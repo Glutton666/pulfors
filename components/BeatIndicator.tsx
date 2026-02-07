@@ -6,7 +6,9 @@ import {
   Platform,
   Dimensions,
   PanResponder,
+  Pressable,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   useAnimatedStyle,
   withTiming,
@@ -98,6 +100,7 @@ interface BeatIndicatorProps {
   currentBeat: number;
   isPlaying: boolean;
   onBeatsChange: (beats: number) => void;
+  onTogglePlay: () => void;
 }
 
 export function BeatIndicator({
@@ -105,6 +108,7 @@ export function BeatIndicator({
   currentBeat,
   isPlaying,
   onBeatsChange,
+  onTogglePlay,
 }: BeatIndicatorProps) {
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
 
@@ -283,11 +287,25 @@ export function BeatIndicator({
           pointerEvents="none"
         />
 
-        <View style={styles.centerHub}>
+        <Pressable
+          onPress={onTogglePlay}
+          style={({ pressed }) => [
+            styles.centerHub,
+            isPlaying && styles.centerHubActive,
+            pressed && styles.centerHubPressed,
+          ]}
+          testID="play-button"
+        >
+          <Ionicons
+            name={isPlaying ? "stop" : "play"}
+            size={28}
+            color={isPlaying ? Colors.background : Colors.background}
+            style={!isPlaying ? { marginLeft: 3 } : undefined}
+          />
           <Text style={styles.signatureText}>
             {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}
           </Text>
-        </View>
+        </Pressable>
       </View>
 
       <Text style={styles.hintText}>swipe to add or remove beats</Text>
@@ -323,20 +341,27 @@ const styles = StyleSheet.create({
   },
   centerHub: {
     position: "absolute",
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: Colors.surfaceLight,
-    borderWidth: 2,
-    borderColor: Colors.border,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: Colors.accent,
     alignItems: "center",
     justifyContent: "center",
+    gap: 1,
+  },
+  centerHubActive: {
+    backgroundColor: Colors.danger,
+  },
+  centerHubPressed: {
+    transform: [{ scale: 0.92 }],
+    opacity: 0.9,
   },
   signatureText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 16,
-    color: Colors.textSecondary,
+    fontSize: 9,
+    color: Colors.background,
     letterSpacing: 1,
+    opacity: 0.7,
   },
   hintText: {
     fontFamily: "SpaceGrotesk_400Regular",

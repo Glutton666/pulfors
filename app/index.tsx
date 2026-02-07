@@ -3,12 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
   Platform,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   useAnimatedStyle,
   withTiming,
@@ -234,31 +232,13 @@ export default function MetronomeScreen() {
             currentBeat={currentBeat}
             isPlaying={isPlaying}
             onBeatsChange={updateTimeSignature}
+            onTogglePlay={togglePlayPause}
           />
         </View>
 
         <View style={styles.bpmSection}>
           <Text style={styles.tempoLabel}>{tempoLabel}</Text>
           <BpmSlider bpm={bpm} onBpmChange={updateBpm} onTapTempo={handleTapTempo} />
-        </View>
-
-        <View style={styles.playSection}>
-          <Pressable
-            onPress={togglePlayPause}
-            style={({ pressed }) => [
-              styles.playButton,
-              isPlaying && styles.playButtonActive,
-              pressed && styles.playButtonPressed,
-            ]}
-            testID="play-button"
-          >
-            <Ionicons
-              name={isPlaying ? "stop" : "play"}
-              size={36}
-              color={isPlaying ? Colors.background : Colors.background}
-              style={!isPlaying ? { marginLeft: 4 } : undefined}
-            />
-          </Pressable>
         </View>
 
       </View>
@@ -296,26 +276,5 @@ const styles = StyleSheet.create({
     color: Colors.accentMuted,
     letterSpacing: 3,
     textTransform: "uppercase",
-  },
-  playSection: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  playButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: Colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    boxShadow: `0px 4px 12px ${Colors.accent}4D`,
-  },
-  playButtonActive: {
-    backgroundColor: Colors.danger,
-    boxShadow: `0px 4px 12px ${Colors.danger}4D`,
-  },
-  playButtonPressed: {
-    transform: [{ scale: 0.93 }],
   },
 });
