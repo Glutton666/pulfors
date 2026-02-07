@@ -24,7 +24,7 @@ import { MetronomeEngine, highClickUri, lowClickUri } from "@/lib/metronome-engi
 import { loadSettings, saveSettings } from "@/lib/storage";
 import { BeatIndicator } from "@/components/BeatIndicator";
 import { BpmSlider } from "@/components/BpmSlider";
-import { StopwatchTimer } from "@/components/StopwatchTimer";
+import { StopwatchTimer, StopwatchTimerToggle } from "@/components/StopwatchTimer";
 
 function getTempoLabel(bpm: number): string {
   if (bpm < 40) return "Grave";
@@ -45,6 +45,7 @@ export default function MetronomeScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(-1);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -241,6 +242,10 @@ export default function MetronomeScreen() {
             <Feather name="activity" size={18} color={Colors.textSecondary} />
             <Text style={styles.tapText}>TAP</Text>
           </Pressable>
+          <StopwatchTimerToggle
+            onPress={() => setPanelOpen(true)}
+            isActive={panelOpen}
+          />
         </View>
 
         <View style={styles.bpmSection}>
@@ -274,11 +279,15 @@ export default function MetronomeScreen() {
           </Pressable>
         </View>
 
-        <StopwatchTimer
-          onTimerExpired={handleTimerExpired}
-          isMetronomePlaying={isPlaying}
-        />
       </View>
+
+      <StopwatchTimer
+        onTimerExpired={handleTimerExpired}
+        isMetronomePlaying={isPlaying}
+        visible={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        topInset={(insets.top || webTopInset)}
+      />
     </View>
   );
 }
@@ -297,6 +306,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "flex-end",
     alignItems: "center",
+    gap: 10,
   },
   tapButton: {
     flexDirection: "row",

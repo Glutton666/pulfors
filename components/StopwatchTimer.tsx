@@ -1,13 +1,22 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Platform,
+  Dimensions,
+} from "react-native";
 import Animated, {
   useAnimatedStyle,
   withTiming,
   withRepeat,
   withSequence,
+  withSpring,
   useSharedValue,
   Easing,
   cancelAnimation,
+  runOnJS,
 } from "react-native-reanimated";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -16,6 +25,7 @@ import Colors from "@/constants/colors";
 type Mode = "stopwatch" | "timer";
 type TimerState = "idle" | "running" | "paused" | "finishing";
 
+const PANEL_WIDTH = 280;
 const TIMER_PRESETS = [
   { label: "1m", seconds: 60 },
   { label: "3m", seconds: 180 },
@@ -29,11 +39,9 @@ function formatTime(totalMs: number): { main: string; fraction: string } {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   const centiseconds = Math.floor((totalMs % 1000) / 10);
-
   const mm = String(minutes).padStart(2, "0");
   const ss = String(seconds).padStart(2, "0");
   const cc = String(centiseconds).padStart(2, "0");
-
   return { main: `${mm}:${ss}`, fraction: `.${cc}` };
 }
 
@@ -48,24 +56,41 @@ function formatCountdown(totalSeconds: number): string {
 interface StopwatchTimerProps {
   onTimerExpired: () => void;
   isMetronomePlaying: boolean;
+  visible: boolean;
+  onClose: () => void;
+  topInset: number;
 }
 
 export function StopwatchTimer({
   onTimerExpired,
   isMetronomePlaying,
+  visible,
+  onClose,
+  topInset,
 }: StopwatchTimerProps) {
   const [mode, setMode] = useState<Mode>("stopwatch");
   const [state, setState] = useState<TimerState>("idle");
   const [elapsed, setElapsed] = useState(0);
   const [timerDuration, setTimerDuration] = useState(180);
   const [remaining, setRemaining] = useState(180);
-
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(0);
   const elapsedAtPauseRef = useRef(0);
 
+  const slideX = useSharedValue(PANEL_WIDTH);
+  const backdropOpacity = useSharedValue(0);
   const pulseOpacity = useSharedValue(1);
   const finishingPulse = useSharedValue(1);
+
+  useEffect(() => {
+    if (visible) {
+      slideX.value = withSpring(0, { damping: 20, stiffness: 200 });
+      backdropOpacity.value = withTiming(1, { duration: 250 });
+    } else {
+      slideX.value = withSpring(PANEL_WIDTH, { damping: 20, stiffness: 200 });
+      backdropOpacity.value = withTiming(0, { duration: 200 });
+    }
+  }, [visible]);
 
   const clearTimerInterval = useCallback(() => {
     if (intervalRef.current) {
@@ -84,7 +109,6 @@ export function StopwatchTimer({
     hapticFeedback();
     startTimeRef.current = Date.now() - elapsedAtPauseRef.current;
     setState("running");
-
     intervalRef.current = setInterval(() => {
       setElapsed(Date.now() - startTimeRef.current);
     }, 33);
@@ -112,12 +136,10 @@ export function StopwatchTimer({
     startTimeRef.current = Date.now();
     elapsedAtPauseRef.current = 0;
     setState("running");
-
     intervalRef.current = setInterval(() => {
-      const elapsed = Date.now() - startTimeRef.current + elapsedAtPauseRef.current;
-      const left = Math.max(0, startRemaining - Math.floor(elapsed / 1000));
+      const el = Date.now() - startTimeRef.current + elapsedAtPauseRef.current;
+      const left = Math.max(0, startRemaining - Math.floor(el / 1000));
       setRemaining(left);
-
       if (left <= 0) {
         clearInterval(intervalRef.current!);
         intervalRef.current = null;
@@ -193,6 +215,14 @@ export function StopwatchTimer({
     opacity: finishingPulse.value,
   }));
 
+  const panelStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: slideX.value }],
+  }));
+
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: backdropOpacity.value,
+  }));
+
   const switchMode = useCallback(
     (newMode: Mode) => {
       if (state !== "idle") return;
@@ -212,7 +242,81 @@ export function StopwatchTimer({
     [state, hapticFeedback]
   );
 
-  const renderStopwatch = () => {
+  const isActive = state !== "idle";
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents={visible ? "auto" : "none"}>
+      <Animated.View style={[styles.backdrop, backdropStyle]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      </Animated.View>
+
+      <Animated.View
+        style={[
+          styles.panel,
+          panelStyle,
+          { paddingTop: topInset + 12 },
+        ]}
+      >
+        <View style={styles.panelHeader}>
+          <Pressable
+            onPress={onClose}
+            style={({ pressed }) => [
+              styles.closeButton,
+              pressed && styles.buttonPressed,
+            ]}
+            testID="panel-close"
+          >
+            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+          </Pressable>
+        </View>
+
+        <View style={styles.tabRow}>
+          <Pressable
+            onPress={() => switchMode("stopwatch")}
+            style={({ pressed }) => [
+              styles.tab,
+              mode === "stopwatch" && styles.tabActive,
+              pressed && styles.buttonPressed,
+            ]}
+            testID="tab-stopwatch"
+          >
+            <MaterialCommunityIcons
+              name="timer-outline"
+              size={15}
+              color={mode === "stopwatch" ? Colors.accent : Colors.textTertiary}
+            />
+            <Text style={[styles.tabText, mode === "stopwatch" && styles.tabTextActive]}>
+              STOPWATCH
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => switchMode("timer")}
+            style={({ pressed }) => [
+              styles.tab,
+              mode === "timer" && styles.tabActive,
+              pressed && styles.buttonPressed,
+            ]}
+            testID="tab-timer"
+          >
+            <MaterialCommunityIcons
+              name="av-timer"
+              size={15}
+              color={mode === "timer" ? Colors.accent : Colors.textTertiary}
+            />
+            <Text style={[styles.tabText, mode === "timer" && styles.tabTextActive]}>
+              TIMER
+            </Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.divider} />
+
+        {mode === "stopwatch" ? renderStopwatchContent() : renderTimerContent()}
+      </Animated.View>
+    </View>
+  );
+
+  function renderStopwatchContent() {
     const { main, fraction } = formatTime(elapsed);
     return (
       <View style={styles.displaySection}>
@@ -228,51 +332,33 @@ export function StopwatchTimer({
           {state === "idle" && (
             <Pressable
               onPress={startStopwatch}
-              style={({ pressed }) => [
-                styles.controlButton,
-                styles.startButton,
-                pressed && styles.buttonPressed,
-              ]}
+              style={({ pressed }) => [styles.controlButton, styles.startButton, pressed && styles.buttonPressed]}
               testID="stopwatch-start"
             >
               <Ionicons name="play" size={18} color={Colors.background} />
             </Pressable>
           )}
           {state === "running" && (
-            <>
-              <Pressable
-                onPress={pauseStopwatch}
-                style={({ pressed }) => [
-                  styles.controlButton,
-                  styles.pauseButton,
-                  pressed && styles.buttonPressed,
-                ]}
-                testID="stopwatch-pause"
-              >
-                <Ionicons name="pause" size={18} color={Colors.text} />
-              </Pressable>
-            </>
+            <Pressable
+              onPress={pauseStopwatch}
+              style={({ pressed }) => [styles.controlButton, styles.pauseButton, pressed && styles.buttonPressed]}
+              testID="stopwatch-pause"
+            >
+              <Ionicons name="pause" size={18} color={Colors.text} />
+            </Pressable>
           )}
           {state === "paused" && (
             <>
               <Pressable
                 onPress={resetStopwatch}
-                style={({ pressed }) => [
-                  styles.controlButton,
-                  styles.resetButton,
-                  pressed && styles.buttonPressed,
-                ]}
+                style={({ pressed }) => [styles.controlButton, styles.resetButton, pressed && styles.buttonPressed]}
                 testID="stopwatch-reset"
               >
                 <Feather name="rotate-ccw" size={16} color={Colors.danger} />
               </Pressable>
               <Pressable
                 onPress={startStopwatch}
-                style={({ pressed }) => [
-                  styles.controlButton,
-                  styles.startButton,
-                  pressed && styles.buttonPressed,
-                ]}
+                style={({ pressed }) => [styles.controlButton, styles.startButton, pressed && styles.buttonPressed]}
                 testID="stopwatch-resume"
               >
                 <Ionicons name="play" size={18} color={Colors.background} />
@@ -282,12 +368,11 @@ export function StopwatchTimer({
         </View>
       </View>
     );
-  };
+  }
 
-  const renderTimer = () => {
+  function renderTimerContent() {
     const display = formatCountdown(remaining);
     const progress = timerDuration > 0 ? remaining / timerDuration : 1;
-
     return (
       <View style={styles.displaySection}>
         {state === "idle" && (
@@ -340,8 +425,7 @@ export function StopwatchTimer({
                 styles.progressBarFill,
                 {
                   width: `${progress * 100}%` as any,
-                  backgroundColor:
-                    state === "finishing" ? Colors.danger : Colors.accent,
+                  backgroundColor: state === "finishing" ? Colors.danger : Colors.accent,
                 },
               ]}
             />
@@ -349,60 +433,40 @@ export function StopwatchTimer({
         )}
 
         {state === "finishing" && (
-          <Text style={styles.finishingLabel}>
-            completing measure...
-          </Text>
+          <Text style={styles.finishingLabel}>completing measure...</Text>
         )}
 
         <View style={styles.controlRow}>
           {state === "idle" && (
             <Pressable
               onPress={startTimer}
-              style={({ pressed }) => [
-                styles.controlButton,
-                styles.startButton,
-                pressed && styles.buttonPressed,
-              ]}
+              style={({ pressed }) => [styles.controlButton, styles.startButton, pressed && styles.buttonPressed]}
               testID="timer-start"
             >
               <Ionicons name="play" size={18} color={Colors.background} />
             </Pressable>
           )}
           {state === "running" && (
-            <>
-              <Pressable
-                onPress={pauseTimer}
-                style={({ pressed }) => [
-                  styles.controlButton,
-                  styles.pauseButton,
-                  pressed && styles.buttonPressed,
-                ]}
-                testID="timer-pause"
-              >
-                <Ionicons name="pause" size={18} color={Colors.text} />
-              </Pressable>
-            </>
+            <Pressable
+              onPress={pauseTimer}
+              style={({ pressed }) => [styles.controlButton, styles.pauseButton, pressed && styles.buttonPressed]}
+              testID="timer-pause"
+            >
+              <Ionicons name="pause" size={18} color={Colors.text} />
+            </Pressable>
           )}
           {state === "paused" && (
             <>
               <Pressable
                 onPress={resetTimer}
-                style={({ pressed }) => [
-                  styles.controlButton,
-                  styles.resetButton,
-                  pressed && styles.buttonPressed,
-                ]}
+                style={({ pressed }) => [styles.controlButton, styles.resetButton, pressed && styles.buttonPressed]}
                 testID="timer-reset"
               >
                 <Feather name="rotate-ccw" size={16} color={Colors.danger} />
               </Pressable>
               <Pressable
                 onPress={startTimer}
-                style={({ pressed }) => [
-                  styles.controlButton,
-                  styles.startButton,
-                  pressed && styles.buttonPressed,
-                ]}
+                style={({ pressed }) => [styles.controlButton, styles.startButton, pressed && styles.buttonPressed]}
                 testID="timer-resume"
               >
                 <Ionicons name="play" size={18} color={Colors.background} />
@@ -412,72 +476,64 @@ export function StopwatchTimer({
         </View>
       </View>
     );
-  };
+  }
+}
 
+interface ToggleButtonProps {
+  onPress: () => void;
+  isActive: boolean;
+}
+
+export function StopwatchTimerToggle({ onPress, isActive }: ToggleButtonProps) {
   return (
-    <View style={styles.container}>
-      <View style={styles.tabRow}>
-        <Pressable
-          onPress={() => switchMode("stopwatch")}
-          style={({ pressed }) => [
-            styles.tab,
-            mode === "stopwatch" && styles.tabActive,
-            pressed && styles.buttonPressed,
-          ]}
-          testID="tab-stopwatch"
-        >
-          <MaterialCommunityIcons
-            name="timer-outline"
-            size={16}
-            color={mode === "stopwatch" ? Colors.accent : Colors.textTertiary}
-          />
-          <Text
-            style={[
-              styles.tabText,
-              mode === "stopwatch" && styles.tabTextActive,
-            ]}
-          >
-            STOPWATCH
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={() => switchMode("timer")}
-          style={({ pressed }) => [
-            styles.tab,
-            mode === "timer" && styles.tabActive,
-            pressed && styles.buttonPressed,
-          ]}
-          testID="tab-timer"
-        >
-          <MaterialCommunityIcons
-            name="av-timer"
-            size={16}
-            color={mode === "timer" ? Colors.accent : Colors.textTertiary}
-          />
-          <Text
-            style={[styles.tabText, mode === "timer" && styles.tabTextActive]}
-          >
-            TIMER
-          </Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.divider} />
-
-      {mode === "stopwatch" ? renderStopwatch() : renderTimer()}
-    </View>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.toggleButton,
+        isActive && styles.toggleButtonActive,
+        pressed && styles.buttonPressed,
+      ]}
+      testID="panel-toggle"
+    >
+      <MaterialCommunityIcons
+        name="timer-outline"
+        size={18}
+        color={isActive ? Colors.accent : Colors.textSecondary}
+      />
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  panel: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: PANEL_WIDTH,
     backgroundColor: Colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingVertical: 12,
+    borderLeftWidth: 1,
+    borderLeftColor: Colors.border,
     paddingHorizontal: 16,
-    gap: 10,
+    paddingBottom: 24,
+    gap: 12,
+  },
+  panelHeader: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginBottom: 4,
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.surfaceLight,
+    alignItems: "center",
+    justifyContent: "center",
   },
   tabRow: {
     flexDirection: "row",
@@ -488,7 +544,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 5,
     paddingVertical: 6,
     borderRadius: 8,
   },
@@ -497,9 +553,9 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 10,
+    fontSize: 9,
     color: Colors.textTertiary,
-    letterSpacing: 2,
+    letterSpacing: 1.5,
   },
   tabTextActive: {
     color: Colors.accent,
@@ -511,7 +567,8 @@ const styles = StyleSheet.create({
   },
   displaySection: {
     alignItems: "center",
-    gap: 10,
+    gap: 12,
+    paddingTop: 8,
   },
   timeRow: {
     flexDirection: "row",
@@ -519,14 +576,14 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 36,
+    fontSize: 32,
     color: Colors.text,
     letterSpacing: 2,
     fontVariant: ["tabular-nums"],
   },
   fractionText: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 20,
+    fontSize: 18,
     color: Colors.textSecondary,
     letterSpacing: 1,
     fontVariant: ["tabular-nums"],
@@ -581,6 +638,8 @@ const styles = StyleSheet.create({
   },
   presetRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
     gap: 6,
   },
   presetChip: {
@@ -620,5 +679,19 @@ const styles = StyleSheet.create({
     color: Colors.danger,
     letterSpacing: 1,
     opacity: 0.8,
+  },
+  toggleButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  toggleButtonActive: {
+    borderColor: Colors.accent,
+    backgroundColor: Colors.accentDim,
   },
 });
