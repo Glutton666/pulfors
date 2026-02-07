@@ -12,7 +12,9 @@ import Animated, {
   withTiming,
   withSequence,
   withSpring,
+  withRepeat,
   useSharedValue,
+  cancelAnimation,
   Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -112,20 +114,38 @@ export function BeatIndicator({
   const swipeDirection = useSharedValue(0);
   const dialRotation = useSharedValue(0);
   const centerGlow = useSharedValue(0);
-  const prevBeatRef = useRef(-1);
+  const centerGlowScale = useSharedValue(1);
 
   useEffect(() => {
-    if (isPlaying && currentBeat >= 0 && currentBeat !== prevBeatRef.current) {
-      prevBeatRef.current = currentBeat;
-      centerGlow.value = withSequence(
-        withTiming(1, { duration: 60, easing: Easing.out(Easing.quad) }),
-        withTiming(0, { duration: 500, easing: Easing.out(Easing.cubic) })
+    if (isPlaying) {
+      centerGlow.value = withTiming(0.25, { duration: 600, easing: Easing.out(Easing.quad) });
+      centerGlowScale.value = withRepeat(
+        withSequence(
+          withTiming(1.15, { duration: 2000, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0.95, { duration: 2500, easing: Easing.inOut(Easing.sin) }),
+          withTiming(1.08, { duration: 1800, easing: Easing.inOut(Easing.sin) }),
+          withTiming(1.0, { duration: 2200, easing: Easing.inOut(Easing.sin) })
+        ),
+        -1,
+        false
       );
-    } else if (!isPlaying) {
-      prevBeatRef.current = -1;
-      centerGlow.value = withTiming(0, { duration: 200 });
+      centerGlow.value = withRepeat(
+        withSequence(
+          withTiming(0.35, { duration: 1800, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0.15, { duration: 2200, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0.3, { duration: 2000, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0.2, { duration: 2500, easing: Easing.inOut(Easing.sin) })
+        ),
+        -1,
+        false
+      );
+    } else {
+      cancelAnimation(centerGlow);
+      cancelAnimation(centerGlowScale);
+      centerGlow.value = withTiming(0, { duration: 800, easing: Easing.out(Easing.quad) });
+      centerGlowScale.value = withTiming(1, { duration: 800 });
     }
-  }, [isPlaying, currentBeat]);
+  }, [isPlaying]);
 
   const startXRef = useRef(0);
   const isDraggingRef = useRef(false);
@@ -245,11 +265,9 @@ export function BeatIndicator({
   }));
 
   const centerGlowStyle = useAnimatedStyle(() => ({
-    opacity: centerGlow.value * 0.7,
-    transform: [{ scale: 1 + centerGlow.value * 0.3 }],
+    opacity: centerGlow.value,
+    transform: [{ scale: centerGlowScale.value }],
   }));
-
-  const isAccentBeat = isPlaying && currentBeat === 0;
 
   const nativePanHandlers = Platform.OS !== "web" && panResponder ? panResponder.panHandlers : {};
 
@@ -277,7 +295,7 @@ export function BeatIndicator({
         <Animated.View
           style={[
             styles.centerGlow,
-            { backgroundColor: isAccentBeat ? Colors.accent : Colors.text },
+            { backgroundColor: Colors.accent },
             centerGlowStyle,
           ]}
           pointerEvents="none"
