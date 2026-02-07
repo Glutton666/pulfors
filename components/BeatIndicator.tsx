@@ -111,6 +111,21 @@ export function BeatIndicator({
   const swipeProgress = useSharedValue(0);
   const swipeDirection = useSharedValue(0);
   const dialRotation = useSharedValue(0);
+  const centerGlow = useSharedValue(0);
+  const prevBeatRef = useRef(-1);
+
+  useEffect(() => {
+    if (isPlaying && currentBeat >= 0 && currentBeat !== prevBeatRef.current) {
+      prevBeatRef.current = currentBeat;
+      centerGlow.value = withSequence(
+        withTiming(1, { duration: 60, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: 500, easing: Easing.out(Easing.cubic) })
+      );
+    } else if (!isPlaying) {
+      prevBeatRef.current = -1;
+      centerGlow.value = withTiming(0, { duration: 200 });
+    }
+  }, [isPlaying, currentBeat]);
 
   const startXRef = useRef(0);
   const isDraggingRef = useRef(false);
@@ -229,6 +244,13 @@ export function BeatIndicator({
     transform: [{ rotate: `${dialRotation.value}deg` }],
   }));
 
+  const centerGlowStyle = useAnimatedStyle(() => ({
+    opacity: centerGlow.value * 0.7,
+    transform: [{ scale: 1 + centerGlow.value * 0.3 }],
+  }));
+
+  const isAccentBeat = isPlaying && currentBeat === 0;
+
   const nativePanHandlers = Platform.OS !== "web" && panResponder ? panResponder.panHandlers : {};
 
   return (
@@ -251,6 +273,15 @@ export function BeatIndicator({
           ))}
 
         </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.centerGlow,
+            { backgroundColor: isAccentBeat ? Colors.accent : Colors.text },
+            centerGlowStyle,
+          ]}
+          pointerEvents="none"
+        />
 
         <View style={styles.centerHub}>
           <Text style={styles.signatureText}>
@@ -282,6 +313,13 @@ const styles = StyleSheet.create({
     width: DIAL_SIZE,
     height: DIAL_SIZE,
     borderRadius: DIAL_RADIUS,
+  },
+  centerGlow: {
+    position: "absolute",
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    opacity: 0,
   },
   centerHub: {
     position: "absolute",
