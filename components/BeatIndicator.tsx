@@ -296,15 +296,17 @@ export function BeatIndicator({
           ]}
           testID="play-button"
         >
-          <Ionicons
-            name={isPlaying ? "stop" : "play"}
-            size={28}
-            color={isPlaying ? Colors.background : Colors.background}
-            style={!isPlaying ? { marginLeft: 3, marginBottom: 2 } : { marginBottom: 2 }}
-          />
           <Text style={styles.signatureText}>
             {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}
           </Text>
+          <View style={styles.iconOverlay} pointerEvents="none">
+            <Ionicons
+              name={isPlaying ? "stop" : "play"}
+              size={30}
+              color={isPlaying ? Colors.background : Colors.background}
+              style={!isPlaying ? { marginLeft: 3 } : undefined}
+            />
+          </View>
         </Pressable>
       </View>
 
@@ -347,7 +349,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accent,
     alignItems: "center",
     justifyContent: "center",
-    gap: 1,
+  },
+  iconOverlay: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
   },
   centerHubActive: {
     backgroundColor: Colors.danger,
