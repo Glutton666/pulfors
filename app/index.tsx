@@ -24,6 +24,7 @@ import { MetronomeEngine, highClickUri, lowClickUri } from "@/lib/metronome-engi
 import { loadSettings, saveSettings } from "@/lib/storage";
 import { BeatIndicator } from "@/components/BeatIndicator";
 import { BpmSlider } from "@/components/BpmSlider";
+import { StopwatchTimer } from "@/components/StopwatchTimer";
 
 function getTempoLabel(bpm: number): string {
   if (bpm < 40) return "Grave";
@@ -144,6 +145,23 @@ export default function MetronomeScreen() {
     }
   }, [isPlaying]);
 
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.setOnMeasureComplete(() => {
+      if (!engine.getIsRunning()) {
+        setIsPlaying(false);
+        setCurrentBeat(-1);
+      }
+    });
+  }, []);
+
+  const handleTimerExpired = useCallback(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.requestStopAfterMeasure();
+  }, []);
+
   const handleTapTempo = useCallback(() => {
     const now = Date.now();
     const taps = tapTimesRef.current;
@@ -255,6 +273,11 @@ export default function MetronomeScreen() {
             />
           </Pressable>
         </View>
+
+        <StopwatchTimer
+          onTimerExpired={handleTimerExpired}
+          isMetronomePlaying={isPlaying}
+        />
       </View>
     </View>
   );
@@ -308,7 +331,6 @@ const styles = StyleSheet.create({
   },
   playSection: {
     alignItems: "center",
-    paddingBottom: 8,
   },
   playButton: {
     width: 72,
