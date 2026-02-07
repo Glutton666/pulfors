@@ -11,8 +11,15 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withSequence,
+  withSpring,
+  withDelay,
   useSharedValue,
   Easing,
+  FadeIn,
+  FadeOut,
+  ZoomIn,
+  ZoomOut,
+  Layout,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
@@ -34,25 +41,25 @@ function BeatDot({ isActive, isAccent }: BeatDotProps) {
         transform: [
           {
             scale: withSequence(
-              withTiming(1.4, { duration: 60, easing: Easing.out(Easing.quad) }),
-              withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) })
+              withTiming(1.5, { duration: 50, easing: Easing.out(Easing.quad) }),
+              withTiming(1, { duration: 250, easing: Easing.out(Easing.elastic(1.5)) })
             ),
           },
         ],
         backgroundColor: withTiming(
           isAccent ? Colors.accent : Colors.text,
-          { duration: 60 }
+          { duration: 50 }
         ),
         shadowOpacity: withSequence(
-          withTiming(0.6, { duration: 60 }),
-          withTiming(0, { duration: 300 })
+          withTiming(0.8, { duration: 50 }),
+          withTiming(0, { duration: 400 })
         ),
       };
     }
     return {
-      transform: [{ scale: withTiming(1, { duration: 150 }) }],
-      backgroundColor: withTiming(Colors.textTertiary, { duration: 150 }),
-      shadowOpacity: withTiming(0, { duration: 150 }),
+      transform: [{ scale: withTiming(1, { duration: 200 }) }],
+      backgroundColor: withTiming(Colors.textTertiary, { duration: 200 }),
+      shadowOpacity: withTiming(0, { duration: 200 }),
     };
   }, [isActive, isAccent]);
 
@@ -65,7 +72,7 @@ function BeatDot({ isActive, isAccent }: BeatDotProps) {
         {
           shadowColor: isAccent ? Colors.accent : Colors.text,
           shadowOffset: { width: 0, height: 0 },
-          shadowRadius: 8,
+          shadowRadius: 10,
         },
       ]}
     />
@@ -87,10 +94,15 @@ export function BeatIndicator({
 }: BeatIndicatorProps) {
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
 
+  const swipeProgress = useSharedValue(0);
+  const swipeDirection = useSharedValue(0);
   const ghostOpacity = useSharedValue(0);
-  const ghostScale = useSharedValue(0.5);
+  const ghostScale = useSharedValue(0.3);
+  const ghostTranslateX = useSharedValue(20);
   const removeOpacity = useSharedValue(1);
   const removeScale = useSharedValue(1);
+  const removeTranslateX = useSharedValue(0);
+  const rowTranslateX = useSharedValue(0);
 
   const startXRef = useRef(0);
   const isDraggingRef = useRef(false);
@@ -103,10 +115,15 @@ export function BeatIndicator({
   useEffect(() => { onBeatsChangeRef.current = onBeatsChange; }, [onBeatsChange]);
 
   const resetVisuals = useCallback(() => {
-    ghostOpacity.value = withTiming(0, { duration: 200 });
-    ghostScale.value = withTiming(0.5, { duration: 200 });
-    removeOpacity.value = withTiming(1, { duration: 200 });
-    removeScale.value = withTiming(1, { duration: 200 });
+    ghostOpacity.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.quad) });
+    ghostScale.value = withTiming(0.3, { duration: 250, easing: Easing.out(Easing.quad) });
+    ghostTranslateX.value = withTiming(20, { duration: 250 });
+    removeOpacity.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.quad) });
+    removeScale.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.quad) });
+    removeTranslateX.value = withTiming(0, { duration: 250 });
+    rowTranslateX.value = withSpring(0, { damping: 15, stiffness: 300 });
+    swipeProgress.value = withTiming(0, { duration: 200 });
+    swipeDirection.value = 0;
   }, []);
 
   const processMove = useCallback((clientX: number) => {
@@ -115,19 +132,35 @@ export function BeatIndicator({
     const canAdd = beatsRef.current < MAX_BEATS;
     const canRemove = beatsRef.current > MIN_BEATS;
 
+    const easedProgress = 1 - Math.pow(1 - progress, 3);
+
+    rowTranslateX.value = dx * 0.06;
+
     if (dx > 0 && canAdd) {
-      ghostOpacity.value = withTiming(progress * 0.8, { duration: 30 });
-      ghostScale.value = withTiming(0.5 + progress * 0.5, { duration: 30 });
-      removeOpacity.value = withTiming(1, { duration: 30 });
-      removeScale.value = withTiming(1, { duration: 30 });
+      swipeDirection.value = 1;
+      swipeProgress.value = progress;
+      ghostOpacity.value = easedProgress * 0.9;
+      ghostScale.value = 0.3 + easedProgress * 0.7;
+      ghostTranslateX.value = 20 * (1 - easedProgress);
+      removeOpacity.value = 1;
+      removeScale.value = 1;
+      removeTranslateX.value = 0;
     } else if (dx < 0 && canRemove) {
-      removeOpacity.value = withTiming(1 - progress * 0.7, { duration: 30 });
-      removeScale.value = withTiming(1 - progress * 0.4, { duration: 30 });
-      ghostOpacity.value = withTiming(0, { duration: 30 });
+      swipeDirection.value = -1;
+      swipeProgress.value = progress;
+      removeOpacity.value = 1 - easedProgress * 0.8;
+      removeScale.value = 1 - easedProgress * 0.5;
+      removeTranslateX.value = easedProgress * -20;
+      ghostOpacity.value = 0;
+      ghostScale.value = 0.3;
+      ghostTranslateX.value = 20;
     } else {
-      ghostOpacity.value = withTiming(0, { duration: 30 });
-      removeOpacity.value = withTiming(1, { duration: 30 });
-      removeScale.value = withTiming(1, { duration: 30 });
+      swipeDirection.value = 0;
+      swipeProgress.value = 0;
+      ghostOpacity.value = withTiming(0, { duration: 100 });
+      removeOpacity.value = withTiming(1, { duration: 100 });
+      removeScale.value = withTiming(1, { duration: 100 });
+      removeTranslateX.value = withTiming(0, { duration: 100 });
     }
 
     if (progress >= 1 && !triggeredRef.current) {
@@ -210,13 +243,36 @@ export function BeatIndicator({
 
   const ghostDotStyle = useAnimatedStyle(() => ({
     opacity: ghostOpacity.value,
-    transform: [{ scale: ghostScale.value }],
+    transform: [
+      { scale: ghostScale.value },
+      { translateX: ghostTranslateX.value },
+    ],
   }));
 
   const lastDotFadeStyle = useAnimatedStyle(() => ({
     opacity: removeOpacity.value,
-    transform: [{ scale: removeScale.value }],
+    transform: [
+      { scale: removeScale.value },
+      { translateX: removeTranslateX.value },
+    ],
   }));
+
+  const rowAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: rowTranslateX.value }],
+  }));
+
+  const progressBarStyle = useAnimatedStyle(() => {
+    const dir = swipeDirection.value;
+    const prog = swipeProgress.value;
+    if (dir === 0 || prog === 0) {
+      return { opacity: 0, width: 0 };
+    }
+    return {
+      opacity: withTiming(prog * 0.5, { duration: 30 }),
+      width: withTiming(prog * 60, { duration: 30 }),
+      backgroundColor: dir > 0 ? Colors.accent : Colors.danger,
+    };
+  });
 
   const nativePanHandlers = Platform.OS !== "web" && panResponder ? panResponder.panHandlers : {};
 
@@ -227,12 +283,14 @@ export function BeatIndicator({
       testID="beat-indicator-swipe"
       {...nativePanHandlers}
     >
-      <View style={styles.dotsRow} pointerEvents="none">
+      <Animated.View style={[styles.progressBar, progressBarStyle]} />
+
+      <Animated.View style={[styles.dotsRow, rowAnimStyle]} pointerEvents="none">
         {beats.map((beat) => {
           const isLast = beat === beatsPerMeasure - 1 && beatsPerMeasure > MIN_BEATS;
           if (isLast) {
             return (
-              <Animated.View key={beat} style={lastDotFadeStyle}>
+              <Animated.View key={`beat-${beat}`} style={lastDotFadeStyle}>
                 <BeatDot
                   isActive={isPlaying && currentBeat === beat}
                   isAccent={beat === 0}
@@ -242,7 +300,7 @@ export function BeatIndicator({
           }
           return (
             <BeatDot
-              key={beat}
+              key={`beat-${beat}`}
               isActive={isPlaying && currentBeat === beat}
               isAccent={beat === 0}
             />
@@ -252,12 +310,16 @@ export function BeatIndicator({
         {beatsPerMeasure < MAX_BEATS && (
           <Animated.View style={[styles.ghostDot, ghostDotStyle]} />
         )}
-      </View>
+      </Animated.View>
 
-      <Text style={styles.hintText} pointerEvents="none">
-        {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}
-        {"  "}·{"  "}swipe to add or remove
-      </Text>
+      <View style={styles.hintRow} pointerEvents="none">
+        <View style={styles.signatureBadge}>
+          <Text style={styles.signatureText}>
+            {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}
+          </Text>
+        </View>
+        <Text style={styles.hintText}>swipe to add or remove</Text>
+      </View>
     </View>
   );
 }
@@ -265,19 +327,28 @@ export function BeatIndicator({
 const styles = StyleSheet.create({
   touchArea: {
     alignItems: "center",
-    paddingVertical: 8,
-    gap: 8,
+    justifyContent: "center",
+    paddingVertical: 12,
+    gap: 10,
     cursor: "grab" as any,
     userSelect: "none" as any,
+  },
+  progressBar: {
+    position: "absolute",
+    top: 0,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: Colors.accent,
   },
   dotsRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    minHeight: 48,
+    gap: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    minHeight: 56,
+    width: "100%",
   },
   dot: {
     width: 14,
@@ -294,16 +365,34 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: Colors.accent,
     borderWidth: 1.5,
     borderColor: Colors.accent,
-    borderStyle: "dashed",
+    backgroundColor: "transparent",
+  },
+  hintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  signatureBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  signatureText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 12,
+    color: Colors.textSecondary,
+    letterSpacing: 1,
   },
   hintText: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
     color: Colors.textTertiary,
     letterSpacing: 1,
-    opacity: 0.6,
+    opacity: 0.5,
   },
 });
