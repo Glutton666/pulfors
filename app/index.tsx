@@ -22,7 +22,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
 import { MetronomeEngine, highClickUri, lowClickUri } from "@/lib/metronome-engine";
 import { loadSettings, saveSettings } from "@/lib/storage";
-import { Pendulum } from "@/components/Pendulum";
 import { BeatIndicator } from "@/components/BeatIndicator";
 import { BpmSlider } from "@/components/BpmSlider";
 
@@ -226,10 +225,6 @@ export default function MetronomeScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.pendulumSection}>
-          <Pendulum isPlaying={isPlaying} bpm={bpm} />
-        </View>
-
         <View style={styles.bpmSection}>
           <Text style={styles.tempoLabel}>{tempoLabel}</Text>
           <BpmSlider bpm={bpm} onBpmChange={updateBpm} />
@@ -299,10 +294,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textSecondary,
     letterSpacing: 2,
-  },
-  pendulumSection: {
-    alignItems: "center",
-    justifyContent: "center",
   },
   bpmSection: {
     alignItems: "center",
