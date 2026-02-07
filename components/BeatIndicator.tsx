@@ -250,9 +250,6 @@ export function BeatIndicator({
             />
           ))}
 
-          <View style={styles.fingerHole}>
-            <View style={styles.fingerHoleInner} />
-          </View>
         </Animated.View>
 
         <View style={styles.centerHub}>
@@ -285,26 +282,6 @@ const styles = StyleSheet.create({
     width: DIAL_SIZE,
     height: DIAL_SIZE,
     borderRadius: DIAL_RADIUS,
-  },
-  fingerHole: {
-    position: "absolute",
-    left: DIAL_RADIUS - 12,
-    bottom: 18,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.background,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  fingerHoleInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.textTertiary,
-    opacity: 0.3,
   },
   centerHub: {
     position: "absolute",
