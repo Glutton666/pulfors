@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   Pressable,
   Platform,
@@ -27,6 +28,7 @@ type TimerState = "idle" | "running" | "paused" | "finishing";
 
 const PANEL_WIDTH = 280;
 const TIMER_PRESETS = [
+  { label: "30s", seconds: 30 },
   { label: "1m", seconds: 60 },
   { label: "3m", seconds: 180 },
   { label: "5m", seconds: 300 },
@@ -73,6 +75,8 @@ export function StopwatchTimer({
   const [elapsed, setElapsed] = useState(0);
   const [timerDuration, setTimerDuration] = useState(180);
   const [remaining, setRemaining] = useState(180);
+  const [editingTimer, setEditingTimer] = useState(false);
+  const [editInput, setEditInput] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(0);
   const elapsedAtPauseRef = useRef(0);
@@ -238,9 +242,41 @@ export function StopwatchTimer({
       hapticFeedback();
       setTimerDuration(seconds);
       setRemaining(seconds);
+      setEditingTimer(false);
     },
     [state, hapticFeedback]
   );
+
+  const startEditingTimer = useCallback(() => {
+    if (state !== "idle") return;
+    const mins = Math.floor(timerDuration / 60);
+    const secs = timerDuration % 60;
+    setEditInput(
+      mins > 0 ? `${mins}:${String(secs).padStart(2, "0")}` : `${secs}`
+    );
+    setEditingTimer(true);
+  }, [state, timerDuration]);
+
+  const commitEditInput = useCallback(() => {
+    setEditingTimer(false);
+    const trimmed = editInput.trim();
+    if (!trimmed) return;
+
+    let totalSeconds = 0;
+    if (trimmed.includes(":")) {
+      const parts = trimmed.split(":");
+      const mins = parseInt(parts[0], 10) || 0;
+      const secs = parseInt(parts[1], 10) || 0;
+      totalSeconds = mins * 60 + secs;
+    } else {
+      const val = parseInt(trimmed, 10) || 0;
+      totalSeconds = val < 10 ? val * 60 : val;
+    }
+
+    totalSeconds = Math.max(1, Math.min(totalSeconds, 5999));
+    setTimerDuration(totalSeconds);
+    setRemaining(totalSeconds);
+  }, [editInput]);
 
   const isActive = state !== "idle";
 
@@ -407,15 +443,37 @@ export function StopwatchTimer({
           {state === "running" && (
             <Animated.View style={[styles.runningDot, runningDotStyle]} />
           )}
-          <Animated.Text
-            style={[
-              styles.timeText,
-              state === "finishing" && styles.finishingText,
-              state === "finishing" ? finishingStyle : undefined,
-            ]}
-          >
-            {display}
-          </Animated.Text>
+          {state === "idle" && editingTimer ? (
+            <TextInput
+              style={[styles.timeText, styles.timeInput]}
+              value={editInput}
+              onChangeText={setEditInput}
+              onBlur={commitEditInput}
+              onSubmitEditing={commitEditInput}
+              keyboardType="numbers-and-punctuation"
+              autoFocus
+              selectTextOnFocus
+              placeholder="m:ss"
+              placeholderTextColor={Colors.textTertiary}
+              testID="timer-input"
+            />
+          ) : (
+            <Pressable
+              onPress={state === "idle" ? startEditingTimer : undefined}
+              disabled={state !== "idle"}
+            >
+              <Animated.Text
+                style={[
+                  styles.timeText,
+                  state === "idle" && styles.timeTextEditable,
+                  state === "finishing" && styles.finishingText,
+                  state === "finishing" ? finishingStyle : undefined,
+                ]}
+              >
+                {display}
+              </Animated.Text>
+            </Pressable>
+          )}
         </View>
 
         {(state === "running" || state === "finishing") && (
@@ -661,6 +719,21 @@ const styles = StyleSheet.create({
   },
   presetTextActive: {
     color: Colors.accent,
+  },
+  timeInput: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.accent,
+    textAlign: "center",
+    minWidth: 120,
+    paddingVertical: 2,
+    color: Colors.text,
+  },
+  timeTextEditable: {
+    borderBottomWidth: 1,
+    borderBottomColor: "transparent",
+    textDecorationLine: "underline",
+    textDecorationColor: Colors.textTertiary,
+    textDecorationStyle: "dotted",
   },
   progressBarContainer: {
     width: "80%",
