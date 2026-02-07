@@ -2,9 +2,9 @@
 
 ## Overview
 
-This is a **Metronome** mobile application built with **Expo (React Native)** and an **Express** backend server. The app provides a musical metronome with features like adjustable BPM, tempo presets (Largo through Presto), time signatures, beat visualization with a pendulum animation, haptic feedback, and audio click generation. Settings are persisted locally using AsyncStorage.
+This is a **Metronome** mobile application built with **Expo (React Native)** and an **Express** backend server. The app provides three integrated tools: a **Metronome** with adjustable BPM, swipeable beat control (1-12 beats), tempo labels, haptic feedback, and audio click generation; a **Stopwatch** with lap timing and best/worst lap highlighting; and a **Timer** with preset durations that integrates with the metronome — when the timer expires, the metronome gracefully completes its current measure before stopping. Settings are persisted locally using AsyncStorage.
 
-The project follows a full-stack architecture where the Express server can serve both the API and a static web build, while the mobile app runs via Expo. The backend includes a PostgreSQL database schema (via Drizzle ORM) with a basic user model, though the core metronome functionality is entirely client-side.
+The project follows a full-stack architecture where the Express server can serve both the API and a static web build, while the mobile app runs via Expo. The backend includes a PostgreSQL database schema (via Drizzle ORM) with a basic user model, though the core functionality is entirely client-side.
 
 ## User Preferences
 
@@ -14,14 +14,15 @@ Preferred communication style: Simple, everyday language.
 
 ### Frontend (Expo / React Native)
 - **Framework**: Expo SDK 54 with React Native 0.81, using the new architecture
-- **Routing**: `expo-router` with file-based routing (app directory). Currently a single-screen app (`app/index.tsx`) with the metronome UI
+- **Routing**: `expo-router` with file-based routing and tab navigation (`app/(tabs)/`). Three tabs: Metronome (`index.tsx`), Stopwatch (`stopwatch.tsx`), Timer (`timer.tsx`)
 - **State Management**: Local React state (`useState`, `useRef`) for metronome state. `@tanstack/react-query` is set up for server data fetching but not heavily used since the metronome is client-side
 - **Animations**: `react-native-reanimated` powers the pendulum swing and beat indicator animations
 - **Audio**: `expo-audio` (`useAudioPlayer`) for click sounds. The metronome engine (`lib/metronome-engine.ts`) generates WAV audio buffers programmatically (high/low click sounds) rather than using pre-recorded audio files
 - **Haptics**: `expo-haptics` provides tactile feedback on beats
 - **Fonts**: Space Grotesk (Google Fonts) loaded via `@expo-google-fonts/space-grotesk`
 - **Persistence**: `@react-native-async-storage/async-storage` stores BPM, beats per measure, and subdivisions locally
-- **UI Components**: Custom components for Pendulum (`components/Pendulum.tsx`), BeatIndicator (`components/BeatIndicator.tsx`), with a dark theme defined in `constants/colors.ts`
+- **UI Components**: Custom components for BeatIndicator (`components/BeatIndicator.tsx`), BpmSlider (`components/BpmSlider.tsx`), with a dark theme defined in `constants/colors.ts`
+- **MetronomeEngine**: `lib/metronome-engine.ts` supports `stopAfterMeasure()` to gracefully complete the current measure before stopping (used by Timer integration)
 - **Error Handling**: Class-based `ErrorBoundary` component wrapping the app
 
 ### Backend (Express)
