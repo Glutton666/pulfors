@@ -41,7 +41,7 @@ function BeatDot({ isActive, isAccent }: BeatDotProps) {
         transform: [
           {
             scale: withSequence(
-              withTiming(1.5, { duration: 50, easing: Easing.out(Easing.quad) }),
+              withTiming(1.25, { duration: 50, easing: Easing.out(Easing.quad) }),
               withTiming(1, { duration: 250, easing: Easing.out(Easing.elastic(1.5)) })
             ),
           },
@@ -72,7 +72,7 @@ function BeatDot({ isActive, isAccent }: BeatDotProps) {
         {
           shadowColor: isAccent ? Colors.accent : Colors.text,
           shadowOffset: { width: 0, height: 0 },
-          shadowRadius: 10,
+          shadowRadius: 16,
         },
       ]}
     />
@@ -344,29 +344,29 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 20,
+    gap: 16,
     paddingVertical: 20,
-    paddingHorizontal: 24,
-    minHeight: 72,
+    paddingHorizontal: 16,
+    minHeight: 80,
     width: "100%",
     flexWrap: "wrap",
   },
   dot: {
-    width: 21,
-    height: 21,
-    borderRadius: 10.5,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: Colors.textTertiary,
   },
   accentDot: {
-    width: 27,
-    height: 27,
-    borderRadius: 13.5,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
   },
   ghostDot: {
-    width: 21,
-    height: 21,
-    borderRadius: 10.5,
-    borderWidth: 2,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2.5,
     borderColor: Colors.accent,
     backgroundColor: "transparent",
   },

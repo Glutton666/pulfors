@@ -229,19 +229,17 @@ export default function MetronomeScreen() {
         ]}
       >
         <View style={styles.topSection}>
-          <View style={styles.bpmSection}>
-            <Text style={styles.tempoLabel}>{tempoLabel}</Text>
-            <BpmSlider bpm={bpm} onBpmChange={updateBpm} onTapTempo={handleTapTempo} />
-          </View>
-        </View>
-
-        <View style={styles.beatSection}>
           <BeatIndicator
             beatsPerMeasure={beatsPerMeasure}
             currentBeat={currentBeat}
             isPlaying={isPlaying}
             onBeatsChange={updateTimeSignature}
           />
+        </View>
+
+        <View style={styles.bpmSection}>
+          <Text style={styles.tempoLabel}>{tempoLabel}</Text>
+          <BpmSlider bpm={bpm} onBpmChange={updateBpm} onTapTempo={handleTapTempo} />
         </View>
 
         <View style={styles.playSection}>
@@ -286,14 +284,11 @@ const styles = StyleSheet.create({
   topSection: {
     flex: 2,
     justifyContent: "center",
+    alignItems: "center",
   },
   bpmSection: {
     alignItems: "center",
     gap: 4,
-  },
-  beatSection: {
-    justifyContent: "center",
-    alignItems: "center",
   },
   tempoLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
