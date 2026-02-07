@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   Platform,
-  Dimensions,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,32 +26,16 @@ import { Pendulum } from "@/components/Pendulum";
 import { BeatIndicator } from "@/components/BeatIndicator";
 import { BpmSlider } from "@/components/BpmSlider";
 
-const TEMPO_PRESETS = [
-  { label: "Largo", min: 40, max: 60, bpm: 50 },
-  { label: "Adagio", min: 60, max: 80, bpm: 70 },
-  { label: "Andante", min: 80, max: 100, bpm: 90 },
-  { label: "Moderato", min: 100, max: 120, bpm: 110 },
-  { label: "Allegro", min: 120, max: 160, bpm: 140 },
-  { label: "Vivace", min: 160, max: 200, bpm: 176 },
-  { label: "Presto", min: 200, max: 300, bpm: 208 },
-];
-
-const TIME_SIGNATURES = [
-  { beats: 2, label: "2/4" },
-  { beats: 3, label: "3/4" },
-  { beats: 4, label: "4/4" },
-  { beats: 6, label: "6/8" },
-];
-
 function getTempoLabel(bpm: number): string {
-  for (const preset of TEMPO_PRESETS) {
-    if (bpm >= preset.min && bpm < preset.max) {
-      return preset.label;
-    }
-  }
-  if (bpm >= 300) return "Prestissimo";
   if (bpm < 40) return "Grave";
-  return "Presto";
+  if (bpm < 60) return "Largo";
+  if (bpm < 80) return "Adagio";
+  if (bpm < 100) return "Andante";
+  if (bpm < 120) return "Moderato";
+  if (bpm < 160) return "Allegro";
+  if (bpm < 200) return "Vivace";
+  if (bpm < 300) return "Presto";
+  return "Prestissimo";
 }
 
 export default function MetronomeScreen() {
@@ -256,67 +239,8 @@ export default function MetronomeScreen() {
           beatsPerMeasure={beatsPerMeasure}
           currentBeat={currentBeat}
           isPlaying={isPlaying}
+          onBeatsChange={updateTimeSignature}
         />
-
-        <View style={styles.timeSignatureSection}>
-          <Text style={styles.sectionLabel}>Time Signature</Text>
-          <View style={styles.timeSignatureRow}>
-            {TIME_SIGNATURES.map((ts) => (
-              <Pressable
-                key={ts.label}
-                onPress={() => updateTimeSignature(ts.beats)}
-                style={[
-                  styles.tsButton,
-                  beatsPerMeasure === ts.beats && styles.tsButtonActive,
-                ]}
-                testID={`ts-${ts.label}`}
-              >
-                <Text
-                  style={[
-                    styles.tsText,
-                    beatsPerMeasure === ts.beats && styles.tsTextActive,
-                  ]}
-                >
-                  {ts.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.presetsSection}>
-          <Text style={styles.sectionLabel}>Tempo</Text>
-          <View style={styles.presetsRow}>
-            {TEMPO_PRESETS.map((preset) => {
-              const isActive = bpm >= preset.min && bpm < preset.max;
-              return (
-                <Pressable
-                  key={preset.label}
-                  onPress={() => {
-                    if (Platform.OS !== "web") {
-                      Haptics.selectionAsync();
-                    }
-                    updateBpm(preset.bpm);
-                  }}
-                  style={[
-                    styles.presetChip,
-                    isActive && styles.presetChipActive,
-                  ]}
-                  testID={`preset-${preset.label}`}
-                >
-                  <Text
-                    style={[
-                      styles.presetText,
-                      isActive && styles.presetTextActive,
-                    ]}
-                  >
-                    {preset.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
 
         <View style={styles.playSection}>
           <Pressable
@@ -390,71 +314,6 @@ const styles = StyleSheet.create({
     color: Colors.accentMuted,
     letterSpacing: 3,
     textTransform: "uppercase",
-  },
-  sectionLabel: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
-    color: Colors.textTertiary,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  timeSignatureSection: {
-    alignItems: "center",
-  },
-  timeSignatureRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  tsButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  tsButtonActive: {
-    backgroundColor: Colors.accentDim,
-    borderColor: Colors.accent,
-  },
-  tsText: {
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 16,
-    color: Colors.textSecondary,
-  },
-  tsTextActive: {
-    color: Colors.accent,
-  },
-  presetsSection: {
-    alignItems: "center",
-  },
-  presetsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 8,
-  },
-  presetChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 16,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  presetChipActive: {
-    backgroundColor: Colors.accentDim,
-    borderColor: Colors.accentMuted,
-  },
-  presetText: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
-    color: Colors.textTertiary,
-  },
-  presetTextActive: {
-    color: Colors.accent,
   },
   playSection: {
     alignItems: "center",
