@@ -25,6 +25,7 @@ import { MetronomeEngine, highClickUri, lowClickUri } from "@/lib/metronome-engi
 import { loadSettings, saveSettings } from "@/lib/storage";
 import { Pendulum } from "@/components/Pendulum";
 import { BeatIndicator } from "@/components/BeatIndicator";
+import { BpmSlider } from "@/components/BpmSlider";
 
 const TEMPO_PRESETS = [
   { label: "Largo", min: 40, max: 60, bpm: 50 },
@@ -192,16 +193,6 @@ export default function MetronomeScreen() {
     tapTimesRef.current = taps;
   }, [updateBpm]);
 
-  const handleBpmIncrement = useCallback(
-    (amount: number) => {
-      if (Platform.OS !== "web") {
-        Haptics.selectionAsync();
-      }
-      updateBpm(bpm + amount);
-    },
-    [bpm, updateBpm]
-  );
-
   const tempoLabel = getTempoLabel(bpm);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -258,36 +249,7 @@ export default function MetronomeScreen() {
 
         <View style={styles.bpmSection}>
           <Text style={styles.tempoLabel}>{tempoLabel}</Text>
-          <View style={styles.bpmRow}>
-            <Pressable
-              onPress={() => handleBpmIncrement(-1)}
-              onLongPress={() => handleBpmIncrement(-10)}
-              style={({ pressed }) => [
-                styles.bpmAdjust,
-                pressed && styles.bpmAdjustPressed,
-              ]}
-              testID="bpm-minus"
-            >
-              <Feather name="minus" size={24} color={Colors.text} />
-            </Pressable>
-
-            <View style={styles.bpmDisplay}>
-              <Text style={styles.bpmValue} testID="bpm-display">{bpm}</Text>
-              <Text style={styles.bpmUnit}>BPM</Text>
-            </View>
-
-            <Pressable
-              onPress={() => handleBpmIncrement(1)}
-              onLongPress={() => handleBpmIncrement(10)}
-              style={({ pressed }) => [
-                styles.bpmAdjust,
-                pressed && styles.bpmAdjustPressed,
-              ]}
-              testID="bpm-plus"
-            >
-              <Feather name="plus" size={24} color={Colors.text} />
-            </Pressable>
-          </View>
+          <BpmSlider bpm={bpm} onBpmChange={updateBpm} />
         </View>
 
         <BeatIndicator
@@ -428,42 +390,6 @@ const styles = StyleSheet.create({
     color: Colors.accentMuted,
     letterSpacing: 3,
     textTransform: "uppercase",
-  },
-  bpmRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 20,
-  },
-  bpmAdjust: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  bpmAdjustPressed: {
-    backgroundColor: Colors.surfaceLight,
-    transform: [{ scale: 0.95 }],
-  },
-  bpmDisplay: {
-    alignItems: "center",
-    minWidth: 120,
-  },
-  bpmValue: {
-    fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 64,
-    color: Colors.text,
-    lineHeight: 72,
-  },
-  bpmUnit: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 13,
-    color: Colors.textTertiary,
-    letterSpacing: 4,
-    marginTop: -4,
   },
   sectionLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
