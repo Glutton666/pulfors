@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,9 @@ import {
   Pressable,
   Platform,
   Dimensions,
+  PanResponder,
+  GestureResponderEvent,
+  PanResponderGestureState,
 } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -15,6 +18,7 @@ import Animated, {
   withSequence,
   withSpring,
   useSharedValue,
+  runOnJS,
   Easing,
   cancelAnimation,
 } from "react-native-reanimated";
@@ -28,6 +32,9 @@ type TimerState = "idle" | "running" | "paused" | "finishing";
 const PANEL_WIDTH = 260;
 const HANDLE_WIDTH = 28;
 const HANDLE_HEIGHT = 80;
+const TOTAL_DRAWER_WIDTH = PANEL_WIDTH + HANDLE_WIDTH;
+const EDGE_SWIPE_ZONE = 30;
+const SWIPE_THRESHOLD = 50;
 const TIMER_PRESETS = [
   { label: "30s", seconds: 30 },
   { label: "1m", seconds: 60 },
@@ -107,12 +114,117 @@ export function StopwatchTimer({
     }
   }, [state]);
 
+  const openRef = useRef(false);
   const togglePanel = useCallback(() => {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    setOpen((prev) => !prev);
+    setOpen((prev) => {
+      openRef.current = !prev;
+      return !prev;
+    });
   }, []);
+
+  const openPanel = useCallback(() => {
+    if (!openRef.current) {
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      openRef.current = true;
+      setOpen(true);
+    }
+  }, []);
+
+  const closePanel = useCallback(() => {
+    if (openRef.current) {
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      openRef.current = false;
+      setOpen(false);
+    }
+  }, []);
+
+  const drawerPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (
+          _evt: GestureResponderEvent,
+          gestureState: PanResponderGestureState
+        ) => {
+          return (
+            Math.abs(gestureState.dx) > 10 &&
+            Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5
+          );
+        },
+        onPanResponderMove: (
+          _evt: GestureResponderEvent,
+          gestureState: PanResponderGestureState
+        ) => {
+          const currentOpen = openRef.current;
+          if (currentOpen) {
+            const clamped = Math.min(0, Math.max(-PANEL_WIDTH, gestureState.dx));
+            slideX.value = clamped;
+          } else {
+            const clamped = Math.min(0, Math.max(-PANEL_WIDTH, -PANEL_WIDTH + gestureState.dx));
+            slideX.value = clamped;
+          }
+        },
+        onPanResponderRelease: (
+          _evt: GestureResponderEvent,
+          gestureState: PanResponderGestureState
+        ) => {
+          if (gestureState.dx > SWIPE_THRESHOLD) {
+            openPanel();
+            slideX.value = withSpring(0, { damping: 22, stiffness: 220 });
+          } else if (gestureState.dx < -SWIPE_THRESHOLD) {
+            closePanel();
+            slideX.value = withSpring(-PANEL_WIDTH, { damping: 22, stiffness: 220 });
+          } else {
+            const currentOpen = openRef.current;
+            if (currentOpen) {
+              slideX.value = withSpring(0, { damping: 22, stiffness: 220 });
+            } else {
+              slideX.value = withSpring(-PANEL_WIDTH, { damping: 22, stiffness: 220 });
+            }
+          }
+        },
+      }),
+    [openPanel, closePanel]
+  );
+
+  const edgeSwipePanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (
+          _evt: GestureResponderEvent,
+          gestureState: PanResponderGestureState
+        ) => {
+          return gestureState.dx > 8 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        },
+        onPanResponderMove: (
+          _evt: GestureResponderEvent,
+          gestureState: PanResponderGestureState
+        ) => {
+          const clamped = Math.min(0, Math.max(-PANEL_WIDTH, -PANEL_WIDTH + gestureState.dx));
+          slideX.value = clamped;
+        },
+        onPanResponderRelease: (
+          _evt: GestureResponderEvent,
+          gestureState: PanResponderGestureState
+        ) => {
+          if (gestureState.dx > SWIPE_THRESHOLD) {
+            openPanel();
+            slideX.value = withSpring(0, { damping: 22, stiffness: 220 });
+          } else {
+            slideX.value = withSpring(-PANEL_WIDTH, { damping: 22, stiffness: 220 });
+          }
+        },
+      }),
+    [openPanel]
+  );
 
   const clearTimerInterval = useCallback(() => {
     if (intervalRef.current) {
@@ -312,74 +424,87 @@ export function StopwatchTimer({
   };
 
   return (
-    <View
-      style={[styles.edgeContainer, { top: topInset + 60 }]}
-      pointerEvents="box-none"
-    >
-      <Animated.View style={[styles.panel, panelStyle]}>
-        <View style={styles.tabRow}>
-          <Pressable
-            onPress={() => switchMode("stopwatch")}
-            style={({ pressed }) => [
-              styles.tab,
-              mode === "stopwatch" && styles.tabActive,
-              pressed && styles.buttonPressed,
-            ]}
-            testID="tab-stopwatch"
-          >
-            <MaterialCommunityIcons
-              name="timer-outline"
-              size={14}
-              color={mode === "stopwatch" ? Colors.accent : Colors.textTertiary}
-            />
-            <Text style={[styles.tabText, mode === "stopwatch" && styles.tabTextActive]}>
-              STOPWATCH
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => switchMode("timer")}
-            style={({ pressed }) => [
-              styles.tab,
-              mode === "timer" && styles.tabActive,
-              pressed && styles.buttonPressed,
-            ]}
-            testID="tab-timer"
-          >
-            <MaterialCommunityIcons
-              name="av-timer"
-              size={14}
-              color={mode === "timer" ? Colors.accent : Colors.textTertiary}
-            />
-            <Text style={[styles.tabText, mode === "timer" && styles.tabTextActive]}>
-              TIMER
-            </Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.divider} />
-
-        {mode === "stopwatch" ? renderStopwatchContent() : renderTimerContent()}
-      </Animated.View>
-
-      <Pressable
-        onPress={togglePanel}
-        style={({ pressed }) => [
-          styles.handle,
-          open && styles.handleOpen,
-          pressed && styles.handlePressed,
-        ]}
-        testID="panel-toggle"
-      >
-        <Animated.View style={[styles.handleGlow, handleGlowStyle]} />
-        <View style={styles.handleLine} />
-        <MaterialCommunityIcons
-          name={handleStatusIcon()}
-          size={14}
-          color={handleStatusColor()}
+    <>
+      {!open && (
+        <View
+          style={[styles.edgeSwipeZone, { top: topInset + 60 }]}
+          {...edgeSwipePanResponder.panHandlers}
         />
-        <View style={styles.handleLine} />
-      </Pressable>
-    </View>
+      )}
+      <View
+        style={[styles.edgeContainer, { top: topInset + 60 }]}
+        pointerEvents="box-none"
+      >
+        <Animated.View
+          style={[styles.drawerWrapper, panelStyle]}
+          {...drawerPanResponder.panHandlers}
+        >
+          <View style={styles.panel}>
+            <View style={styles.tabRow}>
+              <Pressable
+                onPress={() => switchMode("stopwatch")}
+                style={({ pressed }) => [
+                  styles.tab,
+                  mode === "stopwatch" && styles.tabActive,
+                  pressed && styles.buttonPressed,
+                ]}
+                testID="tab-stopwatch"
+              >
+                <MaterialCommunityIcons
+                  name="timer-outline"
+                  size={14}
+                  color={mode === "stopwatch" ? Colors.accent : Colors.textTertiary}
+                />
+                <Text style={[styles.tabText, mode === "stopwatch" && styles.tabTextActive]}>
+                  STOPWATCH
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => switchMode("timer")}
+                style={({ pressed }) => [
+                  styles.tab,
+                  mode === "timer" && styles.tabActive,
+                  pressed && styles.buttonPressed,
+                ]}
+                testID="tab-timer"
+              >
+                <MaterialCommunityIcons
+                  name="av-timer"
+                  size={14}
+                  color={mode === "timer" ? Colors.accent : Colors.textTertiary}
+                />
+                <Text style={[styles.tabText, mode === "timer" && styles.tabTextActive]}>
+                  TIMER
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.divider} />
+
+            {mode === "stopwatch" ? renderStopwatchContent() : renderTimerContent()}
+          </View>
+
+          <Pressable
+            onPress={togglePanel}
+            style={({ pressed }) => [
+              styles.handle,
+              open && styles.handleOpen,
+              pressed && styles.handlePressed,
+            ]}
+            testID="panel-toggle"
+          >
+            <Animated.View style={[styles.handleGlow, handleGlowStyle]} />
+            <View style={styles.handleLine} />
+            <MaterialCommunityIcons
+              name={handleStatusIcon()}
+              size={14}
+              color={handleStatusColor()}
+            />
+            <View style={styles.handleLine} />
+          </Pressable>
+        </Animated.View>
+      </View>
+    </>
   );
 
   function renderStopwatchContent() {
@@ -568,12 +693,23 @@ export function StopwatchTimer({
 }
 
 const styles = StyleSheet.create({
+  edgeSwipeZone: {
+    position: "absolute",
+    left: 0,
+    width: EDGE_SWIPE_ZONE,
+    height: 300,
+    zIndex: 99,
+  },
   edgeContainer: {
     position: "absolute",
     left: 0,
     flexDirection: "row",
     alignItems: "flex-start",
     zIndex: 100,
+  },
+  drawerWrapper: {
+    flexDirection: "row",
+    alignItems: "flex-start",
   },
   handle: {
     width: HANDLE_WIDTH,
