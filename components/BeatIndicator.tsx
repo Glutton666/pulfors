@@ -363,11 +363,11 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   signatureText: {
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 9,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 22,
     color: Colors.background,
-    letterSpacing: 1,
-    opacity: 0.7,
+    letterSpacing: 2,
+    opacity: 0.5,
   },
   hintText: {
     fontFamily: "SpaceGrotesk_400Regular",
