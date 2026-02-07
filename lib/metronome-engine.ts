@@ -1,4 +1,4 @@
-import { Audio } from "expo-av";
+import { useAudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
 
@@ -51,8 +51,8 @@ function createClickBuffer(frequency: number, duration: number, volume: number):
   return btoa(binary);
 }
 
-const highClickBase64 = createClickBuffer(1200, 0.05, 0.9);
-const lowClickBase64 = createClickBuffer(800, 0.04, 0.7);
+export const highClickUri = `data:audio/wav;base64,${createClickBuffer(1200, 0.05, 0.9)}`;
+export const lowClickUri = `data:audio/wav;base64,${createClickBuffer(800, 0.04, 0.7)}`;
 
 export class MetronomeEngine {
   private intervalId: ReturnType<typeof setTimeout> | null = null;
@@ -60,33 +60,13 @@ export class MetronomeEngine {
   private bpm = 120;
   private beatsPerMeasure = 4;
   private currentBeat = 0;
-  private highSound: Audio.Sound | null = null;
-  private lowSound: Audio.Sound | null = null;
   private onBeat: ((beat: number, isAccent: boolean) => void) | null = null;
-  private lastTickTime = 0;
+  private playHighClick: (() => void) | null = null;
+  private playLowClick: (() => void) | null = null;
 
-  async init() {
-    try {
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-      });
-
-      const { sound: high } = await Audio.Sound.createAsync(
-        { uri: `data:audio/wav;base64,${highClickBase64}` },
-        { shouldPlay: false }
-      );
-      this.highSound = high;
-
-      const { sound: low } = await Audio.Sound.createAsync(
-        { uri: `data:audio/wav;base64,${lowClickBase64}` },
-        { shouldPlay: false }
-      );
-      this.lowSound = low;
-    } catch (e) {
-      console.warn("Audio init failed:", e);
-    }
+  setAudioCallbacks(playHigh: () => void, playLow: () => void) {
+    this.playHighClick = playHigh;
+    this.playLowClick = playLow;
   }
 
   setOnBeat(callback: (beat: number, isAccent: boolean) => void) {
@@ -114,14 +94,14 @@ export class MetronomeEngine {
     return this.isRunning;
   }
 
-  private async tick() {
+  private tick() {
     const isAccent = this.currentBeat === 0;
 
     try {
-      const sound = isAccent ? this.highSound : this.lowSound;
-      if (sound) {
-        await sound.setPositionAsync(0);
-        await sound.playAsync();
+      if (isAccent) {
+        this.playHighClick?.();
+      } else {
+        this.playLowClick?.();
       }
     } catch (e) {
       // silent fail
@@ -151,15 +131,9 @@ export class MetronomeEngine {
     const intervalMs = 60000 / this.bpm;
 
     this.tick();
-    this.lastTickTime = Date.now();
 
     this.intervalId = setInterval(() => {
-      const now = Date.now();
-      const elapsed = now - this.lastTickTime;
-      if (elapsed >= intervalMs * 0.9) {
-        this.lastTickTime = now;
-        this.tick();
-      }
+      this.tick();
     }, intervalMs);
   }
 
@@ -172,13 +146,7 @@ export class MetronomeEngine {
     this.currentBeat = 0;
   }
 
-  async cleanup() {
+  cleanup() {
     this.stop();
-    try {
-      await this.highSound?.unloadAsync();
-      await this.lowSound?.unloadAsync();
-    } catch (e) {
-      // silent
-    }
   }
 }

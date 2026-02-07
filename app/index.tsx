@@ -9,24 +9,22 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons, Feather } from "@expo/vector-icons";
 import Animated, {
   useAnimatedStyle,
   withTiming,
   withSequence,
   Easing,
   useSharedValue,
-  runOnJS,
 } from "react-native-reanimated";
+import { useAudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
-import { MetronomeEngine } from "@/lib/metronome-engine";
+import { MetronomeEngine, highClickUri, lowClickUri } from "@/lib/metronome-engine";
 import { loadSettings, saveSettings } from "@/lib/storage";
 import { Pendulum } from "@/components/Pendulum";
 import { BeatIndicator } from "@/components/BeatIndicator";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const TEMPO_PRESETS = [
   { label: "Largo", min: 40, max: 60, bpm: 50 },
@@ -67,6 +65,9 @@ export default function MetronomeScreen() {
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
 
+  const highPlayer = useAudioPlayer(highClickUri);
+  const lowPlayer = useAudioPlayer(lowClickUri);
+
   const flashOpacity = useSharedValue(0);
 
   const flashStyle = useAnimatedStyle(() => ({
@@ -77,14 +78,27 @@ export default function MetronomeScreen() {
     const engine = new MetronomeEngine();
     engineRef.current = engine;
 
-    engine.init().then(() => {
-      loadSettings().then((settings) => {
-        setBpm(settings.bpm);
-        setBeatsPerMeasure(settings.beatsPerMeasure);
-        engine.setBpm(settings.bpm);
-        engine.setBeatsPerMeasure(settings.beatsPerMeasure);
-        setIsLoaded(true);
-      });
+    engine.setAudioCallbacks(
+      () => {
+        try {
+          highPlayer.seekTo(0);
+          highPlayer.play();
+        } catch (e) { /* silent */ }
+      },
+      () => {
+        try {
+          lowPlayer.seekTo(0);
+          lowPlayer.play();
+        } catch (e) { /* silent */ }
+      }
+    );
+
+    loadSettings().then((settings) => {
+      setBpm(settings.bpm);
+      setBeatsPerMeasure(settings.beatsPerMeasure);
+      engine.setBpm(settings.bpm);
+      engine.setBeatsPerMeasure(settings.beatsPerMeasure);
+      setIsLoaded(true);
     });
 
     return () => {
@@ -100,7 +114,7 @@ export default function MetronomeScreen() {
       setCurrentBeat(beat);
       if (isAccent) {
         flashOpacity.value = withSequence(
-          withTiming(0.15, { duration: 50 }),
+          withTiming(0.12, { duration: 50 }),
           withTiming(0, { duration: 250, easing: Easing.out(Easing.quad) })
         );
       }
@@ -208,8 +222,11 @@ export default function MetronomeScreen() {
       />
 
       <Animated.View
-        style={[StyleSheet.absoluteFill, { backgroundColor: Colors.accent }, flashStyle]}
-        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: Colors.accent, pointerEvents: "none" as const },
+          flashStyle,
+        ]}
       />
 
       <View
@@ -228,6 +245,7 @@ export default function MetronomeScreen() {
               styles.tapButton,
               pressed && styles.tapButtonPressed,
             ]}
+            testID="tap-tempo-button"
           >
             <Feather name="activity" size={18} color={Colors.textSecondary} />
             <Text style={styles.tapText}>TAP</Text>
@@ -248,12 +266,13 @@ export default function MetronomeScreen() {
                 styles.bpmAdjust,
                 pressed && styles.bpmAdjustPressed,
               ]}
+              testID="bpm-minus"
             >
               <Feather name="minus" size={24} color={Colors.text} />
             </Pressable>
 
             <View style={styles.bpmDisplay}>
-              <Text style={styles.bpmValue}>{bpm}</Text>
+              <Text style={styles.bpmValue} testID="bpm-display">{bpm}</Text>
               <Text style={styles.bpmUnit}>BPM</Text>
             </View>
 
@@ -264,6 +283,7 @@ export default function MetronomeScreen() {
                 styles.bpmAdjust,
                 pressed && styles.bpmAdjustPressed,
               ]}
+              testID="bpm-plus"
             >
               <Feather name="plus" size={24} color={Colors.text} />
             </Pressable>
@@ -287,6 +307,7 @@ export default function MetronomeScreen() {
                   styles.tsButton,
                   beatsPerMeasure === ts.beats && styles.tsButtonActive,
                 ]}
+                testID={`ts-${ts.label}`}
               >
                 <Text
                   style={[
@@ -319,6 +340,7 @@ export default function MetronomeScreen() {
                     styles.presetChip,
                     isActive && styles.presetChipActive,
                   ]}
+                  testID={`preset-${preset.label}`}
                 >
                   <Text
                     style={[
@@ -342,6 +364,7 @@ export default function MetronomeScreen() {
               isPlaying && styles.playButtonActive,
               pressed && styles.playButtonPressed,
             ]}
+            testID="play-button"
           >
             <Ionicons
               name={isPlaying ? "stop" : "play"}
@@ -518,15 +541,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accent,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: Colors.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    boxShadow: `0px 4px 12px ${Colors.accent}4D`,
   },
   playButtonActive: {
     backgroundColor: Colors.danger,
-    shadowColor: Colors.danger,
+    boxShadow: `0px 4px 12px ${Colors.danger}4D`,
   },
   playButtonPressed: {
     transform: [{ scale: 0.93 }],
