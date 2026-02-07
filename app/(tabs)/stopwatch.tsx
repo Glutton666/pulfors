@@ -159,6 +159,8 @@ export default function StopwatchScreen() {
                 onPress={recordLap}
                 style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
                 testID="stopwatch-lap"
+                accessibilityLabel="Lap"
+                accessibilityRole="button"
               >
                 <Ionicons name="flag" size={22} color={Colors.textSecondary} />
               </Pressable>
@@ -166,6 +168,8 @@ export default function StopwatchScreen() {
                 onPress={pause}
                 style={({ pressed }) => [styles.mainButton, styles.pauseButton, pressed && styles.buttonPressed]}
                 testID="stopwatch-pause"
+                accessibilityLabel="Pause"
+                accessibilityRole="button"
               >
                 <Ionicons name="pause" size={32} color={Colors.background} />
               </Pressable>
