@@ -61,6 +61,8 @@ export class MetronomeEngine {
   private beatsPerMeasure = 4;
   private currentBeat = 0;
   private onBeat: ((beat: number, isAccent: boolean) => void) | null = null;
+  private onMeasureComplete: (() => void) | null = null;
+  private stopAfterMeasure = false;
   private playHighClick: (() => void) | null = null;
   private playLowClick: (() => void) | null = null;
 
@@ -71,6 +73,23 @@ export class MetronomeEngine {
 
   setOnBeat(callback: (beat: number, isAccent: boolean) => void) {
     this.onBeat = callback;
+  }
+
+  setOnMeasureComplete(callback: (() => void) | null) {
+    this.onMeasureComplete = callback;
+  }
+
+  requestStopAfterMeasure() {
+    if (!this.isRunning) return;
+    this.stopAfterMeasure = true;
+  }
+
+  getBeatsPerMeasure() {
+    return this.beatsPerMeasure;
+  }
+
+  getCurrentBeat() {
+    return this.currentBeat;
   }
 
   setBpm(bpm: number) {
@@ -120,7 +139,17 @@ export class MetronomeEngine {
     }
 
     this.onBeat?.(this.currentBeat, isAccent);
-    this.currentBeat = (this.currentBeat + 1) % this.beatsPerMeasure;
+
+    const nextBeat = (this.currentBeat + 1) % this.beatsPerMeasure;
+    if (nextBeat === 0) {
+      this.onMeasureComplete?.();
+      if (this.stopAfterMeasure) {
+        this.stopAfterMeasure = false;
+        this.stop();
+        return;
+      }
+    }
+    this.currentBeat = nextBeat;
   }
 
   start() {
