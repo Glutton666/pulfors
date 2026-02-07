@@ -302,11 +302,12 @@ export function BeatIndicator({
             color={isPlaying ? Colors.background : Colors.background}
             style={!isPlaying ? { marginLeft: 3 } : undefined}
           />
-          <Text style={styles.signatureText}>
-            {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}
-          </Text>
         </Pressable>
       </View>
+
+      <Text style={styles.signatureText}>
+        {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}
+      </Text>
 
       <Text style={styles.hintText}>swipe to add or remove beats</Text>
     </View>
@@ -347,7 +348,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accent,
     alignItems: "center",
     justifyContent: "center",
-    gap: 1,
   },
   centerHubActive: {
     backgroundColor: Colors.danger,
@@ -357,11 +357,10 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   signatureText: {
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 9,
-    color: Colors.background,
-    letterSpacing: 1,
-    opacity: 0.7,
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 22,
+    color: Colors.text,
+    letterSpacing: 2,
   },
   hintText: {
     fontFamily: "SpaceGrotesk_400Regular",
