@@ -34,7 +34,6 @@ const TIMER_PRESETS = [
   { label: "3m", seconds: 180 },
   { label: "5m", seconds: 300 },
   { label: "10m", seconds: 600 },
-  { label: "15m", seconds: 900 },
 ];
 
 function formatTime(totalMs: number): { main: string; fraction: string } {
@@ -79,7 +78,7 @@ export function StopwatchTimer({
   const startTimeRef = useRef(0);
   const elapsedAtPauseRef = useRef(0);
 
-  const slideX = useSharedValue(PANEL_WIDTH);
+  const slideX = useSharedValue(-PANEL_WIDTH);
   const pulseOpacity = useSharedValue(1);
   const finishingPulse = useSharedValue(1);
   const handleGlow = useSharedValue(0);
@@ -88,7 +87,7 @@ export function StopwatchTimer({
     if (open) {
       slideX.value = withSpring(0, { damping: 22, stiffness: 220 });
     } else {
-      slideX.value = withSpring(PANEL_WIDTH, { damping: 22, stiffness: 220 });
+      slideX.value = withSpring(-PANEL_WIDTH, { damping: 22, stiffness: 220 });
     }
   }, [open]);
 
@@ -317,25 +316,6 @@ export function StopwatchTimer({
       style={[styles.edgeContainer, { top: topInset + 60 }]}
       pointerEvents="box-none"
     >
-      <Pressable
-        onPress={togglePanel}
-        style={({ pressed }) => [
-          styles.handle,
-          open && styles.handleOpen,
-          pressed && styles.handlePressed,
-        ]}
-        testID="panel-toggle"
-      >
-        <Animated.View style={[styles.handleGlow, handleGlowStyle]} />
-        <View style={styles.handleLine} />
-        <MaterialCommunityIcons
-          name={handleStatusIcon()}
-          size={14}
-          color={handleStatusColor()}
-        />
-        <View style={styles.handleLine} />
-      </Pressable>
-
       <Animated.View style={[styles.panel, panelStyle]}>
         <View style={styles.tabRow}>
           <Pressable
@@ -380,6 +360,25 @@ export function StopwatchTimer({
 
         {mode === "stopwatch" ? renderStopwatchContent() : renderTimerContent()}
       </Animated.View>
+
+      <Pressable
+        onPress={togglePanel}
+        style={({ pressed }) => [
+          styles.handle,
+          open && styles.handleOpen,
+          pressed && styles.handlePressed,
+        ]}
+        testID="panel-toggle"
+      >
+        <Animated.View style={[styles.handleGlow, handleGlowStyle]} />
+        <View style={styles.handleLine} />
+        <MaterialCommunityIcons
+          name={handleStatusIcon()}
+          size={14}
+          color={handleStatusColor()}
+        />
+        <View style={styles.handleLine} />
+      </Pressable>
     </View>
   );
 
@@ -571,7 +570,7 @@ export function StopwatchTimer({
 const styles = StyleSheet.create({
   edgeContainer: {
     position: "absolute",
-    right: 0,
+    left: 0,
     flexDirection: "row",
     alignItems: "flex-start",
     zIndex: 100,
@@ -580,10 +579,10 @@ const styles = StyleSheet.create({
     width: HANDLE_WIDTH,
     height: HANDLE_HEIGHT,
     backgroundColor: Colors.surface,
-    borderTopLeftRadius: 12,
-    borderBottomLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
     borderWidth: 1,
-    borderRightWidth: 0,
+    borderLeftWidth: 0,
     borderColor: Colors.border,
     alignItems: "center",
     justifyContent: "center",
@@ -611,10 +610,10 @@ const styles = StyleSheet.create({
   panel: {
     width: PANEL_WIDTH,
     backgroundColor: Colors.surface,
-    borderLeftWidth: 1,
+    borderRightWidth: 1,
     borderBottomWidth: 1,
-    borderBottomLeftRadius: 16,
-    borderLeftColor: Colors.border,
+    borderBottomRightRadius: 16,
+    borderRightColor: Colors.border,
     borderBottomColor: Colors.border,
     paddingHorizontal: 14,
     paddingTop: 12,
