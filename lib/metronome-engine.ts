@@ -2,6 +2,8 @@ import { useAudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
 
+export type BeatType = "accent" | "normal" | "mute";
+
 const SAMPLE_RATE = 44100;
 
 function createClickBuffer(frequency: number, duration: number, volume: number): string {
@@ -60,6 +62,7 @@ export class MetronomeEngine {
   private bpm = 120;
   private beatsPerMeasure = 4;
   private currentBeat = 0;
+  private beatTypes: BeatType[] = ["accent", "normal", "normal", "normal"];
   private onBeat: ((beat: number, isAccent: boolean) => void) | null = null;
   private onMeasureComplete: (() => void) | null = null;
   private stopAfterMeasure = false;
@@ -105,6 +108,10 @@ export class MetronomeEngine {
     this.currentBeat = 0;
   }
 
+  setBeatTypes(types: BeatType[]) {
+    this.beatTypes = types;
+  }
+
   getBpm() {
     return this.bpm;
   }
@@ -114,27 +121,31 @@ export class MetronomeEngine {
   }
 
   private tick() {
-    const isAccent = this.currentBeat === 0;
+    const beatType = this.beatTypes[this.currentBeat] || "normal";
+    const isAccent = beatType === "accent";
+    const isMute = beatType === "mute";
 
-    try {
-      if (isAccent) {
-        this.playHighClick?.();
-      } else {
-        this.playLowClick?.();
-      }
-    } catch (e) {
-      // silent fail
-    }
-
-    if (Platform.OS !== "web") {
+    if (!isMute) {
       try {
-        Haptics.impactAsync(
-          isAccent
-            ? Haptics.ImpactFeedbackStyle.Heavy
-            : Haptics.ImpactFeedbackStyle.Light
-        );
+        if (isAccent) {
+          this.playHighClick?.();
+        } else {
+          this.playLowClick?.();
+        }
       } catch (e) {
         // silent fail
+      }
+
+      if (Platform.OS !== "web") {
+        try {
+          Haptics.impactAsync(
+            isAccent
+              ? Haptics.ImpactFeedbackStyle.Heavy
+              : Haptics.ImpactFeedbackStyle.Light
+          );
+        } catch (e) {
+          // silent fail
+        }
       }
     }
 
