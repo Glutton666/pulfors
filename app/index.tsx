@@ -19,6 +19,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
 import { MetronomeEngine, highClickUri, lowClickUri } from "@/lib/metronome-engine";
+import type { BeatType } from "@/lib/metronome-engine";
 import { loadSettings, saveSettings } from "@/lib/storage";
 import { BeatIndicator } from "@/components/BeatIndicator";
 import { BpmSlider } from "@/components/BpmSlider";
@@ -36,10 +37,15 @@ function getTempoLabel(bpm: number): string {
   return "Prestissimo";
 }
 
+function defaultBeatTypes(beats: number): BeatType[] {
+  return Array.from({ length: beats }, (_, i) => (i === 0 ? "accent" : "normal"));
+}
+
 export default function MetronomeScreen() {
   const insets = useSafeAreaInsets();
   const [bpm, setBpm] = useState(120);
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
+  const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(-1);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -114,14 +120,29 @@ export default function MetronomeScreen() {
 
   const updateTimeSignature = useCallback(
     (beats: number) => {
+      const newTypes = defaultBeatTypes(beats);
       setBeatsPerMeasure(beats);
+      setBeatTypes(newTypes);
       engineRef.current?.setBeatsPerMeasure(beats);
+      engineRef.current?.setBeatTypes(newTypes);
       if (Platform.OS !== "web") {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       saveSettings({ bpm, beatsPerMeasure: beats, subdivisions: 1 });
     },
     [bpm]
+  );
+
+  const handleBeatTypeChange = useCallback(
+    (index: number, type: BeatType) => {
+      setBeatTypes((prev) => {
+        const next = [...prev];
+        next[index] = type;
+        engineRef.current?.setBeatTypes(next);
+        return next;
+      });
+    },
+    []
   );
 
   const togglePlayPause = useCallback(() => {
@@ -233,6 +254,8 @@ export default function MetronomeScreen() {
             isPlaying={isPlaying}
             onBeatsChange={updateTimeSignature}
             onTogglePlay={togglePlayPause}
+            beatTypes={beatTypes}
+            onBeatTypeChange={handleBeatTypeChange}
           />
         </View>
 
