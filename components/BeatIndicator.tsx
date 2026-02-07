@@ -20,6 +20,8 @@ import Animated, {
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 
+export type BeatType = "accent" | "normal" | "mute";
+
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const DIAL_SIZE = Math.min(SCREEN_WIDTH - 48, 300);
 const DIAL_RADIUS = DIAL_SIZE / 2;
@@ -34,15 +36,44 @@ interface DialBeatDotProps {
   index: number;
   total: number;
   isActive: boolean;
-  isAccent: boolean;
+  beatType: BeatType;
+  onPress: () => void;
 }
 
-function DialBeatDot({ index, total, isActive, isAccent }: DialBeatDotProps) {
+function DialBeatDot({ index, total, isActive, beatType, onPress }: DialBeatDotProps) {
+  const isAccent = beatType === "accent";
+  const isMute = beatType === "mute";
   const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
-  const x = DIAL_RADIUS + DOT_RADIUS_FROM_CENTER * Math.cos(angle) - (isAccent ? ACCENT_DOT_SIZE : DOT_SIZE) / 2;
-  const y = DIAL_RADIUS + DOT_RADIUS_FROM_CENTER * Math.sin(angle) - (isAccent ? ACCENT_DOT_SIZE : DOT_SIZE) / 2;
+  const size = isAccent ? ACCENT_DOT_SIZE : DOT_SIZE;
+  const x = DIAL_RADIUS + DOT_RADIUS_FROM_CENTER * Math.cos(angle) - size / 2;
+  const y = DIAL_RADIUS + DOT_RADIUS_FROM_CENTER * Math.sin(angle) - size / 2;
 
   const animatedStyle = useAnimatedStyle(() => {
+    if (isMute) {
+      if (isActive) {
+        return {
+          transform: [
+            {
+              scale: withSequence(
+                withTiming(1.3, { duration: 50, easing: Easing.out(Easing.quad) }),
+                withTiming(1, { duration: 250, easing: Easing.out(Easing.elastic(1.5)) })
+              ),
+            },
+          ],
+          borderColor: withTiming(Colors.textTertiary, { duration: 50 }),
+          shadowOpacity: withSequence(
+            withTiming(0.5, { duration: 50 }),
+            withTiming(0, { duration: 400 })
+          ),
+        };
+      }
+      return {
+        transform: [{ scale: withTiming(1, { duration: 200 }) }],
+        borderColor: withTiming(Colors.textTertiary, { duration: 200 }),
+        shadowOpacity: withTiming(0, { duration: 200 }),
+      };
+    }
+
     if (isActive) {
       return {
         transform: [
@@ -68,30 +99,39 @@ function DialBeatDot({ index, total, isActive, isAccent }: DialBeatDotProps) {
       backgroundColor: withTiming(Colors.textTertiary, { duration: 200 }),
       shadowOpacity: withTiming(0, { duration: 200 }),
     };
-  }, [isActive, isAccent]);
-
-  const size = isAccent ? ACCENT_DOT_SIZE : DOT_SIZE;
+  }, [isActive, beatType]);
 
   return (
-    <Animated.View
-      style={[
-        {
-          position: "absolute",
-          left: x,
-          top: y,
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: Colors.textTertiary,
-        },
-        animatedStyle,
-        {
-          shadowColor: isAccent ? Colors.accent : Colors.text,
-          shadowOffset: { width: 0, height: 0 },
-          shadowRadius: isActive ? 20 : 0,
-        },
-      ]}
-    />
+    <Pressable
+      onPress={onPress}
+      style={{
+        position: "absolute",
+        left: x,
+        top: y,
+        width: size,
+        height: size,
+      }}
+      hitSlop={6}
+    >
+      <Animated.View
+        style={[
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            backgroundColor: isMute ? "transparent" : Colors.textTertiary,
+            borderWidth: isMute ? 2.5 : 0,
+            borderColor: isMute ? Colors.textTertiary : "transparent",
+          },
+          animatedStyle,
+          {
+            shadowColor: isAccent ? Colors.accent : Colors.text,
+            shadowOffset: { width: 0, height: 0 },
+            shadowRadius: isActive ? 20 : 0,
+          },
+        ]}
+      />
+    </Pressable>
   );
 }
 
@@ -101,6 +141,8 @@ interface BeatIndicatorProps {
   isPlaying: boolean;
   onBeatsChange: (beats: number) => void;
   onTogglePlay: () => void;
+  beatTypes: BeatType[];
+  onBeatTypeChange: (index: number, type: BeatType) => void;
 }
 
 export function BeatIndicator({
@@ -109,6 +151,8 @@ export function BeatIndicator({
   isPlaying,
   onBeatsChange,
   onTogglePlay,
+  beatTypes,
+  onBeatTypeChange,
 }: BeatIndicatorProps) {
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
 
@@ -257,6 +301,22 @@ export function BeatIndicator({
 
   const nativePanHandlers = Platform.OS !== "web" && panResponder ? panResponder.panHandlers : {};
 
+  const cycleBeatType = useCallback((index: number) => {
+    const current = beatTypes[index] || "normal";
+    let next: BeatType;
+    if (current === "accent") {
+      next = "normal";
+    } else if (current === "normal") {
+      next = "mute";
+    } else {
+      next = "accent";
+    }
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    onBeatTypeChange(index, next);
+  }, [beatTypes, onBeatTypeChange]);
+
   return (
     <View
       ref={containerRef}
@@ -272,7 +332,8 @@ export function BeatIndicator({
               index={beat}
               total={beatsPerMeasure}
               isActive={isPlaying && currentBeat === beat}
-              isAccent={beat === 0}
+              beatType={beatTypes[beat] || "normal"}
+              onPress={() => cycleBeatType(beat)}
             />
           ))}
 
