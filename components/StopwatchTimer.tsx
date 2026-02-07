@@ -1,0 +1,624 @@
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  withTiming,
+  withRepeat,
+  withSequence,
+  useSharedValue,
+  Easing,
+  cancelAnimation,
+} from "react-native-reanimated";
+import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import Colors from "@/constants/colors";
+
+type Mode = "stopwatch" | "timer";
+type TimerState = "idle" | "running" | "paused" | "finishing";
+
+const TIMER_PRESETS = [
+  { label: "1m", seconds: 60 },
+  { label: "3m", seconds: 180 },
+  { label: "5m", seconds: 300 },
+  { label: "10m", seconds: 600 },
+  { label: "15m", seconds: 900 },
+];
+
+function formatTime(totalMs: number): { main: string; fraction: string } {
+  const totalSeconds = Math.floor(totalMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const centiseconds = Math.floor((totalMs % 1000) / 10);
+
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(seconds).padStart(2, "0");
+  const cc = String(centiseconds).padStart(2, "0");
+
+  return { main: `${mm}:${ss}`, fraction: `.${cc}` };
+}
+
+function formatCountdown(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(seconds).padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
+interface StopwatchTimerProps {
+  onTimerExpired: () => void;
+  isMetronomePlaying: boolean;
+}
+
+export function StopwatchTimer({
+  onTimerExpired,
+  isMetronomePlaying,
+}: StopwatchTimerProps) {
+  const [mode, setMode] = useState<Mode>("stopwatch");
+  const [state, setState] = useState<TimerState>("idle");
+  const [elapsed, setElapsed] = useState(0);
+  const [timerDuration, setTimerDuration] = useState(180);
+  const [remaining, setRemaining] = useState(180);
+
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef = useRef(0);
+  const elapsedAtPauseRef = useRef(0);
+
+  const pulseOpacity = useSharedValue(1);
+  const finishingPulse = useSharedValue(1);
+
+  const clearTimerInterval = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  const hapticFeedback = useCallback(() => {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  }, []);
+
+  const startStopwatch = useCallback(() => {
+    hapticFeedback();
+    startTimeRef.current = Date.now() - elapsedAtPauseRef.current;
+    setState("running");
+
+    intervalRef.current = setInterval(() => {
+      setElapsed(Date.now() - startTimeRef.current);
+    }, 33);
+  }, [hapticFeedback]);
+
+  const pauseStopwatch = useCallback(() => {
+    hapticFeedback();
+    clearTimerInterval();
+    elapsedAtPauseRef.current = Date.now() - startTimeRef.current;
+    setState("paused");
+  }, [hapticFeedback, clearTimerInterval]);
+
+  const resetStopwatch = useCallback(() => {
+    hapticFeedback();
+    clearTimerInterval();
+    setElapsed(0);
+    elapsedAtPauseRef.current = 0;
+    setState("idle");
+  }, [hapticFeedback, clearTimerInterval]);
+
+  const startTimer = useCallback(() => {
+    hapticFeedback();
+    const startRemaining = state === "paused" ? remaining : timerDuration;
+    setRemaining(startRemaining);
+    startTimeRef.current = Date.now();
+    elapsedAtPauseRef.current = 0;
+    setState("running");
+
+    intervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTimeRef.current + elapsedAtPauseRef.current;
+      const left = Math.max(0, startRemaining - Math.floor(elapsed / 1000));
+      setRemaining(left);
+
+      if (left <= 0) {
+        clearInterval(intervalRef.current!);
+        intervalRef.current = null;
+        if (isMetronomePlaying) {
+          setState("finishing");
+          onTimerExpired();
+        } else {
+          setState("idle");
+          setRemaining(timerDuration);
+        }
+      }
+    }, 200);
+  }, [hapticFeedback, timerDuration, remaining, state, isMetronomePlaying, onTimerExpired]);
+
+  const pauseTimer = useCallback(() => {
+    hapticFeedback();
+    clearTimerInterval();
+    elapsedAtPauseRef.current += Date.now() - startTimeRef.current;
+    setState("paused");
+  }, [hapticFeedback, clearTimerInterval]);
+
+  const resetTimer = useCallback(() => {
+    hapticFeedback();
+    clearTimerInterval();
+    setRemaining(timerDuration);
+    elapsedAtPauseRef.current = 0;
+    setState("idle");
+  }, [hapticFeedback, clearTimerInterval, timerDuration]);
+
+  useEffect(() => {
+    if (state === "finishing" && !isMetronomePlaying) {
+      setState("idle");
+      setRemaining(timerDuration);
+    }
+  }, [isMetronomePlaying, state, timerDuration]);
+
+  useEffect(() => {
+    if (state === "running") {
+      pulseOpacity.value = withRepeat(
+        withSequence(
+          withTiming(0.4, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        true
+      );
+    } else if (state === "finishing") {
+      finishingPulse.value = withRepeat(
+        withSequence(
+          withTiming(0.3, { duration: 400 }),
+          withTiming(1, { duration: 400 })
+        ),
+        -1,
+        true
+      );
+    } else {
+      cancelAnimation(pulseOpacity);
+      cancelAnimation(finishingPulse);
+      pulseOpacity.value = withTiming(1, { duration: 200 });
+      finishingPulse.value = withTiming(1, { duration: 200 });
+    }
+  }, [state]);
+
+  useEffect(() => {
+    return () => clearTimerInterval();
+  }, [clearTimerInterval]);
+
+  const runningDotStyle = useAnimatedStyle(() => ({
+    opacity: pulseOpacity.value,
+  }));
+
+  const finishingStyle = useAnimatedStyle(() => ({
+    opacity: finishingPulse.value,
+  }));
+
+  const switchMode = useCallback(
+    (newMode: Mode) => {
+      if (state !== "idle") return;
+      hapticFeedback();
+      setMode(newMode);
+    },
+    [state, hapticFeedback]
+  );
+
+  const adjustTimerDuration = useCallback(
+    (seconds: number) => {
+      if (state !== "idle") return;
+      hapticFeedback();
+      setTimerDuration(seconds);
+      setRemaining(seconds);
+    },
+    [state, hapticFeedback]
+  );
+
+  const renderStopwatch = () => {
+    const { main, fraction } = formatTime(elapsed);
+    return (
+      <View style={styles.displaySection}>
+        <View style={styles.timeRow}>
+          {state === "running" && (
+            <Animated.View style={[styles.runningDot, runningDotStyle]} />
+          )}
+          <Text style={styles.timeText}>{main}</Text>
+          <Text style={styles.fractionText}>{fraction}</Text>
+        </View>
+
+        <View style={styles.controlRow}>
+          {state === "idle" && (
+            <Pressable
+              onPress={startStopwatch}
+              style={({ pressed }) => [
+                styles.controlButton,
+                styles.startButton,
+                pressed && styles.buttonPressed,
+              ]}
+              testID="stopwatch-start"
+            >
+              <Ionicons name="play" size={18} color={Colors.background} />
+            </Pressable>
+          )}
+          {state === "running" && (
+            <>
+              <Pressable
+                onPress={pauseStopwatch}
+                style={({ pressed }) => [
+                  styles.controlButton,
+                  styles.pauseButton,
+                  pressed && styles.buttonPressed,
+                ]}
+                testID="stopwatch-pause"
+              >
+                <Ionicons name="pause" size={18} color={Colors.text} />
+              </Pressable>
+            </>
+          )}
+          {state === "paused" && (
+            <>
+              <Pressable
+                onPress={resetStopwatch}
+                style={({ pressed }) => [
+                  styles.controlButton,
+                  styles.resetButton,
+                  pressed && styles.buttonPressed,
+                ]}
+                testID="stopwatch-reset"
+              >
+                <Feather name="rotate-ccw" size={16} color={Colors.danger} />
+              </Pressable>
+              <Pressable
+                onPress={startStopwatch}
+                style={({ pressed }) => [
+                  styles.controlButton,
+                  styles.startButton,
+                  pressed && styles.buttonPressed,
+                ]}
+                testID="stopwatch-resume"
+              >
+                <Ionicons name="play" size={18} color={Colors.background} />
+              </Pressable>
+            </>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const renderTimer = () => {
+    const display = formatCountdown(remaining);
+    const progress = timerDuration > 0 ? remaining / timerDuration : 1;
+
+    return (
+      <View style={styles.displaySection}>
+        {state === "idle" && (
+          <View style={styles.presetRow}>
+            {TIMER_PRESETS.map((p) => (
+              <Pressable
+                key={p.seconds}
+                onPress={() => adjustTimerDuration(p.seconds)}
+                style={({ pressed }) => [
+                  styles.presetChip,
+                  timerDuration === p.seconds && styles.presetChipActive,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.presetText,
+                    timerDuration === p.seconds && styles.presetTextActive,
+                  ]}
+                >
+                  {p.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.timeRow}>
+          {state === "finishing" && (
+            <Animated.View style={[styles.finishingDot, finishingStyle]} />
+          )}
+          {state === "running" && (
+            <Animated.View style={[styles.runningDot, runningDotStyle]} />
+          )}
+          <Animated.Text
+            style={[
+              styles.timeText,
+              state === "finishing" && styles.finishingText,
+              state === "finishing" ? finishingStyle : undefined,
+            ]}
+          >
+            {display}
+          </Animated.Text>
+        </View>
+
+        {(state === "running" || state === "finishing") && (
+          <View style={styles.progressBarContainer}>
+            <View
+              style={[
+                styles.progressBarFill,
+                {
+                  width: `${progress * 100}%` as any,
+                  backgroundColor:
+                    state === "finishing" ? Colors.danger : Colors.accent,
+                },
+              ]}
+            />
+          </View>
+        )}
+
+        {state === "finishing" && (
+          <Text style={styles.finishingLabel}>
+            completing measure...
+          </Text>
+        )}
+
+        <View style={styles.controlRow}>
+          {state === "idle" && (
+            <Pressable
+              onPress={startTimer}
+              style={({ pressed }) => [
+                styles.controlButton,
+                styles.startButton,
+                pressed && styles.buttonPressed,
+              ]}
+              testID="timer-start"
+            >
+              <Ionicons name="play" size={18} color={Colors.background} />
+            </Pressable>
+          )}
+          {state === "running" && (
+            <>
+              <Pressable
+                onPress={pauseTimer}
+                style={({ pressed }) => [
+                  styles.controlButton,
+                  styles.pauseButton,
+                  pressed && styles.buttonPressed,
+                ]}
+                testID="timer-pause"
+              >
+                <Ionicons name="pause" size={18} color={Colors.text} />
+              </Pressable>
+            </>
+          )}
+          {state === "paused" && (
+            <>
+              <Pressable
+                onPress={resetTimer}
+                style={({ pressed }) => [
+                  styles.controlButton,
+                  styles.resetButton,
+                  pressed && styles.buttonPressed,
+                ]}
+                testID="timer-reset"
+              >
+                <Feather name="rotate-ccw" size={16} color={Colors.danger} />
+              </Pressable>
+              <Pressable
+                onPress={startTimer}
+                style={({ pressed }) => [
+                  styles.controlButton,
+                  styles.startButton,
+                  pressed && styles.buttonPressed,
+                ]}
+                testID="timer-resume"
+              >
+                <Ionicons name="play" size={18} color={Colors.background} />
+              </Pressable>
+            </>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.tabRow}>
+        <Pressable
+          onPress={() => switchMode("stopwatch")}
+          style={({ pressed }) => [
+            styles.tab,
+            mode === "stopwatch" && styles.tabActive,
+            pressed && styles.buttonPressed,
+          ]}
+          testID="tab-stopwatch"
+        >
+          <MaterialCommunityIcons
+            name="timer-outline"
+            size={16}
+            color={mode === "stopwatch" ? Colors.accent : Colors.textTertiary}
+          />
+          <Text
+            style={[
+              styles.tabText,
+              mode === "stopwatch" && styles.tabTextActive,
+            ]}
+          >
+            STOPWATCH
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => switchMode("timer")}
+          style={({ pressed }) => [
+            styles.tab,
+            mode === "timer" && styles.tabActive,
+            pressed && styles.buttonPressed,
+          ]}
+          testID="tab-timer"
+        >
+          <MaterialCommunityIcons
+            name="av-timer"
+            size={16}
+            color={mode === "timer" ? Colors.accent : Colors.textTertiary}
+          />
+          <Text
+            style={[styles.tabText, mode === "timer" && styles.tabTextActive]}
+          >
+            TIMER
+          </Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.divider} />
+
+      {mode === "stopwatch" ? renderStopwatch() : renderTimer()}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  tabRow: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  tabActive: {
+    backgroundColor: Colors.surfaceLight,
+  },
+  tabText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 10,
+    color: Colors.textTertiary,
+    letterSpacing: 2,
+  },
+  tabTextActive: {
+    color: Colors.accent,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    opacity: 0.5,
+  },
+  displaySection: {
+    alignItems: "center",
+    gap: 10,
+  },
+  timeRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+  },
+  timeText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 36,
+    color: Colors.text,
+    letterSpacing: 2,
+    fontVariant: ["tabular-nums"],
+  },
+  fractionText: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 20,
+    color: Colors.textSecondary,
+    letterSpacing: 1,
+    fontVariant: ["tabular-nums"],
+  },
+  finishingText: {
+    color: Colors.danger,
+  },
+  runningDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.success,
+    marginRight: 8,
+    marginBottom: 4,
+  },
+  finishingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.danger,
+    marginRight: 8,
+    marginBottom: 4,
+  },
+  controlRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  controlButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  startButton: {
+    backgroundColor: Colors.accent,
+  },
+  pauseButton: {
+    backgroundColor: Colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  resetButton: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  buttonPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.95 }],
+  },
+  presetRow: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  presetChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  presetChipActive: {
+    backgroundColor: Colors.accentDim,
+    borderColor: Colors.accent,
+  },
+  presetText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 11,
+    color: Colors.textTertiary,
+    letterSpacing: 1,
+  },
+  presetTextActive: {
+    color: Colors.accent,
+  },
+  progressBarContainer: {
+    width: "80%",
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: Colors.surfaceLight,
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    borderRadius: 1.5,
+  },
+  finishingLabel: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 10,
+    color: Colors.danger,
+    letterSpacing: 1,
+    opacity: 0.8,
+  },
+});
