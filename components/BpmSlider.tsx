@@ -1,10 +1,12 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, PanResponder, Platform } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
   withTiming,
+  withSequence,
+  Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
@@ -13,13 +15,16 @@ import Colors from "@/constants/colors";
 interface BpmSliderProps {
   bpm: number;
   onBpmChange: (bpm: number) => void;
+  onTapTempo: () => void;
 }
 
-export function BpmSlider({ bpm, onBpmChange }: BpmSliderProps) {
+export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
   const currentBpmRef = useRef(bpm);
   const startBpmRef = useRef(bpm);
   const lastHapticBpm = useRef(bpm);
   const onBpmChangeRef = useRef(onBpmChange);
+  const onTapTempoRef = useRef(onTapTempo);
+  const didDragRef = useRef(false);
 
   useEffect(() => {
     currentBpmRef.current = bpm;
@@ -29,9 +34,14 @@ export function BpmSlider({ bpm, onBpmChange }: BpmSliderProps) {
     onBpmChangeRef.current = onBpmChange;
   }, [onBpmChange]);
 
+  useEffect(() => {
+    onTapTempoRef.current = onTapTempo;
+  }, [onTapTempo]);
+
   const translateX = useSharedValue(0);
   const isDragging = useSharedValue(0);
   const glowIntensity = useSharedValue(0);
+  const tapFlash = useSharedValue(0);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -41,10 +51,15 @@ export function BpmSlider({ bpm, onBpmChange }: BpmSliderProps) {
       onPanResponderGrant: () => {
         startBpmRef.current = currentBpmRef.current;
         lastHapticBpm.current = currentBpmRef.current;
+        didDragRef.current = false;
         isDragging.value = withTiming(1, { duration: 150 });
         glowIntensity.value = withTiming(1, { duration: 200 });
       },
       onPanResponderMove: (_, gestureState) => {
+        if (Math.abs(gestureState.dx) > 5) {
+          didDragRef.current = true;
+        }
+
         const sensitivity = 0.4;
         const rawDelta = gestureState.dx * sensitivity;
         const newBpm = Math.round(startBpmRef.current + rawDelta);
@@ -70,6 +85,14 @@ export function BpmSlider({ bpm, onBpmChange }: BpmSliderProps) {
         translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
         isDragging.value = withTiming(0, { duration: 200 });
         glowIntensity.value = withTiming(0, { duration: 300 });
+
+        if (!didDragRef.current) {
+          onTapTempoRef.current();
+          tapFlash.value = withSequence(
+            withTiming(1, { duration: 60 }),
+            withTiming(0, { duration: 300, easing: Easing.out(Easing.quad) })
+          );
+        }
       },
       onPanResponderTerminate: () => {
         translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
@@ -87,6 +110,10 @@ export function BpmSlider({ bpm, onBpmChange }: BpmSliderProps) {
     opacity: glowIntensity.value * 0.25,
   }));
 
+  const tapFlashStyle = useAnimatedStyle(() => ({
+    opacity: tapFlash.value * 0.15,
+  }));
+
   return (
     <View style={styles.wrapper}>
       <Animated.View style={[styles.glowBg, glowStyle]} />
@@ -95,6 +122,8 @@ export function BpmSlider({ bpm, onBpmChange }: BpmSliderProps) {
         {...panResponder.panHandlers}
         testID="bpm-slider"
       >
+        <Animated.View style={[styles.tapFlashOverlay, tapFlashStyle]} />
+
         <View style={styles.arrowLeft}>
           <Feather name="chevron-left" size={16} color={Colors.textTertiary} />
         </View>
@@ -122,9 +151,14 @@ export function BpmSlider({ bpm, onBpmChange }: BpmSliderProps) {
             />
           ))}
         </View>
+
+        <View style={styles.tapLabel}>
+          <Feather name="activity" size={10} color={Colors.textTertiary} />
+          <Text style={styles.tapText}>TAP</Text>
+        </View>
       </Animated.View>
 
-      <Text style={styles.slideHint}>slide to adjust</Text>
+      <Text style={styles.slideHint}>slide to adjust · tap for tempo</Text>
     </View>
   );
 }
@@ -155,6 +189,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1.5,
     borderColor: Colors.border,
+  },
+  tapFlashOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Colors.accent,
+    borderRadius: 20,
   },
   arrowLeft: {
     opacity: 0.5,
@@ -206,6 +245,21 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accent,
     opacity: 0.7,
     height: 5,
+  },
+  tapLabel: {
+    position: "absolute",
+    top: 8,
+    right: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    opacity: 0.4,
+  },
+  tapText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 8,
+    color: Colors.textTertiary,
+    letterSpacing: 1.5,
   },
   slideHint: {
     fontFamily: "SpaceGrotesk_400Regular",

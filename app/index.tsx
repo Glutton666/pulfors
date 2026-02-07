@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   useAnimatedStyle,
   withTiming,
@@ -24,7 +24,7 @@ import { MetronomeEngine, highClickUri, lowClickUri } from "@/lib/metronome-engi
 import { loadSettings, saveSettings } from "@/lib/storage";
 import { BeatIndicator } from "@/components/BeatIndicator";
 import { BpmSlider } from "@/components/BpmSlider";
-import { StopwatchTimer, StopwatchTimerToggle } from "@/components/StopwatchTimer";
+import { StopwatchTimer } from "@/components/StopwatchTimer";
 
 function getTempoLabel(bpm: number): string {
   if (bpm < 40) return "Grave";
@@ -230,27 +230,9 @@ export default function MetronomeScreen() {
           },
         ]}
       >
-        <View style={styles.topSection}>
-          <Pressable
-            onPress={handleTapTempo}
-            style={({ pressed }) => [
-              styles.tapButton,
-              pressed && styles.tapButtonPressed,
-            ]}
-            testID="tap-tempo-button"
-          >
-            <Feather name="activity" size={18} color={Colors.textSecondary} />
-            <Text style={styles.tapText}>TAP</Text>
-          </Pressable>
-          <StopwatchTimerToggle
-            onPress={() => setPanelOpen(true)}
-            isActive={panelOpen}
-          />
-        </View>
-
         <View style={styles.bpmSection}>
           <Text style={styles.tempoLabel}>{tempoLabel}</Text>
-          <BpmSlider bpm={bpm} onBpmChange={updateBpm} />
+          <BpmSlider bpm={bpm} onBpmChange={updateBpm} onTapTempo={handleTapTempo} />
         </View>
 
         <BeatIndicator
@@ -301,32 +283,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
     justifyContent: "space-between",
-  },
-  topSection: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    alignItems: "center",
-    gap: 10,
-  },
-  tapButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  tapButtonPressed: {
-    backgroundColor: Colors.surfaceLight,
-  },
-  tapText: {
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 13,
-    color: Colors.textSecondary,
-    letterSpacing: 2,
   },
   bpmSection: {
     alignItems: "center",
