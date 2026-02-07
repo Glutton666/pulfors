@@ -63,8 +63,6 @@ export class MetronomeEngine {
   private onBeat: ((beat: number, isAccent: boolean) => void) | null = null;
   private playHighClick: (() => void) | null = null;
   private playLowClick: (() => void) | null = null;
-  private pendingStop = false;
-  private onMeasureComplete: (() => void) | null = null;
 
   setAudioCallbacks(playHigh: () => void, playLow: () => void) {
     this.playHighClick = playHigh;
@@ -97,13 +95,6 @@ export class MetronomeEngine {
   }
 
   private tick() {
-    if (this.pendingStop && this.currentBeat === 0) {
-      this.pendingStop = false;
-      this.stop();
-      this.onMeasureComplete?.();
-      return;
-    }
-
     const isAccent = this.currentBeat === 0;
 
     try {
@@ -136,7 +127,6 @@ export class MetronomeEngine {
     if (this.isRunning) return;
     this.isRunning = true;
     this.currentBeat = 0;
-    this.pendingStop = false;
 
     const intervalMs = 60000 / this.bpm;
 
@@ -149,25 +139,11 @@ export class MetronomeEngine {
 
   stop() {
     this.isRunning = false;
-    this.pendingStop = false;
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
     this.currentBeat = 0;
-  }
-
-  stopAfterMeasure(onComplete?: () => void) {
-    if (!this.isRunning) {
-      onComplete?.();
-      return;
-    }
-    this.pendingStop = true;
-    this.onMeasureComplete = onComplete || null;
-  }
-
-  isPendingStop() {
-    return this.pendingStop;
   }
 
   cleanup() {
