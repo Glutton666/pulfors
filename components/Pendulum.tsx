@@ -10,8 +10,8 @@ import Animated, {
 import Colors from "@/constants/colors";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const PENDULUM_LENGTH = Math.min(SCREEN_WIDTH * 0.38, 160);
-const BOB_SIZE = 12;
+const PENDULUM_LENGTH = Math.min(SCREEN_WIDTH * 0.5, 200);
+const BOB_SIZE = 14;
 
 interface PendulumProps {
   isPlaying: boolean;
@@ -19,13 +19,16 @@ interface PendulumProps {
 }
 
 export function Pendulum({ isPlaying, bpm }: PendulumProps) {
-  const swingDuration = (60000 / bpm);
-  const maxAngle = Math.max(12, Math.min(30, 35 - bpm / 15));
+  const swingDuration = (60000 / bpm) * 1;
+  const maxAngle = Math.max(15, Math.min(35, 40 - bpm / 15));
 
   const animatedStyle = useAnimatedStyle(() => {
     if (!isPlaying) {
-      return { transform: [{ rotate: "0deg" }] };
+      return {
+        transform: [{ rotate: "0deg" }],
+      };
     }
+
     return {
       transform: [
         {
@@ -69,12 +72,13 @@ const styles = StyleSheet.create({
   container: {
     alignItems: "center",
     justifyContent: "flex-end",
-    height: PENDULUM_LENGTH + 40,
+    height: PENDULUM_LENGTH + 60,
+    marginBottom: 8,
   },
   pivotPoint: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: Colors.accent,
     position: "absolute",
     top: 0,
@@ -82,15 +86,15 @@ const styles = StyleSheet.create({
   },
   pendulumArm: {
     position: "absolute",
-    top: 5,
+    top: 6,
     alignItems: "center",
     transformOrigin: "center top",
   },
   armLine: {
-    width: 2.5,
+    width: 3,
     height: PENDULUM_LENGTH,
     backgroundColor: Colors.accentMuted,
-    borderRadius: 1.25,
+    borderRadius: 1.5,
   },
   weightTrack: {
     position: "absolute",
@@ -98,8 +102,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   weight: {
-    width: 18,
-    height: 12,
+    width: 22,
+    height: 14,
     backgroundColor: Colors.accent,
     borderRadius: 3,
   },
@@ -118,9 +122,9 @@ const styles = StyleSheet.create({
   baseTriangle: {
     width: 0,
     height: 0,
-    borderLeftWidth: 30,
-    borderRightWidth: 30,
-    borderBottomWidth: 22,
+    borderLeftWidth: 40,
+    borderRightWidth: 40,
+    borderBottomWidth: 30,
     borderLeftColor: "transparent",
     borderRightColor: "transparent",
     borderBottomColor: Colors.surfaceLight,

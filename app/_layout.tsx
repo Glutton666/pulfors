@@ -6,7 +6,6 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
-import { MetronomeProvider } from "@/lib/metronome-context";
 import {
   useFonts,
   SpaceGrotesk_400Regular,
@@ -21,13 +20,6 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
-      <Stack.Screen
-        name="settings"
-        options={{
-          presentation: "modal",
-          animation: "slide_from_bottom",
-        }}
-      />
     </Stack>
   );
 }
@@ -53,9 +45,7 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView>
           <KeyboardProvider>
-            <MetronomeProvider>
-              <RootLayoutNav />
-            </MetronomeProvider>
+            <RootLayoutNav />
           </KeyboardProvider>
         </GestureHandlerRootView>
       </QueryClientProvider>
