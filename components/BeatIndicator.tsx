@@ -265,6 +265,8 @@ export function BeatIndicator({
       {...nativePanHandlers}
     >
       <View style={styles.dialContainer}>
+        <View style={styles.orbitRing} pointerEvents="none" />
+
         <Animated.View style={[styles.dial, dialStyle]}>
           {beats.map((beat) => (
             <DialBeatDot
@@ -275,7 +277,6 @@ export function BeatIndicator({
               isAccent={beat === 0}
             />
           ))}
-
         </Animated.View>
 
         <Animated.View
@@ -326,6 +327,14 @@ const styles = StyleSheet.create({
     height: DIAL_SIZE,
     alignItems: "center",
     justifyContent: "center",
+  },
+  orbitRing: {
+    position: "absolute",
+    width: DOT_RADIUS_FROM_CENTER * 2,
+    height: DOT_RADIUS_FROM_CENTER * 2,
+    borderRadius: DOT_RADIUS_FROM_CENTER,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
   },
   dial: {
     width: DIAL_SIZE,
