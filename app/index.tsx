@@ -45,8 +45,6 @@ export default function MetronomeScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(-1);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
-
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
 
@@ -266,8 +264,6 @@ export default function MetronomeScreen() {
       <StopwatchTimer
         onTimerExpired={handleTimerExpired}
         isMetronomePlaying={isPlaying}
-        visible={panelOpen}
-        onClose={() => setPanelOpen(false)}
         topInset={(insets.top || webTopInset)}
       />
     </View>

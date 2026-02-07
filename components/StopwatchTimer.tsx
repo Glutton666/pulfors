@@ -17,7 +17,6 @@ import Animated, {
   useSharedValue,
   Easing,
   cancelAnimation,
-  runOnJS,
 } from "react-native-reanimated";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -26,7 +25,9 @@ import Colors from "@/constants/colors";
 type Mode = "stopwatch" | "timer";
 type TimerState = "idle" | "running" | "paused" | "finishing";
 
-const PANEL_WIDTH = 280;
+const PANEL_WIDTH = 260;
+const HANDLE_WIDTH = 28;
+const HANDLE_HEIGHT = 80;
 const TIMER_PRESETS = [
   { label: "30s", seconds: 30 },
   { label: "1m", seconds: 60 },
@@ -58,18 +59,15 @@ function formatCountdown(totalSeconds: number): string {
 interface StopwatchTimerProps {
   onTimerExpired: () => void;
   isMetronomePlaying: boolean;
-  visible: boolean;
-  onClose: () => void;
   topInset: number;
 }
 
 export function StopwatchTimer({
   onTimerExpired,
   isMetronomePlaying,
-  visible,
-  onClose,
   topInset,
 }: StopwatchTimerProps) {
+  const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("stopwatch");
   const [state, setState] = useState<TimerState>("idle");
   const [elapsed, setElapsed] = useState(0);
@@ -82,19 +80,40 @@ export function StopwatchTimer({
   const elapsedAtPauseRef = useRef(0);
 
   const slideX = useSharedValue(PANEL_WIDTH);
-  const backdropOpacity = useSharedValue(0);
   const pulseOpacity = useSharedValue(1);
   const finishingPulse = useSharedValue(1);
+  const handleGlow = useSharedValue(0);
 
   useEffect(() => {
-    if (visible) {
-      slideX.value = withSpring(0, { damping: 20, stiffness: 200 });
-      backdropOpacity.value = withTiming(1, { duration: 250 });
+    if (open) {
+      slideX.value = withSpring(0, { damping: 22, stiffness: 220 });
     } else {
-      slideX.value = withSpring(PANEL_WIDTH, { damping: 20, stiffness: 200 });
-      backdropOpacity.value = withTiming(0, { duration: 200 });
+      slideX.value = withSpring(PANEL_WIDTH, { damping: 22, stiffness: 220 });
     }
-  }, [visible]);
+  }, [open]);
+
+  useEffect(() => {
+    if (state === "running" || state === "finishing") {
+      handleGlow.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 1000 }),
+          withTiming(0.3, { duration: 1000 })
+        ),
+        -1,
+        true
+      );
+    } else {
+      cancelAnimation(handleGlow);
+      handleGlow.value = withTiming(0, { duration: 300 });
+    }
+  }, [state]);
+
+  const togglePanel = useCallback(() => {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setOpen((prev) => !prev);
+  }, []);
 
   const clearTimerInterval = useCallback(() => {
     if (intervalRef.current) {
@@ -223,8 +242,8 @@ export function StopwatchTimer({
     transform: [{ translateX: slideX.value }],
   }));
 
-  const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
+  const handleGlowStyle = useAnimatedStyle(() => ({
+    opacity: handleGlow.value,
   }));
 
   const switchMode = useCallback(
@@ -280,32 +299,44 @@ export function StopwatchTimer({
 
   const isActive = state !== "idle";
 
+  const handleStatusIcon = () => {
+    if (state === "running") return "radiobox-marked" as const;
+    if (state === "finishing") return "radiobox-marked" as const;
+    if (mode === "stopwatch") return "timer-outline" as const;
+    return "av-timer" as const;
+  };
+
+  const handleStatusColor = () => {
+    if (state === "running") return Colors.success;
+    if (state === "finishing") return Colors.danger;
+    return Colors.textTertiary;
+  };
+
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents={visible ? "auto" : "none"}>
-      <Animated.View style={[styles.backdrop, backdropStyle]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-      </Animated.View>
-
-      <Animated.View
-        style={[
-          styles.panel,
-          panelStyle,
-          { paddingTop: topInset + 12 },
+    <View
+      style={[styles.edgeContainer, { top: topInset + 60 }]}
+      pointerEvents="box-none"
+    >
+      <Pressable
+        onPress={togglePanel}
+        style={({ pressed }) => [
+          styles.handle,
+          open && styles.handleOpen,
+          pressed && styles.handlePressed,
         ]}
+        testID="panel-toggle"
       >
-        <View style={styles.panelHeader}>
-          <Pressable
-            onPress={onClose}
-            style={({ pressed }) => [
-              styles.closeButton,
-              pressed && styles.buttonPressed,
-            ]}
-            testID="panel-close"
-          >
-            <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-          </Pressable>
-        </View>
+        <Animated.View style={[styles.handleGlow, handleGlowStyle]} />
+        <View style={styles.handleLine} />
+        <MaterialCommunityIcons
+          name={handleStatusIcon()}
+          size={14}
+          color={handleStatusColor()}
+        />
+        <View style={styles.handleLine} />
+      </Pressable>
 
+      <Animated.View style={[styles.panel, panelStyle]}>
         <View style={styles.tabRow}>
           <Pressable
             onPress={() => switchMode("stopwatch")}
@@ -318,7 +349,7 @@ export function StopwatchTimer({
           >
             <MaterialCommunityIcons
               name="timer-outline"
-              size={15}
+              size={14}
               color={mode === "stopwatch" ? Colors.accent : Colors.textTertiary}
             />
             <Text style={[styles.tabText, mode === "stopwatch" && styles.tabTextActive]}>
@@ -336,7 +367,7 @@ export function StopwatchTimer({
           >
             <MaterialCommunityIcons
               name="av-timer"
-              size={15}
+              size={14}
               color={mode === "timer" ? Colors.accent : Colors.textTertiary}
             />
             <Text style={[styles.tabText, mode === "timer" && styles.tabTextActive]}>
@@ -371,7 +402,7 @@ export function StopwatchTimer({
               style={({ pressed }) => [styles.controlButton, styles.startButton, pressed && styles.buttonPressed]}
               testID="stopwatch-start"
             >
-              <Ionicons name="play" size={18} color={Colors.background} />
+              <Ionicons name="play" size={16} color={Colors.background} />
             </Pressable>
           )}
           {state === "running" && (
@@ -380,7 +411,7 @@ export function StopwatchTimer({
               style={({ pressed }) => [styles.controlButton, styles.pauseButton, pressed && styles.buttonPressed]}
               testID="stopwatch-pause"
             >
-              <Ionicons name="pause" size={18} color={Colors.text} />
+              <Ionicons name="pause" size={16} color={Colors.text} />
             </Pressable>
           )}
           {state === "paused" && (
@@ -390,14 +421,14 @@ export function StopwatchTimer({
                 style={({ pressed }) => [styles.controlButton, styles.resetButton, pressed && styles.buttonPressed]}
                 testID="stopwatch-reset"
               >
-                <Feather name="rotate-ccw" size={16} color={Colors.danger} />
+                <Feather name="rotate-ccw" size={14} color={Colors.danger} />
               </Pressable>
               <Pressable
                 onPress={startStopwatch}
                 style={({ pressed }) => [styles.controlButton, styles.startButton, pressed && styles.buttonPressed]}
                 testID="stopwatch-resume"
               >
-                <Ionicons name="play" size={18} color={Colors.background} />
+                <Ionicons name="play" size={16} color={Colors.background} />
               </Pressable>
             </>
           )}
@@ -501,7 +532,7 @@ export function StopwatchTimer({
               style={({ pressed }) => [styles.controlButton, styles.startButton, pressed && styles.buttonPressed]}
               testID="timer-start"
             >
-              <Ionicons name="play" size={18} color={Colors.background} />
+              <Ionicons name="play" size={16} color={Colors.background} />
             </Pressable>
           )}
           {state === "running" && (
@@ -510,7 +541,7 @@ export function StopwatchTimer({
               style={({ pressed }) => [styles.controlButton, styles.pauseButton, pressed && styles.buttonPressed]}
               testID="timer-pause"
             >
-              <Ionicons name="pause" size={18} color={Colors.text} />
+              <Ionicons name="pause" size={16} color={Colors.text} />
             </Pressable>
           )}
           {state === "paused" && (
@@ -520,14 +551,14 @@ export function StopwatchTimer({
                 style={({ pressed }) => [styles.controlButton, styles.resetButton, pressed && styles.buttonPressed]}
                 testID="timer-reset"
               >
-                <Feather name="rotate-ccw" size={16} color={Colors.danger} />
+                <Feather name="rotate-ccw" size={14} color={Colors.danger} />
               </Pressable>
               <Pressable
                 onPress={startTimer}
                 style={({ pressed }) => [styles.controlButton, styles.startButton, pressed && styles.buttonPressed]}
                 testID="timer-resume"
               >
-                <Ionicons name="play" size={18} color={Colors.background} />
+                <Ionicons name="play" size={16} color={Colors.background} />
               </Pressable>
             </>
           )}
@@ -537,61 +568,58 @@ export function StopwatchTimer({
   }
 }
 
-interface ToggleButtonProps {
-  onPress: () => void;
-  isActive: boolean;
-}
-
-export function StopwatchTimerToggle({ onPress, isActive }: ToggleButtonProps) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.toggleButton,
-        isActive && styles.toggleButtonActive,
-        pressed && styles.buttonPressed,
-      ]}
-      testID="panel-toggle"
-    >
-      <MaterialCommunityIcons
-        name="timer-outline"
-        size={18}
-        color={isActive ? Colors.accent : Colors.textSecondary}
-      />
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-  },
-  panel: {
+  edgeContainer: {
     position: "absolute",
     right: 0,
-    top: 0,
-    bottom: 0,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    zIndex: 100,
+  },
+  handle: {
+    width: HANDLE_WIDTH,
+    height: HANDLE_HEIGHT,
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
+    borderWidth: 1,
+    borderRightWidth: 0,
+    borderColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    overflow: "hidden",
+  },
+  handleOpen: {
+    backgroundColor: Colors.surfaceLight,
+    borderColor: Colors.accent,
+  },
+  handlePressed: {
+    backgroundColor: Colors.surfaceLight,
+  },
+  handleGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Colors.accent,
+  },
+  handleLine: {
+    width: 3,
+    height: 10,
+    borderRadius: 1.5,
+    backgroundColor: Colors.textTertiary,
+    opacity: 0.4,
+  },
+  panel: {
     width: PANEL_WIDTH,
     backgroundColor: Colors.surface,
     borderLeftWidth: 1,
+    borderBottomWidth: 1,
+    borderBottomLeftRadius: 16,
     borderLeftColor: Colors.border,
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    gap: 12,
-  },
-  panelHeader: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginBottom: 4,
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.surfaceLight,
-    alignItems: "center",
-    justifyContent: "center",
+    borderBottomColor: Colors.border,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 16,
+    gap: 10,
   },
   tabRow: {
     flexDirection: "row",
@@ -602,7 +630,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
+    gap: 4,
     paddingVertical: 6,
     borderRadius: 8,
   },
@@ -611,7 +639,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 9,
+    fontSize: 8,
     color: Colors.textTertiary,
     letterSpacing: 1.5,
   },
@@ -625,8 +653,7 @@ const styles = StyleSheet.create({
   },
   displaySection: {
     alignItems: "center",
-    gap: 12,
-    paddingTop: 8,
+    gap: 10,
   },
   timeRow: {
     flexDirection: "row",
@@ -634,14 +661,14 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 32,
+    fontSize: 28,
     color: Colors.text,
     letterSpacing: 2,
     fontVariant: ["tabular-nums"],
   },
   fractionText: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 18,
+    fontSize: 16,
     color: Colors.textSecondary,
     letterSpacing: 1,
     fontVariant: ["tabular-nums"],
@@ -650,30 +677,30 @@ const styles = StyleSheet.create({
     color: Colors.danger,
   },
   runningDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: Colors.success,
-    marginRight: 8,
-    marginBottom: 4,
+    marginRight: 6,
+    marginBottom: 3,
   },
   finishingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: Colors.danger,
-    marginRight: 8,
-    marginBottom: 4,
+    marginRight: 6,
+    marginBottom: 3,
   },
   controlRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 10,
   },
   controlButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -698,12 +725,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
-    gap: 6,
+    gap: 5,
   },
   presetChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -713,7 +740,7 @@ const styles = StyleSheet.create({
   },
   presetText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 11,
+    fontSize: 10,
     color: Colors.textTertiary,
     letterSpacing: 1,
   },
@@ -724,13 +751,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.accent,
     textAlign: "center",
-    minWidth: 120,
+    minWidth: 100,
     paddingVertical: 2,
     color: Colors.text,
   },
   timeTextEditable: {
-    borderBottomWidth: 1,
-    borderBottomColor: "transparent",
     textDecorationLine: "underline",
     textDecorationColor: Colors.textTertiary,
     textDecorationStyle: "dotted",
@@ -748,23 +773,9 @@ const styles = StyleSheet.create({
   },
   finishingLabel: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 10,
+    fontSize: 9,
     color: Colors.danger,
     letterSpacing: 1,
     opacity: 0.8,
-  },
-  toggleButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  toggleButtonActive: {
-    borderColor: Colors.accent,
-    backgroundColor: Colors.accentDim,
   },
 });
