@@ -9,9 +9,9 @@ import {
   TIME_SIGNATURES,
   BEAT_SUBDIVISIONS,
   loadSettings,
-  saveSettings,
+  saveSettings as saveSettingsToStorage,
   loadPresets,
-  savePresets,
+  savePresets as savePresetsToStorage,
 } from "@/lib/storage";
 import { MetronomeEngine } from "@/lib/metronome-engine";
 
@@ -20,7 +20,6 @@ interface MetronomeContextValue {
   presets: TempoPreset[];
   isPlaying: boolean;
   currentBeat: number;
-  currentSubBeat: number;
   bpm: number;
   stopwatchMs: number;
   isStopwatchRunning: boolean;
@@ -28,6 +27,7 @@ interface MetronomeContextValue {
   timerTargetMs: number;
   isTimerRunning: boolean;
   isTimerSet: boolean;
+  isLoaded: boolean;
 
   setBpm: (bpm: number) => void;
   adjustBpm: (delta: number) => void;
@@ -63,8 +63,8 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
   const [presets, setPresets] = useState<TempoPreset[]>(DEFAULT_PRESETS);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(-1);
-  const [currentSubBeat, setCurrentSubBeat] = useState(0);
   const [bpm, setBpmState] = useState(DEFAULT_SETTINGS.bpm);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const [stopwatchMs, setStopwatchMs] = useState(0);
   const [isStopwatchRunning, setIsStopwatchRunning] = useState(false);
@@ -86,24 +86,6 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
     const engine = new MetronomeEngine();
     engineRef.current = engine;
 
-    Promise.all([loadSettings(), loadPresets()]).then(([s, p]) => {
-      setSettings(s);
-      setPresets(p);
-      setBpmState(s.bpm);
-      engine.setBpm(s.bpm);
-      engine.setBeatsPerMeasure(TIME_SIGNATURES[s.timeSignatureIndex]?.beats || 4);
-      engine.setVolume(s.volume);
-    });
-
-    return () => {
-      engine.cleanup();
-    };
-  }, []);
-
-  useEffect(() => {
-    const engine = engineRef.current;
-    if (!engine) return;
-
     engine.setOnBeat((beat, isAccent) => {
       setCurrentBeat(beat);
 
@@ -117,20 +99,34 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
         if (timerRef.current) clearInterval(timerRef.current);
       }
     });
+
+    Promise.all([loadSettings(), loadPresets()]).then(([s, p]) => {
+      setSettings(s);
+      setPresets(p);
+      setBpmState(s.bpm);
+      engine.setBpm(s.bpm);
+      engine.setBeatsPerMeasure(TIME_SIGNATURES[s.timeSignatureIndex]?.beats || 4);
+      engine.setVolume(s.volume);
+      setIsLoaded(true);
+    });
+
+    return () => {
+      engine.cleanup();
+    };
   }, []);
 
   const setBpm = useCallback((newBpm: number) => {
     const clamped = Math.max(20, Math.min(300, newBpm));
     setBpmState(clamped);
     engineRef.current?.setBpm(clamped);
-    saveSettings({ bpm: clamped });
+    saveSettingsToStorage({ bpm: clamped });
   }, []);
 
   const adjustBpm = useCallback((delta: number) => {
     setBpmState(prev => {
       const newVal = Math.max(20, Math.min(300, prev + delta));
       engineRef.current?.setBpm(newVal);
-      saveSettings({ bpm: newVal });
+      saveSettingsToStorage({ bpm: newVal });
       return newVal;
     });
   }, []);
@@ -161,7 +157,7 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
     setSettings(prev => ({ ...prev, timeSignatureIndex: idx, beatsPerMeasure: ts.beats }));
     engineRef.current?.setBeatsPerMeasure(ts.beats);
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    saveSettings({ timeSignatureIndex: idx, beatsPerMeasure: ts.beats });
+    saveSettingsToStorage({ timeSignatureIndex: idx, beatsPerMeasure: ts.beats });
   }, []);
 
   const setTempoPresetIndex = useCallback((idx: number) => {
@@ -170,13 +166,13 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
     setSettings(prev => ({ ...prev, tempoPresetIndex: idx }));
     setBpm(preset.bpm);
     if (Platform.OS !== "web") Haptics.selectionAsync();
-    saveSettings({ tempoPresetIndex: idx });
+    saveSettingsToStorage({ tempoPresetIndex: idx });
   }, [presets, setBpm]);
 
   const setBeatSubdivision = useCallback((sub: number) => {
     setSettings(prev => ({ ...prev, beatSubdivision: sub }));
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    saveSettings({ beatSubdivision: sub });
+    saveSettingsToStorage({ beatSubdivision: sub });
   }, []);
 
   const updateSettings = useCallback((partial: Partial<AppSettings>) => {
@@ -185,14 +181,14 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
       if (partial.volume !== undefined) {
         engineRef.current?.setVolume(partial.volume);
       }
-      saveSettings(partial);
+      saveSettingsToStorage(partial);
       return updated;
     });
   }, []);
 
   const updatePresets = useCallback((p: TempoPreset[]) => {
     setPresets(p);
-    savePresets(p);
+    savePresetsToStorage(p);
   }, []);
 
   const startStopwatch = useCallback(() => {
@@ -256,7 +252,7 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
   }, [stopTimer]);
 
   const value = useMemo(() => ({
-    settings, presets, isPlaying, currentBeat, currentSubBeat, bpm,
+    settings, presets, isPlaying, currentBeat, bpm, isLoaded,
     stopwatchMs, isStopwatchRunning,
     timerMs, timerTargetMs, isTimerRunning, isTimerSet,
     setBpm, adjustBpm, togglePlay,
@@ -266,7 +262,7 @@ export function MetronomeProvider({ children }: { children: ReactNode }) {
     setTimerTarget, startTimer, stopTimer, resetTimer,
     engineRef,
   }), [
-    settings, presets, isPlaying, currentBeat, currentSubBeat, bpm,
+    settings, presets, isPlaying, currentBeat, bpm, isLoaded,
     stopwatchMs, isStopwatchRunning,
     timerMs, timerTargetMs, isTimerRunning, isTimerSet,
     setBpm, adjustBpm, togglePlay,

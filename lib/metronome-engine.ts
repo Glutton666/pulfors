@@ -1,4 +1,3 @@
-import { useAudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
 
@@ -54,13 +53,16 @@ function createClickBuffer(frequency: number, duration: number, volume: number):
 export const highClickUri = `data:audio/wav;base64,${createClickBuffer(1200, 0.05, 0.9)}`;
 export const lowClickUri = `data:audio/wav;base64,${createClickBuffer(800, 0.04, 0.7)}`;
 
+type BeatCallback = (beat: number, isAccent: boolean) => void;
+
 export class MetronomeEngine {
   private intervalId: ReturnType<typeof setTimeout> | null = null;
   private isRunning = false;
   private bpm = 120;
   private beatsPerMeasure = 4;
   private currentBeat = 0;
-  private onBeat: ((beat: number, isAccent: boolean) => void) | null = null;
+  private volume = 0.8;
+  private onBeatCallbacks: BeatCallback[] = [];
   private playHighClick: (() => void) | null = null;
   private playLowClick: (() => void) | null = null;
 
@@ -69,8 +71,16 @@ export class MetronomeEngine {
     this.playLowClick = playLow;
   }
 
-  setOnBeat(callback: (beat: number, isAccent: boolean) => void) {
-    this.onBeat = callback;
+  addOnBeat(callback: BeatCallback) {
+    this.onBeatCallbacks.push(callback);
+  }
+
+  setOnBeat(callback: BeatCallback) {
+    this.onBeatCallbacks = [callback];
+  }
+
+  clearOnBeat() {
+    this.onBeatCallbacks = [];
   }
 
   setBpm(bpm: number) {
@@ -86,40 +96,38 @@ export class MetronomeEngine {
     this.currentBeat = 0;
   }
 
-  getBpm() {
-    return this.bpm;
+  setVolume(vol: number) {
+    this.volume = Math.max(0, Math.min(1, vol));
   }
 
-  getIsRunning() {
-    return this.isRunning;
-  }
+  getBpm() { return this.bpm; }
+  getIsRunning() { return this.isRunning; }
+  getVolume() { return this.volume; }
 
   private tick() {
     const isAccent = this.currentBeat === 0;
 
-    try {
-      if (isAccent) {
-        this.playHighClick?.();
-      } else {
-        this.playLowClick?.();
-      }
-    } catch (e) {
-      // silent fail
+    if (this.volume > 0) {
+      try {
+        if (isAccent) {
+          this.playHighClick?.();
+        } else {
+          this.playLowClick?.();
+        }
+      } catch (e) { /* silent */ }
     }
 
     if (Platform.OS !== "web") {
       try {
         Haptics.impactAsync(
-          isAccent
-            ? Haptics.ImpactFeedbackStyle.Heavy
-            : Haptics.ImpactFeedbackStyle.Light
+          isAccent ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Light
         );
-      } catch (e) {
-        // silent fail
-      }
+      } catch (e) { /* silent */ }
     }
 
-    this.onBeat?.(this.currentBeat, isAccent);
+    for (const cb of this.onBeatCallbacks) {
+      cb(this.currentBeat, isAccent);
+    }
     this.currentBeat = (this.currentBeat + 1) % this.beatsPerMeasure;
   }
 
@@ -127,14 +135,9 @@ export class MetronomeEngine {
     if (this.isRunning) return;
     this.isRunning = true;
     this.currentBeat = 0;
-
     const intervalMs = 60000 / this.bpm;
-
     this.tick();
-
-    this.intervalId = setInterval(() => {
-      this.tick();
-    }, intervalMs);
+    this.intervalId = setInterval(() => { this.tick(); }, intervalMs);
   }
 
   stop() {
@@ -146,7 +149,5 @@ export class MetronomeEngine {
     this.currentBeat = 0;
   }
 
-  cleanup() {
-    this.stop();
-  }
+  cleanup() { this.stop(); }
 }

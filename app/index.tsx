@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Pressable,
   Platform,
   Dimensions,
+  ScrollView,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,207 +21,123 @@ import Animated, {
 import { useAudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import { router } from "expo-router";
 import Colors from "@/constants/colors";
-import { MetronomeEngine, highClickUri, lowClickUri } from "@/lib/metronome-engine";
-import { loadSettings, saveSettings } from "@/lib/storage";
+import { highClickUri, lowClickUri } from "@/lib/metronome-engine";
+import { useMetronome } from "@/lib/metronome-context";
+import { TIME_SIGNATURES, BEAT_SUBDIVISIONS } from "@/lib/storage";
 import { Pendulum } from "@/components/Pendulum";
 import { BeatIndicator } from "@/components/BeatIndicator";
-
-const TEMPO_PRESETS = [
-  { label: "Largo", min: 40, max: 60, bpm: 50 },
-  { label: "Adagio", min: 60, max: 80, bpm: 70 },
-  { label: "Andante", min: 80, max: 100, bpm: 90 },
-  { label: "Moderato", min: 100, max: 120, bpm: 110 },
-  { label: "Allegro", min: 120, max: 160, bpm: 140 },
-  { label: "Vivace", min: 160, max: 200, bpm: 176 },
-  { label: "Presto", min: 200, max: 300, bpm: 208 },
-];
-
-const TIME_SIGNATURES = [
-  { beats: 2, label: "2/4" },
-  { beats: 3, label: "3/4" },
-  { beats: 4, label: "4/4" },
-  { beats: 6, label: "6/8" },
-];
-
-function getTempoLabel(bpm: number): string {
-  for (const preset of TEMPO_PRESETS) {
-    if (bpm >= preset.min && bpm < preset.max) {
-      return preset.label;
-    }
-  }
-  if (bpm >= 300) return "Prestissimo";
-  if (bpm < 40) return "Grave";
-  return "Presto";
-}
+import { GaugeBpm } from "@/components/GaugeBpm";
+import { SwipeSelector } from "@/components/SwipeSelector";
+import { TimerStopwatch } from "@/components/TimerStopwatch";
 
 export default function MetronomeScreen() {
   const insets = useSafeAreaInsets();
-  const [bpm, setBpm] = useState(120);
-  const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentBeat, setCurrentBeat] = useState(-1);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const {
+    settings, presets, isPlaying, currentBeat, bpm, isLoaded,
+    stopwatchMs, isStopwatchRunning,
+    timerMs, timerTargetMs, isTimerRunning, isTimerSet,
+    setBpm, adjustBpm, togglePlay,
+    setTimeSignatureIndex, setTempoPresetIndex, setBeatSubdivision,
+    startStopwatch, stopStopwatch, resetStopwatch,
+    setTimerTarget, startTimer, stopTimer, resetTimer,
+    engineRef,
+  } = useMetronome();
 
-  const engineRef = useRef<MetronomeEngine | null>(null);
-  const tapTimesRef = useRef<number[]>([]);
+  const [timerMode, setTimerMode] = useState<"stopwatch" | "timer">("stopwatch");
+  const lastTapTime = useRef(0);
 
   const highPlayer = useAudioPlayer(highClickUri);
   const lowPlayer = useAudioPlayer(lowClickUri);
 
   const flashOpacity = useSharedValue(0);
 
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.setAudioCallbacks(
+      () => { try { highPlayer.seekTo(0); highPlayer.play(); } catch (e) { /* silent */ } },
+      () => { try { lowPlayer.seekTo(0); lowPlayer.play(); } catch (e) { /* silent */ } }
+    );
+  }, [highPlayer, lowPlayer, engineRef]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.addOnBeat((beat, isAccent) => {
+      if (isAccent) {
+        flashOpacity.value = withSequence(
+          withTiming(0.08, { duration: 40 }),
+          withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) })
+        );
+      }
+    });
+  }, [flashOpacity, engineRef]);
+
   const flashStyle = useAnimatedStyle(() => ({
     opacity: flashOpacity.value,
   }));
 
-  useEffect(() => {
-    const engine = new MetronomeEngine();
-    engineRef.current = engine;
+  const handleBpmAdjust = useCallback((delta: number) => {
+    const now = Date.now();
+    const withinWindow = now - lastTapTime.current < settings.rapidTapWindowMs;
+    lastTapTime.current = now;
+    if (Platform.OS !== "web") Haptics.selectionAsync();
+    adjustBpm(withinWindow ? delta * 10 : delta);
+  }, [adjustBpm, settings.rapidTapWindowMs]);
 
-    engine.setAudioCallbacks(
-      () => {
-        try {
-          highPlayer.seekTo(0);
-          highPlayer.play();
-        } catch (e) { /* silent */ }
-      },
-      () => {
-        try {
-          lowPlayer.seekTo(0);
-          lowPlayer.play();
-        } catch (e) { /* silent */ }
-      }
-    );
-
-    loadSettings().then((settings) => {
-      setBpm(settings.bpm);
-      setBeatsPerMeasure(settings.beatsPerMeasure);
-      engine.setBpm(settings.bpm);
-      engine.setBeatsPerMeasure(settings.beatsPerMeasure);
-      setIsLoaded(true);
-    });
-
-    return () => {
-      engine.cleanup();
-    };
-  }, []);
-
-  useEffect(() => {
-    const engine = engineRef.current;
-    if (!engine) return;
-
-    engine.setOnBeat((beat: number, isAccent: boolean) => {
-      setCurrentBeat(beat);
-      if (isAccent) {
-        flashOpacity.value = withSequence(
-          withTiming(0.12, { duration: 50 }),
-          withTiming(0, { duration: 250, easing: Easing.out(Easing.quad) })
-        );
-      }
-    });
-  }, [flashOpacity]);
-
-  const updateBpm = useCallback(
-    (newBpm: number) => {
-      const clampedBpm = Math.max(20, Math.min(300, newBpm));
-      setBpm(clampedBpm);
-      engineRef.current?.setBpm(clampedBpm);
-      saveSettings({ bpm: clampedBpm, beatsPerMeasure, subdivisions: 1 });
-    },
-    [beatsPerMeasure]
-  );
-
-  const updateTimeSignature = useCallback(
-    (beats: number) => {
-      setBeatsPerMeasure(beats);
-      engineRef.current?.setBeatsPerMeasure(beats);
-      if (Platform.OS !== "web") {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-      saveSettings({ bpm, beatsPerMeasure: beats, subdivisions: 1 });
-    },
-    [bpm]
-  );
-
-  const togglePlayPause = useCallback(() => {
-    const engine = engineRef.current;
-    if (!engine) return;
-
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-
-    if (isPlaying) {
-      engine.stop();
-      setIsPlaying(false);
-      setCurrentBeat(-1);
-    } else {
-      engine.start();
-      setIsPlaying(true);
-    }
-  }, [isPlaying]);
+  const tapTimesRef = useRef<number[]>([]);
 
   const handleTapTempo = useCallback(() => {
     const now = Date.now();
     const taps = tapTimesRef.current;
-
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (taps.length > 0 && now - taps[taps.length - 1] > 2500) {
       tapTimesRef.current = [];
     }
-
     taps.push(now);
-
-    if (taps.length > 8) {
-      taps.shift();
-    }
-
+    if (taps.length > 8) taps.shift();
     if (taps.length >= 2) {
-      let totalInterval = 0;
-      for (let i = 1; i < taps.length; i++) {
-        totalInterval += taps[i] - taps[i - 1];
-      }
-      const avgInterval = totalInterval / (taps.length - 1);
-      const detectedBpm = Math.round(60000 / avgInterval);
-      updateBpm(detectedBpm);
+      let total = 0;
+      for (let i = 1; i < taps.length; i++) total += taps[i] - taps[i - 1];
+      const avg = total / (taps.length - 1);
+      setBpm(Math.round(60000 / avg));
     }
-
     tapTimesRef.current = taps;
-  }, [updateBpm]);
+  }, [setBpm]);
 
-  const handleBpmIncrement = useCallback(
-    (amount: number) => {
-      if (Platform.OS !== "web") {
-        Haptics.selectionAsync();
-      }
-      updateBpm(bpm + amount);
-    },
-    [bpm, updateBpm]
-  );
+  const getTempoLabel = useCallback((b: number) => {
+    for (const p of presets) {
+      if (b >= p.min && b < p.max) return p.label;
+    }
+    return b >= 240 ? "Prestissimo" : "Grave";
+  }, [presets]);
 
-  const tempoLabel = getTempoLabel(bpm);
+  const tsItems = TIME_SIGNATURES.map(ts => ({ label: ts.label, value: ts.label }));
+  const presetItems = presets.map(p => ({ label: p.label, value: p.label }));
+  const beatItems = BEAT_SUBDIVISIONS.map(b => ({
+    label: `${b.value} ${b.value === 1 ? "Beat" : "Beats"}`,
+    value: b.value,
+  }));
+
+  const currentBeatSubIdx = BEAT_SUBDIVISIONS.findIndex(b => b.value === settings.beatSubdivision);
+  const ts = TIME_SIGNATURES[settings.timeSignatureIndex];
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
   if (!isLoaded) {
-    return (
-      <View style={[styles.screen, { backgroundColor: Colors.background }]} />
-    );
+    return <View style={[styles.screen, { backgroundColor: Colors.background }]} />;
   }
 
   return (
     <View style={styles.screen}>
       <StatusBar style="light" />
       <LinearGradient
-        colors={[Colors.background, "#0A0E14", Colors.background]}
+        colors={["#0D1117", "#0A0E14", "#0D1117"]}
         style={StyleSheet.absoluteFill}
       />
-
       <Animated.View
         style={[
           StyleSheet.absoluteFill,
@@ -229,152 +146,142 @@ export default function MetronomeScreen() {
         ]}
       />
 
-      <View
-        style={[
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
           styles.content,
           {
-            paddingTop: (insets.top || webTopInset) + 16,
-            paddingBottom: (insets.bottom || webBottomInset) + 16,
+            paddingTop: (insets.top || webTopInset) + 8,
+            paddingBottom: (insets.bottom || webBottomInset) + 20,
           },
         ]}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
       >
-        <View style={styles.topSection}>
+        <View style={styles.topBar}>
+          <Pressable
+            onPress={() => router.push("/settings")}
+            style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
+          >
+            <Feather name="settings" size={20} color={Colors.textSecondary} />
+          </Pressable>
+
           <Pressable
             onPress={handleTapTempo}
-            style={({ pressed }) => [
-              styles.tapButton,
-              pressed && styles.tapButtonPressed,
-            ]}
-            testID="tap-tempo-button"
+            style={({ pressed }) => [styles.tapBtn, pressed && styles.tapBtnPressed]}
           >
-            <Feather name="activity" size={18} color={Colors.textSecondary} />
+            <Feather name="activity" size={16} color={Colors.textSecondary} />
             <Text style={styles.tapText}>TAP</Text>
           </Pressable>
         </View>
 
-        <View style={styles.pendulumSection}>
-          <Pendulum isPlaying={isPlaying} bpm={bpm} />
-        </View>
-
-        <View style={styles.bpmSection}>
-          <Text style={styles.tempoLabel}>{tempoLabel}</Text>
-          <View style={styles.bpmRow}>
-            <Pressable
-              onPress={() => handleBpmIncrement(-1)}
-              onLongPress={() => handleBpmIncrement(-10)}
-              style={({ pressed }) => [
-                styles.bpmAdjust,
-                pressed && styles.bpmAdjustPressed,
-              ]}
-              testID="bpm-minus"
-            >
-              <Feather name="minus" size={24} color={Colors.text} />
-            </Pressable>
-
-            <View style={styles.bpmDisplay}>
-              <Text style={styles.bpmValue} testID="bpm-display">{bpm}</Text>
-              <Text style={styles.bpmUnit}>BPM</Text>
-            </View>
-
-            <Pressable
-              onPress={() => handleBpmIncrement(1)}
-              onLongPress={() => handleBpmIncrement(10)}
-              style={({ pressed }) => [
-                styles.bpmAdjust,
-                pressed && styles.bpmAdjustPressed,
-              ]}
-              testID="bpm-plus"
-            >
-              <Feather name="plus" size={24} color={Colors.text} />
-            </Pressable>
+        {settings.theme === "analog" ? (
+          <View style={styles.pendulumWrap}>
+            <Pendulum isPlaying={isPlaying} bpm={bpm} />
           </View>
+        ) : null}
+
+        <GaugeBpm
+          bpm={bpm}
+          onBpmChange={setBpm}
+          isPlaying={isPlaying}
+          tempoLabel={getTempoLabel(bpm)}
+        />
+
+        <View style={styles.bpmButtons}>
+          <Pressable
+            onPress={() => handleBpmAdjust(-1)}
+            style={({ pressed }) => [styles.bpmAdjBtn, pressed && styles.bpmAdjBtnPressed]}
+          >
+            <Feather name="minus" size={22} color={Colors.text} />
+          </Pressable>
+          <Pressable
+            onPress={() => handleBpmAdjust(1)}
+            style={({ pressed }) => [styles.bpmAdjBtn, pressed && styles.bpmAdjBtnPressed]}
+          >
+            <Feather name="plus" size={22} color={Colors.text} />
+          </Pressable>
         </View>
 
         <BeatIndicator
-          beatsPerMeasure={beatsPerMeasure}
+          beatsPerMeasure={ts?.beats || 4}
           currentBeat={currentBeat}
           isPlaying={isPlaying}
+          beatLightMode={settings.beatLightMode}
         />
 
-        <View style={styles.timeSignatureSection}>
-          <Text style={styles.sectionLabel}>Time Signature</Text>
-          <View style={styles.timeSignatureRow}>
-            {TIME_SIGNATURES.map((ts) => (
-              <Pressable
-                key={ts.label}
-                onPress={() => updateTimeSignature(ts.beats)}
-                style={[
-                  styles.tsButton,
-                  beatsPerMeasure === ts.beats && styles.tsButtonActive,
-                ]}
-                testID={`ts-${ts.label}`}
-              >
-                <Text
-                  style={[
-                    styles.tsText,
-                    beatsPerMeasure === ts.beats && styles.tsTextActive,
-                  ]}
-                >
-                  {ts.label}
-                </Text>
-              </Pressable>
-            ))}
+        <View style={styles.selectorsSection}>
+          <View style={styles.selectorBlock}>
+            <Text style={styles.selectorLabel}>Tempo</Text>
+            <SwipeSelector
+              items={presetItems}
+              selectedIndex={settings.tempoPresetIndex}
+              onSelect={setTempoPresetIndex}
+              itemWidth={110}
+              labelStyle="large"
+            />
+          </View>
+
+          <View style={styles.selectorRow}>
+            <View style={[styles.selectorBlock, { flex: 1 }]}>
+              <Text style={styles.selectorLabel}>Time Sig.</Text>
+              <SwipeSelector
+                items={tsItems}
+                selectedIndex={settings.timeSignatureIndex}
+                onSelect={setTimeSignatureIndex}
+                itemWidth={70}
+              />
+            </View>
+            <View style={[styles.selectorBlock, { flex: 1 }]}>
+              <Text style={styles.selectorLabel}>Subdivision</Text>
+              <SwipeSelector
+                items={beatItems}
+                selectedIndex={currentBeatSubIdx >= 0 ? currentBeatSubIdx : 0}
+                onSelect={(idx) => setBeatSubdivision(BEAT_SUBDIVISIONS[idx].value)}
+                itemWidth={90}
+              />
+            </View>
           </View>
         </View>
 
-        <View style={styles.presetsSection}>
-          <Text style={styles.sectionLabel}>Tempo</Text>
-          <View style={styles.presetsRow}>
-            {TEMPO_PRESETS.map((preset) => {
-              const isActive = bpm >= preset.min && bpm < preset.max;
-              return (
-                <Pressable
-                  key={preset.label}
-                  onPress={() => {
-                    if (Platform.OS !== "web") {
-                      Haptics.selectionAsync();
-                    }
-                    updateBpm(preset.bpm);
-                  }}
-                  style={[
-                    styles.presetChip,
-                    isActive && styles.presetChipActive,
-                  ]}
-                  testID={`preset-${preset.label}`}
-                >
-                  <Text
-                    style={[
-                      styles.presetText,
-                      isActive && styles.presetTextActive,
-                    ]}
-                  >
-                    {preset.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+        <View style={styles.timerSection}>
+          <TimerStopwatch
+            mode={timerMode}
+            stopwatchMs={stopwatchMs}
+            isStopwatchRunning={isStopwatchRunning}
+            timerMs={timerMs}
+            timerTargetMs={timerTargetMs}
+            isTimerRunning={isTimerRunning}
+            isTimerSet={isTimerSet}
+            onStartStopwatch={startStopwatch}
+            onStopStopwatch={stopStopwatch}
+            onResetStopwatch={resetStopwatch}
+            onSetTimerTarget={setTimerTarget}
+            onStartTimer={startTimer}
+            onStopTimer={stopTimer}
+            onResetTimer={resetTimer}
+            onModeChange={setTimerMode}
+          />
         </View>
 
         <View style={styles.playSection}>
           <Pressable
-            onPress={togglePlayPause}
+            onPress={togglePlay}
             style={({ pressed }) => [
-              styles.playButton,
-              isPlaying && styles.playButtonActive,
-              pressed && styles.playButtonPressed,
+              styles.playBtn,
+              isPlaying && styles.playBtnActive,
+              pressed && styles.playBtnPressed,
             ]}
-            testID="play-button"
           >
             <Ionicons
               name={isPlaying ? "stop" : "play"}
-              size={36}
-              color={isPlaying ? Colors.background : Colors.background}
-              style={!isPlaying ? { marginLeft: 4 } : undefined}
+              size={32}
+              color={Colors.background}
+              style={!isPlaying ? { marginLeft: 3 } : undefined}
             />
           </Pressable>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -384,170 +291,111 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  content: {
+  scroll: {
     flex: 1,
-    paddingHorizontal: 24,
-    justifyContent: "space-between",
   },
-  topSection: {
+  content: {
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+  topBar: {
     flexDirection: "row",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
     alignItems: "center",
   },
-  tapButton: {
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  tapBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 18,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  tapButtonPressed: {
+  tapBtnPressed: {
     backgroundColor: Colors.surfaceLight,
   },
   tapText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.textSecondary,
     letterSpacing: 2,
   },
-  pendulumSection: {
+  pendulumWrap: {
+    alignItems: "center",
+    marginBottom: -8,
+  },
+  bpmButtons: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 16,
+  },
+  bpmAdjBtn: {
+    width: 52,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
-  },
-  bpmSection: {
-    alignItems: "center",
-    gap: 4,
-  },
-  tempoLabel: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 14,
-    color: Colors.accentMuted,
-    letterSpacing: 3,
-    textTransform: "uppercase",
-  },
-  bpmRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 20,
-  },
-  bpmAdjust: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    alignItems: "center",
-    justifyContent: "center",
   },
-  bpmAdjustPressed: {
+  bpmAdjBtnPressed: {
     backgroundColor: Colors.surfaceLight,
     transform: [{ scale: 0.95 }],
   },
-  bpmDisplay: {
-    alignItems: "center",
-    minWidth: 120,
+  selectorsSection: {
+    gap: 12,
   },
-  bpmValue: {
-    fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 64,
-    color: Colors.text,
-    lineHeight: 72,
+  selectorBlock: {
+    gap: 4,
   },
-  bpmUnit: {
+  selectorRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  selectorLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 13,
+    fontSize: 11,
     color: Colors.textTertiary,
-    letterSpacing: 4,
-    marginTop: -4,
-  },
-  sectionLabel: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
-    color: Colors.textTertiary,
-    letterSpacing: 2,
+    letterSpacing: 1.5,
     textTransform: "uppercase",
-    marginBottom: 10,
     textAlign: "center",
   },
-  timeSignatureSection: {
-    alignItems: "center",
-  },
-  timeSignatureRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  tsButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  tsButtonActive: {
-    backgroundColor: Colors.accentDim,
-    borderColor: Colors.accent,
-  },
-  tsText: {
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 16,
-    color: Colors.textSecondary,
-  },
-  tsTextActive: {
-    color: Colors.accent,
-  },
-  presetsSection: {
-    alignItems: "center",
-  },
-  presetsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 8,
-  },
-  presetChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 16,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  presetChipActive: {
-    backgroundColor: Colors.accentDim,
-    borderColor: Colors.accentMuted,
-  },
-  presetText: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
-    color: Colors.textTertiary,
-  },
-  presetTextActive: {
-    color: Colors.accent,
+  timerSection: {
+    paddingTop: 4,
   },
   playSection: {
     alignItems: "center",
+    paddingTop: 4,
     paddingBottom: 8,
   },
-  playButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+  playBtn: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: Colors.accent,
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: `0px 4px 12px ${Colors.accent}4D`,
+    boxShadow: `0px 4px 16px ${Colors.accent}4D`,
   },
-  playButtonActive: {
+  playBtnActive: {
     backgroundColor: Colors.danger,
-    boxShadow: `0px 4px 12px ${Colors.danger}4D`,
+    boxShadow: `0px 4px 16px ${Colors.danger}4D`,
   },
-  playButtonPressed: {
-    transform: [{ scale: 0.93 }],
+  playBtnPressed: {
+    transform: [{ scale: 0.92 }],
   },
 });
