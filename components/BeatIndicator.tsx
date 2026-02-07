@@ -27,7 +27,6 @@ const ACCENT_DOT_SIZE = 38;
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.35;
 const MIN_BEATS = 1;
 const MAX_BEATS = 12;
-const RING_BORDER = 3;
 
 interface DialBeatDotProps {
   index: number;
@@ -137,11 +136,11 @@ export function BeatIndicator({
 
     dialRotation.value = dx * 0.08;
 
-    if (dx > 0 && canAdd) {
-      swipeDirection.value = 1;
-      swipeProgress.value = progress;
-    } else if (dx < 0 && canRemove) {
+    if (dx < 0 && canAdd) {
       swipeDirection.value = -1;
+      swipeProgress.value = progress;
+    } else if (dx > 0 && canRemove) {
+      swipeDirection.value = 1;
       swipeProgress.value = progress;
     } else {
       swipeDirection.value = 0;
@@ -150,12 +149,12 @@ export function BeatIndicator({
 
     if (progress >= 1 && !triggeredRef.current) {
       triggeredRef.current = true;
-      if (dx > 0 && canAdd) {
+      if (dx < 0 && canAdd) {
         if (Platform.OS !== "web") {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         }
         onBeatsChangeRef.current(beatsRef.current + 1);
-      } else if (dx < 0 && canRemove) {
+      } else if (dx > 0 && canRemove) {
         if (Platform.OS !== "web") {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         }
@@ -240,23 +239,21 @@ export function BeatIndicator({
       {...nativePanHandlers}
     >
       <View style={styles.dialContainer}>
-        <View style={styles.outerRing}>
-          <Animated.View style={[styles.dial, dialStyle]}>
-            {beats.map((beat) => (
-              <DialBeatDot
-                key={`beat-${beat}`}
-                index={beat}
-                total={beatsPerMeasure}
-                isActive={isPlaying && currentBeat === beat}
-                isAccent={beat === 0}
-              />
-            ))}
+        <Animated.View style={[styles.dial, dialStyle]}>
+          {beats.map((beat) => (
+            <DialBeatDot
+              key={`beat-${beat}`}
+              index={beat}
+              total={beatsPerMeasure}
+              isActive={isPlaying && currentBeat === beat}
+              isAccent={beat === 0}
+            />
+          ))}
 
-            <View style={styles.fingerHole}>
-              <View style={styles.fingerHoleInner} />
-            </View>
-          </Animated.View>
-        </View>
+          <View style={styles.fingerHole}>
+            <View style={styles.fingerHoleInner} />
+          </View>
+        </Animated.View>
 
         <View style={styles.centerHub}>
           <Text style={styles.signatureText}>
@@ -284,25 +281,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  outerRing: {
+  dial: {
     width: DIAL_SIZE,
     height: DIAL_SIZE,
     borderRadius: DIAL_RADIUS,
-    borderWidth: RING_BORDER,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  dial: {
-    width: DIAL_SIZE - RING_BORDER * 2,
-    height: DIAL_SIZE - RING_BORDER * 2,
-    borderRadius: DIAL_RADIUS - RING_BORDER,
   },
   fingerHole: {
     position: "absolute",
-    left: DIAL_RADIUS - RING_BORDER - 12,
+    left: DIAL_RADIUS - 12,
     bottom: 18,
     width: 24,
     height: 24,
