@@ -300,7 +300,7 @@ export function BeatIndicator({
             name={isPlaying ? "stop" : "play"}
             size={28}
             color={isPlaying ? Colors.background : Colors.background}
-            style={!isPlaying ? { marginLeft: 3 } : undefined}
+            style={!isPlaying ? { marginLeft: 3, marginBottom: 2 } : { marginBottom: 2 }}
           />
           <Text style={styles.signatureText}>
             {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}
