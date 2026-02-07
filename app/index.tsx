@@ -228,17 +228,21 @@ export default function MetronomeScreen() {
           },
         ]}
       >
-        <View style={styles.bpmSection}>
-          <Text style={styles.tempoLabel}>{tempoLabel}</Text>
-          <BpmSlider bpm={bpm} onBpmChange={updateBpm} onTapTempo={handleTapTempo} />
+        <View style={styles.topSection}>
+          <View style={styles.bpmSection}>
+            <Text style={styles.tempoLabel}>{tempoLabel}</Text>
+            <BpmSlider bpm={bpm} onBpmChange={updateBpm} onTapTempo={handleTapTempo} />
+          </View>
         </View>
 
-        <BeatIndicator
-          beatsPerMeasure={beatsPerMeasure}
-          currentBeat={currentBeat}
-          isPlaying={isPlaying}
-          onBeatsChange={updateTimeSignature}
-        />
+        <View style={styles.beatSection}>
+          <BeatIndicator
+            beatsPerMeasure={beatsPerMeasure}
+            currentBeat={currentBeat}
+            isPlaying={isPlaying}
+            onBeatsChange={updateTimeSignature}
+          />
+        </View>
 
         <View style={styles.playSection}>
           <Pressable
@@ -278,11 +282,18 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    justifyContent: "space-between",
+  },
+  topSection: {
+    flex: 2,
+    justifyContent: "center",
   },
   bpmSection: {
     alignItems: "center",
     gap: 4,
+  },
+  beatSection: {
+    justifyContent: "center",
+    alignItems: "center",
   },
   tempoLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
@@ -292,7 +303,9 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   playSection: {
+    flex: 1,
     alignItems: "center",
+    justifyContent: "center",
   },
   playButton: {
     width: 72,
