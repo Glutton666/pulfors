@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Metronome",
-    "slug": "metronome",
+    "name": "PurFors<alpha>",
+    "slug": "purforsalpha",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "metronome",
+    "scheme": "purforsalpha",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -15,10 +15,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.metronome"
+      "bundleIdentifier": "com.purforsalpha.app"
     },
     "android": {
-      "package": "com.metronome",
+      "package": "com.purforsalpha.app",
       "adaptiveIcon": {
         "backgroundColor": "#0D1117",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
