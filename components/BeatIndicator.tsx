@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useMemo } from "react";
+import React, { useRef, useEffect, useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,9 @@ import Animated, {
   withSpring,
   useSharedValue,
   Easing,
+  withDelay,
+  FadeIn,
+  FadeOut,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
@@ -31,6 +34,18 @@ const ACCENT_DOT_SIZE = 38;
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.35;
 const MIN_BEATS = 1;
 const MAX_BEATS = 12;
+
+const BEAT_TYPE_COLORS: Record<BeatType, string> = {
+  accent: Colors.accent,
+  normal: Colors.text,
+  mute: Colors.textTertiary,
+};
+
+const BEAT_TYPE_LABELS: Record<BeatType, string> = {
+  accent: "ACCENT",
+  normal: "NORMAL",
+  mute: "MUTE",
+};
 
 interface DialBeatDotProps {
   index: number;
@@ -48,13 +63,26 @@ function DialBeatDot({ index, total, isActive, beatType, onPress }: DialBeatDotP
   const x = DIAL_RADIUS + DOT_RADIUS_FROM_CENTER * Math.cos(angle) - size / 2;
   const y = DIAL_RADIUS + DOT_RADIUS_FROM_CENTER * Math.sin(angle) - size / 2;
 
+  const popScale = useSharedValue(1);
+
+  const handlePress = useCallback(() => {
+    popScale.value = withSequence(
+      withTiming(0.6, { duration: 60 }),
+      withSpring(1.15, { damping: 8, stiffness: 400 }),
+      withTiming(1, { duration: 150 })
+    );
+    onPress();
+  }, [onPress]);
+
   const animatedStyle = useAnimatedStyle(() => {
+    const baseScale = popScale.value;
+
     if (isMute) {
       if (isActive) {
         return {
           transform: [
             {
-              scale: withSequence(
+              scale: baseScale * withSequence(
                 withTiming(1.3, { duration: 50, easing: Easing.out(Easing.quad) }),
                 withTiming(1, { duration: 250, easing: Easing.out(Easing.elastic(1.5)) })
               ),
@@ -68,7 +96,7 @@ function DialBeatDot({ index, total, isActive, beatType, onPress }: DialBeatDotP
         };
       }
       return {
-        transform: [{ scale: withTiming(1, { duration: 200 }) }],
+        transform: [{ scale: baseScale }],
         borderColor: withTiming(Colors.textTertiary, { duration: 200 }),
         shadowOpacity: withTiming(0, { duration: 200 }),
       };
@@ -78,7 +106,7 @@ function DialBeatDot({ index, total, isActive, beatType, onPress }: DialBeatDotP
       return {
         transform: [
           {
-            scale: withSequence(
+            scale: baseScale * withSequence(
               withTiming(1.3, { duration: 50, easing: Easing.out(Easing.quad) }),
               withTiming(1, { duration: 250, easing: Easing.out(Easing.elastic(1.5)) })
             ),
@@ -95,15 +123,18 @@ function DialBeatDot({ index, total, isActive, beatType, onPress }: DialBeatDotP
       };
     }
     return {
-      transform: [{ scale: withTiming(1, { duration: 200 }) }],
-      backgroundColor: withTiming(Colors.textTertiary, { duration: 200 }),
+      transform: [{ scale: baseScale }],
+      backgroundColor: withTiming(
+        isAccent ? Colors.accentMuted : Colors.textTertiary,
+        { duration: 200 }
+      ),
       shadowOpacity: withTiming(0, { duration: 200 }),
     };
   }, [isActive, beatType]);
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={handlePress}
       style={{
         position: "absolute",
         left: x,
@@ -119,7 +150,7 @@ function DialBeatDot({ index, total, isActive, beatType, onPress }: DialBeatDotP
             width: size,
             height: size,
             borderRadius: size / 2,
-            backgroundColor: isMute ? "transparent" : Colors.textTertiary,
+            backgroundColor: isMute ? "transparent" : (isAccent ? Colors.accentMuted : Colors.textTertiary),
             borderWidth: isMute ? 2.5 : 0,
             borderColor: isMute ? Colors.textTertiary : "transparent",
           },
@@ -132,6 +163,74 @@ function DialBeatDot({ index, total, isActive, beatType, onPress }: DialBeatDotP
         ]}
       />
     </Pressable>
+  );
+}
+
+function BeatChangePopup({ value, visible }: { value: string; visible: boolean }) {
+  const scale = useSharedValue(0);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (visible) {
+      scale.value = 0.3;
+      opacity.value = 0;
+      scale.value = withSequence(
+        withSpring(1.2, { damping: 10, stiffness: 300 }),
+        withTiming(1, { duration: 100 })
+      );
+      opacity.value = withSequence(
+        withTiming(1, { duration: 100 }),
+        withDelay(600, withTiming(0, { duration: 300 }))
+      );
+    }
+  }, [visible, value]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  if (!visible) return null;
+
+  return (
+    <Animated.View style={[styles.beatPopup, animStyle]} pointerEvents="none">
+      <Text style={styles.beatPopupText}>{value}</Text>
+    </Animated.View>
+  );
+}
+
+function BeatTypePopup({ beatType, visible }: { beatType: BeatType; visible: boolean }) {
+  const scale = useSharedValue(0);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (visible) {
+      scale.value = 0.5;
+      opacity.value = 0;
+      scale.value = withSequence(
+        withSpring(1, { damping: 12, stiffness: 350 }),
+      );
+      opacity.value = withSequence(
+        withTiming(1, { duration: 80 }),
+        withDelay(500, withTiming(0, { duration: 250 }))
+      );
+    }
+  }, [visible, beatType]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  if (!visible) return null;
+
+  return (
+    <Animated.View style={[styles.typePopup, animStyle]} pointerEvents="none">
+      <View style={[styles.typePopupDot, { backgroundColor: BEAT_TYPE_COLORS[beatType] }]} />
+      <Text style={[styles.typePopupText, { color: BEAT_TYPE_COLORS[beatType] }]}>
+        {BEAT_TYPE_LABELS[beatType]}
+      </Text>
+    </Animated.View>
   );
 }
 
@@ -161,6 +260,18 @@ export function BeatIndicator({
   const dialRotation = useSharedValue(0);
   const centerGlow = useSharedValue(0);
   const prevBeatRef = useRef(-1);
+
+  const [beatPopup, setBeatPopup] = useState<{ value: string; key: number } | null>(null);
+  const [typePopup, setTypePopup] = useState<{ type: BeatType; key: number } | null>(null);
+  const prevBeatsRef = useRef(beatsPerMeasure);
+
+  useEffect(() => {
+    if (prevBeatsRef.current !== beatsPerMeasure) {
+      const denominator = beatsPerMeasure <= 4 ? "4" : "8";
+      setBeatPopup({ value: `${beatsPerMeasure}/${denominator}`, key: Date.now() });
+      prevBeatsRef.current = beatsPerMeasure;
+    }
+  }, [beatsPerMeasure]);
 
   useEffect(() => {
     if (isPlaying && currentBeat >= 0 && currentBeat !== prevBeatRef.current) {
@@ -312,8 +423,15 @@ export function BeatIndicator({
       next = "accent";
     }
     if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(
+        next === "accent"
+          ? Haptics.ImpactFeedbackStyle.Heavy
+          : next === "mute"
+          ? Haptics.ImpactFeedbackStyle.Light
+          : Haptics.ImpactFeedbackStyle.Medium
+      );
     }
+    setTypePopup({ type: next, key: Date.now() });
     onBeatTypeChange(index, next);
   }, [beatTypes, onBeatTypeChange]);
 
@@ -336,7 +454,6 @@ export function BeatIndicator({
               onPress={() => cycleBeatType(beat)}
             />
           ))}
-
         </Animated.View>
 
         <View style={styles.centerArea} pointerEvents="box-none">
@@ -370,6 +487,18 @@ export function BeatIndicator({
             />
           </Pressable>
         </View>
+
+        <BeatChangePopup
+          value={beatPopup?.value || ""}
+          visible={!!beatPopup}
+          key={beatPopup?.key}
+        />
+
+        <BeatTypePopup
+          beatType={typePopup?.type || "normal"}
+          visible={!!typePopup}
+          key={typePopup?.key}
+        />
       </View>
 
       <Text style={styles.hintText}>swipe to add or remove beats</Text>
@@ -430,6 +559,35 @@ const styles = StyleSheet.create({
   playButtonPressed: {
     transform: [{ scale: 0.92 }],
     opacity: 0.9,
+  },
+  beatPopup: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+    bottom: -10,
+  },
+  beatPopupText: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 28,
+    color: Colors.accent,
+    letterSpacing: 2,
+  },
+  typePopup: {
+    position: "absolute",
+    top: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  typePopupDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  typePopupText: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 12,
+    letterSpacing: 2,
   },
   hintText: {
     fontFamily: "SpaceGrotesk_400Regular",
