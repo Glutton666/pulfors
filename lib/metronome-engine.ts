@@ -11,7 +11,9 @@ export class MetronomeEngine {
   private isRunning = false;
   private bpm = 120;
   private beatsPerMeasure = 4;
+  private subdivisions = 1;
   private currentBeat = 0;
+  private currentSubBeat = 0;
   private beatTypes: BeatType[] = ["accent", "normal", "normal", "normal"];
   private onBeat: ((beat: number, isAccent: boolean) => void) | null = null;
   private onMeasureComplete: (() => void) | null = null;
@@ -56,10 +58,23 @@ export class MetronomeEngine {
   setBeatsPerMeasure(beats: number) {
     this.beatsPerMeasure = beats;
     this.currentBeat = 0;
+    this.currentSubBeat = 0;
   }
 
   setBeatTypes(types: BeatType[]) {
     this.beatTypes = types;
+  }
+
+  setSubdivisions(subs: number) {
+    this.subdivisions = Math.max(1, Math.min(4, subs));
+    if (this.isRunning) {
+      this.stop();
+      this.start();
+    }
+  }
+
+  getSubdivisions() {
+    return this.subdivisions;
   }
 
   getBpm() {
@@ -71,13 +86,14 @@ export class MetronomeEngine {
   }
 
   private tick() {
+    const isMainBeat = this.currentSubBeat === 0;
     const beatType = this.beatTypes[this.currentBeat] || "normal";
-    const isAccent = beatType === "accent";
+    const isAccent = beatType === "accent" && isMainBeat;
     const isMute = beatType === "mute";
 
     if (!isMute) {
       try {
-        if (isAccent) {
+        if (isMainBeat && isAccent) {
           this.playHighClick?.();
         } else {
           this.playLowClick?.();
@@ -88,35 +104,44 @@ export class MetronomeEngine {
       if (Platform.OS !== "web") {
         try {
           Haptics.impactAsync(
-            isAccent
+            isMainBeat && isAccent
               ? Haptics.ImpactFeedbackStyle.Heavy
-              : Haptics.ImpactFeedbackStyle.Light
+              : isMainBeat
+              ? Haptics.ImpactFeedbackStyle.Light
+              : Haptics.ImpactFeedbackStyle.Soft
           );
         } catch (e) {
         }
       }
     }
 
-    this.onBeat?.(this.currentBeat, isAccent);
-
-    const nextBeat = (this.currentBeat + 1) % this.beatsPerMeasure;
-    if (nextBeat === 0) {
-      this.onMeasureComplete?.();
-      if (this.stopAfterMeasure) {
-        this.stopAfterMeasure = false;
-        this.stop();
-        return;
-      }
+    if (isMainBeat) {
+      this.onBeat?.(this.currentBeat, isAccent);
     }
-    this.currentBeat = nextBeat;
+
+    this.currentSubBeat++;
+    if (this.currentSubBeat >= this.subdivisions) {
+      this.currentSubBeat = 0;
+      const nextBeat = (this.currentBeat + 1) % this.beatsPerMeasure;
+      if (nextBeat === 0) {
+        this.onMeasureComplete?.();
+        if (this.stopAfterMeasure) {
+          this.stopAfterMeasure = false;
+          this.stop();
+          return;
+        }
+      }
+      this.currentBeat = nextBeat;
+    }
   }
 
   start() {
     if (this.isRunning) return;
     this.isRunning = true;
     this.currentBeat = 0;
+    this.currentSubBeat = 0;
 
-    const intervalMs = 60000 / this.bpm;
+    const intervalMs = 60000 / (this.bpm * this.subdivisions);
 
     this.tick();
 
@@ -132,6 +157,7 @@ export class MetronomeEngine {
       this.intervalId = null;
     }
     this.currentBeat = 0;
+    this.currentSubBeat = 0;
   }
 
   cleanup() {
