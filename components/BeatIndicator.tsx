@@ -343,22 +343,20 @@ export function BeatIndicator({
   const panResponder = useRef(
     Platform.OS !== "web"
       ? PanResponder.create({
-          onStartShouldSetPanResponder: () => true,
-          onMoveShouldSetPanResponder: () => true,
+          onStartShouldSetPanResponder: () => false,
+          onMoveShouldSetPanResponder: (_, gs) =>
+            Math.abs(gs.dx) > 10,
           onPanResponderGrant: (e) => {
             startXRef.current = e.nativeEvent.pageX;
-            isDraggingRef.current = true;
             triggeredRef.current = false;
           },
           onPanResponderMove: (e) => {
             processMove(e.nativeEvent.pageX);
           },
           onPanResponderRelease: () => {
-            isDraggingRef.current = false;
             resetVisuals();
           },
           onPanResponderTerminate: () => {
-            isDraggingRef.current = false;
             resetVisuals();
           },
         })
@@ -412,7 +410,11 @@ export function BeatIndicator({
       {...nativePanHandlers}
     >
       <View style={styles.dialContainer}>
-        <View ref={dialRef} style={{ width: DIAL_SIZE, height: DIAL_SIZE }}>
+        <View
+          ref={dialRef}
+          style={{ width: DIAL_SIZE, height: DIAL_SIZE }}
+          collapsable={false}
+        >
           <Animated.View style={[styles.dial, dialStyle]}>
             {beats.map((beat) => (
               <DialBeatDot

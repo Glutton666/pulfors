@@ -77,6 +77,15 @@ export default function MetronomeScreen() {
 
   const highPlayer = useAudioPlayer(highClickSource);
   const lowPlayer = useAudioPlayer(lowClickSource);
+  const highPlayerRef = useRef(highPlayer);
+  const lowPlayerRef = useRef(lowPlayer);
+
+  useEffect(() => {
+    highPlayerRef.current = highPlayer;
+  }, [highPlayer]);
+  useEffect(() => {
+    lowPlayerRef.current = lowPlayer;
+  }, [lowPlayer]);
 
   const flashOpacity = useSharedValue(0);
 
@@ -91,14 +100,16 @@ export default function MetronomeScreen() {
     engine.setAudioCallbacks(
       () => {
         try {
-          highPlayer.seekTo(0);
-          highPlayer.play();
+          const p = highPlayerRef.current;
+          p.seekTo(0);
+          p.play();
         } catch (e) {}
       },
       () => {
         try {
-          lowPlayer.seekTo(0);
-          lowPlayer.play();
+          const p = lowPlayerRef.current;
+          p.seekTo(0);
+          p.play();
         } catch (e) {}
       }
     );
@@ -301,18 +312,31 @@ export default function MetronomeScreen() {
         };
       }
     } else {
-      (dialRef.current as any)?.measure?.(
-        (
-          _x: number,
-          _y: number,
-          w: number,
-          h: number,
-          pageX: number,
-          pageY: number
-        ) => {
-          dialCenterRef.current = { x: pageX + w / 2, y: pageY + h / 2 };
-        }
-      );
+      const ref = dialRef.current as any;
+      if (ref?.measureInWindow) {
+        ref.measureInWindow(
+          (x: number, y: number, w: number, h: number) => {
+            if (w > 0 && h > 0) {
+              dialCenterRef.current = { x: x + w / 2, y: y + h / 2 };
+            }
+          }
+        );
+      } else if (ref?.measure) {
+        ref.measure(
+          (
+            _x: number,
+            _y: number,
+            w: number,
+            h: number,
+            pageX: number,
+            pageY: number
+          ) => {
+            if (w > 0 && h > 0) {
+              dialCenterRef.current = { x: pageX + w / 2, y: pageY + h / 2 };
+            }
+          }
+        );
+      }
     }
   }, []);
 

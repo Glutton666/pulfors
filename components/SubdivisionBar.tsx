@@ -14,7 +14,6 @@ import Animated, {
   withTiming,
   withSequence,
   withSpring,
-  Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
@@ -57,11 +56,13 @@ export function SubdivisionBar({
   onReset,
 }: SubdivisionBarProps) {
   const isDraggingUpRef = useRef(false);
-  const gestureStartRef = useRef({ x: 0, y: 0 });
   const horizontalTriggeredRef = useRef(false);
   const patternRef = useRef(pattern);
   const onPatternChangeRef = useRef(onPatternChange);
   const onResetRef = useRef(onReset);
+  const onDragStartRef = useRef(onDragStart);
+  const onDragMoveRef = useRef(onDragMove);
+  const onDragEndRef = useRef(onDragEnd);
 
   const directionChangesRef = useRef<number[]>([]);
   const lastDirectionRef = useRef<"left" | "right" | null>(null);
@@ -78,6 +79,15 @@ export function SubdivisionBar({
   useEffect(() => {
     onResetRef.current = onReset;
   }, [onReset]);
+  useEffect(() => {
+    onDragStartRef.current = onDragStart;
+  }, [onDragStart]);
+  useEffect(() => {
+    onDragMoveRef.current = onDragMove;
+  }, [onDragMove]);
+  useEffect(() => {
+    onDragEndRef.current = onDragEnd;
+  }, [onDragEnd]);
 
   const cycleType = useCallback(
     (index: number) => {
@@ -168,25 +178,25 @@ export function SubdivisionBar({
       onMoveShouldSetPanResponder: (_, gs) => {
         return Math.abs(gs.dy) > 12 || Math.abs(gs.dx) > 15;
       },
-      onPanResponderGrant: (e) => {
-        gestureStartRef.current = {
-          x: e.nativeEvent.pageX,
-          y: e.nativeEvent.pageY,
-        };
+      onPanResponderGrant: () => {
         isDraggingUpRef.current = false;
         horizontalTriggeredRef.current = false;
         lastDirectionRef.current = null;
       },
       onPanResponderMove: (e, gs) => {
         if (isDraggingUpRef.current) {
-          onDragMove(e.nativeEvent.pageX, e.nativeEvent.pageY);
+          onDragMoveRef.current(e.nativeEvent.pageX, e.nativeEvent.pageY);
           return;
         }
 
-        if (!horizontalTriggeredRef.current && Math.abs(gs.dy) > 12 && Math.abs(gs.dy) > Math.abs(gs.dx)) {
+        if (
+          !horizontalTriggeredRef.current &&
+          Math.abs(gs.dy) > 12 &&
+          Math.abs(gs.dy) > Math.abs(gs.dx)
+        ) {
           isDraggingUpRef.current = true;
-          onDragStart();
-          onDragMove(e.nativeEvent.pageX, e.nativeEvent.pageY);
+          onDragStartRef.current();
+          onDragMoveRef.current(e.nativeEvent.pageX, e.nativeEvent.pageY);
           return;
         }
 
@@ -197,7 +207,10 @@ export function SubdivisionBar({
           return;
         }
 
-        if (!horizontalTriggeredRef.current && Math.abs(dx) > SWIPE_THRESHOLD) {
+        if (
+          !horizontalTriggeredRef.current &&
+          Math.abs(dx) > SWIPE_THRESHOLD
+        ) {
           horizontalTriggeredRef.current = true;
           if (dx > 0) {
             addCell();
@@ -209,7 +222,7 @@ export function SubdivisionBar({
       onPanResponderRelease: (e) => {
         if (isDraggingUpRef.current) {
           isDraggingUpRef.current = false;
-          onDragEnd(e.nativeEvent.pageX, e.nativeEvent.pageY);
+          onDragEndRef.current(e.nativeEvent.pageX, e.nativeEvent.pageY);
         }
         horizontalTriggeredRef.current = false;
         lastDirectionRef.current = null;
@@ -217,7 +230,7 @@ export function SubdivisionBar({
       onPanResponderTerminate: (e) => {
         if (isDraggingUpRef.current) {
           isDraggingUpRef.current = false;
-          onDragEnd(e.nativeEvent.pageX, e.nativeEvent.pageY);
+          onDragEndRef.current(e.nativeEvent.pageX, e.nativeEvent.pageY);
         }
         horizontalTriggeredRef.current = false;
         lastDirectionRef.current = null;
@@ -259,14 +272,18 @@ export function SubdivisionBar({
       const dy = e.clientY - g.startY;
 
       if (g.isDraggingUp) {
-        onDragMove(e.clientX, e.clientY);
+        onDragMoveRef.current(e.clientX, e.clientY);
         return;
       }
 
-      if (!g.horizontalTriggered && Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) {
+      if (
+        !g.horizontalTriggered &&
+        Math.abs(dy) > 12 &&
+        Math.abs(dy) > Math.abs(dx)
+      ) {
         g.isDraggingUp = true;
-        onDragStart();
-        onDragMove(e.clientX, e.clientY);
+        onDragStartRef.current();
+        onDragMoveRef.current(e.clientX, e.clientY);
         return;
       }
 
@@ -289,7 +306,7 @@ export function SubdivisionBar({
     const handleUp = (e: MouseEvent) => {
       const g = webGestureRef.current;
       if (g.isDraggingUp) {
-        onDragEnd(e.clientX, e.clientY);
+        onDragEndRef.current(e.clientX, e.clientY);
       }
       webGestureRef.current = {
         isDown: false,
@@ -310,7 +327,7 @@ export function SubdivisionBar({
       document.removeEventListener("mousemove", handleMove);
       document.removeEventListener("mouseup", handleUp);
     };
-  }, [onDragStart, onDragMove, onDragEnd, trackShake, triggerReset, addCell, removeCell]);
+  }, [trackShake, triggerReset, addCell, removeCell]);
 
   const shakeAnimStyle = useAnimatedStyle(() => ({
     transform: [
