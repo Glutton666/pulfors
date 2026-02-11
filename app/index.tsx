@@ -276,6 +276,19 @@ export default function MetronomeScreen() {
     [persistSettings]
   );
 
+  const handleReset = useCallback(() => {
+    setSubdivisionPattern(["accent"]);
+    const emptySubs: Record<string, BeatType[]> = {};
+    setBeatSubdivisions(emptySubs);
+    for (let i = 0; i < beatsPerMeasure; i++) {
+      engineRef.current?.setBeatSubdivision(i, null);
+    }
+    persistSettings({
+      subdivisionPattern: ["accent"],
+      beatSubdivisions: emptySubs,
+    });
+  }, [beatsPerMeasure, persistSettings]);
+
   const measureDialCenter = useCallback(() => {
     if (!dialRef.current) return;
     if (Platform.OS === "web") {
@@ -473,6 +486,7 @@ export default function MetronomeScreen() {
             onDragStart={handleDragStart}
             onDragMove={handleDragMove}
             onDragEnd={handleDragEnd}
+            onReset={handleReset}
           />
           <Text style={styles.tempoLabel}>{tempoLabel}</Text>
           <BpmSlider
