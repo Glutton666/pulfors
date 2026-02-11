@@ -412,20 +412,22 @@ export function BeatIndicator({
       {...nativePanHandlers}
     >
       <View style={styles.dialContainer}>
-        <Animated.View ref={dialRef} style={[styles.dial, dialStyle]}>
-          {beats.map((beat) => (
-            <DialBeatDot
-              key={`beat-${beat}`}
-              index={beat}
-              total={beatsPerMeasure}
-              isActive={isPlaying && currentBeat === beat}
-              beatType={beatTypes[beat] || "normal"}
-              onPress={() => cycleBeatType(beat)}
-              isDropTarget={dropTargetBeat === beat}
-              subdivisionCount={beatSubdivisionCounts[beat] || 0}
-            />
-          ))}
-        </Animated.View>
+        <View ref={dialRef} style={{ width: DIAL_SIZE, height: DIAL_SIZE }}>
+          <Animated.View style={[styles.dial, dialStyle]}>
+            {beats.map((beat) => (
+              <DialBeatDot
+                key={`beat-${beat}`}
+                index={beat}
+                total={beatsPerMeasure}
+                isActive={isPlaying && currentBeat === beat}
+                beatType={beatTypes[beat] || "normal"}
+                onPress={() => cycleBeatType(beat)}
+                isDropTarget={dropTargetBeat === beat}
+                subdivisionCount={beatSubdivisionCounts[beat] || 0}
+              />
+            ))}
+          </Animated.View>
+        </View>
 
         <View style={styles.centerArea} pointerEvents="box-none">
           <Text style={styles.digitalSignature}>

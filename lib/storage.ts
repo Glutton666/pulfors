@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { BeatType } from "./metronome-engine";
 
 const SETTINGS_KEY = "metronome_settings";
 
@@ -6,12 +7,16 @@ export interface MetronomeSettings {
   bpm: number;
   beatsPerMeasure: number;
   subdivisions: number;
+  subdivisionPattern?: BeatType[];
+  beatSubdivisions?: Record<string, BeatType[]>;
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
   bpm: 120,
   beatsPerMeasure: 4,
   subdivisions: 1,
+  subdivisionPattern: ["accent"],
+  beatSubdivisions: {},
 };
 
 export async function loadSettings(): Promise<MetronomeSettings> {

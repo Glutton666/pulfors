@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -18,12 +18,20 @@ import { useAudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
-import { MetronomeEngine, highClickSource, lowClickSource } from "@/lib/metronome-engine";
+import {
+  MetronomeEngine,
+  highClickSource,
+  lowClickSource,
+} from "@/lib/metronome-engine";
 import type { BeatType } from "@/lib/metronome-engine";
 import { loadSettings, saveSettings } from "@/lib/storage";
-import { BeatIndicator } from "@/components/BeatIndicator";
+import {
+  BeatIndicator,
+  DIAL_SIZE,
+  DOT_RADIUS_FROM_CENTER,
+} from "@/components/BeatIndicator";
 import { BpmSlider } from "@/components/BpmSlider";
-import { SubdivisionSelector } from "@/components/SubdivisionSelector";
+import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
 
 function getTempoLabel(bpm: number): string {
@@ -39,7 +47,9 @@ function getTempoLabel(bpm: number): string {
 }
 
 function defaultBeatTypes(beats: number): BeatType[] {
-  return Array.from({ length: beats }, (_, i) => (i === 0 ? "accent" : "normal"));
+  return Array.from({ length: beats }, (_, i) =>
+    i === 0 ? "accent" : "normal"
+  );
 }
 
 export default function MetronomeScreen() {
@@ -49,10 +59,21 @@ export default function MetronomeScreen() {
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(-1);
-  const [subdivisions, setSubdivisions] = useState(1);
+  const [subdivisionPattern, setSubdivisionPattern] = useState<BeatType[]>([
+    "accent",
+  ]);
+  const [beatSubdivisions, setBeatSubdivisions] = useState<
+    Record<string, BeatType[]>
+  >({});
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
+  const [dropTargetBeat, setDropTargetBeat] = useState<number | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
+  const dialRef = useRef<View>(null);
+  const dialCenterRef = useRef({ x: 0, y: 0 });
 
   const highPlayer = useAudioPlayer(highClickSource);
   const lowPlayer = useAudioPlayer(lowClickSource);
@@ -72,23 +93,30 @@ export default function MetronomeScreen() {
         try {
           highPlayer.seekTo(0);
           highPlayer.play();
-        } catch (e) { /* silent */ }
+        } catch (e) {}
       },
       () => {
         try {
           lowPlayer.seekTo(0);
           lowPlayer.play();
-        } catch (e) { /* silent */ }
+        } catch (e) {}
       }
     );
 
     loadSettings().then((settings) => {
       setBpm(settings.bpm);
       setBeatsPerMeasure(settings.beatsPerMeasure);
-      setSubdivisions(settings.subdivisions || 1);
       engine.setBpm(settings.bpm);
       engine.setBeatsPerMeasure(settings.beatsPerMeasure);
-      engine.setSubdivisions(settings.subdivisions || 1);
+
+      if (settings.subdivisionPattern && settings.subdivisionPattern.length > 0) {
+        setSubdivisionPattern(settings.subdivisionPattern);
+      }
+      if (settings.beatSubdivisions) {
+        setBeatSubdivisions(settings.beatSubdivisions);
+        engine.setAllBeatSubdivisions(settings.beatSubdivisions);
+      }
+
       setIsLoaded(true);
     });
 
@@ -112,14 +140,34 @@ export default function MetronomeScreen() {
     });
   }, [flashOpacity]);
 
+  const persistSettings = useCallback(
+    (overrides: Partial<{
+      bpm: number;
+      beatsPerMeasure: number;
+      subdivisionPattern: BeatType[];
+      beatSubdivisions: Record<string, BeatType[]>;
+    }> = {}) => {
+      const current = {
+        bpm,
+        beatsPerMeasure,
+        subdivisions: 1,
+        subdivisionPattern,
+        beatSubdivisions,
+        ...overrides,
+      };
+      saveSettings(current);
+    },
+    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions]
+  );
+
   const updateBpm = useCallback(
     (newBpm: number) => {
       const clampedBpm = Math.max(20, Math.min(300, newBpm));
       setBpm(clampedBpm);
       engineRef.current?.setBpm(clampedBpm);
-      saveSettings({ bpm: clampedBpm, beatsPerMeasure, subdivisions });
+      persistSettings({ bpm: clampedBpm });
     },
-    [beatsPerMeasure, subdivisions]
+    [persistSettings]
   );
 
   const updateTimeSignature = useCallback(
@@ -132,18 +180,14 @@ export default function MetronomeScreen() {
       if (Platform.OS !== "web") {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-      saveSettings({ bpm, beatsPerMeasure: beats, subdivisions });
+      const cleaned: Record<string, BeatType[]> = {};
+      for (const [k, v] of Object.entries(beatSubdivisions)) {
+        if (Number(k) < beats) cleaned[k] = v;
+      }
+      setBeatSubdivisions(cleaned);
+      persistSettings({ beatsPerMeasure: beats, beatSubdivisions: cleaned });
     },
-    [bpm, subdivisions]
-  );
-
-  const updateSubdivisions = useCallback(
-    (subs: number) => {
-      setSubdivisions(subs);
-      engineRef.current?.setSubdivisions(subs);
-      saveSettings({ bpm, beatsPerMeasure, subdivisions: subs });
-    },
-    [bpm, beatsPerMeasure]
+    [persistSettings, beatSubdivisions]
   );
 
   const handleBeatTypeChange = useCallback(
@@ -224,6 +268,122 @@ export default function MetronomeScreen() {
     tapTimesRef.current = taps;
   }, [updateBpm]);
 
+  const handlePatternChange = useCallback(
+    (pattern: BeatType[]) => {
+      setSubdivisionPattern(pattern);
+      persistSettings({ subdivisionPattern: pattern });
+    },
+    [persistSettings]
+  );
+
+  const measureDialCenter = useCallback(() => {
+    if (!dialRef.current) return;
+    if (Platform.OS === "web") {
+      const el = dialRef.current as unknown as HTMLElement;
+      if (el?.getBoundingClientRect) {
+        const rect = el.getBoundingClientRect();
+        dialCenterRef.current = {
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2,
+        };
+      }
+    } else {
+      (dialRef.current as any)?.measure?.(
+        (
+          _x: number,
+          _y: number,
+          w: number,
+          h: number,
+          pageX: number,
+          pageY: number
+        ) => {
+          dialCenterRef.current = { x: pageX + w / 2, y: pageY + h / 2 };
+        }
+      );
+    }
+  }, []);
+
+  const findClosestBeat = useCallback(
+    (pageX: number, pageY: number): number | null => {
+      const center = dialCenterRef.current;
+      if (center.x === 0 && center.y === 0) return null;
+
+      const dialRadius = DIAL_SIZE / 2;
+      let closestBeat: number | null = null;
+      let closestDist = Infinity;
+
+      for (let i = 0; i < beatsPerMeasure; i++) {
+        const angle = (i / beatsPerMeasure) * 2 * Math.PI - Math.PI / 2;
+        const dotX = center.x + DOT_RADIUS_FROM_CENTER * Math.cos(angle);
+        const dotY = center.y + DOT_RADIUS_FROM_CENTER * Math.sin(angle);
+
+        const dist = Math.sqrt((pageX - dotX) ** 2 + (pageY - dotY) ** 2);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestBeat = i;
+        }
+      }
+
+      if (closestDist < 40) return closestBeat;
+      return null;
+    },
+    [beatsPerMeasure]
+  );
+
+  const handleDragStart = useCallback(() => {
+    setIsDragging(true);
+    measureDialCenter();
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  }, [measureDialCenter]);
+
+  const handleDragMove = useCallback(
+    (pageX: number, pageY: number) => {
+      setDragPos({ x: pageX, y: pageY });
+      const target = findClosestBeat(pageX, pageY);
+      setDropTargetBeat(target);
+    },
+    [findClosestBeat]
+  );
+
+  const handleDragEnd = useCallback(
+    (pageX: number, pageY: number) => {
+      const target = findClosestBeat(pageX, pageY);
+      setIsDragging(false);
+      setDropTargetBeat(null);
+
+      if (target !== null && subdivisionPattern.length > 1) {
+        if (Platform.OS !== "web") {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        const newSubs = { ...beatSubdivisions };
+        newSubs[String(target)] = [...subdivisionPattern];
+        setBeatSubdivisions(newSubs);
+        engineRef.current?.setBeatSubdivision(target, subdivisionPattern);
+        persistSettings({ beatSubdivisions: newSubs });
+      } else if (target !== null && subdivisionPattern.length <= 1) {
+        if (Platform.OS !== "web") {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+        const newSubs = { ...beatSubdivisions };
+        delete newSubs[String(target)];
+        setBeatSubdivisions(newSubs);
+        engineRef.current?.setBeatSubdivision(target, null);
+        persistSettings({ beatSubdivisions: newSubs });
+      }
+    },
+    [findClosestBeat, subdivisionPattern, beatSubdivisions, persistSettings]
+  );
+
+  const beatSubdivisionCounts = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const [k, v] of Object.entries(beatSubdivisions)) {
+      counts[Number(k)] = v.length;
+    }
+    return counts;
+  }, [beatSubdivisions]);
+
   const tempoLabel = getTempoLabel(bpm);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -246,7 +406,10 @@ export default function MetronomeScreen() {
       <Animated.View
         style={[
           StyleSheet.absoluteFill,
-          { backgroundColor: Colors.accent, pointerEvents: "none" as const },
+          {
+            backgroundColor: Colors.accent,
+            pointerEvents: "none" as const,
+          },
           flashStyle,
         ]}
       />
@@ -269,25 +432,42 @@ export default function MetronomeScreen() {
             onTogglePlay={togglePlayPause}
             beatTypes={beatTypes}
             onBeatTypeChange={handleBeatTypeChange}
+            dropTargetBeat={dropTargetBeat}
+            beatSubdivisionCounts={beatSubdivisionCounts}
+            dialRef={dialRef}
           />
         </View>
 
         <View style={styles.bpmSection}>
-          <SubdivisionSelector
-            subdivisions={subdivisions}
-            onSubdivisionsChange={updateSubdivisions}
+          <SubdivisionBar
+            pattern={subdivisionPattern}
+            onPatternChange={handlePatternChange}
+            onDragStart={handleDragStart}
+            onDragMove={handleDragMove}
+            onDragEnd={handleDragEnd}
           />
           <Text style={styles.tempoLabel}>{tempoLabel}</Text>
-          <BpmSlider bpm={bpm} onBpmChange={updateBpm} onTapTempo={handleTapTempo} />
+          <BpmSlider
+            bpm={bpm}
+            onBpmChange={updateBpm}
+            onTapTempo={handleTapTempo}
+          />
         </View>
-
       </View>
 
       <StopwatchTimer
         onTimerExpired={handleTimerExpired}
         isMetronomePlaying={isPlaying}
-        topInset={(insets.top || webTopInset)}
+        topInset={insets.top || webTopInset}
       />
+
+      {isDragging && (
+        <DragGhost
+          pattern={subdivisionPattern}
+          x={dragPos.x}
+          y={dragPos.y}
+        />
+      )}
     </View>
   );
 }
