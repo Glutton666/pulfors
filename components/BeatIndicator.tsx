@@ -102,7 +102,7 @@ function DialBeatDot({
       return {
         transform: [{ scale: baseScale }],
         backgroundColor: withTiming("transparent", { duration: 200 }),
-        borderColor: withTiming("rgba(72, 79, 88, 0.5)", { duration: 200 }),
+        borderColor: withTiming(Colors.textSecondary, { duration: 200 }),
         shadowOpacity: withTiming(0, { duration: 200 }),
       };
     }
@@ -172,8 +172,8 @@ function DialBeatDot({
               : isAccent
               ? Colors.accentMuted
               : Colors.textTertiary,
-            borderWidth: isMute ? 2 : 0,
-            borderColor: isMute ? "rgba(72, 79, 88, 0.5)" : "transparent",
+            borderWidth: isMute ? 2.5 : 0,
+            borderColor: isMute ? Colors.textSecondary : "transparent",
           },
           animatedStyle,
           {
