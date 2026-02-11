@@ -18,7 +18,7 @@ import { useAudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
-import { MetronomeEngine, highClickUri, lowClickUri } from "@/lib/metronome-engine";
+import { MetronomeEngine, highClickSource, lowClickSource } from "@/lib/metronome-engine";
 import type { BeatType } from "@/lib/metronome-engine";
 import { loadSettings, saveSettings } from "@/lib/storage";
 import { BeatIndicator } from "@/components/BeatIndicator";
@@ -52,8 +52,8 @@ export default function MetronomeScreen() {
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
 
-  const highPlayer = useAudioPlayer(highClickUri);
-  const lowPlayer = useAudioPlayer(lowClickUri);
+  const highPlayer = useAudioPlayer(highClickSource);
+  const lowPlayer = useAudioPlayer(lowClickSource);
 
   const flashOpacity = useSharedValue(0);
 

@@ -1,60 +1,10 @@
-import { useAudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
 
 export type BeatType = "accent" | "normal" | "mute";
 
-const SAMPLE_RATE = 44100;
-
-function createClickBuffer(frequency: number, duration: number, volume: number): string {
-  const numSamples = Math.floor(SAMPLE_RATE * duration);
-  const numChannels = 1;
-  const bitsPerSample = 16;
-  const byteRate = SAMPLE_RATE * numChannels * (bitsPerSample / 8);
-  const blockAlign = numChannels * (bitsPerSample / 8);
-  const dataSize = numSamples * blockAlign;
-  const headerSize = 44;
-  const buffer = new ArrayBuffer(headerSize + dataSize);
-  const view = new DataView(buffer);
-
-  function writeString(offset: number, str: string) {
-    for (let i = 0; i < str.length; i++) {
-      view.setUint8(offset + i, str.charCodeAt(i));
-    }
-  }
-
-  writeString(0, "RIFF");
-  view.setUint32(4, 36 + dataSize, true);
-  writeString(8, "WAVE");
-  writeString(12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, SAMPLE_RATE, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, bitsPerSample, true);
-  writeString(36, "data");
-  view.setUint32(40, dataSize, true);
-
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / SAMPLE_RATE;
-    const envelope = Math.exp(-t * 40) * volume;
-    const sample = Math.sin(2 * Math.PI * frequency * t) * envelope;
-    const intSample = Math.max(-32768, Math.min(32767, Math.floor(sample * 32767)));
-    view.setInt16(headerSize + i * 2, intSample, true);
-  }
-
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-export const highClickUri = `data:audio/wav;base64,${createClickBuffer(1200, 0.05, 0.9)}`;
-export const lowClickUri = `data:audio/wav;base64,${createClickBuffer(800, 0.04, 0.7)}`;
+export const highClickSource = require("@/assets/sounds/click-high.wav");
+export const lowClickSource = require("@/assets/sounds/click-low.wav");
 
 export class MetronomeEngine {
   private intervalId: ReturnType<typeof setTimeout> | null = null;
@@ -133,7 +83,6 @@ export class MetronomeEngine {
           this.playLowClick?.();
         }
       } catch (e) {
-        // silent fail
       }
 
       if (Platform.OS !== "web") {
@@ -144,7 +93,6 @@ export class MetronomeEngine {
               : Haptics.ImpactFeedbackStyle.Light
           );
         } catch (e) {
-          // silent fail
         }
       }
     }
