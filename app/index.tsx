@@ -23,6 +23,7 @@ import type { BeatType } from "@/lib/metronome-engine";
 import { loadSettings, saveSettings } from "@/lib/storage";
 import { BeatIndicator } from "@/components/BeatIndicator";
 import { BpmSlider } from "@/components/BpmSlider";
+import { SubdivisionSelector } from "@/components/SubdivisionSelector";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
 
 function getTempoLabel(bpm: number): string {
@@ -48,6 +49,7 @@ export default function MetronomeScreen() {
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(-1);
+  const [subdivisions, setSubdivisions] = useState(1);
   const [isLoaded, setIsLoaded] = useState(false);
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -83,8 +85,10 @@ export default function MetronomeScreen() {
     loadSettings().then((settings) => {
       setBpm(settings.bpm);
       setBeatsPerMeasure(settings.beatsPerMeasure);
+      setSubdivisions(settings.subdivisions || 1);
       engine.setBpm(settings.bpm);
       engine.setBeatsPerMeasure(settings.beatsPerMeasure);
+      engine.setSubdivisions(settings.subdivisions || 1);
       setIsLoaded(true);
     });
 
@@ -113,9 +117,9 @@ export default function MetronomeScreen() {
       const clampedBpm = Math.max(20, Math.min(300, newBpm));
       setBpm(clampedBpm);
       engineRef.current?.setBpm(clampedBpm);
-      saveSettings({ bpm: clampedBpm, beatsPerMeasure, subdivisions: 1 });
+      saveSettings({ bpm: clampedBpm, beatsPerMeasure, subdivisions });
     },
-    [beatsPerMeasure]
+    [beatsPerMeasure, subdivisions]
   );
 
   const updateTimeSignature = useCallback(
@@ -128,9 +132,18 @@ export default function MetronomeScreen() {
       if (Platform.OS !== "web") {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-      saveSettings({ bpm, beatsPerMeasure: beats, subdivisions: 1 });
+      saveSettings({ bpm, beatsPerMeasure: beats, subdivisions });
     },
-    [bpm]
+    [bpm, subdivisions]
+  );
+
+  const updateSubdivisions = useCallback(
+    (subs: number) => {
+      setSubdivisions(subs);
+      engineRef.current?.setSubdivisions(subs);
+      saveSettings({ bpm, beatsPerMeasure, subdivisions: subs });
+    },
+    [bpm, beatsPerMeasure]
   );
 
   const handleBeatTypeChange = useCallback(
@@ -260,6 +273,10 @@ export default function MetronomeScreen() {
         </View>
 
         <View style={styles.bpmSection}>
+          <SubdivisionSelector
+            subdivisions={subdivisions}
+            onSubdivisionsChange={updateSubdivisions}
+          />
           <Text style={styles.tempoLabel}>{tempoLabel}</Text>
           <BpmSlider bpm={bpm} onBpmChange={updateBpm} onTapTempo={handleTapTempo} />
         </View>
