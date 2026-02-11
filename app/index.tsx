@@ -206,9 +206,14 @@ export default function MetronomeScreen() {
       setBeatTypes((prev) => {
         const next = [...prev];
         next[index] = type;
-        engineRef.current?.setBeatTypes(next);
         return next;
       });
+      const engine = engineRef.current;
+      if (engine) {
+        const currentTypes = [...engine.getBeatTypes()];
+        currentTypes[index] = type;
+        engine.setBeatTypes(currentTypes);
+      }
     },
     []
   );

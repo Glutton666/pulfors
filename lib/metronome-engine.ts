@@ -70,6 +70,10 @@ export class MetronomeEngine {
     this.beatTypes = types;
   }
 
+  getBeatTypes(): BeatType[] {
+    return this.beatTypes;
+  }
+
   setBeatSubdivision(beatIndex: number, pattern: BeatType[] | null) {
     if (pattern === null || pattern.length <= 1) {
       this.beatSubdivisions.delete(beatIndex);
