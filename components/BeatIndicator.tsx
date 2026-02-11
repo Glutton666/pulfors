@@ -339,36 +339,37 @@ export function BeatIndicator({
 
         </Animated.View>
 
-        <Animated.View
-          style={[
-            styles.centerGlow,
-            { backgroundColor: isAccentBeat ? Colors.accent : Colors.text },
-            centerGlowStyle,
-          ]}
-          pointerEvents="none"
-        />
-
-        <Pressable
-          onPress={onTogglePlay}
-          style={({ pressed }) => [
-            styles.centerHub,
-            isPlaying && styles.centerHubActive,
-            pressed && styles.centerHubPressed,
-          ]}
-          testID="play-button"
-        >
-          <Text style={styles.signatureText}>
+        <View style={styles.centerArea} pointerEvents="box-none">
+          <Text style={styles.digitalSignature}>
             {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}
           </Text>
-          <View style={styles.iconOverlay} pointerEvents="none">
+
+          <Animated.View
+            style={[
+              styles.centerGlow,
+              { backgroundColor: isAccentBeat ? Colors.accent : Colors.text },
+              centerGlowStyle,
+            ]}
+            pointerEvents="none"
+          />
+
+          <Pressable
+            onPress={onTogglePlay}
+            style={({ pressed }) => [
+              styles.playButton,
+              isPlaying && styles.playButtonActive,
+              pressed && styles.playButtonPressed,
+            ]}
+            testID="play-button"
+          >
             <Ionicons
               name={isPlaying ? "stop" : "play"}
-              size={30}
-              color={isPlaying ? Colors.background : Colors.background}
+              size={28}
+              color={Colors.background}
               style={!isPlaying ? { marginLeft: 3 } : undefined}
             />
-          </View>
-        </Pressable>
+          </Pressable>
+        </View>
       </View>
 
       <Text style={styles.hintText}>swipe to add or remove beats</Text>
@@ -395,6 +396,19 @@ const styles = StyleSheet.create({
     height: DIAL_SIZE,
     borderRadius: DIAL_RADIUS,
   },
+  centerArea: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  digitalSignature: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 64,
+    color: Colors.textTertiary,
+    letterSpacing: 4,
+    opacity: 0.25,
+    position: "absolute",
+  },
   centerGlow: {
     position: "absolute",
     width: 100,
@@ -402,33 +416,20 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     opacity: 0,
   },
-  centerHub: {
-    position: "absolute",
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+  playButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: Colors.accent,
     alignItems: "center",
     justifyContent: "center",
   },
-  iconOverlay: {
-    position: "absolute",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  centerHubActive: {
+  playButtonActive: {
     backgroundColor: Colors.danger,
   },
-  centerHubPressed: {
+  playButtonPressed: {
     transform: [{ scale: 0.92 }],
     opacity: 0.9,
-  },
-  signatureText: {
-    fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 22,
-    color: Colors.background,
-    letterSpacing: 2,
-    opacity: 0.5,
   },
   hintText: {
     fontFamily: "SpaceGrotesk_400Regular",
