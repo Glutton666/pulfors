@@ -33,6 +33,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
   const isLongPressActiveRef = useRef(false);
   const touchStartXRef = useRef(0);
   const grantLocationXRef = useRef(0);
+  const grantZoneRef = useRef<"left" | "center" | "right">("center");
 
   useEffect(() => {
     currentBpmRef.current = bpm;
@@ -75,9 +76,19 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
     return "center";
   }, []);
 
-  const startLongPress = useCallback((zone: "left" | "right") => {
-    const delta = zone === "left" ? -10 : 10;
+  const roundBpmDown = useCallback((current: number): number => {
+    const tens = Math.floor(current / 10) * 10;
+    if (current === tens) return Math.max(20, current - 10);
+    return Math.max(20, tens);
+  }, []);
 
+  const roundBpmUp = useCallback((current: number): number => {
+    const tens = Math.ceil(current / 10) * 10;
+    if (current === tens) return Math.min(300, current + 10);
+    return Math.min(300, tens);
+  }, []);
+
+  const startLongPress = useCallback((zone: "left" | "right") => {
     if (zone === "left") {
       leftGlow.value = withTiming(1, { duration: 300 });
     } else {
@@ -87,8 +98,9 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
     longPressTimerRef.current = setTimeout(() => {
       isLongPressActiveRef.current = true;
       const adjust = () => {
-        const newBpm = Math.max(20, Math.min(300, currentBpmRef.current + delta));
-        if (newBpm !== currentBpmRef.current) {
+        const cur = currentBpmRef.current;
+        const newBpm = zone === "left" ? roundBpmDown(cur) : roundBpmUp(cur);
+        if (newBpm !== cur) {
           onBpmChangeRef.current(newBpm);
           if (Platform.OS !== "web") {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -97,8 +109,8 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
       };
       adjust();
       longPressIntervalRef.current = setInterval(adjust, 400);
-    }, 3000);
-  }, []);
+    }, 2000);
+  }, [roundBpmDown, roundBpmUp]);
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     containerWidthRef.current = e.nativeEvent.layout.width;
@@ -121,13 +133,17 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
         touchStartXRef.current = e.nativeEvent.pageX;
 
         const zone = getZone(locationX);
+        grantZoneRef.current = zone;
         if (zone === "left" || zone === "right") {
           startLongPress(zone);
         }
       },
       onPanResponderMove: (_, gestureState) => {
-        if (Math.abs(gestureState.dx) > 10) {
-          clearLongPress();
+        if (grantZoneRef.current !== "center") {
+          if (Math.abs(gestureState.dx) > 10) {
+            clearLongPress();
+          }
+          return;
         }
 
         if (Math.abs(gestureState.dx) > 5) {
@@ -207,13 +223,17 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
       grantLocX = e.clientX - rect.left;
 
       const zone = getZone(grantLocX);
+      const grantZone = zone;
       if (zone === "left" || zone === "right") {
         startLongPress(zone);
       }
 
       const handleMouseMove = (me: MouseEvent) => {
-        if (Math.abs(me.clientX - startX) > 10) {
-          clearLongPress();
+        if (grantZone !== "center") {
+          if (Math.abs(me.clientX - startX) > 10) {
+            clearLongPress();
+          }
+          return;
         }
         if (Math.abs(me.clientX - startX) > 5) {
           dragged = true;
@@ -335,7 +355,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
         </View>
       </Animated.View>
 
-      <Text style={styles.slideHint}>slide to adjust</Text>
+      <Text style={styles.slideHint}>hold sides to jump · slide center to adjust</Text>
     </View>
   );
 }
