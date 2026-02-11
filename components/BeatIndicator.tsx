@@ -26,8 +26,7 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 const DIAL_SIZE = Math.min(SCREEN_WIDTH - 48, 300);
 const DIAL_RADIUS = DIAL_SIZE / 2;
 const DOT_RADIUS_FROM_CENTER = DIAL_RADIUS - 30;
-const DOT_SIZE = 32;
-const ACCENT_DOT_SIZE = 38;
+const DOT_SIZE = 34;
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.35;
 const MIN_BEATS = 1;
 const MAX_BEATS = 12;
@@ -56,7 +55,7 @@ function DialBeatDot({
   const isAccent = beatType === "accent";
   const isMute = beatType === "mute";
   const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
-  const size = isAccent ? ACCENT_DOT_SIZE : DOT_SIZE;
+  const size = DOT_SIZE;
   const x = DIAL_RADIUS + DOT_RADIUS_FROM_CENTER * Math.cos(angle) - size / 2;
   const y = DIAL_RADIUS + DOT_RADIUS_FROM_CENTER * Math.sin(angle) - size / 2;
 
@@ -82,7 +81,7 @@ function DialBeatDot({
               scale:
                 baseScale *
                 withSequence(
-                  withTiming(1.3, {
+                  withTiming(1.15, {
                     duration: 50,
                     easing: Easing.out(Easing.quad),
                   }),
@@ -93,16 +92,18 @@ function DialBeatDot({
                 ),
             },
           ],
-          borderColor: withTiming(Colors.textTertiary, { duration: 50 }),
+          backgroundColor: withTiming("rgba(72, 79, 88, 0.35)", { duration: 50 }),
+          borderColor: withTiming(Colors.textSecondary, { duration: 50 }),
           shadowOpacity: withSequence(
-            withTiming(0.5, { duration: 50 }),
+            withTiming(0.3, { duration: 50 }),
             withTiming(0, { duration: 400 })
           ),
         };
       }
       return {
         transform: [{ scale: baseScale }],
-        borderColor: withTiming(Colors.textTertiary, { duration: 200 }),
+        backgroundColor: withTiming("transparent", { duration: 200 }),
+        borderColor: withTiming("rgba(72, 79, 88, 0.5)", { duration: 200 }),
         shadowOpacity: withTiming(0, { duration: 200 }),
       };
     }
@@ -114,7 +115,7 @@ function DialBeatDot({
             scale:
               baseScale *
               withSequence(
-                withTiming(1.3, {
+                withTiming(1.25, {
                   duration: 50,
                   easing: Easing.out(Easing.quad),
                 }),
@@ -129,6 +130,7 @@ function DialBeatDot({
           isAccent ? Colors.accent : Colors.text,
           { duration: 50 }
         ),
+        borderColor: withTiming("transparent", { duration: 50 }),
         shadowOpacity: withSequence(
           withTiming(1, { duration: 50 }),
           withTiming(0, { duration: 400 })
@@ -141,6 +143,7 @@ function DialBeatDot({
         isAccent ? Colors.accentMuted : Colors.textTertiary,
         { duration: 200 }
       ),
+      borderColor: withTiming("transparent", { duration: 200 }),
       shadowOpacity: withTiming(0, { duration: 200 }),
     };
   }, [isActive, beatType]);
@@ -170,14 +173,14 @@ function DialBeatDot({
               : isAccent
               ? Colors.accentMuted
               : Colors.textTertiary,
-            borderWidth: isMute ? 2.5 : 0,
-            borderColor: isMute ? Colors.textTertiary : "transparent",
+            borderWidth: isMute ? 2 : 0,
+            borderColor: isMute ? "rgba(72, 79, 88, 0.5)" : "transparent",
           },
           animatedStyle,
           {
             shadowColor: isAccent ? Colors.accent : Colors.text,
             shadowOffset: { width: 0, height: 0 },
-            shadowRadius: isActive ? 20 : 0,
+            shadowRadius: isActive ? 16 : 0,
           },
         ]}
       />
