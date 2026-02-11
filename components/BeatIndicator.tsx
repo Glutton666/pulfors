@@ -383,13 +383,10 @@ export function BeatIndicator({
             testID="play-button"
           >
             <Ionicons
-              name={isPlaying ? "stop-outline" : "play-outline"}
+              name={isPlaying ? "stop" : "play"}
               size={56}
               color={isPlaying ? Colors.danger : Colors.accent}
-              style={[
-                { fontWeight: "900" as const },
-                !isPlaying ? { marginLeft: 5 } : undefined,
-              ]}
+              style={!isPlaying ? { marginLeft: 5 } : undefined}
             />
           </Pressable>
         </View>
@@ -426,7 +423,7 @@ const styles = StyleSheet.create({
   },
   digitalSignature: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 128,
+    fontSize: 83,
     color: Colors.textTertiary,
     letterSpacing: 4,
     opacity: 0.15,
@@ -440,18 +437,13 @@ const styles = StyleSheet.create({
     opacity: 0,
   },
   playButton: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 4,
-    borderColor: Colors.accent,
-    backgroundColor: "transparent",
     alignItems: "center",
     justifyContent: "center",
+    padding: 8,
   },
   playButtonPressed: {
-    transform: [{ scale: 0.92 }],
-    opacity: 0.7,
+    transform: [{ scale: 0.85 }],
+    opacity: 0.6,
   },
   hintText: {
     fontFamily: "SpaceGrotesk_400Regular",
