@@ -114,9 +114,26 @@ export class MetronomeEngine {
   }
 
   private getSubPattern(beat: number): BeatType[] {
+    const beatType = this.beatTypes[beat] || "normal";
     const custom = this.beatSubdivisions.get(beat);
-    if (custom && custom.length > 0) return custom;
-    return [this.beatTypes[beat] || "normal"];
+
+    if (!custom || custom.length === 0) {
+      return [beatType];
+    }
+
+    if (beatType === "mute") {
+      return custom.map(() => "mute" as BeatType);
+    }
+
+    if (beatType === "accent") {
+      const result = [...custom];
+      if (result[0] === "normal") {
+        result[0] = "accent";
+      }
+      return result;
+    }
+
+    return custom;
   }
 
   private tick() {
