@@ -303,12 +303,18 @@ export default function MetronomeScreen() {
     }
   }, []);
 
-  const findClosestBeat = useCallback(
+  const CENTER_HUB_RADIUS = 55;
+
+  const findDropTarget = useCallback(
     (pageX: number, pageY: number): number | null => {
       const center = dialCenterRef.current;
       if (center.x === 0 && center.y === 0) return null;
 
-      const dialRadius = DIAL_SIZE / 2;
+      const distToCenter = Math.sqrt(
+        (pageX - center.x) ** 2 + (pageY - center.y) ** 2
+      );
+      if (distToCenter < CENTER_HUB_RADIUS) return -1;
+
       let closestBeat: number | null = null;
       let closestDist = Infinity;
 
@@ -341,19 +347,41 @@ export default function MetronomeScreen() {
   const handleDragMove = useCallback(
     (pageX: number, pageY: number) => {
       setDragPos({ x: pageX, y: pageY });
-      const target = findClosestBeat(pageX, pageY);
+      const target = findDropTarget(pageX, pageY);
       setDropTargetBeat(target);
     },
-    [findClosestBeat]
+    [findDropTarget]
+  );
+
+  const applyToAllBeats = useCallback(
+    (pattern: BeatType[]) => {
+      const newSubs: Record<string, BeatType[]> = {};
+      for (let i = 0; i < beatsPerMeasure; i++) {
+        if (pattern.length > 1) {
+          newSubs[String(i)] = [...pattern];
+          engineRef.current?.setBeatSubdivision(i, pattern);
+        } else {
+          engineRef.current?.setBeatSubdivision(i, null);
+        }
+      }
+      setBeatSubdivisions(newSubs);
+      persistSettings({ beatSubdivisions: newSubs });
+    },
+    [beatsPerMeasure, persistSettings]
   );
 
   const handleDragEnd = useCallback(
     (pageX: number, pageY: number) => {
-      const target = findClosestBeat(pageX, pageY);
+      const target = findDropTarget(pageX, pageY);
       setIsDragging(false);
       setDropTargetBeat(null);
 
-      if (target !== null && subdivisionPattern.length > 1) {
+      if (target === -1) {
+        if (Platform.OS !== "web") {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        applyToAllBeats(subdivisionPattern);
+      } else if (target !== null && subdivisionPattern.length > 1) {
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
@@ -373,7 +401,7 @@ export default function MetronomeScreen() {
         persistSettings({ beatSubdivisions: newSubs });
       }
     },
-    [findClosestBeat, subdivisionPattern, beatSubdivisions, persistSettings]
+    [findDropTarget, subdivisionPattern, beatSubdivisions, persistSettings, applyToAllBeats]
   );
 
   const beatSubdivisionCounts = useMemo(() => {

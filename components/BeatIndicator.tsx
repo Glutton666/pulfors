@@ -422,7 +422,7 @@ export function BeatIndicator({
                 isActive={isPlaying && currentBeat === beat}
                 beatType={beatTypes[beat] || "normal"}
                 onPress={() => cycleBeatType(beat)}
-                isDropTarget={dropTargetBeat === beat}
+                isDropTarget={dropTargetBeat === beat || dropTargetBeat === -1}
                 subdivisionCount={beatSubdivisionCounts[beat] || 0}
               />
             ))}
@@ -445,6 +445,10 @@ export function BeatIndicator({
             pointerEvents="none"
           />
 
+          {dropTargetBeat === -1 && (
+            <View style={styles.centerDropRing} pointerEvents="none" />
+          )}
+
           <Pressable
             onPress={onTogglePlay}
             style={({ pressed }) => [
@@ -460,6 +464,10 @@ export function BeatIndicator({
               style={!isPlaying ? { marginLeft: 5 } : undefined}
             />
           </Pressable>
+
+          {dropTargetBeat === -1 && (
+            <Text style={styles.centerDropLabel}>ALL</Text>
+          )}
         </View>
       </View>
 
@@ -547,5 +555,23 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 9,
     color: Colors.accent,
+  },
+  centerDropRing: {
+    position: "absolute",
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 2,
+    borderColor: Colors.accent,
+    borderStyle: "dashed" as any,
+    opacity: 0.8,
+  },
+  centerDropLabel: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 11,
+    color: Colors.accent,
+    letterSpacing: 2,
+    marginTop: 8,
+    opacity: 0.9,
   },
 });
