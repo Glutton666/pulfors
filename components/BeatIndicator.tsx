@@ -32,15 +32,27 @@ const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.35;
 const MIN_BEATS = 1;
 const MAX_BEATS = 12;
 
+export { DIAL_SIZE, DIAL_RADIUS, DOT_RADIUS_FROM_CENTER };
+
 interface DialBeatDotProps {
   index: number;
   total: number;
   isActive: boolean;
   beatType: BeatType;
   onPress: () => void;
+  isDropTarget: boolean;
+  subdivisionCount: number;
 }
 
-function DialBeatDot({ index, total, isActive, beatType, onPress }: DialBeatDotProps) {
+function DialBeatDot({
+  index,
+  total,
+  isActive,
+  beatType,
+  onPress,
+  isDropTarget,
+  subdivisionCount,
+}: DialBeatDotProps) {
   const isAccent = beatType === "accent";
   const isMute = beatType === "mute";
   const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
@@ -67,10 +79,18 @@ function DialBeatDot({ index, total, isActive, beatType, onPress }: DialBeatDotP
         return {
           transform: [
             {
-              scale: baseScale * withSequence(
-                withTiming(1.3, { duration: 50, easing: Easing.out(Easing.quad) }),
-                withTiming(1, { duration: 250, easing: Easing.out(Easing.elastic(1.5)) })
-              ),
+              scale:
+                baseScale *
+                withSequence(
+                  withTiming(1.3, {
+                    duration: 50,
+                    easing: Easing.out(Easing.quad),
+                  }),
+                  withTiming(1, {
+                    duration: 250,
+                    easing: Easing.out(Easing.elastic(1.5)),
+                  })
+                ),
             },
           ],
           borderColor: withTiming(Colors.textTertiary, { duration: 50 }),
@@ -91,10 +111,18 @@ function DialBeatDot({ index, total, isActive, beatType, onPress }: DialBeatDotP
       return {
         transform: [
           {
-            scale: baseScale * withSequence(
-              withTiming(1.3, { duration: 50, easing: Easing.out(Easing.quad) }),
-              withTiming(1, { duration: 250, easing: Easing.out(Easing.elastic(1.5)) })
-            ),
+            scale:
+              baseScale *
+              withSequence(
+                withTiming(1.3, {
+                  duration: 50,
+                  easing: Easing.out(Easing.quad),
+                }),
+                withTiming(1, {
+                  duration: 250,
+                  easing: Easing.out(Easing.elastic(1.5)),
+                })
+              ),
           },
         ],
         backgroundColor: withTiming(
@@ -135,7 +163,11 @@ function DialBeatDot({ index, total, isActive, beatType, onPress }: DialBeatDotP
             width: size,
             height: size,
             borderRadius: size / 2,
-            backgroundColor: isMute ? "transparent" : (isAccent ? Colors.accentMuted : Colors.textTertiary),
+            backgroundColor: isMute
+              ? "transparent"
+              : isAccent
+              ? Colors.accentMuted
+              : Colors.textTertiary,
             borderWidth: isMute ? 2.5 : 0,
             borderColor: isMute ? Colors.textTertiary : "transparent",
           },
@@ -147,6 +179,25 @@ function DialBeatDot({ index, total, isActive, beatType, onPress }: DialBeatDotP
           },
         ]}
       />
+      {isDropTarget && (
+        <View
+          style={[
+            styles.dropTargetRing,
+            {
+              width: size + 12,
+              height: size + 12,
+              borderRadius: (size + 12) / 2,
+              top: -6,
+              left: -6,
+            },
+          ]}
+        />
+      )}
+      {subdivisionCount > 1 && (
+        <View style={styles.subdivBadge}>
+          <Text style={styles.subdivBadgeText}>{subdivisionCount}</Text>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -159,6 +210,9 @@ interface BeatIndicatorProps {
   onTogglePlay: () => void;
   beatTypes: BeatType[];
   onBeatTypeChange: (index: number, type: BeatType) => void;
+  dropTargetBeat: number | null;
+  beatSubdivisionCounts: Record<number, number>;
+  dialRef?: React.RefObject<View | null>;
 }
 
 export function BeatIndicator({
@@ -169,6 +223,9 @@ export function BeatIndicator({
   onTogglePlay,
   beatTypes,
   onBeatTypeChange,
+  dropTargetBeat,
+  beatSubdivisionCounts,
+  dialRef,
 }: BeatIndicatorProps) {
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
 
@@ -198,8 +255,12 @@ export function BeatIndicator({
   const onBeatsChangeRef = useRef(onBeatsChange);
   const containerRef = useRef<View>(null);
 
-  useEffect(() => { beatsRef.current = beatsPerMeasure; }, [beatsPerMeasure]);
-  useEffect(() => { onBeatsChangeRef.current = onBeatsChange; }, [onBeatsChange]);
+  useEffect(() => {
+    beatsRef.current = beatsPerMeasure;
+  }, [beatsPerMeasure]);
+  useEffect(() => {
+    onBeatsChangeRef.current = onBeatsChange;
+  }, [onBeatsChange]);
 
   const resetVisuals = useCallback(() => {
     swipeProgress.value = withTiming(0, { duration: 200 });
@@ -315,29 +376,33 @@ export function BeatIndicator({
 
   const isAccentBeat = isPlaying && currentBeat === 0;
 
-  const nativePanHandlers = Platform.OS !== "web" && panResponder ? panResponder.panHandlers : {};
+  const nativePanHandlers =
+    Platform.OS !== "web" && panResponder ? panResponder.panHandlers : {};
 
-  const cycleBeatType = useCallback((index: number) => {
-    const current = beatTypes[index] || "normal";
-    let next: BeatType;
-    if (current === "accent") {
-      next = "normal";
-    } else if (current === "normal") {
-      next = "mute";
-    } else {
-      next = "accent";
-    }
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(
-        next === "accent"
-          ? Haptics.ImpactFeedbackStyle.Heavy
-          : next === "mute"
-          ? Haptics.ImpactFeedbackStyle.Light
-          : Haptics.ImpactFeedbackStyle.Medium
-      );
-    }
-    onBeatTypeChange(index, next);
-  }, [beatTypes, onBeatTypeChange]);
+  const cycleBeatType = useCallback(
+    (index: number) => {
+      const current = beatTypes[index] || "normal";
+      let next: BeatType;
+      if (current === "accent") {
+        next = "normal";
+      } else if (current === "normal") {
+        next = "mute";
+      } else {
+        next = "accent";
+      }
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(
+          next === "accent"
+            ? Haptics.ImpactFeedbackStyle.Heavy
+            : next === "mute"
+            ? Haptics.ImpactFeedbackStyle.Light
+            : Haptics.ImpactFeedbackStyle.Medium
+        );
+      }
+      onBeatTypeChange(index, next);
+    },
+    [beatTypes, onBeatTypeChange]
+  );
 
   return (
     <View
@@ -347,7 +412,7 @@ export function BeatIndicator({
       {...nativePanHandlers}
     >
       <View style={styles.dialContainer}>
-        <Animated.View style={[styles.dial, dialStyle]}>
+        <Animated.View ref={dialRef} style={[styles.dial, dialStyle]}>
           {beats.map((beat) => (
             <DialBeatDot
               key={`beat-${beat}`}
@@ -356,6 +421,8 @@ export function BeatIndicator({
               isActive={isPlaying && currentBeat === beat}
               beatType={beatTypes[beat] || "normal"}
               onPress={() => cycleBeatType(beat)}
+              isDropTarget={dropTargetBeat === beat}
+              subdivisionCount={beatSubdivisionCounts[beat] || 0}
             />
           ))}
         </Animated.View>
@@ -368,7 +435,9 @@ export function BeatIndicator({
           <Animated.View
             style={[
               styles.centerGlow,
-              { backgroundColor: isAccentBeat ? Colors.accent : Colors.text },
+              {
+                backgroundColor: isAccentBeat ? Colors.accent : Colors.text,
+              },
               centerGlowStyle,
             ]}
             pointerEvents="none"
@@ -451,5 +520,30 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     letterSpacing: 1,
     opacity: 0.5,
+  },
+  dropTargetRing: {
+    position: "absolute",
+    borderWidth: 2,
+    borderColor: Colors.accent,
+    borderStyle: "dashed" as any,
+    opacity: 0.8,
+  },
+  subdivBadge: {
+    position: "absolute",
+    bottom: -4,
+    right: -4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  subdivBadgeText: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 9,
+    color: Colors.accent,
   },
 });
