@@ -154,8 +154,10 @@ function DialBeatDot({
         top: y,
         width: size,
         height: size,
+        zIndex: 10,
       }}
-      hitSlop={6}
+      hitSlop={10}
+      pressRetentionOffset={{ top: 20, left: 20, right: 20, bottom: 20 }}
     >
       <Animated.View
         style={[
@@ -344,8 +346,11 @@ export function BeatIndicator({
     Platform.OS !== "web"
       ? PanResponder.create({
           onStartShouldSetPanResponder: () => false,
+          onStartShouldSetPanResponderCapture: () => false,
           onMoveShouldSetPanResponder: (_, gs) =>
-            Math.abs(gs.dx) > 10,
+            Math.abs(gs.dx) > 30 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+          onMoveShouldSetPanResponderCapture: () => false,
+          onShouldBlockNativeResponder: () => false,
           onPanResponderGrant: (e) => {
             startXRef.current = e.nativeEvent.pageX;
             triggeredRef.current = false;
@@ -359,6 +364,7 @@ export function BeatIndicator({
           onPanResponderTerminate: () => {
             resetVisuals();
           },
+          onPanResponderTerminationRequest: () => true,
         })
       : null
   ).current;
