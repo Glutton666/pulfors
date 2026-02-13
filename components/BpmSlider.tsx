@@ -109,7 +109,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
       };
       adjust();
       longPressIntervalRef.current = setInterval(adjust, 400);
-    }, 2000);
+    }, 500);
   }, [roundBpmDown, roundBpmUp]);
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
@@ -283,7 +283,103 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
     };
   }, [getZone, startLongPress, clearLongPress]);
 
+  const extendedPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        Math.abs(gestureState.dx) > 5,
+      onPanResponderGrant: () => {
+        startBpmRef.current = currentBpmRef.current;
+        lastHapticBpm.current = currentBpmRef.current;
+        didDragRef.current = false;
+        isDragging.value = withTiming(1, { duration: 150 });
+        glowIntensity.value = withTiming(1, { duration: 200 });
+        grantZoneRef.current = "center";
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (Math.abs(gestureState.dx) > 5) {
+          didDragRef.current = true;
+        }
+        const sensitivity = 0.4;
+        const rawDelta = gestureState.dx * sensitivity;
+        const newBpm = Math.round(startBpmRef.current + rawDelta);
+        const clampedBpm = Math.max(20, Math.min(300, newBpm));
+        translateX.value = Math.max(-30, Math.min(30, gestureState.dx * 0.08));
+        if (clampedBpm !== lastHapticBpm.current) {
+          if (Platform.OS !== "web") {
+            if (clampedBpm % 10 === 0) {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            } else if (clampedBpm % 5 === 0) {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            } else {
+              Haptics.selectionAsync();
+            }
+          }
+          lastHapticBpm.current = clampedBpm;
+          onBpmChangeRef.current(clampedBpm);
+        }
+      },
+      onPanResponderRelease: () => {
+        translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
+        isDragging.value = withTiming(0, { duration: 200 });
+        glowIntensity.value = withTiming(0, { duration: 300 });
+      },
+      onPanResponderTerminate: () => {
+        translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
+        isDragging.value = withTiming(0, { duration: 200 });
+        glowIntensity.value = withTiming(0, { duration: 300 });
+      },
+    })
+  ).current;
+
   const containerRef = useRef<View>(null);
+  const extendedTouchRef = useRef<View>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const el = extendedTouchRef.current as unknown as HTMLElement;
+    if (!el || !el.addEventListener) return;
+
+    let startX = 0;
+    let startBpm = 0;
+    let lastHaptic = 0;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      startX = e.clientX;
+      startBpm = currentBpmRef.current;
+      lastHaptic = currentBpmRef.current;
+      isDragging.value = withTiming(1, { duration: 150 });
+      glowIntensity.value = withTiming(1, { duration: 200 });
+
+      const handleMouseMove = (me: MouseEvent) => {
+        const sensitivity = 0.4;
+        const rawDelta = (me.clientX - startX) * sensitivity;
+        const newBpm = Math.round(startBpm + rawDelta);
+        const clampedBpm = Math.max(20, Math.min(300, newBpm));
+        translateX.value = Math.max(-30, Math.min(30, (me.clientX - startX) * 0.08));
+        if (clampedBpm !== lastHaptic) {
+          lastHaptic = clampedBpm;
+          onBpmChangeRef.current(clampedBpm);
+        }
+      };
+
+      const handleMouseUp = () => {
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+        translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
+        isDragging.value = withTiming(0, { duration: 200 });
+        glowIntensity.value = withTiming(0, { duration: 300 });
+      };
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    };
+
+    el.addEventListener("mousedown", handleMouseDown);
+    return () => {
+      el.removeEventListener("mousedown", handleMouseDown);
+    };
+  }, []);
 
   const containerAnimStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
@@ -309,6 +405,11 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
 
   return (
     <View style={styles.wrapper}>
+      <View
+        ref={extendedTouchRef}
+        style={styles.extendedTouchZone}
+        {...(Platform.OS !== "web" ? extendedPanResponder.panHandlers : {})}
+      />
       <Animated.View style={[styles.glowBg, glowStyle]} />
       <Animated.View
         ref={containerRef}
@@ -366,6 +467,14 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     gap: 6,
     paddingHorizontal: 0,
+  },
+  extendedTouchZone: {
+    position: "absolute",
+    top: -120,
+    left: "15%" as any,
+    right: "15%" as any,
+    height: 120,
+    zIndex: 5,
   },
   glowBg: {
     position: "absolute",
