@@ -21,6 +21,8 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import type { ThemeColor } from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import {
   MetronomeEngine,
   soundSets,
@@ -58,6 +60,7 @@ function defaultBeatTypes(beats: number): BeatType[] {
 
 export default function MetronomeScreen() {
   const insets = useSafeAreaInsets();
+  const { setThemeColor, colors: C } = useTheme();
   const [bpm, setBpm] = useState(120);
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
@@ -184,6 +187,9 @@ export default function MetronomeScreen() {
       if (settings.audioOffsetMs !== undefined) {
         setAudioOffsetMs(settings.audioOffsetMs);
         engine.setAudioOffsetMs(settings.audioOffsetMs);
+      }
+      if (settings.themeColor) {
+        setThemeColor(settings.themeColor);
       }
 
       setIsLoaded(true);
@@ -603,7 +609,7 @@ export default function MetronomeScreen() {
         style={[
           StyleSheet.absoluteFill,
           {
-            backgroundColor: Colors.accent,
+            backgroundColor: C.accent,
             pointerEvents: "none" as const,
           },
           flashStyle,
@@ -672,7 +678,7 @@ export default function MetronomeScreen() {
             onDragEnd={handleDragEnd}
             onReset={handleReset}
           />
-          <Text style={styles.tempoLabel}>{tempoLabel}</Text>
+          <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
           <BpmSlider
             bpm={bpm}
             onBpmChange={updateBpm}

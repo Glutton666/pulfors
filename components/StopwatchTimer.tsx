@@ -24,6 +24,7 @@ import Animated, {
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import {
   TUNINGS,
   frequencyToNote,
@@ -93,6 +94,8 @@ export function StopwatchTimer({
   const startTimeRef = useRef(0);
   const elapsedAtPauseRef = useRef(0);
   const isPlayingRef = useRef(isMetronomePlaying);
+
+  const { colors: C } = useTheme();
 
   const [tunerActive, setTunerActive] = useState(false);
   const [tunerInstrument, setTunerInstrument] = useState(0);
@@ -589,7 +592,7 @@ export function StopwatchTimer({
   const handleStatusColor = () => {
     if (state === "running") return Colors.success;
     if (state === "finishing") return Colors.danger;
-    if (mode === "tuner" && tunerActive) return Colors.accent;
+    if (mode === "tuner" && tunerActive) return C.accent;
     return Colors.textTertiary;
   };
 
@@ -623,9 +626,9 @@ export function StopwatchTimer({
                 <MaterialCommunityIcons
                   name="timer-outline"
                   size={14}
-                  color={mode === "stopwatch" ? Colors.accent : Colors.textTertiary}
+                  color={mode === "stopwatch" ? C.accent : Colors.textTertiary}
                 />
-                <Text style={[styles.tabText, mode === "stopwatch" && styles.tabTextActive]}>
+                <Text style={[styles.tabText, mode === "stopwatch" && styles.tabTextActive, mode === "stopwatch" && { color: C.accent }]}>
                   STOPWATCH
                 </Text>
               </Pressable>
@@ -641,9 +644,9 @@ export function StopwatchTimer({
                 <MaterialCommunityIcons
                   name="av-timer"
                   size={14}
-                  color={mode === "timer" ? Colors.accent : Colors.textTertiary}
+                  color={mode === "timer" ? C.accent : Colors.textTertiary}
                 />
-                <Text style={[styles.tabText, mode === "timer" && styles.tabTextActive]}>
+                <Text style={[styles.tabText, mode === "timer" && styles.tabTextActive, mode === "timer" && { color: C.accent }]}>
                   TIMER
                 </Text>
               </Pressable>
@@ -659,9 +662,9 @@ export function StopwatchTimer({
                 <MaterialCommunityIcons
                   name="tune-variant"
                   size={14}
-                  color={mode === "tuner" ? Colors.accent : Colors.textTertiary}
+                  color={mode === "tuner" ? C.accent : Colors.textTertiary}
                 />
-                <Text style={[styles.tabText, mode === "tuner" && styles.tabTextActive]}>
+                <Text style={[styles.tabText, mode === "tuner" && styles.tabTextActive, mode === "tuner" && { color: C.accent }]}>
                   TUNER
                 </Text>
               </Pressable>
@@ -681,11 +684,12 @@ export function StopwatchTimer({
             style={({ pressed }) => [
               styles.handle,
               open && styles.handleOpen,
+              open && { borderColor: C.accent },
               pressed && styles.handlePressed,
             ]}
             testID="panel-toggle"
           >
-            <Animated.View style={[styles.handleGlow, handleGlowStyle]} />
+            <Animated.View style={[styles.handleGlow, { backgroundColor: C.accent }, handleGlowStyle]} />
             <Animated.View style={[styles.handleFlash, handleFlashStyle]} />
             {!open && isActive && mode === "timer" && (state === "running" || state === "finishing") ? (
               <View style={styles.thermometer}>
@@ -713,7 +717,7 @@ export function StopwatchTimer({
                     style={[
                       styles.thermoFill,
                       {
-                        backgroundColor: state === "finishing" ? Colors.danger : Colors.accent,
+                        backgroundColor: state === "finishing" ? Colors.danger : C.accent,
                       },
                       thermoFillStyle,
                     ]}
@@ -723,7 +727,7 @@ export function StopwatchTimer({
                   style={[
                     styles.thermoBulb,
                     {
-                      backgroundColor: state === "finishing" ? Colors.danger : Colors.accent,
+                      backgroundColor: state === "finishing" ? Colors.danger : C.accent,
                     },
                   ]}
                 >
@@ -731,7 +735,7 @@ export function StopwatchTimer({
                     style={[
                       styles.thermoBulbInner,
                       {
-                        backgroundColor: state === "finishing" ? Colors.danger : Colors.accent,
+                        backgroundColor: state === "finishing" ? Colors.danger : C.accent,
                       },
                     ]}
                   />
@@ -777,7 +781,7 @@ export function StopwatchTimer({
           {state === "idle" && (
             <Pressable
               onPress={startStopwatch}
-              style={({ pressed }) => [styles.controlButton, styles.startButton, pressed && styles.buttonPressed]}
+              style={({ pressed }) => [styles.controlButton, styles.startButton, { backgroundColor: C.accent }, pressed && styles.buttonPressed]}
               testID="stopwatch-start"
             >
               <Ionicons name="play" size={16} color={Colors.background} />
@@ -803,7 +807,7 @@ export function StopwatchTimer({
               </Pressable>
               <Pressable
                 onPress={startStopwatch}
-                style={({ pressed }) => [styles.controlButton, styles.startButton, pressed && styles.buttonPressed]}
+                style={({ pressed }) => [styles.controlButton, styles.startButton, { backgroundColor: C.accent }, pressed && styles.buttonPressed]}
                 testID="stopwatch-resume"
               >
                 <Ionicons name="play" size={16} color={Colors.background} />
@@ -829,6 +833,7 @@ export function StopwatchTimer({
                 style={({ pressed }) => [
                   styles.presetChip,
                   timerDuration === p.seconds && styles.presetChipActive,
+                  timerDuration === p.seconds && { backgroundColor: C.accentDim, borderColor: C.accent },
                   pressed && styles.buttonPressed,
                 ]}
               >
@@ -836,6 +841,7 @@ export function StopwatchTimer({
                   style={[
                     styles.presetText,
                     timerDuration === p.seconds && styles.presetTextActive,
+                    timerDuration === p.seconds && { color: C.accent },
                   ]}
                 >
                   {p.label}
@@ -854,7 +860,7 @@ export function StopwatchTimer({
           )}
           {state === "idle" && editingTimer ? (
             <TextInput
-              style={[styles.timeText, styles.timeInput]}
+              style={[styles.timeText, styles.timeInput, { borderBottomColor: C.accent }]}
               value={editInput}
               onChangeText={setEditInput}
               onBlur={commitEditInput}
@@ -892,7 +898,7 @@ export function StopwatchTimer({
                 styles.progressBarFill,
                 {
                   width: `${progress * 100}%` as any,
-                  backgroundColor: state === "finishing" ? Colors.danger : Colors.accent,
+                  backgroundColor: state === "finishing" ? Colors.danger : C.accent,
                 },
               ]}
             />
@@ -907,7 +913,7 @@ export function StopwatchTimer({
           {state === "idle" && (
             <Pressable
               onPress={startTimer}
-              style={({ pressed }) => [styles.controlButton, styles.startButton, pressed && styles.buttonPressed]}
+              style={({ pressed }) => [styles.controlButton, styles.startButton, { backgroundColor: C.accent }, pressed && styles.buttonPressed]}
               testID="timer-start"
             >
               <Ionicons name="play" size={16} color={Colors.background} />
@@ -933,7 +939,7 @@ export function StopwatchTimer({
               </Pressable>
               <Pressable
                 onPress={startTimer}
-                style={({ pressed }) => [styles.controlButton, styles.startButton, pressed && styles.buttonPressed]}
+                style={({ pressed }) => [styles.controlButton, styles.startButton, { backgroundColor: C.accent }, pressed && styles.buttonPressed]}
                 testID="timer-resume"
               >
                 <Ionicons name="play" size={16} color={Colors.background} />
@@ -956,7 +962,7 @@ export function StopwatchTimer({
     const centsColor = inTune
       ? Colors.success
       : Math.abs(centsDisplay) <= 15
-      ? Colors.accent
+      ? C.accent
       : Colors.danger;
 
     const meterPosition = Math.max(-50, Math.min(50, centsDisplay));
@@ -1008,6 +1014,7 @@ export function StopwatchTimer({
                 style={({ pressed }) => [
                   styles.stringChip,
                   isSelected && styles.stringChipSelected,
+                  isSelected && { backgroundColor: C.accentDim, borderColor: C.accent },
                   isMatched && inTune && styles.stringChipInTune,
                   pressed && { opacity: 0.7 },
                 ]}
@@ -1016,6 +1023,7 @@ export function StopwatchTimer({
                   style={[
                     styles.stringLabel,
                     isSelected && styles.stringLabelSelected,
+                    isSelected && { color: C.accent },
                     isMatched && inTune && { color: Colors.success },
                   ]}
                 >
@@ -1041,6 +1049,7 @@ export function StopwatchTimer({
               style={({ pressed }) => [
                 styles.controlButton,
                 styles.startButton,
+                { backgroundColor: C.accent },
                 pressed && styles.buttonPressed,
               ]}
               testID="tuner-start"

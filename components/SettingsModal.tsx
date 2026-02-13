@@ -14,8 +14,20 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import Colors from "@/constants/colors";
+import Colors, { ACCENT_PRESETS, type ThemeColor } from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import type { FlashMode, HapticMode, SoundSet } from "@/lib/storage";
+
+const THEME_OPTIONS: { value: ThemeColor; label: string; color: string }[] = [
+  { value: "gold", label: "Gold", color: ACCENT_PRESETS.gold.accent },
+  { value: "blue", label: "Blue", color: ACCENT_PRESETS.blue.accent },
+  { value: "green", label: "Green", color: ACCENT_PRESETS.green.accent },
+  { value: "red", label: "Red", color: ACCENT_PRESETS.red.accent },
+  { value: "purple", label: "Purple", color: ACCENT_PRESETS.purple.accent },
+  { value: "cyan", label: "Cyan", color: ACCENT_PRESETS.cyan.accent },
+  { value: "orange", label: "Orange", color: ACCENT_PRESETS.orange.accent },
+  { value: "pink", label: "Pink", color: ACCENT_PRESETS.pink.accent },
+];
 
 interface SettingsModalProps {
   visible: boolean;
@@ -50,9 +62,13 @@ const TRIPLE_OPTIONS: { value: "all" | "accent" | "off"; label: string }[] = [
 function TripleSelector({
   value,
   onChange,
+  accentColor,
+  accentDimColor,
 }: {
   value: "all" | "accent" | "off";
   onChange: (v: "all" | "accent" | "off") => void;
+  accentColor: string;
+  accentDimColor: string;
 }) {
   return (
     <View style={styles.tripleRow}>
@@ -61,7 +77,7 @@ function TripleSelector({
         return (
           <Pressable
             key={opt.value}
-            style={[styles.tripleBtn, active && styles.tripleBtnActive]}
+            style={[styles.tripleBtn, active && [styles.tripleBtnActive, { borderColor: accentColor, backgroundColor: accentDimColor }]]}
             onPress={() => {
               onChange(opt.value);
               if (Platform.OS !== "web") {
@@ -72,7 +88,7 @@ function TripleSelector({
             <Text
               style={[
                 styles.tripleBtnText,
-                active && styles.tripleBtnTextActive,
+                active && [styles.tripleBtnTextActive, { color: accentColor }],
               ]}
             >
               {opt.label}
@@ -100,6 +116,7 @@ export function SettingsModal({
   audioOffsetMs,
   onAudioOffsetChange,
 }: SettingsModalProps) {
+  const { themeColor, setThemeColor, colors: C } = useTheme();
   const insets = useSafeAreaInsets();
   const trackWidthRef = useRef(0);
   const trackLeftRef = useRef(0);
@@ -231,9 +248,51 @@ export function SettingsModal({
 
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Ionicons name={volumeIcon as any} size={18} color={Colors.accent} />
+                <Ionicons name="color-palette-outline" size={18} color={C.accent} />
+                <Text style={styles.sectionLabel}>Theme Color</Text>
+              </View>
+              <View style={styles.themeGrid}>
+                {THEME_OPTIONS.map((opt) => {
+                  const active = themeColor === opt.value;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      testID={`theme-${opt.value}`}
+                      onPress={() => {
+                        setThemeColor(opt.value);
+                        if (Platform.OS !== "web") {
+                          Haptics.selectionAsync();
+                        }
+                      }}
+                      style={({ pressed }) => [
+                        styles.themeChip,
+                        active && { borderColor: opt.color },
+                        pressed && { opacity: 0.7 },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.themeDot,
+                          { backgroundColor: opt.color },
+                          active && styles.themeDotActive,
+                        ]}
+                      />
+                      {active && (
+                        <Ionicons name="checkmark" size={10} color={Colors.white} style={styles.themeCheck} />
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name={volumeIcon as any} size={18} color={C.accent} />
                 <Text style={styles.sectionLabel}>Volume</Text>
-                <Text style={styles.sectionValue}>{pct}%</Text>
+                <Text style={[styles.sectionValue, { color: C.accent }]}>{pct}%</Text>
               </View>
               <View
                 ref={trackRef}
@@ -246,14 +305,14 @@ export function SettingsModal({
                   <View
                     style={[
                       styles.sliderFill,
-                      { width: `${volume * 100}%` as any },
+                      { width: `${volume * 100}%` as any, backgroundColor: C.accent },
                     ]}
                   />
                 </View>
                 <View
                   style={[
                     styles.sliderThumb,
-                    { left: `${volume * 100}%` as any },
+                    { left: `${volume * 100}%` as any, backgroundColor: C.accent },
                   ]}
                 />
               </View>
@@ -267,13 +326,13 @@ export function SettingsModal({
 
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Ionicons name="play-circle-outline" size={18} color={Colors.accent} />
+                <Ionicons name="play-circle-outline" size={18} color={C.accent} />
                 <Text style={styles.sectionLabel}>Background Play</Text>
                 <Switch
                   value={backgroundPlay}
                   onValueChange={onBackgroundPlayChange}
-                  trackColor={{ false: Colors.surfaceLight, true: Colors.accentMuted }}
-                  thumbColor={backgroundPlay ? Colors.accent : Colors.textSecondary}
+                  trackColor={{ false: Colors.surfaceLight, true: C.accentMuted }}
+                  thumbColor={backgroundPlay ? C.accent : Colors.textSecondary}
                   style={{ transform: [{ scale: 0.85 }] }}
                 />
               </View>
@@ -283,7 +342,7 @@ export function SettingsModal({
 
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons name="music-note-eighth" size={18} color={Colors.accent} />
+                <MaterialCommunityIcons name="music-note-eighth" size={18} color={C.accent} />
                 <Text style={styles.sectionLabel}>Sound Set</Text>
               </View>
               <View style={styles.soundSetGrid}>
@@ -294,7 +353,7 @@ export function SettingsModal({
                       key={opt.value}
                       style={[
                         styles.soundSetBtn,
-                        active && styles.soundSetBtnActive,
+                        active && [styles.soundSetBtnActive, { borderColor: C.accent, backgroundColor: C.accentDim }],
                       ]}
                       onPress={() => {
                         onSoundSetChange(opt.value);
@@ -306,12 +365,12 @@ export function SettingsModal({
                       <MaterialCommunityIcons
                         name={opt.icon as any}
                         size={20}
-                        color={active ? Colors.accent : Colors.textSecondary}
+                        color={active ? C.accent : Colors.textSecondary}
                       />
                       <Text
                         style={[
                           styles.soundSetLabel,
-                          active && styles.soundSetLabelActive,
+                          active && [styles.soundSetLabelActive, { color: C.accent }],
                         ]}
                       >
                         {opt.label}
@@ -326,29 +385,29 @@ export function SettingsModal({
 
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Ionicons name="flash-outline" size={18} color={Colors.accent} />
+                <Ionicons name="flash-outline" size={18} color={C.accent} />
                 <Text style={styles.sectionLabel}>Screen Flash</Text>
               </View>
-              <TripleSelector value={flashMode} onChange={onFlashModeChange} />
+              <TripleSelector value={flashMode} onChange={onFlashModeChange} accentColor={C.accent} accentDimColor={C.accentDim} />
             </View>
 
             <View style={styles.divider} />
 
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Ionicons name="phone-portrait-outline" size={18} color={Colors.accent} />
+                <Ionicons name="phone-portrait-outline" size={18} color={C.accent} />
                 <Text style={styles.sectionLabel}>Haptic Feedback</Text>
               </View>
-              <TripleSelector value={hapticMode} onChange={onHapticModeChange} />
+              <TripleSelector value={hapticMode} onChange={onHapticModeChange} accentColor={C.accent} accentDimColor={C.accentDim} />
             </View>
 
             <View style={styles.divider} />
 
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Ionicons name="timer-outline" size={18} color={Colors.accent} />
+                <Ionicons name="timer-outline" size={18} color={C.accent} />
                 <Text style={styles.sectionLabel}>Audio Offset</Text>
-                <Text style={styles.sectionValue}>
+                <Text style={[styles.sectionValue, { color: C.accent }]}>
                   {audioOffsetMs > 0 ? "+" : ""}{audioOffsetMs}ms
                 </Text>
               </View>
@@ -612,5 +671,33 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     textAlign: "center" as const,
     letterSpacing: 0.5,
+  },
+  themeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    justifyContent: "center",
+  },
+  themeChip: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  themeDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  themeDotActive: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  themeCheck: {
+    position: "absolute",
   },
 });

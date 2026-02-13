@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import {
   useFonts,
   SpaceGrotesk_400Regular,
@@ -43,11 +44,13 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <GestureHandlerRootView>
-          <KeyboardProvider>
-            <RootLayoutNav />
-          </KeyboardProvider>
-        </GestureHandlerRootView>
+        <ThemeProvider>
+          <GestureHandlerRootView>
+            <KeyboardProvider>
+              <RootLayoutNav />
+            </KeyboardProvider>
+          </GestureHandlerRootView>
+        </ThemeProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );

@@ -19,6 +19,7 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export type BeatType = "accent" | "normal" | "mute";
 
@@ -52,6 +53,7 @@ function DialBeatDot({
   isDropTarget,
   subdivisionCount,
 }: DialBeatDotProps) {
+  const { colors: C } = useTheme();
   const isAccent = beatType === "accent";
   const isMute = beatType === "mute";
   const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
@@ -62,7 +64,7 @@ function DialBeatDot({
   const popScale = useSharedValue(1);
   const beatScale = useSharedValue(1);
   const beatBg = useSharedValue(
-    isMute ? "transparent" : isAccent ? Colors.accentMuted : Colors.textTertiary
+    isMute ? "transparent" : isAccent ? C.accentMuted : Colors.textTertiary
   );
   const beatBorder = useSharedValue(
     isMute ? Colors.textSecondary : "transparent"
@@ -102,7 +104,7 @@ function DialBeatDot({
         withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) })
       );
       beatBg.value = withTiming(
-        isAccent ? Colors.accent : Colors.text,
+        isAccent ? C.accent : Colors.text,
         { duration: 50 }
       );
       beatBorder.value = withTiming("transparent", { duration: 50 });
@@ -113,7 +115,7 @@ function DialBeatDot({
     } else {
       beatScale.value = withTiming(1, { duration: 150 });
       beatBg.value = withTiming(
-        isAccent ? Colors.accentMuted : Colors.textTertiary,
+        isAccent ? C.accentMuted : Colors.textTertiary,
         { duration: 150 }
       );
       beatBorder.value = withTiming("transparent", { duration: 150 });
@@ -151,14 +153,14 @@ function DialBeatDot({
             backgroundColor: isMute
               ? "transparent"
               : isAccent
-              ? Colors.accentMuted
+              ? C.accentMuted
               : Colors.textTertiary,
             borderWidth: isMute ? 2.5 : 0,
             borderColor: isMute ? Colors.textSecondary : "transparent",
           },
           animatedStyle,
           {
-            shadowColor: isAccent ? Colors.accent : Colors.text,
+            shadowColor: isAccent ? C.accent : Colors.text,
             shadowOffset: { width: 0, height: 0 },
             shadowRadius: isActive ? 16 : 0,
           },
@@ -174,13 +176,14 @@ function DialBeatDot({
               borderRadius: (size + 12) / 2,
               top: -6,
               left: -6,
+              borderColor: C.accent,
             },
           ]}
         />
       )}
       {subdivisionCount > 1 && (
-        <View style={styles.subdivBadge}>
-          <Text style={styles.subdivBadgeText}>{subdivisionCount}</Text>
+        <View style={[styles.subdivBadge, { borderColor: C.accent }]}>
+          <Text style={[styles.subdivBadgeText, { color: C.accent }]}>{subdivisionCount}</Text>
         </View>
       )}
     </Pressable>
@@ -212,6 +215,7 @@ export function BeatIndicator({
   beatSubdivisionCounts,
   dialRef,
 }: BeatIndicatorProps) {
+  const { colors: C } = useTheme();
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
 
   const swipeProgress = useSharedValue(0);
@@ -437,7 +441,7 @@ export function BeatIndicator({
             style={[
               styles.centerGlow,
               {
-                backgroundColor: isAccentBeat ? Colors.accent : Colors.text,
+                backgroundColor: isAccentBeat ? C.accent : Colors.text,
               },
               centerGlowStyle,
             ]}
@@ -445,7 +449,7 @@ export function BeatIndicator({
           />
 
           {dropTargetBeat === -1 && (
-            <View style={styles.centerDropRing} pointerEvents="none" />
+            <View style={[styles.centerDropRing, { borderColor: C.accent }]} pointerEvents="none" />
           )}
 
           <Pressable
@@ -459,13 +463,13 @@ export function BeatIndicator({
             <Ionicons
               name={isPlaying ? "stop" : "play"}
               size={56}
-              color={isPlaying ? Colors.danger : Colors.accent}
+              color={isPlaying ? Colors.danger : C.accent}
               style={!isPlaying ? { marginLeft: 5 } : undefined}
             />
           </Pressable>
 
           {dropTargetBeat === -1 && (
-            <Text style={styles.centerDropLabel}>ALL</Text>
+            <Text style={[styles.centerDropLabel, { color: C.accent }]}>ALL</Text>
           )}
         </View>
       </View>

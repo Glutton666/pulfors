@@ -17,6 +17,7 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import type { BeatType } from "@/lib/metronome-engine";
 
 interface SubdivisionBarProps {
@@ -36,8 +37,8 @@ const SWIPE_THRESHOLD = 30;
 const SHAKE_WINDOW_MS = 3000;
 const SHAKE_COUNT_TRIGGER = 10;
 
-function getCellColor(type: BeatType, active: boolean): string {
-  if (type === "accent") return active ? Colors.accent : Colors.accentMuted;
+function getCellColor(type: BeatType, active: boolean, accentColor: string, accentMutedColor: string): string {
+  if (type === "accent") return active ? accentColor : accentMutedColor;
   if (type === "normal") return active ? Colors.text : Colors.textTertiary;
   return "transparent";
 }
@@ -55,6 +56,7 @@ export function SubdivisionBar({
   onDragEnd,
   onReset,
 }: SubdivisionBarProps) {
+  const { colors: C } = useTheme();
   const isDraggingUpRef = useRef(false);
   const horizontalTriggeredRef = useRef(false);
   const patternRef = useRef(pattern);
@@ -362,7 +364,7 @@ export function SubdivisionBar({
               style={[
                 styles.cell,
                 {
-                  backgroundColor: getCellColor(type, true),
+                  backgroundColor: getCellColor(type, true, C.accent, C.accentMuted),
                   borderColor: getCellBorder(type),
                   borderWidth: type === "mute" ? 2 : 0,
                 },
@@ -388,6 +390,7 @@ export function DragGhost({
   x: number;
   y: number;
 }) {
+  const { colors: GC } = useTheme();
   return (
     <View
       style={[
@@ -405,7 +408,7 @@ export function DragGhost({
           style={[
             styles.ghostCell,
             {
-              backgroundColor: getCellColor(type, true),
+              backgroundColor: getCellColor(type, true, GC.accent, GC.accentMuted),
               borderColor: getCellBorder(type),
               borderWidth: type === "mute" ? 1.5 : 0,
             },

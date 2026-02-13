@@ -17,6 +17,7 @@ import Animated, {
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 
 interface BpmSliderProps {
   bpm: number;
@@ -27,6 +28,7 @@ interface BpmSliderProps {
 type Zone = "left" | "center" | "right";
 
 export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
+  const { colors: C } = useTheme();
   const bpmRef = useRef(bpm);
   const startBpmRef = useRef(bpm);
   const lastHapticRef = useRef(bpm);
@@ -177,9 +179,9 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
         {...panResponder.panHandlers}
       >
         <Animated.View style={[styles.card, bodyStyle]} testID="bpm-slider">
-          <Animated.View style={[styles.flashOverlay, flashStyle]} />
-          <Animated.View style={[styles.glowLeft, leftGlowStyle]} />
-          <Animated.View style={[styles.glowRight, rightGlowStyle]} />
+          <Animated.View style={[styles.flashOverlay, flashStyle, { backgroundColor: C.accent }]} />
+          <Animated.View style={[styles.glowLeft, leftGlowStyle, { backgroundColor: C.accent }]} />
+          <Animated.View style={[styles.glowRight, rightGlowStyle, { backgroundColor: C.accent }]} />
 
           <View style={styles.zoneRow} pointerEvents="none">
             <Feather name="activity" size={12} color={Colors.textTertiary} />
@@ -202,7 +204,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
                 style={[
                   styles.tick,
                   i % 5 === 0 && styles.tickBig,
-                  i === 14 && styles.tickMid,
+                  i === 14 && [styles.tickMid, { backgroundColor: C.accent }],
                 ]}
               />
             ))}

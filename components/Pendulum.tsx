@@ -8,6 +8,7 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PENDULUM_LENGTH = Math.min(SCREEN_WIDTH * 0.5, 200);
@@ -19,6 +20,7 @@ interface PendulumProps {
 }
 
 export function Pendulum({ isPlaying, bpm }: PendulumProps) {
+  const { colors: C } = useTheme();
   const swingDuration = (60000 / bpm) * 1;
   const maxAngle = Math.max(15, Math.min(35, 40 - bpm / 15));
 
@@ -53,13 +55,13 @@ export function Pendulum({ isPlaying, bpm }: PendulumProps) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.pivotPoint} />
+      <View style={[styles.pivotPoint, { backgroundColor: C.accent }]} />
       <Animated.View style={[styles.pendulumArm, animatedStyle]}>
-        <View style={styles.armLine} />
+        <View style={[styles.armLine, { backgroundColor: C.accentMuted }]} />
         <View style={styles.weightTrack}>
-          <View style={styles.weight} />
+          <View style={[styles.weight, { backgroundColor: C.accent }]} />
         </View>
-        <View style={styles.bob} />
+        <View style={[styles.bob, { backgroundColor: C.accent }]} />
       </Animated.View>
       <View style={styles.base}>
         <View style={styles.baseTriangle} />

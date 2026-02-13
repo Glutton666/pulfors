@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { BeatType } from "./metronome-engine";
+import type { ThemeColor } from "@/constants/colors";
 
 const SETTINGS_KEY = "metronome_settings";
 
@@ -19,6 +20,7 @@ export interface MetronomeSettings {
   flashMode?: FlashMode;
   hapticMode?: HapticMode;
   audioOffsetMs?: number;
+  themeColor?: ThemeColor;
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
@@ -33,6 +35,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   flashMode: "accent",
   hapticMode: "all",
   audioOffsetMs: 0,
+  themeColor: "gold",
 };
 
 export async function loadSettings(): Promise<MetronomeSettings> {
