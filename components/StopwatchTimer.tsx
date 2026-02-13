@@ -85,6 +85,11 @@ export function StopwatchTimer({
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(0);
   const elapsedAtPauseRef = useRef(0);
+  const isPlayingRef = useRef(isMetronomePlaying);
+
+  useEffect(() => {
+    isPlayingRef.current = isMetronomePlaying;
+  }, [isMetronomePlaying]);
 
   const slideX = useSharedValue(-PANEL_WIDTH);
   const pulseOpacity = useSharedValue(1);
@@ -251,7 +256,7 @@ export function StopwatchTimer({
 
   const pauseStopwatch = useCallback(() => {
     hapticFeedback();
-    if (isMetronomePlaying) {
+    if (isPlayingRef.current) {
       setState("finishing");
       onStopRequested();
     } else {
@@ -259,7 +264,7 @@ export function StopwatchTimer({
       elapsedAtPauseRef.current = Date.now() - startTimeRef.current;
       setState("paused");
     }
-  }, [hapticFeedback, clearTimerInterval, isMetronomePlaying, onStopRequested]);
+  }, [hapticFeedback, clearTimerInterval, onStopRequested]);
 
   const resetStopwatch = useCallback(() => {
     hapticFeedback();
@@ -283,7 +288,7 @@ export function StopwatchTimer({
       if (left <= 0) {
         clearInterval(intervalRef.current!);
         intervalRef.current = null;
-        if (isMetronomePlaying) {
+        if (isPlayingRef.current) {
           setState("finishing");
           onTimerExpired();
         } else {
@@ -292,7 +297,7 @@ export function StopwatchTimer({
         }
       }
     }, 200);
-  }, [hapticFeedback, timerDuration, remaining, state, isMetronomePlaying, onTimerExpired]);
+  }, [hapticFeedback, timerDuration, remaining, state, onTimerExpired]);
 
   const pauseTimer = useCallback(() => {
     hapticFeedback();
