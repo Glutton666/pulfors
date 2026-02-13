@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,17 +8,78 @@ import {
   Platform,
   PanResponder,
   LayoutChangeEvent,
+  ScrollView,
+  Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, Feather } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import type { FlashMode, HapticMode, SoundSet } from "@/lib/storage";
 
 interface SettingsModalProps {
   visible: boolean;
   onClose: () => void;
   volume: number;
   onVolumeChange: (volume: number) => void;
+  backgroundPlay: boolean;
+  onBackgroundPlayChange: (value: boolean) => void;
+  soundSet: SoundSet;
+  onSoundSetChange: (value: SoundSet) => void;
+  flashMode: FlashMode;
+  onFlashModeChange: (value: FlashMode) => void;
+  hapticMode: HapticMode;
+  onHapticModeChange: (value: HapticMode) => void;
+}
+
+const SOUND_SET_OPTIONS: { value: SoundSet; label: string; icon: string }[] = [
+  { value: "classic", label: "Classic", icon: "music-note" },
+  { value: "woodblock", label: "Woodblock", icon: "music-box" },
+  { value: "digital", label: "Digital", icon: "sine-wave" },
+  { value: "rimshot", label: "Rimshot", icon: "drum" },
+];
+
+const TRIPLE_OPTIONS: { value: "all" | "accent" | "off"; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "accent", label: "Accent" },
+  { value: "off", label: "Off" },
+];
+
+function TripleSelector({
+  value,
+  onChange,
+}: {
+  value: "all" | "accent" | "off";
+  onChange: (v: "all" | "accent" | "off") => void;
+}) {
+  return (
+    <View style={styles.tripleRow}>
+      {TRIPLE_OPTIONS.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <Pressable
+            key={opt.value}
+            style={[styles.tripleBtn, active && styles.tripleBtnActive]}
+            onPress={() => {
+              onChange(opt.value);
+              if (Platform.OS !== "web") {
+                Haptics.selectionAsync();
+              }
+            }}
+          >
+            <Text
+              style={[
+                styles.tripleBtnText,
+                active && styles.tripleBtnTextActive,
+              ]}
+            >
+              {opt.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
 }
 
 export function SettingsModal({
@@ -26,6 +87,14 @@ export function SettingsModal({
   onClose,
   volume,
   onVolumeChange,
+  backgroundPlay,
+  onBackgroundPlayChange,
+  soundSet,
+  onSoundSetChange,
+  flashMode,
+  onFlashModeChange,
+  hapticMode,
+  onHapticModeChange,
 }: SettingsModalProps) {
   const insets = useSafeAreaInsets();
   const trackWidthRef = useRef(0);
@@ -135,62 +204,141 @@ export function SettingsModal({
       statusBarTranslucent
     >
       <Pressable style={styles.overlay} onPress={onClose}>
-        <View
-          style={[
-            styles.sheet,
-            {
-              marginTop: (insets.top || webTopInset) + 50,
-            },
-          ]}
-          onStartShouldSetResponder={() => true}
+        <ScrollView
+          style={{ marginTop: (insets.top || webTopInset) + 50 }}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
         >
-          <View style={styles.header}>
-            <Text style={styles.title}>Settings</Text>
-            <Pressable
-              onPress={onClose}
-              hitSlop={12}
-              testID="settings-close"
-            >
-              <Ionicons name="close" size={22} color={Colors.textSecondary} />
-            </Pressable>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name={volumeIcon as any} size={18} color={Colors.accent} />
-              <Text style={styles.sectionLabel}>Volume</Text>
-              <Text style={styles.sectionValue}>{pct}%</Text>
+          <View
+            style={styles.sheet}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.header}>
+              <Text style={styles.title}>Settings</Text>
+              <Pressable
+                onPress={onClose}
+                hitSlop={12}
+                testID="settings-close"
+              >
+                <Ionicons name="close" size={22} color={Colors.textSecondary} />
+              </Pressable>
             </View>
 
-            <View
-              ref={trackRef}
-              style={styles.sliderContainer}
-              onLayout={onTrackLayout}
-              {...nativePanHandlers}
-              {...(Platform.OS === "web" ? { onMouseDown: handleWebMouse } as any : {})}
-            >
-              <View style={styles.sliderTrack}>
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name={volumeIcon as any} size={18} color={Colors.accent} />
+                <Text style={styles.sectionLabel}>Volume</Text>
+                <Text style={styles.sectionValue}>{pct}%</Text>
+              </View>
+              <View
+                ref={trackRef}
+                style={styles.sliderContainer}
+                onLayout={onTrackLayout}
+                {...nativePanHandlers}
+                {...(Platform.OS === "web" ? { onMouseDown: handleWebMouse } as any : {})}
+              >
+                <View style={styles.sliderTrack}>
+                  <View
+                    style={[
+                      styles.sliderFill,
+                      { width: `${volume * 100}%` as any },
+                    ]}
+                  />
+                </View>
                 <View
                   style={[
-                    styles.sliderFill,
-                    { width: `${volume * 100}%` as any },
+                    styles.sliderThumb,
+                    { left: `${volume * 100}%` as any },
                   ]}
                 />
               </View>
-              <View
-                style={[
-                  styles.sliderThumb,
-                  { left: `${volume * 100}%` as any },
-                ]}
-              />
+              <View style={styles.sliderLabels}>
+                <Text style={styles.sliderLabelText}>0</Text>
+                <Text style={styles.sliderLabelText}>100</Text>
+              </View>
             </View>
 
-            <View style={styles.sliderLabels}>
-              <Text style={styles.sliderLabelText}>0</Text>
-              <Text style={styles.sliderLabelText}>100</Text>
+            <View style={styles.divider} />
+
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="play-circle-outline" size={18} color={Colors.accent} />
+                <Text style={styles.sectionLabel}>Background Play</Text>
+                <Switch
+                  value={backgroundPlay}
+                  onValueChange={onBackgroundPlayChange}
+                  trackColor={{ false: Colors.surfaceLight, true: Colors.accentMuted }}
+                  thumbColor={backgroundPlay ? Colors.accent : Colors.textSecondary}
+                  style={{ transform: [{ scale: 0.85 }] }}
+                />
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <MaterialCommunityIcons name="music-note-eighth" size={18} color={Colors.accent} />
+                <Text style={styles.sectionLabel}>Sound Set</Text>
+              </View>
+              <View style={styles.soundSetGrid}>
+                {SOUND_SET_OPTIONS.map((opt) => {
+                  const active = soundSet === opt.value;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      style={[
+                        styles.soundSetBtn,
+                        active && styles.soundSetBtnActive,
+                      ]}
+                      onPress={() => {
+                        onSoundSetChange(opt.value);
+                        if (Platform.OS !== "web") {
+                          Haptics.selectionAsync();
+                        }
+                      }}
+                    >
+                      <MaterialCommunityIcons
+                        name={opt.icon as any}
+                        size={20}
+                        color={active ? Colors.accent : Colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.soundSetLabel,
+                          active && styles.soundSetLabelActive,
+                        ]}
+                      >
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="flash-outline" size={18} color={Colors.accent} />
+                <Text style={styles.sectionLabel}>Screen Flash</Text>
+              </View>
+              <TripleSelector value={flashMode} onChange={onFlashModeChange} />
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="phone-portrait-outline" size={18} color={Colors.accent} />
+                <Text style={styles.sectionLabel}>Haptic Feedback</Text>
+              </View>
+              <TripleSelector value={hapticMode} onChange={onHapticModeChange} />
             </View>
           </View>
-        </View>
+        </ScrollView>
       </Pressable>
     </Modal>
   );
@@ -201,8 +349,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
   },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 40,
+  },
   sheet: {
-    marginHorizontal: 16,
     backgroundColor: Colors.surface,
     borderRadius: 16,
     borderWidth: 1,
@@ -222,7 +373,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   section: {
-    gap: 12,
+    gap: 10,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -240,7 +391,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.accent,
     minWidth: 40,
-    textAlign: "right",
+    textAlign: "right" as const,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 16,
   },
   sliderContainer: {
     height: 40,
@@ -293,5 +449,60 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: Colors.textTertiary,
     letterSpacing: 0.5,
+  },
+  soundSetGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  soundSetBtn: {
+    flex: 1,
+    minWidth: "45%" as any,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceLight,
+  },
+  soundSetBtnActive: {
+    borderColor: Colors.accent,
+    backgroundColor: Colors.accentDim,
+  },
+  soundSetLabel: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  soundSetLabelActive: {
+    color: Colors.accent,
+  },
+  tripleRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  tripleBtn: {
+    flex: 1,
+    alignItems: "center" as const,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceLight,
+  },
+  tripleBtnActive: {
+    borderColor: Colors.accent,
+    backgroundColor: Colors.accentDim,
+  },
+  tripleBtnText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  tripleBtnTextActive: {
+    color: Colors.accent,
   },
 });

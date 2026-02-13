@@ -23,11 +23,11 @@ import { Ionicons, Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import {
   MetronomeEngine,
-  highClickSource,
-  lowClickSource,
+  soundSets,
 } from "@/lib/metronome-engine";
 import type { BeatType } from "@/lib/metronome-engine";
 import { loadSettings, saveSettings } from "@/lib/storage";
+import type { FlashMode, HapticMode, SoundSet } from "@/lib/storage";
 import {
   BeatIndicator,
   DIAL_SIZE,
@@ -75,16 +75,21 @@ export default function MetronomeScreen() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [volume, setVolume] = useState(0.8);
   const [showSettings, setShowSettings] = useState(false);
+  const [backgroundPlay, setBackgroundPlay] = useState(false);
+  const [soundSet, setSoundSet] = useState<SoundSet>("classic");
+  const [flashMode, setFlashMode] = useState<FlashMode>("accent");
+  const [hapticMode, setHapticMode] = useState<HapticMode>("all");
 
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
   const dialRef = useRef<View>(null);
   const dialCenterRef = useRef({ x: 0, y: 0 });
 
-  const highPlayerA = useAudioPlayer(highClickSource);
-  const highPlayerB = useAudioPlayer(highClickSource);
-  const lowPlayerA = useAudioPlayer(lowClickSource);
-  const lowPlayerB = useAudioPlayer(lowClickSource);
+  const currentSounds = soundSets[soundSet] || soundSets.classic;
+  const highPlayerA = useAudioPlayer(currentSounds.high);
+  const highPlayerB = useAudioPlayer(currentSounds.high);
+  const lowPlayerA = useAudioPlayer(currentSounds.low);
+  const lowPlayerB = useAudioPlayer(currentSounds.low);
   const highToggle = useRef(false);
   const lowToggle = useRef(false);
   const highRefA = useRef(highPlayerA);
@@ -142,6 +147,20 @@ export default function MetronomeScreen() {
       if (settings.volume !== undefined) {
         setVolume(settings.volume);
       }
+      if (settings.backgroundPlay !== undefined) {
+        setBackgroundPlay(settings.backgroundPlay);
+      }
+      if (settings.soundSet) {
+        setSoundSet(settings.soundSet);
+      }
+      if (settings.flashMode) {
+        setFlashMode(settings.flashMode);
+        flashModeRef.current = settings.flashMode;
+      }
+      if (settings.hapticMode) {
+        setHapticMode(settings.hapticMode);
+        engine.setHapticMode(settings.hapticMode);
+      }
 
       setIsLoaded(true);
     });
@@ -151,13 +170,18 @@ export default function MetronomeScreen() {
     };
   }, []);
 
+  const flashModeRef = useRef(flashMode);
+  useEffect(() => { flashModeRef.current = flashMode; }, [flashMode]);
+
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;
 
     engine.setOnBeat((beat: number, isAccent: boolean) => {
       setCurrentBeat(beat);
-      if (isAccent) {
+      const fm = flashModeRef.current;
+      const shouldFlash = fm === "all" || (fm === "accent" && isAccent);
+      if (shouldFlash) {
         flashOpacity.value = withSequence(
           withTiming(0.12, { duration: 50 }),
           withTiming(0, { duration: 250, easing: Easing.out(Easing.quad) })
@@ -175,29 +199,8 @@ export default function MetronomeScreen() {
     } catch (e) {}
   }, [volume, highPlayerA, highPlayerB, lowPlayerA, lowPlayerB]);
 
-  const updateVolume = useCallback(
-    (newVolume: number) => {
-      setVolume(newVolume);
-      saveSettings({
-        bpm,
-        beatsPerMeasure,
-        subdivisions: 1,
-        subdivisionPattern,
-        beatSubdivisions,
-        volume: newVolume,
-      });
-    },
-    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions]
-  );
-
   const persistSettings = useCallback(
-    (overrides: Partial<{
-      bpm: number;
-      beatsPerMeasure: number;
-      subdivisionPattern: BeatType[];
-      beatSubdivisions: Record<string, BeatType[]>;
-      volume: number;
-    }> = {}) => {
+    (overrides: Record<string, any> = {}) => {
       const current = {
         bpm,
         beatsPerMeasure,
@@ -205,11 +208,57 @@ export default function MetronomeScreen() {
         subdivisionPattern,
         beatSubdivisions,
         volume,
+        backgroundPlay,
+        soundSet,
+        flashMode,
+        hapticMode,
         ...overrides,
       };
       saveSettings(current);
     },
-    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume]
+    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, backgroundPlay, soundSet, flashMode, hapticMode]
+  );
+
+  const updateVolume = useCallback(
+    (newVolume: number) => {
+      setVolume(newVolume);
+      persistSettings({ volume: newVolume });
+    },
+    [persistSettings]
+  );
+
+  const updateBackgroundPlay = useCallback(
+    (value: boolean) => {
+      setBackgroundPlay(value);
+      persistSettings({ backgroundPlay: value });
+    },
+    [persistSettings]
+  );
+
+  const updateSoundSet = useCallback(
+    (value: SoundSet) => {
+      setSoundSet(value);
+      persistSettings({ soundSet: value });
+    },
+    [persistSettings]
+  );
+
+  const updateFlashMode = useCallback(
+    (value: FlashMode) => {
+      setFlashMode(value);
+      flashModeRef.current = value;
+      persistSettings({ flashMode: value });
+    },
+    [persistSettings]
+  );
+
+  const updateHapticMode = useCallback(
+    (value: HapticMode) => {
+      setHapticMode(value);
+      engineRef.current?.setHapticMode(value);
+      persistSettings({ hapticMode: value });
+    },
+    [persistSettings]
   );
 
   const updateBpm = useCallback(
@@ -542,6 +591,14 @@ export default function MetronomeScreen() {
         onClose={() => setShowSettings(false)}
         volume={volume}
         onVolumeChange={updateVolume}
+        backgroundPlay={backgroundPlay}
+        onBackgroundPlayChange={updateBackgroundPlay}
+        soundSet={soundSet}
+        onSoundSetChange={updateSoundSet}
+        flashMode={flashMode}
+        onFlashModeChange={updateFlashMode}
+        hapticMode={hapticMode}
+        onHapticModeChange={updateHapticMode}
       />
 
       <View
