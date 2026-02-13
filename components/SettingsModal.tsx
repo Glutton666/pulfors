@@ -356,7 +356,7 @@ export function SettingsModal({
                 <Pressable
                   style={styles.offsetBtn}
                   onPress={() => {
-                    const next = Math.max(-50, audioOffsetMs - 5);
+                    const next = Math.max(-100, audioOffsetMs - 5);
                     onAudioOffsetChange(next);
                     if (Platform.OS !== "web") Haptics.selectionAsync();
                   }}
@@ -366,7 +366,7 @@ export function SettingsModal({
                 <Pressable
                   style={styles.offsetBtn}
                   onPress={() => {
-                    const next = Math.max(-50, audioOffsetMs - 1);
+                    const next = Math.max(-100, audioOffsetMs - 1);
                     onAudioOffsetChange(next);
                     if (Platform.OS !== "web") Haptics.selectionAsync();
                   }}
@@ -385,7 +385,7 @@ export function SettingsModal({
                 <Pressable
                   style={styles.offsetBtn}
                   onPress={() => {
-                    const next = Math.min(50, audioOffsetMs + 1);
+                    const next = Math.min(100, audioOffsetMs + 1);
                     onAudioOffsetChange(next);
                     if (Platform.OS !== "web") Haptics.selectionAsync();
                   }}
@@ -395,7 +395,7 @@ export function SettingsModal({
                 <Pressable
                   style={styles.offsetBtn}
                   onPress={() => {
-                    const next = Math.min(50, audioOffsetMs + 5);
+                    const next = Math.min(100, audioOffsetMs + 5);
                     onAudioOffsetChange(next);
                     if (Platform.OS !== "web") Haptics.selectionAsync();
                   }}

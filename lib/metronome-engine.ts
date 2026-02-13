@@ -53,7 +53,7 @@ export class MetronomeEngine {
   }
 
   setAudioOffsetMs(offset: number) {
-    this.audioOffsetMs = Math.max(-50, Math.min(50, offset));
+    this.audioOffsetMs = Math.max(-100, Math.min(100, offset));
   }
 
   setOnBeat(callback: (beat: number, isAccent: boolean) => void) {
