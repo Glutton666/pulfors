@@ -96,6 +96,10 @@ export function StopwatchTimer({
   const finishingPulse = useSharedValue(1);
   const handleGlow = useSharedValue(0);
   const handleFlash = useSharedValue(0);
+  const thermoHeight = useSharedValue(1);
+  const thermoBreakTop = useSharedValue(0);
+  const thermoBreakBottom = useSharedValue(0);
+  const thermoBreakOpacity = useSharedValue(0);
 
   useEffect(() => {
     if (open) {
@@ -282,13 +286,20 @@ export function StopwatchTimer({
     startTimeRef.current = Date.now();
     elapsedAtPauseRef.current = 0;
     setState("running");
+    thermoBreakOpacity.value = 0;
+    thermoBreakTop.value = 0;
+    thermoBreakBottom.value = 0;
+    thermoHeight.value = startRemaining / timerDuration;
     intervalRef.current = setInterval(() => {
       const el = Date.now() - startTimeRef.current + elapsedAtPauseRef.current;
-      const left = Math.max(0, startRemaining - Math.floor(el / 1000));
-      setRemaining(left);
-      if (left <= 0) {
+      const leftSec = Math.max(0, startRemaining - Math.floor(el / 1000));
+      const leftSmooth = Math.max(0, startRemaining - el / 1000);
+      setRemaining(leftSec);
+      thermoHeight.value = timerDuration > 0 ? leftSmooth / timerDuration : 0;
+      if (leftSec <= 0) {
         clearInterval(intervalRef.current!);
         intervalRef.current = null;
+        thermoHeight.value = withTiming(0, { duration: 300 });
         if (isPlayingRef.current) {
           setState("finishing");
           onTimerExpired();
@@ -297,7 +308,7 @@ export function StopwatchTimer({
           setRemaining(timerDuration);
         }
       }
-    }, 200);
+    }, 50);
   }, [hapticFeedback, timerDuration, remaining, state, onTimerExpired]);
 
   const pauseTimer = useCallback(() => {
@@ -312,6 +323,7 @@ export function StopwatchTimer({
     clearTimerInterval();
     setRemaining(timerDuration);
     elapsedAtPauseRef.current = 0;
+    thermoHeight.value = 1;
     setState("idle");
   }, [hapticFeedback, clearTimerInterval, timerDuration]);
 
@@ -322,6 +334,7 @@ export function StopwatchTimer({
         elapsedAtPauseRef.current = Date.now() - startTimeRef.current;
         setState("paused");
       } else {
+        thermoHeight.value = 1;
         setState("idle");
         setRemaining(timerDuration);
       }
@@ -355,12 +368,18 @@ export function StopwatchTimer({
         withTiming(1, { duration: 100 }),
         withTiming(0, { duration: 200 })
       );
+      thermoBreakOpacity.value = withTiming(1, { duration: 150 });
+      thermoBreakTop.value = withTiming(-6, { duration: 300, easing: Easing.out(Easing.quad) });
+      thermoBreakBottom.value = withTiming(4, { duration: 300, easing: Easing.out(Easing.quad) });
     } else {
       cancelAnimation(pulseOpacity);
       cancelAnimation(finishingPulse);
       pulseOpacity.value = withTiming(1, { duration: 200 });
       finishingPulse.value = withTiming(1, { duration: 200 });
       handleFlash.value = 0;
+      thermoBreakOpacity.value = 0;
+      thermoBreakTop.value = 0;
+      thermoBreakBottom.value = 0;
     }
   }, [state]);
 
@@ -386,6 +405,20 @@ export function StopwatchTimer({
 
   const handleFlashStyle = useAnimatedStyle(() => ({
     opacity: handleFlash.value,
+  }));
+
+  const thermoFillStyle = useAnimatedStyle(() => ({
+    height: `${thermoHeight.value * 100}%` as any,
+  }));
+
+  const thermoBreakTopStyle = useAnimatedStyle(() => ({
+    opacity: thermoBreakOpacity.value,
+    transform: [{ translateY: thermoBreakTop.value }, { rotate: "-12deg" }],
+  }));
+
+  const thermoBreakBottomStyle = useAnimatedStyle(() => ({
+    opacity: thermoBreakOpacity.value,
+    transform: [{ translateY: thermoBreakBottom.value }, { rotate: "8deg" }],
   }));
 
   const switchMode = useCallback(
@@ -528,15 +561,33 @@ export function StopwatchTimer({
             <Animated.View style={[styles.handleFlash, handleFlashStyle]} />
             {!open && isActive && mode === "timer" && (state === "running" || state === "finishing") ? (
               <View style={styles.thermometer}>
+                {state === "finishing" && (
+                  <>
+                    <Animated.View
+                      style={[
+                        styles.thermoBreakShard,
+                        { backgroundColor: Colors.danger },
+                        thermoBreakTopStyle,
+                      ]}
+                    />
+                    <Animated.View
+                      style={[
+                        styles.thermoBreakShard,
+                        { backgroundColor: Colors.danger, top: 26 },
+                        thermoBreakBottomStyle,
+                      ]}
+                    />
+                  </>
+                )}
                 <View style={styles.thermoTube}>
                   <View style={styles.thermoTrack} />
-                  <View
+                  <Animated.View
                     style={[
                       styles.thermoFill,
                       {
-                        height: `${(timerDuration > 0 ? remaining / timerDuration : 1) * 100}%` as any,
                         backgroundColor: state === "finishing" ? Colors.danger : Colors.accent,
                       },
+                      thermoFillStyle,
                     ]}
                   />
                 </View>
@@ -1031,5 +1082,13 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     opacity: 0.6,
+  },
+  thermoBreakShard: {
+    position: "absolute",
+    width: 6,
+    height: 3,
+    borderRadius: 1.5,
+    top: 20,
+    zIndex: 2,
   },
 });
