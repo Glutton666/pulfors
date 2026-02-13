@@ -185,15 +185,15 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
           <Text style={styles.bpmUnit}>BPM</Text>
 
           <View style={styles.zoneRow} pointerEvents="none">
-            <View style={styles.zoneItem}>
-              <Feather name="minus" size={14} color={Colors.textTertiary} />
+            <View style={styles.zoneEdge}>
+              <Feather name="minus" size={22} color={Colors.textSecondary} />
             </View>
-            <View style={[styles.zoneItem, styles.zoneMid]}>
-              <Feather name="activity" size={10} color={Colors.textTertiary} />
+            <View style={styles.zoneMid}>
+              <Feather name="activity" size={12} color={Colors.textTertiary} />
               <Text style={styles.tapLabel}>TAP</Text>
             </View>
-            <View style={styles.zoneItem}>
-              <Feather name="plus" size={14} color={Colors.textTertiary} />
+            <View style={styles.zoneEdge}>
+              <Feather name="plus" size={22} color={Colors.textSecondary} />
             </View>
           </View>
 
@@ -280,15 +280,18 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     marginTop: 8,
   },
-  zoneItem: {
+  zoneEdge: {
     flex: 1,
     alignItems: "center",
-    opacity: 0.4,
+    opacity: 0.5,
   },
   zoneMid: {
+    flex: 1,
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "center",
     gap: 3,
+    opacity: 0.4,
   },
   tapLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
