@@ -4,8 +4,27 @@ import { Platform } from "react-native";
 export type BeatType = "accent" | "normal" | "mute";
 export type HapticMode = "all" | "accent" | "off";
 
-export const highClickSource = require("@/assets/sounds/click-high.wav");
-export const lowClickSource = require("@/assets/sounds/click-low.wav");
+export const soundSets = {
+  classic: {
+    high: require("@/assets/sounds/click-high.wav"),
+    low: require("@/assets/sounds/click-low.wav"),
+  },
+  woodblock: {
+    high: require("@/assets/sounds/woodblock-high.wav"),
+    low: require("@/assets/sounds/woodblock-low.wav"),
+  },
+  digital: {
+    high: require("@/assets/sounds/digital-high.wav"),
+    low: require("@/assets/sounds/digital-low.wav"),
+  },
+  rimshot: {
+    high: require("@/assets/sounds/rimshot-high.wav"),
+    low: require("@/assets/sounds/rimshot-low.wav"),
+  },
+};
+
+export const highClickSource = soundSets.classic.high;
+export const lowClickSource = soundSets.classic.low;
 
 export class MetronomeEngine {
   private timeoutId: ReturnType<typeof setTimeout> | null = null;
