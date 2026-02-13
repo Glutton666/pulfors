@@ -300,12 +300,9 @@ export function StopwatchTimer({
         clearInterval(intervalRef.current!);
         intervalRef.current = null;
         thermoHeight.value = withTiming(0, { duration: 300 });
+        setState("finishing");
         if (isPlayingRef.current) {
-          setState("finishing");
           onTimerExpired();
-        } else {
-          setState("idle");
-          setRemaining(timerDuration);
         }
       }
     }, 50);
@@ -329,15 +326,22 @@ export function StopwatchTimer({
 
   useEffect(() => {
     if (state === "finishing" && !isMetronomePlaying) {
-      if (mode === "stopwatch") {
-        clearTimerInterval();
-        elapsedAtPauseRef.current = Date.now() - startTimeRef.current;
-        setState("paused");
-      } else {
-        thermoHeight.value = 1;
-        setState("idle");
-        setRemaining(timerDuration);
-      }
+      const animDuration = 1200;
+      const timeout = setTimeout(() => {
+        if (mode === "stopwatch") {
+          clearTimerInterval();
+          elapsedAtPauseRef.current = Date.now() - startTimeRef.current;
+          setState("paused");
+        } else {
+          thermoHeight.value = 1;
+          thermoBreakOpacity.value = 0;
+          thermoBreakTop.value = 0;
+          thermoBreakBottom.value = 0;
+          setState("idle");
+          setRemaining(timerDuration);
+        }
+      }, animDuration);
+      return () => clearTimeout(timeout);
     }
   }, [isMetronomePlaying, state, timerDuration, mode, clearTimerInterval]);
 
@@ -1044,6 +1048,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: Colors.danger,
     borderRadius: 12,
+    zIndex: 10,
   },
   thermometer: {
     alignItems: "center",
