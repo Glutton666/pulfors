@@ -345,11 +345,11 @@ export function SubdivisionBar({
       style={[styles.wrapper, shakeAnimStyle]}
       {...nativePanHandlers}
     >
-      <View style={styles.swipeHint}>
-        <Feather name="chevron-left" size={12} color={Colors.textTertiary} />
-      </View>
-
       <View style={styles.cellsContainer} testID="subdivision-cells">
+        <View style={styles.swipeHint}>
+          <Feather name="chevron-left" size={12} color={Colors.textTertiary} />
+        </View>
+
         {pattern.map((type, i) => (
           <Pressable
             key={i}
@@ -370,10 +370,10 @@ export function SubdivisionBar({
             />
           </Pressable>
         ))}
-      </View>
 
-      <View style={styles.swipeHint}>
-        <Feather name="chevron-right" size={12} color={Colors.textTertiary} />
+        <View style={styles.swipeHint}>
+          <Feather name="chevron-right" size={12} color={Colors.textTertiary} />
+        </View>
       </View>
     </Animated.View>
   );
