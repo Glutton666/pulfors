@@ -511,7 +511,9 @@ export function StopwatchTimer({
             testID="panel-toggle"
           >
             <Animated.View style={[styles.handleGlow, handleGlowStyle]} />
-            <View style={styles.handleLine} />
+            {(!isActive || open || mode !== "timer" || (state !== "running" && state !== "finishing")) && (
+              <View style={styles.handleLine} />
+            )}
             <MaterialCommunityIcons
               name={handleStatusIcon()}
               size={14}
