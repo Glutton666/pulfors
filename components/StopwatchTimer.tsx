@@ -589,6 +589,7 @@ export function StopwatchTimer({
   const handleStatusColor = () => {
     if (state === "running") return Colors.success;
     if (state === "finishing") return Colors.danger;
+    if (mode === "tuner" && tunerActive) return Colors.accent;
     return Colors.textTertiary;
   };
 

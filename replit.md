@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a **Metronome** mobile application built with **Expo (React Native)** and an **Express** backend server. The app provides a musical metronome with features like adjustable BPM, tempo presets (Largo through Presto), time signatures, beat visualization with a pendulum animation, haptic feedback, and audio click generation. Settings are persisted locally using AsyncStorage.
+This is a **Metronome** mobile application built with **Expo (React Native)** and an **Express** backend server. The app provides a musical metronome with features like adjustable BPM, tempo presets (Largo through Presto), time signatures, beat visualization with a pendulum animation, haptic feedback, and audio click generation. Settings are persisted locally using AsyncStorage. The side panel includes a **Stopwatch**, **Timer**, and **Tuner** (chromatic tuner with instrument presets for electric/acoustic guitar, bass, 5-string bass, Drop D, and ukulele). The tuner uses Web Audio API for real-time pitch detection via autocorrelation.
 
 The project follows a full-stack architecture where the Express server can serve both the API and a static web build, while the mobile app runs via Expo. The backend includes a PostgreSQL database schema (via Drizzle ORM) with a basic user model, though the core metronome functionality is entirely client-side.
 
