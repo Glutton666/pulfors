@@ -181,6 +181,11 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
           <Animated.View style={[styles.glowLeft, leftGlowStyle]} />
           <Animated.View style={[styles.glowRight, rightGlowStyle]} />
 
+          <View style={styles.zoneRow} pointerEvents="none">
+            <Feather name="activity" size={12} color={Colors.textTertiary} />
+            <Text style={styles.tapLabel}>TAP</Text>
+          </View>
+
           <View style={styles.bpmRow} pointerEvents="none">
             <Feather name="minus" size={24} color={Colors.textSecondary} style={styles.bpmIcon} />
             <View style={styles.bpmContent}>
@@ -188,11 +193,6 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
               <Text style={styles.bpmUnit}>BPM</Text>
             </View>
             <Feather name="plus" size={24} color={Colors.textSecondary} style={styles.bpmIcon} />
-          </View>
-
-          <View style={styles.zoneRow} pointerEvents="none">
-            <Feather name="activity" size={12} color={Colors.textTertiary} />
-            <Text style={styles.tapLabel}>TAP</Text>
           </View>
 
           <View style={styles.ticks} pointerEvents="none">
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
-    marginTop: 4,
+    marginBottom: 2,
     opacity: 0.4,
   },
   tapLabel: {
