@@ -145,7 +145,7 @@ export class MetronomeEngine {
 
     if (!isMute) {
       try {
-        if (isAccent && isMainBeat) {
+        if (isAccent) {
           this.playHighClick?.();
         } else {
           this.playLowClick?.();
@@ -155,7 +155,7 @@ export class MetronomeEngine {
       if (Platform.OS !== "web") {
         try {
           Haptics.impactAsync(
-            isAccent && isMainBeat
+            isAccent
               ? Haptics.ImpactFeedbackStyle.Heavy
               : isMainBeat
               ? Haptics.ImpactFeedbackStyle.Light
