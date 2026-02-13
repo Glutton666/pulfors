@@ -224,6 +224,8 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
       <Animated.View
         style={[styles.container, containerAnimStyle]}
         testID="bpm-slider"
+        onLayout={onLayout}
+        {...panHandlers}
       >
         <Animated.View style={[styles.tapFlashOverlay, tapFlashStyle]} />
         <Animated.View style={[styles.zoneGlowLeft, leftGlowStyle]} />
@@ -238,8 +240,6 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
 
         <View
           style={styles.dragZone}
-          onLayout={onLayout}
-          {...panHandlers}
         >
           <View style={styles.zoneIndicators}>
             <View style={styles.zoneLeft}>
