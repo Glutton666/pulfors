@@ -1,5 +1,12 @@
 import React, { useRef, useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, PanResponder, Platform, Dimensions, LayoutChangeEvent } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  PanResponder,
+  Platform,
+  LayoutChangeEvent,
+} from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -12,264 +19,195 @@ import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 
-const SCREEN_WIDTH = Dimensions.get("window").width;
-
 interface BpmSliderProps {
   bpm: number;
   onBpmChange: (bpm: number) => void;
   onTapTempo: () => void;
 }
 
+type Zone = "left" | "center" | "right";
+
 export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
-  const currentBpmRef = useRef(bpm);
+  const bpmRef = useRef(bpm);
   const startBpmRef = useRef(bpm);
-  const lastHapticBpm = useRef(bpm);
+  const lastHapticBpmRef = useRef(bpm);
   const onBpmChangeRef = useRef(onBpmChange);
   const onTapTempoRef = useRef(onTapTempo);
   const didDragRef = useRef(false);
-  const containerWidthRef = useRef(SCREEN_WIDTH - 32);
+  const widthRef = useRef(300);
+  const zoneRef = useRef<Zone>("center");
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isLongPressActiveRef = useRef(false);
-  const touchStartXRef = useRef(0);
-  const grantLocationXRef = useRef(0);
-  const grantZoneRef = useRef<"left" | "center" | "right">("center");
+  const longPressRepeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const longPressFiredRef = useRef(false);
 
-  useEffect(() => {
-    currentBpmRef.current = bpm;
-  }, [bpm]);
+  useEffect(() => { bpmRef.current = bpm; }, [bpm]);
+  useEffect(() => { onBpmChangeRef.current = onBpmChange; }, [onBpmChange]);
+  useEffect(() => { onTapTempoRef.current = onTapTempo; }, [onTapTempo]);
 
-  useEffect(() => {
-    onBpmChangeRef.current = onBpmChange;
-  }, [onBpmChange]);
+  const offsetX = useSharedValue(0);
+  const active = useSharedValue(0);
+  const flash = useSharedValue(0);
+  const glowL = useSharedValue(0);
+  const glowR = useSharedValue(0);
 
-  useEffect(() => {
-    onTapTempoRef.current = onTapTempo;
-  }, [onTapTempo]);
-
-  const translateX = useSharedValue(0);
-  const isDragging = useSharedValue(0);
-  const glowIntensity = useSharedValue(0);
-  const tapFlash = useSharedValue(0);
-  const leftGlow = useSharedValue(0);
-  const rightGlow = useSharedValue(0);
-
-  const clearLongPress = useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-    if (longPressIntervalRef.current) {
-      clearInterval(longPressIntervalRef.current);
-      longPressIntervalRef.current = null;
-    }
-    isLongPressActiveRef.current = false;
-    leftGlow.value = withTiming(0, { duration: 200 });
-    rightGlow.value = withTiming(0, { duration: 200 });
-  }, []);
-
-  const getZone = useCallback((locationX: number): "left" | "center" | "right" => {
-    const w = containerWidthRef.current;
-    const third = w / 3;
-    if (locationX < third) return "left";
-    if (locationX > third * 2) return "right";
+  const getZone = useCallback((x: number): Zone => {
+    const third = widthRef.current / 3;
+    if (x < third) return "left";
+    if (x > third * 2) return "right";
     return "center";
   }, []);
 
-  const roundBpmDown = useCallback((current: number): number => {
-    const tens = Math.floor(current / 10) * 10;
-    if (current === tens) return Math.max(20, current - 10);
-    return Math.max(20, tens);
+  const snapDown = useCallback((v: number) => {
+    const t = Math.floor(v / 10) * 10;
+    return Math.max(20, v === t ? v - 10 : t);
   }, []);
 
-  const roundBpmUp = useCallback((current: number): number => {
-    const tens = Math.ceil(current / 10) * 10;
-    if (current === tens) return Math.min(300, current + 10);
-    return Math.min(300, tens);
+  const snapUp = useCallback((v: number) => {
+    const t = Math.ceil(v / 10) * 10;
+    return Math.min(300, v === t ? v + 10 : t);
   }, []);
 
-  const startLongPress = useCallback((zone: "left" | "right") => {
-    if (zone === "left") {
-      leftGlow.value = withTiming(1, { duration: 300 });
-    } else {
-      rightGlow.value = withTiming(1, { duration: 300 });
-    }
+  const clearTimers = useCallback(() => {
+    if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+    if (longPressRepeatRef.current) { clearInterval(longPressRepeatRef.current); longPressRepeatRef.current = null; }
+    longPressFiredRef.current = false;
+    glowL.value = withTiming(0, { duration: 200 });
+    glowR.value = withTiming(0, { duration: 200 });
+  }, []);
+
+  const beginLongPress = useCallback((zone: "left" | "right") => {
+    (zone === "left" ? glowL : glowR).value = withTiming(1, { duration: 300 });
 
     longPressTimerRef.current = setTimeout(() => {
-      isLongPressActiveRef.current = true;
-      const adjust = () => {
-        const cur = currentBpmRef.current;
-        const newBpm = zone === "left" ? roundBpmDown(cur) : roundBpmUp(cur);
-        if (newBpm !== cur) {
-          onBpmChangeRef.current(newBpm);
-          if (Platform.OS !== "web") {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          }
+      longPressFiredRef.current = true;
+      const step = () => {
+        const cur = bpmRef.current;
+        const next = zone === "left" ? snapDown(cur) : snapUp(cur);
+        if (next !== cur) {
+          onBpmChangeRef.current(next);
+          if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         }
       };
-      adjust();
-      longPressIntervalRef.current = setInterval(adjust, 400);
+      step();
+      longPressRepeatRef.current = setInterval(step, 350);
     }, 500);
-  }, [roundBpmDown, roundBpmUp]);
+  }, [snapDown, snapUp]);
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
-    containerWidthRef.current = e.nativeEvent.layout.width;
+    widthRef.current = e.nativeEvent.layout.width;
   }, []);
 
-  const panResponder = useRef(
+  const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) =>
-        Math.abs(gestureState.dx) > 5,
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 5,
+
       onPanResponderGrant: (e) => {
-        startBpmRef.current = currentBpmRef.current;
-        lastHapticBpm.current = currentBpmRef.current;
+        startBpmRef.current = bpmRef.current;
+        lastHapticBpmRef.current = bpmRef.current;
         didDragRef.current = false;
-        isDragging.value = withTiming(1, { duration: 150 });
-        glowIntensity.value = withTiming(1, { duration: 200 });
+        active.value = withTiming(1, { duration: 150 });
 
-        const locationX = e.nativeEvent.locationX;
-        grantLocationXRef.current = locationX;
-        touchStartXRef.current = e.nativeEvent.pageX;
-
-        const zone = getZone(locationX);
-        grantZoneRef.current = zone;
-        if (zone === "left" || zone === "right") {
-          startLongPress(zone);
-        }
+        const zone = getZone(e.nativeEvent.locationX);
+        zoneRef.current = zone;
+        if (zone !== "center") beginLongPress(zone);
       },
-      onPanResponderMove: (_, gestureState) => {
-        if (Math.abs(gestureState.dx) > 5) {
+
+      onPanResponderMove: (_, gs) => {
+        if (Math.abs(gs.dx) > 5) {
           didDragRef.current = true;
-          if (grantZoneRef.current !== "center") {
-            clearLongPress();
-            return;
-          }
+          if (zoneRef.current !== "center") { clearTimers(); return; }
         }
+        if (zoneRef.current !== "center") return;
 
-        if (grantZoneRef.current !== "center") return;
+        const delta = gs.dx * 0.4;
+        const next = Math.max(20, Math.min(300, Math.round(startBpmRef.current + delta)));
+        offsetX.value = Math.max(-30, Math.min(30, gs.dx * 0.08));
 
-        const sensitivity = 0.4;
-        const rawDelta = gestureState.dx * sensitivity;
-        const newBpm = Math.round(startBpmRef.current + rawDelta);
-        const clampedBpm = Math.max(20, Math.min(300, newBpm));
-
-        translateX.value = Math.max(-30, Math.min(30, gestureState.dx * 0.08));
-
-        if (clampedBpm !== lastHapticBpm.current) {
+        if (next !== lastHapticBpmRef.current) {
           if (Platform.OS !== "web") {
-            if (clampedBpm % 10 === 0) {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            } else if (clampedBpm % 5 === 0) {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            } else {
-              Haptics.selectionAsync();
-            }
+            if (next % 10 === 0) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            else if (next % 5 === 0) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            else Haptics.selectionAsync();
           }
-          lastHapticBpm.current = clampedBpm;
-          onBpmChangeRef.current(clampedBpm);
+          lastHapticBpmRef.current = next;
+          onBpmChangeRef.current(next);
         }
       },
+
       onPanResponderRelease: () => {
-        translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
-        isDragging.value = withTiming(0, { duration: 200 });
-        glowIntensity.value = withTiming(0, { duration: 300 });
+        offsetX.value = withSpring(0, { damping: 15, stiffness: 300 });
+        active.value = withTiming(0, { duration: 200 });
+        const wasLong = longPressFiredRef.current;
+        clearTimers();
 
-        const wasLongPress = isLongPressActiveRef.current;
-        clearLongPress();
-
-        if (grantZoneRef.current === "center" && !didDragRef.current && !wasLongPress) {
+        if (zoneRef.current === "center" && !didDragRef.current && !wasLong) {
           onTapTempoRef.current();
-          tapFlash.value = withSequence(
+          flash.value = withSequence(
             withTiming(1, { duration: 60 }),
             withTiming(0, { duration: 300, easing: Easing.out(Easing.quad) })
           );
         }
       },
+
       onPanResponderTerminate: () => {
-        translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
-        isDragging.value = withTiming(0, { duration: 200 });
-        glowIntensity.value = withTiming(0, { duration: 300 });
-        clearLongPress();
+        offsetX.value = withSpring(0, { damping: 15, stiffness: 300 });
+        active.value = withTiming(0, { duration: 200 });
+        clearTimers();
       },
     })
   ).current;
 
-
-  const containerAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
+  const bodyStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: offsetX.value }],
   }));
-
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glowIntensity.value * 0.25,
-  }));
-
-  const tapFlashStyle = useAnimatedStyle(() => ({
-    opacity: tapFlash.value * 0.15,
-  }));
-
-  const leftGlowStyle = useAnimatedStyle(() => ({
-    opacity: leftGlow.value * 0.3,
-  }));
-
-  const rightGlowStyle = useAnimatedStyle(() => ({
-    opacity: rightGlow.value * 0.3,
-  }));
-
-  const panHandlers = panResponder.panHandlers;
+  const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value * 0.15 }));
+  const leftGlowStyle = useAnimatedStyle(() => ({ opacity: glowL.value * 0.3 }));
+  const rightGlowStyle = useAnimatedStyle(() => ({ opacity: glowR.value * 0.3 }));
 
   return (
     <View style={styles.wrapper}>
-      <Animated.View style={[styles.glowBg, glowStyle]} />
       <Animated.View
-        style={[styles.container, containerAnimStyle]}
+        style={[styles.card, bodyStyle]}
         testID="bpm-slider"
         onLayout={onLayout}
-        {...panHandlers}
+        {...pan.panHandlers}
       >
-        <Animated.View style={[styles.tapFlashOverlay, tapFlashStyle]} />
-        <Animated.View style={[styles.zoneGlowLeft, leftGlowStyle]} />
-        <Animated.View style={[styles.zoneGlowRight, rightGlowStyle]} />
+        <Animated.View style={[styles.flashOverlay, flashStyle]} />
+        <Animated.View style={[styles.glowLeft, leftGlowStyle]} />
+        <Animated.View style={[styles.glowRight, rightGlowStyle]} />
 
-        <View style={styles.bpmContent}>
-          <Text style={styles.bpmValue} testID="bpm-display">
-            {bpm}
-          </Text>
-          <Text style={styles.bpmUnit}>BPM</Text>
+        <Text style={styles.bpmValue} testID="bpm-display">{bpm}</Text>
+        <Text style={styles.bpmUnit}>BPM</Text>
+
+        <View style={styles.zoneRow}>
+          <View style={styles.zoneItem}>
+            <Feather name="minus" size={14} color={Colors.textTertiary} />
+          </View>
+          <View style={[styles.zoneItem, styles.zoneMid]}>
+            <Feather name="activity" size={10} color={Colors.textTertiary} />
+            <Text style={styles.tapLabel}>TAP</Text>
+          </View>
+          <View style={styles.zoneItem}>
+            <Feather name="plus" size={14} color={Colors.textTertiary} />
+          </View>
         </View>
 
-        <View
-          style={styles.dragZone}
-        >
-          <View style={styles.zoneIndicators}>
-            <View style={styles.zoneLeft}>
-              <Feather name="minus" size={14} color={Colors.textTertiary} />
-            </View>
-            <View style={styles.zoneCenter}>
-              <Feather name="activity" size={10} color={Colors.textTertiary} />
-              <Text style={styles.tapText}>TAP</Text>
-            </View>
-            <View style={styles.zoneRight}>
-              <Feather name="plus" size={14} color={Colors.textTertiary} />
-            </View>
-          </View>
-
-          <View style={styles.tickTrack}>
-            {Array.from({ length: 29 }, (_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.tick,
-                  i % 5 === 0 && styles.tickMajor,
-                  i === 14 && styles.tickCenter,
-                ]}
-              />
-            ))}
-          </View>
+        <View style={styles.ticks}>
+          {Array.from({ length: 29 }, (_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.tick,
+                i % 5 === 0 && styles.tickBig,
+                i === 14 && styles.tickMid,
+              ]}
+            />
+          ))}
         </View>
       </Animated.View>
 
-      <Text style={styles.slideHint}>hold sides to jump · slide center to adjust</Text>
+      <Text style={styles.hint}>hold sides ±10 · slide center to adjust</Text>
     </View>
   );
 }
@@ -279,28 +217,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     alignSelf: "stretch",
     gap: 6,
-    paddingHorizontal: 0,
   },
-  dragZone: {
-    alignSelf: "stretch",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-  },
-  glowBg: {
-    position: "absolute",
-    top: -10,
-    left: -10,
-    right: -10,
-    bottom: -10,
-    borderRadius: 24,
-    backgroundColor: Colors.accent,
-  },
-  container: {
-    flexDirection: "column",
+  card: {
     alignItems: "center",
-    justifyContent: "center",
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingTop: 14,
+    paddingBottom: 10,
     borderRadius: 20,
     backgroundColor: Colors.surface,
     alignSelf: "stretch",
@@ -308,12 +230,12 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: Colors.border,
   },
-  tapFlashOverlay: {
+  flashOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: Colors.accent,
     borderRadius: 20,
   },
-  zoneGlowLeft: {
+  glowLeft: {
     position: "absolute",
     left: 0,
     top: 0,
@@ -323,7 +245,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderBottomLeftRadius: 20,
   },
-  zoneGlowRight: {
+  glowRight: {
     position: "absolute",
     right: 0,
     top: 0,
@@ -332,33 +254,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accent,
     borderTopRightRadius: 20,
     borderBottomRightRadius: 20,
-  },
-  zoneIndicators: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  zoneLeft: {
-    flex: 1,
-    alignItems: "center",
-    opacity: 0.4,
-  },
-  zoneCenter: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 3,
-    opacity: 0.4,
-  },
-  zoneRight: {
-    flex: 1,
-    alignItems: "center",
-    opacity: 0.4,
-  },
-  bpmContent: {
-    alignItems: "center",
-    minWidth: 120,
   },
   bpmValue: {
     fontFamily: "SpaceGrotesk_700Bold",
@@ -373,12 +268,34 @@ const styles = StyleSheet.create({
     letterSpacing: 4,
     marginTop: -4,
   },
-  tickTrack: {
+  zoneRow: {
+    flexDirection: "row",
+    alignSelf: "stretch",
+    marginTop: 8,
+  },
+  zoneItem: {
+    flex: 1,
+    alignItems: "center",
+    opacity: 0.4,
+  },
+  zoneMid: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 3,
+  },
+  tapLabel: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 8,
+    color: Colors.textTertiary,
+    letterSpacing: 1.5,
+  },
+  ticks: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-end",
+    alignSelf: "stretch",
     height: 6,
-    marginTop: 8,
+    marginTop: 6,
+    paddingHorizontal: 4,
   },
   tick: {
     width: 1,
@@ -387,22 +304,16 @@ const styles = StyleSheet.create({
     opacity: 0.3,
     borderRadius: 0.5,
   },
-  tickMajor: {
+  tickBig: {
     height: 5,
     opacity: 0.5,
   },
-  tickCenter: {
+  tickMid: {
     backgroundColor: Colors.accent,
     opacity: 0.7,
     height: 5,
   },
-  tapText: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 8,
-    color: Colors.textTertiary,
-    letterSpacing: 1.5,
-  },
-  slideHint: {
+  hint: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
     color: Colors.textTertiary,
