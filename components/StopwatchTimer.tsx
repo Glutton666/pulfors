@@ -95,6 +95,7 @@ export function StopwatchTimer({
   const pulseOpacity = useSharedValue(1);
   const finishingPulse = useSharedValue(1);
   const handleGlow = useSharedValue(0);
+  const handleFlash = useSharedValue(0);
 
   useEffect(() => {
     if (open) {
@@ -346,11 +347,20 @@ export function StopwatchTimer({
         -1,
         true
       );
+      handleFlash.value = withSequence(
+        withTiming(1, { duration: 100 }),
+        withTiming(0, { duration: 150 }),
+        withTiming(1, { duration: 100 }),
+        withTiming(0, { duration: 150 }),
+        withTiming(1, { duration: 100 }),
+        withTiming(0, { duration: 200 })
+      );
     } else {
       cancelAnimation(pulseOpacity);
       cancelAnimation(finishingPulse);
       pulseOpacity.value = withTiming(1, { duration: 200 });
       finishingPulse.value = withTiming(1, { duration: 200 });
+      handleFlash.value = 0;
     }
   }, [state]);
 
@@ -372,6 +382,10 @@ export function StopwatchTimer({
 
   const handleGlowStyle = useAnimatedStyle(() => ({
     opacity: handleGlow.value,
+  }));
+
+  const handleFlashStyle = useAnimatedStyle(() => ({
+    opacity: handleFlash.value,
   }));
 
   const switchMode = useCallback(
@@ -511,9 +525,11 @@ export function StopwatchTimer({
             testID="panel-toggle"
           >
             <Animated.View style={[styles.handleGlow, handleGlowStyle]} />
+            <Animated.View style={[styles.handleFlash, handleFlashStyle]} />
             {!open && isActive && mode === "timer" && (state === "running" || state === "finishing") ? (
               <View style={styles.thermometer}>
                 <View style={styles.thermoTube}>
+                  <View style={styles.thermoTrack} />
                   <View
                     style={[
                       styles.thermoFill,
@@ -531,7 +547,16 @@ export function StopwatchTimer({
                       backgroundColor: state === "finishing" ? Colors.danger : Colors.accent,
                     },
                   ]}
-                />
+                >
+                  <View
+                    style={[
+                      styles.thermoBulbInner,
+                      {
+                        backgroundColor: state === "finishing" ? Colors.danger : Colors.accent,
+                      },
+                    ]}
+                  />
+                </View>
               </View>
             ) : (
               <>
@@ -964,30 +989,47 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     opacity: 0.8,
   },
+  handleFlash: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Colors.danger,
+    borderRadius: 12,
+  },
   thermometer: {
     alignItems: "center",
-    gap: 0,
   },
   thermoTube: {
-    width: 4,
+    width: 6,
     height: 48,
-    borderTopLeftRadius: 2,
-    borderTopRightRadius: 2,
-    backgroundColor: Colors.surfaceLight,
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
     overflow: "hidden",
     justifyContent: "flex-end",
-    marginBottom: -3,
+    marginBottom: -4,
     zIndex: 0,
+  },
+  thermoTrack: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: 3,
   },
   thermoFill: {
     width: "100%",
-    borderTopLeftRadius: 2,
-    borderTopRightRadius: 2,
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
+    zIndex: 1,
   },
   thermoBulb: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    alignItems: "center",
+    justifyContent: "center",
     zIndex: 1,
+  },
+  thermoBulbInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    opacity: 0.6,
   },
 });
