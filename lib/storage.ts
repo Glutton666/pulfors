@@ -18,6 +18,7 @@ export interface MetronomeSettings {
   soundSet?: SoundSet;
   flashMode?: FlashMode;
   hapticMode?: HapticMode;
+  audioOffsetMs?: number;
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
@@ -31,6 +32,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   soundSet: "classic",
   flashMode: "accent",
   hapticMode: "all",
+  audioOffsetMs: 0,
 };
 
 export async function loadSettings(): Promise<MetronomeSettings> {

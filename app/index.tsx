@@ -79,6 +79,7 @@ export default function MetronomeScreen() {
   const [soundSet, setSoundSet] = useState<SoundSet>("classic");
   const [flashMode, setFlashMode] = useState<FlashMode>("accent");
   const [hapticMode, setHapticMode] = useState<HapticMode>("all");
+  const [audioOffsetMs, setAudioOffsetMs] = useState(0);
 
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -180,6 +181,10 @@ export default function MetronomeScreen() {
         setHapticMode(settings.hapticMode);
         engine.setHapticMode(settings.hapticMode);
       }
+      if (settings.audioOffsetMs !== undefined) {
+        setAudioOffsetMs(settings.audioOffsetMs);
+        engine.setAudioOffsetMs(settings.audioOffsetMs);
+      }
 
       setIsLoaded(true);
     });
@@ -233,11 +238,12 @@ export default function MetronomeScreen() {
         soundSet,
         flashMode,
         hapticMode,
+        audioOffsetMs,
         ...overrides,
       };
       saveSettings(current);
     },
-    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, backgroundPlay, soundSet, flashMode, hapticMode]
+    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, backgroundPlay, soundSet, flashMode, hapticMode, audioOffsetMs]
   );
 
   const updateVolume = useCallback(
@@ -278,6 +284,15 @@ export default function MetronomeScreen() {
       setHapticMode(value);
       engineRef.current?.setHapticMode(value);
       persistSettings({ hapticMode: value });
+    },
+    [persistSettings]
+  );
+
+  const updateAudioOffset = useCallback(
+    (value: number) => {
+      setAudioOffsetMs(value);
+      engineRef.current?.setAudioOffsetMs(value);
+      persistSettings({ audioOffsetMs: value });
     },
     [persistSettings]
   );
@@ -620,6 +635,8 @@ export default function MetronomeScreen() {
         onFlashModeChange={updateFlashMode}
         hapticMode={hapticMode}
         onHapticModeChange={updateHapticMode}
+        audioOffsetMs={audioOffsetMs}
+        onAudioOffsetChange={updateAudioOffset}
       />
 
       <View

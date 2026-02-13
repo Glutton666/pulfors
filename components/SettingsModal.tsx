@@ -30,6 +30,8 @@ interface SettingsModalProps {
   onFlashModeChange: (value: FlashMode) => void;
   hapticMode: HapticMode;
   onHapticModeChange: (value: HapticMode) => void;
+  audioOffsetMs: number;
+  onAudioOffsetChange: (value: number) => void;
 }
 
 const SOUND_SET_OPTIONS: { value: SoundSet; label: string; icon: string }[] = [
@@ -95,6 +97,8 @@ export function SettingsModal({
   onFlashModeChange,
   hapticMode,
   onHapticModeChange,
+  audioOffsetMs,
+  onAudioOffsetChange,
 }: SettingsModalProps) {
   const insets = useSafeAreaInsets();
   const trackWidthRef = useRef(0);
@@ -337,6 +341,72 @@ export function SettingsModal({
               </View>
               <TripleSelector value={hapticMode} onChange={onHapticModeChange} />
             </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="timer-outline" size={18} color={Colors.accent} />
+                <Text style={styles.sectionLabel}>Audio Offset</Text>
+                <Text style={styles.sectionValue}>
+                  {audioOffsetMs > 0 ? "+" : ""}{audioOffsetMs}ms
+                </Text>
+              </View>
+              <View style={styles.offsetRow}>
+                <Pressable
+                  style={styles.offsetBtn}
+                  onPress={() => {
+                    const next = Math.max(-50, audioOffsetMs - 5);
+                    onAudioOffsetChange(next);
+                    if (Platform.OS !== "web") Haptics.selectionAsync();
+                  }}
+                >
+                  <Ionicons name="remove" size={18} color={Colors.text} />
+                </Pressable>
+                <Pressable
+                  style={styles.offsetBtn}
+                  onPress={() => {
+                    const next = Math.max(-50, audioOffsetMs - 1);
+                    onAudioOffsetChange(next);
+                    if (Platform.OS !== "web") Haptics.selectionAsync();
+                  }}
+                >
+                  <Text style={styles.offsetBtnText}>-1</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.offsetBtn, styles.offsetResetBtn]}
+                  onPress={() => {
+                    onAudioOffsetChange(0);
+                    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                >
+                  <Text style={styles.offsetResetText}>0</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.offsetBtn}
+                  onPress={() => {
+                    const next = Math.min(50, audioOffsetMs + 1);
+                    onAudioOffsetChange(next);
+                    if (Platform.OS !== "web") Haptics.selectionAsync();
+                  }}
+                >
+                  <Text style={styles.offsetBtnText}>+1</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.offsetBtn}
+                  onPress={() => {
+                    const next = Math.min(50, audioOffsetMs + 5);
+                    onAudioOffsetChange(next);
+                    if (Platform.OS !== "web") Haptics.selectionAsync();
+                  }}
+                >
+                  <Ionicons name="add" size={18} color={Colors.text} />
+                </Pressable>
+              </View>
+              <Text style={styles.offsetHint}>
+                - = audio earlier / + = audio later
+              </Text>
+            </View>
           </View>
         </ScrollView>
       </Pressable>
@@ -504,5 +574,43 @@ const styles = StyleSheet.create({
   },
   tripleBtnTextActive: {
     color: Colors.accent,
+  },
+  offsetRow: {
+    flexDirection: "row",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: 8,
+  },
+  offsetBtn: {
+    width: 44,
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceLight,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  offsetBtnText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
+    color: Colors.text,
+  },
+  offsetResetBtn: {
+    borderColor: Colors.accentMuted,
+    backgroundColor: Colors.accentDim,
+    width: 52,
+  },
+  offsetResetText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 14,
+    color: Colors.accent,
+  },
+  offsetHint: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 10,
+    color: Colors.textTertiary,
+    textAlign: "center" as const,
+    letterSpacing: 0.5,
   },
 });

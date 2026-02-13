@@ -41,6 +41,7 @@ export class MetronomeEngine {
   private playHighClick: (() => void) | null = null;
   private playLowClick: (() => void) | null = null;
   private hapticMode: HapticMode = "all";
+  private audioOffsetMs: number = 0;
 
   setAudioCallbacks(playHigh: () => void, playLow: () => void) {
     this.playHighClick = playHigh;
@@ -49,6 +50,10 @@ export class MetronomeEngine {
 
   setHapticMode(mode: HapticMode) {
     this.hapticMode = mode;
+  }
+
+  setAudioOffsetMs(offset: number) {
+    this.audioOffsetMs = Math.max(-50, Math.min(50, offset));
   }
 
   setOnBeat(callback: (beat: number, isAccent: boolean) => void) {
@@ -168,7 +173,8 @@ export class MetronomeEngine {
     const isAccent = subBeatType === "accent";
     const isMute = subBeatType === "mute";
 
-    if (!isMute) {
+    const playAudio = () => {
+      if (isMute) return;
       try {
         if (isAccent) {
           this.playHighClick?.();
@@ -176,8 +182,10 @@ export class MetronomeEngine {
           this.playLowClick?.();
         }
       } catch (e) {}
+    };
 
-      if (Platform.OS !== "web" && this.hapticMode !== "off") {
+    const playHapticAndVisual = () => {
+      if (!isMute && Platform.OS !== "web" && this.hapticMode !== "off") {
         const shouldHaptic = this.hapticMode === "all" || (this.hapticMode === "accent" && isAccent);
         if (shouldHaptic) {
           try {
@@ -191,10 +199,21 @@ export class MetronomeEngine {
           } catch (e) {}
         }
       }
-    }
+      if (isMainBeat) {
+        this.onBeat?.(this.currentBeat, isAccent);
+      }
+    };
 
-    if (isMainBeat) {
-      this.onBeat?.(this.currentBeat, isAccent);
+    const offset = this.audioOffsetMs;
+    if (offset > 0) {
+      playHapticAndVisual();
+      setTimeout(playAudio, offset);
+    } else if (offset < 0) {
+      playAudio();
+      setTimeout(playHapticAndVisual, Math.abs(offset));
+    } else {
+      playAudio();
+      playHapticAndVisual();
     }
 
     this.currentSubBeat++;
