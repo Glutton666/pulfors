@@ -828,7 +828,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   themeScroll: {
-    flexDirection: "row",
+    flexDirection: "row-reverse",
     gap: 10,
     paddingVertical: 4,
     paddingHorizontal: 2,
