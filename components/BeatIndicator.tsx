@@ -71,8 +71,8 @@ function DialBeatDot({
 
   const handlePress = useCallback(() => {
     popScale.value = withSequence(
-      withTiming(0.85, { duration: 40, easing: Easing.out(Easing.quad) }),
-      withTiming(1, { duration: 100, easing: Easing.out(Easing.quad) })
+      withTiming(0.93, { duration: 30, easing: Easing.out(Easing.quad) }),
+      withTiming(1, { duration: 80, easing: Easing.out(Easing.quad) })
     );
     onPress();
   }, [onPress]);
