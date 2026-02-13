@@ -512,29 +512,21 @@ export function StopwatchTimer({
               size={14}
               color={handleStatusColor()}
             />
-            {!open && isActive && (
-              <View style={styles.handleMiniInfo}>
-                <Text style={[styles.handleMiniText, state === "finishing" && { color: Colors.danger }]}>
-                  {mode === "stopwatch"
-                    ? formatTime(elapsed).main
-                    : formatCountdown(remaining)}
-                </Text>
-                {mode === "timer" && (state === "running" || state === "finishing") && (
-                  <View style={styles.handleMiniBar}>
-                    <View
-                      style={[
-                        styles.handleMiniBarFill,
-                        {
-                          width: `${(timerDuration > 0 ? remaining / timerDuration : 1) * 100}%` as any,
-                          backgroundColor: state === "finishing" ? Colors.danger : Colors.accent,
-                        },
-                      ]}
-                    />
-                  </View>
-                )}
+            {!open && isActive && mode === "timer" && (state === "running" || state === "finishing") ? (
+              <View style={styles.handleVerticalBarContainer}>
+                <View
+                  style={[
+                    styles.handleVerticalBarFill,
+                    {
+                      height: `${(timerDuration > 0 ? remaining / timerDuration : 1) * 100}%` as any,
+                      backgroundColor: state === "finishing" ? Colors.danger : Colors.accent,
+                    },
+                  ]}
+                />
               </View>
+            ) : (
+              <View style={styles.handleLine} />
             )}
-            {(open || !isActive) && <View style={styles.handleLine} />}
           </Pressable>
         </Animated.View>
       </View>
@@ -955,26 +947,16 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     opacity: 0.8,
   },
-  handleMiniInfo: {
-    alignItems: "center",
-    gap: 2,
-  },
-  handleMiniText: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 7,
-    color: Colors.textSecondary,
-    letterSpacing: 0.5,
-    fontVariant: ["tabular-nums" as const],
-  },
-  handleMiniBar: {
-    width: 16,
-    height: 2,
-    borderRadius: 1,
+  handleVerticalBarContainer: {
+    width: 3,
+    height: 20,
+    borderRadius: 1.5,
     backgroundColor: Colors.surfaceLight,
     overflow: "hidden",
+    justifyContent: "flex-end",
   },
-  handleMiniBarFill: {
-    height: "100%",
-    borderRadius: 1,
+  handleVerticalBarFill: {
+    width: "100%",
+    borderRadius: 1.5,
   },
 });

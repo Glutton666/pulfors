@@ -174,12 +174,13 @@ export class MetronomeEngine {
       this.currentSubBeat = 0;
       const nextBeat = (this.currentBeat + 1) % this.beatsPerMeasure;
       if (nextBeat === 0) {
-        this.onMeasureComplete?.();
         if (this.stopAfterMeasure) {
           this.stopAfterMeasure = false;
           this.stop();
+          this.onMeasureComplete?.();
           return;
         }
+        this.onMeasureComplete?.();
       }
       this.currentBeat = nextBeat;
     }
