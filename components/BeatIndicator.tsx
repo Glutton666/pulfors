@@ -60,6 +60,14 @@ function DialBeatDot({
   const y = DIAL_RADIUS + DOT_RADIUS_FROM_CENTER * Math.sin(angle) - size / 2;
 
   const popScale = useSharedValue(1);
+  const beatScale = useSharedValue(1);
+  const beatBg = useSharedValue(
+    isMute ? "transparent" : isAccent ? Colors.accentMuted : Colors.textTertiary
+  );
+  const beatBorder = useSharedValue(
+    isMute ? Colors.textSecondary : "transparent"
+  );
+  const beatShadow = useSharedValue(0);
 
   const handlePress = useCallback(() => {
     popScale.value = withSequence(
@@ -69,83 +77,56 @@ function DialBeatDot({
     onPress();
   }, [onPress]);
 
-  const animatedStyle = useAnimatedStyle(() => {
-    const baseScale = popScale.value;
-
+  useEffect(() => {
     if (isMute) {
       if (isActive) {
-        return {
-          transform: [
-            {
-              scale:
-                baseScale *
-                withSequence(
-                  withTiming(1.15, {
-                    duration: 50,
-                    easing: Easing.out(Easing.quad),
-                  }),
-                  withTiming(1, {
-                    duration: 250,
-                    easing: Easing.out(Easing.elastic(1.5)),
-                  })
-                ),
-            },
-          ],
-          backgroundColor: withTiming("rgba(72, 79, 88, 0.35)", { duration: 50 }),
-          borderColor: withTiming(Colors.textSecondary, { duration: 50 }),
-          shadowOpacity: withSequence(
-            withTiming(0.3, { duration: 50 }),
-            withTiming(0, { duration: 400 })
-          ),
-        };
+        beatScale.value = withSequence(
+          withTiming(1.15, { duration: 50, easing: Easing.out(Easing.quad) }),
+          withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) })
+        );
+        beatBg.value = withTiming("rgba(72, 79, 88, 0.35)", { duration: 50 });
+        beatBorder.value = withTiming(Colors.textSecondary, { duration: 50 });
+        beatShadow.value = withSequence(
+          withTiming(0.3, { duration: 50 }),
+          withTiming(0, { duration: 300 })
+        );
+      } else {
+        beatScale.value = withTiming(1, { duration: 150 });
+        beatBg.value = withTiming("transparent", { duration: 150 });
+        beatBorder.value = withTiming(Colors.textSecondary, { duration: 150 });
+        beatShadow.value = withTiming(0, { duration: 150 });
       }
-      return {
-        transform: [{ scale: baseScale }],
-        backgroundColor: withTiming("transparent", { duration: 200 }),
-        borderColor: withTiming(Colors.textSecondary, { duration: 200 }),
-        shadowOpacity: withTiming(0, { duration: 200 }),
-      };
-    }
-
-    if (isActive) {
-      return {
-        transform: [
-          {
-            scale:
-              baseScale *
-              withSequence(
-                withTiming(1.25, {
-                  duration: 50,
-                  easing: Easing.out(Easing.quad),
-                }),
-                withTiming(1, {
-                  duration: 250,
-                  easing: Easing.out(Easing.elastic(1.5)),
-                })
-              ),
-          },
-        ],
-        backgroundColor: withTiming(
-          isAccent ? Colors.accent : Colors.text,
-          { duration: 50 }
-        ),
-        borderColor: withTiming("transparent", { duration: 50 }),
-        shadowOpacity: withSequence(
-          withTiming(1, { duration: 50 }),
-          withTiming(0, { duration: 400 })
-        ),
-      };
-    }
-    return {
-      transform: [{ scale: baseScale }],
-      backgroundColor: withTiming(
+    } else if (isActive) {
+      beatScale.value = withSequence(
+        withTiming(1.2, { duration: 50, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) })
+      );
+      beatBg.value = withTiming(
+        isAccent ? Colors.accent : Colors.text,
+        { duration: 50 }
+      );
+      beatBorder.value = withTiming("transparent", { duration: 50 });
+      beatShadow.value = withSequence(
+        withTiming(1, { duration: 50 }),
+        withTiming(0, { duration: 300 })
+      );
+    } else {
+      beatScale.value = withTiming(1, { duration: 150 });
+      beatBg.value = withTiming(
         isAccent ? Colors.accentMuted : Colors.textTertiary,
-        { duration: 200 }
-      ),
-      borderColor: withTiming("transparent", { duration: 200 }),
-      shadowOpacity: withTiming(0, { duration: 200 }),
-    };
+        { duration: 150 }
+      );
+      beatBorder.value = withTiming("transparent", { duration: 150 });
+      beatShadow.value = withTiming(0, { duration: 150 });
+    }
   }, [isActive, beatType]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: beatScale.value * popScale.value }],
+    backgroundColor: beatBg.value,
+    borderColor: beatBorder.value,
+    shadowOpacity: beatShadow.value,
+  }));
 
   return (
     <Pressable
