@@ -694,7 +694,7 @@ export function StopwatchTimer({
             style={({ pressed }) => [
               styles.handle,
               open && styles.handleOpen,
-              open && { borderColor: C.accent },
+              open && { borderColor: "transparent" },
               pressed && styles.handlePressed,
             ]}
             testID="panel-toggle"
