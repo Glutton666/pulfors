@@ -1,12 +1,15 @@
-import React, { createContext, useContext, useState, useMemo, useCallback, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Colors, { getColors, type ThemeColor } from "@/constants/colors";
 
 const THEME_KEY = "metronome_theme_color";
+const CUSTOM_HEX_KEY = "metronome_custom_hex";
 
 interface ThemeContextValue {
   themeColor: ThemeColor;
+  customHex: string;
   setThemeColor: (color: ThemeColor) => void;
+  setCustomHex: (hex: string) => void;
   colors: typeof Colors;
 }
 
@@ -18,17 +21,36 @@ export function ThemeProvider({
   children: ReactNode;
 }) {
   const [themeColor, setThemeColorState] = useState<ThemeColor>("gold");
+  const [customHex, setCustomHexState] = useState<string>("#D4A846");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [saved, savedHex] = await Promise.all([
+          AsyncStorage.getItem(THEME_KEY),
+          AsyncStorage.getItem(CUSTOM_HEX_KEY),
+        ]);
+        if (saved) setThemeColorState(saved as ThemeColor);
+        if (savedHex) setCustomHexState(savedHex);
+      } catch {}
+    })();
+  }, []);
 
   const setThemeColor = useCallback((color: ThemeColor) => {
     setThemeColorState(color);
     AsyncStorage.setItem(THEME_KEY, color).catch(() => {});
   }, []);
 
-  const colors = useMemo(() => getColors(themeColor), [themeColor]);
+  const setCustomHex = useCallback((hex: string) => {
+    setCustomHexState(hex);
+    AsyncStorage.setItem(CUSTOM_HEX_KEY, hex).catch(() => {});
+  }, []);
+
+  const colors = useMemo(() => getColors(themeColor, customHex), [themeColor, customHex]);
 
   const value = useMemo(
-    () => ({ themeColor, setThemeColor, colors }),
-    [themeColor, setThemeColor, colors]
+    () => ({ themeColor, customHex, setThemeColor, setCustomHex, colors }),
+    [themeColor, customHex, setThemeColor, setCustomHex, colors]
   );
 
   return (

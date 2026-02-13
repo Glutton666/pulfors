@@ -1,4 +1,4 @@
-export type ThemeColor = "gold" | "blue" | "green" | "red" | "purple" | "cyan" | "orange" | "pink";
+export type ThemeColor = "gold" | "blue" | "green" | "red" | "purple" | "cyan" | "orange" | "pink" | "custom";
 
 export interface AccentColors {
   accent: string;
@@ -6,7 +6,7 @@ export interface AccentColors {
   accentMuted: string;
 }
 
-const ACCENT_PRESETS: Record<ThemeColor, AccentColors> = {
+const ACCENT_PRESETS: Record<Exclude<ThemeColor, "custom">, AccentColors> = {
   gold: {
     accent: "#D4A846",
     accentDim: "rgba(212, 168, 70, 0.15)",
@@ -51,6 +51,24 @@ const ACCENT_PRESETS: Record<ThemeColor, AccentColors> = {
 
 export { ACCENT_PRESETS };
 
+export function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = hex.replace("#", "");
+  return {
+    r: parseInt(h.substring(0, 2), 16),
+    g: parseInt(h.substring(2, 4), 16),
+    b: parseInt(h.substring(4, 6), 16),
+  };
+}
+
+export function accentFromHex(hex: string): AccentColors {
+  const { r, g, b } = hexToRgb(hex);
+  return {
+    accent: hex,
+    accentDim: `rgba(${r}, ${g}, ${b}, 0.15)`,
+    accentMuted: `rgba(${r}, ${g}, ${b}, 0.4)`,
+  };
+}
+
 const Colors = {
   background: "#0D1117",
   surface: "#161B22",
@@ -67,8 +85,12 @@ const Colors = {
   white: "#FFFFFF",
 };
 
-export function getColors(theme: ThemeColor) {
-  const preset = ACCENT_PRESETS[theme];
+export function getColors(theme: ThemeColor, customHex?: string) {
+  if (theme === "custom" && customHex) {
+    const custom = accentFromHex(customHex);
+    return { ...Colors, ...custom };
+  }
+  const preset = ACCENT_PRESETS[theme === "custom" ? "gold" : theme];
   return {
     ...Colors,
     accent: preset.accent,

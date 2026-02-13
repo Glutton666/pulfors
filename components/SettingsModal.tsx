@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from "react";
+import React, { useRef, useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -10,15 +10,17 @@ import {
   LayoutChangeEvent,
   ScrollView,
   Switch,
+  TextInput,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import Colors, { ACCENT_PRESETS, type ThemeColor } from "@/constants/colors";
+import Colors, { ACCENT_PRESETS, accentFromHex, type ThemeColor } from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import type { FlashMode, HapticMode, SoundSet } from "@/lib/storage";
 
-const THEME_OPTIONS: { value: ThemeColor; label: string; color: string }[] = [
+const PRESET_COLORS: { value: Exclude<ThemeColor, "custom">; label: string; color: string }[] = [
   { value: "gold", label: "Gold", color: ACCENT_PRESETS.gold.accent },
   { value: "blue", label: "Blue", color: ACCENT_PRESETS.blue.accent },
   { value: "green", label: "Green", color: ACCENT_PRESETS.green.accent },
@@ -27,6 +29,12 @@ const THEME_OPTIONS: { value: ThemeColor; label: string; color: string }[] = [
   { value: "cyan", label: "Cyan", color: ACCENT_PRESETS.cyan.accent },
   { value: "orange", label: "Orange", color: ACCENT_PRESETS.orange.accent },
   { value: "pink", label: "Pink", color: ACCENT_PRESETS.pink.accent },
+];
+
+const HUE_COLORS = [
+  "#FF0000", "#FF8000", "#FFFF00", "#80FF00",
+  "#00FF00", "#00FF80", "#00FFFF", "#0080FF",
+  "#0000FF", "#8000FF", "#FF00FF", "#FF0080", "#FF0000",
 ];
 
 interface SettingsModalProps {
@@ -116,8 +124,12 @@ export function SettingsModal({
   audioOffsetMs,
   onAudioOffsetChange,
 }: SettingsModalProps) {
-  const { themeColor, setThemeColor, colors: C } = useTheme();
+  const { themeColor, customHex, setThemeColor, setCustomHex, colors: C } = useTheme();
   const insets = useSafeAreaInsets();
+  const [showCustomPicker, setShowCustomPicker] = useState(themeColor === "custom");
+  const [hexInput, setHexInput] = useState(customHex);
+  const hueTrackRef = useRef<View>(null);
+  const hueTrackWidthRef = useRef(0);
   const trackWidthRef = useRef(0);
   const trackLeftRef = useRef(0);
   const lastHapticRef = useRef(volume);
@@ -205,6 +217,89 @@ export function SettingsModal({
     [updateVolumeFromX]
   );
 
+  const hueFromPosition = useCallback((ratio: number): string => {
+    const r = Math.max(0, Math.min(1, ratio));
+    const segment = r * (HUE_COLORS.length - 1);
+    const idx = Math.floor(segment);
+    const t = segment - idx;
+    const c1 = HUE_COLORS[Math.min(idx, HUE_COLORS.length - 1)];
+    const c2 = HUE_COLORS[Math.min(idx + 1, HUE_COLORS.length - 1)];
+    const r1 = parseInt(c1.slice(1, 3), 16), g1 = parseInt(c1.slice(3, 5), 16), b1 = parseInt(c1.slice(5, 7), 16);
+    const r2 = parseInt(c2.slice(1, 3), 16), g2 = parseInt(c2.slice(3, 5), 16), b2 = parseInt(c2.slice(5, 7), 16);
+    const rr = Math.round(r1 + (r2 - r1) * t);
+    const gg = Math.round(g1 + (g2 - g1) * t);
+    const bb = Math.round(b1 + (b2 - b1) * t);
+    return `#${rr.toString(16).padStart(2, "0")}${gg.toString(16).padStart(2, "0")}${bb.toString(16).padStart(2, "0")}`.toUpperCase();
+  }, []);
+
+  const updateHueFromX = useCallback(
+    (pageX: number) => {
+      const w = hueTrackWidthRef.current;
+      if (w <= 0) return;
+      if (hueTrackRef.current) {
+        (hueTrackRef.current as any).measureInWindow?.((x: number) => {
+          const relX = pageX - x;
+          const ratio = Math.max(0, Math.min(1, relX / w));
+          const hex = hueFromPosition(ratio);
+          setCustomHex(hex);
+          setHexInput(hex);
+          setThemeColor("custom");
+          setShowCustomPicker(true);
+        });
+      }
+    },
+    [hueFromPosition, setCustomHex, setThemeColor]
+  );
+
+  const huePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => { updateHueFromX(e.nativeEvent.pageX); },
+      onPanResponderMove: (e) => { updateHueFromX(e.nativeEvent.pageX); },
+      onPanResponderRelease: () => {},
+    })
+  ).current;
+
+  const handleHueWebMouse = useCallback(
+    (e: any) => {
+      if (Platform.OS !== "web") return;
+      const el = e.currentTarget as HTMLElement;
+      const rect = el.getBoundingClientRect();
+      const w = rect.width;
+      const doUpdate = (pageX: number) => {
+        const relX = pageX - rect.left;
+        const ratio = Math.max(0, Math.min(1, relX / w));
+        const hex = hueFromPosition(ratio);
+        setCustomHex(hex);
+        setHexInput(hex);
+        setThemeColor("custom");
+        setShowCustomPicker(true);
+      };
+      doUpdate(e.nativeEvent.clientX);
+      const handleMove = (me: MouseEvent) => { doUpdate(me.clientX); };
+      const handleUp = () => {
+        document.removeEventListener("mousemove", handleMove);
+        document.removeEventListener("mouseup", handleUp);
+      };
+      document.addEventListener("mousemove", handleMove);
+      document.addEventListener("mouseup", handleUp);
+    },
+    [hueFromPosition, setCustomHex, setThemeColor]
+  );
+
+  const handleHexSubmit = useCallback(() => {
+    let h = hexInput.trim();
+    if (!h.startsWith("#")) h = "#" + h;
+    if (/^#[0-9A-Fa-f]{6}$/.test(h)) {
+      setCustomHex(h.toUpperCase());
+      setThemeColor("custom");
+      setShowCustomPicker(true);
+    } else {
+      setHexInput(customHex);
+    }
+  }, [hexInput, customHex, setCustomHex, setThemeColor]);
+
   const volumeIcon =
     volume === 0
       ? "volume-off"
@@ -251,8 +346,12 @@ export function SettingsModal({
                 <Ionicons name="color-palette-outline" size={18} color={C.accent} />
                 <Text style={styles.sectionLabel}>Theme Color</Text>
               </View>
-              <View style={styles.themeGrid}>
-                {THEME_OPTIONS.map((opt) => {
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.themeScroll}
+              >
+                {PRESET_COLORS.map((opt) => {
                   const active = themeColor === opt.value;
                   return (
                     <Pressable
@@ -260,21 +359,20 @@ export function SettingsModal({
                       testID={`theme-${opt.value}`}
                       onPress={() => {
                         setThemeColor(opt.value);
+                        setShowCustomPicker(false);
                         if (Platform.OS !== "web") {
                           Haptics.selectionAsync();
                         }
                       }}
-                      style={({ pressed }) => [
+                      style={[
                         styles.themeChip,
                         active && { borderColor: opt.color },
-                        pressed && { opacity: 0.7 },
                       ]}
                     >
                       <View
                         style={[
                           styles.themeDot,
                           { backgroundColor: opt.color },
-                          active && styles.themeDotActive,
                         ]}
                       />
                       {active && (
@@ -283,7 +381,64 @@ export function SettingsModal({
                     </Pressable>
                   );
                 })}
-              </View>
+                <Pressable
+                  testID="theme-custom"
+                  onPress={() => {
+                    setShowCustomPicker(true);
+                    setThemeColor("custom");
+                    if (Platform.OS !== "web") {
+                      Haptics.selectionAsync();
+                    }
+                  }}
+                  style={[
+                    styles.themeChip,
+                    styles.customChip,
+                    themeColor === "custom" && { borderColor: customHex },
+                  ]}
+                >
+                  {themeColor === "custom" ? (
+                    <>
+                      <View style={[styles.themeDot, { backgroundColor: customHex }]} />
+                      <Ionicons name="checkmark" size={10} color={Colors.white} style={styles.themeCheck} />
+                    </>
+                  ) : (
+                    <Ionicons name="color-wand-outline" size={18} color={Colors.textSecondary} />
+                  )}
+                </Pressable>
+              </ScrollView>
+              {showCustomPicker && (
+                <View style={styles.customPickerContainer}>
+                  <View
+                    ref={hueTrackRef}
+                    style={styles.hueTrackWrapper}
+                    onLayout={(e) => { hueTrackWidthRef.current = e.nativeEvent.layout.width; }}
+                    {...(Platform.OS !== "web" ? huePanResponder.panHandlers : {})}
+                    {...(Platform.OS === "web" ? { onMouseDown: handleHueWebMouse } as any : {})}
+                  >
+                    <LinearGradient
+                      colors={HUE_COLORS as any}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.hueTrack}
+                    />
+                    <View style={[styles.hueThumb, { backgroundColor: customHex, borderColor: Colors.white }]} />
+                  </View>
+                  <View style={styles.hexRow}>
+                    <View style={[styles.hexPreview, { backgroundColor: customHex }]} />
+                    <TextInput
+                      style={[styles.hexInput, { borderColor: C.accent }]}
+                      value={hexInput}
+                      onChangeText={setHexInput}
+                      onBlur={handleHexSubmit}
+                      onSubmitEditing={handleHexSubmit}
+                      placeholder="#FFFFFF"
+                      placeholderTextColor={Colors.textTertiary}
+                      maxLength={7}
+                      autoCapitalize="characters"
+                    />
+                  </View>
+                </View>
+              )}
             </View>
 
             <View style={styles.divider} />
@@ -672,11 +827,11 @@ const styles = StyleSheet.create({
     textAlign: "center" as const,
     letterSpacing: 0.5,
   },
-  themeGrid: {
+  themeScroll: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 10,
-    justifyContent: "center",
+    paddingVertical: 4,
+    paddingHorizontal: 2,
   },
   themeChip: {
     width: 36,
@@ -687,17 +842,69 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  customChip: {
+    borderStyle: "dashed" as any,
+  },
   themeDot: {
     width: 24,
     height: 24,
     borderRadius: 12,
   },
-  themeDotActive: {
+  themeCheck: {
+    position: "absolute",
+  },
+  customPickerContainer: {
+    marginTop: 14,
+    gap: 12,
+  },
+  hueTrackWrapper: {
+    height: 32,
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  hueTrack: {
+    height: 14,
+    borderRadius: 7,
+  },
+  hueThumb: {
+    position: "absolute",
     width: 22,
     height: 22,
     borderRadius: 11,
+    borderWidth: 3,
+    left: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.4,
+        shadowRadius: 3,
+      },
+      android: { elevation: 4 },
+      web: { boxShadow: "0 2px 6px rgba(0,0,0,0.4)" },
+    }),
   },
-  themeCheck: {
-    position: "absolute",
+  hexRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  hexPreview: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  hexInput: {
+    flex: 1,
+    height: 36,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 14,
+    color: Colors.text,
+    backgroundColor: Colors.surfaceLight,
   },
 });
