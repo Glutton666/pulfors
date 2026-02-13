@@ -121,7 +121,7 @@ function DialBeatDot({
       beatBorder.value = withTiming("transparent", { duration: 150 });
       beatShadow.value = withTiming(0, { duration: 150 });
     }
-  }, [isActive, beatType]);
+  }, [isActive, beatType, C.accent, C.accentMuted]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: beatScale.value * popScale.value }],
