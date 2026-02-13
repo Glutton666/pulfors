@@ -511,28 +511,38 @@ export function StopwatchTimer({
             testID="panel-toggle"
           >
             <Animated.View style={[styles.handleGlow, handleGlowStyle]} />
-            {(!isActive || open || mode !== "timer" || (state !== "running" && state !== "finishing")) && (
-              <View style={styles.handleLine} />
-            )}
-            <MaterialCommunityIcons
-              name={handleStatusIcon()}
-              size={14}
-              color={handleStatusColor()}
-            />
             {!open && isActive && mode === "timer" && (state === "running" || state === "finishing") ? (
-              <View style={styles.handleVerticalBarContainer}>
+              <View style={styles.thermometer}>
+                <View style={styles.thermoTube}>
+                  <View
+                    style={[
+                      styles.thermoFill,
+                      {
+                        height: `${(timerDuration > 0 ? remaining / timerDuration : 1) * 100}%` as any,
+                        backgroundColor: state === "finishing" ? Colors.danger : Colors.accent,
+                      },
+                    ]}
+                  />
+                </View>
                 <View
                   style={[
-                    styles.handleVerticalBarFill,
+                    styles.thermoBulb,
                     {
-                      height: `${(timerDuration > 0 ? remaining / timerDuration : 1) * 100}%` as any,
                       backgroundColor: state === "finishing" ? Colors.danger : Colors.accent,
                     },
                   ]}
                 />
               </View>
             ) : (
-              <View style={styles.handleLine} />
+              <>
+                <View style={styles.handleLine} />
+                <MaterialCommunityIcons
+                  name={handleStatusIcon()}
+                  size={14}
+                  color={handleStatusColor()}
+                />
+                <View style={styles.handleLine} />
+              </>
             )}
           </Pressable>
         </Animated.View>
@@ -954,16 +964,30 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     opacity: 0.8,
   },
-  handleVerticalBarContainer: {
-    width: 3,
-    height: 32,
-    borderRadius: 1.5,
+  thermometer: {
+    alignItems: "center",
+    gap: 0,
+  },
+  thermoTube: {
+    width: 4,
+    height: 48,
+    borderTopLeftRadius: 2,
+    borderTopRightRadius: 2,
     backgroundColor: Colors.surfaceLight,
     overflow: "hidden",
     justifyContent: "flex-end",
+    marginBottom: -3,
+    zIndex: 0,
   },
-  handleVerticalBarFill: {
+  thermoFill: {
     width: "100%",
-    borderRadius: 1.5,
+    borderTopLeftRadius: 2,
+    borderTopRightRadius: 2,
+  },
+  thermoBulb: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    zIndex: 1,
   },
 });
