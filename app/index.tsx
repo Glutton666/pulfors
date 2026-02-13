@@ -85,22 +85,39 @@ export default function MetronomeScreen() {
   const dialRef = useRef<View>(null);
   const dialCenterRef = useRef({ x: 0, y: 0 });
 
-  const currentSounds = soundSets[soundSet] || soundSets.classic;
-  const highPlayerA = useAudioPlayer(currentSounds.high);
-  const highPlayerB = useAudioPlayer(currentSounds.high);
-  const lowPlayerA = useAudioPlayer(currentSounds.low);
-  const lowPlayerB = useAudioPlayer(currentSounds.low);
+  const classicHighA = useAudioPlayer(soundSets.classic.high);
+  const classicHighB = useAudioPlayer(soundSets.classic.high);
+  const classicLowA = useAudioPlayer(soundSets.classic.low);
+  const classicLowB = useAudioPlayer(soundSets.classic.low);
+
+  const woodblockHighA = useAudioPlayer(soundSets.woodblock.high);
+  const woodblockHighB = useAudioPlayer(soundSets.woodblock.high);
+  const woodblockLowA = useAudioPlayer(soundSets.woodblock.low);
+  const woodblockLowB = useAudioPlayer(soundSets.woodblock.low);
+
+  const digitalHighA = useAudioPlayer(soundSets.digital.high);
+  const digitalHighB = useAudioPlayer(soundSets.digital.high);
+  const digitalLowA = useAudioPlayer(soundSets.digital.low);
+  const digitalLowB = useAudioPlayer(soundSets.digital.low);
+
+  const rimshotHighA = useAudioPlayer(soundSets.rimshot.high);
+  const rimshotHighB = useAudioPlayer(soundSets.rimshot.high);
+  const rimshotLowA = useAudioPlayer(soundSets.rimshot.low);
+  const rimshotLowB = useAudioPlayer(soundSets.rimshot.low);
+
+  const allPlayers = useMemo(() => ({
+    classic: { highA: classicHighA, highB: classicHighB, lowA: classicLowA, lowB: classicLowB },
+    woodblock: { highA: woodblockHighA, highB: woodblockHighB, lowA: woodblockLowA, lowB: woodblockLowB },
+    digital: { highA: digitalHighA, highB: digitalHighB, lowA: digitalLowA, lowB: digitalLowB },
+    rimshot: { highA: rimshotHighA, highB: rimshotHighB, lowA: rimshotLowA, lowB: rimshotLowB },
+  }), [classicHighA, classicHighB, classicLowA, classicLowB, woodblockHighA, woodblockHighB, woodblockLowA, woodblockLowB, digitalHighA, digitalHighB, digitalLowA, digitalLowB, rimshotHighA, rimshotHighB, rimshotLowA, rimshotLowB]);
+
   const highToggle = useRef(false);
   const lowToggle = useRef(false);
-  const highRefA = useRef(highPlayerA);
-  const highRefB = useRef(highPlayerB);
-  const lowRefA = useRef(lowPlayerA);
-  const lowRefB = useRef(lowPlayerB);
-
-  useEffect(() => { highRefA.current = highPlayerA; }, [highPlayerA]);
-  useEffect(() => { highRefB.current = highPlayerB; }, [highPlayerB]);
-  useEffect(() => { lowRefA.current = lowPlayerA; }, [lowPlayerA]);
-  useEffect(() => { lowRefB.current = lowPlayerB; }, [lowPlayerB]);
+  const soundSetRef = useRef(soundSet);
+  useEffect(() => { soundSetRef.current = soundSet; }, [soundSet]);
+  const allPlayersRef = useRef(allPlayers);
+  useEffect(() => { allPlayersRef.current = allPlayers; }, [allPlayers]);
 
   const flashOpacity = useSharedValue(0);
 
@@ -115,7 +132,8 @@ export default function MetronomeScreen() {
     engine.setAudioCallbacks(
       () => {
         try {
-          const p = highToggle.current ? highRefB.current : highRefA.current;
+          const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
+          const p = highToggle.current ? players.highB : players.highA;
           highToggle.current = !highToggle.current;
           p.seekTo(0);
           p.play();
@@ -123,7 +141,8 @@ export default function MetronomeScreen() {
       },
       () => {
         try {
-          const p = lowToggle.current ? lowRefB.current : lowRefA.current;
+          const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
+          const p = lowToggle.current ? players.lowB : players.lowA;
           lowToggle.current = !lowToggle.current;
           p.seekTo(0);
           p.play();
@@ -192,12 +211,14 @@ export default function MetronomeScreen() {
 
   useEffect(() => {
     try {
-      highPlayerA.volume = volume;
-      highPlayerB.volume = volume;
-      lowPlayerA.volume = volume;
-      lowPlayerB.volume = volume;
+      Object.values(allPlayers).forEach((set) => {
+        set.highA.volume = volume;
+        set.highB.volume = volume;
+        set.lowA.volume = volume;
+        set.lowB.volume = volume;
+      });
     } catch (e) {}
-  }, [volume, highPlayerA, highPlayerB, lowPlayerA, lowPlayerB]);
+  }, [volume, allPlayers]);
 
   const persistSettings = useCallback(
     (overrides: Record<string, any> = {}) => {
