@@ -4,6 +4,8 @@ import {
   Text,
   StyleSheet,
   Platform,
+  Pressable,
+  Modal,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,6 +19,7 @@ import Animated, {
 import { useAudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons, Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import {
   MetronomeEngine,
@@ -33,6 +36,7 @@ import {
 import { BpmSlider } from "@/components/BpmSlider";
 import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
+import { SettingsModal } from "@/components/SettingsModal";
 
 function getTempoLabel(bpm: number): string {
   if (bpm < 40) return "Grave";
@@ -69,6 +73,8 @@ export default function MetronomeScreen() {
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
   const [dropTargetBeat, setDropTargetBeat] = useState<number | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [volume, setVolume] = useState(0.8);
+  const [showSettings, setShowSettings] = useState(false);
 
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -133,6 +139,9 @@ export default function MetronomeScreen() {
         setBeatSubdivisions(settings.beatSubdivisions);
         engine.setAllBeatSubdivisions(settings.beatSubdivisions);
       }
+      if (settings.volume !== undefined) {
+        setVolume(settings.volume);
+      }
 
       setIsLoaded(true);
     });
@@ -157,12 +166,37 @@ export default function MetronomeScreen() {
     });
   }, [flashOpacity]);
 
+  useEffect(() => {
+    try {
+      highPlayerA.volume = volume;
+      highPlayerB.volume = volume;
+      lowPlayerA.volume = volume;
+      lowPlayerB.volume = volume;
+    } catch (e) {}
+  }, [volume, highPlayerA, highPlayerB, lowPlayerA, lowPlayerB]);
+
+  const updateVolume = useCallback(
+    (newVolume: number) => {
+      setVolume(newVolume);
+      saveSettings({
+        bpm,
+        beatsPerMeasure,
+        subdivisions: 1,
+        subdivisionPattern,
+        beatSubdivisions,
+        volume: newVolume,
+      });
+    },
+    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions]
+  );
+
   const persistSettings = useCallback(
     (overrides: Partial<{
       bpm: number;
       beatsPerMeasure: number;
       subdivisionPattern: BeatType[];
       beatSubdivisions: Record<string, BeatType[]>;
+      volume: number;
     }> = {}) => {
       const current = {
         bpm,
@@ -170,11 +204,12 @@ export default function MetronomeScreen() {
         subdivisions: 1,
         subdivisionPattern,
         beatSubdivisions,
+        volume,
         ...overrides,
       };
       saveSettings(current);
     },
-    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions]
+    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume]
   );
 
   const updateBpm = useCallback(
@@ -490,6 +525,25 @@ export default function MetronomeScreen() {
         ]}
       />
 
+      <Pressable
+        style={[
+          styles.settingsButton,
+          { top: (insets.top || webTopInset) + 12 },
+        ]}
+        onPress={() => setShowSettings(true)}
+        hitSlop={8}
+        testID="settings-button"
+      >
+        <Ionicons name="settings-outline" size={22} color={Colors.textSecondary} />
+      </Pressable>
+
+      <SettingsModal
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
+        volume={volume}
+        onVolumeChange={updateVolume}
+      />
+
       <View
         style={[
           styles.content,
@@ -574,5 +628,18 @@ const styles = StyleSheet.create({
     color: Colors.accentMuted,
     letterSpacing: 3,
     textTransform: "uppercase",
+  },
+  settingsButton: {
+    position: "absolute",
+    right: 20,
+    zIndex: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

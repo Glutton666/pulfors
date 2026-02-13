@@ -9,6 +9,7 @@ export interface MetronomeSettings {
   subdivisions: number;
   subdivisionPattern?: BeatType[];
   beatSubdivisions?: Record<string, BeatType[]>;
+  volume?: number;
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
@@ -17,6 +18,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   subdivisions: 1,
   subdivisionPattern: ["accent"],
   beatSubdivisions: {},
+  volume: 0.8,
 };
 
 export async function loadSettings(): Promise<MetronomeSettings> {
