@@ -75,17 +75,21 @@ export default function MetronomeScreen() {
   const dialRef = useRef<View>(null);
   const dialCenterRef = useRef({ x: 0, y: 0 });
 
-  const highPlayer = useAudioPlayer(highClickSource);
-  const lowPlayer = useAudioPlayer(lowClickSource);
-  const highPlayerRef = useRef(highPlayer);
-  const lowPlayerRef = useRef(lowPlayer);
+  const highPlayerA = useAudioPlayer(highClickSource);
+  const highPlayerB = useAudioPlayer(highClickSource);
+  const lowPlayerA = useAudioPlayer(lowClickSource);
+  const lowPlayerB = useAudioPlayer(lowClickSource);
+  const highToggle = useRef(false);
+  const lowToggle = useRef(false);
+  const highRefA = useRef(highPlayerA);
+  const highRefB = useRef(highPlayerB);
+  const lowRefA = useRef(lowPlayerA);
+  const lowRefB = useRef(lowPlayerB);
 
-  useEffect(() => {
-    highPlayerRef.current = highPlayer;
-  }, [highPlayer]);
-  useEffect(() => {
-    lowPlayerRef.current = lowPlayer;
-  }, [lowPlayer]);
+  useEffect(() => { highRefA.current = highPlayerA; }, [highPlayerA]);
+  useEffect(() => { highRefB.current = highPlayerB; }, [highPlayerB]);
+  useEffect(() => { lowRefA.current = lowPlayerA; }, [lowPlayerA]);
+  useEffect(() => { lowRefB.current = lowPlayerB; }, [lowPlayerB]);
 
   const flashOpacity = useSharedValue(0);
 
@@ -100,14 +104,16 @@ export default function MetronomeScreen() {
     engine.setAudioCallbacks(
       () => {
         try {
-          const p = highPlayerRef.current;
+          const p = highToggle.current ? highRefB.current : highRefA.current;
+          highToggle.current = !highToggle.current;
           p.seekTo(0);
           p.play();
         } catch (e) {}
       },
       () => {
         try {
-          const p = lowPlayerRef.current;
+          const p = lowToggle.current ? lowRefB.current : lowRefA.current;
+          lowToggle.current = !lowToggle.current;
           p.seekTo(0);
           p.play();
         } catch (e) {}
