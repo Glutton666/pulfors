@@ -143,8 +143,11 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
           didDragRef.current = true;
           if (grantZoneRef.current !== "center") {
             clearLongPress();
+            return;
           }
         }
+
+        if (grantZoneRef.current !== "center") return;
 
         const sensitivity = 0.4;
         const rawDelta = gestureState.dx * sensitivity;
@@ -167,7 +170,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
           onBpmChangeRef.current(clampedBpm);
         }
       },
-      onPanResponderRelease: (e) => {
+      onPanResponderRelease: () => {
         translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
         isDragging.value = withTiming(0, { duration: 200 });
         glowIntensity.value = withTiming(0, { duration: 300 });
@@ -175,7 +178,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
         const wasLongPress = isLongPressActiveRef.current;
         clearLongPress();
 
-        if (!didDragRef.current && !wasLongPress) {
+        if (grantZoneRef.current === "center" && !didDragRef.current && !wasLongPress) {
           onTapTempoRef.current();
           tapFlash.value = withSequence(
             withTiming(1, { duration: 60 }),
@@ -192,85 +195,6 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
     })
   ).current;
 
-  const containerRef = useRef<View>(null);
-
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-
-    const el = containerRef.current as unknown as HTMLElement;
-    if (!el || !el.addEventListener) return;
-
-    let startX = 0;
-    let startBpm = 0;
-    let lastHaptic = 0;
-    let dragged = false;
-    let grantLocX = 0;
-
-    const handleMouseDown = (e: MouseEvent) => {
-      startX = e.clientX;
-      startBpm = currentBpmRef.current;
-      lastHaptic = currentBpmRef.current;
-      dragged = false;
-      isDragging.value = withTiming(1, { duration: 150 });
-      glowIntensity.value = withTiming(1, { duration: 200 });
-
-      const rect = el.getBoundingClientRect();
-      grantLocX = e.clientX - rect.left;
-
-      const zone = getZone(grantLocX);
-      const grantZone = zone;
-      if (zone === "left" || zone === "right") {
-        startLongPress(zone);
-      }
-
-      const handleMouseMove = (me: MouseEvent) => {
-        if (Math.abs(me.clientX - startX) > 5) {
-          dragged = true;
-          if (grantZone !== "center") {
-            clearLongPress();
-          }
-        }
-        const sensitivity = 0.4;
-        const rawDelta = (me.clientX - startX) * sensitivity;
-        const newBpm = Math.round(startBpm + rawDelta);
-        const clampedBpm = Math.max(20, Math.min(300, newBpm));
-        translateX.value = Math.max(-30, Math.min(30, (me.clientX - startX) * 0.08));
-        if (clampedBpm !== lastHaptic) {
-          lastHaptic = clampedBpm;
-          onBpmChangeRef.current(clampedBpm);
-        }
-      };
-
-      const handleMouseUp = () => {
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
-        translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
-        isDragging.value = withTiming(0, { duration: 200 });
-        glowIntensity.value = withTiming(0, { duration: 300 });
-
-        const wasLongPress = isLongPressActiveRef.current;
-        clearLongPress();
-
-        if (!dragged && !wasLongPress) {
-          onTapTempoRef.current();
-          tapFlash.value = withSequence(
-            withTiming(1, { duration: 60 }),
-            withTiming(0, { duration: 300, easing: Easing.out(Easing.quad) })
-          );
-        }
-      };
-
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-    };
-
-    el.addEventListener("mousedown", handleMouseDown);
-
-    return () => {
-      el.removeEventListener("mousedown", handleMouseDown);
-      clearLongPress();
-    };
-  }, [getZone, startLongPress, clearLongPress]);
 
   const containerAnimStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
@@ -292,7 +216,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
     opacity: rightGlow.value * 0.3,
   }));
 
-  const nativePanHandlers = Platform.OS !== "web" ? panResponder.panHandlers : {};
+  const panHandlers = panResponder.panHandlers;
 
   return (
     <View style={styles.wrapper}>
@@ -313,10 +237,9 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
         </View>
 
         <View
-          ref={containerRef}
           style={styles.dragZone}
           onLayout={onLayout}
-          {...nativePanHandlers}
+          {...panHandlers}
         >
           <View style={styles.zoneIndicators}>
             <View style={styles.zoneLeft}>
