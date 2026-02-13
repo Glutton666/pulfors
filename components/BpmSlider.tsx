@@ -181,20 +181,18 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
           <Animated.View style={[styles.glowLeft, leftGlowStyle]} />
           <Animated.View style={[styles.glowRight, rightGlowStyle]} />
 
-          <Text style={styles.bpmValue} testID="bpm-display">{bpm}</Text>
-          <Text style={styles.bpmUnit}>BPM</Text>
+          <View style={styles.bpmRow} pointerEvents="none">
+            <Feather name="minus" size={24} color={Colors.textSecondary} style={styles.bpmIcon} />
+            <View style={styles.bpmContent}>
+              <Text style={styles.bpmValue} testID="bpm-display">{bpm}</Text>
+              <Text style={styles.bpmUnit}>BPM</Text>
+            </View>
+            <Feather name="plus" size={24} color={Colors.textSecondary} style={styles.bpmIcon} />
+          </View>
 
           <View style={styles.zoneRow} pointerEvents="none">
-            <View style={styles.zoneEdge}>
-              <Feather name="minus" size={22} color={Colors.textSecondary} />
-            </View>
-            <View style={styles.zoneMid}>
-              <Feather name="activity" size={12} color={Colors.textTertiary} />
-              <Text style={styles.tapLabel}>TAP</Text>
-            </View>
-            <View style={styles.zoneEdge}>
-              <Feather name="plus" size={22} color={Colors.textSecondary} />
-            </View>
+            <Feather name="activity" size={12} color={Colors.textTertiary} />
+            <Text style={styles.tapLabel}>TAP</Text>
           </View>
 
           <View style={styles.ticks} pointerEvents="none">
@@ -275,22 +273,26 @@ const styles = StyleSheet.create({
     letterSpacing: 4,
     marginTop: -4,
   },
-  zoneRow: {
-    flexDirection: "row",
-    alignSelf: "stretch",
-    marginTop: 8,
-  },
-  zoneEdge: {
-    flex: 1,
-    alignItems: "center",
-    opacity: 0.5,
-  },
-  zoneMid: {
-    flex: 1,
+  bpmRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 3,
+    alignSelf: "stretch",
+    paddingHorizontal: 8,
+  },
+  bpmContent: {
+    alignItems: "center",
+    flex: 1,
+  },
+  bpmIcon: {
+    opacity: 0.5,
+  },
+  zoneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    marginTop: 4,
     opacity: 0.4,
   },
   tapLabel: {
