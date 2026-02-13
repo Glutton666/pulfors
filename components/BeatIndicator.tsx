@@ -421,9 +421,17 @@ export function BeatIndicator({
         </View>
 
         <View style={styles.centerArea} pointerEvents="box-none">
-          <Text style={styles.digitalSignature}>
-            {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}
-          </Text>
+          <View style={styles.signatureRow} pointerEvents="none">
+            <Text style={styles.digitalSignature} numberOfLines={1}>
+              {beatsPerMeasure}
+            </Text>
+            <Text style={styles.digitalSignatureSlash} numberOfLines={1}>
+              /
+            </Text>
+            <Text style={styles.digitalSignature} numberOfLines={1}>
+              {beatsPerMeasure <= 4 ? "4" : "8"}
+            </Text>
+          </View>
 
           <Animated.View
             style={[
@@ -491,13 +499,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  signatureRow: {
+    position: "absolute",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   digitalSignature: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 83,
     color: Colors.textTertiary,
-    letterSpacing: 4,
     opacity: 0.15,
-    position: "absolute",
+  },
+  digitalSignatureSlash: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 70,
+    color: Colors.textTertiary,
+    opacity: 0.15,
+    marginHorizontal: -2,
   },
   centerGlow: {
     position: "absolute",
