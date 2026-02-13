@@ -368,6 +368,13 @@ export default function MetronomeScreen() {
     }
   }, [isPlaying]);
 
+  const startMetronome = useCallback(() => {
+    const engine = engineRef.current;
+    if (!engine || isPlaying) return;
+    engine.start();
+    setIsPlaying(true);
+  }, [isPlaying]);
+
   useEffect(() => {
     const engine = engineRef.current;
     if (!engine) return;
@@ -690,6 +697,7 @@ export default function MetronomeScreen() {
       <StopwatchTimer
         onTimerExpired={handleTimerExpired}
         onStopRequested={handleTimerExpired}
+        onStartMetronome={startMetronome}
         isMetronomePlaying={isPlaying}
         topInset={insets.top || webTopInset}
       />

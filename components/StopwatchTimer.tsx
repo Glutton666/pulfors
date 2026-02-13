@@ -72,6 +72,7 @@ function formatCountdown(totalSeconds: number): string {
 interface StopwatchTimerProps {
   onTimerExpired: () => void;
   onStopRequested: () => void;
+  onStartMetronome: () => void;
   isMetronomePlaying: boolean;
   topInset: number;
 }
@@ -79,6 +80,7 @@ interface StopwatchTimerProps {
 export function StopwatchTimer({
   onTimerExpired,
   onStopRequested,
+  onStartMetronome,
   isMetronomePlaying,
   topInset,
 }: StopwatchTimerProps) {
@@ -281,7 +283,11 @@ export function StopwatchTimer({
     intervalRef.current = setInterval(() => {
       setElapsed(Date.now() - startTimeRef.current);
     }, 33);
-  }, [hapticFeedback]);
+    if (!isPlayingRef.current) {
+      onStartMetronome();
+    }
+    setOpen(false);
+  }, [hapticFeedback, onStartMetronome]);
 
   const pauseStopwatch = useCallback(() => {
     hapticFeedback();
@@ -314,6 +320,10 @@ export function StopwatchTimer({
     thermoBreakTop.value = 0;
     thermoBreakBottom.value = 0;
     thermoHeight.value = startRemaining / timerDuration;
+    if (!isPlayingRef.current) {
+      onStartMetronome();
+    }
+    setOpen(false);
     intervalRef.current = setInterval(() => {
       const el = Date.now() - startTimeRef.current + elapsedAtPauseRef.current;
       const leftSec = Math.max(0, startRemaining - Math.floor(el / 1000));
