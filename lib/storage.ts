@@ -3,6 +3,10 @@ import type { BeatType } from "./metronome-engine";
 
 const SETTINGS_KEY = "metronome_settings";
 
+export type FlashMode = "all" | "accent" | "off";
+export type HapticMode = "all" | "accent" | "off";
+export type SoundSet = "classic" | "woodblock" | "digital" | "rimshot";
+
 export interface MetronomeSettings {
   bpm: number;
   beatsPerMeasure: number;
@@ -10,6 +14,10 @@ export interface MetronomeSettings {
   subdivisionPattern?: BeatType[];
   beatSubdivisions?: Record<string, BeatType[]>;
   volume?: number;
+  backgroundPlay?: boolean;
+  soundSet?: SoundSet;
+  flashMode?: FlashMode;
+  hapticMode?: HapticMode;
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
@@ -19,6 +27,10 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   subdivisionPattern: ["accent"],
   beatSubdivisions: {},
   volume: 0.8,
+  backgroundPlay: false,
+  soundSet: "classic",
+  flashMode: "accent",
+  hapticMode: "all",
 };
 
 export async function loadSettings(): Promise<MetronomeSettings> {

@@ -2,6 +2,7 @@ import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
 
 export type BeatType = "accent" | "normal" | "mute";
+export type HapticMode = "all" | "accent" | "off";
 
 export const highClickSource = require("@/assets/sounds/click-high.wav");
 export const lowClickSource = require("@/assets/sounds/click-low.wav");
@@ -20,10 +21,15 @@ export class MetronomeEngine {
   private stopAfterMeasure = false;
   private playHighClick: (() => void) | null = null;
   private playLowClick: (() => void) | null = null;
+  private hapticMode: HapticMode = "all";
 
   setAudioCallbacks(playHigh: () => void, playLow: () => void) {
     this.playHighClick = playHigh;
     this.playLowClick = playLow;
+  }
+
+  setHapticMode(mode: HapticMode) {
+    this.hapticMode = mode;
   }
 
   setOnBeat(callback: (beat: number, isAccent: boolean) => void) {
@@ -152,16 +158,19 @@ export class MetronomeEngine {
         }
       } catch (e) {}
 
-      if (Platform.OS !== "web") {
-        try {
-          Haptics.impactAsync(
-            isAccent
-              ? Haptics.ImpactFeedbackStyle.Heavy
-              : isMainBeat
-              ? Haptics.ImpactFeedbackStyle.Light
-              : Haptics.ImpactFeedbackStyle.Soft
-          );
-        } catch (e) {}
+      if (Platform.OS !== "web" && this.hapticMode !== "off") {
+        const shouldHaptic = this.hapticMode === "all" || (this.hapticMode === "accent" && isAccent);
+        if (shouldHaptic) {
+          try {
+            Haptics.impactAsync(
+              isAccent
+                ? Haptics.ImpactFeedbackStyle.Heavy
+                : isMainBeat
+                ? Haptics.ImpactFeedbackStyle.Light
+                : Haptics.ImpactFeedbackStyle.Soft
+            );
+          } catch (e) {}
+        }
       }
     }
 
