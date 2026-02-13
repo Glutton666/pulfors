@@ -411,6 +411,11 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
 
   return (
     <View style={styles.wrapper}>
+      <View
+        ref={extendedTouchRef}
+        style={styles.extendedTouchZone}
+        {...(Platform.OS !== "web" ? extendedPanResponder.panHandlers : {})}
+      />
       <Animated.View style={[styles.glowBg, glowStyle]} />
       <Animated.View
         ref={containerRef}
