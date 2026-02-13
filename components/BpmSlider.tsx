@@ -139,15 +139,11 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
         }
       },
       onPanResponderMove: (_, gestureState) => {
-        if (grantZoneRef.current !== "center") {
-          if (Math.abs(gestureState.dx) > 10) {
-            clearLongPress();
-          }
-          return;
-        }
-
         if (Math.abs(gestureState.dx) > 5) {
           didDragRef.current = true;
+          if (grantZoneRef.current !== "center") {
+            clearLongPress();
+          }
         }
 
         const sensitivity = 0.4;
@@ -180,14 +176,11 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
         clearLongPress();
 
         if (!didDragRef.current && !wasLongPress) {
-          const zone = getZone(grantLocationXRef.current);
-          if (zone === "center") {
-            onTapTempoRef.current();
-            tapFlash.value = withSequence(
-              withTiming(1, { duration: 60 }),
-              withTiming(0, { duration: 300, easing: Easing.out(Easing.quad) })
-            );
-          }
+          onTapTempoRef.current();
+          tapFlash.value = withSequence(
+            withTiming(1, { duration: 60 }),
+            withTiming(0, { duration: 300, easing: Easing.out(Easing.quad) })
+          );
         }
       },
       onPanResponderTerminate: () => {
@@ -229,14 +222,11 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
       }
 
       const handleMouseMove = (me: MouseEvent) => {
-        if (grantZone !== "center") {
-          if (Math.abs(me.clientX - startX) > 10) {
-            clearLongPress();
-          }
-          return;
-        }
         if (Math.abs(me.clientX - startX) > 5) {
           dragged = true;
+          if (grantZone !== "center") {
+            clearLongPress();
+          }
         }
         const sensitivity = 0.4;
         const rawDelta = (me.clientX - startX) * sensitivity;
@@ -260,14 +250,11 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
         clearLongPress();
 
         if (!dragged && !wasLongPress) {
-          const zone = getZone(grantLocX);
-          if (zone === "center") {
-            onTapTempoRef.current();
-            tapFlash.value = withSequence(
-              withTiming(1, { duration: 60 }),
-              withTiming(0, { duration: 300, easing: Easing.out(Easing.quad) })
-            );
-          }
+          onTapTempoRef.current();
+          tapFlash.value = withSequence(
+            withTiming(1, { duration: 60 }),
+            withTiming(0, { duration: 300, easing: Easing.out(Easing.quad) })
+          );
         }
       };
 
@@ -323,6 +310,13 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
         translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
         isDragging.value = withTiming(0, { duration: 200 });
         glowIntensity.value = withTiming(0, { duration: 300 });
+        if (!didDragRef.current) {
+          onTapTempoRef.current();
+          tapFlash.value = withSequence(
+            withTiming(1, { duration: 60 }),
+            withTiming(0, { duration: 300, easing: Easing.out(Easing.quad) })
+          );
+        }
       },
       onPanResponderTerminate: () => {
         translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
@@ -343,15 +337,20 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
     let startX = 0;
     let startBpm = 0;
     let lastHaptic = 0;
+    let dragged = false;
 
     const handleMouseDown = (e: MouseEvent) => {
       startX = e.clientX;
       startBpm = currentBpmRef.current;
       lastHaptic = currentBpmRef.current;
+      dragged = false;
       isDragging.value = withTiming(1, { duration: 150 });
       glowIntensity.value = withTiming(1, { duration: 200 });
 
       const handleMouseMove = (me: MouseEvent) => {
+        if (Math.abs(me.clientX - startX) > 5) {
+          dragged = true;
+        }
         const sensitivity = 0.4;
         const rawDelta = (me.clientX - startX) * sensitivity;
         const newBpm = Math.round(startBpm + rawDelta);
@@ -369,6 +368,13 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
         translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
         isDragging.value = withTiming(0, { duration: 200 });
         glowIntensity.value = withTiming(0, { duration: 300 });
+        if (!dragged) {
+          onTapTempoRef.current();
+          tapFlash.value = withSequence(
+            withTiming(1, { duration: 60 }),
+            withTiming(0, { duration: 300, easing: Easing.out(Easing.quad) })
+          );
+        }
       };
 
       document.addEventListener("mousemove", handleMouseMove);
