@@ -420,9 +420,9 @@ const styles = StyleSheet.create({
   wrapper: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    justifyContent: "space-between",
     paddingVertical: 6,
-    paddingHorizontal: 10,
+    width: "100%",
     cursor: "grab" as any,
     userSelect: "none" as any,
   },
@@ -431,8 +431,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   cellsContainer: {
+    flex: 1,
     flexDirection: "row",
-    gap: CELL_GAP,
+    justifyContent: "space-evenly",
     alignItems: "center",
   },
   cell: {
