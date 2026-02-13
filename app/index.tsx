@@ -534,6 +534,7 @@ export default function MetronomeScreen() {
 
       <StopwatchTimer
         onTimerExpired={handleTimerExpired}
+        onStopRequested={handleTimerExpired}
         isMetronomePlaying={isPlaying}
         topInset={insets.top || webTopInset}
       />

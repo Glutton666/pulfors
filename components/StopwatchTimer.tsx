@@ -16,7 +16,6 @@ import Animated, {
   withTiming,
   withRepeat,
   withSequence,
-  withSpring,
   useSharedValue,
   runOnJS,
   Easing,
@@ -64,12 +63,14 @@ function formatCountdown(totalSeconds: number): string {
 
 interface StopwatchTimerProps {
   onTimerExpired: () => void;
+  onStopRequested: () => void;
   isMetronomePlaying: boolean;
   topInset: number;
 }
 
 export function StopwatchTimer({
   onTimerExpired,
+  onStopRequested,
   isMetronomePlaying,
   topInset,
 }: StopwatchTimerProps) {
@@ -92,9 +93,9 @@ export function StopwatchTimer({
 
   useEffect(() => {
     if (open) {
-      slideX.value = withSpring(0, { damping: 22, stiffness: 220 });
+      slideX.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) });
     } else {
-      slideX.value = withSpring(-PANEL_WIDTH, { damping: 22, stiffness: 220 });
+      slideX.value = withTiming(-PANEL_WIDTH, { duration: 180, easing: Easing.in(Easing.quad) });
     }
   }, [open]);
 
@@ -177,16 +178,16 @@ export function StopwatchTimer({
         ) => {
           if (gestureState.dx > SWIPE_THRESHOLD) {
             openPanel();
-            slideX.value = withSpring(0, { damping: 22, stiffness: 220 });
+            slideX.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) });
           } else if (gestureState.dx < -SWIPE_THRESHOLD) {
             closePanel();
-            slideX.value = withSpring(-PANEL_WIDTH, { damping: 22, stiffness: 220 });
+            slideX.value = withTiming(-PANEL_WIDTH, { duration: 180, easing: Easing.in(Easing.quad) });
           } else {
             const currentOpen = openRef.current;
             if (currentOpen) {
-              slideX.value = withSpring(0, { damping: 22, stiffness: 220 });
+              slideX.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) });
             } else {
-              slideX.value = withSpring(-PANEL_WIDTH, { damping: 22, stiffness: 220 });
+              slideX.value = withTiming(-PANEL_WIDTH, { duration: 180, easing: Easing.in(Easing.quad) });
             }
           }
         },
@@ -217,9 +218,9 @@ export function StopwatchTimer({
         ) => {
           if (gestureState.dx > SWIPE_THRESHOLD) {
             openPanel();
-            slideX.value = withSpring(0, { damping: 22, stiffness: 220 });
+            slideX.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) });
           } else {
-            slideX.value = withSpring(-PANEL_WIDTH, { damping: 22, stiffness: 220 });
+            slideX.value = withTiming(-PANEL_WIDTH, { duration: 180, easing: Easing.in(Easing.quad) });
           }
         },
       }),
@@ -250,10 +251,15 @@ export function StopwatchTimer({
 
   const pauseStopwatch = useCallback(() => {
     hapticFeedback();
-    clearTimerInterval();
-    elapsedAtPauseRef.current = Date.now() - startTimeRef.current;
-    setState("paused");
-  }, [hapticFeedback, clearTimerInterval]);
+    if (isMetronomePlaying) {
+      setState("finishing");
+      onStopRequested();
+    } else {
+      clearTimerInterval();
+      elapsedAtPauseRef.current = Date.now() - startTimeRef.current;
+      setState("paused");
+    }
+  }, [hapticFeedback, clearTimerInterval, isMetronomePlaying, onStopRequested]);
 
   const resetStopwatch = useCallback(() => {
     hapticFeedback();
@@ -305,10 +311,16 @@ export function StopwatchTimer({
 
   useEffect(() => {
     if (state === "finishing" && !isMetronomePlaying) {
-      setState("idle");
-      setRemaining(timerDuration);
+      if (mode === "stopwatch") {
+        clearTimerInterval();
+        elapsedAtPauseRef.current = Date.now() - startTimeRef.current;
+        setState("paused");
+      } else {
+        setState("idle");
+        setRemaining(timerDuration);
+      }
     }
-  }, [isMetronomePlaying, state, timerDuration]);
+  }, [isMetronomePlaying, state, timerDuration, mode, clearTimerInterval]);
 
   useEffect(() => {
     if (state === "running") {
@@ -500,7 +512,29 @@ export function StopwatchTimer({
               size={14}
               color={handleStatusColor()}
             />
-            <View style={styles.handleLine} />
+            {!open && isActive && (
+              <View style={styles.handleMiniInfo}>
+                <Text style={[styles.handleMiniText, state === "finishing" && { color: Colors.danger }]}>
+                  {mode === "stopwatch"
+                    ? formatTime(elapsed).main
+                    : formatCountdown(remaining)}
+                </Text>
+                {mode === "timer" && (state === "running" || state === "finishing") && (
+                  <View style={styles.handleMiniBar}>
+                    <View
+                      style={[
+                        styles.handleMiniBarFill,
+                        {
+                          width: `${(timerDuration > 0 ? remaining / timerDuration : 1) * 100}%` as any,
+                          backgroundColor: state === "finishing" ? Colors.danger : Colors.accent,
+                        },
+                      ]}
+                    />
+                  </View>
+                )}
+              </View>
+            )}
+            {(open || !isActive) && <View style={styles.handleLine} />}
           </Pressable>
         </Animated.View>
       </View>
@@ -512,12 +546,19 @@ export function StopwatchTimer({
     return (
       <View style={styles.displaySection}>
         <View style={styles.timeRow}>
+          {state === "finishing" && (
+            <Animated.View style={[styles.finishingDot, finishingStyle]} />
+          )}
           {state === "running" && (
             <Animated.View style={[styles.runningDot, runningDotStyle]} />
           )}
-          <Text style={styles.timeText}>{main}</Text>
-          <Text style={styles.fractionText}>{fraction}</Text>
+          <Text style={[styles.timeText, state === "finishing" && styles.finishingText]}>{main}</Text>
+          <Text style={[styles.fractionText, state === "finishing" && { color: Colors.danger }]}>{fraction}</Text>
         </View>
+
+        {state === "finishing" && (
+          <Text style={styles.finishingLabel}>completing measure...</Text>
+        )}
 
         <View style={styles.controlRow}>
           {state === "idle" && (
@@ -713,7 +754,7 @@ const styles = StyleSheet.create({
   },
   handle: {
     width: HANDLE_WIDTH,
-    height: HANDLE_HEIGHT,
+    minHeight: HANDLE_HEIGHT,
     backgroundColor: Colors.surface,
     borderTopRightRadius: 12,
     borderBottomRightRadius: 12,
@@ -722,8 +763,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 4,
     overflow: "hidden",
+    paddingVertical: 6,
   },
   handleOpen: {
     backgroundColor: Colors.surfaceLight,
@@ -912,5 +954,27 @@ const styles = StyleSheet.create({
     color: Colors.danger,
     letterSpacing: 1,
     opacity: 0.8,
+  },
+  handleMiniInfo: {
+    alignItems: "center",
+    gap: 2,
+  },
+  handleMiniText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 7,
+    color: Colors.textSecondary,
+    letterSpacing: 0.5,
+    fontVariant: ["tabular-nums" as const],
+  },
+  handleMiniBar: {
+    width: 16,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: Colors.surfaceLight,
+    overflow: "hidden",
+  },
+  handleMiniBarFill: {
+    height: "100%",
+    borderRadius: 1,
   },
 });
