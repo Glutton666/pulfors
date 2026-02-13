@@ -956,7 +956,7 @@ const styles = StyleSheet.create({
   },
   handleVerticalBarContainer: {
     width: 3,
-    height: 20,
+    height: 32,
     borderRadius: 1.5,
     backgroundColor: Colors.surfaceLight,
     overflow: "hidden",
