@@ -192,6 +192,8 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
     })
   ).current;
 
+  const containerRef = useRef<View>(null);
+
   useEffect(() => {
     if (Platform.OS !== "web") return;
 
@@ -270,123 +272,6 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
     };
   }, [getZone, startLongPress, clearLongPress]);
 
-  const extendedPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) =>
-        Math.abs(gestureState.dx) > 5,
-      onPanResponderGrant: () => {
-        startBpmRef.current = currentBpmRef.current;
-        lastHapticBpm.current = currentBpmRef.current;
-        didDragRef.current = false;
-        isDragging.value = withTiming(1, { duration: 150 });
-        glowIntensity.value = withTiming(1, { duration: 200 });
-        grantZoneRef.current = "center";
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (Math.abs(gestureState.dx) > 5) {
-          didDragRef.current = true;
-        }
-        const sensitivity = 0.4;
-        const rawDelta = gestureState.dx * sensitivity;
-        const newBpm = Math.round(startBpmRef.current + rawDelta);
-        const clampedBpm = Math.max(20, Math.min(300, newBpm));
-        translateX.value = Math.max(-30, Math.min(30, gestureState.dx * 0.08));
-        if (clampedBpm !== lastHapticBpm.current) {
-          if (Platform.OS !== "web") {
-            if (clampedBpm % 10 === 0) {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            } else if (clampedBpm % 5 === 0) {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            } else {
-              Haptics.selectionAsync();
-            }
-          }
-          lastHapticBpm.current = clampedBpm;
-          onBpmChangeRef.current(clampedBpm);
-        }
-      },
-      onPanResponderRelease: () => {
-        translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
-        isDragging.value = withTiming(0, { duration: 200 });
-        glowIntensity.value = withTiming(0, { duration: 300 });
-        if (!didDragRef.current) {
-          onTapTempoRef.current();
-          tapFlash.value = withSequence(
-            withTiming(1, { duration: 60 }),
-            withTiming(0, { duration: 300, easing: Easing.out(Easing.quad) })
-          );
-        }
-      },
-      onPanResponderTerminate: () => {
-        translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
-        isDragging.value = withTiming(0, { duration: 200 });
-        glowIntensity.value = withTiming(0, { duration: 300 });
-      },
-    })
-  ).current;
-
-  const containerRef = useRef<View>(null);
-  const extendedTouchRef = useRef<View>(null);
-
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    const el = extendedTouchRef.current as unknown as HTMLElement;
-    if (!el || !el.addEventListener) return;
-
-    let startX = 0;
-    let startBpm = 0;
-    let lastHaptic = 0;
-    let dragged = false;
-
-    const handleMouseDown = (e: MouseEvent) => {
-      startX = e.clientX;
-      startBpm = currentBpmRef.current;
-      lastHaptic = currentBpmRef.current;
-      dragged = false;
-      isDragging.value = withTiming(1, { duration: 150 });
-      glowIntensity.value = withTiming(1, { duration: 200 });
-
-      const handleMouseMove = (me: MouseEvent) => {
-        if (Math.abs(me.clientX - startX) > 5) {
-          dragged = true;
-        }
-        const sensitivity = 0.4;
-        const rawDelta = (me.clientX - startX) * sensitivity;
-        const newBpm = Math.round(startBpm + rawDelta);
-        const clampedBpm = Math.max(20, Math.min(300, newBpm));
-        translateX.value = Math.max(-30, Math.min(30, (me.clientX - startX) * 0.08));
-        if (clampedBpm !== lastHaptic) {
-          lastHaptic = clampedBpm;
-          onBpmChangeRef.current(clampedBpm);
-        }
-      };
-
-      const handleMouseUp = () => {
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
-        translateX.value = withSpring(0, { damping: 15, stiffness: 300 });
-        isDragging.value = withTiming(0, { duration: 200 });
-        glowIntensity.value = withTiming(0, { duration: 300 });
-        if (!dragged) {
-          onTapTempoRef.current();
-          tapFlash.value = withSequence(
-            withTiming(1, { duration: 60 }),
-            withTiming(0, { duration: 300, easing: Easing.out(Easing.quad) })
-          );
-        }
-      };
-
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-    };
-
-    el.addEventListener("mousedown", handleMouseDown);
-    return () => {
-      el.removeEventListener("mousedown", handleMouseDown);
-    };
-  }, []);
-
   const containerAnimStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
   }));
@@ -411,35 +296,14 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
 
   return (
     <View style={styles.wrapper}>
-      <View
-        ref={extendedTouchRef}
-        style={styles.extendedTouchZone}
-        {...(Platform.OS !== "web" ? extendedPanResponder.panHandlers : {})}
-      />
       <Animated.View style={[styles.glowBg, glowStyle]} />
       <Animated.View
-        ref={containerRef}
         style={[styles.container, containerAnimStyle]}
-        onLayout={onLayout}
-        {...nativePanHandlers}
         testID="bpm-slider"
       >
         <Animated.View style={[styles.tapFlashOverlay, tapFlashStyle]} />
         <Animated.View style={[styles.zoneGlowLeft, leftGlowStyle]} />
         <Animated.View style={[styles.zoneGlowRight, rightGlowStyle]} />
-
-        <View style={styles.zoneIndicators}>
-          <View style={styles.zoneLeft}>
-            <Feather name="minus" size={14} color={Colors.textTertiary} />
-          </View>
-          <View style={styles.zoneCenter}>
-            <Feather name="activity" size={10} color={Colors.textTertiary} />
-            <Text style={styles.tapText}>TAP</Text>
-          </View>
-          <View style={styles.zoneRight}>
-            <Feather name="plus" size={14} color={Colors.textTertiary} />
-          </View>
-        </View>
 
         <View style={styles.bpmContent}>
           <Text style={styles.bpmValue} testID="bpm-display">
@@ -448,17 +312,37 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
           <Text style={styles.bpmUnit}>BPM</Text>
         </View>
 
-        <View style={styles.tickTrack}>
-          {Array.from({ length: 29 }, (_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.tick,
-                i % 5 === 0 && styles.tickMajor,
-                i === 14 && styles.tickCenter,
-              ]}
-            />
-          ))}
+        <View
+          ref={containerRef}
+          style={styles.dragZone}
+          onLayout={onLayout}
+          {...nativePanHandlers}
+        >
+          <View style={styles.zoneIndicators}>
+            <View style={styles.zoneLeft}>
+              <Feather name="minus" size={14} color={Colors.textTertiary} />
+            </View>
+            <View style={styles.zoneCenter}>
+              <Feather name="activity" size={10} color={Colors.textTertiary} />
+              <Text style={styles.tapText}>TAP</Text>
+            </View>
+            <View style={styles.zoneRight}>
+              <Feather name="plus" size={14} color={Colors.textTertiary} />
+            </View>
+          </View>
+
+          <View style={styles.tickTrack}>
+            {Array.from({ length: 29 }, (_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.tick,
+                  i % 5 === 0 && styles.tickMajor,
+                  i === 14 && styles.tickCenter,
+                ]}
+              />
+            ))}
+          </View>
         </View>
       </Animated.View>
 
@@ -474,13 +358,10 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 0,
   },
-  extendedTouchZone: {
-    position: "absolute",
-    top: -120,
-    left: "15%" as any,
-    right: "15%" as any,
-    height: 120,
-    zIndex: 5,
+  dragZone: {
+    alignSelf: "stretch",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
   },
   glowBg: {
     position: "absolute",
@@ -530,10 +411,6 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 20,
   },
   zoneIndicators: {
-    position: "absolute",
-    top: 8,
-    left: 12,
-    right: 12,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -574,14 +451,11 @@ const styles = StyleSheet.create({
     marginTop: -4,
   },
   tickTrack: {
-    position: "absolute",
-    bottom: 6,
-    left: 20,
-    right: 20,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
     height: 6,
+    marginTop: 8,
   },
   tick: {
     width: 1,
