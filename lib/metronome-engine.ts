@@ -270,15 +270,16 @@ export class MetronomeEngine {
     }
   }
 
+  private getElapsed(): number {
+    return performance.now() - this.measureStartTime;
+  }
+
   private loop = () => {
     if (!this.isRunning) return;
 
-    const now = performance.now();
-    const elapsed = now - this.measureStartTime;
-
     while (this.isRunning && this.scheduleIndex < this.schedule.length) {
       const tick = this.schedule[this.scheduleIndex];
-      if (tick.time > elapsed + 1) break;
+      if (tick.time > this.getElapsed() + 1) break;
 
       this.fireTick(tick);
       this.scheduleIndex++;
@@ -294,6 +295,7 @@ export class MetronomeEngine {
         this.measureStartTime += this.measureDurationMs;
         this.schedule = this.buildSchedule();
         this.scheduleIndex = 0;
+        break;
       }
     }
 
