@@ -137,19 +137,21 @@ export default function MetronomeScreen() {
       () => {
         try {
           const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
-          const p = highToggle.current ? players.highB : players.highA;
+          const active = highToggle.current ? players.highB : players.highA;
+          const idle = highToggle.current ? players.highA : players.highB;
           highToggle.current = !highToggle.current;
-          p.seekTo(0);
-          p.play();
+          active.play();
+          idle.seekTo(0);
         } catch (e) {}
       },
       () => {
         try {
           const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
-          const p = lowToggle.current ? players.lowB : players.lowA;
+          const active = lowToggle.current ? players.lowB : players.lowA;
+          const idle = lowToggle.current ? players.lowA : players.lowB;
           lowToggle.current = !lowToggle.current;
-          p.seekTo(0);
-          p.play();
+          active.play();
+          idle.seekTo(0);
         } catch (e) {}
       }
     );

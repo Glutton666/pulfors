@@ -26,7 +26,7 @@ export const soundSets = {
 export const highClickSource = soundSets.classic.high;
 export const lowClickSource = soundSets.classic.low;
 
-const TICK_INTERVAL = 4;
+const TICK_INTERVAL = 2;
 
 export class MetronomeEngine {
   private timerId: ReturnType<typeof setTimeout> | null = null;
@@ -242,7 +242,7 @@ export class MetronomeEngine {
 
     const now = performance.now();
 
-    while (this.isRunning && this.nextTickTime <= now + 1) {
+    while (this.isRunning && this.nextTickTime <= now + 0.5) {
       this.fireTick();
       const dur = this.getSubBeatDurationMs();
       if (!this.advanceBeat()) return;
@@ -250,8 +250,8 @@ export class MetronomeEngine {
     }
 
     if (this.isRunning) {
-      const wait = Math.max(1, this.nextTickTime - performance.now() - 1);
-      this.timerId = setTimeout(this.loop, Math.min(wait, TICK_INTERVAL));
+      const wait = this.nextTickTime - performance.now();
+      this.timerId = setTimeout(this.loop, Math.min(Math.max(0, wait - 0.5), TICK_INTERVAL));
     }
   };
 
