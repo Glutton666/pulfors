@@ -26,9 +26,16 @@ export const soundSets = {
 export const highClickSource = soundSets.classic.high;
 export const lowClickSource = soundSets.classic.low;
 
+interface ScheduledTick {
+  time: number;
+  beat: number;
+  subBeat: number;
+  type: BeatType;
+  isMainBeat: boolean;
+}
+
 export class MetronomeEngine {
   private timerId: ReturnType<typeof setTimeout> | null = null;
-  private rafId: number | null = null;
   private isRunning = false;
   private bpm = 120;
   private beatsPerMeasure = 4;
@@ -43,7 +50,11 @@ export class MetronomeEngine {
   private playLowClick: (() => void) | null = null;
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
-  private nextTickTime: number = 0;
+
+  private schedule: ScheduledTick[] = [];
+  private scheduleIndex = 0;
+  private measureStartTime = 0;
+  private measureDurationMs = 0;
 
   setAudioCallbacks(playHigh: () => void, playLow: () => void) {
     this.playHighClick = playHigh;
@@ -81,6 +92,9 @@ export class MetronomeEngine {
 
   setBpm(bpm: number) {
     this.bpm = Math.max(20, Math.min(300, bpm));
+    if (this.isRunning) {
+      this.rebuildSchedule();
+    }
   }
 
   setBeatsPerMeasure(beats: number) {
@@ -160,12 +174,57 @@ export class MetronomeEngine {
     return custom;
   }
 
-  private fireTick() {
-    const subPattern = this.getSubPattern(this.currentBeat);
-    const subBeatType = subPattern[this.currentSubBeat] || "normal";
-    const isMainBeat = this.currentSubBeat === 0;
-    const isAccent = subBeatType === "accent";
-    const isMute = subBeatType === "mute";
+  private buildSchedule(): ScheduledTick[] {
+    const beatDur = 60000 / this.bpm;
+    const ticks: ScheduledTick[] = [];
+    let time = 0;
+
+    for (let beat = 0; beat < this.beatsPerMeasure; beat++) {
+      const subPattern = this.getSubPattern(beat);
+      const subDur = beatDur / subPattern.length;
+      for (let sub = 0; sub < subPattern.length; sub++) {
+        ticks.push({
+          time,
+          beat,
+          subBeat: sub,
+          type: subPattern[sub],
+          isMainBeat: sub === 0,
+        });
+        time += subDur;
+      }
+    }
+
+    this.measureDurationMs = time;
+    return ticks;
+  }
+
+  private rebuildSchedule() {
+    const oldSchedule = this.schedule;
+    const oldIndex = this.scheduleIndex;
+
+    this.schedule = this.buildSchedule();
+
+    if (oldSchedule.length > 0 && oldIndex < oldSchedule.length) {
+      const currentTick = oldSchedule[oldIndex];
+      let bestIdx = 0;
+      for (let i = 0; i < this.schedule.length; i++) {
+        if (this.schedule[i].beat === currentTick.beat && this.schedule[i].subBeat === currentTick.subBeat) {
+          bestIdx = i;
+          break;
+        }
+      }
+      const elapsed = performance.now() - this.measureStartTime;
+      this.measureStartTime = performance.now() - this.schedule[bestIdx].time;
+      this.scheduleIndex = bestIdx;
+    }
+  }
+
+  private fireTick(tick: ScheduledTick) {
+    this.currentBeat = tick.beat;
+    this.currentSubBeat = tick.subBeat;
+
+    const isAccent = tick.type === "accent";
+    const isMute = tick.type === "mute";
 
     const playAudio = () => {
       if (isMute) return;
@@ -186,15 +245,15 @@ export class MetronomeEngine {
             Haptics.impactAsync(
               isAccent
                 ? Haptics.ImpactFeedbackStyle.Heavy
-                : isMainBeat
+                : tick.isMainBeat
                 ? Haptics.ImpactFeedbackStyle.Light
                 : Haptics.ImpactFeedbackStyle.Soft
             );
           } catch (e) {}
         }
       }
-      if (isMainBeat) {
-        this.onBeat?.(this.currentBeat, isAccent);
+      if (tick.isMainBeat) {
+        this.onBeat?.(tick.beat, isAccent);
       }
     };
 
@@ -211,49 +270,43 @@ export class MetronomeEngine {
     }
   }
 
-  private advanceBeat(): boolean {
-    const subPattern = this.getSubPattern(this.currentBeat);
-    this.currentSubBeat++;
-    if (this.currentSubBeat >= subPattern.length) {
-      this.currentSubBeat = 0;
-      const nextBeat = (this.currentBeat + 1) % this.beatsPerMeasure;
-      if (nextBeat === 0) {
-        if (this.stopAfterMeasure) {
-          this.stopAfterMeasure = false;
-          this.stop();
-          this.onMeasureComplete?.();
-          return false;
-        }
-        this.onMeasureComplete?.();
-      }
-      this.currentBeat = nextBeat;
-    }
-    return true;
-  }
-
-  private getSubBeatDurationMs(): number {
-    const subPattern = this.getSubPattern(this.currentBeat);
-    return (60000 / this.bpm) / subPattern.length;
-  }
-
   private loop = () => {
     if (!this.isRunning) return;
 
     const now = performance.now();
+    const elapsed = now - this.measureStartTime;
 
-    while (this.isRunning && this.nextTickTime <= now + 0.5) {
-      this.fireTick();
-      const dur = this.getSubBeatDurationMs();
-      if (!this.advanceBeat()) return;
-      this.nextTickTime += dur;
+    while (this.isRunning && this.scheduleIndex < this.schedule.length) {
+      const tick = this.schedule[this.scheduleIndex];
+      if (tick.time > elapsed + 1) break;
+
+      this.fireTick(tick);
+      this.scheduleIndex++;
+
+      if (this.scheduleIndex >= this.schedule.length) {
+        if (this.stopAfterMeasure) {
+          this.stopAfterMeasure = false;
+          this.stop();
+          this.onMeasureComplete?.();
+          return;
+        }
+        this.onMeasureComplete?.();
+        this.measureStartTime += this.measureDurationMs;
+        this.schedule = this.buildSchedule();
+        this.scheduleIndex = 0;
+      }
     }
 
     if (this.isRunning) {
-      const wait = this.nextTickTime - performance.now();
-      if (wait > 16) {
-        this.timerId = setTimeout(this.loop, wait - 8);
-      } else {
-        this.rafId = requestAnimationFrame(this.loop);
+      const nextTick = this.schedule[this.scheduleIndex];
+      if (nextTick) {
+        const nextAbsolute = this.measureStartTime + nextTick.time;
+        const wait = nextAbsolute - performance.now();
+        if (wait > 20) {
+          this.timerId = setTimeout(this.loop, wait - 10);
+        } else {
+          this.timerId = setTimeout(this.loop, 1);
+        }
       }
     }
   };
@@ -263,7 +316,9 @@ export class MetronomeEngine {
     this.isRunning = true;
     this.currentBeat = 0;
     this.currentSubBeat = 0;
-    this.nextTickTime = performance.now();
+    this.schedule = this.buildSchedule();
+    this.scheduleIndex = 0;
+    this.measureStartTime = performance.now();
     this.loop();
   }
 
@@ -272,10 +327,6 @@ export class MetronomeEngine {
     if (this.timerId) {
       clearTimeout(this.timerId);
       this.timerId = null;
-    }
-    if (this.rafId) {
-      cancelAnimationFrame(this.rafId);
-      this.rafId = null;
     }
     this.currentBeat = 0;
     this.currentSubBeat = 0;
