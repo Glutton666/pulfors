@@ -26,8 +26,10 @@ export const soundSets = {
 export const highClickSource = soundSets.classic.high;
 export const lowClickSource = soundSets.classic.low;
 
+const TICK_INTERVAL = 4;
+
 export class MetronomeEngine {
-  private timeoutId: ReturnType<typeof setTimeout> | null = null;
+  private timerId: ReturnType<typeof setTimeout> | null = null;
   private isRunning = false;
   private bpm = 120;
   private beatsPerMeasure = 4;
@@ -42,6 +44,7 @@ export class MetronomeEngine {
   private playLowClick: (() => void) | null = null;
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
+  private nextTickTime: number = 0;
 
   setAudioCallbacks(playHigh: () => void, playLow: () => void) {
     this.playHighClick = playHigh;
@@ -79,10 +82,6 @@ export class MetronomeEngine {
 
   setBpm(bpm: number) {
     this.bpm = Math.max(20, Math.min(300, bpm));
-    if (this.isRunning) {
-      this.stop();
-      this.start();
-    }
   }
 
   setBeatsPerMeasure(beats: number) {
@@ -109,10 +108,6 @@ export class MetronomeEngine {
       this.beatSubdivisions.delete(beatIndex);
     } else {
       this.beatSubdivisions.set(beatIndex, [...pattern]);
-    }
-    if (this.isRunning) {
-      this.stop();
-      this.start();
     }
   }
 
@@ -166,7 +161,7 @@ export class MetronomeEngine {
     return custom;
   }
 
-  private tick() {
+  private fireTick() {
     const subPattern = this.getSubPattern(this.currentBeat);
     const subBeatType = subPattern[this.currentSubBeat] || "normal";
     const isMainBeat = this.currentSubBeat === 0;
@@ -215,7 +210,10 @@ export class MetronomeEngine {
       playAudio();
       playHapticAndVisual();
     }
+  }
 
+  private advanceBeat(): boolean {
+    const subPattern = this.getSubPattern(this.currentBeat);
     this.currentSubBeat++;
     if (this.currentSubBeat >= subPattern.length) {
       this.currentSubBeat = 0;
@@ -225,34 +223,52 @@ export class MetronomeEngine {
           this.stopAfterMeasure = false;
           this.stop();
           this.onMeasureComplete?.();
-          return;
+          return false;
         }
         this.onMeasureComplete?.();
       }
       this.currentBeat = nextBeat;
     }
+    return true;
+  }
+
+  private getSubBeatDurationMs(): number {
+    const subPattern = this.getSubPattern(this.currentBeat);
+    return (60000 / this.bpm) / subPattern.length;
+  }
+
+  private loop = () => {
+    if (!this.isRunning) return;
+
+    const now = performance.now();
+
+    while (this.isRunning && this.nextTickTime <= now + 1) {
+      this.fireTick();
+      const dur = this.getSubBeatDurationMs();
+      if (!this.advanceBeat()) return;
+      this.nextTickTime += dur;
+    }
 
     if (this.isRunning) {
-      const nextSubPattern = this.getSubPattern(this.currentBeat);
-      const beatDuration = 60000 / this.bpm;
-      const subBeatDuration = beatDuration / nextSubPattern.length;
-      this.timeoutId = setTimeout(() => this.tick(), subBeatDuration);
+      const wait = Math.max(1, this.nextTickTime - performance.now() - 1);
+      this.timerId = setTimeout(this.loop, Math.min(wait, TICK_INTERVAL));
     }
-  }
+  };
 
   start() {
     if (this.isRunning) return;
     this.isRunning = true;
     this.currentBeat = 0;
     this.currentSubBeat = 0;
-    this.tick();
+    this.nextTickTime = performance.now();
+    this.loop();
   }
 
   stop() {
     this.isRunning = false;
-    if (this.timeoutId) {
-      clearTimeout(this.timeoutId);
-      this.timeoutId = null;
+    if (this.timerId) {
+      clearTimeout(this.timerId);
+      this.timerId = null;
     }
     this.currentBeat = 0;
     this.currentSubBeat = 0;
