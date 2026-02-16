@@ -44,6 +44,7 @@ export class MetronomeEngine {
   private beatTypes: BeatType[] = ["accent", "normal", "normal", "normal"];
   private beatSubdivisions: Map<number, BeatType[]> = new Map();
   private onBeat: ((beat: number, isAccent: boolean) => void) | null = null;
+  private onSubBeat: ((beat: number, subBeat: number) => void) | null = null;
   private onMeasureComplete: (() => void) | null = null;
   private stopAfterMeasure = false;
   private playHighClick: (() => void) | null = null;
@@ -71,6 +72,10 @@ export class MetronomeEngine {
 
   setOnBeat(callback: (beat: number, isAccent: boolean) => void) {
     this.onBeat = callback;
+  }
+
+  setOnSubBeat(callback: ((beat: number, subBeat: number) => void) | null) {
+    this.onSubBeat = callback;
   }
 
   setOnMeasureComplete(callback: (() => void) | null) {
@@ -252,6 +257,7 @@ export class MetronomeEngine {
           } catch (e) {}
         }
       }
+      this.onSubBeat?.(tick.beat, tick.subBeat);
       if (tick.isMainBeat) {
         this.onBeat?.(tick.beat, isAccent);
       }

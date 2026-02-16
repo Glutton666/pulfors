@@ -66,6 +66,7 @@ export default function MetronomeScreen() {
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(-1);
+  const [activeSubNote, setActiveSubNote] = useState(-1);
   const [subdivisionPattern, setSubdivisionPattern] = useState<BeatType[]>([
     "accent",
   ]);
@@ -223,6 +224,10 @@ export default function MetronomeScreen() {
         );
       }
     });
+
+    engine.setOnSubBeat((beat: number, subBeat: number) => {
+      setActiveSubNote(subBeat);
+    });
   }, [flashOpacity]);
 
   useEffect(() => {
@@ -368,6 +373,7 @@ export default function MetronomeScreen() {
       engine.stop();
       setIsPlaying(false);
       setCurrentBeat(-1);
+      setActiveSubNote(-1);
     } else {
       engine.start();
       setIsPlaying(true);
@@ -388,6 +394,7 @@ export default function MetronomeScreen() {
       if (!engine.getIsRunning()) {
         setIsPlaying(false);
         setCurrentBeat(-1);
+        setActiveSubNote(-1);
       }
     });
   }, []);
@@ -690,6 +697,9 @@ export default function MetronomeScreen() {
             onDragMove={handleDragMove}
             onDragEnd={handleDragEnd}
             onReset={handleReset}
+            isPlaying={isPlaying}
+            activeSubNote={activeSubNote}
+            activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
           />
           <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
           <BpmSlider

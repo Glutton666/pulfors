@@ -27,6 +27,9 @@ interface SubdivisionBarProps {
   onDragMove: (pageX: number, pageY: number) => void;
   onDragEnd: (pageX: number, pageY: number) => void;
   onReset: () => void;
+  isPlaying?: boolean;
+  activeSubNote?: number;
+  activeBeatPattern?: BeatType[] | null;
 }
 
 const CELL_SIZE = 28;
@@ -55,6 +58,9 @@ export function SubdivisionBar({
   onDragMove,
   onDragEnd,
   onReset,
+  isPlaying = false,
+  activeSubNote = -1,
+  activeBeatPattern = null,
 }: SubdivisionBarProps) {
   const { colors: C } = useTheme();
   const isDraggingUpRef = useRef(false);
@@ -352,26 +358,35 @@ export function SubdivisionBar({
           <Feather name="chevron-left" size={12} color={Colors.textTertiary} />
         </View>
 
-        {pattern.map((type, i) => (
-          <Pressable
-            key={i}
-            onPress={() => cycleType(i)}
-            style={({ pressed }) => [pressed && { opacity: 0.6 }]}
-            hitSlop={2}
-            testID={`subdivision-cell-${i}`}
-          >
-            <View
-              style={[
-                styles.cell,
-                {
-                  backgroundColor: getCellColor(type, true, C.accent, C.accentMuted),
-                  borderColor: getCellBorder(type),
-                  borderWidth: type === "mute" ? 2 : 0,
-                },
-              ]}
-            />
-          </Pressable>
-        ))}
+        {(() => {
+          const displayPattern = isPlaying && activeBeatPattern ? activeBeatPattern : pattern;
+          return displayPattern.map((type, i) => {
+            const isActive = isPlaying && i === activeSubNote;
+            return (
+              <Pressable
+                key={i}
+                onPress={() => {
+                  if (!activeBeatPattern) cycleType(i);
+                }}
+                style={({ pressed }) => [pressed && !activeBeatPattern && { opacity: 0.6 }]}
+                hitSlop={2}
+                testID={`subdivision-cell-${i}`}
+              >
+                <View
+                  style={[
+                    styles.cell,
+                    {
+                      backgroundColor: getCellColor(type, true, C.accent, C.accentMuted),
+                      borderColor: getCellBorder(type),
+                      borderWidth: type === "mute" ? 2 : 0,
+                      opacity: isPlaying ? (isActive ? 1 : 0.3) : 1,
+                    },
+                  ]}
+                />
+              </Pressable>
+            );
+          });
+        })()}
 
         <View style={styles.swipeHint}>
           <Feather name="chevron-right" size={12} color={Colors.textTertiary} />
