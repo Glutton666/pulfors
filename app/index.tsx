@@ -225,7 +225,7 @@ export default function MetronomeScreen() {
   useEffect(() => {
     try {
       Object.values(allPlayers).forEach((set) => {
-        const amplified = Math.min(volume * 10, 10);
+        const amplified = Math.min(volume * 100, 100);
         set.highA.volume = amplified;
         set.highB.volume = amplified;
         set.lowA.volume = amplified;
