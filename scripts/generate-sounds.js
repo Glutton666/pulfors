@@ -50,185 +50,158 @@ function normalize(samples) {
   return samples;
 }
 
-function softClip(x) {
-  if (x > 1) return 1;
-  if (x < -1) return -1;
-  return x;
+function fadeOut(samples, fadeMs) {
+  const fadeSamples = Math.floor(SAMPLE_RATE * fadeMs / 1000);
+  const start = samples.length - fadeSamples;
+  for (let i = start; i < samples.length; i++) {
+    const ratio = (samples.length - i) / fadeSamples;
+    samples[i] *= ratio;
+  }
+  return samples;
 }
 
 function generateClassicHigh() {
-  const duration = 0.06;
+  const duration = 0.05;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
-  const attackSamples = Math.floor(SAMPLE_RATE * 0.001);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const attack = i < attackSamples ? i / attackSamples : 1.0;
-    const decay = Math.exp(-t * 50);
-    const env = attack * decay;
+    const env = Math.exp(-t * 60);
     const f0 = 2500 + 800 * Math.exp(-t * 200);
     let s = 0;
     s += Math.sin(2 * Math.PI * f0 * t) * 1.0;
     s += Math.sin(2 * Math.PI * f0 * 2.0 * t) * 0.6;
     s += Math.sin(2 * Math.PI * f0 * 3.0 * t) * 0.3;
     s += Math.sin(2 * Math.PI * f0 * 0.5 * t) * 0.4;
-    s += Math.sin(2 * Math.PI * f0 * 4.0 * t) * 0.15;
-    if (t < 0.003) s += (Math.random() * 2 - 1) * 0.8 * (1 - t / 0.003);
-    samples[i] = softClip(s * env * 1.5);
+    samples[i] = s * env;
   }
-  return normalize(samples);
+  return fadeOut(normalize(samples), 5);
 }
 
 function generateClassicLow() {
-  const duration = 0.05;
+  const duration = 0.04;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
-  const attackSamples = Math.floor(SAMPLE_RATE * 0.001);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const attack = i < attackSamples ? i / attackSamples : 1.0;
-    const decay = Math.exp(-t * 55);
-    const env = attack * decay;
+    const env = Math.exp(-t * 70);
     const f0 = 1800 + 500 * Math.exp(-t * 250);
     let s = 0;
     s += Math.sin(2 * Math.PI * f0 * t) * 1.0;
     s += Math.sin(2 * Math.PI * f0 * 2.0 * t) * 0.5;
     s += Math.sin(2 * Math.PI * f0 * 3.0 * t) * 0.2;
     s += Math.sin(2 * Math.PI * f0 * 0.5 * t) * 0.35;
-    if (t < 0.002) s += (Math.random() * 2 - 1) * 0.6 * (1 - t / 0.002);
-    samples[i] = softClip(s * env * 1.4);
+    samples[i] = s * env;
   }
-  return normalize(samples);
+  return fadeOut(normalize(samples), 5);
 }
 
 function generateWoodblockHigh() {
-  const duration = 0.08;
+  const duration = 0.06;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
-  const attackSamples = Math.floor(SAMPLE_RATE * 0.0005);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const attack = i < attackSamples ? i / attackSamples : 1.0;
-    const decay = Math.exp(-t * 40);
-    const env = attack * decay;
+    const env = Math.exp(-t * 50);
     const f1 = 900 + 200 * Math.exp(-t * 60);
     const f2 = 2300 + 300 * Math.exp(-t * 80);
     let s = 0;
     s += Math.sin(2 * Math.PI * f1 * t) * 1.0;
     s += Math.sin(2 * Math.PI * f2 * t) * 0.7;
     s += Math.sin(2 * Math.PI * f1 * 2.8 * t) * 0.4;
-    s += Math.sin(2 * Math.PI * f1 * 4.2 * t) * 0.15;
-    if (t < 0.002) s += (Math.random() * 2 - 1) * 0.5 * (1 - t / 0.002);
-    samples[i] = softClip(s * env * 1.3);
+    samples[i] = s * env;
   }
-  return normalize(samples);
+  return fadeOut(normalize(samples), 5);
 }
 
 function generateWoodblockLow() {
-  const duration = 0.09;
+  const duration = 0.07;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
-  const attackSamples = Math.floor(SAMPLE_RATE * 0.0005);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const attack = i < attackSamples ? i / attackSamples : 1.0;
-    const decay = Math.exp(-t * 35);
-    const env = attack * decay;
+    const env = Math.exp(-t * 45);
     const f1 = 600 + 150 * Math.exp(-t * 50);
     const f2 = 1500 + 200 * Math.exp(-t * 70);
     let s = 0;
     s += Math.sin(2 * Math.PI * f1 * t) * 1.0;
     s += Math.sin(2 * Math.PI * f2 * t) * 0.6;
     s += Math.sin(2 * Math.PI * f1 * 2.5 * t) * 0.3;
-    s += Math.sin(2 * Math.PI * f1 * 4.0 * t) * 0.1;
-    if (t < 0.002) s += (Math.random() * 2 - 1) * 0.4 * (1 - t / 0.002);
-    samples[i] = softClip(s * env * 1.3);
+    samples[i] = s * env;
   }
-  return normalize(samples);
+  return fadeOut(normalize(samples), 5);
 }
 
 function generateDigitalHigh() {
-  const duration = 0.04;
+  const duration = 0.03;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const decay = Math.exp(-t * 60);
+    const env = Math.exp(-t * 80);
     const freq = 2600;
     let s = 0;
     s += Math.sin(2 * Math.PI * freq * t) * 1.0;
     s += Math.sin(2 * Math.PI * freq * 2.0 * t) * 0.5;
     s += Math.sin(2 * Math.PI * freq * 3.0 * t) * 0.25;
     s += Math.sin(2 * Math.PI * freq * 0.5 * t) * 0.4;
-    if (t < 0.001) s += (Math.random() * 2 - 1) * 0.7 * (1 - t / 0.001);
-    samples[i] = softClip(s * decay * 1.4);
+    samples[i] = s * env;
   }
-  return normalize(samples);
+  return fadeOut(normalize(samples), 3);
 }
 
 function generateDigitalLow() {
-  const duration = 0.035;
+  const duration = 0.025;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const decay = Math.exp(-t * 70);
+    const env = Math.exp(-t * 90);
     const freq = 1900;
     let s = 0;
     s += Math.sin(2 * Math.PI * freq * t) * 1.0;
     s += Math.sin(2 * Math.PI * freq * 2.0 * t) * 0.45;
     s += Math.sin(2 * Math.PI * freq * 3.0 * t) * 0.2;
     s += Math.sin(2 * Math.PI * freq * 0.5 * t) * 0.35;
-    if (t < 0.001) s += (Math.random() * 2 - 1) * 0.5 * (1 - t / 0.001);
-    samples[i] = softClip(s * decay * 1.3);
+    samples[i] = s * env;
   }
-  return normalize(samples);
+  return fadeOut(normalize(samples), 3);
 }
 
 function generateRimshotHigh() {
-  const duration = 0.10;
+  const duration = 0.08;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
-  const attackSamples = Math.floor(SAMPLE_RATE * 0.0003);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const attack = i < attackSamples ? i / attackSamples : 1.0;
-    const decay = Math.exp(-t * 30);
-    const env = attack * decay;
+    const env = Math.exp(-t * 40);
     let s = 0;
     s += Math.sin(2 * Math.PI * 450 * t) * 0.8;
     s += Math.sin(2 * Math.PI * 900 * t) * 0.5;
     s += Math.sin(2 * Math.PI * 1350 * t) * 0.3;
     s += Math.sin(2 * Math.PI * 2000 * t) * 0.4;
     s += Math.sin(2 * Math.PI * 3200 * t) * 0.2;
-    s += Math.sin(2 * Math.PI * 4500 * t) * 0.1;
-    if (t < 0.004) s += (Math.random() * 2 - 1) * 1.0 * (1 - t / 0.004);
-    samples[i] = softClip(s * env * 1.5);
+    samples[i] = s * env;
   }
-  return normalize(samples);
+  return fadeOut(normalize(samples), 5);
 }
 
 function generateRimshotLow() {
-  const duration = 0.09;
+  const duration = 0.07;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
-  const attackSamples = Math.floor(SAMPLE_RATE * 0.0003);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const attack = i < attackSamples ? i / attackSamples : 1.0;
-    const decay = Math.exp(-t * 35);
-    const env = attack * decay;
+    const env = Math.exp(-t * 45);
     let s = 0;
     s += Math.sin(2 * Math.PI * 350 * t) * 0.7;
     s += Math.sin(2 * Math.PI * 700 * t) * 0.4;
     s += Math.sin(2 * Math.PI * 1050 * t) * 0.2;
     s += Math.sin(2 * Math.PI * 1600 * t) * 0.35;
     s += Math.sin(2 * Math.PI * 2600 * t) * 0.15;
-    s += Math.sin(2 * Math.PI * 3800 * t) * 0.08;
-    if (t < 0.003) s += (Math.random() * 2 - 1) * 0.8 * (1 - t / 0.003);
-    samples[i] = softClip(s * env * 1.4);
+    samples[i] = s * env;
   }
-  return normalize(samples);
+  return fadeOut(normalize(samples), 5);
 }
 
 const outDir = path.join(__dirname, "..", "assets", "sounds");
