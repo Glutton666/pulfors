@@ -133,10 +133,12 @@ export default function MetronomeScreen() {
     const engine = new MetronomeEngine();
     engineRef.current = engine;
 
-    const playPlayer = (p: any) => {
+    const restartPlayer = (active: any, other: any) => {
       try {
-        p.seekTo(0);
-        p.play();
+        other.pause();
+        other.seekTo(0);
+        active.seekTo(0);
+        active.play();
       } catch (e) {}
     };
 
@@ -144,17 +146,19 @@ export default function MetronomeScreen() {
       () => {
         try {
           const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
-          const p = highToggle.current ? players.highB : players.highA;
+          const active = highToggle.current ? players.highB : players.highA;
+          const other = highToggle.current ? players.highA : players.highB;
           highToggle.current = !highToggle.current;
-          playPlayer(p);
+          restartPlayer(active, other);
         } catch (e) {}
       },
       () => {
         try {
           const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
-          const p = lowToggle.current ? players.lowB : players.lowA;
+          const active = lowToggle.current ? players.lowB : players.lowA;
+          const other = lowToggle.current ? players.lowA : players.lowB;
           lowToggle.current = !lowToggle.current;
-          playPlayer(p);
+          restartPlayer(active, other);
         } catch (e) {}
       }
     );
@@ -228,10 +232,11 @@ export default function MetronomeScreen() {
   useEffect(() => {
     try {
       Object.values(allPlayers).forEach((set) => {
-        set.highA.volume = volume;
-        set.highB.volume = volume;
-        set.lowA.volume = volume;
-        set.lowB.volume = volume;
+        const v = volume * 5;
+        set.highA.volume = v;
+        set.highB.volume = v;
+        set.lowA.volume = v;
+        set.lowB.volume = v;
       });
     } catch (e) {}
   }, [volume, allPlayers]);
