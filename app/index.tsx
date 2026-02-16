@@ -76,7 +76,7 @@ export default function MetronomeScreen() {
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
   const [dropTargetBeat, setDropTargetBeat] = useState<number | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [volume, setVolume] = useState(0.8);
+  const [volume, setVolume] = useState(0.5);
   const [showSettings, setShowSettings] = useState(false);
   const [backgroundPlay, setBackgroundPlay] = useState(false);
   const [soundSet, setSoundSet] = useState<SoundSet>("classic");
@@ -225,10 +225,11 @@ export default function MetronomeScreen() {
   useEffect(() => {
     try {
       Object.values(allPlayers).forEach((set) => {
-        set.highA.volume = volume;
-        set.highB.volume = volume;
-        set.lowA.volume = volume;
-        set.lowB.volume = volume;
+        const amplified = Math.min(volume * 10, 10);
+        set.highA.volume = amplified;
+        set.highB.volume = amplified;
+        set.lowA.volume = amplified;
+        set.lowB.volume = amplified;
       });
     } catch (e) {}
   }, [volume, allPlayers]);
