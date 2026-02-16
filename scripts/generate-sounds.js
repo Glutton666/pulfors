@@ -50,140 +50,218 @@ function normalize(samples, peak) {
   return samples;
 }
 
+function softClip(x) {
+  if (x > 1) return 1;
+  if (x < -1) return -1;
+  return x - (x * x * x) / 3;
+}
+
 function generateClassicHigh() {
-  const duration = 0.03;
+  const duration = 0.04;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 150);
-    const freq = 1800 + 800 * Math.exp(-t * 300);
-    const s = Math.sin(2 * Math.PI * freq * t) * 0.8
-            + Math.sin(2 * Math.PI * freq * 2.3 * t) * 0.25
-            + Math.sin(2 * Math.PI * freq * 3.7 * t) * 0.15;
-    const noise = (Math.random() * 2 - 1) * Math.exp(-t * 400) * 0.2;
-    samples[i] = (s + noise) * env;
+    const attack = t < 0.0005 ? t / 0.0005 : 1;
+    const decay = Math.exp(-t * 100);
+    const env = attack * decay;
+
+    const f0 = 2500 + 1500 * Math.exp(-t * 400);
+    let s = 0;
+    s += Math.sin(2 * Math.PI * f0 * t) * 1.0;
+    s += Math.sin(2 * Math.PI * f0 * 2.0 * t) * 0.6;
+    s += Math.sin(2 * Math.PI * f0 * 3.0 * t) * 0.35;
+    s += Math.sin(2 * Math.PI * f0 * 4.5 * t) * 0.2;
+    s += Math.sin(2 * Math.PI * f0 * 6.0 * t) * 0.1;
+
+    const transient = (Math.random() * 2 - 1) * Math.exp(-t * 800) * 0.8;
+    const click = (t < 0.001) ? (Math.random() * 2 - 1) * 1.5 : 0;
+
+    samples[i] = softClip((s * env + transient + click) * 1.8);
   }
-  return normalize(samples, 0.98);
+  return normalize(samples, 0.99);
 }
 
 function generateClassicLow() {
-  const duration = 0.025;
+  const duration = 0.035;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 180);
-    const freq = 1200 + 400 * Math.exp(-t * 350);
-    const s = Math.sin(2 * Math.PI * freq * t) * 0.8
-            + Math.sin(2 * Math.PI * freq * 2.1 * t) * 0.2;
-    const noise = (Math.random() * 2 - 1) * Math.exp(-t * 500) * 0.15;
-    samples[i] = (s + noise) * env;
+    const attack = t < 0.0004 ? t / 0.0004 : 1;
+    const decay = Math.exp(-t * 120);
+    const env = attack * decay;
+
+    const f0 = 1800 + 800 * Math.exp(-t * 400);
+    let s = 0;
+    s += Math.sin(2 * Math.PI * f0 * t) * 1.0;
+    s += Math.sin(2 * Math.PI * f0 * 2.0 * t) * 0.5;
+    s += Math.sin(2 * Math.PI * f0 * 3.0 * t) * 0.25;
+    s += Math.sin(2 * Math.PI * f0 * 4.5 * t) * 0.12;
+
+    const transient = (Math.random() * 2 - 1) * Math.exp(-t * 900) * 0.7;
+    const click = (t < 0.0008) ? (Math.random() * 2 - 1) * 1.2 : 0;
+
+    samples[i] = softClip((s * env + transient + click) * 1.6);
   }
-  return normalize(samples, 0.95);
+  return normalize(samples, 0.99);
 }
 
 function generateWoodblockHigh() {
-  const duration = 0.05;
-  const numSamples = Math.floor(SAMPLE_RATE * duration);
-  const samples = new Float64Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 90);
-    const f1 = 900 * Math.exp(-t * 30);
-    const f2 = 2200 * Math.exp(-t * 50);
-    const s = Math.sin(2 * Math.PI * f1 * t) * 0.6
-            + Math.sin(2 * Math.PI * f2 * t) * 0.4
-            + Math.sin(2 * Math.PI * 3400 * t) * Math.exp(-t * 150) * 0.2;
-    const noise = (Math.random() * 2 - 1) * Math.exp(-t * 250) * 0.15;
-    samples[i] = (s + noise) * env;
-  }
-  return normalize(samples, 0.98);
-}
-
-function generateWoodblockLow() {
   const duration = 0.06;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 70);
-    const f1 = 600 * Math.exp(-t * 25);
-    const f2 = 1500 * Math.exp(-t * 40);
-    const s = Math.sin(2 * Math.PI * f1 * t) * 0.6
-            + Math.sin(2 * Math.PI * f2 * t) * 0.35
-            + Math.sin(2 * Math.PI * 2500 * t) * Math.exp(-t * 130) * 0.15;
-    const noise = (Math.random() * 2 - 1) * Math.exp(-t * 200) * 0.12;
-    samples[i] = (s + noise) * env;
+    const attack = t < 0.0003 ? t / 0.0003 : 1;
+    const decay = Math.exp(-t * 65);
+    const env = attack * decay;
+
+    const f1 = 800 + 200 * Math.exp(-t * 50);
+    const f2 = 2400 + 400 * Math.exp(-t * 80);
+    const f3 = 4200;
+    let s = 0;
+    s += Math.sin(2 * Math.PI * f1 * t) * 1.0;
+    s += Math.sin(2 * Math.PI * f2 * t) * 0.7;
+    s += Math.sin(2 * Math.PI * f3 * t) * Math.exp(-t * 150) * 0.4;
+    s += Math.sin(2 * Math.PI * f1 * 3.1 * t) * 0.25;
+
+    const knock = (Math.random() * 2 - 1) * Math.exp(-t * 500) * 0.9;
+    const click = (t < 0.0006) ? (Math.random() * 2 - 1) * 1.3 : 0;
+
+    samples[i] = softClip((s * env + knock + click) * 1.5);
   }
-  return normalize(samples, 0.95);
+  return normalize(samples, 0.99);
+}
+
+function generateWoodblockLow() {
+  const duration = 0.07;
+  const numSamples = Math.floor(SAMPLE_RATE * duration);
+  const samples = new Float64Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SAMPLE_RATE;
+    const attack = t < 0.0003 ? t / 0.0003 : 1;
+    const decay = Math.exp(-t * 55);
+    const env = attack * decay;
+
+    const f1 = 550 + 150 * Math.exp(-t * 40);
+    const f2 = 1600 + 300 * Math.exp(-t * 60);
+    const f3 = 3000;
+    let s = 0;
+    s += Math.sin(2 * Math.PI * f1 * t) * 1.0;
+    s += Math.sin(2 * Math.PI * f2 * t) * 0.6;
+    s += Math.sin(2 * Math.PI * f3 * t) * Math.exp(-t * 130) * 0.3;
+    s += Math.sin(2 * Math.PI * f1 * 2.8 * t) * 0.2;
+
+    const knock = (Math.random() * 2 - 1) * Math.exp(-t * 450) * 0.8;
+    const click = (t < 0.0005) ? (Math.random() * 2 - 1) * 1.1 : 0;
+
+    samples[i] = softClip((s * env + knock + click) * 1.4);
+  }
+  return normalize(samples, 0.99);
 }
 
 function generateDigitalHigh() {
-  const duration = 0.02;
+  const duration = 0.025;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 250);
-    const freq = 2400;
-    const sq = Math.sign(Math.sin(2 * Math.PI * freq * t)) * 0.5;
-    const tri = (2 / Math.PI) * Math.asin(Math.sin(2 * Math.PI * freq * 1.5 * t)) * 0.35;
-    const sine = Math.sin(2 * Math.PI * freq * 0.5 * t) * 0.25;
-    samples[i] = (sq + tri + sine) * env;
+    const attack = t < 0.0002 ? t / 0.0002 : 1;
+    const decay = Math.exp(-t * 160);
+    const env = attack * decay;
+
+    const freq = 2800;
+    const sq = Math.sign(Math.sin(2 * Math.PI * freq * t));
+    const saw = 2 * ((freq * t) % 1) - 1;
+    const sine1 = Math.sin(2 * Math.PI * freq * t);
+    const sine2 = Math.sin(2 * Math.PI * freq * 2 * t);
+    let s = sq * 0.5 + saw * 0.2 + sine1 * 0.8 + sine2 * 0.4;
+
+    const click = (t < 0.0008) ? (Math.random() * 2 - 1) * 1.5 : 0;
+
+    samples[i] = softClip((s * env + click) * 1.6);
   }
-  return normalize(samples, 0.98);
+  return normalize(samples, 0.99);
 }
 
 function generateDigitalLow() {
-  const duration = 0.018;
+  const duration = 0.022;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 300);
-    const freq = 1600;
-    const sq = Math.sign(Math.sin(2 * Math.PI * freq * t)) * 0.45;
-    const tri = (2 / Math.PI) * Math.asin(Math.sin(2 * Math.PI * freq * 1.5 * t)) * 0.3;
-    const sine = Math.sin(2 * Math.PI * freq * 0.5 * t) * 0.2;
-    samples[i] = (sq + tri + sine) * env;
+    const attack = t < 0.0002 ? t / 0.0002 : 1;
+    const decay = Math.exp(-t * 180);
+    const env = attack * decay;
+
+    const freq = 2000;
+    const sq = Math.sign(Math.sin(2 * Math.PI * freq * t));
+    const saw = 2 * ((freq * t) % 1) - 1;
+    const sine1 = Math.sin(2 * Math.PI * freq * t);
+    const sine2 = Math.sin(2 * Math.PI * freq * 2 * t);
+    let s = sq * 0.4 + saw * 0.15 + sine1 * 0.7 + sine2 * 0.3;
+
+    const click = (t < 0.0006) ? (Math.random() * 2 - 1) * 1.2 : 0;
+
+    samples[i] = softClip((s * env + click) * 1.5);
   }
-  return normalize(samples, 0.95);
+  return normalize(samples, 0.99);
 }
 
 function generateRimshotHigh() {
-  const duration = 0.065;
+  const duration = 0.08;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env1 = Math.exp(-t * 60);
-    const env2 = Math.exp(-t * 150);
-    const body = Math.sin(2 * Math.PI * 400 * t) * 0.4 * env1
-               + Math.sin(2 * Math.PI * 800 * t) * 0.2 * env1;
-    const crack = (Math.random() * 2 - 1) * 0.6 * env2;
-    const ring = Math.sin(2 * Math.PI * 1800 * t) * 0.25 * Math.exp(-t * 120)
-               + Math.sin(2 * Math.PI * 3200 * t) * 0.15 * Math.exp(-t * 200);
-    samples[i] = body + crack + ring;
+    const attack = t < 0.0002 ? t / 0.0002 : 1;
+
+    const bodyEnv = Math.exp(-t * 45);
+    const body = Math.sin(2 * Math.PI * 350 * t) * 0.6
+               + Math.sin(2 * Math.PI * 700 * t) * 0.3
+               + Math.sin(2 * Math.PI * 1100 * t) * 0.15;
+
+    const crackEnv = Math.exp(-t * 120);
+    const crack = (Math.random() * 2 - 1) * 1.2 * crackEnv;
+
+    const ringEnv = Math.exp(-t * 80);
+    const ring = Math.sin(2 * Math.PI * 2000 * t) * 0.4 * ringEnv
+               + Math.sin(2 * Math.PI * 3500 * t) * 0.2 * Math.exp(-t * 150)
+               + Math.sin(2 * Math.PI * 5000 * t) * 0.1 * Math.exp(-t * 250);
+
+    const click = (t < 0.001) ? (Math.random() * 2 - 1) * 1.8 : 0;
+
+    samples[i] = softClip((body * bodyEnv + crack + ring + click) * attack * 1.6);
   }
-  return normalize(samples, 0.98);
+  return normalize(samples, 0.99);
 }
 
 function generateRimshotLow() {
-  const duration = 0.055;
+  const duration = 0.07;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env1 = Math.exp(-t * 80);
-    const env2 = Math.exp(-t * 200);
-    const body = Math.sin(2 * Math.PI * 300 * t) * 0.35 * env1
-               + Math.sin(2 * Math.PI * 600 * t) * 0.15 * env1;
-    const crack = (Math.random() * 2 - 1) * 0.45 * env2;
-    const ring = Math.sin(2 * Math.PI * 1400 * t) * 0.2 * Math.exp(-t * 140);
-    samples[i] = body + crack + ring;
+    const attack = t < 0.0002 ? t / 0.0002 : 1;
+
+    const bodyEnv = Math.exp(-t * 55);
+    const body = Math.sin(2 * Math.PI * 250 * t) * 0.5
+               + Math.sin(2 * Math.PI * 500 * t) * 0.25
+               + Math.sin(2 * Math.PI * 800 * t) * 0.12;
+
+    const crackEnv = Math.exp(-t * 150);
+    const crack = (Math.random() * 2 - 1) * 1.0 * crackEnv;
+
+    const ringEnv = Math.exp(-t * 100);
+    const ring = Math.sin(2 * Math.PI * 1500 * t) * 0.3 * ringEnv
+               + Math.sin(2 * Math.PI * 2800 * t) * 0.15 * Math.exp(-t * 180);
+
+    const click = (t < 0.0008) ? (Math.random() * 2 - 1) * 1.5 : 0;
+
+    samples[i] = softClip((body * bodyEnv + crack + ring + click) * attack * 1.5);
   }
-  return normalize(samples, 0.95);
+  return normalize(samples, 0.99);
 }
 
 const outDir = path.join(__dirname, "..", "assets", "sounds");
@@ -198,4 +276,4 @@ writeWav(path.join(outDir, "digital-low.wav"), generateDigitalLow());
 writeWav(path.join(outDir, "rimshot-high.wav"), generateRimshotHigh());
 writeWav(path.join(outDir, "rimshot-low.wav"), generateRimshotLow());
 
-console.log("\nAll sound files generated successfully!");
+console.log("\nAll sound files generated!");
