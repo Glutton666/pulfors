@@ -133,38 +133,28 @@ export default function MetronomeScreen() {
     const engine = new MetronomeEngine();
     engineRef.current = engine;
 
-    const prevHighTimer = { current: null as ReturnType<typeof setTimeout> | null };
-    const prevLowTimer = { current: null as ReturnType<typeof setTimeout> | null };
-
-    const playWithTail = (active: any, other: any, timerRef: { current: ReturnType<typeof setTimeout> | null }, tickDurationMs: number) => {
+    const restartPlayer = (active: any) => {
       try {
-        if (timerRef.current) clearTimeout(timerRef.current);
         active.seekTo(0);
         active.play();
-        const fadeTime = Math.max(20, tickDurationMs * 0.9);
-        timerRef.current = setTimeout(() => {
-          try { other.pause(); } catch (e) {}
-        }, fadeTime);
       } catch (e) {}
     };
 
     engine.setAudioCallbacks(
-      (tickDurationMs: number) => {
+      () => {
         try {
           const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
           const active = highToggle.current ? players.highB : players.highA;
-          const other = highToggle.current ? players.highA : players.highB;
           highToggle.current = !highToggle.current;
-          playWithTail(active, other, prevHighTimer, tickDurationMs);
+          restartPlayer(active);
         } catch (e) {}
       },
-      (tickDurationMs: number) => {
+      () => {
         try {
           const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
           const active = lowToggle.current ? players.lowB : players.lowA;
-          const other = lowToggle.current ? players.lowA : players.lowB;
           lowToggle.current = !lowToggle.current;
-          playWithTail(active, other, prevLowTimer, tickDurationMs);
+          restartPlayer(active);
         } catch (e) {}
       }
     );
@@ -238,7 +228,7 @@ export default function MetronomeScreen() {
   useEffect(() => {
     try {
       Object.values(allPlayers).forEach((set) => {
-        const v = volume * 10;
+        const v = volume * 5;
         set.highA.volume = v;
         set.highB.volume = v;
         set.lowA.volume = v;

@@ -46,8 +46,8 @@ export class MetronomeEngine {
   private onBeat: ((beat: number, isAccent: boolean) => void) | null = null;
   private onMeasureComplete: (() => void) | null = null;
   private stopAfterMeasure = false;
-  private playHighClick: ((tickDurationMs: number) => void) | null = null;
-  private playLowClick: ((tickDurationMs: number) => void) | null = null;
+  private playHighClick: (() => void) | null = null;
+  private playLowClick: (() => void) | null = null;
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
 
@@ -56,7 +56,7 @@ export class MetronomeEngine {
   private measureStartTime = 0;
   private measureDurationMs = 0;
 
-  setAudioCallbacks(playHigh: (tickDurationMs: number) => void, playLow: (tickDurationMs: number) => void) {
+  setAudioCallbacks(playHigh: () => void, playLow: () => void) {
     this.playHighClick = playHigh;
     this.playLowClick = playLow;
   }
@@ -219,28 +219,20 @@ export class MetronomeEngine {
     }
   }
 
-  private getTickDuration(index: number): number {
-    if (index < this.schedule.length - 1) {
-      return this.schedule[index + 1].time - this.schedule[index].time;
-    }
-    return this.measureDurationMs - this.schedule[index].time;
-  }
-
   private fireTick(tick: ScheduledTick) {
     this.currentBeat = tick.beat;
     this.currentSubBeat = tick.subBeat;
 
     const isAccent = tick.type === "accent";
     const isMute = tick.type === "mute";
-    const tickDuration = this.getTickDuration(this.scheduleIndex);
 
     const playAudio = () => {
       if (isMute) return;
       try {
         if (isAccent) {
-          this.playHighClick?.(tickDuration);
+          this.playHighClick?.();
         } else {
-          this.playLowClick?.(tickDuration);
+          this.playLowClick?.();
         }
       } catch (e) {}
     };
