@@ -140,6 +140,9 @@ export function SettingsModal({
     trackWidthRef.current = e.nativeEvent.layout.width;
   }, []);
 
+  const onVolumeChangeRef = useRef(onVolumeChange);
+  onVolumeChangeRef.current = onVolumeChange;
+
   const updateVolumeFromX = useCallback(
     (pageX: number) => {
       const w = trackWidthRef.current;
@@ -160,10 +163,13 @@ export function SettingsModal({
           }
         }
       }
-      onVolumeChange(rounded);
+      onVolumeChangeRef.current(rounded);
     },
-    [onVolumeChange]
+    []
   );
+
+  const updateVolumeRef = useRef(updateVolumeFromX);
+  updateVolumeRef.current = updateVolumeFromX;
 
   const panResponder = useRef(
     PanResponder.create({
@@ -173,14 +179,14 @@ export function SettingsModal({
         if (trackRef.current) {
           (trackRef.current as any).measureInWindow?.((x: number) => {
             trackLeftRef.current = x + 8;
-            updateVolumeFromX(e.nativeEvent.pageX);
+            updateVolumeRef.current(e.nativeEvent.pageX);
           });
         } else {
-          updateVolumeFromX(e.nativeEvent.pageX);
+          updateVolumeRef.current(e.nativeEvent.pageX);
         }
       },
       onPanResponderMove: (e) => {
-        updateVolumeFromX(e.nativeEvent.pageX);
+        updateVolumeRef.current(e.nativeEvent.pageX);
       },
       onPanResponderRelease: () => {},
     })
