@@ -36,147 +36,154 @@ function writeWav(filePath, samples) {
   console.log(`Written: ${filePath} (${numSamples} samples, ${(numSamples / SAMPLE_RATE * 1000).toFixed(0)}ms)`);
 }
 
-function envelope(t, attack, decay, sustain, release, duration) {
-  if (t < attack) return t / attack;
-  if (t < attack + decay) return 1 - (1 - sustain) * ((t - attack) / decay);
-  if (t < duration - release) return sustain;
-  return sustain * (1 - (t - (duration - release)) / release);
+function normalize(samples, peak) {
+  let max = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const abs = Math.abs(samples[i]);
+    if (abs > max) max = abs;
+  }
+  if (max === 0) return samples;
+  const scale = peak / max;
+  for (let i = 0; i < samples.length; i++) {
+    samples[i] *= scale;
+  }
+  return samples;
 }
 
 function generateClassicHigh() {
+  const duration = 0.03;
+  const numSamples = Math.floor(SAMPLE_RATE * duration);
+  const samples = new Float64Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SAMPLE_RATE;
+    const env = Math.exp(-t * 150);
+    const freq = 1800 + 800 * Math.exp(-t * 300);
+    const s = Math.sin(2 * Math.PI * freq * t) * 0.8
+            + Math.sin(2 * Math.PI * freq * 2.3 * t) * 0.25
+            + Math.sin(2 * Math.PI * freq * 3.7 * t) * 0.15;
+    const noise = (Math.random() * 2 - 1) * Math.exp(-t * 400) * 0.2;
+    samples[i] = (s + noise) * env;
+  }
+  return normalize(samples, 0.98);
+}
+
+function generateClassicLow() {
   const duration = 0.025;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 200) * 0.95;
-    const freq = 1800 + 800 * Math.exp(-t * 300);
-    const s = Math.sin(2 * Math.PI * freq * t) * 0.7
-            + Math.sin(2 * Math.PI * freq * 2.3 * t) * 0.15
-            + Math.sin(2 * Math.PI * freq * 3.7 * t) * 0.08;
+    const env = Math.exp(-t * 180);
+    const freq = 1200 + 400 * Math.exp(-t * 350);
+    const s = Math.sin(2 * Math.PI * freq * t) * 0.8
+            + Math.sin(2 * Math.PI * freq * 2.1 * t) * 0.2;
     const noise = (Math.random() * 2 - 1) * Math.exp(-t * 500) * 0.15;
     samples[i] = (s + noise) * env;
   }
-  return samples;
+  return normalize(samples, 0.95);
 }
 
-function generateClassicLow() {
+function generateWoodblockHigh() {
+  const duration = 0.05;
+  const numSamples = Math.floor(SAMPLE_RATE * duration);
+  const samples = new Float64Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SAMPLE_RATE;
+    const env = Math.exp(-t * 90);
+    const f1 = 900 * Math.exp(-t * 30);
+    const f2 = 2200 * Math.exp(-t * 50);
+    const s = Math.sin(2 * Math.PI * f1 * t) * 0.6
+            + Math.sin(2 * Math.PI * f2 * t) * 0.4
+            + Math.sin(2 * Math.PI * 3400 * t) * Math.exp(-t * 150) * 0.2;
+    const noise = (Math.random() * 2 - 1) * Math.exp(-t * 250) * 0.15;
+    samples[i] = (s + noise) * env;
+  }
+  return normalize(samples, 0.98);
+}
+
+function generateWoodblockLow() {
+  const duration = 0.06;
+  const numSamples = Math.floor(SAMPLE_RATE * duration);
+  const samples = new Float64Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SAMPLE_RATE;
+    const env = Math.exp(-t * 70);
+    const f1 = 600 * Math.exp(-t * 25);
+    const f2 = 1500 * Math.exp(-t * 40);
+    const s = Math.sin(2 * Math.PI * f1 * t) * 0.6
+            + Math.sin(2 * Math.PI * f2 * t) * 0.35
+            + Math.sin(2 * Math.PI * 2500 * t) * Math.exp(-t * 130) * 0.15;
+    const noise = (Math.random() * 2 - 1) * Math.exp(-t * 200) * 0.12;
+    samples[i] = (s + noise) * env;
+  }
+  return normalize(samples, 0.95);
+}
+
+function generateDigitalHigh() {
   const duration = 0.02;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 250) * 0.75;
-    const freq = 1200 + 400 * Math.exp(-t * 350);
-    const s = Math.sin(2 * Math.PI * freq * t) * 0.7
-            + Math.sin(2 * Math.PI * freq * 2.1 * t) * 0.12;
-    const noise = (Math.random() * 2 - 1) * Math.exp(-t * 600) * 0.1;
-    samples[i] = (s + noise) * env;
-  }
-  return samples;
-}
-
-function generateWoodblockHigh() {
-  const duration = 0.045;
-  const numSamples = Math.floor(SAMPLE_RATE * duration);
-  const samples = new Float64Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 120) * 0.85;
-    const f1 = 900 * Math.exp(-t * 30);
-    const f2 = 2200 * Math.exp(-t * 50);
-    const s = Math.sin(2 * Math.PI * f1 * t) * 0.5
-            + Math.sin(2 * Math.PI * f2 * t) * 0.3
-            + Math.sin(2 * Math.PI * 3400 * t) * Math.exp(-t * 200) * 0.15;
-    const noise = (Math.random() * 2 - 1) * Math.exp(-t * 300) * 0.12;
-    samples[i] = (s + noise) * env;
-  }
-  return samples;
-}
-
-function generateWoodblockLow() {
-  const duration = 0.055;
-  const numSamples = Math.floor(SAMPLE_RATE * duration);
-  const samples = new Float64Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 90) * 0.75;
-    const f1 = 600 * Math.exp(-t * 25);
-    const f2 = 1500 * Math.exp(-t * 40);
-    const s = Math.sin(2 * Math.PI * f1 * t) * 0.5
-            + Math.sin(2 * Math.PI * f2 * t) * 0.25
-            + Math.sin(2 * Math.PI * 2500 * t) * Math.exp(-t * 180) * 0.1;
-    const noise = (Math.random() * 2 - 1) * Math.exp(-t * 250) * 0.1;
-    samples[i] = (s + noise) * env;
-  }
-  return samples;
-}
-
-function generateDigitalHigh() {
-  const duration = 0.015;
-  const numSamples = Math.floor(SAMPLE_RATE * duration);
-  const samples = new Float64Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 350) * 0.9;
+    const env = Math.exp(-t * 250);
     const freq = 2400;
-    const sq = Math.sign(Math.sin(2 * Math.PI * freq * t)) * 0.4;
+    const sq = Math.sign(Math.sin(2 * Math.PI * freq * t)) * 0.5;
+    const tri = (2 / Math.PI) * Math.asin(Math.sin(2 * Math.PI * freq * 1.5 * t)) * 0.35;
+    const sine = Math.sin(2 * Math.PI * freq * 0.5 * t) * 0.25;
+    samples[i] = (sq + tri + sine) * env;
+  }
+  return normalize(samples, 0.98);
+}
+
+function generateDigitalLow() {
+  const duration = 0.018;
+  const numSamples = Math.floor(SAMPLE_RATE * duration);
+  const samples = new Float64Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SAMPLE_RATE;
+    const env = Math.exp(-t * 300);
+    const freq = 1600;
+    const sq = Math.sign(Math.sin(2 * Math.PI * freq * t)) * 0.45;
     const tri = (2 / Math.PI) * Math.asin(Math.sin(2 * Math.PI * freq * 1.5 * t)) * 0.3;
     const sine = Math.sin(2 * Math.PI * freq * 0.5 * t) * 0.2;
     samples[i] = (sq + tri + sine) * env;
   }
-  return samples;
+  return normalize(samples, 0.95);
 }
 
-function generateDigitalLow() {
-  const duration = 0.012;
+function generateRimshotHigh() {
+  const duration = 0.065;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 400) * 0.7;
-    const freq = 1600;
-    const sq = Math.sign(Math.sin(2 * Math.PI * freq * t)) * 0.35;
-    const tri = (2 / Math.PI) * Math.asin(Math.sin(2 * Math.PI * freq * 1.5 * t)) * 0.25;
-    const sine = Math.sin(2 * Math.PI * freq * 0.5 * t) * 0.15;
-    samples[i] = (sq + tri + sine) * env;
+    const env1 = Math.exp(-t * 60);
+    const env2 = Math.exp(-t * 150);
+    const body = Math.sin(2 * Math.PI * 400 * t) * 0.4 * env1
+               + Math.sin(2 * Math.PI * 800 * t) * 0.2 * env1;
+    const crack = (Math.random() * 2 - 1) * 0.6 * env2;
+    const ring = Math.sin(2 * Math.PI * 1800 * t) * 0.25 * Math.exp(-t * 120)
+               + Math.sin(2 * Math.PI * 3200 * t) * 0.15 * Math.exp(-t * 200);
+    samples[i] = body + crack + ring;
   }
-  return samples;
+  return normalize(samples, 0.98);
 }
 
-function generateRimshotHigh() {
-  const duration = 0.06;
+function generateRimshotLow() {
+  const duration = 0.055;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
     const env1 = Math.exp(-t * 80);
     const env2 = Math.exp(-t * 200);
-    const body = Math.sin(2 * Math.PI * 400 * t) * 0.3 * env1
-               + Math.sin(2 * Math.PI * 800 * t) * 0.15 * env1;
-    const crack = (Math.random() * 2 - 1) * 0.5 * env2;
-    const ring = Math.sin(2 * Math.PI * 1800 * t) * 0.2 * Math.exp(-t * 150)
-               + Math.sin(2 * Math.PI * 3200 * t) * 0.1 * Math.exp(-t * 250);
-    samples[i] = (body + crack + ring) * 0.85;
+    const body = Math.sin(2 * Math.PI * 300 * t) * 0.35 * env1
+               + Math.sin(2 * Math.PI * 600 * t) * 0.15 * env1;
+    const crack = (Math.random() * 2 - 1) * 0.45 * env2;
+    const ring = Math.sin(2 * Math.PI * 1400 * t) * 0.2 * Math.exp(-t * 140);
+    samples[i] = body + crack + ring;
   }
-  return samples;
-}
-
-function generateRimshotLow() {
-  const duration = 0.05;
-  const numSamples = Math.floor(SAMPLE_RATE * duration);
-  const samples = new Float64Array(numSamples);
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / SAMPLE_RATE;
-    const env1 = Math.exp(-t * 100);
-    const env2 = Math.exp(-t * 250);
-    const body = Math.sin(2 * Math.PI * 300 * t) * 0.25 * env1
-               + Math.sin(2 * Math.PI * 600 * t) * 0.1 * env1;
-    const crack = (Math.random() * 2 - 1) * 0.35 * env2;
-    const ring = Math.sin(2 * Math.PI * 1400 * t) * 0.15 * Math.exp(-t * 180);
-    samples[i] = (body + crack + ring) * 0.7;
-  }
-  return samples;
+  return normalize(samples, 0.95);
 }
 
 const outDir = path.join(__dirname, "..", "assets", "sounds");
