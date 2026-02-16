@@ -133,10 +133,8 @@ export default function MetronomeScreen() {
     const engine = new MetronomeEngine();
     engineRef.current = engine;
 
-    const restartPlayer = (active: any, other: any) => {
+    const restartPlayer = (active: any) => {
       try {
-        other.pause();
-        other.seekTo(0);
         active.seekTo(0);
         active.play();
       } catch (e) {}
@@ -147,18 +145,16 @@ export default function MetronomeScreen() {
         try {
           const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
           const active = highToggle.current ? players.highB : players.highA;
-          const other = highToggle.current ? players.highA : players.highB;
           highToggle.current = !highToggle.current;
-          restartPlayer(active, other);
+          restartPlayer(active);
         } catch (e) {}
       },
       () => {
         try {
           const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
           const active = lowToggle.current ? players.lowB : players.lowA;
-          const other = lowToggle.current ? players.lowA : players.lowB;
           lowToggle.current = !lowToggle.current;
-          restartPlayer(active, other);
+          restartPlayer(active);
         } catch (e) {}
       }
     );
