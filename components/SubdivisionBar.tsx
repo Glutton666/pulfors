@@ -99,6 +99,7 @@ export function SubdivisionBar({
 
   const cycleType = useCallback(
     (index: number) => {
+      if (isPlaying) return;
       const newPattern = [...pattern];
       const current = newPattern[index];
       const next: BeatType =
@@ -121,10 +122,16 @@ export function SubdivisionBar({
 
       onPatternChange(newPattern);
     },
-    [pattern, onPatternChange]
+    [pattern, onPatternChange, isPlaying]
   );
 
+  const isPlayingRef = useRef(isPlaying);
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
   const addCell = useCallback(() => {
+    if (isPlayingRef.current) return;
     const p = patternRef.current;
     if (p.length >= MAX_CELLS) return;
     if (Platform.OS !== "web") {
@@ -134,6 +141,7 @@ export function SubdivisionBar({
   }, []);
 
   const removeCell = useCallback(() => {
+    if (isPlayingRef.current) return;
     const p = patternRef.current;
     if (p.length <= MIN_CELLS) return;
     if (Platform.OS !== "web") {
@@ -164,6 +172,7 @@ export function SubdivisionBar({
   }, []);
 
   const triggerReset = useCallback(() => {
+    if (isPlayingRef.current) return;
     if (Platform.OS !== "web") {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
@@ -184,6 +193,7 @@ export function SubdivisionBar({
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gs) => {
+        if (isPlayingRef.current) return false;
         return Math.abs(gs.dy) > 12 || Math.abs(gs.dx) > 15;
       },
       onPanResponderGrant: () => {
@@ -274,7 +284,7 @@ export function SubdivisionBar({
 
     const handleMove = (e: MouseEvent) => {
       const g = webGestureRef.current;
-      if (!g.isDown) return;
+      if (!g.isDown || isPlayingRef.current) return;
 
       const dx = e.clientX - g.startX;
       const dy = e.clientY - g.startY;
