@@ -469,8 +469,8 @@ export function BeatIndicator({
 
   const BAR_HEIGHT = beatsPerMeasure <= 4 ? 44 : beatsPerMeasure <= 6 ? 36 : 30;
   const BAR_LINE_COLOR = Colors.textSecondary;
-  const SCROLL_MAX_HEIGHT = 5 * (BAR_HEIGHT + 1) + 2;
-  const needsScroll = beatsPerMeasure > 5;
+  const SCROLL_MAX_HEIGHT = 10 * (BAR_HEIGHT + 1) + 2;
+  const needsScroll = beatsPerMeasure > 10;
 
   const barAreaPanResponder = useMemo(() =>
     PanResponder.create({
@@ -492,11 +492,13 @@ export function BeatIndicator({
 
   useEffect(() => {
     if (!barMode || !isPlaying || currentBeat < 0) return;
-    if (beatsPerMeasure <= 5) return;
+    if (!needsScroll) return;
     const rowH = BAR_HEIGHT + 1;
-    const scrollTarget = Math.max(0, currentBeat * rowH - 60);
+    const visibleHeight = SCROLL_MAX_HEIGHT;
+    const beatTop = currentBeat * rowH;
+    const scrollTarget = Math.max(0, beatTop - (visibleHeight / 2) + (rowH / 2));
     barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
-  }, [barMode, isPlaying, currentBeat, beatsPerMeasure]);
+  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, needsScroll]);
 
   if (barMode) {
     const barRows = beats.map((beat) => {
@@ -608,21 +610,9 @@ export function BeatIndicator({
 
     return (
       <View style={styles.barModeContainer} testID="beat-indicator-bar-mode">
-        <Pressable
-          onPress={onTogglePlay}
-          style={({ pressed }) => [
-            styles.barPlayButton,
-            pressed && styles.playButtonPressed,
-          ]}
-          testID="bar-play-button"
-        >
-          <Ionicons
-            name={isPlaying ? "stop" : "play"}
-            size={40}
-            color={isPlaying ? Colors.danger : C.accent}
-            style={!isPlaying ? { marginLeft: 4 } : undefined}
-          />
-        </Pressable>
+        <Text style={[styles.hintText, { marginBottom: -4 }]}>
+          {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}  {"\u2022"}  drag {"\u2193"} add  {"\u2022"}  drag {"\u2191"} remove
+        </Text>
 
         <View
           style={styles.barMeasureOuter}
@@ -654,9 +644,21 @@ export function BeatIndicator({
           )}
         </View>
 
-        <Text style={[styles.hintText, { marginTop: 2 }]}>
-          {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}  {"\u2022"}  drag {"\u2193"} add  {"\u2022"}  drag {"\u2191"} remove
-        </Text>
+        <Pressable
+          onPress={onTogglePlay}
+          style={({ pressed }) => [
+            styles.barPlayButton,
+            pressed && styles.playButtonPressed,
+          ]}
+          testID="bar-play-button"
+        >
+          <Ionicons
+            name={isPlaying ? "stop" : "play"}
+            size={40}
+            color={isPlaying ? Colors.danger : C.accent}
+            style={!isPlaying ? { marginLeft: 4 } : undefined}
+          />
+        </Pressable>
 
         <Pressable
           onPress={() => onBarModeChange(false)}
