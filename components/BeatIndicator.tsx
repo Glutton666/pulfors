@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useMemo } from "react";
+import React, { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   PanResponder,
   Pressable,
   ScrollView,
+  Modal,
+  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
@@ -223,6 +225,11 @@ function DialBeatDot({
   );
 }
 
+export interface BarRepeat {
+  type: "count" | "duration";
+  value: number;
+}
+
 interface BeatIndicatorProps {
   beatsPerMeasure: number;
   currentBeat: number;
@@ -239,6 +246,9 @@ interface BeatIndicatorProps {
   beatSubdivisions: Record<string, BeatType[]>;
   onBeatSubdivisionChange: (beatIndex: number, pattern: BeatType[] | null) => void;
   activeSubNote: number;
+  barAreaRef?: React.RefObject<View | null>;
+  barRepeats: Record<number, BarRepeat>;
+  onBarRepeatChange: (beat: number, repeat: BarRepeat | null) => void;
 }
 
 export function BeatIndicator({
@@ -257,6 +267,9 @@ export function BeatIndicator({
   beatSubdivisions,
   onBeatSubdivisionChange,
   activeSubNote,
+  barAreaRef,
+  barRepeats,
+  onBarRepeatChange,
 }: BeatIndicatorProps) {
   const { colors: C } = useTheme();
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
@@ -466,6 +479,51 @@ export function BeatIndicator({
   }, [isPlaying, beatSubdivisions, onBeatSubdivisionChange]);
 
   const barScrollRef = useRef<ScrollView>(null);
+  const [repeatModalBeat, setRepeatModalBeat] = useState<number | null>(null);
+  const [repeatType, setRepeatType] = useState<"count" | "duration">("count");
+  const [repeatCountVal, setRepeatCountVal] = useState(2);
+  const [repeatMinVal, setRepeatMinVal] = useState(0);
+  const [repeatSecVal, setRepeatSecVal] = useState(30);
+
+  const openRepeatModal = useCallback((beat: number) => {
+    const existing = barRepeats[beat];
+    if (existing) {
+      setRepeatType(existing.type);
+      if (existing.type === "count") {
+        setRepeatCountVal(existing.value);
+      } else {
+        setRepeatMinVal(Math.floor(existing.value / 60));
+        setRepeatSecVal(existing.value % 60);
+      }
+    } else {
+      setRepeatType("count");
+      setRepeatCountVal(2);
+      setRepeatMinVal(0);
+      setRepeatSecVal(30);
+    }
+    setRepeatModalBeat(beat);
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+  }, [barRepeats]);
+
+  const saveRepeat = useCallback(() => {
+    if (repeatModalBeat === null) return;
+    const val = repeatType === "count" ? repeatCountVal : repeatMinVal * 60 + repeatSecVal;
+    onBarRepeatChange(repeatModalBeat, { type: repeatType, value: val });
+    setRepeatModalBeat(null);
+  }, [repeatModalBeat, repeatType, repeatCountVal, repeatMinVal, repeatSecVal, onBarRepeatChange]);
+
+  const clearRepeat = useCallback(() => {
+    if (repeatModalBeat === null) return;
+    onBarRepeatChange(repeatModalBeat, null);
+    setRepeatModalBeat(null);
+  }, [repeatModalBeat, onBarRepeatChange]);
+
+  const formatRepeat = (r: BarRepeat): string => {
+    if (r.type === "count") return `\u00D7${r.value}`;
+    const m = Math.floor(r.value / 60);
+    const s = r.value % 60;
+    return m > 0 ? `${m}:${s.toString().padStart(2, "0")}` : `${s}s`;
+  };
 
   const BAR_HEIGHT = beatsPerMeasure <= 4 ? 44 : beatsPerMeasure <= 6 ? 36 : 30;
   const BAR_LINE_COLOR = Colors.textSecondary;
@@ -497,23 +555,30 @@ export function BeatIndicator({
     const visibleHeight = SCROLL_MAX_HEIGHT;
     const beatTop = currentBeat * rowH;
     const scrollTarget = Math.max(0, beatTop - (visibleHeight / 2) + (rowH / 2));
-    barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
+    barScrollRef.current?.scrollTo({ y: scrollTarget, animated: false });
   }, [barMode, isPlaying, currentBeat, beatsPerMeasure, needsScroll]);
 
   if (barMode) {
+    const isDropping = dropTargetBeat !== null;
     const barRows = beats.map((beat) => {
       const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
       const isCurrent = isPlaying && currentBeat === beat;
       const bType = beatTypes[beat] || "normal";
+      const isDropTarget = isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
+      const repeat = barRepeats[beat];
       return (
-        <View
+        <Pressable
           key={`bar-${beat}`}
+          onLongPress={() => { if (!isPlaying) openRepeatModal(beat); }}
+          delayLongPress={500}
+          onPress={() => cycleBeatType(beat)}
           style={[
             styles.barBeatWrapper,
             isCurrent && styles.barBeatWrapperActive,
+            isDropTarget && { backgroundColor: "rgba(255,255,255,0.06)", borderColor: C.accent, borderWidth: 1, borderRadius: 4, marginHorizontal: -1 },
           ]}
         >
-          <Pressable onPress={() => cycleBeatType(beat)} style={styles.barBeatLabel}>
+          <View style={styles.barBeatLabel}>
             <Text style={[
               styles.barBeatLabelText,
               {
@@ -526,7 +591,7 @@ export function BeatIndicator({
             ]}>
               {beat + 1}
             </Text>
-          </Pressable>
+          </View>
           <View style={[
             styles.barBeatContent,
             { height: BAR_HEIGHT },
@@ -540,7 +605,7 @@ export function BeatIndicator({
               return (
                 <Pressable
                   key={ci}
-                  onPress={() => handleBarCellPress(beat, ci)}
+                  onPress={(e) => { e.stopPropagation(); handleBarCellPress(beat, ci); }}
                   style={[styles.barNoteCell, !isLast && { borderRightWidth: 1, borderRightColor: "rgba(255,255,255,0.08)" }]}
                 >
                   {isStrongType ? (
@@ -574,37 +639,18 @@ export function BeatIndicator({
             })}
           </View>
           <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
-          <View style={styles.barSplitControls}>
+          {repeat ? (
             <Pressable
-              onPress={() => {
-                if (isPlaying) return;
-                const cur = beatSubdivisions[String(beat)] || ["normal"];
-                if (cur.length > 1) {
-                  const np = cur.slice(0, -1);
-                  onBeatSubdivisionChange(beat, np.length <= 1 ? null : np);
-                }
-              }}
-              style={styles.barSplitBtn}
-              hitSlop={4}
+              onPress={(e) => { e.stopPropagation(); openRepeatModal(beat); }}
+              style={styles.barRepeatBadge}
+              hitSlop={6}
             >
-              <Ionicons name="remove" size={14} color={Colors.textTertiary} />
+              <Text style={[styles.barRepeatText, { color: C.accent }]}>{formatRepeat(repeat)}</Text>
             </Pressable>
-            <Text style={styles.barSplitCount}>{pattern.length}</Text>
-            <Pressable
-              onPress={() => {
-                if (isPlaying) return;
-                const cur = beatSubdivisions[String(beat)] || ["normal"];
-                if (cur.length < 8) {
-                  onBeatSubdivisionChange(beat, [...cur, "normal" as BeatType]);
-                }
-              }}
-              style={styles.barSplitBtn}
-              hitSlop={4}
-            >
-              <Ionicons name="add" size={14} color={Colors.textTertiary} />
-            </Pressable>
-          </View>
-        </View>
+          ) : (
+            <View style={styles.barRepeatBadge} />
+          )}
+        </Pressable>
       );
     });
 
@@ -615,6 +661,7 @@ export function BeatIndicator({
         </Text>
 
         <View
+          ref={barAreaRef}
           style={styles.barMeasureOuter}
           {...barAreaPanResponder.panHandlers}
         >
@@ -645,6 +692,17 @@ export function BeatIndicator({
         </View>
 
         <Pressable
+          onPress={() => onBarModeChange(false)}
+          style={styles.barModeHandle}
+          testID="close-bar-mode"
+          hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+          accessibilityRole="button"
+          accessibilityLabel="Close bar mode"
+        >
+          <Ionicons name="chevron-down" size={18} color={Colors.textTertiary} />
+        </Pressable>
+
+        <Pressable
           onPress={onTogglePlay}
           style={({ pressed }) => [
             styles.barPlayButton,
@@ -660,16 +718,80 @@ export function BeatIndicator({
           />
         </Pressable>
 
-        <Pressable
-          onPress={() => onBarModeChange(false)}
-          style={styles.barModeHandle}
-          testID="close-bar-mode"
-          hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
-          accessibilityRole="button"
-          accessibilityLabel="Close bar mode"
+        <Modal
+          visible={repeatModalBeat !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setRepeatModalBeat(null)}
         >
-          <Ionicons name="chevron-down" size={18} color={Colors.textTertiary} />
-        </Pressable>
+          <Pressable style={styles.repeatModalOverlay} onPress={() => setRepeatModalBeat(null)}>
+            <View style={[styles.repeatModalCard, { borderColor: C.accent }]} onStartShouldSetResponder={() => true}>
+              <Text style={styles.repeatModalTitle}>
+                Bar {repeatModalBeat !== null ? repeatModalBeat + 1 : ""} Repeat
+              </Text>
+
+              <View style={styles.repeatTypeRow}>
+                <Pressable
+                  onPress={() => setRepeatType("count")}
+                  style={[styles.repeatTypeBtn, repeatType === "count" && { backgroundColor: C.accent }]}
+                >
+                  <Text style={[styles.repeatTypeBtnText, repeatType === "count" && { color: Colors.background }]}>Count</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setRepeatType("duration")}
+                  style={[styles.repeatTypeBtn, repeatType === "duration" && { backgroundColor: C.accent }]}
+                >
+                  <Text style={[styles.repeatTypeBtnText, repeatType === "duration" && { color: Colors.background }]}>Duration</Text>
+                </Pressable>
+              </View>
+
+              {repeatType === "count" ? (
+                <View style={styles.repeatValueRow}>
+                  <Pressable onPress={() => setRepeatCountVal(Math.max(2, repeatCountVal - 1))} style={styles.repeatValBtn}>
+                    <Ionicons name="remove" size={20} color={Colors.text} />
+                  </Pressable>
+                  <Text style={styles.repeatValText}>{"\u00D7"}{repeatCountVal}</Text>
+                  <Pressable onPress={() => setRepeatCountVal(Math.min(99, repeatCountVal + 1))} style={styles.repeatValBtn}>
+                    <Ionicons name="add" size={20} color={Colors.text} />
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.repeatValueRow}>
+                  <View style={styles.repeatTimeGroup}>
+                    <Pressable onPress={() => setRepeatMinVal(Math.max(0, repeatMinVal - 1))} style={styles.repeatValBtn}>
+                      <Ionicons name="remove" size={18} color={Colors.text} />
+                    </Pressable>
+                    <Text style={styles.repeatValText}>{repeatMinVal}</Text>
+                    <Pressable onPress={() => setRepeatMinVal(Math.min(59, repeatMinVal + 1))} style={styles.repeatValBtn}>
+                      <Ionicons name="add" size={18} color={Colors.text} />
+                    </Pressable>
+                    <Text style={styles.repeatTimeLabel}>min</Text>
+                  </View>
+                  <Text style={styles.repeatTimeSep}>:</Text>
+                  <View style={styles.repeatTimeGroup}>
+                    <Pressable onPress={() => setRepeatSecVal(Math.max(0, repeatSecVal - 5))} style={styles.repeatValBtn}>
+                      <Ionicons name="remove" size={18} color={Colors.text} />
+                    </Pressable>
+                    <Text style={styles.repeatValText}>{repeatSecVal.toString().padStart(2, "0")}</Text>
+                    <Pressable onPress={() => setRepeatSecVal(Math.min(55, repeatSecVal + 5))} style={styles.repeatValBtn}>
+                      <Ionicons name="add" size={18} color={Colors.text} />
+                    </Pressable>
+                    <Text style={styles.repeatTimeLabel}>sec</Text>
+                  </View>
+                </View>
+              )}
+
+              <View style={styles.repeatActions}>
+                <Pressable onPress={clearRepeat} style={styles.repeatClearBtn}>
+                  <Text style={[styles.repeatClearText, { color: Colors.danger }]}>Clear</Text>
+                </Pressable>
+                <Pressable onPress={saveRepeat} style={[styles.repeatSaveBtn, { backgroundColor: C.accent }]}>
+                  <Text style={[styles.repeatSaveText, { color: Colors.background }]}>Save</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Pressable>
+        </Modal>
       </View>
     );
   }
@@ -936,22 +1058,115 @@ const styles = StyleSheet.create({
     marginLeft: 0,
     opacity: 0.4,
   },
-  barSplitControls: {
-    flexDirection: "column",
+  barRepeatBadge: {
+    width: 32,
     alignItems: "center",
     justifyContent: "center",
-    width: 22,
-    gap: 0,
+    paddingHorizontal: 2,
   },
-  barSplitBtn: {
-    padding: 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  barSplitCount: {
+  barRepeatText: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 9,
+    fontSize: 10,
+    letterSpacing: 0.5,
+  },
+  repeatModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  repeatModalCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 20,
+    width: 280,
+    gap: 16,
+  },
+  repeatModalTitle: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 16,
+    color: Colors.text,
+    textAlign: "center" as const,
+  },
+  repeatTypeRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  repeatTypeBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.border,
+    alignItems: "center",
+  },
+  repeatTypeBtnText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
+    color: Colors.text,
+  },
+  repeatValueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  repeatValBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  repeatValText: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 22,
+    color: Colors.text,
+    minWidth: 48,
+    textAlign: "center" as const,
+  },
+  repeatTimeGroup: {
+    alignItems: "center",
+    gap: 4,
+  },
+  repeatTimeLabel: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 10,
     color: Colors.textTertiary,
+  },
+  repeatTimeSep: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 22,
+    color: Colors.textSecondary,
+    marginBottom: 16,
+  },
+  repeatActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+  },
+  repeatClearBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.danger,
+    alignItems: "center",
+  },
+  repeatClearText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 14,
+  },
+  repeatSaveBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  repeatSaveText: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 14,
   },
   barMeasureOuter: {
     width: "100%" as any,

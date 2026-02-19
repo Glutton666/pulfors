@@ -35,6 +35,7 @@ import {
   DIAL_SIZE,
   DOT_RADIUS_FROM_CENTER,
 } from "@/components/BeatIndicator";
+import type { BarRepeat } from "@/components/BeatIndicator";
 import { BpmSlider } from "@/components/BpmSlider";
 import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
@@ -74,6 +75,9 @@ export default function MetronomeScreen() {
     Record<string, BeatType[]>
   >({});
   const [barMode, setBarMode] = useState(false);
+  const [barRepeats, setBarRepeats] = useState<Record<number, BarRepeat>>({});
+  const barAreaRef = useRef<View>(null);
+  const barAreaLayoutRef = useRef({ y: 0, height: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
   const [dropTargetBeat, setDropTargetBeat] = useState<number | null>(null);
@@ -533,8 +537,33 @@ export default function MetronomeScreen() {
 
   const CENTER_HUB_RADIUS = 55;
 
+  const measureBarArea = useCallback(() => {
+    const ref = barAreaRef.current as any;
+    if (!ref) return;
+    if (Platform.OS === "web" && ref?.getBoundingClientRect) {
+      const rect = ref.getBoundingClientRect();
+      barAreaLayoutRef.current = { y: rect.top, height: rect.height };
+    } else if (ref?.measure) {
+      ref.measure((_x: number, _y: number, _w: number, h: number, _px: number, py: number) => {
+        barAreaLayoutRef.current = { y: py, height: h };
+      });
+    }
+  }, []);
+
   const findDropTarget = useCallback(
     (pageX: number, pageY: number): number | null => {
+      if (barMode) {
+        const layout = barAreaLayoutRef.current;
+        if (layout.height <= 0) return null;
+        const relY = pageY - layout.y;
+        if (relY < 0 || relY > layout.height) return null;
+        const barH = beatsPerMeasure <= 4 ? 44 : beatsPerMeasure <= 6 ? 36 : 30;
+        const rowH = barH + 1;
+        const beatIdx = Math.floor(relY / rowH);
+        if (beatIdx >= 0 && beatIdx < beatsPerMeasure) return beatIdx;
+        return -1;
+      }
+
       const center = dialCenterRef.current;
       if (center.x === 0 && center.y === 0) return null;
 
@@ -561,16 +590,20 @@ export default function MetronomeScreen() {
       if (closestDist < 40) return closestBeat;
       return null;
     },
-    [beatsPerMeasure]
+    [beatsPerMeasure, barMode]
   );
 
   const handleDragStart = useCallback(() => {
     setIsDragging(true);
-    measureDialCenter();
+    if (barMode) {
+      measureBarArea();
+    } else {
+      measureDialCenter();
+    }
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-  }, [measureDialCenter]);
+  }, [measureDialCenter, measureBarArea, barMode]);
 
   const handleDragMove = useCallback(
     (pageX: number, pageY: number) => {
@@ -631,6 +664,18 @@ export default function MetronomeScreen() {
     },
     [findDropTarget, subdivisionPattern, beatSubdivisions, persistSettings, applyToAllBeats]
   );
+
+  const handleBarRepeatChange = useCallback((beat: number, repeat: BarRepeat | null) => {
+    setBarRepeats(prev => {
+      const next = { ...prev };
+      if (repeat) {
+        next[beat] = repeat;
+      } else {
+        delete next[beat];
+      }
+      return next;
+    });
+  }, []);
 
   const beatSubdivisionCounts = useMemo(() => {
     const counts: Record<number, number> = {};
@@ -725,6 +770,9 @@ export default function MetronomeScreen() {
             beatSubdivisions={beatSubdivisions}
             onBeatSubdivisionChange={handleBeatSubdivisionChange}
             activeSubNote={activeSubNote}
+            barAreaRef={barAreaRef}
+            barRepeats={barRepeats}
+            onBarRepeatChange={handleBarRepeatChange}
           />
         </View>
 
