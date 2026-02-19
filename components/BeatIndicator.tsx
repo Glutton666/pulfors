@@ -21,7 +21,7 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 
-export type BeatType = "accent" | "normal" | "mute";
+export type BeatType = "strong" | "accent" | "normal" | "mute";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const DIAL_SIZE = Math.min(SCREEN_WIDTH - 48, 300);

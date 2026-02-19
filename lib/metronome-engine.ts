@@ -1,7 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { Platform } from "react-native";
 
-export type BeatType = "accent" | "normal" | "mute";
+export type BeatType = "strong" | "accent" | "normal" | "mute";
 export type HapticMode = "all" | "accent" | "off";
 
 export const soundSets = {
@@ -47,6 +47,7 @@ export class MetronomeEngine {
   private onSubBeat: ((beat: number, subBeat: number) => void) | null = null;
   private onMeasureComplete: (() => void) | null = null;
   private stopAfterMeasure = false;
+  private playStrongClick: (() => void) | null = null;
   private playHighClick: (() => void) | null = null;
   private playLowClick: (() => void) | null = null;
   private hapticMode: HapticMode = "all";
@@ -57,9 +58,10 @@ export class MetronomeEngine {
   private measureStartTime = 0;
   private measureDurationMs = 0;
 
-  setAudioCallbacks(playHigh: () => void, playLow: () => void) {
+  setAudioCallbacks(playHigh: () => void, playLow: () => void, playStrong?: () => void) {
     this.playHighClick = playHigh;
     this.playLowClick = playLow;
+    this.playStrongClick = playStrong || null;
   }
 
   setHapticMode(mode: HapticMode) {
@@ -168,6 +170,14 @@ export class MetronomeEngine {
       return custom.map(() => "mute" as BeatType);
     }
 
+    if (beatType === "strong") {
+      const result = [...custom];
+      if (result[0] === "normal" || result[0] === "accent") {
+        result[0] = "strong";
+      }
+      return result;
+    }
+
     if (beatType === "accent") {
       const result = [...custom];
       if (result[0] === "normal") {
@@ -228,13 +238,16 @@ export class MetronomeEngine {
     this.currentBeat = tick.beat;
     this.currentSubBeat = tick.subBeat;
 
-    const isAccent = tick.type === "accent";
+    const isStrong = tick.type === "strong";
+    const isAccent = tick.type === "accent" || isStrong;
     const isMute = tick.type === "mute";
 
     const playAudio = () => {
       if (isMute) return;
       try {
-        if (isAccent) {
+        if (isStrong) {
+          this.playStrongClick?.();
+        } else if (isAccent) {
           this.playHighClick?.();
         } else {
           this.playLowClick?.();
@@ -248,7 +261,9 @@ export class MetronomeEngine {
         if (shouldHaptic) {
           try {
             Haptics.impactAsync(
-              isAccent
+              isStrong
+                ? Haptics.ImpactFeedbackStyle.Heavy
+                : isAccent
                 ? Haptics.ImpactFeedbackStyle.Heavy
                 : tick.isMainBeat
                 ? Haptics.ImpactFeedbackStyle.Light
