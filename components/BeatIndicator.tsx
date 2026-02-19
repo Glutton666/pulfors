@@ -164,12 +164,13 @@ function DialBeatDot({
           ]}
         >
           <LinearGradient
-            colors={[Colors.white, C.accent, C.accentMuted]}
+            colors={[Colors.white, Colors.white, C.accent, C.accentMuted, Colors.background]}
+            locations={[0, 0.15, 0.4, 0.7, 1]}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}
           >
-            <View style={{ width: size - 10, height: size - 10, borderRadius: (size - 10) / 2, backgroundColor: C.accentMuted }} />
+            <View style={{ width: size - 14, height: size - 14, borderRadius: (size - 14) / 2, backgroundColor: C.accentMuted }} />
           </LinearGradient>
         </Animated.View>
       ) : (

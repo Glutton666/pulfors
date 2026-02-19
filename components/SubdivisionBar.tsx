@@ -392,12 +392,13 @@ export function SubdivisionBar({
                 {type === "strong" ? (
                   <View style={[styles.cell, { overflow: "hidden", opacity: isPlaying ? (isActive ? 1 : 0.3) : 1 }]}>
                     <LinearGradient
-                      colors={[Colors.white, C.accent, C.accentMuted]}
+                      colors={[Colors.white, Colors.white, C.accent, C.accentMuted, Colors.background]}
+                      locations={[0, 0.15, 0.4, 0.7, 1]}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={{ width: CELL_SIZE, height: CELL_SIZE, alignItems: "center", justifyContent: "center", borderRadius: 6 }}
                     >
-                      <View style={{ width: CELL_SIZE - 8, height: CELL_SIZE - 8, borderRadius: 4, backgroundColor: C.accentMuted }} />
+                      <View style={{ width: CELL_SIZE - 10, height: CELL_SIZE - 10, borderRadius: 3, backgroundColor: C.accentMuted }} />
                     </LinearGradient>
                   </View>
                 ) : (
@@ -451,7 +452,8 @@ export function DragGhost({
         type === "strong" ? (
           <View key={i} style={[styles.ghostCell, { overflow: "hidden" }]}>
             <LinearGradient
-              colors={[Colors.white, GC.accent, GC.accentMuted]}
+              colors={[Colors.white, Colors.white, GC.accent, GC.accentMuted, Colors.background]}
+              locations={[0, 0.15, 0.4, 0.7, 1]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={{ width: 18, height: 18, alignItems: "center", justifyContent: "center", borderRadius: 4 }}
