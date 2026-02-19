@@ -39,11 +39,6 @@ interface ScheduledTick {
   isMainBeat: boolean;
 }
 
-export interface BarRepeatConfig {
-  type: "count" | "duration";
-  value: number;
-}
-
 export class MetronomeEngine {
   private timerId: ReturnType<typeof setTimeout> | null = null;
   private isRunning = false;
@@ -53,7 +48,6 @@ export class MetronomeEngine {
   private currentSubBeat = 0;
   private beatTypes: BeatType[] = ["accent", "normal", "normal", "normal"];
   private beatSubdivisions: Map<number, BeatType[]> = new Map();
-  private barRepeats: Map<number, BarRepeatConfig> = new Map();
   private onBeat: ((beat: number, isAccent: boolean) => void) | null = null;
   private onSubBeat: ((beat: number, subBeat: number) => void) | null = null;
   private onMeasureComplete: (() => void) | null = null;
@@ -161,30 +155,6 @@ export class MetronomeEngine {
     }
   }
 
-  setBarRepeat(beatIndex: number, repeat: BarRepeatConfig | null) {
-    if (repeat === null) {
-      this.barRepeats.delete(beatIndex);
-    } else {
-      this.barRepeats.set(beatIndex, { ...repeat });
-    }
-  }
-
-  setAllBarRepeats(repeats: Record<number, BarRepeatConfig>) {
-    this.barRepeats.clear();
-    for (const [key, value] of Object.entries(repeats)) {
-      this.barRepeats.set(Number(key), { ...value });
-    }
-  }
-
-  private getRepeatCount(beat: number): number {
-    const repeat = this.barRepeats.get(beat);
-    if (!repeat) return 1;
-    if (repeat.type === "count") return Math.max(1, repeat.value);
-    const beatDurMs = 60000 / this.bpm;
-    const durationMs = repeat.value * 1000;
-    return Math.max(1, Math.round(durationMs / beatDurMs));
-  }
-
   getBpm() {
     return this.bpm;
   }
@@ -230,21 +200,17 @@ export class MetronomeEngine {
     let time = 0;
 
     for (let beat = 0; beat < this.beatsPerMeasure; beat++) {
-      const repeatCount = this.getRepeatCount(beat);
       const subPattern = this.getSubPattern(beat);
       const subDur = beatDur / subPattern.length;
-
-      for (let rep = 0; rep < repeatCount; rep++) {
-        for (let sub = 0; sub < subPattern.length; sub++) {
-          ticks.push({
-            time,
-            beat,
-            subBeat: sub,
-            type: subPattern[sub],
-            isMainBeat: sub === 0,
-          });
-          time += subDur;
-        }
+      for (let sub = 0; sub < subPattern.length; sub++) {
+        ticks.push({
+          time,
+          beat,
+          subBeat: sub,
+          type: subPattern[sub],
+          isMainBeat: sub === 0,
+        });
+        time += subDur;
       }
     }
 
