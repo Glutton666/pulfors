@@ -35,7 +35,8 @@ import {
   DIAL_SIZE,
   DOT_RADIUS_FROM_CENTER,
 } from "@/components/BeatIndicator";
-import type { BarRepeat } from "@/components/BeatIndicator";
+import { BarPanel } from "@/components/BarPanel";
+import type { BarRepeat } from "@/components/BarPanel";
 import { BpmSlider } from "@/components/BpmSlider";
 import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
@@ -753,7 +754,7 @@ export default function MetronomeScreen() {
           },
         ]}
       >
-        <View style={styles.topSection}>
+        <View style={[styles.topSection, barMode && { flex: 1 }]}>
           <BeatIndicator
             beatsPerMeasure={beatsPerMeasure}
             currentBeat={currentBeat}
@@ -762,19 +763,34 @@ export default function MetronomeScreen() {
             onTogglePlay={togglePlayPause}
             beatTypes={beatTypes}
             onBeatTypeChange={handleBeatTypeChange}
-            dropTargetBeat={dropTargetBeat}
+            dropTargetBeat={barMode ? null : dropTargetBeat}
             beatSubdivisionCounts={beatSubdivisionCounts}
             dialRef={dialRef}
-            barMode={barMode}
-            onBarModeChange={setBarMode}
-            beatSubdivisions={beatSubdivisions}
-            onBeatSubdivisionChange={handleBeatSubdivisionChange}
-            activeSubNote={activeSubNote}
-            barAreaRef={barAreaRef}
-            barRepeats={barRepeats}
-            onBarRepeatChange={handleBarRepeatChange}
+            onOpenBarPanel={() => setBarMode(true)}
           />
         </View>
+
+        {barMode && (
+          <View style={styles.barPanelSection}>
+            <BarPanel
+              beatsPerMeasure={beatsPerMeasure}
+              currentBeat={currentBeat}
+              isPlaying={isPlaying}
+              onBeatsChange={updateTimeSignature}
+              beatTypes={beatTypes}
+              onBeatTypeChange={handleBeatTypeChange}
+              dropTargetBeat={dropTargetBeat}
+              beatSubdivisions={beatSubdivisions}
+              onBeatSubdivisionChange={handleBeatSubdivisionChange}
+              activeSubNote={activeSubNote}
+              barAreaRef={barAreaRef}
+              barRepeats={barRepeats}
+              onBarRepeatChange={handleBarRepeatChange}
+              visible={barMode}
+              onClose={() => setBarMode(false)}
+            />
+          </View>
+        )}
 
         <View style={styles.bpmSection}>
           <SubdivisionBar
@@ -829,6 +845,10 @@ const styles = StyleSheet.create({
     flex: 2,
     justifyContent: "center",
     alignItems: "center",
+  },
+  barPanelSection: {
+    paddingHorizontal: 0,
+    marginBottom: 8,
   },
   bpmSection: {
     alignItems: "center",
