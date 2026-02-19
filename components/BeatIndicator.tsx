@@ -313,8 +313,7 @@ export function BeatIndicator({
     dialRotation.value = withSpring(0, { damping: 15, stiffness: 300 });
   }, []);
 
-  const processMove = useCallback((clientX: number) => {
-    const dx = clientX - startXRef.current;
+  const processMoveByDx = useCallback((dx: number) => {
     const progress = Math.min(Math.abs(dx) / SWIPE_THRESHOLD, 1);
     const canAdd = beatsRef.current < MAX_BEATS;
     const canRemove = beatsRef.current > MIN_BEATS;
@@ -359,7 +358,7 @@ export function BeatIndicator({
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDraggingRef.current) return;
-      processMove(e.clientX);
+      processMoveByDx(e.clientX - startXRef.current);
     };
 
     const handleMouseUp = () => {
@@ -383,7 +382,7 @@ export function BeatIndicator({
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [processMove, resetVisuals]);
+  }, [processMoveByDx, resetVisuals]);
 
   const panResponder = useRef(
     Platform.OS !== "web"
@@ -391,15 +390,14 @@ export function BeatIndicator({
           onStartShouldSetPanResponder: () => false,
           onStartShouldSetPanResponderCapture: () => false,
           onMoveShouldSetPanResponder: (_, gs) =>
-            Math.abs(gs.dx) > 30 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+            Math.abs(gs.dx) > 20 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
           onMoveShouldSetPanResponderCapture: () => false,
           onShouldBlockNativeResponder: () => false,
-          onPanResponderGrant: (e) => {
-            startXRef.current = e.nativeEvent.pageX;
+          onPanResponderGrant: () => {
             triggeredRef.current = false;
           },
-          onPanResponderMove: (e) => {
-            processMove(e.nativeEvent.pageX);
+          onPanResponderMove: (_, gs) => {
+            processMoveByDx(gs.dx);
           },
           onPanResponderRelease: () => {
             resetVisuals();
@@ -647,23 +645,50 @@ export function BeatIndicator({
 
     return (
       <View style={styles.barModeContainer} testID="beat-indicator-bar-mode">
-        <View style={styles.barTimeSigRow}>
+        <View style={styles.barTopRow}>
           <Pressable
-            onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
-            style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure <= MIN_BEATS) && { opacity: 0.3 }]}
+            onPress={() => onBarModeChange(false)}
+            style={styles.barModeCloseBtn}
+            testID="close-bar-mode"
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Close bar mode"
           >
-            <Ionicons name="remove" size={16} color={Colors.textSecondary} />
+            <Ionicons name="close" size={18} color={Colors.textTertiary} />
           </Pressable>
-          <Text style={styles.hintText}>
-            {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}
-          </Text>
+          <View style={styles.barTimeSigRow}>
+            <Pressable
+              onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+              style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure <= MIN_BEATS) && { opacity: 0.3 }]}
+              hitSlop={8}
+            >
+              <Ionicons name="remove" size={16} color={Colors.textSecondary} />
+            </Pressable>
+            <Text style={styles.hintText}>
+              {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}
+            </Text>
+            <Pressable
+              onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+              style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
+              hitSlop={8}
+            >
+              <Ionicons name="add" size={16} color={Colors.textSecondary} />
+            </Pressable>
+          </View>
           <Pressable
-            onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
-            style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
-            hitSlop={8}
+            onPress={onTogglePlay}
+            style={({ pressed }) => [
+              styles.barPlayBtn,
+              pressed && { opacity: 0.7 },
+            ]}
+            testID="bar-play-button"
           >
-            <Ionicons name="add" size={16} color={Colors.textSecondary} />
+            <Ionicons
+              name={isPlaying ? "stop" : "play"}
+              size={22}
+              color={isPlaying ? Colors.danger : C.accent}
+              style={!isPlaying ? { marginLeft: 2 } : undefined}
+            />
           </Pressable>
         </View>
 
@@ -688,33 +713,6 @@ export function BeatIndicator({
             <View style={styles.barScrollFade} pointerEvents="none" />
           )}
         </View>
-
-        <Pressable
-          onPress={() => onBarModeChange(false)}
-          style={styles.barModeHandle}
-          testID="close-bar-mode"
-          hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
-          accessibilityRole="button"
-          accessibilityLabel="Close bar mode"
-        >
-          <Ionicons name="chevron-down" size={18} color={Colors.textTertiary} />
-        </Pressable>
-
-        <Pressable
-          onPress={onTogglePlay}
-          style={({ pressed }) => [
-            styles.barPlayButton,
-            pressed && styles.playButtonPressed,
-          ]}
-          testID="bar-play-button"
-        >
-          <Ionicons
-            name={isPlaying ? "stop" : "play"}
-            size={40}
-            color={isPlaying ? Colors.danger : C.accent}
-            style={!isPlaying ? { marginLeft: 4 } : undefined}
-          />
-        </Pressable>
 
         <Modal
           visible={repeatModalBeat !== null}
@@ -999,11 +997,31 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   barModeContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
     flex: 1,
     width: "100%" as any,
+  },
+  barTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  barModeCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  barPlayBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   barTimeSigRow: {
     flexDirection: "row",
@@ -1166,6 +1184,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   barMeasureOuter: {
+    flex: 1,
+    flexShrink: 1,
     width: "100%" as any,
     paddingHorizontal: 0,
   },
@@ -1182,11 +1202,6 @@ const styles = StyleSheet.create({
   },
   barBeatWrapperActive: {
     backgroundColor: "rgba(255,255,255,0.03)",
-  },
-  barPlayButton: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 6,
   },
   barModeHandle: {
     alignItems: "center",
