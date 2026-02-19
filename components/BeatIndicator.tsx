@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -235,6 +235,234 @@ interface BeatIndicatorProps {
   dialRef?: React.RefObject<View | null>;
 }
 
+const BAR_HEIGHT = 60;
+const BAR_WIDTH = SCREEN_WIDTH - 48;
+const BAR_SWIPE_THRESHOLD = 50;
+const BEAT_BLOCK_SIZE = 28;
+const BEAT_BLOCK_GAP = 6;
+
+function BeatCountBar({
+  beatsPerMeasure,
+  onBeatsChange,
+  onDismiss,
+}: {
+  beatsPerMeasure: number;
+  onBeatsChange: (beats: number) => void;
+  onDismiss: () => void;
+}) {
+  const { colors: C } = useTheme();
+  const beatsRef = useRef(beatsPerMeasure);
+  const onBeatsChangeRef = useRef(onBeatsChange);
+  const onDismissRef = useRef(onDismiss);
+  const startXRef = useRef(0);
+  const startYRef = useRef(0);
+  const triggeredRef = useRef(false);
+  const slideOffset = useSharedValue(0);
+  const barContainerRef = useRef<View>(null);
+  const isDraggingRef = useRef(false);
+
+  useEffect(() => { beatsRef.current = beatsPerMeasure; }, [beatsPerMeasure]);
+  useEffect(() => { onBeatsChangeRef.current = onBeatsChange; }, [onBeatsChange]);
+  useEffect(() => { onDismissRef.current = onDismiss; }, [onDismiss]);
+
+  const resetSlide = useCallback(() => {
+    slideOffset.value = withSpring(0, { damping: 20, stiffness: 300 });
+  }, []);
+
+  const processBarMove = useCallback((dx: number, dy: number) => {
+    if (dy > BAR_SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx) * 1.2 && !triggeredRef.current) {
+      triggeredRef.current = true;
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      onDismissRef.current();
+      return;
+    }
+
+    slideOffset.value = dx * 0.5;
+
+    if (Math.abs(dx) > BAR_SWIPE_THRESHOLD && !triggeredRef.current) {
+      triggeredRef.current = true;
+      const canAdd = beatsRef.current < MAX_BEATS;
+      const canRemove = beatsRef.current > MIN_BEATS;
+      if (dx > 0 && canAdd) {
+        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        onBeatsChangeRef.current(beatsRef.current + 1);
+      } else if (dx < 0 && canRemove) {
+        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        onBeatsChangeRef.current(beatsRef.current - 1);
+      }
+      setTimeout(() => { triggeredRef.current = false; }, 200);
+    }
+  }, []);
+
+  const barPanResponder = useRef(
+    Platform.OS !== "web"
+      ? PanResponder.create({
+          onStartShouldSetPanResponder: () => true,
+          onMoveShouldSetPanResponder: () => true,
+          onPanResponderGrant: (e) => {
+            startXRef.current = e.nativeEvent.pageX;
+            startYRef.current = e.nativeEvent.pageY;
+            triggeredRef.current = false;
+          },
+          onPanResponderMove: (e) => {
+            const dx = e.nativeEvent.pageX - startXRef.current;
+            const dy = e.nativeEvent.pageY - startYRef.current;
+            processBarMove(dx, dy);
+          },
+          onPanResponderRelease: () => { resetSlide(); },
+          onPanResponderTerminate: () => { resetSlide(); },
+        })
+      : null
+  ).current;
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const el = barContainerRef.current as any as HTMLElement;
+    if (!el?.addEventListener) return;
+
+    const handleDown = (e: MouseEvent) => {
+      startXRef.current = e.clientX;
+      startYRef.current = e.clientY;
+      isDraggingRef.current = true;
+      triggeredRef.current = false;
+    };
+    const handleMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      processBarMove(e.clientX - startXRef.current, e.clientY - startYRef.current);
+    };
+    const handleUp = () => {
+      isDraggingRef.current = false;
+      resetSlide();
+    };
+    el.addEventListener("mousedown", handleDown);
+    document.addEventListener("mousemove", handleMove);
+    document.addEventListener("mouseup", handleUp);
+    return () => {
+      el.removeEventListener("mousedown", handleDown);
+      document.removeEventListener("mousemove", handleMove);
+      document.removeEventListener("mouseup", handleUp);
+    };
+  }, [processBarMove, resetSlide]);
+
+  const barNativeHandlers = Platform.OS !== "web" && barPanResponder ? barPanResponder.panHandlers : {};
+
+  const slideStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: slideOffset.value }],
+  }));
+
+  const blocks = Array.from({ length: beatsPerMeasure }, (_, i) => i);
+
+  return (
+    <View
+      ref={barContainerRef}
+      style={barStyles.wrapper}
+      {...barNativeHandlers}
+    >
+      <Animated.View style={[barStyles.bar, { borderColor: C.accentMuted }, slideStyle]}>
+        <View style={barStyles.arrowLeft}>
+          <Ionicons name="remove" size={18} color={beatsPerMeasure <= MIN_BEATS ? Colors.textTertiary : C.accent} />
+        </View>
+        <View style={barStyles.blocksRow}>
+          {blocks.map((i) => (
+            <View
+              key={i}
+              style={[
+                barStyles.block,
+                {
+                  backgroundColor: i === 0 ? C.accent : C.accentMuted,
+                  width: BEAT_BLOCK_SIZE,
+                  height: BEAT_BLOCK_SIZE,
+                },
+              ]}
+            />
+          ))}
+        </View>
+        <View style={barStyles.arrowRight}>
+          <Ionicons name="add" size={18} color={beatsPerMeasure >= MAX_BEATS ? Colors.textTertiary : C.accent} />
+        </View>
+      </Animated.View>
+      <View style={barStyles.countRow}>
+        <Text style={[barStyles.countText, { color: C.accent }]}>{beatsPerMeasure}</Text>
+        <Text style={barStyles.countLabel}> beats</Text>
+      </View>
+      <View style={barStyles.hintRow}>
+        <Ionicons name="chevron-down" size={14} color={Colors.textTertiary} />
+        <Text style={barStyles.hintText}>swipe down to close</Text>
+      </View>
+    </View>
+  );
+}
+
+const barStyles = StyleSheet.create({
+  wrapper: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    cursor: "grab" as any,
+    userSelect: "none" as any,
+  },
+  bar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    height: BAR_HEIGHT,
+    width: BAR_WIDTH,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 12,
+  },
+  arrowLeft: {
+    width: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  arrowRight: {
+    width: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  blocksRow: {
+    flex: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: BEAT_BLOCK_GAP,
+    paddingVertical: 4,
+  },
+  block: {
+    borderRadius: 6,
+  },
+  countRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+  },
+  countText: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 22,
+  },
+  countLabel: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  hintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  hintText: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 11,
+    color: Colors.textTertiary,
+    letterSpacing: 1,
+    opacity: 0.5,
+  },
+});
+
 export function BeatIndicator({
   beatsPerMeasure,
   currentBeat,
@@ -249,12 +477,29 @@ export function BeatIndicator({
 }: BeatIndicatorProps) {
   const { colors: C } = useTheme();
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
+  const [showBeatBar, setShowBeatBar] = useState(false);
 
   const swipeProgress = useSharedValue(0);
   const swipeDirection = useSharedValue(0);
   const dialRotation = useSharedValue(0);
   const centerGlow = useSharedValue(0);
+  const modeTransition = useSharedValue(1);
   const prevBeatRef = useRef(-1);
+
+  const switchToBeatBar = useCallback(() => {
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowBeatBar(true);
+    modeTransition.value = 0;
+    modeTransition.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.quad) });
+  }, []);
+
+  const dismissBeatBar = useCallback(() => {
+    modeTransition.value = withTiming(0, { duration: 200, easing: Easing.in(Easing.quad) });
+    setTimeout(() => {
+      setShowBeatBar(false);
+      modeTransition.value = 1;
+    }, 210);
+  }, []);
 
   useEffect(() => {
     if (isPlaying && currentBeat >= 0 && currentBeat !== prevBeatRef.current) {
@@ -270,8 +515,10 @@ export function BeatIndicator({
   }, [isPlaying, currentBeat]);
 
   const startXRef = useRef(0);
+  const startYRef = useRef(0);
   const isDraggingRef = useRef(false);
   const triggeredRef = useRef(false);
+  const verticalTriggeredRef = useRef(false);
   const beatsRef = useRef(beatsPerMeasure);
   const onBeatsChangeRef = useRef(onBeatsChange);
   const containerRef = useRef<View>(null);
@@ -289,8 +536,16 @@ export function BeatIndicator({
     dialRotation.value = withSpring(0, { damping: 15, stiffness: 300 });
   }, []);
 
-  const processMove = useCallback((clientX: number) => {
+  const processMove = useCallback((clientX: number, clientY: number) => {
     const dx = clientX - startXRef.current;
+    const dy = clientY - startYRef.current;
+
+    if (dy < -60 && Math.abs(dy) > Math.abs(dx) * 1.3 && !verticalTriggeredRef.current) {
+      verticalTriggeredRef.current = true;
+      switchToBeatBar();
+      return;
+    }
+
     const progress = Math.min(Math.abs(dx) / SWIPE_THRESHOLD, 1);
     const canAdd = beatsRef.current < MAX_BEATS;
     const canRemove = beatsRef.current > MIN_BEATS;
@@ -322,20 +577,22 @@ export function BeatIndicator({
         onBeatsChangeRef.current(beatsRef.current - 1);
       }
     }
-  }, []);
+  }, [switchToBeatBar]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
 
     const handleMouseDown = (e: MouseEvent) => {
       startXRef.current = e.clientX;
+      startYRef.current = e.clientY;
       isDraggingRef.current = true;
       triggeredRef.current = false;
+      verticalTriggeredRef.current = false;
     };
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDraggingRef.current) return;
-      processMove(e.clientX);
+      processMove(e.clientX, e.clientY);
     };
 
     const handleMouseUp = () => {
@@ -367,15 +624,18 @@ export function BeatIndicator({
           onStartShouldSetPanResponder: () => false,
           onStartShouldSetPanResponderCapture: () => false,
           onMoveShouldSetPanResponder: (_, gs) =>
-            Math.abs(gs.dx) > 30 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+            (Math.abs(gs.dx) > 30 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5) ||
+            (gs.dy < -30 && Math.abs(gs.dy) > Math.abs(gs.dx) * 1.3),
           onMoveShouldSetPanResponderCapture: () => false,
           onShouldBlockNativeResponder: () => false,
           onPanResponderGrant: (e) => {
             startXRef.current = e.nativeEvent.pageX;
+            startYRef.current = e.nativeEvent.pageY;
             triggeredRef.current = false;
+            verticalTriggeredRef.current = false;
           },
           onPanResponderMove: (e) => {
-            processMove(e.nativeEvent.pageX);
+            processMove(e.nativeEvent.pageX, e.nativeEvent.pageY);
           },
           onPanResponderRelease: () => {
             resetVisuals();
@@ -395,6 +655,16 @@ export function BeatIndicator({
   const centerGlowStyle = useAnimatedStyle(() => ({
     opacity: centerGlow.value * 0.7,
     transform: [{ scale: 1 + centerGlow.value * 0.3 }],
+  }));
+
+  const dialContainerAnimStyle = useAnimatedStyle(() => ({
+    opacity: modeTransition.value,
+    transform: [{ scale: 0.95 + modeTransition.value * 0.05 }],
+  }));
+
+  const barAnimStyle = useAnimatedStyle(() => ({
+    opacity: modeTransition.value,
+    transform: [{ translateY: (1 - modeTransition.value) * 30 }],
   }));
 
   const isAccentBeat = isPlaying && currentBeat === 0;
@@ -431,6 +701,18 @@ export function BeatIndicator({
     [beatTypes, onBeatTypeChange]
   );
 
+  if (showBeatBar) {
+    return (
+      <Animated.View style={barAnimStyle}>
+        <BeatCountBar
+          beatsPerMeasure={beatsPerMeasure}
+          onBeatsChange={onBeatsChange}
+          onDismiss={dismissBeatBar}
+        />
+      </Animated.View>
+    );
+  }
+
   return (
     <View
       ref={containerRef}
@@ -438,79 +720,84 @@ export function BeatIndicator({
       testID="beat-indicator-swipe"
       {...nativePanHandlers}
     >
-      <View style={styles.dialContainer}>
-        <View
-          ref={dialRef}
-          style={{ width: DIAL_SIZE, height: DIAL_SIZE }}
-          collapsable={false}
-        >
-          <Animated.View style={[styles.dial, dialStyle]}>
-            {beats.map((beat) => (
-              <DialBeatDot
-                key={`beat-${beat}`}
-                index={beat}
-                total={beatsPerMeasure}
-                isActive={isPlaying && currentBeat === beat}
-                beatType={beatTypes[beat] || "normal"}
-                onPress={() => cycleBeatType(beat)}
-                isDropTarget={dropTargetBeat === beat || dropTargetBeat === -1}
-                subdivisionCount={beatSubdivisionCounts[beat] || 0}
-              />
-            ))}
-          </Animated.View>
-        </View>
-
-        <View style={styles.centerArea} pointerEvents="box-none">
-          <View style={styles.signatureRow} pointerEvents="none">
-            <Text style={styles.digitalSignature} numberOfLines={1}>
-              {beatsPerMeasure}
-            </Text>
-            <Text style={styles.digitalSignatureSlash} numberOfLines={1}>
-              /
-            </Text>
-            <Text style={styles.digitalSignature} numberOfLines={1}>
-              {beatsPerMeasure <= 4 ? "4" : "8"}
-            </Text>
+      <Animated.View style={dialContainerAnimStyle}>
+        <View style={styles.dialContainer}>
+          <View
+            ref={dialRef}
+            style={{ width: DIAL_SIZE, height: DIAL_SIZE }}
+            collapsable={false}
+          >
+            <Animated.View style={[styles.dial, dialStyle]}>
+              {beats.map((beat) => (
+                <DialBeatDot
+                  key={`beat-${beat}`}
+                  index={beat}
+                  total={beatsPerMeasure}
+                  isActive={isPlaying && currentBeat === beat}
+                  beatType={beatTypes[beat] || "normal"}
+                  onPress={() => cycleBeatType(beat)}
+                  isDropTarget={dropTargetBeat === beat || dropTargetBeat === -1}
+                  subdivisionCount={beatSubdivisionCounts[beat] || 0}
+                />
+              ))}
+            </Animated.View>
           </View>
 
-          <Animated.View
-            style={[
-              styles.centerGlow,
-              {
-                backgroundColor: isAccentBeat ? C.accent : Colors.text,
-              },
-              centerGlowStyle,
-            ]}
-            pointerEvents="none"
-          />
+          <View style={styles.centerArea} pointerEvents="box-none">
+            <View style={styles.signatureRow} pointerEvents="none">
+              <Text style={styles.digitalSignature} numberOfLines={1}>
+                {beatsPerMeasure}
+              </Text>
+              <Text style={styles.digitalSignatureSlash} numberOfLines={1}>
+                /
+              </Text>
+              <Text style={styles.digitalSignature} numberOfLines={1}>
+                {beatsPerMeasure <= 4 ? "4" : "8"}
+              </Text>
+            </View>
 
-          {dropTargetBeat === -1 && (
-            <View style={[styles.centerDropRing, { borderColor: C.accent }]} pointerEvents="none" />
-          )}
-
-          <Pressable
-            onPress={onTogglePlay}
-            style={({ pressed }) => [
-              styles.playButton,
-              pressed && styles.playButtonPressed,
-            ]}
-            testID="play-button"
-          >
-            <Ionicons
-              name={isPlaying ? "stop" : "play"}
-              size={56}
-              color={isPlaying ? Colors.danger : C.accent}
-              style={!isPlaying ? { marginLeft: 5 } : undefined}
+            <Animated.View
+              style={[
+                styles.centerGlow,
+                {
+                  backgroundColor: isAccentBeat ? C.accent : Colors.text,
+                },
+                centerGlowStyle,
+              ]}
+              pointerEvents="none"
             />
-          </Pressable>
 
-          {dropTargetBeat === -1 && (
-            <Text style={[styles.centerDropLabel, { color: C.accent }]}>ALL</Text>
-          )}
+            {dropTargetBeat === -1 && (
+              <View style={[styles.centerDropRing, { borderColor: C.accent }]} pointerEvents="none" />
+            )}
+
+            <Pressable
+              onPress={onTogglePlay}
+              style={({ pressed }) => [
+                styles.playButton,
+                pressed && styles.playButtonPressed,
+              ]}
+              testID="play-button"
+            >
+              <Ionicons
+                name={isPlaying ? "stop" : "play"}
+                size={56}
+                color={isPlaying ? Colors.danger : C.accent}
+                style={!isPlaying ? { marginLeft: 5 } : undefined}
+              />
+            </Pressable>
+
+            {dropTargetBeat === -1 && (
+              <Text style={[styles.centerDropLabel, { color: C.accent }]}>ALL</Text>
+            )}
+          </View>
         </View>
-      </View>
+      </Animated.View>
 
-      <Text style={styles.hintText}>swipe to add or remove beats</Text>
+      <View style={styles.swipeUpHintRow}>
+        <Ionicons name="chevron-up" size={14} color={Colors.textTertiary} />
+        <Text style={styles.hintText}>swipe up for beat bar</Text>
+      </View>
     </View>
   );
 }
@@ -623,5 +910,11 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginTop: 8,
     opacity: 0.9,
+  },
+  swipeUpHintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
   },
 });
