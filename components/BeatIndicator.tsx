@@ -158,7 +158,7 @@ function DialBeatDot({
               : isAccent
               ? C.accentMuted
               : Colors.textTertiary,
-            borderWidth: isMute ? 2.5 : isStrong ? 2.5 : 0,
+            borderWidth: isMute ? 2.5 : isStrong ? 4 : 0,
             borderColor: isMute ? Colors.textSecondary : isStrong ? C.accent : "transparent",
           },
           animatedStyle,

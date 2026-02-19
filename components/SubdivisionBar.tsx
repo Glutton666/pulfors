@@ -394,7 +394,7 @@ export function SubdivisionBar({
                     {
                       backgroundColor: getCellColor(type, true, C.accent, C.accentMuted),
                       borderColor: getCellBorder(type, C.accent),
-                      borderWidth: type === "mute" ? 2 : type === "strong" ? 2.5 : 0,
+                      borderWidth: type === "mute" ? 2 : type === "strong" ? 3.5 : 0,
                       opacity: isPlaying ? (isActive ? 1 : 0.3) : 1,
                     },
                   ]}
@@ -441,7 +441,7 @@ export function DragGhost({
             {
               backgroundColor: getCellColor(type, true, GC.accent, GC.accentMuted),
               borderColor: getCellBorder(type, GC.accent),
-              borderWidth: type === "mute" ? 1.5 : type === "strong" ? 2 : 0,
+              borderWidth: type === "mute" ? 1.5 : type === "strong" ? 3 : 0,
             },
           ]}
         />
