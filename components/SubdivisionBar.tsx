@@ -47,9 +47,9 @@ function getCellColor(type: BeatType, active: boolean, accentColor: string, acce
   return "transparent";
 }
 
-function getCellBorder(type: BeatType, accentColor: string): string {
+function getCellBorder(type: BeatType): string {
   if (type === "mute") return Colors.textTertiary;
-  if (type === "strong") return accentColor;
+  if (type === "strong") return Colors.white;
   return "transparent";
 }
 
@@ -393,8 +393,8 @@ export function SubdivisionBar({
                     styles.cell,
                     {
                       backgroundColor: getCellColor(type, true, C.accent, C.accentMuted),
-                      borderColor: getCellBorder(type, C.accent),
-                      borderWidth: type === "mute" ? 2 : type === "strong" ? 3.5 : 0,
+                      borderColor: getCellBorder(type),
+                      borderWidth: type === "mute" ? 2 : type === "strong" ? 4 : 0,
                       opacity: isPlaying ? (isActive ? 1 : 0.3) : 1,
                     },
                   ]}
@@ -440,8 +440,8 @@ export function DragGhost({
             styles.ghostCell,
             {
               backgroundColor: getCellColor(type, true, GC.accent, GC.accentMuted),
-              borderColor: getCellBorder(type, GC.accent),
-              borderWidth: type === "mute" ? 1.5 : type === "strong" ? 3 : 0,
+              borderColor: getCellBorder(type),
+              borderWidth: type === "mute" ? 1.5 : type === "strong" ? 3.5 : 0,
             },
           ]}
         />
