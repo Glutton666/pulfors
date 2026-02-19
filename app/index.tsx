@@ -78,6 +78,19 @@ export default function MetronomeScreen() {
   const [barRepeats, setBarRepeats] = useState<Record<number, BarRepeat>>({});
   const barAreaRef = useRef<View>(null);
   const barAreaLayoutRef = useRef({ y: 0, height: 0 });
+
+  const dialConfigRef = useRef({
+    beatsPerMeasure: 4,
+    beatTypes: defaultBeatTypes(4),
+    beatSubdivisions: {} as Record<string, BeatType[]>,
+  });
+  const barConfigRef = useRef({
+    beatsPerMeasure: 4,
+    beatTypes: defaultBeatTypes(4),
+    beatSubdivisions: {} as Record<string, BeatType[]>,
+    barRepeats: {} as Record<number, BarRepeat>,
+  });
+
   const [isDragging, setIsDragging] = useState(false);
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
   const [dropTargetBeat, setDropTargetBeat] = useState<number | null>(null);
@@ -383,6 +396,9 @@ export default function MetronomeScreen() {
     []
   );
 
+  const barModeRef = useRef(barMode);
+  useEffect(() => { barModeRef.current = barMode; }, [barMode]);
+
   const togglePlayPause = useCallback(() => {
     const engine = engineRef.current;
     if (!engine) return;
@@ -401,6 +417,53 @@ export default function MetronomeScreen() {
       setIsPlaying(true);
     }
   }, [isPlaying]);
+
+  const handleBarModeChange = useCallback((toBarMode: boolean) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+
+    if (isPlaying) {
+      engine.stop();
+      setIsPlaying(false);
+      setCurrentBeat(-1);
+      setActiveSubNote(-1);
+    }
+
+    if (toBarMode) {
+      dialConfigRef.current = {
+        beatsPerMeasure,
+        beatTypes: [...beatTypes],
+        beatSubdivisions: { ...beatSubdivisions },
+      };
+      const bc = barConfigRef.current;
+      setBeatsPerMeasure(bc.beatsPerMeasure);
+      setBeatTypes([...bc.beatTypes]);
+      setBeatSubdivisions({ ...bc.beatSubdivisions });
+      setBarRepeats({ ...bc.barRepeats });
+      engine.setBeatsPerMeasure(bc.beatsPerMeasure);
+      engine.setBeatTypes([...bc.beatTypes]);
+      engine.setAllBeatSubdivisions(bc.beatSubdivisions);
+      engine.setBarRepeats(bc.barRepeats);
+    } else {
+      barConfigRef.current = {
+        beatsPerMeasure,
+        beatTypes: [...beatTypes],
+        beatSubdivisions: { ...beatSubdivisions },
+        barRepeats: { ...barRepeats },
+      };
+      const dc = dialConfigRef.current;
+      setBeatsPerMeasure(dc.beatsPerMeasure);
+      setBeatTypes([...dc.beatTypes]);
+      setBeatSubdivisions({ ...dc.beatSubdivisions });
+      setBarRepeats({});
+      engine.setBeatsPerMeasure(dc.beatsPerMeasure);
+      engine.setBeatTypes([...dc.beatTypes]);
+      engine.setAllBeatSubdivisions(dc.beatSubdivisions);
+      engine.clearBarRepeats();
+    }
+
+    setBarMode(toBarMode);
+  }, [isPlaying, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats]);
 
   const startMetronome = useCallback(() => {
     const engine = engineRef.current;
@@ -673,6 +736,8 @@ export default function MetronomeScreen() {
       } else {
         delete next[beat];
       }
+      engineRef.current?.setBarRepeats(next);
+      barConfigRef.current.barRepeats = { ...next };
       return next;
     });
   }, []);
@@ -766,7 +831,7 @@ export default function MetronomeScreen() {
             beatSubdivisionCounts={beatSubdivisionCounts}
             dialRef={dialRef}
             barMode={barMode}
-            onBarModeChange={setBarMode}
+            onBarModeChange={handleBarModeChange}
             beatSubdivisions={beatSubdivisions}
             onBeatSubdivisionChange={handleBeatSubdivisionChange}
             activeSubNote={activeSubNote}
