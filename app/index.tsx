@@ -94,31 +94,40 @@ export default function MetronomeScreen() {
   const classicHighB = useAudioPlayer(soundSets.classic.high);
   const classicLowA = useAudioPlayer(soundSets.classic.low);
   const classicLowB = useAudioPlayer(soundSets.classic.low);
+  const classicStrongA = useAudioPlayer(soundSets.classic.strong);
+  const classicStrongB = useAudioPlayer(soundSets.classic.strong);
 
   const woodblockHighA = useAudioPlayer(soundSets.woodblock.high);
   const woodblockHighB = useAudioPlayer(soundSets.woodblock.high);
   const woodblockLowA = useAudioPlayer(soundSets.woodblock.low);
   const woodblockLowB = useAudioPlayer(soundSets.woodblock.low);
+  const woodblockStrongA = useAudioPlayer(soundSets.woodblock.strong);
+  const woodblockStrongB = useAudioPlayer(soundSets.woodblock.strong);
 
   const digitalHighA = useAudioPlayer(soundSets.digital.high);
   const digitalHighB = useAudioPlayer(soundSets.digital.high);
   const digitalLowA = useAudioPlayer(soundSets.digital.low);
   const digitalLowB = useAudioPlayer(soundSets.digital.low);
+  const digitalStrongA = useAudioPlayer(soundSets.digital.strong);
+  const digitalStrongB = useAudioPlayer(soundSets.digital.strong);
 
   const rimshotHighA = useAudioPlayer(soundSets.rimshot.high);
   const rimshotHighB = useAudioPlayer(soundSets.rimshot.high);
   const rimshotLowA = useAudioPlayer(soundSets.rimshot.low);
   const rimshotLowB = useAudioPlayer(soundSets.rimshot.low);
+  const rimshotStrongA = useAudioPlayer(soundSets.rimshot.strong);
+  const rimshotStrongB = useAudioPlayer(soundSets.rimshot.strong);
 
   const allPlayers = useMemo(() => ({
-    classic: { highA: classicHighA, highB: classicHighB, lowA: classicLowA, lowB: classicLowB },
-    woodblock: { highA: woodblockHighA, highB: woodblockHighB, lowA: woodblockLowA, lowB: woodblockLowB },
-    digital: { highA: digitalHighA, highB: digitalHighB, lowA: digitalLowA, lowB: digitalLowB },
-    rimshot: { highA: rimshotHighA, highB: rimshotHighB, lowA: rimshotLowA, lowB: rimshotLowB },
-  }), [classicHighA, classicHighB, classicLowA, classicLowB, woodblockHighA, woodblockHighB, woodblockLowA, woodblockLowB, digitalHighA, digitalHighB, digitalLowA, digitalLowB, rimshotHighA, rimshotHighB, rimshotLowA, rimshotLowB]);
+    classic: { highA: classicHighA, highB: classicHighB, lowA: classicLowA, lowB: classicLowB, strongA: classicStrongA, strongB: classicStrongB },
+    woodblock: { highA: woodblockHighA, highB: woodblockHighB, lowA: woodblockLowA, lowB: woodblockLowB, strongA: woodblockStrongA, strongB: woodblockStrongB },
+    digital: { highA: digitalHighA, highB: digitalHighB, lowA: digitalLowA, lowB: digitalLowB, strongA: digitalStrongA, strongB: digitalStrongB },
+    rimshot: { highA: rimshotHighA, highB: rimshotHighB, lowA: rimshotLowA, lowB: rimshotLowB, strongA: rimshotStrongA, strongB: rimshotStrongB },
+  }), [classicHighA, classicHighB, classicLowA, classicLowB, classicStrongA, classicStrongB, woodblockHighA, woodblockHighB, woodblockLowA, woodblockLowB, woodblockStrongA, woodblockStrongB, digitalHighA, digitalHighB, digitalLowA, digitalLowB, digitalStrongA, digitalStrongB, rimshotHighA, rimshotHighB, rimshotLowA, rimshotLowB, rimshotStrongA, rimshotStrongB]);
 
   const highToggle = useRef(false);
   const lowToggle = useRef(false);
+  const strongToggle = useRef(false);
   const soundSetRef = useRef(soundSet);
   useEffect(() => { soundSetRef.current = soundSet; }, [soundSet]);
   const allPlayersRef = useRef(allPlayers);
@@ -155,6 +164,14 @@ export default function MetronomeScreen() {
           const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
           const active = lowToggle.current ? players.lowB : players.lowA;
           lowToggle.current = !lowToggle.current;
+          restartPlayer(active);
+        } catch (e) {}
+      },
+      () => {
+        try {
+          const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
+          const active = strongToggle.current ? players.strongB : players.strongA;
+          strongToggle.current = !strongToggle.current;
           restartPlayer(active);
         } catch (e) {}
       }

@@ -8,23 +8,28 @@ export const soundSets = {
   classic: {
     high: require("@/assets/sounds/click-high.wav"),
     low: require("@/assets/sounds/click-low.wav"),
+    strong: require("@/assets/sounds/click-strong.wav"),
   },
   woodblock: {
     high: require("@/assets/sounds/woodblock-high.wav"),
     low: require("@/assets/sounds/woodblock-low.wav"),
+    strong: require("@/assets/sounds/woodblock-strong.wav"),
   },
   digital: {
     high: require("@/assets/sounds/digital-high.wav"),
     low: require("@/assets/sounds/digital-low.wav"),
+    strong: require("@/assets/sounds/digital-strong.wav"),
   },
   rimshot: {
     high: require("@/assets/sounds/rimshot-high.wav"),
     low: require("@/assets/sounds/rimshot-low.wav"),
+    strong: require("@/assets/sounds/rimshot-strong.wav"),
   },
 };
 
 export const highClickSource = soundSets.classic.high;
 export const lowClickSource = soundSets.classic.low;
+export const strongClickSource = soundSets.classic.strong;
 
 interface ScheduledTick {
   time: number;
