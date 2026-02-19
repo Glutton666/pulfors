@@ -57,6 +57,7 @@ export class MetronomeEngine {
   private playLowClick: (() => void) | null = null;
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
+  private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
 
   private schedule: ScheduledTick[] = [];
   private scheduleIndex = 0;
@@ -155,6 +156,23 @@ export class MetronomeEngine {
     }
   }
 
+  setBarRepeats(repeats: Record<number, { type: "count" | "duration"; value: number }>) {
+    this.barRepeats.clear();
+    for (const [k, v] of Object.entries(repeats)) {
+      this.barRepeats.set(Number(k), v);
+    }
+    if (this.isRunning) {
+      this.rebuildSchedule();
+    }
+  }
+
+  clearBarRepeats() {
+    this.barRepeats.clear();
+    if (this.isRunning) {
+      this.rebuildSchedule();
+    }
+  }
+
   getBpm() {
     return this.bpm;
   }
@@ -202,15 +220,29 @@ export class MetronomeEngine {
     for (let beat = 0; beat < this.beatsPerMeasure; beat++) {
       const subPattern = this.getSubPattern(beat);
       const subDur = beatDur / subPattern.length;
-      for (let sub = 0; sub < subPattern.length; sub++) {
-        ticks.push({
-          time,
-          beat,
-          subBeat: sub,
-          type: subPattern[sub],
-          isMainBeat: sub === 0,
-        });
-        time += subDur;
+      const repeat = this.barRepeats.get(beat);
+      let repeatCount = 1;
+
+      if (repeat) {
+        if (repeat.type === "count") {
+          repeatCount = Math.max(1, repeat.value);
+        } else {
+          const durationMs = repeat.value * 1000;
+          repeatCount = Math.max(1, Math.round(durationMs / beatDur));
+        }
+      }
+
+      for (let r = 0; r < repeatCount; r++) {
+        for (let sub = 0; sub < subPattern.length; sub++) {
+          ticks.push({
+            time,
+            beat,
+            subBeat: sub,
+            type: subPattern[sub],
+            isMainBeat: sub === 0,
+          });
+          time += subDur;
+        }
       }
     }
 
