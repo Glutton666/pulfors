@@ -163,27 +163,15 @@ function DialBeatDot({
             },
           ]}
         >
-          {isActive ? (
-            <LinearGradient
-              colors={[Colors.white, C.accent, C.accentMuted]}
-              locations={[0, 0.35, 1]}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
-              style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}
-            >
-              <View style={{ width: size - 14, height: size - 14, borderRadius: (size - 14) / 2, backgroundColor: C.accentMuted }} />
-            </LinearGradient>
-          ) : (
-            <LinearGradient
-              colors={[C.accent, C.accentMuted, C.accentDim]}
-              locations={[0, 0.4, 1]}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
-              style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}
-            >
-              <View style={{ width: size - 10, height: size - 10, borderRadius: (size - 10) / 2, backgroundColor: C.accentDim }} />
-            </LinearGradient>
-          )}
+          <LinearGradient
+            colors={[Colors.white, C.accent, C.accentMuted]}
+            locations={[0, 0.35, 1]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}
+          >
+            <View style={{ width: size - 14, height: size - 14, borderRadius: (size - 14) / 2, backgroundColor: C.accentMuted }} />
+          </LinearGradient>
         </Animated.View>
       ) : (
         <Animated.View
