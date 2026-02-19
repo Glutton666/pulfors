@@ -61,7 +61,7 @@ function fadeOut(samples, fadeMs) {
 }
 
 function generateClassicHigh() {
-  const duration = 0.05;
+  const duration = 0.025;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
@@ -79,7 +79,7 @@ function generateClassicHigh() {
 }
 
 function generateClassicLow() {
-  const duration = 0.04;
+  const duration = 0.02;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
@@ -97,7 +97,7 @@ function generateClassicLow() {
 }
 
 function generateWoodblockHigh() {
-  const duration = 0.06;
+  const duration = 0.035;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
@@ -115,7 +115,7 @@ function generateWoodblockHigh() {
 }
 
 function generateWoodblockLow() {
-  const duration = 0.07;
+  const duration = 0.04;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
@@ -133,7 +133,7 @@ function generateWoodblockLow() {
 }
 
 function generateDigitalHigh() {
-  const duration = 0.03;
+  const duration = 0.015;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
@@ -151,7 +151,7 @@ function generateDigitalHigh() {
 }
 
 function generateDigitalLow() {
-  const duration = 0.025;
+  const duration = 0.012;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
@@ -169,7 +169,7 @@ function generateDigitalLow() {
 }
 
 function generateRimshotHigh() {
-  const duration = 0.08;
+  const duration = 0.045;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
@@ -187,7 +187,7 @@ function generateRimshotHigh() {
 }
 
 function generateRimshotLow() {
-  const duration = 0.07;
+  const duration = 0.04;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
