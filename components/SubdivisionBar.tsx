@@ -390,7 +390,7 @@ export function SubdivisionBar({
                 testID={`subdivision-cell-${i}`}
               >
                 {type === "strong" ? (
-                  <View style={[styles.cell, { overflow: "hidden", opacity: isPlaying ? (isActive ? 1 : 0.3) : 1 }]}>
+                  <View style={[styles.cell, { overflow: "hidden", opacity: isPlaying ? (isActive ? 1 : 0.3) : 0.7 }]}>
                     <LinearGradient
                       colors={[Colors.white, C.accent, C.accentMuted]}
                       locations={[0, 0.35, 1]}

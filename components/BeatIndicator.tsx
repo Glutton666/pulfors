@@ -154,6 +154,7 @@ function DialBeatDot({
               height: size,
               borderRadius: size / 2,
               overflow: "hidden",
+              opacity: isActive ? 1 : 0.65,
             },
             animatedStyle,
             {
