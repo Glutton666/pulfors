@@ -18,6 +18,7 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 
@@ -145,30 +146,56 @@ function DialBeatDot({
       hitSlop={10}
       pressRetentionOffset={{ top: 20, left: 20, right: 20, bottom: 20 }}
     >
-      <Animated.View
-        style={[
-          {
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            backgroundColor: isMute
-              ? "transparent"
-              : isStrong
-              ? C.accent
-              : isAccent
-              ? C.accentMuted
-              : Colors.textTertiary,
-            borderWidth: isMute ? 2.5 : isStrong ? 5 : 0,
-            borderColor: isMute ? Colors.textSecondary : isStrong ? Colors.white : "transparent",
-          },
-          animatedStyle,
-          {
-            shadowColor: isAccent ? C.accent : Colors.text,
-            shadowOffset: { width: 0, height: 0 },
-            shadowRadius: isActive ? 16 : 0,
-          },
-        ]}
-      />
+      {isStrong ? (
+        <Animated.View
+          style={[
+            {
+              width: size,
+              height: size,
+              borderRadius: size / 2,
+              overflow: "hidden",
+            },
+            animatedStyle,
+            {
+              shadowColor: C.accent,
+              shadowOffset: { width: 0, height: 0 },
+              shadowRadius: isActive ? 16 : 0,
+            },
+          ]}
+        >
+          <LinearGradient
+            colors={[Colors.white, C.accent, C.accentMuted]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}
+          >
+            <View style={{ width: size - 10, height: size - 10, borderRadius: (size - 10) / 2, backgroundColor: C.accentMuted }} />
+          </LinearGradient>
+        </Animated.View>
+      ) : (
+        <Animated.View
+          style={[
+            {
+              width: size,
+              height: size,
+              borderRadius: size / 2,
+              backgroundColor: isMute
+                ? "transparent"
+                : isAccent
+                ? C.accentMuted
+                : Colors.textTertiary,
+              borderWidth: isMute ? 2.5 : 0,
+              borderColor: isMute ? Colors.textSecondary : "transparent",
+            },
+            animatedStyle,
+            {
+              shadowColor: isAccent ? C.accent : Colors.text,
+              shadowOffset: { width: 0, height: 0 },
+              shadowRadius: isActive ? 16 : 0,
+            },
+          ]}
+        />
+      )}
       {isDropTarget && (
         <View
           style={[

@@ -16,6 +16,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import type { BeatType } from "@/lib/metronome-engine";
@@ -388,17 +389,30 @@ export function SubdivisionBar({
                 hitSlop={2}
                 testID={`subdivision-cell-${i}`}
               >
-                <View
-                  style={[
-                    styles.cell,
-                    {
-                      backgroundColor: getCellColor(type, true, C.accent, C.accentMuted),
-                      borderColor: getCellBorder(type),
-                      borderWidth: type === "mute" ? 2 : type === "strong" ? 4 : 0,
-                      opacity: isPlaying ? (isActive ? 1 : 0.3) : 1,
-                    },
-                  ]}
-                />
+                {type === "strong" ? (
+                  <View style={[styles.cell, { overflow: "hidden", opacity: isPlaying ? (isActive ? 1 : 0.3) : 1 }]}>
+                    <LinearGradient
+                      colors={[Colors.white, C.accent, C.accentMuted]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={{ width: CELL_SIZE, height: CELL_SIZE, alignItems: "center", justifyContent: "center", borderRadius: 6 }}
+                    >
+                      <View style={{ width: CELL_SIZE - 8, height: CELL_SIZE - 8, borderRadius: 4, backgroundColor: C.accentMuted }} />
+                    </LinearGradient>
+                  </View>
+                ) : (
+                  <View
+                    style={[
+                      styles.cell,
+                      {
+                        backgroundColor: getCellColor(type, true, C.accent, C.accentMuted),
+                        borderColor: getCellBorder(type),
+                        borderWidth: type === "mute" ? 2 : 0,
+                        opacity: isPlaying ? (isActive ? 1 : 0.3) : 1,
+                      },
+                    ]}
+                  />
+                )}
               </Pressable>
             );
           });
@@ -434,17 +448,30 @@ export function DragGhost({
       pointerEvents="none"
     >
       {pattern.map((type, i) => (
-        <View
-          key={i}
-          style={[
-            styles.ghostCell,
-            {
-              backgroundColor: getCellColor(type, true, GC.accent, GC.accentMuted),
-              borderColor: getCellBorder(type),
-              borderWidth: type === "mute" ? 1.5 : type === "strong" ? 3.5 : 0,
-            },
-          ]}
-        />
+        type === "strong" ? (
+          <View key={i} style={[styles.ghostCell, { overflow: "hidden" }]}>
+            <LinearGradient
+              colors={[Colors.white, GC.accent, GC.accentMuted]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ width: 18, height: 18, alignItems: "center", justifyContent: "center", borderRadius: 4 }}
+            >
+              <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: GC.accentMuted }} />
+            </LinearGradient>
+          </View>
+        ) : (
+          <View
+            key={i}
+            style={[
+              styles.ghostCell,
+              {
+                backgroundColor: getCellColor(type, true, GC.accent, GC.accentMuted),
+                borderColor: getCellBorder(type),
+                borderWidth: type === "mute" ? 1.5 : 0,
+              },
+            ]}
+          />
+        )
       ))}
     </View>
   );
