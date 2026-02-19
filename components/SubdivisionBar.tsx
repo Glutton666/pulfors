@@ -41,13 +41,15 @@ const SHAKE_WINDOW_MS = 3000;
 const SHAKE_COUNT_TRIGGER = 10;
 
 function getCellColor(type: BeatType, active: boolean, accentColor: string, accentMutedColor: string): string {
+  if (type === "strong") return accentColor;
   if (type === "accent") return active ? accentColor : accentMutedColor;
   if (type === "normal") return active ? Colors.text : Colors.textTertiary;
   return "transparent";
 }
 
-function getCellBorder(type: BeatType): string {
+function getCellBorder(type: BeatType, accentColor: string): string {
   if (type === "mute") return Colors.textTertiary;
+  if (type === "strong") return accentColor;
   return "transparent";
 }
 
@@ -103,16 +105,20 @@ export function SubdivisionBar({
       const newPattern = [...pattern];
       const current = newPattern[index];
       const next: BeatType =
-        current === "accent"
+        current === "strong"
+          ? "accent"
+          : current === "accent"
           ? "normal"
           : current === "normal"
           ? "mute"
-          : "accent";
+          : "strong";
       newPattern[index] = next;
 
       if (Platform.OS !== "web") {
         Haptics.impactAsync(
-          next === "accent"
+          next === "strong"
+            ? Haptics.ImpactFeedbackStyle.Heavy
+            : next === "accent"
             ? Haptics.ImpactFeedbackStyle.Heavy
             : next === "mute"
             ? Haptics.ImpactFeedbackStyle.Light
@@ -387,8 +393,8 @@ export function SubdivisionBar({
                     styles.cell,
                     {
                       backgroundColor: getCellColor(type, true, C.accent, C.accentMuted),
-                      borderColor: getCellBorder(type),
-                      borderWidth: type === "mute" ? 2 : 0,
+                      borderColor: getCellBorder(type, C.accent),
+                      borderWidth: type === "mute" ? 2 : type === "strong" ? 2.5 : 0,
                       opacity: isPlaying ? (isActive ? 1 : 0.3) : 1,
                     },
                   ]}
@@ -434,8 +440,8 @@ export function DragGhost({
             styles.ghostCell,
             {
               backgroundColor: getCellColor(type, true, GC.accent, GC.accentMuted),
-              borderColor: getCellBorder(type),
-              borderWidth: type === "mute" ? 1.5 : 0,
+              borderColor: getCellBorder(type, GC.accent),
+              borderWidth: type === "mute" ? 1.5 : type === "strong" ? 2 : 0,
             },
           ]}
         />
