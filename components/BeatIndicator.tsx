@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from "react";
+import React, { useRef, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Dimensions,
   PanResponder,
   Pressable,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
@@ -464,51 +465,147 @@ export function BeatIndicator({
     }
   }, [isPlaying, beatSubdivisions, onBeatSubdivisionChange]);
 
-  const barPanResponders = useRef<Record<number, ReturnType<typeof PanResponder.create>>>({});
-
-  const getBarPanResponder = useCallback((beatIndex: number) => {
-    if (!barPanResponders.current[beatIndex]) {
-      barPanResponders.current[beatIndex] = PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, gs) =>
-          (Math.abs(gs.dx) > 20 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.2) ||
-          (gs.dy > 25 && Math.abs(gs.dy) > Math.abs(gs.dx) * 1.5),
-        onPanResponderRelease: (_, gs) => {
-          if (isPlaying) return;
-          if (Math.abs(gs.dx) > Math.abs(gs.dy) && Math.abs(gs.dx) > 20) {
-            const currentPattern = beatSubdivisions[String(beatIndex)] || ["normal"];
-            if (gs.dx > 0 && currentPattern.length < 8) {
-              const newPattern = [...currentPattern, "normal" as BeatType];
-              onBeatSubdivisionChange(beatIndex, newPattern);
-              if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            } else if (gs.dx < 0 && currentPattern.length > 1) {
-              const newPattern = currentPattern.slice(0, -1);
-              onBeatSubdivisionChange(beatIndex, newPattern.length <= 1 ? null : newPattern);
-              if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }
-          } else if (Math.abs(gs.dy) > 30) {
-            if (gs.dy > 0 && beatsPerMeasure < MAX_BEATS) {
-              onBeatsChange(beatsPerMeasure + 1);
-              if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            } else if (gs.dy < 0 && beatsPerMeasure > MIN_BEATS) {
-              onBeatsChange(beatsPerMeasure - 1);
-              if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            }
-          }
-        },
-      });
-    }
-    return barPanResponders.current[beatIndex];
-  }, [beatSubdivisions, onBeatSubdivisionChange, beatsPerMeasure, onBeatsChange, isPlaying]);
-
-  useEffect(() => {
-    barPanResponders.current = {};
-  }, [beatSubdivisions, beatsPerMeasure]);
+  const barScrollRef = useRef<ScrollView>(null);
 
   const BAR_HEIGHT = beatsPerMeasure <= 4 ? 44 : beatsPerMeasure <= 6 ? 36 : 30;
   const BAR_LINE_COLOR = Colors.textSecondary;
+  const SCROLL_MAX_HEIGHT = 5 * (BAR_HEIGHT + 1) + 2;
+  const needsScroll = beatsPerMeasure > 5;
+
+  const barAreaPanResponder = useMemo(() =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) =>
+        !isPlaying && Math.abs(gs.dy) > 30 && Math.abs(gs.dy) > Math.abs(gs.dx) * 1.5,
+      onPanResponderRelease: (_, gs) => {
+        if (isPlaying) return;
+        if (gs.dy > 40 && beatsPerMeasure < MAX_BEATS) {
+          onBeatsChange(beatsPerMeasure + 1);
+          if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        } else if (gs.dy < -40 && beatsPerMeasure > MIN_BEATS) {
+          onBeatsChange(beatsPerMeasure - 1);
+          if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }
+      },
+    }),
+  [isPlaying, beatsPerMeasure, onBeatsChange]);
+
+  useEffect(() => {
+    if (!barMode || !isPlaying || currentBeat < 0) return;
+    if (beatsPerMeasure <= 5) return;
+    const rowH = BAR_HEIGHT + 1;
+    const scrollTarget = Math.max(0, currentBeat * rowH - 60);
+    barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
+  }, [barMode, isPlaying, currentBeat, beatsPerMeasure]);
 
   if (barMode) {
+    const barRows = beats.map((beat) => {
+      const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
+      const isCurrent = isPlaying && currentBeat === beat;
+      const bType = beatTypes[beat] || "normal";
+      return (
+        <View
+          key={`bar-${beat}`}
+          style={[
+            styles.barBeatWrapper,
+            isCurrent && styles.barBeatWrapperActive,
+          ]}
+        >
+          <Pressable onPress={() => cycleBeatType(beat)} style={styles.barBeatLabel}>
+            <Text style={[
+              styles.barBeatLabelText,
+              {
+                color: bType === "strong" ? C.accent
+                  : bType === "accent" ? C.accentMuted
+                  : bType === "mute" ? Colors.textTertiary
+                  : Colors.textSecondary,
+                opacity: isCurrent ? 1 : 0.6,
+              }
+            ]}>
+              {beat + 1}
+            </Text>
+          </Pressable>
+          <View style={[
+            styles.barBeatContent,
+            { height: BAR_HEIGHT },
+            isCurrent && { backgroundColor: "rgba(255,255,255,0.08)" },
+          ]}>
+            {pattern.map((type, ci) => {
+              const isActiveCell = isCurrent && ci === activeSubNote;
+              const isStrongType = type === "strong";
+              const isAccentType = type === "accent" || isStrongType;
+              const isLast = ci === pattern.length - 1;
+              return (
+                <Pressable
+                  key={ci}
+                  onPress={() => handleBarCellPress(beat, ci)}
+                  style={[styles.barNoteCell, !isLast && { borderRightWidth: 1, borderRightColor: "rgba(255,255,255,0.08)" }]}
+                >
+                  {isStrongType ? (
+                    <LinearGradient
+                      colors={[Colors.white, C.accent, C.accentMuted]}
+                      locations={[0, 0.35, 1]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={[styles.barNoteFill, { opacity: isActiveCell ? 1 : 0.75, margin: 3 }]}
+                    />
+                  ) : type === "mute" ? (
+                    <View style={[styles.barNoteFill, {
+                      margin: 3,
+                      backgroundColor: "transparent",
+                      borderWidth: 1,
+                      borderColor: Colors.textTertiary,
+                      borderStyle: "dashed" as any,
+                      opacity: isActiveCell ? 0.9 : 0.4,
+                    }]} />
+                  ) : (
+                    <View style={[styles.barNoteFill, {
+                      margin: 3,
+                      backgroundColor: isAccentType
+                        ? (isActiveCell ? C.accent : C.accentMuted)
+                        : (isActiveCell ? Colors.text : Colors.textTertiary),
+                      opacity: isActiveCell ? 1 : 0.7,
+                    }]} />
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
+          <View style={styles.barSplitControls}>
+            <Pressable
+              onPress={() => {
+                if (isPlaying) return;
+                const cur = beatSubdivisions[String(beat)] || ["normal"];
+                if (cur.length > 1) {
+                  const np = cur.slice(0, -1);
+                  onBeatSubdivisionChange(beat, np.length <= 1 ? null : np);
+                }
+              }}
+              style={styles.barSplitBtn}
+              hitSlop={4}
+            >
+              <Ionicons name="remove" size={14} color={Colors.textTertiary} />
+            </Pressable>
+            <Text style={styles.barSplitCount}>{pattern.length}</Text>
+            <Pressable
+              onPress={() => {
+                if (isPlaying) return;
+                const cur = beatSubdivisions[String(beat)] || ["normal"];
+                if (cur.length < 8) {
+                  onBeatSubdivisionChange(beat, [...cur, "normal" as BeatType]);
+                }
+              }}
+              style={styles.barSplitBtn}
+              hitSlop={4}
+            >
+              <Ionicons name="add" size={14} color={Colors.textTertiary} />
+            </Pressable>
+          </View>
+        </View>
+      );
+    });
+
     return (
       <View style={styles.barModeContainer} testID="beat-indicator-bar-mode">
         <Pressable
@@ -527,140 +624,50 @@ export function BeatIndicator({
           />
         </Pressable>
 
-        <View style={styles.barMeasureContainer}>
-          <View style={[styles.barMeasureStartLine, { backgroundColor: BAR_LINE_COLOR }]} />
+        <View
+          style={styles.barMeasureOuter}
+          {...barAreaPanResponder.panHandlers}
+        >
+          {needsScroll ? (
+            <ScrollView
+              ref={barScrollRef}
+              style={[styles.barScrollView, { maxHeight: SCROLL_MAX_HEIGHT }]}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+            >
+              <View style={styles.barMeasureContainer}>
+                <View style={[styles.barMeasureStartLine, { backgroundColor: BAR_LINE_COLOR }]} />
+                <View style={styles.barMeasureInner}>{barRows}</View>
+                <View style={[styles.barMeasureEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
+              </View>
+            </ScrollView>
+          ) : (
+            <View style={styles.barMeasureContainer}>
+              <View style={[styles.barMeasureStartLine, { backgroundColor: BAR_LINE_COLOR }]} />
+              <View style={styles.barMeasureInner}>{barRows}</View>
+              <View style={[styles.barMeasureEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
+            </View>
+          )}
 
-          <View style={styles.barMeasureInner}>
-            {beats.map((beat) => {
-              const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
-              const isCurrent = isPlaying && currentBeat === beat;
-              const bType = beatTypes[beat] || "normal";
-              const panHandlers = getBarPanResponder(beat).panHandlers;
-              return (
-                <View key={`bar-${beat}`} style={styles.barBeatWrapper} {...panHandlers}>
-                  <Pressable onPress={() => cycleBeatType(beat)} style={styles.barBeatLabel}>
-                    <Text style={[
-                      styles.barBeatLabelText,
-                      { color: bType === "strong" ? C.accent : bType === "accent" ? C.accentMuted : bType === "mute" ? Colors.textTertiary : Colors.textSecondary }
-                    ]}>
-                      {beat + 1}
-                    </Text>
-                  </Pressable>
-                  <View style={[
-                    styles.barBeatContent,
-                    { height: BAR_HEIGHT },
-                    isCurrent && { backgroundColor: "rgba(255,255,255,0.06)" },
-                  ]}>
-                    {pattern.map((type, ci) => {
-                      const isActiveCell = isCurrent && ci === activeSubNote;
-                      const isStrongType = type === "strong";
-                      const isAccentType = type === "accent" || isStrongType;
-                      const isLast = ci === pattern.length - 1;
-                      return (
-                        <Pressable
-                          key={ci}
-                          onPress={() => handleBarCellPress(beat, ci)}
-                          style={[styles.barNoteCell, !isLast && { borderRightWidth: 1, borderRightColor: "rgba(255,255,255,0.08)" }]}
-                        >
-                          {isStrongType ? (
-                            <LinearGradient
-                              colors={[Colors.white, C.accent, C.accentMuted]}
-                              locations={[0, 0.35, 1]}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                              style={[styles.barNoteFill, { opacity: isActiveCell ? 1 : 0.75, margin: 3 }]}
-                            />
-                          ) : type === "mute" ? (
-                            <View style={[styles.barNoteFill, {
-                              margin: 3,
-                              backgroundColor: "transparent",
-                              borderWidth: 1,
-                              borderColor: Colors.textTertiary,
-                              borderStyle: "dashed" as any,
-                              opacity: isActiveCell ? 0.9 : 0.4,
-                            }]} />
-                          ) : (
-                            <View style={[styles.barNoteFill, {
-                              margin: 3,
-                              backgroundColor: isAccentType
-                                ? (isActiveCell ? C.accent : C.accentMuted)
-                                : (isActiveCell ? Colors.text : Colors.textTertiary),
-                              opacity: isActiveCell ? 1 : 0.7,
-                            }]} />
-                          )}
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                  <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
-                  <View style={styles.barSplitControls}>
-                    <Pressable
-                      onPress={() => {
-                        if (isPlaying) return;
-                        const cur = beatSubdivisions[String(beat)] || ["normal"];
-                        if (cur.length > 1) {
-                          const np = cur.slice(0, -1);
-                          onBeatSubdivisionChange(beat, np.length <= 1 ? null : np);
-                        }
-                      }}
-                      style={styles.barSplitBtn}
-                      hitSlop={4}
-                    >
-                      <Ionicons name="remove" size={14} color={Colors.textTertiary} />
-                    </Pressable>
-                    <Text style={styles.barSplitCount}>{pattern.length}</Text>
-                    <Pressable
-                      onPress={() => {
-                        if (isPlaying) return;
-                        const cur = beatSubdivisions[String(beat)] || ["normal"];
-                        if (cur.length < 8) {
-                          onBeatSubdivisionChange(beat, [...cur, "normal" as BeatType]);
-                        }
-                      }}
-                      style={styles.barSplitBtn}
-                      hitSlop={4}
-                    >
-                      <Ionicons name="add" size={14} color={Colors.textTertiary} />
-                    </Pressable>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-
-          <View style={[styles.barMeasureEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
+          {needsScroll && (
+            <View style={styles.barScrollFade} pointerEvents="none" />
+          )}
         </View>
 
-        <View style={styles.barBeatCountControls}>
-          <Pressable
-            onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) onBeatsChange(beatsPerMeasure - 1); }}
-            style={styles.barCountBtn}
-            hitSlop={6}
-          >
-            <Ionicons name="remove-circle-outline" size={22} color={beatsPerMeasure <= MIN_BEATS ? Colors.textTertiary : Colors.textSecondary} />
-          </Pressable>
-          <Text style={styles.barCountLabel}>{beatsPerMeasure} bars</Text>
-          <Pressable
-            onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) onBeatsChange(beatsPerMeasure + 1); }}
-            style={styles.barCountBtn}
-            hitSlop={6}
-          >
-            <Ionicons name="add-circle-outline" size={22} color={beatsPerMeasure >= MAX_BEATS ? Colors.textTertiary : Colors.textSecondary} />
-          </Pressable>
-        </View>
+        <Text style={[styles.hintText, { marginTop: 2 }]}>
+          {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}  {"\u2022"}  drag {"\u2193"} add  {"\u2022"}  drag {"\u2191"} remove
+        </Text>
 
-        <View style={styles.barModeFooter}>
-          <Pressable
-            onPress={() => onBarModeChange(false)}
-            style={styles.barModeHandle}
-            testID="close-bar-mode"
-            hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
-            accessibilityRole="button"
-            accessibilityLabel="Close bar mode"
-          >
-            <Ionicons name="chevron-down" size={18} color={Colors.textTertiary} />
-          </Pressable>
-        </View>
+        <Pressable
+          onPress={() => onBarModeChange(false)}
+          style={styles.barModeHandle}
+          testID="close-bar-mode"
+          hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+          accessibilityRole="button"
+          accessibilityLabel="Close bar mode"
+        >
+          <Ionicons name="chevron-down" size={18} color={Colors.textTertiary} />
+        </Pressable>
       </View>
     );
   }
@@ -880,7 +887,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "stretch",
     width: "100%" as any,
-    paddingHorizontal: 8,
   },
   barMeasureStartLine: {
     width: 3,
@@ -945,33 +951,28 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: Colors.textTertiary,
   },
-  barBeatCountControls: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    marginTop: 4,
+  barMeasureOuter: {
+    width: "100%" as any,
+    paddingHorizontal: 8,
   },
-  barCountBtn: {
-    padding: 4,
-    alignItems: "center",
-    justifyContent: "center",
+  barScrollView: {
+    flexGrow: 0,
   },
-  barCountLabel: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 13,
-    color: Colors.textSecondary,
-    minWidth: 50,
-    textAlign: "center" as const,
+  barScrollFade: {
+    position: "absolute",
+    bottom: 0,
+    left: 8,
+    right: 8,
+    height: 20,
+    backgroundColor: "transparent",
+  },
+  barBeatWrapperActive: {
+    backgroundColor: "rgba(255,255,255,0.03)",
   },
   barPlayButton: {
     alignItems: "center",
     justifyContent: "center",
     padding: 6,
-  },
-  barModeFooter: {
-    alignItems: "center",
-    gap: 4,
   },
   barModeHandle: {
     alignItems: "center",
