@@ -508,7 +508,12 @@ export function BeatIndicator({
   const saveRepeat = useCallback(() => {
     if (repeatModalBeat === null) return;
     const val = repeatType === "count" ? repeatCountVal : repeatMinVal * 60 + repeatSecVal;
-    onBarRepeatChange(repeatModalBeat, { type: repeatType, value: val });
+    if (val <= 0) return;
+    if (repeatType === "count" && val === 1) {
+      onBarRepeatChange(repeatModalBeat, null);
+    } else {
+      onBarRepeatChange(repeatModalBeat, { type: repeatType, value: val });
+    }
     setRepeatModalBeat(null);
   }, [repeatModalBeat, repeatType, repeatCountVal, repeatMinVal, repeatSecVal, onBarRepeatChange]);
 
@@ -520,9 +525,11 @@ export function BeatIndicator({
 
   const formatRepeat = (r: BarRepeat): string => {
     if (r.type === "count") return `\u00D7${r.value}`;
-    const m = Math.floor(r.value / 60);
-    const s = r.value % 60;
-    return m > 0 ? `${m}:${s.toString().padStart(2, "0")}` : `${s}s`;
+    const totalSec = r.value;
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    if (m > 0) return s > 0 ? `${m}'${s.toString().padStart(2, "0")}"` : `${m}'`;
+    return `${s}"`;
   };
 
   const BAR_HEIGHT = beatsPerMeasure <= 4 ? 44 : beatsPerMeasure <= 6 ? 36 : 30;
@@ -639,17 +646,15 @@ export function BeatIndicator({
             })}
           </View>
           <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
-          {repeat ? (
-            <Pressable
-              onPress={(e) => { e.stopPropagation(); openRepeatModal(beat); }}
-              style={styles.barRepeatBadge}
-              hitSlop={6}
-            >
-              <Text style={[styles.barRepeatText, { color: C.accent }]}>{formatRepeat(repeat)}</Text>
-            </Pressable>
-          ) : (
-            <View style={styles.barRepeatBadge} />
-          )}
+          <Pressable
+            onPress={(e) => { e.stopPropagation(); if (!isPlaying) openRepeatModal(beat); }}
+            style={styles.barRepeatBadge}
+            hitSlop={6}
+          >
+            <Text style={[styles.barRepeatText, { color: repeat ? C.accent : Colors.textTertiary }]}>
+              {repeat ? formatRepeat(repeat) : "\u00D71"}
+            </Text>
+          </Pressable>
         </Pressable>
       );
     });
