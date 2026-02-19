@@ -54,7 +54,8 @@ function DialBeatDot({
   subdivisionCount,
 }: DialBeatDotProps) {
   const { colors: C } = useTheme();
-  const isAccent = beatType === "accent";
+  const isStrong = beatType === "strong";
+  const isAccent = beatType === "accent" || isStrong;
   const isMute = beatType === "mute";
   const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
   const size = DOT_SIZE;
@@ -100,25 +101,25 @@ function DialBeatDot({
       }
     } else if (isActive) {
       beatScale.value = withSequence(
-        withTiming(1.2, { duration: 50, easing: Easing.out(Easing.quad) }),
+        withTiming(isStrong ? 1.35 : 1.2, { duration: 50, easing: Easing.out(Easing.quad) }),
         withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) })
       );
       beatBg.value = withTiming(
         isAccent ? C.accent : Colors.text,
         { duration: 50 }
       );
-      beatBorder.value = withTiming("transparent", { duration: 50 });
+      beatBorder.value = withTiming(isStrong ? C.accent : "transparent", { duration: 50 });
       beatShadow.value = withSequence(
-        withTiming(1, { duration: 50 }),
+        withTiming(isStrong ? 1.5 : 1, { duration: 50 }),
         withTiming(0, { duration: 300 })
       );
     } else {
       beatScale.value = withTiming(1, { duration: 150 });
       beatBg.value = withTiming(
-        isAccent ? C.accentMuted : Colors.textTertiary,
+        isStrong ? C.accent : isAccent ? C.accentMuted : Colors.textTertiary,
         { duration: 150 }
       );
-      beatBorder.value = withTiming("transparent", { duration: 150 });
+      beatBorder.value = withTiming(isStrong ? C.accent : "transparent", { duration: 150 });
       beatShadow.value = withTiming(0, { duration: 150 });
     }
   }, [isActive, beatType, C.accent, C.accentMuted]);
@@ -152,11 +153,13 @@ function DialBeatDot({
             borderRadius: size / 2,
             backgroundColor: isMute
               ? "transparent"
+              : isStrong
+              ? C.accent
               : isAccent
               ? C.accentMuted
               : Colors.textTertiary,
-            borderWidth: isMute ? 2.5 : 0,
-            borderColor: isMute ? Colors.textSecondary : "transparent",
+            borderWidth: isMute ? 2.5 : isStrong ? 2.5 : 0,
+            borderColor: isMute ? Colors.textSecondary : isStrong ? C.accent : "transparent",
           },
           animatedStyle,
           {
@@ -374,16 +377,20 @@ export function BeatIndicator({
     (index: number) => {
       const current = beatTypes[index] || "normal";
       let next: BeatType;
-      if (current === "accent") {
+      if (current === "strong") {
+        next = "accent";
+      } else if (current === "accent") {
         next = "normal";
       } else if (current === "normal") {
         next = "mute";
       } else {
-        next = "accent";
+        next = "strong";
       }
       if (Platform.OS !== "web") {
         Haptics.impactAsync(
-          next === "accent"
+          next === "strong"
+            ? Haptics.ImpactFeedbackStyle.Heavy
+            : next === "accent"
             ? Haptics.ImpactFeedbackStyle.Heavy
             : next === "mute"
             ? Haptics.ImpactFeedbackStyle.Light
