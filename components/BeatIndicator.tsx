@@ -486,9 +486,12 @@ export function BeatIndicator({
               onBeatSubdivisionChange(beatIndex, newPattern.length <= 1 ? null : newPattern);
               if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             }
-          } else if (gs.dy > 30) {
-            if (beatsPerMeasure < MAX_BEATS) {
+          } else if (Math.abs(gs.dy) > 30) {
+            if (gs.dy > 0 && beatsPerMeasure < MAX_BEATS) {
               onBeatsChange(beatsPerMeasure + 1);
+              if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            } else if (gs.dy < 0 && beatsPerMeasure > MIN_BEATS) {
+              onBeatsChange(beatsPerMeasure - 1);
               if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             }
           }
@@ -600,7 +603,7 @@ export function BeatIndicator({
 
         <View style={styles.barModeFooter}>
           <Text style={[styles.hintText, { marginTop: 0 }]}>
-            drag left/right to split or merge  {"\u2022"}  drag down to add bar
+            drag left/right to split or merge  {"\u2022"}  drag down/up to add/remove bar
           </Text>
           <Pressable
             onPress={() => onBarModeChange(false)}
