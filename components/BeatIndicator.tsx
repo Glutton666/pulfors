@@ -535,7 +535,7 @@ export function BeatIndicator({
               const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
               const isCurrent = isPlaying && currentBeat === beat;
               const bType = beatTypes[beat] || "normal";
-              const panHandlers = Platform.OS !== "web" ? getBarPanResponder(beat).panHandlers : {};
+              const panHandlers = getBarPanResponder(beat).panHandlers;
               return (
                 <View key={`bar-${beat}`} style={styles.barBeatWrapper} {...panHandlers}>
                   <Pressable onPress={() => cycleBeatType(beat)} style={styles.barBeatLabel}>
@@ -593,6 +593,36 @@ export function BeatIndicator({
                     })}
                   </View>
                   <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
+                  <View style={styles.barSplitControls}>
+                    <Pressable
+                      onPress={() => {
+                        if (isPlaying) return;
+                        const cur = beatSubdivisions[String(beat)] || ["normal"];
+                        if (cur.length > 1) {
+                          const np = cur.slice(0, -1);
+                          onBeatSubdivisionChange(beat, np.length <= 1 ? null : np);
+                        }
+                      }}
+                      style={styles.barSplitBtn}
+                      hitSlop={4}
+                    >
+                      <Ionicons name="remove" size={14} color={Colors.textTertiary} />
+                    </Pressable>
+                    <Text style={styles.barSplitCount}>{pattern.length}</Text>
+                    <Pressable
+                      onPress={() => {
+                        if (isPlaying) return;
+                        const cur = beatSubdivisions[String(beat)] || ["normal"];
+                        if (cur.length < 8) {
+                          onBeatSubdivisionChange(beat, [...cur, "normal" as BeatType]);
+                        }
+                      }}
+                      style={styles.barSplitBtn}
+                      hitSlop={4}
+                    >
+                      <Ionicons name="add" size={14} color={Colors.textTertiary} />
+                    </Pressable>
+                  </View>
                 </View>
               );
             })}
@@ -601,10 +631,25 @@ export function BeatIndicator({
           <View style={[styles.barMeasureEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
         </View>
 
+        <View style={styles.barBeatCountControls}>
+          <Pressable
+            onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) onBeatsChange(beatsPerMeasure - 1); }}
+            style={styles.barCountBtn}
+            hitSlop={6}
+          >
+            <Ionicons name="remove-circle-outline" size={22} color={beatsPerMeasure <= MIN_BEATS ? Colors.textTertiary : Colors.textSecondary} />
+          </Pressable>
+          <Text style={styles.barCountLabel}>{beatsPerMeasure} bars</Text>
+          <Pressable
+            onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) onBeatsChange(beatsPerMeasure + 1); }}
+            style={styles.barCountBtn}
+            hitSlop={6}
+          >
+            <Ionicons name="add-circle-outline" size={22} color={beatsPerMeasure >= MAX_BEATS ? Colors.textTertiary : Colors.textSecondary} />
+          </Pressable>
+        </View>
+
         <View style={styles.barModeFooter}>
-          <Text style={[styles.hintText, { marginTop: 0 }]}>
-            drag left/right to split or merge  {"\u2022"}  drag down/up to add/remove bar
-          </Text>
           <Pressable
             onPress={() => onBarModeChange(false)}
             style={styles.barModeHandle}
@@ -882,6 +927,42 @@ const styles = StyleSheet.create({
     width: 1.5,
     marginLeft: 0,
     opacity: 0.4,
+  },
+  barSplitControls: {
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 22,
+    gap: 0,
+  },
+  barSplitBtn: {
+    padding: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  barSplitCount: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 9,
+    color: Colors.textTertiary,
+  },
+  barBeatCountControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 4,
+  },
+  barCountBtn: {
+    padding: 4,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  barCountLabel: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
+    color: Colors.textSecondary,
+    minWidth: 50,
+    textAlign: "center" as const,
   },
   barPlayButton: {
     alignItems: "center",
