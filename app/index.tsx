@@ -73,6 +73,7 @@ export default function MetronomeScreen() {
   const [beatSubdivisions, setBeatSubdivisions] = useState<
     Record<string, BeatType[]>
   >({});
+  const [barMode, setBarMode] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
   const [dropTargetBeat, setDropTargetBeat] = useState<number | null>(null);
@@ -453,6 +454,22 @@ export default function MetronomeScreen() {
     tapTimesRef.current = taps;
   }, [updateBpm]);
 
+  const handleBeatSubdivisionChange = useCallback(
+    (beatIndex: number, pattern: BeatType[] | null) => {
+      const newSubs = { ...beatSubdivisions };
+      if (pattern && pattern.length > 1) {
+        newSubs[String(beatIndex)] = pattern;
+        engineRef.current?.setBeatSubdivision(beatIndex, pattern);
+      } else {
+        delete newSubs[String(beatIndex)];
+        engineRef.current?.setBeatSubdivision(beatIndex, null);
+      }
+      setBeatSubdivisions(newSubs);
+      persistSettings({ beatSubdivisions: newSubs });
+    },
+    [beatSubdivisions, persistSettings]
+  );
+
   const handlePatternChange = useCallback(
     (pattern: BeatType[]) => {
       setSubdivisionPattern(pattern);
@@ -703,6 +720,11 @@ export default function MetronomeScreen() {
             dropTargetBeat={dropTargetBeat}
             beatSubdivisionCounts={beatSubdivisionCounts}
             dialRef={dialRef}
+            barMode={barMode}
+            onBarModeChange={setBarMode}
+            beatSubdivisions={beatSubdivisions}
+            onBeatSubdivisionChange={handleBeatSubdivisionChange}
+            activeSubNote={activeSubNote}
           />
         </View>
 

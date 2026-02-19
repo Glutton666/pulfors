@@ -233,6 +233,11 @@ interface BeatIndicatorProps {
   dropTargetBeat: number | null;
   beatSubdivisionCounts: Record<number, number>;
   dialRef?: React.RefObject<View | null>;
+  barMode: boolean;
+  onBarModeChange: (mode: boolean) => void;
+  beatSubdivisions: Record<string, BeatType[]>;
+  onBeatSubdivisionChange: (beatIndex: number, pattern: BeatType[] | null) => void;
+  activeSubNote: number;
 }
 
 export function BeatIndicator({
@@ -246,6 +251,11 @@ export function BeatIndicator({
   dropTargetBeat,
   beatSubdivisionCounts,
   dialRef,
+  barMode,
+  onBarModeChange,
+  beatSubdivisions,
+  onBeatSubdivisionChange,
+  activeSubNote,
 }: BeatIndicatorProps) {
   const { colors: C } = useTheme();
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
@@ -431,6 +441,205 @@ export function BeatIndicator({
     [beatTypes, onBeatTypeChange]
   );
 
+  const modeHandleResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dy) > 20 && Math.abs(gs.dy) > Math.abs(gs.dx) * 1.5,
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy < -40) {
+          onBarModeChange(true);
+          if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        } else if (gs.dy > 40) {
+          onBarModeChange(false);
+          if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }
+      },
+    })
+  ).current;
+
+  const barSwipeStartRef = useRef({ x: 0, y: 0 });
+  const barSwipeTriggeredRef = useRef(false);
+
+  const handleBarCellPress = useCallback((beatIndex: number, cellIndex: number) => {
+    if (isPlaying) return;
+    const pattern = beatSubdivisions[String(beatIndex)] || ["normal"];
+    const newPattern = [...pattern];
+    const current = newPattern[cellIndex];
+    const next: BeatType =
+      current === "strong" ? "accent"
+      : current === "accent" ? "normal"
+      : current === "normal" ? "mute"
+      : "strong";
+    newPattern[cellIndex] = next;
+    onBeatSubdivisionChange(beatIndex, newPattern);
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(
+        next === "strong" || next === "accent"
+          ? Haptics.ImpactFeedbackStyle.Heavy
+          : next === "mute"
+          ? Haptics.ImpactFeedbackStyle.Light
+          : Haptics.ImpactFeedbackStyle.Medium
+      );
+    }
+  }, [isPlaying, beatSubdivisions, onBeatSubdivisionChange]);
+
+  const barPanResponders = useRef<Record<number, ReturnType<typeof PanResponder.create>>>({});
+
+  const getBarPanResponder = useCallback((beatIndex: number) => {
+    if (!barPanResponders.current[beatIndex]) {
+      barPanResponders.current[beatIndex] = PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, gs) =>
+          (Math.abs(gs.dx) > 25 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5) ||
+          (gs.dy > 25 && Math.abs(gs.dy) > Math.abs(gs.dx) * 1.5),
+        onPanResponderGrant: (e) => {
+          barSwipeStartRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+          barSwipeTriggeredRef.current = false;
+        },
+        onPanResponderRelease: (_, gs) => {
+          if (barSwipeTriggeredRef.current) return;
+          barSwipeTriggeredRef.current = true;
+          if (Math.abs(gs.dx) > Math.abs(gs.dy)) {
+            const currentPattern = beatSubdivisions[String(beatIndex)] || ["normal"];
+            if (gs.dx > 30 && currentPattern.length < 8) {
+              const newPattern = [...currentPattern, "normal" as BeatType];
+              onBeatSubdivisionChange(beatIndex, newPattern);
+              if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            } else if (gs.dx < -30 && currentPattern.length > 1) {
+              const newPattern = currentPattern.slice(0, -1);
+              onBeatSubdivisionChange(beatIndex, newPattern.length <= 1 ? null : newPattern);
+              if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }
+          } else if (gs.dy > 30) {
+            if (beatsPerMeasure < MAX_BEATS) {
+              onBeatsChange(beatsPerMeasure + 1);
+              if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            }
+          }
+        },
+      });
+    }
+    return barPanResponders.current[beatIndex];
+  }, [beatSubdivisions, onBeatSubdivisionChange, beatsPerMeasure, onBeatsChange]);
+
+  useEffect(() => {
+    barPanResponders.current = {};
+  }, [beatSubdivisions, beatsPerMeasure]);
+
+  if (barMode) {
+    return (
+      <View style={styles.barModeContainer} testID="beat-indicator-bar-mode">
+        <View style={styles.barModeHeader}>
+          <View style={[styles.signatureRow, { position: "relative" }]}>
+            <Text style={[styles.digitalSignature, { fontSize: 40, opacity: 0.25 }]} numberOfLines={1}>
+              {beatsPerMeasure}
+            </Text>
+            <Text style={[styles.digitalSignatureSlash, { fontSize: 34, opacity: 0.25 }]} numberOfLines={1}>
+              /
+            </Text>
+            <Text style={[styles.digitalSignature, { fontSize: 40, opacity: 0.25 }]} numberOfLines={1}>
+              {beatsPerMeasure <= 4 ? "4" : "8"}
+            </Text>
+          </View>
+          <Pressable
+            onPress={onTogglePlay}
+            style={({ pressed }) => [
+              styles.barPlayButton,
+              pressed && styles.playButtonPressed,
+            ]}
+            testID="bar-play-button"
+          >
+            <Ionicons
+              name={isPlaying ? "stop" : "play"}
+              size={36}
+              color={isPlaying ? Colors.danger : C.accent}
+              style={!isPlaying ? { marginLeft: 3 } : undefined}
+            />
+          </Pressable>
+        </View>
+
+        <View style={styles.barsList}>
+          {beats.map((beat) => {
+            const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
+            const isCurrent = isPlaying && currentBeat === beat;
+            const bType = beatTypes[beat] || "normal";
+            const panHandlers = Platform.OS !== "web" ? getBarPanResponder(beat).panHandlers : {};
+            return (
+              <View key={`bar-${beat}`} style={[styles.barRow, isCurrent && { backgroundColor: Colors.surfaceLight }]} {...panHandlers}>
+                <Pressable onPress={() => cycleBeatType(beat)} style={styles.barLabel}>
+                  <Text style={[
+                    styles.barLabelText,
+                    { color: bType === "strong" ? C.accent : bType === "accent" ? C.accentMuted : bType === "mute" ? Colors.textTertiary : Colors.textSecondary }
+                  ]}>
+                    {beat + 1}
+                  </Text>
+                </Pressable>
+                <View style={styles.barCells}>
+                  {pattern.map((type, ci) => {
+                    const isActiveCell = isCurrent && ci === activeSubNote;
+                    const isStrongType = type === "strong";
+                    const isAccentType = type === "accent" || isStrongType;
+                    return (
+                      <Pressable
+                        key={ci}
+                        onPress={() => handleBarCellPress(beat, ci)}
+                        style={{ flex: 1 }}
+                      >
+                        {isStrongType ? (
+                          <View style={[styles.barCell, { overflow: "hidden", opacity: isActiveCell ? 1 : 0.8 }]}>
+                            <LinearGradient
+                              colors={[Colors.white, C.accent, C.accentMuted]}
+                              locations={[0, 0.35, 1]}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                              style={[styles.barCell, { alignItems: "center", justifyContent: "center" }]}
+                            >
+                              <View style={{ flex: 1, alignSelf: "stretch", margin: 3, borderRadius: 3, backgroundColor: C.accentMuted }} />
+                            </LinearGradient>
+                          </View>
+                        ) : (
+                          <View
+                            style={[
+                              styles.barCell,
+                              {
+                                backgroundColor: type === "mute"
+                                  ? "transparent"
+                                  : isAccentType
+                                  ? (isActiveCell ? C.accent : C.accentMuted)
+                                  : (isActiveCell ? Colors.text : Colors.textTertiary),
+                                borderWidth: type === "mute" ? 1.5 : 0,
+                                borderColor: type === "mute" ? Colors.textTertiary : "transparent",
+                                opacity: isActiveCell ? 1 : 0.8,
+                              },
+                            ]}
+                          />
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
+        <Pressable
+          onPress={() => onBarModeChange(false)}
+          style={styles.barModeHandle}
+          testID="close-bar-mode"
+          hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+          accessibilityRole="button"
+          accessibilityLabel="Close bar mode"
+        >
+          <Ionicons name="chevron-down" size={18} color={Colors.textTertiary} />
+        </Pressable>
+
+        <Text style={[styles.hintText, { marginTop: 4 }]}>swipe cells left/right to adjust  |  swipe down to add beat</Text>
+      </View>
+    );
+  }
+
   return (
     <View
       ref={containerRef}
@@ -509,6 +718,17 @@ export function BeatIndicator({
           )}
         </View>
       </View>
+
+      <Pressable
+        onPress={() => onBarModeChange(true)}
+        style={styles.barModeHandle}
+        testID="open-bar-mode"
+        hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+        accessibilityRole="button"
+        accessibilityLabel="Open bar mode"
+      >
+        <Ionicons name="chevron-up" size={18} color={Colors.textTertiary} />
+      </Pressable>
 
       <Text style={styles.hintText}>swipe to add or remove beats</Text>
     </View>
@@ -623,5 +843,65 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginTop: 8,
     opacity: 0.9,
+  },
+  barModeContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    flex: 1,
+  },
+  barModeHeader: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  barsList: {
+    width: "100%" as any,
+    gap: 5,
+    paddingHorizontal: 4,
+  },
+  barRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  barLabel: {
+    width: 24,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  barLabelText: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 14,
+  },
+  barCells: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 4,
+  },
+  barCell: {
+    height: 28,
+    borderRadius: 5,
+    flex: 1,
+  },
+  barPlayButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 6,
+    marginTop: 4,
+  },
+  barModeHandle: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 24,
+    minWidth: 80,
+    minHeight: 36,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 12,
   },
 });
