@@ -204,16 +204,96 @@ function generateRimshotLow() {
   return fadeOut(normalize(samples), 5);
 }
 
+function generateClassicStrong() {
+  const duration = 0.035;
+  const numSamples = Math.floor(SAMPLE_RATE * duration);
+  const samples = new Float64Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SAMPLE_RATE;
+    const env = Math.exp(-t * 45);
+    const f0 = 3200 + 1200 * Math.exp(-t * 150);
+    let s = 0;
+    s += Math.sin(2 * Math.PI * f0 * t) * 1.0;
+    s += Math.sin(2 * Math.PI * f0 * 2.0 * t) * 0.8;
+    s += Math.sin(2 * Math.PI * f0 * 3.0 * t) * 0.5;
+    s += Math.sin(2 * Math.PI * f0 * 0.5 * t) * 0.6;
+    s += Math.sin(2 * Math.PI * f0 * 4.0 * t) * 0.3;
+    samples[i] = s * env;
+  }
+  return fadeOut(normalize(samples), 5);
+}
+
+function generateWoodblockStrong() {
+  const duration = 0.045;
+  const numSamples = Math.floor(SAMPLE_RATE * duration);
+  const samples = new Float64Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SAMPLE_RATE;
+    const env = Math.exp(-t * 38);
+    const f1 = 1100 + 300 * Math.exp(-t * 50);
+    const f2 = 2800 + 500 * Math.exp(-t * 70);
+    let s = 0;
+    s += Math.sin(2 * Math.PI * f1 * t) * 1.0;
+    s += Math.sin(2 * Math.PI * f2 * t) * 0.85;
+    s += Math.sin(2 * Math.PI * f1 * 2.8 * t) * 0.6;
+    s += Math.sin(2 * Math.PI * f1 * 4.0 * t) * 0.3;
+    samples[i] = s * env;
+  }
+  return fadeOut(normalize(samples), 5);
+}
+
+function generateDigitalStrong() {
+  const duration = 0.02;
+  const numSamples = Math.floor(SAMPLE_RATE * duration);
+  const samples = new Float64Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SAMPLE_RATE;
+    const env = Math.exp(-t * 60);
+    const freq = 3200;
+    let s = 0;
+    s += Math.sin(2 * Math.PI * freq * t) * 1.0;
+    s += Math.sin(2 * Math.PI * freq * 2.0 * t) * 0.7;
+    s += Math.sin(2 * Math.PI * freq * 3.0 * t) * 0.4;
+    s += Math.sin(2 * Math.PI * freq * 0.5 * t) * 0.6;
+    s += Math.sin(2 * Math.PI * freq * 4.0 * t) * 0.25;
+    samples[i] = s * env;
+  }
+  return fadeOut(normalize(samples), 3);
+}
+
+function generateRimshotStrong() {
+  const duration = 0.055;
+  const numSamples = Math.floor(SAMPLE_RATE * duration);
+  const samples = new Float64Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SAMPLE_RATE;
+    const env = Math.exp(-t * 32);
+    let s = 0;
+    s += Math.sin(2 * Math.PI * 550 * t) * 1.0;
+    s += Math.sin(2 * Math.PI * 1100 * t) * 0.7;
+    s += Math.sin(2 * Math.PI * 1650 * t) * 0.45;
+    s += Math.sin(2 * Math.PI * 2400 * t) * 0.55;
+    s += Math.sin(2 * Math.PI * 3800 * t) * 0.3;
+    s += Math.sin(2 * Math.PI * 4500 * t) * 0.15;
+    samples[i] = s * env;
+  }
+  return fadeOut(normalize(samples), 5);
+}
+
 const outDir = path.join(__dirname, "..", "assets", "sounds");
 fs.mkdirSync(outDir, { recursive: true });
 
 writeWav(path.join(outDir, "click-high.wav"), generateClassicHigh());
 writeWav(path.join(outDir, "click-low.wav"), generateClassicLow());
+writeWav(path.join(outDir, "click-strong.wav"), generateClassicStrong());
 writeWav(path.join(outDir, "woodblock-high.wav"), generateWoodblockHigh());
 writeWav(path.join(outDir, "woodblock-low.wav"), generateWoodblockLow());
+writeWav(path.join(outDir, "woodblock-strong.wav"), generateWoodblockStrong());
 writeWav(path.join(outDir, "digital-high.wav"), generateDigitalHigh());
 writeWav(path.join(outDir, "digital-low.wav"), generateDigitalLow());
+writeWav(path.join(outDir, "digital-strong.wav"), generateDigitalStrong());
 writeWav(path.join(outDir, "rimshot-high.wav"), generateRimshotHigh());
 writeWav(path.join(outDir, "rimshot-low.wav"), generateRimshotLow());
+writeWav(path.join(outDir, "rimshot-strong.wav"), generateRimshotStrong());
 
 console.log("\nAll sound files generated!");
