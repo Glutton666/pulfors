@@ -164,8 +164,8 @@ function DialBeatDot({
           ]}
         >
           <LinearGradient
-            colors={[Colors.white, Colors.white, C.accent, C.accentMuted, Colors.background]}
-            locations={[0, 0.15, 0.4, 0.7, 1]}
+            colors={[Colors.white, C.accent, C.accentMuted]}
+            locations={[0, 0.35, 1]}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}
