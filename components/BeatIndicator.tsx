@@ -457,7 +457,11 @@ export function BeatIndicator({
 
   const handleBarCellPress = useCallback((beatIndex: number, cellIndex: number) => {
     if (isPlaying) return;
-    const pattern = beatSubdivisions[String(beatIndex)] || ["normal"];
+    const pattern = beatSubdivisions[String(beatIndex)];
+    if (!pattern || pattern.length <= 1) {
+      cycleBeatType(beatIndex);
+      return;
+    }
     const newPattern = [...pattern];
     const current = newPattern[cellIndex];
     const next: BeatType =
@@ -476,7 +480,7 @@ export function BeatIndicator({
           : Haptics.ImpactFeedbackStyle.Medium
       );
     }
-  }, [isPlaying, beatSubdivisions, onBeatSubdivisionChange]);
+  }, [isPlaying, beatSubdivisions, onBeatSubdivisionChange, cycleBeatType]);
 
   const barScrollRef = useRef<ScrollView>(null);
   const [repeatModalBeat, setRepeatModalBeat] = useState<number | null>(null);
@@ -536,24 +540,6 @@ export function BeatIndicator({
   const BAR_LINE_COLOR = Colors.textSecondary;
   const SCROLL_MAX_HEIGHT = 10 * (BAR_HEIGHT + 1) + 2;
   const needsScroll = beatsPerMeasure > 10;
-
-  const barAreaPanResponder = useMemo(() =>
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gs) =>
-        !isPlaying && Math.abs(gs.dy) > 30 && Math.abs(gs.dy) > Math.abs(gs.dx) * 1.5,
-      onPanResponderRelease: (_, gs) => {
-        if (isPlaying) return;
-        if (gs.dy > 40 && beatsPerMeasure < MAX_BEATS) {
-          onBeatsChange(beatsPerMeasure + 1);
-          if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        } else if (gs.dy < -40 && beatsPerMeasure > MIN_BEATS) {
-          onBeatsChange(beatsPerMeasure - 1);
-          if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        }
-      },
-    }),
-  [isPlaying, beatsPerMeasure, onBeatsChange]);
 
   useEffect(() => {
     if (!barMode || !isPlaying || currentBeat < 0) return;
@@ -661,14 +647,29 @@ export function BeatIndicator({
 
     return (
       <View style={styles.barModeContainer} testID="beat-indicator-bar-mode">
-        <Text style={[styles.hintText, { marginBottom: -4 }]}>
-          {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}  {"\u2022"}  drag {"\u2193"} add  {"\u2022"}  drag {"\u2191"} remove
-        </Text>
+        <View style={styles.barTimeSigRow}>
+          <Pressable
+            onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+            style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure <= MIN_BEATS) && { opacity: 0.3 }]}
+            hitSlop={8}
+          >
+            <Ionicons name="remove" size={16} color={Colors.textSecondary} />
+          </Pressable>
+          <Text style={styles.hintText}>
+            {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}
+          </Text>
+          <Pressable
+            onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+            style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
+            hitSlop={8}
+          >
+            <Ionicons name="add" size={16} color={Colors.textSecondary} />
+          </Pressable>
+        </View>
 
         <View
           ref={barAreaRef}
           style={styles.barMeasureOuter}
-          {...barAreaPanResponder.panHandlers}
         >
           {needsScroll ? (
             <ScrollView
@@ -677,18 +678,10 @@ export function BeatIndicator({
               showsVerticalScrollIndicator={false}
               nestedScrollEnabled
             >
-              <View style={styles.barMeasureContainer}>
-                <View style={[styles.barMeasureStartLine, { backgroundColor: BAR_LINE_COLOR }]} />
-                <View style={styles.barMeasureInner}>{barRows}</View>
-                <View style={[styles.barMeasureEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
-              </View>
+              <View style={styles.barMeasureInner}>{barRows}</View>
             </ScrollView>
           ) : (
-            <View style={styles.barMeasureContainer}>
-              <View style={[styles.barMeasureStartLine, { backgroundColor: BAR_LINE_COLOR }]} />
-              <View style={styles.barMeasureInner}>{barRows}</View>
-              <View style={[styles.barMeasureEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
-            </View>
+            <View style={styles.barMeasureInner}>{barRows}</View>
           )}
 
           {needsScroll && (
@@ -1008,23 +1001,22 @@ const styles = StyleSheet.create({
   barModeContainer: {
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 6,
     flex: 1,
     width: "100%" as any,
   },
-  barMeasureContainer: {
+  barTimeSigRow: {
     flexDirection: "row",
-    alignItems: "stretch",
-    width: "100%" as any,
+    alignItems: "center",
+    gap: 12,
   },
-  barMeasureStartLine: {
-    width: 3,
-    borderRadius: 1.5,
-    marginRight: 0,
-  },
-  barMeasureEndLine: {
-    width: 5,
-    borderRadius: 1,
+  barTimeSigBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   barMeasureInner: {
     flex: 1,
@@ -1175,7 +1167,7 @@ const styles = StyleSheet.create({
   },
   barMeasureOuter: {
     width: "100%" as any,
-    paddingHorizontal: 8,
+    paddingHorizontal: 0,
   },
   barScrollView: {
     flexGrow: 0,
@@ -1183,8 +1175,8 @@ const styles = StyleSheet.create({
   barScrollFade: {
     position: "absolute",
     bottom: 0,
-    left: 8,
-    right: 8,
+    left: 0,
+    right: 0,
     height: 20,
     backgroundColor: "transparent",
   },
