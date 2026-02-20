@@ -545,12 +545,14 @@ export function BeatIndicator({
   const rowH = BAR_HEIGHT + 1 + barGap;
   const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
   const copyHeight = beatsPerMeasure * rowH;
+  const [activeCopy, setActiveCopy] = useState(1);
   const activeCopyRef = useRef(1);
   const barPrevBeatRef = useRef(-1);
 
   useEffect(() => {
     if (!isPlaying) {
       activeCopyRef.current = 1;
+      setActiveCopy(1);
       barPrevBeatRef.current = -1;
       if (barMode && barContainerHeight > 0) {
         const initTarget = Math.max(0, centerPad + copyHeight - barContainerHeight / 2 + BAR_HEIGHT / 2);
@@ -568,10 +570,12 @@ export function BeatIndicator({
 
     if (prev >= 0 && currentBeat < prev) {
       activeCopyRef.current++;
+      setActiveCopy(activeCopyRef.current);
     }
 
     if (activeCopyRef.current > 1 && currentBeat > 0) {
       activeCopyRef.current = 1;
+      setActiveCopy(1);
       const snapTop = centerPad + 1 * copyHeight + (currentBeat - 1) * rowH;
       const snapTarget = Math.max(0, snapTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
       barScrollRef.current?.scrollTo({ y: snapTarget, animated: false });
@@ -586,7 +590,7 @@ export function BeatIndicator({
     const isDropping = dropTargetBeat !== null;
     const renderBarRow = (beat: number, copyIndex: number) => {
       const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
-      const isCurrent = isPlaying && currentBeat === beat;
+      const isCurrent = isPlaying && currentBeat === beat && copyIndex === activeCopy;
       const bType = beatTypes[beat] || "normal";
       const isDropTarget = isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
       const repeat = barRepeats[beat];
