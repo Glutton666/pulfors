@@ -551,18 +551,31 @@ export function BeatIndicator({
     return `${m}:${s.toString().padStart(2, "0")}`;
   }, [barClockMode, barElapsedSec, barTimerRemaining, barTimerDuration, isPlaying]);
 
+  const barClockSwipePan = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_e, g) => !isPlaying && Math.abs(g.dx) > 10 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+    onPanResponderRelease: (_e, g) => {
+      if (Math.abs(g.dx) < 20) return;
+      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (g.dx < 0 && barClockMode === "stopwatch") {
+        setBarClockMode("timer");
+      } else if (g.dx > 0 && barClockMode === "timer") {
+        setBarClockMode("stopwatch");
+        setBarTimerEditing(false);
+      }
+    },
+  }), [isPlaying, barClockMode]);
+
   const handleBarClockTap = useCallback(() => {
     if (isPlaying) return;
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (barClockMode === "stopwatch") {
-      setBarClockMode("timer");
-    } else if (!barTimerEditing) {
+    if (barClockMode === "timer") {
+      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setBarTimerEditing(true);
       const m = Math.floor(barTimerDuration / 60);
       const s = barTimerDuration % 60;
       setBarTimerInput(m > 0 ? `${m}:${s.toString().padStart(2, "0")}` : `${s}`);
     }
-  }, [isPlaying, barClockMode, barTimerEditing, barTimerDuration]);
+  }, [isPlaying, barClockMode, barTimerDuration]);
 
   const commitBarTimerInput = useCallback(() => {
     setBarTimerEditing(false);
@@ -582,13 +595,6 @@ export function BeatIndicator({
     setBarTimerDuration(totalSeconds);
     setBarTimerRemaining(totalSeconds);
   }, [barTimerInput]);
-
-  const switchToStopwatch = useCallback(() => {
-    if (isPlaying) return;
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setBarClockMode("stopwatch");
-    setBarTimerEditing(false);
-  }, [isPlaying]);
 
   const [repeatModalBeat, setRepeatModalBeat] = useState<number | null>(null);
   const [repeatType, setRepeatType] = useState<"count" | "duration">("count");
@@ -868,31 +874,21 @@ export function BeatIndicator({
             >
               <Ionicons name="remove" size={16} color={Colors.textSecondary} />
             </Pressable>
-            <Pressable style={styles.barInfoCol} onPress={handleBarClockTap} onLongPress={barClockMode === "timer" ? switchToStopwatch : undefined}>
-              {barTimerEditing ? (
-                <TextInput
-                  style={[styles.barInfoText, { color: C.accent, minWidth: 48, textAlign: "center", padding: 0, borderBottomWidth: 1, borderBottomColor: C.accent }]}
-                  value={barTimerInput}
-                  onChangeText={setBarTimerInput}
-                  onSubmitEditing={commitBarTimerInput}
-                  onBlur={commitBarTimerInput}
-                  keyboardType="numbers-and-punctuation"
-                  autoFocus
-                  selectTextOnFocus
-                  placeholder="M:SS"
-                  placeholderTextColor={Colors.textTertiary}
-                />
-              ) : (
+            <View style={styles.barInfoCol} {...barClockSwipePan.panHandlers}>
+              <Pressable onPress={handleBarClockTap}>
                 <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? Colors.danger : C.accent }]}>
-                  {barClockMode === "timer" && !isPlaying ? (
-                    <>{barTimeDisplay} <Text style={{ fontSize: 9, color: Colors.textTertiary }}>&#9202;</Text></>
-                  ) : barTimeDisplay}
+                  {barTimeDisplay}
+                  {barClockMode === "timer" && !isPlaying && <Text style={{ fontSize: 9, color: Colors.textTertiary }}> &#9202;</Text>}
                 </Text>
-              )}
+              </Pressable>
               <Text style={[styles.barInfoText, { color: Colors.textTertiary, fontSize: 10 }]}>
                 {beatsPerMeasure} bars
               </Text>
-            </Pressable>
+              <View style={styles.barClockDots}>
+                <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
+                <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: Colors.danger }]} />
+              </View>
+            </View>
             <Pressable
               onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
               style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
@@ -917,6 +913,39 @@ export function BeatIndicator({
             />
           </Pressable>
         </View>
+
+        <Modal
+          visible={barTimerEditing}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setBarTimerEditing(false)}
+        >
+          <Pressable style={styles.repeatOverlay} onPress={() => setBarTimerEditing(false)}>
+            <View style={[styles.repeatModal, { marginTop: 80, maxWidth: 240 }]} onStartShouldSetResponder={() => true}>
+              <Text style={[styles.repeatTitle, { color: Colors.danger }]}>Timer Duration</Text>
+              <TextInput
+                style={[styles.barInfoText, { color: C.accent, fontSize: 28, textAlign: "center", padding: 8, borderBottomWidth: 1, borderBottomColor: C.accent, width: "100%" as any }]}
+                value={barTimerInput}
+                onChangeText={setBarTimerInput}
+                onSubmitEditing={commitBarTimerInput}
+                keyboardType="numbers-and-punctuation"
+                autoFocus
+                selectTextOnFocus
+                placeholder="M:SS"
+                placeholderTextColor={Colors.textTertiary}
+              />
+              <Text style={{ color: Colors.textTertiary, fontSize: 11, marginTop: 6, textAlign: "center" }}>
+                M:SS or seconds
+              </Text>
+              <Pressable
+                onPress={commitBarTimerInput}
+                style={[styles.repeatSaveBtn, { backgroundColor: Colors.danger, marginTop: 14 }]}
+              >
+                <Text style={[styles.repeatSaveText, { color: Colors.white }]}>Set</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Modal>
 
         <Modal
           visible={repeatModalBeat !== null}
@@ -1166,6 +1195,17 @@ const styles = StyleSheet.create({
   barFadeGradientBottom: {
     width: "100%" as any,
     zIndex: 10,
+  },
+  barClockDots: {
+    flexDirection: "row",
+    gap: 4,
+    marginTop: 3,
+  },
+  barClockDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.textTertiary,
   },
   barInfoCol: {
     alignItems: "center",
