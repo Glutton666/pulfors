@@ -645,7 +645,7 @@ export function BeatIndicator({
 
     return (
       <View style={styles.barModeContainer} testID="beat-indicator-bar-mode">
-        <View style={styles.barTopRow}>
+        <View style={styles.barTopRowCenter}>
           <Pressable
             onPress={() => onBarModeChange(false)}
             style={styles.barModeCloseBtn}
@@ -656,6 +656,31 @@ export function BeatIndicator({
           >
             <Ionicons name="close" size={18} color={Colors.textTertiary} />
           </Pressable>
+        </View>
+
+        <View
+          ref={barAreaRef}
+          style={styles.barMeasureOuter}
+        >
+          {needsScroll ? (
+            <ScrollView
+              ref={barScrollRef}
+              style={[styles.barScrollView, { maxHeight: SCROLL_MAX_HEIGHT }]}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+            >
+              <View style={styles.barMeasureInner}>{barRows}</View>
+            </ScrollView>
+          ) : (
+            <View style={styles.barMeasureInner}>{barRows}</View>
+          )}
+
+          {needsScroll && (
+            <View style={styles.barScrollFade} pointerEvents="none" />
+          )}
+        </View>
+
+        <View style={styles.barBottomRow}>
           <View style={styles.barTimeSigRow}>
             <Pressable
               onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
@@ -690,28 +715,6 @@ export function BeatIndicator({
               style={!isPlaying ? { marginLeft: 2 } : undefined}
             />
           </Pressable>
-        </View>
-
-        <View
-          ref={barAreaRef}
-          style={styles.barMeasureOuter}
-        >
-          {needsScroll ? (
-            <ScrollView
-              ref={barScrollRef}
-              style={[styles.barScrollView, { maxHeight: SCROLL_MAX_HEIGHT }]}
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled
-            >
-              <View style={styles.barMeasureInner}>{barRows}</View>
-            </ScrollView>
-          ) : (
-            <View style={styles.barMeasureInner}>{barRows}</View>
-          )}
-
-          {needsScroll && (
-            <View style={styles.barScrollFade} pointerEvents="none" />
-          )}
         </View>
 
         <Modal
@@ -1000,12 +1003,17 @@ const styles = StyleSheet.create({
     flex: 1,
     width: "100%" as any,
   },
-  barTopRow: {
+  barTopRowCenter: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 4,
+  },
+  barBottomRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    justifyContent: "center",
+    paddingVertical: 8,
+    gap: 16,
   },
   barModeCloseBtn: {
     width: 32,
