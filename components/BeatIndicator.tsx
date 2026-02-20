@@ -545,12 +545,14 @@ export function BeatIndicator({
   const rowH = BAR_HEIGHT + 1 + barGap;
   const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
   const loopResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevBarBeatRef = useRef(-1);
 
   useEffect(() => {
     if (!barMode || !isPlaying || currentBeat < 0) return;
     if (barContainerHeight <= 0) return;
 
-    const prevBeat = prevBeatRef.current;
+    const prevBeat = prevBarBeatRef.current;
+    prevBarBeatRef.current = currentBeat;
     const isLoopWrap = barLoopMode === "loop" && prevBeat === beatsPerMeasure - 1 && currentBeat === 0 && prevBeat >= 0;
 
     if (loopResetTimerRef.current) {
@@ -577,6 +579,7 @@ export function BeatIndicator({
 
   useEffect(() => {
     if (!isPlaying) {
+      prevBarBeatRef.current = -1;
       if (loopResetTimerRef.current) {
         clearTimeout(loopResetTimerRef.current);
         loopResetTimerRef.current = null;
