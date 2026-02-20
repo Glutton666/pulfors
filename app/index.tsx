@@ -630,7 +630,7 @@ export default function MetronomeScreen() {
         const rowH = barH + 1;
         const beatIdx = Math.floor(relY / rowH);
         if (beatIdx >= 0 && beatIdx < beatsPerMeasure) return beatIdx;
-        return -1;
+        return null;
       }
 
       const center = dialCenterRef.current;
