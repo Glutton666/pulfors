@@ -754,13 +754,15 @@ export function BeatIndicator({
             <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>{allBarRows}</View>
           </ScrollView>
           <LinearGradient
-            colors={[Colors.background, "transparent"]}
-            style={[styles.barFadeGradient, { top: 0, height: rowH }]}
+            colors={[Colors.background, Colors.background, "transparent"]}
+            locations={[0, 0.5, 1]}
+            style={[styles.barFadeGradient, { top: 0, height: rowH * 1.5 }]}
             pointerEvents="none"
           />
           <LinearGradient
-            colors={["transparent", Colors.background]}
-            style={[styles.barFadeGradient, { bottom: 0, height: rowH }]}
+            colors={["transparent", Colors.background, Colors.background]}
+            locations={[0, 0.5, 1]}
+            style={[styles.barFadeGradient, { bottom: 0, height: rowH * 1.5 }]}
             pointerEvents="none"
           />
         </View>
