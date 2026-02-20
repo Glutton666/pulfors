@@ -540,18 +540,17 @@ export function BeatIndicator({
 
   const BAR_HEIGHT = beatsPerMeasure <= 4 ? 44 : beatsPerMeasure <= 6 ? 36 : 30;
   const BAR_LINE_COLOR = Colors.textSecondary;
-  const SCROLL_MAX_HEIGHT = 10 * (BAR_HEIGHT + 1) + 2;
-  const needsScroll = beatsPerMeasure > 10;
+  const [barContainerHeight, setBarContainerHeight] = useState(0);
+  const rowH = BAR_HEIGHT + 1;
+  const centerPad = Math.max(0, (barContainerHeight - rowH) / 2);
 
   useEffect(() => {
     if (!barMode || !isPlaying || currentBeat < 0) return;
-    if (!needsScroll) return;
-    const rowH = BAR_HEIGHT + 1;
-    const visibleHeight = SCROLL_MAX_HEIGHT;
+    if (barContainerHeight <= 0) return;
     const beatTop = currentBeat * rowH;
-    const scrollTarget = Math.max(0, beatTop - (visibleHeight / 2) + (rowH / 2));
-    barScrollRef.current?.scrollTo({ y: scrollTarget, animated: false });
-  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, needsScroll]);
+    const scrollTarget = Math.max(0, beatTop - (barContainerHeight / 2) + (rowH / 2));
+    barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
+  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight]);
 
   if (barMode) {
     const isDropping = dropTargetBeat !== null;
@@ -665,23 +664,16 @@ export function BeatIndicator({
         <View
           ref={barAreaRef}
           style={styles.barMeasureOuter}
+          onLayout={(e) => setBarContainerHeight(e.nativeEvent.layout.height)}
         >
-          {needsScroll ? (
-            <ScrollView
-              ref={barScrollRef}
-              style={[styles.barScrollView, { maxHeight: SCROLL_MAX_HEIGHT }]}
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled
-            >
-              <View style={styles.barMeasureInner}>{barRows}</View>
-            </ScrollView>
-          ) : (
-            <View style={styles.barMeasureInner}>{barRows}</View>
-          )}
-
-          {needsScroll && (
-            <View style={styles.barScrollFade} pointerEvents="none" />
-          )}
+          <ScrollView
+            ref={barScrollRef}
+            style={styles.barScrollView}
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+          >
+            <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad }]}>{barRows}</View>
+          </ScrollView>
         </View>
 
         <View style={styles.barBottomRow}>
