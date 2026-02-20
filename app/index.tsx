@@ -824,7 +824,7 @@ export default function MetronomeScreen() {
           },
         ]}
       >
-        <View style={styles.topSection}>
+        <View style={[styles.topSection, barMode && { justifyContent: "flex-start", flex: 3 }]}>
           <BeatIndicator
             beatsPerMeasure={beatsPerMeasure}
             currentBeat={currentBeat}

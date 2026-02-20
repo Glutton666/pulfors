@@ -541,16 +541,17 @@ export function BeatIndicator({
   const BAR_HEIGHT = beatsPerMeasure <= 4 ? 44 : beatsPerMeasure <= 6 ? 36 : 30;
   const BAR_LINE_COLOR = Colors.textSecondary;
   const [barContainerHeight, setBarContainerHeight] = useState(0);
-  const rowH = BAR_HEIGHT + 1;
-  const centerPad = Math.max(0, (barContainerHeight - rowH) / 2);
+  const barGap = Math.round(BAR_HEIGHT * 0.5);
+  const rowH = BAR_HEIGHT + 1 + barGap;
+  const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
 
   useEffect(() => {
     if (!barMode || !isPlaying || currentBeat < 0) return;
     if (barContainerHeight <= 0) return;
-    const beatTop = currentBeat * rowH;
-    const scrollTarget = Math.max(0, beatTop - (barContainerHeight / 2) + (rowH / 2));
-    barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
-  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight]);
+    const beatTop = centerPad + currentBeat * rowH;
+    const scrollTarget = Math.max(0, beatTop - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
+    barScrollRef.current?.scrollTo({ y: scrollTarget, animated: false });
+  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH]);
 
   if (barMode) {
     const isDropping = dropTargetBeat !== null;
@@ -672,7 +673,7 @@ export function BeatIndicator({
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
           >
-            <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad }]}>{barRows}</View>
+            <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>{barRows}</View>
           </ScrollView>
         </View>
 
