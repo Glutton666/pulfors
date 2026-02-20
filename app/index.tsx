@@ -104,6 +104,7 @@ export default function MetronomeScreen() {
   const [flashMode, setFlashMode] = useState<FlashMode>("accent");
   const [hapticMode, setHapticMode] = useState<HapticMode>("all");
   const [audioOffsetMs, setAudioOffsetMs] = useState(0);
+  const [timerStopMode, setTimerStopMode] = useState<"immediate" | "end-of-cycle">("end-of-cycle");
 
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -234,6 +235,9 @@ export default function MetronomeScreen() {
       if (settings.themeColor) {
         setThemeColor(settings.themeColor);
       }
+      if (settings.timerStopMode) {
+        setTimerStopMode(settings.timerStopMode);
+      }
 
       setIsLoaded(true);
     });
@@ -293,11 +297,12 @@ export default function MetronomeScreen() {
         flashMode,
         hapticMode,
         audioOffsetMs,
+        timerStopMode,
         ...overrides,
       };
       saveSettings(current);
     },
-    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, backgroundPlay, soundSet, flashMode, hapticMode, audioOffsetMs]
+    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, backgroundPlay, soundSet, flashMode, hapticMode, audioOffsetMs, timerStopMode]
   );
 
   const updateVolume = useCallback(
@@ -491,11 +496,28 @@ export default function MetronomeScreen() {
     });
   }, []);
 
+  const timerStopModeRef = useRef(timerStopMode);
+  useEffect(() => { timerStopModeRef.current = timerStopMode; }, [timerStopMode]);
+
   const handleTimerExpired = useCallback(() => {
     const engine = engineRef.current;
     if (!engine) return;
-    engine.requestStopAfterMeasure();
+    if (timerStopModeRef.current === "immediate") {
+      engine.stop();
+      setIsPlaying(false);
+      setCurrentBeat(-1);
+    } else {
+      engine.requestStopAfterMeasure();
+    }
   }, []);
+
+  const updateTimerStopMode = useCallback(
+    (mode: "immediate" | "end-of-cycle") => {
+      setTimerStopMode(mode);
+      persistSettings({ timerStopMode: mode });
+    },
+    [persistSettings]
+  );
 
   const handleTapTempo = useCallback(() => {
     const now = Date.now();
@@ -819,6 +841,8 @@ export default function MetronomeScreen() {
         onHapticModeChange={updateHapticMode}
         audioOffsetMs={audioOffsetMs}
         onAudioOffsetChange={updateAudioOffset}
+        timerStopMode={timerStopMode}
+        onTimerStopModeChange={updateTimerStopMode}
       />
 
       <View

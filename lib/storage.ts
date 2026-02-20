@@ -21,6 +21,7 @@ export interface MetronomeSettings {
   hapticMode?: HapticMode;
   audioOffsetMs?: number;
   themeColor?: ThemeColor;
+  timerStopMode?: "immediate" | "end-of-cycle";
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
@@ -36,6 +37,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   hapticMode: "all",
   audioOffsetMs: 0,
   themeColor: "gold",
+  timerStopMode: "end-of-cycle",
 };
 
 export async function loadSettings(): Promise<MetronomeSettings> {

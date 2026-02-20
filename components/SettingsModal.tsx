@@ -52,6 +52,8 @@ interface SettingsModalProps {
   onHapticModeChange: (value: HapticMode) => void;
   audioOffsetMs: number;
   onAudioOffsetChange: (value: number) => void;
+  timerStopMode: "immediate" | "end-of-cycle";
+  onTimerStopModeChange: (value: "immediate" | "end-of-cycle") => void;
 }
 
 const SOUND_SET_OPTIONS: { value: SoundSet; label: string; icon: string }[] = [
@@ -123,6 +125,8 @@ export function SettingsModal({
   onHapticModeChange,
   audioOffsetMs,
   onAudioOffsetChange,
+  timerStopMode,
+  onTimerStopModeChange,
 }: SettingsModalProps) {
   const { themeColor, customHex, setThemeColor, setCustomHex, colors: C } = useTheme();
   const insets = useSafeAreaInsets();
@@ -627,6 +631,39 @@ export function SettingsModal({
                 - = audio earlier / + = audio later
               </Text>
             </View>
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionLabel}>Timer Stop</Text>
+            </View>
+            <View style={styles.tripleRow}>
+              {([
+                { value: "end-of-cycle" as const, label: "End of Cycle" },
+                { value: "immediate" as const, label: "Immediate" },
+              ]).map((opt) => {
+                const active = timerStopMode === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    style={[styles.tripleBtn, active && [styles.tripleBtnActive, { borderColor: C.accent, backgroundColor: C.accentDim }]]}
+                    onPress={() => {
+                      onTimerStopModeChange(opt.value);
+                      if (Platform.OS !== "web") Haptics.selectionAsync();
+                    }}
+                  >
+                    <Text style={[styles.tripleBtnText, active && [styles.tripleBtnTextActive, { color: C.accent }]]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={styles.offsetHint}>
+              {timerStopMode === "end-of-cycle"
+                ? "Stops after current measure ends"
+                : "Stops immediately when timer expires"}
+            </Text>
           </View>
         </ScrollView>
       </Pressable>
