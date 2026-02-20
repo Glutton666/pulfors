@@ -41,6 +41,7 @@ import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
 import { SettingsModal } from "@/components/SettingsModal";
 import { TunerModal } from "@/components/TunerModal";
+import { SignalGeneratorModal } from "@/components/SignalGeneratorModal";
 
 function getTempoLabel(bpm: number): string {
   if (bpm < 40) return "Grave";
@@ -108,6 +109,7 @@ export default function MetronomeScreen() {
   const [timerStopMode, setTimerStopMode] = useState<"immediate" | "end-of-cycle">("end-of-cycle");
   const [showMenu, setShowMenu] = useState(false);
   const [showTuner, setShowTuner] = useState(false);
+  const [showSignalGen, setShowSignalGen] = useState(false);
 
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -848,6 +850,17 @@ export default function MetronomeScreen() {
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
+                  setShowSignalGen(true);
+                }}
+              >
+                <MaterialCommunityIcons name="waveform" size={18} color={C.accent} />
+                <Text style={styles.menuItemText}>Signal Generator</Text>
+              </Pressable>
+              <View style={styles.menuDivider} />
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                onPress={() => {
+                  setShowMenu(false);
                   setShowSettings(true);
                 }}
               >
@@ -862,6 +875,11 @@ export default function MetronomeScreen() {
       <TunerModal
         visible={showTuner}
         onClose={() => setShowTuner(false)}
+      />
+
+      <SignalGeneratorModal
+        visible={showSignalGen}
+        onClose={() => setShowSignalGen(false)}
       />
 
       <SettingsModal
