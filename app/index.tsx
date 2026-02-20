@@ -988,7 +988,7 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     position: "absolute",
-    left: 20,
+    right: 20,
     zIndex: 20,
     width: 36,
     height: 36,
@@ -1005,7 +1005,7 @@ const styles = StyleSheet.create({
   },
   menuDropdown: {
     position: "absolute",
-    left: 20,
+    right: 20,
     backgroundColor: Colors.surface,
     borderRadius: 12,
     borderWidth: 1,
