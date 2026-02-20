@@ -853,6 +853,7 @@ export default function MetronomeScreen() {
             barLoopMode={barLoopMode}
             onBarLoopModeChange={setBarLoopMode}
             onBarScrollOffset={(offset) => { barScrollOffsetRef.current = offset; }}
+            onBarTimerExpired={handleTimerExpired}
           />
         </View>
 

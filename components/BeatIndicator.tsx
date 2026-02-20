@@ -252,6 +252,7 @@ interface BeatIndicatorProps {
   barLoopMode: "loop" | "once";
   onBarLoopModeChange: (mode: "loop" | "once") => void;
   onBarScrollOffset?: (offset: number) => void;
+  onBarTimerExpired?: () => void;
 }
 
 export function BeatIndicator({
@@ -276,6 +277,7 @@ export function BeatIndicator({
   barLoopMode,
   onBarLoopModeChange,
   onBarScrollOffset,
+  onBarTimerExpired,
 }: BeatIndicatorProps) {
   const { colors: C } = useTheme();
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
@@ -489,26 +491,104 @@ export function BeatIndicator({
   const barScrollRef = useRef<ScrollView>(null);
   const [barElapsedSec, setBarElapsedSec] = useState(0);
   const barStartTimeRef = useRef(0);
+  const [barClockMode, setBarClockMode] = useState<"stopwatch" | "timer">("stopwatch");
+  const [barTimerDuration, setBarTimerDuration] = useState(180);
+  const [barTimerRemaining, setBarTimerRemaining] = useState(180);
+  const [barTimerEditing, setBarTimerEditing] = useState(false);
+  const [barTimerInput, setBarTimerInput] = useState("");
+  const barTimerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!barMode) return;
     if (isPlaying) {
       barStartTimeRef.current = Date.now();
       setBarElapsedSec(0);
-      const iv = setInterval(() => {
-        setBarElapsedSec(Math.floor((Date.now() - barStartTimeRef.current) / 1000));
-      }, 1000);
-      return () => clearInterval(iv);
+      if (barClockMode === "stopwatch") {
+        const iv = setInterval(() => {
+          setBarElapsedSec(Math.floor((Date.now() - barStartTimeRef.current) / 1000));
+        }, 1000);
+        return () => clearInterval(iv);
+      } else {
+        setBarTimerRemaining(barTimerDuration);
+        const startTime = Date.now();
+        barTimerIntervalRef.current = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - startTime) / 1000);
+          const left = Math.max(0, barTimerDuration - elapsed);
+          setBarTimerRemaining(left);
+          setBarElapsedSec(elapsed);
+          if (left <= 0) {
+            if (barTimerIntervalRef.current) clearInterval(barTimerIntervalRef.current);
+            barTimerIntervalRef.current = null;
+            onBarTimerExpired?.();
+          }
+        }, 250);
+        return () => {
+          if (barTimerIntervalRef.current) {
+            clearInterval(barTimerIntervalRef.current);
+            barTimerIntervalRef.current = null;
+          }
+        };
+      }
     } else {
       setBarElapsedSec(0);
+      setBarTimerRemaining(barTimerDuration);
+      if (barTimerIntervalRef.current) {
+        clearInterval(barTimerIntervalRef.current);
+        barTimerIntervalRef.current = null;
+      }
     }
-  }, [isPlaying, barMode]);
+  }, [isPlaying, barMode, barClockMode, barTimerDuration, onBarTimerExpired]);
 
-  const barElapsed = useMemo(() => {
+  const barTimeDisplay = useMemo(() => {
+    if (barClockMode === "timer") {
+      const t = isPlaying ? barTimerRemaining : barTimerDuration;
+      const m = Math.floor(t / 60);
+      const s = t % 60;
+      return `${m}:${s.toString().padStart(2, "0")}`;
+    }
     const m = Math.floor(barElapsedSec / 60);
     const s = barElapsedSec % 60;
     return `${m}:${s.toString().padStart(2, "0")}`;
-  }, [barElapsedSec]);
+  }, [barClockMode, barElapsedSec, barTimerRemaining, barTimerDuration, isPlaying]);
+
+  const handleBarClockTap = useCallback(() => {
+    if (isPlaying) return;
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (barClockMode === "stopwatch") {
+      setBarClockMode("timer");
+    } else if (!barTimerEditing) {
+      setBarTimerEditing(true);
+      const m = Math.floor(barTimerDuration / 60);
+      const s = barTimerDuration % 60;
+      setBarTimerInput(m > 0 ? `${m}:${s.toString().padStart(2, "0")}` : `${s}`);
+    }
+  }, [isPlaying, barClockMode, barTimerEditing, barTimerDuration]);
+
+  const commitBarTimerInput = useCallback(() => {
+    setBarTimerEditing(false);
+    const trimmed = barTimerInput.trim();
+    if (!trimmed) return;
+    let totalSeconds = 0;
+    if (trimmed.includes(":")) {
+      const parts = trimmed.split(":");
+      const mins = parseInt(parts[0], 10) || 0;
+      const secs = parseInt(parts[1], 10) || 0;
+      totalSeconds = mins * 60 + secs;
+    } else {
+      const val = parseInt(trimmed, 10) || 0;
+      totalSeconds = val < 10 ? val * 60 : val;
+    }
+    totalSeconds = Math.max(1, Math.min(totalSeconds, 5999));
+    setBarTimerDuration(totalSeconds);
+    setBarTimerRemaining(totalSeconds);
+  }, [barTimerInput]);
+
+  const switchToStopwatch = useCallback(() => {
+    if (isPlaying) return;
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setBarClockMode("stopwatch");
+    setBarTimerEditing(false);
+  }, [isPlaying]);
 
   const [repeatModalBeat, setRepeatModalBeat] = useState<number | null>(null);
   const [repeatType, setRepeatType] = useState<"count" | "duration">("count");
@@ -788,14 +868,31 @@ export function BeatIndicator({
             >
               <Ionicons name="remove" size={16} color={Colors.textSecondary} />
             </Pressable>
-            <View style={styles.barInfoCol}>
-              <Text style={[styles.barInfoText, { color: C.accent }]}>
-                {barElapsed}
-              </Text>
+            <Pressable style={styles.barInfoCol} onPress={handleBarClockTap} onLongPress={barClockMode === "timer" ? switchToStopwatch : undefined}>
+              {barTimerEditing ? (
+                <TextInput
+                  style={[styles.barInfoText, { color: C.accent, minWidth: 48, textAlign: "center", padding: 0, borderBottomWidth: 1, borderBottomColor: C.accent }]}
+                  value={barTimerInput}
+                  onChangeText={setBarTimerInput}
+                  onSubmitEditing={commitBarTimerInput}
+                  onBlur={commitBarTimerInput}
+                  keyboardType="numbers-and-punctuation"
+                  autoFocus
+                  selectTextOnFocus
+                  placeholder="M:SS"
+                  placeholderTextColor={Colors.textTertiary}
+                />
+              ) : (
+                <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? Colors.danger : C.accent }]}>
+                  {barClockMode === "timer" && !isPlaying ? (
+                    <>{barTimeDisplay} <Text style={{ fontSize: 9, color: Colors.textTertiary }}>&#9202;</Text></>
+                  ) : barTimeDisplay}
+                </Text>
+              )}
               <Text style={[styles.barInfoText, { color: Colors.textTertiary, fontSize: 10 }]}>
                 {beatsPerMeasure} bars
               </Text>
-            </View>
+            </Pressable>
             <Pressable
               onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
               style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
