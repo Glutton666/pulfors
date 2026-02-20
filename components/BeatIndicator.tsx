@@ -684,9 +684,15 @@ export function BeatIndicator({
       );
     };
     const allBarRows: React.ReactNode[] = [];
-    for (let copy = 0; copy < NUM_COPIES; copy++) {
+    if (isPlaying) {
+      for (let copy = 0; copy < NUM_COPIES; copy++) {
+        for (const beat of beats) {
+          allBarRows.push(renderBarRow(beat, copy));
+        }
+      }
+    } else {
       for (const beat of beats) {
-        allBarRows.push(renderBarRow(beat, copy));
+        allBarRows.push(renderBarRow(beat, 0));
       }
     }
 
