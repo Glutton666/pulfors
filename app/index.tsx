@@ -19,7 +19,7 @@ import Animated, {
 import { useAudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons, Feather } from "@expo/vector-icons";
+import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import type { ThemeColor } from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -40,6 +40,7 @@ import { BpmSlider } from "@/components/BpmSlider";
 import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
 import { SettingsModal } from "@/components/SettingsModal";
+import { TunerModal } from "@/components/TunerModal";
 
 function getTempoLabel(bpm: number): string {
   if (bpm < 40) return "Grave";
@@ -105,6 +106,8 @@ export default function MetronomeScreen() {
   const [hapticMode, setHapticMode] = useState<HapticMode>("all");
   const [audioOffsetMs, setAudioOffsetMs] = useState(0);
   const [timerStopMode, setTimerStopMode] = useState<"immediate" | "end-of-cycle">("end-of-cycle");
+  const [showMenu, setShowMenu] = useState(false);
+  const [showTuner, setShowTuner] = useState(false);
 
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -816,15 +819,50 @@ export default function MetronomeScreen() {
 
       <Pressable
         style={[
-          styles.settingsButton,
+          styles.menuButton,
           { top: (insets.top || webTopInset) + 12 },
         ]}
-        onPress={() => setShowSettings(true)}
+        onPress={() => setShowMenu(!showMenu)}
         hitSlop={8}
-        testID="settings-button"
+        testID="menu-button"
       >
-        <Ionicons name="settings-outline" size={22} color={Colors.textSecondary} />
+        <Ionicons name="menu" size={22} color={Colors.textSecondary} />
       </Pressable>
+
+      {showMenu && (
+        <Modal transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
+          <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
+            <View style={[styles.menuDropdown, { top: (insets.top || webTopInset) + 52 }]}>
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                onPress={() => {
+                  setShowMenu(false);
+                  setShowTuner(true);
+                }}
+              >
+                <MaterialCommunityIcons name="tune-variant" size={18} color={C.accent} />
+                <Text style={styles.menuItemText}>Tuner</Text>
+              </Pressable>
+              <View style={styles.menuDivider} />
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                onPress={() => {
+                  setShowMenu(false);
+                  setShowSettings(true);
+                }}
+              >
+                <Ionicons name="settings-outline" size={18} color={Colors.textSecondary} />
+                <Text style={styles.menuItemText}>Settings</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Modal>
+      )}
+
+      <TunerModal
+        visible={showTuner}
+        onClose={() => setShowTuner(false)}
+      />
 
       <SettingsModal
         visible={showSettings}
@@ -948,9 +986,9 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
     textTransform: "uppercase",
   },
-  settingsButton: {
+  menuButton: {
     position: "absolute",
-    right: 20,
+    left: 20,
     zIndex: 20,
     width: 36,
     height: 36,
@@ -960,5 +998,45 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     alignItems: "center",
     justifyContent: "center",
+  },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.3)",
+  },
+  menuDropdown: {
+    position: "absolute",
+    left: 20,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: 4,
+    minWidth: 160,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  menuItemPressed: {
+    backgroundColor: Colors.surfaceLight,
+  },
+  menuItemText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 14,
+    color: Colors.text,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginHorizontal: 12,
+    opacity: 0.5,
   },
 });
