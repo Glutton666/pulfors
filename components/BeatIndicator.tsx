@@ -759,13 +759,13 @@ export function BeatIndicator({
             style={[styles.barFadeGradient, { top: 0, height: rowH * 1.8 }]}
             pointerEvents="none"
           />
-          <LinearGradient
-            colors={["transparent", Colors.background + "80", Colors.background, Colors.background]}
-            locations={[0, 0.25, 0.55, 1]}
-            style={[styles.barFadeGradient, { bottom: -44, height: rowH * 1.8 + 44 }]}
-            pointerEvents="none"
-          />
         </View>
+        <LinearGradient
+          colors={["transparent", Colors.background + "80", Colors.background, Colors.background]}
+          locations={[0, 0.2, 0.5, 1]}
+          style={[styles.barFadeGradientBottom, { height: rowH * 2 + 44, marginTop: -(rowH * 2 + 44) }]}
+          pointerEvents="none"
+        />
 
         <View style={styles.barBottomRow}>
           <Pressable
@@ -1064,6 +1064,10 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
+    zIndex: 10,
+  },
+  barFadeGradientBottom: {
+    width: "100%" as any,
     zIndex: 10,
   },
   barInfoCol: {
