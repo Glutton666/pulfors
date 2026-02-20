@@ -538,10 +538,10 @@ export function BeatIndicator({
     return `${s}"`;
   };
 
-  const BAR_HEIGHT = beatsPerMeasure <= 4 ? 44 : beatsPerMeasure <= 6 ? 36 : 30;
+  const BAR_HEIGHT = 36;
   const BAR_LINE_COLOR = Colors.textSecondary;
   const [barContainerHeight, setBarContainerHeight] = useState(0);
-  const barGap = Math.round(BAR_HEIGHT * 0.5);
+  const barGap = 18;
   const rowH = BAR_HEIGHT + 1 + barGap;
   const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
 
