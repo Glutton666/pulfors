@@ -753,6 +753,16 @@ export function BeatIndicator({
           >
             <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>{allBarRows}</View>
           </ScrollView>
+          <LinearGradient
+            colors={[Colors.background, "transparent"]}
+            style={[styles.barFadeGradient, { top: 0, height: rowH }]}
+            pointerEvents="none"
+          />
+          <LinearGradient
+            colors={["transparent", Colors.background]}
+            style={[styles.barFadeGradient, { bottom: 0, height: rowH }]}
+            pointerEvents="none"
+          />
         </View>
 
         <View style={styles.barBottomRow}>
@@ -1047,6 +1057,12 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     letterSpacing: 1,
     opacity: 0.5,
+  },
+  barFadeGradient: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
   barInfoCol: {
     alignItems: "center",
