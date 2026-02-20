@@ -544,7 +544,8 @@ export function BeatIndicator({
   const barGap = 18;
   const rowH = BAR_HEIGHT + 1 + barGap;
   const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
-  const loopResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loopSetRef = useRef(0);
+  const oneSetHeight = beatsPerMeasure * rowH;
 
   useEffect(() => {
     if (!barMode || !isPlaying || currentBeat < 0) return;
@@ -553,56 +554,48 @@ export function BeatIndicator({
     const prevBeat = prevBeatRef.current;
     const isLoopWrap = barLoopMode === "loop" && prevBeat === beatsPerMeasure - 1 && currentBeat === 0 && prevBeat >= 0;
 
-    if (loopResetTimerRef.current) {
-      clearTimeout(loopResetTimerRef.current);
-      loopResetTimerRef.current = null;
-    }
-
     if (isLoopWrap) {
-      const dupBeatTop = centerPad + beatsPerMeasure * rowH + barGap;
-      const dupScrollTarget = Math.max(0, dupBeatTop - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
-      barScrollRef.current?.scrollTo({ y: dupScrollTarget, animated: true });
+      loopSetRef.current += 1;
 
-      loopResetTimerRef.current = setTimeout(() => {
-        const realTarget = Math.max(0, centerPad - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
-        barScrollRef.current?.scrollTo({ y: realTarget, animated: false });
-        loopResetTimerRef.current = null;
-      }, 350);
-    } else {
-      const beatTop = centerPad + currentBeat * rowH;
-      const scrollTarget = Math.max(0, beatTop - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
-      barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
+      if (loopSetRef.current >= 2) {
+        const prevY = centerPad + loopSetRef.current * oneSetHeight + currentBeat * rowH;
+        const prevScroll = Math.max(0, prevY - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
+        barScrollRef.current?.scrollTo({ y: prevScroll - oneSetHeight, animated: false });
+        loopSetRef.current = 1;
+      }
     }
-  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, barLoopMode]);
+
+    const virtualBeatTop = centerPad + loopSetRef.current * oneSetHeight + currentBeat * rowH;
+    const scrollTarget = Math.max(0, virtualBeatTop - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
+    barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
+  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, barLoopMode, oneSetHeight]);
 
   useEffect(() => {
     if (!isPlaying) {
-      if (loopResetTimerRef.current) {
-        clearTimeout(loopResetTimerRef.current);
-        loopResetTimerRef.current = null;
-      }
+      loopSetRef.current = 0;
     }
   }, [isPlaying]);
 
   if (barMode) {
     const isDropping = dropTargetBeat !== null;
-    const renderBarRow = (beat: number, keyPrefix: string, ghost: boolean) => {
+    const activeSet = loopSetRef.current;
+    const renderBarRow = (beat: number, keyPrefix: string, setIndex: number) => {
       const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
-      const isCurrent = !ghost && isPlaying && currentBeat === beat;
+      const isCurrent = isPlaying && currentBeat === beat && activeSet === setIndex;
       const bType = beatTypes[beat] || "normal";
-      const isDropTarget = !ghost && isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
+      const isMain = setIndex === 0;
+      const isDropTarget = isMain && isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
       const repeat = barRepeats[beat];
       return (
         <Pressable
           key={`${keyPrefix}-${beat}`}
-          onLongPress={() => { if (!ghost && !isPlaying) openRepeatModal(beat); }}
+          onLongPress={() => { if (isMain && !isPlaying) openRepeatModal(beat); }}
           delayLongPress={500}
-          onPress={() => { if (!ghost) cycleBeatType(beat); }}
+          onPress={() => { if (isMain) cycleBeatType(beat); }}
           style={[
             styles.barBeatWrapper,
             isCurrent && styles.barBeatWrapperActive,
             isDropTarget && { backgroundColor: "rgba(255,255,255,0.06)", borderColor: C.accent, borderWidth: 1, borderRadius: 4, marginHorizontal: -1 },
-            ghost && { opacity: 0.35 },
           ]}
         >
           <View style={styles.barBeatLabel}>
@@ -632,7 +625,7 @@ export function BeatIndicator({
               return (
                 <Pressable
                   key={ci}
-                  onPress={(e) => { e.stopPropagation(); if (!ghost) handleBarCellPress(beat, ci); }}
+                  onPress={(e) => { e.stopPropagation(); if (isMain) handleBarCellPress(beat, ci); }}
                   style={[styles.barNoteCell, !isLast && { borderRightWidth: 1, borderRightColor: "rgba(255,255,255,0.08)" }]}
                 >
                   {isStrongType ? (
@@ -667,7 +660,7 @@ export function BeatIndicator({
           </View>
           <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
           <Pressable
-            onPress={(e) => { e.stopPropagation(); if (!ghost && !isPlaying) openRepeatModal(beat); }}
+            onPress={(e) => { e.stopPropagation(); if (isMain && !isPlaying) openRepeatModal(beat); }}
             style={styles.barRepeatBadge}
             hitSlop={6}
           >
@@ -678,8 +671,9 @@ export function BeatIndicator({
         </Pressable>
       );
     };
-    const barRows = beats.map((beat) => renderBarRow(beat, "bar", false));
-    const dupBarRows = barLoopMode === "loop" ? beats.map((beat) => renderBarRow(beat, "dup", true)) : null;
+    const barRows = beats.map((beat) => renderBarRow(beat, "bar", 0));
+    const dupBarRows1 = barLoopMode === "loop" ? beats.map((beat) => renderBarRow(beat, "dup1", 1)) : null;
+    const dupBarRows2 = barLoopMode === "loop" ? beats.map((beat) => renderBarRow(beat, "dup2", 2)) : null;
 
     return (
       <View style={styles.barModeContainer} testID="beat-indicator-bar-mode">
@@ -709,7 +703,8 @@ export function BeatIndicator({
           >
             <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>
               {barRows}
-              {dupBarRows}
+              {dupBarRows1}
+              {dupBarRows2}
             </View>
           </ScrollView>
         </View>
