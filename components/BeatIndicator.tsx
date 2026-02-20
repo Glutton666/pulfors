@@ -547,7 +547,6 @@ export function BeatIndicator({
   const copyHeight = beatsPerMeasure * rowH;
   const activeCopyRef = useRef(1);
   const barPrevBeatRef = useRef(-1);
-  const [, setRenderTick] = useState(0);
 
   useEffect(() => {
     if (!isPlaying) {
@@ -571,27 +570,23 @@ export function BeatIndicator({
       activeCopyRef.current++;
     }
 
+    if (activeCopyRef.current > 1 && currentBeat > 0) {
+      activeCopyRef.current = 1;
+      const snapTop = centerPad + 1 * copyHeight + (currentBeat - 1) * rowH;
+      const snapTarget = Math.max(0, snapTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
+      barScrollRef.current?.scrollTo({ y: snapTarget, animated: false });
+    }
+
     const beatTop = centerPad + activeCopyRef.current * copyHeight + currentBeat * rowH;
     const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
     barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
-
-    if (activeCopyRef.current >= 2) {
-      const tid = setTimeout(() => {
-        activeCopyRef.current = 1;
-        const resetTop = centerPad + copyHeight + currentBeat * rowH;
-        const resetTarget = Math.max(0, resetTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
-        barScrollRef.current?.scrollTo({ y: resetTarget, animated: false });
-        setRenderTick(t => t + 1);
-      }, 250);
-      return () => clearTimeout(tid);
-    }
   }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, copyHeight]);
 
   if (barMode) {
     const isDropping = dropTargetBeat !== null;
     const renderBarRow = (beat: number, copyIndex: number) => {
       const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
-      const isCurrent = isPlaying && currentBeat === beat && copyIndex === activeCopyRef.current;
+      const isCurrent = isPlaying && currentBeat === beat;
       const bType = beatTypes[beat] || "normal";
       const isDropTarget = isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
       const repeat = barRepeats[beat];
@@ -713,7 +708,7 @@ export function BeatIndicator({
             style={styles.barScrollView}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
-            contentOffset={{ x: 0, y: Math.max(0, centerPad + copyHeight - barContainerHeight / 2 + BAR_HEIGHT / 2) }}
+            contentOffset={{ x: 0, y: centerPad + copyHeight - barContainerHeight / 2 + BAR_HEIGHT / 2 }}
             scrollEnabled={!isPlaying}
           >
             <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>{allBarRows}</View>
