@@ -631,7 +631,6 @@ export function SettingsModal({
                 - = audio earlier / + = audio later
               </Text>
             </View>
-          </View>
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -664,6 +663,7 @@ export function SettingsModal({
                 ? "Stops after current measure ends"
                 : "Stops immediately when timer expires"}
             </Text>
+          </View>
           </View>
         </ScrollView>
       </Pressable>
