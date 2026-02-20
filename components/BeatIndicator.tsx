@@ -561,7 +561,7 @@ export function BeatIndicator({
     }
 
     if (isLoopWrap) {
-      const dupBeatTop = centerPad + beatsPerMeasure * rowH + barGap;
+      const dupBeatTop = centerPad + beatsPerMeasure * rowH;
       const dupScrollTarget = Math.max(0, dupBeatTop - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
       barScrollRef.current?.scrollTo({ y: dupScrollTarget, animated: true });
 
@@ -591,7 +591,7 @@ export function BeatIndicator({
     const isDropping = dropTargetBeat !== null;
     const renderBarRow = (beat: number, keyPrefix: string, ghost: boolean) => {
       const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
-      const isCurrent = !ghost && isPlaying && currentBeat === beat;
+      const isCurrent = isPlaying && currentBeat === beat;
       const bType = beatTypes[beat] || "normal";
       const isDropTarget = !ghost && isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
       const repeat = barRepeats[beat];
@@ -605,7 +605,7 @@ export function BeatIndicator({
             styles.barBeatWrapper,
             isCurrent && styles.barBeatWrapperActive,
             isDropTarget && { backgroundColor: "rgba(255,255,255,0.06)", borderColor: C.accent, borderWidth: 1, borderRadius: 4, marginHorizontal: -1 },
-            ghost && { opacity: 0.35 },
+            ghost && !isCurrent && { opacity: 0.35 },
           ]}
         >
           <View style={styles.barBeatLabel}>
