@@ -79,6 +79,7 @@ export default function MetronomeScreen() {
   const [barRepeats, setBarRepeats] = useState<Record<number, BarRepeat>>({});
   const barAreaRef = useRef<View>(null);
   const barAreaLayoutRef = useRef({ y: 0, height: 0 });
+  const barScrollOffsetRef = useRef(0);
 
   const dialConfigRef = useRef({
     beatsPerMeasure: 4,
@@ -626,9 +627,14 @@ export default function MetronomeScreen() {
         if (layout.height <= 0) return null;
         const relY = pageY - layout.y;
         if (relY < 0 || relY > layout.height) return null;
-        const barH = beatsPerMeasure <= 4 ? 44 : beatsPerMeasure <= 6 ? 36 : 30;
-        const rowH = barH + 1;
-        const beatIdx = Math.floor(relY / rowH);
+        const BAR_HEIGHT = 36;
+        const barGap = 18;
+        const rowH = BAR_HEIGHT + 1 + barGap;
+        const scrollY = barScrollOffsetRef.current;
+        const contentY = relY + scrollY;
+        const centerPad = Math.max(0, (layout.height - BAR_HEIGHT) / 2);
+        const adjustedY = contentY - centerPad;
+        const beatIdx = Math.floor(adjustedY / rowH);
         if (beatIdx >= 0 && beatIdx < beatsPerMeasure) return beatIdx;
         return null;
       }
@@ -846,6 +852,7 @@ export default function MetronomeScreen() {
             onBarRepeatChange={handleBarRepeatChange}
             barLoopMode={barLoopMode}
             onBarLoopModeChange={setBarLoopMode}
+            onBarScrollOffset={(offset) => { barScrollOffsetRef.current = offset; }}
           />
         </View>
 

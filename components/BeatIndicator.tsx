@@ -251,6 +251,7 @@ interface BeatIndicatorProps {
   onBarRepeatChange: (beat: number, repeat: BarRepeat | null) => void;
   barLoopMode: "loop" | "once";
   onBarLoopModeChange: (mode: "loop" | "once") => void;
+  onBarScrollOffset?: (offset: number) => void;
 }
 
 export function BeatIndicator({
@@ -274,6 +275,7 @@ export function BeatIndicator({
   onBarRepeatChange,
   barLoopMode,
   onBarLoopModeChange,
+  onBarScrollOffset,
 }: BeatIndicatorProps) {
   const { colors: C } = useTheme();
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
@@ -558,8 +560,8 @@ export function BeatIndicator({
       setActiveCopy(CENTER_COPY);
       barPrevBeatRef.current = -1;
       if (barMode && barContainerHeight > 0) {
-        const initTarget = Math.max(0, centerPad + CENTER_COPY * copyHeight - barContainerHeight / 2 + BAR_HEIGHT / 2);
-        barScrollRef.current?.scrollTo({ y: initTarget, animated: false });
+        barScrollRef.current?.scrollTo({ y: 0, animated: false });
+        onBarScrollOffset?.(0);
       }
     }
   }, [isPlaying, barMode, barContainerHeight, centerPad, copyHeight]);
@@ -597,7 +599,7 @@ export function BeatIndicator({
       const bType = beatTypes[beat] || "normal";
       const isDropTarget = isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
       const repeat = barRepeats[beat];
-      const isPrimary = copyIndex === 1;
+      const isPrimary = isPlaying ? copyIndex === CENTER_COPY : copyIndex === 0;
       return (
         <Pressable
           key={`bar-${copyIndex}-${beat}`}
@@ -721,8 +723,10 @@ export function BeatIndicator({
             style={styles.barScrollView}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
-            contentOffset={{ x: 0, y: centerPad + copyHeight - barContainerHeight / 2 + BAR_HEIGHT / 2 }}
+            contentOffset={{ x: 0, y: isPlaying ? centerPad + CENTER_COPY * copyHeight - barContainerHeight / 2 + BAR_HEIGHT / 2 : 0 }}
             scrollEnabled={!isPlaying}
+            onScroll={(e) => onBarScrollOffset?.(e.nativeEvent.contentOffset.y)}
+            scrollEventThrottle={16}
           >
             <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>{allBarRows}</View>
           </ScrollView>
