@@ -586,7 +586,7 @@ export function BeatIndicator({
 
     const beatTop = centerPad + activeCopyRef.current * copyHeight + currentBeat * rowH;
     const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
-    barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
+    barScrollRef.current?.scrollTo({ y: scrollTarget, animated: false });
   }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, copyHeight]);
 
   if (barMode) {
