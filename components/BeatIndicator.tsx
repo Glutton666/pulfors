@@ -546,7 +546,7 @@ export function BeatIndicator({
   const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
   const loopSetRef = useRef(0);
   const oneSetHeight = beatsPerMeasure * rowH;
-  const scrollAnimFrameRef = useRef<number | null>(null);
+  const loopResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!barMode || !isPlaying || currentBeat < 0) return;
@@ -555,40 +555,36 @@ export function BeatIndicator({
     const prevBeat = prevBeatRef.current;
     const isLoopWrap = barLoopMode === "loop" && prevBeat === beatsPerMeasure - 1 && currentBeat === 0 && prevBeat >= 0;
 
-    if (scrollAnimFrameRef.current) {
-      cancelAnimationFrame(scrollAnimFrameRef.current);
-      scrollAnimFrameRef.current = null;
+    if (loopResetTimerRef.current) {
+      clearTimeout(loopResetTimerRef.current);
+      loopResetTimerRef.current = null;
     }
 
     if (isLoopWrap) {
       loopSetRef.current += 1;
-
-      if (loopSetRef.current >= 2) {
-        const resetFrom = centerPad + loopSetRef.current * oneSetHeight - (barContainerHeight / 2) + (BAR_HEIGHT / 2);
-        barScrollRef.current?.scrollTo({ y: Math.max(0, resetFrom - oneSetHeight), animated: false });
-        loopSetRef.current = 1;
-
-        scrollAnimFrameRef.current = requestAnimationFrame(() => {
-          const target = centerPad + loopSetRef.current * oneSetHeight + currentBeat * rowH;
-          const scrollY = Math.max(0, target - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
-          barScrollRef.current?.scrollTo({ y: scrollY, animated: true });
-          scrollAnimFrameRef.current = null;
-        });
-        return;
-      }
     }
 
     const virtualBeatTop = centerPad + loopSetRef.current * oneSetHeight + currentBeat * rowH;
     const scrollTarget = Math.max(0, virtualBeatTop - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
     barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
+
+    if (isLoopWrap && loopSetRef.current >= 2) {
+      loopResetTimerRef.current = setTimeout(() => {
+        loopSetRef.current = 1;
+        const resetY = centerPad + 1 * oneSetHeight + currentBeat * rowH;
+        const resetScroll = Math.max(0, resetY - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
+        barScrollRef.current?.scrollTo({ y: resetScroll, animated: false });
+        loopResetTimerRef.current = null;
+      }, 250);
+    }
   }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, barLoopMode, oneSetHeight]);
 
   useEffect(() => {
     if (!isPlaying) {
       loopSetRef.current = 0;
-      if (scrollAnimFrameRef.current) {
-        cancelAnimationFrame(scrollAnimFrameRef.current);
-        scrollAnimFrameRef.current = null;
+      if (loopResetTimerRef.current) {
+        clearTimeout(loopResetTimerRef.current);
+        loopResetTimerRef.current = null;
       }
       if (barMode && barContainerHeight > 0) {
         const resetY = Math.max(0, centerPad - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
