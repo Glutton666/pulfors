@@ -546,6 +546,7 @@ export function BeatIndicator({
   const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
   const loopSetRef = useRef(0);
   const oneSetHeight = beatsPerMeasure * rowH;
+  const scrollAnimFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!barMode || !isPlaying || currentBeat < 0) return;
@@ -554,14 +555,26 @@ export function BeatIndicator({
     const prevBeat = prevBeatRef.current;
     const isLoopWrap = barLoopMode === "loop" && prevBeat === beatsPerMeasure - 1 && currentBeat === 0 && prevBeat >= 0;
 
+    if (scrollAnimFrameRef.current) {
+      cancelAnimationFrame(scrollAnimFrameRef.current);
+      scrollAnimFrameRef.current = null;
+    }
+
     if (isLoopWrap) {
       loopSetRef.current += 1;
 
       if (loopSetRef.current >= 2) {
-        const prevY = centerPad + loopSetRef.current * oneSetHeight + currentBeat * rowH;
-        const prevScroll = Math.max(0, prevY - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
-        barScrollRef.current?.scrollTo({ y: prevScroll - oneSetHeight, animated: false });
+        const resetFrom = centerPad + loopSetRef.current * oneSetHeight - (barContainerHeight / 2) + (BAR_HEIGHT / 2);
+        barScrollRef.current?.scrollTo({ y: Math.max(0, resetFrom - oneSetHeight), animated: false });
         loopSetRef.current = 1;
+
+        scrollAnimFrameRef.current = requestAnimationFrame(() => {
+          const target = centerPad + loopSetRef.current * oneSetHeight + currentBeat * rowH;
+          const scrollY = Math.max(0, target - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
+          barScrollRef.current?.scrollTo({ y: scrollY, animated: true });
+          scrollAnimFrameRef.current = null;
+        });
+        return;
       }
     }
 
@@ -573,15 +586,22 @@ export function BeatIndicator({
   useEffect(() => {
     if (!isPlaying) {
       loopSetRef.current = 0;
+      if (scrollAnimFrameRef.current) {
+        cancelAnimationFrame(scrollAnimFrameRef.current);
+        scrollAnimFrameRef.current = null;
+      }
+      if (barMode && barContainerHeight > 0) {
+        const resetY = Math.max(0, centerPad - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
+        barScrollRef.current?.scrollTo({ y: resetY, animated: true });
+      }
     }
   }, [isPlaying]);
 
   if (barMode) {
     const isDropping = dropTargetBeat !== null;
-    const activeSet = loopSetRef.current;
     const renderBarRow = (beat: number, keyPrefix: string, setIndex: number) => {
       const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
-      const isCurrent = isPlaying && currentBeat === beat && activeSet === setIndex;
+      const isCurrent = isPlaying && currentBeat === beat;
       const bType = beatTypes[beat] || "normal";
       const isMain = setIndex === 0;
       const isDropTarget = isMain && isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
@@ -700,6 +720,7 @@ export function BeatIndicator({
             style={styles.barScrollView}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
+            scrollEnabled={!isPlaying}
           >
             <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>
               {barRows}
