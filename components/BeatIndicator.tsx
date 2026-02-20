@@ -762,7 +762,7 @@ export function BeatIndicator({
           <LinearGradient
             colors={["transparent", Colors.background + "80", Colors.background, Colors.background]}
             locations={[0, 0.25, 0.55, 1]}
-            style={[styles.barFadeGradient, { bottom: 0, height: rowH * 1.8 }]}
+            style={[styles.barFadeGradient, { bottom: -20, height: rowH * 1.8 + 20 }]}
             pointerEvents="none"
           />
         </View>
