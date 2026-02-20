@@ -545,14 +545,12 @@ export function BeatIndicator({
   const rowH = BAR_HEIGHT + 1 + barGap;
   const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
   const loopResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevBarBeatRef = useRef(-1);
 
   useEffect(() => {
     if (!barMode || !isPlaying || currentBeat < 0) return;
     if (barContainerHeight <= 0) return;
 
-    const prevBeat = prevBarBeatRef.current;
-    prevBarBeatRef.current = currentBeat;
+    const prevBeat = prevBeatRef.current;
     const isLoopWrap = barLoopMode === "loop" && prevBeat === beatsPerMeasure - 1 && currentBeat === 0 && prevBeat >= 0;
 
     if (loopResetTimerRef.current) {
@@ -561,7 +559,7 @@ export function BeatIndicator({
     }
 
     if (isLoopWrap) {
-      const dupBeatTop = centerPad + beatsPerMeasure * rowH;
+      const dupBeatTop = centerPad + beatsPerMeasure * rowH + barGap;
       const dupScrollTarget = Math.max(0, dupBeatTop - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
       barScrollRef.current?.scrollTo({ y: dupScrollTarget, animated: true });
 
@@ -579,7 +577,6 @@ export function BeatIndicator({
 
   useEffect(() => {
     if (!isPlaying) {
-      prevBarBeatRef.current = -1;
       if (loopResetTimerRef.current) {
         clearTimeout(loopResetTimerRef.current);
         loopResetTimerRef.current = null;
@@ -591,7 +588,7 @@ export function BeatIndicator({
     const isDropping = dropTargetBeat !== null;
     const renderBarRow = (beat: number, keyPrefix: string, ghost: boolean) => {
       const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
-      const isCurrent = isPlaying && currentBeat === beat;
+      const isCurrent = !ghost && isPlaying && currentBeat === beat;
       const bType = beatTypes[beat] || "normal";
       const isDropTarget = !ghost && isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
       const repeat = barRepeats[beat];
@@ -605,7 +602,7 @@ export function BeatIndicator({
             styles.barBeatWrapper,
             isCurrent && styles.barBeatWrapperActive,
             isDropTarget && { backgroundColor: "rgba(255,255,255,0.06)", borderColor: C.accent, borderWidth: 1, borderRadius: 4, marginHorizontal: -1 },
-            ghost && !isCurrent && { opacity: 0.35 },
+            ghost && { opacity: 0.35 },
           ]}
         >
           <View style={styles.barBeatLabel}>
