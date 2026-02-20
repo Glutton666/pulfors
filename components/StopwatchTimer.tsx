@@ -25,15 +25,7 @@ import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
-import {
-  TUNINGS,
-  frequencyToNote,
-  findClosestTuningNote,
-  autoCorrelate,
-  type InstrumentTuning,
-} from "@/lib/tuner-engine";
-
-type Mode = "stopwatch" | "timer" | "tuner";
+type Mode = "stopwatch" | "timer";
 type TimerState = "idle" | "running" | "paused" | "finishing";
 
 const PANEL_WIDTH = 260;
@@ -99,19 +91,6 @@ export function StopwatchTimer({
 
   const { colors: C } = useTheme();
 
-  const [tunerActive, setTunerActive] = useState(false);
-  const [tunerInstrument, setTunerInstrument] = useState(0);
-  const [detectedFreq, setDetectedFreq] = useState<number | null>(null);
-  const [detectedNote, setDetectedNote] = useState<string | null>(null);
-  const [detectedCents, setDetectedCents] = useState(0);
-  const [selectedString, setSelectedString] = useState<number | null>(null);
-  const [micPermission, setMicPermission] = useState<boolean | null>(null);
-  const audioContextRef = useRef<any>(null);
-  const analyserRef = useRef<any>(null);
-  const sourceRef = useRef<any>(null);
-  const streamRef = useRef<any>(null);
-  const tunerRafRef = useRef<number | null>(null);
-  const tunerActiveRef = useRef(false);
 
   useEffect(() => {
     isPlayingRef.current = isMetronomePlaying;
@@ -459,92 +438,13 @@ export function StopwatchTimer({
     transform: [{ translateY: thermoBreakBottom.value }, { rotate: "8deg" }],
   }));
 
-  const startTuner = useCallback(async () => {
-    if (Platform.OS !== "web") {
-      setTunerActive(false);
-      setMicPermission(false);
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioContextRef.current = audioCtx;
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 4096;
-      analyserRef.current = analyser;
-      const source = audioCtx.createMediaStreamSource(stream);
-      source.connect(analyser);
-      sourceRef.current = source;
-
-      setMicPermission(true);
-      tunerActiveRef.current = true;
-      setTunerActive(true);
-
-      const buf = new Float32Array(analyser.fftSize);
-      const detect = () => {
-        if (!tunerActiveRef.current) return;
-        analyser.getFloatTimeDomainData(buf);
-        const freq = autoCorrelate(buf, audioCtx.sampleRate);
-        if (freq > 0 && freq < 2000) {
-          setDetectedFreq(Math.round(freq * 10) / 10);
-          const noteInfo = frequencyToNote(freq);
-          setDetectedNote(`${noteInfo.name}${noteInfo.octave}`);
-          setDetectedCents(noteInfo.cents);
-        } else {
-          setDetectedFreq(null);
-          setDetectedNote(null);
-          setDetectedCents(0);
-        }
-        tunerRafRef.current = requestAnimationFrame(detect);
-      };
-      detect();
-    } catch {
-      setMicPermission(false);
-      setTunerActive(false);
-    }
-  }, []);
-
-  const stopTuner = useCallback(() => {
-    tunerActiveRef.current = false;
-    setTunerActive(false);
-    if (tunerRafRef.current) {
-      cancelAnimationFrame(tunerRafRef.current);
-      tunerRafRef.current = null;
-    }
-    if (sourceRef.current) {
-      sourceRef.current.disconnect();
-      sourceRef.current = null;
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t: any) => t.stop());
-      streamRef.current = null;
-    }
-    setDetectedFreq(null);
-    setDetectedNote(null);
-    setDetectedCents(0);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (tunerActiveRef.current) stopTuner();
-    };
-  }, [stopTuner]);
-
   const switchMode = useCallback(
     (newMode: Mode) => {
       if (state !== "idle") return;
       hapticFeedback();
-      if (mode === "tuner" && newMode !== "tuner") {
-        stopTuner();
-      }
       setMode(newMode);
     },
-    [state, hapticFeedback, mode, stopTuner]
+    [state, hapticFeedback, mode]
   );
 
   const adjustTimerDuration = useCallback(
@@ -594,7 +494,6 @@ export function StopwatchTimer({
   const handleStatusIcon = () => {
     if (state === "running") return "radiobox-marked" as const;
     if (state === "finishing") return "radiobox-marked" as const;
-    if (mode === "tuner") return "tune-variant" as const;
     if (mode === "stopwatch") return "timer-outline" as const;
     return "av-timer" as const;
   };
@@ -602,7 +501,6 @@ export function StopwatchTimer({
   const handleStatusColor = () => {
     if (state === "running") return Colors.success;
     if (state === "finishing") return Colors.danger;
-    if (mode === "tuner" && tunerActive) return C.accent;
     return Colors.textTertiary;
   };
 
@@ -660,33 +558,13 @@ export function StopwatchTimer({
                   TIMER
                 </Text>
               </Pressable>
-              <Pressable
-                onPress={() => switchMode("tuner")}
-                style={({ pressed }) => [
-                  styles.tab,
-                  mode === "tuner" && styles.tabActive,
-                  pressed && styles.buttonPressed,
-                ]}
-                testID="tab-tuner"
-              >
-                <MaterialCommunityIcons
-                  name="tune-variant"
-                  size={14}
-                  color={mode === "tuner" ? C.accent : Colors.textTertiary}
-                />
-                <Text style={[styles.tabText, mode === "tuner" && styles.tabTextActive, mode === "tuner" && { color: C.accent }]}>
-                  TUNER
-                </Text>
-              </Pressable>
             </View>
 
             <View style={styles.divider} />
 
             {mode === "stopwatch"
               ? renderStopwatchContent()
-              : mode === "timer"
-              ? renderTimerContent()
-              : renderTunerContent()}
+              : renderTimerContent()}
           </View>
 
           <Pressable
@@ -961,167 +839,6 @@ export function StopwatchTimer({
     );
   }
 
-  function renderTunerContent() {
-    const currentTuning = TUNINGS[tunerInstrument];
-    const match = detectedFreq
-      ? findClosestTuningNote(detectedFreq, currentTuning)
-      : null;
-
-    const centsDisplay = match ? match.cents : detectedCents;
-    const inTune = Math.abs(centsDisplay) <= 5;
-    const centsColor = inTune
-      ? Colors.success
-      : Math.abs(centsDisplay) <= 15
-      ? C.accent
-      : Colors.danger;
-
-    const meterPosition = Math.max(-50, Math.min(50, centsDisplay));
-    const meterPercent = ((meterPosition + 50) / 100) * 100;
-
-    return (
-      <View style={styles.displaySection}>
-        <View style={styles.instrumentRow}>
-          <Pressable
-            onPress={() => {
-              hapticFeedback();
-              setTunerInstrument((prev) =>
-                prev <= 0 ? TUNINGS.length - 1 : prev - 1
-              );
-              setSelectedString(null);
-            }}
-            hitSlop={8}
-          >
-            <Feather name="chevron-left" size={14} color={Colors.textSecondary} />
-          </Pressable>
-          <Text style={styles.instrumentLabel}>{currentTuning.label}</Text>
-          <Pressable
-            onPress={() => {
-              hapticFeedback();
-              setTunerInstrument((prev) =>
-                prev >= TUNINGS.length - 1 ? 0 : prev + 1
-              );
-              setSelectedString(null);
-            }}
-            hitSlop={8}
-          >
-            <Feather name="chevron-right" size={14} color={Colors.textSecondary} />
-          </Pressable>
-        </View>
-
-        <View style={styles.stringRow}>
-          {currentTuning.notes.map((note, i) => {
-            const isMatched = match && match.note.string === note.string;
-            const isSelected = selectedString === note.string;
-            return (
-              <Pressable
-                key={i}
-                onPress={() => {
-                  hapticFeedback();
-                  setSelectedString(
-                    selectedString === note.string ? null : note.string
-                  );
-                }}
-                style={({ pressed }) => [
-                  styles.stringChip,
-                  isSelected && styles.stringChipSelected,
-                  isSelected && { backgroundColor: C.accentDim, borderColor: C.accent },
-                  isMatched && inTune && styles.stringChipInTune,
-                  pressed && { opacity: 0.7 },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.stringLabel,
-                    isSelected && styles.stringLabelSelected,
-                    isSelected && { color: C.accent },
-                    isMatched && inTune && { color: Colors.success },
-                  ]}
-                >
-                  {note.name}
-                </Text>
-                <Text style={styles.stringNum}>{note.string}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {!tunerActive ? (
-          <View style={styles.tunerStartSection}>
-            {micPermission === false && Platform.OS !== "web" ? (
-              <Text style={styles.tunerHint}>
-                Tuner uses microphone (web only)
-              </Text>
-            ) : micPermission === false ? (
-              <Text style={styles.tunerHint}>Microphone access denied</Text>
-            ) : null}
-            <Pressable
-              onPress={startTuner}
-              style={({ pressed }) => [
-                styles.controlButton,
-                styles.startButton,
-                { backgroundColor: C.accent },
-                pressed && styles.buttonPressed,
-              ]}
-              testID="tuner-start"
-            >
-              <MaterialCommunityIcons
-                name="microphone"
-                size={16}
-                color={Colors.background}
-              />
-            </Pressable>
-          </View>
-        ) : (
-          <View style={styles.tunerActiveSection}>
-            <Text style={[styles.tunerNote, { color: centsColor }]}>
-              {detectedNote ?? "--"}
-            </Text>
-
-            <View style={styles.centsMeter}>
-              <View style={styles.centsMeterTrack}>
-                <View style={styles.centsMeterCenter} />
-                <View
-                  style={[
-                    styles.centsMeterNeedle,
-                    {
-                      left: `${meterPercent}%` as any,
-                      backgroundColor: centsColor,
-                    },
-                  ]}
-                />
-              </View>
-              <View style={styles.centsMeterLabels}>
-                <Text style={styles.centsMeterLabel}>-50</Text>
-                <Text style={[styles.centsMeterLabel, { color: Colors.text }]}>0</Text>
-                <Text style={styles.centsMeterLabel}>+50</Text>
-              </View>
-            </View>
-
-            <Text style={[styles.centsText, { color: centsColor }]}>
-              {centsDisplay > 0 ? "+" : ""}
-              {centsDisplay} cents
-            </Text>
-
-            {detectedFreq && (
-              <Text style={styles.freqText}>{detectedFreq} Hz</Text>
-            )}
-
-            <Pressable
-              onPress={stopTuner}
-              style={({ pressed }) => [
-                styles.controlButton,
-                styles.pauseButton,
-                pressed && styles.buttonPressed,
-              ]}
-              testID="tuner-stop"
-            >
-              <Ionicons name="stop" size={14} color={Colors.text} />
-            </Pressable>
-          </View>
-        )}
-      </View>
-    );
-  }
 }
 
 const styles = StyleSheet.create({
@@ -1397,124 +1114,5 @@ const styles = StyleSheet.create({
     borderRadius: 1.5,
     top: 20,
     zIndex: 2,
-  },
-  instrumentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-  },
-  instrumentLabel: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 11,
-    color: Colors.text,
-    letterSpacing: 0.5,
-    minWidth: 100,
-    textAlign: "center",
-  },
-  stringRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 4,
-  },
-  stringChip: {
-    width: 32,
-    height: 38,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 1,
-  },
-  stringChipSelected: {
-    backgroundColor: Colors.accentDim,
-    borderColor: Colors.accent,
-  },
-  stringChipInTune: {
-    borderColor: Colors.success,
-    backgroundColor: "rgba(63, 185, 80, 0.12)",
-  },
-  stringLabel: {
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 13,
-    color: Colors.text,
-  },
-  stringLabelSelected: {
-    color: Colors.accent,
-  },
-  stringNum: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 7,
-    color: Colors.textTertiary,
-    letterSpacing: 0.5,
-  },
-  tunerStartSection: {
-    alignItems: "center",
-    gap: 8,
-  },
-  tunerHint: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 9,
-    color: Colors.textTertiary,
-    textAlign: "center",
-  },
-  tunerActiveSection: {
-    alignItems: "center",
-    gap: 6,
-  },
-  tunerNote: {
-    fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 32,
-    letterSpacing: 2,
-  },
-  centsMeter: {
-    width: "90%",
-    gap: 3,
-  },
-  centsMeterTrack: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.surfaceLight,
-    position: "relative",
-    overflow: "visible",
-  },
-  centsMeterCenter: {
-    position: "absolute",
-    left: "50%",
-    top: -2,
-    width: 2,
-    height: 8,
-    marginLeft: -1,
-    backgroundColor: Colors.textTertiary,
-    borderRadius: 1,
-  },
-  centsMeterNeedle: {
-    position: "absolute",
-    top: -3,
-    width: 6,
-    height: 10,
-    marginLeft: -3,
-    borderRadius: 3,
-  },
-  centsMeterLabels: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  centsMeterLabel: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 7,
-    color: Colors.textTertiary,
-  },
-  centsText: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 11,
-    letterSpacing: 0.5,
-  },
-  freqText: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 9,
-    color: Colors.textTertiary,
   },
 });
