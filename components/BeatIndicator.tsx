@@ -545,8 +545,8 @@ export function BeatIndicator({
   const rowH = BAR_HEIGHT + 1 + barGap;
   const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
   const loopSetRef = useRef(0);
+  const [barSetCount, setBarSetCount] = useState(1);
   const oneSetHeight = beatsPerMeasure * rowH;
-  const loopResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!barMode || !isPlaying || currentBeat < 0) return;
@@ -555,40 +555,25 @@ export function BeatIndicator({
     const prevBeat = prevBeatRef.current;
     const isLoopWrap = barLoopMode === "loop" && prevBeat === beatsPerMeasure - 1 && currentBeat === 0 && prevBeat >= 0;
 
-    if (loopResetTimerRef.current) {
-      clearTimeout(loopResetTimerRef.current);
-      loopResetTimerRef.current = null;
-    }
-
     if (isLoopWrap) {
       loopSetRef.current += 1;
+      setBarSetCount(prev => Math.max(prev, loopSetRef.current + 2));
     }
 
     const virtualBeatTop = centerPad + loopSetRef.current * oneSetHeight + currentBeat * rowH;
     const scrollTarget = Math.max(0, virtualBeatTop - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
     barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
-
-    if (isLoopWrap && loopSetRef.current >= 2) {
-      loopResetTimerRef.current = setTimeout(() => {
-        loopSetRef.current = 1;
-        const resetY = centerPad + 1 * oneSetHeight + currentBeat * rowH;
-        const resetScroll = Math.max(0, resetY - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
-        barScrollRef.current?.scrollTo({ y: resetScroll, animated: false });
-        loopResetTimerRef.current = null;
-      }, 250);
-    }
   }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, barLoopMode, oneSetHeight]);
 
   useEffect(() => {
     if (!isPlaying) {
       loopSetRef.current = 0;
-      if (loopResetTimerRef.current) {
-        clearTimeout(loopResetTimerRef.current);
-        loopResetTimerRef.current = null;
-      }
+      setBarSetCount(1);
       if (barMode && barContainerHeight > 0) {
-        const resetY = Math.max(0, centerPad - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
-        barScrollRef.current?.scrollTo({ y: resetY, animated: true });
+        requestAnimationFrame(() => {
+          const resetY = Math.max(0, centerPad - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
+          barScrollRef.current?.scrollTo({ y: resetY, animated: false });
+        });
       }
     }
   }, [isPlaying]);
@@ -687,9 +672,12 @@ export function BeatIndicator({
         </Pressable>
       );
     };
-    const barRows = beats.map((beat) => renderBarRow(beat, "bar", 0));
-    const dupBarRows1 = barLoopMode === "loop" ? beats.map((beat) => renderBarRow(beat, "dup1", 1)) : null;
-    const dupBarRows2 = barLoopMode === "loop" ? beats.map((beat) => renderBarRow(beat, "dup2", 2)) : null;
+    const allBarSets: React.ReactNode[] = [];
+    for (let s = 0; s < barSetCount; s++) {
+      beats.forEach((beat) => {
+        allBarSets.push(renderBarRow(beat, `set${s}`, s));
+      });
+    }
 
     return (
       <View style={styles.barModeContainer} testID="beat-indicator-bar-mode">
@@ -719,9 +707,7 @@ export function BeatIndicator({
             scrollEnabled={!isPlaying}
           >
             <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>
-              {barRows}
-              {dupBarRows1}
-              {dupBarRows2}
+              {allBarSets}
             </View>
           </ScrollView>
         </View>
