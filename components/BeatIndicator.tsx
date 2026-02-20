@@ -487,6 +487,29 @@ export function BeatIndicator({
   }, [isPlaying, beatSubdivisions, onBeatSubdivisionChange, cycleBeatType]);
 
   const barScrollRef = useRef<ScrollView>(null);
+  const [barElapsedSec, setBarElapsedSec] = useState(0);
+  const barStartTimeRef = useRef(0);
+
+  useEffect(() => {
+    if (!barMode) return;
+    if (isPlaying) {
+      barStartTimeRef.current = Date.now();
+      setBarElapsedSec(0);
+      const iv = setInterval(() => {
+        setBarElapsedSec(Math.floor((Date.now() - barStartTimeRef.current) / 1000));
+      }, 1000);
+      return () => clearInterval(iv);
+    } else {
+      setBarElapsedSec(0);
+    }
+  }, [isPlaying, barMode]);
+
+  const barElapsed = useMemo(() => {
+    const m = Math.floor(barElapsedSec / 60);
+    const s = barElapsedSec % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  }, [barElapsedSec]);
+
   const [repeatModalBeat, setRepeatModalBeat] = useState<number | null>(null);
   const [repeatType, setRepeatType] = useState<"count" | "duration">("count");
   const [repeatCountVal, setRepeatCountVal] = useState(2);
@@ -753,9 +776,14 @@ export function BeatIndicator({
             >
               <Ionicons name="remove" size={16} color={Colors.textSecondary} />
             </Pressable>
-            <Text style={styles.hintText}>
-              {beatsPerMeasure}/{beatsPerMeasure <= 4 ? "4" : "8"}
-            </Text>
+            <View style={styles.barInfoCol}>
+              <Text style={[styles.barInfoText, { color: C.accent }]}>
+                {barElapsed}
+              </Text>
+              <Text style={[styles.barInfoText, { color: Colors.textTertiary, fontSize: 10 }]}>
+                {beatsPerMeasure} bars
+              </Text>
+            </View>
             <Pressable
               onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
               style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
@@ -1019,6 +1047,16 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     letterSpacing: 1,
     opacity: 0.5,
+  },
+  barInfoCol: {
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 48,
+  },
+  barInfoText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    letterSpacing: 0.5,
   },
   dropTargetRing: {
     position: "absolute",
