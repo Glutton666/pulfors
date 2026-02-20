@@ -920,11 +920,15 @@ export function BeatIndicator({
           animationType="fade"
           onRequestClose={() => setBarTimerEditing(false)}
         >
-          <Pressable style={styles.repeatOverlay} onPress={() => setBarTimerEditing(false)}>
-            <View style={[styles.repeatModal, { marginTop: 80, maxWidth: 240 }]} onStartShouldSetResponder={() => true}>
-              <Text style={[styles.repeatTitle, { color: Colors.danger }]}>Timer Duration</Text>
+          <View style={styles.barTimerOverlay}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setBarTimerEditing(false)} />
+            <View style={styles.barTimerCard}>
+              <View style={styles.barTimerHeader}>
+                <Ionicons name="timer-outline" size={20} color={Colors.danger} />
+                <Text style={styles.barTimerTitle}>Timer</Text>
+              </View>
               <TextInput
-                style={[styles.barInfoText, { color: C.accent, fontSize: 28, textAlign: "center", padding: 8, borderBottomWidth: 1, borderBottomColor: C.accent, width: "100%" as any }]}
+                style={[styles.barTimerInput, { borderBottomColor: C.accent, color: C.accent }]}
                 value={barTimerInput}
                 onChangeText={setBarTimerInput}
                 onSubmitEditing={commitBarTimerInput}
@@ -934,17 +938,15 @@ export function BeatIndicator({
                 placeholder="M:SS"
                 placeholderTextColor={Colors.textTertiary}
               />
-              <Text style={{ color: Colors.textTertiary, fontSize: 11, marginTop: 6, textAlign: "center" }}>
-                M:SS or seconds
-              </Text>
+              <Text style={styles.barTimerHint}>M:SS or seconds</Text>
               <Pressable
                 onPress={commitBarTimerInput}
-                style={[styles.repeatSaveBtn, { backgroundColor: Colors.danger, marginTop: 14 }]}
+                style={[styles.barTimerSetBtn, { backgroundColor: Colors.danger }]}
               >
-                <Text style={[styles.repeatSaveText, { color: Colors.white }]}>Set</Text>
+                <Text style={styles.barTimerSetText}>Set</Text>
               </Pressable>
             </View>
-          </Pressable>
+          </View>
         </Modal>
 
         <Modal
@@ -1195,6 +1197,57 @@ const styles = StyleSheet.create({
   barFadeGradientBottom: {
     width: "100%" as any,
     zIndex: 10,
+  },
+  barTimerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  barTimerCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 24,
+    width: 220,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  barTimerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  barTimerTitle: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 16,
+    color: Colors.danger,
+  },
+  barTimerInput: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 32,
+    textAlign: "center",
+    padding: 8,
+    borderBottomWidth: 2,
+    width: "100%" as any,
+  },
+  barTimerHint: {
+    color: Colors.textTertiary,
+    fontSize: 11,
+    marginTop: 8,
+    fontFamily: "SpaceGrotesk_400Regular",
+  },
+  barTimerSetBtn: {
+    marginTop: 16,
+    paddingHorizontal: 32,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  barTimerSetText: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 14,
+    color: Colors.white,
   },
   barClockDots: {
     flexDirection: "row",
