@@ -545,17 +545,20 @@ export function BeatIndicator({
   const rowH = BAR_HEIGHT + 1 + barGap;
   const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
   const copyHeight = beatsPerMeasure * rowH;
-  const [activeCopy, setActiveCopy] = useState(1);
-  const activeCopyRef = useRef(1);
+  const [activeCopy, setActiveCopy] = useState(2);
+  const activeCopyRef = useRef(2);
   const barPrevBeatRef = useRef(-1);
+
+  const NUM_COPIES = 5;
+  const CENTER_COPY = 2;
 
   useEffect(() => {
     if (!isPlaying) {
-      activeCopyRef.current = 1;
-      setActiveCopy(1);
+      activeCopyRef.current = CENTER_COPY;
+      setActiveCopy(CENTER_COPY);
       barPrevBeatRef.current = -1;
       if (barMode && barContainerHeight > 0) {
-        const initTarget = Math.max(0, centerPad + copyHeight - barContainerHeight / 2 + BAR_HEIGHT / 2);
+        const initTarget = Math.max(0, centerPad + CENTER_COPY * copyHeight - barContainerHeight / 2 + BAR_HEIGHT / 2);
         barScrollRef.current?.scrollTo({ y: initTarget, animated: false });
       }
     }
@@ -573,10 +576,10 @@ export function BeatIndicator({
       setActiveCopy(activeCopyRef.current);
     }
 
-    if (activeCopyRef.current > 1 && currentBeat > 0) {
-      activeCopyRef.current = 1;
-      setActiveCopy(1);
-      const snapTop = centerPad + 1 * copyHeight + (currentBeat - 1) * rowH;
+    if (activeCopyRef.current > CENTER_COPY && currentBeat > 0) {
+      activeCopyRef.current = CENTER_COPY;
+      setActiveCopy(CENTER_COPY);
+      const snapTop = centerPad + CENTER_COPY * copyHeight + (currentBeat - 1) * rowH;
       const snapTarget = Math.max(0, snapTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
       barScrollRef.current?.scrollTo({ y: snapTarget, animated: false });
     }
@@ -681,7 +684,7 @@ export function BeatIndicator({
       );
     };
     const allBarRows: React.ReactNode[] = [];
-    for (let copy = 0; copy < 3; copy++) {
+    for (let copy = 0; copy < NUM_COPIES; copy++) {
       for (const beat of beats) {
         allBarRows.push(renderBarRow(beat, copy));
       }
