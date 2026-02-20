@@ -544,33 +544,65 @@ export function BeatIndicator({
   const barGap = 18;
   const rowH = BAR_HEIGHT + 1 + barGap;
   const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
+  const loopResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!barMode || !isPlaying || currentBeat < 0) return;
     if (barContainerHeight <= 0) return;
-    const beatTop = centerPad + currentBeat * rowH;
-    const scrollTarget = Math.max(0, beatTop - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
-    barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
-  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH]);
+
+    const prevBeat = prevBeatRef.current;
+    const isLoopWrap = barLoopMode === "loop" && prevBeat === beatsPerMeasure - 1 && currentBeat === 0 && prevBeat >= 0;
+
+    if (loopResetTimerRef.current) {
+      clearTimeout(loopResetTimerRef.current);
+      loopResetTimerRef.current = null;
+    }
+
+    if (isLoopWrap) {
+      const dupBeatTop = centerPad + beatsPerMeasure * rowH + barGap;
+      const dupScrollTarget = Math.max(0, dupBeatTop - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
+      barScrollRef.current?.scrollTo({ y: dupScrollTarget, animated: true });
+
+      loopResetTimerRef.current = setTimeout(() => {
+        const realTarget = Math.max(0, centerPad - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
+        barScrollRef.current?.scrollTo({ y: realTarget, animated: false });
+        loopResetTimerRef.current = null;
+      }, 350);
+    } else {
+      const beatTop = centerPad + currentBeat * rowH;
+      const scrollTarget = Math.max(0, beatTop - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
+      barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
+    }
+  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, barLoopMode]);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      if (loopResetTimerRef.current) {
+        clearTimeout(loopResetTimerRef.current);
+        loopResetTimerRef.current = null;
+      }
+    }
+  }, [isPlaying]);
 
   if (barMode) {
     const isDropping = dropTargetBeat !== null;
-    const barRows = beats.map((beat) => {
+    const renderBarRow = (beat: number, keyPrefix: string, ghost: boolean) => {
       const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
-      const isCurrent = isPlaying && currentBeat === beat;
+      const isCurrent = !ghost && isPlaying && currentBeat === beat;
       const bType = beatTypes[beat] || "normal";
-      const isDropTarget = isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
+      const isDropTarget = !ghost && isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
       const repeat = barRepeats[beat];
       return (
         <Pressable
-          key={`bar-${beat}`}
-          onLongPress={() => { if (!isPlaying) openRepeatModal(beat); }}
+          key={`${keyPrefix}-${beat}`}
+          onLongPress={() => { if (!ghost && !isPlaying) openRepeatModal(beat); }}
           delayLongPress={500}
-          onPress={() => cycleBeatType(beat)}
+          onPress={() => { if (!ghost) cycleBeatType(beat); }}
           style={[
             styles.barBeatWrapper,
             isCurrent && styles.barBeatWrapperActive,
             isDropTarget && { backgroundColor: "rgba(255,255,255,0.06)", borderColor: C.accent, borderWidth: 1, borderRadius: 4, marginHorizontal: -1 },
+            ghost && { opacity: 0.35 },
           ]}
         >
           <View style={styles.barBeatLabel}>
@@ -600,7 +632,7 @@ export function BeatIndicator({
               return (
                 <Pressable
                   key={ci}
-                  onPress={(e) => { e.stopPropagation(); handleBarCellPress(beat, ci); }}
+                  onPress={(e) => { e.stopPropagation(); if (!ghost) handleBarCellPress(beat, ci); }}
                   style={[styles.barNoteCell, !isLast && { borderRightWidth: 1, borderRightColor: "rgba(255,255,255,0.08)" }]}
                 >
                   {isStrongType ? (
@@ -635,7 +667,7 @@ export function BeatIndicator({
           </View>
           <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
           <Pressable
-            onPress={(e) => { e.stopPropagation(); if (!isPlaying) openRepeatModal(beat); }}
+            onPress={(e) => { e.stopPropagation(); if (!ghost && !isPlaying) openRepeatModal(beat); }}
             style={styles.barRepeatBadge}
             hitSlop={6}
           >
@@ -645,7 +677,9 @@ export function BeatIndicator({
           </Pressable>
         </Pressable>
       );
-    });
+    };
+    const barRows = beats.map((beat) => renderBarRow(beat, "bar", false));
+    const dupBarRows = barLoopMode === "loop" ? beats.map((beat) => renderBarRow(beat, "dup", true)) : null;
 
     return (
       <View style={styles.barModeContainer} testID="beat-indicator-bar-mode">
@@ -673,7 +707,10 @@ export function BeatIndicator({
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
           >
-            <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>{barRows}</View>
+            <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>
+              {barRows}
+              {dupBarRows}
+            </View>
           </ScrollView>
         </View>
 
