@@ -586,7 +586,7 @@ export function BeatIndicator({
     const isDropping = dropTargetBeat !== null;
     const renderBarRow = (beat: number, copyIndex: number) => {
       const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
-      const isCurrent = isPlaying && currentBeat === beat;
+      const isCurrent = isPlaying && currentBeat === beat && copyIndex === activeCopyRef.current;
       const bType = beatTypes[beat] || "normal";
       const isDropTarget = isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
       const repeat = barRepeats[beat];
