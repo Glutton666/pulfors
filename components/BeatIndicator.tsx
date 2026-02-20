@@ -544,55 +544,29 @@ export function BeatIndicator({
   const barGap = 18;
   const rowH = BAR_HEIGHT + 1 + barGap;
   const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
-  const loopSetRef = useRef(0);
-  const [barSetCount, setBarSetCount] = useState(1);
-  const oneSetHeight = beatsPerMeasure * rowH;
 
   useEffect(() => {
     if (!barMode || !isPlaying || currentBeat < 0) return;
     if (barContainerHeight <= 0) return;
-
-    const prevBeat = prevBeatRef.current;
-    const isLoopWrap = barLoopMode === "loop" && prevBeat === beatsPerMeasure - 1 && currentBeat === 0 && prevBeat >= 0;
-
-    if (isLoopWrap) {
-      loopSetRef.current += 1;
-      setBarSetCount(prev => Math.max(prev, loopSetRef.current + 2));
-    }
-
-    const virtualBeatTop = centerPad + loopSetRef.current * oneSetHeight + currentBeat * rowH;
-    const scrollTarget = Math.max(0, virtualBeatTop - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
+    const beatTop = centerPad + currentBeat * rowH;
+    const scrollTarget = Math.max(0, beatTop - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
     barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
-  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, barLoopMode, oneSetHeight]);
-
-  useEffect(() => {
-    if (!isPlaying) {
-      loopSetRef.current = 0;
-      setBarSetCount(1);
-      if (barMode && barContainerHeight > 0) {
-        requestAnimationFrame(() => {
-          const resetY = Math.max(0, centerPad - (barContainerHeight / 2) + (BAR_HEIGHT / 2));
-          barScrollRef.current?.scrollTo({ y: resetY, animated: false });
-        });
-      }
-    }
-  }, [isPlaying]);
+  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH]);
 
   if (barMode) {
     const isDropping = dropTargetBeat !== null;
-    const renderBarRow = (beat: number, keyPrefix: string, setIndex: number) => {
+    const barRows = beats.map((beat) => {
       const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
       const isCurrent = isPlaying && currentBeat === beat;
       const bType = beatTypes[beat] || "normal";
-      const isMain = setIndex === 0;
-      const isDropTarget = isMain && isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
+      const isDropTarget = isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
       const repeat = barRepeats[beat];
       return (
         <Pressable
-          key={`${keyPrefix}-${beat}`}
-          onLongPress={() => { if (isMain && !isPlaying) openRepeatModal(beat); }}
+          key={`bar-${beat}`}
+          onLongPress={() => { if (!isPlaying) openRepeatModal(beat); }}
           delayLongPress={500}
-          onPress={() => { if (isMain) cycleBeatType(beat); }}
+          onPress={() => cycleBeatType(beat)}
           style={[
             styles.barBeatWrapper,
             isCurrent && styles.barBeatWrapperActive,
@@ -626,7 +600,7 @@ export function BeatIndicator({
               return (
                 <Pressable
                   key={ci}
-                  onPress={(e) => { e.stopPropagation(); if (isMain) handleBarCellPress(beat, ci); }}
+                  onPress={(e) => { e.stopPropagation(); handleBarCellPress(beat, ci); }}
                   style={[styles.barNoteCell, !isLast && { borderRightWidth: 1, borderRightColor: "rgba(255,255,255,0.08)" }]}
                 >
                   {isStrongType ? (
@@ -661,7 +635,7 @@ export function BeatIndicator({
           </View>
           <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
           <Pressable
-            onPress={(e) => { e.stopPropagation(); if (isMain && !isPlaying) openRepeatModal(beat); }}
+            onPress={(e) => { e.stopPropagation(); if (!isPlaying) openRepeatModal(beat); }}
             style={styles.barRepeatBadge}
             hitSlop={6}
           >
@@ -671,13 +645,7 @@ export function BeatIndicator({
           </Pressable>
         </Pressable>
       );
-    };
-    const allBarSets: React.ReactNode[] = [];
-    for (let s = 0; s < barSetCount; s++) {
-      beats.forEach((beat) => {
-        allBarSets.push(renderBarRow(beat, `set${s}`, s));
-      });
-    }
+    });
 
     return (
       <View style={styles.barModeContainer} testID="beat-indicator-bar-mode">
@@ -704,11 +672,8 @@ export function BeatIndicator({
             style={styles.barScrollView}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
-            scrollEnabled={!isPlaying}
           >
-            <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>
-              {allBarSets}
-            </View>
+            <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>{barRows}</View>
           </ScrollView>
         </View>
 
