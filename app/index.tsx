@@ -75,6 +75,7 @@ export default function MetronomeScreen() {
     Record<string, BeatType[]>
   >({});
   const [barMode, setBarMode] = useState(false);
+  const [barLoopMode, setBarLoopMode] = useState<"loop" | "once">("loop");
   const [barRepeats, setBarRepeats] = useState<Record<number, BarRepeat>>({});
   const barAreaRef = useRef<View>(null);
   const barAreaLayoutRef = useRef({ y: 0, height: 0 });
@@ -398,6 +399,8 @@ export default function MetronomeScreen() {
 
   const barModeRef = useRef(barMode);
   useEffect(() => { barModeRef.current = barMode; }, [barMode]);
+  const barLoopModeRef = useRef(barLoopMode);
+  useEffect(() => { barLoopModeRef.current = barLoopMode; }, [barLoopMode]);
 
   const togglePlayPause = useCallback(() => {
     const engine = engineRef.current;
@@ -414,6 +417,9 @@ export default function MetronomeScreen() {
       setActiveSubNote(-1);
     } else {
       engine.start();
+      if (barModeRef.current && barLoopModeRef.current === "once") {
+        engine.requestStopAfterMeasure();
+      }
       setIsPlaying(true);
     }
   }, [isPlaying]);
@@ -838,6 +844,8 @@ export default function MetronomeScreen() {
             barAreaRef={barAreaRef}
             barRepeats={barRepeats}
             onBarRepeatChange={handleBarRepeatChange}
+            barLoopMode={barLoopMode}
+            onBarLoopModeChange={setBarLoopMode}
           />
         </View>
 

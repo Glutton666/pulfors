@@ -249,6 +249,8 @@ interface BeatIndicatorProps {
   barAreaRef?: React.RefObject<View | null>;
   barRepeats: Record<number, BarRepeat>;
   onBarRepeatChange: (beat: number, repeat: BarRepeat | null) => void;
+  barLoopMode: "loop" | "once";
+  onBarLoopModeChange: (mode: "loop" | "once") => void;
 }
 
 export function BeatIndicator({
@@ -270,6 +272,8 @@ export function BeatIndicator({
   barAreaRef,
   barRepeats,
   onBarRepeatChange,
+  barLoopMode,
+  onBarLoopModeChange,
 }: BeatIndicatorProps) {
   const { colors: C } = useTheme();
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
@@ -681,6 +685,18 @@ export function BeatIndicator({
         </View>
 
         <View style={styles.barBottomRow}>
+          <Pressable
+            onPress={() => onBarLoopModeChange(barLoopMode === "loop" ? "once" : "loop")}
+            style={[styles.barLoopBtn, barLoopMode === "once" && { backgroundColor: "rgba(255,255,255,0.12)" }]}
+            hitSlop={6}
+            testID="bar-loop-toggle"
+          >
+            <Ionicons
+              name={barLoopMode === "loop" ? "repeat" : "play-forward"}
+              size={18}
+              color={barLoopMode === "loop" ? C.accent : Colors.textSecondary}
+            />
+          </Pressable>
           <View style={styles.barTimeSigRow}>
             <Pressable
               onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
@@ -1024,6 +1040,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   barPlayBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  barLoopBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
