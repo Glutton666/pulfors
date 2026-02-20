@@ -877,13 +877,15 @@ export default function MetronomeScreen() {
         </View>
       </View>
 
-      <StopwatchTimer
-        onTimerExpired={handleTimerExpired}
-        onStopRequested={handleTimerExpired}
-        onStartMetronome={startMetronome}
-        isMetronomePlaying={isPlaying}
-        topInset={insets.top || webTopInset}
-      />
+      {!barMode && (
+        <StopwatchTimer
+          onTimerExpired={handleTimerExpired}
+          onStopRequested={handleTimerExpired}
+          onStartMetronome={startMetronome}
+          isMetronomePlaying={isPlaying}
+          topInset={insets.top || webTopInset}
+        />
+      )}
 
       {isDragging && (
         <DragGhost
