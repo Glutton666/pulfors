@@ -9,6 +9,7 @@ import {
   ScrollView,
   Modal,
   TextInput,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
@@ -286,7 +287,7 @@ export function BeatIndicator({
   initialBarClockMode,
   initialBarTimerDuration,
 }: BeatIndicatorProps) {
-  const { colors: C } = useTheme();
+  const { colors: C, centerImageUri } = useTheme();
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
 
   const swipeProgress = useSharedValue(0);
@@ -1099,17 +1100,25 @@ export function BeatIndicator({
         </View>
 
         <View style={styles.centerArea} pointerEvents="box-none">
-          <View style={styles.signatureRow} pointerEvents="none">
-            <Text style={styles.digitalSignature} numberOfLines={1}>
-              {beatsPerMeasure}
-            </Text>
-            <Text style={styles.digitalSignatureSlash} numberOfLines={1}>
-              /
-            </Text>
-            <Text style={styles.digitalSignature} numberOfLines={1}>
-              {beatsPerMeasure <= 4 ? "4" : "8"}
-            </Text>
-          </View>
+          {!centerImageUri && (
+            <View style={styles.signatureRow} pointerEvents="none">
+              <Text style={styles.digitalSignature} numberOfLines={1}>
+                {beatsPerMeasure}
+              </Text>
+              <Text style={styles.digitalSignatureSlash} numberOfLines={1}>
+                /
+              </Text>
+              <Text style={styles.digitalSignature} numberOfLines={1}>
+                {beatsPerMeasure <= 4 ? "4" : "8"}
+              </Text>
+            </View>
+          )}
+
+          {centerImageUri && (
+            <View style={styles.centerImageContainer} pointerEvents="none">
+              <Image source={{ uri: centerImageUri }} style={styles.centerImage} />
+            </View>
+          )}
 
           <Animated.View
             style={[
@@ -1206,6 +1215,19 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     opacity: 0.15,
     marginHorizontal: -2,
+  },
+  centerImageContainer: {
+    position: "absolute",
+    width: moderateScale(130),
+    height: moderateScale(130),
+    borderRadius: moderateScale(65),
+    overflow: "hidden",
+    opacity: 0.35,
+  },
+  centerImage: {
+    width: moderateScale(130),
+    height: moderateScale(130),
+    borderRadius: moderateScale(65),
   },
   centerGlow: {
     position: "absolute",
