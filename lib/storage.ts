@@ -73,6 +73,7 @@ export interface PracticeEntry {
   id: string;
   label: string;
   createdAt: number;
+  createdBy?: string;
   bpm: number;
   beatsPerMeasure: number;
   beatTypes: BeatType[];
@@ -104,12 +105,14 @@ export async function savePracticeBook(entries: PracticeEntry[]): Promise<void> 
 
 export function createPracticeEntry(
   label: string,
-  config: Omit<PracticeEntry, "id" | "label" | "createdAt">
+  config: Omit<PracticeEntry, "id" | "label" | "createdAt">,
+  createdBy?: string
 ): PracticeEntry {
   return {
     id: Crypto.randomUUID(),
     label,
     createdAt: Date.now(),
+    ...(createdBy ? { createdBy } : {}),
     ...config,
   };
 }

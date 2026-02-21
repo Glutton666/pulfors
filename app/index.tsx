@@ -1206,6 +1206,7 @@ export default function MetronomeScreen() {
         onLoad={handleLoadPracticeEntry}
         onSetGoal={handleSetPracticeNoteGoal}
         currentConfig={currentBarConfig}
+        username={username}
       />
 
       <WorkUpOverviewModal

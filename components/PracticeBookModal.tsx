@@ -9,6 +9,10 @@ import {
   TextInput,
   Alert,
   Platform,
+  Animated,
+  PanResponder,
+  Share,
+  Dimensions,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -28,6 +32,7 @@ interface PracticeBookModalProps {
   onLoad: (entry: PracticeEntry) => void;
   onSetGoal?: (entry: PracticeEntry, targetMinutes: number) => void;
   currentConfig: Omit<PracticeEntry, "id" | "label" | "createdAt"> | null;
+  username?: string;
 }
 
 const BEAT_COLORS: Record<BeatType, string> = {
@@ -36,6 +41,9 @@ const BEAT_COLORS: Record<BeatType, string> = {
   mute: "#30363D",
   strong: "#F0883E",
 };
+
+const ACTION_WIDTH = 160;
+const SWIPE_THRESHOLD = 60;
 
 function formatDate(ts: number) {
   const d = new Date(ts);
@@ -65,12 +73,216 @@ function BeatPreview({ beatTypes, size = 10 }: { beatTypes: BeatType[]; size?: n
   );
 }
 
+function SwipeableEntry({
+  item,
+  isEditing,
+  editLabel,
+  setEditLabel,
+  editInputRef,
+  onRename,
+  onLoad,
+  onDelete,
+  onShare,
+  onLongPress,
+  accentColor,
+  openItemId,
+  setOpenItemId,
+}: {
+  item: PracticeEntry;
+  isEditing: boolean;
+  editLabel: string;
+  setEditLabel: (v: string) => void;
+  editInputRef: React.RefObject<TextInput | null>;
+  onRename: (id: string) => void;
+  onLoad: (entry: PracticeEntry) => void;
+  onDelete: (id: string) => void;
+  onShare: (entry: PracticeEntry) => void;
+  onLongPress: () => void;
+  accentColor: string;
+  openItemId: string | null;
+  setOpenItemId: (id: string | null) => void;
+}) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const isOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (openItemId !== item.id && isOpenRef.current) {
+      Animated.spring(translateX, { toValue: 0, useNativeDriver: true, friction: 8 }).start();
+      isOpenRef.current = false;
+    }
+  }, [openItemId, item.id]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dx) > 10 && Math.abs(gs.dy) < 20,
+      onPanResponderMove: (_, gs) => {
+        const base = isOpenRef.current ? -ACTION_WIDTH : 0;
+        const val = Math.min(0, Math.max(-ACTION_WIDTH, base + gs.dx));
+        translateX.setValue(val);
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (isOpenRef.current) {
+          if (gs.dx > SWIPE_THRESHOLD) {
+            Animated.spring(translateX, { toValue: 0, useNativeDriver: true, friction: 8 }).start();
+            isOpenRef.current = false;
+            setOpenItemId(null);
+          } else {
+            Animated.spring(translateX, { toValue: -ACTION_WIDTH, useNativeDriver: true, friction: 8 }).start();
+          }
+        } else {
+          if (gs.dx < -SWIPE_THRESHOLD) {
+            Animated.spring(translateX, { toValue: -ACTION_WIDTH, useNativeDriver: true, friction: 8 }).start();
+            isOpenRef.current = true;
+            setOpenItemId(item.id);
+          } else {
+            Animated.spring(translateX, { toValue: 0, useNativeDriver: true, friction: 8 }).start();
+          }
+        }
+      },
+    })
+  ).current;
+
+  const barCount = item.beatsPerMeasure;
+  const secondsPerBeat = 60 / item.bpm;
+  const onePlaySeconds = barCount * secondsPerBeat;
+
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = Math.round(sec % 60);
+    if (m > 0) return `${m}분 ${s}초`;
+    return `${s}초`;
+  };
+
+  const clockMode = item.barClockMode || "stopwatch";
+  const timerDur = item.barTimerDuration;
+  let playModeText: string;
+  if (clockMode === "timer" && timerDur != null && timerDur > 0) {
+    const tm = Math.floor(timerDur / 60);
+    const ts = timerDur % 60;
+    playModeText = tm > 0 ? `${tm}:${String(ts).padStart(2, "0")}` : `${ts}초`;
+  } else if (item.barLoopMode === "loop") {
+    playModeText = "연속재생";
+  } else {
+    playModeText = "1회재생";
+  }
+
+  return (
+    <View style={styles.swipeContainer}>
+      <View style={styles.actionsBackground}>
+        <Pressable
+          style={[styles.swipeAction, { backgroundColor: "#3B82F6" }]}
+          onPress={() => {
+            Animated.spring(translateX, { toValue: 0, useNativeDriver: true, friction: 8 }).start();
+            isOpenRef.current = false;
+            setOpenItemId(null);
+            onShare(item);
+          }}
+        >
+          <Ionicons name="share-outline" size={18} color="#fff" />
+          <Text style={styles.swipeActionText}>공유</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.swipeAction, { backgroundColor: "#F59E0B" }]}
+          onPress={() => {
+            Animated.spring(translateX, { toValue: 0, useNativeDriver: true, friction: 8 }).start();
+            isOpenRef.current = false;
+            setOpenItemId(null);
+            onRename(item.id);
+          }}
+        >
+          <Ionicons name="pencil" size={18} color="#fff" />
+          <Text style={styles.swipeActionText}>수정</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.swipeAction, { backgroundColor: Colors.danger }]}
+          onPress={() => {
+            Animated.spring(translateX, { toValue: 0, useNativeDriver: true, friction: 8 }).start();
+            isOpenRef.current = false;
+            setOpenItemId(null);
+            onDelete(item.id);
+          }}
+        >
+          <Ionicons name="trash-outline" size={18} color="#fff" />
+          <Text style={styles.swipeActionText}>삭제</Text>
+        </Pressable>
+      </View>
+
+      <Animated.View
+        style={[styles.entryCard, { transform: [{ translateX }] }]}
+        {...panResponder.panHandlers}
+      >
+        <Pressable
+          style={styles.entryMain}
+          onPress={() => onLoad(item)}
+          onLongPress={onLongPress}
+          delayLongPress={500}
+        >
+          <View style={styles.entryHeader}>
+            {isEditing ? (
+              <TextInput
+                ref={editInputRef}
+                style={[styles.editInput, { borderColor: accentColor }]}
+                value={editLabel}
+                onChangeText={setEditLabel}
+                onSubmitEditing={() => onRename(item.id)}
+                onBlur={() => onRename(item.id)}
+                autoFocus
+                selectTextOnFocus
+              />
+            ) : (
+              <Text style={styles.entryLabel} numberOfLines={1}>
+                {item.label}
+              </Text>
+            )}
+            <Text style={styles.entryDate}>{formatDate(item.createdAt)}</Text>
+          </View>
+
+          {item.createdBy ? (
+            <Text style={styles.createdBy}>by {item.createdBy}</Text>
+          ) : null}
+
+          <View style={styles.entryDetails}>
+            <View style={styles.detailChip}>
+              <Text style={[styles.detailValue, { color: accentColor }]}>
+                {item.bpm}
+              </Text>
+              <Text style={styles.detailUnit}>BPM</Text>
+            </View>
+            <View style={styles.detailChip}>
+              <Text style={[styles.detailValue, { color: accentColor }]}>
+                {barCount}
+              </Text>
+              <Text style={styles.detailUnit}>Bar</Text>
+            </View>
+            <View style={styles.detailChip}>
+              <Ionicons
+                name={clockMode === "timer" ? "timer-outline" : "infinite"}
+                size={12}
+                color={Colors.textSecondary}
+              />
+              <Text style={styles.detailUnit}>{playModeText}</Text>
+            </View>
+            <View style={styles.detailChip}>
+              <Ionicons name="time-outline" size={12} color={Colors.textSecondary} />
+              <Text style={styles.detailUnit}>{formatTime(onePlaySeconds)}</Text>
+            </View>
+          </View>
+
+          <BeatPreview beatTypes={item.beatTypes} />
+        </Pressable>
+      </Animated.View>
+    </View>
+  );
+}
+
 export function PracticeBookModal({
   visible,
   onClose,
   onLoad,
   onSetGoal,
   currentConfig,
+  username,
 }: PracticeBookModalProps) {
   const insets = useSafeAreaInsets();
   const { colors: C } = useTheme();
@@ -81,26 +293,28 @@ export function PracticeBookModal({
   const [editLabel, setEditLabel] = useState("");
   const [goalEntry, setGoalEntry] = useState<PracticeEntry | null>(null);
   const [goalMinutes, setGoalMinutes] = useState("10");
+  const [openItemId, setOpenItemId] = useState<string | null>(null);
   const saveInputRef = useRef<TextInput>(null);
-  const editInputRef = useRef<TextInput>(null);
+  const editInputRef = useRef<TextInput | null>(null);
 
   useEffect(() => {
     if (visible) {
       loadPracticeBook().then(setEntries);
       setShowSaveInput(false);
       setEditingId(null);
+      setOpenItemId(null);
     }
   }, [visible]);
 
   const handleSave = useCallback(async () => {
     if (!currentConfig || !saveLabel.trim()) return;
-    const entry = createPracticeEntry(saveLabel.trim(), currentConfig);
+    const entry = createPracticeEntry(saveLabel.trim(), currentConfig, username || undefined);
     const updated = [entry, ...entries];
     setEntries(updated);
     await savePracticeBook(updated);
     setSaveLabel("");
     setShowSaveInput(false);
-  }, [currentConfig, saveLabel, entries]);
+  }, [currentConfig, saveLabel, entries, username]);
 
   const handleDelete = useCallback(
     (id: string) => {
@@ -137,6 +351,14 @@ export function PracticeBookModal({
     [entries, editLabel]
   );
 
+  const handleStartRename = useCallback((id: string) => {
+    const entry = entries.find((e) => e.id === id);
+    if (entry) {
+      setEditingId(id);
+      setEditLabel(entry.label);
+    }
+  }, [entries]);
+
   const handleLoad = useCallback(
     (entry: PracticeEntry) => {
       onLoad(entry);
@@ -145,120 +367,64 @@ export function PracticeBookModal({
     [onLoad, onClose]
   );
 
+  const handleShare = useCallback(async (entry: PracticeEntry) => {
+    const beatTypeNames: Record<BeatType, string> = {
+      accent: "Accent",
+      normal: "Normal",
+      mute: "Mute",
+      strong: "Strong",
+    };
+    const clockMode = entry.barClockMode || "stopwatch";
+    const loopText = entry.barLoopMode === "loop" ? "연속재생" : "1회재생";
+    let timerText = "";
+    if (clockMode === "timer" && entry.barTimerDuration) {
+      const tm = Math.floor(entry.barTimerDuration / 60);
+      const ts = entry.barTimerDuration % 60;
+      timerText = `\nTimer: ${tm}:${String(ts).padStart(2, "0")}`;
+    }
+
+    const message = [
+      `🎵 ${entry.label}`,
+      entry.createdBy ? `by ${entry.createdBy}` : "",
+      ``,
+      `BPM: ${entry.bpm}`,
+      `Beats: ${entry.beatsPerMeasure}`,
+      `Pattern: ${entry.beatTypes.map((t) => beatTypeNames[t]).join(" → ")}`,
+      `Mode: ${loopText}${timerText}`,
+      ``,
+      `Created: ${formatDate(entry.createdAt)}`,
+    ].filter(Boolean).join("\n");
+
+    try {
+      await Share.share({ message, title: entry.label });
+    } catch (_) {}
+  }, []);
+
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
-  const renderItem = ({ item }: { item: PracticeEntry }) => {
-    const isEditing = editingId === item.id;
-    const barCount = item.beatsPerMeasure;
-    const secondsPerBeat = 60 / item.bpm;
-    const onePlaySeconds = barCount * secondsPerBeat;
-
-    const formatTime = (sec: number) => {
-      const m = Math.floor(sec / 60);
-      const s = Math.round(sec % 60);
-      if (m > 0) return `${m}분 ${s}초`;
-      return `${s}초`;
-    };
-
-    const clockMode = item.barClockMode || "stopwatch";
-    const timerDur = item.barTimerDuration;
-    let playModeText: string;
-    if (clockMode === "timer" && timerDur != null && timerDur > 0) {
-      const tm = Math.floor(timerDur / 60);
-      const ts = timerDur % 60;
-      playModeText = tm > 0 ? `${tm}:${String(ts).padStart(2, "0")}` : `${ts}초`;
-    } else if (item.barLoopMode === "loop") {
-      playModeText = "연속재생";
-    } else {
-      playModeText = "1회재생";
-    }
-
-    return (
-      <View style={styles.entryCard}>
-        <Pressable
-          style={styles.entryMain}
-          onPress={() => handleLoad(item)}
-          onLongPress={() => {
-            if (onSetGoal) {
-              setGoalEntry(item);
-              setGoalMinutes("10");
-            }
-          }}
-          delayLongPress={500}
-        >
-          <View style={styles.entryHeader}>
-            {isEditing ? (
-              <TextInput
-                ref={editInputRef}
-                style={[styles.editInput, { borderColor: C.accent }]}
-                value={editLabel}
-                onChangeText={setEditLabel}
-                onSubmitEditing={() => handleRename(item.id)}
-                onBlur={() => handleRename(item.id)}
-                autoFocus
-                selectTextOnFocus
-              />
-            ) : (
-              <Text style={styles.entryLabel} numberOfLines={1}>
-                {item.label}
-              </Text>
-            )}
-            <Text style={styles.entryDate}>{formatDate(item.createdAt)}</Text>
-          </View>
-
-          <View style={styles.entryDetails}>
-            <View style={styles.detailChip}>
-              <Text style={[styles.detailValue, { color: C.accent }]}>
-                {item.bpm}
-              </Text>
-              <Text style={styles.detailUnit}>BPM</Text>
-            </View>
-            <View style={styles.detailChip}>
-              <Text style={[styles.detailValue, { color: C.accent }]}>
-                {barCount}
-              </Text>
-              <Text style={styles.detailUnit}>Bar</Text>
-            </View>
-            <View style={styles.detailChip}>
-              <Ionicons
-                name={clockMode === "timer" ? "timer-outline" : "infinite"}
-                size={12}
-                color={Colors.textSecondary}
-              />
-              <Text style={styles.detailUnit}>{playModeText}</Text>
-            </View>
-            <View style={styles.detailChip}>
-              <Ionicons name="time-outline" size={12} color={Colors.textSecondary} />
-              <Text style={styles.detailUnit}>{formatTime(onePlaySeconds)}</Text>
-            </View>
-          </View>
-
-          <BeatPreview beatTypes={item.beatTypes} />
-        </Pressable>
-
-        <View style={styles.entryActions}>
-          <Pressable
-            style={styles.actionBtn}
-            onPress={() => {
-              setEditingId(item.id);
-              setEditLabel(item.label);
-            }}
-            hitSlop={6}
-          >
-            <Ionicons name="pencil" size={16} color={Colors.textSecondary} />
-          </Pressable>
-          <Pressable
-            style={styles.actionBtn}
-            onPress={() => handleDelete(item.id)}
-            hitSlop={6}
-          >
-            <Ionicons name="trash-outline" size={16} color={Colors.danger} />
-          </Pressable>
-        </View>
-      </View>
-    );
-  };
+  const renderItem = ({ item }: { item: PracticeEntry }) => (
+    <SwipeableEntry
+      item={item}
+      isEditing={editingId === item.id}
+      editLabel={editLabel}
+      setEditLabel={setEditLabel}
+      editInputRef={editInputRef}
+      onRename={editingId === item.id ? handleRename : handleStartRename}
+      onLoad={handleLoad}
+      onDelete={handleDelete}
+      onShare={handleShare}
+      onLongPress={() => {
+        if (onSetGoal) {
+          setGoalEntry(item);
+          setGoalMinutes("10");
+        }
+      }}
+      accentColor={C.accent}
+      openItemId={openItemId}
+      setOpenItemId={setOpenItemId}
+    />
+  );
 
   return (
     <Modal
@@ -494,19 +660,40 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 20,
   },
+  swipeContainer: {
+    marginBottom: 10,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  actionsBackground: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: ACTION_WIDTH,
+    flexDirection: "row",
+  },
+  swipeAction: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+  },
+  swipeActionText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 10,
+    color: "#fff",
+  },
   entryCard: {
     backgroundColor: Colors.surface,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.border,
-    marginBottom: 10,
-    flexDirection: "row",
     overflow: "hidden",
   },
   entryMain: {
-    flex: 1,
     padding: 14,
-    gap: 8,
+    gap: 6,
   },
   entryHeader: {
     flexDirection: "row",
@@ -524,6 +711,12 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
     color: Colors.textTertiary,
+  },
+  createdBy: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 11,
+    color: Colors.textTertiary,
+    marginTop: -2,
   },
   editInput: {
     flex: 1,
@@ -560,22 +753,6 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
     color: Colors.textSecondary,
-  },
-  entryActions: {
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 12,
-    borderLeftWidth: 1,
-    borderLeftColor: Colors.border,
-  },
-  actionBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.surfaceLight,
   },
   emptyState: {
     flex: 1,
