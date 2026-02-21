@@ -252,6 +252,31 @@ export default function MetronomeScreen() {
       }
     );
 
+    const preloadSounds = async (samples: NoteSampleMap) => {
+      for (const s of Object.values(noteSampleSoundsRef.current)) {
+        try { await s.unloadAsync(); } catch {}
+      }
+      noteSampleSoundsRef.current = {};
+
+      for (const [key, uri] of Object.entries(samples)) {
+        try {
+          const rawUri = uri.split("#")[0];
+          const sound = new Audio.Sound();
+          await sound.loadAsync({ uri: rawUri });
+
+          const hashParts = uri.split("#t=")[1];
+          if (hashParts) {
+            const [startMs] = hashParts.split(",").map(Number);
+            if (!isNaN(startMs)) {
+              await sound.setPositionAsync(startMs);
+            }
+          }
+
+          noteSampleSoundsRef.current[key] = sound;
+        } catch {}
+      }
+    };
+
     loadSettings().then((settings) => {
       setBpm(settings.bpm);
       setBeatsPerMeasure(settings.beatsPerMeasure);
@@ -302,7 +327,7 @@ export default function MetronomeScreen() {
     loadNoteSamples().then((samples) => {
       setNoteSamples(samples);
       noteSamplesRef.current = samples;
-      preloadNoteSampleSounds(samples);
+      preloadSounds(samples);
     });
 
     engine.setCustomSampleCallback((beat: number, subBeat: number) => {
@@ -310,7 +335,14 @@ export default function MetronomeScreen() {
       const sound = noteSampleSoundsRef.current[key];
       if (sound) {
         try {
-          sound.setPositionAsync(0).then(() => sound.playAsync()).catch(() => {});
+          const sampleUri = noteSamplesRef.current[key] || "";
+          const hashParts = sampleUri.split("#t=")[1];
+          let startMs = 0;
+          if (hashParts) {
+            const parsed = parseInt(hashParts.split(",")[0], 10);
+            if (!isNaN(parsed)) startMs = parsed;
+          }
+          sound.setPositionAsync(startMs).then(() => sound.playAsync()).catch(() => {});
         } catch {}
         return true;
       }
