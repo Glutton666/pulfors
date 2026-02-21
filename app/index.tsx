@@ -58,6 +58,10 @@ import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import type { PracticeEntry } from "@/lib/storage";
 import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
+import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample } from "@/lib/note-samples";
+import type { NoteSampleMap } from "@/lib/note-samples";
+import { NoteRecorderModal } from "@/components/NoteRecorderModal";
+import { Audio } from "expo-av";
 import type { ActivityLog, Goal, PracticeSessionData, PracticeRoomVisitData } from "@/lib/activity-log";
 import {
   loadPracticeRooms,
@@ -150,6 +154,11 @@ export default function MetronomeScreen() {
   const [trackingRoomName, setTrackingRoomName] = useState<string | null>(null);
   const [completedGoalPopups, setCompletedGoalPopups] = useState<Goal[]>([]);
   const dismissedGoalIdsRef = useRef<Set<string>>(new Set());
+
+  const [noteSamples, setNoteSamples] = useState<NoteSampleMap>({});
+  const noteSamplesRef = useRef<NoteSampleMap>({});
+  const noteSampleSoundsRef = useRef<Record<string, Audio.Sound>>({});
+  const [recorderTarget, setRecorderTarget] = useState<{ beat: number; sub: number } | null>(null);
 
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -290,6 +299,24 @@ export default function MetronomeScreen() {
       setIsLoaded(true);
     });
 
+    loadNoteSamples().then((samples) => {
+      setNoteSamples(samples);
+      noteSamplesRef.current = samples;
+      preloadNoteSampleSounds(samples);
+    });
+
+    engine.setCustomSampleCallback((beat: number, subBeat: number) => {
+      const key = `${beat}-${subBeat}`;
+      const sound = noteSampleSoundsRef.current[key];
+      if (sound) {
+        try {
+          sound.setPositionAsync(0).then(() => sound.playAsync()).catch(() => {});
+        } catch {}
+        return true;
+      }
+      return false;
+    });
+
     loadLoggingEnabled().then((val) => setLoggingEnabled(val));
     setupNotificationControls();
 
@@ -298,6 +325,57 @@ export default function MetronomeScreen() {
       dismissNotification();
     };
   }, []);
+
+  const preloadNoteSampleSounds = useCallback(async (samples: NoteSampleMap) => {
+    for (const s of Object.values(noteSampleSoundsRef.current)) {
+      try { await s.unloadAsync(); } catch {}
+    }
+    noteSampleSoundsRef.current = {};
+
+    for (const [key, uri] of Object.entries(samples)) {
+      try {
+        const rawUri = uri.split("#")[0];
+        const sound = new Audio.Sound();
+        await sound.loadAsync({ uri: rawUri });
+
+        const hashParts = uri.split("#t=")[1];
+        if (hashParts) {
+          const [startMs, endMs] = hashParts.split(",").map(Number);
+          if (!isNaN(startMs)) {
+            await sound.setPositionAsync(startMs);
+          }
+        }
+
+        noteSampleSoundsRef.current[key] = sound;
+      } catch {}
+    }
+  }, []);
+
+  const handleNoteRecordRequest = useCallback((beatIndex: number, subIndex: number) => {
+    setRecorderTarget({ beat: beatIndex, sub: subIndex });
+  }, []);
+
+  const handleNoteRecordSave = useCallback(async (uri: string) => {
+    if (!recorderTarget) return;
+    const updated = await setNoteSample(recorderTarget.beat, recorderTarget.sub, uri, noteSamplesRef.current);
+    setNoteSamples(updated);
+    noteSamplesRef.current = updated;
+    await preloadNoteSampleSounds(updated);
+    setRecorderTarget(null);
+  }, [recorderTarget, preloadNoteSampleSounds]);
+
+  const handleNoteRecordDelete = useCallback(async () => {
+    if (!recorderTarget) return;
+    const updated = await removeNoteSample(recorderTarget.beat, recorderTarget.sub, noteSamplesRef.current);
+    setNoteSamples(updated);
+    noteSamplesRef.current = updated;
+    const key = `${recorderTarget.beat}-${recorderTarget.sub}`;
+    if (noteSampleSoundsRef.current[key]) {
+      try { await noteSampleSoundsRef.current[key].unloadAsync(); } catch {}
+      delete noteSampleSoundsRef.current[key];
+    }
+    setRecorderTarget(null);
+  }, [recorderTarget]);
 
   const checkCompletedGoals = useCallback(async () => {
     try {
@@ -1335,6 +1413,16 @@ export default function MetronomeScreen() {
         }}
       />
 
+      <NoteRecorderModal
+        visible={recorderTarget !== null}
+        onClose={() => setRecorderTarget(null)}
+        onSave={handleNoteRecordSave}
+        onDelete={handleNoteRecordDelete}
+        beatIndex={recorderTarget?.beat ?? 0}
+        subIndex={recorderTarget?.sub ?? 0}
+        hasExisting={recorderTarget ? hasNoteSample(recorderTarget.beat, recorderTarget.sub, noteSamples) : false}
+      />
+
       <PracticeBookModal
         visible={showPracticeBook}
         onClose={() => {
@@ -1448,6 +1536,8 @@ export default function MetronomeScreen() {
             }}
             initialBarClockMode={barConfigRef.current.barClockMode}
             initialBarTimerDuration={barConfigRef.current.barTimerDuration}
+            noteSamples={noteSamples}
+            onNoteRecordRequest={handleNoteRecordRequest}
             subdivisionBarElement={barMode ? (
               <SubdivisionBar
                 pattern={subdivisionPattern}

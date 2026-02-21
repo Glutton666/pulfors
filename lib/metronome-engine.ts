@@ -55,6 +55,7 @@ export class MetronomeEngine {
   private playStrongClick: (() => void) | null = null;
   private playHighClick: (() => void) | null = null;
   private playLowClick: (() => void) | null = null;
+  private playCustomSample: ((beat: number, subBeat: number) => boolean) | null = null;
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
   private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
@@ -68,6 +69,10 @@ export class MetronomeEngine {
     this.playHighClick = playHigh;
     this.playLowClick = playLow;
     this.playStrongClick = playStrong || null;
+  }
+
+  setCustomSampleCallback(callback: ((beat: number, subBeat: number) => boolean) | null) {
+    this.playCustomSample = callback;
   }
 
   setHapticMode(mode: HapticMode) {
@@ -281,6 +286,9 @@ export class MetronomeEngine {
 
     const playAudio = () => {
       if (isMute) return;
+      if (this.playCustomSample && this.playCustomSample(tick.beat, tick.subBeat)) {
+        return;
+      }
       try {
         if (isStrong) {
           this.playStrongClick?.();

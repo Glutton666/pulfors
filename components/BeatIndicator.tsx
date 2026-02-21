@@ -257,6 +257,8 @@ interface BeatIndicatorProps {
   onBarClockConfigChange?: (mode: "stopwatch" | "timer", duration: number) => void;
   initialBarClockMode?: "stopwatch" | "timer";
   initialBarTimerDuration?: number;
+  noteSamples?: Record<string, string>;
+  onNoteRecordRequest?: (beatIndex: number, subIndex: number) => void;
 }
 
 export function BeatIndicator({
@@ -286,6 +288,8 @@ export function BeatIndicator({
   onBarClockConfigChange,
   initialBarClockMode,
   initialBarTimerDuration,
+  noteSamples,
+  onNoteRecordRequest,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
 
@@ -777,10 +781,19 @@ export function BeatIndicator({
               const isStrongType = type === "strong";
               const isAccentType = type === "accent" || isStrongType;
               const isLast = ci === pattern.length - 1;
+              const sampleKey = `${beat}-${ci}`;
+              const hasSample = !!(noteSamples && noteSamples[sampleKey]);
               return (
                 <Pressable
                   key={ci}
                   onPress={(e) => { e.stopPropagation(); if (isPrimary) handleBarCellPress(beat, ci); }}
+                  onLongPress={(e) => {
+                    e.stopPropagation();
+                    if (isPrimary && !isPlaying && onNoteRecordRequest && pattern.length > 1) {
+                      onNoteRecordRequest(beat, ci);
+                    }
+                  }}
+                  delayLongPress={500}
                   style={[styles.barNoteCell, !isLast && { borderRightWidth: 1, borderRightColor: "rgba(255,255,255,0.08)" }]}
                 >
                   {isStrongType ? (
@@ -808,6 +821,9 @@ export function BeatIndicator({
                         : (isActiveCell ? Colors.text : Colors.textTertiary),
                       opacity: isActiveCell ? 1 : 0.7,
                     }]} />
+                  )}
+                  {hasSample && (
+                    <Text style={styles.noteSampleStar}>★</Text>
                   )}
                 </Pressable>
               );
@@ -1473,6 +1489,14 @@ const styles = StyleSheet.create({
   barNoteFill: {
     flex: 1,
     borderRadius: 4,
+  },
+  noteSampleStar: {
+    position: "absolute",
+    bottom: 1,
+    right: 1,
+    fontSize: 7,
+    color: "#FFD700",
+    lineHeight: 9,
   },
   barBeatEndLine: {
     width: 1.5,

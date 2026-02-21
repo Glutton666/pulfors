@@ -7,23 +7,19 @@ import {
   Platform,
   Modal,
   Alert,
+  PanResponder,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
-import * as FileSystem from "expo-file-system";
-import * as Crypto from "expo-crypto";
 import * as Haptics from "expo-haptics";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withSequence,
   withSpring,
-  runOnJS,
 } from "react-native-reanimated";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
-import { PanResponder } from "react-native";
 
 type Phase = "countdown" | "recording" | "trimming" | "idle";
 
@@ -222,20 +218,10 @@ export function NoteRecorderModal({
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
 
       if (uri) {
-        const id = Crypto.randomUUID();
-        const ext = Platform.OS === "web" ? "webm" : "m4a";
-        const dir = FileSystem.documentDirectory || "";
-        const destUri = `${dir}note-sample-${id}.${ext}`;
-        
-        if (Platform.OS !== "web" && dir) {
-          await FileSystem.copyAsync({ from: uri, to: destUri });
-          setRecordedUri(destUri);
-        } else {
-          setRecordedUri(uri);
-        }
+        setRecordedUri(uri);
 
         const sound = new Audio.Sound();
-        await sound.loadAsync({ uri: Platform.OS !== "web" && dir ? destUri : uri });
+        await sound.loadAsync({ uri });
         const status = await sound.getStatusAsync();
         if (status.isLoaded && status.durationMillis) {
           setAudioDuration(status.durationMillis / 1000);
@@ -305,10 +291,10 @@ export function NoteRecorderModal({
   const handleSave = useCallback(async () => {
     if (!recordedUri) return;
 
-    if (Platform.OS !== "web" && FileSystem.documentDirectory && audioDuration > 0) {
+    if (audioDuration > 0) {
       const startMs = Math.floor(trimStart * audioDuration * 1000);
       const endMs = Math.floor(trimEnd * audioDuration * 1000);
-      
+
       if (startMs === 0 && endMs >= audioDuration * 1000 - 50) {
         onSave(recordedUri);
       } else {
@@ -502,7 +488,7 @@ function TrimHandle({
           layoutRef.current = { x, width };
         });
       },
-      onPanResponderMove: (e) => {
+      onPanResponderMove: (e: any) => {
         const { x, width } = layoutRef.current;
         if (width === 0) return;
         const pageX = e.nativeEvent.pageX;
