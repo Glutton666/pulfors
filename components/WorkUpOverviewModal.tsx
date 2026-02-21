@@ -484,7 +484,7 @@ export function WorkUpOverviewModal({
                     goals.map((goal) => {
                       const progress = getGoalProgress(goal);
                       const pct = Math.min(1, progress / goal.target);
-                      const goalColor = goal.type === "beat_mode_time" ? BEAT_COLOR : goal.type === "bar_mode_time" ? BAR_COLOR : goal.type === "room_time" ? ROOM_COLOR : C.accent;
+                      const goalColor = goal.type === "beat_mode_time" ? BEAT_COLOR : goal.type === "bar_mode_time" ? BAR_COLOR : goal.type === "room_time" ? ROOM_COLOR : goal.type === "session_goal" ? BAR_COLOR : C.accent;
                       return (
                         <View key={goal.id} style={s.goalRow}>
                           <CircularProgress size={44} strokeWidth={4} progress={pct} color={goalColor} bgColor={Colors.surfaceLight}>

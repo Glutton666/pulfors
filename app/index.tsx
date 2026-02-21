@@ -6,6 +6,7 @@ import {
   Platform,
   Pressable,
   Modal,
+  Alert,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -18,6 +19,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useAudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
+import * as Crypto from "expo-crypto";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -311,6 +313,15 @@ export default function MetronomeScreen() {
           case "beat_mode_time": progress = todayBeatTime; break;
           case "bar_mode_time": progress = todayBarTime; break;
           case "room_time": progress = todayRoomTime; break;
+          case "session_goal": {
+            progress = todaySessions
+              .filter((l) => {
+                const d = l.data as PracticeSessionData;
+                return d.mode === "bar" && d.practiceNoteId === g.practiceNoteId;
+              })
+              .reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0) / 60;
+            break;
+          }
         }
         return progress >= g.target;
       });
@@ -1026,6 +1037,26 @@ export default function MetronomeScreen() {
     loadedPracticeNoteRef.current = { id: entry.id, label: entry.label };
   }, [isPlaying, barMode, beatsPerMeasure, beatTypes, beatSubdivisions]);
 
+  const handleSetPracticeNoteGoal = useCallback(async (entry: PracticeEntry) => {
+    const goals = await loadGoals();
+    const existing = goals.find((g) => g.type === "session_goal" && g.practiceNoteId === entry.id);
+    if (existing) {
+      Alert.alert("이미 설정됨", `"${entry.label}" 목표가 이미 있습니다.`);
+      return;
+    }
+    const newGoal: Goal = {
+      id: Crypto.randomUUID(),
+      type: "session_goal",
+      target: 10,
+      label: `♫ ${entry.label}`,
+      practiceNoteId: entry.id,
+      practiceNoteLabel: entry.label,
+    };
+    const updated = [...goals, newGoal];
+    await saveGoals(updated);
+    Alert.alert("목표 설정 완료", `"${entry.label}" 연습 목표가 추가되었습니다 (10분).\nWork Up Overview에서 수정할 수 있습니다.`);
+  }, []);
+
   const tempoLabel = getTempoLabel(bpm);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -1169,6 +1200,7 @@ export default function MetronomeScreen() {
           }
         }}
         onLoad={handleLoadPracticeEntry}
+        onSetGoal={handleSetPracticeNoteGoal}
         currentConfig={currentBarConfig}
       />
 

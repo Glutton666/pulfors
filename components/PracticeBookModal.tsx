@@ -26,6 +26,7 @@ interface PracticeBookModalProps {
   visible: boolean;
   onClose: () => void;
   onLoad: (entry: PracticeEntry) => void;
+  onSetGoal?: (entry: PracticeEntry) => void;
   currentConfig: Omit<PracticeEntry, "id" | "label" | "createdAt"> | null;
 }
 
@@ -68,6 +69,7 @@ export function PracticeBookModal({
   visible,
   onClose,
   onLoad,
+  onSetGoal,
   currentConfig,
 }: PracticeBookModalProps) {
   const insets = useSafeAreaInsets();
@@ -175,6 +177,23 @@ export function PracticeBookModal({
         <Pressable
           style={styles.entryMain}
           onPress={() => handleLoad(item)}
+          onLongPress={() => {
+            if (onSetGoal) {
+              if (Platform.OS === "web") {
+                onSetGoal(item);
+              } else {
+                Alert.alert(
+                  "목표 설정",
+                  `"${item.label}"을(를) 연습 목표로 설정하시겠습니까?`,
+                  [
+                    { text: "취소", style: "cancel" },
+                    { text: "설정", onPress: () => onSetGoal(item) },
+                  ]
+                );
+              }
+            }
+          }}
+          delayLongPress={500}
         >
           <View style={styles.entryHeader}>
             {isEditing ? (
