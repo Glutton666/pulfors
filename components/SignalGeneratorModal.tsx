@@ -14,7 +14,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useAudioPlayer } from "expo-audio";
-import { Audio } from "expo-av";
+import { Audio, InterruptionModeIOS } from "expo-av";
 import * as FileSystem from "expo-file-system";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -471,7 +471,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       } catch {}
       micRecordingRef.current = null;
     }
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+    await Audio.setAudioModeAsync({ allowsRecordingIOS: false, interruptionModeIOS: InterruptionModeIOS.MixWithOthers });
   }, []);
 
   const stopMic = useCallback(() => {
@@ -549,6 +549,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
+        interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
       });
 
       micActiveRef.current = true;

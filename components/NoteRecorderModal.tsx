@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Audio } from "expo-av";
+import { Audio, InterruptionModeIOS } from "expo-av";
 import * as Haptics from "expo-haptics";
 import * as DocumentPicker from "expo-document-picker";
 import Animated, {
@@ -89,7 +89,7 @@ export function NoteRecorderModal({
       previewSoundRef.current = null;
     }
     try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, interruptionModeIOS: InterruptionModeIOS.MixWithOthers });
     } catch {}
   }, []);
 
@@ -149,6 +149,7 @@ export function NoteRecorderModal({
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
+        interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
       });
 
       const recording = new Audio.Recording();
@@ -217,7 +218,7 @@ export function NoteRecorderModal({
       await recordingRef.current.stopAndUnloadAsync();
       const uri = recordingRef.current.getURI();
       recordingRef.current = null;
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, interruptionModeIOS: InterruptionModeIOS.MixWithOthers });
 
       if (uri) {
         setRecordedUri(uri);
