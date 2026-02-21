@@ -73,6 +73,7 @@ export async function addActivityLog(
     };
     logs.push(newEntry);
     await AsyncStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(logs));
+    console.log("[ActivityLog] Saved entry:", entry.type, JSON.stringify(entry.data), "total logs:", logs.length);
   } catch (e) {
     console.warn("Failed to add activity log:", e);
   }
