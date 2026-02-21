@@ -142,7 +142,7 @@ export function SettingsModal({
   username,
   onUsernameChange,
 }: SettingsModalProps) {
-  const { themeColor, customHex, setThemeColor, setCustomHex, colors: C, centerImageUri, setCenterImageUri } = useTheme();
+  const { themeColor, customHex, setThemeColor, setCustomHex, colors: C, centerImageUri, setCenterImageUri, accentImageUri, setAccentImageUri, strongImageUri, setStrongImageUri } = useTheme();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
   const [showCustomPicker, setShowCustomPicker] = useState(themeColor === "custom");
@@ -364,7 +364,7 @@ export function SettingsModal({
     }
   }, [hexInput, customHex, setCustomHex, setThemeColor]);
 
-  const pickCenterImage = useCallback(async () => {
+  const pickImage = useCallback(async (setter: (uri: string | null) => void) => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsEditing: true,
@@ -372,19 +372,19 @@ export function SettingsModal({
       quality: 0.8,
     });
     if (!result.canceled && result.assets?.[0]) {
-      setCenterImageUri(result.assets[0].uri);
+      setter(result.assets[0].uri);
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     }
-  }, [setCenterImageUri]);
+  }, []);
 
-  const removeCenterImage = useCallback(() => {
-    setCenterImageUri(null);
+  const removeImage = useCallback((setter: (uri: string | null) => void) => {
+    setter(null);
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-  }, [setCenterImageUri]);
+  }, []);
 
   const volumeIcon =
     volume === 0
@@ -504,40 +504,49 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="image-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>Center Image</Text>
-        </View>
-        <View style={styles.centerImageRow}>
-          <Pressable onPress={pickCenterImage} style={[styles.centerImagePreview, { borderColor: C.accent }]}>
-            {centerImageUri ? (
-              <Image source={{ uri: centerImageUri }} style={styles.centerImageThumb} />
-            ) : (
-              <Ionicons name="camera-outline" size={28} color={Colors.textTertiary} />
-            )}
-          </Pressable>
-          <View style={styles.centerImageActions}>
-            <Pressable
-              onPress={pickCenterImage}
-              style={[styles.centerImageBtn, { borderColor: C.accent, backgroundColor: C.accentDim }]}
-            >
-              <Ionicons name="image-outline" size={16} color={C.accent} />
-              <Text style={[styles.centerImageBtnText, { color: C.accent }]}>
-                {centerImageUri ? "Change" : "Select"}
-              </Text>
-            </Pressable>
-            {centerImageUri && (
-              <Pressable
-                onPress={removeCenterImage}
-                style={[styles.centerImageBtn, { borderColor: Colors.border }]}
-              >
-                <Ionicons name="trash-outline" size={16} color={Colors.danger} />
-                <Text style={[styles.centerImageBtnText, { color: Colors.danger }]}>Remove</Text>
-              </Pressable>
-            )}
-          </View>
+          <Text style={styles.sectionLabel}>Center Hub Images</Text>
         </View>
         <Text style={styles.offsetHint}>
-          Photo appears in the dial center hub
+          Different photos show for each beat type in the dial center
         </Text>
+
+        {([
+          { label: "Normal", uri: centerImageUri, setter: setCenterImageUri, icon: "ellipse-outline" as const },
+          { label: "Accent", uri: accentImageUri, setter: setAccentImageUri, icon: "chevron-up-outline" as const },
+          { label: "Strong", uri: strongImageUri, setter: setStrongImageUri, icon: "chevron-up" as const },
+        ]).map((slot) => (
+          <View key={slot.label} style={styles.imageSlotRow}>
+            <View style={styles.imageSlotLabel}>
+              <Ionicons name={slot.icon} size={14} color={C.accent} />
+              <Text style={[styles.imageSlotText, { color: Colors.textSecondary }]}>{slot.label}</Text>
+            </View>
+            <Pressable onPress={() => pickImage(slot.setter)} style={[styles.centerImagePreview, { borderColor: slot.uri ? C.accent : Colors.border, width: 52, height: 52, borderRadius: 26 }]}>
+              {slot.uri ? (
+                <Image source={{ uri: slot.uri }} style={{ width: 52, height: 52, borderRadius: 26 }} />
+              ) : (
+                <Ionicons name="camera-outline" size={20} color={Colors.textTertiary} />
+              )}
+            </Pressable>
+            <View style={styles.imageSlotActions}>
+              <Pressable
+                onPress={() => pickImage(slot.setter)}
+                style={[styles.centerImageBtn, { borderColor: C.accent, backgroundColor: C.accentDim }]}
+              >
+                <Text style={[styles.centerImageBtnText, { color: C.accent }]}>
+                  {slot.uri ? "Change" : "Select"}
+                </Text>
+              </Pressable>
+              {slot.uri && (
+                <Pressable
+                  onPress={() => removeImage(slot.setter)}
+                  style={[styles.centerImageBtn, { borderColor: Colors.border }]}
+                >
+                  <Ionicons name="close-outline" size={16} color={Colors.danger} />
+                </Pressable>
+              )}
+            </View>
+          </View>
+        ))}
       </View>
 
       <View style={styles.divider} />
@@ -1185,6 +1194,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.text,
     backgroundColor: Colors.surfaceLight,
+  },
+  imageSlotRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 10,
+  },
+  imageSlotLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    width: 70,
+  },
+  imageSlotText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+  },
+  imageSlotActions: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 6,
+    alignItems: "center",
   },
   centerImageRow: {
     flexDirection: "row",

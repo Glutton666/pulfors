@@ -287,7 +287,7 @@ export function BeatIndicator({
   initialBarClockMode,
   initialBarTimerDuration,
 }: BeatIndicatorProps) {
-  const { colors: C, centerImageUri } = useTheme();
+  const { colors: C, centerImageUri, accentImageUri, strongImageUri } = useTheme();
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
 
   const swipeProgress = useSharedValue(0);
@@ -1100,25 +1100,30 @@ export function BeatIndicator({
         </View>
 
         <View style={styles.centerArea} pointerEvents="box-none">
-          {!centerImageUri && (
-            <View style={styles.signatureRow} pointerEvents="none">
-              <Text style={styles.digitalSignature} numberOfLines={1}>
-                {beatsPerMeasure}
-              </Text>
-              <Text style={styles.digitalSignatureSlash} numberOfLines={1}>
-                /
-              </Text>
-              <Text style={styles.digitalSignature} numberOfLines={1}>
-                {beatsPerMeasure <= 4 ? "4" : "8"}
-              </Text>
-            </View>
-          )}
+          {(() => {
+            const currentBeatType = isPlaying && currentBeat >= 0 ? (beatTypes[currentBeat] || "normal") : "normal";
+            const activeImage =
+              currentBeatType === "accent" && accentImageUri ? accentImageUri :
+              currentBeatType === "strong" && strongImageUri ? strongImageUri :
+              centerImageUri;
+            return activeImage ? (
+              <View style={styles.centerImageContainer} pointerEvents="none">
+                <Image source={{ uri: activeImage }} style={styles.centerImage} />
+              </View>
+            ) : null;
+          })()}
 
-          {centerImageUri && (
-            <View style={styles.centerImageContainer} pointerEvents="none">
-              <Image source={{ uri: centerImageUri }} style={styles.centerImage} />
-            </View>
-          )}
+          <View style={styles.signatureRow} pointerEvents="none">
+            <Text style={styles.digitalSignature} numberOfLines={1}>
+              {beatsPerMeasure}
+            </Text>
+            <Text style={styles.digitalSignatureSlash} numberOfLines={1}>
+              /
+            </Text>
+            <Text style={styles.digitalSignature} numberOfLines={1}>
+              {beatsPerMeasure <= 4 ? "4" : "8"}
+            </Text>
+          </View>
 
           <Animated.View
             style={[
