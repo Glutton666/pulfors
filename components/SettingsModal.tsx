@@ -57,6 +57,8 @@ interface SettingsModalProps {
   onClose: () => void;
   volume: number;
   onVolumeChange: (volume: number) => void;
+  sampleVolume: number;
+  onSampleVolumeChange: (volume: number) => void;
   backgroundPlay: boolean;
   onBackgroundPlayChange: (value: boolean) => void;
   soundSet: SoundSet;
@@ -138,6 +140,8 @@ export function SettingsModal({
   onClose,
   volume,
   onVolumeChange,
+  sampleVolume,
+  onSampleVolumeChange,
   backgroundPlay,
   onBackgroundPlayChange,
   soundSet,
@@ -328,6 +332,106 @@ export function SettingsModal({
     },
     [updateVolumeFromX]
   );
+
+  const sampleTrackRef = useRef<View>(null);
+  const sampleTrackWidthRef = useRef(0);
+  const sampleTrackLeftRef = useRef(0);
+  const lastSampleHapticRef = useRef(0);
+
+  const onSampleVolumeChangeRef = useRef(onSampleVolumeChange);
+  onSampleVolumeChangeRef.current = onSampleVolumeChange;
+
+  const onSampleTrackLayout = useCallback((e: LayoutChangeEvent) => {
+    sampleTrackWidthRef.current = e.nativeEvent.layout.width;
+  }, []);
+
+  const updateSampleVolumeFromX = useCallback(
+    (pageX: number) => {
+      const w = sampleTrackWidthRef.current;
+      if (w <= 0) return;
+      const relX = pageX - sampleTrackLeftRef.current;
+      const newVol = Math.max(0, Math.min(1, relX / w));
+      const rounded = Math.round(newVol * 100) / 100;
+
+      const step = Math.round(rounded * 20);
+      const lastStep = Math.round(lastSampleHapticRef.current * 20);
+      if (step !== lastStep) {
+        lastSampleHapticRef.current = rounded;
+        if (Platform.OS !== "web") {
+          if (rounded === 0 || rounded === 1) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          } else {
+            Haptics.selectionAsync();
+          }
+        }
+      }
+      onSampleVolumeChangeRef.current(rounded);
+    },
+    []
+  );
+
+  const updateSampleVolumeRef = useRef(updateSampleVolumeFromX);
+  updateSampleVolumeRef.current = updateSampleVolumeFromX;
+
+  const samplePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => {
+        if (sampleTrackRef.current) {
+          (sampleTrackRef.current as any).measureInWindow?.((x: number) => {
+            sampleTrackLeftRef.current = x + 8;
+            updateSampleVolumeRef.current(e.nativeEvent.pageX);
+          });
+        } else {
+          updateSampleVolumeRef.current(e.nativeEvent.pageX);
+        }
+      },
+      onPanResponderMove: (e) => {
+        updateSampleVolumeRef.current(e.nativeEvent.pageX);
+      },
+      onPanResponderRelease: () => {},
+    })
+  ).current;
+
+  const sampleNativePanHandlers =
+    Platform.OS !== "web" ? samplePanResponder.panHandlers : {};
+
+  const handleSampleWebMouse = useCallback(
+    (e: any) => {
+      if (Platform.OS !== "web") return;
+      const el = e.currentTarget as HTMLElement;
+      const rect = el.getBoundingClientRect();
+      sampleTrackLeftRef.current = rect.left;
+
+      const startUpdate = (me: MouseEvent) => {
+        updateSampleVolumeFromX(me.clientX);
+      };
+
+      startUpdate(e.nativeEvent);
+
+      const handleMove = (me: MouseEvent) => {
+        startUpdate(me);
+      };
+      const handleUp = () => {
+        document.removeEventListener("mousemove", handleMove);
+        document.removeEventListener("mouseup", handleUp);
+      };
+      document.addEventListener("mousemove", handleMove);
+      document.addEventListener("mouseup", handleUp);
+    },
+    [updateSampleVolumeFromX]
+  );
+
+  const sampleVolPct = Math.round(sampleVolume * 100);
+  const sampleVolumeIcon =
+    sampleVolume === 0
+      ? "volume-off"
+      : sampleVolume < 0.3
+        ? "volume-low"
+        : sampleVolume < 0.7
+          ? "volume-medium"
+          : "volume-high";
 
   const hueFromPosition = useCallback((ratio: number): string => {
     const r = Math.max(0, Math.min(1, ratio));
@@ -677,6 +781,38 @@ export function SettingsModal({
             style={[
               styles.sliderThumb,
               { left: `${volume * 100}%` as any, backgroundColor: C.accent },
+            ]}
+          />
+        </View>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name={sampleVolumeIcon as any} size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>Sample Volume</Text>
+          <Text style={[styles.sectionValue, { color: C.accent }]}>{sampleVolPct}%</Text>
+        </View>
+        <View
+          ref={sampleTrackRef}
+          style={styles.sliderContainer}
+          onLayout={onSampleTrackLayout}
+          {...sampleNativePanHandlers}
+          {...(Platform.OS === "web" ? { onMouseDown: handleSampleWebMouse } as any : {})}
+        >
+          <View style={styles.sliderTrack}>
+            <View
+              style={[
+                styles.sliderFill,
+                { width: `${sampleVolume * 100}%` as any, backgroundColor: C.accent },
+              ]}
+            />
+          </View>
+          <View
+            style={[
+              styles.sliderThumb,
+              { left: `${sampleVolume * 100}%` as any, backgroundColor: C.accent },
             ]}
           />
         </View>
