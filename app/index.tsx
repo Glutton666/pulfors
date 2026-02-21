@@ -346,6 +346,7 @@ export default function MetronomeScreen() {
     });
 
     engine.setCustomSampleCallback((beat: number, subBeat: number) => {
+      if (!barModeRef.current) return false;
       const key = `${beat}-${subBeat}`;
       const player = noteSampleSoundsRef.current[key];
       if (player) {
