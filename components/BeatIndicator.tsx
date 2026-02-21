@@ -679,6 +679,13 @@ export function BeatIndicator({
     if (!barMode || !isPlaying || currentBeat < 0) return;
     if (barContainerHeight <= 0 || copyHeight <= 0) return;
 
+    if (barLoopMode === "once") {
+      const beatTop = centerPad + currentBeat * rowH;
+      const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
+      barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
+      return;
+    }
+
     const prev = barPrevBeatRef.current;
     barPrevBeatRef.current = currentBeat;
 
@@ -698,7 +705,7 @@ export function BeatIndicator({
     const beatTop = centerPad + activeCopyRef.current * copyHeight + currentBeat * rowH;
     const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
     barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
-  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, copyHeight]);
+  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, copyHeight, barLoopMode]);
 
   if (barMode) {
     const isDropping = dropTargetBeat !== null;
@@ -795,7 +802,7 @@ export function BeatIndicator({
       );
     };
     const allBarRows: React.ReactNode[] = [];
-    if (isPlaying) {
+    if (isPlaying && barLoopMode !== "once") {
       for (let copy = 0; copy < NUM_COPIES; copy++) {
         for (const beat of beats) {
           allBarRows.push(renderBarRow(beat, copy));
