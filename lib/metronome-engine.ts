@@ -37,6 +37,7 @@ interface ScheduledTick {
   subBeat: number;
   type: BeatType;
   isMainBeat: boolean;
+  repeatIteration: number;
 }
 
 export class MetronomeEngine {
@@ -245,6 +246,7 @@ export class MetronomeEngine {
             subBeat: sub,
             type: subPattern[sub],
             isMainBeat: sub === 0,
+            repeatIteration: r,
           });
           time += subDur;
         }
@@ -286,7 +288,7 @@ export class MetronomeEngine {
 
     const playAudio = () => {
       if (isMute) return;
-      if (this.playCustomSample && this.playCustomSample(tick.beat, tick.subBeat)) {
+      if (tick.repeatIteration === 0 && this.playCustomSample && this.playCustomSample(tick.beat, tick.subBeat)) {
         return;
       }
       try {
