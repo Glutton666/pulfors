@@ -856,10 +856,11 @@ export function BeatIndicator({
       setActiveCopy(activeCopyRef.current);
     }
 
-    if (activeCopyRef.current > CENTER_COPY && currentBeat > 0) {
+    if (activeCopyRef.current > CENTER_COPY) {
       activeCopyRef.current = CENTER_COPY;
       setActiveCopy(CENTER_COPY);
-      const snapTop = centerPad + CENTER_COPY * copyHeight + (currentBeat - 1) * rowH;
+      const snapBeat = currentBeat > 0 ? currentBeat - 1 : beatsPerMeasure - 1;
+      const snapTop = centerPad + CENTER_COPY * copyHeight + snapBeat * rowH;
       const snapTarget = Math.max(0, snapTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
       barScrollRef.current?.scrollTo({ y: snapTarget, animated: false });
     }
@@ -988,8 +989,9 @@ export function BeatIndicator({
             })}
             {(() => {
               const cellHas = (b: number, c: number) => {
+                if (!noteSamples) return false;
                 const sk = `${b}-${c}`;
-                return !!(noteSamples && noteSamples[sk]) || sampleCoveredCells.has(sk);
+                return !!noteSamples[sk];
               };
               const anyCovered = pattern.some((_, ci) => cellHas(beat, ci));
               if (!anyCovered) return null;
@@ -1082,7 +1084,7 @@ export function BeatIndicator({
             style={styles.barScrollView}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
-            contentOffset={{ x: 0, y: isPlaying ? centerPad + CENTER_COPY * copyHeight - barContainerHeight / 2 + BAR_HEIGHT / 2 : 0 }}
+            contentOffset={{ x: 0, y: isPlaying ? centerPad + CENTER_COPY * copyHeight + (barStartBeat && barStartBeat > 0 ? barStartBeat * rowH : 0) - barContainerHeight / 2 + BAR_HEIGHT / 2 : 0 }}
             scrollEnabled={!isPlaying}
             onScroll={(e) => onBarScrollOffset?.(e.nativeEvent.contentOffset.y)}
             scrollEventThrottle={16}

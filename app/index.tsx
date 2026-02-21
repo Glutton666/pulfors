@@ -261,6 +261,7 @@ export default function MetronomeScreen() {
       }
       noteSampleSoundsRef.current = {};
 
+      const invalidKeys: string[] = [];
       for (const [key, uri] of Object.entries(samples)) {
         try {
           const rawUri = uri.split("#")[0];
@@ -269,7 +270,18 @@ export default function MetronomeScreen() {
           noteSampleSoundsRef.current[key] = player;
         } catch (e) {
           console.warn("[SamplePreload] Failed to preload:", key, e);
+          invalidKeys.push(key);
         }
+      }
+
+      if (invalidKeys.length > 0) {
+        let cleaned = { ...samples };
+        for (const k of invalidKeys) {
+          delete cleaned[k];
+        }
+        setNoteSamples(cleaned);
+        noteSamplesRef.current = cleaned;
+        saveNoteSamples(cleaned);
       }
     };
 
@@ -412,6 +424,7 @@ export default function MetronomeScreen() {
     }
     noteSampleSoundsRef.current = {};
 
+    const invalidKeys: string[] = [];
     for (const [key, uri] of Object.entries(samples)) {
       try {
         const rawUri = uri.split("#")[0];
@@ -420,7 +433,18 @@ export default function MetronomeScreen() {
         noteSampleSoundsRef.current[key] = player;
       } catch (e) {
         console.warn("[SamplePreload] Failed:", key, e);
+        invalidKeys.push(key);
       }
+    }
+
+    if (invalidKeys.length > 0) {
+      let cleaned = { ...samples };
+      for (const k of invalidKeys) {
+        delete cleaned[k];
+      }
+      setNoteSamples(cleaned);
+      noteSamplesRef.current = cleaned;
+      saveNoteSamples(cleaned);
     }
   }, []);
 
@@ -937,15 +961,24 @@ export default function MetronomeScreen() {
         beatTypes: [...beatTypes],
         beatSubdivisions: { ...beatSubdivisions },
       };
-      const bc = barConfigRef.current;
-      setBeatsPerMeasure(bc.beatsPerMeasure);
-      setBeatTypes([...bc.beatTypes]);
-      setBeatSubdivisions({ ...bc.beatSubdivisions });
-      setBarRepeats({ ...bc.barRepeats });
-      engine.setBeatsPerMeasure(bc.beatsPerMeasure);
-      engine.setBeatTypes([...bc.beatTypes]);
-      engine.setAllBeatSubdivisions(bc.beatSubdivisions);
-      engine.setBarRepeats(bc.barRepeats);
+      const defaultBeats = 4;
+      const defaultTypes = defaultBeatTypes(defaultBeats);
+      barConfigRef.current = {
+        beatsPerMeasure: defaultBeats,
+        beatTypes: [...defaultTypes],
+        beatSubdivisions: {},
+        barRepeats: {},
+        barClockMode: "stopwatch",
+        barTimerDuration: 180,
+      };
+      setBeatsPerMeasure(defaultBeats);
+      setBeatTypes([...defaultTypes]);
+      setBeatSubdivisions({});
+      setBarRepeats({});
+      engine.setBeatsPerMeasure(defaultBeats);
+      engine.setBeatTypes([...defaultTypes]);
+      engine.setAllBeatSubdivisions({});
+      engine.clearBarRepeats();
     } else {
       barConfigRef.current = {
         ...barConfigRef.current,
