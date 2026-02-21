@@ -445,6 +445,31 @@ export function BeatIndicator({
   const nativePanHandlers =
     Platform.OS !== "web" && panResponder ? panResponder.panHandlers : {};
 
+  const noteHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noteHoldFiredRef = useRef(false);
+
+  const clearNoteHold = useCallback(() => {
+    if (noteHoldTimerRef.current) {
+      clearTimeout(noteHoldTimerRef.current);
+      noteHoldTimerRef.current = null;
+    }
+  }, []);
+
+  const startNoteHold = useCallback((beat: number, ci: number, patternLen: number) => {
+    clearNoteHold();
+    noteHoldFiredRef.current = false;
+    noteHoldTimerRef.current = setTimeout(() => {
+      noteHoldFiredRef.current = true;
+      noteHoldTimerRef.current = null;
+      if (!isPlaying && onNoteRecordRequest && patternLen > 1) {
+        if (Platform.OS !== "web") {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        }
+        onNoteRecordRequest(beat, ci);
+      }
+    }, 500);
+  }, [isPlaying, onNoteRecordRequest, clearNoteHold]);
+
   const cycleBeatType = useCallback(
     (index: number) => {
       const current = beatTypes[index] || "normal";
@@ -786,14 +811,19 @@ export function BeatIndicator({
               return (
                 <Pressable
                   key={ci}
-                  onPress={(e) => { e.stopPropagation(); if (isPrimary) handleBarCellPress(beat, ci); }}
-                  onLongPress={(e) => {
+                  onPress={(e) => {
                     e.stopPropagation();
+                    clearNoteHold();
+                    if (!noteHoldFiredRef.current && isPrimary) handleBarCellPress(beat, ci);
+                  }}
+                  onPressIn={() => {
                     if (isPrimary && !isPlaying && onNoteRecordRequest && pattern.length > 1) {
-                      onNoteRecordRequest(beat, ci);
+                      startNoteHold(beat, ci, pattern.length);
                     }
                   }}
-                  delayLongPress={500}
+                  onPressOut={() => {
+                    clearNoteHold();
+                  }}
                   style={[styles.barNoteCell, !isLast && { borderRightWidth: 1, borderRightColor: "rgba(255,255,255,0.08)" }]}
                 >
                   {isStrongType ? (
