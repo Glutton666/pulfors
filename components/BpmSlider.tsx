@@ -146,14 +146,24 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
       onPanResponderRelease: () => {
         offsetX.value = withSpring(0, { damping: 15, stiffness: 300 });
         const wasLong = longPressFired.current;
+        const zone = zoneRef.current;
         clearTimers();
 
-        if (zoneRef.current === "center" && !didDragRef.current && !wasLong) {
-          onTapTempoRef.current();
-          flash.value = withSequence(
-            withTiming(1, { duration: 60 }),
-            withTiming(0, { duration: 300, easing: Easing.out(Easing.quad) })
-          );
+        if (!didDragRef.current && !wasLong) {
+          if (zone === "center") {
+            onTapTempoRef.current();
+            flash.value = withSequence(
+              withTiming(1, { duration: 60 }),
+              withTiming(0, { duration: 300, easing: Easing.out(Easing.quad) })
+            );
+          } else {
+            const delta = zone === "left" ? -1 : 1;
+            const next = Math.max(20, Math.min(300, bpmRef.current + delta));
+            if (next !== bpmRef.current) {
+              onBpmChangeRef.current(next);
+              if (Platform.OS !== "web") Haptics.selectionAsync();
+            }
+          }
         }
       },
 
