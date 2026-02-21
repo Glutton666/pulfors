@@ -664,7 +664,9 @@ export default function MetronomeScreen() {
         const layout = barAreaLayoutRef.current;
         if (layout.height <= 0) return null;
         const relY = pageY - layout.y;
-        if (relY < 0 || relY > layout.height) return null;
+        if (relY < -60) return null;
+        if (relY < 0) return -1;
+        if (relY > layout.height) return null;
         const BAR_HEIGHT = 36;
         const barGap = 18;
         const rowH = BAR_HEIGHT + 1 + barGap;

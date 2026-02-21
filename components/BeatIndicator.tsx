@@ -842,13 +842,20 @@ export function BeatIndicator({
         <View style={styles.barTopRowCenter}>
           <Pressable
             onPress={() => onBarModeChange(false)}
-            style={styles.barModeCloseBtn}
+            style={[
+              styles.barModeCloseBtn,
+              dropTargetBeat === -1 && { backgroundColor: C.accent, borderWidth: 2, borderColor: C.accent },
+            ]}
             testID="close-bar-mode"
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Close bar mode"
           >
-            <Ionicons name="close" size={18} color={Colors.textTertiary} />
+            {dropTargetBeat === -1 ? (
+              <Ionicons name="layers" size={16} color={Colors.white} />
+            ) : (
+              <Ionicons name="close" size={18} color={Colors.textTertiary} />
+            )}
           </Pressable>
         </View>
 
