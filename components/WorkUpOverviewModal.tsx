@@ -50,7 +50,10 @@ const GOAL_TYPE_OPTIONS: { value: Goal["type"]; label: string; short: string }[]
   { value: "total_play_time", label: "Total Play Time", short: "Total" },
   { value: "beat_mode_time", label: "Beat Mode Time", short: "Beat" },
   { value: "bar_mode_time", label: "Bar Mode Time", short: "Bar" },
+  { value: "room_time", label: "Practice Room Time", short: "Room" },
 ];
+
+const ROOM_COLOR = "#A371F7";
 
 function getStartOfDay(date: Date): number {
   const d = new Date(date);
@@ -308,6 +311,11 @@ export function WorkUpOverviewModal({
     return configs.sort((a, b) => b.duration - a.duration);
   }, [todaySessions]);
 
+  const todayRoomTime = useMemo(
+    () => todayLogs.filter(l => l.type === "practice_room_visit").reduce((s, l) => s + ((l.data as PracticeRoomVisitData).duration || 0), 0),
+    [todayLogs]
+  );
+
   const roomVisitStats = useMemo(() => {
     const visits: Record<string, { name: string; totalDuration: number; visitCount: number }> = {};
     logs.filter((l) => l.type === "practice_room_visit").forEach((l) => {
@@ -325,10 +333,11 @@ export function WorkUpOverviewModal({
         case "total_play_time": return todayTotalTime / 60;
         case "beat_mode_time": return todayBeatTime / 60;
         case "bar_mode_time": return todayBarTime / 60;
+        case "room_time": return todayRoomTime / 60;
         default: return 0;
       }
     },
-    [todayTotalTime, todayBeatTime, todayBarTime]
+    [todayTotalTime, todayBeatTime, todayBarTime, todayRoomTime]
   );
 
   const handleAddGoal = useCallback(async () => {
@@ -455,7 +464,7 @@ export function WorkUpOverviewModal({
                     goals.map((goal) => {
                       const progress = getGoalProgress(goal);
                       const pct = Math.min(1, progress / goal.target);
-                      const goalColor = goal.type === "beat_mode_time" ? BEAT_COLOR : goal.type === "bar_mode_time" ? BAR_COLOR : C.accent;
+                      const goalColor = goal.type === "beat_mode_time" ? BEAT_COLOR : goal.type === "bar_mode_time" ? BAR_COLOR : goal.type === "room_time" ? ROOM_COLOR : C.accent;
                       return (
                         <View key={goal.id} style={s.goalRow}>
                           <CircularProgress size={44} strokeWidth={4} progress={pct} color={goalColor} bgColor={Colors.surfaceLight}>

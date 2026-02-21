@@ -32,7 +32,7 @@ export interface ActivityLog {
 
 export interface Goal {
   id: string;
-  type: "total_play_time" | "beat_mode_time" | "bar_mode_time";
+  type: "total_play_time" | "beat_mode_time" | "bar_mode_time" | "room_time";
   target: number;
   label: string;
 }
