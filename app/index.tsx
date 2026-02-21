@@ -66,10 +66,23 @@ export default function MetronomeScreen() {
   const { setThemeColor, colors: C } = useTheme();
 
   useEffect(() => {
-    setAudioModeAsync({
-      playsInSilentMode: true,
-      interruptionMode: "mixWithOthers",
-    });
+    const configureAudio = async () => {
+      try {
+        if (Platform.OS === "ios") {
+          await setAudioModeAsync({
+            playsInSilentMode: true,
+            shouldPlayInBackground: false,
+            interruptionMode: "mixWithOthers",
+          });
+        } else if (Platform.OS === "android") {
+          await setAudioModeAsync({
+            playsInSilentMode: true,
+            shouldPlayInBackground: false,
+          });
+        }
+      } catch {}
+    };
+    configureAudio();
   }, []);
   const [bpm, setBpm] = useState(120);
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
