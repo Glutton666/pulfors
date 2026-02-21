@@ -61,7 +61,8 @@ import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLog
 import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample } from "@/lib/note-samples";
 import type { NoteSampleMap } from "@/lib/note-samples";
 import { NoteRecorderModal } from "@/components/NoteRecorderModal";
-import { Audio } from "expo-av";
+import { AudioModule } from "expo-audio";
+import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import type { ActivityLog, Goal, PracticeSessionData, PracticeRoomVisitData } from "@/lib/activity-log";
 import {
   loadPracticeRooms,
@@ -157,7 +158,7 @@ export default function MetronomeScreen() {
 
   const [noteSamples, setNoteSamples] = useState<NoteSampleMap>({});
   const noteSamplesRef = useRef<NoteSampleMap>({});
-  const noteSampleSoundsRef = useRef<Record<string, Audio.Sound>>({});
+  const noteSampleSoundsRef = useRef<Record<string, ExpoAudioPlayer>>({});
   const samplePlayStateRef = useRef<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>({});
   const [recorderTarget, setRecorderTarget] = useState<{ beat: number; sub: number } | null>(null);
 
@@ -255,26 +256,18 @@ export default function MetronomeScreen() {
 
     const preloadSounds = async (samples: NoteSampleMap) => {
       for (const s of Object.values(noteSampleSoundsRef.current)) {
-        try { await s.unloadAsync(); } catch {}
+        try { s.remove(); } catch {}
       }
       noteSampleSoundsRef.current = {};
 
       for (const [key, uri] of Object.entries(samples)) {
         try {
           const rawUri = uri.split("#")[0];
-          const sound = new Audio.Sound();
-          await sound.loadAsync({ uri: rawUri });
-
-          const hashParts = uri.split("#t=")[1];
-          if (hashParts) {
-            const [startMs] = hashParts.split(",").map(Number);
-            if (!isNaN(startMs)) {
-              await sound.setPositionAsync(startMs);
-            }
-          }
-
-          noteSampleSoundsRef.current[key] = sound;
-        } catch {}
+          const player = new AudioModule.AudioPlayer(rawUri, 0, false);
+          noteSampleSoundsRef.current[key] = player;
+        } catch (e) {
+          console.warn("[SamplePreload] Failed to preload:", key, e);
+        }
       }
     };
 
@@ -333,8 +326,8 @@ export default function MetronomeScreen() {
 
     engine.setCustomSampleCallback((beat: number, subBeat: number) => {
       const key = `${beat}-${subBeat}`;
-      const sound = noteSampleSoundsRef.current[key];
-      if (sound) {
+      const player = noteSampleSoundsRef.current[key];
+      if (player) {
         const state = samplePlayStateRef.current[key];
         if (state && state.playing) {
           return true;
@@ -357,51 +350,46 @@ export default function MetronomeScreen() {
 
           samplePlayStateRef.current[key] = { playing: true, endTimer: null };
 
-          const doPlay = async () => {
-            try {
-              try { await sound.stopAsync(); } catch {}
-              await sound.setPositionAsync(startMs);
-              await sound.playAsync();
+          player.seekTo(startMs / 1000).then(() => {
+            player.play();
 
-              if (durationMs > 0) {
-                const timer = setTimeout(() => {
-                  sound.stopAsync().catch(() => {});
-                  if (samplePlayStateRef.current[key]) {
-                    samplePlayStateRef.current[key].playing = false;
-                    samplePlayStateRef.current[key].endTimer = null;
-                  }
-                }, durationMs);
+            if (durationMs > 0) {
+              const timer = setTimeout(() => {
+                try { player.pause(); } catch {}
                 if (samplePlayStateRef.current[key]) {
-                  samplePlayStateRef.current[key].endTimer = timer;
+                  samplePlayStateRef.current[key].playing = false;
+                  samplePlayStateRef.current[key].endTimer = null;
                 }
-              } else {
-                try {
-                  const status = await sound.getStatusAsync();
-                  if (status.isLoaded && status.durationMillis) {
-                    const remaining = status.durationMillis - startMs;
-                    if (remaining > 0) {
-                      const timer = setTimeout(() => {
-                        if (samplePlayStateRef.current[key]) {
-                          samplePlayStateRef.current[key].playing = false;
-                          samplePlayStateRef.current[key].endTimer = null;
-                        }
-                      }, remaining);
-                      if (samplePlayStateRef.current[key]) {
-                        samplePlayStateRef.current[key].endTimer = timer;
-                      }
-                    }
-                  }
-                } catch {}
-              }
-            } catch (e) {
-              console.warn("[SamplePlay] Error playing sample:", key, e);
+              }, durationMs);
               if (samplePlayStateRef.current[key]) {
-                samplePlayStateRef.current[key].playing = false;
+                samplePlayStateRef.current[key].endTimer = timer;
+              }
+            } else {
+              const dur = player.duration;
+              if (dur > 0) {
+                const remaining = (dur - startMs / 1000) * 1000;
+                if (remaining > 0) {
+                  const timer = setTimeout(() => {
+                    if (samplePlayStateRef.current[key]) {
+                      samplePlayStateRef.current[key].playing = false;
+                      samplePlayStateRef.current[key].endTimer = null;
+                    }
+                  }, remaining);
+                  if (samplePlayStateRef.current[key]) {
+                    samplePlayStateRef.current[key].endTimer = timer;
+                  }
+                }
               }
             }
-          };
-          doPlay();
-        } catch {}
+          }).catch((e: any) => {
+            console.warn("[SamplePlay] Seek failed:", key, e);
+            if (samplePlayStateRef.current[key]) {
+              samplePlayStateRef.current[key].playing = false;
+            }
+          });
+        } catch (e) {
+          console.warn("[SamplePlay] Error:", key, e);
+        }
         return true;
       }
       return false;
@@ -418,26 +406,18 @@ export default function MetronomeScreen() {
 
   const preloadNoteSampleSounds = useCallback(async (samples: NoteSampleMap) => {
     for (const s of Object.values(noteSampleSoundsRef.current)) {
-      try { await s.unloadAsync(); } catch {}
+      try { s.remove(); } catch {}
     }
     noteSampleSoundsRef.current = {};
 
     for (const [key, uri] of Object.entries(samples)) {
       try {
         const rawUri = uri.split("#")[0];
-        const sound = new Audio.Sound();
-        await sound.loadAsync({ uri: rawUri });
-
-        const hashParts = uri.split("#t=")[1];
-        if (hashParts) {
-          const [startMs, endMs] = hashParts.split(",").map(Number);
-          if (!isNaN(startMs)) {
-            await sound.setPositionAsync(startMs);
-          }
-        }
-
-        noteSampleSoundsRef.current[key] = sound;
-      } catch {}
+        const player = new AudioModule.AudioPlayer(rawUri, 0, false);
+        noteSampleSoundsRef.current[key] = player;
+      } catch (e) {
+        console.warn("[SamplePreload] Failed:", key, e);
+      }
     }
   }, []);
 
@@ -446,8 +426,8 @@ export default function MetronomeScreen() {
       if (state.endTimer) clearTimeout(state.endTimer);
     }
     samplePlayStateRef.current = {};
-    for (const sound of Object.values(noteSampleSoundsRef.current)) {
-      try { sound.stopAsync().catch(() => {}); } catch {}
+    for (const player of Object.values(noteSampleSoundsRef.current)) {
+      try { player.pause(); } catch {}
     }
   }, []);
 
@@ -471,7 +451,7 @@ export default function MetronomeScreen() {
     noteSamplesRef.current = updated;
     const key = `${recorderTarget.beat}-${recorderTarget.sub}`;
     if (noteSampleSoundsRef.current[key]) {
-      try { await noteSampleSoundsRef.current[key].unloadAsync(); } catch {}
+      try { noteSampleSoundsRef.current[key].remove(); } catch {}
       delete noteSampleSoundsRef.current[key];
     }
     setRecorderTarget(null);
@@ -927,7 +907,7 @@ export default function MetronomeScreen() {
         }
         samplePlayStateRef.current = {};
         for (const snd of Object.values(noteSampleSoundsRef.current)) {
-          try { snd.stopAsync().catch(() => {}); } catch {}
+          try { snd.pause(); } catch {}
         }
         setIsPlaying(false);
         setCurrentBeat(-1);

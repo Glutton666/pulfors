@@ -920,12 +920,36 @@ export function BeatIndicator({
                       opacity: isActiveCell ? 1 : 0.7,
                     }]} />
                   )}
-                  {hasSample && (
-                    <View style={[styles.noteSampleBar, { backgroundColor: "#39FF14" }]} />
-                  )}
-                  {!hasSample && isCovered && (
-                    <View style={[styles.noteSampleBar, { backgroundColor: "#39FF14", opacity: 0.45 }]} />
-                  )}
+                  {(hasSample || isCovered) && (() => {
+                    const prevKey = ci > 0 ? `${beat}-${ci - 1}` : null;
+                    const nextKey = ci < pattern.length - 1 ? `${beat}-${ci + 1}` : null;
+                    const prevCovered = prevKey ? (sampleCoveredCells.has(prevKey) || !!(noteSamples && noteSamples[prevKey])) : false;
+                    const nextCovered = nextKey ? (sampleCoveredCells.has(nextKey) || !!(noteSamples && noteSamples[nextKey])) : false;
+                    const isFirst = ci === 0;
+                    const isLastCell = ci === pattern.length - 1;
+                    const prevBeatLastCovered = isFirst && beat > 0 && (() => {
+                      const prevBeatPattern = beatSubdivisions[String(beat - 1)] || ["normal"];
+                      const prevLastKey = `${beat - 1}-${prevBeatPattern.length - 1}`;
+                      return sampleCoveredCells.has(prevLastKey) || !!(noteSamples && noteSamples[prevLastKey]);
+                    })();
+                    const nextBeatFirstCovered = isLastCell && beat < beatsPerMeasure - 1 && (() => {
+                      const nk = `${beat + 1}-0`;
+                      return sampleCoveredCells.has(nk) || !!(noteSamples && noteSamples[nk]);
+                    })();
+                    const extendLeft = prevCovered || prevBeatLastCovered;
+                    const extendRight = nextCovered || nextBeatFirstCovered;
+                    return (
+                      <View style={[
+                        styles.noteSampleBar,
+                        {
+                          backgroundColor: "#39FF14",
+                          opacity: hasSample ? 1 : 0.5,
+                          left: extendLeft ? 0 : 3,
+                          right: extendRight ? 0 : 3,
+                        },
+                      ]} />
+                    );
+                  })()}
                 </Pressable>
               );
             })}
@@ -1593,11 +1617,11 @@ const styles = StyleSheet.create({
   },
   noteSampleBar: {
     position: "absolute",
-    left: 3,
-    right: 3,
-    bottom: 2,
+    left: 0,
+    right: 0,
+    bottom: 1,
     height: 3,
-    borderRadius: 1.5,
+    borderRadius: 0,
   },
   barBeatEndLine: {
     width: 1.5,
