@@ -1085,6 +1085,28 @@ export default function MetronomeScreen() {
     return () => sub.remove();
   }, [handleDeepLinkImport]);
 
+  const pendingImportProcessed = useRef(false);
+  useEffect(() => {
+    if (pendingImportProcessed.current) return;
+    const timer = setTimeout(async () => {
+      const { consumePendingImport } = require("@/lib/pending-import");
+      const decoded = consumePendingImport();
+      if (decoded && decoded.bpm && decoded.beatTypes) {
+        pendingImportProcessed.current = true;
+        const entry: PracticeEntry = {
+          id: Crypto.randomUUID(),
+          ...decoded,
+        };
+        const { loadPracticeBook: lpb, savePracticeBook: spb } = await import("@/lib/storage");
+        const existing = await lpb();
+        await spb([entry, ...existing]);
+        handleLoadPracticeEntry(entry);
+        Alert.alert("설정 가져오기 완료", `"${entry.label}" 설정이 적용되고 Practice Note에 저장되었습니다.\n\nBPM: ${entry.bpm} | ${entry.beatsPerMeasure} beats`);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [handleLoadPracticeEntry]);
+
   const handleSetPracticeNoteGoal = useCallback(async (entry: PracticeEntry, targetMinutes: number) => {
     const goals = await loadGoals();
     const existing = goals.find((g) => g.type === "session_goal" && g.practiceNoteId === entry.id);

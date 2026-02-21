@@ -1,0 +1,28 @@
+import { Platform } from "react-native";
+
+const STORAGE_KEY = "@practice_pending_import";
+
+export function setPendingImport(data: any) {
+  try {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+  } catch (e) {
+    console.warn("setPendingImport error:", e);
+  }
+}
+
+export function consumePendingImport(): any {
+  try {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const raw = window.sessionStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        window.sessionStorage.removeItem(STORAGE_KEY);
+        return JSON.parse(raw);
+      }
+    }
+  } catch (e) {
+    console.warn("consumePendingImport error:", e);
+  }
+  return null;
+}
