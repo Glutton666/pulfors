@@ -146,10 +146,9 @@ export function PracticeBookModal({
 
   const renderItem = ({ item }: { item: PracticeEntry }) => {
     const isEditing = editingId === item.id;
-    const barCount = Math.ceil(item.beatTypes.length / item.beatsPerMeasure);
+    const barCount = item.beatsPerMeasure;
     const secondsPerBeat = 60 / item.bpm;
-    const totalBeats = item.beatTypes.length;
-    const onePlaySeconds = totalBeats * secondsPerBeat;
+    const onePlaySeconds = barCount * secondsPerBeat;
 
     const formatTime = (sec: number) => {
       const m = Math.floor(sec / 60);
@@ -209,11 +208,6 @@ export function PracticeBookModal({
                 {barCount}
               </Text>
               <Text style={styles.detailUnit}>Bar</Text>
-            </View>
-            <View style={styles.detailChip}>
-              <Text style={[styles.detailValue, { color: C.accent }]}>
-                {item.beatsPerMeasure}/4
-              </Text>
             </View>
             <View style={styles.detailChip}>
               <Ionicons
