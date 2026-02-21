@@ -1034,14 +1034,9 @@ export function SettingsModal({
             <View style={styles.divider} />
 
             <View style={styles.usernameSection}>
-              <View style={[styles.sectionHeader, { justifyContent: "space-between" }]}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Ionicons name="location" size={18} color={C.accent} />
-                  <Text style={styles.sectionLabel}>Practice Rooms</Text>
-                </View>
-                <Pressable onPress={() => setShowAddRoom(!showAddRoom)} hitSlop={8}>
-                  <Ionicons name={showAddRoom ? "close-circle" : "add-circle"} size={20} color={C.accent} />
-                </Pressable>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="location" size={18} color={C.accent} />
+                <Text style={styles.sectionLabel}>Practice Rooms</Text>
               </View>
 
               {roomTrackingActive && trackingRoomName && (
@@ -1056,7 +1051,32 @@ export function SettingsModal({
                 </View>
               )}
 
-              {showAddRoom && (
+              {practiceRooms.map((room) => {
+                const isTracking = roomTrackingActive && trackingRoomName === room.name;
+                return (
+                  <View key={room.id} style={styles.roomRow}>
+                    <View style={styles.roomInfo}>
+                      <Ionicons name="location-outline" size={14} color={C.accent} />
+                      <Text style={styles.roomName} numberOfLines={1}>{room.name}</Text>
+                    </View>
+                    <View style={styles.roomActions}>
+                      {!isTracking && !roomTrackingActive && (
+                        <Pressable
+                          style={[styles.roomStartBtn, { backgroundColor: C.accentDim }]}
+                          onPress={() => onStartRoomTracking({ id: room.id, name: room.name })}
+                        >
+                          <Ionicons name="play" size={12} color={C.accent} />
+                        </Pressable>
+                      )}
+                      <Pressable onPress={() => handleDeleteRoom(room.id)} hitSlop={8}>
+                        <Ionicons name="trash-outline" size={14} color={Colors.textTertiary} />
+                      </Pressable>
+                    </View>
+                  </View>
+                );
+              })}
+
+              {showAddRoom ? (
                 <View style={[styles.addRoomForm, { borderColor: C.accentDim }]}>
                   <Text style={styles.addRoomHint}>Register your current location as a practice room</Text>
                   <View style={styles.addRoomRow}>
@@ -1077,35 +1097,14 @@ export function SettingsModal({
                     </Pressable>
                   </View>
                 </View>
-              )}
-
-              {practiceRooms.length === 0 && !showAddRoom ? (
-                <Text style={styles.roomEmptyHint}>Tap + to register a practice room</Text>
               ) : (
-                practiceRooms.map((room) => {
-                  const isTracking = roomTrackingActive && trackingRoomName === room.name;
-                  return (
-                    <View key={room.id} style={styles.roomRow}>
-                      <View style={styles.roomInfo}>
-                        <Ionicons name="location-outline" size={14} color={C.accent} />
-                        <Text style={styles.roomName} numberOfLines={1}>{room.name}</Text>
-                      </View>
-                      <View style={styles.roomActions}>
-                        {!isTracking && !roomTrackingActive && (
-                          <Pressable
-                            style={[styles.roomStartBtn, { backgroundColor: C.accentDim }]}
-                            onPress={() => onStartRoomTracking({ id: room.id, name: room.name })}
-                          >
-                            <Ionicons name="play" size={12} color={C.accent} />
-                          </Pressable>
-                        )}
-                        <Pressable onPress={() => handleDeleteRoom(room.id)} hitSlop={8}>
-                          <Ionicons name="trash-outline" size={14} color={Colors.textTertiary} />
-                        </Pressable>
-                      </View>
-                    </View>
-                  );
-                })
+                <Pressable
+                  style={[styles.addRoomBtn, { borderColor: C.accentDim }]}
+                  onPress={() => setShowAddRoom(true)}
+                >
+                  <Ionicons name="add" size={16} color={C.accent} />
+                  <Text style={[styles.addRoomBtnText, { color: C.accent }]}>Add Practice Room</Text>
+                </Pressable>
               )}
             </View>
 
@@ -1578,6 +1577,21 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
+  },
+  addRoomBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderRadius: 10,
+    borderStyle: "dashed" as any,
+    marginTop: 4,
+  },
+  addRoomBtnText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
   },
   roomEmptyHint: {
     fontFamily: "SpaceGrotesk_400Regular",
