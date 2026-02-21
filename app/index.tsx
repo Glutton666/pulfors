@@ -46,8 +46,8 @@ import { SignalGeneratorModal } from "@/components/SignalGeneratorModal";
 import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import type { PracticeEntry } from "@/lib/storage";
-import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog } from "@/lib/activity-log";
-import type { ActivityLog } from "@/lib/activity-log";
+import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
+import type { ActivityLog, Goal, PracticeSessionData, PracticeRoomVisitData } from "@/lib/activity-log";
 import {
   loadPracticeRooms,
   getCurrentLocation,
@@ -135,6 +135,8 @@ export default function MetronomeScreen() {
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [roomTrackingActive, setRoomTrackingActive] = useState(false);
   const [trackingRoomName, setTrackingRoomName] = useState<string | null>(null);
+  const [completedGoalPopups, setCompletedGoalPopups] = useState<Goal[]>([]);
+  const dismissedGoalIdsRef = useRef<Set<string>>(new Set());
 
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -279,6 +281,55 @@ export default function MetronomeScreen() {
     };
   }, []);
 
+  const checkCompletedGoals = useCallback(async () => {
+    try {
+      const [allGoals, allLogs] = await Promise.all([loadGoals(), loadActivityLogs()]);
+      if (allGoals.length === 0) return;
+
+      const now = new Date();
+      const dayStart = new Date(now);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayStartMs = dayStart.getTime();
+
+      const todayLogs = allLogs.filter((l) => l.timestamp >= dayStartMs);
+      const todaySessions = todayLogs.filter((l) => l.type === "practice_session");
+      const todayTotalTime = todaySessions.reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0) / 60;
+      const todayBeatTime = todaySessions.filter((l) => (l.data as PracticeSessionData).mode === "dial").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0) / 60;
+      const todayBarTime = todaySessions.filter((l) => (l.data as PracticeSessionData).mode === "bar").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0) / 60;
+      const todayRoomTime = todayLogs.filter((l) => l.type === "practice_room_visit").reduce((s, l) => s + ((l.data as PracticeRoomVisitData).duration || 0), 0) / 60;
+
+      const newlyCompleted = allGoals.filter((g) => {
+        if (dismissedGoalIdsRef.current.has(g.id)) return false;
+        let progress = 0;
+        switch (g.type) {
+          case "total_play_time": progress = todayTotalTime; break;
+          case "beat_mode_time": progress = todayBeatTime; break;
+          case "bar_mode_time": progress = todayBarTime; break;
+          case "room_time": progress = todayRoomTime; break;
+        }
+        return progress >= g.target;
+      });
+
+      if (newlyCompleted.length > 0) {
+        setCompletedGoalPopups((prev) => {
+          const existingIds = new Set(prev.map((p) => p.id));
+          const fresh = newlyCompleted.filter((g) => !existingIds.has(g.id));
+          return fresh.length > 0 ? [...prev, ...fresh] : prev;
+        });
+      }
+    } catch (e) {
+      console.warn("Failed to check goals:", e);
+    }
+  }, []);
+
+  const dismissGoalPopup = useCallback(async (id: string) => {
+    dismissedGoalIdsRef.current.add(id);
+    setCompletedGoalPopups((prev) => prev.filter((g) => g.id !== id));
+    const allGoals = await loadGoals();
+    const updated = allGoals.filter((g) => g.id !== id);
+    await saveGoals(updated);
+  }, []);
+
   const startRoomTracking = useCallback(async (room: { id: string; name: string }) => {
     const granted = await requestLocationPermission();
     if (!granted) return;
@@ -301,7 +352,7 @@ export default function MetronomeScreen() {
             addActivityLog({
               type: "practice_room_visit",
               data: { roomId: roomTrackRef.current.roomId, roomName: roomTrackRef.current.roomName, duration: dur },
-            });
+            }).then(() => checkCompletedGoals());
           }
           roomTrackRef.current = null;
           setRoomTrackingActive(false);
@@ -326,13 +377,13 @@ export default function MetronomeScreen() {
         addActivityLog({
           type: "practice_room_visit",
           data: { roomId: roomTrackRef.current.roomId, roomName: roomTrackRef.current.roomName, duration: dur },
-        });
+        }).then(() => checkCompletedGoals());
       }
       roomTrackRef.current = null;
     }
     setRoomTrackingActive(false);
     setTrackingRoomName(null);
-  }, []);
+  }, [checkCompletedGoals]);
 
   useEffect(() => {
     return () => {
@@ -528,7 +579,7 @@ export default function MetronomeScreen() {
               duration: dur,
               ...(barMode ? { barConfig: `${beatsPerMeasure}/${4}` } : {}),
             },
-          });
+          }).then(() => checkCompletedGoals());
         }
         practiceStartRef.current = null;
       }
@@ -1139,6 +1190,28 @@ export default function MetronomeScreen() {
         }}
       />
 
+      {completedGoalPopups.length > 0 && !showMenu && !showTuner && !showSignalGen && !showPracticeBook && !showWorkUp && !showSettings && (
+        <View style={[styles.goalPopupContainer, { top: (insets.top || webTopInset) + 8, pointerEvents: "box-none" }]}>
+          {completedGoalPopups.map((goal) => {
+            const goalColor = goal.type === "beat_mode_time" ? "#58A6FF" : goal.type === "bar_mode_time" ? "#F0883E" : goal.type === "room_time" ? "#A371F7" : C.accent;
+            return (
+              <Pressable
+                key={`popup-${goal.id}`}
+                style={[styles.goalPopup, { borderColor: goalColor, backgroundColor: Colors.surface }]}
+                onPress={() => dismissGoalPopup(goal.id)}
+              >
+                <Ionicons name="checkmark-circle" size={22} color={goalColor} />
+                <View style={styles.goalPopupInfo}>
+                  <Text style={[styles.goalPopupTitle, { color: goalColor }]}>{goal.label} Complete!</Text>
+                  <Text style={styles.goalPopupSub}>Tap to dismiss</Text>
+                </View>
+                <Ionicons name="close" size={16} color={Colors.textTertiary} />
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
       <View
         style={[
           styles.content,
@@ -1315,5 +1388,39 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     marginHorizontal: 12,
     opacity: 0.5,
+  },
+  goalPopupContainer: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    zIndex: 100,
+    gap: 8,
+  },
+  goalPopup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  goalPopupInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  goalPopupTitle: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 14,
+    letterSpacing: 0.2,
+  },
+  goalPopupSub: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 11,
+    color: Colors.textTertiary,
   },
 });
