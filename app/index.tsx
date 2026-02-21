@@ -51,7 +51,7 @@ import type { ActivityLog } from "@/lib/activity-log";
 import {
   loadPracticeRooms,
   getCurrentLocation,
-  checkLocationPermission,
+  requestLocationPermission,
   findNearbyRoom,
   type PracticeRoom,
 } from "@/lib/practice-room";
@@ -133,6 +133,8 @@ export default function MetronomeScreen() {
   const featureStartRef = useRef<{ name: string; start: number } | null>(null);
   const roomTrackRef = useRef<{ roomId: string; roomName: string; start: number } | null>(null);
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [roomTrackingActive, setRoomTrackingActive] = useState(false);
+  const [trackingRoomName, setTrackingRoomName] = useState<string | null>(null);
 
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -277,50 +279,23 @@ export default function MetronomeScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!loggingEnabled) {
-      if (locationIntervalRef.current) {
-        clearInterval(locationIntervalRef.current);
-        locationIntervalRef.current = null;
-      }
-      if (roomTrackRef.current) {
-        const dur = Math.round((Date.now() - roomTrackRef.current.start) / 1000);
-        if (dur >= 10) {
-          addActivityLog({
-            type: "practice_room_visit",
-            data: { roomId: roomTrackRef.current.roomId, roomName: roomTrackRef.current.roomName, duration: dur },
-          });
-        }
-        roomTrackRef.current = null;
-      }
-      return;
-    }
+  const startRoomTracking = useCallback(async (room: { id: string; name: string }) => {
+    const granted = await requestLocationPermission();
+    if (!granted) return;
+    roomTrackRef.current = { roomId: room.id, roomName: room.name, start: Date.now() };
+    setRoomTrackingActive(true);
+    setTrackingRoomName(room.name);
 
-    const checkLocation = async () => {
+    if (locationIntervalRef.current) clearInterval(locationIntervalRef.current);
+    locationIntervalRef.current = setInterval(async () => {
       try {
-        const hasPermission = await checkLocationPermission();
-        if (!hasPermission) return;
-
-        const rooms = await loadPracticeRooms();
-        if (rooms.length === 0) return;
-
         const loc = await getCurrentLocation();
-        if (!loc) return;
-
-        const nearbyRoom = findNearbyRoom(loc.coords.latitude, loc.coords.longitude, rooms);
-
-        if (nearbyRoom && !roomTrackRef.current) {
-          roomTrackRef.current = { roomId: nearbyRoom.id, roomName: nearbyRoom.name, start: Date.now() };
-        } else if (nearbyRoom && roomTrackRef.current && roomTrackRef.current.roomId !== nearbyRoom.id) {
-          const dur = Math.round((Date.now() - roomTrackRef.current.start) / 1000);
-          if (dur >= 10) {
-            addActivityLog({
-              type: "practice_room_visit",
-              data: { roomId: roomTrackRef.current.roomId, roomName: roomTrackRef.current.roomName, duration: dur },
-            });
-          }
-          roomTrackRef.current = { roomId: nearbyRoom.id, roomName: nearbyRoom.name, start: Date.now() };
-        } else if (!nearbyRoom && roomTrackRef.current) {
+        if (!loc || !roomTrackRef.current) return;
+        const rooms = await loadPracticeRooms();
+        const trackedRoom = rooms.find(r => r.id === roomTrackRef.current!.roomId);
+        if (!trackedRoom) return;
+        const dist = findNearbyRoom(loc.coords.latitude, loc.coords.longitude, [trackedRoom], 20);
+        if (!dist) {
           const dur = Math.round((Date.now() - roomTrackRef.current.start) / 1000);
           if (dur >= 10) {
             addActivityLog({
@@ -329,32 +304,41 @@ export default function MetronomeScreen() {
             });
           }
           roomTrackRef.current = null;
+          setRoomTrackingActive(false);
+          setTrackingRoomName(null);
+          if (locationIntervalRef.current) {
+            clearInterval(locationIntervalRef.current);
+            locationIntervalRef.current = null;
+          }
         }
-      } catch (e) {
-        // silently ignore location errors during tracking
+      } catch (e) {}
+    }, 15000);
+  }, []);
+
+  const stopRoomTracking = useCallback(() => {
+    if (locationIntervalRef.current) {
+      clearInterval(locationIntervalRef.current);
+      locationIntervalRef.current = null;
+    }
+    if (roomTrackRef.current) {
+      const dur = Math.round((Date.now() - roomTrackRef.current.start) / 1000);
+      if (dur >= 10) {
+        addActivityLog({
+          type: "practice_room_visit",
+          data: { roomId: roomTrackRef.current.roomId, roomName: roomTrackRef.current.roomName, duration: dur },
+        });
       }
-    };
+      roomTrackRef.current = null;
+    }
+    setRoomTrackingActive(false);
+    setTrackingRoomName(null);
+  }, []);
 
-    checkLocation();
-    locationIntervalRef.current = setInterval(checkLocation, 30000);
-
+  useEffect(() => {
     return () => {
-      if (locationIntervalRef.current) {
-        clearInterval(locationIntervalRef.current);
-        locationIntervalRef.current = null;
-      }
-      if (roomTrackRef.current) {
-        const dur = Math.round((Date.now() - roomTrackRef.current.start) / 1000);
-        if (dur >= 10) {
-          addActivityLog({
-            type: "practice_room_visit",
-            data: { roomId: roomTrackRef.current.roomId, roomName: roomTrackRef.current.roomName, duration: dur },
-          });
-        }
-        roomTrackRef.current = null;
-      }
+      stopRoomTracking();
     };
-  }, [loggingEnabled]);
+  }, []);
 
   const flashModeRef = useRef(flashMode);
   useEffect(() => { flashModeRef.current = flashMode; }, [flashMode]);
@@ -1125,6 +1109,10 @@ export default function MetronomeScreen() {
         visible={showWorkUp}
         onClose={() => setShowWorkUp(false)}
         loggingEnabled={loggingEnabled}
+        roomTrackingActive={roomTrackingActive}
+        trackingRoomName={trackingRoomName}
+        onStartRoomTracking={startRoomTracking}
+        onStopRoomTracking={stopRoomTracking}
       />
 
       <SettingsModal

@@ -4,7 +4,7 @@ import * as Crypto from "expo-crypto";
 import { Platform } from "react-native";
 
 const PRACTICE_ROOMS_KEY = "metronome_practice_rooms";
-const PROXIMITY_RADIUS_METERS = 100;
+const PROXIMITY_RADIUS_METERS = 20;
 
 export interface PracticeRoom {
   id: string;

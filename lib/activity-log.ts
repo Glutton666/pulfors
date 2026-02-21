@@ -32,7 +32,7 @@ export interface ActivityLog {
 
 export interface Goal {
   id: string;
-  type: "daily_practice_time" | "daily_sessions" | "target_bpm";
+  type: "total_play_time" | "beat_mode_time" | "bar_mode_time";
   target: number;
   label: string;
 }
