@@ -23,6 +23,7 @@ import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import type { ThemeColor } from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
+import { moderateScale } from "@/lib/scale";
 import {
   MetronomeEngine,
   soundSets,
@@ -1106,7 +1107,7 @@ const styles = StyleSheet.create({
   },
   tempoLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 14,
+    fontSize: moderateScale(14, 0.3),
     color: Colors.accentMuted,
     letterSpacing: 3,
     textTransform: "uppercase",
@@ -1115,9 +1116,9 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 20,
     zIndex: 20,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: moderateScale(36, 0.3),
+    height: moderateScale(36, 0.3),
+    borderRadius: moderateScale(18, 0.3),
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -1136,7 +1137,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     paddingVertical: 4,
-    minWidth: 160,
+    minWidth: moderateScale(160, 0.4),
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -1147,15 +1148,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: moderateScale(16, 0.3),
+    paddingVertical: moderateScale(12, 0.3),
   },
   menuItemPressed: {
     backgroundColor: Colors.surfaceLight,
   },
   menuItemText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 14,
+    fontSize: moderateScale(14, 0.3),
     color: Colors.text,
   },
   menuDivider: {

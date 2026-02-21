@@ -18,6 +18,7 @@ import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
+import { moderateScale } from "@/lib/scale";
 
 interface BpmSliderProps {
   bpm: number;
@@ -231,7 +232,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 10,
-    borderRadius: 20,
+    borderRadius: moderateScale(20, 0.3),
     backgroundColor: Colors.surface,
     overflow: "hidden",
     borderWidth: 1.5,
@@ -264,13 +265,13 @@ const styles = StyleSheet.create({
   },
   bpmValue: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 64,
+    fontSize: moderateScale(64, 0.4),
     color: Colors.text,
-    lineHeight: 72,
+    lineHeight: moderateScale(72, 0.4),
   },
   bpmUnit: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 13,
+    fontSize: moderateScale(13, 0.3),
     color: Colors.textTertiary,
     letterSpacing: 4,
     marginTop: -4,
@@ -299,7 +300,7 @@ const styles = StyleSheet.create({
   },
   tapLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 8,
+    fontSize: moderateScale(8, 0.3),
     color: Colors.textTertiary,
     letterSpacing: 1.5,
   },
@@ -329,7 +330,7 @@ const styles = StyleSheet.create({
   },
   hint: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: moderateScale(11, 0.3),
     color: Colors.textTertiary,
     letterSpacing: 1,
     opacity: 0.6,

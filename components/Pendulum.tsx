@@ -1,5 +1,5 @@
 import React from "react";
-import { View, StyleSheet, Dimensions } from "react-native";
+import { View, StyleSheet } from "react-native";
 import Animated, {
   useAnimatedStyle,
   withTiming,
@@ -9,10 +9,10 @@ import Animated, {
 } from "react-native-reanimated";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
+import { moderateScale, SCREEN_WIDTH } from "@/lib/scale";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const PENDULUM_LENGTH = Math.min(SCREEN_WIDTH * 0.5, 200);
-const BOB_SIZE = 14;
+const PENDULUM_LENGTH = Math.min(SCREEN_WIDTH * 0.5, moderateScale(200));
+const BOB_SIZE = moderateScale(14, 0.4);
 
 interface PendulumProps {
   isPlaying: boolean;

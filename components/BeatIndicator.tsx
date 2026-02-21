@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   Platform,
-  Dimensions,
   PanResponder,
   Pressable,
   ScrollView,
@@ -24,14 +23,14 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
+import { moderateScale, SCREEN_WIDTH } from "@/lib/scale";
 
 export type BeatType = "strong" | "accent" | "normal" | "mute";
 
-const SCREEN_WIDTH = Dimensions.get("window").width;
-const DIAL_SIZE = Math.min(SCREEN_WIDTH - 48, 300);
+const DIAL_SIZE = Math.min(SCREEN_WIDTH - 48, moderateScale(300));
 const DIAL_RADIUS = DIAL_SIZE / 2;
-const DOT_RADIUS_FROM_CENTER = DIAL_RADIUS - 30;
-const DOT_SIZE = 34;
+const DOT_RADIUS_FROM_CENTER = DIAL_RADIUS - moderateScale(30, 0.4);
+const DOT_SIZE = moderateScale(34, 0.4);
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.35;
 const MIN_BEATS = 1;
 const MAX_BEATS = 12;
@@ -1190,22 +1189,22 @@ const styles = StyleSheet.create({
   },
   digitalSignature: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 83,
+    fontSize: moderateScale(83, 0.4),
     color: Colors.textTertiary,
     opacity: 0.15,
   },
   digitalSignatureSlash: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 70,
+    fontSize: moderateScale(70, 0.4),
     color: Colors.textTertiary,
     opacity: 0.15,
     marginHorizontal: -2,
   },
   centerGlow: {
     position: "absolute",
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: moderateScale(120),
+    height: moderateScale(120),
+    borderRadius: moderateScale(60),
     opacity: 0,
   },
   playButton: {
@@ -1244,7 +1243,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 24,
-    width: 220,
+    width: moderateScale(220, 0.5),
     alignItems: "center",
     borderWidth: 1,
     borderColor: Colors.border,
@@ -1299,11 +1298,11 @@ const styles = StyleSheet.create({
   barInfoCol: {
     alignItems: "center",
     justifyContent: "center",
-    minWidth: 48,
+    minWidth: moderateScale(48, 0.4),
   },
   barInfoText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
+    fontSize: moderateScale(12, 0.4),
     letterSpacing: 0.5,
   },
   dropTargetRing: {
@@ -1333,9 +1332,9 @@ const styles = StyleSheet.create({
   },
   centerDropRing: {
     position: "absolute",
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+    width: moderateScale(110),
+    height: moderateScale(110),
+    borderRadius: moderateScale(55),
     borderWidth: 2,
     borderColor: Colors.accent,
     borderStyle: "dashed" as any,
@@ -1366,25 +1365,25 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   barModeCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: moderateScale(32, 0.4),
+    height: moderateScale(32, 0.4),
+    borderRadius: moderateScale(16, 0.4),
     backgroundColor: "rgba(255,255,255,0.06)",
     alignItems: "center",
     justifyContent: "center",
   },
   barPlayBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: moderateScale(32, 0.4),
+    height: moderateScale(32, 0.4),
+    borderRadius: moderateScale(16, 0.4),
     backgroundColor: "rgba(255,255,255,0.06)",
     alignItems: "center",
     justifyContent: "center",
   },
   barLoopBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: moderateScale(32, 0.4),
+    height: moderateScale(32, 0.4),
+    borderRadius: moderateScale(16, 0.4),
     backgroundColor: "rgba(255,255,255,0.06)",
     alignItems: "center",
     justifyContent: "center",
@@ -1395,9 +1394,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   barTimeSigBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: moderateScale(28, 0.4),
+    height: moderateScale(28, 0.4),
+    borderRadius: moderateScale(14, 0.4),
     backgroundColor: "rgba(255,255,255,0.08)",
     alignItems: "center",
     justifyContent: "center",
@@ -1411,13 +1410,13 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
   },
   barBeatLabel: {
-    width: 22,
+    width: moderateScale(22, 0.4),
     alignItems: "center",
     justifyContent: "center",
   },
   barBeatLabelText: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 13,
+    fontSize: moderateScale(13, 0.4),
   },
   barBeatContent: {
     flex: 1,
@@ -1440,14 +1439,14 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   barRepeatBadge: {
-    width: 32,
+    width: moderateScale(32, 0.4),
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 2,
   },
   barRepeatText: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 10,
+    fontSize: moderateScale(10, 0.4),
     letterSpacing: 0.5,
   },
   repeatModalOverlay: {
@@ -1461,7 +1460,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     padding: 20,
-    width: 280,
+    width: moderateScale(280, 0.5),
     gap: 16,
   },
   repeatModalTitle: {
@@ -1493,9 +1492,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   repeatValBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: moderateScale(36, 0.4),
+    height: moderateScale(36, 0.4),
+    borderRadius: moderateScale(18, 0.4),
     backgroundColor: Colors.border,
     alignItems: "center",
     justifyContent: "center",
