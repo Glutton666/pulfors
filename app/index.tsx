@@ -44,7 +44,10 @@ import { SettingsModal } from "@/components/SettingsModal";
 import { TunerModal } from "@/components/TunerModal";
 import { SignalGeneratorModal } from "@/components/SignalGeneratorModal";
 import { PracticeBookModal } from "@/components/PracticeBookModal";
+import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import type { PracticeEntry } from "@/lib/storage";
+import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog } from "@/lib/activity-log";
+import type { ActivityLog } from "@/lib/activity-log";
 
 function getTempoLabel(bpm: number): string {
   if (bpm < 40) return "Grave";
@@ -117,6 +120,10 @@ export default function MetronomeScreen() {
   const [showTuner, setShowTuner] = useState(false);
   const [showSignalGen, setShowSignalGen] = useState(false);
   const [showPracticeBook, setShowPracticeBook] = useState(false);
+  const [showWorkUp, setShowWorkUp] = useState(false);
+  const [loggingEnabled, setLoggingEnabled] = useState(false);
+  const practiceStartRef = useRef<number | null>(null);
+  const featureStartRef = useRef<{ name: string; start: number } | null>(null);
 
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -253,6 +260,8 @@ export default function MetronomeScreen() {
 
       setIsLoaded(true);
     });
+
+    loadLoggingEnabled().then((val) => setLoggingEnabled(val));
 
     return () => {
       engine.cleanup();
@@ -436,14 +445,32 @@ export default function MetronomeScreen() {
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
+      if (loggingEnabled && practiceStartRef.current) {
+        const dur = Math.round((Date.now() - practiceStartRef.current) / 1000);
+        if (dur >= 3) {
+          addActivityLog({
+            type: "practice_session",
+            data: {
+              bpm,
+              mode: barMode ? "bar" : "dial",
+              duration: dur,
+              ...(barMode ? { barConfig: `${beatsPerMeasure}/${4}` } : {}),
+            },
+          });
+        }
+        practiceStartRef.current = null;
+      }
     } else {
       engine.start();
       if (barModeRef.current && barLoopModeRef.current === "once") {
         engine.requestStopAfterMeasure();
       }
       setIsPlaying(true);
+      if (loggingEnabled) {
+        practiceStartRef.current = Date.now();
+      }
     }
-  }, [isPlaying]);
+  }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure]);
 
   const handleBarModeChange = useCallback((toBarMode: boolean) => {
     const engine = engineRef.current;
@@ -911,6 +938,7 @@ export default function MetronomeScreen() {
                 onPress={() => {
                   setShowMenu(false);
                   setShowTuner(true);
+                  if (loggingEnabled) featureStartRef.current = { name: "tuner", start: Date.now() };
                 }}
               >
                 <MaterialCommunityIcons name="tune-variant" size={18} color={C.accent} />
@@ -922,6 +950,7 @@ export default function MetronomeScreen() {
                 onPress={() => {
                   setShowMenu(false);
                   setShowSignalGen(true);
+                  if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
                 }}
               >
                 <MaterialCommunityIcons name="waveform" size={18} color={C.accent} />
@@ -933,10 +962,22 @@ export default function MetronomeScreen() {
                 onPress={() => {
                   setShowMenu(false);
                   setShowPracticeBook(true);
+                  if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
                 }}
               >
                 <MaterialCommunityIcons name="notebook-outline" size={18} color={C.accent} />
                 <Text style={styles.menuItemText}>Practice Note</Text>
+              </Pressable>
+              <View style={styles.menuDivider} />
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                onPress={() => {
+                  setShowMenu(false);
+                  setShowWorkUp(true);
+                }}
+              >
+                <MaterialCommunityIcons name="chart-line" size={18} color={C.accent} />
+                <Text style={styles.menuItemText}>Work Up</Text>
               </Pressable>
               <View style={styles.menuDivider} />
               <Pressable
@@ -956,19 +997,46 @@ export default function MetronomeScreen() {
 
       <TunerModal
         visible={showTuner}
-        onClose={() => setShowTuner(false)}
+        onClose={() => {
+          setShowTuner(false);
+          if (loggingEnabled && featureStartRef.current?.name === "tuner") {
+            const dur = Math.round((Date.now() - featureStartRef.current.start) / 1000);
+            if (dur >= 2) addActivityLog({ type: "feature_usage", data: { feature: "tuner", duration: dur } });
+            featureStartRef.current = null;
+          }
+        }}
       />
 
       <SignalGeneratorModal
         visible={showSignalGen}
-        onClose={() => setShowSignalGen(false)}
+        onClose={() => {
+          setShowSignalGen(false);
+          if (loggingEnabled && featureStartRef.current?.name === "signal_generator") {
+            const dur = Math.round((Date.now() - featureStartRef.current.start) / 1000);
+            if (dur >= 2) addActivityLog({ type: "feature_usage", data: { feature: "signal_generator", duration: dur } });
+            featureStartRef.current = null;
+          }
+        }}
       />
 
       <PracticeBookModal
         visible={showPracticeBook}
-        onClose={() => setShowPracticeBook(false)}
+        onClose={() => {
+          setShowPracticeBook(false);
+          if (loggingEnabled && featureStartRef.current?.name === "practice_note") {
+            const dur = Math.round((Date.now() - featureStartRef.current.start) / 1000);
+            if (dur >= 2) addActivityLog({ type: "feature_usage", data: { feature: "practice_note", duration: dur } });
+            featureStartRef.current = null;
+          }
+        }}
         onLoad={handleLoadPracticeEntry}
         currentConfig={currentBarConfig}
+      />
+
+      <WorkUpOverviewModal
+        visible={showWorkUp}
+        onClose={() => setShowWorkUp(false)}
+        loggingEnabled={loggingEnabled}
       />
 
       <SettingsModal
@@ -988,6 +1056,11 @@ export default function MetronomeScreen() {
         onAudioOffsetChange={updateAudioOffset}
         timerStopMode={timerStopMode}
         onTimerStopModeChange={updateTimerStopMode}
+        loggingEnabled={loggingEnabled}
+        onLoggingEnabledChange={(val) => {
+          setLoggingEnabled(val);
+          saveLoggingEnabled(val);
+        }}
       />
 
       <View

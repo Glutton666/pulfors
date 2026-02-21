@@ -56,6 +56,8 @@ interface SettingsModalProps {
   onAudioOffsetChange: (value: number) => void;
   timerStopMode: "immediate" | "end-of-cycle";
   onTimerStopModeChange: (value: "immediate" | "end-of-cycle") => void;
+  loggingEnabled: boolean;
+  onLoggingEnabledChange: (val: boolean) => void;
 }
 
 const SOUND_SET_OPTIONS: { value: SoundSet; label: string; icon: string }[] = [
@@ -129,6 +131,8 @@ export function SettingsModal({
   onAudioOffsetChange,
   timerStopMode,
   onTimerStopModeChange,
+  loggingEnabled,
+  onLoggingEnabledChange,
 }: SettingsModalProps) {
   const { themeColor, customHex, setThemeColor, setCustomHex, colors: C } = useTheme();
   const insets = useSafeAreaInsets();
@@ -696,6 +700,24 @@ export function SettingsModal({
                 : "Stops immediately when timer expires"}
             </Text>
           </View>
+
+            <View style={styles.divider} />
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <MaterialCommunityIcons name="chart-line" size={18} color={C.accent} />
+                <Text style={styles.sectionLabel}>Activity Logging</Text>
+                <Switch
+                  value={loggingEnabled}
+                  onValueChange={onLoggingEnabledChange}
+                  trackColor={{ false: Colors.surfaceLight, true: C.accentMuted }}
+                  thumbColor={loggingEnabled ? C.accent : Colors.textSecondary}
+                  style={{ transform: [{ scale: 0.85 }] }}
+                />
+              </View>
+              <Text style={styles.offsetHint}>
+                Track practice sessions and feature usage
+              </Text>
+            </View>
           </Pressable>
         </ScrollView>
       </Pressable>
