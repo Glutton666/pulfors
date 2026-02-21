@@ -51,9 +51,9 @@ const NOTE_FREQS: { name: string; freq: number }[] = [
   { name: "10k", freq: 10000 },
 ];
 
-const KNOB_SIZE = 130;
+const KNOB_SIZE = 110;
 const KNOB_RADIUS = KNOB_SIZE / 2;
-const KNOB_STROKE = 6;
+const KNOB_STROKE = 5;
 const ARC_START = 135;
 const ARC_END = 405;
 const ARC_RANGE = ARC_END - ARC_START;
@@ -110,7 +110,7 @@ function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentD
       },
       onPanResponderMove: (_, gs) => {
         if (Math.abs(gs.dy) > 3) movedRef.current = true;
-        const sensitivity = 0.004;
+        const sensitivity = 0.0015;
         const delta = -gs.dy * sensitivity;
         const next = Math.max(0, Math.min(1, valRef.current + delta));
         if (Math.abs(next - valRef.current) > 0.001) {
@@ -416,8 +416,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     borderColor: Colors.border,
-    gap: 10,
-    maxHeight: "85%",
+    gap: 8,
+    maxHeight: "80%",
   },
   header: {
     flexDirection: "row",
@@ -475,8 +475,8 @@ const styles = StyleSheet.create({
   },
   knobValue: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 24,
-    lineHeight: 28,
+    fontSize: 20,
+    lineHeight: 24,
   },
   knobUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
@@ -531,7 +531,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   presetsScroll: {
-    maxHeight: 120,
+    maxHeight: 100,
     width: "100%",
   },
   presetsGrid: {
@@ -591,10 +591,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 28,
-    paddingVertical: 12,
-    borderRadius: 14,
-    marginTop: 2,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
   playBtnText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
