@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -11,13 +11,18 @@ import {
   Alert,
   ActivityIndicator,
   Dimensions,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import Svg, { Circle } from "react-native-svg";
+import Svg, { Circle, Rect } from "react-native-svg";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import * as Crypto from "expo-crypto";
+import ViewShot from "react-native-view-shot";
+import * as Sharing from "expo-sharing";
+import * as FileSystem from "expo-file-system";
+import * as ImagePicker from "expo-image-picker";
 import {
   loadActivityLogs,
   loadGoals,
@@ -222,6 +227,57 @@ export function WorkUpOverviewModal({
   const [showAddRoom, setShowAddRoom] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
   const [addingRoom, setAddingRoom] = useState(false);
+
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareBgMode, setShareBgMode] = useState<"grayscale" | "custom">("grayscale");
+  const [shareBgUri, setShareBgUri] = useState<string | null>(null);
+  const [shareCapturing, setShareCapturing] = useState(false);
+  const shareRef = useRef<ViewShot>(null);
+
+  const grayscaleColors = useMemo(() => {
+    const hues = ["#1a1a2e", "#16213e", "#0f3460", "#1a1a1a", "#2d2d2d", "#1e1e2f", "#0d1117", "#161b22", "#21262d", "#282c34"];
+    const idx = Math.floor(Math.random() * hues.length);
+    return { bg: hues[idx], secondary: "#ffffff15" };
+  }, [showShareModal]);
+
+  const pickShareBg = useCallback(async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [9, 16],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      setShareBgUri(result.assets[0].uri);
+      setShareBgMode("custom");
+    }
+  }, []);
+
+  const handleShare = useCallback(async () => {
+    if (!shareRef.current) return;
+    setShareCapturing(true);
+    try {
+      const uri = await (shareRef.current as any).capture();
+      if (Platform.OS === "web") {
+        const link = document.createElement("a");
+        link.href = uri;
+        link.download = "practice-summary.png";
+        link.click();
+      } else {
+        const available = await Sharing.isAvailableAsync();
+        if (available) {
+          await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: "Share Practice Summary" });
+        } else {
+          Alert.alert("Sharing not available on this device");
+        }
+      }
+    } catch (e) {
+      console.warn("Share error:", e);
+      Alert.alert("Error", "Could not capture or share the image.");
+    } finally {
+      setShareCapturing(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (visible && loggingEnabled) {
@@ -442,9 +498,16 @@ export function WorkUpOverviewModal({
 
             <View style={s.header}>
               <Text style={s.title}>Work Up</Text>
-              <Pressable onPress={onClose} hitSlop={12}>
-                <Ionicons name="close" size={22} color={Colors.textSecondary} />
-              </Pressable>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                {loggingEnabled && (
+                  <Pressable onPress={() => setShowShareModal(true)} hitSlop={12}>
+                    <Ionicons name="share-outline" size={20} color={C.accent} />
+                  </Pressable>
+                )}
+                <Pressable onPress={onClose} hitSlop={12}>
+                  <Ionicons name="close" size={22} color={Colors.textSecondary} />
+                </Pressable>
+              </View>
             </View>
 
             {!loggingEnabled ? (
@@ -802,6 +865,154 @@ export function WorkUpOverviewModal({
           </Pressable>
         </ScrollView>
       </Pressable>
+
+      {/* ── Share Summary Modal ── */}
+      <Modal visible={showShareModal} animationType="slide" transparent onRequestClose={() => setShowShareModal(false)} statusBarTranslucent>
+        <View style={shareStyles.overlay}>
+          <View style={[shareStyles.container, { paddingTop: (insets.top || webTopInset) + 10, paddingBottom: insets.bottom + 10 }]}>
+            <View style={shareStyles.topBar}>
+              <Pressable onPress={() => setShowShareModal(false)} hitSlop={12}>
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </Pressable>
+              <Text style={shareStyles.topTitle}>Share Summary</Text>
+              <Pressable onPress={handleShare} disabled={shareCapturing} style={[shareStyles.shareBtn, { backgroundColor: C.accent }]}>
+                {shareCapturing ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={shareStyles.shareBtnText}>Share</Text>
+                )}
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={shareStyles.scrollContent} showsVerticalScrollIndicator={false}>
+              <ViewShot ref={shareRef} options={{ format: "png", quality: 1 }} style={shareStyles.cardOuter}>
+                <View style={[shareStyles.card, { backgroundColor: shareBgMode === "custom" && shareBgUri ? "transparent" : grayscaleColors.bg }]}>
+                  {shareBgMode === "custom" && shareBgUri && (
+                    <Image source={{ uri: shareBgUri }} style={shareStyles.bgImage} blurRadius={2} />
+                  )}
+                  {shareBgMode === "custom" && shareBgUri && (
+                    <View style={shareStyles.bgOverlay} />
+                  )}
+
+                  <View style={shareStyles.cardContent}>
+                    {/* App branding */}
+                    <View style={shareStyles.brandRow}>
+                      <MaterialCommunityIcons name="metronome" size={20} color={C.accent} />
+                      <Text style={[shareStyles.brandText, { color: C.accent }]}>Metronome</Text>
+                    </View>
+
+                    <Text style={shareStyles.dateText}>
+                      {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+                    </Text>
+
+                    {/* Total time big display */}
+                    <View style={shareStyles.bigTimeWrap}>
+                      <Text style={[shareStyles.bigTime, { color: "#fff" }]}>{formatMinutes(todayTotalTime)}</Text>
+                      <Text style={shareStyles.bigTimeUnit}>minutes</Text>
+                    </View>
+
+                    {/* Play time bar chart */}
+                    <View style={shareStyles.barChart}>
+                      <View style={shareStyles.barRow}>
+                        <Text style={shareStyles.barLabel}>Beat</Text>
+                        <View style={shareStyles.barTrack}>
+                          <View style={[shareStyles.barFill, {
+                            backgroundColor: BEAT_COLOR,
+                            width: todayTotalTime > 0 ? `${Math.max(5, (todayBeatTime / todayTotalTime) * 100)}%` : "5%"
+                          }]} />
+                        </View>
+                        <Text style={[shareStyles.barValue, { color: BEAT_COLOR }]}>{formatDuration(todayBeatTime)}</Text>
+                      </View>
+                      <View style={shareStyles.barRow}>
+                        <Text style={shareStyles.barLabel}>Bar</Text>
+                        <View style={shareStyles.barTrack}>
+                          <View style={[shareStyles.barFill, {
+                            backgroundColor: BAR_COLOR,
+                            width: todayTotalTime > 0 ? `${Math.max(5, (todayBarTime / todayTotalTime) * 100)}%` : "5%"
+                          }]} />
+                        </View>
+                        <Text style={[shareStyles.barValue, { color: BAR_COLOR }]}>{formatDuration(todayBarTime)}</Text>
+                      </View>
+                    </View>
+
+                    {/* Goals */}
+                    {goals.length > 0 && (
+                      <View style={shareStyles.goalsSection}>
+                        <Text style={shareStyles.sectionTitle}>Goals</Text>
+                        {goals.map((goal) => {
+                          const progress = getGoalProgress(goal);
+                          const pct = Math.min(1, progress / goal.target);
+                          const goalColor = goal.type === "beat_mode_time" ? BEAT_COLOR : goal.type === "bar_mode_time" ? BAR_COLOR : goal.type === "room_time" ? ROOM_COLOR : C.accent;
+                          const completed = pct >= 1;
+                          return (
+                            <View key={goal.id} style={shareStyles.goalItem}>
+                              <View style={shareStyles.goalLeft}>
+                                <Ionicons name={completed ? "checkmark-circle" : "ellipse-outline"} size={16} color={completed ? "#3fb950" : goalColor} />
+                                <Text style={shareStyles.goalText}>{goal.label}</Text>
+                              </View>
+                              <Text style={[shareStyles.goalProg, { color: goalColor }]}>
+                                {Math.round(progress)}m / {goal.target}m
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+
+                    {/* Weekly summary */}
+                    <View style={shareStyles.weekSection}>
+                      <Text style={shareStyles.sectionTitle}>This Week</Text>
+                      <View style={shareStyles.weekRow}>
+                        <View style={shareStyles.weekItem}>
+                          <Text style={[shareStyles.weekVal, { color: C.accent }]}>{formatDuration(weekTotalTime)}</Text>
+                          <Text style={shareStyles.weekLbl}>Total</Text>
+                        </View>
+                        <View style={[shareStyles.weekDivider, { backgroundColor: "#ffffff20" }]} />
+                        <View style={shareStyles.weekItem}>
+                          <Text style={[shareStyles.weekVal, { color: BEAT_COLOR }]}>{formatDuration(weekBeatTime)}</Text>
+                          <Text style={shareStyles.weekLbl}>Beat</Text>
+                        </View>
+                        <View style={[shareStyles.weekDivider, { backgroundColor: "#ffffff20" }]} />
+                        <View style={shareStyles.weekItem}>
+                          <Text style={[shareStyles.weekVal, { color: BAR_COLOR }]}>{formatDuration(weekBarTime)}</Text>
+                          <Text style={shareStyles.weekLbl}>Bar</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              </ViewShot>
+
+              {/* Background options */}
+              <View style={shareStyles.bgOptions}>
+                <Text style={shareStyles.bgTitle}>Background</Text>
+                <View style={shareStyles.bgRow}>
+                  <Pressable
+                    style={[shareStyles.bgChip, shareBgMode === "grayscale" && !shareBgUri && { borderColor: C.accent, backgroundColor: C.accentDim }]}
+                    onPress={() => { setShareBgMode("grayscale"); setShareBgUri(null); }}
+                  >
+                    <View style={[shareStyles.bgPreview, { backgroundColor: grayscaleColors.bg }]} />
+                    <Text style={[shareStyles.bgChipText, shareBgMode === "grayscale" && !shareBgUri && { color: C.accent }]}>Random</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[shareStyles.bgChip, shareBgMode === "custom" && shareBgUri ? { borderColor: C.accent, backgroundColor: C.accentDim } : {}]}
+                    onPress={pickShareBg}
+                  >
+                    {shareBgUri ? (
+                      <Image source={{ uri: shareBgUri }} style={shareStyles.bgPreview} />
+                    ) : (
+                      <View style={[shareStyles.bgPreview, { backgroundColor: Colors.surfaceLight }]}>
+                        <Ionicons name="image-outline" size={14} color={Colors.textTertiary} />
+                      </View>
+                    )}
+                    <Text style={[shareStyles.bgChipText, shareBgMode === "custom" && shareBgUri ? { color: C.accent } : {}]}>Custom</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -1172,5 +1383,226 @@ const s = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+  },
+});
+
+const shareStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.85)",
+  },
+  container: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  topTitle: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 16,
+    color: Colors.text,
+  },
+  shareBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+    minWidth: 70,
+    alignItems: "center",
+  },
+  shareBtnText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 14,
+    color: "#fff",
+  },
+  scrollContent: {
+    alignItems: "center",
+    paddingBottom: 30,
+  },
+  cardOuter: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 24,
+    overflow: "hidden",
+  },
+  card: {
+    borderRadius: 24,
+    overflow: "hidden",
+    minHeight: 500,
+  },
+  bgImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover" as any,
+  },
+  bgOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  cardContent: {
+    padding: 28,
+    gap: 20,
+    zIndex: 1,
+  },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  brandText: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 16,
+    letterSpacing: 1,
+  },
+  dateText: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 12,
+    color: "#ffffffaa",
+    marginTop: -12,
+  },
+  bigTimeWrap: {
+    alignItems: "center",
+    paddingVertical: 10,
+  },
+  bigTime: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 64,
+    lineHeight: 70,
+  },
+  bigTimeUnit: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 14,
+    color: "#ffffff88",
+    marginTop: 2,
+  },
+  barChart: {
+    gap: 10,
+  },
+  barRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  barLabel: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    color: "#ffffffbb",
+    width: 36,
+  },
+  barTrack: {
+    flex: 1,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#ffffff15",
+    overflow: "hidden",
+  },
+  barFill: {
+    height: "100%",
+    borderRadius: 5,
+  },
+  barValue: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 12,
+    width: 50,
+    textAlign: "right",
+  },
+  goalsSection: {
+    gap: 8,
+  },
+  sectionTitle: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 13,
+    color: "#ffffffcc",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  goalItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  goalLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  goalText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
+    color: "#ffffffdd",
+  },
+  goalProg: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 12,
+  },
+  weekSection: {
+    gap: 10,
+  },
+  weekRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    backgroundColor: "#ffffff10",
+    borderRadius: 14,
+    paddingVertical: 14,
+  },
+  weekItem: {
+    alignItems: "center",
+    flex: 1,
+  },
+  weekVal: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 15,
+  },
+  weekLbl: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 11,
+    color: "#ffffff88",
+    marginTop: 2,
+  },
+  weekDivider: {
+    width: 1,
+    height: 28,
+  },
+  bgOptions: {
+    marginTop: 20,
+    gap: 10,
+    width: "100%",
+    maxWidth: 360,
+  },
+  bgTitle: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  bgRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  bgChip: {
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 10,
+    flex: 1,
+  },
+  bgPreview: {
+    width: 50,
+    height: 30,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bgChipText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 11,
+    color: Colors.textSecondary,
   },
 });
