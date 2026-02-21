@@ -112,6 +112,25 @@ export async function updateNotificationBpm(bpm: number, mode: string, isPlaying
   }
 }
 
+export async function showPausedNotification(bpm: number, mode: string) {
+  if (Platform.OS === "web" || !isSetup) return;
+
+  try {
+    await Notifications.setNotificationCategoryAsync(
+      CATEGORY_ID,
+      buildActions(false)
+    );
+
+    await Notifications.scheduleNotificationAsync({
+      identifier: NOTIFICATION_ID,
+      content: buildContent(bpm, mode, false),
+      trigger: null,
+    });
+  } catch (e) {
+    console.warn("Show paused notification error:", e);
+  }
+}
+
 export async function dismissNotification() {
   if (Platform.OS === "web") return;
 

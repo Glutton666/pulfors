@@ -12,6 +12,7 @@ import * as Linking from "expo-linking";
 import {
   setupNotificationControls,
   showPlayingNotification,
+  showPausedNotification,
   updateNotificationBpm,
   dismissNotification,
   addNotificationActionListener,
@@ -595,7 +596,7 @@ export default function MetronomeScreen() {
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
-      dismissNotification();
+      showPausedNotification(bpm, modeLabel);
       if (loggingEnabled && practiceStartRef.current) {
         const dur = Math.round((Date.now() - practiceStartRef.current) / 1000);
         if (dur >= 3) {
@@ -744,7 +745,8 @@ export default function MetronomeScreen() {
         setIsPlaying(false);
         setCurrentBeat(-1);
         setActiveSubNote(-1);
-        dismissNotification();
+        const modeLabel = barModeRef.current ? "Bar" : "Dial";
+        showPausedNotification(bpmRef.current, modeLabel);
       }
     });
   }, []);
@@ -759,7 +761,8 @@ export default function MetronomeScreen() {
       engine.stop();
       setIsPlaying(false);
       setCurrentBeat(-1);
-      dismissNotification();
+      const modeLabel = barModeRef.current ? "Bar" : "Dial";
+      showPausedNotification(bpmRef.current, modeLabel);
     } else {
       engine.requestStopAfterMeasure();
     }
