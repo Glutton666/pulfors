@@ -48,6 +48,13 @@ import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import type { PracticeEntry } from "@/lib/storage";
 import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog } from "@/lib/activity-log";
 import type { ActivityLog } from "@/lib/activity-log";
+import {
+  loadPracticeRooms,
+  getCurrentLocation,
+  checkLocationPermission,
+  findNearbyRoom,
+  type PracticeRoom,
+} from "@/lib/practice-room";
 
 function getTempoLabel(bpm: number): string {
   if (bpm < 40) return "Grave";
@@ -124,6 +131,8 @@ export default function MetronomeScreen() {
   const [loggingEnabled, setLoggingEnabled] = useState(false);
   const practiceStartRef = useRef<number | null>(null);
   const featureStartRef = useRef<{ name: string; start: number } | null>(null);
+  const roomTrackRef = useRef<{ roomId: string; roomName: string; start: number } | null>(null);
+  const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -267,6 +276,85 @@ export default function MetronomeScreen() {
       engine.cleanup();
     };
   }, []);
+
+  useEffect(() => {
+    if (!loggingEnabled) {
+      if (locationIntervalRef.current) {
+        clearInterval(locationIntervalRef.current);
+        locationIntervalRef.current = null;
+      }
+      if (roomTrackRef.current) {
+        const dur = Math.round((Date.now() - roomTrackRef.current.start) / 1000);
+        if (dur >= 10) {
+          addActivityLog({
+            type: "practice_room_visit",
+            data: { roomId: roomTrackRef.current.roomId, roomName: roomTrackRef.current.roomName, duration: dur },
+          });
+        }
+        roomTrackRef.current = null;
+      }
+      return;
+    }
+
+    const checkLocation = async () => {
+      try {
+        const hasPermission = await checkLocationPermission();
+        if (!hasPermission) return;
+
+        const rooms = await loadPracticeRooms();
+        if (rooms.length === 0) return;
+
+        const loc = await getCurrentLocation();
+        if (!loc) return;
+
+        const nearbyRoom = findNearbyRoom(loc.coords.latitude, loc.coords.longitude, rooms);
+
+        if (nearbyRoom && !roomTrackRef.current) {
+          roomTrackRef.current = { roomId: nearbyRoom.id, roomName: nearbyRoom.name, start: Date.now() };
+        } else if (nearbyRoom && roomTrackRef.current && roomTrackRef.current.roomId !== nearbyRoom.id) {
+          const dur = Math.round((Date.now() - roomTrackRef.current.start) / 1000);
+          if (dur >= 10) {
+            addActivityLog({
+              type: "practice_room_visit",
+              data: { roomId: roomTrackRef.current.roomId, roomName: roomTrackRef.current.roomName, duration: dur },
+            });
+          }
+          roomTrackRef.current = { roomId: nearbyRoom.id, roomName: nearbyRoom.name, start: Date.now() };
+        } else if (!nearbyRoom && roomTrackRef.current) {
+          const dur = Math.round((Date.now() - roomTrackRef.current.start) / 1000);
+          if (dur >= 10) {
+            addActivityLog({
+              type: "practice_room_visit",
+              data: { roomId: roomTrackRef.current.roomId, roomName: roomTrackRef.current.roomName, duration: dur },
+            });
+          }
+          roomTrackRef.current = null;
+        }
+      } catch (e) {
+        // silently ignore location errors during tracking
+      }
+    };
+
+    checkLocation();
+    locationIntervalRef.current = setInterval(checkLocation, 30000);
+
+    return () => {
+      if (locationIntervalRef.current) {
+        clearInterval(locationIntervalRef.current);
+        locationIntervalRef.current = null;
+      }
+      if (roomTrackRef.current) {
+        const dur = Math.round((Date.now() - roomTrackRef.current.start) / 1000);
+        if (dur >= 10) {
+          addActivityLog({
+            type: "practice_room_visit",
+            data: { roomId: roomTrackRef.current.roomId, roomName: roomTrackRef.current.roomName, duration: dur },
+          });
+        }
+        roomTrackRef.current = null;
+      }
+    };
+  }, [loggingEnabled]);
 
   const flashModeRef = useRef(flashMode);
   useEffect(() => { flashModeRef.current = flashMode; }, [flashMode]);
