@@ -133,6 +133,8 @@ export default function MetronomeScreen() {
   const [dropTargetBeat, setDropTargetBeat] = useState<number | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [volume, setVolume] = useState(0.5);
+  const [sampleVolume, setSampleVolume] = useState(0.8);
+  const sampleVolumeRef = useRef(0.8);
   const [showSettings, setShowSettings] = useState(false);
   const [backgroundPlay, setBackgroundPlay] = useState(false);
   const [soundSet, setSoundSet] = useState<SoundSet>("classic");
@@ -267,6 +269,7 @@ export default function MetronomeScreen() {
           const rawUri = uri.split("#")[0];
           const isFileUri = rawUri.startsWith("file://");
           const player = createAudioPlayer(rawUri, { downloadFirst: isFileUri });
+          player.volume = sampleVolumeRef.current * 5.0;
           noteSampleSoundsRef.current[key] = player;
         } catch (e) {
           console.warn("[SamplePreload] Failed to preload:", key, e);
@@ -300,6 +303,10 @@ export default function MetronomeScreen() {
       }
       if (settings.volume !== undefined) {
         setVolume(settings.volume);
+      }
+      if (settings.sampleVolume !== undefined) {
+        setSampleVolume(settings.sampleVolume);
+        sampleVolumeRef.current = settings.sampleVolume;
       }
       if (settings.backgroundPlay !== undefined) {
         setBackgroundPlay(settings.backgroundPlay);
@@ -428,6 +435,7 @@ export default function MetronomeScreen() {
         const rawUri = uri.split("#")[0];
         const isFileUri = rawUri.startsWith("file://");
         const player = createAudioPlayer(rawUri, { downloadFirst: isFileUri });
+        player.volume = sampleVolumeRef.current * 5.0;
         noteSampleSoundsRef.current[key] = player;
       } catch (e) {
         console.warn("[SamplePreload] Failed:", key, e);
@@ -649,6 +657,7 @@ export default function MetronomeScreen() {
         subdivisionPattern,
         beatSubdivisions,
         volume,
+        sampleVolume,
         backgroundPlay,
         soundSet,
         flashMode,
@@ -659,7 +668,7 @@ export default function MetronomeScreen() {
       };
       saveSettings(current);
     },
-    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, backgroundPlay, soundSet, flashMode, hapticMode, audioOffsetMs, timerStopMode]
+    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, flashMode, hapticMode, audioOffsetMs, timerStopMode]
   );
 
   const updateVolume = useCallback(
@@ -669,6 +678,26 @@ export default function MetronomeScreen() {
     },
     [persistSettings]
   );
+
+  const updateSampleVolume = useCallback(
+    (newVol: number) => {
+      setSampleVolume(newVol);
+      sampleVolumeRef.current = newVol;
+      const MAX_SAMPLE_VOL = 5.0;
+      for (const player of Object.values(noteSampleSoundsRef.current)) {
+        try { player.volume = newVol * MAX_SAMPLE_VOL; } catch {}
+      }
+      persistSettings({ sampleVolume: newVol });
+    },
+    [persistSettings]
+  );
+
+  useEffect(() => {
+    const MAX_SAMPLE_VOL = 5.0;
+    for (const player of Object.values(noteSampleSoundsRef.current)) {
+      try { player.volume = sampleVolume * MAX_SAMPLE_VOL; } catch {}
+    }
+  }, [sampleVolume]);
 
   const updateBackgroundPlay = useCallback(
     (value: boolean) => {
@@ -1670,6 +1699,8 @@ export default function MetronomeScreen() {
         onClose={() => setShowSettings(false)}
         volume={volume}
         onVolumeChange={updateVolume}
+        sampleVolume={sampleVolume}
+        onSampleVolumeChange={updateSampleVolume}
         backgroundPlay={backgroundPlay}
         onBackgroundPlayChange={updateBackgroundPlay}
         soundSet={soundSet}
