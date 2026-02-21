@@ -42,6 +42,8 @@ import { StopwatchTimer } from "@/components/StopwatchTimer";
 import { SettingsModal } from "@/components/SettingsModal";
 import { TunerModal } from "@/components/TunerModal";
 import { SignalGeneratorModal } from "@/components/SignalGeneratorModal";
+import { PracticeBookModal } from "@/components/PracticeBookModal";
+import type { PracticeEntry } from "@/lib/storage";
 
 function getTempoLabel(bpm: number): string {
   if (bpm < 40) return "Grave";
@@ -111,6 +113,7 @@ export default function MetronomeScreen() {
   const [showMenu, setShowMenu] = useState(false);
   const [showTuner, setShowTuner] = useState(false);
   const [showSignalGen, setShowSignalGen] = useState(false);
+  const [showPracticeBook, setShowPracticeBook] = useState(false);
 
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -790,6 +793,60 @@ export default function MetronomeScreen() {
     return counts;
   }, [beatSubdivisions]);
 
+  const currentBarConfig = useMemo(() => {
+    if (!barMode) return null;
+    return {
+      bpm,
+      beatsPerMeasure,
+      beatTypes: [...beatTypes],
+      beatSubdivisions: { ...beatSubdivisions },
+      barRepeats: { ...barRepeats },
+      barLoopMode: barLoopMode as "loop" | "once",
+      subdivisionPattern: [...subdivisionPattern],
+    };
+  }, [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, barLoopMode, subdivisionPattern]);
+
+  const handleLoadPracticeEntry = useCallback((entry: PracticeEntry) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+
+    if (isPlaying) {
+      engine.stop();
+      setIsPlaying(false);
+      setCurrentBeat(-1);
+      setActiveSubNote(-1);
+    }
+
+    if (!barMode) {
+      dialConfigRef.current = {
+        beatsPerMeasure,
+        beatTypes: [...beatTypes],
+        beatSubdivisions: { ...beatSubdivisions },
+      };
+      setBarMode(true);
+    }
+
+    setBpm(entry.bpm);
+    setBeatsPerMeasure(entry.beatsPerMeasure);
+    setBeatTypes([...entry.beatTypes]);
+    setBeatSubdivisions({ ...entry.beatSubdivisions });
+    setBarRepeats({ ...entry.barRepeats });
+    setBarLoopMode(entry.barLoopMode);
+    setSubdivisionPattern([...entry.subdivisionPattern]);
+
+    engine.setBpm(entry.bpm);
+    engine.setBeatsPerMeasure(entry.beatsPerMeasure);
+    engine.setBeatTypes([...entry.beatTypes]);
+    engine.setAllBeatSubdivisions(entry.beatSubdivisions);
+    engine.setBarRepeats(entry.barRepeats);
+    barConfigRef.current = {
+      beatsPerMeasure: entry.beatsPerMeasure,
+      beatTypes: [...entry.beatTypes],
+      beatSubdivisions: { ...entry.beatSubdivisions },
+      barRepeats: { ...entry.barRepeats },
+    };
+  }, [isPlaying, barMode, beatsPerMeasure, beatTypes, beatSubdivisions]);
+
   const tempoLabel = getTempoLabel(bpm);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -862,6 +919,17 @@ export default function MetronomeScreen() {
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
+                  setShowPracticeBook(true);
+                }}
+              >
+                <MaterialCommunityIcons name="notebook-outline" size={18} color={C.accent} />
+                <Text style={styles.menuItemText}>연습장</Text>
+              </Pressable>
+              <View style={styles.menuDivider} />
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                onPress={() => {
+                  setShowMenu(false);
                   setShowSettings(true);
                 }}
               >
@@ -881,6 +949,13 @@ export default function MetronomeScreen() {
       <SignalGeneratorModal
         visible={showSignalGen}
         onClose={() => setShowSignalGen(false)}
+      />
+
+      <PracticeBookModal
+        visible={showPracticeBook}
+        onClose={() => setShowPracticeBook(false)}
+        onLoad={handleLoadPracticeEntry}
+        currentConfig={currentBarConfig}
       />
 
       <SettingsModal
