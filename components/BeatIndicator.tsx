@@ -1103,12 +1103,21 @@ export function BeatIndicator({
         <View style={styles.centerArea} pointerEvents="box-none">
           {hubImages.length > 0 && (() => {
             const currentBeatType = isPlaying && currentBeat >= 0 ? (beatTypes[currentBeat] || "normal") : "normal";
-            const activeImage = getImageForBeatType(currentBeatType);
-            return activeImage ? (
+            const activeUri = getImageForBeatType(currentBeatType);
+            return (
               <View style={styles.centerImageContainer} pointerEvents="none">
-                <Image source={{ uri: activeImage }} style={styles.centerImage} />
+                {hubImages.map((img) => (
+                  <Image
+                    key={img.id}
+                    source={{ uri: img.uri }}
+                    style={[
+                      styles.centerImage,
+                      { position: "absolute", opacity: img.uri === activeUri ? 1 : 0 },
+                    ]}
+                  />
+                ))}
               </View>
-            ) : null;
+            );
           })()}
 
           <View style={styles.signatureRow} pointerEvents="none">
