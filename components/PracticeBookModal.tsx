@@ -14,6 +14,7 @@ import {
   Share,
   Dimensions,
 } from "react-native";
+import * as Linking from "expo-linking";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
@@ -383,6 +384,23 @@ export function PracticeBookModal({
       timerText = `\nTimer: ${tm}:${String(ts).padStart(2, "0")}`;
     }
 
+    const shareData: Omit<PracticeEntry, "id"> = {
+      label: entry.label,
+      createdAt: entry.createdAt,
+      createdBy: entry.createdBy,
+      bpm: entry.bpm,
+      beatsPerMeasure: entry.beatsPerMeasure,
+      beatTypes: entry.beatTypes,
+      beatSubdivisions: entry.beatSubdivisions,
+      barRepeats: entry.barRepeats,
+      barLoopMode: entry.barLoopMode,
+      subdivisionPattern: entry.subdivisionPattern,
+      barClockMode: entry.barClockMode,
+      barTimerDuration: entry.barTimerDuration,
+    };
+    const encoded = encodeURIComponent(btoa(JSON.stringify(shareData)));
+    const deepLink = Linking.createURL("practice", { queryParams: { d: encoded } });
+
     const message = [
       `🎵 ${entry.label}`,
       entry.createdBy ? `by ${entry.createdBy}` : "",
@@ -392,11 +410,12 @@ export function PracticeBookModal({
       `Pattern: ${entry.beatTypes.map((t) => beatTypeNames[t]).join(" → ")}`,
       `Mode: ${loopText}${timerText}`,
       ``,
-      `Created: ${formatDate(entry.createdAt)}`,
+      `앱에서 바로 적용하기:`,
+      deepLink,
     ].filter(Boolean).join("\n");
 
     try {
-      await Share.share({ message, title: entry.label });
+      await Share.share({ message, title: entry.label, url: deepLink });
     } catch (_) {}
   }, []);
 

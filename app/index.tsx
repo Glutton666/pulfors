@@ -8,6 +8,7 @@ import {
   Modal,
   Alert,
 } from "react-native";
+import * as Linking from "expo-linking";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
@@ -1036,6 +1037,53 @@ export default function MetronomeScreen() {
     };
     loadedPracticeNoteRef.current = { id: entry.id, label: entry.label };
   }, [isPlaying, barMode, beatsPerMeasure, beatTypes, beatSubdivisions]);
+
+  const handleDeepLinkImport = useCallback((url: string) => {
+    try {
+      const parsed = Linking.parse(url);
+      if (parsed.path === "practice" && parsed.queryParams?.d) {
+        const decoded = JSON.parse(atob(decodeURIComponent(parsed.queryParams.d as string)));
+        if (decoded && decoded.bpm && decoded.beatTypes) {
+          const entry: PracticeEntry = {
+            id: Crypto.randomUUID(),
+            ...decoded,
+          };
+          Alert.alert(
+            "설정 가져오기",
+            `"${entry.label}" 설정을 적용하시겠습니까?\n\nBPM: ${entry.bpm} | ${entry.beatsPerMeasure} beats`,
+            [
+              { text: "취소", style: "cancel" },
+              {
+                text: "적용",
+                onPress: () => handleLoadPracticeEntry(entry),
+              },
+              {
+                text: "저장 후 적용",
+                onPress: async () => {
+                  const { loadPracticeBook: lpb, savePracticeBook: spb } = await import("@/lib/storage");
+                  const existing = await lpb();
+                  await spb([entry, ...existing]);
+                  handleLoadPracticeEntry(entry);
+                  Alert.alert("저장 완료", `"${entry.label}" 이(가) Practice Note에 저장되었습니다.`);
+                },
+              },
+            ]
+          );
+        }
+      }
+    } catch (e) {
+      console.warn("Deep link parse error:", e);
+    }
+  }, [handleLoadPracticeEntry]);
+
+  useEffect(() => {
+    const handleUrl = (event: { url: string }) => handleDeepLinkImport(event.url);
+    const sub = Linking.addEventListener("url", handleUrl);
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLinkImport(url);
+    });
+    return () => sub.remove();
+  }, [handleDeepLinkImport]);
 
   const handleSetPracticeNoteGoal = useCallback(async (entry: PracticeEntry, targetMinutes: number) => {
     const goals = await loadGoals();
