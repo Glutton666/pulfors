@@ -369,10 +369,11 @@ export function SettingsModal({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           bounces={false}
+          onStartShouldSetResponder={() => true}
         >
-          <View
+          <Pressable
             style={styles.sheet}
-            onStartShouldSetResponder={() => true}
+            onPress={(e) => e.stopPropagation()}
           >
             <View style={styles.header}>
               <Text style={styles.title}>Settings</Text>
@@ -694,7 +695,7 @@ export function SettingsModal({
                 ? "Stops after current measure ends"
                 : "Stops immediately when timer expires"}
             </Text>
-          </View>
+          </Pressable>
           </View>
         </ScrollView>
       </Pressable>
