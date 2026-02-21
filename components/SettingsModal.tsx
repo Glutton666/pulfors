@@ -695,8 +695,8 @@ export function SettingsModal({
                 ? "Stops after current measure ends"
                 : "Stops immediately when timer expires"}
             </Text>
-          </Pressable>
           </View>
+          </Pressable>
         </ScrollView>
       </Pressable>
     </Modal>
