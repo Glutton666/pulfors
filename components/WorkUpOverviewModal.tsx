@@ -228,16 +228,9 @@ export function WorkUpOverviewModal({
   const [addingRoom, setAddingRoom] = useState(false);
 
   const [showShareModal, setShowShareModal] = useState(false);
-  const [shareBgMode, setShareBgMode] = useState<"grayscale" | "custom">("grayscale");
   const [shareBgUri, setShareBgUri] = useState<string | null>(null);
   const [shareCapturing, setShareCapturing] = useState(false);
   const shareRef = useRef<View>(null);
-
-  const grayscaleColors = useMemo(() => {
-    const hues = ["#1a1a2e", "#16213e", "#0f3460", "#1a1a1a", "#2d2d2d", "#1e1e2f", "#0d1117", "#161b22", "#21262d", "#282c34"];
-    const idx = Math.floor(Math.random() * hues.length);
-    return { bg: hues[idx], secondary: "#ffffff15" };
-  }, [showShareModal]);
 
   const pickShareBg = useCallback(async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -248,7 +241,6 @@ export function WorkUpOverviewModal({
     });
     if (!result.canceled && result.assets?.[0]) {
       setShareBgUri(result.assets[0].uri);
-      setShareBgMode("custom");
     }
   }, []);
 
@@ -888,11 +880,11 @@ export function WorkUpOverviewModal({
 
             <ScrollView contentContainerStyle={shareStyles.scrollContent} showsVerticalScrollIndicator={false}>
               <View ref={shareRef} collapsable={false} style={shareStyles.cardOuter}>
-                <View style={[shareStyles.card, { backgroundColor: shareBgMode === "custom" && shareBgUri ? "transparent" : grayscaleColors.bg }]}>
-                  {shareBgMode === "custom" && shareBgUri && (
+                <View style={[shareStyles.card, { backgroundColor: shareBgUri ? "transparent" : Colors.background }]}>
+                  {shareBgUri && (
                     <Image source={{ uri: shareBgUri }} style={shareStyles.bgImage} blurRadius={2} />
                   )}
-                  {shareBgMode === "custom" && shareBgUri && (
+                  {shareBgUri && (
                     <View style={shareStyles.bgOverlay} />
                   )}
 
@@ -985,19 +977,12 @@ export function WorkUpOverviewModal({
                 </View>
               </View>
 
-              {/* Background options */}
+              {/* Background option */}
               <View style={shareStyles.bgOptions}>
                 <Text style={shareStyles.bgTitle}>Background</Text>
                 <View style={shareStyles.bgRow}>
                   <Pressable
-                    style={[shareStyles.bgChip, shareBgMode === "grayscale" && !shareBgUri && { borderColor: C.accent, backgroundColor: C.accentDim }]}
-                    onPress={() => { setShareBgMode("grayscale"); setShareBgUri(null); }}
-                  >
-                    <View style={[shareStyles.bgPreview, { backgroundColor: grayscaleColors.bg }]} />
-                    <Text style={[shareStyles.bgChipText, shareBgMode === "grayscale" && !shareBgUri && { color: C.accent }]}>Random</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[shareStyles.bgChip, shareBgMode === "custom" && shareBgUri ? { borderColor: C.accent, backgroundColor: C.accentDim } : {}]}
+                    style={[shareStyles.bgChip, shareBgUri ? { borderColor: C.accent, backgroundColor: C.accentDim } : {}]}
                     onPress={pickShareBg}
                   >
                     {shareBgUri ? (
@@ -1007,8 +992,17 @@ export function WorkUpOverviewModal({
                         <Ionicons name="image-outline" size={14} color={Colors.textTertiary} />
                       </View>
                     )}
-                    <Text style={[shareStyles.bgChipText, shareBgMode === "custom" && shareBgUri ? { color: C.accent } : {}]}>Custom</Text>
+                    <Text style={[shareStyles.bgChipText, shareBgUri ? { color: C.accent } : {}]}>Custom Image</Text>
                   </Pressable>
+                  {shareBgUri && (
+                    <Pressable
+                      style={[shareStyles.bgChip, { borderColor: Colors.border }]}
+                      onPress={() => setShareBgUri(null)}
+                    >
+                      <View style={[shareStyles.bgPreview, { backgroundColor: Colors.background }]} />
+                      <Text style={shareStyles.bgChipText}>Reset</Text>
+                    </Pressable>
+                  )}
                 </View>
               </View>
             </ScrollView>
