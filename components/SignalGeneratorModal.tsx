@@ -9,11 +9,12 @@ import {
   TextInput,
   PanResponder,
   ScrollView,
-  Alert,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useAudioPlayer } from "expo-audio";
+import { Audio } from "expo-av";
+import * as FileSystem from "expo-file-system";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
@@ -177,6 +178,8 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const micSourceRef = useRef<any>(null);
   const micStreamRef = useRef<any>(null);
   const micRafRef = useRef<number | null>(null);
+  const micRecordingRef = useRef<Audio.Recording | null>(null);
+  const micMobileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const engineRef = useRef(new SignalGeneratorEngine());
   const isPlayingRef = useRef(false);
@@ -253,37 +256,94 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       if (micSourceRef.current) micSourceRef.current.disconnect();
       if (micAudioCtxRef.current) micAudioCtxRef.current.close();
       if (micStreamRef.current) micStreamRef.current.getTracks().forEach((t: any) => t.stop());
+      if (micMobileTimerRef.current) clearTimeout(micMobileTimerRef.current);
+      if (micRecordingRef.current) {
+        try { micRecordingRef.current.stopAndUnloadAsync(); } catch {}
+      }
     };
+  }, []);
+
+  const decodeWavBase64 = useCallback((base64: string, sampleRate: number): { samples: Float32Array; rate: number } | null => {
+    try {
+      const binaryStr = atob(base64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+      const view = new DataView(bytes.buffer);
+      const riffTag = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+      if (riffTag !== "RIFF") return null;
+      const numChannels = view.getUint16(22, true);
+      const wavSampleRate = view.getUint32(24, true);
+      const bitsPerSample = view.getUint16(34, true);
+      let dataOffset = 36;
+      while (dataOffset < bytes.length - 8) {
+        const tag = String.fromCharCode(bytes[dataOffset], bytes[dataOffset + 1], bytes[dataOffset + 2], bytes[dataOffset + 3]);
+        const chunkSize = view.getUint32(dataOffset + 4, true);
+        if (tag === "data") {
+          dataOffset += 8;
+          const bytesPerSample = bitsPerSample / 8;
+          const numSamples = Math.floor(chunkSize / (bytesPerSample * numChannels));
+          const samples = new Float32Array(numSamples);
+          for (let i = 0; i < numSamples; i++) {
+            const offset = dataOffset + i * bytesPerSample * numChannels;
+            if (offset + bytesPerSample > bytes.length) break;
+            if (bitsPerSample === 16) {
+              samples[i] = view.getInt16(offset, true) / 32768;
+            } else if (bitsPerSample === 8) {
+              samples[i] = (bytes[offset] - 128) / 128;
+            }
+          }
+          return { samples, rate: wavSampleRate || sampleRate };
+        }
+        dataOffset += 8 + chunkSize;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const stopMobileMic = useCallback(async () => {
+    if (micMobileTimerRef.current) {
+      clearTimeout(micMobileTimerRef.current);
+      micMobileTimerRef.current = null;
+    }
+    if (micRecordingRef.current) {
+      try {
+        await micRecordingRef.current.stopAndUnloadAsync();
+      } catch {}
+      micRecordingRef.current = null;
+    }
+    await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
   }, []);
 
   const stopMic = useCallback(() => {
     micActiveRef.current = false;
     setMicListening(false);
-    if (micRafRef.current) {
-      cancelAnimationFrame(micRafRef.current);
-      micRafRef.current = null;
-    }
-    if (micSourceRef.current) {
-      micSourceRef.current.disconnect();
-      micSourceRef.current = null;
-    }
-    if (micAudioCtxRef.current) {
-      micAudioCtxRef.current.close();
-      micAudioCtxRef.current = null;
-    }
-    if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach((t: any) => t.stop());
-      micStreamRef.current = null;
+    if (Platform.OS === "web") {
+      if (micRafRef.current) {
+        cancelAnimationFrame(micRafRef.current);
+        micRafRef.current = null;
+      }
+      if (micSourceRef.current) {
+        micSourceRef.current.disconnect();
+        micSourceRef.current = null;
+      }
+      if (micAudioCtxRef.current) {
+        micAudioCtxRef.current.close();
+        micAudioCtxRef.current = null;
+      }
+      if (micStreamRef.current) {
+        micStreamRef.current.getTracks().forEach((t: any) => t.stop());
+        micStreamRef.current = null;
+      }
+    } else {
+      stopMobileMic();
     }
     setMicDetectedFreq(null);
     setMicDetectedNote(null);
-  }, []);
+  }, [stopMobileMic]);
 
-  const startMic = useCallback(async () => {
-    if (Platform.OS !== "web") {
-      Alert.alert("Web Only", "Microphone pitch detection is available on web only.");
-      return;
-    }
+  const startMicWeb = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       micStreamRef.current = stream;
@@ -320,6 +380,103 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       setMicListening(false);
     }
   }, []);
+
+  const startMicMobile = useCallback(async () => {
+    try {
+      const perm = await Audio.requestPermissionsAsync();
+      if (!perm.granted) return;
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      micActiveRef.current = true;
+      setMicListening(true);
+
+      const SAMPLE_RATE = 44100;
+      const RECORD_MS = 300;
+
+      const recordAndAnalyze = async () => {
+        if (!micActiveRef.current) return;
+        try {
+          const recording = new Audio.Recording();
+          await recording.prepareToRecordAsync({
+            isMeteringEnabled: false,
+            android: {
+              extension: ".wav",
+              outputFormat: (Audio as any).AndroidOutputFormat?.DEFAULT ?? 0,
+              audioEncoder: (Audio as any).AndroidAudioEncoder?.DEFAULT ?? 0,
+              sampleRate: SAMPLE_RATE,
+              numberOfChannels: 1,
+              bitRate: 128000,
+            },
+            ios: {
+              extension: ".wav",
+              outputFormat: (Audio as any).IOSOutputFormat?.LINEARPCM ?? 1819304813,
+              audioQuality: (Audio as any).IOSAudioQuality?.HIGH ?? 127,
+              sampleRate: SAMPLE_RATE,
+              numberOfChannels: 1,
+              bitRate: 128000,
+              linearPCMBitDepth: 16,
+              linearPCMIsBigEndian: false,
+              linearPCMIsFloat: false,
+            },
+            web: { mimeType: "audio/wav", bitsPerSecond: 128000 },
+          });
+          micRecordingRef.current = recording;
+          await recording.startAsync();
+
+          micMobileTimerRef.current = setTimeout(async () => {
+            if (!micActiveRef.current) return;
+            try {
+              await recording.stopAndUnloadAsync();
+              const uri = recording.getURI();
+              micRecordingRef.current = null;
+              if (uri) {
+                const base64 = await FileSystem.readAsStringAsync(uri, {
+                  encoding: "base64" as any,
+                });
+                const decoded = decodeWavBase64(base64, SAMPLE_RATE);
+                if (decoded && decoded.samples.length > 256) {
+                  const freq = autoCorrelate(decoded.samples, decoded.rate);
+                  if (freq > 20 && freq <= MAX_FREQ) {
+                    const rounded = Math.round(freq * 10) / 10;
+                    setMicDetectedFreq(rounded);
+                    const noteInfo = frequencyToNote(freq);
+                    setMicDetectedNote(`${noteInfo.name}${noteInfo.octave}`);
+                  } else {
+                    setMicDetectedFreq(null);
+                    setMicDetectedNote(null);
+                  }
+                }
+                try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
+              }
+            } catch {}
+            if (micActiveRef.current) {
+              recordAndAnalyze();
+            }
+          }, RECORD_MS);
+        } catch {
+          if (micActiveRef.current) {
+            micMobileTimerRef.current = setTimeout(recordAndAnalyze, 500);
+          }
+        }
+      };
+
+      recordAndAnalyze();
+    } catch {
+      setMicListening(false);
+    }
+  }, [decodeWavBase64]);
+
+  const startMic = useCallback(async () => {
+    if (Platform.OS === "web") {
+      startMicWeb();
+    } else {
+      startMicMobile();
+    }
+  }, [startMicWeb, startMicMobile]);
 
   const toggleMic = useCallback(() => {
     hapticFeedback();
