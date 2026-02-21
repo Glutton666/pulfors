@@ -9,6 +9,7 @@ import {
   TextInput,
   PanResponder,
   ScrollView,
+  Alert,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -279,7 +280,10 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   }, []);
 
   const startMic = useCallback(async () => {
-    if (Platform.OS !== "web") return;
+    if (Platform.OS !== "web") {
+      Alert.alert("Web Only", "Microphone pitch detection is available on web only.");
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       micStreamRef.current = stream;
@@ -469,52 +473,50 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
             </View>
           </View>
 
-          {Platform.OS === "web" && (
-            <View style={styles.micSection}>
-              <View style={styles.micRow}>
+          <View style={styles.micSection}>
+            <View style={styles.micRow}>
+              <Pressable
+                onPress={toggleMic}
+                style={({ pressed }) => [
+                  styles.micBtn,
+                  micListening && { backgroundColor: Colors.danger },
+                  !micListening && { backgroundColor: Colors.surfaceLight, borderWidth: 1, borderColor: Colors.border },
+                  pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+                ]}
+                testID="signal-mic-toggle"
+              >
+                <MaterialCommunityIcons
+                  name={micListening ? "microphone-off" : "microphone"}
+                  size={18}
+                  color={micListening ? Colors.white : C.accent}
+                />
+                <Text style={[styles.micBtnText, { color: micListening ? Colors.white : Colors.textSecondary }]}>
+                  {micListening ? "Stop" : "Listen"}
+                </Text>
+              </Pressable>
+
+              {micListening && micDetectedFreq && (
                 <Pressable
-                  onPress={toggleMic}
+                  onPress={applyMicFreq}
                   style={({ pressed }) => [
-                    styles.micBtn,
-                    micListening && { backgroundColor: Colors.danger },
-                    !micListening && { backgroundColor: Colors.surfaceLight, borderWidth: 1, borderColor: Colors.border },
+                    styles.micApplyBtn,
+                    { backgroundColor: C.accentDim, borderColor: C.accent },
                     pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
                   ]}
-                  testID="signal-mic-toggle"
+                  testID="signal-mic-apply"
                 >
-                  <MaterialCommunityIcons
-                    name={micListening ? "microphone-off" : "microphone"}
-                    size={18}
-                    color={micListening ? Colors.white : C.accent}
-                  />
-                  <Text style={[styles.micBtnText, { color: micListening ? Colors.white : Colors.textSecondary }]}>
-                    {micListening ? "Stop" : "Listen"}
+                  <Text style={[styles.micApplyFreq, { color: C.accent }]}>
+                    {micDetectedNote} {micDetectedFreq} Hz
                   </Text>
+                  <Ionicons name="arrow-forward" size={14} color={C.accent} />
                 </Pressable>
+              )}
 
-                {micListening && micDetectedFreq && (
-                  <Pressable
-                    onPress={applyMicFreq}
-                    style={({ pressed }) => [
-                      styles.micApplyBtn,
-                      { backgroundColor: C.accentDim, borderColor: C.accent },
-                      pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
-                    ]}
-                    testID="signal-mic-apply"
-                  >
-                    <Text style={[styles.micApplyFreq, { color: C.accent }]}>
-                      {micDetectedNote} {micDetectedFreq} Hz
-                    </Text>
-                    <Ionicons name="arrow-forward" size={14} color={C.accent} />
-                  </Pressable>
-                )}
-
-                {micListening && !micDetectedFreq && (
-                  <Text style={styles.micHint}>Listening...</Text>
-                )}
-              </View>
+              {micListening && !micDetectedFreq && (
+                <Text style={styles.micHint}>Listening...</Text>
+              )}
             </View>
-          )}
+          </View>
 
           <Pressable
             onPress={() => {
