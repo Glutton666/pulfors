@@ -703,63 +703,50 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
 
           <View style={styles.divider} />
 
-          <View style={styles.knobPickerRow}>
-            <View style={styles.pickerColumnWrap}>
-              <PickerColumn
-                data={NOTE_NAMES}
-                selected={selectedNote}
-                onSelect={handleNoteSelect}
-                accentColor={C.accent}
-                accentDim={C.accentDim}
-              />
-              <Text style={styles.pickerHzHint}>
-                {noteToFreq(selectedNote, selectedOctave)} Hz
-              </Text>
-            </View>
+          <Knob
+            value={freqNorm}
+            onChange={handleFreqKnob}
+            displayValue={formatFreqDisplay(frequency)}
+            displayUnit={freqDisplayUnit}
+            accentColor={C.accent}
+            accentDim={C.accentDim}
+            onTapCenter={openFreqEdit}
+          />
 
-            <View style={styles.knobCenterWrap}>
-              <Knob
-                value={freqNorm}
-                onChange={handleFreqKnob}
-                displayValue={formatFreqDisplay(frequency)}
-                displayUnit={freqDisplayUnit}
-                accentColor={C.accent}
-                accentDim={C.accentDim}
-                onTapCenter={openFreqEdit}
+          {editingFreq && (
+            <View style={styles.freqEditRow}>
+              <TextInput
+                style={[styles.freqEditInput, { color: C.accent, borderBottomColor: C.accent }]}
+                value={freqInput}
+                onChangeText={setFreqInput}
+                onSubmitEditing={commitFreqInput}
+                onBlur={commitFreqInput}
+                keyboardType="numeric"
+                autoFocus
+                selectTextOnFocus
               />
-              {editingFreq ? (
-                <View style={styles.freqEditRow}>
-                  <TextInput
-                    style={[styles.freqEditInput, { color: C.accent, borderBottomColor: C.accent }]}
-                    value={freqInput}
-                    onChangeText={setFreqInput}
-                    onSubmitEditing={commitFreqInput}
-                    onBlur={commitFreqInput}
-                    keyboardType="numeric"
-                    autoFocus
-                    selectTextOnFocus
-                  />
-                  <Text style={styles.freqEditUnit}>Hz</Text>
-                </View>
-              ) : (
-                <Pressable onPress={openFreqEdit} style={styles.freqTapBtn} hitSlop={8}>
-                  <Text style={[styles.freqTapText, { color: Colors.textSecondary }]}>
-                    {frequency} Hz
-                  </Text>
-                  <Ionicons name="pencil" size={12} color={Colors.textTertiary} style={{ marginLeft: 4 }} />
-                </Pressable>
-              )}
+              <Text style={styles.freqEditUnit}>Hz</Text>
             </View>
+          )}
 
-            <View style={styles.pickerColumnWrap}>
-              <PickerColumn
-                data={OCTAVES}
-                selected={selectedOctave}
-                onSelect={handleOctaveSelect}
-                accentColor={C.accent}
-                accentDim={C.accentDim}
-              />
-            </View>
+          <View style={styles.notePickerRow}>
+            <PickerColumn
+              data={NOTE_NAMES}
+              selected={selectedNote}
+              onSelect={handleNoteSelect}
+              accentColor={C.accent}
+              accentDim={C.accentDim}
+            />
+            <PickerColumn
+              data={OCTAVES}
+              selected={selectedOctave}
+              onSelect={handleOctaveSelect}
+              accentColor={C.accent}
+              accentDim={C.accentDim}
+            />
+            <Text style={styles.pickerHzHint}>
+              {noteToFreq(selectedNote, selectedOctave)} Hz
+            </Text>
           </View>
 
           <View style={styles.waveSection}>
@@ -979,26 +966,18 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     marginBottom: 6,
   },
-  knobPickerRow: {
+  notePickerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
-    width: "100%",
-  },
-  pickerColumnWrap: {
-    alignItems: "center",
-    gap: 4,
-  },
-  knobCenterWrap: {
-    alignItems: "center",
-    gap: 2,
+    gap: 10,
   },
   pickerHzHint: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 10,
     color: Colors.textTertiary,
     opacity: 0.6,
+    marginLeft: 2,
   },
   waveSection: {
     width: "100%",
