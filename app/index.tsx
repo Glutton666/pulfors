@@ -96,6 +96,8 @@ export default function MetronomeScreen() {
     beatTypes: defaultBeatTypes(4),
     beatSubdivisions: {} as Record<string, BeatType[]>,
     barRepeats: {} as Record<number, BarRepeat>,
+    barClockMode: "stopwatch" as "stopwatch" | "timer",
+    barTimerDuration: 180,
   });
 
   const [isDragging, setIsDragging] = useState(false);
@@ -470,6 +472,7 @@ export default function MetronomeScreen() {
       engine.setBarRepeats(bc.barRepeats);
     } else {
       barConfigRef.current = {
+        ...barConfigRef.current,
         beatsPerMeasure,
         beatTypes: [...beatTypes],
         beatSubdivisions: { ...beatSubdivisions },
@@ -806,6 +809,8 @@ export default function MetronomeScreen() {
       barRepeats: { ...barRepeats },
       barLoopMode: barLoopMode as "loop" | "once",
       subdivisionPattern: [...subdivisionPattern],
+      barClockMode: barConfigRef.current.barClockMode,
+      barTimerDuration: barConfigRef.current.barTimerDuration,
     };
   }, [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, barLoopMode, subdivisionPattern]);
 
@@ -847,6 +852,8 @@ export default function MetronomeScreen() {
       beatTypes: [...entry.beatTypes],
       beatSubdivisions: { ...entry.beatSubdivisions },
       barRepeats: { ...entry.barRepeats },
+      barClockMode: entry.barClockMode || "stopwatch",
+      barTimerDuration: entry.barTimerDuration ?? 180,
     };
   }, [isPlaying, barMode, beatsPerMeasure, beatTypes, beatSubdivisions]);
 
@@ -1013,6 +1020,12 @@ export default function MetronomeScreen() {
             onBarLoopModeChange={setBarLoopMode}
             onBarScrollOffset={(offset) => { barScrollOffsetRef.current = offset; }}
             onBarTimerExpired={handleTimerExpired}
+            onBarClockConfigChange={(mode, dur) => {
+              barConfigRef.current.barClockMode = mode;
+              barConfigRef.current.barTimerDuration = dur;
+            }}
+            initialBarClockMode={barConfigRef.current.barClockMode}
+            initialBarTimerDuration={barConfigRef.current.barTimerDuration}
             subdivisionBarElement={barMode ? (
               <SubdivisionBar
                 pattern={subdivisionPattern}

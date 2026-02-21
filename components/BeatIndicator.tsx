@@ -254,6 +254,9 @@ interface BeatIndicatorProps {
   onBarScrollOffset?: (offset: number) => void;
   onBarTimerExpired?: () => void;
   subdivisionBarElement?: React.ReactNode;
+  onBarClockConfigChange?: (mode: "stopwatch" | "timer", duration: number) => void;
+  initialBarClockMode?: "stopwatch" | "timer";
+  initialBarTimerDuration?: number;
 }
 
 export function BeatIndicator({
@@ -280,6 +283,9 @@ export function BeatIndicator({
   onBarScrollOffset,
   onBarTimerExpired,
   subdivisionBarElement,
+  onBarClockConfigChange,
+  initialBarClockMode,
+  initialBarTimerDuration,
 }: BeatIndicatorProps) {
   const { colors: C } = useTheme();
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
@@ -493,8 +499,24 @@ export function BeatIndicator({
   const barScrollRef = useRef<ScrollView>(null);
   const [barElapsedSec, setBarElapsedSec] = useState(0);
   const barStartTimeRef = useRef(0);
-  const [barClockMode, setBarClockMode] = useState<"stopwatch" | "timer">("stopwatch");
-  const [barTimerDuration, setBarTimerDuration] = useState(180);
+  const [barClockMode, setBarClockModeRaw] = useState<"stopwatch" | "timer">(initialBarClockMode || "stopwatch");
+  const [barTimerDuration, setBarTimerDurationRaw] = useState(initialBarTimerDuration || 180);
+
+  const setBarClockMode = useCallback((mode: "stopwatch" | "timer") => {
+    setBarClockModeRaw(mode);
+    onBarClockConfigChange?.(mode, barTimerDuration);
+  }, [barTimerDuration, onBarClockConfigChange]);
+
+  const setBarTimerDuration = useCallback((dur: number) => {
+    setBarTimerDurationRaw(dur);
+    onBarClockConfigChange?.(barClockMode, dur);
+  }, [barClockMode, onBarClockConfigChange]);
+
+  useEffect(() => {
+    if (initialBarClockMode) setBarClockModeRaw(initialBarClockMode);
+    if (initialBarTimerDuration != null) setBarTimerDurationRaw(initialBarTimerDuration);
+  }, [initialBarClockMode, initialBarTimerDuration]);
+
   const [barTimerRemaining, setBarTimerRemaining] = useState(180);
   const [barTimerEditing, setBarTimerEditing] = useState(false);
   const [barTimerInput, setBarTimerInput] = useState("");
