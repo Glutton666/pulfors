@@ -294,31 +294,18 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const [freqInput, setFreqInput] = useState("440");
   const [selectedNote, setSelectedNote] = useState("A");
   const [selectedOctave, setSelectedOctave] = useState(4);
-  const pickerUpdatingRef = useRef(false);
 
   const handleNoteSelect = useCallback((note: string) => {
     setSelectedNote(note);
-    pickerUpdatingRef.current = true;
     const f = noteToFreq(note, selectedOctave);
     if (f >= MIN_FREQ && f <= MAX_FREQ) setFrequency(f);
-    setTimeout(() => { pickerUpdatingRef.current = false; }, 100);
   }, [selectedOctave]);
 
   const handleOctaveSelect = useCallback((oct: number) => {
     setSelectedOctave(oct);
-    pickerUpdatingRef.current = true;
     const f = noteToFreq(selectedNote, oct);
     if (f >= MIN_FREQ && f <= MAX_FREQ) setFrequency(f);
-    setTimeout(() => { pickerUpdatingRef.current = false; }, 100);
   }, [selectedNote]);
-
-  useEffect(() => {
-    if (!pickerUpdatingRef.current) {
-      const { name, octave } = freqToNoteOctave(frequency);
-      setSelectedNote(name);
-      setSelectedOctave(octave);
-    }
-  }, [frequency]);
 
   const [micListening, setMicListening] = useState(false);
   const [micDetectedFreq, setMicDetectedFreq] = useState<number | null>(null);
