@@ -53,7 +53,7 @@ function freqToNoteOctave(freq: number): { name: string; octave: number } {
   return { name: NOTE_NAMES[noteIndex], octave: Math.max(0, Math.min(8, octave)) };
 }
 
-const KNOB_SIZE = 110;
+const KNOB_SIZE = 220;
 const KNOB_RADIUS = KNOB_SIZE / 2;
 const KNOB_STROKE = 5;
 const ARC_START = 135;
@@ -900,9 +900,9 @@ const styles = StyleSheet.create({
   },
   knobIndicatorDot: {
     position: "absolute",
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
   },
   knobCenter: {
     position: "absolute",
@@ -915,14 +915,14 @@ const styles = StyleSheet.create({
   },
   knobValue: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 20,
-    lineHeight: 24,
+    fontSize: 36,
+    lineHeight: 42,
   },
   knobUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 12,
+    fontSize: 18,
     color: Colors.textTertiary,
-    lineHeight: 14,
+    lineHeight: 22,
   },
   freqEditRow: {
     flexDirection: "row",
@@ -970,14 +970,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: 2,
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    alignSelf: "center",
   },
   pickerHzHint: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 10,
     color: Colors.textTertiary,
     opacity: 0.6,
-    marginLeft: 2,
+    marginLeft: 6,
   },
   waveSection: {
     width: "100%",
