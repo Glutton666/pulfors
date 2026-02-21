@@ -158,6 +158,7 @@ export default function MetronomeScreen() {
   const [noteSamples, setNoteSamples] = useState<NoteSampleMap>({});
   const noteSamplesRef = useRef<NoteSampleMap>({});
   const noteSampleSoundsRef = useRef<Record<string, Audio.Sound>>({});
+  const samplePlayStateRef = useRef<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>({});
   const [recorderTarget, setRecorderTarget] = useState<{ beat: number; sub: number } | null>(null);
 
   const engineRef = useRef<MetronomeEngine | null>(null);
@@ -334,17 +335,60 @@ export default function MetronomeScreen() {
       const key = `${beat}-${subBeat}`;
       const sound = noteSampleSoundsRef.current[key];
       if (sound) {
+        const state = samplePlayStateRef.current[key];
+        if (state && state.playing) {
+          return true;
+        }
         try {
           const sampleUri = noteSamplesRef.current[key] || "";
           const hashParts = sampleUri.split("#t=")[1];
           let startMs = 0;
+          let endMs = 0;
           if (hashParts) {
-            const parsed = parseInt(hashParts.split(",")[0], 10);
-            if (!isNaN(parsed)) startMs = parsed;
+            const parts = hashParts.split(",").map(Number);
+            if (!isNaN(parts[0])) startMs = parts[0];
+            if (parts.length > 1 && !isNaN(parts[1])) endMs = parts[1];
           }
+          const durationMs = endMs > startMs ? endMs - startMs : 0;
+
+          if (samplePlayStateRef.current[key]?.endTimer) {
+            clearTimeout(samplePlayStateRef.current[key].endTimer!);
+          }
+
+          samplePlayStateRef.current[key] = { playing: true, endTimer: null };
+
           sound.stopAsync().then(() => {
             sound.setPositionAsync(startMs).then(() => {
               sound.playAsync().catch(() => {});
+              if (durationMs > 0) {
+                const timer = setTimeout(() => {
+                  sound.stopAsync().catch(() => {});
+                  if (samplePlayStateRef.current[key]) {
+                    samplePlayStateRef.current[key].playing = false;
+                    samplePlayStateRef.current[key].endTimer = null;
+                  }
+                }, durationMs);
+                if (samplePlayStateRef.current[key]) {
+                  samplePlayStateRef.current[key].endTimer = timer;
+                }
+              } else {
+                sound.getStatusAsync().then((status) => {
+                  if (status.isLoaded && status.durationMillis) {
+                    const remaining = status.durationMillis - startMs;
+                    if (remaining > 0) {
+                      const timer = setTimeout(() => {
+                        if (samplePlayStateRef.current[key]) {
+                          samplePlayStateRef.current[key].playing = false;
+                          samplePlayStateRef.current[key].endTimer = null;
+                        }
+                      }, remaining);
+                      if (samplePlayStateRef.current[key]) {
+                        samplePlayStateRef.current[key].endTimer = timer;
+                      }
+                    }
+                  }
+                }).catch(() => {});
+              }
             }).catch(() => {});
           }).catch(() => {});
         } catch {}
@@ -384,6 +428,16 @@ export default function MetronomeScreen() {
 
         noteSampleSoundsRef.current[key] = sound;
       } catch {}
+    }
+  }, []);
+
+  const clearSamplePlayStates = useCallback(() => {
+    for (const [key, state] of Object.entries(samplePlayStateRef.current)) {
+      if (state.endTimer) clearTimeout(state.endTimer);
+    }
+    samplePlayStateRef.current = {};
+    for (const sound of Object.values(noteSampleSoundsRef.current)) {
+      try { sound.stopAsync().catch(() => {}); } catch {}
     }
   }, []);
 
@@ -707,6 +761,7 @@ export default function MetronomeScreen() {
     const modeLabel = barModeRef.current ? "Bar" : "Dial";
     if (isPlaying) {
       engine.stop();
+      clearSamplePlayStates();
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
@@ -802,6 +857,7 @@ export default function MetronomeScreen() {
 
     if (isPlaying) {
       engine.stop();
+      clearSamplePlayStates();
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
@@ -856,6 +912,13 @@ export default function MetronomeScreen() {
     if (!engine) return;
     engine.setOnMeasureComplete(() => {
       if (!engine.getIsRunning()) {
+        for (const [k, st] of Object.entries(samplePlayStateRef.current)) {
+          if (st.endTimer) clearTimeout(st.endTimer);
+        }
+        samplePlayStateRef.current = {};
+        for (const snd of Object.values(noteSampleSoundsRef.current)) {
+          try { snd.stopAsync().catch(() => {}); } catch {}
+        }
         setIsPlaying(false);
         setCurrentBeat(-1);
         setActiveSubNote(-1);
@@ -873,6 +936,7 @@ export default function MetronomeScreen() {
     if (!engine) return;
     if (timerStopModeRef.current === "immediate") {
       engine.stop();
+      clearSamplePlayStates();
       setIsPlaying(false);
       setCurrentBeat(-1);
       const modeLabel = barModeRef.current ? "Bar" : "Dial";
@@ -1186,6 +1250,7 @@ export default function MetronomeScreen() {
 
     if (isPlaying) {
       engine.stop();
+      clearSamplePlayStates();
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
