@@ -9,6 +9,13 @@ import {
   Alert,
 } from "react-native";
 import * as Linking from "expo-linking";
+import {
+  setupNotificationControls,
+  showPlayingNotification,
+  showPausedNotification,
+  dismissNotification,
+  addNotificationActionListener,
+} from "@/lib/notification-controls";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
@@ -283,9 +290,11 @@ export default function MetronomeScreen() {
     });
 
     loadLoggingEnabled().then((val) => setLoggingEnabled(val));
+    setupNotificationControls();
 
     return () => {
       engine.cleanup();
+      dismissNotification();
     };
   }, []);
 
@@ -580,11 +589,13 @@ export default function MetronomeScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
 
+    const modeLabel = barModeRef.current ? "Bar" : "Dial";
     if (isPlaying) {
       engine.stop();
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
+      dismissNotification();
       if (loggingEnabled && practiceStartRef.current) {
         const dur = Math.round((Date.now() - practiceStartRef.current) / 1000);
         if (dur >= 3) {
@@ -608,11 +619,24 @@ export default function MetronomeScreen() {
         engine.requestStopAfterMeasure();
       }
       setIsPlaying(true);
+      showPlayingNotification(bpm, modeLabel);
       if (loggingEnabled) {
         practiceStartRef.current = Date.now();
       }
     }
   }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure]);
+
+  const togglePlayPauseRef = useRef(togglePlayPause);
+  useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
+
+  useEffect(() => {
+    const sub = addNotificationActionListener((actionId) => {
+      if (actionId === "TOGGLE_PLAY") {
+        togglePlayPauseRef.current();
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   const handleBarModeChange = useCallback((toBarMode: boolean) => {
     const engine = engineRef.current;
@@ -677,6 +701,7 @@ export default function MetronomeScreen() {
         setIsPlaying(false);
         setCurrentBeat(-1);
         setActiveSubNote(-1);
+        dismissNotification();
       }
     });
   }, []);
@@ -691,6 +716,7 @@ export default function MetronomeScreen() {
       engine.stop();
       setIsPlaying(false);
       setCurrentBeat(-1);
+      dismissNotification();
     } else {
       engine.requestStopAfterMeasure();
     }
