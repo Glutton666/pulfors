@@ -879,7 +879,7 @@ export function BeatIndicator({
                   onLongPress={() => {
                     if (!noteHoldFiredRef.current && isPrimary && !isPlaying && canRecord && onNoteRecordRequest && pattern.length > 1) {
                       noteHoldFiredRef.current = true;
-                      onNoteRecordRequest(beat, ci, pattern.length);
+                      onNoteRecordRequest(beat, ci);
                     }
                   }}
                   onPressIn={() => { noteHoldFiredRef.current = false; }}
@@ -921,10 +921,10 @@ export function BeatIndicator({
                     }]} />
                   )}
                   {hasSample && (
-                    <Text style={styles.noteSampleStar}>★</Text>
+                    <View style={[styles.noteSampleBar, { backgroundColor: "#39FF14" }]} />
                   )}
                   {!hasSample && isCovered && (
-                    <Text style={[styles.noteSampleStar, { opacity: 0.5 }]}>★</Text>
+                    <View style={[styles.noteSampleBar, { backgroundColor: "#39FF14", opacity: 0.45 }]} />
                   )}
                 </Pressable>
               );
@@ -1591,17 +1591,13 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 4,
   },
-  noteSampleStar: {
+  noteSampleBar: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    textAlign: "center",
-    textAlignVertical: "center",
-    fontSize: 10,
-    color: "rgba(255, 215, 0, 0.55)",
-    lineHeight: 28,
+    left: 3,
+    right: 3,
+    bottom: 2,
+    height: 3,
+    borderRadius: 1.5,
   },
   barBeatEndLine: {
     width: 1.5,

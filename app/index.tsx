@@ -357,9 +357,12 @@ export default function MetronomeScreen() {
 
           samplePlayStateRef.current[key] = { playing: true, endTimer: null };
 
-          sound.stopAsync().then(() => {
-            sound.setPositionAsync(startMs).then(() => {
-              sound.playAsync().catch(() => {});
+          const doPlay = async () => {
+            try {
+              try { await sound.stopAsync(); } catch {}
+              await sound.setPositionAsync(startMs);
+              await sound.playAsync();
+
               if (durationMs > 0) {
                 const timer = setTimeout(() => {
                   sound.stopAsync().catch(() => {});
@@ -372,7 +375,8 @@ export default function MetronomeScreen() {
                   samplePlayStateRef.current[key].endTimer = timer;
                 }
               } else {
-                sound.getStatusAsync().then((status) => {
+                try {
+                  const status = await sound.getStatusAsync();
                   if (status.isLoaded && status.durationMillis) {
                     const remaining = status.durationMillis - startMs;
                     if (remaining > 0) {
@@ -387,10 +391,16 @@ export default function MetronomeScreen() {
                       }
                     }
                   }
-                }).catch(() => {});
+                } catch {}
               }
-            }).catch(() => {});
-          }).catch(() => {});
+            } catch (e) {
+              console.warn("[SamplePlay] Error playing sample:", key, e);
+              if (samplePlayStateRef.current[key]) {
+                samplePlayStateRef.current[key].playing = false;
+              }
+            }
+          };
+          doPlay();
         } catch {}
         return true;
       }
