@@ -9,6 +9,7 @@ import {
   Alert,
   PanResponder,
   ActivityIndicator,
+  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Audio, InterruptionModeIOS } from "expo-av";
@@ -297,12 +298,7 @@ export function NoteRecorderModal({
     if (audioDuration > 0) {
       const startMs = Math.floor(trimStart * audioDuration * 1000);
       const endMs = Math.floor(trimEnd * audioDuration * 1000);
-
-      if (startMs === 0 && endMs >= audioDuration * 1000 - 50) {
-        onSave(recordedUri);
-      } else {
-        onSave(`${recordedUri}#t=${startMs},${endMs}`);
-      }
+      onSave(`${recordedUri}#t=${startMs},${endMs}`);
     } else {
       onSave(recordedUri);
     }
@@ -366,6 +362,56 @@ export function NoteRecorderModal({
     const ms = Math.floor((seconds % 1) * 10);
     return `${s}.${ms}`;
   };
+
+  const formatMinSec = (totalSeconds: number) => {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${s < 10 ? "0" : ""}${s.toFixed(2)}`;
+  };
+
+  const parseMinSec = (text: string): number | null => {
+    const cleaned = text.trim();
+    if (cleaned.includes(":")) {
+      const [minPart, secPart] = cleaned.split(":");
+      const mins = parseInt(minPart, 10);
+      const secs = parseFloat(secPart);
+      if (isNaN(mins) || isNaN(secs)) return null;
+      return mins * 60 + secs;
+    }
+    const val = parseFloat(cleaned);
+    if (isNaN(val)) return null;
+    return val;
+  };
+
+  const [startTimeText, setStartTimeText] = useState("");
+  const [endTimeText, setEndTimeText] = useState("");
+  const [editingStart, setEditingStart] = useState(false);
+  const [editingEnd, setEditingEnd] = useState(false);
+
+  useEffect(() => {
+    if (phase === "trimming" && audioDuration > 0) {
+      if (!editingStart) setStartTimeText(formatMinSec(trimStart * audioDuration));
+      if (!editingEnd) setEndTimeText(formatMinSec(trimEnd * audioDuration));
+    }
+  }, [phase, trimStart, trimEnd, audioDuration, editingStart, editingEnd]);
+
+  const applyStartTime = useCallback(() => {
+    setEditingStart(false);
+    if (audioDuration <= 0) return;
+    const parsed = parseMinSec(startTimeText);
+    if (parsed === null || parsed < 0) return;
+    const ratio = Math.max(0, Math.min(parsed / audioDuration, trimEnd - 0.01));
+    setTrimStart(ratio);
+  }, [startTimeText, audioDuration, trimEnd]);
+
+  const applyEndTime = useCallback(() => {
+    setEditingEnd(false);
+    if (audioDuration <= 0) return;
+    const parsed = parseMinSec(endTimeText);
+    if (parsed === null || parsed < 0) return;
+    const ratio = Math.min(1, Math.max(parsed / audioDuration, trimStart + 0.01));
+    setTrimEnd(ratio);
+  }, [endTimeText, audioDuration, trimStart]);
 
   const trimStartDisplay = (trimStart * audioDuration).toFixed(2);
   const trimEndDisplay = (trimEnd * audioDuration).toFixed(2);
@@ -456,8 +502,42 @@ export function NoteRecorderModal({
             <View style={styles.content}>
               <Text style={styles.sectionLabel}>Trim Audio</Text>
               <Text style={styles.trimInfo}>
-                {trimStartDisplay}s — {trimEndDisplay}s ({trimDuration}s)
+                Duration: {trimDuration}s
               </Text>
+
+              <View style={styles.trimTimeInputRow}>
+                <View style={styles.trimTimeInputGroup}>
+                  <Text style={styles.trimTimeLabel}>Start</Text>
+                  <TextInput
+                    style={[styles.trimTimeInput, { borderColor: C.accent + "60" }]}
+                    value={startTimeText}
+                    onChangeText={setStartTimeText}
+                    onFocus={() => setEditingStart(true)}
+                    onBlur={applyStartTime}
+                    onSubmitEditing={applyStartTime}
+                    keyboardType="decimal-pad"
+                    placeholder="0:00.00"
+                    placeholderTextColor={Colors.textTertiary}
+                    returnKeyType="done"
+                  />
+                </View>
+                <Text style={styles.trimTimeSeparator}>—</Text>
+                <View style={styles.trimTimeInputGroup}>
+                  <Text style={styles.trimTimeLabel}>End</Text>
+                  <TextInput
+                    style={[styles.trimTimeInput, { borderColor: C.accent + "60" }]}
+                    value={endTimeText}
+                    onChangeText={setEndTimeText}
+                    onFocus={() => setEditingEnd(true)}
+                    onBlur={applyEndTime}
+                    onSubmitEditing={applyEndTime}
+                    keyboardType="decimal-pad"
+                    placeholder="0:00.00"
+                    placeholderTextColor={Colors.textTertiary}
+                    returnKeyType="done"
+                  />
+                </View>
+              </View>
 
               <View style={styles.trimContainer}>
                 <View style={styles.waveformBar}>
@@ -474,13 +554,13 @@ export function NoteRecorderModal({
                   />
                   <TrimHandle
                     value={trimStart}
-                    onChange={(v) => setTrimStart(Math.min(v, trimEnd - 0.05))}
+                    onChange={(v) => { setTrimStart(Math.min(v, trimEnd - 0.05)); setEditingStart(false); }}
                     color={C.accent}
                     side="left"
                   />
                   <TrimHandle
                     value={trimEnd}
-                    onChange={(v) => setTrimEnd(Math.max(v, trimStart + 0.05))}
+                    onChange={(v) => { setTrimEnd(Math.max(v, trimStart + 0.05)); setEditingEnd(false); }}
                     color={C.accent}
                     side="right"
                   />
@@ -711,6 +791,37 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontVariant: ["tabular-nums"],
     alignSelf: "flex-start",
+  },
+  trimTimeInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    width: "100%",
+  },
+  trimTimeInputGroup: {
+    flex: 1,
+    gap: 4,
+  },
+  trimTimeLabel: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  trimTimeInput: {
+    backgroundColor: Colors.surfaceLight,
+    color: Colors.text,
+    fontSize: 14,
+    fontVariant: ["tabular-nums"],
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    textAlign: "center",
+  },
+  trimTimeSeparator: {
+    color: Colors.textSecondary,
+    fontSize: 16,
+    marginTop: 18,
   },
   trimContainer: {
     width: "100%",

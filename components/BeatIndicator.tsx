@@ -307,6 +307,7 @@ export function BeatIndicator({
       const triggerBeat = parseInt(beatStr, 10);
       const triggerSub = parseInt(subStr, 10);
       if (isNaN(triggerBeat) || isNaN(triggerSub)) continue;
+      if (triggerBeat >= beatsPerMeasure) continue;
 
       const hashParts = uri.split("#t=")[1];
       let durationMs = 0;
@@ -316,19 +317,19 @@ export function BeatIndicator({
         const endMs = parts.length > 1 && !isNaN(parts[1]) ? parts[1] : 0;
         if (endMs > startMs) durationMs = endMs - startMs;
       }
-      if (durationMs <= 0) continue;
 
       covered.add(key);
+
+      if (durationMs <= 0) continue;
 
       let remainMs = durationMs;
       let b = triggerBeat;
       let s = triggerSub;
-      const pattern = beatSubdivisions[String(b)];
-      const subCount = pattern ? pattern.length : 1;
-      const subDur = beatDurMs / subCount;
-      remainMs -= subDur;
+      const triggerPattern = beatSubdivisions[String(b)];
+      const triggerSubCount = triggerPattern ? triggerPattern.length : 1;
+      remainMs -= beatDurMs / triggerSubCount;
 
-      while (remainMs > 0 && b < beatsPerMeasure) {
+      while (remainMs > 0) {
         s++;
         const curPattern = beatSubdivisions[String(b)];
         const curSubCount = curPattern ? curPattern.length : 1;
