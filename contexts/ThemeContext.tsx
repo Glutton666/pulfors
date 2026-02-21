@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Colors, { getColors, type ThemeColor } from "@/constants/colors";
 
@@ -11,7 +11,7 @@ export type BeatTypeKey = "normal" | "accent" | "strong";
 export interface HubImage {
   id: string;
   uri: string;
-  beatType: BeatTypeKey;
+  beatTypes: BeatTypeKey[];
 }
 
 interface ThemeContextValue {
@@ -23,7 +23,7 @@ interface ThemeContextValue {
   hubImages: HubImage[];
   addHubImage: (uri: string) => void;
   removeHubImage: (id: string) => void;
-  updateHubImageBeatType: (id: string, beatType: BeatTypeKey) => void;
+  updateHubImageBeatTypes: (id: string, beatTypes: BeatTypeKey[]) => void;
   getImageForBeatType: (beatType: string) => string | null;
 }
 
@@ -38,6 +38,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [themeColor, setThemeColorState] = useState<ThemeColor>("gold");
   const [customHex, setCustomHexState] = useState<string>("#D4A846");
   const [hubImages, setHubImagesState] = useState<HubImage[]>([]);
+  const beatTypeCycleRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     (async () => {
@@ -76,7 +77,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const addHubImage = useCallback((uri: string) => {
     setHubImagesState((prev) => {
       if (prev.length >= 3) return prev;
-      const next = [...prev, { id: genId(), uri, beatType: "normal" as BeatTypeKey }];
+      const next = [...prev, { id: genId(), uri, beatTypes: ["normal" as BeatTypeKey] }];
       persistHubImages(next);
       return next;
     });
@@ -90,9 +91,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     });
   }, [persistHubImages]);
 
-  const updateHubImageBeatType = useCallback((id: string, beatType: BeatTypeKey) => {
+  const updateHubImageBeatTypes = useCallback((id: string, beatTypes: BeatTypeKey[]) => {
     setHubImagesState((prev) => {
-      const next = prev.map((img) => (img.id === id ? { ...img, beatType } : img));
+      const next = prev.map((img) => (img.id === id ? { ...img, beatTypes } : img));
       persistHubImages(next);
       return next;
     });
@@ -100,8 +101,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const getImageForBeatType = useCallback((beatType: string) => {
     const key = beatType as BeatTypeKey;
-    const match = hubImages.find((img) => img.beatType === key);
-    return match ? match.uri : null;
+    const matches = hubImages.filter((img) => img.beatTypes.includes(key));
+    if (matches.length === 0) return null;
+    if (matches.length === 1) return matches[0].uri;
+    const cycleKey = key;
+    const idx = (beatTypeCycleRef.current[cycleKey] || 0) % matches.length;
+    beatTypeCycleRef.current[cycleKey] = idx + 1;
+    return matches[idx].uri;
   }, [hubImages]);
 
   const colors = useMemo(() => getColors(themeColor, customHex), [themeColor, customHex]);
@@ -109,10 +115,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       themeColor, customHex, setThemeColor, setCustomHex, colors,
-      hubImages, addHubImage, removeHubImage, updateHubImageBeatType, getImageForBeatType,
+      hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes, getImageForBeatType,
     }),
     [themeColor, customHex, setThemeColor, setCustomHex, colors,
-     hubImages, addHubImage, removeHubImage, updateHubImageBeatType, getImageForBeatType]
+     hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes, getImageForBeatType]
   );
 
   return (

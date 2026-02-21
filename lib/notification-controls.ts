@@ -20,29 +20,26 @@ function buildActions(isPlaying: boolean) {
   return [
     {
       identifier: "BPM_DOWN",
-      buttonTitle: "◀  BPM",
+      buttonTitle: "− BPM",
       options: { opensAppToForeground: false },
     },
     {
       identifier: "TOGGLE_PLAY",
-      buttonTitle: isPlaying ? "⏸  Pause" : "▶  Play",
+      buttonTitle: isPlaying ? "⏸ Pause" : "▶ Play",
       options: { opensAppToForeground: true },
     },
     {
       identifier: "BPM_UP",
-      buttonTitle: "BPM  ▶",
+      buttonTitle: "+ BPM",
       options: { opensAppToForeground: false },
     },
   ];
 }
 
-function buildContent(bpm: number, mode: string, isPlaying: boolean) {
-  const bar = "━".repeat(Math.min(20, Math.round((bpm - 20) / 14)));
-  const dot = "●";
-  const empty = "─".repeat(Math.max(0, 20 - Math.round((bpm - 20) / 14)));
+function buildContent(bpm: number, _mode: string, isPlaying: boolean) {
   return {
-    title: `${isPlaying ? "♪" : "⏸"} ${bpm} BPM`,
-    body: `${bar}${dot}${empty}\n${mode} · tap ×1 = ±1  ·  tap ×2 = ±5`,
+    title: `${isPlaying ? "▶" : "⏸"} ${bpm} BPM`,
+    body: isPlaying ? "Playing" : "Paused",
     categoryIdentifier: CATEGORY_ID,
     sticky: true,
     autoDismiss: false,

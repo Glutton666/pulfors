@@ -288,6 +288,7 @@ export function BeatIndicator({
   initialBarTimerDuration,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
+
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
 
   const swipeProgress = useSharedValue(0);
