@@ -9,6 +9,7 @@ import {
   TextInput,
   PanResponder,
   ScrollView,
+  FlatList,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -31,28 +32,26 @@ const WAVE_OPTIONS: { type: WaveType; label: string; icon: string }[] = [
   { type: "sawtooth", label: "Saw", icon: "sawtooth-wave" },
 ];
 
-const NOTE_FREQS: { name: string; freq: number }[] = [
-  { name: "C2", freq: 65.41 },
-  { name: "E2", freq: 82.41 },
-  { name: "A2", freq: 110 },
-  { name: "C3", freq: 130.81 },
-  { name: "E3", freq: 164.81 },
-  { name: "G3", freq: 196 },
-  { name: "A3", freq: 220 },
-  { name: "C4", freq: 261.63 },
-  { name: "E4", freq: 329.63 },
-  { name: "G4", freq: 392 },
-  { name: "A4", freq: 440 },
-  { name: "C5", freq: 523.25 },
-  { name: "E5", freq: 659.25 },
-  { name: "A5", freq: 880 },
-  { name: "C6", freq: 1046.5 },
-  { name: "1k", freq: 1000 },
-  { name: "2k", freq: 2000 },
-  { name: "4k", freq: 4000 },
-  { name: "8k", freq: 8000 },
-  { name: "10k", freq: 10000 },
-];
+const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const OCTAVES = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+const PICKER_ITEM_H = 36;
+const PICKER_VISIBLE = 3;
+const PICKER_H = PICKER_ITEM_H * PICKER_VISIBLE;
+
+function noteToFreq(name: string, octave: number): number {
+  const idx = NOTE_NAMES.indexOf(name);
+  if (idx < 0) return 440;
+  const semitones = (octave - 4) * 12 + (idx - 9);
+  return Math.round(440 * Math.pow(2, semitones / 12) * 100) / 100;
+}
+
+function freqToNoteOctave(freq: number): { name: string; octave: number } {
+  const semitones = 12 * Math.log2(freq / 440);
+  const rounded = Math.round(semitones);
+  const noteIndex = ((rounded % 12) + 12 + 9) % 12;
+  const octave = Math.floor((rounded + 9) / 12) + 4;
+  return { name: NOTE_NAMES[noteIndex], octave: Math.max(0, Math.min(8, octave)) };
+}
 
 const KNOB_SIZE = 110;
 const KNOB_RADIUS = KNOB_SIZE / 2;
@@ -156,6 +155,131 @@ function formatHz(freq: number): string {
   return freq.toFixed(1);
 }
 
+function PickerColumn<T extends string | number>({
+  data,
+  selected,
+  onSelect,
+  accentColor,
+  accentDim,
+  renderLabel,
+}: {
+  data: T[];
+  selected: T;
+  onSelect: (item: T) => void;
+  accentColor: string;
+  accentDim: string;
+  renderLabel?: (item: T) => string;
+}) {
+  const flatListRef = useRef<FlatList<T>>(null);
+  const scrollingRef = useRef(false);
+  const selectedIdx = data.indexOf(selected);
+
+  useEffect(() => {
+    if (!scrollingRef.current && selectedIdx >= 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToOffset({
+          offset: selectedIdx * PICKER_ITEM_H,
+          animated: true,
+        });
+      }, 50);
+    }
+  }, [selectedIdx]);
+
+  const onMomentumEnd = useCallback(
+    (e: any) => {
+      const y = e.nativeEvent.contentOffset.y;
+      const idx = Math.round(y / PICKER_ITEM_H);
+      const clamped = Math.max(0, Math.min(data.length - 1, idx));
+      if (data[clamped] !== selected) {
+        onSelect(data[clamped]);
+        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      scrollingRef.current = false;
+    },
+    [data, selected, onSelect]
+  );
+
+  const getItemLayout = useCallback(
+    (_: any, index: number) => ({
+      length: PICKER_ITEM_H,
+      offset: PICKER_ITEM_H * index,
+      index,
+    }),
+    []
+  );
+
+  return (
+    <View style={[pickerStyles.column, { height: PICKER_H }]}>
+      <View style={[pickerStyles.highlight, { backgroundColor: accentDim, borderColor: accentColor }]} />
+      <FlatList
+        ref={flatListRef}
+        data={data}
+        keyExtractor={(item) => String(item)}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={PICKER_ITEM_H}
+        decelerationRate="fast"
+        onScrollBeginDrag={() => { scrollingRef.current = true; }}
+        onMomentumScrollEnd={onMomentumEnd}
+        onScrollEndDrag={(e) => {
+          if (Platform.OS === "web") onMomentumEnd(e);
+        }}
+        getItemLayout={getItemLayout}
+        contentContainerStyle={{ paddingVertical: PICKER_ITEM_H }}
+        renderItem={({ item }) => {
+          const isSelected = item === selected;
+          return (
+            <Pressable
+              onPress={() => { onSelect(item); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+              style={pickerStyles.item}
+            >
+              <Text
+                style={[
+                  pickerStyles.itemText,
+                  isSelected && { color: accentColor, fontFamily: "SpaceGrotesk_700Bold" },
+                ]}
+              >
+                {renderLabel ? renderLabel(item) : String(item)}
+              </Text>
+            </Pressable>
+          );
+        }}
+      />
+    </View>
+  );
+}
+
+const pickerStyles = StyleSheet.create({
+  column: {
+    width: 60,
+    overflow: "hidden",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  highlight: {
+    position: "absolute",
+    top: PICKER_ITEM_H,
+    left: 0,
+    right: 0,
+    height: PICKER_ITEM_H,
+    borderRadius: 8,
+    borderWidth: 1,
+    zIndex: 1,
+    pointerEvents: "none",
+  },
+  item: {
+    height: PICKER_ITEM_H,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  itemText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 16,
+    color: Colors.textTertiary,
+  },
+});
+
 interface SignalGeneratorModalProps {
   visible: boolean;
   onClose: () => void;
@@ -168,6 +292,33 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const [isPlaying, setIsPlaying] = useState(false);
   const [editingFreq, setEditingFreq] = useState(false);
   const [freqInput, setFreqInput] = useState("440");
+  const [selectedNote, setSelectedNote] = useState("A");
+  const [selectedOctave, setSelectedOctave] = useState(4);
+  const pickerUpdatingRef = useRef(false);
+
+  const handleNoteSelect = useCallback((note: string) => {
+    setSelectedNote(note);
+    pickerUpdatingRef.current = true;
+    const f = noteToFreq(note, selectedOctave);
+    if (f >= MIN_FREQ && f <= MAX_FREQ) setFrequency(f);
+    setTimeout(() => { pickerUpdatingRef.current = false; }, 100);
+  }, [selectedOctave]);
+
+  const handleOctaveSelect = useCallback((oct: number) => {
+    setSelectedOctave(oct);
+    pickerUpdatingRef.current = true;
+    const f = noteToFreq(selectedNote, oct);
+    if (f >= MIN_FREQ && f <= MAX_FREQ) setFrequency(f);
+    setTimeout(() => { pickerUpdatingRef.current = false; }, 100);
+  }, [selectedNote]);
+
+  useEffect(() => {
+    if (!pickerUpdatingRef.current) {
+      const { name, octave } = freqToNoteOctave(frequency);
+      setSelectedNote(name);
+      setSelectedOctave(octave);
+    }
+  }, [frequency]);
 
   const [micListening, setMicListening] = useState(false);
   const [micDetectedFreq, setMicDetectedFreq] = useState<number | null>(null);
@@ -578,30 +729,29 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
             </Pressable>
           )}
 
-          <View style={styles.presetsSection}>
-            <Text style={styles.sectionLabel}>PRESETS</Text>
-            <ScrollView
-              style={styles.presetsScroll}
-              contentContainerStyle={styles.presetsGrid}
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled
-            >
-              {NOTE_FREQS.map((n) => {
-                const active = Math.abs(frequency - n.freq) < 0.5;
-                return (
-                  <Pressable
-                    key={n.name}
-                    onPress={() => { hapticFeedback(); setFrequency(n.freq); }}
-                    style={[styles.presetChip, active && { backgroundColor: C.accentDim, borderColor: C.accent }]}
-                  >
-                    <Text style={[styles.presetName, active && { color: C.accent }]}>{n.name}</Text>
-                    <Text style={[styles.presetHz, active && { color: C.accent, opacity: 0.7 }]}>
-                      {n.freq >= 1000 ? (n.freq / 1000) + "kHz" : n.freq + "Hz"}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+          <View style={styles.pickerSection}>
+            <Text style={styles.sectionLabel}>NOTE</Text>
+            <View style={styles.pickerRow}>
+              <PickerColumn
+                data={NOTE_NAMES}
+                selected={selectedNote}
+                onSelect={handleNoteSelect}
+                accentColor={C.accent}
+                accentDim={C.accentDim}
+              />
+              <PickerColumn
+                data={OCTAVES}
+                selected={selectedOctave}
+                onSelect={handleOctaveSelect}
+                accentColor={C.accent}
+                accentDim={C.accentDim}
+              />
+              <View style={styles.pickerFreqLabel}>
+                <Text style={[styles.pickerFreqValue, { color: C.accent }]}>
+                  {noteToFreq(selectedNote, selectedOctave)} Hz
+                </Text>
+              </View>
+            </View>
           </View>
 
           <View style={styles.waveSection}>
@@ -821,42 +971,24 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     marginBottom: 6,
   },
-  presetsSection: {
+  pickerSection: {
     width: "100%",
     alignItems: "center",
+    gap: 4,
   },
-  presetsScroll: {
-    maxHeight: 100,
-    width: "100%",
-  },
-  presetsGrid: {
+  pickerRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 5,
-    paddingBottom: 2,
-  },
-  presetChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
     alignItems: "center",
-    minWidth: 50,
+    gap: 10,
   },
-  presetName: {
+  pickerFreqLabel: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingLeft: 4,
+  },
+  pickerFreqValue: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 12,
-    color: Colors.textSecondary,
-    letterSpacing: 0.3,
-  },
-  presetHz: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 8,
-    color: Colors.textTertiary,
-    opacity: 0.8,
-    marginTop: 1,
+    fontSize: 13,
   },
   waveSection: {
     width: "100%",
