@@ -295,6 +295,8 @@ export function BeatIndicator({
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
 
+  const longPressedRef = useRef(false);
+
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
 
   const swipeProgress = useSharedValue(0);
@@ -1004,8 +1006,11 @@ export function BeatIndicator({
             </Pressable>
           </View>
           <Pressable
-            onPress={onTogglePlay}
-            onLongPress={!isPlaying && onLongPressPlay ? onLongPressPlay : undefined}
+            onPress={() => {
+              if (longPressedRef.current) { longPressedRef.current = false; return; }
+              onTogglePlay();
+            }}
+            onLongPress={!isPlaying && onLongPressPlay ? () => { longPressedRef.current = true; onLongPressPlay(); } : undefined}
             delayLongPress={500}
             style={({ pressed }) => [
               styles.barPlayBtn,
@@ -1212,8 +1217,11 @@ export function BeatIndicator({
           )}
 
           <Pressable
-            onPress={onTogglePlay}
-            onLongPress={!isPlaying && onLongPressPlay ? onLongPressPlay : undefined}
+            onPress={() => {
+              if (longPressedRef.current) { longPressedRef.current = false; return; }
+              onTogglePlay();
+            }}
+            onLongPress={!isPlaying && onLongPressPlay ? () => { longPressedRef.current = true; onLongPressPlay(); } : undefined}
             delayLongPress={500}
             style={({ pressed }) => [
               styles.playButton,
