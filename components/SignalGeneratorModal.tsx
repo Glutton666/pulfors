@@ -20,6 +20,7 @@ import {
   SignalGeneratorEngine,
   generateToneDataUri,
 } from "@/lib/signal-generator-engine";
+import { autoCorrelate, frequencyToNote } from "@/lib/tuner-engine";
 
 const WAVE_OPTIONS: { type: WaveType; label: string; icon: string }[] = [
   { type: "sine", label: "Sine", icon: "sine-wave" },
@@ -166,6 +167,16 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const [editingFreq, setEditingFreq] = useState(false);
   const [freqInput, setFreqInput] = useState("440");
 
+  const [micListening, setMicListening] = useState(false);
+  const [micDetectedFreq, setMicDetectedFreq] = useState<number | null>(null);
+  const [micDetectedNote, setMicDetectedNote] = useState<string | null>(null);
+  const micActiveRef = useRef(false);
+  const micAudioCtxRef = useRef<any>(null);
+  const micAnalyserRef = useRef<any>(null);
+  const micSourceRef = useRef<any>(null);
+  const micStreamRef = useRef<any>(null);
+  const micRafRef = useRef<number | null>(null);
+
   const engineRef = useRef(new SignalGeneratorEngine());
   const isPlayingRef = useRef(false);
   const mobileLoopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -239,10 +250,89 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
     };
   }, []);
 
+  const stopMic = useCallback(() => {
+    micActiveRef.current = false;
+    setMicListening(false);
+    if (micRafRef.current) {
+      cancelAnimationFrame(micRafRef.current);
+      micRafRef.current = null;
+    }
+    if (micSourceRef.current) {
+      micSourceRef.current.disconnect();
+      micSourceRef.current = null;
+    }
+    if (micAudioCtxRef.current) {
+      micAudioCtxRef.current.close();
+      micAudioCtxRef.current = null;
+    }
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach((t: any) => t.stop());
+      micStreamRef.current = null;
+    }
+    setMicDetectedFreq(null);
+    setMicDetectedNote(null);
+  }, []);
+
+  const startMic = useCallback(async () => {
+    if (Platform.OS !== "web") return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStreamRef.current = stream;
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      micAudioCtxRef.current = audioCtx;
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 4096;
+      micAnalyserRef.current = analyser;
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+      micSourceRef.current = source;
+
+      micActiveRef.current = true;
+      setMicListening(true);
+
+      const buf = new Float32Array(analyser.fftSize);
+      const detect = () => {
+        if (!micActiveRef.current) return;
+        analyser.getFloatTimeDomainData(buf);
+        const freq = autoCorrelate(buf, audioCtx.sampleRate);
+        if (freq > 20 && freq <= MAX_FREQ) {
+          const rounded = Math.round(freq * 10) / 10;
+          setMicDetectedFreq(rounded);
+          const noteInfo = frequencyToNote(freq);
+          setMicDetectedNote(`${noteInfo.name}${noteInfo.octave}`);
+        } else {
+          setMicDetectedFreq(null);
+          setMicDetectedNote(null);
+        }
+        micRafRef.current = requestAnimationFrame(detect);
+      };
+      detect();
+    } catch {
+      setMicListening(false);
+    }
+  }, []);
+
+  const toggleMic = useCallback(() => {
+    hapticFeedback();
+    if (micListening) {
+      stopMic();
+    } else {
+      startMic();
+    }
+  }, [micListening, stopMic, startMic, hapticFeedback]);
+
+  const applyMicFreq = useCallback(() => {
+    if (micDetectedFreq && micDetectedFreq >= MIN_FREQ && micDetectedFreq <= MAX_FREQ) {
+      hapticFeedback();
+      setFrequency(micDetectedFreq);
+    }
+  }, [micDetectedFreq, hapticFeedback]);
+
   const handleClose = useCallback(() => {
     stopPlayback();
+    stopMic();
     onClose();
-  }, [stopPlayback, onClose]);
+  }, [stopPlayback, stopMic, onClose]);
 
   const handleFreqKnob = useCallback((norm: number) => {
     const f = normToFreq(norm);
