@@ -17,11 +17,17 @@ export interface FeatureUsageData {
   duration: number;
 }
 
+export interface PracticeRoomVisitData {
+  roomId: string;
+  roomName: string;
+  duration: number;
+}
+
 export interface ActivityLog {
   id: string;
-  type: "practice_session" | "feature_usage";
+  type: "practice_session" | "feature_usage" | "practice_room_visit";
   timestamp: number;
-  data: PracticeSessionData | FeatureUsageData;
+  data: PracticeSessionData | FeatureUsageData | PracticeRoomVisitData;
 }
 
 export interface Goal {
