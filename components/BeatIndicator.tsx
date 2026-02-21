@@ -34,7 +34,7 @@ const DOT_RADIUS_FROM_CENTER = DIAL_RADIUS - moderateScale(30, 0.4);
 const DOT_SIZE = moderateScale(34, 0.4);
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.35;
 const MIN_BEATS = 1;
-const MAX_BEATS = 12;
+const MAX_BEATS = 32;
 
 export { DIAL_SIZE, DIAL_RADIUS, DOT_RADIUS_FROM_CENTER };
 
