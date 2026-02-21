@@ -833,13 +833,13 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.surface,
     borderRadius: 20,
-    padding: 20,
-    width: 320,
+    padding: 24,
+    width: 340,
     alignItems: "center",
     borderWidth: 1,
     borderColor: Colors.border,
-    gap: 8,
-    maxHeight: "80%",
+    gap: 18,
+    maxHeight: "85%",
   },
   header: {
     flexDirection: "row",
