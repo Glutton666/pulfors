@@ -132,6 +132,7 @@ export default function MetronomeScreen() {
   const [loggingEnabled, setLoggingEnabled] = useState(false);
   const practiceStartRef = useRef<number | null>(null);
   const featureStartRef = useRef<{ name: string; start: number } | null>(null);
+  const loadedPracticeNoteRef = useRef<{ id: string; label: string } | null>(null);
   const roomTrackRef = useRef<{ roomId: string; roomName: string; start: number } | null>(null);
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [roomTrackingActive, setRoomTrackingActive] = useState(false);
@@ -575,13 +576,15 @@ export default function MetronomeScreen() {
       if (loggingEnabled && practiceStartRef.current) {
         const dur = Math.round((Date.now() - practiceStartRef.current) / 1000);
         if (dur >= 3) {
+          const noteRef = loadedPracticeNoteRef.current;
           addActivityLog({
             type: "practice_session",
             data: {
               bpm,
               mode: barMode ? "bar" : "dial",
               duration: dur,
-              ...(barMode ? { barConfig: `${beatsPerMeasure}/${4}` } : {}),
+              ...(barMode ? { barConfig: { beatsPerMeasure, subdivisions: subdivisionPattern.length } } : {}),
+              ...(barMode && noteRef ? { practiceNoteId: noteRef.id, practiceNoteLabel: noteRef.label } : {}),
             },
           }).then(() => checkCompletedGoals());
         }
@@ -1020,6 +1023,7 @@ export default function MetronomeScreen() {
       barClockMode: entry.barClockMode || "stopwatch",
       barTimerDuration: entry.barTimerDuration ?? 180,
     };
+    loadedPracticeNoteRef.current = { id: entry.id, label: entry.label };
   }, [isPlaying, barMode, beatsPerMeasure, beatTypes, beatSubdivisions]);
 
   const tempoLabel = getTempoLabel(bpm);

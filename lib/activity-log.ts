@@ -10,6 +10,8 @@ export interface PracticeSessionData {
   mode: "dial" | "bar";
   duration: number;
   barConfig?: any;
+  practiceNoteId?: string;
+  practiceNoteLabel?: string;
 }
 
 export interface FeatureUsageData {
@@ -32,9 +34,11 @@ export interface ActivityLog {
 
 export interface Goal {
   id: string;
-  type: "total_play_time" | "beat_mode_time" | "bar_mode_time" | "room_time";
+  type: "total_play_time" | "beat_mode_time" | "bar_mode_time" | "room_time" | "session_goal";
   target: number;
   label: string;
+  practiceNoteId?: string;
+  practiceNoteLabel?: string;
 }
 
 export async function loadLoggingEnabled(): Promise<boolean> {
