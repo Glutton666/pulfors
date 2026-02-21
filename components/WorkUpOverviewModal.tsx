@@ -889,47 +889,43 @@ export function WorkUpOverviewModal({
                   )}
 
                   <View style={shareStyles.cardContent}>
-                    {/* App branding */}
                     <View style={shareStyles.brandRow}>
-                      <MaterialCommunityIcons name="metronome" size={20} color={C.accent} />
-                      <Text style={[shareStyles.brandText, { color: C.accent }]}>Metronome</Text>
+                      <Text style={[shareStyles.brandText, { color: C.accent }]}>PurPors</Text>
                     </View>
 
                     <Text style={shareStyles.dateText}>
                       {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
                     </Text>
 
-                    {/* Total time big display */}
-                    <View style={shareStyles.bigTimeWrap}>
-                      <Text style={[shareStyles.bigTime, { color: "#fff" }]}>{formatMinutes(todayTotalTime)}</Text>
-                      <Text style={shareStyles.bigTimeUnit}>minutes</Text>
+                    <View style={shareStyles.comboSection}>
+                      <View style={shareStyles.bigTimeWrap}>
+                        <Text style={[shareStyles.bigTime, { color: "#fff" }]}>{formatMinutes(todayTotalTime)}</Text>
+                        <Text style={shareStyles.bigTimeUnit}>min</Text>
+                      </View>
+                      <View style={shareStyles.barChart}>
+                        <View style={shareStyles.barRow}>
+                          <Text style={shareStyles.barLabel}>Beat</Text>
+                          <View style={shareStyles.barTrack}>
+                            <View style={[shareStyles.barFill, {
+                              backgroundColor: BEAT_COLOR,
+                              width: todayTotalTime > 0 ? `${Math.max(5, (todayBeatTime / todayTotalTime) * 100)}%` : "5%"
+                            }]} />
+                          </View>
+                          <Text style={[shareStyles.barValue, { color: BEAT_COLOR }]}>{formatDuration(todayBeatTime)}</Text>
+                        </View>
+                        <View style={shareStyles.barRow}>
+                          <Text style={shareStyles.barLabel}>Bar</Text>
+                          <View style={shareStyles.barTrack}>
+                            <View style={[shareStyles.barFill, {
+                              backgroundColor: BAR_COLOR,
+                              width: todayTotalTime > 0 ? `${Math.max(5, (todayBarTime / todayTotalTime) * 100)}%` : "5%"
+                            }]} />
+                          </View>
+                          <Text style={[shareStyles.barValue, { color: BAR_COLOR }]}>{formatDuration(todayBarTime)}</Text>
+                        </View>
+                      </View>
                     </View>
 
-                    {/* Play time bar chart */}
-                    <View style={shareStyles.barChart}>
-                      <View style={shareStyles.barRow}>
-                        <Text style={shareStyles.barLabel}>Beat</Text>
-                        <View style={shareStyles.barTrack}>
-                          <View style={[shareStyles.barFill, {
-                            backgroundColor: BEAT_COLOR,
-                            width: todayTotalTime > 0 ? `${Math.max(5, (todayBeatTime / todayTotalTime) * 100)}%` : "5%"
-                          }]} />
-                        </View>
-                        <Text style={[shareStyles.barValue, { color: BEAT_COLOR }]}>{formatDuration(todayBeatTime)}</Text>
-                      </View>
-                      <View style={shareStyles.barRow}>
-                        <Text style={shareStyles.barLabel}>Bar</Text>
-                        <View style={shareStyles.barTrack}>
-                          <View style={[shareStyles.barFill, {
-                            backgroundColor: BAR_COLOR,
-                            width: todayTotalTime > 0 ? `${Math.max(5, (todayBarTime / todayTotalTime) * 100)}%` : "5%"
-                          }]} />
-                        </View>
-                        <Text style={[shareStyles.barValue, { color: BAR_COLOR }]}>{formatDuration(todayBarTime)}</Text>
-                      </View>
-                    </View>
-
-                    {/* Goals */}
                     {goals.length > 0 && (
                       <View style={shareStyles.goalsSection}>
                         <Text style={shareStyles.sectionTitle}>Goals</Text>
@@ -952,27 +948,6 @@ export function WorkUpOverviewModal({
                         })}
                       </View>
                     )}
-
-                    {/* Weekly summary */}
-                    <View style={shareStyles.weekSection}>
-                      <Text style={shareStyles.sectionTitle}>This Week</Text>
-                      <View style={shareStyles.weekRow}>
-                        <View style={shareStyles.weekItem}>
-                          <Text style={[shareStyles.weekVal, { color: C.accent }]}>{formatDuration(weekTotalTime)}</Text>
-                          <Text style={shareStyles.weekLbl}>Total</Text>
-                        </View>
-                        <View style={[shareStyles.weekDivider, { backgroundColor: "#ffffff20" }]} />
-                        <View style={shareStyles.weekItem}>
-                          <Text style={[shareStyles.weekVal, { color: BEAT_COLOR }]}>{formatDuration(weekBeatTime)}</Text>
-                          <Text style={shareStyles.weekLbl}>Beat</Text>
-                        </View>
-                        <View style={[shareStyles.weekDivider, { backgroundColor: "#ffffff20" }]} />
-                        <View style={shareStyles.weekItem}>
-                          <Text style={[shareStyles.weekVal, { color: BAR_COLOR }]}>{formatDuration(weekBarTime)}</Text>
-                          <Text style={shareStyles.weekLbl}>Bar</Text>
-                        </View>
-                      </View>
-                    </View>
                   </View>
                 </View>
               </View>
@@ -1427,7 +1402,7 @@ const shareStyles = StyleSheet.create({
   card: {
     borderRadius: 24,
     overflow: "hidden",
-    minHeight: 500,
+    minHeight: 320,
   },
   bgImage: {
     ...StyleSheet.absoluteFillObject,
@@ -1460,22 +1435,27 @@ const shareStyles = StyleSheet.create({
     color: "#ffffffaa",
     marginTop: -12,
   },
+  comboSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
   bigTimeWrap: {
     alignItems: "center",
-    paddingVertical: 10,
   },
   bigTime: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 64,
-    lineHeight: 70,
+    fontSize: 48,
+    lineHeight: 54,
   },
   bigTimeUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 14,
+    fontSize: 12,
     color: "#ffffff88",
     marginTop: 2,
   },
   barChart: {
+    flex: 1,
     gap: 10,
   },
   barRow: {
