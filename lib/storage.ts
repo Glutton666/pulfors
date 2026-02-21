@@ -78,6 +78,8 @@ export interface PracticeEntry {
   barRepeats: Record<number, BarRepeatEntry>;
   barLoopMode: "loop" | "once";
   subdivisionPattern: BeatType[];
+  barClockMode?: "stopwatch" | "timer";
+  barTimerDuration?: number;
 }
 
 export async function loadPracticeBook(): Promise<PracticeEntry[]> {
