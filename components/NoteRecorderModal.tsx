@@ -59,6 +59,8 @@ export function NoteRecorderModal({
   const [trimEnd, setTrimEnd] = useState(1);
   const [audioDuration, setAudioDuration] = useState(0);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
+  const [loadingProgress, setLoadingProgress] = useState(0);
 
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -304,9 +306,15 @@ export function NoteRecorderModal({
     }
   }, [recordedUri, trimStart, trimEnd, audioDuration, onSave]);
 
+  const MAX_DURATION_SEC = 600;
+  const MAX_FILE_SIZE_MB = 50;
+
   const handleImportFile = useCallback(async () => {
     try {
       setPhase("loading");
+      setLoadingProgress(0);
+      setLoadingMessage("Selecting file...");
+
       const result = await DocumentPicker.getDocumentAsync({
         type: ["audio/*"],
         copyToCacheDirectory: true,
@@ -314,32 +322,76 @@ export function NoteRecorderModal({
 
       if (result.canceled || !result.assets || result.assets.length === 0) {
         setPhase("idle");
+        setLoadingMessage("");
         return;
       }
 
-      const fileUri = result.assets[0].uri;
+      const asset = result.assets[0];
+      const fileUri = asset.uri;
+      const fileSizeMB = asset.size ? asset.size / (1024 * 1024) : 0;
+
+      if (fileSizeMB > MAX_FILE_SIZE_MB) {
+        Alert.alert("File Too Large", `Maximum file size is ${MAX_FILE_SIZE_MB}MB. This file is ${Math.round(fileSizeMB)}MB.`);
+        setPhase("idle");
+        setLoadingMessage("");
+        return;
+      }
+
+      setLoadingMessage("Loading audio...");
+      setLoadingProgress(0.2);
+
+      const progressInterval = setInterval(() => {
+        setLoadingProgress((prev) => Math.min(prev + 0.05, 0.85));
+      }, 500);
+
       const sound = new Audio.Sound();
       await sound.loadAsync({ uri: fileUri });
       const status = await sound.getStatusAsync();
 
+      clearInterval(progressInterval);
+      setLoadingProgress(0.95);
+
       if (status.isLoaded && status.durationMillis) {
+        const durationSec = status.durationMillis / 1000;
+
+        if (durationSec > MAX_DURATION_SEC) {
+          Alert.alert(
+            "Too Long",
+            `Maximum audio length is 10 minutes. This file is ${Math.floor(durationSec / 60)}m ${Math.round(durationSec % 60)}s.`
+          );
+          await sound.unloadAsync();
+          setPhase("idle");
+          setLoadingMessage("");
+          setLoadingProgress(0);
+          return;
+        }
+
+        setLoadingProgress(1);
+        setLoadingMessage("Ready!");
+
         setRecordedUri(fileUri);
-        setAudioDuration(status.durationMillis / 1000);
+        setAudioDuration(durationSec);
         setTrimStart(0);
         setTrimEnd(1);
         setPhase("trimming");
+        setLoadingMessage("");
+        setLoadingProgress(0);
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
       } else {
         Alert.alert("Error", "Could not load this audio file.");
         setPhase("idle");
+        setLoadingMessage("");
+        setLoadingProgress(0);
       }
       await sound.unloadAsync();
     } catch (e) {
       console.error("Failed to import audio:", e);
       Alert.alert("Error", "Failed to import audio file.");
       setPhase("idle");
+      setLoadingMessage("");
+      setLoadingProgress(0);
     }
   }, []);
 
@@ -460,7 +512,15 @@ export function NoteRecorderModal({
           {phase === "loading" && (
             <View style={styles.content}>
               <ActivityIndicator size="large" color={C.accent} />
-              <Text style={styles.hintText}>Loading audio...</Text>
+              <Text style={styles.hintText}>{loadingMessage || "Loading audio..."}</Text>
+              {loadingProgress > 0 && (
+                <View style={{ width: "80%", height: 4, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 2, marginTop: 12, overflow: "hidden" }}>
+                  <View style={{ width: `${Math.round(loadingProgress * 100)}%` as any, height: "100%", backgroundColor: C.accent, borderRadius: 2 }} />
+                </View>
+              )}
+              {loadingProgress > 0 && (
+                <Text style={[styles.hintText, { fontSize: 11, marginTop: 6 }]}>{Math.round(loadingProgress * 100)}%</Text>
+              )}
             </View>
           )}
 

@@ -935,43 +935,47 @@ export function BeatIndicator({
                       opacity: isActiveCell ? 1 : 0.7,
                     }]} />
                   )}
-                  {(hasSample || isCovered) && (() => {
-                    const prevKey = ci > 0 ? `${beat}-${ci - 1}` : null;
-                    const nextKey = ci < pattern.length - 1 ? `${beat}-${ci + 1}` : null;
-                    const prevCovered = prevKey ? (sampleCoveredCells.has(prevKey) || !!(noteSamples && noteSamples[prevKey])) : false;
-                    const nextCovered = nextKey ? (sampleCoveredCells.has(nextKey) || !!(noteSamples && noteSamples[nextKey])) : false;
-                    const isFirst = ci === 0;
-                    const isLastCell = ci === pattern.length - 1;
-                    const prevBeatLastCovered = isFirst && beat > 0 && (() => {
-                      const prevBeatPattern = beatSubdivisions[String(beat - 1)] || ["normal"];
-                      const prevLastKey = `${beat - 1}-${prevBeatPattern.length - 1}`;
-                      return sampleCoveredCells.has(prevLastKey) || !!(noteSamples && noteSamples[prevLastKey]);
-                    })();
-                    const nextBeatFirstCovered = isLastCell && beat < beatsPerMeasure - 1 && (() => {
-                      const nk = `${beat + 1}-0`;
-                      return sampleCoveredCells.has(nk) || !!(noteSamples && noteSamples[nk]);
-                    })();
-                    const extendLeft = prevCovered || prevBeatLastCovered;
-                    const extendRight = nextCovered || nextBeatFirstCovered;
-                    const barColor = isStrongType ? "#FFFFFF" : isAccentType ? "#7FFF00" : "#39FF14";
-                    const barOpacity = hasSample
-                      ? (isStrongType ? 1 : isAccentType ? 0.9 : 0.75)
-                      : (isStrongType ? 0.6 : isAccentType ? 0.5 : 0.4);
-                    return (
-                      <View style={[
-                        styles.noteSampleBar,
-                        {
-                          backgroundColor: barColor,
-                          opacity: barOpacity,
-                          left: extendLeft ? 0 : 3,
-                          right: extendRight ? 0 : 3,
-                        },
-                      ]} />
-                    );
-                  })()}
+                  
                 </Pressable>
               );
             })}
+            {(() => {
+              const cellHas = (b: number, c: number) => {
+                const sk = `${b}-${c}`;
+                return !!(noteSamples && noteSamples[sk]) || sampleCoveredCells.has(sk);
+              };
+              const anyCovered = pattern.some((_, ci) => cellHas(beat, ci));
+              if (!anyCovered) return null;
+
+              const segments: { start: number; end: number }[] = [];
+              let segStart = -1;
+              for (let ci = 0; ci <= pattern.length; ci++) {
+                const covered = ci < pattern.length && cellHas(beat, ci);
+                if (covered && segStart < 0) segStart = ci;
+                if (!covered && segStart >= 0) {
+                  segments.push({ start: segStart, end: ci - 1 });
+                  segStart = -1;
+                }
+              }
+              if (segStart >= 0) segments.push({ start: segStart, end: pattern.length - 1 });
+
+              return segments.map((seg, si) => {
+                const leftPct = (seg.start / pattern.length) * 100;
+                const widthPct = ((seg.end - seg.start + 1) / pattern.length) * 100;
+                return (
+                  <View key={`bar-${si}`} style={{
+                    position: "absolute",
+                    left: `${leftPct}%` as any,
+                    width: `${widthPct}%` as any,
+                    bottom: -1,
+                    height: 3,
+                    backgroundColor: "#39FF14",
+                    opacity: 0.85,
+                    zIndex: 10,
+                  }} />
+                );
+              });
+            })()}
           </View>
           <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
           <Pressable
@@ -1610,6 +1614,7 @@ const styles = StyleSheet.create({
   barBeatWrapper: {
     flexDirection: "row",
     alignItems: "stretch",
+    overflow: "visible" as any,
   },
   barBeatLabel: {
     width: moderateScale(22, 0.4),
@@ -1625,6 +1630,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.08)",
+    overflow: "visible" as any,
   },
   barNoteCell: {
     flex: 1,
@@ -1639,9 +1645,10 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: 1,
+    bottom: 0,
     height: 3,
     borderRadius: 0,
+    zIndex: 10,
   },
   barBeatEndLine: {
     width: 1.5,

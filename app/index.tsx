@@ -61,7 +61,7 @@ import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLog
 import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample } from "@/lib/note-samples";
 import type { NoteSampleMap } from "@/lib/note-samples";
 import { NoteRecorderModal } from "@/components/NoteRecorderModal";
-import { AudioModule } from "expo-audio";
+import { AudioModule, createAudioPlayer } from "expo-audio";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import type { ActivityLog, Goal, PracticeSessionData, PracticeRoomVisitData } from "@/lib/activity-log";
 import {
@@ -257,14 +257,15 @@ export default function MetronomeScreen() {
 
     const preloadSounds = async (samples: NoteSampleMap) => {
       for (const s of Object.values(noteSampleSoundsRef.current)) {
-        try { s.remove(); } catch {}
+        try { s.release(); } catch {}
       }
       noteSampleSoundsRef.current = {};
 
       for (const [key, uri] of Object.entries(samples)) {
         try {
           const rawUri = uri.split("#")[0];
-          const player = new AudioModule.AudioPlayer(rawUri, 0, false);
+          const isFileUri = rawUri.startsWith("file://");
+          const player = createAudioPlayer(rawUri, { downloadFirst: isFileUri });
           noteSampleSoundsRef.current[key] = player;
         } catch (e) {
           console.warn("[SamplePreload] Failed to preload:", key, e);
@@ -407,14 +408,15 @@ export default function MetronomeScreen() {
 
   const preloadNoteSampleSounds = useCallback(async (samples: NoteSampleMap) => {
     for (const s of Object.values(noteSampleSoundsRef.current)) {
-      try { s.remove(); } catch {}
+      try { s.release(); } catch {}
     }
     noteSampleSoundsRef.current = {};
 
     for (const [key, uri] of Object.entries(samples)) {
       try {
         const rawUri = uri.split("#")[0];
-        const player = new AudioModule.AudioPlayer(rawUri, 0, false);
+        const isFileUri = rawUri.startsWith("file://");
+        const player = createAudioPlayer(rawUri, { downloadFirst: isFileUri });
         noteSampleSoundsRef.current[key] = player;
       } catch (e) {
         console.warn("[SamplePreload] Failed:", key, e);
@@ -452,7 +454,7 @@ export default function MetronomeScreen() {
     noteSamplesRef.current = updated;
     const key = `${recorderTarget.beat}-${recorderTarget.sub}`;
     if (noteSampleSoundsRef.current[key]) {
-      try { noteSampleSoundsRef.current[key].remove(); } catch {}
+      try { noteSampleSoundsRef.current[key].release(); } catch {}
       delete noteSampleSoundsRef.current[key];
     }
     setRecorderTarget(null);
@@ -714,7 +716,16 @@ export default function MetronomeScreen() {
         if (Number(k) < beats) cleaned[k] = v;
       }
       setBeatSubdivisions(cleaned);
-      persistSettings({ beatsPerMeasure: beats, beatSubdivisions: cleaned });
+      if (barModeRef.current) {
+        barConfigRef.current.beatsPerMeasure = beats;
+        barConfigRef.current.beatTypes = newTypes;
+        barConfigRef.current.beatSubdivisions = cleaned;
+      } else {
+        dialConfigRef.current.beatsPerMeasure = beats;
+        dialConfigRef.current.beatTypes = newTypes;
+        dialConfigRef.current.beatSubdivisions = cleaned;
+        persistSettings({ beatsPerMeasure: beats, beatSubdivisions: cleaned });
+      }
     },
     [persistSettings, beatSubdivisions]
   );
@@ -724,6 +735,11 @@ export default function MetronomeScreen() {
       setBeatTypes((prev) => {
         const next = [...prev];
         next[index] = type;
+        if (barModeRef.current) {
+          barConfigRef.current.beatTypes = next;
+        } else {
+          dialConfigRef.current.beatTypes = next;
+        }
         return next;
       });
       const engine = engineRef.current;
@@ -999,7 +1015,12 @@ export default function MetronomeScreen() {
         engineRef.current?.setBeatSubdivision(beatIndex, null);
       }
       setBeatSubdivisions(newSubs);
-      persistSettings({ beatSubdivisions: newSubs });
+      if (barModeRef.current) {
+        barConfigRef.current.beatSubdivisions = newSubs;
+      } else {
+        dialConfigRef.current.beatSubdivisions = newSubs;
+        persistSettings({ beatSubdivisions: newSubs });
+      }
     },
     [beatSubdivisions, persistSettings]
   );
