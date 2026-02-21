@@ -11,11 +11,13 @@ import {
   ScrollView,
   Switch,
   TextInput,
+  Image,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { useAudioPlayer } from "expo-audio";
 import Colors, { ACCENT_PRESETS, accentFromHex, type ThemeColor } from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -140,7 +142,7 @@ export function SettingsModal({
   username,
   onUsernameChange,
 }: SettingsModalProps) {
-  const { themeColor, customHex, setThemeColor, setCustomHex, colors: C } = useTheme();
+  const { themeColor, customHex, setThemeColor, setCustomHex, colors: C, centerImageUri, setCenterImageUri } = useTheme();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
   const [showCustomPicker, setShowCustomPicker] = useState(themeColor === "custom");
@@ -362,6 +364,28 @@ export function SettingsModal({
     }
   }, [hexInput, customHex, setCustomHex, setThemeColor]);
 
+  const pickCenterImage = useCallback(async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      setCenterImageUri(result.assets[0].uri);
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    }
+  }, [setCenterImageUri]);
+
+  const removeCenterImage = useCallback(() => {
+    setCenterImageUri(null);
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  }, [setCenterImageUri]);
+
   const volumeIcon =
     volume === 0
       ? "volume-off"
@@ -473,6 +497,47 @@ export function SettingsModal({
             </View>
           </View>
         )}
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="image-outline" size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>Center Image</Text>
+        </View>
+        <View style={styles.centerImageRow}>
+          <Pressable onPress={pickCenterImage} style={[styles.centerImagePreview, { borderColor: C.accent }]}>
+            {centerImageUri ? (
+              <Image source={{ uri: centerImageUri }} style={styles.centerImageThumb} />
+            ) : (
+              <Ionicons name="camera-outline" size={28} color={Colors.textTertiary} />
+            )}
+          </Pressable>
+          <View style={styles.centerImageActions}>
+            <Pressable
+              onPress={pickCenterImage}
+              style={[styles.centerImageBtn, { borderColor: C.accent, backgroundColor: C.accentDim }]}
+            >
+              <Ionicons name="image-outline" size={16} color={C.accent} />
+              <Text style={[styles.centerImageBtnText, { color: C.accent }]}>
+                {centerImageUri ? "Change" : "Select"}
+              </Text>
+            </Pressable>
+            {centerImageUri && (
+              <Pressable
+                onPress={removeCenterImage}
+                style={[styles.centerImageBtn, { borderColor: Colors.border }]}
+              >
+                <Ionicons name="trash-outline" size={16} color={Colors.danger} />
+                <Text style={[styles.centerImageBtnText, { color: Colors.danger }]}>Remove</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+        <Text style={styles.offsetHint}>
+          Photo appears in the dial center hub
+        </Text>
       </View>
 
       <View style={styles.divider} />
@@ -1120,5 +1185,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.text,
     backgroundColor: Colors.surfaceLight,
+  },
+  centerImageRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    marginTop: 4,
+  },
+  centerImagePreview: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 2,
+    borderStyle: "dashed" as any,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    backgroundColor: Colors.surfaceLight,
+  },
+  centerImageThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+  },
+  centerImageActions: {
+    flex: 1,
+    gap: 8,
+  },
+  centerImageBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  centerImageBtnText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
   },
 });
