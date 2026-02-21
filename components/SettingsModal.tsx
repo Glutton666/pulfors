@@ -64,7 +64,7 @@ const SOUND_SET_OPTIONS: { value: SoundSet; label: string; icon: string }[] = [
   { value: "classic", label: "Classic", icon: "music-note" },
   { value: "woodblock", label: "Woodblock", icon: "music-box" },
   { value: "digital", label: "Digital", icon: "sine-wave" },
-  { value: "rimshot", label: "Rimshot", icon: "drum" },
+  { value: "rimshot", label: "Rimshot", icon: "music-circle-outline" },
 ];
 
 const TRIPLE_OPTIONS: { value: "all" | "accent" | "off"; label: string }[] = [
