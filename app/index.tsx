@@ -1037,7 +1037,7 @@ export default function MetronomeScreen() {
     loadedPracticeNoteRef.current = { id: entry.id, label: entry.label };
   }, [isPlaying, barMode, beatsPerMeasure, beatTypes, beatSubdivisions]);
 
-  const handleSetPracticeNoteGoal = useCallback(async (entry: PracticeEntry) => {
+  const handleSetPracticeNoteGoal = useCallback(async (entry: PracticeEntry, targetMinutes: number) => {
     const goals = await loadGoals();
     const existing = goals.find((g) => g.type === "session_goal" && g.practiceNoteId === entry.id);
     if (existing) {
@@ -1047,14 +1047,14 @@ export default function MetronomeScreen() {
     const newGoal: Goal = {
       id: Crypto.randomUUID(),
       type: "session_goal",
-      target: 10,
+      target: targetMinutes,
       label: `♫ ${entry.label}`,
       practiceNoteId: entry.id,
       practiceNoteLabel: entry.label,
     };
     const updated = [...goals, newGoal];
     await saveGoals(updated);
-    Alert.alert("목표 설정 완료", `"${entry.label}" 연습 목표가 추가되었습니다 (10분).\nWork Up Overview에서 수정할 수 있습니다.`);
+    Alert.alert("목표 설정 완료", `"${entry.label}" 연습 목표가 추가되었습니다 (${targetMinutes}분).`);
   }, []);
 
   const tempoLabel = getTempoLabel(bpm);

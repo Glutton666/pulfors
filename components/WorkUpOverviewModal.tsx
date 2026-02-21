@@ -215,6 +215,8 @@ export function WorkUpOverviewModal({
   const [newGoalType, setNewGoalType] = useState<Goal["type"]>("total_play_time");
   const [newGoalTarget, setNewGoalTarget] = useState("");
   const [showDetails, setShowDetails] = useState(false);
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  const [editGoalTarget, setEditGoalTarget] = useState("");
 
   const [practiceRooms, setPracticeRooms] = useState<PracticeRoom[]>([]);
   const [showAddRoom, setShowAddRoom] = useState(false);
@@ -377,8 +379,25 @@ export function WorkUpOverviewModal({
       const updated = goals.filter((g) => g.id !== id);
       setGoals(updated);
       await saveGoals(updated);
+      if (editingGoalId === id) setEditingGoalId(null);
     },
-    [goals]
+    [goals, editingGoalId]
+  );
+
+  const handleUpdateGoalTarget = useCallback(
+    async () => {
+      if (!editingGoalId) return;
+      const target = parseInt(editGoalTarget, 10);
+      if (isNaN(target) || target <= 0) {
+        setEditingGoalId(null);
+        return;
+      }
+      const updated = goals.map((g) => g.id === editingGoalId ? { ...g, target } : g);
+      setGoals(updated);
+      await saveGoals(updated);
+      setEditingGoalId(null);
+    },
+    [goals, editingGoalId, editGoalTarget]
   );
 
   const handleAddRoom = useCallback(async () => {
@@ -485,21 +504,51 @@ export function WorkUpOverviewModal({
                       const progress = getGoalProgress(goal);
                       const pct = Math.min(1, progress / goal.target);
                       const goalColor = goal.type === "beat_mode_time" ? BEAT_COLOR : goal.type === "bar_mode_time" ? BAR_COLOR : goal.type === "room_time" ? ROOM_COLOR : goal.type === "session_goal" ? BAR_COLOR : C.accent;
+                      const isEditing = editingGoalId === goal.id;
                       return (
-                        <View key={goal.id} style={s.goalRow}>
+                        <Pressable
+                          key={goal.id}
+                          style={s.goalRow}
+                          onLongPress={() => {
+                            setEditingGoalId(goal.id);
+                            setEditGoalTarget(String(goal.target));
+                          }}
+                          delayLongPress={500}
+                        >
                           <CircularProgress size={44} strokeWidth={4} progress={pct} color={goalColor} bgColor={Colors.surfaceLight}>
                             <Text style={[s.goalPct, { color: goalColor }]}>{Math.round(pct * 100)}%</Text>
                           </CircularProgress>
                           <View style={s.goalInfo}>
                             <Text style={s.goalLabel}>{goal.label}</Text>
-                            <Text style={s.goalProgress}>
-                              {Math.round(progress)}m / {goal.target}m
-                            </Text>
+                            {isEditing ? (
+                              <View style={s.goalEditRow}>
+                                <TextInput
+                                  style={[s.goalEditInput, { borderColor: goalColor }]}
+                                  value={editGoalTarget}
+                                  onChangeText={setEditGoalTarget}
+                                  keyboardType="numeric"
+                                  autoFocus
+                                  selectTextOnFocus
+                                  onSubmitEditing={handleUpdateGoalTarget}
+                                />
+                                <Text style={s.goalEditUnit}>분</Text>
+                                <Pressable style={[s.goalEditSave, { backgroundColor: goalColor }]} onPress={handleUpdateGoalTarget}>
+                                  <Ionicons name="checkmark" size={14} color={Colors.surface} />
+                                </Pressable>
+                                <Pressable style={s.goalEditCancel} onPress={() => setEditingGoalId(null)}>
+                                  <Ionicons name="close" size={14} color={Colors.textTertiary} />
+                                </Pressable>
+                              </View>
+                            ) : (
+                              <Text style={s.goalProgress}>
+                                {Math.round(progress)}m / {goal.target}m
+                              </Text>
+                            )}
                           </View>
                           <Pressable onPress={() => handleDeleteGoal(goal.id)} hitSlop={8}>
                             <Ionicons name="trash-outline" size={14} color={Colors.textTertiary} />
                           </Pressable>
-                        </View>
+                        </Pressable>
                       );
                     })
                   )}
@@ -850,6 +899,44 @@ const s = StyleSheet.create({
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
     color: Colors.textSecondary,
+  },
+  goalEditRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+  },
+  goalEditInput: {
+    width: 56,
+    height: 28,
+    borderWidth: 1,
+    borderRadius: 6,
+    backgroundColor: Colors.surfaceLight,
+    color: Colors.text,
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 13,
+    textAlign: "center",
+    paddingVertical: 0,
+  },
+  goalEditUnit: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 11,
+    color: Colors.textSecondary,
+  },
+  goalEditSave: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  goalEditCancel: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.surfaceLight,
   },
   goalTypeRow: {
     flexDirection: "row",

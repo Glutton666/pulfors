@@ -26,7 +26,7 @@ interface PracticeBookModalProps {
   visible: boolean;
   onClose: () => void;
   onLoad: (entry: PracticeEntry) => void;
-  onSetGoal?: (entry: PracticeEntry) => void;
+  onSetGoal?: (entry: PracticeEntry, targetMinutes: number) => void;
   currentConfig: Omit<PracticeEntry, "id" | "label" | "createdAt"> | null;
 }
 
@@ -79,6 +79,8 @@ export function PracticeBookModal({
   const [saveLabel, setSaveLabel] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
+  const [goalEntry, setGoalEntry] = useState<PracticeEntry | null>(null);
+  const [goalMinutes, setGoalMinutes] = useState("10");
   const saveInputRef = useRef<TextInput>(null);
   const editInputRef = useRef<TextInput>(null);
 
@@ -179,18 +181,8 @@ export function PracticeBookModal({
           onPress={() => handleLoad(item)}
           onLongPress={() => {
             if (onSetGoal) {
-              if (Platform.OS === "web") {
-                onSetGoal(item);
-              } else {
-                Alert.alert(
-                  "목표 설정",
-                  `"${item.label}"을(를) 연습 목표로 설정하시겠습니까?`,
-                  [
-                    { text: "취소", style: "cancel" },
-                    { text: "설정", onPress: () => onSetGoal(item) },
-                  ]
-                );
-              }
+              setGoalEntry(item);
+              setGoalMinutes("10");
             }
           }}
           delayLongPress={500}
@@ -367,6 +359,47 @@ export function PracticeBookModal({
             contentContainerStyle={styles.list}
             scrollEnabled={!!entries.length}
           />
+        )}
+
+        {goalEntry && (
+          <View style={styles.goalOverlay}>
+            <View style={[styles.goalDialog, { borderColor: C.accent }]}>
+              <Text style={styles.goalDialogTitle}>목표 설정</Text>
+              <Text style={styles.goalDialogSub}>"{goalEntry.label}" 연습 목표 시간 (분)</Text>
+              <View style={styles.goalInputRow}>
+                <TextInput
+                  style={[styles.goalInput, { borderColor: C.accent }]}
+                  value={goalMinutes}
+                  onChangeText={setGoalMinutes}
+                  keyboardType="numeric"
+                  autoFocus
+                  selectTextOnFocus
+                />
+                <Text style={styles.goalInputUnit}>분</Text>
+              </View>
+              <View style={styles.goalBtnRow}>
+                <Pressable
+                  style={styles.goalCancelBtn}
+                  onPress={() => setGoalEntry(null)}
+                >
+                  <Text style={styles.goalCancelText}>취소</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.goalConfirmBtn, { backgroundColor: C.accent }, !goalMinutes.trim() && { opacity: 0.4 }]}
+                  onPress={() => {
+                    const mins = parseInt(goalMinutes, 10);
+                    if (!isNaN(mins) && mins > 0 && onSetGoal && goalEntry) {
+                      onSetGoal(goalEntry, mins);
+                      setGoalEntry(null);
+                    }
+                  }}
+                  disabled={!goalMinutes.trim()}
+                >
+                  <Text style={styles.goalConfirmText}>설정</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
         )}
       </View>
     </Modal>
@@ -562,5 +595,81 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textTertiary,
     textAlign: "center",
+  },
+  goalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  goalDialog: {
+    width: "80%",
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 20,
+    gap: 12,
+  },
+  goalDialogTitle: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 16,
+    color: Colors.text,
+    textAlign: "center",
+  },
+  goalDialogSub: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 13,
+    color: Colors.textSecondary,
+    textAlign: "center",
+  },
+  goalInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  goalInput: {
+    width: 80,
+    height: 42,
+    borderWidth: 1,
+    borderRadius: 8,
+    backgroundColor: Colors.surfaceLight,
+    color: Colors.text,
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 18,
+    textAlign: "center",
+  },
+  goalInputUnit: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  goalBtnRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 4,
+  },
+  goalCancelBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: Colors.surfaceLight,
+  },
+  goalCancelText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  goalConfirmBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  goalConfirmText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 14,
+    color: Colors.background,
   },
 });
