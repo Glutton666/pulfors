@@ -16,9 +16,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useAudioPlayer } from "expo-audio";
 import Colors, { ACCENT_PRESETS, accentFromHex, type ThemeColor } from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import type { FlashMode, HapticMode, SoundSet } from "@/lib/storage";
+import { soundSets } from "@/lib/metronome-engine";
 
 const PRESET_COLORS: { value: Exclude<ThemeColor, "custom">; label: string; color: string }[] = [
   { value: "gold", label: "Gold", color: ACCENT_PRESETS.gold.accent },
@@ -137,6 +139,54 @@ export function SettingsModal({
   const trackWidthRef = useRef(0);
   const trackLeftRef = useRef(0);
   const lastHapticRef = useRef(volume);
+  const [previewingSet, setPreviewingSet] = useState<SoundSet | null>(null);
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const classicStrong = useAudioPlayer(soundSets.classic.strong);
+  const classicHigh = useAudioPlayer(soundSets.classic.high);
+  const classicLow = useAudioPlayer(soundSets.classic.low);
+  const woodblockStrong = useAudioPlayer(soundSets.woodblock.strong);
+  const woodblockHigh = useAudioPlayer(soundSets.woodblock.high);
+  const woodblockLow = useAudioPlayer(soundSets.woodblock.low);
+  const digitalStrong = useAudioPlayer(soundSets.digital.strong);
+  const digitalHigh = useAudioPlayer(soundSets.digital.high);
+  const digitalLow = useAudioPlayer(soundSets.digital.low);
+  const rimshotStrong = useAudioPlayer(soundSets.rimshot.strong);
+  const rimshotHigh = useAudioPlayer(soundSets.rimshot.high);
+  const rimshotLow = useAudioPlayer(soundSets.rimshot.low);
+
+  const previewPlayers: Record<SoundSet, { strong: typeof classicStrong; high: typeof classicHigh; low: typeof classicLow }> = {
+    classic: { strong: classicStrong, high: classicHigh, low: classicLow },
+    woodblock: { strong: woodblockStrong, high: woodblockHigh, low: woodblockLow },
+    digital: { strong: digitalStrong, high: digitalHigh, low: digitalLow },
+    rimshot: { strong: rimshotStrong, high: rimshotHigh, low: rimshotLow },
+  };
+
+  const playSoundPreview = useCallback((set: SoundSet) => {
+    if (previewTimerRef.current) {
+      clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
+    setPreviewingSet(set);
+    const players = previewPlayers[set];
+    const playOne = (player: typeof classicStrong) => {
+      try {
+        player.seekTo(0);
+        player.play();
+      } catch {}
+    };
+
+    playOne(players.strong);
+    previewTimerRef.current = setTimeout(() => {
+      playOne(players.high);
+      previewTimerRef.current = setTimeout(() => {
+        playOne(players.low);
+        previewTimerRef.current = setTimeout(() => {
+          setPreviewingSet(null);
+        }, 350);
+      }, 350);
+    }, 350);
+  }, []);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
@@ -522,6 +572,7 @@ export function SettingsModal({
                       ]}
                       onPress={() => {
                         onSoundSetChange(opt.value);
+                        playSoundPreview(opt.value);
                         if (Platform.OS !== "web") {
                           Haptics.selectionAsync();
                         }
