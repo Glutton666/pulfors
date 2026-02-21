@@ -142,7 +142,7 @@ export function SettingsModal({
   username,
   onUsernameChange,
 }: SettingsModalProps) {
-  const { themeColor, customHex, setThemeColor, setCustomHex, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
+  const { themeColor, customHex, setThemeColor, setCustomHex, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatType } = useTheme();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
   const [showCustomPicker, setShowCustomPicker] = useState(themeColor === "custom");
@@ -515,15 +515,12 @@ export function SettingsModal({
                 <Image source={{ uri: img.uri }} style={styles.hubImageThumb} />
                 <View style={styles.hubImageChips}>
                   {beatTypeOptions.map((bt) => {
-                    const active = img.beatTypes.includes(bt.key);
+                    const active = img.beatType === bt.key;
                     return (
                       <Pressable
                         key={bt.key}
                         onPress={() => {
-                          const next = active
-                            ? img.beatTypes.filter((t) => t !== bt.key)
-                            : [...img.beatTypes, bt.key];
-                          if (next.length > 0) updateHubImageBeatTypes(img.id, next);
+                          if (!active) updateHubImageBeatType(img.id, bt.key);
                         }}
                         style={[
                           styles.beatTypeChip,

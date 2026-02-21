@@ -11,7 +11,7 @@ export type BeatTypeKey = "normal" | "accent" | "strong";
 export interface HubImage {
   id: string;
   uri: string;
-  beatTypes: BeatTypeKey[];
+  beatType: BeatTypeKey;
 }
 
 interface ThemeContextValue {
@@ -23,7 +23,7 @@ interface ThemeContextValue {
   hubImages: HubImage[];
   addHubImage: (uri: string) => void;
   removeHubImage: (id: string) => void;
-  updateHubImageBeatTypes: (id: string, beatTypes: BeatTypeKey[]) => void;
+  updateHubImageBeatType: (id: string, beatType: BeatTypeKey) => void;
   getImageForBeatType: (beatType: string) => string | null;
 }
 
@@ -76,7 +76,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const addHubImage = useCallback((uri: string) => {
     setHubImagesState((prev) => {
       if (prev.length >= 3) return prev;
-      const next = [...prev, { id: genId(), uri, beatTypes: ["normal" as BeatTypeKey] }];
+      const next = [...prev, { id: genId(), uri, beatType: "normal" as BeatTypeKey }];
       persistHubImages(next);
       return next;
     });
@@ -90,9 +90,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     });
   }, [persistHubImages]);
 
-  const updateHubImageBeatTypes = useCallback((id: string, beatTypes: BeatTypeKey[]) => {
+  const updateHubImageBeatType = useCallback((id: string, beatType: BeatTypeKey) => {
     setHubImagesState((prev) => {
-      const next = prev.map((img) => (img.id === id ? { ...img, beatTypes } : img));
+      const next = prev.map((img) => (img.id === id ? { ...img, beatType } : img));
       persistHubImages(next);
       return next;
     });
@@ -100,7 +100,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const getImageForBeatType = useCallback((beatType: string) => {
     const key = beatType as BeatTypeKey;
-    const match = hubImages.find((img) => img.beatTypes.includes(key));
+    const match = hubImages.find((img) => img.beatType === key);
     return match ? match.uri : null;
   }, [hubImages]);
 
@@ -109,10 +109,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       themeColor, customHex, setThemeColor, setCustomHex, colors,
-      hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes, getImageForBeatType,
+      hubImages, addHubImage, removeHubImage, updateHubImageBeatType, getImageForBeatType,
     }),
     [themeColor, customHex, setThemeColor, setCustomHex, colors,
-     hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes, getImageForBeatType]
+     hubImages, addHubImage, removeHubImage, updateHubImageBeatType, getImageForBeatType]
   );
 
   return (
