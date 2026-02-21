@@ -4,9 +4,15 @@ import Colors, { getColors, type ThemeColor } from "@/constants/colors";
 
 const THEME_KEY = "metronome_theme_color";
 const CUSTOM_HEX_KEY = "metronome_custom_hex";
-const CENTER_IMAGE_KEY = "metronome_center_image";
-const ACCENT_IMAGE_KEY = "metronome_accent_image";
-const STRONG_IMAGE_KEY = "metronome_strong_image";
+const HUB_IMAGES_KEY = "metronome_hub_images";
+
+export type BeatTypeKey = "normal" | "accent" | "strong";
+
+export interface HubImage {
+  id: string;
+  uri: string;
+  beatTypes: BeatTypeKey[];
+}
 
 interface ThemeContextValue {
   themeColor: ThemeColor;
@@ -14,44 +20,47 @@ interface ThemeContextValue {
   setThemeColor: (color: ThemeColor) => void;
   setCustomHex: (hex: string) => void;
   colors: typeof Colors;
-  centerImageUri: string | null;
-  setCenterImageUri: (uri: string | null) => void;
-  accentImageUri: string | null;
-  setAccentImageUri: (uri: string | null) => void;
-  strongImageUri: string | null;
-  setStrongImageUri: (uri: string | null) => void;
+  hubImages: HubImage[];
+  addHubImage: (uri: string) => void;
+  removeHubImage: (id: string) => void;
+  updateHubImageBeatTypes: (id: string, beatTypes: BeatTypeKey[]) => void;
+  getImageForBeatType: (beatType: string) => string | null;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-export function ThemeProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
+let nextId = 1;
+function genId() {
+  return `hub_${Date.now()}_${nextId++}`;
+}
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
   const [themeColor, setThemeColorState] = useState<ThemeColor>("gold");
   const [customHex, setCustomHexState] = useState<string>("#D4A846");
-  const [centerImageUri, setCenterImageUriState] = useState<string | null>(null);
-  const [accentImageUri, setAccentImageUriState] = useState<string | null>(null);
-  const [strongImageUri, setStrongImageUriState] = useState<string | null>(null);
+  const [hubImages, setHubImagesState] = useState<HubImage[]>([]);
 
   useEffect(() => {
     (async () => {
       try {
-        const [saved, savedHex, savedImage, savedAccent, savedStrong] = await Promise.all([
+        const [saved, savedHex, savedImages] = await Promise.all([
           AsyncStorage.getItem(THEME_KEY),
           AsyncStorage.getItem(CUSTOM_HEX_KEY),
-          AsyncStorage.getItem(CENTER_IMAGE_KEY),
-          AsyncStorage.getItem(ACCENT_IMAGE_KEY),
-          AsyncStorage.getItem(STRONG_IMAGE_KEY),
+          AsyncStorage.getItem(HUB_IMAGES_KEY),
         ]);
         if (saved) setThemeColorState(saved as ThemeColor);
         if (savedHex) setCustomHexState(savedHex);
-        if (savedImage) setCenterImageUriState(savedImage);
-        if (savedAccent) setAccentImageUriState(savedAccent);
-        if (savedStrong) setStrongImageUriState(savedStrong);
+        if (savedImages) {
+          try {
+            const parsed = JSON.parse(savedImages);
+            if (Array.isArray(parsed)) setHubImagesState(parsed);
+          } catch {}
+        }
       } catch {}
     })();
+  }, []);
+
+  const persistHubImages = useCallback((images: HubImage[]) => {
+    AsyncStorage.setItem(HUB_IMAGES_KEY, JSON.stringify(images)).catch(() => {});
   }, []);
 
   const setThemeColor = useCallback((color: ThemeColor) => {
@@ -64,46 +73,46 @@ export function ThemeProvider({
     AsyncStorage.setItem(CUSTOM_HEX_KEY, hex).catch(() => {});
   }, []);
 
-  const setCenterImageUri = useCallback((uri: string | null) => {
-    setCenterImageUriState(uri);
-    if (uri) {
-      AsyncStorage.setItem(CENTER_IMAGE_KEY, uri).catch(() => {});
-    } else {
-      AsyncStorage.removeItem(CENTER_IMAGE_KEY).catch(() => {});
-    }
-  }, []);
+  const addHubImage = useCallback((uri: string) => {
+    setHubImagesState((prev) => {
+      if (prev.length >= 3) return prev;
+      const next = [...prev, { id: genId(), uri, beatTypes: ["normal" as BeatTypeKey] }];
+      persistHubImages(next);
+      return next;
+    });
+  }, [persistHubImages]);
 
-  const setAccentImageUri = useCallback((uri: string | null) => {
-    setAccentImageUriState(uri);
-    if (uri) {
-      AsyncStorage.setItem(ACCENT_IMAGE_KEY, uri).catch(() => {});
-    } else {
-      AsyncStorage.removeItem(ACCENT_IMAGE_KEY).catch(() => {});
-    }
-  }, []);
+  const removeHubImage = useCallback((id: string) => {
+    setHubImagesState((prev) => {
+      const next = prev.filter((img) => img.id !== id);
+      persistHubImages(next);
+      return next;
+    });
+  }, [persistHubImages]);
 
-  const setStrongImageUri = useCallback((uri: string | null) => {
-    setStrongImageUriState(uri);
-    if (uri) {
-      AsyncStorage.setItem(STRONG_IMAGE_KEY, uri).catch(() => {});
-    } else {
-      AsyncStorage.removeItem(STRONG_IMAGE_KEY).catch(() => {});
-    }
-  }, []);
+  const updateHubImageBeatTypes = useCallback((id: string, beatTypes: BeatTypeKey[]) => {
+    setHubImagesState((prev) => {
+      const next = prev.map((img) => (img.id === id ? { ...img, beatTypes } : img));
+      persistHubImages(next);
+      return next;
+    });
+  }, [persistHubImages]);
+
+  const getImageForBeatType = useCallback((beatType: string) => {
+    const key = beatType as BeatTypeKey;
+    const match = hubImages.find((img) => img.beatTypes.includes(key));
+    return match ? match.uri : null;
+  }, [hubImages]);
 
   const colors = useMemo(() => getColors(themeColor, customHex), [themeColor, customHex]);
 
   const value = useMemo(
     () => ({
       themeColor, customHex, setThemeColor, setCustomHex, colors,
-      centerImageUri, setCenterImageUri,
-      accentImageUri, setAccentImageUri,
-      strongImageUri, setStrongImageUri,
+      hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes, getImageForBeatType,
     }),
     [themeColor, customHex, setThemeColor, setCustomHex, colors,
-     centerImageUri, setCenterImageUri,
-     accentImageUri, setAccentImageUri,
-     strongImageUri, setStrongImageUri]
+     hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes, getImageForBeatType]
   );
 
   return (

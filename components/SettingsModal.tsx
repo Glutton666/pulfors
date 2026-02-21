@@ -20,7 +20,7 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useAudioPlayer } from "expo-audio";
 import Colors, { ACCENT_PRESETS, accentFromHex, type ThemeColor } from "@/constants/colors";
-import { useTheme } from "@/contexts/ThemeContext";
+import { useTheme, type BeatTypeKey } from "@/contexts/ThemeContext";
 import type { FlashMode, HapticMode, SoundSet } from "@/lib/storage";
 import { soundSets } from "@/lib/metronome-engine";
 
@@ -142,7 +142,7 @@ export function SettingsModal({
   username,
   onUsernameChange,
 }: SettingsModalProps) {
-  const { themeColor, customHex, setThemeColor, setCustomHex, colors: C, centerImageUri, setCenterImageUri, accentImageUri, setAccentImageUri, strongImageUri, setStrongImageUri } = useTheme();
+  const { themeColor, customHex, setThemeColor, setCustomHex, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
   const [showCustomPicker, setShowCustomPicker] = useState(themeColor === "custom");
@@ -364,7 +364,7 @@ export function SettingsModal({
     }
   }, [hexInput, customHex, setCustomHex, setThemeColor]);
 
-  const pickImage = useCallback(async (setter: (uri: string | null) => void) => {
+  const pickHubImage = useCallback(async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsEditing: true,
@@ -372,19 +372,12 @@ export function SettingsModal({
       quality: 0.8,
     });
     if (!result.canceled && result.assets?.[0]) {
-      setter(result.assets[0].uri);
+      addHubImage(result.assets[0].uri);
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     }
-  }, []);
-
-  const removeImage = useCallback((setter: (uri: string | null) => void) => {
-    setter(null);
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-  }, []);
+  }, [addHubImage]);
 
   const volumeIcon =
     volume === 0
@@ -507,46 +500,65 @@ export function SettingsModal({
           <Text style={styles.sectionLabel}>Center Hub Images</Text>
         </View>
         <Text style={styles.offsetHint}>
-          Different photos show for each beat type in the dial center
+          Add photos and assign them to beat types
         </Text>
 
-        {([
-          { label: "Normal", uri: centerImageUri, setter: setCenterImageUri, icon: "ellipse-outline" as const },
-          { label: "Accent", uri: accentImageUri, setter: setAccentImageUri, icon: "chevron-up-outline" as const },
-          { label: "Strong", uri: strongImageUri, setter: setStrongImageUri, icon: "chevron-up" as const },
-        ]).map((slot) => (
-          <View key={slot.label} style={styles.imageSlotRow}>
-            <View style={styles.imageSlotLabel}>
-              <Ionicons name={slot.icon} size={14} color={C.accent} />
-              <Text style={[styles.imageSlotText, { color: Colors.textSecondary }]}>{slot.label}</Text>
-            </View>
-            <Pressable onPress={() => pickImage(slot.setter)} style={[styles.centerImagePreview, { borderColor: slot.uri ? C.accent : Colors.border, width: 52, height: 52, borderRadius: 26 }]}>
-              {slot.uri ? (
-                <Image source={{ uri: slot.uri }} style={{ width: 52, height: 52, borderRadius: 26 }} />
-              ) : (
-                <Ionicons name="camera-outline" size={20} color={Colors.textTertiary} />
-              )}
-            </Pressable>
-            <View style={styles.imageSlotActions}>
-              <Pressable
-                onPress={() => pickImage(slot.setter)}
-                style={[styles.centerImageBtn, { borderColor: C.accent, backgroundColor: C.accentDim }]}
-              >
-                <Text style={[styles.centerImageBtnText, { color: C.accent }]}>
-                  {slot.uri ? "Change" : "Select"}
-                </Text>
-              </Pressable>
-              {slot.uri && (
-                <Pressable
-                  onPress={() => removeImage(slot.setter)}
-                  style={[styles.centerImageBtn, { borderColor: Colors.border }]}
-                >
-                  <Ionicons name="close-outline" size={16} color={Colors.danger} />
+        {hubImages.map((img) => {
+          const beatTypeOptions: { key: BeatTypeKey; label: string; icon: any }[] = [
+            { key: "normal", label: "Normal", icon: "ellipse-outline" },
+            { key: "accent", label: "Accent", icon: "chevron-up-outline" },
+            { key: "strong", label: "Strong", icon: "chevron-up" },
+          ];
+          return (
+            <View key={img.id} style={styles.hubImageCard}>
+              <View style={styles.hubImageTop}>
+                <Image source={{ uri: img.uri }} style={styles.hubImageThumb} />
+                <View style={styles.hubImageChips}>
+                  {beatTypeOptions.map((bt) => {
+                    const active = img.beatTypes.includes(bt.key);
+                    return (
+                      <Pressable
+                        key={bt.key}
+                        onPress={() => {
+                          const next = active
+                            ? img.beatTypes.filter((t) => t !== bt.key)
+                            : [...img.beatTypes, bt.key];
+                          if (next.length > 0) updateHubImageBeatTypes(img.id, next);
+                        }}
+                        style={[
+                          styles.beatTypeChip,
+                          active
+                            ? { backgroundColor: C.accentDim, borderColor: C.accent }
+                            : { backgroundColor: Colors.surface, borderColor: Colors.border },
+                        ]}
+                      >
+                        <Ionicons name={bt.icon} size={12} color={active ? C.accent : Colors.textTertiary} />
+                        <Text style={[styles.beatTypeChipText, { color: active ? C.accent : Colors.textTertiary }]}>
+                          {bt.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Pressable onPress={() => removeHubImage(img.id)} style={styles.hubImageRemove}>
+                  <Ionicons name="close-circle" size={22} color={Colors.danger} />
                 </Pressable>
-              )}
+              </View>
             </View>
-          </View>
-        ))}
+          );
+        })}
+
+        {hubImages.length < 3 && (
+          <Pressable
+            onPress={pickHubImage}
+            style={[styles.addHubImageBtn, { borderColor: C.accent }]}
+          >
+            <Ionicons name="add-circle-outline" size={20} color={C.accent} />
+            <Text style={[styles.addHubImageText, { color: C.accent }]}>
+              Add Image ({hubImages.length}/3)
+            </Text>
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.divider} />
@@ -1195,65 +1207,59 @@ const styles = StyleSheet.create({
     color: Colors.text,
     backgroundColor: Colors.surfaceLight,
   },
-  imageSlotRow: {
+  hubImageCard: {
+    marginTop: 10,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  hubImageTop: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginTop: 10,
   },
-  imageSlotLabel: {
+  hubImageThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  hubImageChips: {
+    flex: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  beatTypeChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    width: 70,
-  },
-  imageSlotText: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
-  },
-  imageSlotActions: {
-    flex: 1,
-    flexDirection: "row",
-    gap: 6,
-    alignItems: "center",
-  },
-  centerImageRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-    marginTop: 4,
-  },
-  centerImagePreview: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 2,
-    borderStyle: "dashed" as any,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    backgroundColor: Colors.surfaceLight,
-  },
-  centerImageThumb: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-  },
-  centerImageActions: {
-    flex: 1,
-    gap: 8,
-  },
-  centerImageBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 14,
     borderWidth: 1,
   },
-  centerImageBtnText: {
+  beatTypeChipText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 11,
+  },
+  hubImageRemove: {
+    padding: 2,
+  },
+  addHubImageBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: "dashed" as any,
+    backgroundColor: Colors.surface,
+  },
+  addHubImageText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 13,
   },

@@ -287,7 +287,7 @@ export function BeatIndicator({
   initialBarClockMode,
   initialBarTimerDuration,
 }: BeatIndicatorProps) {
-  const { colors: C, centerImageUri, accentImageUri, strongImageUri } = useTheme();
+  const { colors: C, getImageForBeatType, hubImages } = useTheme();
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
 
   const swipeProgress = useSharedValue(0);
@@ -1100,12 +1100,9 @@ export function BeatIndicator({
         </View>
 
         <View style={styles.centerArea} pointerEvents="box-none">
-          {(() => {
+          {hubImages.length > 0 && (() => {
             const currentBeatType = isPlaying && currentBeat >= 0 ? (beatTypes[currentBeat] || "normal") : "normal";
-            const activeImage =
-              currentBeatType === "accent" && accentImageUri ? accentImageUri :
-              currentBeatType === "strong" && strongImageUri ? strongImageUri :
-              centerImageUri;
+            const activeImage = getImageForBeatType(currentBeatType);
             return activeImage ? (
               <View style={styles.centerImageContainer} pointerEvents="none">
                 <Image source={{ uri: activeImage }} style={styles.centerImage} />
