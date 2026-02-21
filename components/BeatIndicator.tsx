@@ -447,8 +447,11 @@ export function BeatIndicator({
 
   const noteHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noteHoldFiredRef = useRef(false);
+  const noteHoldActiveRef = useRef(false);
+  const noteHoldTargetRef = useRef<{ beat: number; ci: number } | null>(null);
 
   const clearNoteHold = useCallback(() => {
+    noteHoldActiveRef.current = false;
     if (noteHoldTimerRef.current) {
       clearTimeout(noteHoldTimerRef.current);
       noteHoldTimerRef.current = null;
@@ -458,8 +461,11 @@ export function BeatIndicator({
   const startNoteHold = useCallback((beat: number, ci: number, patternLen: number) => {
     clearNoteHold();
     noteHoldFiredRef.current = false;
+    noteHoldActiveRef.current = true;
+    noteHoldTargetRef.current = { beat, ci };
     noteHoldTimerRef.current = setTimeout(() => {
       noteHoldFiredRef.current = true;
+      noteHoldActiveRef.current = false;
       noteHoldTimerRef.current = null;
       if (!isPlaying && onNoteRecordRequest && patternLen > 1) {
         if (Platform.OS !== "web") {
@@ -771,18 +777,20 @@ export function BeatIndicator({
       const repeat = barRepeats[beat];
       const isPrimary = isPlaying ? (barLoopMode === "once" ? copyIndex === 0 : copyIndex === CENTER_COPY) : copyIndex === 0;
       return (
-        <Pressable
+        <View
           key={`bar-${copyIndex}-${beat}`}
-          onLongPress={() => { if (isPrimary && !isPlaying) openRepeatModal(beat); }}
-          delayLongPress={500}
-          onPress={() => { if (isPrimary) cycleBeatType(beat); }}
           style={[
             styles.barBeatWrapper,
             isCurrent && styles.barBeatWrapperActive,
             isPrimary && isDropTarget && { backgroundColor: "rgba(255,255,255,0.06)", borderColor: C.accent, borderWidth: 1, borderRadius: 4, marginHorizontal: -1 },
           ]}
         >
-          <View style={styles.barBeatLabel}>
+          <Pressable
+            style={styles.barBeatLabel}
+            onLongPress={() => { if (isPrimary && !isPlaying) openRepeatModal(beat); }}
+            delayLongPress={500}
+            onPress={() => { if (isPrimary) cycleBeatType(beat); }}
+          >
             <Text style={[
               styles.barBeatLabelText,
               {
@@ -795,7 +803,7 @@ export function BeatIndicator({
             ]}>
               {beat + 1}
             </Text>
-          </View>
+          </Pressable>
           <View style={[
             styles.barBeatContent,
             { height: BAR_HEIGHT },
@@ -811,19 +819,25 @@ export function BeatIndicator({
               return (
                 <Pressable
                   key={ci}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    clearNoteHold();
+                  onPress={() => {
                     if (!noteHoldFiredRef.current && isPrimary) handleBarCellPress(beat, ci);
                   }}
-                  onPressIn={() => {
+                  onLongPress={() => {
+                    if (!noteHoldFiredRef.current && isPrimary && !isPlaying && onNoteRecordRequest && pattern.length > 1) {
+                      noteHoldFiredRef.current = true;
+                      onNoteRecordRequest(beat, ci, pattern.length);
+                    }
+                  }}
+                  onPressIn={() => { noteHoldFiredRef.current = false; }}
+                  delayLongPress={500}
+                  onTouchStart={() => {
+                    noteHoldFiredRef.current = false;
                     if (isPrimary && !isPlaying && onNoteRecordRequest && pattern.length > 1) {
                       startNoteHold(beat, ci, pattern.length);
                     }
                   }}
-                  onPressOut={() => {
-                    clearNoteHold();
-                  }}
+                  onTouchEnd={() => { clearNoteHold(); }}
+                  onTouchCancel={() => { clearNoteHold(); }}
                   style={[styles.barNoteCell, !isLast && { borderRightWidth: 1, borderRightColor: "rgba(255,255,255,0.08)" }]}
                 >
                   {isStrongType ? (
@@ -869,7 +883,7 @@ export function BeatIndicator({
               {repeat ? formatRepeat(repeat) : "\u00D71"}
             </Text>
           </Pressable>
-        </Pressable>
+        </View>
       );
     };
     const allBarRows: React.ReactNode[] = [];
