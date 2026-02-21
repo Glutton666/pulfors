@@ -259,6 +259,7 @@ interface BeatIndicatorProps {
   initialBarTimerDuration?: number;
   noteSamples?: Record<string, string>;
   onNoteRecordRequest?: (beatIndex: number, subIndex: number) => void;
+  bpm?: number;
 }
 
 export function BeatIndicator({
@@ -290,10 +291,60 @@ export function BeatIndicator({
   initialBarTimerDuration,
   noteSamples,
   onNoteRecordRequest,
+  bpm,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
 
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
+
+  const sampleCoveredCells = useMemo(() => {
+    const covered = new Set<string>();
+    if (!noteSamples || !bpm || bpm <= 0) return covered;
+    const beatDurMs = 60000 / bpm;
+
+    for (const [key, uri] of Object.entries(noteSamples)) {
+      const [beatStr, subStr] = key.split("-");
+      const triggerBeat = parseInt(beatStr, 10);
+      const triggerSub = parseInt(subStr, 10);
+      if (isNaN(triggerBeat) || isNaN(triggerSub)) continue;
+
+      const hashParts = uri.split("#t=")[1];
+      let durationMs = 0;
+      if (hashParts) {
+        const parts = hashParts.split(",").map(Number);
+        const startMs = !isNaN(parts[0]) ? parts[0] : 0;
+        const endMs = parts.length > 1 && !isNaN(parts[1]) ? parts[1] : 0;
+        if (endMs > startMs) durationMs = endMs - startMs;
+      }
+      if (durationMs <= 0) continue;
+
+      covered.add(key);
+
+      let remainMs = durationMs;
+      let b = triggerBeat;
+      let s = triggerSub;
+      const pattern = beatSubdivisions[String(b)];
+      const subCount = pattern ? pattern.length : 1;
+      const subDur = beatDurMs / subCount;
+      remainMs -= subDur;
+
+      while (remainMs > 0 && b < beatsPerMeasure) {
+        s++;
+        const curPattern = beatSubdivisions[String(b)];
+        const curSubCount = curPattern ? curPattern.length : 1;
+        if (s >= curSubCount) {
+          s = 0;
+          b++;
+          if (b >= beatsPerMeasure) break;
+        }
+        covered.add(`${b}-${s}`);
+        const nextPattern = beatSubdivisions[String(b)];
+        const nextSubCount = nextPattern ? nextPattern.length : 1;
+        remainMs -= beatDurMs / nextSubCount;
+      }
+    }
+    return covered;
+  }, [noteSamples, bpm, beatsPerMeasure, beatSubdivisions]);
 
   const swipeProgress = useSharedValue(0);
   const swipeDirection = useSharedValue(0);
@@ -467,14 +518,14 @@ export function BeatIndicator({
       noteHoldFiredRef.current = true;
       noteHoldActiveRef.current = false;
       noteHoldTimerRef.current = null;
-      if (!isPlaying && onNoteRecordRequest && patternLen > 1) {
+      if (!isPlaying && barLoopMode !== "loop" && onNoteRecordRequest && patternLen > 1) {
         if (Platform.OS !== "web") {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
         }
         onNoteRecordRequest(beat, ci);
       }
     }, 500);
-  }, [isPlaying, onNoteRecordRequest, clearNoteHold]);
+  }, [isPlaying, barLoopMode, onNoteRecordRequest, clearNoteHold]);
 
   const cycleBeatType = useCallback(
     (index: number) => {
@@ -816,6 +867,8 @@ export function BeatIndicator({
               const isLast = ci === pattern.length - 1;
               const sampleKey = `${beat}-${ci}`;
               const hasSample = !!(noteSamples && noteSamples[sampleKey]);
+              const isCovered = sampleCoveredCells.has(sampleKey);
+              const canRecord = barLoopMode !== "loop";
               return (
                 <Pressable
                   key={ci}
@@ -823,7 +876,7 @@ export function BeatIndicator({
                     if (!noteHoldFiredRef.current && isPrimary) handleBarCellPress(beat, ci);
                   }}
                   onLongPress={() => {
-                    if (!noteHoldFiredRef.current && isPrimary && !isPlaying && onNoteRecordRequest && pattern.length > 1) {
+                    if (!noteHoldFiredRef.current && isPrimary && !isPlaying && canRecord && onNoteRecordRequest && pattern.length > 1) {
                       noteHoldFiredRef.current = true;
                       onNoteRecordRequest(beat, ci, pattern.length);
                     }
@@ -832,7 +885,7 @@ export function BeatIndicator({
                   delayLongPress={500}
                   onTouchStart={() => {
                     noteHoldFiredRef.current = false;
-                    if (isPrimary && !isPlaying && onNoteRecordRequest && pattern.length > 1) {
+                    if (isPrimary && !isPlaying && canRecord && onNoteRecordRequest && pattern.length > 1) {
                       startNoteHold(beat, ci, pattern.length);
                     }
                   }}
@@ -868,6 +921,9 @@ export function BeatIndicator({
                   )}
                   {hasSample && (
                     <Text style={styles.noteSampleStar}>★</Text>
+                  )}
+                  {!hasSample && isCovered && (
+                    <Text style={[styles.noteSampleStar, { opacity: 0.5 }]}>★</Text>
                   )}
                 </Pressable>
               );

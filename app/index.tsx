@@ -1643,6 +1643,7 @@ export default function MetronomeScreen() {
             initialBarTimerDuration={barConfigRef.current.barTimerDuration}
             noteSamples={noteSamples}
             onNoteRecordRequest={handleNoteRecordRequest}
+            bpm={bpm}
             subdivisionBarElement={barMode ? (
               <SubdivisionBar
                 pattern={subdivisionPattern}
