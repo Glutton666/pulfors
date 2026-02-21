@@ -1,6 +1,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import * as Font from "expo-font";
 import React, { useEffect, useState } from "react";
 import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -30,15 +31,33 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const [audioReady, setAudioReady] = useState(Platform.OS === "web");
+  const [iconsReady, setIconsReady] = useState(false);
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_400Regular,
     SpaceGrotesk_500Medium,
     SpaceGrotesk_600SemiBold,
     SpaceGrotesk_700Bold,
-    ...Ionicons.font,
-    ...Feather.font,
-    ...MaterialCommunityIcons.font,
   });
+
+  useEffect(() => {
+    const loadIconFonts = async () => {
+      try {
+        const iconFonts = {
+          ...Ionicons.font,
+          ...Feather.font,
+          ...MaterialCommunityIcons.font,
+        };
+        const alreadyLoaded = Object.keys(iconFonts).every((name) => Font.isLoaded(name));
+        if (!alreadyLoaded) {
+          await Font.loadAsync(iconFonts);
+        }
+      } catch (e) {
+        console.warn("Icon font loading error:", e);
+      }
+      setIconsReady(true);
+    };
+    loadIconFonts();
+  }, []);
 
   useEffect(() => {
     const configureAudio = async () => {
@@ -62,12 +81,12 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (fontsLoaded && audioReady) {
+    if (fontsLoaded && audioReady && iconsReady) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, audioReady]);
+  }, [fontsLoaded, audioReady, iconsReady]);
 
-  if (!fontsLoaded || !audioReady) return null;
+  if (!fontsLoaded || !audioReady || !iconsReady) return null;
 
   return (
     <ErrorBoundary>
