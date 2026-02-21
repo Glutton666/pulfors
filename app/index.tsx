@@ -16,7 +16,7 @@ import Animated, {
   Easing,
   useSharedValue,
 } from "react-native-reanimated";
-import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
+import { useAudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -65,25 +65,6 @@ export default function MetronomeScreen() {
   const insets = useSafeAreaInsets();
   const { setThemeColor, colors: C } = useTheme();
 
-  useEffect(() => {
-    const configureAudio = async () => {
-      try {
-        if (Platform.OS === "ios") {
-          await setAudioModeAsync({
-            playsInSilentMode: true,
-            shouldPlayInBackground: false,
-            interruptionMode: "mixWithOthers",
-          });
-        } else if (Platform.OS === "android") {
-          await setAudioModeAsync({
-            playsInSilentMode: true,
-            shouldPlayInBackground: false,
-          });
-        }
-      } catch {}
-    };
-    configureAudio();
-  }, []);
   const [bpm, setBpm] = useState(120);
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));

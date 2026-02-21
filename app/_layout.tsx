@@ -1,9 +1,11 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import { setAudioModeAsync } from "expo-audio";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { ThemeProvider } from "@/contexts/ThemeContext";
@@ -26,6 +28,7 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  const [audioReady, setAudioReady] = useState(Platform.OS === "web");
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_400Regular,
     SpaceGrotesk_500Medium,
@@ -34,12 +37,33 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (fontsLoaded) {
+    const configureAudio = async () => {
+      try {
+        if (Platform.OS === "ios") {
+          await setAudioModeAsync({
+            playsInSilentMode: true,
+            shouldPlayInBackground: false,
+            interruptionMode: "mixWithOthers",
+          });
+        } else if (Platform.OS === "android") {
+          await setAudioModeAsync({
+            playsInSilentMode: true,
+            shouldPlayInBackground: false,
+          });
+        }
+      } catch {}
+      setAudioReady(true);
+    };
+    configureAudio();
+  }, []);
+
+  useEffect(() => {
+    if (fontsLoaded && audioReady) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, audioReady]);
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded || !audioReady) return null;
 
   return (
     <ErrorBoundary>
