@@ -342,7 +342,11 @@ export default function MetronomeScreen() {
             const parsed = parseInt(hashParts.split(",")[0], 10);
             if (!isNaN(parsed)) startMs = parsed;
           }
-          sound.setPositionAsync(startMs).then(() => sound.playAsync()).catch(() => {});
+          sound.stopAsync().then(() => {
+            sound.setPositionAsync(startMs).then(() => {
+              sound.playAsync().catch(() => {});
+            }).catch(() => {});
+          }).catch(() => {});
         } catch {}
         return true;
       }
