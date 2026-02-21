@@ -717,6 +717,47 @@ export function BeatIndicator({
   const [repeatCountVal, setRepeatCountVal] = useState(2);
   const [repeatMinVal, setRepeatMinVal] = useState(0);
   const [repeatSecVal, setRepeatSecVal] = useState(30);
+  const [repeatCountEditing, setRepeatCountEditing] = useState(false);
+  const [repeatCountText, setRepeatCountText] = useState("");
+  const [repeatMinEditing, setRepeatMinEditing] = useState(false);
+  const [repeatMinText, setRepeatMinText] = useState("");
+  const [repeatSecEditing, setRepeatSecEditing] = useState(false);
+  const [repeatSecText, setRepeatSecText] = useState("");
+
+  const countSwipeStartRef = useRef(0);
+  const countPanResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 10 && Math.abs(gs.dx) > Math.abs(gs.dy),
+    onPanResponderGrant: () => { countSwipeStartRef.current = repeatCountVal; },
+    onPanResponderMove: (_, gs) => {
+      const delta = Math.round(gs.dx / 30);
+      setRepeatCountVal(Math.max(2, Math.min(99, countSwipeStartRef.current + delta)));
+    },
+    onPanResponderRelease: () => {
+      if (Platform.OS !== "web") Haptics.selectionAsync();
+    },
+  }), [repeatCountVal]);
+
+  const durSwipeStartMinRef = useRef(0);
+  const durSwipeStartSecRef = useRef(0);
+  const durPanResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 10 && Math.abs(gs.dy) > Math.abs(gs.dx),
+    onPanResponderGrant: () => {
+      durSwipeStartMinRef.current = repeatMinVal;
+      durSwipeStartSecRef.current = repeatSecVal;
+    },
+    onPanResponderMove: (_, gs) => {
+      const totalStartSec = durSwipeStartMinRef.current * 60 + durSwipeStartSecRef.current;
+      const delta = Math.round(-gs.dy / 20) * 5;
+      const newTotal = Math.max(0, Math.min(3599, totalStartSec + delta));
+      setRepeatMinVal(Math.floor(newTotal / 60));
+      setRepeatSecVal(newTotal % 60);
+    },
+    onPanResponderRelease: () => {
+      if (Platform.OS !== "web") Haptics.selectionAsync();
+    },
+  }), [repeatMinVal, repeatSecVal]);
 
   const openRepeatModal = useCallback((beat: number) => {
     const existing = barRepeats[beat];
@@ -734,6 +775,9 @@ export function BeatIndicator({
       setRepeatMinVal(0);
       setRepeatSecVal(30);
     }
+    setRepeatCountEditing(false);
+    setRepeatMinEditing(false);
+    setRepeatSecEditing(false);
     setRepeatModalBeat(beat);
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   }, [barRepeats]);
@@ -798,7 +842,9 @@ export function BeatIndicator({
     if (barLoopMode === "once") {
       const beatTop = centerPad + currentBeat * rowH;
       const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
-      barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
+      const isFirstTick = barPrevBeatRef.current < 0;
+      barPrevBeatRef.current = currentBeat;
+      barScrollRef.current?.scrollTo({ y: scrollTarget, animated: !isFirstTick });
       return;
     }
 
@@ -820,7 +866,8 @@ export function BeatIndicator({
 
     const beatTop = centerPad + activeCopyRef.current * copyHeight + currentBeat * rowH;
     const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
-    barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
+    const isFirstTick = prev < 0;
+    barScrollRef.current?.scrollTo({ y: scrollTarget, animated: !isFirstTick });
   }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, copyHeight, barLoopMode]);
 
   if (barMode) {
@@ -1189,34 +1236,112 @@ export function BeatIndicator({
                   <Pressable onPress={() => setRepeatCountVal(Math.max(2, repeatCountVal - 1))} style={styles.repeatValBtn}>
                     <Ionicons name="remove" size={20} color={Colors.text} />
                   </Pressable>
-                  <Text style={styles.repeatValText}>{"\u00D7"}{repeatCountVal}</Text>
+                  <View {...countPanResponder.panHandlers} style={{ alignItems: "center", minWidth: 70 }}>
+                    {repeatCountEditing ? (
+                      <TextInput
+                        style={[styles.repeatValText, { textAlign: "center", minWidth: 50, padding: 4, borderBottomWidth: 1, borderBottomColor: C.accent }]}
+                        keyboardType="number-pad"
+                        value={repeatCountText}
+                        onChangeText={setRepeatCountText}
+                        onBlur={() => {
+                          const v = parseInt(repeatCountText, 10);
+                          if (!isNaN(v)) setRepeatCountVal(Math.max(2, Math.min(99, v)));
+                          setRepeatCountEditing(false);
+                        }}
+                        onSubmitEditing={() => {
+                          const v = parseInt(repeatCountText, 10);
+                          if (!isNaN(v)) setRepeatCountVal(Math.max(2, Math.min(99, v)));
+                          setRepeatCountEditing(false);
+                        }}
+                        autoFocus
+                        selectTextOnFocus
+                        maxLength={2}
+                      />
+                    ) : (
+                      <Pressable onPress={() => { setRepeatCountText(String(repeatCountVal)); setRepeatCountEditing(true); }}>
+                        <Text style={styles.repeatValText}>{"\u00D7"}{repeatCountVal}</Text>
+                      </Pressable>
+                    )}
+                    <Text style={{ color: Colors.textTertiary, fontSize: 10, marginTop: 2 }}>{"\u2190"} swipe {"\u2192"}</Text>
+                  </View>
                   <Pressable onPress={() => setRepeatCountVal(Math.min(99, repeatCountVal + 1))} style={styles.repeatValBtn}>
                     <Ionicons name="add" size={20} color={Colors.text} />
                   </Pressable>
                 </View>
               ) : (
-                <View style={styles.repeatValueRow}>
-                  <View style={styles.repeatTimeGroup}>
-                    <Pressable onPress={() => setRepeatMinVal(Math.max(0, repeatMinVal - 1))} style={styles.repeatValBtn}>
-                      <Ionicons name="remove" size={18} color={Colors.text} />
-                    </Pressable>
-                    <Text style={styles.repeatValText}>{repeatMinVal}</Text>
-                    <Pressable onPress={() => setRepeatMinVal(Math.min(59, repeatMinVal + 1))} style={styles.repeatValBtn}>
-                      <Ionicons name="add" size={18} color={Colors.text} />
-                    </Pressable>
-                    <Text style={styles.repeatTimeLabel}>min</Text>
+                <View {...durPanResponder.panHandlers}>
+                  <View style={styles.repeatValueRow}>
+                    <View style={styles.repeatTimeGroup}>
+                      <Pressable onPress={() => setRepeatMinVal(Math.max(0, repeatMinVal - 1))} style={styles.repeatValBtn}>
+                        <Ionicons name="remove" size={18} color={Colors.text} />
+                      </Pressable>
+                      {repeatMinEditing ? (
+                        <TextInput
+                          style={[styles.repeatValText, { textAlign: "center", minWidth: 30, padding: 4, borderBottomWidth: 1, borderBottomColor: C.accent }]}
+                          keyboardType="number-pad"
+                          value={repeatMinText}
+                          onChangeText={setRepeatMinText}
+                          onBlur={() => {
+                            const v = parseInt(repeatMinText, 10);
+                            if (!isNaN(v)) setRepeatMinVal(Math.max(0, Math.min(59, v)));
+                            setRepeatMinEditing(false);
+                          }}
+                          onSubmitEditing={() => {
+                            const v = parseInt(repeatMinText, 10);
+                            if (!isNaN(v)) setRepeatMinVal(Math.max(0, Math.min(59, v)));
+                            setRepeatMinEditing(false);
+                          }}
+                          autoFocus
+                          selectTextOnFocus
+                          maxLength={2}
+                        />
+                      ) : (
+                        <Pressable onPress={() => { setRepeatMinText(String(repeatMinVal)); setRepeatMinEditing(true); }}>
+                          <Text style={styles.repeatValText}>{repeatMinVal}</Text>
+                        </Pressable>
+                      )}
+                      <Pressable onPress={() => setRepeatMinVal(Math.min(59, repeatMinVal + 1))} style={styles.repeatValBtn}>
+                        <Ionicons name="add" size={18} color={Colors.text} />
+                      </Pressable>
+                      <Text style={styles.repeatTimeLabel}>min</Text>
+                    </View>
+                    <Text style={styles.repeatTimeSep}>:</Text>
+                    <View style={styles.repeatTimeGroup}>
+                      <Pressable onPress={() => setRepeatSecVal(Math.max(0, repeatSecVal - 5))} style={styles.repeatValBtn}>
+                        <Ionicons name="remove" size={18} color={Colors.text} />
+                      </Pressable>
+                      {repeatSecEditing ? (
+                        <TextInput
+                          style={[styles.repeatValText, { textAlign: "center", minWidth: 30, padding: 4, borderBottomWidth: 1, borderBottomColor: C.accent }]}
+                          keyboardType="number-pad"
+                          value={repeatSecText}
+                          onChangeText={setRepeatSecText}
+                          onBlur={() => {
+                            const v = parseInt(repeatSecText, 10);
+                            if (!isNaN(v)) setRepeatSecVal(Math.max(0, Math.min(59, v)));
+                            setRepeatSecEditing(false);
+                          }}
+                          onSubmitEditing={() => {
+                            const v = parseInt(repeatSecText, 10);
+                            if (!isNaN(v)) setRepeatSecVal(Math.max(0, Math.min(59, v)));
+                            setRepeatSecEditing(false);
+                          }}
+                          autoFocus
+                          selectTextOnFocus
+                          maxLength={2}
+                        />
+                      ) : (
+                        <Pressable onPress={() => { setRepeatSecText(String(repeatSecVal).padStart(2, "0")); setRepeatSecEditing(true); }}>
+                          <Text style={styles.repeatValText}>{repeatSecVal.toString().padStart(2, "0")}</Text>
+                        </Pressable>
+                      )}
+                      <Pressable onPress={() => setRepeatSecVal(Math.min(55, repeatSecVal + 5))} style={styles.repeatValBtn}>
+                        <Ionicons name="add" size={18} color={Colors.text} />
+                      </Pressable>
+                      <Text style={styles.repeatTimeLabel}>sec</Text>
+                    </View>
                   </View>
-                  <Text style={styles.repeatTimeSep}>:</Text>
-                  <View style={styles.repeatTimeGroup}>
-                    <Pressable onPress={() => setRepeatSecVal(Math.max(0, repeatSecVal - 5))} style={styles.repeatValBtn}>
-                      <Ionicons name="remove" size={18} color={Colors.text} />
-                    </Pressable>
-                    <Text style={styles.repeatValText}>{repeatSecVal.toString().padStart(2, "0")}</Text>
-                    <Pressable onPress={() => setRepeatSecVal(Math.min(55, repeatSecVal + 5))} style={styles.repeatValBtn}>
-                      <Ionicons name="add" size={18} color={Colors.text} />
-                    </Pressable>
-                    <Text style={styles.repeatTimeLabel}>sec</Text>
-                  </View>
+                  <Text style={{ color: Colors.textTertiary, fontSize: 10, textAlign: "center", marginTop: 4 }}>{"\u2191"} swipe {"\u2193"}</Text>
                 </View>
               )}
 
