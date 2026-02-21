@@ -379,14 +379,31 @@ export class MetronomeEngine {
     }
   };
 
-  start() {
+  start(startFromBeat?: number) {
     if (this.isRunning) return;
     this.isRunning = true;
-    this.currentBeat = 0;
-    this.currentSubBeat = 0;
     this.schedule = this.buildSchedule();
-    this.scheduleIndex = 0;
-    this.measureStartTime = performance.now();
+
+    if (startFromBeat !== undefined && startFromBeat > 0 && startFromBeat < this.beatsPerMeasure) {
+      const idx = this.schedule.findIndex(t => t.beat === startFromBeat && t.subBeat === 0);
+      if (idx >= 0) {
+        this.scheduleIndex = idx;
+        this.currentBeat = startFromBeat;
+        this.currentSubBeat = 0;
+        const timeOffset = this.schedule[idx].time;
+        this.measureStartTime = performance.now() - timeOffset;
+      } else {
+        this.scheduleIndex = 0;
+        this.currentBeat = 0;
+        this.currentSubBeat = 0;
+        this.measureStartTime = performance.now();
+      }
+    } else {
+      this.currentBeat = 0;
+      this.currentSubBeat = 0;
+      this.scheduleIndex = 0;
+      this.measureStartTime = performance.now();
+    }
     this.loop();
   }
 

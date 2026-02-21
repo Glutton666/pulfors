@@ -107,6 +107,7 @@ export default function MetronomeScreen() {
     Record<string, BeatType[]>
   >({});
   const [barMode, setBarMode] = useState(false);
+  const [barStartBeat, setBarStartBeat] = useState<number | null>(null);
   const [barLoopMode, setBarLoopMode] = useState<"loop" | "once">("loop");
   const [barRepeats, setBarRepeats] = useState<Record<number, BarRepeat>>({});
   const barAreaRef = useRef<View>(null);
@@ -737,6 +738,8 @@ export default function MetronomeScreen() {
 
   const barModeRef = useRef(barMode);
   useEffect(() => { barModeRef.current = barMode; }, [barMode]);
+  const barStartBeatRef = useRef(barStartBeat);
+  useEffect(() => { barStartBeatRef.current = barStartBeat; }, [barStartBeat]);
   const barLoopModeRef = useRef(barLoopMode);
   useEffect(() => { barLoopModeRef.current = barLoopMode; }, [barLoopMode]);
 
@@ -774,7 +777,8 @@ export default function MetronomeScreen() {
         practiceStartRef.current = null;
       }
     } else {
-      engine.start();
+      const startBeat = barModeRef.current ? barStartBeatRef.current : undefined;
+      engine.start(startBeat ?? undefined);
       if (barModeRef.current && barLoopModeRef.current === "once") {
         engine.requestStopAfterMeasure();
       }
@@ -852,6 +856,7 @@ export default function MetronomeScreen() {
       setCurrentBeat(-1);
       setActiveSubNote(-1);
     }
+    setBarStartBeat(null);
 
     if (toBarMode) {
       dialConfigRef.current = {
@@ -1634,6 +1639,8 @@ export default function MetronomeScreen() {
             noteSamples={noteSamples}
             onNoteRecordRequest={handleNoteRecordRequest}
             bpm={bpm}
+            barStartBeat={barStartBeat}
+            onBarStartBeatSelect={setBarStartBeat}
             subdivisionBarElement={barMode ? (
               <SubdivisionBar
                 pattern={subdivisionPattern}

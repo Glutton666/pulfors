@@ -260,6 +260,8 @@ interface BeatIndicatorProps {
   noteSamples?: Record<string, string>;
   onNoteRecordRequest?: (beatIndex: number, subIndex: number) => void;
   bpm?: number;
+  barStartBeat?: number | null;
+  onBarStartBeatSelect?: (beat: number | null) => void;
 }
 
 export function BeatIndicator({
@@ -292,6 +294,8 @@ export function BeatIndicator({
   noteSamples,
   onNoteRecordRequest,
   bpm,
+  barStartBeat,
+  onBarStartBeatSelect,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
 
@@ -838,22 +842,33 @@ export function BeatIndicator({
           ]}
         >
           <Pressable
-            style={styles.barBeatLabel}
+            style={[
+              styles.barBeatLabel,
+              barStartBeat === beat && !isPlaying && { backgroundColor: C.accent + "30", borderRadius: 4 },
+            ]}
             onLongPress={() => { if (isPrimary && !isPlaying) openRepeatModal(beat); }}
             delayLongPress={500}
-            onPress={() => { if (isPrimary) cycleBeatType(beat); }}
+            onPress={() => {
+              if (isPrimary && !isPlaying && onBarStartBeatSelect) {
+                onBarStartBeatSelect(barStartBeat === beat ? null : beat);
+                if (Platform.OS !== "web") Haptics.selectionAsync();
+              } else if (isPrimary) {
+                cycleBeatType(beat);
+              }
+            }}
           >
             <Text style={[
               styles.barBeatLabelText,
               {
-                color: bType === "strong" ? C.accent
+                color: barStartBeat === beat && !isPlaying ? C.accent
+                  : bType === "strong" ? C.accent
                   : bType === "accent" ? C.accentMuted
                   : bType === "mute" ? Colors.textTertiary
                   : Colors.textSecondary,
-                opacity: isCurrent ? 1 : 0.6,
+                opacity: isCurrent ? 1 : (barStartBeat === beat ? 1 : 0.6),
               }
             ]}>
-              {beat + 1}
+              {barStartBeat === beat && !isPlaying ? "▶" : beat + 1}
             </Text>
           </Pressable>
           <View style={[
@@ -938,12 +953,16 @@ export function BeatIndicator({
                     })();
                     const extendLeft = prevCovered || prevBeatLastCovered;
                     const extendRight = nextCovered || nextBeatFirstCovered;
+                    const barColor = isStrongType ? "#FFFFFF" : isAccentType ? "#7FFF00" : "#39FF14";
+                    const barOpacity = hasSample
+                      ? (isStrongType ? 1 : isAccentType ? 0.9 : 0.75)
+                      : (isStrongType ? 0.6 : isAccentType ? 0.5 : 0.4);
                     return (
                       <View style={[
                         styles.noteSampleBar,
                         {
-                          backgroundColor: "#39FF14",
-                          opacity: hasSample ? 1 : 0.5,
+                          backgroundColor: barColor,
+                          opacity: barOpacity,
                           left: extendLeft ? 0 : 3,
                           right: extendRight ? 0 : 3,
                         },
@@ -1537,7 +1556,8 @@ const styles = StyleSheet.create({
   barTopRowCenter: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 4,
+    paddingTop: 40,
+    paddingBottom: 4,
   },
   barBottomRow: {
     flexDirection: "row",
