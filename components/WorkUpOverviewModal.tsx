@@ -29,7 +29,6 @@ import {
   type ActivityLog,
   type Goal,
   type PracticeSessionData,
-  type FeatureUsageData,
   type PracticeRoomVisitData,
 } from "@/lib/activity-log";
 import {
@@ -388,18 +387,17 @@ export function WorkUpOverviewModal({
     }
   }, [playTimePeriod]);
 
-  const featureUsage = useMemo(() => {
-    const usage: Record<string, number> = { tuner: 0, signal_generator: 0, practice_note: 0 };
-    todayLogs.filter((l) => l.type === "feature_usage").forEach((l) => {
-      const data = l.data as FeatureUsageData;
-      usage[data.feature] = (usage[data.feature] || 0) + data.duration;
-    });
-    return usage;
-  }, [todayLogs]);
+  const periodSessions = useMemo(() => {
+    switch (playTimePeriod) {
+      case "today": return todaySessions;
+      case "week": return weekSessions;
+      case "month": return monthSessions;
+    }
+  }, [playTimePeriod, todaySessions, weekSessions, monthSessions]);
 
   const beatSessionDetails = useMemo(() => {
     const byBpm: Record<number, { bpm: number; duration: number; count: number }> = {};
-    todaySessions
+    periodSessions
       .filter(l => (l.data as PracticeSessionData).mode === "dial")
       .forEach(l => {
         const d = l.data as PracticeSessionData;
@@ -408,12 +406,12 @@ export function WorkUpOverviewModal({
         byBpm[d.bpm].count += 1;
       });
     return Object.values(byBpm).sort((a, b) => b.duration - a.duration);
-  }, [todaySessions]);
+  }, [periodSessions]);
 
   const barSessionDetails = useMemo(() => {
     const configs: { label: string; sublabel?: string; duration: number; count: number; bpm: number; beats: number; subdivisions: number; practiceNoteId?: string; practiceNoteLabel?: string }[] = [];
     const configMap: Record<string, number> = {};
-    todaySessions
+    periodSessions
       .filter(l => (l.data as PracticeSessionData).mode === "bar")
       .forEach(l => {
         const d = l.data as PracticeSessionData;
@@ -444,7 +442,7 @@ export function WorkUpOverviewModal({
         configs[configMap[key]].count += 1;
       });
     return configs.sort((a, b) => b.duration - a.duration);
-  }, [todaySessions]);
+  }, [periodSessions]);
 
   const todayRoomTime = useMemo(
     () => todayLogs.filter(l => l.type === "practice_room_visit").reduce((s, l) => s + ((l.data as PracticeRoomVisitData).duration || 0), 0),
@@ -807,34 +805,8 @@ export function WorkUpOverviewModal({
                         </View>
                       )}
 
-                      {/* Feature usage details */}
-                      <View style={s.detailSection}>
-                        <View style={s.detailSectionHeader}>
-                          <View style={[s.legendDot, { backgroundColor: Colors.textSecondary }]} />
-                          <Text style={[s.detailSectionTitle, { color: Colors.textSecondary }]}>Feature Usage</Text>
-                        </View>
-                        <View style={s.detailRow}>
-                          <View style={s.detailInfo}>
-                            <Text style={s.detailMain}>Tuner</Text>
-                          </View>
-                          <Text style={s.detailTimeSec}>{formatDuration(featureUsage.tuner)}</Text>
-                        </View>
-                        <View style={s.detailRow}>
-                          <View style={s.detailInfo}>
-                            <Text style={s.detailMain}>Signal Generator</Text>
-                          </View>
-                          <Text style={s.detailTimeSec}>{formatDuration(featureUsage.signal_generator)}</Text>
-                        </View>
-                        <View style={s.detailRow}>
-                          <View style={s.detailInfo}>
-                            <Text style={s.detailMain}>Practice Note</Text>
-                          </View>
-                          <Text style={s.detailTimeSec}>{formatDuration(featureUsage.practice_note)}</Text>
-                        </View>
-                      </View>
-
                       {beatSessionDetails.length === 0 && barSessionDetails.length === 0 && (
-                        <Text style={s.emptyHint}>No sessions recorded today</Text>
+                        <Text style={s.emptyHint}>No sessions recorded {periodLabel.toLowerCase()}</Text>
                       )}
                     </View>
                   )}
