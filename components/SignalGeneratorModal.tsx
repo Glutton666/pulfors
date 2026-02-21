@@ -360,15 +360,17 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       setMicListening(true);
 
       const buf = new Float32Array(analyser.fftSize);
+      const MIC_GATE = 0.05;
       const detect = () => {
         if (!micActiveRef.current) return;
         analyser.getFloatTimeDomainData(buf);
-        const freq = autoCorrelate(buf, audioCtx.sampleRate);
+        const freq = autoCorrelate(buf, audioCtx.sampleRate, MIC_GATE);
         if (freq > 20 && freq <= MAX_FREQ) {
           const rounded = Math.round(freq * 10) / 10;
           setMicDetectedFreq(rounded);
           const noteInfo = frequencyToNote(freq);
           setMicDetectedNote(`${noteInfo.name}${noteInfo.octave}`);
+          setFrequency(rounded);
         } else {
           setMicDetectedFreq(null);
           setMicDetectedNote(null);
@@ -395,7 +397,8 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       setMicListening(true);
 
       const SAMPLE_RATE = 44100;
-      const RECORD_MS = 300;
+      const RECORD_MS = 200;
+      const MIC_GATE = 0.05;
 
       const recordAndAnalyze = async () => {
         if (!micActiveRef.current) return;
@@ -439,12 +442,13 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                 });
                 const decoded = decodeWavBase64(base64, SAMPLE_RATE);
                 if (decoded && decoded.samples.length > 256) {
-                  const freq = autoCorrelate(decoded.samples, decoded.rate);
+                  const freq = autoCorrelate(decoded.samples, decoded.rate, MIC_GATE);
                   if (freq > 20 && freq <= MAX_FREQ) {
                     const rounded = Math.round(freq * 10) / 10;
                     setMicDetectedFreq(rounded);
                     const noteInfo = frequencyToNote(freq);
                     setMicDetectedNote(`${noteInfo.name}${noteInfo.octave}`);
+                    setFrequency(rounded);
                   } else {
                     setMicDetectedFreq(null);
                     setMicDetectedNote(null);
@@ -486,13 +490,6 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       startMic();
     }
   }, [micListening, stopMic, startMic, hapticFeedback]);
-
-  const applyMicFreq = useCallback(() => {
-    if (micDetectedFreq && micDetectedFreq >= MIN_FREQ && micDetectedFreq <= MAX_FREQ) {
-      hapticFeedback();
-      setFrequency(micDetectedFreq);
-    }
-  }, [micDetectedFreq, hapticFeedback]);
 
   const handleClose = useCallback(() => {
     stopPlayback();
@@ -653,20 +650,17 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               </Pressable>
 
               {micListening && micDetectedFreq && (
-                <Pressable
-                  onPress={applyMicFreq}
-                  style={({ pressed }) => [
+                <View
+                  style={[
                     styles.micApplyBtn,
                     { backgroundColor: C.accentDim, borderColor: C.accent },
-                    pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
                   ]}
-                  testID="signal-mic-apply"
                 >
+                  <MaterialCommunityIcons name="ear-hearing" size={14} color={C.accent} />
                   <Text style={[styles.micApplyFreq, { color: C.accent }]}>
                     {micDetectedNote} {micDetectedFreq} Hz
                   </Text>
-                  <Ionicons name="arrow-forward" size={14} color={C.accent} />
-                </Pressable>
+                </View>
               )}
 
               {micListening && !micDetectedFreq && (
