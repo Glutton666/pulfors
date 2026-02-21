@@ -53,7 +53,7 @@ function freqToNoteOctave(freq: number): { name: string; octave: number } {
   return { name: NOTE_NAMES[noteIndex], octave: Math.max(0, Math.min(8, octave)) };
 }
 
-const KNOB_SIZE = 220;
+const KNOB_SIZE = 165;
 const KNOB_RADIUS = KNOB_SIZE / 2;
 const KNOB_STROKE = 5;
 const ARC_START = 135;
@@ -250,7 +250,7 @@ function PickerColumn<T extends string | number>({
 
 const pickerStyles = StyleSheet.create({
   column: {
-    width: 60,
+    width: 90,
     overflow: "hidden",
     borderRadius: 10,
     borderWidth: 1,
@@ -744,10 +744,10 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               accentColor={C.accent}
               accentDim={C.accentDim}
             />
-            <Text style={styles.pickerHzHint}>
-              {noteToFreq(selectedNote, selectedOctave)} Hz
-            </Text>
           </View>
+          <Text style={styles.pickerHzHint}>
+            {noteToFreq(selectedNote, selectedOctave)} Hz
+          </Text>
 
           <View style={styles.waveSection}>
             <Text style={styles.sectionLabel}>WAVEFORM</Text>
@@ -900,9 +900,9 @@ const styles = StyleSheet.create({
   },
   knobIndicatorDot: {
     position: "absolute",
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
   },
   knobCenter: {
     position: "absolute",
@@ -915,14 +915,14 @@ const styles = StyleSheet.create({
   },
   knobValue: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 36,
-    lineHeight: 42,
+    fontSize: 28,
+    lineHeight: 32,
   },
   knobUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 18,
+    fontSize: 14,
     color: Colors.textTertiary,
-    lineHeight: 22,
+    lineHeight: 18,
   },
   freqEditRow: {
     flexDirection: "row",
