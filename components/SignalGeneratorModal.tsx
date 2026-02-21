@@ -31,108 +31,27 @@ const WAVE_OPTIONS: { type: WaveType; label: string; icon: string }[] = [
   { type: "sawtooth", label: "Saw", icon: "sawtooth-wave" },
 ];
 
-interface PresetCategory {
-  label: string;
-  items: { name: string; freq: number }[];
-}
-
-const PRESET_CATEGORIES: PresetCategory[] = [
-  {
-    label: "CHROMATIC",
-    items: [
-      { name: "C2", freq: 65.41 },
-      { name: "C#2", freq: 69.3 },
-      { name: "D2", freq: 73.42 },
-      { name: "D#2", freq: 77.78 },
-      { name: "E2", freq: 82.41 },
-      { name: "F2", freq: 87.31 },
-      { name: "F#2", freq: 92.5 },
-      { name: "G2", freq: 98.0 },
-      { name: "G#2", freq: 103.83 },
-      { name: "A2", freq: 110 },
-      { name: "A#2", freq: 116.54 },
-      { name: "B2", freq: 123.47 },
-      { name: "C3", freq: 130.81 },
-      { name: "C#3", freq: 138.59 },
-      { name: "D3", freq: 146.83 },
-      { name: "D#3", freq: 155.56 },
-      { name: "E3", freq: 164.81 },
-      { name: "F3", freq: 174.61 },
-      { name: "F#3", freq: 185.0 },
-      { name: "G3", freq: 196 },
-      { name: "G#3", freq: 207.65 },
-      { name: "A3", freq: 220 },
-      { name: "A#3", freq: 233.08 },
-      { name: "B3", freq: 246.94 },
-      { name: "C4", freq: 261.63 },
-      { name: "C#4", freq: 277.18 },
-      { name: "D4", freq: 293.66 },
-      { name: "D#4", freq: 311.13 },
-      { name: "E4", freq: 329.63 },
-      { name: "F4", freq: 349.23 },
-      { name: "F#4", freq: 369.99 },
-      { name: "G4", freq: 392 },
-      { name: "G#4", freq: 415.3 },
-      { name: "A4", freq: 440 },
-      { name: "A#4", freq: 466.16 },
-      { name: "B4", freq: 493.88 },
-      { name: "C5", freq: 523.25 },
-      { name: "C#5", freq: 554.37 },
-      { name: "D5", freq: 587.33 },
-      { name: "D#5", freq: 622.25 },
-      { name: "E5", freq: 659.25 },
-      { name: "F5", freq: 698.46 },
-      { name: "F#5", freq: 739.99 },
-      { name: "G5", freq: 783.99 },
-      { name: "G#5", freq: 830.61 },
-      { name: "A5", freq: 880 },
-      { name: "A#5", freq: 932.33 },
-      { name: "B5", freq: 987.77 },
-      { name: "C6", freq: 1046.5 },
-    ],
-  },
-  {
-    label: "GUITAR",
-    items: [
-      { name: "E2", freq: 82.41 },
-      { name: "A2", freq: 110 },
-      { name: "D3", freq: 146.83 },
-      { name: "G3", freq: 196 },
-      { name: "B3", freq: 246.94 },
-      { name: "E4", freq: 329.63 },
-    ],
-  },
-  {
-    label: "BASS",
-    items: [
-      { name: "B0", freq: 30.87 },
-      { name: "E1", freq: 41.2 },
-      { name: "A1", freq: 55.0 },
-      { name: "D2", freq: 73.42 },
-      { name: "G2", freq: 98.0 },
-    ],
-  },
-  {
-    label: "TEST TONE",
-    items: [
-      { name: "20", freq: 20 },
-      { name: "50", freq: 50 },
-      { name: "100", freq: 100 },
-      { name: "200", freq: 200 },
-      { name: "250", freq: 250 },
-      { name: "500", freq: 500 },
-      { name: "1k", freq: 1000 },
-      { name: "2k", freq: 2000 },
-      { name: "3k", freq: 3000 },
-      { name: "4k", freq: 4000 },
-      { name: "6k", freq: 6000 },
-      { name: "8k", freq: 8000 },
-      { name: "10k", freq: 10000 },
-      { name: "12k", freq: 12000 },
-      { name: "15k", freq: 15000 },
-      { name: "20k", freq: 20000 },
-    ],
-  },
+const NOTE_FREQS: { name: string; freq: number }[] = [
+  { name: "C2", freq: 65.41 },
+  { name: "E2", freq: 82.41 },
+  { name: "A2", freq: 110 },
+  { name: "C3", freq: 130.81 },
+  { name: "E3", freq: 164.81 },
+  { name: "G3", freq: 196 },
+  { name: "A3", freq: 220 },
+  { name: "C4", freq: 261.63 },
+  { name: "E4", freq: 329.63 },
+  { name: "G4", freq: 392 },
+  { name: "A4", freq: 440 },
+  { name: "C5", freq: 523.25 },
+  { name: "E5", freq: 659.25 },
+  { name: "A5", freq: 880 },
+  { name: "C6", freq: 1046.5 },
+  { name: "1k", freq: 1000 },
+  { name: "2k", freq: 2000 },
+  { name: "4k", freq: 4000 },
+  { name: "8k", freq: 8000 },
+  { name: "10k", freq: 10000 },
 ];
 
 const KNOB_SIZE = 110;
@@ -249,7 +168,6 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const [isPlaying, setIsPlaying] = useState(false);
   const [editingFreq, setEditingFreq] = useState(false);
   const [freqInput, setFreqInput] = useState("440");
-  const [presetCat, setPresetCat] = useState(0);
 
   const [micListening, setMicListening] = useState(false);
   const [micDetectedFreq, setMicDetectedFreq] = useState<number | null>(null);
@@ -661,31 +579,14 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
           )}
 
           <View style={styles.presetsSection}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.catTabRow}
-            >
-              {PRESET_CATEGORIES.map((cat, idx) => {
-                const active = presetCat === idx;
-                return (
-                  <Pressable
-                    key={cat.label}
-                    onPress={() => { hapticFeedback(); setPresetCat(idx); }}
-                    style={[styles.catTab, active && { backgroundColor: C.accentDim, borderColor: C.accent }]}
-                  >
-                    <Text style={[styles.catTabText, active && { color: C.accent }]}>{cat.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            <Text style={styles.sectionLabel}>PRESETS</Text>
             <ScrollView
               style={styles.presetsScroll}
               contentContainerStyle={styles.presetsGrid}
               showsVerticalScrollIndicator={false}
               nestedScrollEnabled
             >
-              {PRESET_CATEGORIES[presetCat].items.map((n) => {
+              {NOTE_FREQS.map((n) => {
                 const active = Math.abs(frequency - n.freq) < 0.5;
                 return (
                   <Pressable
@@ -924,27 +825,8 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
   },
-  catTabRow: {
-    flexDirection: "row",
-    gap: 6,
-    paddingHorizontal: 4,
-    marginBottom: 8,
-  },
-  catTab: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  catTabText: {
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 9,
-    color: Colors.textTertiary,
-    letterSpacing: 1,
-  },
   presetsScroll: {
-    maxHeight: 120,
+    maxHeight: 100,
     width: "100%",
   },
   presetsGrid: {
