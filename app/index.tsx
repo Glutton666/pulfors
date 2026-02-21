@@ -847,13 +847,21 @@ export default function MetronomeScreen() {
           if (sampleDurMs <= 0) continue;
 
           let elapsedMs = 0;
+          const curBarRepeats = barConfigRef.current.barRepeats || {};
           for (let b = trigBeat; b < startBeat; b++) {
             const pat = engine.getBeatSubdivision(b);
             const subCount = pat ? pat.length : 1;
+            const rep = curBarRepeats[b];
+            let repeatCount = 1;
+            if (rep) {
+              if (rep.type === "count") repeatCount = Math.max(1, rep.value);
+              else repeatCount = Math.max(1, Math.round((rep.value * 1000) / beatDurMs));
+            }
             if (b === trigBeat) {
               elapsedMs += (subCount - trigSub) * (beatDurMs / subCount);
+              elapsedMs += (repeatCount - 1) * beatDurMs;
             } else {
-              elapsedMs += beatDurMs;
+              elapsedMs += beatDurMs * repeatCount;
             }
           }
 

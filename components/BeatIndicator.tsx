@@ -940,19 +940,22 @@ export function BeatIndicator({
               }
             }}
           >
-            <Text style={[
-              styles.barBeatLabelText,
-              {
-                color: barStartBeat === beat && !isPlaying ? C.accent
-                  : bType === "strong" ? C.accent
-                  : bType === "accent" ? C.accentMuted
-                  : bType === "mute" ? Colors.textTertiary
-                  : Colors.textSecondary,
-                opacity: isCurrent ? 1 : (barStartBeat === beat ? 1 : 0.6),
-              }
-            ]}>
-              {barStartBeat === beat && !isPlaying ? "▶" : beat + 1}
-            </Text>
+            {barStartBeat === beat && !isPlaying ? (
+              <Ionicons name="play" size={12} color={C.accent} style={{ marginLeft: 1 }} />
+            ) : (
+              <Text style={[
+                styles.barBeatLabelText,
+                {
+                  color: bType === "strong" ? C.accent
+                    : bType === "accent" ? C.accentMuted
+                    : bType === "mute" ? Colors.textTertiary
+                    : Colors.textSecondary,
+                  opacity: isCurrent ? 1 : 0.6,
+                }
+              ]}>
+                {beat + 1}
+              </Text>
+            )}
           </Pressable>
           <View style={[
             styles.barBeatContent,
