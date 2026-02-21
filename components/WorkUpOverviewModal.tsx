@@ -461,7 +461,7 @@ export function WorkUpOverviewModal({
                       <Ionicons name="flag" size={16} color={C.accent} />
                       <Text style={[s.cardTitle, { color: C.accent }]}>Goals</Text>
                     </View>
-                    <Pressable onPress={() => setShowAddGoal(!showAddGoal)} hitSlop={8}>
+                    <Pressable testID="add-goal-btn" onPress={() => setShowAddGoal(!showAddGoal)} hitSlop={12} style={{ padding: 4 }}>
                       <Ionicons name={showAddGoal ? "close-circle" : "add-circle"} size={20} color={C.accent} />
                     </Pressable>
                   </View>
