@@ -16,6 +16,40 @@ Notifications.setNotificationHandler({
   }),
 });
 
+function buildActions(isPlaying: boolean) {
+  return [
+    {
+      identifier: "BPM_DOWN",
+      buttonTitle: "◀  BPM",
+      options: { opensAppToForeground: false },
+    },
+    {
+      identifier: "TOGGLE_PLAY",
+      buttonTitle: isPlaying ? "⏸  Pause" : "▶  Play",
+      options: { opensAppToForeground: true },
+    },
+    {
+      identifier: "BPM_UP",
+      buttonTitle: "BPM  ▶",
+      options: { opensAppToForeground: false },
+    },
+  ];
+}
+
+function buildContent(bpm: number, mode: string, isPlaying: boolean) {
+  const bar = "━".repeat(Math.min(20, Math.round((bpm - 20) / 14)));
+  const dot = "●";
+  const empty = "─".repeat(Math.max(0, 20 - Math.round((bpm - 20) / 14)));
+  return {
+    title: `${isPlaying ? "♪" : "⏸"} ${bpm} BPM`,
+    body: `${bar}${dot}${empty}\n${mode} · tap ×1 = ±1  ·  tap ×2 = ±5`,
+    categoryIdentifier: CATEGORY_ID,
+    sticky: true,
+    autoDismiss: false,
+    ...(Platform.OS === "android" ? { channelId: "metronome" } : {}),
+  };
+}
+
 export async function setupNotificationControls() {
   if (isSetup || Platform.OS === "web") return;
 
@@ -33,23 +67,10 @@ export async function setupNotificationControls() {
       });
     }
 
-    await Notifications.setNotificationCategoryAsync(CATEGORY_ID, [
-      {
-        identifier: "TOGGLE_PLAY",
-        buttonTitle: "⏸ Stop",
-        options: { opensAppToForeground: true },
-      },
-      {
-        identifier: "BPM_DOWN",
-        buttonTitle: "BPM -5",
-        options: { opensAppToForeground: false },
-      },
-      {
-        identifier: "BPM_UP",
-        buttonTitle: "BPM +5",
-        options: { opensAppToForeground: false },
-      },
-    ]);
+    await Notifications.setNotificationCategoryAsync(
+      CATEGORY_ID,
+      buildActions(false)
+    );
 
     isSetup = true;
   } catch (e) {
@@ -65,36 +86,14 @@ export async function showPlayingNotification(bpm: number, mode: string) {
   }
 
   try {
-    await Notifications.setNotificationCategoryAsync(CATEGORY_ID, [
-      {
-        identifier: "TOGGLE_PLAY",
-        buttonTitle: "⏸ Stop",
-        options: { opensAppToForeground: true },
-      },
-      {
-        identifier: "BPM_DOWN",
-        buttonTitle: "-5 BPM",
-        options: { opensAppToForeground: false },
-      },
-      {
-        identifier: "BPM_UP",
-        buttonTitle: "+5 BPM",
-        options: { opensAppToForeground: false },
-      },
-    ]);
+    await Notifications.setNotificationCategoryAsync(
+      CATEGORY_ID,
+      buildActions(true)
+    );
 
     await Notifications.scheduleNotificationAsync({
       identifier: NOTIFICATION_ID,
-      content: {
-        title: `🎵 ${bpm} BPM - Playing`,
-        body: `${mode} mode`,
-        categoryIdentifier: CATEGORY_ID,
-        sticky: true,
-        autoDismiss: false,
-        ...(Platform.OS === "android"
-          ? { channelId: "metronome" }
-          : {}),
-      },
+      content: buildContent(bpm, mode, true),
       trigger: null,
     });
   } catch (e) {
@@ -102,22 +101,13 @@ export async function showPlayingNotification(bpm: number, mode: string) {
   }
 }
 
-export async function updateNotificationBpm(bpm: number, mode: string) {
+export async function updateNotificationBpm(bpm: number, mode: string, isPlaying: boolean = true) {
   if (Platform.OS === "web" || !isSetup) return;
 
   try {
     await Notifications.scheduleNotificationAsync({
       identifier: NOTIFICATION_ID,
-      content: {
-        title: `🎵 ${bpm} BPM - Playing`,
-        body: `${mode} mode`,
-        categoryIdentifier: CATEGORY_ID,
-        sticky: true,
-        autoDismiss: false,
-        ...(Platform.OS === "android"
-          ? { channelId: "metronome" }
-          : {}),
-      },
+      content: buildContent(bpm, mode, isPlaying),
       trigger: null,
     });
   } catch (e) {
@@ -140,12 +130,12 @@ export function addNotificationActionListener(
 ) {
   return Notifications.addNotificationResponseReceivedListener((response) => {
     const actionId = response.actionIdentifier;
-    if (actionId === "TOGGLE_PLAY") {
-      callback("TOGGLE_PLAY");
-    } else if (actionId === "BPM_DOWN") {
-      callback("BPM_DOWN");
-    } else if (actionId === "BPM_UP") {
-      callback("BPM_UP");
+    if (
+      actionId === "TOGGLE_PLAY" ||
+      actionId === "BPM_DOWN" ||
+      actionId === "BPM_UP"
+    ) {
+      callback(actionId);
     }
   });
 }

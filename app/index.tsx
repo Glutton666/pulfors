@@ -633,23 +633,52 @@ export default function MetronomeScreen() {
   const bpmRef = useRef(bpm);
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
 
+  const bpmTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bpmTapCountRef = useRef<{ direction: string; count: number }>({ direction: "", count: 0 });
+
   useEffect(() => {
     const sub = addNotificationActionListener((actionId) => {
       if (actionId === "TOGGLE_PLAY") {
         togglePlayPauseRef.current();
-      } else if (actionId === "BPM_DOWN") {
-        const newBpm = Math.max(20, bpmRef.current - 5);
-        updateBpmRef.current(newBpm);
-        const modeLabel = barModeRef.current ? "Bar" : "Dial";
-        updateNotificationBpm(newBpm, modeLabel);
-      } else if (actionId === "BPM_UP") {
-        const newBpm = Math.min(300, bpmRef.current + 5);
-        updateBpmRef.current(newBpm);
-        const modeLabel = barModeRef.current ? "Bar" : "Dial";
-        updateNotificationBpm(newBpm, modeLabel);
+        return;
+      }
+
+      if (actionId === "BPM_DOWN" || actionId === "BPM_UP") {
+        const dir = actionId;
+
+        if (bpmTapCountRef.current.direction === dir && bpmTapTimerRef.current) {
+          clearTimeout(bpmTapTimerRef.current);
+          bpmTapTimerRef.current = null;
+          bpmTapCountRef.current = { direction: "", count: 0 };
+
+          const delta = dir === "BPM_DOWN" ? -5 : 5;
+          const newBpm = Math.max(20, Math.min(300, bpmRef.current + delta));
+          updateBpmRef.current(newBpm);
+          const modeLabel = barModeRef.current ? "Bar" : "Dial";
+          updateNotificationBpm(newBpm, modeLabel);
+        } else {
+          if (bpmTapTimerRef.current) {
+            clearTimeout(bpmTapTimerRef.current);
+          }
+          bpmTapCountRef.current = { direction: dir, count: 1 };
+
+          bpmTapTimerRef.current = setTimeout(() => {
+            bpmTapTimerRef.current = null;
+            bpmTapCountRef.current = { direction: "", count: 0 };
+
+            const delta = dir === "BPM_DOWN" ? -1 : 1;
+            const newBpm = Math.max(20, Math.min(300, bpmRef.current + delta));
+            updateBpmRef.current(newBpm);
+            const modeLabel = barModeRef.current ? "Bar" : "Dial";
+            updateNotificationBpm(newBpm, modeLabel);
+          }, 300);
+        }
       }
     });
-    return () => sub.remove();
+    return () => {
+      sub.remove();
+      if (bpmTapTimerRef.current) clearTimeout(bpmTapTimerRef.current);
+    };
   }, []);
 
   const handleBarModeChange = useCallback((toBarMode: boolean) => {
