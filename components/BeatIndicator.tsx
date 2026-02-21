@@ -306,6 +306,14 @@ export function BeatIndicator({
     if (!noteSamples || !bpm || bpm <= 0) return covered;
     const beatDurMs = 60000 / bpm;
 
+    const getRepeatCount = (beat: number) => {
+      const repeat = barRepeats[beat];
+      if (!repeat) return 1;
+      if (repeat.type === "count") return Math.max(1, repeat.value);
+      const durationMs = repeat.value * 1000;
+      return Math.max(1, Math.round(durationMs / beatDurMs));
+    };
+
     for (const [key, uri] of Object.entries(noteSamples)) {
       const [beatStr, subStr] = key.split("-");
       const triggerBeat = parseInt(beatStr, 10);
@@ -327,29 +335,46 @@ export function BeatIndicator({
       if (durationMs <= 0) continue;
 
       let remainMs = durationMs;
-      let b = triggerBeat;
-      let s = triggerSub;
-      const triggerPattern = beatSubdivisions[String(b)];
+      const triggerPattern = beatSubdivisions[String(triggerBeat)];
       const triggerSubCount = triggerPattern ? triggerPattern.length : 1;
-      remainMs -= beatDurMs / triggerSubCount;
+      const triggerSubDur = beatDurMs / triggerSubCount;
 
-      while (remainMs > 0) {
-        s++;
+      for (let si = triggerSub; si < triggerSubCount && remainMs > 0; si++) {
+        covered.add(`${triggerBeat}-${si}`);
+        remainMs -= triggerSubDur;
+      }
+
+      const triggerRepeatCount = getRepeatCount(triggerBeat);
+      const triggerRepeatExtraMs = (triggerRepeatCount - 1) * beatDurMs;
+      remainMs -= triggerRepeatExtraMs;
+
+      let b = triggerBeat + 1;
+
+      while (remainMs > 0 && b < beatsPerMeasure) {
         const curPattern = beatSubdivisions[String(b)];
         const curSubCount = curPattern ? curPattern.length : 1;
-        if (s >= curSubCount) {
-          s = 0;
+        const curSubDur = beatDurMs / curSubCount;
+        const curRepeatCount = getRepeatCount(b);
+        const fullBeatDur = beatDurMs * curRepeatCount;
+
+        if (remainMs >= fullBeatDur) {
+          for (let si = 0; si < curSubCount; si++) {
+            covered.add(`${b}-${si}`);
+          }
+          remainMs -= fullBeatDur;
           b++;
-          if (b >= beatsPerMeasure) break;
+        } else {
+          let leftMs = remainMs;
+          for (let si = 0; si < curSubCount && leftMs > 0; si++) {
+            covered.add(`${b}-${si}`);
+            leftMs -= curSubDur;
+          }
+          remainMs = 0;
         }
-        covered.add(`${b}-${s}`);
-        const nextPattern = beatSubdivisions[String(b)];
-        const nextSubCount = nextPattern ? nextPattern.length : 1;
-        remainMs -= beatDurMs / nextSubCount;
       }
     }
     return covered;
-  }, [noteSamples, bpm, beatsPerMeasure, beatSubdivisions]);
+  }, [noteSamples, bpm, beatsPerMeasure, beatSubdivisions, barRepeats]);
 
   const swipeProgress = useSharedValue(0);
   const swipeDirection = useSharedValue(0);
