@@ -269,8 +269,6 @@ function SwipeableEntry({
               <Text style={styles.detailUnit}>{formatTime(onePlaySeconds)}</Text>
             </View>
           </View>
-
-          <BeatPreview beatTypes={item.beatTypes} />
         </Pressable>
       </Animated.View>
     </View>
