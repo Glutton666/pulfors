@@ -515,10 +515,6 @@ export function SettingsModal({
                   ]}
                 />
               </View>
-              <View style={styles.sliderLabels}>
-                <Text style={styles.sliderLabelText}>0</Text>
-                <Text style={styles.sliderLabelText}>100</Text>
-              </View>
             </View>
 
             <View style={styles.divider} />
