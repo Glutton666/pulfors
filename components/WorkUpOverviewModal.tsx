@@ -31,13 +31,6 @@ import {
   type PracticeSessionData,
   type PracticeRoomVisitData,
 } from "@/lib/activity-log";
-import {
-  loadPracticeRooms,
-  addPracticeRoom,
-  deletePracticeRoom,
-  requestLocationPermission,
-  type PracticeRoom,
-} from "@/lib/practice-room";
 
 interface WorkUpOverviewModalProps {
   visible: boolean;
@@ -237,11 +230,6 @@ export function WorkUpOverviewModal({
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [editGoalTarget, setEditGoalTarget] = useState("");
 
-  const [practiceRooms, setPracticeRooms] = useState<PracticeRoom[]>([]);
-  const [showAddRoom, setShowAddRoom] = useState(false);
-  const [newRoomName, setNewRoomName] = useState("");
-  const [addingRoom, setAddingRoom] = useState(false);
-
   const [playTimePeriod, setPlayTimePeriod] = useState<PlayTimePeriod>("today");
   const [showYearlySummary, setShowYearlySummary] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -294,7 +282,6 @@ export function WorkUpOverviewModal({
     if (visible && loggingEnabled) {
       loadActivityLogs().then(setLogs);
       loadGoals().then(setGoals);
-      loadPracticeRooms().then(setPracticeRooms);
     }
   }, [visible, loggingEnabled]);
 
@@ -449,17 +436,6 @@ export function WorkUpOverviewModal({
     [todayLogs]
   );
 
-  const roomVisitStats = useMemo(() => {
-    const visits: Record<string, { name: string; totalDuration: number; visitCount: number }> = {};
-    logs.filter((l) => l.type === "practice_room_visit").forEach((l) => {
-      const data = l.data as PracticeRoomVisitData;
-      if (!visits[data.roomId]) visits[data.roomId] = { name: data.roomName, totalDuration: 0, visitCount: 0 };
-      visits[data.roomId].totalDuration += data.duration;
-      visits[data.roomId].visitCount += 1;
-    });
-    return Object.entries(visits).sort(([, a], [, b]) => b.totalDuration - a.totalDuration);
-  }, [logs]);
-
   const getGoalProgress = useCallback(
     (goal: Goal): number => {
       switch (goal.type) {
@@ -519,31 +495,6 @@ export function WorkUpOverviewModal({
     },
     [goals, editingGoalId, editGoalTarget]
   );
-
-  const handleAddRoom = useCallback(async () => {
-    if (!newRoomName.trim()) return;
-    setAddingRoom(true);
-    const granted = await requestLocationPermission();
-    if (!granted) {
-      setAddingRoom(false);
-      Alert.alert("Permission Needed", "Location permission is required to register a practice room.");
-      return;
-    }
-    const room = await addPracticeRoom(newRoomName.trim());
-    if (room) {
-      setPracticeRooms((prev) => [...prev, room]);
-      setNewRoomName("");
-      setShowAddRoom(false);
-    } else {
-      Alert.alert("Error", "Could not get your current location. Please try again.");
-    }
-    setAddingRoom(false);
-  }, [newRoomName]);
-
-  const handleDeleteRoom = useCallback(async (id: string) => {
-    await deletePracticeRoom(id);
-    setPracticeRooms((prev) => prev.filter((r) => r.id !== id));
-  }, []);
 
   const BEAT_COLOR = "#58A6FF";
   const BAR_COLOR = "#F0883E";
@@ -812,88 +763,6 @@ export function WorkUpOverviewModal({
                   )}
                 </View>
 
-                {/* ── Practice Rooms ── */}
-                <View style={s.card}>
-                  <View style={s.cardHeader}>
-                    <View style={s.cardHeaderLeft}>
-                      <Ionicons name="location" size={16} color={C.accent} />
-                      <Text style={[s.cardTitle, { color: Colors.text }]}>Practice Rooms</Text>
-                    </View>
-                    <Pressable onPress={() => setShowAddRoom(!showAddRoom)} hitSlop={8}>
-                      <Ionicons name={showAddRoom ? "close-circle" : "add-circle"} size={20} color={C.accent} />
-                    </Pressable>
-                  </View>
-
-                  {roomTrackingActive && trackingRoomName && (
-                    <View style={[s.trackingBanner, { borderColor: Colors.success }]}>
-                      <View style={s.trackingDot} />
-                      <Text style={[s.trackingText, { color: Colors.success }]}>
-                        Tracking at {trackingRoomName}
-                      </Text>
-                      <Pressable style={[s.trackingStopBtn, { backgroundColor: Colors.danger }]} onPress={onStopRoomTracking}>
-                        <Text style={s.trackingStopText}>Stop</Text>
-                      </Pressable>
-                    </View>
-                  )}
-
-                  {showAddRoom && (
-                    <View style={[s.addForm, { borderColor: C.accentDim }]}>
-                      <Text style={s.formHint}>Register your current location as a practice room</Text>
-                      <View style={s.addFormRow}>
-                        <TextInput
-                          style={[s.formInput, { borderColor: C.accentMuted, flex: 1 }]}
-                          value={newRoomName}
-                          onChangeText={setNewRoomName}
-                          placeholder="Room name"
-                          placeholderTextColor={Colors.textTertiary}
-                          maxLength={30}
-                        />
-                        <Pressable style={[s.formSaveBtn, { backgroundColor: C.accent }]} onPress={handleAddRoom} disabled={addingRoom}>
-                          {addingRoom ? (
-                            <ActivityIndicator size="small" color={Colors.surface} />
-                          ) : (
-                            <Ionicons name="checkmark" size={16} color={Colors.surface} />
-                          )}
-                        </Pressable>
-                      </View>
-                    </View>
-                  )}
-
-                  {practiceRooms.length === 0 && !showAddRoom ? (
-                    <Text style={s.emptyHint}>Tap + to register a practice room</Text>
-                  ) : (
-                    practiceRooms.map((room) => {
-                      const visitInfo = roomVisitStats.find(([id]) => id === room.id);
-                      const isTracking = roomTrackingActive && trackingRoomName === room.name;
-                      return (
-                        <View key={room.id} style={s.roomRow}>
-                          <View style={s.roomInfo}>
-                            <Ionicons name="location-outline" size={14} color={C.accent} />
-                            <Text style={s.roomName} numberOfLines={1}>{room.name}</Text>
-                          </View>
-                          <View style={s.roomActions}>
-                            {visitInfo && (
-                              <Text style={s.roomStat}>
-                                {visitInfo[1].visitCount}x · {formatDuration(visitInfo[1].totalDuration)}
-                              </Text>
-                            )}
-                            {!isTracking && !roomTrackingActive && (
-                              <Pressable
-                                style={[s.roomStartBtn, { backgroundColor: C.accentDim }]}
-                                onPress={() => onStartRoomTracking({ id: room.id, name: room.name })}
-                              >
-                                <Ionicons name="play" size={12} color={C.accent} />
-                              </Pressable>
-                            )}
-                            <Pressable onPress={() => handleDeleteRoom(room.id)} hitSlop={8}>
-                              <Ionicons name="trash-outline" size={14} color={Colors.textTertiary} />
-                            </Pressable>
-                          </View>
-                        </View>
-                      );
-                    })
-                  )}
-                </View>
               </>
             )}
           </Pressable>

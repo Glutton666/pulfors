@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useState } from "react";
+import React, { useRef, useCallback, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
   Switch,
   TextInput,
   Image,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -23,6 +25,13 @@ import Colors, { ACCENT_PRESETS, accentFromHex, type ThemeColor } from "@/consta
 import { useTheme, type BeatTypeKey } from "@/contexts/ThemeContext";
 import type { FlashMode, HapticMode, SoundSet } from "@/lib/storage";
 import { soundSets } from "@/lib/metronome-engine";
+import {
+  loadPracticeRooms,
+  addPracticeRoom,
+  deletePracticeRoom,
+  requestLocationPermission,
+  type PracticeRoom,
+} from "@/lib/practice-room";
 
 const PRESET_COLORS: { value: Exclude<ThemeColor, "custom">; label: string; color: string }[] = [
   { value: "gold", label: "Gold", color: ACCENT_PRESETS.gold.accent },
@@ -64,6 +73,10 @@ interface SettingsModalProps {
   onLoggingEnabledChange: (val: boolean) => void;
   username: string;
   onUsernameChange: (val: string) => void;
+  roomTrackingActive: boolean;
+  trackingRoomName: string | null;
+  onStartRoomTracking: (room: { id: string; name: string }) => void;
+  onStopRoomTracking: () => void;
 }
 
 const SOUND_SET_OPTIONS: { value: SoundSet; label: string; icon: string }[] = [
@@ -141,6 +154,10 @@ export function SettingsModal({
   onLoggingEnabledChange,
   username,
   onUsernameChange,
+  roomTrackingActive,
+  trackingRoomName,
+  onStartRoomTracking,
+  onStopRoomTracking,
 }: SettingsModalProps) {
   const { themeColor, customHex, setThemeColor, setCustomHex, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
   const insets = useSafeAreaInsets();
@@ -155,11 +172,42 @@ export function SettingsModal({
   const lastHapticRef = useRef(volume);
   const previewIndexRef = useRef<Record<string, number>>({});
 
-  React.useEffect(() => {
+  const [practiceRooms, setPracticeRooms] = useState<PracticeRoom[]>([]);
+  const [showAddRoom, setShowAddRoom] = useState(false);
+  const [newRoomName, setNewRoomName] = useState("");
+  const [addingRoom, setAddingRoom] = useState(false);
+
+  useEffect(() => {
     if (visible) {
       setLocalUsername(username);
+      loadPracticeRooms().then(setPracticeRooms);
     }
   }, [visible, username]);
+
+  const handleAddRoom = useCallback(async () => {
+    if (!newRoomName.trim()) return;
+    setAddingRoom(true);
+    const granted = await requestLocationPermission();
+    if (!granted) {
+      setAddingRoom(false);
+      Alert.alert("Permission Needed", "Location permission is required to register a practice room.");
+      return;
+    }
+    const room = await addPracticeRoom(newRoomName.trim());
+    if (room) {
+      setPracticeRooms((prev) => [...prev, room]);
+      setNewRoomName("");
+      setShowAddRoom(false);
+    } else {
+      Alert.alert("Error", "Could not get your current location. Please try again.");
+    }
+    setAddingRoom(false);
+  }, [newRoomName]);
+
+  const handleDeleteRoom = useCallback(async (id: string) => {
+    await deletePracticeRoom(id);
+    setPracticeRooms((prev) => prev.filter((r) => r.id !== id));
+  }, []);
 
   const classicStrong = useAudioPlayer(soundSets.classic.strong);
   const classicHigh = useAudioPlayer(soundSets.classic.high);
@@ -849,6 +897,84 @@ export function SettingsModal({
 
             <View style={styles.divider} />
 
+            <View style={styles.usernameSection}>
+              <View style={[styles.sectionHeader, { justifyContent: "space-between" }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Ionicons name="location" size={18} color={C.accent} />
+                  <Text style={styles.sectionLabel}>Practice Rooms</Text>
+                </View>
+                <Pressable onPress={() => setShowAddRoom(!showAddRoom)} hitSlop={8}>
+                  <Ionicons name={showAddRoom ? "close-circle" : "add-circle"} size={20} color={C.accent} />
+                </Pressable>
+              </View>
+
+              {roomTrackingActive && trackingRoomName && (
+                <View style={[styles.trackingBanner, { borderColor: Colors.success }]}>
+                  <View style={styles.trackingDot} />
+                  <Text style={[styles.trackingText, { color: Colors.success }]}>
+                    Tracking at {trackingRoomName}
+                  </Text>
+                  <Pressable style={[styles.trackingStopBtn, { backgroundColor: Colors.danger }]} onPress={onStopRoomTracking}>
+                    <Text style={styles.trackingStopText}>Stop</Text>
+                  </Pressable>
+                </View>
+              )}
+
+              {showAddRoom && (
+                <View style={[styles.addRoomForm, { borderColor: C.accentDim }]}>
+                  <Text style={styles.addRoomHint}>Register your current location as a practice room</Text>
+                  <View style={styles.addRoomRow}>
+                    <TextInput
+                      style={[styles.usernameInput, { borderColor: C.accentMuted, flex: 1 }]}
+                      value={newRoomName}
+                      onChangeText={setNewRoomName}
+                      placeholder="Room name"
+                      placeholderTextColor={Colors.textTertiary}
+                      maxLength={30}
+                    />
+                    <Pressable style={[styles.addRoomSaveBtn, { backgroundColor: C.accent }]} onPress={handleAddRoom} disabled={addingRoom}>
+                      {addingRoom ? (
+                        <ActivityIndicator size="small" color={Colors.surface} />
+                      ) : (
+                        <Ionicons name="checkmark" size={16} color={Colors.surface} />
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+
+              {practiceRooms.length === 0 && !showAddRoom ? (
+                <Text style={styles.roomEmptyHint}>Tap + to register a practice room</Text>
+              ) : (
+                practiceRooms.map((room) => {
+                  const isTracking = roomTrackingActive && trackingRoomName === room.name;
+                  return (
+                    <View key={room.id} style={styles.roomRow}>
+                      <View style={styles.roomInfo}>
+                        <Ionicons name="location-outline" size={14} color={C.accent} />
+                        <Text style={styles.roomName} numberOfLines={1}>{room.name}</Text>
+                      </View>
+                      <View style={styles.roomActions}>
+                        {!isTracking && !roomTrackingActive && (
+                          <Pressable
+                            style={[styles.roomStartBtn, { backgroundColor: C.accentDim }]}
+                            onPress={() => onStartRoomTracking({ id: room.id, name: room.name })}
+                          >
+                            <Ionicons name="play" size={12} color={C.accent} />
+                          </Pressable>
+                        )}
+                        <Pressable onPress={() => handleDeleteRoom(room.id)} hitSlop={8}>
+                          <Ionicons name="trash-outline" size={14} color={Colors.textTertiary} />
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+
+            <View style={styles.divider} />
+
             <View style={styles.tabBar}>
               <Pressable
                 style={[styles.tabBtn, activeTab === "theme" && [styles.tabBtnActive, { borderColor: C.accent }]]}
@@ -1262,5 +1388,96 @@ const styles = StyleSheet.create({
   addHubImageText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 13,
+  },
+  trackingBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  trackingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.success,
+  },
+  trackingText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    flex: 1,
+  },
+  trackingStopBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  trackingStopText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 11,
+    color: "#fff",
+  },
+  addRoomForm: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    gap: 8,
+    borderStyle: "dashed" as any,
+  },
+  addRoomHint: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  addRoomRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+  },
+  addRoomSaveBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  roomEmptyHint: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 12,
+    color: Colors.textTertiary,
+    textAlign: "center",
+    paddingVertical: 8,
+  },
+  roomRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 6,
+  },
+  roomInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flex: 1,
+  },
+  roomName: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
+    color: Colors.text,
+    flex: 1,
+  },
+  roomActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  roomStartBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

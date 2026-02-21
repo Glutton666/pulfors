@@ -1509,6 +1509,10 @@ export default function MetronomeScreen() {
         }}
         username={username}
         onUsernameChange={updateUsername}
+        roomTrackingActive={roomTrackingActive}
+        trackingRoomName={trackingRoomName}
+        onStartRoomTracking={startRoomTracking}
+        onStopRoomTracking={stopRoomTracking}
       />
 
       {completedGoalPopups.length > 0 && !showMenu && !showTuner && !showSignalGen && !showPracticeBook && !showWorkUp && !showSettings && (
