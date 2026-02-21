@@ -288,6 +288,8 @@ export default function MetronomeScreen() {
         set.highB.volume = v;
         set.lowA.volume = v;
         set.lowB.volume = v;
+        set.strongA.volume = v;
+        set.strongB.volume = v;
       });
     } catch (e) {}
   }, [volume, allPlayers]);
