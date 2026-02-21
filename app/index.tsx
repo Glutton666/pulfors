@@ -1041,7 +1041,11 @@ export default function MetronomeScreen() {
     const goals = await loadGoals();
     const existing = goals.find((g) => g.type === "session_goal" && g.practiceNoteId === entry.id);
     if (existing) {
-      Alert.alert("이미 설정됨", `"${entry.label}" 목표가 이미 있습니다.`);
+      const updated = goals.map((g) =>
+        g.id === existing.id ? { ...g, target: targetMinutes, label: `♫ ${entry.label}` } : g
+      );
+      await saveGoals(updated);
+      Alert.alert("목표 수정 완료", `"${entry.label}" 목표가 ${targetMinutes}분으로 변경되었습니다.`);
       return;
     }
     const newGoal: Goal = {
