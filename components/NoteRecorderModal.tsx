@@ -8,10 +8,12 @@ import {
   Modal,
   Alert,
   PanResponder,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
+import * as DocumentPicker from "expo-document-picker";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -21,7 +23,7 @@ import Animated, {
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 
-type Phase = "countdown" | "recording" | "trimming" | "idle";
+type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
 
 interface NoteRecorderModalProps {
   visible: boolean;
@@ -305,6 +307,45 @@ export function NoteRecorderModal({
     }
   }, [recordedUri, trimStart, trimEnd, audioDuration, onSave]);
 
+  const handleImportFile = useCallback(async () => {
+    try {
+      setPhase("loading");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["audio/*"],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        setPhase("idle");
+        return;
+      }
+
+      const fileUri = result.assets[0].uri;
+      const sound = new Audio.Sound();
+      await sound.loadAsync({ uri: fileUri });
+      const status = await sound.getStatusAsync();
+
+      if (status.isLoaded && status.durationMillis) {
+        setRecordedUri(fileUri);
+        setAudioDuration(status.durationMillis / 1000);
+        setTrimStart(0);
+        setTrimEnd(1);
+        setPhase("trimming");
+        if (Platform.OS !== "web") {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      } else {
+        Alert.alert("Error", "Could not load this audio file.");
+        setPhase("idle");
+      }
+      await sound.unloadAsync();
+    } catch (e) {
+      console.error("Failed to import audio:", e);
+      Alert.alert("Error", "Failed to import audio file.");
+      setPhase("idle");
+    }
+  }, []);
+
   const handleDelete = useCallback(() => {
     onDelete();
   }, [onDelete]);
@@ -344,19 +385,35 @@ export function NoteRecorderModal({
 
           {phase === "idle" && (
             <View style={styles.content}>
-              <Pressable
-                style={[styles.recordButton, { backgroundColor: C.accent }]}
-                onPress={startCountdown}
-              >
-                <Ionicons name="mic" size={28} color={Colors.white} />
-                <Text style={styles.recordButtonText}>Record</Text>
-              </Pressable>
+              <View style={styles.sourceRow}>
+                <Pressable
+                  style={[styles.sourceButton, { backgroundColor: C.accent }]}
+                  onPress={startCountdown}
+                >
+                  <Ionicons name="mic" size={24} color={Colors.white} />
+                  <Text style={styles.sourceButtonText}>Record</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.sourceButton, { backgroundColor: Colors.surfaceLight }]}
+                  onPress={handleImportFile}
+                >
+                  <Ionicons name="musical-notes" size={24} color={Colors.text} />
+                  <Text style={[styles.sourceButtonText, { color: Colors.text }]}>Import</Text>
+                </Pressable>
+              </View>
               {hasExisting && (
                 <Pressable style={styles.deleteButton} onPress={handleDelete}>
                   <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
-                  <Text style={[styles.deleteText]}>Remove Recording</Text>
+                  <Text style={[styles.deleteText]}>Remove Sample</Text>
                 </Pressable>
               )}
+            </View>
+          )}
+
+          {phase === "loading" && (
+            <View style={styles.content}>
+              <ActivityIndicator size="large" color={C.accent} />
+              <Text style={styles.hintText}>Loading audio...</Text>
             </View>
           )}
 
@@ -549,6 +606,24 @@ const styles = StyleSheet.create({
   content: {
     alignItems: "center",
     gap: 16,
+  },
+  sourceRow: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  sourceButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 18,
+    borderRadius: 14,
+  },
+  sourceButtonText: {
+    color: Colors.white,
+    fontSize: 14,
+    fontWeight: "600",
   },
   recordButton: {
     flexDirection: "row",
