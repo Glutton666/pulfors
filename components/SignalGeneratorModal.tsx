@@ -703,15 +703,35 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
 
           <View style={styles.divider} />
 
-          <Knob
-            value={freqNorm}
-            onChange={handleFreqKnob}
-            displayValue={formatFreqDisplay(frequency)}
-            displayUnit={freqDisplayUnit}
-            accentColor={C.accent}
-            accentDim={C.accentDim}
-            onTapCenter={openFreqEdit}
-          />
+          <View style={styles.knobWrap}>
+            <Knob
+              value={freqNorm}
+              onChange={handleFreqKnob}
+              displayValue={formatFreqDisplay(frequency)}
+              displayUnit={freqDisplayUnit}
+              accentColor={C.accent}
+              accentDim={C.accentDim}
+              onTapCenter={openFreqEdit}
+            />
+            <Pressable
+              onPress={toggleMic}
+              style={[
+                styles.micEmoji,
+                micListening && styles.micEmojiActive,
+              ]}
+              hitSlop={8}
+              testID="signal-mic-toggle"
+            >
+              <Text style={{ fontSize: 22 }}>{micListening ? "🔴" : "👂"}</Text>
+            </Pressable>
+            {micListening && micDetectedFreq ? (
+              <Text style={[styles.micDetectedHint, { color: C.accent }]}>
+                {micDetectedNote} {micDetectedFreq} Hz
+              </Text>
+            ) : micListening ? (
+              <Text style={styles.micDetectedHint}>...</Text>
+            ) : null}
+          </View>
 
           {editingFreq && (
             <View style={styles.freqEditRow}>
@@ -769,48 +789,6 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                   </Pressable>
                 );
               })}
-            </View>
-          </View>
-
-          <View style={styles.micSection}>
-            <View style={styles.micRow}>
-              <Pressable
-                onPress={toggleMic}
-                style={({ pressed }) => [
-                  styles.micBtn,
-                  micListening && { backgroundColor: Colors.danger },
-                  !micListening && { backgroundColor: Colors.surfaceLight, borderWidth: 1, borderColor: Colors.border },
-                  pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
-                ]}
-                testID="signal-mic-toggle"
-              >
-                <MaterialCommunityIcons
-                  name={micListening ? "microphone-off" : "microphone"}
-                  size={18}
-                  color={micListening ? Colors.white : C.accent}
-                />
-                <Text style={[styles.micBtnText, { color: micListening ? Colors.white : Colors.textSecondary }]}>
-                  {micListening ? "Stop" : "Listen"}
-                </Text>
-              </Pressable>
-
-              {micListening && micDetectedFreq && (
-                <View
-                  style={[
-                    styles.micApplyBtn,
-                    { backgroundColor: C.accentDim, borderColor: C.accent },
-                  ]}
-                >
-                  <MaterialCommunityIcons name="ear-hearing" size={14} color={C.accent} />
-                  <Text style={[styles.micApplyFreq, { color: C.accent }]}>
-                    {micDetectedNote} {micDetectedFreq} Hz
-                  </Text>
-                </View>
-              )}
-
-              {micListening && !micDetectedFreq && (
-                <Text style={styles.micHint}>Listening...</Text>
-              )}
             </View>
           </View>
 
@@ -1008,45 +986,33 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     letterSpacing: 0.5,
   },
-  micSection: {
-    width: "100%",
+  knobWrap: {
     alignItems: "center",
-  },
-  micRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
     justifyContent: "center",
   },
-  micBtn: {
-    flexDirection: "row",
+  micEmoji: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.surfaceLight,
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  micBtnText: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
-  },
-  micApplyBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    justifyContent: "center",
     borderWidth: 1,
+    borderColor: Colors.border,
   },
-  micApplyFreq: {
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 12,
+  micEmojiActive: {
+    borderColor: Colors.danger,
+    backgroundColor: "rgba(255,59,48,0.15)",
   },
-  micHint: {
-    fontFamily: "SpaceGrotesk_400Regular",
+  micDetectedHint: {
+    fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 11,
     color: Colors.textTertiary,
+    marginTop: 2,
+    textAlign: "center",
   },
   playBtn: {
     flexDirection: "row",
