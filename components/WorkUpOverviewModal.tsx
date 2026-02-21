@@ -15,13 +15,12 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import Svg, { Circle, Rect } from "react-native-svg";
+import Svg, { Circle } from "react-native-svg";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import * as Crypto from "expo-crypto";
-import ViewShot from "react-native-view-shot";
+import { captureRef } from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
-import * as FileSystem from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import {
   loadActivityLogs,
@@ -232,7 +231,7 @@ export function WorkUpOverviewModal({
   const [shareBgMode, setShareBgMode] = useState<"grayscale" | "custom">("grayscale");
   const [shareBgUri, setShareBgUri] = useState<string | null>(null);
   const [shareCapturing, setShareCapturing] = useState(false);
-  const shareRef = useRef<ViewShot>(null);
+  const shareRef = useRef<View>(null);
 
   const grayscaleColors = useMemo(() => {
     const hues = ["#1a1a2e", "#16213e", "#0f3460", "#1a1a1a", "#2d2d2d", "#1e1e2f", "#0d1117", "#161b22", "#21262d", "#282c34"];
@@ -257,7 +256,10 @@ export function WorkUpOverviewModal({
     if (!shareRef.current) return;
     setShareCapturing(true);
     try {
-      const uri = await (shareRef.current as any).capture();
+      const uri = await captureRef(shareRef, {
+        format: "png",
+        quality: 1,
+      });
       if (Platform.OS === "web") {
         const link = document.createElement("a");
         link.href = uri;
@@ -885,7 +887,7 @@ export function WorkUpOverviewModal({
             </View>
 
             <ScrollView contentContainerStyle={shareStyles.scrollContent} showsVerticalScrollIndicator={false}>
-              <ViewShot ref={shareRef} options={{ format: "png", quality: 1 }} style={shareStyles.cardOuter}>
+              <View ref={shareRef} collapsable={false} style={shareStyles.cardOuter}>
                 <View style={[shareStyles.card, { backgroundColor: shareBgMode === "custom" && shareBgUri ? "transparent" : grayscaleColors.bg }]}>
                   {shareBgMode === "custom" && shareBgUri && (
                     <Image source={{ uri: shareBgUri }} style={shareStyles.bgImage} blurRadius={2} />
@@ -981,7 +983,7 @@ export function WorkUpOverviewModal({
                     </View>
                   </View>
                 </View>
-              </ViewShot>
+              </View>
 
               {/* Background options */}
               <View style={shareStyles.bgOptions}>
