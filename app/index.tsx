@@ -1011,20 +1011,35 @@ export default function MetronomeScreen() {
             onBarScrollOffset={(offset) => { barScrollOffsetRef.current = offset; }}
             onBarTimerExpired={handleTimerExpired}
           />
+          {barMode && (
+            <SubdivisionBar
+              pattern={subdivisionPattern}
+              onPatternChange={handlePatternChange}
+              onDragStart={handleDragStart}
+              onDragMove={handleDragMove}
+              onDragEnd={handleDragEnd}
+              onReset={handleReset}
+              isPlaying={isPlaying}
+              activeSubNote={activeSubNote}
+              activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
+            />
+          )}
         </View>
 
         <View style={styles.bpmSection}>
-          <SubdivisionBar
-            pattern={subdivisionPattern}
-            onPatternChange={handlePatternChange}
-            onDragStart={handleDragStart}
-            onDragMove={handleDragMove}
-            onDragEnd={handleDragEnd}
-            onReset={handleReset}
-            isPlaying={isPlaying}
-            activeSubNote={activeSubNote}
-            activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
-          />
+          {!barMode && (
+            <SubdivisionBar
+              pattern={subdivisionPattern}
+              onPatternChange={handlePatternChange}
+              onDragStart={handleDragStart}
+              onDragMove={handleDragMove}
+              onDragEnd={handleDragEnd}
+              onReset={handleReset}
+              isPlaying={isPlaying}
+              activeSubNote={activeSubNote}
+              activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
+            />
+          )}
           <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
           <BpmSlider
             bpm={bpm}
