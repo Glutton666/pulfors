@@ -287,22 +287,33 @@ export function WorkUpOverviewModal({
   }, [todaySessions]);
 
   const barSessionDetails = useMemo(() => {
-    const configs: { label: string; duration: number; count: number; bpm: number; beats: number; subdivisions: number }[] = [];
+    const configs: { label: string; sublabel?: string; duration: number; count: number; bpm: number; beats: number; subdivisions: number; practiceNoteId?: string; practiceNoteLabel?: string }[] = [];
     const configMap: Record<string, number> = {};
     todaySessions
       .filter(l => (l.data as PracticeSessionData).mode === "bar")
       .forEach(l => {
         const d = l.data as PracticeSessionData;
-        const key = `${d.bpm}-${d.barConfig?.beatsPerMeasure || "?"}/${d.barConfig?.subdivisions || "?"}`;
+        const noteId = d.practiceNoteId;
+        const noteLabel = d.practiceNoteLabel;
+        const key = noteId
+          ? `note-${noteId}`
+          : `${d.bpm}-${d.barConfig?.beatsPerMeasure || "?"}/${d.barConfig?.subdivisions || "?"}`;
         if (configMap[key] === undefined) {
           configMap[key] = configs.length;
           configs.push({
-            label: `${d.bpm} BPM · ${d.barConfig?.beatsPerMeasure || "?"}/${d.barConfig?.subdivisions || "?"}`,
+            label: noteLabel
+              ? `\u266B ${noteLabel}`
+              : `${d.bpm} BPM \u00B7 ${d.barConfig?.beatsPerMeasure || "?"}/${d.barConfig?.subdivisions || "?"}`,
+            sublabel: noteLabel
+              ? `${d.bpm} BPM \u00B7 ${d.barConfig?.beatsPerMeasure || "?"}/${d.barConfig?.subdivisions || "?"}`
+              : undefined,
             duration: 0,
             count: 0,
             bpm: d.bpm,
             beats: d.barConfig?.beatsPerMeasure || 4,
             subdivisions: d.barConfig?.subdivisions || 1,
+            practiceNoteId: noteId,
+            practiceNoteLabel: noteLabel,
           });
         }
         configs[configMap[key]].duration += d.duration;
@@ -334,10 +345,19 @@ export function WorkUpOverviewModal({
         case "beat_mode_time": return todayBeatTime / 60;
         case "bar_mode_time": return todayBarTime / 60;
         case "room_time": return todayRoomTime / 60;
+        case "session_goal": {
+          const sessionTime = todaySessions
+            .filter(l => {
+              const d = l.data as PracticeSessionData;
+              return d.mode === "bar" && d.practiceNoteId === goal.practiceNoteId;
+            })
+            .reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0);
+          return sessionTime / 60;
+        }
         default: return 0;
       }
     },
-    [todayTotalTime, todayBeatTime, todayBarTime, todayRoomTime]
+    [todayTotalTime, todayBeatTime, todayBarTime, todayRoomTime, todaySessions]
   );
 
   const handleAddGoal = useCallback(async () => {
@@ -602,6 +622,9 @@ export function WorkUpOverviewModal({
                             <View key={i} style={s.detailRow}>
                               <View style={s.detailInfo}>
                                 <Text style={s.detailMain}>{sess.label}</Text>
+                                {sess.sublabel && (
+                                  <Text style={s.detailSub}>{sess.sublabel}</Text>
+                                )}
                                 <Text style={s.detailSub}>{sess.count} session{sess.count > 1 ? "s" : ""}</Text>
                               </View>
                               <Text style={[s.detailTime, { color: BAR_COLOR }]}>{formatDuration(sess.duration)}</Text>
