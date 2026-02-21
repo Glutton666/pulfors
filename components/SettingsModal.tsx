@@ -1023,7 +1023,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingBottom: 40,
+    paddingBottom: 80,
   },
   sheet: {
     backgroundColor: Colors.surface,
