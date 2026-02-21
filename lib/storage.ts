@@ -1,8 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Crypto from "expo-crypto";
 import type { BeatType } from "./metronome-engine";
 import type { ThemeColor } from "@/constants/colors";
 
 const SETTINGS_KEY = "metronome_settings";
+const PRACTICE_BOOK_KEY = "practice_book";
 
 export type FlashMode = "all" | "accent" | "off";
 export type HapticMode = "all" | "accent" | "off";
@@ -58,4 +60,52 @@ export async function saveSettings(settings: MetronomeSettings): Promise<void> {
   } catch (e) {
     console.warn("Failed to save settings:", e);
   }
+}
+
+export interface BarRepeatEntry {
+  type: "count" | "duration";
+  value: number;
+}
+
+export interface PracticeEntry {
+  id: string;
+  label: string;
+  createdAt: number;
+  bpm: number;
+  beatsPerMeasure: number;
+  beatTypes: BeatType[];
+  beatSubdivisions: Record<string, BeatType[]>;
+  barRepeats: Record<number, BarRepeatEntry>;
+  barLoopMode: "loop" | "once";
+  subdivisionPattern: BeatType[];
+}
+
+export async function loadPracticeBook(): Promise<PracticeEntry[]> {
+  try {
+    const data = await AsyncStorage.getItem(PRACTICE_BOOK_KEY);
+    if (data) return JSON.parse(data);
+  } catch (e) {
+    console.warn("Failed to load practice book:", e);
+  }
+  return [];
+}
+
+export async function savePracticeBook(entries: PracticeEntry[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(PRACTICE_BOOK_KEY, JSON.stringify(entries));
+  } catch (e) {
+    console.warn("Failed to save practice book:", e);
+  }
+}
+
+export function createPracticeEntry(
+  label: string,
+  config: Omit<PracticeEntry, "id" | "label" | "createdAt">
+): PracticeEntry {
+  return {
+    id: Crypto.randomUUID(),
+    label,
+    createdAt: Date.now(),
+    ...config,
+  };
 }
