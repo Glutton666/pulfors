@@ -29,16 +29,29 @@ const WAVE_OPTIONS: { type: WaveType; label: string; icon: string }[] = [
 ];
 
 const NOTE_FREQS: { name: string; freq: number }[] = [
+  { name: "C2", freq: 65.41 },
+  { name: "E2", freq: 82.41 },
   { name: "A2", freq: 110 },
+  { name: "C3", freq: 130.81 },
   { name: "E3", freq: 164.81 },
+  { name: "G3", freq: 196 },
   { name: "A3", freq: 220 },
+  { name: "C4", freq: 261.63 },
   { name: "E4", freq: 329.63 },
+  { name: "G4", freq: 392 },
   { name: "A4", freq: 440 },
+  { name: "C5", freq: 523.25 },
+  { name: "E5", freq: 659.25 },
   { name: "A5", freq: 880 },
+  { name: "C6", freq: 1046.5 },
   { name: "1k", freq: 1000 },
+  { name: "2k", freq: 2000 },
+  { name: "4k", freq: 4000 },
+  { name: "8k", freq: 8000 },
+  { name: "10k", freq: 10000 },
 ];
 
-const KNOB_SIZE = 100;
+const KNOB_SIZE = 130;
 const KNOB_RADIUS = KNOB_SIZE / 2;
 const KNOB_STROKE = 6;
 const ARC_START = 135;
@@ -48,8 +61,7 @@ const INDICATOR_RADIUS = KNOB_RADIUS - 14;
 
 const MIN_FREQ = 20;
 const MAX_FREQ = 20000;
-const MIN_DB = -60;
-const MAX_DB = 0;
+const VOLUME_LINEAR = 0.3;
 
 function freqToNorm(freq: number): number {
   const logMin = Math.log10(MIN_FREQ);
@@ -63,36 +75,25 @@ function normToFreq(norm: number): number {
   return Math.pow(10, logMin + norm * (logMax - logMin));
 }
 
-function dbToLinear(db: number): number {
-  return Math.pow(10, db / 20);
-}
-
 function polarToXY(angleDeg: number, r: number, cx: number, cy: number) {
   const rad = (angleDeg - 90) * (Math.PI / 180);
   return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
 }
 
-function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number) {
-  const start = polarToXY(endAngle, r, cx, cy);
-  const end = polarToXY(startAngle, r, cx, cy);
-  const largeArc = endAngle - startAngle > 180 ? 1 : 0;
-  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y}`;
-}
-
 interface KnobProps {
   value: number;
   onChange: (v: number) => void;
-  label: string;
   displayValue: string;
   displayUnit: string;
   accentColor: string;
   accentDim: string;
+  onTapCenter?: () => void;
 }
 
-function Knob({ value, onChange, label, displayValue, displayUnit, accentColor, accentDim }: KnobProps) {
+function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentDim, onTapCenter }: KnobProps) {
   const knobRef = useRef<View>(null);
-  const layoutRef = useRef({ cx: 0, cy: 0 });
   const valRef = useRef(value);
+  const movedRef = useRef(false);
   valRef.current = value;
 
   const haptic = useCallback(() => {
@@ -104,35 +105,37 @@ function Knob({ value, onChange, label, displayValue, displayUnit, accentColor, 
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        knobRef.current?.measureInWindow((x, y, w, h) => {
-          layoutRef.current = { cx: x + w / 2, cy: y + h / 2 };
-        });
+        movedRef.current = false;
         haptic();
       },
       onPanResponderMove: (_, gs) => {
-        const sensitivity = 0.005;
+        if (Math.abs(gs.dy) > 3) movedRef.current = true;
+        const sensitivity = 0.004;
         const delta = -gs.dy * sensitivity;
         const next = Math.max(0, Math.min(1, valRef.current + delta));
         if (Math.abs(next - valRef.current) > 0.001) {
           onChange(next);
         }
       },
-    }), [onChange, haptic]);
+      onPanResponderRelease: () => {
+        if (!movedRef.current && onTapCenter) {
+          onTapCenter();
+        }
+      },
+    }), [onChange, haptic, onTapCenter]);
 
   const angle = ARC_START + value * ARC_RANGE;
   const indicator = polarToXY(angle, INDICATOR_RADIUS, KNOB_RADIUS, KNOB_RADIUS);
-  const trackR = KNOB_RADIUS - KNOB_STROKE / 2 - 4;
 
   return (
     <View style={styles.knobContainer}>
-      <Text style={styles.knobLabel}>{label}</Text>
       <View
         ref={knobRef}
         {...panResponder.panHandlers}
         style={styles.knobOuter}
       >
         <View style={[styles.knobBg, { borderColor: accentDim }]}>
-          <View style={[styles.knobIndicatorDot, { backgroundColor: accentColor, left: indicator.x - 5, top: indicator.y - 5 }]} />
+          <View style={[styles.knobIndicatorDot, { backgroundColor: accentColor, left: indicator.x - 6, top: indicator.y - 6 }]} />
         </View>
         <View style={styles.knobCenter} pointerEvents="none">
           <Text style={[styles.knobValue, { color: accentColor }]}>{displayValue}</Text>
@@ -143,6 +146,13 @@ function Knob({ value, onChange, label, displayValue, displayUnit, accentColor, 
   );
 }
 
+function formatHz(freq: number): string {
+  if (freq >= 10000) return (freq / 1000).toFixed(1) + "k";
+  if (freq >= 1000) return (freq / 1000).toFixed(2) + "k";
+  if (freq >= 100) return Math.round(freq).toString();
+  return freq.toFixed(1);
+}
+
 interface SignalGeneratorModalProps {
   visible: boolean;
   onClose: () => void;
@@ -151,7 +161,6 @@ interface SignalGeneratorModalProps {
 export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalProps) {
   const { colors: C } = useTheme();
   const [frequency, setFrequency] = useState(440);
-  const [volumeDb, setVolumeDb] = useState(-10);
   const [waveType, setWaveType] = useState<WaveType>("sine");
   const [isPlaying, setIsPlaying] = useState(false);
   const [editingFreq, setEditingFreq] = useState(false);
@@ -161,12 +170,10 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const isPlayingRef = useRef(false);
   const mobileLoopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const volumeLinear = dbToLinear(volumeDb);
-
   const toneUri = useMemo(() => {
     if (Platform.OS === "web") return null;
-    return generateToneDataUri(frequency, waveType, volumeLinear);
-  }, [frequency, waveType, volumeLinear]);
+    return generateToneDataUri(frequency, waveType, VOLUME_LINEAR);
+  }, [frequency, waveType]);
 
   const mobilePlayer = useAudioPlayer(toneUri ?? undefined);
 
@@ -191,7 +198,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const startPlayback = useCallback(() => {
     isPlayingRef.current = true;
     if (Platform.OS === "web") {
-      engineRef.current.startWeb(frequency, waveType, volumeLinear);
+      engineRef.current.startWeb(frequency, waveType, VOLUME_LINEAR);
     } else {
       const playLoop = () => {
         if (!isPlayingRef.current) return;
@@ -204,7 +211,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       playLoop();
     }
     setIsPlaying(true);
-  }, [frequency, waveType, volumeLinear, mobilePlayer]);
+  }, [frequency, waveType, mobilePlayer]);
 
   useEffect(() => {
     if (isPlaying && Platform.OS === "web") {
@@ -219,17 +226,11 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   }, [waveType, isPlaying]);
 
   useEffect(() => {
-    if (isPlaying && Platform.OS === "web") {
-      engineRef.current.updateVolume(volumeLinear);
-    }
-  }, [volumeLinear, isPlaying]);
-
-  useEffect(() => {
     if (isPlaying && Platform.OS !== "web") {
       stopPlayback();
       setTimeout(() => startPlayback(), 50);
     }
-  }, [frequency, waveType, volumeLinear]);
+  }, [frequency, waveType]);
 
   useEffect(() => {
     return () => {
@@ -248,13 +249,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
     setFrequency(Math.round(f * 10) / 10);
   }, []);
 
-  const handleVolKnob = useCallback((norm: number) => {
-    const db = MIN_DB + norm * (MAX_DB - MIN_DB);
-    setVolumeDb(Math.round(db));
-  }, []);
-
   const freqNorm = freqToNorm(frequency);
-  const volNorm = (volumeDb - MIN_DB) / (MAX_DB - MIN_DB);
 
   const formatFreqDisplay = (f: number) => {
     if (f >= 1000) return (f / 1000).toFixed(f >= 10000 ? 1 : 2);
@@ -270,6 +265,11 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       setFrequency(Math.round(val * 10) / 10);
     }
   }, [freqInput]);
+
+  const openFreqEdit = useCallback(() => {
+    setFreqInput(String(frequency));
+    setEditingFreq(true);
+  }, [frequency]);
 
   return (
     <Modal
@@ -292,26 +292,15 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
 
           <View style={styles.divider} />
 
-          <View style={styles.knobsRow}>
-            <Knob
-              value={freqNorm}
-              onChange={handleFreqKnob}
-              label="FREQUENCY"
-              displayValue={formatFreqDisplay(frequency)}
-              displayUnit={freqDisplayUnit}
-              accentColor={C.accent}
-              accentDim={C.accentDim}
-            />
-            <Knob
-              value={volNorm}
-              onChange={handleVolKnob}
-              label="VOLUME"
-              displayValue={`${volumeDb}`}
-              displayUnit="dB"
-              accentColor={C.accent}
-              accentDim={C.accentDim}
-            />
-          </View>
+          <Knob
+            value={freqNorm}
+            onChange={handleFreqKnob}
+            displayValue={formatFreqDisplay(frequency)}
+            displayUnit={freqDisplayUnit}
+            accentColor={C.accent}
+            accentDim={C.accentDim}
+            onTapCenter={openFreqEdit}
+          />
 
           {editingFreq ? (
             <View style={styles.freqEditRow}>
@@ -328,26 +317,38 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               <Text style={styles.freqEditUnit}>Hz</Text>
             </View>
           ) : (
-            <Pressable onPress={() => { setFreqInput(String(frequency)); setEditingFreq(true); }}>
-              <Text style={[styles.freqTapText, { color: Colors.textTertiary }]}>
-                {frequency} Hz — tap to edit
+            <Pressable onPress={openFreqEdit} style={styles.freqTapBtn} hitSlop={8}>
+              <Text style={[styles.freqTapText, { color: Colors.textSecondary }]}>
+                {frequency} Hz
               </Text>
+              <Ionicons name="pencil" size={12} color={Colors.textTertiary} style={{ marginLeft: 4 }} />
             </Pressable>
           )}
 
-          <View style={styles.presetsRow}>
-            {NOTE_FREQS.map((n) => {
-              const active = Math.abs(frequency - n.freq) < 0.5;
-              return (
-                <Pressable
-                  key={n.name}
-                  onPress={() => { hapticFeedback(); setFrequency(n.freq); }}
-                  style={[styles.presetChip, active && { backgroundColor: C.accentDim, borderColor: C.accent }]}
-                >
-                  <Text style={[styles.presetText, active && { color: C.accent }]}>{n.name}</Text>
-                </Pressable>
-              );
-            })}
+          <View style={styles.presetsSection}>
+            <Text style={styles.sectionLabel}>PRESETS</Text>
+            <ScrollView
+              style={styles.presetsScroll}
+              contentContainerStyle={styles.presetsGrid}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+            >
+              {NOTE_FREQS.map((n) => {
+                const active = Math.abs(frequency - n.freq) < 0.5;
+                return (
+                  <Pressable
+                    key={n.name}
+                    onPress={() => { hapticFeedback(); setFrequency(n.freq); }}
+                    style={[styles.presetChip, active && { backgroundColor: C.accentDim, borderColor: C.accent }]}
+                  >
+                    <Text style={[styles.presetName, active && { color: C.accent }]}>{n.name}</Text>
+                    <Text style={[styles.presetHz, active && { color: C.accent, opacity: 0.7 }]}>
+                      {n.freq >= 1000 ? (n.freq / 1000) + "kHz" : n.freq + "Hz"}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
 
           <View style={styles.waveSection}>
@@ -411,11 +412,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderRadius: 20,
     padding: 20,
-    width: 310,
+    width: 320,
     alignItems: "center",
     borderWidth: 1,
     borderColor: Colors.border,
-    gap: 12,
+    gap: 10,
+    maxHeight: "85%",
   },
   header: {
     flexDirection: "row",
@@ -442,21 +444,8 @@ const styles = StyleSheet.create({
     opacity: 0.5,
     width: "100%",
   },
-  knobsRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 24,
-  },
   knobContainer: {
     alignItems: "center",
-    gap: 4,
-  },
-  knobLabel: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 9,
-    color: Colors.textTertiary,
-    letterSpacing: 2,
-    textTransform: "uppercase",
   },
   knobOuter: {
     width: KNOB_SIZE,
@@ -471,9 +460,9 @@ const styles = StyleSheet.create({
   },
   knobIndicatorDot: {
     position: "absolute",
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
   knobCenter: {
     position: "absolute",
@@ -486,36 +475,48 @@ const styles = StyleSheet.create({
   },
   knobValue: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 18,
-    lineHeight: 20,
+    fontSize: 24,
+    lineHeight: 28,
   },
   knobUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 10,
+    fontSize: 12,
     color: Colors.textTertiary,
-    lineHeight: 12,
+    lineHeight: 14,
   },
   freqEditRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 6,
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   freqEditInput: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 16,
+    fontSize: 20,
     borderBottomWidth: 2,
-    paddingVertical: 2,
-    minWidth: 80,
+    paddingVertical: 4,
+    minWidth: 100,
     textAlign: "center",
   },
   freqEditUnit: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 12,
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 16,
     color: Colors.textTertiary,
   },
+  freqTapBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
   freqTapText: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 14,
   },
   sectionLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
@@ -523,26 +524,44 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     letterSpacing: 2,
     textTransform: "uppercase",
-    marginBottom: 4,
+    marginBottom: 6,
   },
-  presetsRow: {
+  presetsSection: {
+    width: "100%",
+    alignItems: "center",
+  },
+  presetsScroll: {
+    maxHeight: 120,
+    width: "100%",
+  },
+  presetsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
     gap: 5,
+    paddingBottom: 2,
   },
   presetChip: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 5,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: Colors.border,
+    alignItems: "center",
+    minWidth: 50,
   },
-  presetText: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 11,
+  presetName: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 12,
+    color: Colors.textSecondary,
+    letterSpacing: 0.3,
+  },
+  presetHz: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 8,
     color: Colors.textTertiary,
-    letterSpacing: 0.5,
+    opacity: 0.8,
+    marginTop: 1,
   },
   waveSection: {
     width: "100%",
