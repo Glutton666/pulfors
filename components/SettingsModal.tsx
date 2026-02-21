@@ -139,8 +139,7 @@ export function SettingsModal({
   const trackWidthRef = useRef(0);
   const trackLeftRef = useRef(0);
   const lastHapticRef = useRef(volume);
-  const [previewingSet, setPreviewingSet] = useState<SoundSet | null>(null);
-  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewIndexRef = useRef<Record<string, number>>({});
 
   const classicStrong = useAudioPlayer(soundSets.classic.strong);
   const classicHigh = useAudioPlayer(soundSets.classic.high);
@@ -155,37 +154,22 @@ export function SettingsModal({
   const rimshotHigh = useAudioPlayer(soundSets.rimshot.high);
   const rimshotLow = useAudioPlayer(soundSets.rimshot.low);
 
-  const previewPlayers: Record<SoundSet, { strong: typeof classicStrong; high: typeof classicHigh; low: typeof classicLow }> = {
-    classic: { strong: classicStrong, high: classicHigh, low: classicLow },
-    woodblock: { strong: woodblockStrong, high: woodblockHigh, low: woodblockLow },
-    digital: { strong: digitalStrong, high: digitalHigh, low: digitalLow },
-    rimshot: { strong: rimshotStrong, high: rimshotHigh, low: rimshotLow },
+  const previewPlayers: Record<SoundSet, typeof classicStrong[]> = {
+    classic: [classicStrong, classicHigh, classicLow],
+    woodblock: [woodblockStrong, woodblockHigh, woodblockLow],
+    digital: [digitalStrong, digitalHigh, digitalLow],
+    rimshot: [rimshotStrong, rimshotHigh, rimshotLow],
   };
 
   const playSoundPreview = useCallback((set: SoundSet) => {
-    if (previewTimerRef.current) {
-      clearTimeout(previewTimerRef.current);
-      previewTimerRef.current = null;
-    }
-    setPreviewingSet(set);
+    const idx = previewIndexRef.current[set] ?? 0;
     const players = previewPlayers[set];
-    const playOne = (player: typeof classicStrong) => {
-      try {
-        player.seekTo(0);
-        player.play();
-      } catch {}
-    };
-
-    playOne(players.strong);
-    previewTimerRef.current = setTimeout(() => {
-      playOne(players.high);
-      previewTimerRef.current = setTimeout(() => {
-        playOne(players.low);
-        previewTimerRef.current = setTimeout(() => {
-          setPreviewingSet(null);
-        }, 350);
-      }, 350);
-    }, 350);
+    const player = players[idx];
+    try {
+      player.seekTo(0);
+      player.play();
+    } catch {}
+    previewIndexRef.current[set] = (idx + 1) % 3;
   }, []);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
