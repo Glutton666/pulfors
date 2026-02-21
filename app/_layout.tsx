@@ -73,6 +73,7 @@ export default function RootLayout() {
           await setAudioModeAsync({
             playsInSilentMode: true,
             shouldPlayInBackground: false,
+            interruptionMode: "mixWithOthers",
           });
         }
       } catch {}

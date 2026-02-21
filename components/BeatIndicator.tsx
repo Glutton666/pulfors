@@ -236,7 +236,6 @@ interface BeatIndicatorProps {
   isPlaying: boolean;
   onBeatsChange: (beats: number) => void;
   onTogglePlay: () => void;
-  onLongPressPlay?: () => void;
   beatTypes: BeatType[];
   onBeatTypeChange: (index: number, type: BeatType) => void;
   dropTargetBeat: number | null;
@@ -268,7 +267,6 @@ export function BeatIndicator({
   isPlaying,
   onBeatsChange,
   onTogglePlay,
-  onLongPressPlay,
   beatTypes,
   onBeatTypeChange,
   dropTargetBeat,
@@ -294,8 +292,6 @@ export function BeatIndicator({
   onNoteRecordRequest,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
-
-  const longPressedRef = useRef(false);
 
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
 
@@ -1006,12 +1002,7 @@ export function BeatIndicator({
             </Pressable>
           </View>
           <Pressable
-            onPress={() => {
-              if (longPressedRef.current) { longPressedRef.current = false; return; }
-              onTogglePlay();
-            }}
-            onLongPress={!isPlaying && onLongPressPlay ? () => { longPressedRef.current = true; onLongPressPlay(); } : undefined}
-            delayLongPress={500}
+            onPress={onTogglePlay}
             style={({ pressed }) => [
               styles.barPlayBtn,
               pressed && { opacity: 0.7 },
@@ -1217,12 +1208,7 @@ export function BeatIndicator({
           )}
 
           <Pressable
-            onPress={() => {
-              if (longPressedRef.current) { longPressedRef.current = false; return; }
-              onTogglePlay();
-            }}
-            onLongPress={!isPlaying && onLongPressPlay ? () => { longPressedRef.current = true; onLongPressPlay(); } : undefined}
-            delayLongPress={500}
+            onPress={onTogglePlay}
             style={({ pressed }) => [
               styles.playButton,
               pressed && styles.playButtonPressed,

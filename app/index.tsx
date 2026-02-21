@@ -26,7 +26,7 @@ import Animated, {
   Easing,
   useSharedValue,
 } from "react-native-reanimated";
-import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
+import { useAudioPlayer } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
 import { LinearGradient } from "expo-linear-gradient";
@@ -97,15 +97,6 @@ export default function MetronomeScreen() {
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
   const [isPlaying, setIsPlaying] = useState(false);
-  const mixModeRef = useRef(false);
-  const restoreDuckMode = useCallback(() => {
-    if (mixModeRef.current) {
-      mixModeRef.current = false;
-      if (Platform.OS === "ios") {
-        setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false, interruptionMode: "mixWithOthers" }).catch(() => {});
-      }
-    }
-  }, []);
   const [currentBeat, setCurrentBeat] = useState(-1);
   const [activeSubNote, setActiveSubNote] = useState(-1);
   const [subdivisionPattern, setSubdivisionPattern] = useState<BeatType[]>([
@@ -720,7 +711,6 @@ export default function MetronomeScreen() {
       setCurrentBeat(-1);
       setActiveSubNote(-1);
       showPausedNotification(bpm, modeLabel);
-      restoreDuckMode();
       if (loggingEnabled && practiceStartRef.current) {
         const dur = Math.round((Date.now() - practiceStartRef.current) / 1000);
         if (dur >= 3) {
@@ -750,33 +740,6 @@ export default function MetronomeScreen() {
       }
     }
   }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure]);
-
-  const longPressPlay = useCallback(async () => {
-    const engine = engineRef.current;
-    if (!engine || isPlaying) return;
-
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    }
-
-    mixModeRef.current = true;
-    if (Platform.OS === "ios") {
-      await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false, interruptionMode: "mixWithOthers" }).catch(() => {});
-    } else if (Platform.OS === "android") {
-      await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false }).catch(() => {});
-    }
-
-    engine.start();
-    if (barModeRef.current && barLoopModeRef.current === "once") {
-      engine.requestStopAfterMeasure();
-    }
-    setIsPlaying(true);
-    const modeLabel = barModeRef.current ? "Bar" : "Dial";
-    showPlayingNotification(bpm, modeLabel);
-    if (loggingEnabled) {
-      practiceStartRef.current = Date.now();
-    }
-  }, [isPlaying, loggingEnabled, bpm]);
 
   const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
@@ -842,7 +805,6 @@ export default function MetronomeScreen() {
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
-      restoreDuckMode();
     }
 
     if (toBarMode) {
@@ -899,7 +861,6 @@ export default function MetronomeScreen() {
         setActiveSubNote(-1);
         const modeLabel = barModeRef.current ? "Bar" : "Dial";
         showPausedNotification(bpmRef.current, modeLabel);
-        restoreDuckMode();
       }
     });
   }, []);
@@ -916,7 +877,6 @@ export default function MetronomeScreen() {
       setCurrentBeat(-1);
       const modeLabel = barModeRef.current ? "Bar" : "Dial";
       showPausedNotification(bpmRef.current, modeLabel);
-      restoreDuckMode();
     } else {
       engine.requestStopAfterMeasure();
     }
@@ -1229,7 +1189,6 @@ export default function MetronomeScreen() {
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
-      restoreDuckMode();
     }
 
     if (!barMode) {
@@ -1594,7 +1553,6 @@ export default function MetronomeScreen() {
             isPlaying={isPlaying}
             onBeatsChange={updateTimeSignature}
             onTogglePlay={togglePlayPause}
-            onLongPressPlay={longPressPlay}
             beatTypes={beatTypes}
             onBeatTypeChange={handleBeatTypeChange}
             dropTargetBeat={dropTargetBeat}
