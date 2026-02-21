@@ -973,6 +973,9 @@ export default function MetronomeScreen() {
       setBeatTypes([...defaultTypes]);
       setBeatSubdivisions({});
       setBarRepeats({});
+      setBarLoopMode("loop");
+      setNoteSamples({});
+      noteSamplesRef.current = {};
       engine.setBeatsPerMeasure(defaultBeats);
       engine.setBeatTypes([...defaultTypes]);
       engine.setAllBeatSubdivisions({});
