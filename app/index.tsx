@@ -282,13 +282,15 @@ export default function MetronomeScreen() {
 
   useEffect(() => {
     try {
+      const MAX_VOLUME = 5.0;
       Object.values(allPlayers).forEach((set) => {
-        set.highA.volume = volume;
-        set.highB.volume = volume;
-        set.lowA.volume = volume;
-        set.lowB.volume = volume;
-        set.strongA.volume = volume;
-        set.strongB.volume = volume;
+        const v = volume * MAX_VOLUME;
+        set.highA.volume = v;
+        set.highB.volume = v;
+        set.lowA.volume = v;
+        set.lowB.volume = v;
+        set.strongA.volume = v;
+        set.strongB.volume = v;
       });
     } catch (e) {}
   }, [volume, allPlayers]);
