@@ -803,6 +803,63 @@ export default function MetronomeScreen() {
       if (loggingEnabled) {
         practiceStartRef.current = Date.now();
       }
+
+      if (startBeat && startBeat > 0) {
+        const beatDurMs = 60000 / bpm;
+        const samples = noteSamplesRef.current;
+        for (const [key, uri] of Object.entries(samples)) {
+          const [bStr, sStr] = key.split("-");
+          const trigBeat = parseInt(bStr, 10);
+          const trigSub = parseInt(sStr, 10);
+          if (isNaN(trigBeat) || isNaN(trigSub) || trigBeat >= startBeat) continue;
+
+          const hashParts = uri.split("#t=")[1];
+          let sampleStartMs = 0;
+          let sampleEndMs = 0;
+          if (hashParts) {
+            const parts = hashParts.split(",").map(Number);
+            if (!isNaN(parts[0])) sampleStartMs = parts[0];
+            if (parts.length > 1 && !isNaN(parts[1])) sampleEndMs = parts[1];
+          }
+          const sampleDurMs = sampleEndMs > sampleStartMs ? sampleEndMs - sampleStartMs : 0;
+          if (sampleDurMs <= 0) continue;
+
+          let elapsedMs = 0;
+          for (let b = trigBeat; b < startBeat; b++) {
+            const pat = engine.getBeatSubdivision(b);
+            const subCount = pat ? pat.length : 1;
+            if (b === trigBeat) {
+              elapsedMs += (subCount - trigSub) * (beatDurMs / subCount);
+            } else {
+              elapsedMs += beatDurMs;
+            }
+          }
+
+          if (elapsedMs < sampleDurMs) {
+            const player = noteSampleSoundsRef.current[key];
+            if (player) {
+              const seekToMs = sampleStartMs + elapsedMs;
+              const remainingMs = sampleDurMs - elapsedMs;
+              samplePlayStateRef.current[key] = { playing: true, endTimer: null };
+              player.seekTo(seekToMs / 1000).then(() => {
+                player.play();
+                if (remainingMs > 0) {
+                  const timer = setTimeout(() => {
+                    try { player.pause(); } catch {}
+                    if (samplePlayStateRef.current[key]) {
+                      samplePlayStateRef.current[key].playing = false;
+                      samplePlayStateRef.current[key].endTimer = null;
+                    }
+                  }, remainingMs);
+                  if (samplePlayStateRef.current[key]) {
+                    samplePlayStateRef.current[key].endTimer = timer;
+                  }
+                }
+              }).catch(() => {});
+            }
+          }
+        }
+      }
     }
   }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure]);
 
