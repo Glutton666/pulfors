@@ -523,14 +523,14 @@ export function BeatIndicator({
       noteHoldFiredRef.current = true;
       noteHoldActiveRef.current = false;
       noteHoldTimerRef.current = null;
-      if (!isPlaying && barLoopMode !== "loop" && onNoteRecordRequest && patternLen > 1) {
+      if (!isPlaying && onNoteRecordRequest && patternLen > 1) {
         if (Platform.OS !== "web") {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
         }
         onNoteRecordRequest(beat, ci);
       }
     }, 500);
-  }, [isPlaying, barLoopMode, onNoteRecordRequest, clearNoteHold]);
+  }, [isPlaying, onNoteRecordRequest, clearNoteHold]);
 
   const cycleBeatType = useCallback(
     (index: number) => {
@@ -832,8 +832,19 @@ export function BeatIndicator({
         barScrollRef.current?.scrollTo({ y: 0, animated: false });
         onBarScrollOffset?.(0);
       }
+    } else if (barMode && barContainerHeight > 0) {
+      const startBeat = barStartBeat && barStartBeat > 0 ? barStartBeat : 0;
+      if (barLoopMode === "once") {
+        const beatTop = centerPad + startBeat * rowH;
+        const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
+        barScrollRef.current?.scrollTo({ y: scrollTarget, animated: false });
+      } else {
+        const beatTop = centerPad + CENTER_COPY * copyHeight + startBeat * rowH;
+        const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
+        barScrollRef.current?.scrollTo({ y: scrollTarget, animated: false });
+      }
     }
-  }, [isPlaying, barMode, barContainerHeight, centerPad, copyHeight]);
+  }, [isPlaying, barMode, barContainerHeight, centerPad, copyHeight, barLoopMode, barStartBeat, rowH]);
 
   useEffect(() => {
     if (!barMode || !isPlaying || currentBeat < 0) return;
@@ -856,11 +867,10 @@ export function BeatIndicator({
       setActiveCopy(activeCopyRef.current);
     }
 
-    if (activeCopyRef.current > CENTER_COPY) {
+    if (activeCopyRef.current > CENTER_COPY && currentBeat > 0) {
       activeCopyRef.current = CENTER_COPY;
       setActiveCopy(CENTER_COPY);
-      const snapBeat = currentBeat > 0 ? currentBeat - 1 : beatsPerMeasure - 1;
-      const snapTop = centerPad + CENTER_COPY * copyHeight + snapBeat * rowH;
+      const snapTop = centerPad + CENTER_COPY * copyHeight + (currentBeat - 1) * rowH;
       const snapTarget = Math.max(0, snapTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
       barScrollRef.current?.scrollTo({ y: snapTarget, animated: false });
     }
@@ -932,7 +942,7 @@ export function BeatIndicator({
               const sampleKey = `${beat}-${ci}`;
               const hasSample = !!(noteSamples && noteSamples[sampleKey]);
               const isCovered = sampleCoveredCells.has(sampleKey);
-              const canRecord = barLoopMode !== "loop";
+              const canRecord = true;
               return (
                 <Pressable
                   key={ci}
@@ -989,9 +999,8 @@ export function BeatIndicator({
             })}
             {(() => {
               const cellHas = (b: number, c: number) => {
-                if (!noteSamples) return false;
                 const sk = `${b}-${c}`;
-                return !!noteSamples[sk];
+                return !!(noteSamples && noteSamples[sk]) || sampleCoveredCells.has(sk);
               };
               const anyCovered = pattern.some((_, ci) => cellHas(beat, ci));
               if (!anyCovered) return null;
@@ -1084,7 +1093,7 @@ export function BeatIndicator({
             style={styles.barScrollView}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
-            contentOffset={{ x: 0, y: isPlaying ? centerPad + CENTER_COPY * copyHeight + (barStartBeat && barStartBeat > 0 ? barStartBeat * rowH : 0) - barContainerHeight / 2 + BAR_HEIGHT / 2 : 0 }}
+            contentOffset={{ x: 0, y: 0 }}
             scrollEnabled={!isPlaying}
             onScroll={(e) => onBarScrollOffset?.(e.nativeEvent.contentOffset.y)}
             scrollEventThrottle={16}

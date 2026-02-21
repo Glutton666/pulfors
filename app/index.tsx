@@ -342,10 +342,12 @@ export default function MetronomeScreen() {
       const key = `${beat}-${subBeat}`;
       const player = noteSampleSoundsRef.current[key];
       if (player) {
-        const state = samplePlayStateRef.current[key];
-        if (state && state.playing) {
-          return true;
+        if (samplePlayStateRef.current[key]?.endTimer) {
+          clearTimeout(samplePlayStateRef.current[key].endTimer!);
         }
+        try {
+          player.pause();
+        } catch {}
         try {
           const sampleUri = noteSamplesRef.current[key] || "";
           const hashParts = sampleUri.split("#t=")[1];
@@ -357,10 +359,6 @@ export default function MetronomeScreen() {
             if (parts.length > 1 && !isNaN(parts[1])) endMs = parts[1];
           }
           const durationMs = endMs > startMs ? endMs - startMs : 0;
-
-          if (samplePlayStateRef.current[key]?.endTimer) {
-            clearTimeout(samplePlayStateRef.current[key].endTimer!);
-          }
 
           samplePlayStateRef.current[key] = { playing: true, endTimer: null };
 
