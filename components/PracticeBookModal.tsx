@@ -272,7 +272,7 @@ export function PracticeBookModal({
               size={22}
               color={C.accent}
             />
-            <Text style={styles.title}>연습장</Text>
+            <Text style={styles.title}>Practice Note</Text>
           </View>
           <Pressable onPress={onClose} hitSlop={10}>
             <Ionicons name="close" size={24} color={Colors.textSecondary} />

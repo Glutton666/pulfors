@@ -936,7 +936,7 @@ export default function MetronomeScreen() {
                 }}
               >
                 <MaterialCommunityIcons name="notebook-outline" size={18} color={C.accent} />
-                <Text style={styles.menuItemText}>연습장</Text>
+                <Text style={styles.menuItemText}>Practice Note</Text>
               </Pressable>
               <View style={styles.menuDivider} />
               <Pressable
