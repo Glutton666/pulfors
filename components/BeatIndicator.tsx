@@ -253,6 +253,7 @@ interface BeatIndicatorProps {
   onBarLoopModeChange: (mode: "loop" | "once") => void;
   onBarScrollOffset?: (offset: number) => void;
   onBarTimerExpired?: () => void;
+  subdivisionBarElement?: React.ReactNode;
 }
 
 export function BeatIndicator({
@@ -278,6 +279,7 @@ export function BeatIndicator({
   onBarLoopModeChange,
   onBarScrollOffset,
   onBarTimerExpired,
+  subdivisionBarElement,
 }: BeatIndicatorProps) {
   const { colors: C } = useTheme();
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
@@ -859,6 +861,10 @@ export function BeatIndicator({
           style={[styles.barFadeGradientBottom, { height: rowH + 100, marginTop: -(rowH + 100) }]}
           pointerEvents="none"
         />
+
+        {subdivisionBarElement && (
+          <View style={styles.barSubdivisionSlot}>{subdivisionBarElement}</View>
+        )}
 
         <View style={styles.barBottomRow}>
           <Pressable
@@ -1551,5 +1557,9 @@ const styles = StyleSheet.create({
     minHeight: 36,
     backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: 12,
+  },
+  barSubdivisionSlot: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
 });
