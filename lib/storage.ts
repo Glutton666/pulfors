@@ -24,6 +24,7 @@ export interface MetronomeSettings {
   audioOffsetMs?: number;
   themeColor?: ThemeColor;
   timerStopMode?: "immediate" | "end-of-cycle";
+  username?: string;
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
@@ -40,6 +41,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   audioOffsetMs: 0,
   themeColor: "gold",
   timerStopMode: "end-of-cycle",
+  username: "",
 };
 
 export async function loadSettings(): Promise<MetronomeSettings> {
