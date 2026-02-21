@@ -16,6 +16,7 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { moderateScale } from "@/lib/scale";
@@ -181,8 +182,22 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
       >
         <Animated.View style={[styles.card, bodyStyle]} testID="bpm-slider">
           <Animated.View style={[styles.flashOverlay, flashStyle, { backgroundColor: C.accent }]} />
-          <Animated.View style={[styles.glowLeft, leftGlowStyle, { backgroundColor: C.accent }]} />
-          <Animated.View style={[styles.glowRight, rightGlowStyle, { backgroundColor: C.accent }]} />
+          <Animated.View style={[styles.glowLeft, leftGlowStyle]}>
+            <LinearGradient
+              colors={[C.accent, "transparent"]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+          <Animated.View style={[styles.glowRight, rightGlowStyle]}>
+            <LinearGradient
+              colors={["transparent", C.accent]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
 
           <View style={styles.zoneRow} pointerEvents="none">
             <Feather name="activity" size={12} color={Colors.textTertiary} />
@@ -248,20 +263,20 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    width: "33%" as any,
-    backgroundColor: Colors.accent,
+    width: "40%" as any,
     borderTopLeftRadius: 20,
     borderBottomLeftRadius: 20,
+    overflow: "hidden",
   },
   glowRight: {
     position: "absolute",
     right: 0,
     top: 0,
     bottom: 0,
-    width: "33%" as any,
-    backgroundColor: Colors.accent,
+    width: "40%" as any,
     borderTopRightRadius: 20,
     borderBottomRightRadius: 20,
+    overflow: "hidden",
   },
   bpmValue: {
     fontFamily: "SpaceGrotesk_700Bold",
