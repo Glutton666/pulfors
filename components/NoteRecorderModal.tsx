@@ -1,0 +1,737 @@
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Platform,
+  Modal,
+  Alert,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Audio } from "expo-av";
+import * as FileSystem from "expo-file-system";
+import * as Crypto from "expo-crypto";
+import * as Haptics from "expo-haptics";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSequence,
+  withSpring,
+  runOnJS,
+} from "react-native-reanimated";
+import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
+import { PanResponder } from "react-native";
+
+type Phase = "countdown" | "recording" | "trimming" | "idle";
+
+interface NoteRecorderModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onSave: (uri: string) => void;
+  onDelete: () => void;
+  beatIndex: number;
+  subIndex: number;
+  hasExisting: boolean;
+}
+
+const MAX_RECORD_SECONDS = 10;
+const COUNTDOWN_FROM = 3;
+
+export function NoteRecorderModal({
+  visible,
+  onClose,
+  onSave,
+  onDelete,
+  beatIndex,
+  subIndex,
+  hasExisting,
+}: NoteRecorderModalProps) {
+  const { colors: C } = useTheme();
+
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [countdownValue, setCountdownValue] = useState(COUNTDOWN_FROM);
+  const [recordDuration, setRecordDuration] = useState(0);
+  const [recordedUri, setRecordedUri] = useState<string | null>(null);
+
+  const [trimStart, setTrimStart] = useState(0);
+  const [trimEnd, setTrimEnd] = useState(1);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewSoundRef = useRef<Audio.Sound | null>(null);
+
+  const countScale = useSharedValue(1);
+  const countOpacity = useSharedValue(1);
+
+  const cleanup = useCallback(async () => {
+    if (recordTimerRef.current) {
+      clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+    if (countdownTimerRef.current) {
+      clearTimeout(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    if (recordingRef.current) {
+      try {
+        await recordingRef.current.stopAndUnloadAsync();
+      } catch {}
+      recordingRef.current = null;
+    }
+    if (previewSoundRef.current) {
+      try {
+        await previewSoundRef.current.unloadAsync();
+      } catch {}
+      previewSoundRef.current = null;
+    }
+    try {
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!visible) {
+      cleanup();
+      setPhase("idle");
+      setCountdownValue(COUNTDOWN_FROM);
+      setRecordDuration(0);
+      setRecordedUri(null);
+      setTrimStart(0);
+      setTrimEnd(1);
+      setAudioDuration(0);
+      setIsPlayingPreview(false);
+    }
+  }, [visible, cleanup]);
+
+  const startCountdown = useCallback(async () => {
+    const { status } = await Audio.requestPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission Required", "Microphone access is needed to record audio.");
+      return;
+    }
+
+    setPhase("countdown");
+    setCountdownValue(COUNTDOWN_FROM);
+    let count = COUNTDOWN_FROM;
+
+    const tick = () => {
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      countScale.value = 0.5;
+      countOpacity.value = 0;
+      countScale.value = withSpring(1, { damping: 8, stiffness: 300 });
+      countOpacity.value = withTiming(1, { duration: 200 });
+    };
+
+    tick();
+
+    const doTick = () => {
+      count--;
+      if (count > 0) {
+        setCountdownValue(count);
+        tick();
+        countdownTimerRef.current = setTimeout(doTick, 1000);
+      } else {
+        startRecording();
+      }
+    };
+
+    countdownTimerRef.current = setTimeout(doTick, 1000);
+  }, []);
+
+  const startRecording = useCallback(async () => {
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync({
+        isMeteringEnabled: false,
+        android: {
+          extension: ".m4a",
+          outputFormat: 2,
+          audioEncoder: 3,
+          sampleRate: 44100,
+          numberOfChannels: 1,
+          bitRate: 128000,
+        },
+        ios: {
+          extension: ".m4a",
+          outputFormat: "aac",
+          audioQuality: 127,
+          sampleRate: 44100,
+          numberOfChannels: 1,
+          bitRate: 128000,
+          linearPCMBitDepth: 16,
+          linearPCMIsBigEndian: false,
+          linearPCMIsFloat: false,
+        },
+        web: {
+          mimeType: "audio/webm",
+          bitsPerSecond: 128000,
+        },
+      } as any);
+
+      recordingRef.current = recording;
+      await recording.startAsync();
+      setPhase("recording");
+      setRecordDuration(0);
+
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+
+      const startTime = Date.now();
+      recordTimerRef.current = setInterval(() => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        setRecordDuration(elapsed);
+        if (elapsed >= MAX_RECORD_SECONDS) {
+          stopRecording();
+        }
+      }, 100);
+    } catch (e) {
+      console.error("Failed to start recording:", e);
+      setPhase("idle");
+    }
+  }, []);
+
+  const stopRecording = useCallback(async () => {
+    if (recordTimerRef.current) {
+      clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+
+    if (!recordingRef.current) {
+      setPhase("idle");
+      return;
+    }
+
+    try {
+      await recordingRef.current.stopAndUnloadAsync();
+      const uri = recordingRef.current.getURI();
+      recordingRef.current = null;
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+
+      if (uri) {
+        const id = Crypto.randomUUID();
+        const ext = Platform.OS === "web" ? "webm" : "m4a";
+        const dir = FileSystem.documentDirectory || "";
+        const destUri = `${dir}note-sample-${id}.${ext}`;
+        
+        if (Platform.OS !== "web" && dir) {
+          await FileSystem.copyAsync({ from: uri, to: destUri });
+          setRecordedUri(destUri);
+        } else {
+          setRecordedUri(uri);
+        }
+
+        const sound = new Audio.Sound();
+        await sound.loadAsync({ uri: Platform.OS !== "web" && dir ? destUri : uri });
+        const status = await sound.getStatusAsync();
+        if (status.isLoaded && status.durationMillis) {
+          setAudioDuration(status.durationMillis / 1000);
+          setTrimEnd(1);
+        }
+        await sound.unloadAsync();
+
+        setPhase("trimming");
+        if (Platform.OS !== "web") {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      } else {
+        setPhase("idle");
+      }
+    } catch (e) {
+      console.error("Failed to stop recording:", e);
+      setPhase("idle");
+    }
+  }, []);
+
+  const playPreview = useCallback(async () => {
+    if (!recordedUri || audioDuration === 0) return;
+
+    if (previewSoundRef.current) {
+      try {
+        await previewSoundRef.current.unloadAsync();
+      } catch {}
+      previewSoundRef.current = null;
+    }
+
+    try {
+      const sound = new Audio.Sound();
+      await sound.loadAsync({ uri: recordedUri });
+      previewSoundRef.current = sound;
+
+      const startMs = Math.floor(trimStart * audioDuration * 1000);
+      const endMs = Math.floor(trimEnd * audioDuration * 1000);
+
+      await sound.setPositionAsync(startMs);
+      setIsPlayingPreview(true);
+      await sound.playAsync();
+
+      const checkInterval = setInterval(async () => {
+        try {
+          const status = await sound.getStatusAsync();
+          if (status.isLoaded) {
+            if (!status.isPlaying || (status.positionMillis >= endMs)) {
+              await sound.stopAsync();
+              clearInterval(checkInterval);
+              setIsPlayingPreview(false);
+            }
+          } else {
+            clearInterval(checkInterval);
+            setIsPlayingPreview(false);
+          }
+        } catch {
+          clearInterval(checkInterval);
+          setIsPlayingPreview(false);
+        }
+      }, 50);
+    } catch (e) {
+      console.error("Failed to play preview:", e);
+      setIsPlayingPreview(false);
+    }
+  }, [recordedUri, trimStart, trimEnd, audioDuration]);
+
+  const handleSave = useCallback(async () => {
+    if (!recordedUri) return;
+
+    if (Platform.OS !== "web" && FileSystem.documentDirectory && audioDuration > 0) {
+      const startMs = Math.floor(trimStart * audioDuration * 1000);
+      const endMs = Math.floor(trimEnd * audioDuration * 1000);
+      
+      if (startMs === 0 && endMs >= audioDuration * 1000 - 50) {
+        onSave(recordedUri);
+      } else {
+        onSave(`${recordedUri}#t=${startMs},${endMs}`);
+      }
+    } else {
+      onSave(recordedUri);
+    }
+  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave]);
+
+  const handleDelete = useCallback(() => {
+    onDelete();
+  }, [onDelete]);
+
+  const handleClose = useCallback(async () => {
+    await cleanup();
+    onClose();
+  }, [cleanup, onClose]);
+
+  const countAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: countScale.value }],
+    opacity: countOpacity.value,
+  }));
+
+  const formatTime = (seconds: number) => {
+    const s = Math.floor(seconds);
+    const ms = Math.floor((seconds % 1) * 10);
+    return `${s}.${ms}`;
+  };
+
+  const trimStartDisplay = (trimStart * audioDuration).toFixed(2);
+  const trimEndDisplay = (trimEnd * audioDuration).toFixed(2);
+  const trimDuration = ((trimEnd - trimStart) * audioDuration).toFixed(2);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
+      <Pressable style={styles.overlay} onPress={handleClose}>
+        <Pressable style={[styles.container, { backgroundColor: Colors.surface }]} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.header}>
+            <Text style={styles.title}>
+              Beat {beatIndex + 1}, Note {subIndex + 1}
+            </Text>
+            <Pressable onPress={handleClose} hitSlop={12}>
+              <Ionicons name="close" size={22} color={Colors.textSecondary} />
+            </Pressable>
+          </View>
+
+          {phase === "idle" && (
+            <View style={styles.content}>
+              <Pressable
+                style={[styles.recordButton, { backgroundColor: C.accent }]}
+                onPress={startCountdown}
+              >
+                <Ionicons name="mic" size={28} color={Colors.white} />
+                <Text style={styles.recordButtonText}>Record</Text>
+              </Pressable>
+              {hasExisting && (
+                <Pressable style={styles.deleteButton} onPress={handleDelete}>
+                  <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
+                  <Text style={[styles.deleteText]}>Remove Recording</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          {phase === "countdown" && (
+            <View style={styles.content}>
+              <Animated.View style={[styles.countdownCircle, { borderColor: C.accent }, countAnimStyle]}>
+                <Text style={[styles.countdownText, { color: C.accent }]}>{countdownValue}</Text>
+              </Animated.View>
+              <Text style={styles.hintText}>Get ready...</Text>
+            </View>
+          )}
+
+          {phase === "recording" && (
+            <View style={styles.content}>
+              <View style={styles.recordingIndicator}>
+                <View style={[styles.recordDot, { backgroundColor: "#FF4444" }]} />
+                <Text style={styles.recordingTimeText}>{formatTime(recordDuration)}s</Text>
+              </View>
+              <View style={styles.recordingBar}>
+                <View
+                  style={[
+                    styles.recordingProgress,
+                    { width: `${(recordDuration / MAX_RECORD_SECONDS) * 100}%`, backgroundColor: "#FF4444" },
+                  ]}
+                />
+              </View>
+              <Text style={styles.hintText}>Max {MAX_RECORD_SECONDS}s</Text>
+              <Pressable
+                style={[styles.stopButton, { backgroundColor: "#FF4444" }]}
+                onPress={stopRecording}
+              >
+                <Ionicons name="stop" size={24} color={Colors.white} />
+                <Text style={styles.recordButtonText}>Stop</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {phase === "trimming" && recordedUri && (
+            <View style={styles.content}>
+              <Text style={styles.sectionLabel}>Trim Audio</Text>
+              <Text style={styles.trimInfo}>
+                {trimStartDisplay}s — {trimEndDisplay}s ({trimDuration}s)
+              </Text>
+
+              <View style={styles.trimContainer}>
+                <View style={styles.waveformBar}>
+                  <View
+                    style={[
+                      styles.trimRegion,
+                      {
+                        left: `${trimStart * 100}%`,
+                        width: `${(trimEnd - trimStart) * 100}%`,
+                        backgroundColor: C.accent + "40",
+                        borderColor: C.accent,
+                      },
+                    ]}
+                  />
+                  <TrimHandle
+                    value={trimStart}
+                    onChange={(v) => setTrimStart(Math.min(v, trimEnd - 0.05))}
+                    color={C.accent}
+                    side="left"
+                  />
+                  <TrimHandle
+                    value={trimEnd}
+                    onChange={(v) => setTrimEnd(Math.max(v, trimStart + 0.05))}
+                    color={C.accent}
+                    side="right"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.trimActions}>
+                <Pressable
+                  style={[styles.previewBtn, { borderColor: C.accent }]}
+                  onPress={playPreview}
+                >
+                  <Ionicons
+                    name={isPlayingPreview ? "pause" : "play"}
+                    size={18}
+                    color={C.accent}
+                  />
+                  <Text style={[styles.previewBtnText, { color: C.accent }]}>
+                    {isPlayingPreview ? "Playing..." : "Preview"}
+                  </Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.saveRow}>
+                <Pressable style={styles.cancelBtn} onPress={handleClose}>
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.saveBtn, { backgroundColor: C.accent }]}
+                  onPress={handleSave}
+                >
+                  <Ionicons name="checkmark" size={18} color={Colors.white} />
+                  <Text style={styles.saveBtnText}>Save</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function TrimHandle({
+  value,
+  onChange,
+  color,
+  side,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  color: string;
+  side: "left" | "right";
+}) {
+  const containerRef = useRef<View>(null);
+  const layoutRef = useRef({ x: 0, width: 0 });
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        containerRef.current?.measureInWindow((x, _y, width) => {
+          layoutRef.current = { x, width };
+        });
+      },
+      onPanResponderMove: (e) => {
+        const { x, width } = layoutRef.current;
+        if (width === 0) return;
+        const pageX = e.nativeEvent.pageX;
+        const ratio = Math.max(0, Math.min(1, (pageX - x) / width));
+        onChange(ratio);
+      },
+    })
+  ).current;
+
+  return (
+    <View
+      ref={containerRef}
+      style={[StyleSheet.absoluteFill]}
+      pointerEvents="box-none"
+    >
+      <View
+        {...panResponder.panHandlers}
+        style={[
+          styles.trimHandle,
+          {
+            left: `${value * 100}%`,
+            marginLeft: side === "left" ? -10 : -10,
+            backgroundColor: color,
+          },
+        ]}
+      >
+        <View style={styles.trimHandleLine} />
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  container: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 16,
+    padding: 20,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  title: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  content: {
+    alignItems: "center",
+    gap: 16,
+  },
+  recordButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 30,
+  },
+  recordButtonText: {
+    color: Colors.white,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  deleteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+  },
+  deleteText: {
+    color: "#FF6B6B",
+    fontSize: 14,
+  },
+  countdownCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  countdownText: {
+    fontSize: 36,
+    fontWeight: "800",
+  },
+  hintText: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+  },
+  recordingIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  recordDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  recordingTimeText: {
+    color: Colors.text,
+    fontSize: 24,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
+  recordingBar: {
+    width: "100%",
+    height: 6,
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  recordingProgress: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  stopButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  sectionLabel: {
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: "600",
+    alignSelf: "flex-start",
+  },
+  trimInfo: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontVariant: ["tabular-nums"],
+    alignSelf: "flex-start",
+  },
+  trimContainer: {
+    width: "100%",
+    height: 60,
+    justifyContent: "center",
+  },
+  waveformBar: {
+    width: "100%",
+    height: 40,
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: 6,
+    overflow: "visible",
+    position: "relative",
+  },
+  trimRegion: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    borderWidth: 1,
+    borderRadius: 4,
+  },
+  trimHandle: {
+    position: "absolute",
+    top: -4,
+    width: 20,
+    height: 48,
+    borderRadius: 4,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  trimHandleLine: {
+    width: 2,
+    height: 20,
+    backgroundColor: "rgba(255,255,255,0.6)",
+    borderRadius: 1,
+  },
+  trimActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  previewBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  previewBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  saveRow: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+    marginTop: 4,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: Colors.surfaceLight,
+    alignItems: "center",
+  },
+  cancelBtnText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  saveBtn: {
+    flex: 1,
+    flexDirection: "row",
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  saveBtnText: {
+    color: Colors.white,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+});
