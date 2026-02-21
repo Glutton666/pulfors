@@ -247,6 +247,11 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
     return () => {
       engineRef.current.stopWeb();
       if (mobileLoopRef.current) clearTimeout(mobileLoopRef.current);
+      micActiveRef.current = false;
+      if (micRafRef.current) cancelAnimationFrame(micRafRef.current);
+      if (micSourceRef.current) micSourceRef.current.disconnect();
+      if (micAudioCtxRef.current) micAudioCtxRef.current.close();
+      if (micStreamRef.current) micStreamRef.current.getTracks().forEach((t: any) => t.stop());
     };
   }, []);
 
@@ -464,6 +469,53 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
             </View>
           </View>
 
+          {Platform.OS === "web" && (
+            <View style={styles.micSection}>
+              <View style={styles.micRow}>
+                <Pressable
+                  onPress={toggleMic}
+                  style={({ pressed }) => [
+                    styles.micBtn,
+                    micListening && { backgroundColor: Colors.danger },
+                    !micListening && { backgroundColor: Colors.surfaceLight, borderWidth: 1, borderColor: Colors.border },
+                    pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+                  ]}
+                  testID="signal-mic-toggle"
+                >
+                  <MaterialCommunityIcons
+                    name={micListening ? "microphone-off" : "microphone"}
+                    size={18}
+                    color={micListening ? Colors.white : C.accent}
+                  />
+                  <Text style={[styles.micBtnText, { color: micListening ? Colors.white : Colors.textSecondary }]}>
+                    {micListening ? "Stop" : "Listen"}
+                  </Text>
+                </Pressable>
+
+                {micListening && micDetectedFreq && (
+                  <Pressable
+                    onPress={applyMicFreq}
+                    style={({ pressed }) => [
+                      styles.micApplyBtn,
+                      { backgroundColor: C.accentDim, borderColor: C.accent },
+                      pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+                    ]}
+                    testID="signal-mic-apply"
+                  >
+                    <Text style={[styles.micApplyFreq, { color: C.accent }]}>
+                      {micDetectedNote} {micDetectedFreq} Hz
+                    </Text>
+                    <Ionicons name="arrow-forward" size={14} color={C.accent} />
+                  </Pressable>
+                )}
+
+                {micListening && !micDetectedFreq && (
+                  <Text style={styles.micHint}>Listening...</Text>
+                )}
+              </View>
+            </View>
+          )}
+
           <Pressable
             onPress={() => {
               hapticFeedback();
@@ -676,6 +728,46 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: Colors.textTertiary,
     letterSpacing: 0.5,
+  },
+  micSection: {
+    width: "100%",
+    alignItems: "center",
+  },
+  micRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    justifyContent: "center",
+  },
+  micBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  micBtnText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+  },
+  micApplyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  micApplyFreq: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 12,
+  },
+  micHint: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 11,
+    color: Colors.textTertiary,
   },
   playBtn: {
     flexDirection: "row",
