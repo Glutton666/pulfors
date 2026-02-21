@@ -987,19 +987,6 @@ export default function MetronomeScreen() {
         ]}
       >
         <View style={[styles.topSection, barMode && { justifyContent: "flex-start", flex: 3 }]}>
-          {barMode && (
-            <SubdivisionBar
-              pattern={subdivisionPattern}
-              onPatternChange={handlePatternChange}
-              onDragStart={handleDragStart}
-              onDragMove={handleDragMove}
-              onDragEnd={handleDragEnd}
-              onReset={handleReset}
-              isPlaying={isPlaying}
-              activeSubNote={activeSubNote}
-              activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
-            />
-          )}
           <BeatIndicator
             beatsPerMeasure={beatsPerMeasure}
             currentBeat={currentBeat}
@@ -1024,6 +1011,19 @@ export default function MetronomeScreen() {
             onBarScrollOffset={(offset) => { barScrollOffsetRef.current = offset; }}
             onBarTimerExpired={handleTimerExpired}
           />
+          {barMode && (
+            <SubdivisionBar
+              pattern={subdivisionPattern}
+              onPatternChange={handlePatternChange}
+              onDragStart={handleDragStart}
+              onDragMove={handleDragMove}
+              onDragEnd={handleDragEnd}
+              onReset={handleReset}
+              isPlaying={isPlaying}
+              activeSubNote={activeSubNote}
+              activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
+            />
+          )}
         </View>
 
         <View style={styles.bpmSection}>
