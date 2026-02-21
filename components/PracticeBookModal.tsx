@@ -146,10 +146,30 @@ export function PracticeBookModal({
 
   const renderItem = ({ item }: { item: PracticeEntry }) => {
     const isEditing = editingId === item.id;
-    const repeatCount = Object.keys(item.barRepeats || {}).length;
-    const subCount = Object.keys(item.beatSubdivisions || {}).filter(
-      (k) => (item.beatSubdivisions[k]?.length || 0) > 1
-    ).length;
+    const barCount = Math.ceil(item.beatTypes.length / item.beatsPerMeasure);
+    const secondsPerBeat = 60 / item.bpm;
+    const totalBeats = item.beatTypes.length;
+    const onePlaySeconds = totalBeats * secondsPerBeat;
+
+    const formatTime = (sec: number) => {
+      const m = Math.floor(sec / 60);
+      const s = Math.round(sec % 60);
+      if (m > 0) return `${m}분 ${s}초`;
+      return `${s}초`;
+    };
+
+    const clockMode = item.barClockMode || "stopwatch";
+    const timerDur = item.barTimerDuration;
+    let playModeText: string;
+    if (clockMode === "timer" && timerDur != null && timerDur > 0) {
+      const tm = Math.floor(timerDur / 60);
+      const ts = timerDur % 60;
+      playModeText = tm > 0 ? `${tm}:${String(ts).padStart(2, "0")}` : `${ts}초`;
+    } else if (item.barLoopMode === "loop") {
+      playModeText = "연속재생";
+    } else {
+      playModeText = "1회재생";
+    }
 
     return (
       <View style={styles.entryCard}>
@@ -186,34 +206,27 @@ export function PracticeBookModal({
             </View>
             <View style={styles.detailChip}>
               <Text style={[styles.detailValue, { color: C.accent }]}>
-                {item.beatsPerMeasure}/{4}
+                {barCount}
+              </Text>
+              <Text style={styles.detailUnit}>Bar</Text>
+            </View>
+            <View style={styles.detailChip}>
+              <Text style={[styles.detailValue, { color: C.accent }]}>
+                {item.beatsPerMeasure}/4
               </Text>
             </View>
             <View style={styles.detailChip}>
-              <Text style={styles.detailUnit}>
-                {item.barLoopMode === "loop" ? "Loop" : "Once"}
-              </Text>
+              <Ionicons
+                name={clockMode === "timer" ? "timer-outline" : "infinite"}
+                size={12}
+                color={Colors.textSecondary}
+              />
+              <Text style={styles.detailUnit}>{playModeText}</Text>
             </View>
-            {repeatCount > 0 && (
-              <View style={styles.detailChip}>
-                <MaterialCommunityIcons
-                  name="repeat"
-                  size={12}
-                  color={Colors.textSecondary}
-                />
-                <Text style={styles.detailUnit}>{repeatCount}</Text>
-              </View>
-            )}
-            {subCount > 0 && (
-              <View style={styles.detailChip}>
-                <MaterialCommunityIcons
-                  name="music-note-sixteenth"
-                  size={12}
-                  color={Colors.textSecondary}
-                />
-                <Text style={styles.detailUnit}>{subCount}</Text>
-              </View>
-            )}
+            <View style={styles.detailChip}>
+              <Ionicons name="time-outline" size={12} color={Colors.textSecondary} />
+              <Text style={styles.detailUnit}>{formatTime(onePlaySeconds)}</Text>
+            </View>
           </View>
 
           <BeatPreview beatTypes={item.beatTypes} />
