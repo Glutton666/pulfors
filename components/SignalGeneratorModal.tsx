@@ -722,7 +722,11 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               hitSlop={8}
               testID="signal-mic-toggle"
             >
-              <Text style={{ fontSize: 22 }}>{micListening ? "🔴" : "👂"}</Text>
+              <MaterialCommunityIcons
+                name={micListening ? "microphone-off" : "microphone"}
+                size={20}
+                color={micListening ? Colors.danger : Colors.textSecondary}
+              />
             </Pressable>
             {micListening && micDetectedFreq ? (
               <Text style={[styles.micDetectedHint, { color: C.accent }]}>
