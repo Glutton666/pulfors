@@ -8,6 +8,8 @@ import {
   Platform,
   ScrollView,
   TextInput,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -22,7 +24,15 @@ import {
   type Goal,
   type PracticeSessionData,
   type FeatureUsageData,
+  type PracticeRoomVisitData,
 } from "@/lib/activity-log";
+import {
+  loadPracticeRooms,
+  addPracticeRoom,
+  deletePracticeRoom,
+  requestLocationPermission,
+  type PracticeRoom,
+} from "@/lib/practice-room";
 
 interface WorkUpOverviewModalProps {
   visible: boolean;
@@ -76,10 +86,16 @@ export function WorkUpOverviewModal({
   const [newGoalType, setNewGoalType] = useState<Goal["type"]>("daily_practice_time");
   const [newGoalTarget, setNewGoalTarget] = useState("");
 
+  const [practiceRooms, setPracticeRooms] = useState<PracticeRoom[]>([]);
+  const [showAddRoom, setShowAddRoom] = useState(false);
+  const [newRoomName, setNewRoomName] = useState("");
+  const [addingRoom, setAddingRoom] = useState(false);
+
   useEffect(() => {
     if (visible && loggingEnabled) {
       loadActivityLogs().then(setLogs);
       loadGoals().then(setGoals);
+      loadPracticeRooms().then(setPracticeRooms);
     }
   }, [visible, loggingEnabled]);
 
@@ -228,6 +244,53 @@ export function WorkUpOverviewModal({
     },
     [goals]
   );
+
+  const handleAddRoom = useCallback(async () => {
+    if (!newRoomName.trim()) return;
+    setAddingRoom(true);
+    const granted = await requestLocationPermission();
+    if (!granted) {
+      setAddingRoom(false);
+      Alert.alert("Permission Needed", "Location permission is required to register a practice room.");
+      return;
+    }
+    const room = await addPracticeRoom(newRoomName.trim());
+    if (room) {
+      setPracticeRooms((prev) => [...prev, room]);
+      setNewRoomName("");
+      setShowAddRoom(false);
+    } else {
+      Alert.alert("Error", "Could not get your current location. Please try again.");
+    }
+    setAddingRoom(false);
+  }, [newRoomName]);
+
+  const handleDeleteRoom = useCallback(async (id: string) => {
+    await deletePracticeRoom(id);
+    setPracticeRooms((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
+  const roomVisitStats = useMemo(() => {
+    const visits: Record<string, { name: string; totalDuration: number; visitCount: number }> = {};
+    logs
+      .filter((l) => l.type === "practice_room_visit")
+      .forEach((l) => {
+        const data = l.data as PracticeRoomVisitData;
+        if (!visits[data.roomId]) {
+          visits[data.roomId] = { name: data.roomName, totalDuration: 0, visitCount: 0 };
+        }
+        visits[data.roomId].totalDuration += data.duration;
+        visits[data.roomId].visitCount += 1;
+      });
+    return Object.entries(visits)
+      .sort(([, a], [, b]) => b.totalDuration - a.totalDuration);
+  }, [logs]);
+
+  const todayRoomVisits = useMemo(() => {
+    return todayLogs
+      .filter((l) => l.type === "practice_room_visit")
+      .reduce((sum, l) => sum + ((l.data as PracticeRoomVisitData).duration || 0), 0);
+  }, [todayLogs]);
 
   return (
     <Modal
@@ -384,6 +447,91 @@ export function WorkUpOverviewModal({
                       </Text>
                     </View>
                   </View>
+                </View>
+
+                <View style={styles.divider} />
+
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Ionicons name="location-outline" size={18} color={C.accent} />
+                    <Text style={styles.sectionLabel}>Practice Rooms</Text>
+                    <Pressable
+                      onPress={() => setShowAddRoom(!showAddRoom)}
+                      hitSlop={8}
+                    >
+                      <Ionicons
+                        name={showAddRoom ? "close-circle" : "add-circle"}
+                        size={22}
+                        color={C.accent}
+                      />
+                    </Pressable>
+                  </View>
+
+                  {showAddRoom && (
+                    <View style={[styles.addGoalForm, { borderColor: C.accentDim }]}>
+                      <Text style={styles.roomHint}>
+                        Register your current location as a practice room
+                      </Text>
+                      <View style={styles.goalInputRow}>
+                        <TextInput
+                          style={[styles.goalInput, { borderColor: C.accentMuted, flex: 1 }]}
+                          value={newRoomName}
+                          onChangeText={setNewRoomName}
+                          placeholder="Room name (e.g. Studio A)"
+                          placeholderTextColor={Colors.textTertiary}
+                          maxLength={30}
+                        />
+                        <Pressable
+                          style={[styles.goalSaveBtn, { backgroundColor: C.accent }]}
+                          onPress={handleAddRoom}
+                          disabled={addingRoom}
+                        >
+                          {addingRoom ? (
+                            <ActivityIndicator size="small" color={Colors.surface} />
+                          ) : (
+                            <Ionicons name="checkmark" size={18} color={Colors.surface} />
+                          )}
+                        </Pressable>
+                      </View>
+                    </View>
+                  )}
+
+                  {practiceRooms.length === 0 && !showAddRoom ? (
+                    <Text style={styles.emptyText}>
+                      No rooms registered. Tap + to add your current location.
+                    </Text>
+                  ) : (
+                    practiceRooms.map((room) => {
+                      const visitInfo = roomVisitStats.find(([id]) => id === room.id);
+                      return (
+                        <View key={room.id} style={styles.roomItem}>
+                          <View style={styles.roomHeader}>
+                            <Ionicons name="location" size={14} color={C.accent} />
+                            <Text style={styles.roomName} numberOfLines={1}>{room.name}</Text>
+                            <Pressable onPress={() => handleDeleteRoom(room.id)} hitSlop={8}>
+                              <Ionicons name="trash-outline" size={16} color={Colors.textTertiary} />
+                            </Pressable>
+                          </View>
+                          {visitInfo ? (
+                            <Text style={styles.roomStats}>
+                              {visitInfo[1].visitCount} visit{visitInfo[1].visitCount !== 1 ? "s" : ""} · {formatDuration(visitInfo[1].totalDuration)}
+                            </Text>
+                          ) : (
+                            <Text style={styles.roomStats}>No visits recorded yet</Text>
+                          )}
+                        </View>
+                      );
+                    })
+                  )}
+
+                  {todayRoomVisits > 0 && (
+                    <View style={[styles.statCard, { borderColor: C.accentDim, marginTop: 8 }]}>
+                      <Text style={[styles.statValue, { color: C.accent }]}>
+                        {formatDuration(todayRoomVisits)}
+                      </Text>
+                      <Text style={styles.statLabel}>At practice rooms today</Text>
+                    </View>
+                  )}
                 </View>
 
                 {barModeStats.length > 0 && (
@@ -733,5 +881,34 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
     color: Colors.textSecondary,
+  },
+  roomHint: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginBottom: 4,
+  },
+  roomItem: {
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: 8,
+    padding: 10,
+    gap: 4,
+  },
+  roomHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  roomName: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
+    color: Colors.text,
+    flex: 1,
+  },
+  roomStats: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginLeft: 20,
   },
 });
