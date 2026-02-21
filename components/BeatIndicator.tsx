@@ -711,11 +711,11 @@ export function BeatIndicator({
     const isDropping = dropTargetBeat !== null;
     const renderBarRow = (beat: number, copyIndex: number) => {
       const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
-      const isCurrent = isPlaying && currentBeat === beat && copyIndex === activeCopy;
+      const isCurrent = isPlaying && currentBeat === beat && (barLoopMode === "once" ? copyIndex === 0 : copyIndex === activeCopy);
       const bType = beatTypes[beat] || "normal";
       const isDropTarget = isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
       const repeat = barRepeats[beat];
-      const isPrimary = isPlaying ? copyIndex === CENTER_COPY : copyIndex === 0;
+      const isPrimary = isPlaying ? (barLoopMode === "once" ? copyIndex === 0 : copyIndex === CENTER_COPY) : copyIndex === 0;
       return (
         <Pressable
           key={`bar-${copyIndex}-${beat}`}
@@ -862,10 +862,11 @@ export function BeatIndicator({
 
         <View style={styles.barBottomRow}>
           <Pressable
-            onPress={() => onBarLoopModeChange(barLoopMode === "loop" ? "once" : "loop")}
-            style={[styles.barLoopBtn, barLoopMode === "once" && { backgroundColor: "rgba(255,255,255,0.12)" }]}
+            onPress={() => { if (!isPlaying) onBarLoopModeChange(barLoopMode === "loop" ? "once" : "loop"); }}
+            style={[styles.barLoopBtn, barLoopMode === "once" && { backgroundColor: "rgba(255,255,255,0.12)" }, isPlaying && { opacity: 0.3 }]}
             hitSlop={6}
             testID="bar-loop-toggle"
+            disabled={isPlaying}
           >
             <Ionicons
               name={barLoopMode === "loop" ? "repeat" : "play-forward"}
