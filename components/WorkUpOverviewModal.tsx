@@ -74,6 +74,22 @@ function getStartOfWeek(date: Date): number {
   return d.getTime();
 }
 
+function getStartOfMonth(date: Date): number {
+  const d = new Date(date);
+  d.setDate(1);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function getStartOfYear(date: Date): number {
+  const d = new Date(date);
+  d.setMonth(0, 1);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+type PlayTimePeriod = "today" | "week" | "month";
+
 function formatDuration(seconds: number): string {
   if (seconds < 60) return `${Math.round(seconds)}s`;
   const mins = Math.floor(seconds / 60);
@@ -227,6 +243,8 @@ export function WorkUpOverviewModal({
   const [newRoomName, setNewRoomName] = useState("");
   const [addingRoom, setAddingRoom] = useState(false);
 
+  const [playTimePeriod, setPlayTimePeriod] = useState<PlayTimePeriod>("today");
+  const [showYearlySummary, setShowYearlySummary] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareBgUri, setShareBgUri] = useState<string | null>(null);
   const [shareCapturing, setShareCapturing] = useState(false);
@@ -315,6 +333,60 @@ export function WorkUpOverviewModal({
     () => weekSessions.filter(l => (l.data as PracticeSessionData).mode === "bar").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
     [weekSessions]
   );
+
+  const monthStart = getStartOfMonth(new Date());
+  const monthLogs = useMemo(() => logs.filter((l) => l.timestamp >= monthStart), [logs, monthStart]);
+  const monthSessions = useMemo(() => monthLogs.filter((l) => l.type === "practice_session"), [monthLogs]);
+  const monthTotalTime = useMemo(
+    () => monthSessions.reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    [monthSessions]
+  );
+  const monthBeatTime = useMemo(
+    () => monthSessions.filter(l => (l.data as PracticeSessionData).mode === "dial").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    [monthSessions]
+  );
+  const monthBarTime = useMemo(
+    () => monthSessions.filter(l => (l.data as PracticeSessionData).mode === "bar").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    [monthSessions]
+  );
+
+  const lastYearStart = getStartOfYear(new Date(new Date().getFullYear() - 1, 0, 1));
+  const lastYearEnd = getStartOfYear(new Date());
+  const lastYearLogs = useMemo(() => logs.filter((l) => l.timestamp >= lastYearStart && l.timestamp < lastYearEnd), [logs, lastYearStart, lastYearEnd]);
+  const lastYearSessions = useMemo(() => lastYearLogs.filter((l) => l.type === "practice_session"), [lastYearLogs]);
+  const lastYearTotalTime = useMemo(
+    () => lastYearSessions.reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    [lastYearSessions]
+  );
+  const lastYearBeatTime = useMemo(
+    () => lastYearSessions.filter(l => (l.data as PracticeSessionData).mode === "dial").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    [lastYearSessions]
+  );
+  const lastYearBarTime = useMemo(
+    () => lastYearSessions.filter(l => (l.data as PracticeSessionData).mode === "bar").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    [lastYearSessions]
+  );
+  const lastYearSessionCount = lastYearSessions.length;
+  const hasLastYearData = lastYearTotalTime > 0;
+
+  const periodData = useMemo(() => {
+    switch (playTimePeriod) {
+      case "today": return { total: todayTotalTime, beat: todayBeatTime, bar: todayBarTime };
+      case "week": return { total: weekTotalTime, beat: weekBeatTime, bar: weekBarTime };
+      case "month": return { total: monthTotalTime, beat: monthBeatTime, bar: monthBarTime };
+    }
+  }, [playTimePeriod, todayTotalTime, todayBeatTime, todayBarTime, weekTotalTime, weekBeatTime, weekBarTime, monthTotalTime, monthBeatTime, monthBarTime]);
+
+  const periodLabel = playTimePeriod === "today" ? "Today" : playTimePeriod === "week" ? "This Week" : "This Month";
+
+  const cyclePeriod = useCallback((direction: 1 | -1) => {
+    const periods: PlayTimePeriod[] = ["today", "week", "month"];
+    const idx = periods.indexOf(playTimePeriod);
+    const next = idx + direction;
+    if (next >= 0 && next < periods.length) {
+      setPlayTimePeriod(periods[next]);
+    }
+  }, [playTimePeriod]);
 
   const featureUsage = useMemo(() => {
     const usage: Record<string, number> = { tuner: 0, signal_generator: 0, practice_note: 0 };
@@ -611,13 +683,25 @@ export function WorkUpOverviewModal({
                   )}
                 </View>
 
-                {/* ── Play Time Donut ── */}
+                {/* ── Play Time (Today / Week / Month) ── */}
                 <View style={s.card}>
                   <View style={s.cardHeader}>
+                    <Pressable onPress={() => cyclePeriod(-1)} hitSlop={12} style={{ opacity: playTimePeriod === "today" ? 0.2 : 1 }}>
+                      <Ionicons name="chevron-back" size={18} color={C.accent} />
+                    </Pressable>
                     <View style={s.cardHeaderLeft}>
                       <Ionicons name="time-outline" size={16} color={C.accent} />
-                      <Text style={[s.cardTitle, { color: Colors.text }]}>Today's Play Time</Text>
+                      <Text style={[s.cardTitle, { color: Colors.text }]}>{periodLabel}</Text>
                     </View>
+                    <Pressable onPress={() => cyclePeriod(1)} hitSlop={12} style={{ opacity: playTimePeriod === "month" ? 0.2 : 1 }}>
+                      <Ionicons name="chevron-forward" size={18} color={C.accent} />
+                    </Pressable>
+                  </View>
+
+                  <View style={s.periodDots}>
+                    {(["today", "week", "month"] as PlayTimePeriod[]).map((p) => (
+                      <View key={p} style={[s.periodDot, { backgroundColor: p === playTimePeriod ? C.accent : Colors.surfaceLight }]} />
+                    ))}
                   </View>
 
                   <View style={s.donutRow}>
@@ -625,12 +709,12 @@ export function WorkUpOverviewModal({
                       size={120}
                       strokeWidth={10}
                       segments={[
-                        { value: todayBeatTime || 0.01, color: BEAT_COLOR },
-                        { value: todayBarTime || 0.01, color: BAR_COLOR },
+                        { value: periodData.beat || 0.01, color: BEAT_COLOR },
+                        { value: periodData.bar || 0.01, color: BAR_COLOR },
                       ]}
                       bgColor={Colors.surfaceLight}
                     >
-                      <Text style={[s.donutCenter, { color: C.accent }]}>{formatMinutes(todayTotalTime)}</Text>
+                      <Text style={[s.donutCenter, { color: C.accent }]}>{formatMinutes(periodData.total)}</Text>
                       <Text style={s.donutUnit}>min</Text>
                     </DonutChart>
 
@@ -639,52 +723,36 @@ export function WorkUpOverviewModal({
                         <View style={[s.legendDot, { backgroundColor: BEAT_COLOR }]} />
                         <View>
                           <Text style={s.legendLabel}>Beat Mode</Text>
-                          <Text style={[s.legendValue, { color: BEAT_COLOR }]}>{formatDuration(todayBeatTime)}</Text>
+                          <Text style={[s.legendValue, { color: BEAT_COLOR }]}>{formatDuration(periodData.beat)}</Text>
                         </View>
                       </View>
                       <View style={s.legendItem}>
                         <View style={[s.legendDot, { backgroundColor: BAR_COLOR }]} />
                         <View>
                           <Text style={s.legendLabel}>Bar Mode</Text>
-                          <Text style={[s.legendValue, { color: BAR_COLOR }]}>{formatDuration(todayBarTime)}</Text>
+                          <Text style={[s.legendValue, { color: BAR_COLOR }]}>{formatDuration(periodData.bar)}</Text>
                         </View>
                       </View>
                       <View style={s.legendItem}>
                         <View style={[s.legendDot, { backgroundColor: C.accent }]} />
                         <View>
                           <Text style={s.legendLabel}>Total</Text>
-                          <Text style={[s.legendValue, { color: C.accent }]}>{formatDuration(todayTotalTime)}</Text>
+                          <Text style={[s.legendValue, { color: C.accent }]}>{formatDuration(periodData.total)}</Text>
                         </View>
                       </View>
                     </View>
                   </View>
                 </View>
 
-                {/* ── Weekly Summary ── */}
-                <View style={s.card}>
-                  <View style={s.cardHeader}>
-                    <View style={s.cardHeaderLeft}>
-                      <Ionicons name="calendar-outline" size={16} color={C.accent} />
-                      <Text style={[s.cardTitle, { color: Colors.text }]}>This Week</Text>
+                {hasLastYearData && (
+                  <Pressable style={[s.card, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]} onPress={() => setShowYearlySummary(true)}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <Ionicons name="trophy-outline" size={20} color="#FFD700" />
+                      <Text style={[s.cardTitle, { color: Colors.text }]}>{new Date().getFullYear() - 1} Year in Review</Text>
                     </View>
-                  </View>
-                  <View style={s.weekGrid}>
-                    <View style={s.weekStat}>
-                      <Text style={[s.weekValue, { color: C.accent }]}>{formatDuration(weekTotalTime)}</Text>
-                      <Text style={s.weekLabel}>Total</Text>
-                    </View>
-                    <View style={[s.weekDivider, { backgroundColor: Colors.border }]} />
-                    <View style={s.weekStat}>
-                      <Text style={[s.weekValue, { color: BEAT_COLOR }]}>{formatDuration(weekBeatTime)}</Text>
-                      <Text style={s.weekLabel}>Beat</Text>
-                    </View>
-                    <View style={[s.weekDivider, { backgroundColor: Colors.border }]} />
-                    <View style={s.weekStat}>
-                      <Text style={[s.weekValue, { color: BAR_COLOR }]}>{formatDuration(weekBarTime)}</Text>
-                      <Text style={s.weekLabel}>Bar</Text>
-                    </View>
-                  </View>
-                </View>
+                    <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
+                  </Pressable>
+                )}
 
                 {/* ── Detailed Breakdown (+ button) ── */}
                 <View style={s.card}>
@@ -983,6 +1051,43 @@ export function WorkUpOverviewModal({
             </ScrollView>
           </View>
         </View>
+      </Modal>
+
+      {/* ── Yearly Summary Modal ── */}
+      <Modal visible={showYearlySummary} animationType="fade" transparent onRequestClose={() => setShowYearlySummary(false)} statusBarTranslucent>
+        <Pressable style={yearStyles.overlay} onPress={() => setShowYearlySummary(false)}>
+          <Pressable style={[yearStyles.card, { backgroundColor: Colors.surface }]} onPress={(e) => e.stopPropagation()}>
+            <View style={yearStyles.header}>
+              <Ionicons name="trophy" size={28} color="#FFD700" />
+              <Text style={yearStyles.title}>{new Date().getFullYear() - 1} Year in Review</Text>
+              <Pressable onPress={() => setShowYearlySummary(false)} hitSlop={12}>
+                <Ionicons name="close" size={22} color={Colors.textSecondary} />
+              </Pressable>
+            </View>
+
+            <View style={yearStyles.bigStat}>
+              <Text style={[yearStyles.bigNum, { color: C.accent }]}>{formatMinutes(lastYearTotalTime)}</Text>
+              <Text style={yearStyles.bigLabel}>minutes practiced</Text>
+            </View>
+
+            <View style={yearStyles.statsGrid}>
+              <View style={yearStyles.statItem}>
+                <Text style={[yearStyles.statVal, { color: BEAT_COLOR }]}>{formatDuration(lastYearBeatTime)}</Text>
+                <Text style={yearStyles.statLabel}>Beat Mode</Text>
+              </View>
+              <View style={yearStyles.statItem}>
+                <Text style={[yearStyles.statVal, { color: BAR_COLOR }]}>{formatDuration(lastYearBarTime)}</Text>
+                <Text style={yearStyles.statLabel}>Bar Mode</Text>
+              </View>
+              <View style={yearStyles.statItem}>
+                <Text style={[yearStyles.statVal, { color: C.accent }]}>{lastYearSessionCount}</Text>
+                <Text style={yearStyles.statLabel}>Sessions</Text>
+              </View>
+            </View>
+
+            <Text style={yearStyles.footerText}>Keep up the great work!</Text>
+          </Pressable>
+        </Pressable>
       </Modal>
     </Modal>
   );
@@ -1355,6 +1460,18 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  periodDots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: -4,
+    marginBottom: 4,
+  },
+  periodDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
 });
 
 const shareStyles = StyleSheet.create({
@@ -1580,5 +1697,77 @@ const shareStyles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 11,
     color: Colors.textSecondary,
+  },
+});
+
+const yearStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 340,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    gap: 20,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    width: "100%",
+    justifyContent: "center",
+  },
+  title: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 18,
+    color: Colors.text,
+    flex: 1,
+  },
+  bigStat: {
+    alignItems: "center",
+    gap: 4,
+  },
+  bigNum: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 56,
+    lineHeight: 62,
+  },
+  bigLabel: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  statsGrid: {
+    flexDirection: "row",
+    width: "100%",
+    justifyContent: "space-around",
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: 14,
+    paddingVertical: 14,
+  },
+  statItem: {
+    alignItems: "center",
+    gap: 4,
+  },
+  statVal: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 16,
+  },
+  statLabel: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  footerText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: "center",
   },
 });
