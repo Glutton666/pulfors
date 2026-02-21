@@ -236,6 +236,7 @@ interface BeatIndicatorProps {
   isPlaying: boolean;
   onBeatsChange: (beats: number) => void;
   onTogglePlay: () => void;
+  onLongPressPlay?: () => void;
   beatTypes: BeatType[];
   onBeatTypeChange: (index: number, type: BeatType) => void;
   dropTargetBeat: number | null;
@@ -267,6 +268,7 @@ export function BeatIndicator({
   isPlaying,
   onBeatsChange,
   onTogglePlay,
+  onLongPressPlay,
   beatTypes,
   onBeatTypeChange,
   dropTargetBeat,
@@ -1003,6 +1005,8 @@ export function BeatIndicator({
           </View>
           <Pressable
             onPress={onTogglePlay}
+            onLongPress={!isPlaying && onLongPressPlay ? onLongPressPlay : undefined}
+            delayLongPress={500}
             style={({ pressed }) => [
               styles.barPlayBtn,
               pressed && { opacity: 0.7 },
@@ -1209,6 +1213,8 @@ export function BeatIndicator({
 
           <Pressable
             onPress={onTogglePlay}
+            onLongPress={!isPlaying && onLongPressPlay ? onLongPressPlay : undefined}
+            delayLongPress={500}
             style={({ pressed }) => [
               styles.playButton,
               pressed && styles.playButtonPressed,

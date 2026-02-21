@@ -67,7 +67,7 @@ export default function RootLayout() {
           await setAudioModeAsync({
             playsInSilentMode: true,
             shouldPlayInBackground: false,
-            interruptionMode: "mixWithOthers",
+            interruptionMode: "duckOthers",
           });
         } else if (Platform.OS === "android") {
           await setAudioModeAsync({
