@@ -12,7 +12,7 @@ import * as Linking from "expo-linking";
 import {
   setupNotificationControls,
   showPlayingNotification,
-  showPausedNotification,
+  updateNotificationBpm,
   dismissNotification,
   addNotificationActionListener,
 } from "@/lib/notification-controls";
@@ -628,11 +628,25 @@ export default function MetronomeScreen() {
 
   const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
+  const updateBpmRef = useRef(updateBpm);
+  useEffect(() => { updateBpmRef.current = updateBpm; }, [updateBpm]);
+  const bpmRef = useRef(bpm);
+  useEffect(() => { bpmRef.current = bpm; }, [bpm]);
 
   useEffect(() => {
     const sub = addNotificationActionListener((actionId) => {
       if (actionId === "TOGGLE_PLAY") {
         togglePlayPauseRef.current();
+      } else if (actionId === "BPM_DOWN") {
+        const newBpm = Math.max(20, bpmRef.current - 5);
+        updateBpmRef.current(newBpm);
+        const modeLabel = barModeRef.current ? "Bar" : "Dial";
+        updateNotificationBpm(newBpm, modeLabel);
+      } else if (actionId === "BPM_UP") {
+        const newBpm = Math.min(300, bpmRef.current + 5);
+        updateBpmRef.current(newBpm);
+        const modeLabel = barModeRef.current ? "Bar" : "Dial";
+        updateNotificationBpm(newBpm, modeLabel);
       }
     });
     return () => sub.remove();

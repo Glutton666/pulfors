@@ -8,11 +8,11 @@ let isSetup = false;
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: false,
+    shouldShowAlert: true,
     shouldPlaySound: false,
     shouldSetBadge: false,
-    shouldShowBanner: false,
-    shouldShowList: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -36,7 +36,17 @@ export async function setupNotificationControls() {
     await Notifications.setNotificationCategoryAsync(CATEGORY_ID, [
       {
         identifier: "TOGGLE_PLAY",
-        buttonTitle: "⏸ 정지",
+        buttonTitle: "⏸ Stop",
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: "BPM_DOWN",
+        buttonTitle: "BPM -5",
+        options: { opensAppToForeground: false },
+      },
+      {
+        identifier: "BPM_UP",
+        buttonTitle: "BPM +5",
         options: { opensAppToForeground: false },
       },
     ]);
@@ -48,13 +58,27 @@ export async function setupNotificationControls() {
 }
 
 export async function showPlayingNotification(bpm: number, mode: string) {
-  if (Platform.OS === "web" || !isSetup) return;
+  if (Platform.OS === "web") return;
+  if (!isSetup) {
+    await setupNotificationControls();
+    if (!isSetup) return;
+  }
 
   try {
     await Notifications.setNotificationCategoryAsync(CATEGORY_ID, [
       {
         identifier: "TOGGLE_PLAY",
-        buttonTitle: "⏸ 정지",
+        buttonTitle: "⏸ Stop",
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: "BPM_DOWN",
+        buttonTitle: "-5 BPM",
+        options: { opensAppToForeground: false },
+      },
+      {
+        identifier: "BPM_UP",
+        buttonTitle: "+5 BPM",
         options: { opensAppToForeground: false },
       },
     ]);
@@ -62,10 +86,11 @@ export async function showPlayingNotification(bpm: number, mode: string) {
     await Notifications.scheduleNotificationAsync({
       identifier: NOTIFICATION_ID,
       content: {
-        title: `🎵 ${bpm} BPM`,
-        body: `${mode} 모드 재생 중`,
+        title: `🎵 ${bpm} BPM - Playing`,
+        body: `${mode} mode`,
         categoryIdentifier: CATEGORY_ID,
         sticky: true,
+        autoDismiss: false,
         ...(Platform.OS === "android"
           ? { channelId: "metronome" }
           : {}),
@@ -77,25 +102,18 @@ export async function showPlayingNotification(bpm: number, mode: string) {
   }
 }
 
-export async function showPausedNotification(bpm: number, mode: string) {
+export async function updateNotificationBpm(bpm: number, mode: string) {
   if (Platform.OS === "web" || !isSetup) return;
 
   try {
-    await Notifications.setNotificationCategoryAsync(CATEGORY_ID, [
-      {
-        identifier: "TOGGLE_PLAY",
-        buttonTitle: "▶ 재생",
-        options: { opensAppToForeground: false },
-      },
-    ]);
-
     await Notifications.scheduleNotificationAsync({
       identifier: NOTIFICATION_ID,
       content: {
-        title: `🎵 ${bpm} BPM`,
-        body: `${mode} 모드 일시정지`,
+        title: `🎵 ${bpm} BPM - Playing`,
+        body: `${mode} mode`,
         categoryIdentifier: CATEGORY_ID,
         sticky: true,
+        autoDismiss: false,
         ...(Platform.OS === "android"
           ? { channelId: "metronome" }
           : {}),
@@ -103,7 +121,7 @@ export async function showPausedNotification(bpm: number, mode: string) {
       trigger: null,
     });
   } catch (e) {
-    console.warn("Update notification error:", e);
+    console.warn("Update notification BPM error:", e);
   }
 }
 
@@ -122,8 +140,12 @@ export function addNotificationActionListener(
 ) {
   return Notifications.addNotificationResponseReceivedListener((response) => {
     const actionId = response.actionIdentifier;
-    if (actionId === "TOGGLE_PLAY" || actionId === Notifications.DEFAULT_ACTION_IDENTIFIER) {
-      callback(actionId === "TOGGLE_PLAY" ? "TOGGLE_PLAY" : "OPEN_APP");
+    if (actionId === "TOGGLE_PLAY") {
+      callback("TOGGLE_PLAY");
+    } else if (actionId === "BPM_DOWN") {
+      callback("BPM_DOWN");
+    } else if (actionId === "BPM_UP") {
+      callback("BPM_UP");
     }
   });
 }
