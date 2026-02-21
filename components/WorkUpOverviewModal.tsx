@@ -386,6 +386,19 @@ export function WorkUpOverviewModal({
     setPracticeRooms((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
+  const completedGoals = useMemo(() => {
+    return goals.filter((g) => {
+      const progress = getGoalProgress(g);
+      return progress >= g.target;
+    });
+  }, [goals, getGoalProgress]);
+
+  const handleDismissCompletedGoal = useCallback(async (id: string) => {
+    const updated = goals.filter((g) => g.id !== id);
+    setGoals(updated);
+    await saveGoals(updated);
+  }, [goals]);
+
   const BEAT_COLOR = "#58A6FF";
   const BAR_COLOR = "#F0883E";
 
@@ -415,6 +428,26 @@ export function WorkUpOverviewModal({
               </View>
             ) : (
               <>
+                {completedGoals.length > 0 && completedGoals.map((goal) => {
+                  const goalColor = goal.type === "beat_mode_time" ? BEAT_COLOR : goal.type === "bar_mode_time" ? BAR_COLOR : goal.type === "room_time" ? ROOM_COLOR : C.accent;
+                  return (
+                    <Pressable
+                      key={`complete-${goal.id}`}
+                      style={[s.completedBanner, { borderColor: goalColor, backgroundColor: `${goalColor}12` }]}
+                      onPress={() => handleDismissCompletedGoal(goal.id)}
+                    >
+                      <Ionicons name="checkmark-circle" size={20} color={goalColor} />
+                      <View style={s.completedBannerInfo}>
+                        <Text style={[s.completedBannerTitle, { color: goalColor }]}>
+                          {goal.label} Complete!
+                        </Text>
+                        <Text style={s.completedBannerSub}>Tap to dismiss</Text>
+                      </View>
+                      <Ionicons name="close" size={16} color={Colors.textTertiary} />
+                    </Pressable>
+                  );
+                })}
+
                 {/* ── Goals (top) ── */}
                 <View style={s.card}>
                   <View style={s.cardHeader}>
@@ -844,6 +877,29 @@ const s = StyleSheet.create({
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 12,
     color: Colors.textSecondary,
+  },
+
+  completedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+  },
+  completedBannerInfo: {
+    flex: 1,
+    gap: 1,
+  },
+  completedBannerTitle: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 13,
+    letterSpacing: 0.2,
+  },
+  completedBannerSub: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 10,
+    color: Colors.textTertiary,
   },
 
   // Forms
