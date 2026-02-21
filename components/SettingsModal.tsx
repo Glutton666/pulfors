@@ -39,6 +39,8 @@ const HUE_COLORS = [
   "#0000FF", "#8000FF", "#FF00FF", "#FF0080", "#FF0000",
 ];
 
+type SettingsTab = "theme" | "sound";
+
 interface SettingsModalProps {
   visible: boolean;
   onClose: () => void;
@@ -58,6 +60,8 @@ interface SettingsModalProps {
   onTimerStopModeChange: (value: "immediate" | "end-of-cycle") => void;
   loggingEnabled: boolean;
   onLoggingEnabledChange: (val: boolean) => void;
+  username: string;
+  onUsernameChange: (val: string) => void;
 }
 
 const SOUND_SET_OPTIONS: { value: SoundSet; label: string; icon: string }[] = [
@@ -133,17 +137,27 @@ export function SettingsModal({
   onTimerStopModeChange,
   loggingEnabled,
   onLoggingEnabledChange,
+  username,
+  onUsernameChange,
 }: SettingsModalProps) {
   const { themeColor, customHex, setThemeColor, setCustomHex, colors: C } = useTheme();
   const insets = useSafeAreaInsets();
+  const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
   const [showCustomPicker, setShowCustomPicker] = useState(themeColor === "custom");
   const [hexInput, setHexInput] = useState(customHex);
+  const [localUsername, setLocalUsername] = useState(username);
   const hueTrackRef = useRef<View>(null);
   const hueTrackWidthRef = useRef(0);
   const trackWidthRef = useRef(0);
   const trackLeftRef = useRef(0);
   const lastHapticRef = useRef(volume);
   const previewIndexRef = useRef<Record<string, number>>({});
+
+  React.useEffect(() => {
+    if (visible) {
+      setLocalUsername(username);
+    }
+  }, [visible, username]);
 
   const classicStrong = useAudioPlayer(soundSets.classic.strong);
   const classicHigh = useAudioPlayer(soundSets.classic.high);
@@ -359,6 +373,345 @@ export function SettingsModal({
 
   const pct = Math.round(volume * 100);
 
+  const renderThemeTab = () => (
+    <>
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="color-palette-outline" size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>Theme Color</Text>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.themeScroll}
+        >
+          {PRESET_COLORS.map((opt) => {
+            const active = themeColor === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                testID={`theme-${opt.value}`}
+                onPress={() => {
+                  setThemeColor(opt.value);
+                  setShowCustomPicker(false);
+                  if (Platform.OS !== "web") {
+                    Haptics.selectionAsync();
+                  }
+                }}
+                style={[
+                  styles.themeChip,
+                  active && { borderColor: opt.color },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.themeDot,
+                    { backgroundColor: opt.color },
+                  ]}
+                />
+                {active && (
+                  <Ionicons name="checkmark" size={10} color={Colors.white} style={styles.themeCheck} />
+                )}
+              </Pressable>
+            );
+          })}
+          <Pressable
+            testID="theme-custom"
+            onPress={() => {
+              setShowCustomPicker(true);
+              setThemeColor("custom");
+              if (Platform.OS !== "web") {
+                Haptics.selectionAsync();
+              }
+            }}
+            style={[
+              styles.themeChip,
+              styles.customChip,
+              themeColor === "custom" && { borderColor: customHex },
+            ]}
+          >
+            {themeColor === "custom" ? (
+              <>
+                <View style={[styles.themeDot, { backgroundColor: customHex }]} />
+                <Ionicons name="checkmark" size={10} color={Colors.white} style={styles.themeCheck} />
+              </>
+            ) : (
+              <Ionicons name="color-wand-outline" size={18} color={Colors.textSecondary} />
+            )}
+          </Pressable>
+        </ScrollView>
+        {showCustomPicker && (
+          <View style={styles.customPickerContainer}>
+            <View
+              ref={hueTrackRef}
+              style={styles.hueTrackWrapper}
+              onLayout={(e) => { hueTrackWidthRef.current = e.nativeEvent.layout.width; }}
+              {...(Platform.OS !== "web" ? huePanResponder.panHandlers : {})}
+              {...(Platform.OS === "web" ? { onMouseDown: handleHueWebMouse } as any : {})}
+            >
+              <LinearGradient
+                colors={HUE_COLORS as any}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.hueTrack}
+              />
+              <View style={[styles.hueThumb, { backgroundColor: customHex, borderColor: Colors.white }]} />
+            </View>
+            <View style={styles.hexRow}>
+              <View style={[styles.hexPreview, { backgroundColor: customHex }]} />
+              <TextInput
+                style={[styles.hexInput, { borderColor: C.accent }]}
+                value={hexInput}
+                onChangeText={setHexInput}
+                onBlur={handleHexSubmit}
+                onSubmitEditing={handleHexSubmit}
+                placeholder="#FFFFFF"
+                placeholderTextColor={Colors.textTertiary}
+                maxLength={7}
+                autoCapitalize="characters"
+              />
+            </View>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="flash-outline" size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>Screen Flash</Text>
+        </View>
+        <TripleSelector value={flashMode} onChange={onFlashModeChange} accentColor={C.accent} accentDimColor={C.accentDim} />
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="phone-portrait-outline" size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>Haptic Feedback</Text>
+        </View>
+        <TripleSelector value={hapticMode} onChange={onHapticModeChange} accentColor={C.accent} accentDimColor={C.accentDim} />
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <MaterialCommunityIcons name="chart-line" size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>Activity Logging</Text>
+          <Switch
+            value={loggingEnabled}
+            onValueChange={onLoggingEnabledChange}
+            trackColor={{ false: Colors.surfaceLight, true: C.accentMuted }}
+            thumbColor={loggingEnabled ? C.accent : Colors.textSecondary}
+            style={{ transform: [{ scale: 0.85 }] }}
+          />
+        </View>
+        <Text style={styles.offsetHint}>
+          Track practice sessions and feature usage
+        </Text>
+      </View>
+    </>
+  );
+
+  const renderSoundTab = () => (
+    <>
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name={volumeIcon as any} size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>Volume</Text>
+          <Text style={[styles.sectionValue, { color: C.accent }]}>{pct}%</Text>
+        </View>
+        <View
+          ref={trackRef}
+          style={styles.sliderContainer}
+          onLayout={onTrackLayout}
+          {...nativePanHandlers}
+          {...(Platform.OS === "web" ? { onMouseDown: handleWebMouse } as any : {})}
+        >
+          <View style={styles.sliderTrack}>
+            <View
+              style={[
+                styles.sliderFill,
+                { width: `${volume * 100}%` as any, backgroundColor: C.accent },
+              ]}
+            />
+          </View>
+          <View
+            style={[
+              styles.sliderThumb,
+              { left: `${volume * 100}%` as any, backgroundColor: C.accent },
+            ]}
+          />
+        </View>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <MaterialCommunityIcons name="music-note-eighth" size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>Sound Set</Text>
+        </View>
+        <View style={styles.soundSetGrid}>
+          {SOUND_SET_OPTIONS.map((opt) => {
+            const active = soundSet === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                style={[
+                  styles.soundSetBtn,
+                  active && [styles.soundSetBtnActive, { borderColor: C.accent, backgroundColor: C.accentDim }],
+                ]}
+                onPress={() => {
+                  onSoundSetChange(opt.value);
+                  playSoundPreview(opt.value);
+                  if (Platform.OS !== "web") {
+                    Haptics.selectionAsync();
+                  }
+                }}
+              >
+                <MaterialCommunityIcons
+                  name={opt.icon as any}
+                  size={20}
+                  color={active ? C.accent : Colors.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.soundSetLabel,
+                    active && [styles.soundSetLabelActive, { color: C.accent }],
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="timer-outline" size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>Audio Offset</Text>
+          <Text style={[styles.sectionValue, { color: C.accent }]}>
+            {audioOffsetMs > 0 ? "+" : ""}{audioOffsetMs}ms
+          </Text>
+        </View>
+        <View style={styles.offsetRow}>
+          <Pressable
+            style={styles.offsetBtn}
+            onPress={() => {
+              const next = Math.max(-100, audioOffsetMs - 5);
+              onAudioOffsetChange(next);
+              if (Platform.OS !== "web") Haptics.selectionAsync();
+            }}
+          >
+            <Ionicons name="remove" size={18} color={Colors.text} />
+          </Pressable>
+          <Pressable
+            style={styles.offsetBtn}
+            onPress={() => {
+              const next = Math.max(-100, audioOffsetMs - 1);
+              onAudioOffsetChange(next);
+              if (Platform.OS !== "web") Haptics.selectionAsync();
+            }}
+          >
+            <Text style={styles.offsetBtnText}>-1</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.offsetBtn, styles.offsetResetBtn]}
+            onPress={() => {
+              onAudioOffsetChange(0);
+              if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
+          >
+            <Text style={styles.offsetResetText}>0</Text>
+          </Pressable>
+          <Pressable
+            style={styles.offsetBtn}
+            onPress={() => {
+              const next = Math.min(100, audioOffsetMs + 1);
+              onAudioOffsetChange(next);
+              if (Platform.OS !== "web") Haptics.selectionAsync();
+            }}
+          >
+            <Text style={styles.offsetBtnText}>+1</Text>
+          </Pressable>
+          <Pressable
+            style={styles.offsetBtn}
+            onPress={() => {
+              const next = Math.min(100, audioOffsetMs + 5);
+              onAudioOffsetChange(next);
+              if (Platform.OS !== "web") Haptics.selectionAsync();
+            }}
+          >
+            <Ionicons name="add" size={18} color={Colors.text} />
+          </Pressable>
+        </View>
+        <Text style={styles.offsetHint}>
+          - = audio earlier / + = audio later
+        </Text>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="stop-circle-outline" size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>Timer Stop</Text>
+        </View>
+        <View style={styles.tripleRow}>
+          {([
+            { value: "end-of-cycle" as const, label: "End of Cycle" },
+            { value: "immediate" as const, label: "Immediate" },
+          ]).map((opt) => {
+            const active = timerStopMode === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                style={[styles.tripleBtn, active && [styles.tripleBtnActive, { borderColor: C.accent, backgroundColor: C.accentDim }]]}
+                onPress={() => {
+                  onTimerStopModeChange(opt.value);
+                  if (Platform.OS !== "web") Haptics.selectionAsync();
+                }}
+              >
+                <Text style={[styles.tripleBtnText, active && [styles.tripleBtnTextActive, { color: C.accent }]]}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.offsetHint}>
+          {timerStopMode === "end-of-cycle"
+            ? "Stops after current measure ends"
+            : "Stops immediately when timer expires"}
+        </Text>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="play-circle-outline" size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>Background Play</Text>
+          <Switch
+            value={backgroundPlay}
+            onValueChange={onBackgroundPlayChange}
+            trackColor={{ false: Colors.surfaceLight, true: C.accentMuted }}
+            thumbColor={backgroundPlay ? C.accent : Colors.textSecondary}
+            style={{ transform: [{ scale: 0.85 }] }}
+          />
+        </View>
+      </View>
+    </>
+  );
+
   return (
     <Modal
       visible={visible}
@@ -390,334 +743,60 @@ export function SettingsModal({
               </Pressable>
             </View>
 
-            <View style={styles.section}>
+            <View style={styles.usernameSection}>
               <View style={styles.sectionHeader}>
-                <Ionicons name="color-palette-outline" size={18} color={C.accent} />
-                <Text style={styles.sectionLabel}>Theme Color</Text>
+                <Ionicons name="person-outline" size={18} color={C.accent} />
+                <Text style={styles.sectionLabel}>Username</Text>
               </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.themeScroll}
+              <TextInput
+                style={[styles.usernameInput, { borderColor: C.accentMuted }]}
+                value={localUsername}
+                onChangeText={setLocalUsername}
+                onBlur={() => onUsernameChange(localUsername)}
+                onSubmitEditing={() => onUsernameChange(localUsername)}
+                placeholder="Enter your name"
+                placeholderTextColor={Colors.textTertiary}
+                maxLength={30}
+                testID="settings-username"
+              />
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.tabBar}>
+              <Pressable
+                style={[styles.tabBtn, activeTab === "theme" && [styles.tabBtnActive, { borderColor: C.accent }]]}
+                onPress={() => {
+                  setActiveTab("theme");
+                  if (Platform.OS !== "web") Haptics.selectionAsync();
+                }}
               >
-                {PRESET_COLORS.map((opt) => {
-                  const active = themeColor === opt.value;
-                  return (
-                    <Pressable
-                      key={opt.value}
-                      testID={`theme-${opt.value}`}
-                      onPress={() => {
-                        setThemeColor(opt.value);
-                        setShowCustomPicker(false);
-                        if (Platform.OS !== "web") {
-                          Haptics.selectionAsync();
-                        }
-                      }}
-                      style={[
-                        styles.themeChip,
-                        active && { borderColor: opt.color },
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.themeDot,
-                          { backgroundColor: opt.color },
-                        ]}
-                      />
-                      {active && (
-                        <Ionicons name="checkmark" size={10} color={Colors.white} style={styles.themeCheck} />
-                      )}
-                    </Pressable>
-                  );
-                })}
-                <Pressable
-                  testID="theme-custom"
-                  onPress={() => {
-                    setShowCustomPicker(true);
-                    setThemeColor("custom");
-                    if (Platform.OS !== "web") {
-                      Haptics.selectionAsync();
-                    }
-                  }}
-                  style={[
-                    styles.themeChip,
-                    styles.customChip,
-                    themeColor === "custom" && { borderColor: customHex },
-                  ]}
-                >
-                  {themeColor === "custom" ? (
-                    <>
-                      <View style={[styles.themeDot, { backgroundColor: customHex }]} />
-                      <Ionicons name="checkmark" size={10} color={Colors.white} style={styles.themeCheck} />
-                    </>
-                  ) : (
-                    <Ionicons name="color-wand-outline" size={18} color={Colors.textSecondary} />
-                  )}
-                </Pressable>
-              </ScrollView>
-              {showCustomPicker && (
-                <View style={styles.customPickerContainer}>
-                  <View
-                    ref={hueTrackRef}
-                    style={styles.hueTrackWrapper}
-                    onLayout={(e) => { hueTrackWidthRef.current = e.nativeEvent.layout.width; }}
-                    {...(Platform.OS !== "web" ? huePanResponder.panHandlers : {})}
-                    {...(Platform.OS === "web" ? { onMouseDown: handleHueWebMouse } as any : {})}
-                  >
-                    <LinearGradient
-                      colors={HUE_COLORS as any}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.hueTrack}
-                    />
-                    <View style={[styles.hueThumb, { backgroundColor: customHex, borderColor: Colors.white }]} />
-                  </View>
-                  <View style={styles.hexRow}>
-                    <View style={[styles.hexPreview, { backgroundColor: customHex }]} />
-                    <TextInput
-                      style={[styles.hexInput, { borderColor: C.accent }]}
-                      value={hexInput}
-                      onChangeText={setHexInput}
-                      onBlur={handleHexSubmit}
-                      onSubmitEditing={handleHexSubmit}
-                      placeholder="#FFFFFF"
-                      placeholderTextColor={Colors.textTertiary}
-                      maxLength={7}
-                      autoCapitalize="characters"
-                    />
-                  </View>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name={volumeIcon as any} size={18} color={C.accent} />
-                <Text style={styles.sectionLabel}>Volume</Text>
-                <Text style={[styles.sectionValue, { color: C.accent }]}>{pct}%</Text>
-              </View>
-              <View
-                ref={trackRef}
-                style={styles.sliderContainer}
-                onLayout={onTrackLayout}
-                {...nativePanHandlers}
-                {...(Platform.OS === "web" ? { onMouseDown: handleWebMouse } as any : {})}
+                <Ionicons
+                  name="color-palette-outline"
+                  size={16}
+                  color={activeTab === "theme" ? C.accent : Colors.textSecondary}
+                />
+                <Text style={[styles.tabBtnText, activeTab === "theme" && { color: C.accent }]}>Theme</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.tabBtn, activeTab === "sound" && [styles.tabBtnActive, { borderColor: C.accent }]]}
+                onPress={() => {
+                  setActiveTab("sound");
+                  if (Platform.OS !== "web") Haptics.selectionAsync();
+                }}
               >
-                <View style={styles.sliderTrack}>
-                  <View
-                    style={[
-                      styles.sliderFill,
-                      { width: `${volume * 100}%` as any, backgroundColor: C.accent },
-                    ]}
-                  />
-                </View>
-                <View
-                  style={[
-                    styles.sliderThumb,
-                    { left: `${volume * 100}%` as any, backgroundColor: C.accent },
-                  ]}
+                <Ionicons
+                  name="musical-notes-outline"
+                  size={16}
+                  color={activeTab === "sound" ? C.accent : Colors.textSecondary}
                 />
-              </View>
+                <Text style={[styles.tabBtnText, activeTab === "sound" && { color: C.accent }]}>Sound</Text>
+              </Pressable>
             </View>
 
             <View style={styles.divider} />
 
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="play-circle-outline" size={18} color={C.accent} />
-                <Text style={styles.sectionLabel}>Background Play</Text>
-                <Switch
-                  value={backgroundPlay}
-                  onValueChange={onBackgroundPlayChange}
-                  trackColor={{ false: Colors.surfaceLight, true: C.accentMuted }}
-                  thumbColor={backgroundPlay ? C.accent : Colors.textSecondary}
-                  style={{ transform: [{ scale: 0.85 }] }}
-                />
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons name="music-note-eighth" size={18} color={C.accent} />
-                <Text style={styles.sectionLabel}>Sound Set</Text>
-              </View>
-              <View style={styles.soundSetGrid}>
-                {SOUND_SET_OPTIONS.map((opt) => {
-                  const active = soundSet === opt.value;
-                  return (
-                    <Pressable
-                      key={opt.value}
-                      style={[
-                        styles.soundSetBtn,
-                        active && [styles.soundSetBtnActive, { borderColor: C.accent, backgroundColor: C.accentDim }],
-                      ]}
-                      onPress={() => {
-                        onSoundSetChange(opt.value);
-                        playSoundPreview(opt.value);
-                        if (Platform.OS !== "web") {
-                          Haptics.selectionAsync();
-                        }
-                      }}
-                    >
-                      <MaterialCommunityIcons
-                        name={opt.icon as any}
-                        size={20}
-                        color={active ? C.accent : Colors.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          styles.soundSetLabel,
-                          active && [styles.soundSetLabelActive, { color: C.accent }],
-                        ]}
-                      >
-                        {opt.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="flash-outline" size={18} color={C.accent} />
-                <Text style={styles.sectionLabel}>Screen Flash</Text>
-              </View>
-              <TripleSelector value={flashMode} onChange={onFlashModeChange} accentColor={C.accent} accentDimColor={C.accentDim} />
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="phone-portrait-outline" size={18} color={C.accent} />
-                <Text style={styles.sectionLabel}>Haptic Feedback</Text>
-              </View>
-              <TripleSelector value={hapticMode} onChange={onHapticModeChange} accentColor={C.accent} accentDimColor={C.accentDim} />
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="timer-outline" size={18} color={C.accent} />
-                <Text style={styles.sectionLabel}>Audio Offset</Text>
-                <Text style={[styles.sectionValue, { color: C.accent }]}>
-                  {audioOffsetMs > 0 ? "+" : ""}{audioOffsetMs}ms
-                </Text>
-              </View>
-              <View style={styles.offsetRow}>
-                <Pressable
-                  style={styles.offsetBtn}
-                  onPress={() => {
-                    const next = Math.max(-100, audioOffsetMs - 5);
-                    onAudioOffsetChange(next);
-                    if (Platform.OS !== "web") Haptics.selectionAsync();
-                  }}
-                >
-                  <Ionicons name="remove" size={18} color={Colors.text} />
-                </Pressable>
-                <Pressable
-                  style={styles.offsetBtn}
-                  onPress={() => {
-                    const next = Math.max(-100, audioOffsetMs - 1);
-                    onAudioOffsetChange(next);
-                    if (Platform.OS !== "web") Haptics.selectionAsync();
-                  }}
-                >
-                  <Text style={styles.offsetBtnText}>-1</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.offsetBtn, styles.offsetResetBtn]}
-                  onPress={() => {
-                    onAudioOffsetChange(0);
-                    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }}
-                >
-                  <Text style={styles.offsetResetText}>0</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.offsetBtn}
-                  onPress={() => {
-                    const next = Math.min(100, audioOffsetMs + 1);
-                    onAudioOffsetChange(next);
-                    if (Platform.OS !== "web") Haptics.selectionAsync();
-                  }}
-                >
-                  <Text style={styles.offsetBtnText}>+1</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.offsetBtn}
-                  onPress={() => {
-                    const next = Math.min(100, audioOffsetMs + 5);
-                    onAudioOffsetChange(next);
-                    if (Platform.OS !== "web") Haptics.selectionAsync();
-                  }}
-                >
-                  <Ionicons name="add" size={18} color={Colors.text} />
-                </Pressable>
-              </View>
-              <Text style={styles.offsetHint}>
-                - = audio earlier / + = audio later
-              </Text>
-            </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionLabel}>Timer Stop</Text>
-            </View>
-            <View style={styles.tripleRow}>
-              {([
-                { value: "end-of-cycle" as const, label: "End of Cycle" },
-                { value: "immediate" as const, label: "Immediate" },
-              ]).map((opt) => {
-                const active = timerStopMode === opt.value;
-                return (
-                  <Pressable
-                    key={opt.value}
-                    style={[styles.tripleBtn, active && [styles.tripleBtnActive, { borderColor: C.accent, backgroundColor: C.accentDim }]]}
-                    onPress={() => {
-                      onTimerStopModeChange(opt.value);
-                      if (Platform.OS !== "web") Haptics.selectionAsync();
-                    }}
-                  >
-                    <Text style={[styles.tripleBtnText, active && [styles.tripleBtnTextActive, { color: C.accent }]]}>
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <Text style={styles.offsetHint}>
-              {timerStopMode === "end-of-cycle"
-                ? "Stops after current measure ends"
-                : "Stops immediately when timer expires"}
-            </Text>
-          </View>
-
-            <View style={styles.divider} />
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <MaterialCommunityIcons name="chart-line" size={18} color={C.accent} />
-                <Text style={styles.sectionLabel}>Activity Logging</Text>
-                <Switch
-                  value={loggingEnabled}
-                  onValueChange={onLoggingEnabledChange}
-                  trackColor={{ false: Colors.surfaceLight, true: C.accentMuted }}
-                  thumbColor={loggingEnabled ? C.accent : Colors.textSecondary}
-                  style={{ transform: [{ scale: 0.85 }] }}
-                />
-              </View>
-              <Text style={styles.offsetHint}>
-                Track practice sessions and feature usage
-              </Text>
-            </View>
+            {activeTab === "theme" ? renderThemeTab() : renderSoundTab()}
           </Pressable>
         </ScrollView>
       </Pressable>
@@ -745,13 +824,51 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 16,
   },
   title: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 18,
     color: Colors.text,
     letterSpacing: 0.5,
+  },
+  usernameSection: {
+    gap: 10,
+  },
+  usernameInput: {
+    height: 42,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 14,
+    color: Colors.text,
+    backgroundColor: Colors.surfaceLight,
+  },
+  tabBar: {
+    flexDirection: "row",
+    gap: 10,
+    marginVertical: 4,
+  },
+  tabBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceLight,
+  },
+  tabBtnActive: {
+    backgroundColor: Colors.accentDim,
+  },
+  tabBtnText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 13,
+    color: Colors.textSecondary,
   },
   section: {
     gap: 10,

@@ -123,6 +123,7 @@ export default function MetronomeScreen() {
   const [hapticMode, setHapticMode] = useState<HapticMode>("all");
   const [audioOffsetMs, setAudioOffsetMs] = useState(0);
   const [timerStopMode, setTimerStopMode] = useState<"immediate" | "end-of-cycle">("end-of-cycle");
+  const [username, setUsername] = useState("");
   const [showMenu, setShowMenu] = useState(false);
   const [showTuner, setShowTuner] = useState(false);
   const [showSignalGen, setShowSignalGen] = useState(false);
@@ -269,6 +270,9 @@ export default function MetronomeScreen() {
       }
       if (settings.timerStopMode) {
         setTimerStopMode(settings.timerStopMode);
+      }
+      if (settings.username) {
+        setUsername(settings.username);
       }
 
       setIsLoaded(true);
@@ -681,6 +685,14 @@ export default function MetronomeScreen() {
     (mode: "immediate" | "end-of-cycle") => {
       setTimerStopMode(mode);
       persistSettings({ timerStopMode: mode });
+    },
+    [persistSettings]
+  );
+
+  const updateUsername = useCallback(
+    (name: string) => {
+      setUsername(name);
+      persistSettings({ username: name });
     },
     [persistSettings]
   );
@@ -1188,6 +1200,8 @@ export default function MetronomeScreen() {
           setLoggingEnabled(val);
           saveLoggingEnabled(val);
         }}
+        username={username}
+        onUsernameChange={updateUsername}
       />
 
       {completedGoalPopups.length > 0 && !showMenu && !showTuner && !showSignalGen && !showPracticeBook && !showWorkUp && !showSettings && (
