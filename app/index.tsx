@@ -102,7 +102,7 @@ export default function MetronomeScreen() {
     if (mixModeRef.current) {
       mixModeRef.current = false;
       if (Platform.OS === "ios") {
-        setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false, interruptionMode: "duckOthers" }).catch(() => {});
+        setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false, interruptionMode: "mixWithOthers" }).catch(() => {});
       }
     }
   }, []);
