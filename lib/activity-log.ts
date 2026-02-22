@@ -5,6 +5,12 @@ const ACTIVITY_LOG_KEY = "metronome_activity_log";
 const ACTIVITY_SETTINGS_KEY = "metronome_activity_settings";
 const GOALS_KEY = "metronome_goals";
 
+export interface AccuracyData {
+  avgOffsetMs: number;
+  accuracyPercent: number;
+  hitCount: number;
+}
+
 export interface PracticeSessionData {
   bpm: number;
   mode: "dial" | "bar";
@@ -12,6 +18,7 @@ export interface PracticeSessionData {
   barConfig?: any;
   practiceNoteId?: string;
   practiceNoteLabel?: string;
+  accuracy?: AccuracyData;
 }
 
 export interface FeatureUsageData {
