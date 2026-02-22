@@ -1808,6 +1808,11 @@ export default function MetronomeScreen() {
         trackingRoomName={trackingRoomName}
         onStartRoomTracking={startRoomTracking}
         onStopRoomTracking={stopRoomTracking}
+        rhythmCalibrationMs={rhythmCalibrationMs}
+        onRhythmCalibrationChange={(val) => {
+          setRhythmCalibrationMs(val);
+          persistSettings({ rhythmCalibrationMs: val });
+        }}
       />
 
       {completedGoalPopups.length > 0 && !showMenu && !showTuner && !showSignalGen && !showPracticeBook && !showWorkUp && !showSettings && (
