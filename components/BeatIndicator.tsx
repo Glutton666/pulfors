@@ -74,7 +74,7 @@ function DialBeatDot({
   const beatBorder = useSharedValue(
     isMute ? Colors.textSecondary : "transparent"
   );
-  const beatShadow = useSharedValue(0);
+  const beatOpacity = useSharedValue(isStrong ? 0.65 : 1);
 
   const handlePress = useCallback(() => {
     popScale.value = withSequence(
@@ -93,15 +93,10 @@ function DialBeatDot({
         );
         beatBg.value = withTiming("rgba(72, 79, 88, 0.35)", { duration: 50 });
         beatBorder.value = withTiming(Colors.textSecondary, { duration: 50 });
-        beatShadow.value = withSequence(
-          withTiming(0.3, { duration: 50 }),
-          withTiming(0, { duration: 300 })
-        );
       } else {
         beatScale.value = withTiming(1, { duration: 150 });
         beatBg.value = withTiming("transparent", { duration: 150 });
         beatBorder.value = withTiming(Colors.textSecondary, { duration: 150 });
-        beatShadow.value = withTiming(0, { duration: 150 });
       }
     } else if (isActive) {
       beatScale.value = withSequence(
@@ -113,10 +108,7 @@ function DialBeatDot({
         { duration: 50 }
       );
       beatBorder.value = withTiming(isStrong ? C.accent : "transparent", { duration: 50 });
-      beatShadow.value = withSequence(
-        withTiming(isStrong ? 1.5 : 1, { duration: 50 }),
-        withTiming(0, { duration: 300 })
-      );
+      beatOpacity.value = withTiming(1, { duration: 50 });
     } else {
       beatScale.value = withTiming(1, { duration: 150 });
       beatBg.value = withTiming(
@@ -124,7 +116,7 @@ function DialBeatDot({
         { duration: 150 }
       );
       beatBorder.value = withTiming(isStrong ? C.accent : "transparent", { duration: 150 });
-      beatShadow.value = withTiming(0, { duration: 150 });
+      beatOpacity.value = withTiming(isStrong ? 0.65 : 1, { duration: 150 });
     }
   }, [isActive, beatType, C.accent, C.accentMuted]);
 
@@ -132,7 +124,7 @@ function DialBeatDot({
     transform: [{ scale: beatScale.value * popScale.value }],
     backgroundColor: beatBg.value,
     borderColor: beatBorder.value,
-    shadowOpacity: beatShadow.value,
+    opacity: beatOpacity.value,
   }));
 
   return (
@@ -157,14 +149,8 @@ function DialBeatDot({
               height: size,
               borderRadius: size / 2,
               overflow: "hidden",
-              opacity: isActive ? 1 : 0.65,
             },
             animatedStyle,
-            {
-              shadowColor: C.accent,
-              shadowOffset: { width: 0, height: 0 },
-              shadowRadius: isActive ? 16 : 0,
-            },
           ]}
         >
           <LinearGradient
@@ -193,11 +179,6 @@ function DialBeatDot({
               borderColor: isMute ? Colors.textSecondary : "transparent",
             },
             animatedStyle,
-            {
-              shadowColor: isAccent ? C.accent : Colors.text,
-              shadowOffset: { width: 0, height: 0 },
-              shadowRadius: isActive ? 16 : 0,
-            },
           ]}
         />
       )}
@@ -841,12 +822,12 @@ export function BeatIndicator({
   const rowH = BAR_HEIGHT + 1 + barGap;
   const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
   const copyHeight = beatsPerMeasure * rowH;
-  const [activeCopy, setActiveCopy] = useState(2);
-  const activeCopyRef = useRef(2);
+  const [activeCopy, setActiveCopy] = useState(1);
+  const activeCopyRef = useRef(1);
   const barPrevBeatRef = useRef(-1);
 
-  const NUM_COPIES = 5;
-  const CENTER_COPY = 2;
+  const NUM_COPIES = 3;
+  const CENTER_COPY = 1;
 
   useEffect(() => {
     if (!isPlaying) {

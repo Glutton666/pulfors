@@ -42,6 +42,7 @@ interface ScheduledTick {
 
 export class MetronomeEngine {
   private timerId: ReturnType<typeof setTimeout> | null = null;
+  private rafId: number | null = null;
   private isRunning = false;
   private bpm = 120;
   private beatsPerMeasure = 4;
@@ -403,14 +404,40 @@ export class MetronomeEngine {
       if (nextTick) {
         const nextAbsolute = this.measureStartTime + nextTick.time;
         const wait = nextAbsolute - performance.now();
-        if (wait > 20) {
-          this.timerId = setTimeout(this.loop, wait - 10);
+        if (wait > 50) {
+          this.timerId = setTimeout(this.loop, Math.min(wait - 30, 40));
         } else {
-          this.timerId = setTimeout(this.loop, 1);
+          this.scheduleRAF();
         }
       }
     }
   };
+
+  private rafLoop = () => {
+    if (!this.isRunning) return;
+    this.loop();
+    if (this.isRunning && this.rafId !== null) {
+      this.rafId = null;
+    }
+  };
+
+  private scheduleRAF() {
+    if (this.rafId !== null) return;
+    if (typeof requestAnimationFrame !== "undefined") {
+      this.rafId = requestAnimationFrame(this.rafLoop);
+    } else {
+      this.timerId = setTimeout(this.loop, 1);
+    }
+  }
+
+  private cancelRAF() {
+    if (this.rafId !== null) {
+      if (typeof cancelAnimationFrame !== "undefined") {
+        cancelAnimationFrame(this.rafId);
+      }
+      this.rafId = null;
+    }
+  }
 
   start(startFromBeat?: number) {
     if (this.isRunning) return;
@@ -448,6 +475,7 @@ export class MetronomeEngine {
       clearTimeout(this.timerId);
       this.timerId = null;
     }
+    this.cancelRAF();
     this.currentBeat = 0;
     this.currentSubBeat = 0;
     this.schedule = [];

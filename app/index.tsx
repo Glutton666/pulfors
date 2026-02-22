@@ -108,6 +108,7 @@ export default function MetronomeScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(-1);
   const [activeSubNote, setActiveSubNote] = useState(-1);
+  const activeSubNoteRef = useRef(-1);
   const [subdivisionPattern, setSubdivisionPattern] = useState<BeatType[]>([
     "accent",
   ]);
@@ -745,20 +746,39 @@ export default function MetronomeScreen() {
     const engine = engineRef.current;
     if (!engine) return;
 
+    let beatRafPending = false;
+    let pendingBeat = -1;
+    let pendingAccent = false;
     engine.setOnBeat((beat: number, isAccent: boolean) => {
-      setCurrentBeat(beat);
-      const fm = flashModeRef.current;
-      const shouldFlash = fm === "all" || (fm === "accent" && isAccent);
-      if (shouldFlash) {
-        flashOpacity.value = withSequence(
-          withTiming(0.12, { duration: 50 }),
-          withTiming(0, { duration: 250, easing: Easing.out(Easing.quad) })
-        );
+      pendingBeat = beat;
+      pendingAccent = isAccent;
+      if (!beatRafPending) {
+        beatRafPending = true;
+        requestAnimationFrame(() => {
+          beatRafPending = false;
+          setCurrentBeat(pendingBeat);
+          const fm = flashModeRef.current;
+          const shouldFlash = fm === "all" || (fm === "accent" && pendingAccent);
+          if (shouldFlash) {
+            flashOpacity.value = withSequence(
+              withTiming(0.12, { duration: 50 }),
+              withTiming(0, { duration: 250, easing: Easing.out(Easing.quad) })
+            );
+          }
+        });
       }
     });
 
-    engine.setOnSubBeat((beat: number, subBeat: number) => {
-      setActiveSubNote(subBeat);
+    let subBeatRafPending = false;
+    engine.setOnSubBeat((_beat: number, subBeat: number) => {
+      activeSubNoteRef.current = subBeat;
+      if (!subBeatRafPending) {
+        subBeatRafPending = true;
+        requestAnimationFrame(() => {
+          subBeatRafPending = false;
+          setActiveSubNote(activeSubNoteRef.current);
+        });
+      }
     });
   }, [flashOpacity]);
 
