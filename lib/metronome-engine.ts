@@ -183,6 +183,14 @@ export class MetronomeEngine {
     return this.bpm;
   }
 
+  getScheduleInfo(): { ticks: { time: number; type: BeatType; beat: number; subBeat: number; repeatIteration: number }[]; durationMs: number } {
+    const ticks = this.buildSchedule();
+    return {
+      ticks: ticks.map(t => ({ time: t.time, type: t.type, beat: t.beat, subBeat: t.subBeat, repeatIteration: t.repeatIteration })),
+      durationMs: this.measureDurationMs,
+    };
+  }
+
   getIsRunning() {
     return this.isRunning;
   }
