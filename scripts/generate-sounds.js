@@ -50,6 +50,14 @@ function normalize(samples) {
   return samples;
 }
 
+function fadeIn(samples, fadeMs) {
+  const fadeSamples = Math.floor(SAMPLE_RATE * fadeMs / 1000);
+  for (let i = 0; i < fadeSamples && i < samples.length; i++) {
+    samples[i] *= i / fadeSamples;
+  }
+  return samples;
+}
+
 function fadeOut(samples, fadeMs) {
   const fadeSamples = Math.floor(SAMPLE_RATE * fadeMs / 1000);
   const start = samples.length - fadeSamples;
@@ -75,7 +83,7 @@ function generateClassicHigh() {
     s += Math.sin(2 * Math.PI * f0 * 0.5 * t) * 0.4;
     samples[i] = s * env;
   }
-  return fadeOut(normalize(samples), 2);
+  return fadeIn(fadeOut(normalize(samples), 2), 0.8);
 }
 
 function generateClassicLow() {
@@ -93,7 +101,7 @@ function generateClassicLow() {
     s += Math.sin(2 * Math.PI * f0 * 0.5 * t) * 0.35;
     samples[i] = s * env;
   }
-  return fadeOut(normalize(samples), 2);
+  return fadeIn(fadeOut(normalize(samples), 2), 0.6);
 }
 
 function generateClassicStrong() {
@@ -112,7 +120,7 @@ function generateClassicStrong() {
     s += Math.sin(2 * Math.PI * f0 * 4.0 * t) * 0.3;
     samples[i] = s * env;
   }
-  return fadeOut(normalize(samples), 2);
+  return fadeIn(fadeOut(normalize(samples), 2), 0.8);
 }
 
 function generateWoodblockHigh() {
@@ -130,7 +138,7 @@ function generateWoodblockHigh() {
     s += Math.sin(2 * Math.PI * f1 * 2.8 * t) * 0.4;
     samples[i] = s * env;
   }
-  return fadeOut(normalize(samples), 2);
+  return fadeIn(fadeOut(normalize(samples), 2), 1.0);
 }
 
 function generateWoodblockLow() {
@@ -148,7 +156,7 @@ function generateWoodblockLow() {
     s += Math.sin(2 * Math.PI * f1 * 2.5 * t) * 0.3;
     samples[i] = s * env;
   }
-  return fadeOut(normalize(samples), 2);
+  return fadeIn(fadeOut(normalize(samples), 2), 1.0);
 }
 
 function generateWoodblockStrong() {
@@ -167,7 +175,7 @@ function generateWoodblockStrong() {
     s += Math.sin(2 * Math.PI * f1 * 4.0 * t) * 0.3;
     samples[i] = s * env;
   }
-  return fadeOut(normalize(samples), 2);
+  return fadeIn(fadeOut(normalize(samples), 2), 1.0);
 }
 
 function generateDigitalHigh() {
@@ -185,7 +193,7 @@ function generateDigitalHigh() {
     s += Math.sin(2 * Math.PI * freq * 0.5 * t) * 0.4;
     samples[i] = s * env;
   }
-  return fadeOut(normalize(samples), 1);
+  return fadeIn(fadeOut(normalize(samples), 1), 0.4);
 }
 
 function generateDigitalLow() {
@@ -203,7 +211,7 @@ function generateDigitalLow() {
     s += Math.sin(2 * Math.PI * freq * 0.5 * t) * 0.35;
     samples[i] = s * env;
   }
-  return fadeOut(normalize(samples), 1);
+  return fadeIn(fadeOut(normalize(samples), 1), 0.3);
 }
 
 function generateDigitalStrong() {
@@ -222,7 +230,7 @@ function generateDigitalStrong() {
     s += Math.sin(2 * Math.PI * freq * 4.0 * t) * 0.25;
     samples[i] = s * env;
   }
-  return fadeOut(normalize(samples), 1);
+  return fadeIn(fadeOut(normalize(samples), 1), 0.5);
 }
 
 function generateRimshotHigh() {
@@ -240,7 +248,7 @@ function generateRimshotHigh() {
     s += Math.sin(2 * Math.PI * 3200 * t) * 0.2;
     samples[i] = s * env;
   }
-  return fadeOut(normalize(samples), 2);
+  return fadeIn(fadeOut(normalize(samples), 2), 1.0);
 }
 
 function generateRimshotLow() {
@@ -258,7 +266,7 @@ function generateRimshotLow() {
     s += Math.sin(2 * Math.PI * 2600 * t) * 0.15;
     samples[i] = s * env;
   }
-  return fadeOut(normalize(samples), 2);
+  return fadeIn(fadeOut(normalize(samples), 2), 1.0);
 }
 
 function generateRimshotStrong() {
@@ -277,7 +285,7 @@ function generateRimshotStrong() {
     s += Math.sin(2 * Math.PI * 4500 * t) * 0.15;
     samples[i] = s * env;
   }
-  return fadeOut(normalize(samples), 2);
+  return fadeIn(fadeOut(normalize(samples), 2), 1.2);
 }
 
 const outDir = path.join(__dirname, "..", "assets", "sounds");
