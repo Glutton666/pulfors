@@ -60,6 +60,7 @@ export class MetronomeEngine {
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
   private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
+  private preRenderedAudio = false;
 
   private schedule: ScheduledTick[] = [];
   private scheduleIndex = 0;
@@ -82,6 +83,10 @@ export class MetronomeEngine {
 
   setAudioOffsetMs(offset: number) {
     this.audioOffsetMs = Math.max(-100, Math.min(100, offset));
+  }
+
+  setPreRenderedAudio(enabled: boolean) {
+    this.preRenderedAudio = enabled;
   }
 
   setOnBeat(callback: (beat: number, isAccent: boolean) => void) {
@@ -343,7 +348,9 @@ export class MetronomeEngine {
 
     fireVisual();
 
-    if (offset > 0) {
+    if (this.preRenderedAudio) {
+      fireHaptic();
+    } else if (offset > 0) {
       fireHaptic();
       setTimeout(playAudio, offset);
     } else if (offset < 0) {

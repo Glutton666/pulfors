@@ -63,6 +63,14 @@ import type { NoteSampleMap } from "@/lib/note-samples";
 import { NoteRecorderModal } from "@/components/NoteRecorderModal";
 import { AudioModule, createAudioPlayer } from "expo-audio";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
+import {
+  decodeAsset,
+  decodeSampleFile,
+  parseTrimInfo,
+  renderMeasure,
+  saveRenderedWav,
+} from "@/lib/audio-renderer";
+import type { ClickPCMs, SamplePCMEntry, TickInfo } from "@/lib/audio-renderer";
 import type { ActivityLog, Goal, PracticeSessionData, PracticeRoomVisitData } from "@/lib/activity-log";
 import {
   loadPracticeRooms,
@@ -164,6 +172,11 @@ export default function MetronomeScreen() {
   const noteSampleSoundsRef = useRef<Record<string, ExpoAudioPlayer>>({});
   const samplePlayStateRef = useRef<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>({});
   const [recorderTarget, setRecorderTarget] = useState<{ beat: number; sub: number } | null>(null);
+
+  const renderedPlayerRef = useRef<ExpoAudioPlayer | null>(null);
+  const clickPCMCacheRef = useRef<Record<string, ClickPCMs>>({});
+  const samplePCMCacheRef = useRef<Map<string, SamplePCMEntry>>(new Map());
+  const renderedUrlRef = useRef<string | null>(null);
 
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -416,6 +429,10 @@ export default function MetronomeScreen() {
 
     return () => {
       engine.cleanup();
+      if (renderedPlayerRef.current) {
+        try { renderedPlayerRef.current.release(); } catch {}
+        renderedPlayerRef.current = null;
+      }
       dismissNotification();
     };
   }, []);
@@ -461,31 +478,141 @@ export default function MetronomeScreen() {
     }
   }, []);
 
+  const getClickPCMs = useCallback(async (set: SoundSet): Promise<ClickPCMs> => {
+    if (clickPCMCacheRef.current[set]) return clickPCMCacheRef.current[set];
+    const src = soundSets[set] || soundSets.classic;
+    const [strong, high, low] = await Promise.all([
+      decodeAsset(src.strong),
+      decodeAsset(src.high),
+      decodeAsset(src.low),
+    ]);
+    const result: ClickPCMs = { strong, high, low };
+    clickPCMCacheRef.current[set] = result;
+    return result;
+  }, []);
+
+  const getSamplePCMs = useCallback(async (samples: NoteSampleMap): Promise<Map<string, SamplePCMEntry>> => {
+    const map = new Map<string, SamplePCMEntry>();
+    const entries = Object.entries(samples);
+    if (entries.length === 0) return map;
+
+    await Promise.all(entries.map(async ([key, uri]) => {
+      const cached = samplePCMCacheRef.current.get(key);
+      if (cached) {
+        map.set(key, cached);
+        return;
+      }
+      try {
+        const pcm = await decodeSampleFile(uri);
+        if (pcm) {
+          const { trimStartMs, trimDurationMs } = parseTrimInfo(uri);
+          const entry: SamplePCMEntry = { pcm, trimStartMs, trimDurationMs };
+          map.set(key, entry);
+          samplePCMCacheRef.current.set(key, entry);
+        }
+      } catch (e) {
+        console.warn("[PreRender] Failed to decode sample:", key, e);
+      }
+    }));
+    return map;
+  }, []);
+
+  const buildAndPlayRendered = useCallback(async () => {
+    const engine = engineRef.current;
+    if (!engine) return;
+
+    try {
+      const scheduleInfo = engine.getScheduleInfo();
+      const [clickPCMs, samplePCMs] = await Promise.all([
+        getClickPCMs(soundSetRef.current),
+        getSamplePCMs(noteSamplesRef.current),
+      ]);
+
+      const pcm = renderMeasure({
+        schedule: scheduleInfo.ticks as TickInfo[],
+        measureDurationMs: scheduleInfo.durationMs,
+        clickPCMs,
+        samplePCMs,
+        clickVolume: 1.0,
+        sampleVolume: sampleVolumeRef.current * 5.0,
+      });
+
+      const wavUri = await saveRenderedWav(pcm);
+
+      if (renderedPlayerRef.current) {
+        try { renderedPlayerRef.current.release(); } catch {}
+      }
+
+      if (Platform.OS === "web" && renderedUrlRef.current) {
+        try { URL.revokeObjectURL(renderedUrlRef.current); } catch {}
+      }
+      renderedUrlRef.current = wavUri;
+
+      const player = createAudioPlayer(wavUri);
+      player.loop = true;
+      player.volume = 1.0;
+      renderedPlayerRef.current = player;
+      player.play();
+
+      engine.setPreRenderedAudio(true);
+    } catch (e) {
+      console.warn("[PreRender] Failed, falling back to per-tick audio:", e);
+      engine.setPreRenderedAudio(false);
+    }
+  }, [getClickPCMs, getSamplePCMs]);
+
+  const stopRenderedAudio = useCallback(() => {
+    if (renderedPlayerRef.current) {
+      try {
+        renderedPlayerRef.current.pause();
+        renderedPlayerRef.current.release();
+      } catch {}
+      renderedPlayerRef.current = null;
+    }
+    if (Platform.OS === "web" && renderedUrlRef.current) {
+      try { URL.revokeObjectURL(renderedUrlRef.current); } catch {}
+      renderedUrlRef.current = null;
+    }
+    const engine = engineRef.current;
+    if (engine) engine.setPreRenderedAudio(false);
+  }, []);
+
+  const invalidateSamplePCMCache = useCallback((key?: string) => {
+    if (key) {
+      samplePCMCacheRef.current.delete(key);
+    } else {
+      samplePCMCacheRef.current.clear();
+    }
+  }, []);
+
   const handleNoteRecordRequest = useCallback((beatIndex: number, subIndex: number) => {
     setRecorderTarget({ beat: beatIndex, sub: subIndex });
   }, []);
 
   const handleNoteRecordSave = useCallback(async (uri: string) => {
     if (!recorderTarget) return;
+    const key = `${recorderTarget.beat}-${recorderTarget.sub}`;
+    invalidateSamplePCMCache(key);
     const updated = await setNoteSample(recorderTarget.beat, recorderTarget.sub, uri, noteSamplesRef.current);
     setNoteSamples(updated);
     noteSamplesRef.current = updated;
     await preloadNoteSampleSounds(updated);
     setRecorderTarget(null);
-  }, [recorderTarget, preloadNoteSampleSounds]);
+  }, [recorderTarget, preloadNoteSampleSounds, invalidateSamplePCMCache]);
 
   const handleNoteRecordDelete = useCallback(async () => {
     if (!recorderTarget) return;
+    const key = `${recorderTarget.beat}-${recorderTarget.sub}`;
+    invalidateSamplePCMCache(key);
     const updated = await removeNoteSample(recorderTarget.beat, recorderTarget.sub, noteSamplesRef.current);
     setNoteSamples(updated);
     noteSamplesRef.current = updated;
-    const key = `${recorderTarget.beat}-${recorderTarget.sub}`;
     if (noteSampleSoundsRef.current[key]) {
       try { noteSampleSoundsRef.current[key].release(); } catch {}
       delete noteSampleSoundsRef.current[key];
     }
     setRecorderTarget(null);
-  }, [recorderTarget]);
+  }, [recorderTarget, invalidateSamplePCMCache]);
 
   const checkCompletedGoals = useCallback(async () => {
     try {
@@ -739,14 +866,25 @@ export default function MetronomeScreen() {
     [persistSettings]
   );
 
+  const reRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleReRender = useCallback(() => {
+    if (reRenderTimerRef.current) clearTimeout(reRenderTimerRef.current);
+    reRenderTimerRef.current = setTimeout(() => {
+      if (engineRef.current?.getIsRunning()) {
+        buildAndPlayRendered();
+      }
+    }, 300);
+  }, [buildAndPlayRendered]);
+
   const updateBpm = useCallback(
     (newBpm: number) => {
       const clampedBpm = Math.max(20, Math.min(300, newBpm));
       setBpm(clampedBpm);
       engineRef.current?.setBpm(clampedBpm);
       persistSettings({ bpm: clampedBpm });
+      scheduleReRender();
     },
-    [persistSettings]
+    [persistSettings, scheduleReRender]
   );
 
   const updateTimeSignature = useCallback(
@@ -818,6 +956,7 @@ export default function MetronomeScreen() {
     const modeLabel = barModeRef.current ? "Bar" : "Dial";
     if (isPlaying) {
       engine.stop();
+      stopRenderedAudio();
       clearSamplePlayStates();
       setIsPlaying(false);
       setCurrentBeat(-1);
@@ -848,6 +987,7 @@ export default function MetronomeScreen() {
       }
       setIsPlaying(true);
       showPlayingNotification(bpm, modeLabel);
+      buildAndPlayRendered();
       if (loggingEnabled) {
         practiceStartRef.current = Date.now();
       }
@@ -982,6 +1122,7 @@ export default function MetronomeScreen() {
 
     if (isPlaying) {
       engine.stop();
+      stopRenderedAudio();
       clearSamplePlayStates();
       setIsPlaying(false);
       setCurrentBeat(-1);
@@ -1050,6 +1191,10 @@ export default function MetronomeScreen() {
     if (!engine) return;
     engine.setOnMeasureComplete(() => {
       if (!engine.getIsRunning()) {
+        if (renderedPlayerRef.current) {
+          try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
+          renderedPlayerRef.current = null;
+        }
         for (const [k, st] of Object.entries(samplePlayStateRef.current)) {
           if (st.endTimer) clearTimeout(st.endTimer);
         }
@@ -1074,6 +1219,7 @@ export default function MetronomeScreen() {
     if (!engine) return;
     if (timerStopModeRef.current === "immediate") {
       engine.stop();
+      stopRenderedAudio();
       clearSamplePlayStates();
       setIsPlaying(false);
       setCurrentBeat(-1);
@@ -1393,6 +1539,7 @@ export default function MetronomeScreen() {
 
     if (isPlaying) {
       engine.stop();
+      stopRenderedAudio();
       clearSamplePlayStates();
       setIsPlaying(false);
       setCurrentBeat(-1);
