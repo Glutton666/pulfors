@@ -113,7 +113,7 @@ export function findClosestTuningNote(
   return { note: closest, cents: Math.round(minCents) };
 }
 
-export function autoCorrelate(buffer: Float32Array, sampleRate: number, rmsThreshold: number = 0.01): number {
+export function autoCorrelate(buffer: Float32Array, sampleRate: number, rmsThreshold: number = 0.15): number {
   const SIZE = buffer.length;
 
   let rms = 0;
