@@ -345,71 +345,67 @@ export default function MetronomeScreen() {
       preloadSounds(samples);
     });
 
+    const sampleTimingCacheRef = { current: new Map<string, { startMs: number; durationMs: number }>() };
+
+    const parseSampleTiming = (key: string): { startMs: number; durationMs: number } => {
+      const cached = sampleTimingCacheRef.current.get(key);
+      if (cached) return cached;
+      const sampleUri = noteSamplesRef.current[key] || "";
+      const hashParts = sampleUri.split("#t=")[1];
+      let startMs = 0;
+      let endMs = 0;
+      if (hashParts) {
+        const parts = hashParts.split(",").map(Number);
+        if (!isNaN(parts[0])) startMs = parts[0];
+        if (parts.length > 1 && !isNaN(parts[1])) endMs = parts[1];
+      }
+      const durationMs = endMs > startMs ? endMs - startMs : 0;
+      const result = { startMs, durationMs };
+      sampleTimingCacheRef.current.set(key, result);
+      return result;
+    };
+
+    const playSampleAsync = (key: string, player: any) => {
+      if (samplePlayStateRef.current[key]?.endTimer) {
+        clearTimeout(samplePlayStateRef.current[key].endTimer!);
+      }
+      try { player.pause(); } catch {}
+
+      const { startMs, durationMs } = parseSampleTiming(key);
+      samplePlayStateRef.current[key] = { playing: true, endTimer: null };
+
+      player.seekTo(startMs / 1000).then(() => {
+        player.play();
+        const effectiveDur = durationMs > 0
+          ? durationMs
+          : player.duration > 0
+            ? (player.duration - startMs / 1000) * 1000
+            : 0;
+        if (effectiveDur > 0) {
+          const timer = setTimeout(() => {
+            try { player.pause(); } catch {}
+            if (samplePlayStateRef.current[key]) {
+              samplePlayStateRef.current[key].playing = false;
+              samplePlayStateRef.current[key].endTimer = null;
+            }
+          }, effectiveDur);
+          if (samplePlayStateRef.current[key]) {
+            samplePlayStateRef.current[key].endTimer = timer;
+          }
+        }
+      }).catch(() => {
+        if (samplePlayStateRef.current[key]) {
+          samplePlayStateRef.current[key].playing = false;
+        }
+      });
+    };
+
     engine.setCustomSampleCallback((beat: number, subBeat: number) => {
       if (!barModeRef.current) return false;
       const key = `${beat}-${subBeat}`;
       const player = noteSampleSoundsRef.current[key];
       if (player) {
-        if (samplePlayStateRef.current[key]?.endTimer) {
-          clearTimeout(samplePlayStateRef.current[key].endTimer!);
-        }
-        try {
-          player.pause();
-        } catch {}
-        try {
-          const sampleUri = noteSamplesRef.current[key] || "";
-          const hashParts = sampleUri.split("#t=")[1];
-          let startMs = 0;
-          let endMs = 0;
-          if (hashParts) {
-            const parts = hashParts.split(",").map(Number);
-            if (!isNaN(parts[0])) startMs = parts[0];
-            if (parts.length > 1 && !isNaN(parts[1])) endMs = parts[1];
-          }
-          const durationMs = endMs > startMs ? endMs - startMs : 0;
-
-          samplePlayStateRef.current[key] = { playing: true, endTimer: null };
-
-          player.seekTo(startMs / 1000).then(() => {
-            player.play();
-
-            if (durationMs > 0) {
-              const timer = setTimeout(() => {
-                try { player.pause(); } catch {}
-                if (samplePlayStateRef.current[key]) {
-                  samplePlayStateRef.current[key].playing = false;
-                  samplePlayStateRef.current[key].endTimer = null;
-                }
-              }, durationMs);
-              if (samplePlayStateRef.current[key]) {
-                samplePlayStateRef.current[key].endTimer = timer;
-              }
-            } else {
-              const dur = player.duration;
-              if (dur > 0) {
-                const remaining = (dur - startMs / 1000) * 1000;
-                if (remaining > 0) {
-                  const timer = setTimeout(() => {
-                    if (samplePlayStateRef.current[key]) {
-                      samplePlayStateRef.current[key].playing = false;
-                      samplePlayStateRef.current[key].endTimer = null;
-                    }
-                  }, remaining);
-                  if (samplePlayStateRef.current[key]) {
-                    samplePlayStateRef.current[key].endTimer = timer;
-                  }
-                }
-              }
-            }
-          }).catch((e: any) => {
-            console.warn("[SamplePlay] Seek failed:", key, e);
-            if (samplePlayStateRef.current[key]) {
-              samplePlayStateRef.current[key].playing = false;
-            }
-          });
-        } catch (e) {
-          console.warn("[SamplePlay] Error:", key, e);
-        }
+        setTimeout(() => playSampleAsync(key, player), 0);
         return true;
       }
       return false;
@@ -857,68 +853,70 @@ export default function MetronomeScreen() {
       }
 
       if (startBeat && startBeat > 0) {
-        const beatDurMs = 60000 / bpm;
-        const samples = noteSamplesRef.current;
-        for (const [key, uri] of Object.entries(samples)) {
-          const [bStr, sStr] = key.split("-");
-          const trigBeat = parseInt(bStr, 10);
-          const trigSub = parseInt(sStr, 10);
-          if (isNaN(trigBeat) || isNaN(trigSub) || trigBeat >= startBeat) continue;
+        setTimeout(() => {
+          const beatDurMs = 60000 / bpm;
+          const samples = noteSamplesRef.current;
+          for (const [key, uri] of Object.entries(samples)) {
+            const [bStr, sStr] = key.split("-");
+            const trigBeat = parseInt(bStr, 10);
+            const trigSub = parseInt(sStr, 10);
+            if (isNaN(trigBeat) || isNaN(trigSub) || trigBeat >= startBeat) continue;
 
-          const hashParts = uri.split("#t=")[1];
-          let sampleStartMs = 0;
-          let sampleEndMs = 0;
-          if (hashParts) {
-            const parts = hashParts.split(",").map(Number);
-            if (!isNaN(parts[0])) sampleStartMs = parts[0];
-            if (parts.length > 1 && !isNaN(parts[1])) sampleEndMs = parts[1];
-          }
-          const sampleDurMs = sampleEndMs > sampleStartMs ? sampleEndMs - sampleStartMs : 0;
-          if (sampleDurMs <= 0) continue;
-
-          let elapsedMs = 0;
-          const curBarRepeats = barConfigRef.current.barRepeats || {};
-          for (let b = trigBeat; b < startBeat; b++) {
-            const pat = engine.getBeatSubdivision(b);
-            const subCount = pat ? pat.length : 1;
-            const rep = curBarRepeats[b];
-            let repeatCount = 1;
-            if (rep) {
-              if (rep.type === "count") repeatCount = Math.max(1, rep.value);
-              else repeatCount = Math.max(1, Math.round((rep.value * 1000) / beatDurMs));
+            const hashParts = uri.split("#t=")[1];
+            let sampleStartMs = 0;
+            let sampleEndMs = 0;
+            if (hashParts) {
+              const parts = hashParts.split(",").map(Number);
+              if (!isNaN(parts[0])) sampleStartMs = parts[0];
+              if (parts.length > 1 && !isNaN(parts[1])) sampleEndMs = parts[1];
             }
-            if (b === trigBeat) {
-              elapsedMs += (subCount - trigSub) * (beatDurMs / subCount);
-              elapsedMs += (repeatCount - 1) * beatDurMs;
-            } else {
-              elapsedMs += beatDurMs * repeatCount;
-            }
-          }
+            const sampleDurMs = sampleEndMs > sampleStartMs ? sampleEndMs - sampleStartMs : 0;
+            if (sampleDurMs <= 0) continue;
 
-          if (elapsedMs < sampleDurMs) {
-            const player = noteSampleSoundsRef.current[key];
-            if (player) {
-              const seekToMs = sampleStartMs + elapsedMs;
-              const remainingMs = sampleDurMs - elapsedMs;
-              samplePlayStateRef.current[key] = { playing: true, endTimer: null };
-              player.seekTo(seekToMs / 1000).then(() => {
-                player.play();
-                if (remainingMs > 0) {
-                  const timer = setTimeout(() => {
-                    try { player.pause(); } catch {}
+            let elapsedMs = 0;
+            const curBarRepeats = barConfigRef.current.barRepeats || {};
+            for (let b = trigBeat; b < startBeat; b++) {
+              const pat = engine.getBeatSubdivision(b);
+              const subCount = pat ? pat.length : 1;
+              const rep = curBarRepeats[b];
+              let repeatCount = 1;
+              if (rep) {
+                if (rep.type === "count") repeatCount = Math.max(1, rep.value);
+                else repeatCount = Math.max(1, Math.round((rep.value * 1000) / beatDurMs));
+              }
+              if (b === trigBeat) {
+                elapsedMs += (subCount - trigSub) * (beatDurMs / subCount);
+                elapsedMs += (repeatCount - 1) * beatDurMs;
+              } else {
+                elapsedMs += beatDurMs * repeatCount;
+              }
+            }
+
+            if (elapsedMs < sampleDurMs) {
+              const player = noteSampleSoundsRef.current[key];
+              if (player) {
+                const seekToMs = sampleStartMs + elapsedMs;
+                const remainingMs = sampleDurMs - elapsedMs;
+                samplePlayStateRef.current[key] = { playing: true, endTimer: null };
+                player.seekTo(seekToMs / 1000).then(() => {
+                  player.play();
+                  if (remainingMs > 0) {
+                    const timer = setTimeout(() => {
+                      try { player.pause(); } catch {}
+                      if (samplePlayStateRef.current[key]) {
+                        samplePlayStateRef.current[key].playing = false;
+                        samplePlayStateRef.current[key].endTimer = null;
+                      }
+                    }, remainingMs);
                     if (samplePlayStateRef.current[key]) {
-                      samplePlayStateRef.current[key].playing = false;
-                      samplePlayStateRef.current[key].endTimer = null;
+                      samplePlayStateRef.current[key].endTimer = timer;
                     }
-                  }, remainingMs);
-                  if (samplePlayStateRef.current[key]) {
-                    samplePlayStateRef.current[key].endTimer = timer;
                   }
-                }
-              }).catch(() => {});
+                }).catch(() => {});
+              }
             }
           }
-        }
+        }, 0);
       }
     }
   }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure]);

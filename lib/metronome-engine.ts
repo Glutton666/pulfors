@@ -288,21 +288,31 @@ export class MetronomeEngine {
 
     const playAudio = () => {
       if (isMute) return;
-      if (tick.repeatIteration === 0 && this.playCustomSample && this.playCustomSample(tick.beat, tick.subBeat)) {
-        return;
+      let customHandled = false;
+      if (tick.repeatIteration === 0 && this.playCustomSample) {
+        customHandled = this.playCustomSample(tick.beat, tick.subBeat);
       }
-      try {
-        if (isStrong) {
-          this.playStrongClick?.();
-        } else if (isAccent) {
-          this.playHighClick?.();
-        } else {
-          this.playLowClick?.();
-        }
-      } catch (e) {}
+      if (!customHandled) {
+        try {
+          if (isStrong) {
+            this.playStrongClick?.();
+          } else if (isAccent) {
+            this.playHighClick?.();
+          } else {
+            this.playLowClick?.();
+          }
+        } catch (e) {}
+      }
     };
 
-    const playHapticAndVisual = () => {
+    const fireVisual = () => {
+      this.onSubBeat?.(tick.beat, tick.subBeat);
+      if (tick.isMainBeat) {
+        this.onBeat?.(tick.beat, isAccent);
+      }
+    };
+
+    const fireHaptic = () => {
       if (!isMute && Platform.OS !== "web" && this.hapticMode !== "off") {
         const shouldHaptic = this.hapticMode === "all" || (this.hapticMode === "accent" && isAccent);
         if (shouldHaptic) {
@@ -319,22 +329,21 @@ export class MetronomeEngine {
           } catch (e) {}
         }
       }
-      this.onSubBeat?.(tick.beat, tick.subBeat);
-      if (tick.isMainBeat) {
-        this.onBeat?.(tick.beat, isAccent);
-      }
     };
 
     const offset = this.audioOffsetMs;
+
+    fireVisual();
+
     if (offset > 0) {
-      playHapticAndVisual();
+      fireHaptic();
       setTimeout(playAudio, offset);
     } else if (offset < 0) {
       playAudio();
-      setTimeout(playHapticAndVisual, Math.abs(offset));
+      setTimeout(fireHaptic, Math.abs(offset));
     } else {
       playAudio();
-      playHapticAndVisual();
+      fireHaptic();
     }
   }
 
