@@ -25,6 +25,8 @@ export interface MetronomeSettings {
   themeColor?: ThemeColor;
   timerStopMode?: "immediate" | "end-of-cycle";
   username?: string;
+  rhythmCalibrationMs?: number;
+  sampleVolume?: number;
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
@@ -42,6 +44,8 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   themeColor: "gold",
   timerStopMode: "end-of-cycle",
   username: "",
+  rhythmCalibrationMs: 0,
+  sampleVolume: 0.8,
 };
 
 export async function loadSettings(): Promise<MetronomeSettings> {
