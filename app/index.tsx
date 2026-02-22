@@ -62,7 +62,6 @@ import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasN
 import type { NoteSampleMap } from "@/lib/note-samples";
 import { NoteRecorderModal } from "@/components/NoteRecorderModal";
 import { AudioModule, createAudioPlayer } from "expo-audio";
-import { RhythmAccuracyEngine, TimingResult } from "@/lib/rhythm-accuracy";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import type { ActivityLog, Goal, PracticeSessionData, PracticeRoomVisitData } from "@/lib/activity-log";
 import {
@@ -165,14 +164,6 @@ export default function MetronomeScreen() {
   const noteSampleSoundsRef = useRef<Record<string, ExpoAudioPlayer>>({});
   const samplePlayStateRef = useRef<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>({});
   const [recorderTarget, setRecorderTarget] = useState<{ beat: number; sub: number } | null>(null);
-
-  const [accuracyMode, setAccuracyMode] = useState(false);
-  const accuracyModeRef = useRef(false);
-  const [lastTimingOffset, setLastTimingOffset] = useState<number | null>(null);
-  const [rhythmCalibrationMs, setRhythmCalibrationMs] = useState(0);
-  const rhythmAccuracyRef = useRef<RhythmAccuracyEngine | null>(null);
-  const accuracyResultsRef = useRef<TimingResult[]>([]);
-  const playLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -343,9 +334,6 @@ export default function MetronomeScreen() {
       }
       if (settings.username) {
         setUsername(settings.username);
-      }
-      if (settings.rhythmCalibrationMs !== undefined) {
-        setRhythmCalibrationMs(settings.rhythmCalibrationMs);
       }
 
       setIsLoaded(true);
@@ -644,12 +632,6 @@ export default function MetronomeScreen() {
     engine.setOnSubBeat((beat: number, subBeat: number) => {
       setActiveSubNote(subBeat);
     });
-
-    engine.setOnTickFired((time: number, beat: number, subBeat: number) => {
-      if (accuracyModeRef.current && rhythmAccuracyRef.current) {
-        rhythmAccuracyRef.current.registerTick(time);
-      }
-    });
   }, [flashOpacity]);
 
   useEffect(() => {
@@ -683,12 +665,11 @@ export default function MetronomeScreen() {
         hapticMode,
         audioOffsetMs,
         timerStopMode,
-        rhythmCalibrationMs,
         ...overrides,
       };
       saveSettings(current);
     },
-    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, flashMode, hapticMode, audioOffsetMs, timerStopMode, rhythmCalibrationMs]
+    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, flashMode, hapticMode, audioOffsetMs, timerStopMode]
   );
 
   const updateVolume = useCallback(
@@ -830,15 +811,6 @@ export default function MetronomeScreen() {
   const barLoopModeRef = useRef(barLoopMode);
   useEffect(() => { barLoopModeRef.current = barLoopMode; }, [barLoopMode]);
 
-  const stopAccuracyMode = useCallback(() => {
-    if (rhythmAccuracyRef.current) {
-      rhythmAccuracyRef.current.stop();
-    }
-    accuracyModeRef.current = false;
-    setAccuracyMode(false);
-    setLastTimingOffset(null);
-  }, []);
-
   const togglePlayPause = useCallback(() => {
     const engine = engineRef.current;
     if (!engine) return;
@@ -855,21 +827,6 @@ export default function MetronomeScreen() {
       setCurrentBeat(-1);
       setActiveSubNote(-1);
       showPausedNotification(bpm, modeLabel);
-
-      let accuracyData: { avgOffsetMs: number; accuracyPercent: number; hitCount: number } | undefined;
-      if (accuracyModeRef.current && rhythmAccuracyRef.current) {
-        const results = rhythmAccuracyRef.current.getResults();
-        if (results.length > 0) {
-          accuracyData = {
-            avgOffsetMs: Math.round(rhythmAccuracyRef.current.getAverageOffset()),
-            accuracyPercent: rhythmAccuracyRef.current.getAccuracyPercent(),
-            hitCount: results.length,
-          };
-          accuracyResultsRef.current = results;
-        }
-        stopAccuracyMode();
-      }
-
       if (loggingEnabled && practiceStartRef.current) {
         const dur = Math.round((Date.now() - practiceStartRef.current) / 1000);
         if (dur >= 3) {
@@ -882,7 +839,6 @@ export default function MetronomeScreen() {
               duration: dur,
               ...(barMode ? { barConfig: { beatsPerMeasure, subdivisions: subdivisionPattern.length } } : {}),
               ...(barMode && noteRef ? { practiceNoteId: noteRef.id, practiceNoteLabel: noteRef.label } : {}),
-              ...(accuracyData ? { accuracy: accuracyData } : {}),
             },
           }).then(() => checkCompletedGoals());
         }
@@ -966,45 +922,6 @@ export default function MetronomeScreen() {
       }
     }
   }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure]);
-
-  const handlePlayLongPress = useCallback(async () => {
-    if (barModeRef.current) return;
-    if (isPlaying) return;
-
-    const engine = engineRef.current;
-    if (!engine) return;
-
-    if (Platform.OS !== "web") {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-
-    if (!rhythmAccuracyRef.current) {
-      rhythmAccuracyRef.current = new RhythmAccuracyEngine();
-    }
-    rhythmAccuracyRef.current.setCalibrationOffset(rhythmCalibrationMs);
-    rhythmAccuracyRef.current.clearResults();
-    rhythmAccuracyRef.current.setOnTimingResult((result) => {
-      setLastTimingOffset(result.offsetMs);
-    });
-
-    const started = await rhythmAccuracyRef.current.start();
-    if (!started) {
-      return;
-    }
-
-    accuracyModeRef.current = true;
-    setAccuracyMode(true);
-    setLastTimingOffset(null);
-    accuracyResultsRef.current = [];
-
-    engine.start();
-    setIsPlaying(true);
-    const modeLabel = "Dial";
-    showPlayingNotification(bpm, modeLabel);
-    if (loggingEnabled) {
-      practiceStartRef.current = Date.now();
-    }
-  }, [isPlaying, bpm, rhythmCalibrationMs, loggingEnabled]);
 
   const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
@@ -1808,11 +1725,6 @@ export default function MetronomeScreen() {
         trackingRoomName={trackingRoomName}
         onStartRoomTracking={startRoomTracking}
         onStopRoomTracking={stopRoomTracking}
-        rhythmCalibrationMs={rhythmCalibrationMs}
-        onRhythmCalibrationChange={(val) => {
-          setRhythmCalibrationMs(val);
-          persistSettings({ rhythmCalibrationMs: val });
-        }}
       />
 
       {completedGoalPopups.length > 0 && !showMenu && !showTuner && !showSignalGen && !showPracticeBook && !showWorkUp && !showSettings && (
@@ -1853,9 +1765,6 @@ export default function MetronomeScreen() {
             isPlaying={isPlaying}
             onBeatsChange={updateTimeSignature}
             onTogglePlay={togglePlayPause}
-            onPlayLongPress={handlePlayLongPress}
-            accuracyMode={accuracyMode}
-            lastTimingOffset={lastTimingOffset}
             beatTypes={beatTypes}
             onBeatTypeChange={handleBeatTypeChange}
             dropTargetBeat={dropTargetBeat}

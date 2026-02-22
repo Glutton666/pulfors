@@ -236,9 +236,6 @@ interface BeatIndicatorProps {
   isPlaying: boolean;
   onBeatsChange: (beats: number) => void;
   onTogglePlay: () => void;
-  onPlayLongPress?: () => void;
-  accuracyMode?: boolean;
-  lastTimingOffset?: number | null;
   beatTypes: BeatType[];
   onBeatTypeChange: (index: number, type: BeatType) => void;
   dropTargetBeat: number | null;
@@ -273,9 +270,6 @@ export function BeatIndicator({
   isPlaying,
   onBeatsChange,
   onTogglePlay,
-  onPlayLongPress,
-  accuracyMode,
-  lastTimingOffset,
   beatTypes,
   onBeatTypeChange,
   dropTargetBeat,
@@ -1483,42 +1477,18 @@ export function BeatIndicator({
 
           <Pressable
             onPress={onTogglePlay}
-            onLongPress={!barMode ? onPlayLongPress : undefined}
-            delayLongPress={500}
             style={({ pressed }) => [
               styles.playButton,
               pressed && styles.playButtonPressed,
             ]}
             testID="play-button"
           >
-            {accuracyMode && isPlaying && lastTimingOffset !== null ? (
-              <View style={styles.accuracyDisplay}>
-                <Text style={[
-                  styles.accuracyOffset,
-                  {
-                    color: Math.abs(lastTimingOffset) <= 20
-                      ? "#4CAF50"
-                      : Math.abs(lastTimingOffset) <= 50
-                      ? "#FFC107"
-                      : "#FF5252",
-                  },
-                ]}>
-                  {lastTimingOffset > 0 ? "+" : ""}{Math.round(lastTimingOffset)}ms
-                </Text>
-              </View>
-            ) : accuracyMode && isPlaying ? (
-              <View style={styles.accuracyDisplay}>
-                <Ionicons name="mic" size={28} color={C.accent} />
-                <Text style={[styles.accuracyLabel, { color: C.accent }]}>TAP</Text>
-              </View>
-            ) : (
-              <Ionicons
-                name={isPlaying ? "stop" : "play"}
-                size={56}
-                color={isPlaying ? Colors.danger : C.accent}
-                style={!isPlaying ? { marginLeft: 5 } : undefined}
-              />
-            )}
+            <Ionicons
+              name={isPlaying ? "stop" : "play"}
+              size={56}
+              color={isPlaying ? Colors.danger : C.accent}
+              style={!isPlaying ? { marginLeft: 5 } : undefined}
+            />
           </Pressable>
 
           {dropTargetBeat === -1 && (
@@ -1614,20 +1584,6 @@ const styles = StyleSheet.create({
   playButtonPressed: {
     transform: [{ scale: 0.85 }],
     opacity: 0.6,
-  },
-  accuracyDisplay: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  accuracyOffset: {
-    fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 22,
-    textAlign: "center",
-  },
-  accuracyLabel: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 10,
-    marginTop: 2,
   },
   hintText: {
     fontFamily: "SpaceGrotesk_400Regular",

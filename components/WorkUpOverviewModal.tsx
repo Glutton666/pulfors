@@ -383,25 +383,16 @@ export function WorkUpOverviewModal({
   }, [playTimePeriod, todaySessions, weekSessions, monthSessions]);
 
   const beatSessionDetails = useMemo(() => {
-    const byBpm: Record<number, { bpm: number; duration: number; count: number; accuracySum: number; accuracyCount: number; avgOffset: number }> = {};
+    const byBpm: Record<number, { bpm: number; duration: number; count: number }> = {};
     periodSessions
       .filter(l => (l.data as PracticeSessionData).mode === "dial")
       .forEach(l => {
         const d = l.data as PracticeSessionData;
-        if (!byBpm[d.bpm]) byBpm[d.bpm] = { bpm: d.bpm, duration: 0, count: 0, accuracySum: 0, accuracyCount: 0, avgOffset: 0 };
+        if (!byBpm[d.bpm]) byBpm[d.bpm] = { bpm: d.bpm, duration: 0, count: 0 };
         byBpm[d.bpm].duration += d.duration;
         byBpm[d.bpm].count += 1;
-        if (d.accuracy) {
-          byBpm[d.bpm].accuracySum += d.accuracy.accuracyPercent;
-          byBpm[d.bpm].accuracyCount += 1;
-          byBpm[d.bpm].avgOffset += d.accuracy.avgOffsetMs;
-        }
       });
-    return Object.values(byBpm).map(v => ({
-      ...v,
-      avgAccuracy: v.accuracyCount > 0 ? Math.round(v.accuracySum / v.accuracyCount) : null,
-      avgOffsetMs: v.accuracyCount > 0 ? Math.round(v.avgOffset / v.accuracyCount) : null,
-    })).sort((a, b) => b.duration - a.duration);
+    return Object.values(byBpm).sort((a, b) => b.duration - a.duration);
   }, [periodSessions]);
 
   const barSessionDetails = useMemo(() => {
@@ -735,11 +726,7 @@ export function WorkUpOverviewModal({
                             <View key={i} style={s.detailRow}>
                               <View style={s.detailInfo}>
                                 <Text style={s.detailMain}>{sess.bpm} BPM</Text>
-                                <Text style={s.detailSub}>
-                                  {sess.count} session{sess.count > 1 ? "s" : ""}
-                                  {sess.avgAccuracy !== null ? ` · ${sess.avgAccuracy}% accuracy` : ""}
-                                  {sess.avgOffsetMs !== null ? ` (${sess.avgOffsetMs > 0 ? "+" : ""}${sess.avgOffsetMs}ms)` : ""}
-                                </Text>
+                                <Text style={s.detailSub}>{sess.count} session{sess.count > 1 ? "s" : ""}</Text>
                               </View>
                               <Text style={[s.detailTime, { color: BEAT_COLOR }]}>{formatDuration(sess.duration)}</Text>
                             </View>

@@ -79,8 +79,6 @@ interface SettingsModalProps {
   trackingRoomName: string | null;
   onStartRoomTracking: (room: { id: string; name: string }) => void;
   onStopRoomTracking: () => void;
-  rhythmCalibrationMs: number;
-  onRhythmCalibrationChange: (value: number) => void;
 }
 
 const SOUND_SET_OPTIONS: { value: SoundSet; label: string; icon: string }[] = [
@@ -164,8 +162,6 @@ export function SettingsModal({
   trackingRoomName,
   onStartRoomTracking,
   onStopRoomTracking,
-  rhythmCalibrationMs,
-  onRhythmCalibrationChange,
 }: SettingsModalProps) {
   const { themeColor, customHex, setThemeColor, setCustomHex, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
   const insets = useSafeAreaInsets();
@@ -931,75 +927,6 @@ export function SettingsModal({
           - = audio earlier / + = audio later
         </Text>
       </View>
-
-      {Platform.OS === "web" && (
-        <>
-          <View style={styles.divider} />
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="mic-outline" size={18} color={C.accent} />
-              <Text style={styles.sectionLabel}>Rhythm Calibration</Text>
-              <Text style={[styles.sectionValue, { color: C.accent }]}>
-                {rhythmCalibrationMs > 0 ? "+" : ""}{rhythmCalibrationMs}ms
-              </Text>
-            </View>
-            <View style={styles.offsetRow}>
-              <Pressable
-                style={styles.offsetBtn}
-                onPress={() => {
-                  const next = Math.max(-200, rhythmCalibrationMs - 5);
-                  onRhythmCalibrationChange(next);
-                  if (Platform.OS !== "web") Haptics.selectionAsync();
-                }}
-              >
-                <Ionicons name="remove" size={18} color={Colors.text} />
-              </Pressable>
-              <Pressable
-                style={styles.offsetBtn}
-                onPress={() => {
-                  const next = Math.max(-200, rhythmCalibrationMs - 1);
-                  onRhythmCalibrationChange(next);
-                  if (Platform.OS !== "web") Haptics.selectionAsync();
-                }}
-              >
-                <Text style={styles.offsetBtnText}>-1</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.offsetBtn, styles.offsetResetBtn]}
-                onPress={() => {
-                  onRhythmCalibrationChange(0);
-                  if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }}
-              >
-                <Text style={styles.offsetResetText}>0</Text>
-              </Pressable>
-              <Pressable
-                style={styles.offsetBtn}
-                onPress={() => {
-                  const next = Math.min(200, rhythmCalibrationMs + 1);
-                  onRhythmCalibrationChange(next);
-                  if (Platform.OS !== "web") Haptics.selectionAsync();
-                }}
-              >
-                <Text style={styles.offsetBtnText}>+1</Text>
-              </Pressable>
-              <Pressable
-                style={styles.offsetBtn}
-                onPress={() => {
-                  const next = Math.min(200, rhythmCalibrationMs + 5);
-                  onRhythmCalibrationChange(next);
-                  if (Platform.OS !== "web") Haptics.selectionAsync();
-                }}
-              >
-                <Ionicons name="add" size={18} color={Colors.text} />
-              </Pressable>
-            </View>
-            <Text style={styles.offsetHint}>
-              Compensate for mic latency (long-press Play for accuracy mode)
-            </Text>
-          </View>
-        </>
-      )}
 
       <View style={styles.divider} />
 
