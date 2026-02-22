@@ -517,9 +517,9 @@ export default function MetronomeScreen() {
     return map;
   }, []);
 
-  const buildAndPlayRendered = useCallback(async () => {
+  const buildRenderedPlayer = useCallback(async (): Promise<ExpoAudioPlayer | null> => {
     const engine = engineRef.current;
-    if (!engine) return;
+    if (!engine) return null;
 
     try {
       const scheduleInfo = engine.getScheduleInfo();
@@ -552,14 +552,22 @@ export default function MetronomeScreen() {
       player.loop = true;
       player.volume = 1.0;
       renderedPlayerRef.current = player;
-      player.play();
-
-      engine.setPreRenderedAudio(true);
+      return player;
     } catch (e) {
       console.warn("[PreRender] Failed, falling back to per-tick audio:", e);
-      engine.setPreRenderedAudio(false);
+      return null;
     }
   }, [getClickPCMs, getSamplePCMs]);
+
+  const buildAndPlayRendered = useCallback(async () => {
+    const player = await buildRenderedPlayer();
+    if (player) {
+      player.play();
+      engineRef.current?.setPreRenderedAudio(true);
+    } else {
+      engineRef.current?.setPreRenderedAudio(false);
+    }
+  }, [buildRenderedPlayer]);
 
   const stopRenderedAudio = useCallback(() => {
     if (renderedPlayerRef.current) {
@@ -945,7 +953,7 @@ export default function MetronomeScreen() {
   const barLoopModeRef = useRef(barLoopMode);
   useEffect(() => { barLoopModeRef.current = barLoopMode; }, [barLoopMode]);
 
-  const togglePlayPause = useCallback(() => {
+  const togglePlayPause = useCallback(async () => {
     const engine = engineRef.current;
     if (!engine) return;
 
@@ -981,15 +989,25 @@ export default function MetronomeScreen() {
       }
     } else {
       const startBeat = barModeRef.current ? barStartBeatRef.current : undefined;
-      engine.start(startBeat ?? undefined);
-      if (barModeRef.current && barLoopModeRef.current === "once") {
-        engine.requestStopAfterMeasure();
-      }
       setIsPlaying(true);
       showPlayingNotification(bpm, modeLabel);
-      buildAndPlayRendered();
       if (loggingEnabled) {
         practiceStartRef.current = Date.now();
+      }
+
+      engine.buildScheduleOnly();
+      const renderedPlayer = await buildRenderedPlayer();
+
+      engine.start(startBeat ?? undefined);
+      if (renderedPlayer) {
+        renderedPlayer.play();
+        engine.setPreRenderedAudio(true);
+      } else {
+        engine.setPreRenderedAudio(false);
+      }
+
+      if (barModeRef.current && barLoopModeRef.current === "once") {
+        engine.requestStopAfterMeasure();
       }
 
       if (startBeat && startBeat > 0) {
@@ -1179,12 +1197,20 @@ export default function MetronomeScreen() {
     setBarMode(toBarMode);
   }, [isPlaying, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats]);
 
-  const startMetronome = useCallback(() => {
+  const startMetronome = useCallback(async () => {
     const engine = engineRef.current;
     if (!engine || isPlaying) return;
-    engine.start();
     setIsPlaying(true);
-  }, [isPlaying]);
+    engine.buildScheduleOnly();
+    const renderedPlayer = await buildRenderedPlayer();
+    engine.start();
+    if (renderedPlayer) {
+      renderedPlayer.play();
+      engine.setPreRenderedAudio(true);
+    } else {
+      engine.setPreRenderedAudio(false);
+    }
+  }, [isPlaying, buildRenderedPlayer]);
 
   useEffect(() => {
     const engine = engineRef.current;

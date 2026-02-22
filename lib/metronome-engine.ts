@@ -188,10 +188,17 @@ export class MetronomeEngine {
     return this.bpm;
   }
 
+  buildScheduleOnly() {
+    this.schedule = this.buildSchedule();
+    this.scheduleIndex = 0;
+  }
+
   getScheduleInfo(): { ticks: { time: number; type: BeatType; beat: number; subBeat: number; repeatIteration: number }[]; durationMs: number } {
-    const ticks = this.buildSchedule();
+    if (this.schedule.length === 0) {
+      this.schedule = this.buildSchedule();
+    }
     return {
-      ticks: ticks.map(t => ({ time: t.time, type: t.type, beat: t.beat, subBeat: t.subBeat, repeatIteration: t.repeatIteration })),
+      ticks: this.schedule.map(t => ({ time: t.time, type: t.type, beat: t.beat, subBeat: t.subBeat, repeatIteration: t.repeatIteration })),
       durationMs: this.measureDurationMs,
     };
   }
@@ -405,7 +412,9 @@ export class MetronomeEngine {
   start(startFromBeat?: number) {
     if (this.isRunning) return;
     this.isRunning = true;
-    this.schedule = this.buildSchedule();
+    if (this.schedule.length === 0) {
+      this.schedule = this.buildSchedule();
+    }
 
     if (startFromBeat !== undefined && startFromBeat > 0 && startFromBeat < this.beatsPerMeasure) {
       const idx = this.schedule.findIndex(t => t.beat === startFromBeat && t.subBeat === 0);
@@ -438,6 +447,8 @@ export class MetronomeEngine {
     }
     this.currentBeat = 0;
     this.currentSubBeat = 0;
+    this.schedule = [];
+    this.scheduleIndex = 0;
   }
 
   cleanup() {
