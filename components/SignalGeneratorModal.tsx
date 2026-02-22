@@ -526,12 +526,23 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
 
   const startMicWeb = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          sampleRate: { ideal: 48000 },
+          channelCount: 1,
+        },
+      });
       micStreamRef.current = stream;
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({
+        sampleRate: 48000,
+      });
       micAudioCtxRef.current = audioCtx;
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 4096;
+      analyser.fftSize = 8192;
+      analyser.smoothingTimeConstant = 0;
       micAnalyserRef.current = analyser;
       const source = audioCtx.createMediaStreamSource(stream);
       source.connect(analyser);
@@ -593,10 +604,10 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       micActiveRef.current = true;
       setMicListening(true);
 
-      const SAMPLE_RATE = 44100;
+      const SAMPLE_RATE = 48000;
       const RECORD_MS = 500;
       const MIC_GATE = 0.08;
-      const WINDOW_SIZE = 4096;
+      const WINDOW_SIZE = 8192;
 
       const recordAndAnalyze = async () => {
         if (!micActiveRef.current) return;
@@ -610,20 +621,20 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               audioEncoder: (Audio as any).AndroidAudioEncoder?.DEFAULT ?? 0,
               sampleRate: SAMPLE_RATE,
               numberOfChannels: 1,
-              bitRate: 128000,
+              bitRate: 768000,
             },
             ios: {
               extension: ".wav",
               outputFormat: (Audio as any).IOSOutputFormat?.LINEARPCM ?? 1819304813,
-              audioQuality: (Audio as any).IOSAudioQuality?.HIGH ?? 127,
+              audioQuality: (Audio as any).IOSAudioQuality?.MAX ?? 127,
               sampleRate: SAMPLE_RATE,
               numberOfChannels: 1,
-              bitRate: 128000,
+              bitRate: 768000,
               linearPCMBitDepth: 16,
               linearPCMIsBigEndian: false,
               linearPCMIsFloat: false,
             },
-            web: { mimeType: "audio/wav", bitsPerSecond: 128000 },
+            web: { mimeType: "audio/wav", bitsPerSecond: 768000 },
           });
           micRecordingRef.current = recording;
           await recording.startAsync();

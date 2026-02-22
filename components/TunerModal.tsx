@@ -53,12 +53,23 @@ export function TunerModal({ visible, onClose }: TunerModalProps) {
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          sampleRate: { ideal: 48000 },
+          channelCount: 1,
+        },
+      });
       streamRef.current = stream;
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({
+        sampleRate: 48000,
+      });
       audioContextRef.current = audioCtx;
       const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 4096;
+      analyser.fftSize = 8192;
+      analyser.smoothingTimeConstant = 0;
       analyserRef.current = analyser;
       const source = audioCtx.createMediaStreamSource(stream);
       source.connect(analyser);
