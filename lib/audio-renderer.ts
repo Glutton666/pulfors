@@ -321,6 +321,8 @@ export function renderMeasure(params: {
   return buffer;
 }
 
+let _renderSlot = 0;
+
 export async function saveRenderedWav(pcm: Float32Array): Promise<string> {
   const wav = encodeWav(pcm, RENDER_SR);
 
@@ -329,7 +331,8 @@ export async function saveRenderedWav(pcm: Float32Array): Promise<string> {
     return URL.createObjectURL(blob);
   } else {
     const cacheDir = Paths.cache;
-    const file = new File(cacheDir, "rendered_measure.wav");
+    _renderSlot = (_renderSlot + 1) % 2;
+    const file = new File(cacheDir, `rendered_measure_${_renderSlot}.wav`);
     const bytes = new Uint8Array(wav);
     file.write(bytes);
     return file.uri;
