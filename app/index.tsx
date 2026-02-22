@@ -64,7 +64,7 @@ import { NoteRecorderModal } from "@/components/NoteRecorderModal";
 import { AudioModule, createAudioPlayer } from "expo-audio";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import {
-  loadAssetPCM,
+  decodeAsset,
   decodeSampleFile,
   parseTrimInfo,
   renderMeasure,
@@ -482,9 +482,9 @@ export default function MetronomeScreen() {
     if (clickPCMCacheRef.current[set]) return clickPCMCacheRef.current[set];
     const src = soundSets[set] || soundSets.classic;
     const [strong, high, low] = await Promise.all([
-      loadAssetPCM(src.strong),
-      loadAssetPCM(src.high),
-      loadAssetPCM(src.low),
+      decodeAsset(src.strong),
+      decodeAsset(src.high),
+      decodeAsset(src.low),
     ]);
     const result: ClickPCMs = { strong, high, low };
     clickPCMCacheRef.current[set] = result;
@@ -517,13 +517,9 @@ export default function MetronomeScreen() {
     return map;
   }, []);
 
-  const renderGenRef = useRef(0);
-
   const buildAndPlayRendered = useCallback(async () => {
     const engine = engineRef.current;
     if (!engine) return;
-
-    const gen = ++renderGenRef.current;
 
     try {
       const scheduleInfo = engine.getScheduleInfo();
@@ -531,8 +527,6 @@ export default function MetronomeScreen() {
         getClickPCMs(soundSetRef.current),
         getSamplePCMs(noteSamplesRef.current),
       ]);
-
-      if (gen !== renderGenRef.current) return;
 
       const pcm = renderMeasure({
         schedule: scheduleInfo.ticks as TickInfo[],
@@ -543,38 +537,22 @@ export default function MetronomeScreen() {
         sampleVolume: sampleVolumeRef.current * 5.0,
       });
 
-      if (gen !== renderGenRef.current) return;
-
       const wavUri = await saveRenderedWav(pcm);
 
-      if (gen !== renderGenRef.current) {
-        if (Platform.OS === "web") {
-          try { URL.revokeObjectURL(wavUri); } catch {}
-        }
-        return;
+      if (renderedPlayerRef.current) {
+        try { renderedPlayerRef.current.release(); } catch {}
       }
 
-      const newPlayer = createAudioPlayer(wavUri);
-      newPlayer.loop = true;
-      newPlayer.volume = 1.0;
-
-      const oldPlayer = renderedPlayerRef.current;
-      const oldUrl = renderedUrlRef.current;
-
-      renderedPlayerRef.current = newPlayer;
+      if (Platform.OS === "web" && renderedUrlRef.current) {
+        try { URL.revokeObjectURL(renderedUrlRef.current); } catch {}
+      }
       renderedUrlRef.current = wavUri;
-      newPlayer.play();
 
-      if (oldPlayer) {
-        setTimeout(() => {
-          try { oldPlayer.pause(); oldPlayer.release(); } catch {}
-        }, 50);
-      }
-      if (Platform.OS === "web" && oldUrl && oldUrl !== wavUri) {
-        setTimeout(() => {
-          try { URL.revokeObjectURL(oldUrl); } catch {}
-        }, 100);
-      }
+      const player = createAudioPlayer(wavUri);
+      player.loop = true;
+      player.volume = 1.0;
+      renderedPlayerRef.current = player;
+      player.play();
 
       engine.setPreRenderedAudio(true);
     } catch (e) {
