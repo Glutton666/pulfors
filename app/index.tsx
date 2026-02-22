@@ -523,18 +523,15 @@ export default function MetronomeScreen() {
 
     try {
       const scheduleInfo = engine.getScheduleInfo();
-      const [clickPCMs, samplePCMs] = await Promise.all([
-        getClickPCMs(soundSetRef.current),
-        getSamplePCMs(noteSamplesRef.current),
-      ]);
+      const clickPCMs = await getClickPCMs(soundSetRef.current);
 
       const pcm = renderMeasure({
         schedule: scheduleInfo.ticks as TickInfo[],
         measureDurationMs: scheduleInfo.durationMs,
         clickPCMs,
-        samplePCMs,
+        samplePCMs: new Map(),
         clickVolume: 1.0,
-        sampleVolume: sampleVolumeRef.current * 5.0,
+        sampleVolume: 0,
       });
 
       const wavUri = await saveRenderedWav(pcm);
@@ -557,7 +554,7 @@ export default function MetronomeScreen() {
       console.warn("[PreRender] Failed, falling back to per-tick audio:", e);
       return null;
     }
-  }, [getClickPCMs, getSamplePCMs]);
+  }, [getClickPCMs]);
 
   const buildAndPlayRendered = useCallback(async () => {
     const player = await buildRenderedPlayer();
