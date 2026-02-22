@@ -501,6 +501,29 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
     setMicDetectedNote(null);
   }, [stopMobileMic]);
 
+  const pickDominantFreq = useCallback((readings: number[]): number | null => {
+    if (readings.length === 0) return null;
+    const noteMap = new Map<string, number[]>();
+    for (const f of readings) {
+      const info = frequencyToNote(f);
+      const key = `${info.name}${info.octave}`;
+      if (!noteMap.has(key)) noteMap.set(key, []);
+      noteMap.get(key)!.push(f);
+    }
+    let bestKey = "";
+    let bestCount = 0;
+    for (const [key, freqs] of noteMap) {
+      if (freqs.length > bestCount) {
+        bestCount = freqs.length;
+        bestKey = key;
+      }
+    }
+    if (!bestKey) return null;
+    const freqs = noteMap.get(bestKey)!;
+    freqs.sort((a, b) => a - b);
+    return freqs[Math.floor(freqs.length / 2)];
+  }, []);
+
   const startMicWeb = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -519,27 +542,42 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
 
       const buf = new Float32Array(analyser.fftSize);
       const MIC_GATE = 0.05;
+      const WINDOW_MS = 500;
+      let readings: number[] = [];
+      let windowStart = Date.now();
+
       const detect = () => {
         if (!micActiveRef.current) return;
         analyser.getFloatTimeDomainData(buf);
         const freq = autoCorrelate(buf, audioCtx.sampleRate, MIC_GATE);
         if (freq > 20 && freq <= MAX_FREQ) {
-          const rounded = Math.round(freq * 10) / 10;
-          setMicDetectedFreq(rounded);
-          const noteInfo = frequencyToNote(freq);
-          setMicDetectedNote(`${noteInfo.name}${noteInfo.octave}`);
-          setFrequency(rounded);
-        } else {
-          setMicDetectedFreq(null);
-          setMicDetectedNote(null);
+          readings.push(freq);
         }
+
+        const elapsed = Date.now() - windowStart;
+        if (elapsed >= WINDOW_MS) {
+          const dominant = pickDominantFreq(readings);
+          if (dominant) {
+            const rounded = Math.round(dominant * 10) / 10;
+            setMicDetectedFreq(rounded);
+            const noteInfo = frequencyToNote(dominant);
+            setMicDetectedNote(`${noteInfo.name}${noteInfo.octave}`);
+            setFrequency(rounded);
+          } else {
+            setMicDetectedFreq(null);
+            setMicDetectedNote(null);
+          }
+          readings = [];
+          windowStart = Date.now();
+        }
+
         micRafRef.current = requestAnimationFrame(detect);
       };
       detect();
     } catch {
       setMicListening(false);
     }
-  }, []);
+  }, [pickDominantFreq]);
 
   const startMicMobile = useCallback(async () => {
     try {
@@ -556,8 +594,9 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       setMicListening(true);
 
       const SAMPLE_RATE = 44100;
-      const RECORD_MS = 200;
+      const RECORD_MS = 500;
       const MIC_GATE = 0.05;
+      const WINDOW_SIZE = 4096;
 
       const recordAndAnalyze = async () => {
         if (!micActiveRef.current) return;
@@ -600,12 +639,21 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                   encoding: "base64" as any,
                 });
                 const decoded = decodeWavBase64(base64, SAMPLE_RATE);
-                if (decoded && decoded.samples.length > 256) {
-                  const freq = autoCorrelate(decoded.samples, decoded.rate, MIC_GATE);
-                  if (freq > 20 && freq <= MAX_FREQ) {
-                    const rounded = Math.round(freq * 10) / 10;
+                if (decoded && decoded.samples.length > WINDOW_SIZE) {
+                  const readings: number[] = [];
+                  const step = Math.floor(WINDOW_SIZE / 2);
+                  for (let offset = 0; offset + WINDOW_SIZE <= decoded.samples.length; offset += step) {
+                    const window = decoded.samples.slice(offset, offset + WINDOW_SIZE);
+                    const freq = autoCorrelate(window, decoded.rate, MIC_GATE);
+                    if (freq > 20 && freq <= MAX_FREQ) {
+                      readings.push(freq);
+                    }
+                  }
+                  const dominant = pickDominantFreq(readings);
+                  if (dominant) {
+                    const rounded = Math.round(dominant * 10) / 10;
                     setMicDetectedFreq(rounded);
-                    const noteInfo = frequencyToNote(freq);
+                    const noteInfo = frequencyToNote(dominant);
                     setMicDetectedNote(`${noteInfo.name}${noteInfo.octave}`);
                     setFrequency(rounded);
                   } else {
