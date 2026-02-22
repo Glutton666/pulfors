@@ -548,7 +548,7 @@ export function BeatIndicator({
       noteHoldFiredRef.current = true;
       noteHoldActiveRef.current = false;
       noteHoldTimerRef.current = null;
-      if (!isPlaying && onNoteRecordRequest && patternLen > 1) {
+      if (!isPlaying && onNoteRecordRequest) {
         if (Platform.OS !== "web") {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
         }
@@ -978,7 +978,7 @@ export function BeatIndicator({
                     if (!noteHoldFiredRef.current && isPrimary) handleBarCellPress(beat, ci);
                   }}
                   onLongPress={() => {
-                    if (!noteHoldFiredRef.current && isPrimary && !isPlaying && canRecord && onNoteRecordRequest && pattern.length > 1) {
+                    if (!noteHoldFiredRef.current && isPrimary && !isPlaying && canRecord && onNoteRecordRequest) {
                       noteHoldFiredRef.current = true;
                       onNoteRecordRequest(beat, ci);
                     }
@@ -987,7 +987,7 @@ export function BeatIndicator({
                   delayLongPress={500}
                   onTouchStart={() => {
                     noteHoldFiredRef.current = false;
-                    if (isPrimary && !isPlaying && canRecord && onNoteRecordRequest && pattern.length > 1) {
+                    if (isPrimary && !isPlaying && canRecord && onNoteRecordRequest) {
                       startNoteHold(beat, ci, pattern.length);
                     }
                   }}
