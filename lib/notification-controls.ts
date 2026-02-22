@@ -1,20 +1,42 @@
 import { Platform } from "react-native";
-import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 
 const CATEGORY_ID = "metronome_controls";
 const NOTIFICATION_ID = "metronome_playback";
 
 let isSetup = false;
+let Notifications: typeof import("expo-notifications") | null = null;
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+const isExpoGo = Constants.appOwnership === "expo";
+
+async function getNotifications() {
+  if (Notifications) return Notifications;
+  if (Platform.OS === "web" || isExpoGo) return null;
+  try {
+    Notifications = await import("expo-notifications");
+    return Notifications;
+  } catch {
+    return null;
+  }
+}
+
+async function initHandler() {
+  const N = await getNotifications();
+  if (!N) return;
+  try {
+    N.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  } catch {}
+}
+
+initHandler();
 
 function buildActions(isPlaying: boolean) {
   return [
@@ -48,23 +70,26 @@ function buildContent(bpm: number, _mode: string, isPlaying: boolean) {
 }
 
 export async function setupNotificationControls() {
-  if (isSetup || Platform.OS === "web") return;
+  if (isSetup || Platform.OS === "web" || isExpoGo) return;
+
+  const N = await getNotifications();
+  if (!N) return;
 
   try {
-    const { status } = await Notifications.requestPermissionsAsync();
+    const { status } = await N.requestPermissionsAsync();
     if (status !== "granted") return;
 
     if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync("metronome", {
+      await N.setNotificationChannelAsync("metronome", {
         name: "Metronome Controls",
-        importance: Notifications.AndroidImportance.LOW,
+        importance: N.AndroidImportance.LOW,
         sound: undefined,
         vibrationPattern: [],
         enableVibrate: false,
       });
     }
 
-    await Notifications.setNotificationCategoryAsync(
+    await N.setNotificationCategoryAsync(
       CATEGORY_ID,
       buildActions(false)
     );
@@ -76,19 +101,22 @@ export async function setupNotificationControls() {
 }
 
 export async function showPlayingNotification(bpm: number, mode: string) {
-  if (Platform.OS === "web") return;
+  if (Platform.OS === "web" || isExpoGo) return;
   if (!isSetup) {
     await setupNotificationControls();
     if (!isSetup) return;
   }
 
+  const N = await getNotifications();
+  if (!N) return;
+
   try {
-    await Notifications.setNotificationCategoryAsync(
+    await N.setNotificationCategoryAsync(
       CATEGORY_ID,
       buildActions(true)
     );
 
-    await Notifications.scheduleNotificationAsync({
+    await N.scheduleNotificationAsync({
       identifier: NOTIFICATION_ID,
       content: buildContent(bpm, mode, true),
       trigger: null,
@@ -99,10 +127,13 @@ export async function showPlayingNotification(bpm: number, mode: string) {
 }
 
 export async function updateNotificationBpm(bpm: number, mode: string, isPlaying: boolean = true) {
-  if (Platform.OS === "web" || !isSetup) return;
+  if (Platform.OS === "web" || !isSetup || isExpoGo) return;
+
+  const N = await getNotifications();
+  if (!N) return;
 
   try {
-    await Notifications.scheduleNotificationAsync({
+    await N.scheduleNotificationAsync({
       identifier: NOTIFICATION_ID,
       content: buildContent(bpm, mode, isPlaying),
       trigger: null,
@@ -113,15 +144,18 @@ export async function updateNotificationBpm(bpm: number, mode: string, isPlaying
 }
 
 export async function showPausedNotification(bpm: number, mode: string) {
-  if (Platform.OS === "web" || !isSetup) return;
+  if (Platform.OS === "web" || !isSetup || isExpoGo) return;
+
+  const N = await getNotifications();
+  if (!N) return;
 
   try {
-    await Notifications.setNotificationCategoryAsync(
+    await N.setNotificationCategoryAsync(
       CATEGORY_ID,
       buildActions(false)
     );
 
-    await Notifications.scheduleNotificationAsync({
+    await N.scheduleNotificationAsync({
       identifier: NOTIFICATION_ID,
       content: buildContent(bpm, mode, false),
       trigger: null,
@@ -132,10 +166,13 @@ export async function showPausedNotification(bpm: number, mode: string) {
 }
 
 export async function dismissNotification() {
-  if (Platform.OS === "web") return;
+  if (Platform.OS === "web" || isExpoGo) return;
+
+  const N = await getNotifications();
+  if (!N) return;
 
   try {
-    await Notifications.dismissNotificationAsync(NOTIFICATION_ID);
+    await N.dismissNotificationAsync(NOTIFICATION_ID);
   } catch (e) {
     console.warn("Dismiss notification error:", e);
   }
@@ -144,6 +181,10 @@ export async function dismissNotification() {
 export function addNotificationActionListener(
   callback: (actionId: string) => void
 ) {
+  if (Platform.OS === "web" || isExpoGo || !Notifications) {
+    return { remove: () => {} };
+  }
+
   return Notifications.addNotificationResponseReceivedListener((response) => {
     const actionId = response.actionIdentifier;
     if (
