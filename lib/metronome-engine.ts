@@ -52,6 +52,7 @@ export class MetronomeEngine {
   private onBeat: ((beat: number, isAccent: boolean) => void) | null = null;
   private onSubBeat: ((beat: number, subBeat: number) => void) | null = null;
   private onMeasureComplete: (() => void) | null = null;
+  private onTickFired: ((time: number, beat: number, subBeat: number) => void) | null = null;
   private stopAfterMeasure = false;
   private playStrongClick: (() => void) | null = null;
   private playHighClick: (() => void) | null = null;
@@ -94,6 +95,10 @@ export class MetronomeEngine {
 
   setOnMeasureComplete(callback: (() => void) | null) {
     this.onMeasureComplete = callback;
+  }
+
+  setOnTickFired(callback: ((time: number, beat: number, subBeat: number) => void) | null) {
+    this.onTickFired = callback;
   }
 
   requestStopAfterMeasure() {
@@ -324,6 +329,10 @@ export class MetronomeEngine {
         this.onBeat?.(tick.beat, isAccent);
       }
     };
+
+    if (tick.isMainBeat && !isMute) {
+      this.onTickFired?.(performance.now(), tick.beat, tick.subBeat);
+    }
 
     const offset = this.audioOffsetMs;
     if (offset > 0) {
