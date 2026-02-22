@@ -50,14 +50,6 @@ function normalize(samples) {
   return samples;
 }
 
-function softAttack(samples, attackMs) {
-  const attackSamples = Math.floor(SAMPLE_RATE * attackMs / 1000);
-  for (let i = 0; i < Math.min(attackSamples, samples.length); i++) {
-    samples[i] *= i / attackSamples;
-  }
-  return samples;
-}
-
 function fadeOut(samples, fadeMs) {
   const fadeSamples = Math.floor(SAMPLE_RATE * fadeMs / 1000);
   const start = samples.length - fadeSamples;
@@ -69,12 +61,12 @@ function fadeOut(samples, fadeMs) {
 }
 
 function generateClassicHigh() {
-  const duration = 0.018;
+  const duration = 0.025;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 90);
+    const env = Math.exp(-t * 60);
     const f0 = 2500 + 800 * Math.exp(-t * 200);
     let s = 0;
     s += Math.sin(2 * Math.PI * f0 * t) * 1.0;
@@ -83,16 +75,16 @@ function generateClassicHigh() {
     s += Math.sin(2 * Math.PI * f0 * 0.5 * t) * 0.4;
     samples[i] = s * env;
   }
-  return fadeOut(softAttack(normalize(samples), 0.3), 4);
+  return fadeOut(normalize(samples), 5);
 }
 
 function generateClassicLow() {
-  const duration = 0.015;
+  const duration = 0.02;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 100);
+    const env = Math.exp(-t * 70);
     const f0 = 1800 + 500 * Math.exp(-t * 250);
     let s = 0;
     s += Math.sin(2 * Math.PI * f0 * t) * 1.0;
@@ -101,16 +93,16 @@ function generateClassicLow() {
     s += Math.sin(2 * Math.PI * f0 * 0.5 * t) * 0.35;
     samples[i] = s * env;
   }
-  return fadeOut(softAttack(normalize(samples), 0.3), 3);
+  return fadeOut(normalize(samples), 5);
 }
 
 function generateWoodblockHigh() {
-  const duration = 0.025;
+  const duration = 0.035;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 70);
+    const env = Math.exp(-t * 50);
     const f1 = 900 + 200 * Math.exp(-t * 60);
     const f2 = 2300 + 300 * Math.exp(-t * 80);
     let s = 0;
@@ -119,16 +111,16 @@ function generateWoodblockHigh() {
     s += Math.sin(2 * Math.PI * f1 * 2.8 * t) * 0.4;
     samples[i] = s * env;
   }
-  return fadeOut(softAttack(normalize(samples), 0.4), 4);
+  return fadeOut(normalize(samples), 5);
 }
 
 function generateWoodblockLow() {
-  const duration = 0.03;
+  const duration = 0.04;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 60);
+    const env = Math.exp(-t * 45);
     const f1 = 600 + 150 * Math.exp(-t * 50);
     const f2 = 1500 + 200 * Math.exp(-t * 70);
     let s = 0;
@@ -137,16 +129,16 @@ function generateWoodblockLow() {
     s += Math.sin(2 * Math.PI * f1 * 2.5 * t) * 0.3;
     samples[i] = s * env;
   }
-  return fadeOut(softAttack(normalize(samples), 0.4), 4);
+  return fadeOut(normalize(samples), 5);
 }
 
 function generateDigitalHigh() {
-  const duration = 0.012;
+  const duration = 0.015;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 110);
+    const env = Math.exp(-t * 80);
     const freq = 2600;
     let s = 0;
     s += Math.sin(2 * Math.PI * freq * t) * 1.0;
@@ -155,16 +147,16 @@ function generateDigitalHigh() {
     s += Math.sin(2 * Math.PI * freq * 0.5 * t) * 0.4;
     samples[i] = s * env;
   }
-  return fadeOut(softAttack(normalize(samples), 0.2), 2);
+  return fadeOut(normalize(samples), 3);
 }
 
 function generateDigitalLow() {
-  const duration = 0.01;
+  const duration = 0.012;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 120);
+    const env = Math.exp(-t * 90);
     const freq = 1900;
     let s = 0;
     s += Math.sin(2 * Math.PI * freq * t) * 1.0;
@@ -173,16 +165,16 @@ function generateDigitalLow() {
     s += Math.sin(2 * Math.PI * freq * 0.5 * t) * 0.35;
     samples[i] = s * env;
   }
-  return fadeOut(softAttack(normalize(samples), 0.2), 2);
+  return fadeOut(normalize(samples), 3);
 }
 
 function generateRimshotHigh() {
-  const duration = 0.032;
+  const duration = 0.045;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 55);
+    const env = Math.exp(-t * 40);
     let s = 0;
     s += Math.sin(2 * Math.PI * 450 * t) * 0.8;
     s += Math.sin(2 * Math.PI * 900 * t) * 0.5;
@@ -191,16 +183,16 @@ function generateRimshotHigh() {
     s += Math.sin(2 * Math.PI * 3200 * t) * 0.2;
     samples[i] = s * env;
   }
-  return fadeOut(softAttack(normalize(samples), 0.4), 4);
+  return fadeOut(normalize(samples), 5);
 }
 
 function generateRimshotLow() {
-  const duration = 0.028;
+  const duration = 0.04;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 60);
+    const env = Math.exp(-t * 45);
     let s = 0;
     s += Math.sin(2 * Math.PI * 350 * t) * 0.7;
     s += Math.sin(2 * Math.PI * 700 * t) * 0.4;
@@ -209,16 +201,16 @@ function generateRimshotLow() {
     s += Math.sin(2 * Math.PI * 2600 * t) * 0.15;
     samples[i] = s * env;
   }
-  return fadeOut(softAttack(normalize(samples), 0.4), 4);
+  return fadeOut(normalize(samples), 5);
 }
 
 function generateClassicStrong() {
-  const duration = 0.025;
+  const duration = 0.035;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 65);
+    const env = Math.exp(-t * 45);
     const f0 = 3200 + 1200 * Math.exp(-t * 150);
     let s = 0;
     s += Math.sin(2 * Math.PI * f0 * t) * 1.0;
@@ -228,16 +220,16 @@ function generateClassicStrong() {
     s += Math.sin(2 * Math.PI * f0 * 4.0 * t) * 0.3;
     samples[i] = s * env;
   }
-  return fadeOut(softAttack(normalize(samples), 0.3), 4);
+  return fadeOut(normalize(samples), 5);
 }
 
 function generateWoodblockStrong() {
-  const duration = 0.032;
+  const duration = 0.045;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 52);
+    const env = Math.exp(-t * 38);
     const f1 = 1100 + 300 * Math.exp(-t * 50);
     const f2 = 2800 + 500 * Math.exp(-t * 70);
     let s = 0;
@@ -247,16 +239,16 @@ function generateWoodblockStrong() {
     s += Math.sin(2 * Math.PI * f1 * 4.0 * t) * 0.3;
     samples[i] = s * env;
   }
-  return fadeOut(softAttack(normalize(samples), 0.4), 4);
+  return fadeOut(normalize(samples), 5);
 }
 
 function generateDigitalStrong() {
-  const duration = 0.015;
+  const duration = 0.02;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 85);
+    const env = Math.exp(-t * 60);
     const freq = 3200;
     let s = 0;
     s += Math.sin(2 * Math.PI * freq * t) * 1.0;
@@ -266,16 +258,16 @@ function generateDigitalStrong() {
     s += Math.sin(2 * Math.PI * freq * 4.0 * t) * 0.25;
     samples[i] = s * env;
   }
-  return fadeOut(softAttack(normalize(samples), 0.2), 2);
+  return fadeOut(normalize(samples), 3);
 }
 
 function generateRimshotStrong() {
-  const duration = 0.038;
+  const duration = 0.055;
   const numSamples = Math.floor(SAMPLE_RATE * duration);
   const samples = new Float64Array(numSamples);
   for (let i = 0; i < numSamples; i++) {
     const t = i / SAMPLE_RATE;
-    const env = Math.exp(-t * 45);
+    const env = Math.exp(-t * 32);
     let s = 0;
     s += Math.sin(2 * Math.PI * 550 * t) * 1.0;
     s += Math.sin(2 * Math.PI * 1100 * t) * 0.7;
@@ -285,7 +277,7 @@ function generateRimshotStrong() {
     s += Math.sin(2 * Math.PI * 4500 * t) * 0.15;
     samples[i] = s * env;
   }
-  return fadeOut(softAttack(normalize(samples), 0.4), 4);
+  return fadeOut(normalize(samples), 5);
 }
 
 const outDir = path.join(__dirname, "..", "assets", "sounds");

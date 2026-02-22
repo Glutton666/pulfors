@@ -64,7 +64,7 @@ import { NoteRecorderModal } from "@/components/NoteRecorderModal";
 import { AudioModule, createAudioPlayer } from "expo-audio";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import {
-  loadAssetPCM,
+  decodeAsset,
   decodeSampleFile,
   parseTrimInfo,
   renderMeasure,
@@ -482,9 +482,9 @@ export default function MetronomeScreen() {
     if (clickPCMCacheRef.current[set]) return clickPCMCacheRef.current[set];
     const src = soundSets[set] || soundSets.classic;
     const [strong, high, low] = await Promise.all([
-      loadAssetPCM(src.strong),
-      loadAssetPCM(src.high),
-      loadAssetPCM(src.low),
+      decodeAsset(src.strong),
+      decodeAsset(src.high),
+      decodeAsset(src.low),
     ]);
     const result: ClickPCMs = { strong, high, low };
     clickPCMCacheRef.current[set] = result;
