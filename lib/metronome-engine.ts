@@ -414,11 +414,9 @@ export class MetronomeEngine {
   };
 
   private rafLoop = () => {
+    this.rafId = null;
     if (!this.isRunning) return;
     this.loop();
-    if (this.isRunning && this.rafId !== null) {
-      this.rafId = null;
-    }
   };
 
   private scheduleRAF() {
