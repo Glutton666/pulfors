@@ -155,8 +155,7 @@ export function NoteRecorderModal({
         interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
       });
 
-      const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync({
+      const recordingOptions: Audio.RecordingOptions = {
         isMeteringEnabled: false,
         android: {
           extension: ".m4a",
@@ -168,7 +167,7 @@ export function NoteRecorderModal({
         },
         ios: {
           extension: ".wav",
-          outputFormat: "lpcm",
+          outputFormat: "lpcm" as any,
           audioQuality: 127,
           sampleRate: 44100,
           numberOfChannels: 1,
@@ -181,10 +180,11 @@ export function NoteRecorderModal({
           mimeType: "audio/webm",
           bitsPerSecond: 128000,
         },
-      } as any);
+      };
+
+      const { recording } = await Audio.Recording.createAsync(recordingOptions);
 
       recordingRef.current = recording;
-      await recording.startAsync();
       setPhase("recording");
       setRecordDuration(0);
 
@@ -200,8 +200,9 @@ export function NoteRecorderModal({
           stopRecording();
         }
       }, 100);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to start recording:", e);
+      Alert.alert("Recording Error", e?.message || "Could not start recording. Please check microphone permissions.");
       setPhase("idle");
     }
   }, []);
@@ -226,14 +227,17 @@ export function NoteRecorderModal({
       if (uri) {
         setRecordedUri(uri);
 
-        const sound = new Audio.Sound();
-        await sound.loadAsync({ uri });
-        const status = await sound.getStatusAsync();
-        if (status.isLoaded && status.durationMillis) {
-          setAudioDuration(status.durationMillis / 1000);
-          setTrimEnd(1);
+        try {
+          const { sound, status } = await Audio.Sound.createAsync({ uri });
+          if (status.isLoaded && status.durationMillis) {
+            setAudioDuration(status.durationMillis / 1000);
+            setTrimEnd(1);
+          }
+          await sound.unloadAsync();
+        } catch (e2) {
+          console.warn("Could not get recording duration:", e2);
+          setAudioDuration(0);
         }
-        await sound.unloadAsync();
 
         setPhase("trimming");
         if (Platform.OS !== "web") {
@@ -259,14 +263,15 @@ export function NoteRecorderModal({
     }
 
     try {
-      const sound = new Audio.Sound();
-      await sound.loadAsync({ uri: recordedUri });
-      previewSoundRef.current = sound;
-
       const startMs = Math.floor(trimStart * audioDuration * 1000);
       const endMs = Math.floor(trimEnd * audioDuration * 1000);
 
-      await sound.setPositionAsync(startMs);
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: recordedUri },
+        { positionMillis: startMs }
+      );
+      previewSoundRef.current = sound;
+
       setIsPlayingPreview(true);
       await sound.playAsync();
 
@@ -344,9 +349,7 @@ export function NoteRecorderModal({
         setLoadingProgress((prev) => Math.min(prev + 0.05, 0.85));
       }, 500);
 
-      const sound = new Audio.Sound();
-      await sound.loadAsync({ uri: fileUri });
-      const status = await sound.getStatusAsync();
+      const { sound, status } = await Audio.Sound.createAsync({ uri: fileUri });
 
       clearInterval(progressInterval);
       setLoadingProgress(0.95);
