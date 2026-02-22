@@ -301,20 +301,17 @@ export class MetronomeEngine {
 
     const playAudio = () => {
       if (isMute) return;
-      let customHandled = false;
+      try {
+        if (isStrong) {
+          this.playStrongClick?.();
+        } else if (isAccent) {
+          this.playHighClick?.();
+        } else {
+          this.playLowClick?.();
+        }
+      } catch (e) {}
       if (tick.repeatIteration === 0 && this.playCustomSample) {
-        customHandled = this.playCustomSample(tick.beat, tick.subBeat);
-      }
-      if (!customHandled) {
-        try {
-          if (isStrong) {
-            this.playStrongClick?.();
-          } else if (isAccent) {
-            this.playHighClick?.();
-          } else {
-            this.playLowClick?.();
-          }
-        } catch (e) {}
+        this.playCustomSample(tick.beat, tick.subBeat);
       }
     };
 

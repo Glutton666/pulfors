@@ -291,6 +291,12 @@ export function renderMeasure(params: {
     const offsetSamples = Math.round((tick.time / 1000) * RENDER_SR);
     const key = `${tick.beat}-${tick.subBeat}`;
 
+    let clickPCM: Float32Array;
+    if (tick.type === "strong") clickPCM = clickPCMs.strong;
+    else if (tick.type === "accent") clickPCM = clickPCMs.high;
+    else clickPCM = clickPCMs.low;
+    mixInto(buffer, clickPCM, offsetSamples, clickVolume);
+
     if (tick.repeatIteration === 0 && samplePCMs.has(key)) {
       const sample = samplePCMs.get(key)!;
       const trimStart = Math.round(
@@ -305,12 +311,6 @@ export function renderMeasure(params: {
         Math.min(trimStart + trimLen, sample.pcm.length)
       );
       mixInto(buffer, trimmed, offsetSamples, sampleVolume);
-    } else {
-      let clickPCM: Float32Array;
-      if (tick.type === "strong") clickPCM = clickPCMs.strong;
-      else if (tick.type === "accent") clickPCM = clickPCMs.high;
-      else clickPCM = clickPCMs.low;
-      mixInto(buffer, clickPCM, offsetSamples, clickVolume);
     }
   }
 
