@@ -17,6 +17,7 @@ export interface MetronomeSettings {
   subdivisionPattern?: BeatType[];
   beatSubdivisions?: Record<string, BeatType[]>;
   volume?: number;
+  sampleVolume?: number;
   backgroundPlay?: boolean;
   soundSet?: SoundSet;
   flashMode?: FlashMode;

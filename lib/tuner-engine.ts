@@ -113,7 +113,7 @@ export function findClosestTuningNote(
   return { note: closest, cents: Math.round(minCents) };
 }
 
-export function autoCorrelate(buffer: Float32Array, sampleRate: number, rmsThreshold: number = 0.15): number {
+export function autoCorrelate(buffer: Float32Array, sampleRate: number, rmsThreshold: number = 0.08): number {
   const SIZE = buffer.length;
 
   let rms = 0;
@@ -142,6 +142,7 @@ export function autoCorrelate(buffer: Float32Array, sampleRate: number, rmsThres
   }
 
   const buf = buffer.slice(r1, r2);
+  if (buf.length < 2) return -1;
   const c = new Float32Array(buf.length);
 
   for (let i = 0; i < buf.length; i++) {
@@ -151,7 +152,7 @@ export function autoCorrelate(buffer: Float32Array, sampleRate: number, rmsThres
   }
 
   let d = 0;
-  while (c[d] > c[d + 1]) d++;
+  while (d < buf.length - 1 && c[d] > c[d + 1]) d++;
 
   let maxval = -1;
   let maxpos = -1;
@@ -161,6 +162,11 @@ export function autoCorrelate(buffer: Float32Array, sampleRate: number, rmsThres
       maxpos = i;
     }
   }
+
+  if (maxpos < 0 || maxval < 0) return -1;
+
+  const clarity = c[0] > 0 ? maxval / c[0] : 0;
+  if (clarity < 0.5) return -1;
 
   let T0 = maxpos;
 
