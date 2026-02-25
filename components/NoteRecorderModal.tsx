@@ -29,11 +29,12 @@ type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
 interface NoteRecorderModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (uri: string) => void;
+  onSave: (uri: string, name: string) => void;
   onDelete: () => void;
   beatIndex: number;
   subIndex: number;
   hasExisting: boolean;
+  existingName?: string;
 }
 
 const MAX_RECORD_SECONDS = 10;
@@ -47,6 +48,7 @@ export function NoteRecorderModal({
   beatIndex,
   subIndex,
   hasExisting,
+  existingName,
 }: NoteRecorderModalProps) {
   const { colors: C } = useTheme();
 
@@ -54,6 +56,7 @@ export function NoteRecorderModal({
   const [countdownValue, setCountdownValue] = useState(COUNTDOWN_FROM);
   const [recordDuration, setRecordDuration] = useState(0);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
+  const [sampleName, setSampleName] = useState("");
 
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(1);
@@ -107,8 +110,11 @@ export function NoteRecorderModal({
       setTrimEnd(1);
       setAudioDuration(0);
       setIsPlayingPreview(false);
+      setSampleName("");
+    } else {
+      setSampleName(existingName || "");
     }
-  }, [visible, cleanup]);
+  }, [visible, cleanup, existingName]);
 
   const startCountdown = useCallback(async () => {
     const { status } = await Audio.requestPermissionsAsync();
@@ -300,11 +306,11 @@ export function NoteRecorderModal({
     if (audioDuration > 0) {
       const startMs = Math.floor(trimStart * audioDuration * 1000);
       const endMs = Math.floor(trimEnd * audioDuration * 1000);
-      onSave(`${recordedUri}#t=${startMs},${endMs}`);
+      onSave(`${recordedUri}#t=${startMs},${endMs}`, sampleName);
     } else {
-      onSave(recordedUri);
+      onSave(recordedUri, sampleName);
     }
-  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave]);
+  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave, sampleName]);
 
   const MAX_DURATION_SEC = 600;
   const MAX_FILE_SIZE_MB = 50;
@@ -643,6 +649,19 @@ export function NoteRecorderModal({
                 </Pressable>
               </View>
 
+              <View style={styles.nameInputRow}>
+                <Ionicons name="pricetag-outline" size={14} color={Colors.textSecondary} />
+                <TextInput
+                  style={[styles.nameInput, { borderColor: C.accent + "40" }]}
+                  value={sampleName}
+                  onChangeText={setSampleName}
+                  placeholder="Sample name (optional)"
+                  placeholderTextColor={Colors.textTertiary}
+                  returnKeyType="done"
+                  maxLength={30}
+                />
+              </View>
+
               <View style={styles.saveRow}>
                 <Pressable style={styles.cancelBtn} onPress={handleClose}>
                   <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -934,6 +953,23 @@ const styles = StyleSheet.create({
   previewBtnText: {
     fontSize: 14,
     fontWeight: "600",
+  },
+  nameInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    width: "100%",
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  nameInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    color: Colors.text,
+    fontSize: 13,
   },
   saveRow: {
     flexDirection: "row",

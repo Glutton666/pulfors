@@ -58,8 +58,8 @@ import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import type { PracticeEntry } from "@/lib/storage";
 import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
-import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample } from "@/lib/note-samples";
-import type { NoteSampleMap } from "@/lib/note-samples";
+import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, setNoteSampleName, removeNoteSampleName } from "@/lib/note-samples";
+import type { NoteSampleMap, NoteSampleNameMap } from "@/lib/note-samples";
 import { NoteRecorderModal } from "@/components/NoteRecorderModal";
 import { AudioModule, createAudioPlayer } from "expo-audio";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
@@ -170,6 +170,8 @@ export default function MetronomeScreen() {
 
   const [noteSamples, setNoteSamples] = useState<NoteSampleMap>({});
   const noteSamplesRef = useRef<NoteSampleMap>({});
+  const [noteSampleNames, setNoteSampleNames] = useState<NoteSampleNameMap>({});
+  const noteSampleNamesRef = useRef<NoteSampleNameMap>({});
   const noteSampleSoundsRef = useRef<Record<string, ExpoAudioPlayer>>({});
   const samplePlayStateRef = useRef<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>({});
   const [recorderTarget, setRecorderTarget] = useState<{ beat: number; sub: number } | null>(null);
@@ -357,6 +359,11 @@ export default function MetronomeScreen() {
       setNoteSamples(samples);
       noteSamplesRef.current = samples;
       preloadSounds(samples);
+    });
+
+    loadNoteSampleNames().then((names) => {
+      setNoteSampleNames(names);
+      noteSampleNamesRef.current = names;
     });
 
     const sampleTimingCacheRef = { current: new Map<string, { startMs: number; durationMs: number }>() };
@@ -595,13 +602,16 @@ export default function MetronomeScreen() {
     setRecorderTarget({ beat: beatIndex, sub: subIndex });
   }, []);
 
-  const handleNoteRecordSave = useCallback(async (uri: string) => {
+  const handleNoteRecordSave = useCallback(async (uri: string, name: string) => {
     if (!recorderTarget) return;
     const key = `${recorderTarget.beat}-${recorderTarget.sub}`;
     invalidateSamplePCMCache(key);
     const updated = await setNoteSample(recorderTarget.beat, recorderTarget.sub, uri, noteSamplesRef.current);
     setNoteSamples(updated);
     noteSamplesRef.current = updated;
+    const updatedNames = await setNoteSampleName(recorderTarget.beat, recorderTarget.sub, name, noteSampleNamesRef.current);
+    setNoteSampleNames(updatedNames);
+    noteSampleNamesRef.current = updatedNames;
     await preloadNoteSampleSounds(updated);
     setRecorderTarget(null);
   }, [recorderTarget, preloadNoteSampleSounds, invalidateSamplePCMCache]);
@@ -613,6 +623,9 @@ export default function MetronomeScreen() {
     const updated = await removeNoteSample(recorderTarget.beat, recorderTarget.sub, noteSamplesRef.current);
     setNoteSamples(updated);
     noteSamplesRef.current = updated;
+    const updatedNames = await removeNoteSampleName(recorderTarget.beat, recorderTarget.sub, noteSampleNamesRef.current);
+    setNoteSampleNames(updatedNames);
+    noteSampleNamesRef.current = updatedNames;
     if (noteSampleSoundsRef.current[key]) {
       try { noteSampleSoundsRef.current[key].release(); } catch {}
       delete noteSampleSoundsRef.current[key];
@@ -1188,6 +1201,8 @@ export default function MetronomeScreen() {
       setBarLoopMode("loop");
       setNoteSamples({});
       noteSamplesRef.current = {};
+      setNoteSampleNames({});
+      noteSampleNamesRef.current = {};
       engine.setBeatsPerMeasure(defaultBeats);
       engine.setBeatTypes([...defaultTypes]);
       engine.setAllBeatSubdivisions({});
@@ -1855,6 +1870,7 @@ export default function MetronomeScreen() {
         beatIndex={recorderTarget?.beat ?? 0}
         subIndex={recorderTarget?.sub ?? 0}
         hasExisting={recorderTarget ? hasNoteSample(recorderTarget.beat, recorderTarget.sub, noteSamples) : false}
+        existingName={recorderTarget ? (noteSampleNames[`${recorderTarget.beat}-${recorderTarget.sub}`] || "") : ""}
       />
 
       <PracticeBookModal
@@ -1977,6 +1993,7 @@ export default function MetronomeScreen() {
             initialBarClockMode={barConfigRef.current.barClockMode}
             initialBarTimerDuration={barConfigRef.current.barTimerDuration}
             noteSamples={noteSamples}
+            noteSampleNames={noteSampleNames}
             onNoteRecordRequest={handleNoteRecordRequest}
             bpm={bpm}
             barStartBeat={barStartBeat}

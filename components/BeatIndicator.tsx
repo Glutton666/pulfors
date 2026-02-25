@@ -239,6 +239,7 @@ interface BeatIndicatorProps {
   initialBarClockMode?: "stopwatch" | "timer";
   initialBarTimerDuration?: number;
   noteSamples?: Record<string, string>;
+  noteSampleNames?: Record<string, string>;
   onNoteRecordRequest?: (beatIndex: number, subIndex: number) => void;
   bpm?: number;
   barStartBeat?: number | null;
@@ -273,6 +274,7 @@ export function BeatIndicator({
   initialBarClockMode,
   initialBarTimerDuration,
   noteSamples,
+  noteSampleNames,
   onNoteRecordRequest,
   bpm,
   barStartBeat,
@@ -1026,7 +1028,17 @@ export function BeatIndicator({
               }
               if (segStart >= 0) segments.push({ start: segStart, end: pattern.length - 1 });
 
-              return segments.map((seg, si) => {
+              const sampleNameForBeat = (() => {
+                for (let ci = 0; ci < pattern.length; ci++) {
+                  const sk = `${beat}-${ci}`;
+                  if (noteSamples && noteSamples[sk] && noteSampleNames && noteSampleNames[sk]) {
+                    return noteSampleNames[sk];
+                  }
+                }
+                return null;
+              })();
+
+              const result: React.ReactNode[] = segments.map((seg, si) => {
                 const leftPct = (seg.start / pattern.length) * 100;
                 const widthPct = ((seg.end - seg.start + 1) / pattern.length) * 100;
                 return (
@@ -1036,12 +1048,33 @@ export function BeatIndicator({
                     width: `${widthPct}%` as any,
                     bottom: -1,
                     height: 3,
-                    backgroundColor: "#39FF14",
+                    backgroundColor: "#FF4444",
                     opacity: 0.85,
                     zIndex: 10,
                   }} />
                 );
               });
+
+              if (sampleNameForBeat) {
+                result.push(
+                  <View key="sample-name" style={{
+                    position: "absolute",
+                    bottom: 3,
+                    left: 2,
+                    right: 2,
+                    zIndex: 11,
+                  }} pointerEvents="none">
+                    <Text numberOfLines={1} style={{
+                      fontSize: 8,
+                      color: "#FF4444",
+                      fontWeight: "600",
+                      opacity: 0.9,
+                    }}>{sampleNameForBeat}</Text>
+                  </View>
+                );
+              }
+
+              return result;
             })()}
           </View>
           <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
