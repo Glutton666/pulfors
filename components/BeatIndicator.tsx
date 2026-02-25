@@ -240,6 +240,7 @@ interface BeatIndicatorProps {
   initialBarTimerDuration?: number;
   noteSamples?: Record<string, string>;
   noteSampleNames?: Record<string, string>;
+  noteSampleSources?: Record<string, string>;
   onNoteRecordRequest?: (beatIndex: number, subIndex: number) => void;
   bpm?: number;
   barStartBeat?: number | null;
@@ -275,6 +276,7 @@ export function BeatIndicator({
   initialBarTimerDuration,
   noteSamples,
   noteSampleNames,
+  noteSampleSources,
   onNoteRecordRequest,
   bpm,
   barStartBeat,
@@ -1028,15 +1030,21 @@ export function BeatIndicator({
               }
               if (segStart >= 0) segments.push({ start: segStart, end: pattern.length - 1 });
 
-              const sampleNameForBeat = (() => {
+              const beatSampleInfo = (() => {
+                let name: string | null = null;
+                let source: string | null = null;
                 for (let ci = 0; ci < pattern.length; ci++) {
                   const sk = `${beat}-${ci}`;
-                  if (noteSamples && noteSamples[sk] && noteSampleNames && noteSampleNames[sk]) {
-                    return noteSampleNames[sk];
+                  if (noteSamples && noteSamples[sk]) {
+                    if (noteSampleSources && noteSampleSources[sk]) source = noteSampleSources[sk];
+                    if (noteSampleNames && noteSampleNames[sk]) name = noteSampleNames[sk];
+                    break;
                   }
                 }
-                return null;
+                return { name, source };
               })();
+
+              const barColor = beatSampleInfo.source === "import" ? "#39FF14" : "#FF4444";
 
               const result: React.ReactNode[] = segments.map((seg, si) => {
                 const leftPct = (seg.start / pattern.length) * 100;
@@ -1048,14 +1056,14 @@ export function BeatIndicator({
                     width: `${widthPct}%` as any,
                     bottom: -1,
                     height: 3,
-                    backgroundColor: "#FF4444",
+                    backgroundColor: barColor,
                     opacity: 0.85,
                     zIndex: 10,
                   }} />
                 );
               });
 
-              if (sampleNameForBeat) {
+              if (beatSampleInfo.name) {
                 result.push(
                   <View key="sample-name" style={{
                     position: "absolute",
@@ -1066,10 +1074,10 @@ export function BeatIndicator({
                   }} pointerEvents="none">
                     <Text numberOfLines={1} style={{
                       fontSize: 8,
-                      color: "#FF4444",
+                      color: barColor,
                       fontWeight: "600",
                       opacity: 0.9,
-                    }}>{sampleNameForBeat}</Text>
+                    }}>{beatSampleInfo.name}</Text>
                   </View>
                 );
               }

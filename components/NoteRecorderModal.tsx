@@ -23,13 +23,14 @@ import Animated, {
 } from "react-native-reanimated";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
+import type { SampleSource } from "@/lib/note-samples";
 
 type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
 
 interface NoteRecorderModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (uri: string, name: string) => void;
+  onSave: (uri: string, name: string, source: SampleSource) => void;
   onDelete: () => void;
   beatIndex: number;
   subIndex: number;
@@ -57,6 +58,7 @@ export function NoteRecorderModal({
   const [recordDuration, setRecordDuration] = useState(0);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
   const [sampleName, setSampleName] = useState("");
+  const sourceTypeRef = useRef<SampleSource>("recording");
 
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(1);
@@ -123,6 +125,7 @@ export function NoteRecorderModal({
       return;
     }
 
+    sourceTypeRef.current = "recording";
     setPhase("countdown");
     setCountdownValue(COUNTDOWN_FROM);
     let count = COUNTDOWN_FROM;
@@ -306,9 +309,9 @@ export function NoteRecorderModal({
     if (audioDuration > 0) {
       const startMs = Math.floor(trimStart * audioDuration * 1000);
       const endMs = Math.floor(trimEnd * audioDuration * 1000);
-      onSave(`${recordedUri}#t=${startMs},${endMs}`, sampleName);
+      onSave(`${recordedUri}#t=${startMs},${endMs}`, sampleName, sourceTypeRef.current);
     } else {
-      onSave(recordedUri, sampleName);
+      onSave(recordedUri, sampleName, sourceTypeRef.current);
     }
   }, [recordedUri, trimStart, trimEnd, audioDuration, onSave, sampleName]);
 
@@ -317,6 +320,7 @@ export function NoteRecorderModal({
 
   const handleImportFile = useCallback(async () => {
     try {
+      sourceTypeRef.current = "import";
       setPhase("loading");
       setLoadingProgress(0);
       setLoadingMessage("Selecting file...");

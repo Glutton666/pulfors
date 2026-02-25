@@ -2,9 +2,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const STORAGE_KEY = "@note_samples";
 const NAMES_STORAGE_KEY = "@note_sample_names";
+const SOURCES_STORAGE_KEY = "@note_sample_sources";
 
 export type NoteSampleMap = Record<string, string>;
 export type NoteSampleNameMap = Record<string, string>;
+export type SampleSource = "recording" | "import";
+export type NoteSampleSourceMap = Record<string, SampleSource>;
 
 function sampleKey(beatIndex: number, subIndex: number): string {
   return `${beatIndex}-${subIndex}`;
@@ -36,6 +39,44 @@ export async function saveNoteSampleNames(names: NoteSampleNameMap): Promise<voi
   try {
     await AsyncStorage.setItem(NAMES_STORAGE_KEY, JSON.stringify(names));
   } catch {}
+}
+
+export async function loadNoteSampleSources(): Promise<NoteSampleSourceMap> {
+  try {
+    const raw = await AsyncStorage.getItem(SOURCES_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return {};
+}
+
+export async function saveNoteSampleSources(sources: NoteSampleSourceMap): Promise<void> {
+  try {
+    await AsyncStorage.setItem(SOURCES_STORAGE_KEY, JSON.stringify(sources));
+  } catch {}
+}
+
+export async function setNoteSampleSource(
+  beatIndex: number,
+  subIndex: number,
+  source: SampleSource,
+  existing: NoteSampleSourceMap
+): Promise<NoteSampleSourceMap> {
+  const updated = { ...existing, [sampleKey(beatIndex, subIndex)]: source };
+  await saveNoteSampleSources(updated);
+  return updated;
+}
+
+export async function removeNoteSampleSource(
+  beatIndex: number,
+  subIndex: number,
+  existing: NoteSampleSourceMap
+): Promise<NoteSampleSourceMap> {
+  const key = sampleKey(beatIndex, subIndex);
+  if (!(key in existing)) return existing;
+  const updated = { ...existing };
+  delete updated[key];
+  await saveNoteSampleSources(updated);
+  return updated;
 }
 
 export async function setNoteSample(
