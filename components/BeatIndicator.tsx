@@ -287,7 +287,7 @@ export function BeatIndicator({
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
 
   const sampleCoveredCells = useMemo(() => {
-    const covered = new Set<string>();
+    const covered = new Map<string, string>();
     if (!noteSamples || !bpm || bpm <= 0) return covered;
     const beatDurMs = 60000 / bpm;
 
@@ -299,12 +299,20 @@ export function BeatIndicator({
       return Math.max(1, Math.round(durationMs / beatDurMs));
     };
 
+    const markCell = (cellKey: string, source: string) => {
+      const existing = covered.get(cellKey);
+      if (existing === "recording") return;
+      covered.set(cellKey, source);
+    };
+
     for (const [key, uri] of Object.entries(noteSamples)) {
       const [beatStr, subStr] = key.split("-");
       const triggerBeat = parseInt(beatStr, 10);
       const triggerSub = parseInt(subStr, 10);
       if (isNaN(triggerBeat) || isNaN(triggerSub)) continue;
       if (triggerBeat >= beatsPerMeasure) continue;
+
+      const source = (noteSampleSources && noteSampleSources[key]) || "recording";
 
       const hashParts = uri.split("#t=")[1];
       let durationMs = 0;
@@ -315,7 +323,7 @@ export function BeatIndicator({
         if (endMs > startMs) durationMs = endMs - startMs;
       }
 
-      covered.add(key);
+      markCell(key, source);
 
       if (durationMs <= 0) continue;
 
@@ -325,7 +333,7 @@ export function BeatIndicator({
       const triggerSubDur = beatDurMs / triggerSubCount;
 
       for (let si = triggerSub; si < triggerSubCount && remainMs > 0; si++) {
-        covered.add(`${triggerBeat}-${si}`);
+        markCell(`${triggerBeat}-${si}`, source);
         remainMs -= triggerSubDur;
       }
 
@@ -344,14 +352,14 @@ export function BeatIndicator({
 
         if (remainMs >= fullBeatDur) {
           for (let si = 0; si < curSubCount; si++) {
-            covered.add(`${b}-${si}`);
+            markCell(`${b}-${si}`, source);
           }
           remainMs -= fullBeatDur;
           b++;
         } else {
           let leftMs = remainMs;
           for (let si = 0; si < curSubCount && leftMs > 0; si++) {
-            covered.add(`${b}-${si}`);
+            markCell(`${b}-${si}`, source);
             leftMs -= curSubDur;
           }
           remainMs = 0;
@@ -359,7 +367,7 @@ export function BeatIndicator({
       }
     }
     return covered;
-  }, [noteSamples, bpm, beatsPerMeasure, beatSubdivisions, barRepeats]);
+  }, [noteSamples, noteSampleSources, bpm, beatsPerMeasure, beatSubdivisions, barRepeats]);
 
   const swipeProgress = useSharedValue(0);
   const swipeDirection = useSharedValue(0);
@@ -1030,25 +1038,43 @@ export function BeatIndicator({
               }
               if (segStart >= 0) segments.push({ start: segStart, end: pattern.length - 1 });
 
-              const beatSampleInfo = (() => {
+              const getSegmentSource = (seg: { start: number; end: number }): string => {
+                for (let ci = seg.start; ci <= seg.end; ci++) {
+                  const sk = `${beat}-${ci}`;
+                  const directSource = noteSampleSources && noteSamples && noteSamples[sk] && noteSampleSources[sk];
+                  if (directSource === "recording") return "recording";
+                  const coveredSource = sampleCoveredCells.get(sk);
+                  if (coveredSource === "recording") return "recording";
+                }
+                for (let ci = seg.start; ci <= seg.end; ci++) {
+                  const sk = `${beat}-${ci}`;
+                  const directSource = noteSampleSources && noteSamples && noteSamples[sk] && noteSampleSources[sk];
+                  if (directSource) return directSource;
+                  const coveredSource = sampleCoveredCells.get(sk);
+                  if (coveredSource) return coveredSource;
+                }
+                return "recording";
+              };
+
+              const beatNameInfo = (() => {
                 let name: string | null = null;
-                let source: string | null = null;
+                let nameSource: string = "recording";
                 for (let ci = 0; ci < pattern.length; ci++) {
                   const sk = `${beat}-${ci}`;
                   if (noteSamples && noteSamples[sk]) {
-                    if (noteSampleSources && noteSampleSources[sk]) source = noteSampleSources[sk];
                     if (noteSampleNames && noteSampleNames[sk]) name = noteSampleNames[sk];
+                    nameSource = (noteSampleSources && noteSampleSources[sk]) || "recording";
                     break;
                   }
                 }
-                return { name, source };
+                return { name, nameSource };
               })();
-
-              const barColor = beatSampleInfo.source === "import" ? "#39FF14" : "#FF4444";
 
               const result: React.ReactNode[] = segments.map((seg, si) => {
                 const leftPct = (seg.start / pattern.length) * 100;
                 const widthPct = ((seg.end - seg.start + 1) / pattern.length) * 100;
+                const segSource = getSegmentSource(seg);
+                const segColor = segSource === "import" ? "#39FF14" : "#FF4444";
                 return (
                   <View key={`bar-${si}`} style={{
                     position: "absolute",
@@ -1056,14 +1082,15 @@ export function BeatIndicator({
                     width: `${widthPct}%` as any,
                     bottom: -1,
                     height: 3,
-                    backgroundColor: barColor,
+                    backgroundColor: segColor,
                     opacity: 0.85,
                     zIndex: 10,
                   }} />
                 );
               });
 
-              if (beatSampleInfo.name) {
+              if (beatNameInfo.name) {
+                const nameColor = beatNameInfo.nameSource === "import" ? "#39FF14" : "#FF4444";
                 result.push(
                   <View key="sample-name" style={{
                     position: "absolute",
@@ -1074,10 +1101,10 @@ export function BeatIndicator({
                   }} pointerEvents="none">
                     <Text numberOfLines={1} style={{
                       fontSize: 8,
-                      color: barColor,
+                      color: nameColor,
                       fontWeight: "600",
                       opacity: 0.9,
-                    }}>{beatSampleInfo.name}</Text>
+                    }}>{beatNameInfo.name}</Text>
                   </View>
                 );
               }
