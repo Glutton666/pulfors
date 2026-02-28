@@ -539,15 +539,18 @@ export default function MetronomeScreen() {
 
     try {
       const scheduleInfo = engine.getScheduleInfo();
-      const clickPCMs = await getClickPCMs(soundSetRef.current);
+      const [clickPCMs, samplePCMs] = await Promise.all([
+        getClickPCMs(soundSetRef.current),
+        barModeRef.current ? getSamplePCMs(noteSamplesRef.current) : Promise.resolve(new Map<string, SamplePCMEntry>()),
+      ]);
 
       const pcm = renderMeasure({
         schedule: scheduleInfo.ticks as TickInfo[],
         measureDurationMs: scheduleInfo.durationMs,
         clickPCMs,
-        samplePCMs: new Map(),
+        samplePCMs,
         clickVolume: 1.0,
-        sampleVolume: 0,
+        sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current * 5.0 : 0,
       });
 
       const wavUri = await saveRenderedWav(pcm);
@@ -570,17 +573,29 @@ export default function MetronomeScreen() {
       console.warn("[PreRender] Failed, falling back to per-tick audio:", e);
       return null;
     }
-  }, [getClickPCMs]);
+  }, [getClickPCMs, getSamplePCMs]);
 
   const buildAndPlayRendered = useCallback(async () => {
     const player = await buildRenderedPlayer();
-    if (player) {
-      player.play();
-      engineRef.current?.setPreRenderedAudio(true);
-    } else {
-      engineRef.current?.setPreRenderedAudio(false);
+    if (player && engineRef.current?.getIsRunning()) {
+      if (pendingRenderedPlayerRef.current) {
+        try { pendingRenderedPlayerRef.current.release(); } catch {}
+      }
+      pendingRenderedPlayerRef.current = player;
+    } else if (player) {
+      try { player.release(); } catch {}
     }
   }, [buildRenderedPlayer]);
+
+  const reRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleReRender = useCallback(() => {
+    if (reRenderTimerRef.current) clearTimeout(reRenderTimerRef.current);
+    reRenderTimerRef.current = setTimeout(() => {
+      if (engineRef.current?.getIsRunning()) {
+        buildAndPlayRendered();
+      }
+    }, 300);
+  }, [buildAndPlayRendered]);
 
   const stopRenderedAudio = useCallback(() => {
     if (renderedPlayerRef.current) {
@@ -628,8 +643,9 @@ export default function MetronomeScreen() {
     setNoteSampleSources(updatedSources);
     noteSampleSourcesRef.current = updatedSources;
     await preloadNoteSampleSounds(updated);
+    scheduleReRender();
     setRecorderTarget(null);
-  }, [recorderTarget, preloadNoteSampleSounds, invalidateSamplePCMCache]);
+  }, [recorderTarget, preloadNoteSampleSounds, invalidateSamplePCMCache, scheduleReRender]);
 
   const handleNoteRecordDelete = useCallback(async () => {
     if (!recorderTarget) return;
@@ -648,8 +664,9 @@ export default function MetronomeScreen() {
       try { noteSampleSoundsRef.current[key].release(); } catch {}
       delete noteSampleSoundsRef.current[key];
     }
+    scheduleReRender();
     setRecorderTarget(null);
-  }, [recorderTarget, invalidateSamplePCMCache]);
+  }, [recorderTarget, invalidateSamplePCMCache, scheduleReRender]);
 
   const checkCompletedGoals = useCallback(async () => {
     try {
@@ -868,8 +885,9 @@ export default function MetronomeScreen() {
         try { player.volume = newVol * MAX_SAMPLE_VOL; } catch {}
       }
       persistSettings({ sampleVolume: newVol });
+      scheduleReRender();
     },
-    [persistSettings]
+    [persistSettings, scheduleReRender]
   );
 
   useEffect(() => {
@@ -921,16 +939,6 @@ export default function MetronomeScreen() {
     },
     [persistSettings]
   );
-
-  const reRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleReRender = useCallback(() => {
-    if (reRenderTimerRef.current) clearTimeout(reRenderTimerRef.current);
-    reRenderTimerRef.current = setTimeout(() => {
-      if (engineRef.current?.getIsRunning()) {
-        buildAndPlayRendered();
-      }
-    }, 300);
-  }, [buildAndPlayRendered]);
 
   const updateBpm = useCallback(
     (newBpm: number) => {

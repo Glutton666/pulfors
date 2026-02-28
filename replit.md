@@ -24,7 +24,7 @@ Preferred communication style: Simple, everyday language.
 - **Routing**: `expo-router` with file-based routing (app directory). Currently a single-screen app (`app/index.tsx`) with the metronome UI
 - **State Management**: Local React state (`useState`, `useRef`) for metronome state. `@tanstack/react-query` is set up for server data fetching but not heavily used since the metronome is client-side
 - **Animations**: `react-native-reanimated` powers the pendulum swing and beat indicator animations
-- **Audio**: `expo-audio` (`useAudioPlayer`) for click sounds. The metronome engine (`lib/metronome-engine.ts`) generates WAV audio buffers programmatically (high/low click sounds) rather than using pre-recorded audio files
+- **Audio**: `expo-audio` for click sounds. The audio system uses a **two-phase approach**: (1) immediate per-tick playback on first measure for zero-latency start, then (2) seamless switch to a pre-rendered WAV buffer (via `lib/audio-renderer.ts` `renderMeasure`) that bakes clicks AND custom samples into a single looping file at the next measure boundary. This eliminates per-tick `seekTo`/`play` overhead and prevents cycle-boundary jitter when many samples are assigned
 - **Haptics**: `expo-haptics` provides tactile feedback on beats
 - **Fonts**: Space Grotesk (Google Fonts) loaded via `@expo-google-fonts/space-grotesk`
 - **Persistence**: `@react-native-async-storage/async-storage` stores BPM, beats per measure, and subdivisions locally
