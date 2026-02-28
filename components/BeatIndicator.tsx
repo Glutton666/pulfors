@@ -10,6 +10,7 @@ import {
   Modal,
   TextInput,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
@@ -215,6 +216,7 @@ interface BeatIndicatorProps {
   beatsPerMeasure: number;
   currentBeat: number;
   isPlaying: boolean;
+  isPreparing?: boolean;
   onBeatsChange: (beats: number) => void;
   onTogglePlay: () => void;
   beatTypes: BeatType[];
@@ -251,6 +253,7 @@ export function BeatIndicator({
   beatsPerMeasure,
   currentBeat,
   isPlaying,
+  isPreparing = false,
   onBeatsChange,
   onTogglePlay,
   beatTypes,
@@ -1245,15 +1248,21 @@ export function BeatIndicator({
             style={({ pressed }) => [
               styles.barPlayBtn,
               pressed && { opacity: 0.7 },
+              isPreparing && { opacity: 0.5 },
             ]}
             testID="bar-play-button"
+            disabled={isPreparing}
           >
-            <Ionicons
-              name={isPlaying ? "stop" : "play"}
-              size={22}
-              color={isPlaying ? Colors.danger : C.accent}
-              style={!isPlaying ? { marginLeft: 2 } : undefined}
-            />
+            {isPreparing ? (
+              <ActivityIndicator size="small" color={C.accent} />
+            ) : (
+              <Ionicons
+                name={isPlaying ? "stop" : "play"}
+                size={22}
+                color={isPlaying ? Colors.danger : C.accent}
+                style={!isPlaying ? { marginLeft: 2 } : undefined}
+              />
+            )}
           </Pressable>
         </View>
 
@@ -1529,15 +1538,21 @@ export function BeatIndicator({
             style={({ pressed }) => [
               styles.playButton,
               pressed && styles.playButtonPressed,
+              isPreparing && { opacity: 0.5 },
             ]}
             testID="play-button"
+            disabled={isPreparing}
           >
-            <Ionicons
-              name={isPlaying ? "stop" : "play"}
-              size={56}
-              color={isPlaying ? Colors.danger : C.accent}
-              style={!isPlaying ? { marginLeft: 5 } : undefined}
-            />
+            {isPreparing ? (
+              <ActivityIndicator size="large" color={C.accent} />
+            ) : (
+              <Ionicons
+                name={isPlaying ? "stop" : "play"}
+                size={56}
+                color={isPlaying ? Colors.danger : C.accent}
+                style={!isPlaying ? { marginLeft: 5 } : undefined}
+              />
+            )}
           </Pressable>
 
           {dropTargetBeat === -1 && (

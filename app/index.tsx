@@ -141,6 +141,7 @@ export default function MetronomeScreen() {
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
   const [dropTargetBeat, setDropTargetBeat] = useState<number | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isPreparing, setIsPreparing] = useState(false);
   const [volume, setVolume] = useState(0.5);
   const [sampleVolume, setSampleVolume] = useState(0.8);
   const sampleVolumeRef = useRef(0.8);
@@ -549,10 +550,10 @@ export default function MetronomeScreen() {
 
     try {
       const scheduleInfo = engine.getScheduleInfo();
-      const [clickPCMs, samplePCMs] = await Promise.all([
+      const [clickPCMs] = await Promise.all([
         getClickPCMs(soundSetRef.current),
-        barModeRef.current ? getSamplePCMs(noteSamplesRef.current) : Promise.resolve(new Map<string, SamplePCMEntry>()),
       ]);
+      const samplePCMs = new Map<string, SamplePCMEntry>();
 
       const pcm = renderMeasure({
         schedule: scheduleInfo.ticks as TickInfo[],
@@ -578,7 +579,7 @@ export default function MetronomeScreen() {
       console.warn("[PreRender] Failed, falling back to per-tick audio:", e);
       return null;
     }
-  }, [getClickPCMs, getSamplePCMs]);
+  }, [getClickPCMs]);
 
   const stopRenderedAudio = useCallback(() => {
     if (renderedPlayerRef.current) {
@@ -1000,7 +1001,7 @@ export default function MetronomeScreen() {
 
   const togglePlayPause = useCallback(async () => {
     const engine = engineRef.current;
-    if (!engine) return;
+    if (!engine || isPreparing) return;
 
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1034,7 +1035,7 @@ export default function MetronomeScreen() {
       }
     } else {
       const startBeat = barModeRef.current ? barStartBeatRef.current : undefined;
-      setIsPlaying(true);
+      setIsPreparing(true);
       showPlayingNotification(bpm, modeLabel);
       if (loggingEnabled) {
         practiceStartRef.current = Date.now();
@@ -1051,6 +1052,8 @@ export default function MetronomeScreen() {
       } else {
         engine.setPreRenderedAudio(false);
       }
+      setIsPreparing(false);
+      setIsPlaying(true);
       engine.start(startBeat ?? undefined);
 
       if (barModeRef.current && barLoopModeRef.current === "once") {
@@ -1250,8 +1253,8 @@ export default function MetronomeScreen() {
 
   const startMetronome = useCallback(async () => {
     const engine = engineRef.current;
-    if (!engine || isPlaying) return;
-    setIsPlaying(true);
+    if (!engine || isPlaying || isPreparing) return;
+    setIsPreparing(true);
     engine.buildScheduleOnly();
 
     const renderedPlayer = await buildRenderedPlayer();
@@ -1263,8 +1266,10 @@ export default function MetronomeScreen() {
     } else {
       engine.setPreRenderedAudio(false);
     }
+    setIsPreparing(false);
+    setIsPlaying(true);
     engine.start();
-  }, [isPlaying, buildRenderedPlayer, stopRenderedAudio]);
+  }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -1989,6 +1994,7 @@ export default function MetronomeScreen() {
             beatsPerMeasure={beatsPerMeasure}
             currentBeat={currentBeat}
             isPlaying={isPlaying}
+            isPreparing={isPreparing}
             onBeatsChange={updateTimeSignature}
             onTogglePlay={togglePlayPause}
             beatTypes={beatTypes}

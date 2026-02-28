@@ -359,6 +359,9 @@ export class MetronomeEngine {
     fireVisual();
 
     if (this.preRenderedAudio) {
+      if (tick.repeatIteration === 0 && this.playCustomSample) {
+        this.playCustomSample(tick.beat, tick.subBeat);
+      }
       fireHaptic();
     } else if (offset > 0) {
       fireHaptic();
