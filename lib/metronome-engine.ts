@@ -38,6 +38,7 @@ interface ScheduledTick {
   type: BeatType;
   isMainBeat: boolean;
   repeatIteration: number;
+  barRepeatIteration: number;
 }
 
 export class MetronomeEngine {
@@ -225,12 +226,12 @@ export class MetronomeEngine {
     this.scheduleIndex = 0;
   }
 
-  getScheduleInfo(): { ticks: { time: number; type: BeatType; beat: number; subBeat: number; repeatIteration: number }[]; durationMs: number } {
+  getScheduleInfo(): { ticks: { time: number; type: BeatType; beat: number; subBeat: number; repeatIteration: number; barRepeatIteration: number }[]; durationMs: number } {
     if (this.schedule.length === 0) {
       this.schedule = this.buildSchedule();
     }
     return {
-      ticks: this.schedule.map(t => ({ time: t.time, type: t.type, beat: t.beat, subBeat: t.subBeat, repeatIteration: t.repeatIteration })),
+      ticks: this.schedule.map(t => ({ time: t.time, type: t.type, beat: t.beat, subBeat: t.subBeat, repeatIteration: t.repeatIteration, barRepeatIteration: t.barRepeatIteration })),
       durationMs: this.measureDurationMs,
     };
   }
@@ -279,7 +280,7 @@ export class MetronomeEngine {
       .filter(b => b.startBeat < this.beatsPerMeasure && b.endBeat >= b.startBeat)
       .sort((a, b) => a.startBeat - b.startBeat);
 
-    const addBeatTicks = (beat: number, iteration: number) => {
+    const addBeatTicks = (beat: number, iteration: number, barRepIter: number) => {
       const subPattern = this.getSubPattern(beat);
       const subDur = beatDur / subPattern.length;
       for (let sub = 0; sub < subPattern.length; sub++) {
@@ -290,6 +291,7 @@ export class MetronomeEngine {
           type: subPattern[sub],
           isMainBeat: sub === 0,
           repeatIteration: iteration,
+          barRepeatIteration: barRepIter,
         });
         time += subDur;
       }
@@ -307,10 +309,10 @@ export class MetronomeEngine {
           barRepeatCount = Math.max(1, Math.round((barRep.value * 1000) / barDurMs));
         }
         for (let r = 0; r < barRepeatCount; r++) {
-          addBeatTicks(beat, blockIteration);
+          addBeatTicks(beat, blockIteration, r);
         }
       } else {
-        addBeatTicks(beat, blockIteration);
+        addBeatTicks(beat, blockIteration, 0);
       }
     };
 
@@ -389,7 +391,7 @@ export class MetronomeEngine {
           this.playLowClick?.();
         }
       } catch (e) {}
-      if (tick.repeatIteration === 0 && this.playCustomSample) {
+      if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0 && this.playCustomSample) {
         this.playCustomSample(tick.beat, tick.subBeat);
       }
     };
@@ -425,7 +427,7 @@ export class MetronomeEngine {
     fireVisual();
 
     if (this.preRenderedAudio) {
-      if (tick.repeatIteration === 0 && this.playCustomSample) {
+      if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0 && this.playCustomSample) {
         this.playCustomSample(tick.beat, tick.subBeat);
       }
       fireHaptic();

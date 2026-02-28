@@ -11,6 +11,7 @@ export interface TickInfo {
   beat: number;
   subBeat: number;
   repeatIteration: number;
+  barRepeatIteration: number;
 }
 
 export interface DecodedSample {
@@ -299,7 +300,7 @@ export function renderMeasure(params: {
     else clickPCM = clickPCMs.low;
     mixInto(buffer, clickPCM, offsetSamples, clickVolume);
 
-    if (tick.repeatIteration === 0 && samplePCMs.has(key)) {
+    if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0 && samplePCMs.has(key)) {
       const sample = samplePCMs.get(key)!;
       const trimStart = Math.round(
         (sample.trimStartMs / 1000) * RENDER_SR
