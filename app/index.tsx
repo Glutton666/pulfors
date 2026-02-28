@@ -179,6 +179,7 @@ export default function MetronomeScreen() {
   const [recorderTarget, setRecorderTarget] = useState<{ beat: number; sub: number } | null>(null);
 
   const renderedPlayerRef = useRef<ExpoAudioPlayer | null>(null);
+  const pendingRenderedPlayerRef = useRef<ExpoAudioPlayer | null>(null);
   const clickPCMCacheRef = useRef<Record<string, ClickPCMs>>({});
   const samplePCMCacheRef = useRef<Map<string, SamplePCMEntry>>(new Map());
   const renderedUrlRef = useRef<string | null>(null);
@@ -588,6 +589,10 @@ export default function MetronomeScreen() {
         renderedPlayerRef.current.release();
       } catch {}
       renderedPlayerRef.current = null;
+    }
+    if (pendingRenderedPlayerRef.current) {
+      try { pendingRenderedPlayerRef.current.release(); } catch {}
+      pendingRenderedPlayerRef.current = null;
     }
     if (Platform.OS === "web" && renderedUrlRef.current) {
       try { URL.revokeObjectURL(renderedUrlRef.current); } catch {}
@@ -1039,15 +1044,19 @@ export default function MetronomeScreen() {
       }
 
       engine.buildScheduleOnly();
-      const renderedPlayer = await buildRenderedPlayer();
-
+      engine.setPreRenderedAudio(false);
       engine.start(startBeat ?? undefined);
-      if (renderedPlayer) {
-        renderedPlayer.play();
-        engine.setPreRenderedAudio(true);
-      } else {
-        engine.setPreRenderedAudio(false);
-      }
+
+      buildRenderedPlayer().then((renderedPlayer) => {
+        if (renderedPlayer && engineRef.current?.getIsRunning()) {
+          if (pendingRenderedPlayerRef.current) {
+            try { pendingRenderedPlayerRef.current.release(); } catch {}
+          }
+          pendingRenderedPlayerRef.current = renderedPlayer;
+        } else if (renderedPlayer) {
+          try { renderedPlayer.release(); } catch {}
+        }
+      });
 
       if (barModeRef.current && barLoopModeRef.current === "once") {
         engine.requestStopAfterMeasure();
@@ -1249,14 +1258,19 @@ export default function MetronomeScreen() {
     if (!engine || isPlaying) return;
     setIsPlaying(true);
     engine.buildScheduleOnly();
-    const renderedPlayer = await buildRenderedPlayer();
+    engine.setPreRenderedAudio(false);
     engine.start();
-    if (renderedPlayer) {
-      renderedPlayer.play();
-      engine.setPreRenderedAudio(true);
-    } else {
-      engine.setPreRenderedAudio(false);
-    }
+
+    buildRenderedPlayer().then((renderedPlayer) => {
+      if (renderedPlayer && engineRef.current?.getIsRunning()) {
+        if (pendingRenderedPlayerRef.current) {
+          try { pendingRenderedPlayerRef.current.release(); } catch {}
+        }
+        pendingRenderedPlayerRef.current = renderedPlayer;
+      } else if (renderedPlayer) {
+        try { renderedPlayer.release(); } catch {}
+      }
+    });
   }, [isPlaying, buildRenderedPlayer]);
 
   useEffect(() => {
@@ -1267,6 +1281,10 @@ export default function MetronomeScreen() {
         if (renderedPlayerRef.current) {
           try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
           renderedPlayerRef.current = null;
+        }
+        if (pendingRenderedPlayerRef.current) {
+          try { pendingRenderedPlayerRef.current.release(); } catch {}
+          pendingRenderedPlayerRef.current = null;
         }
         for (const [k, st] of Object.entries(samplePlayStateRef.current)) {
           if (st.endTimer) clearTimeout(st.endTimer);
@@ -1280,6 +1298,15 @@ export default function MetronomeScreen() {
         setActiveSubNote(-1);
         const modeLabel = barModeRef.current ? "Bar" : "Dial";
         showPausedNotification(bpmRef.current, modeLabel);
+      } else if (pendingRenderedPlayerRef.current) {
+        const player = pendingRenderedPlayerRef.current;
+        pendingRenderedPlayerRef.current = null;
+        if (renderedPlayerRef.current) {
+          try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
+        }
+        renderedPlayerRef.current = player;
+        player.play();
+        engine.setPreRenderedAudio(true);
       }
     });
   }, []);
