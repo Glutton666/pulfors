@@ -1313,37 +1313,39 @@ export default function MetronomeScreen() {
       if (blocks.length === 0) return;
 
       const curId = activeBlockIdRef.current;
+      if (!curId) {
+        activateBlock(blocks[0]);
+        return;
+      }
       const curIter = activeBlockIterRef.current;
       const curIdx = blocks.findIndex(b => b.id === curId);
-      if (curIdx < 0) return;
+      if (curIdx < 0) {
+        activateBlock(blocks[0]);
+        return;
+      }
 
       const curBlock = blocks[curIdx];
 
+      let shouldAdvance = false;
       if (curBlock.loopMode === "time") {
         const startTime = blockStartTimeRef.current;
         const elapsed = (Date.now() - startTime) / 1000;
-        if (elapsed < curBlock.loopDuration) {
-          activeBlockIterRef.current = curIter + 1;
-          setActiveBlockIteration(curIter + 1);
-          return;
-        }
+        shouldAdvance = elapsed >= curBlock.loopDuration;
       } else {
-        if (curIter < curBlock.loopCount) {
-          activeBlockIterRef.current = curIter + 1;
-          setActiveBlockIteration(curIter + 1);
-          return;
-        }
+        shouldAdvance = curIter >= curBlock.loopCount;
+      }
+
+      if (!shouldAdvance) {
+        activeBlockIterRef.current = curIter + 1;
+        setActiveBlockIteration(curIter + 1);
+        return;
       }
 
       const nextIdx = curIdx + 1;
       if (nextIdx < blocks.length) {
         activateBlock(blocks[nextIdx]);
       } else {
-        engine.clearBeatRange();
-        activeBlockIdRef.current = null;
-        activeBlockIterRef.current = 1;
-        setActiveBlockId(null);
-        setActiveBlockIteration(1);
+        activateBlock(blocks[0]);
       }
     });
 

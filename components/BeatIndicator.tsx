@@ -1470,12 +1470,11 @@ export function BeatIndicator({
                 </View>
               ) : (
                 <View style={styles.blockEditLoopBody}>
-                  <View style={styles.blockEditTimeField}>
-                    <Text style={styles.blockEditTimeUnit}>min</Text>
-                    <View style={styles.blockEditLoopControls}>
-                      <Pressable onPress={() => setBlockEditLoopDuration(Math.max(0, blockEditLoopDuration - 60))} style={styles.blockEditSmallBtn}>
-                        <Ionicons name="remove" size={16} color={Colors.text} />
-                      </Pressable>
+                  <Pressable onPress={() => setBlockEditLoopDuration(Math.max(10, blockEditLoopDuration - 10))} style={styles.blockEditSmallBtn}>
+                    <Ionicons name="remove" size={16} color={Colors.text} />
+                  </Pressable>
+                  <View style={styles.blockEditTimeInputRow}>
+                    <View style={styles.blockEditTimeField}>
                       <TextInput
                         style={[styles.blockEditLoopInput, { borderBottomColor: C.accent }]}
                         value={String(Math.floor(blockEditLoopDuration / 60))}
@@ -1488,18 +1487,10 @@ export function BeatIndicator({
                         selectTextOnFocus
                         maxLength={2}
                       />
-                      <Pressable onPress={() => setBlockEditLoopDuration(Math.min(3600, blockEditLoopDuration + 60))} style={styles.blockEditSmallBtn}>
-                        <Ionicons name="add" size={16} color={Colors.text} />
-                      </Pressable>
+                      <Text style={styles.blockEditTimeUnit}>min</Text>
                     </View>
-                  </View>
-                  <Text style={styles.blockEditTimeSep}>:</Text>
-                  <View style={styles.blockEditTimeField}>
-                    <Text style={styles.blockEditTimeUnit}>sec</Text>
-                    <View style={styles.blockEditLoopControls}>
-                      <Pressable onPress={() => { const s = blockEditLoopDuration % 60; const m = Math.floor(blockEditLoopDuration / 60); setBlockEditLoopDuration(m * 60 + Math.max(0, s - 5)); }} style={styles.blockEditSmallBtn}>
-                        <Ionicons name="remove" size={16} color={Colors.text} />
-                      </Pressable>
+                    <Text style={styles.blockEditTimeSep}>:</Text>
+                    <View style={styles.blockEditTimeField}>
                       <TextInput
                         style={[styles.blockEditLoopInput, { borderBottomColor: C.accent }]}
                         value={String(blockEditLoopDuration % 60).padStart(2, "0")}
@@ -1512,11 +1503,12 @@ export function BeatIndicator({
                         selectTextOnFocus
                         maxLength={2}
                       />
-                      <Pressable onPress={() => { const s = blockEditLoopDuration % 60; const m = Math.floor(blockEditLoopDuration / 60); setBlockEditLoopDuration(Math.min(3600, m * 60 + Math.min(55, s + 5))); }} style={styles.blockEditSmallBtn}>
-                        <Ionicons name="add" size={16} color={Colors.text} />
-                      </Pressable>
+                      <Text style={styles.blockEditTimeUnit}>sec</Text>
                     </View>
                   </View>
+                  <Pressable onPress={() => setBlockEditLoopDuration(Math.min(3600, blockEditLoopDuration + 10))} style={styles.blockEditSmallBtn}>
+                    <Ionicons name="add" size={16} color={Colors.text} />
+                  </Pressable>
                 </View>
               )}
 
@@ -2242,15 +2234,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     minWidth: 44,
   },
+  blockEditTimeInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
   blockEditTimeField: {
     alignItems: "center",
-    gap: 3,
+    gap: 2,
   },
   blockEditTimeSep: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 22,
     color: Colors.textSecondary,
-    marginTop: 16,
   },
   blockEditTimeUnit: {
     fontFamily: "SpaceGrotesk_500Medium",
