@@ -805,46 +805,21 @@ export function BeatIndicator({
     return `${s}"`;
   };
 
-  const getUsedBeats = useCallback((excludeIndex?: number) => {
-    const used = new Set<number>();
-    loopBlocks.forEach((b, i) => {
-      if (i === excludeIndex) return;
-      for (let beat = b.startBeat; beat <= Math.min(b.endBeat, beatsPerMeasure - 1); beat++) used.add(beat);
-    });
-    return used;
-  }, [loopBlocks, beatsPerMeasure]);
-
   const addLoopBlock = useCallback(() => {
-    const used = getUsedBeats();
-    let start = -1;
-    for (let b = 0; b < beatsPerMeasure; b++) {
-      if (!used.has(b)) { start = b; break; }
-    }
-    if (start === -1) return;
-    let end = start;
-    for (let b = start + 1; b < beatsPerMeasure && !used.has(b); b++) end = b;
-    const newBlock: LoopBlock = { startBeat: start, endBeat: end, type: "count", value: 2 };
+    const newBlock: LoopBlock = { startBeat: 0, endBeat: Math.min(beatsPerMeasure - 1, 3), type: "count", value: 2 };
     const updated = [...loopBlocks, newBlock];
     onLoopBlocksChange(updated);
     setEditingBlockIndex(updated.length - 1);
     setLoopBlockExpanded(true);
-  }, [loopBlocks, onLoopBlocksChange, beatsPerMeasure, getUsedBeats]);
+  }, [loopBlocks, onLoopBlocksChange, beatsPerMeasure]);
 
   const updateLoopBlock = useCallback((index: number, patch: Partial<LoopBlock>) => {
     const merged = { ...loopBlocks[index], ...patch };
     merged.startBeat = Math.max(0, Math.min(beatsPerMeasure - 1, merged.startBeat));
     merged.endBeat = Math.max(merged.startBeat, Math.min(beatsPerMeasure - 1, merged.endBeat));
-    const used = getUsedBeats(index);
-    for (let b = merged.startBeat; b <= merged.endBeat; b++) {
-      if (used.has(b)) {
-        if (b <= merged.startBeat) { merged.startBeat = b + 1; }
-        else { merged.endBeat = b - 1; break; }
-      }
-    }
-    if (merged.startBeat > merged.endBeat) return;
     const updated = loopBlocks.map((b, i) => i === index ? merged : b);
     onLoopBlocksChange(updated);
-  }, [loopBlocks, onLoopBlocksChange, beatsPerMeasure, getUsedBeats]);
+  }, [loopBlocks, onLoopBlocksChange, beatsPerMeasure]);
 
   const removeLoopBlock = useCallback((index: number) => {
     const updated = loopBlocks.filter((_, i) => i !== index);
@@ -862,10 +837,13 @@ export function BeatIndicator({
   };
 
   const blockForBeat = useMemo(() => {
-    const map = new Map<number, { block: LoopBlock; index: number; isFirst: boolean; isLast: boolean }>();
+    const map = new Map<number, { block: LoopBlock; index: number; isFirst: boolean; isLast: boolean }[]>();
     loopBlocks.forEach((block, idx) => {
       for (let b = block.startBeat; b <= block.endBeat && b < beatsPerMeasure; b++) {
-        map.set(b, { block, index: idx, isFirst: b === block.startBeat, isLast: b === block.endBeat || b === beatsPerMeasure - 1 });
+        const entry = { block, index: idx, isFirst: b === block.startBeat, isLast: b === block.endBeat || b === beatsPerMeasure - 1 };
+        const existing = map.get(b) || [];
+        existing.push(entry);
+        map.set(b, existing);
       }
     });
     return map;
@@ -950,7 +928,7 @@ export function BeatIndicator({
       const isCurrent = isPlaying && currentBeat === beat && (barLoopMode === "once" ? copyIndex === 0 : copyIndex === activeCopy);
       const bType = beatTypes[beat] || "normal";
       const isDropTarget = isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
-      const beatBlock = blockForBeat.get(beat);
+      const beatBlocks = blockForBeat.get(beat) || [];
       const isPrimary = isPlaying ? (barLoopMode === "once" ? copyIndex === 0 : copyIndex === CENTER_COPY) : copyIndex === 0;
       return (
         <View
@@ -961,21 +939,22 @@ export function BeatIndicator({
             isPrimary && isDropTarget && { backgroundColor: "rgba(255,255,255,0.06)", borderColor: C.accent, borderWidth: 1, borderRadius: 4, marginHorizontal: -1 },
           ]}
         >
-          {beatBlock && isPrimary && (
-            <View style={{
+          {isPrimary && beatBlocks.map((bb, bbi) => (
+            <View key={`bracket-${bbi}`} style={{
               position: "absolute",
-              left: 0,
-              top: beatBlock.isFirst ? "50%" : 0,
-              bottom: beatBlock.isLast ? "50%" : 0,
+              left: bbi * 5,
+              top: bb.isFirst ? "50%" : 0,
+              bottom: bb.isLast ? "50%" : 0,
               width: 3,
               backgroundColor: C.accent,
-              borderTopLeftRadius: beatBlock.isFirst ? 3 : 0,
-              borderTopRightRadius: beatBlock.isFirst ? 3 : 0,
-              borderBottomLeftRadius: beatBlock.isLast ? 3 : 0,
-              borderBottomRightRadius: beatBlock.isLast ? 3 : 0,
+              borderTopLeftRadius: bb.isFirst ? 3 : 0,
+              borderTopRightRadius: bb.isFirst ? 3 : 0,
+              borderBottomLeftRadius: bb.isLast ? 3 : 0,
+              borderBottomRightRadius: bb.isLast ? 3 : 0,
               zIndex: 10,
+              opacity: 0.7 + 0.3 / (bbi + 1),
             }} />
-          )}
+          ))}
           <Pressable
             style={[
               styles.barBeatLabel,
