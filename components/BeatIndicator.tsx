@@ -1420,54 +1420,42 @@ export function BeatIndicator({
               </View>
 
               <View style={styles.blockEditRow}>
-                <Text style={styles.blockEditLabel}>Loop</Text>
+                <Pressable
+                  onPress={() => setBlockEditLoopMode("count")}
+                  style={[styles.blockEditModeBtn, blockEditLoopMode === "count" && { backgroundColor: C.accent }]}
+                >
+                  <Text style={[styles.blockEditModeBtnText, blockEditLoopMode === "count" && { color: Colors.background }]}>{"\u00D7"}</Text>
+                </Pressable>
                 <View style={styles.blockEditRangeRow}>
-                  <Pressable
-                    onPress={() => setBlockEditLoopMode("count")}
-                    style={[styles.blockEditModeBtn, blockEditLoopMode === "count" && { backgroundColor: C.accent }]}
-                  >
-                    <Text style={[styles.blockEditModeBtnText, blockEditLoopMode === "count" && { color: Colors.background }]}>{"\u00D7"}</Text>
+                  <Pressable onPress={() => setBlockEditLoopCount(Math.max(1, blockEditLoopCount - 1))} style={[styles.blockEditSmallBtn, blockEditLoopMode !== "count" && { opacity: 0.3 }]} disabled={blockEditLoopMode !== "count"}>
+                    <Ionicons name="remove" size={14} color={Colors.text} />
                   </Pressable>
-                  <Pressable
-                    onPress={() => setBlockEditLoopMode("time")}
-                    style={[styles.blockEditModeBtn, blockEditLoopMode === "time" && { backgroundColor: C.accent }]}
-                  >
-                    <Ionicons name="time-outline" size={14} color={blockEditLoopMode === "time" ? Colors.background : Colors.text} />
+                  <Text style={[styles.blockEditValue, blockEditLoopMode !== "count" && { opacity: 0.3 }]}>{blockEditLoopCount}</Text>
+                  <Pressable onPress={() => setBlockEditLoopCount(Math.min(99, blockEditLoopCount + 1))} style={[styles.blockEditSmallBtn, blockEditLoopMode !== "count" && { opacity: 0.3 }]} disabled={blockEditLoopMode !== "count"}>
+                    <Ionicons name="add" size={14} color={Colors.text} />
+                  </Pressable>
+                </View>
+                <View style={{ width: 12 }} />
+                <Pressable
+                  onPress={() => setBlockEditLoopMode("time")}
+                  style={[styles.blockEditModeBtn, blockEditLoopMode === "time" && { backgroundColor: C.accent }]}
+                >
+                  <Ionicons name="time-outline" size={14} color={blockEditLoopMode === "time" ? Colors.background : Colors.text} />
+                </Pressable>
+                <View style={styles.blockEditRangeRow}>
+                  <Pressable onPress={() => setBlockEditLoopDuration(Math.max(5, blockEditLoopDuration - 5))} style={[styles.blockEditSmallBtn, blockEditLoopMode !== "time" && { opacity: 0.3 }]} disabled={blockEditLoopMode !== "time"}>
+                    <Ionicons name="remove" size={14} color={Colors.text} />
+                  </Pressable>
+                  <Text style={[styles.blockEditValue, blockEditLoopMode !== "time" && { opacity: 0.3 }]}>
+                    {blockEditLoopDuration >= 60
+                      ? `${Math.floor(blockEditLoopDuration / 60)}:${(blockEditLoopDuration % 60).toString().padStart(2, "0")}`
+                      : `${blockEditLoopDuration}s`}
+                  </Text>
+                  <Pressable onPress={() => setBlockEditLoopDuration(Math.min(3600, blockEditLoopDuration + 5))} style={[styles.blockEditSmallBtn, blockEditLoopMode !== "time" && { opacity: 0.3 }]} disabled={blockEditLoopMode !== "time"}>
+                    <Ionicons name="add" size={14} color={Colors.text} />
                   </Pressable>
                 </View>
               </View>
-
-              {blockEditLoopMode === "count" ? (
-                <View style={styles.blockEditRow}>
-                  <Text style={styles.blockEditLabel}>{"\u00D7"} Count</Text>
-                  <View style={styles.blockEditRangeRow}>
-                    <Pressable onPress={() => setBlockEditLoopCount(Math.max(1, blockEditLoopCount - 1))} style={styles.blockEditSmallBtn}>
-                      <Ionicons name="remove" size={14} color={Colors.text} />
-                    </Pressable>
-                    <Text style={styles.blockEditValue}>{blockEditLoopCount}</Text>
-                    <Pressable onPress={() => setBlockEditLoopCount(Math.min(99, blockEditLoopCount + 1))} style={styles.blockEditSmallBtn}>
-                      <Ionicons name="add" size={14} color={Colors.text} />
-                    </Pressable>
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.blockEditRow}>
-                  <Text style={styles.blockEditLabel}>Time</Text>
-                  <View style={styles.blockEditRangeRow}>
-                    <Pressable onPress={() => setBlockEditLoopDuration(Math.max(5, blockEditLoopDuration - 5))} style={styles.blockEditSmallBtn}>
-                      <Ionicons name="remove" size={14} color={Colors.text} />
-                    </Pressable>
-                    <Text style={styles.blockEditValue}>
-                      {blockEditLoopDuration >= 60
-                        ? `${Math.floor(blockEditLoopDuration / 60)}:${(blockEditLoopDuration % 60).toString().padStart(2, "0")}`
-                        : `${blockEditLoopDuration}s`}
-                    </Text>
-                    <Pressable onPress={() => setBlockEditLoopDuration(Math.min(3600, blockEditLoopDuration + 5))} style={styles.blockEditSmallBtn}>
-                      <Ionicons name="add" size={14} color={Colors.text} />
-                    </Pressable>
-                  </View>
-                </View>
-              )}
 
               <View style={styles.repeatActions}>
                 {blockEditId !== "new" && (
