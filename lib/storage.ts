@@ -75,11 +75,8 @@ export interface LoopBlockEntry {
   startBeat: number;
   endBeat: number;
   loopCount: number;
-  afterAction:
-    | { type: "next" }
-    | { type: "goto-block"; blockId: string }
-    | { type: "goto-beat"; beat: number }
-    | { type: "random" };
+  loopMode: "count" | "time";
+  loopDuration: number;
 }
 
 export interface PracticeEntry {

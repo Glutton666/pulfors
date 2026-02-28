@@ -217,11 +217,8 @@ export interface LoopBlock {
   startBeat: number;
   endBeat: number;
   loopCount: number;
-  afterAction:
-    | { type: "next" }
-    | { type: "goto-block"; blockId: string }
-    | { type: "goto-beat"; beat: number }
-    | { type: "random" };
+  loopMode: "count" | "time";
+  loopDuration: number;
 }
 
 interface BeatIndicatorProps {
@@ -743,9 +740,8 @@ export function BeatIndicator({
   const [blockEditStart, setBlockEditStart] = useState(0);
   const [blockEditEnd, setBlockEditEnd] = useState(0);
   const [blockEditLoopCount, setBlockEditLoopCount] = useState(2);
-  const [blockEditAfterType, setBlockEditAfterType] = useState<"next" | "goto-block" | "goto-beat" | "random">("next");
-  const [blockEditGotoBlockId, setBlockEditGotoBlockId] = useState("");
-  const [blockEditGotoBeat, setBlockEditGotoBeat] = useState(0);
+  const [blockEditLoopMode, setBlockEditLoopMode] = useState<"count" | "time">("count");
+  const [blockEditLoopDuration, setBlockEditLoopDuration] = useState(30);
 
   const generateBlockId = useCallback(() => {
     return Date.now().toString() + Math.random().toString(36).substr(2, 9);
@@ -757,68 +753,68 @@ export function BeatIndicator({
       setBlockEditStart(block.startBeat);
       setBlockEditEnd(block.endBeat);
       setBlockEditLoopCount(block.loopCount);
-      setBlockEditAfterType(block.afterAction.type);
-      if (block.afterAction.type === "goto-block") {
-        setBlockEditGotoBlockId(block.afterAction.blockId);
-      }
-      if (block.afterAction.type === "goto-beat") {
-        setBlockEditGotoBeat(block.afterAction.beat);
-      }
+      setBlockEditLoopMode(block.loopMode || "count");
+      setBlockEditLoopDuration(block.loopDuration || 30);
     } else {
       setBlockEditId("new");
       setBlockEditStart(0);
       setBlockEditEnd(Math.min(beatsPerMeasure - 1, 3));
       setBlockEditLoopCount(2);
-      setBlockEditAfterType("next");
-      setBlockEditGotoBlockId("");
-      setBlockEditGotoBeat(0);
+      setBlockEditLoopMode("count");
+      setBlockEditLoopDuration(30);
     }
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, [beatsPerMeasure]);
 
   const saveBlock = useCallback(() => {
     if (blockEditId === null) return;
-    let resolvedAfterType = blockEditAfterType;
-    if (resolvedAfterType === "goto-block" && !blockEditGotoBlockId) {
-      resolvedAfterType = "next";
-    }
-    const afterAction: LoopBlock["afterAction"] =
-      resolvedAfterType === "goto-block" ? { type: "goto-block", blockId: blockEditGotoBlockId } :
-      resolvedAfterType === "goto-beat" ? { type: "goto-beat", beat: blockEditGotoBeat } :
-      resolvedAfterType === "random" ? { type: "random" } :
-      { type: "next" };
     if (blockEditId === "new") {
       const newBlock: LoopBlock = {
         id: generateBlockId(),
         startBeat: blockEditStart,
         endBeat: blockEditEnd,
         loopCount: blockEditLoopCount,
-        afterAction,
+        loopMode: blockEditLoopMode,
+        loopDuration: blockEditLoopDuration,
       };
       onLoopBlocksChange([...loopBlocks, newBlock]);
     } else {
       onLoopBlocksChange(loopBlocks.map(b =>
-        b.id === blockEditId ? { ...b, startBeat: blockEditStart, endBeat: blockEditEnd, loopCount: blockEditLoopCount, afterAction } : b
+        b.id === blockEditId ? { ...b, startBeat: blockEditStart, endBeat: blockEditEnd, loopCount: blockEditLoopCount, loopMode: blockEditLoopMode, loopDuration: blockEditLoopDuration } : b
       ));
     }
     setBlockEditId(null);
-  }, [blockEditId, blockEditAfterType, blockEditGotoBlockId, blockEditGotoBeat, blockEditStart, blockEditEnd, blockEditLoopCount, loopBlocks, onLoopBlocksChange, generateBlockId]);
+  }, [blockEditId, blockEditStart, blockEditEnd, blockEditLoopCount, blockEditLoopMode, blockEditLoopDuration, loopBlocks, onLoopBlocksChange, generateBlockId]);
 
   const deleteBlock = useCallback((blockId: string) => {
     onLoopBlocksChange(loopBlocks.filter(b => b.id !== blockId));
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [loopBlocks, onLoopBlocksChange]);
 
-  const formatBlockAfter = (block: LoopBlock, allBlocks: LoopBlock[]): string => {
-    const a = block.afterAction;
-    if (a.type === "next") return "\u2192next";
-    if (a.type === "random") return "\u2192rand";
-    if (a.type === "goto-beat") return `\u2192B${a.beat + 1}`;
-    if (a.type === "goto-block") {
-      const idx = allBlocks.findIndex(b => b.id === a.blockId);
-      return idx >= 0 ? `\u2192#${idx + 1}` : "\u2192?";
+  const formatBlockLoop = (block: LoopBlock): string => {
+    if (block.loopMode === "time") {
+      const d = block.loopDuration;
+      if (d >= 60) {
+        const m = Math.floor(d / 60);
+        const s = d % 60;
+        return s > 0 ? `${m}:${s.toString().padStart(2, "0")}` : `${m}m`;
+      }
+      return `${d}s`;
     }
-    return "";
+    return `\u00D7${block.loopCount}`;
+  };
+
+  const blockColorForIndex = (idx: number): string => {
+    const palette = [C.accent, "#FF6B6B", "#4ECDC4", "#FFE66D", "#A78BFA", "#F97316"];
+    return palette[idx % palette.length];
+  };
+
+  const getBlockForBeat = (beat: number): { block: LoopBlock; idx: number } | null => {
+    for (let i = 0; i < loopBlocks.length; i++) {
+      const b = loopBlocks[i];
+      if (beat >= b.startBeat && beat <= b.endBeat) return { block: b, idx: i };
+    }
+    return null;
   };
 
   const BAR_HEIGHT = 36;
@@ -834,6 +830,25 @@ export function BeatIndicator({
 
   const NUM_COPIES = 3;
   const CENTER_COPY = 1;
+
+  const handleBarRowTapForBlock = useCallback((beat: number) => {
+    if (blockEditId === null) return;
+    if (beat >= blockEditStart && beat <= blockEditEnd) {
+      if (blockEditStart === blockEditEnd) return;
+      if (beat === blockEditStart) {
+        setBlockEditStart(blockEditStart + 1);
+      } else if (beat === blockEditEnd) {
+        setBlockEditEnd(blockEditEnd - 1);
+      }
+    } else {
+      if (beat === blockEditStart - 1) {
+        setBlockEditStart(beat);
+      } else if (beat === blockEditEnd + 1) {
+        setBlockEditEnd(beat);
+      }
+    }
+    if (Platform.OS !== "web") Haptics.selectionAsync();
+  }, [blockEditId, blockEditStart, blockEditEnd]);
 
   useEffect(() => {
     if (!isPlaying) {
@@ -901,6 +916,15 @@ export function BeatIndicator({
       const bType = beatTypes[beat] || "normal";
       const isDropTarget = isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
       const isPrimary = isPlaying ? (barLoopMode === "once" ? copyIndex === 0 : copyIndex === CENTER_COPY) : copyIndex === 0;
+
+      const blockInfo = isPrimary ? getBlockForBeat(beat) : null;
+      const isEditingRange = blockEditId !== null && beat >= blockEditStart && beat <= blockEditEnd;
+      const isRangeTop = blockEditId !== null && beat === blockEditStart;
+      const isRangeBottom = blockEditId !== null && beat === blockEditEnd;
+      const blockColor = blockInfo ? blockColorForIndex(blockInfo.idx) : null;
+      const isBlockTop = blockInfo ? beat === blockInfo.block.startBeat : false;
+      const isBlockBottom = blockInfo ? beat === blockInfo.block.endBeat : false;
+
       return (
         <View
           key={`bar-${copyIndex}-${beat}`}
@@ -910,13 +934,49 @@ export function BeatIndicator({
             isPrimary && isDropTarget && { backgroundColor: "rgba(255,255,255,0.06)", borderColor: C.accent, borderWidth: 1, borderRadius: 4, marginHorizontal: -1 },
           ]}
         >
+          {isPrimary && blockColor && !blockEditId && (
+            <View style={[
+              styles.blockBracket,
+              { backgroundColor: blockColor + "30", borderLeftColor: blockColor },
+              isBlockTop && styles.blockBracketTop,
+              isBlockBottom && styles.blockBracketBottom,
+            ]}>
+              {isBlockTop && (
+                <Text style={[styles.blockBracketLabel, { color: blockColor }]}>#{blockInfo!.idx + 1}</Text>
+              )}
+            </View>
+          )}
+          {isPrimary && blockEditId && (
+            <View style={[
+              styles.blockBracket,
+              {
+                backgroundColor: isEditingRange ? C.accent + "20" : "transparent",
+                borderLeftColor: isEditingRange ? C.accent : "transparent",
+              },
+              isRangeTop && styles.blockBracketTop,
+              isRangeBottom && styles.blockBracketBottom,
+            ]}>
+              {isRangeTop && (
+                <Ionicons name="chevron-up" size={10} color={C.accent} style={{ position: "absolute", top: 0, left: 2 }} />
+              )}
+              {isRangeBottom && (
+                <Ionicons name="chevron-down" size={10} color={C.accent} style={{ position: "absolute", bottom: 0, left: 2 }} />
+              )}
+            </View>
+          )}
           <Pressable
             style={[
               styles.barBeatLabel,
               barStartBeat === beat && !isPlaying && { backgroundColor: C.accent + "30", borderRadius: 4 },
+              blockColor && !blockEditId && { marginLeft: 16 },
+              blockEditId && { marginLeft: 16 },
             ]}
             delayLongPress={500}
             onPress={() => {
+              if (blockEditId !== null && isPrimary) {
+                handleBarRowTapForBlock(beat);
+                return;
+              }
               if (isPrimary && !isPlaying && onBarStartBeatSelect) {
                 onBarStartBeatSelect(barStartBeat === beat ? null : beat);
                 if (Platform.OS !== "web") Haptics.selectionAsync();
@@ -1150,19 +1210,19 @@ export function BeatIndicator({
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.blockPillsScroll}>
               {loopBlocks.map((block, idx) => {
                 const isActive = activeBlockId === block.id;
+                const pillColor = blockColorForIndex(idx);
                 return (
                   <Pressable
                     key={block.id}
                     onPress={() => openBlockEdit(block)}
                     onLongPress={() => deleteBlock(block.id)}
-                    style={[styles.blockPill, isActive && { borderColor: C.accent }]}
+                    style={[styles.blockPill, { borderColor: pillColor + "40" }, isActive && { borderColor: pillColor }]}
                   >
-                    <Text style={[styles.blockPillIndex, { color: C.accent }]}>#{idx + 1}</Text>
+                    <View style={[styles.blockPillDot, { backgroundColor: pillColor }]} />
                     <Text style={styles.blockPillText}>
                       {block.startBeat + 1}{"\u2013"}{block.endBeat + 1}
                     </Text>
-                    <Text style={[styles.blockPillRepeat, { color: C.accent }]}>{"\u00D7"}{block.loopCount}</Text>
-                    <Text style={styles.blockPillAfter}>{formatBlockAfter(block, loopBlocks)}</Text>
+                    <Text style={[styles.blockPillRepeat, { color: pillColor }]}>{formatBlockLoop(block)}</Text>
                   </Pressable>
                 );
               })}
@@ -1181,7 +1241,7 @@ export function BeatIndicator({
               if (!block) return null;
               return (
                 <Text style={[styles.blockActiveText, { color: C.accent }]}>
-                  #{idx + 1} ({block.startBeat + 1}{"\u2013"}{block.endBeat + 1}) {activeBlockIteration ?? 1}/{block.loopCount}
+                  #{idx + 1} ({block.startBeat + 1}{"\u2013"}{block.endBeat + 1}) {block.loopMode === "time" ? formatBlockLoop(block) : `${activeBlockIteration ?? 1}/${block.loopCount}`}
                 </Text>
               );
             })()}
@@ -1340,87 +1400,58 @@ export function BeatIndicator({
 
               <View style={styles.blockEditRow}>
                 <Text style={styles.blockEditLabel}>Range</Text>
-                <View style={styles.blockEditRangeRow}>
-                  <Pressable onPress={() => setBlockEditStart(Math.max(0, blockEditStart - 1))} style={styles.blockEditSmallBtn}>
-                    <Ionicons name="remove" size={14} color={Colors.text} />
-                  </Pressable>
-                  <Text style={styles.blockEditValue}>{blockEditStart + 1}</Text>
-                  <Pressable onPress={() => setBlockEditStart(Math.min(blockEditEnd, blockEditStart + 1))} style={styles.blockEditSmallBtn}>
-                    <Ionicons name="add" size={14} color={Colors.text} />
-                  </Pressable>
-                  <Text style={styles.blockEditRangeSep}>{"\u2013"}</Text>
-                  <Pressable onPress={() => setBlockEditEnd(Math.max(blockEditStart, blockEditEnd - 1))} style={styles.blockEditSmallBtn}>
-                    <Ionicons name="remove" size={14} color={Colors.text} />
-                  </Pressable>
-                  <Text style={styles.blockEditValue}>{blockEditEnd + 1}</Text>
-                  <Pressable onPress={() => setBlockEditEnd(Math.min(beatsPerMeasure - 1, blockEditEnd + 1))} style={styles.blockEditSmallBtn}>
-                    <Ionicons name="add" size={14} color={Colors.text} />
-                  </Pressable>
-                </View>
+                <Text style={[styles.blockEditValue, { fontSize: 15 }]}>
+                  {blockEditStart + 1} {"\u2013"} {blockEditEnd + 1}
+                </Text>
+                <Text style={{ fontFamily: "SpaceGrotesk_400Regular", fontSize: 11, color: Colors.textTertiary, marginLeft: 6 }}>
+                  slide bars to adjust
+                </Text>
               </View>
 
               <View style={styles.blockEditRow}>
-                <Text style={styles.blockEditLabel}>{"\u00D7"} Loop</Text>
+                <Text style={styles.blockEditLabel}>Loop</Text>
                 <View style={styles.blockEditRangeRow}>
-                  <Pressable onPress={() => setBlockEditLoopCount(Math.max(1, blockEditLoopCount - 1))} style={styles.blockEditSmallBtn}>
-                    <Ionicons name="remove" size={14} color={Colors.text} />
+                  <Pressable
+                    onPress={() => setBlockEditLoopMode("count")}
+                    style={[styles.blockEditModeBtn, blockEditLoopMode === "count" && { backgroundColor: C.accent }]}
+                  >
+                    <Text style={[styles.blockEditModeBtnText, blockEditLoopMode === "count" && { color: Colors.background }]}>{"\u00D7"}</Text>
                   </Pressable>
-                  <Text style={styles.blockEditValue}>{blockEditLoopCount}</Text>
-                  <Pressable onPress={() => setBlockEditLoopCount(Math.min(99, blockEditLoopCount + 1))} style={styles.blockEditSmallBtn}>
-                    <Ionicons name="add" size={14} color={Colors.text} />
+                  <Pressable
+                    onPress={() => setBlockEditLoopMode("time")}
+                    style={[styles.blockEditModeBtn, blockEditLoopMode === "time" && { backgroundColor: C.accent }]}
+                  >
+                    <Ionicons name="time-outline" size={14} color={blockEditLoopMode === "time" ? Colors.background : Colors.text} />
                   </Pressable>
                 </View>
               </View>
 
-              <View style={styles.blockEditRow}>
-                <Text style={styles.blockEditLabel}>After</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
-                  <View style={styles.blockEditAfterRow}>
-                    {(["next", "goto-block", "goto-beat", "random"] as const).map(t => (
-                      <Pressable
-                        key={t}
-                        onPress={() => setBlockEditAfterType(t)}
-                        style={[styles.blockEditAfterBtn, blockEditAfterType === t && { backgroundColor: C.accent }]}
-                      >
-                        <Text style={[styles.blockEditAfterBtnText, blockEditAfterType === t && { color: Colors.background }]}>
-                          {t === "next" ? "Next" : t === "goto-block" ? "Block" : t === "goto-beat" ? "Beat" : "Rand"}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </ScrollView>
-              </View>
-
-              {blockEditAfterType === "goto-block" && loopBlocks.length > 0 && (
+              {blockEditLoopMode === "count" ? (
                 <View style={styles.blockEditRow}>
-                  <Text style={styles.blockEditLabel}>To #</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
-                    <View style={styles.blockEditAfterRow}>
-                      {loopBlocks.filter(b => b.id !== blockEditId).map((b, i) => (
-                        <Pressable
-                          key={b.id}
-                          onPress={() => setBlockEditGotoBlockId(b.id)}
-                          style={[styles.blockEditAfterBtn, blockEditGotoBlockId === b.id && { backgroundColor: C.accent }]}
-                        >
-                          <Text style={[styles.blockEditAfterBtnText, blockEditGotoBlockId === b.id && { color: Colors.background }]}>
-                            #{loopBlocks.indexOf(b) + 1}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </ScrollView>
-                </View>
-              )}
-
-              {blockEditAfterType === "goto-beat" && (
-                <View style={styles.blockEditRow}>
-                  <Text style={styles.blockEditLabel}>Beat</Text>
+                  <Text style={styles.blockEditLabel}>{"\u00D7"} Count</Text>
                   <View style={styles.blockEditRangeRow}>
-                    <Pressable onPress={() => setBlockEditGotoBeat(Math.max(0, blockEditGotoBeat - 1))} style={styles.blockEditSmallBtn}>
+                    <Pressable onPress={() => setBlockEditLoopCount(Math.max(1, blockEditLoopCount - 1))} style={styles.blockEditSmallBtn}>
                       <Ionicons name="remove" size={14} color={Colors.text} />
                     </Pressable>
-                    <Text style={styles.blockEditValue}>{blockEditGotoBeat + 1}</Text>
-                    <Pressable onPress={() => setBlockEditGotoBeat(Math.min(beatsPerMeasure - 1, blockEditGotoBeat + 1))} style={styles.blockEditSmallBtn}>
+                    <Text style={styles.blockEditValue}>{blockEditLoopCount}</Text>
+                    <Pressable onPress={() => setBlockEditLoopCount(Math.min(99, blockEditLoopCount + 1))} style={styles.blockEditSmallBtn}>
+                      <Ionicons name="add" size={14} color={Colors.text} />
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.blockEditRow}>
+                  <Text style={styles.blockEditLabel}>Time</Text>
+                  <View style={styles.blockEditRangeRow}>
+                    <Pressable onPress={() => setBlockEditLoopDuration(Math.max(5, blockEditLoopDuration - 5))} style={styles.blockEditSmallBtn}>
+                      <Ionicons name="remove" size={14} color={Colors.text} />
+                    </Pressable>
+                    <Text style={styles.blockEditValue}>
+                      {blockEditLoopDuration >= 60
+                        ? `${Math.floor(blockEditLoopDuration / 60)}:${(blockEditLoopDuration % 60).toString().padStart(2, "0")}`
+                        : `${blockEditLoopDuration}s`}
+                    </Text>
+                    <Pressable onPress={() => setBlockEditLoopDuration(Math.min(3600, blockEditLoopDuration + 5))} style={styles.blockEditSmallBtn}>
                       <Ionicons name="add" size={14} color={Colors.text} />
                     </Pressable>
                   </View>
@@ -2039,9 +2070,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.15)",
   },
-  blockPillIndex: {
-    fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 10,
+  blockPillDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   blockPillText: {
     fontFamily: "SpaceGrotesk_500Medium",
@@ -2051,11 +2083,6 @@ const styles = StyleSheet.create({
   blockPillRepeat: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 10,
-  },
-  blockPillAfter: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 9,
-    color: Colors.textTertiary,
   },
   blockAddBtn: {
     width: 32,
@@ -2114,19 +2141,39 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     marginHorizontal: 4,
   },
-  blockEditAfterRow: {
-    flexDirection: "row",
-    gap: 6,
-  },
-  blockEditAfterBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+  blockEditModeBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  blockEditAfterBtnText: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
+  blockEditModeBtnText: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 16,
     color: Colors.text,
+  },
+  blockBracket: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 14,
+    borderLeftWidth: 3,
+    justifyContent: "center",
+    zIndex: 5,
+  },
+  blockBracketTop: {
+    borderTopLeftRadius: 4,
+  },
+  blockBracketBottom: {
+    borderBottomLeftRadius: 4,
+  },
+  blockBracketLabel: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 8,
+    textAlign: "center" as const,
+    marginLeft: -1,
   },
 });

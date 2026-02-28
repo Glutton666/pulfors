@@ -124,6 +124,7 @@ export default function MetronomeScreen() {
   const [activeBlockIteration, setActiveBlockIteration] = useState(1);
   const activeBlockIdRef = useRef<string | null>(null);
   const activeBlockIterRef = useRef(1);
+  const blockStartTimeRef = useRef(Date.now());
   const loopBlocksRef = useRef<LoopBlock[]>([]);
   const barAreaRef = useRef<View>(null);
   const barAreaLayoutRef = useRef({ y: 0, height: 0 });
@@ -1260,6 +1261,7 @@ export default function MetronomeScreen() {
       engine.setBeatRange(firstBlock.startBeat, firstBlock.endBeat);
       activeBlockIdRef.current = firstBlock.id;
       activeBlockIterRef.current = 1;
+      blockStartTimeRef.current = Date.now();
       setActiveBlockId(firstBlock.id);
       setActiveBlockIteration(1);
     } else {
@@ -1323,55 +1325,39 @@ export default function MetronomeScreen() {
       if (curIdx < 0) return;
 
       const curBlock = blocks[curIdx];
-      if (curIter < curBlock.loopCount) {
-        activeBlockIterRef.current = curIter + 1;
-        setActiveBlockIteration(curIter + 1);
-        return;
+
+      if (curBlock.loopMode === "time") {
+        const startTime = blockStartTimeRef.current;
+        const elapsed = (Date.now() - startTime) / 1000;
+        if (elapsed < curBlock.loopDuration) {
+          activeBlockIterRef.current = curIter + 1;
+          setActiveBlockIteration(curIter + 1);
+          return;
+        }
+      } else {
+        if (curIter < curBlock.loopCount) {
+          activeBlockIterRef.current = curIter + 1;
+          setActiveBlockIteration(curIter + 1);
+          return;
+        }
       }
 
-      const clearBlockState = () => {
+      const nextIdx = curIdx + 1;
+      if (nextIdx < blocks.length) {
+        activateBlock(blocks[nextIdx]);
+      } else {
         engine.clearBeatRange();
         activeBlockIdRef.current = null;
         activeBlockIterRef.current = 1;
         setActiveBlockId(null);
         setActiveBlockIteration(1);
-      };
-
-      const executeAfter = (action: LoopBlock["afterAction"]) => {
-        if (action.type === "next") {
-          const nextIdx = curIdx + 1;
-          if (nextIdx < blocks.length) {
-            activateBlock(blocks[nextIdx]);
-          } else {
-            clearBlockState();
-          }
-        } else if (action.type === "goto-block") {
-          const target = blocks.find(b => b.id === action.blockId);
-          if (target) {
-            activateBlock(target);
-          } else {
-            clearBlockState();
-          }
-        } else if (action.type === "goto-beat") {
-          clearBlockState();
-          engine.setBeatRange(action.beat, engine.getBeatsPerMeasure() - 1);
-        } else if (action.type === "random") {
-          const others = blocks.filter(b => b.id !== curId);
-          if (others.length > 0) {
-            const pick = others[Math.floor(Math.random() * others.length)];
-            activateBlock(pick);
-          } else {
-            activateBlock(curBlock);
-          }
-        }
-      };
-
-      executeAfter(curBlock.afterAction);
+      }
     });
 
     const activateBlock = (block: LoopBlock) => {
       activeBlockIdRef.current = block.id;
       activeBlockIterRef.current = 1;
+      blockStartTimeRef.current = Date.now();
       setActiveBlockId(block.id);
       setActiveBlockIteration(1);
       engine.setBeatRange(block.startBeat, block.endBeat);
@@ -1732,7 +1718,14 @@ export default function MetronomeScreen() {
     setBeatTypes([...entry.beatTypes]);
     setBeatSubdivisions({ ...entry.beatSubdivisions });
     setBarRepeats({ ...entry.barRepeats });
-    const entryBlocks = entry.loopBlocks || [];
+    const entryBlocks = (entry.loopBlocks || []).map((b: any) => ({
+      id: b.id,
+      startBeat: b.startBeat,
+      endBeat: b.endBeat,
+      loopCount: b.loopCount || 2,
+      loopMode: b.loopMode || "count",
+      loopDuration: b.loopDuration || 30,
+    } as LoopBlock));
     setLoopBlocks([...entryBlocks]);
     loopBlocksRef.current = [...entryBlocks];
     setBarLoopMode(entry.barLoopMode);
