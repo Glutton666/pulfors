@@ -70,6 +70,18 @@ export interface BarRepeatEntry {
   value: number;
 }
 
+export interface LoopBlockEntry {
+  id: string;
+  startBeat: number;
+  endBeat: number;
+  loopCount: number;
+  afterAction:
+    | { type: "next" }
+    | { type: "goto-block"; blockId: string }
+    | { type: "goto-beat"; beat: number }
+    | { type: "random" };
+}
+
 export interface PracticeEntry {
   id: string;
   label: string;
@@ -80,6 +92,7 @@ export interface PracticeEntry {
   beatTypes: BeatType[];
   beatSubdivisions: Record<string, BeatType[]>;
   barRepeats: Record<number, BarRepeatEntry>;
+  loopBlocks?: LoopBlockEntry[];
   barLoopMode: "loop" | "once";
   subdivisionPattern: BeatType[];
   barClockMode?: "stopwatch" | "timer";

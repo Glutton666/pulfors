@@ -47,7 +47,7 @@ import {
   DIAL_SIZE,
   DOT_RADIUS_FROM_CENTER,
 } from "@/components/BeatIndicator";
-import type { BarRepeat } from "@/components/BeatIndicator";
+import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
 import { BpmSlider } from "@/components/BpmSlider";
 import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
@@ -119,6 +119,12 @@ export default function MetronomeScreen() {
   const [barStartBeat, setBarStartBeat] = useState<number | null>(null);
   const [barLoopMode, setBarLoopMode] = useState<"loop" | "once">("loop");
   const [barRepeats, setBarRepeats] = useState<Record<number, BarRepeat>>({});
+  const [loopBlocks, setLoopBlocks] = useState<LoopBlock[]>([]);
+  const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+  const [activeBlockIteration, setActiveBlockIteration] = useState(1);
+  const activeBlockIdRef = useRef<string | null>(null);
+  const activeBlockIterRef = useRef(1);
+  const loopBlocksRef = useRef<LoopBlock[]>([]);
   const barAreaRef = useRef<View>(null);
   const barAreaLayoutRef = useRef({ y: 0, height: 0 });
   const barScrollOffsetRef = useRef(0);
@@ -1082,21 +1088,13 @@ export default function MetronomeScreen() {
             if (sampleDurMs <= 0) continue;
 
             let elapsedMs = 0;
-            const curBarRepeats = barConfigRef.current.barRepeats || {};
             for (let b = trigBeat; b < startBeat; b++) {
               const pat = engine.getBeatSubdivision(b);
               const subCount = pat ? pat.length : 1;
-              const rep = curBarRepeats[b];
-              let repeatCount = 1;
-              if (rep) {
-                if (rep.type === "count") repeatCount = Math.max(1, rep.value);
-                else repeatCount = Math.max(1, Math.round((rep.value * 1000) / beatDurMs));
-              }
               if (b === trigBeat) {
                 elapsedMs += (subCount - trigSub) * (beatDurMs / subCount);
-                elapsedMs += (repeatCount - 1) * beatDurMs;
               } else {
-                elapsedMs += beatDurMs * repeatCount;
+                elapsedMs += beatDurMs;
               }
             }
 
@@ -1228,7 +1226,7 @@ export default function MetronomeScreen() {
       engine.setBeatsPerMeasure(defaultBeats);
       engine.setBeatTypes([...defaultTypes]);
       engine.setAllBeatSubdivisions({});
-      engine.clearBarRepeats();
+      engine.clearBeatRange();
     } else {
       barConfigRef.current = {
         ...barConfigRef.current,
@@ -1245,7 +1243,7 @@ export default function MetronomeScreen() {
       engine.setBeatsPerMeasure(dc.beatsPerMeasure);
       engine.setBeatTypes([...dc.beatTypes]);
       engine.setAllBeatSubdivisions(dc.beatSubdivisions);
-      engine.clearBarRepeats();
+      engine.clearBeatRange();
     }
 
     setBarMode(toBarMode);
@@ -1255,6 +1253,23 @@ export default function MetronomeScreen() {
     const engine = engineRef.current;
     if (!engine || isPlaying || isPreparing) return;
     setIsPreparing(true);
+
+    const blocks = loopBlocksRef.current;
+    if (blocks.length > 0) {
+      const firstBlock = blocks[0];
+      engine.setBeatRange(firstBlock.startBeat, firstBlock.endBeat);
+      activeBlockIdRef.current = firstBlock.id;
+      activeBlockIterRef.current = 1;
+      setActiveBlockId(firstBlock.id);
+      setActiveBlockIteration(1);
+    } else {
+      engine.clearBeatRange();
+      activeBlockIdRef.current = null;
+      activeBlockIterRef.current = 1;
+      setActiveBlockId(null);
+      setActiveBlockIteration(1);
+    }
+
     engine.buildScheduleOnly();
 
     const renderedPlayer = await buildRenderedPlayer();
@@ -1287,13 +1302,80 @@ export default function MetronomeScreen() {
         for (const snd of Object.values(noteSampleSoundsRef.current)) {
           try { snd.pause(); } catch {}
         }
+        activeBlockIdRef.current = null;
+        activeBlockIterRef.current = 1;
+        setActiveBlockId(null);
+        setActiveBlockIteration(1);
         setIsPlaying(false);
         setCurrentBeat(-1);
         setActiveSubNote(-1);
         const modeLabel = barModeRef.current ? "Bar" : "Dial";
         showPausedNotification(bpmRef.current, modeLabel);
+        return;
       }
+
+      const blocks = loopBlocksRef.current;
+      if (blocks.length === 0) return;
+
+      const curId = activeBlockIdRef.current;
+      const curIter = activeBlockIterRef.current;
+      const curIdx = blocks.findIndex(b => b.id === curId);
+      if (curIdx < 0) return;
+
+      const curBlock = blocks[curIdx];
+      if (curIter < curBlock.loopCount) {
+        activeBlockIterRef.current = curIter + 1;
+        setActiveBlockIteration(curIter + 1);
+        return;
+      }
+
+      const clearBlockState = () => {
+        engine.clearBeatRange();
+        activeBlockIdRef.current = null;
+        activeBlockIterRef.current = 1;
+        setActiveBlockId(null);
+        setActiveBlockIteration(1);
+      };
+
+      const executeAfter = (action: LoopBlock["afterAction"]) => {
+        if (action.type === "next") {
+          const nextIdx = curIdx + 1;
+          if (nextIdx < blocks.length) {
+            activateBlock(blocks[nextIdx]);
+          } else {
+            clearBlockState();
+          }
+        } else if (action.type === "goto-block") {
+          const target = blocks.find(b => b.id === action.blockId);
+          if (target) {
+            activateBlock(target);
+          } else {
+            clearBlockState();
+          }
+        } else if (action.type === "goto-beat") {
+          clearBlockState();
+          engine.setBeatRange(action.beat, engine.getBeatsPerMeasure() - 1);
+        } else if (action.type === "random") {
+          const others = blocks.filter(b => b.id !== curId);
+          if (others.length > 0) {
+            const pick = others[Math.floor(Math.random() * others.length)];
+            activateBlock(pick);
+          } else {
+            activateBlock(curBlock);
+          }
+        }
+      };
+
+      executeAfter(curBlock.afterAction);
     });
+
+    const activateBlock = (block: LoopBlock) => {
+      activeBlockIdRef.current = block.id;
+      activeBlockIterRef.current = 1;
+      setActiveBlockId(block.id);
+      setActiveBlockIteration(1);
+      engine.setBeatRange(block.startBeat, block.endBeat);
+    };
   }, []);
 
   const timerStopModeRef = useRef(timerStopMode);
@@ -1589,10 +1671,14 @@ export default function MetronomeScreen() {
       } else {
         delete next[beat];
       }
-      engineRef.current?.setBarRepeats(next);
       barConfigRef.current.barRepeats = { ...next };
       return next;
     });
+  }, []);
+
+  const handleLoopBlocksChange = useCallback((blocks: LoopBlock[]) => {
+    setLoopBlocks(blocks);
+    loopBlocksRef.current = blocks;
   }, []);
 
   const beatSubdivisionCounts = useMemo(() => {
@@ -1611,12 +1697,13 @@ export default function MetronomeScreen() {
       beatTypes: [...beatTypes],
       beatSubdivisions: { ...beatSubdivisions },
       barRepeats: { ...barRepeats },
+      loopBlocks: [...loopBlocks],
       barLoopMode: barLoopMode as "loop" | "once",
       subdivisionPattern: [...subdivisionPattern],
       barClockMode: barConfigRef.current.barClockMode,
       barTimerDuration: barConfigRef.current.barTimerDuration,
     };
-  }, [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, barLoopMode, subdivisionPattern]);
+  }, [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, subdivisionPattern]);
 
   const handleLoadPracticeEntry = useCallback((entry: PracticeEntry) => {
     const engine = engineRef.current;
@@ -1645,6 +1732,9 @@ export default function MetronomeScreen() {
     setBeatTypes([...entry.beatTypes]);
     setBeatSubdivisions({ ...entry.beatSubdivisions });
     setBarRepeats({ ...entry.barRepeats });
+    const entryBlocks = entry.loopBlocks || [];
+    setLoopBlocks([...entryBlocks]);
+    loopBlocksRef.current = [...entryBlocks];
     setBarLoopMode(entry.barLoopMode);
     setSubdivisionPattern([...entry.subdivisionPattern]);
 
@@ -1652,7 +1742,7 @@ export default function MetronomeScreen() {
     engine.setBeatsPerMeasure(entry.beatsPerMeasure);
     engine.setBeatTypes([...entry.beatTypes]);
     engine.setAllBeatSubdivisions(entry.beatSubdivisions);
-    engine.setBarRepeats(entry.barRepeats);
+    engine.clearBeatRange();
     barConfigRef.current = {
       beatsPerMeasure: entry.beatsPerMeasure,
       beatTypes: [...entry.beatTypes],
@@ -2010,6 +2100,10 @@ export default function MetronomeScreen() {
             barAreaRef={barAreaRef}
             barRepeats={barRepeats}
             onBarRepeatChange={handleBarRepeatChange}
+            loopBlocks={loopBlocks}
+            onLoopBlocksChange={handleLoopBlocksChange}
+            activeBlockId={activeBlockId}
+            activeBlockIteration={activeBlockIteration}
             barLoopMode={barLoopMode}
             onBarLoopModeChange={setBarLoopMode}
             onBarScrollOffset={(offset) => { barScrollOffsetRef.current = offset; }}
