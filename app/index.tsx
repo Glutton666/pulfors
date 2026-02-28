@@ -47,7 +47,7 @@ import {
   DIAL_SIZE,
   DOT_RADIUS_FROM_CENTER,
 } from "@/components/BeatIndicator";
-import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
+import type { BarRepeat } from "@/components/BeatIndicator";
 import { BpmSlider } from "@/components/BpmSlider";
 import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
@@ -58,7 +58,7 @@ import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import type { PracticeEntry } from "@/lib/storage";
 import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
-import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource } from "@/lib/note-samples";
+import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, setNoteSampleSource, removeNoteSampleSource } from "@/lib/note-samples";
 import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, SampleSource } from "@/lib/note-samples";
 import { NoteRecorderModal } from "@/components/NoteRecorderModal";
 import { AudioModule, createAudioPlayer } from "expo-audio";
@@ -119,13 +119,6 @@ export default function MetronomeScreen() {
   const [barStartBeat, setBarStartBeat] = useState<number | null>(null);
   const [barLoopMode, setBarLoopMode] = useState<"loop" | "once">("loop");
   const [barRepeats, setBarRepeats] = useState<Record<number, BarRepeat>>({});
-  const [loopBlocks, setLoopBlocks] = useState<LoopBlock[]>([]);
-  const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
-  const [activeBlockIteration, setActiveBlockIteration] = useState(1);
-  const activeBlockIdRef = useRef<string | null>(null);
-  const activeBlockIterRef = useRef(1);
-  const blockStartTimeRef = useRef(Date.now());
-  const loopBlocksRef = useRef<LoopBlock[]>([]);
   const barAreaRef = useRef<View>(null);
   const barAreaLayoutRef = useRef({ y: 0, height: 0 });
   const barScrollOffsetRef = useRef(0);
@@ -376,9 +369,21 @@ export default function MetronomeScreen() {
       }).catch(() => {});
     });
 
-    saveNoteSamples({});
-    saveNoteSampleNames({});
-    saveNoteSampleSources({});
+    loadNoteSamples().then((samples) => {
+      setNoteSamples(samples);
+      noteSamplesRef.current = samples;
+      preloadSounds(samples);
+    });
+
+    loadNoteSampleNames().then((names) => {
+      setNoteSampleNames(names);
+      noteSampleNamesRef.current = names;
+    });
+
+    loadNoteSampleSources().then((sources) => {
+      setNoteSampleSources(sources);
+      noteSampleSourcesRef.current = sources;
+    });
 
     const sampleTimingCacheRef = { current: new Map<string, { startMs: number; durationMs: number }>() };
 
@@ -1005,13 +1010,8 @@ export default function MetronomeScreen() {
     const modeLabel = barModeRef.current ? "Bar" : "Dial";
     if (isPlaying) {
       engine.stop();
-      engine.clearBeatRange();
       stopRenderedAudio();
       clearSamplePlayStates();
-      activeBlockIdRef.current = null;
-      activeBlockIterRef.current = 1;
-      setActiveBlockId(null);
-      setActiveBlockIteration(1);
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
@@ -1041,44 +1041,22 @@ export default function MetronomeScreen() {
         practiceStartRef.current = Date.now();
       }
 
-      const blocks = loopBlocksRef.current;
-      if (blocks.length > 0) {
-        const firstBlock = blocks[0];
-        engine.setBeatRange(firstBlock.startBeat, firstBlock.endBeat);
-        activeBlockIdRef.current = firstBlock.id;
-        activeBlockIterRef.current = 1;
-        blockStartTimeRef.current = Date.now();
-        setActiveBlockId(firstBlock.id);
-        setActiveBlockIteration(1);
-      } else {
-        engine.clearBeatRange();
-        activeBlockIdRef.current = null;
-        activeBlockIterRef.current = 1;
-        setActiveBlockId(null);
-        setActiveBlockIteration(1);
-      }
-
       engine.buildScheduleOnly();
 
-      if (blocks.length > 0) {
+      const renderedPlayer = await buildRenderedPlayer();
+      if (renderedPlayer) {
         stopRenderedAudio();
-        engine.setPreRenderedAudio(false);
+        renderedPlayerRef.current = renderedPlayer;
+        engine.setPreRenderedAudio(true);
+        renderedPlayer.play();
       } else {
-        const renderedPlayer = await buildRenderedPlayer();
-        if (renderedPlayer) {
-          stopRenderedAudio();
-          renderedPlayerRef.current = renderedPlayer;
-          engine.setPreRenderedAudio(true);
-          renderedPlayer.play();
-        } else {
-          engine.setPreRenderedAudio(false);
-        }
+        engine.setPreRenderedAudio(false);
       }
       setIsPreparing(false);
       setIsPlaying(true);
       engine.start(startBeat ?? undefined);
 
-      if (blocks.length === 0 && barModeRef.current && barLoopModeRef.current === "once") {
+      if (barModeRef.current && barLoopModeRef.current === "once") {
         engine.requestStopAfterMeasure();
       }
 
@@ -1104,13 +1082,21 @@ export default function MetronomeScreen() {
             if (sampleDurMs <= 0) continue;
 
             let elapsedMs = 0;
+            const curBarRepeats = barConfigRef.current.barRepeats || {};
             for (let b = trigBeat; b < startBeat; b++) {
               const pat = engine.getBeatSubdivision(b);
               const subCount = pat ? pat.length : 1;
+              const rep = curBarRepeats[b];
+              let repeatCount = 1;
+              if (rep) {
+                if (rep.type === "count") repeatCount = Math.max(1, rep.value);
+                else repeatCount = Math.max(1, Math.round((rep.value * 1000) / beatDurMs));
+              }
               if (b === trigBeat) {
                 elapsedMs += (subCount - trigSub) * (beatDurMs / subCount);
+                elapsedMs += (repeatCount - 1) * beatDurMs;
               } else {
-                elapsedMs += beatDurMs;
+                elapsedMs += beatDurMs * repeatCount;
               }
             }
 
@@ -1141,7 +1127,7 @@ export default function MetronomeScreen() {
         }, 0);
       }
     }
-  }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure, buildRenderedPlayer, stopRenderedAudio]);
+  }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure]);
 
   const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
@@ -1242,7 +1228,7 @@ export default function MetronomeScreen() {
       engine.setBeatsPerMeasure(defaultBeats);
       engine.setBeatTypes([...defaultTypes]);
       engine.setAllBeatSubdivisions({});
-      engine.clearBeatRange();
+      engine.clearBarRepeats();
     } else {
       barConfigRef.current = {
         ...barConfigRef.current,
@@ -1259,7 +1245,7 @@ export default function MetronomeScreen() {
       engine.setBeatsPerMeasure(dc.beatsPerMeasure);
       engine.setBeatTypes([...dc.beatTypes]);
       engine.setAllBeatSubdivisions(dc.beatSubdivisions);
-      engine.clearBeatRange();
+      engine.clearBarRepeats();
     }
 
     setBarMode(toBarMode);
@@ -1269,39 +1255,16 @@ export default function MetronomeScreen() {
     const engine = engineRef.current;
     if (!engine || isPlaying || isPreparing) return;
     setIsPreparing(true);
-
-    const blocks = loopBlocksRef.current;
-    if (blocks.length > 0) {
-      const firstBlock = blocks[0];
-      engine.setBeatRange(firstBlock.startBeat, firstBlock.endBeat);
-      activeBlockIdRef.current = firstBlock.id;
-      activeBlockIterRef.current = 1;
-      blockStartTimeRef.current = Date.now();
-      setActiveBlockId(firstBlock.id);
-      setActiveBlockIteration(1);
-    } else {
-      engine.clearBeatRange();
-      activeBlockIdRef.current = null;
-      activeBlockIterRef.current = 1;
-      setActiveBlockId(null);
-      setActiveBlockIteration(1);
-    }
-
     engine.buildScheduleOnly();
 
-    if (blocks.length > 0) {
+    const renderedPlayer = await buildRenderedPlayer();
+    if (renderedPlayer) {
       stopRenderedAudio();
-      engine.setPreRenderedAudio(false);
+      renderedPlayerRef.current = renderedPlayer;
+      engine.setPreRenderedAudio(true);
+      renderedPlayer.play();
     } else {
-      const renderedPlayer = await buildRenderedPlayer();
-      if (renderedPlayer) {
-        stopRenderedAudio();
-        renderedPlayerRef.current = renderedPlayer;
-        engine.setPreRenderedAudio(true);
-        renderedPlayer.play();
-      } else {
-        engine.setPreRenderedAudio(false);
-      }
+      engine.setPreRenderedAudio(false);
     }
     setIsPreparing(false);
     setIsPlaying(true);
@@ -1324,78 +1287,13 @@ export default function MetronomeScreen() {
         for (const snd of Object.values(noteSampleSoundsRef.current)) {
           try { snd.pause(); } catch {}
         }
-        activeBlockIdRef.current = null;
-        activeBlockIterRef.current = 1;
-        setActiveBlockId(null);
-        setActiveBlockIteration(1);
         setIsPlaying(false);
         setCurrentBeat(-1);
         setActiveSubNote(-1);
         const modeLabel = barModeRef.current ? "Bar" : "Dial";
         showPausedNotification(bpmRef.current, modeLabel);
-        return;
-      }
-
-      const blocks = loopBlocksRef.current;
-      if (blocks.length === 0) return;
-
-      const curId = activeBlockIdRef.current;
-      if (!curId) {
-        activateBlock(blocks[0]);
-        return;
-      }
-      const curIter = activeBlockIterRef.current;
-      const curIdx = blocks.findIndex(b => b.id === curId);
-      if (curIdx < 0) {
-        activateBlock(blocks[0]);
-        return;
-      }
-
-      const curBlock = blocks[curIdx];
-
-      let shouldAdvance = false;
-      if (curBlock.loopMode === "time") {
-        const startTime = blockStartTimeRef.current;
-        const elapsed = (Date.now() - startTime) / 1000;
-        shouldAdvance = elapsed >= curBlock.loopDuration;
-      } else {
-        shouldAdvance = curIter >= curBlock.loopCount;
-      }
-
-      if (!shouldAdvance) {
-        activeBlockIterRef.current = curIter + 1;
-        setActiveBlockIteration(curIter + 1);
-        return;
-      }
-
-      const nextIdx = curIdx + 1;
-      if (nextIdx < blocks.length) {
-        activateBlock(blocks[nextIdx]);
-      } else {
-        engine.stop();
-        engine.clearBeatRange();
-        if (renderedPlayerRef.current) {
-          try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
-          renderedPlayerRef.current = null;
-        }
-        activeBlockIdRef.current = null;
-        activeBlockIterRef.current = 1;
-        setActiveBlockId(null);
-        setActiveBlockIteration(1);
-        setIsPlaying(false);
-        setCurrentBeat(-1);
-        setActiveSubNote(-1);
       }
     });
-
-    const activateBlock = (block: LoopBlock) => {
-      activeBlockIdRef.current = block.id;
-      activeBlockIterRef.current = 1;
-      blockStartTimeRef.current = Date.now();
-      setActiveBlockId(block.id);
-      setActiveBlockIteration(1);
-      engine.setBeatRange(block.startBeat, block.endBeat);
-    };
   }, []);
 
   const timerStopModeRef = useRef(timerStopMode);
@@ -1691,14 +1589,10 @@ export default function MetronomeScreen() {
       } else {
         delete next[beat];
       }
+      engineRef.current?.setBarRepeats(next);
       barConfigRef.current.barRepeats = { ...next };
       return next;
     });
-  }, []);
-
-  const handleLoopBlocksChange = useCallback((blocks: LoopBlock[]) => {
-    setLoopBlocks(blocks);
-    loopBlocksRef.current = blocks;
   }, []);
 
   const beatSubdivisionCounts = useMemo(() => {
@@ -1717,13 +1611,12 @@ export default function MetronomeScreen() {
       beatTypes: [...beatTypes],
       beatSubdivisions: { ...beatSubdivisions },
       barRepeats: { ...barRepeats },
-      loopBlocks: [...loopBlocks],
       barLoopMode: barLoopMode as "loop" | "once",
       subdivisionPattern: [...subdivisionPattern],
       barClockMode: barConfigRef.current.barClockMode,
       barTimerDuration: barConfigRef.current.barTimerDuration,
     };
-  }, [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, subdivisionPattern]);
+  }, [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, barLoopMode, subdivisionPattern]);
 
   const handleLoadPracticeEntry = useCallback((entry: PracticeEntry) => {
     const engine = engineRef.current;
@@ -1752,16 +1645,6 @@ export default function MetronomeScreen() {
     setBeatTypes([...entry.beatTypes]);
     setBeatSubdivisions({ ...entry.beatSubdivisions });
     setBarRepeats({ ...entry.barRepeats });
-    const entryBlocks = (entry.loopBlocks || []).map((b: any) => ({
-      id: b.id,
-      startBeat: b.startBeat,
-      endBeat: b.endBeat,
-      loopCount: b.loopCount || 2,
-      loopMode: b.loopMode || "count",
-      loopDuration: b.loopDuration || 30,
-    } as LoopBlock));
-    setLoopBlocks([...entryBlocks]);
-    loopBlocksRef.current = [...entryBlocks];
     setBarLoopMode(entry.barLoopMode);
     setSubdivisionPattern([...entry.subdivisionPattern]);
 
@@ -1769,7 +1652,7 @@ export default function MetronomeScreen() {
     engine.setBeatsPerMeasure(entry.beatsPerMeasure);
     engine.setBeatTypes([...entry.beatTypes]);
     engine.setAllBeatSubdivisions(entry.beatSubdivisions);
-    engine.clearBeatRange();
+    engine.setBarRepeats(entry.barRepeats);
     barConfigRef.current = {
       beatsPerMeasure: entry.beatsPerMeasure,
       beatTypes: [...entry.beatTypes],
@@ -2127,10 +2010,6 @@ export default function MetronomeScreen() {
             barAreaRef={barAreaRef}
             barRepeats={barRepeats}
             onBarRepeatChange={handleBarRepeatChange}
-            loopBlocks={loopBlocks}
-            onLoopBlocksChange={handleLoopBlocksChange}
-            activeBlockId={activeBlockId}
-            activeBlockIteration={activeBlockIteration}
             barLoopMode={barLoopMode}
             onBarLoopModeChange={setBarLoopMode}
             onBarScrollOffset={(offset) => { barScrollOffsetRef.current = offset; }}
