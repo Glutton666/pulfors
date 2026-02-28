@@ -1043,6 +1043,10 @@ export default function MetronomeScreen() {
         practiceStartRef.current = Date.now();
       }
 
+      if (barModeRef.current) {
+        engine.setAllBarRepeats(barConfigRef.current.barRepeats || {});
+        engine.setLoopBlocks(barConfigRef.current.loopBlocks || []);
+      }
       engine.buildScheduleOnly();
 
       const renderedPlayer = await buildRenderedPlayer();
@@ -1262,6 +1266,10 @@ export default function MetronomeScreen() {
     const engine = engineRef.current;
     if (!engine || isPlaying || isPreparing) return;
     setIsPreparing(true);
+    if (barModeRef.current) {
+      engine.setAllBarRepeats(barConfigRef.current.barRepeats || {});
+      engine.setLoopBlocks(barConfigRef.current.loopBlocks || []);
+    }
     engine.buildScheduleOnly();
 
     const renderedPlayer = await buildRenderedPlayer();
