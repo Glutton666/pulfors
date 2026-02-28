@@ -555,10 +555,6 @@ export default function MetronomeScreen() {
 
       const wavUri = await saveRenderedWav(pcm);
 
-      if (renderedPlayerRef.current) {
-        try { renderedPlayerRef.current.release(); } catch {}
-      }
-
       if (Platform.OS === "web" && renderedUrlRef.current) {
         try { URL.revokeObjectURL(renderedUrlRef.current); } catch {}
       }
@@ -567,7 +563,6 @@ export default function MetronomeScreen() {
       const player = createAudioPlayer(wavUri);
       player.loop = true;
       player.volume = 1.0;
-      renderedPlayerRef.current = player;
       return player;
     } catch (e) {
       console.warn("[PreRender] Failed, falling back to per-tick audio:", e);
