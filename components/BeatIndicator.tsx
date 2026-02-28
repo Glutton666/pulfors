@@ -1248,29 +1248,44 @@ export function BeatIndicator({
           </View>
         )}
 
-        <View
-          ref={barAreaRef}
-          style={styles.barMeasureOuter}
-          onLayout={(e) => setBarContainerHeight(e.nativeEvent.layout.height)}
-        >
-          <ScrollView
-            ref={barScrollRef}
-            style={styles.barScrollView}
-            showsVerticalScrollIndicator={false}
-            nestedScrollEnabled
-            contentOffset={{ x: 0, y: 0 }}
-            scrollEnabled={!isPlaying}
-            onScroll={(e) => onBarScrollOffset?.(e.nativeEvent.contentOffset.y)}
-            scrollEventThrottle={16}
+        <View style={styles.barAreaWithSide}>
+          <View
+            ref={barAreaRef}
+            style={styles.barMeasureOuter}
+            onLayout={(e) => setBarContainerHeight(e.nativeEvent.layout.height)}
           >
-            <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>{allBarRows}</View>
-          </ScrollView>
-          <LinearGradient
-            colors={[Colors.background, Colors.background, Colors.background + "80", "transparent"]}
-            locations={[0, 0.45, 0.75, 1]}
-            style={[styles.barFadeGradient, { top: 0, height: rowH * 1.8 }]}
-            pointerEvents="none"
-          />
+            <ScrollView
+              ref={barScrollRef}
+              style={styles.barScrollView}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+              contentOffset={{ x: 0, y: 0 }}
+              scrollEnabled={!isPlaying}
+              onScroll={(e) => onBarScrollOffset?.(e.nativeEvent.contentOffset.y)}
+              scrollEventThrottle={16}
+            >
+              <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>{allBarRows}</View>
+            </ScrollView>
+            <LinearGradient
+              colors={[Colors.background, Colors.background, Colors.background + "80", "transparent"]}
+              locations={[0, 0.45, 0.75, 1]}
+              style={[styles.barFadeGradient, { top: 0, height: rowH * 1.8 }]}
+              pointerEvents="none"
+            />
+          </View>
+          <Pressable
+            onPress={() => { if (!isPlaying) onBarLoopModeChange(barLoopMode === "loop" ? "once" : "loop"); }}
+            style={[styles.barSideLoopBtn, barLoopMode === "once" && { backgroundColor: "rgba(255,255,255,0.12)" }, isPlaying && { opacity: 0.3 }]}
+            hitSlop={6}
+            testID="bar-loop-toggle-side"
+            disabled={isPlaying}
+          >
+            <Ionicons
+              name={barLoopMode === "loop" ? "repeat" : "play-forward"}
+              size={18}
+              color={barLoopMode === "loop" ? C.accent : Colors.textSecondary}
+            />
+          </Pressable>
         </View>
         <LinearGradient
           colors={["transparent", Colors.background + "60", Colors.background + "C0", Colors.background]}
@@ -1284,19 +1299,6 @@ export function BeatIndicator({
         )}
 
         <View style={styles.barBottomRow}>
-          <Pressable
-            onPress={() => { if (!isPlaying) onBarLoopModeChange(barLoopMode === "loop" ? "once" : "loop"); }}
-            style={[styles.barLoopBtn, barLoopMode === "once" && { backgroundColor: "rgba(255,255,255,0.12)" }, isPlaying && { opacity: 0.3 }]}
-            hitSlop={6}
-            testID="bar-loop-toggle"
-            disabled={isPlaying}
-          >
-            <Ionicons
-              name={barLoopMode === "loop" ? "repeat" : "play-forward"}
-              size={18}
-              color={barLoopMode === "loop" ? C.accent : Colors.textSecondary}
-            />
-          </Pressable>
           <View style={styles.barTimeSigRow}>
             <Pressable
               onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
@@ -2068,12 +2070,26 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 14,
   },
+  barAreaWithSide: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    flexShrink: 1,
+  },
   barMeasureOuter: {
     flex: 1,
     flexShrink: 1,
-    width: "100%" as any,
     paddingHorizontal: 0,
     overflow: "hidden",
+  },
+  barSideLoopBtn: {
+    width: moderateScale(32, 0.4),
+    height: moderateScale(32, 0.4),
+    borderRadius: moderateScale(16, 0.4),
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 6,
   },
   barScrollView: {
     flexGrow: 0,
