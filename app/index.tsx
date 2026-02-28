@@ -583,6 +583,18 @@ export default function MetronomeScreen() {
     }
   }, [getClickPCMs]);
 
+  const warmupAudioPlayers = useCallback(async () => {
+    try {
+      const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
+      const toWarm = [players.highA, players.highB, players.lowA, players.lowB, players.strongA, players.strongB];
+      const savedVolumes = toWarm.map(p => p.volume);
+      toWarm.forEach(p => { p.volume = 0; });
+      toWarm.forEach(p => { try { p.seekTo(0); p.play(); } catch {} });
+      await new Promise(r => setTimeout(r, 30));
+      toWarm.forEach((p, i) => { try { p.pause(); p.seekTo(0); p.volume = savedVolumes[i]; } catch {} });
+    } catch {}
+  }, []);
+
   const stopRenderedAudio = useCallback(() => {
     if (renderedPlayerRef.current) {
       try {
@@ -1049,11 +1061,19 @@ export default function MetronomeScreen() {
       }
       engine.buildScheduleOnly();
 
+      await warmupAudioPlayers();
+
       const renderedPlayer = await buildRenderedPlayer();
       if (renderedPlayer) {
         stopRenderedAudio();
         renderedPlayerRef.current = renderedPlayer;
         engine.setPreRenderedAudio(true);
+        renderedPlayer.volume = 0;
+        renderedPlayer.play();
+        await new Promise(r => setTimeout(r, 20));
+        renderedPlayer.pause();
+        await renderedPlayer.seekTo(0);
+        renderedPlayer.volume = 1.0;
         renderedPlayer.play();
       } else {
         engine.setPreRenderedAudio(false);
@@ -1133,7 +1153,7 @@ export default function MetronomeScreen() {
         }, 0);
       }
     }
-  }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure]);
+  }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure, warmupAudioPlayers]);
 
   const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
@@ -1272,11 +1292,19 @@ export default function MetronomeScreen() {
     }
     engine.buildScheduleOnly();
 
+    await warmupAudioPlayers();
+
     const renderedPlayer = await buildRenderedPlayer();
     if (renderedPlayer) {
       stopRenderedAudio();
       renderedPlayerRef.current = renderedPlayer;
       engine.setPreRenderedAudio(true);
+      renderedPlayer.volume = 0;
+      renderedPlayer.play();
+      await new Promise(r => setTimeout(r, 20));
+      renderedPlayer.pause();
+      await renderedPlayer.seekTo(0);
+      renderedPlayer.volume = 1.0;
       renderedPlayer.play();
     } else {
       engine.setPreRenderedAudio(false);
@@ -1284,7 +1312,7 @@ export default function MetronomeScreen() {
     setIsPreparing(false);
     setIsPlaying(true);
     engine.start();
-  }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio]);
+  }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio, warmupAudioPlayers]);
 
   useEffect(() => {
     const engine = engineRef.current;
