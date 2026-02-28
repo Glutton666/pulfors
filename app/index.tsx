@@ -1005,8 +1005,13 @@ export default function MetronomeScreen() {
     const modeLabel = barModeRef.current ? "Bar" : "Dial";
     if (isPlaying) {
       engine.stop();
+      engine.clearBeatRange();
       stopRenderedAudio();
       clearSamplePlayStates();
+      activeBlockIdRef.current = null;
+      activeBlockIterRef.current = 1;
+      setActiveBlockId(null);
+      setActiveBlockIteration(1);
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
@@ -1036,22 +1041,44 @@ export default function MetronomeScreen() {
         practiceStartRef.current = Date.now();
       }
 
+      const blocks = loopBlocksRef.current;
+      if (blocks.length > 0) {
+        const firstBlock = blocks[0];
+        engine.setBeatRange(firstBlock.startBeat, firstBlock.endBeat);
+        activeBlockIdRef.current = firstBlock.id;
+        activeBlockIterRef.current = 1;
+        blockStartTimeRef.current = Date.now();
+        setActiveBlockId(firstBlock.id);
+        setActiveBlockIteration(1);
+      } else {
+        engine.clearBeatRange();
+        activeBlockIdRef.current = null;
+        activeBlockIterRef.current = 1;
+        setActiveBlockId(null);
+        setActiveBlockIteration(1);
+      }
+
       engine.buildScheduleOnly();
 
-      const renderedPlayer = await buildRenderedPlayer();
-      if (renderedPlayer) {
+      if (blocks.length > 0) {
         stopRenderedAudio();
-        renderedPlayerRef.current = renderedPlayer;
-        engine.setPreRenderedAudio(true);
-        renderedPlayer.play();
-      } else {
         engine.setPreRenderedAudio(false);
+      } else {
+        const renderedPlayer = await buildRenderedPlayer();
+        if (renderedPlayer) {
+          stopRenderedAudio();
+          renderedPlayerRef.current = renderedPlayer;
+          engine.setPreRenderedAudio(true);
+          renderedPlayer.play();
+        } else {
+          engine.setPreRenderedAudio(false);
+        }
       }
       setIsPreparing(false);
       setIsPlaying(true);
       engine.start(startBeat ?? undefined);
 
-      if (barModeRef.current && barLoopModeRef.current === "once") {
+      if (blocks.length === 0 && barModeRef.current && barLoopModeRef.current === "once") {
         engine.requestStopAfterMeasure();
       }
 
@@ -1114,7 +1141,7 @@ export default function MetronomeScreen() {
         }, 0);
       }
     }
-  }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure]);
+  }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure, buildRenderedPlayer, stopRenderedAudio]);
 
   const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
