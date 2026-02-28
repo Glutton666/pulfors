@@ -58,7 +58,7 @@ import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import type { PracticeEntry } from "@/lib/storage";
 import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
-import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, setNoteSampleSource, removeNoteSampleSource } from "@/lib/note-samples";
+import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource } from "@/lib/note-samples";
 import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, SampleSource } from "@/lib/note-samples";
 import { NoteRecorderModal } from "@/components/NoteRecorderModal";
 import { AudioModule, createAudioPlayer } from "expo-audio";
@@ -376,21 +376,9 @@ export default function MetronomeScreen() {
       }).catch(() => {});
     });
 
-    loadNoteSamples().then((samples) => {
-      setNoteSamples(samples);
-      noteSamplesRef.current = samples;
-      preloadSounds(samples);
-    });
-
-    loadNoteSampleNames().then((names) => {
-      setNoteSampleNames(names);
-      noteSampleNamesRef.current = names;
-    });
-
-    loadNoteSampleSources().then((sources) => {
-      setNoteSampleSources(sources);
-      noteSampleSourcesRef.current = sources;
-    });
+    saveNoteSamples({});
+    saveNoteSampleNames({});
+    saveNoteSampleSources({});
 
     const sampleTimingCacheRef = { current: new Map<string, { startMs: number; durationMs: number }>() };
 
