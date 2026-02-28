@@ -736,6 +736,10 @@ export function BeatIndicator({
     setBarTimerRemaining(totalSeconds);
   }, [barTimerInput]);
 
+  const [repeatEditBeat, setRepeatEditBeat] = useState<number | null>(null);
+  const [repeatEditType, setRepeatEditType] = useState<"count" | "duration">("count");
+  const [repeatEditValue, setRepeatEditValue] = useState(2);
+
   const [blockEditId, setBlockEditId] = useState<string | null>(null);
   const [blockEditStart, setBlockEditStart] = useState(0);
   const [blockEditEnd, setBlockEditEnd] = useState(0);
@@ -971,7 +975,7 @@ export function BeatIndicator({
               blockColor && !blockEditId && { marginLeft: 16 },
               blockEditId && { marginLeft: 16 },
             ]}
-            delayLongPress={500}
+            delayLongPress={400}
             onPress={() => {
               if (blockEditId !== null && isPrimary) {
                 handleBarRowTapForBlock(beat);
@@ -982,6 +986,20 @@ export function BeatIndicator({
                 if (Platform.OS !== "web") Haptics.selectionAsync();
               } else if (isPrimary) {
                 cycleBeatType(beat);
+              }
+            }}
+            onLongPress={() => {
+              if (isPrimary && !isPlaying && !blockEditId) {
+                const existing = barRepeats[beat];
+                if (existing) {
+                  setRepeatEditType(existing.type);
+                  setRepeatEditValue(existing.value);
+                } else {
+                  setRepeatEditType("count");
+                  setRepeatEditValue(2);
+                }
+                setRepeatEditBeat(beat);
+                if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               }
             }}
           >
@@ -1166,6 +1184,28 @@ export function BeatIndicator({
               return result;
             })()}
           </View>
+          {barRepeats[beat] && (
+            <Pressable
+              style={styles.barRepeatBadge}
+              onPress={() => {
+                if (isPlaying || blockEditId) return;
+                const existing = barRepeats?.[beat];
+                if (!existing) return;
+                setRepeatEditType(existing.type);
+                setRepeatEditValue(existing.value);
+                setRepeatEditBeat(beat);
+                if (Platform.OS !== "web") Haptics.selectionAsync();
+              }}
+            >
+              <Text style={[styles.barRepeatText, { color: C.accent }]}>
+                {barRepeats[beat].type === "count"
+                  ? `\u00D7${barRepeats[beat].value}`
+                  : barRepeats[beat].value >= 60
+                    ? `${Math.floor(barRepeats[beat].value / 60)}:${(barRepeats[beat].value % 60).toString().padStart(2, "0")}`
+                    : `${barRepeats[beat].value}s`}
+              </Text>
+            </Pressable>
+          )}
           <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
         </View>
       );
@@ -1522,6 +1562,125 @@ export function BeatIndicator({
                   <Text style={styles.repeatClearText}>Cancel</Text>
                 </Pressable>
                 <Pressable onPress={saveBlock} style={[styles.repeatSaveBtn, { backgroundColor: C.accent }]}>
+                  <Text style={[styles.repeatSaveText, { color: Colors.background }]}>Save</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Pressable>
+        </Modal>
+
+        <Modal
+          visible={repeatEditBeat !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setRepeatEditBeat(null)}
+        >
+          <Pressable style={styles.repeatModalOverlay} onPress={() => setRepeatEditBeat(null)}>
+            <View style={[styles.repeatModalCard, { borderColor: C.accent }]} onStartShouldSetResponder={() => true}>
+              <Text style={styles.repeatModalTitle}>
+                Beat {repeatEditBeat !== null ? repeatEditBeat + 1 : ""} Repeat
+              </Text>
+
+              <View style={styles.blockEditLoopTabRow}>
+                <Pressable
+                  onPress={() => setRepeatEditType("count")}
+                  style={[styles.blockEditLoopTab, repeatEditType === "count" && { backgroundColor: C.accent }]}
+                >
+                  <Text style={[styles.blockEditLoopTabText, repeatEditType === "count" ? { color: Colors.background } : { color: Colors.textSecondary }]}>{"\u00D7"} Count</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => { setRepeatEditType("duration"); if (repeatEditType === "count") setRepeatEditValue(30); }}
+                  style={[styles.blockEditLoopTab, repeatEditType === "duration" && { backgroundColor: C.accent }]}
+                >
+                  <Text style={[styles.blockEditLoopTabText, repeatEditType === "duration" ? { color: Colors.background } : { color: Colors.textSecondary }]}>
+                    <Ionicons name="time-outline" size={12} color={repeatEditType === "duration" ? Colors.background : Colors.textSecondary} />{" "}Time
+                  </Text>
+                </Pressable>
+              </View>
+
+              {repeatEditType === "count" ? (
+                <View style={styles.blockEditLoopBody}>
+                  <Pressable onPress={() => setRepeatEditValue(Math.max(1, repeatEditValue - 1))} style={styles.blockEditSmallBtn}>
+                    <Ionicons name="remove" size={16} color={Colors.text} />
+                  </Pressable>
+                  <TextInput
+                    style={[styles.blockEditLoopInput, { borderBottomColor: C.accent }]}
+                    value={String(repeatEditValue)}
+                    onChangeText={(t) => {
+                      const v = parseInt(t, 10);
+                      if (!isNaN(v) && v >= 1 && v <= 999) setRepeatEditValue(v);
+                      else if (t === "") setRepeatEditValue(1);
+                    }}
+                    keyboardType="number-pad"
+                    selectTextOnFocus
+                    maxLength={3}
+                  />
+                  <Pressable onPress={() => setRepeatEditValue(Math.min(999, repeatEditValue + 1))} style={styles.blockEditSmallBtn}>
+                    <Ionicons name="add" size={16} color={Colors.text} />
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.blockEditLoopBody}>
+                  <Pressable onPress={() => setRepeatEditValue(Math.max(5, repeatEditValue - 10))} style={styles.blockEditSmallBtn}>
+                    <Ionicons name="remove" size={16} color={Colors.text} />
+                  </Pressable>
+                  <View style={styles.blockEditTimeInputRow}>
+                    <View style={styles.blockEditTimeField}>
+                      <TextInput
+                        style={[styles.blockEditLoopInput, { borderBottomColor: C.accent }]}
+                        value={String(Math.floor(repeatEditValue / 60))}
+                        onChangeText={(t) => {
+                          const m = parseInt(t, 10);
+                          if (!isNaN(m) && m >= 0 && m <= 60) setRepeatEditValue(m * 60 + (repeatEditValue % 60));
+                          else if (t === "") setRepeatEditValue(repeatEditValue % 60 || 5);
+                        }}
+                        keyboardType="number-pad"
+                        selectTextOnFocus
+                        maxLength={2}
+                      />
+                      <Text style={styles.blockEditTimeUnit}>min</Text>
+                    </View>
+                    <Text style={styles.blockEditTimeSep}>:</Text>
+                    <View style={styles.blockEditTimeField}>
+                      <TextInput
+                        style={[styles.blockEditLoopInput, { borderBottomColor: C.accent }]}
+                        value={String(repeatEditValue % 60).padStart(2, "0")}
+                        onChangeText={(t) => {
+                          const s = parseInt(t, 10);
+                          if (!isNaN(s) && s >= 0 && s <= 59) setRepeatEditValue(Math.floor(repeatEditValue / 60) * 60 + s);
+                          else if (t === "") setRepeatEditValue(Math.floor(repeatEditValue / 60) * 60 || 5);
+                        }}
+                        keyboardType="number-pad"
+                        selectTextOnFocus
+                        maxLength={2}
+                      />
+                      <Text style={styles.blockEditTimeUnit}>sec</Text>
+                    </View>
+                  </View>
+                  <Pressable onPress={() => setRepeatEditValue(Math.min(3600, repeatEditValue + 10))} style={styles.blockEditSmallBtn}>
+                    <Ionicons name="add" size={16} color={Colors.text} />
+                  </Pressable>
+                </View>
+              )}
+
+              <View style={styles.repeatActions}>
+                {barRepeats[repeatEditBeat ?? -1] && (
+                  <Pressable onPress={() => { if (repeatEditBeat !== null) { onBarRepeatChange(repeatEditBeat, null); setRepeatEditBeat(null); } }} style={styles.repeatClearBtn}>
+                    <Text style={[styles.repeatClearText, { color: Colors.danger }]}>Delete</Text>
+                  </Pressable>
+                )}
+                <Pressable onPress={() => setRepeatEditBeat(null)} style={styles.repeatClearBtn}>
+                  <Text style={styles.repeatClearText}>Cancel</Text>
+                </Pressable>
+                <Pressable onPress={() => {
+                  if (repeatEditBeat !== null) {
+                    const clampedValue = repeatEditType === "count"
+                      ? Math.max(1, repeatEditValue)
+                      : Math.max(5, repeatEditValue);
+                    onBarRepeatChange(repeatEditBeat, { type: repeatEditType, value: clampedValue });
+                    setRepeatEditBeat(null);
+                  }
+                }} style={[styles.repeatSaveBtn, { backgroundColor: C.accent }]}>
                   <Text style={[styles.repeatSaveText, { color: Colors.background }]}>Save</Text>
                 </Pressable>
               </View>
