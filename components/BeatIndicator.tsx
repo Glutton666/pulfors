@@ -957,62 +957,37 @@ export function BeatIndicator({
               opacity: 0.7 + 0.3 / (bbi + 1),
             }} />
           ))}
-          <View style={{ alignItems: "center", width: 24 }}>
-            <Pressable
-              style={[
-                styles.barBeatLabel,
-                barStartBeat === beat && !isPlaying && { backgroundColor: C.accent + "30", borderRadius: 4 },
-              ]}
-              onPress={() => {
-                if (isPrimary && !isPlaying && onBarStartBeatSelect) {
-                  onBarStartBeatSelect(barStartBeat === beat ? null : beat);
-                  if (Platform.OS !== "web") Haptics.selectionAsync();
-                } else if (isPrimary) {
-                  cycleBeatType(beat);
+          <Pressable
+            style={[
+              styles.barBeatLabel,
+              barStartBeat === beat && !isPlaying && { backgroundColor: C.accent + "30", borderRadius: 4 },
+            ]}
+            onPress={() => {
+              if (isPrimary && !isPlaying && onBarStartBeatSelect) {
+                onBarStartBeatSelect(barStartBeat === beat ? null : beat);
+                if (Platform.OS !== "web") Haptics.selectionAsync();
+              } else if (isPrimary) {
+                cycleBeatType(beat);
+              }
+            }}
+          >
+            {barStartBeat === beat && !isPlaying ? (
+              <Ionicons name="play" size={12} color={C.accent} style={{ marginLeft: 1 }} />
+            ) : (
+              <Text style={[
+                styles.barBeatLabelText,
+                {
+                  color: bType === "strong" ? C.accent
+                    : bType === "accent" ? C.accentMuted
+                    : bType === "mute" ? Colors.textTertiary
+                    : Colors.textSecondary,
+                  opacity: isCurrent ? 1 : 0.6,
                 }
-              }}
-            >
-              {barStartBeat === beat && !isPlaying ? (
-                <Ionicons name="play" size={12} color={C.accent} style={{ marginLeft: 1 }} />
-              ) : (
-                <Text style={[
-                  styles.barBeatLabelText,
-                  {
-                    color: bType === "strong" ? C.accent
-                      : bType === "accent" ? C.accentMuted
-                      : bType === "mute" ? Colors.textTertiary
-                      : Colors.textSecondary,
-                    opacity: isCurrent ? 1 : 0.6,
-                  }
-                ]}>
-                  {beat + 1}
-                </Text>
-              )}
-            </Pressable>
-            {isPrimary && !isPlaying && (
-              <Pressable
-                onPress={() => openRepeatModal(beat)}
-                hitSlop={{ top: 2, bottom: 4, left: 6, right: 6 }}
-                style={{
-                  marginTop: 2,
-                  backgroundColor: barRepeats[beat] ? C.accent : "rgba(255,255,255,0.12)",
-                  borderRadius: 6,
-                  paddingHorizontal: 4,
-                  paddingVertical: 1,
-                  minWidth: 22,
-                  alignItems: "center",
-                }}
-              >
-                {barRepeats[beat] ? (
-                  <Text style={{ color: Colors.white, fontSize: 9, fontWeight: "700" }}>
-                    {formatRepeat(barRepeats[beat])}
-                  </Text>
-                ) : (
-                  <Ionicons name="repeat-outline" size={11} color={Colors.textTertiary} />
-                )}
-              </Pressable>
+              ]}>
+                {beat + 1}
+              </Text>
             )}
-          </View>
+          </Pressable>
           <View style={[
             styles.barBeatContent,
             { height: BAR_HEIGHT },
@@ -1178,6 +1153,30 @@ export function BeatIndicator({
             })()}
           </View>
           <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
+          {isPrimary && !isPlaying && (
+            <Pressable
+              onPress={() => openRepeatModal(beat)}
+              hitSlop={{ top: 4, bottom: 4, left: 2, right: 6 }}
+              style={{
+                marginLeft: 3,
+                backgroundColor: barRepeats[beat] ? C.accent : "transparent",
+                borderRadius: 4,
+                paddingHorizontal: 3,
+                paddingVertical: 1,
+                alignItems: "center",
+                justifyContent: "center",
+                minWidth: 20,
+              }}
+            >
+              {barRepeats[beat] ? (
+                <Text style={{ color: Colors.white, fontSize: 9, fontWeight: "700" }}>
+                  {formatRepeat(barRepeats[beat])}
+                </Text>
+              ) : (
+                <Ionicons name="repeat-outline" size={12} color={Colors.textTertiary} style={{ opacity: 0.5 }} />
+              )}
+            </Pressable>
+          )}
         </View>
       );
     };
