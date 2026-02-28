@@ -64,8 +64,8 @@ import { NoteRecorderModal } from "@/components/NoteRecorderModal";
 import { AudioModule, createAudioPlayer } from "expo-audio";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import {
-  loadAssetPCM,
   decodeSampleFile,
+  loadAssetPCM,
   parseTrimInfo,
   renderMeasure,
   saveRenderedWav,
@@ -356,6 +356,16 @@ export default function MetronomeScreen() {
       }
 
       setIsLoaded(true);
+
+      const set = settings.soundSet || "classic";
+      const src = soundSets[set] || soundSets.classic;
+      Promise.all([
+        loadAssetPCM(src.strong),
+        loadAssetPCM(src.high),
+        loadAssetPCM(src.low),
+      ]).then(([strong, high, low]) => {
+        clickPCMCacheRef.current[set] = { strong, high, low };
+      }).catch(() => {});
     });
 
     loadNoteSamples().then((samples) => {
@@ -570,28 +580,6 @@ export default function MetronomeScreen() {
     }
   }, [getClickPCMs, getSamplePCMs]);
 
-  const buildAndPlayRendered = useCallback(async () => {
-    const player = await buildRenderedPlayer();
-    if (player && engineRef.current?.getIsRunning()) {
-      if (pendingRenderedPlayerRef.current) {
-        try { pendingRenderedPlayerRef.current.release(); } catch {}
-      }
-      pendingRenderedPlayerRef.current = player;
-    } else if (player) {
-      try { player.release(); } catch {}
-    }
-  }, [buildRenderedPlayer]);
-
-  const reRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleReRender = useCallback(() => {
-    if (reRenderTimerRef.current) clearTimeout(reRenderTimerRef.current);
-    reRenderTimerRef.current = setTimeout(() => {
-      if (engineRef.current?.getIsRunning()) {
-        buildAndPlayRendered();
-      }
-    }, 300);
-  }, [buildAndPlayRendered]);
-
   const stopRenderedAudio = useCallback(() => {
     if (renderedPlayerRef.current) {
       try {
@@ -600,10 +588,6 @@ export default function MetronomeScreen() {
       } catch {}
       renderedPlayerRef.current = null;
     }
-    if (pendingRenderedPlayerRef.current) {
-      try { pendingRenderedPlayerRef.current.release(); } catch {}
-      pendingRenderedPlayerRef.current = null;
-    }
     if (Platform.OS === "web" && renderedUrlRef.current) {
       try { URL.revokeObjectURL(renderedUrlRef.current); } catch {}
       renderedUrlRef.current = null;
@@ -611,6 +595,16 @@ export default function MetronomeScreen() {
     const engine = engineRef.current;
     if (engine) engine.setPreRenderedAudio(false);
   }, []);
+
+  const reRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleReRender = useCallback(() => {
+    if (reRenderTimerRef.current) clearTimeout(reRenderTimerRef.current);
+    reRenderTimerRef.current = setTimeout(() => {
+      if (engineRef.current?.getIsRunning()) {
+        stopRenderedAudio();
+      }
+    }, 300);
+  }, [stopRenderedAudio]);
 
   const invalidateSamplePCMCache = useCallback((key?: string) => {
     if (key) {
@@ -1047,19 +1041,17 @@ export default function MetronomeScreen() {
       }
 
       engine.buildScheduleOnly();
-      engine.setPreRenderedAudio(false);
-      engine.start(startBeat ?? undefined);
 
-      buildRenderedPlayer().then((renderedPlayer) => {
-        if (renderedPlayer && engineRef.current?.getIsRunning()) {
-          if (pendingRenderedPlayerRef.current) {
-            try { pendingRenderedPlayerRef.current.release(); } catch {}
-          }
-          pendingRenderedPlayerRef.current = renderedPlayer;
-        } else if (renderedPlayer) {
-          try { renderedPlayer.release(); } catch {}
-        }
-      });
+      const renderedPlayer = await buildRenderedPlayer();
+      if (renderedPlayer) {
+        stopRenderedAudio();
+        renderedPlayerRef.current = renderedPlayer;
+        engine.setPreRenderedAudio(true);
+        renderedPlayer.play();
+      } else {
+        engine.setPreRenderedAudio(false);
+      }
+      engine.start(startBeat ?? undefined);
 
       if (barModeRef.current && barLoopModeRef.current === "once") {
         engine.requestStopAfterMeasure();
@@ -1261,20 +1253,18 @@ export default function MetronomeScreen() {
     if (!engine || isPlaying) return;
     setIsPlaying(true);
     engine.buildScheduleOnly();
-    engine.setPreRenderedAudio(false);
-    engine.start();
 
-    buildRenderedPlayer().then((renderedPlayer) => {
-      if (renderedPlayer && engineRef.current?.getIsRunning()) {
-        if (pendingRenderedPlayerRef.current) {
-          try { pendingRenderedPlayerRef.current.release(); } catch {}
-        }
-        pendingRenderedPlayerRef.current = renderedPlayer;
-      } else if (renderedPlayer) {
-        try { renderedPlayer.release(); } catch {}
-      }
-    });
-  }, [isPlaying, buildRenderedPlayer]);
+    const renderedPlayer = await buildRenderedPlayer();
+    if (renderedPlayer) {
+      stopRenderedAudio();
+      renderedPlayerRef.current = renderedPlayer;
+      engine.setPreRenderedAudio(true);
+      renderedPlayer.play();
+    } else {
+      engine.setPreRenderedAudio(false);
+    }
+    engine.start();
+  }, [isPlaying, buildRenderedPlayer, stopRenderedAudio]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -1284,10 +1274,6 @@ export default function MetronomeScreen() {
         if (renderedPlayerRef.current) {
           try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
           renderedPlayerRef.current = null;
-        }
-        if (pendingRenderedPlayerRef.current) {
-          try { pendingRenderedPlayerRef.current.release(); } catch {}
-          pendingRenderedPlayerRef.current = null;
         }
         for (const [k, st] of Object.entries(samplePlayStateRef.current)) {
           if (st.endTimer) clearTimeout(st.endTimer);
@@ -1301,17 +1287,6 @@ export default function MetronomeScreen() {
         setActiveSubNote(-1);
         const modeLabel = barModeRef.current ? "Bar" : "Dial";
         showPausedNotification(bpmRef.current, modeLabel);
-      } else if (pendingRenderedPlayerRef.current) {
-        const player = pendingRenderedPlayerRef.current;
-        pendingRenderedPlayerRef.current = null;
-        engine.setPendingMeasureStartAction(() => {
-          if (renderedPlayerRef.current) {
-            try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
-          }
-          renderedPlayerRef.current = player;
-          player.play();
-          engine.setPreRenderedAudio(true);
-        });
       }
     });
   }, []);
