@@ -1216,15 +1216,7 @@ export function BeatIndicator({
         {!isPlaying && (
           <View style={{ paddingHorizontal: 12, paddingBottom: 4 }}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}>
-                <Pressable
-                  onPress={addLoopBlock}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 3, paddingVertical: 3, paddingHorizontal: 7, backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 6 }}
-                  hitSlop={4}
-                >
-                  <Ionicons name="add" size={12} color={Colors.textSecondary} />
-                  <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: 10, color: Colors.textSecondary }}>Block</Text>
-                </Pressable>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 4 }}>
                 {loopBlocks.map((block, idx) => (
                   <Pressable
                     key={idx}
@@ -1253,6 +1245,14 @@ export function BeatIndicator({
                     </Pressable>
                   </Pressable>
                 ))}
+                <Pressable
+                  onPress={addLoopBlock}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 3, paddingVertical: 3, paddingHorizontal: 7, backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 6 }}
+                  hitSlop={4}
+                >
+                  <Ionicons name="add" size={12} color={Colors.textSecondary} />
+                  <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: 10, color: Colors.textSecondary }}>Block</Text>
+                </Pressable>
               </View>
             </ScrollView>
 
