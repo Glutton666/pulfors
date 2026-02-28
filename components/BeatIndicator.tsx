@@ -992,13 +992,15 @@ export function BeatIndicator({
                   style={[styles.barNoteCell, !isLast && { borderRightWidth: 1, borderRightColor: "rgba(255,255,255,0.08)" }]}
                 >
                   {isStrongType ? (
-                    <LinearGradient
-                      colors={[Colors.white, C.accent, C.accentMuted]}
-                      locations={[0, 0.35, 1]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={[styles.barNoteFill, { opacity: isActiveCell ? 1 : 0.75, margin: 3 }]}
-                    />
+                    <View style={[styles.barNoteFill, { margin: 3, overflow: "hidden", opacity: isActiveCell ? 1 : 0.75 }]}>
+                      <LinearGradient
+                        colors={[Colors.white, C.accent, C.accentMuted]}
+                        locations={[0, 0.35, 1]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 4 }}
+                      />
+                    </View>
                   ) : type === "mute" ? (
                     <View style={[styles.barNoteFill, {
                       margin: 3,
