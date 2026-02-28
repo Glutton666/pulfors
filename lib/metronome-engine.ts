@@ -392,9 +392,10 @@ export class MetronomeEngine {
           this.onMeasureComplete?.();
           return;
         }
+        const prevDuration = this.measureDurationMs;
         this.onMeasureComplete?.();
-        this.measureStartTime += this.measureDurationMs;
         this.schedule = this.buildSchedule();
+        this.measureStartTime += prevDuration;
         this.scheduleIndex = 0;
         break;
       }

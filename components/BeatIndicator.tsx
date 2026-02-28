@@ -1436,19 +1436,28 @@ export function BeatIndicator({
                   style={[styles.blockEditLoopSection, blockEditLoopMode === "count" && { borderColor: C.accent, backgroundColor: C.accent + "10" }]}
                 >
                   <Text style={[styles.blockEditLoopSectionLabel, blockEditLoopMode === "count" ? { color: C.accent } : { color: Colors.textTertiary }]}>{"\u00D7"} Count</Text>
-                  <TextInput
-                    style={[styles.blockEditLoopInput, blockEditLoopMode !== "count" && { color: Colors.textTertiary, borderBottomColor: Colors.border }]}
-                    value={String(blockEditLoopCount)}
-                    onChangeText={(t) => {
-                      setBlockEditLoopMode("count");
-                      const v = parseInt(t, 10);
-                      if (!isNaN(v) && v >= 1 && v <= 999) setBlockEditLoopCount(v);
-                    }}
-                    onFocus={() => setBlockEditLoopMode("count")}
-                    keyboardType="number-pad"
-                    selectTextOnFocus
-                    maxLength={3}
-                  />
+                  <View style={styles.blockEditLoopControls}>
+                    <Pressable onPress={() => { setBlockEditLoopMode("count"); setBlockEditLoopCount(Math.max(1, blockEditLoopCount - 1)); }} style={styles.blockEditSmallBtn}>
+                      <Ionicons name="remove" size={14} color={blockEditLoopMode === "count" ? Colors.text : Colors.textTertiary} />
+                    </Pressable>
+                    <TextInput
+                      style={[styles.blockEditLoopInput, blockEditLoopMode !== "count" && { color: Colors.textTertiary, borderBottomColor: Colors.border }]}
+                      value={String(blockEditLoopCount)}
+                      onChangeText={(t) => {
+                        setBlockEditLoopMode("count");
+                        const v = parseInt(t, 10);
+                        if (!isNaN(v) && v >= 1 && v <= 999) setBlockEditLoopCount(v);
+                        else if (t === "") setBlockEditLoopCount(1);
+                      }}
+                      onFocus={() => setBlockEditLoopMode("count")}
+                      keyboardType="number-pad"
+                      selectTextOnFocus
+                      maxLength={3}
+                    />
+                    <Pressable onPress={() => { setBlockEditLoopMode("count"); setBlockEditLoopCount(Math.min(999, blockEditLoopCount + 1)); }} style={styles.blockEditSmallBtn}>
+                      <Ionicons name="add" size={14} color={blockEditLoopMode === "count" ? Colors.text : Colors.textTertiary} />
+                    </Pressable>
+                  </View>
                 </Pressable>
                 <Pressable
                   onPress={() => setBlockEditLoopMode("time")}
@@ -1457,32 +1466,59 @@ export function BeatIndicator({
                   <Text style={[styles.blockEditLoopSectionLabel, blockEditLoopMode === "time" ? { color: C.accent } : { color: Colors.textTertiary }]}>
                     <Ionicons name="time-outline" size={11} color={blockEditLoopMode === "time" ? C.accent : Colors.textTertiary} />{" "}Time
                   </Text>
-                  <TextInput
-                    style={[styles.blockEditLoopInput, blockEditLoopMode !== "time" && { color: Colors.textTertiary, borderBottomColor: Colors.border }]}
-                    value={blockEditLoopDuration >= 60
-                      ? `${Math.floor(blockEditLoopDuration / 60)}:${(blockEditLoopDuration % 60).toString().padStart(2, "0")}`
-                      : String(blockEditLoopDuration)}
-                    onChangeText={(t) => {
-                      setBlockEditLoopMode("time");
-                      const trimmed = t.trim();
-                      if (trimmed.includes(":")) {
-                        const parts = trimmed.split(":");
-                        const m = parseInt(parts[0], 10) || 0;
-                        const s = parseInt(parts[1], 10) || 0;
-                        const total = m * 60 + s;
-                        if (total >= 1 && total <= 3600) setBlockEditLoopDuration(total);
-                      } else {
-                        const v = parseInt(trimmed, 10);
-                        if (!isNaN(v) && v >= 1 && v <= 3600) setBlockEditLoopDuration(v);
-                      }
-                    }}
-                    onFocus={() => setBlockEditLoopMode("time")}
-                    keyboardType="numbers-and-punctuation"
-                    selectTextOnFocus
-                    placeholder="M:SS"
-                    placeholderTextColor={Colors.textTertiary}
-                    maxLength={5}
-                  />
+                  <View style={styles.blockEditTimeRow}>
+                    <View style={styles.blockEditTimeField}>
+                      <View style={styles.blockEditLoopControls}>
+                        <Pressable onPress={() => { setBlockEditLoopMode("time"); setBlockEditLoopDuration(Math.max(0, blockEditLoopDuration - 60)); }} style={styles.blockEditSmallBtn}>
+                          <Ionicons name="remove" size={14} color={blockEditLoopMode === "time" ? Colors.text : Colors.textTertiary} />
+                        </Pressable>
+                        <TextInput
+                          style={[styles.blockEditLoopInput, { minWidth: 28 }, blockEditLoopMode !== "time" && { color: Colors.textTertiary, borderBottomColor: Colors.border }]}
+                          value={String(Math.floor(blockEditLoopDuration / 60))}
+                          onChangeText={(t) => {
+                            setBlockEditLoopMode("time");
+                            const m = parseInt(t, 10);
+                            if (!isNaN(m) && m >= 0 && m <= 60) setBlockEditLoopDuration(m * 60 + (blockEditLoopDuration % 60));
+                            else if (t === "") setBlockEditLoopDuration(blockEditLoopDuration % 60);
+                          }}
+                          onFocus={() => setBlockEditLoopMode("time")}
+                          keyboardType="number-pad"
+                          selectTextOnFocus
+                          maxLength={2}
+                        />
+                        <Pressable onPress={() => { setBlockEditLoopMode("time"); setBlockEditLoopDuration(Math.min(3600, blockEditLoopDuration + 60)); }} style={styles.blockEditSmallBtn}>
+                          <Ionicons name="add" size={14} color={blockEditLoopMode === "time" ? Colors.text : Colors.textTertiary} />
+                        </Pressable>
+                      </View>
+                      <Text style={[styles.blockEditTimeUnit, blockEditLoopMode !== "time" && { color: Colors.textTertiary }]}>min</Text>
+                    </View>
+                    <Text style={[styles.blockEditFieldSep, { fontSize: 16 }, blockEditLoopMode !== "time" && { color: Colors.textTertiary }]}>:</Text>
+                    <View style={styles.blockEditTimeField}>
+                      <View style={styles.blockEditLoopControls}>
+                        <Pressable onPress={() => { setBlockEditLoopMode("time"); const s = blockEditLoopDuration % 60; const m = Math.floor(blockEditLoopDuration / 60); setBlockEditLoopDuration(m * 60 + Math.max(0, s - 5)); }} style={styles.blockEditSmallBtn}>
+                          <Ionicons name="remove" size={14} color={blockEditLoopMode === "time" ? Colors.text : Colors.textTertiary} />
+                        </Pressable>
+                        <TextInput
+                          style={[styles.blockEditLoopInput, { minWidth: 28 }, blockEditLoopMode !== "time" && { color: Colors.textTertiary, borderBottomColor: Colors.border }]}
+                          value={String(blockEditLoopDuration % 60).padStart(2, "0")}
+                          onChangeText={(t) => {
+                            setBlockEditLoopMode("time");
+                            const s = parseInt(t, 10);
+                            if (!isNaN(s) && s >= 0 && s <= 59) setBlockEditLoopDuration(Math.floor(blockEditLoopDuration / 60) * 60 + s);
+                            else if (t === "") setBlockEditLoopDuration(Math.floor(blockEditLoopDuration / 60) * 60);
+                          }}
+                          onFocus={() => setBlockEditLoopMode("time")}
+                          keyboardType="number-pad"
+                          selectTextOnFocus
+                          maxLength={2}
+                        />
+                        <Pressable onPress={() => { setBlockEditLoopMode("time"); const s = blockEditLoopDuration % 60; const m = Math.floor(blockEditLoopDuration / 60); setBlockEditLoopDuration(Math.min(3600, m * 60 + Math.min(55, s + 5))); }} style={styles.blockEditSmallBtn}>
+                          <Ionicons name="add" size={14} color={blockEditLoopMode === "time" ? Colors.text : Colors.textTertiary} />
+                        </Pressable>
+                      </View>
+                      <Text style={[styles.blockEditTimeUnit, blockEditLoopMode !== "time" && { color: Colors.textTertiary }]}>sec</Text>
+                    </View>
+                  </View>
                 </Pressable>
               </View>
 
@@ -2182,6 +2218,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: "center" as const,
   },
+  blockEditLoopControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  blockEditSmallBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   blockEditLoopInput: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 18,
@@ -2189,10 +2238,25 @@ const styles = StyleSheet.create({
     textAlign: "center" as const,
     borderBottomWidth: 2,
     borderBottomColor: Colors.accent,
-    paddingVertical: 4,
+    paddingVertical: 2,
     paddingHorizontal: 4,
-    minWidth: 40,
-    marginTop: 6,
+    minWidth: 36,
+  },
+  blockEditTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    marginTop: 4,
+  },
+  blockEditTimeField: {
+    alignItems: "center",
+    gap: 2,
+  },
+  blockEditTimeUnit: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 10,
+    color: Colors.textSecondary,
   },
   blockBracket: {
     position: "absolute",

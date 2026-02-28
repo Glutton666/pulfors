@@ -1262,14 +1262,19 @@ export default function MetronomeScreen() {
 
     engine.buildScheduleOnly();
 
-    const renderedPlayer = await buildRenderedPlayer();
-    if (renderedPlayer) {
+    if (blocks.length > 0) {
       stopRenderedAudio();
-      renderedPlayerRef.current = renderedPlayer;
-      engine.setPreRenderedAudio(true);
-      renderedPlayer.play();
-    } else {
       engine.setPreRenderedAudio(false);
+    } else {
+      const renderedPlayer = await buildRenderedPlayer();
+      if (renderedPlayer) {
+        stopRenderedAudio();
+        renderedPlayerRef.current = renderedPlayer;
+        engine.setPreRenderedAudio(true);
+        renderedPlayer.play();
+      } else {
+        engine.setPreRenderedAudio(false);
+      }
     }
     setIsPreparing(false);
     setIsPlaying(true);
