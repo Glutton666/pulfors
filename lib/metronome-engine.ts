@@ -62,6 +62,7 @@ export class MetronomeEngine {
   private audioOffsetMs: number = 0;
   private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
   private preRenderedAudio = false;
+  private pendingMeasureStartAction: (() => void) | null = null;
 
   private schedule: ScheduledTick[] = [];
   private scheduleIndex = 0;
@@ -88,6 +89,10 @@ export class MetronomeEngine {
 
   setPreRenderedAudio(enabled: boolean) {
     this.preRenderedAudio = enabled;
+  }
+
+  setPendingMeasureStartAction(action: (() => void) | null) {
+    this.pendingMeasureStartAction = action;
   }
 
   setOnBeat(callback: (beat: number, isAccent: boolean) => void) {
@@ -374,6 +379,12 @@ export class MetronomeEngine {
   private loop = () => {
     if (!this.isRunning) return;
 
+    if (this.pendingMeasureStartAction && this.scheduleIndex === 0) {
+      const action = this.pendingMeasureStartAction;
+      this.pendingMeasureStartAction = null;
+      action();
+    }
+
     while (this.isRunning && this.scheduleIndex < this.schedule.length) {
       const tick = this.schedule[this.scheduleIndex];
       if (tick.time > this.getElapsed() + 1) break;
@@ -471,6 +482,7 @@ export class MetronomeEngine {
       this.timerId = null;
     }
     this.cancelRAF();
+    this.pendingMeasureStartAction = null;
     this.currentBeat = 0;
     this.currentSubBeat = 0;
     this.schedule = [];

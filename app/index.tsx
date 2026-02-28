@@ -1304,12 +1304,14 @@ export default function MetronomeScreen() {
       } else if (pendingRenderedPlayerRef.current) {
         const player = pendingRenderedPlayerRef.current;
         pendingRenderedPlayerRef.current = null;
-        if (renderedPlayerRef.current) {
-          try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
-        }
-        renderedPlayerRef.current = player;
-        player.play();
-        engine.setPreRenderedAudio(true);
+        engine.setPendingMeasureStartAction(() => {
+          if (renderedPlayerRef.current) {
+            try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
+          }
+          renderedPlayerRef.current = player;
+          player.play();
+          engine.setPreRenderedAudio(true);
+        });
       }
     });
   }, []);
