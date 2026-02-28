@@ -1400,12 +1400,23 @@ export function BeatIndicator({
 
               <View style={styles.blockEditRow}>
                 <Text style={styles.blockEditLabel}>Range</Text>
-                <Text style={[styles.blockEditValue, { fontSize: 15 }]}>
-                  {blockEditStart + 1} {"\u2013"} {blockEditEnd + 1}
-                </Text>
-                <Text style={{ fontFamily: "SpaceGrotesk_400Regular", fontSize: 11, color: Colors.textTertiary, marginLeft: 6 }}>
-                  slide bars to adjust
-                </Text>
+                <View style={styles.blockEditRangeRow}>
+                  <Pressable onPress={() => setBlockEditStart(Math.max(0, blockEditStart - 1))} style={styles.blockEditSmallBtn}>
+                    <Ionicons name="remove" size={14} color={Colors.text} />
+                  </Pressable>
+                  <Text style={styles.blockEditValue}>{blockEditStart + 1}</Text>
+                  <Pressable onPress={() => setBlockEditStart(Math.min(blockEditEnd, blockEditStart + 1))} style={styles.blockEditSmallBtn}>
+                    <Ionicons name="add" size={14} color={Colors.text} />
+                  </Pressable>
+                  <Text style={styles.blockEditRangeSep}>{"\u2013"}</Text>
+                  <Pressable onPress={() => setBlockEditEnd(Math.max(blockEditStart, blockEditEnd - 1))} style={styles.blockEditSmallBtn}>
+                    <Ionicons name="remove" size={14} color={Colors.text} />
+                  </Pressable>
+                  <Text style={styles.blockEditValue}>{blockEditEnd + 1}</Text>
+                  <Pressable onPress={() => setBlockEditEnd(Math.min(beatsPerMeasure - 1, blockEditEnd + 1))} style={styles.blockEditSmallBtn}>
+                    <Ionicons name="add" size={14} color={Colors.text} />
+                  </Pressable>
+                </View>
               </View>
 
               <View style={styles.blockEditRow}>
