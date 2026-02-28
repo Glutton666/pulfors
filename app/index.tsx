@@ -47,7 +47,7 @@ import {
   DIAL_SIZE,
   DOT_RADIUS_FROM_CENTER,
 } from "@/components/BeatIndicator";
-import type { BarRepeat } from "@/components/BeatIndicator";
+import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
 import { BpmSlider } from "@/components/BpmSlider";
 import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
@@ -119,6 +119,7 @@ export default function MetronomeScreen() {
   const [barStartBeat, setBarStartBeat] = useState<number | null>(null);
   const [barLoopMode, setBarLoopMode] = useState<"loop" | "once">("loop");
   const [barRepeats, setBarRepeats] = useState<Record<number, BarRepeat>>({});
+  const [loopBlocks, setLoopBlocks] = useState<LoopBlock[]>([]);
   const barAreaRef = useRef<View>(null);
   const barAreaLayoutRef = useRef({ y: 0, height: 0 });
   const barScrollOffsetRef = useRef(0);
@@ -133,6 +134,7 @@ export default function MetronomeScreen() {
     beatTypes: defaultBeatTypes(4),
     beatSubdivisions: {} as Record<string, BeatType[]>,
     barRepeats: {} as Record<number, BarRepeat>,
+    loopBlocks: [] as LoopBlock[],
     barClockMode: "stopwatch" as "stopwatch" | "timer",
     barTimerDuration: 180,
   });
@@ -1218,6 +1220,7 @@ export default function MetronomeScreen() {
       setBeatTypes([...defaultTypes]);
       setBeatSubdivisions({});
       setBarRepeats({});
+      setLoopBlocks([]);
       setBarLoopMode("loop");
       setNoteSamples({});
       noteSamplesRef.current = {};
@@ -1228,7 +1231,7 @@ export default function MetronomeScreen() {
       engine.setBeatsPerMeasure(defaultBeats);
       engine.setBeatTypes([...defaultTypes]);
       engine.setAllBeatSubdivisions({});
-      engine.clearBarRepeats();
+      engine.clearLoopBlocks();
     } else {
       barConfigRef.current = {
         ...barConfigRef.current,
@@ -1236,20 +1239,22 @@ export default function MetronomeScreen() {
         beatTypes: [...beatTypes],
         beatSubdivisions: { ...beatSubdivisions },
         barRepeats: { ...barRepeats },
+        loopBlocks: [...loopBlocks],
       };
       const dc = dialConfigRef.current;
       setBeatsPerMeasure(dc.beatsPerMeasure);
       setBeatTypes([...dc.beatTypes]);
       setBeatSubdivisions({ ...dc.beatSubdivisions });
       setBarRepeats({});
+      setLoopBlocks([]);
       engine.setBeatsPerMeasure(dc.beatsPerMeasure);
       engine.setBeatTypes([...dc.beatTypes]);
       engine.setAllBeatSubdivisions(dc.beatSubdivisions);
-      engine.clearBarRepeats();
+      engine.clearLoopBlocks();
     }
 
     setBarMode(toBarMode);
-  }, [isPlaying, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats]);
+  }, [isPlaying, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks]);
 
   const startMetronome = useCallback(async () => {
     const engine = engineRef.current;
@@ -1589,11 +1594,31 @@ export default function MetronomeScreen() {
       } else {
         delete next[beat];
       }
-      engineRef.current?.setBarRepeats(next);
       barConfigRef.current.barRepeats = { ...next };
       return next;
     });
   }, []);
+
+  const handleLoopBlocksChange = useCallback((blocks: LoopBlock[]) => {
+    setLoopBlocks(blocks);
+    engineRef.current?.setLoopBlocks(blocks);
+    barConfigRef.current.loopBlocks = [...blocks];
+  }, []);
+
+  useEffect(() => {
+    if (loopBlocks.length === 0) return;
+    const clamped = loopBlocks
+      .map(b => ({
+        ...b,
+        startBeat: Math.min(b.startBeat, beatsPerMeasure - 1),
+        endBeat: Math.min(b.endBeat, beatsPerMeasure - 1),
+      }))
+      .filter(b => b.startBeat <= b.endBeat);
+    const changed = clamped.length !== loopBlocks.length || clamped.some((b, i) => b.startBeat !== loopBlocks[i].startBeat || b.endBeat !== loopBlocks[i].endBeat);
+    if (changed) {
+      handleLoopBlocksChange(clamped);
+    }
+  }, [beatsPerMeasure]);
 
   const beatSubdivisionCounts = useMemo(() => {
     const counts: Record<number, number> = {};
@@ -1611,12 +1636,13 @@ export default function MetronomeScreen() {
       beatTypes: [...beatTypes],
       beatSubdivisions: { ...beatSubdivisions },
       barRepeats: { ...barRepeats },
+      loopBlocks: [...loopBlocks],
       barLoopMode: barLoopMode as "loop" | "once",
       subdivisionPattern: [...subdivisionPattern],
       barClockMode: barConfigRef.current.barClockMode,
       barTimerDuration: barConfigRef.current.barTimerDuration,
     };
-  }, [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, barLoopMode, subdivisionPattern]);
+  }, [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, subdivisionPattern]);
 
   const handleLoadPracticeEntry = useCallback((entry: PracticeEntry) => {
     const engine = engineRef.current;
@@ -1645,6 +1671,8 @@ export default function MetronomeScreen() {
     setBeatTypes([...entry.beatTypes]);
     setBeatSubdivisions({ ...entry.beatSubdivisions });
     setBarRepeats({ ...entry.barRepeats });
+    const entryBlocks = (entry as any).loopBlocks || [];
+    setLoopBlocks([...entryBlocks]);
     setBarLoopMode(entry.barLoopMode);
     setSubdivisionPattern([...entry.subdivisionPattern]);
 
@@ -1652,12 +1680,13 @@ export default function MetronomeScreen() {
     engine.setBeatsPerMeasure(entry.beatsPerMeasure);
     engine.setBeatTypes([...entry.beatTypes]);
     engine.setAllBeatSubdivisions(entry.beatSubdivisions);
-    engine.setBarRepeats(entry.barRepeats);
+    engine.setLoopBlocks(entryBlocks);
     barConfigRef.current = {
       beatsPerMeasure: entry.beatsPerMeasure,
       beatTypes: [...entry.beatTypes],
       beatSubdivisions: { ...entry.beatSubdivisions },
       barRepeats: { ...entry.barRepeats },
+      loopBlocks: [...entryBlocks],
       barClockMode: entry.barClockMode || "stopwatch",
       barTimerDuration: entry.barTimerDuration ?? 180,
     };
@@ -2008,8 +2037,8 @@ export default function MetronomeScreen() {
             onBeatSubdivisionChange={handleBeatSubdivisionChange}
             activeSubNote={activeSubNote}
             barAreaRef={barAreaRef}
-            barRepeats={barRepeats}
-            onBarRepeatChange={handleBarRepeatChange}
+            loopBlocks={loopBlocks}
+            onLoopBlocksChange={handleLoopBlocksChange}
             barLoopMode={barLoopMode}
             onBarLoopModeChange={setBarLoopMode}
             onBarScrollOffset={(offset) => { barScrollOffsetRef.current = offset; }}

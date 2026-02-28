@@ -60,7 +60,7 @@ export class MetronomeEngine {
   private playCustomSample: ((beat: number, subBeat: number) => boolean) | null = null;
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
-  private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
+  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number }[] = [];
   private preRenderedAudio = false;
   private pendingMeasureStartAction: (() => void) | null = null;
 
@@ -173,18 +173,15 @@ export class MetronomeEngine {
     }
   }
 
-  setBarRepeats(repeats: Record<number, { type: "count" | "duration"; value: number }>) {
-    this.barRepeats.clear();
-    for (const [k, v] of Object.entries(repeats)) {
-      this.barRepeats.set(Number(k), v);
-    }
+  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number }[]) {
+    this.loopBlocks = blocks.map(b => ({ ...b }));
     if (this.isRunning) {
       this.rebuildSchedule();
     }
   }
 
-  clearBarRepeats() {
-    this.barRepeats.clear();
+  clearLoopBlocks() {
+    this.loopBlocks = [];
     if (this.isRunning) {
       this.rebuildSchedule();
     }
@@ -249,33 +246,48 @@ export class MetronomeEngine {
     const ticks: ScheduledTick[] = [];
     let time = 0;
 
-    for (let beat = 0; beat < this.beatsPerMeasure; beat++) {
+    const sortedBlocks = this.loopBlocks
+      .filter(b => b.startBeat < this.beatsPerMeasure && b.endBeat >= b.startBeat)
+      .sort((a, b) => a.startBeat - b.startBeat);
+
+    const addBeatTicks = (beat: number, iteration: number) => {
       const subPattern = this.getSubPattern(beat);
       const subDur = beatDur / subPattern.length;
-      const repeat = this.barRepeats.get(beat);
-      let repeatCount = 1;
-
-      if (repeat) {
-        if (repeat.type === "count") {
-          repeatCount = Math.max(1, repeat.value);
-        } else {
-          const durationMs = repeat.value * 1000;
-          repeatCount = Math.max(1, Math.round(durationMs / beatDur));
-        }
+      for (let sub = 0; sub < subPattern.length; sub++) {
+        ticks.push({
+          time,
+          beat,
+          subBeat: sub,
+          type: subPattern[sub],
+          isMainBeat: sub === 0,
+          repeatIteration: iteration,
+        });
+        time += subDur;
       }
+    };
 
-      for (let r = 0; r < repeatCount; r++) {
-        for (let sub = 0; sub < subPattern.length; sub++) {
-          ticks.push({
-            time,
-            beat,
-            subBeat: sub,
-            type: subPattern[sub],
-            isMainBeat: sub === 0,
-            repeatIteration: r,
-          });
-          time += subDur;
+    let beat = 0;
+    while (beat < this.beatsPerMeasure) {
+      const block = sortedBlocks.find(b => b.startBeat === beat);
+      if (block) {
+        const endBeat = Math.min(block.endBeat, this.beatsPerMeasure - 1);
+        const blockBeatCount = endBeat - block.startBeat + 1;
+        const blockDurMs = blockBeatCount * beatDur;
+        let repeatCount = 1;
+        if (block.type === "count") {
+          repeatCount = Math.max(1, block.value);
+        } else {
+          repeatCount = Math.max(1, Math.round((block.value * 1000) / blockDurMs));
         }
+        for (let r = 0; r < repeatCount; r++) {
+          for (let b = block.startBeat; b <= endBeat; b++) {
+            addBeatTicks(b, r);
+          }
+        }
+        beat = endBeat + 1;
+      } else {
+        addBeatTicks(beat, 0);
+        beat++;
       }
     }
 

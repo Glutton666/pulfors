@@ -391,6 +391,7 @@ export function PracticeBookModal({
       beatTypes: entry.beatTypes,
       beatSubdivisions: entry.beatSubdivisions,
       barRepeats: entry.barRepeats,
+      loopBlocks: (entry as any).loopBlocks || [],
       barLoopMode: entry.barLoopMode,
       subdivisionPattern: entry.subdivisionPattern,
       barClockMode: entry.barClockMode,
