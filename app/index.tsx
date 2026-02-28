@@ -1372,7 +1372,19 @@ export default function MetronomeScreen() {
       if (nextIdx < blocks.length) {
         activateBlock(blocks[nextIdx]);
       } else {
-        activateBlock(blocks[0]);
+        engine.stop();
+        engine.clearBeatRange();
+        if (renderedPlayerRef.current) {
+          try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
+          renderedPlayerRef.current = null;
+        }
+        activeBlockIdRef.current = null;
+        activeBlockIterRef.current = 1;
+        setActiveBlockId(null);
+        setActiveBlockIteration(1);
+        setIsPlaying(false);
+        setCurrentBeat(-1);
+        setActiveSubNote(-1);
       }
     });
 
