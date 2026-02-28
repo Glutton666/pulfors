@@ -305,8 +305,11 @@ export function BeatIndicator({
     if (!noteSamples || !bpm || bpm <= 0) return covered;
     const beatDurMs = 60000 / bpm;
 
-    const getRepeatCount = (_beat: number) => {
-      return 1;
+    const getBarDurationMs = (beat: number): number => {
+      const rep = barRepeats[beat];
+      if (!rep) return beatDurMs;
+      if (rep.type === "count") return beatDurMs * Math.max(1, rep.value);
+      return Math.max(beatDurMs, rep.value * 1000);
     };
 
     const markCell = (cellKey: string, source: string) => {
@@ -347,8 +350,8 @@ export function BeatIndicator({
         remainMs -= triggerSubDur;
       }
 
-      const triggerRepeatCount = getRepeatCount(triggerBeat);
-      const triggerRepeatExtraMs = (triggerRepeatCount - 1) * beatDurMs;
+      const triggerBarDur = getBarDurationMs(triggerBeat);
+      const triggerRepeatExtraMs = triggerBarDur - beatDurMs;
       remainMs -= triggerRepeatExtraMs;
 
       let b = triggerBeat + 1;
@@ -357,14 +360,13 @@ export function BeatIndicator({
         const curPattern = beatSubdivisions[String(b)];
         const curSubCount = curPattern ? curPattern.length : 1;
         const curSubDur = beatDurMs / curSubCount;
-        const curRepeatCount = getRepeatCount(b);
-        const fullBeatDur = beatDurMs * curRepeatCount;
+        const fullBarDur = getBarDurationMs(b);
 
-        if (remainMs >= fullBeatDur) {
+        if (remainMs >= fullBarDur) {
           for (let si = 0; si < curSubCount; si++) {
             markCell(`${b}-${si}`, source);
           }
-          remainMs -= fullBeatDur;
+          remainMs -= fullBarDur;
           b++;
         } else {
           let leftMs = remainMs;
@@ -377,7 +379,7 @@ export function BeatIndicator({
       }
     }
     return covered;
-  }, [noteSamples, noteSampleSources, bpm, beatsPerMeasure, beatSubdivisions, loopBlocks]);
+  }, [noteSamples, noteSampleSources, bpm, beatsPerMeasure, beatSubdivisions, barRepeats]);
 
   const swipeProgress = useSharedValue(0);
   const swipeDirection = useSharedValue(0);
