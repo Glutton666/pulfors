@@ -61,6 +61,7 @@ export class MetronomeEngine {
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
   private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number }[] = [];
+  private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
   private preRenderedAudio = false;
   private pendingMeasureStartAction: (() => void) | null = null;
 
@@ -187,6 +188,34 @@ export class MetronomeEngine {
     }
   }
 
+  setBarRepeat(beat: number, repeat: { type: "count" | "duration"; value: number } | null) {
+    if (repeat) {
+      this.barRepeats.set(beat, { ...repeat });
+    } else {
+      this.barRepeats.delete(beat);
+    }
+    if (this.isRunning) {
+      this.rebuildSchedule();
+    }
+  }
+
+  setAllBarRepeats(repeats: Record<number, { type: "count" | "duration"; value: number }>) {
+    this.barRepeats.clear();
+    for (const [key, value] of Object.entries(repeats)) {
+      this.barRepeats.set(Number(key), { ...value });
+    }
+    if (this.isRunning) {
+      this.rebuildSchedule();
+    }
+  }
+
+  clearBarRepeats() {
+    this.barRepeats.clear();
+    if (this.isRunning) {
+      this.rebuildSchedule();
+    }
+  }
+
   getBpm() {
     return this.bpm;
   }
@@ -246,7 +275,19 @@ export class MetronomeEngine {
     const ticks: ScheduledTick[] = [];
     let time = 0;
 
-    const sortedBlocks = this.loopBlocks
+    const blocksCombined: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number }[] = [
+      ...this.loopBlocks,
+    ];
+    const blockCoveredBeats = new Set<number>();
+    for (const b of this.loopBlocks) {
+      for (let i = b.startBeat; i <= b.endBeat; i++) blockCoveredBeats.add(i);
+    }
+    for (const [beat, rep] of this.barRepeats.entries()) {
+      if (beat < this.beatsPerMeasure && !blockCoveredBeats.has(beat)) {
+        blocksCombined.push({ startBeat: beat, endBeat: beat, type: rep.type, value: rep.value });
+      }
+    }
+    const sortedBlocks = blocksCombined
       .filter(b => b.startBeat < this.beatsPerMeasure && b.endBeat >= b.startBeat)
       .sort((a, b) => a.startBeat - b.startBeat);
 

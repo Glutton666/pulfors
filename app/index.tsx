@@ -1232,6 +1232,7 @@ export default function MetronomeScreen() {
       engine.setBeatTypes([...defaultTypes]);
       engine.setAllBeatSubdivisions({});
       engine.clearLoopBlocks();
+      engine.clearBarRepeats();
     } else {
       barConfigRef.current = {
         ...barConfigRef.current,
@@ -1251,6 +1252,7 @@ export default function MetronomeScreen() {
       engine.setBeatTypes([...dc.beatTypes]);
       engine.setAllBeatSubdivisions(dc.beatSubdivisions);
       engine.clearLoopBlocks();
+      engine.clearBarRepeats();
     }
 
     setBarMode(toBarMode);
@@ -1595,6 +1597,7 @@ export default function MetronomeScreen() {
         delete next[beat];
       }
       barConfigRef.current.barRepeats = { ...next };
+      engineRef.current?.setBarRepeat(beat, repeat);
       return next;
     });
   }, []);
@@ -1681,6 +1684,7 @@ export default function MetronomeScreen() {
     engine.setBeatTypes([...entry.beatTypes]);
     engine.setAllBeatSubdivisions(entry.beatSubdivisions);
     engine.setLoopBlocks(entryBlocks);
+    engine.setAllBarRepeats(entry.barRepeats || {});
     barConfigRef.current = {
       beatsPerMeasure: entry.beatsPerMeasure,
       beatTypes: [...entry.beatTypes],
@@ -2037,6 +2041,8 @@ export default function MetronomeScreen() {
             onBeatSubdivisionChange={handleBeatSubdivisionChange}
             activeSubNote={activeSubNote}
             barAreaRef={barAreaRef}
+            barRepeats={barRepeats}
+            onBarRepeatChange={handleBarRepeatChange}
             loopBlocks={loopBlocks}
             onLoopBlocksChange={handleLoopBlocksChange}
             barLoopMode={barLoopMode}

@@ -237,6 +237,8 @@ interface BeatIndicatorProps {
   onBeatSubdivisionChange: (beatIndex: number, pattern: BeatType[] | null) => void;
   activeSubNote: number;
   barAreaRef?: React.RefObject<View | null>;
+  barRepeats: Record<number, BarRepeat>;
+  onBarRepeatChange: (beat: number, repeat: BarRepeat | null) => void;
   loopBlocks: LoopBlock[];
   onLoopBlocksChange: (blocks: LoopBlock[]) => void;
   barLoopMode: "loop" | "once";
@@ -274,6 +276,8 @@ export function BeatIndicator({
   onBeatSubdivisionChange,
   activeSubNote,
   barAreaRef,
+  barRepeats,
+  onBarRepeatChange,
   loopBlocks,
   onLoopBlocksChange,
   barLoopMode,
@@ -736,8 +740,70 @@ export function BeatIndicator({
     setBarTimerRemaining(totalSeconds);
   }, [barTimerInput]);
 
+  const [repeatModalBeat, setRepeatModalBeat] = useState<number | null>(null);
+  const [repeatType, setRepeatType] = useState<"count" | "duration">("count");
+  const [repeatCountVal, setRepeatCountVal] = useState(2);
+  const [repeatMinVal, setRepeatMinVal] = useState(0);
+  const [repeatSecVal, setRepeatSecVal] = useState(30);
+  const [repeatCountEditing, setRepeatCountEditing] = useState(false);
+  const [repeatCountText, setRepeatCountText] = useState("");
+  const [repeatMinEditing, setRepeatMinEditing] = useState(false);
+  const [repeatMinText, setRepeatMinText] = useState("");
+  const [repeatSecEditing, setRepeatSecEditing] = useState(false);
+  const [repeatSecText, setRepeatSecText] = useState("");
+
   const [loopBlockExpanded, setLoopBlockExpanded] = useState(false);
   const [editingBlockIndex, setEditingBlockIndex] = useState<number | null>(null);
+
+  const openRepeatModal = useCallback((beat: number) => {
+    const existing = barRepeats[beat];
+    if (existing) {
+      setRepeatType(existing.type);
+      if (existing.type === "count") {
+        setRepeatCountVal(existing.value);
+      } else {
+        setRepeatMinVal(Math.floor(existing.value / 60));
+        setRepeatSecVal(existing.value % 60);
+      }
+    } else {
+      setRepeatType("count");
+      setRepeatCountVal(2);
+      setRepeatMinVal(0);
+      setRepeatSecVal(30);
+    }
+    setRepeatCountEditing(false);
+    setRepeatMinEditing(false);
+    setRepeatSecEditing(false);
+    setRepeatModalBeat(beat);
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+  }, [barRepeats]);
+
+  const saveRepeat = useCallback(() => {
+    if (repeatModalBeat === null) return;
+    const val = repeatType === "count" ? repeatCountVal : repeatMinVal * 60 + repeatSecVal;
+    if (val <= 0) return;
+    if (repeatType === "count" && val === 1) {
+      onBarRepeatChange(repeatModalBeat, null);
+    } else {
+      onBarRepeatChange(repeatModalBeat, { type: repeatType, value: val });
+    }
+    setRepeatModalBeat(null);
+  }, [repeatModalBeat, repeatType, repeatCountVal, repeatMinVal, repeatSecVal, onBarRepeatChange]);
+
+  const clearRepeat = useCallback(() => {
+    if (repeatModalBeat === null) return;
+    onBarRepeatChange(repeatModalBeat, null);
+    setRepeatModalBeat(null);
+  }, [repeatModalBeat, onBarRepeatChange]);
+
+  const formatRepeat = (r: BarRepeat): string => {
+    if (r.type === "count") return `\u00D7${r.value}`;
+    const totalSec = r.value;
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    if (m > 0) return s > 0 ? `${m}'${s.toString().padStart(2, "0")}"` : `${m}'`;
+    return `${s}"`;
+  };
 
   const getUsedBeats = useCallback((excludeIndex?: number) => {
     const used = new Set<number>();
@@ -1106,6 +1172,46 @@ export function BeatIndicator({
             })()}
           </View>
           <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
+          {isPrimary && !isPlaying && barRepeats[beat] && (
+            <Pressable
+              onPress={() => openRepeatModal(beat)}
+              style={{
+                position: "absolute",
+                right: -4,
+                top: 2,
+                backgroundColor: C.accent,
+                borderRadius: 8,
+                paddingHorizontal: 5,
+                paddingVertical: 1,
+                zIndex: 20,
+                minWidth: 22,
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ color: Colors.white, fontSize: 9, fontWeight: "700" }}>
+                {formatRepeat(barRepeats[beat])}
+              </Text>
+            </Pressable>
+          )}
+          {isPrimary && !isPlaying && !barRepeats[beat] && (
+            <Pressable
+              onPress={() => openRepeatModal(beat)}
+              style={{
+                position: "absolute",
+                right: -4,
+                top: 2,
+                backgroundColor: "rgba(255,255,255,0.1)",
+                borderRadius: 8,
+                paddingHorizontal: 4,
+                paddingVertical: 1,
+                zIndex: 20,
+                minWidth: 18,
+                alignItems: "center",
+              }}
+            >
+              <Ionicons name="repeat-outline" size={10} color={Colors.textTertiary} />
+            </Pressable>
+          )}
         </View>
       );
     };
@@ -1468,6 +1574,163 @@ export function BeatIndicator({
               >
                 <Text style={styles.barTimerSetText}>Set</Text>
               </Pressable>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={repeatModalBeat !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setRepeatModalBeat(null)}
+        >
+          <View style={styles.barTimerOverlay}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setRepeatModalBeat(null)} />
+            <View style={[styles.barTimerCard, { width: 260 }]}>
+              <View style={styles.barTimerHeader}>
+                <Ionicons name="repeat" size={18} color={C.accent} />
+                <Text style={[styles.barTimerTitle, { color: C.accent }]}>
+                  Bar {repeatModalBeat !== null ? repeatModalBeat + 1 : ""} Repeat
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: "row", justifyContent: "center", gap: 8, marginBottom: 14 }}>
+                <Pressable
+                  onPress={() => setRepeatType("count")}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 6,
+                    borderRadius: 14,
+                    backgroundColor: repeatType === "count" ? C.accent + "30" : "rgba(255,255,255,0.08)",
+                  }}
+                >
+                  <Text style={{ color: repeatType === "count" ? C.accent : Colors.textSecondary, fontSize: 13, fontWeight: "600" }}>Count</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setRepeatType("duration")}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 6,
+                    borderRadius: 14,
+                    backgroundColor: repeatType === "duration" ? C.accent + "30" : "rgba(255,255,255,0.08)",
+                  }}
+                >
+                  <Text style={{ color: repeatType === "duration" ? C.accent : Colors.textSecondary, fontSize: 13, fontWeight: "600" }}>Time</Text>
+                </Pressable>
+              </View>
+
+              {repeatType === "count" ? (
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 16 }}>
+                  <Pressable
+                    onPress={() => setRepeatCountVal(Math.max(1, repeatCountVal - 1))}
+                    style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Ionicons name="remove" size={16} color={Colors.textSecondary} />
+                  </Pressable>
+                  {repeatCountEditing ? (
+                    <TextInput
+                      style={{ color: Colors.text, fontSize: 22, fontWeight: "700", textAlign: "center", width: 50, borderBottomWidth: 1, borderBottomColor: C.accent, padding: 0 }}
+                      value={repeatCountText}
+                      onChangeText={setRepeatCountText}
+                      keyboardType="number-pad"
+                      autoFocus
+                      selectTextOnFocus
+                      onBlur={() => {
+                        const n = parseInt(repeatCountText, 10);
+                        if (!isNaN(n) && n >= 1) setRepeatCountVal(n);
+                        setRepeatCountEditing(false);
+                      }}
+                      onSubmitEditing={() => {
+                        const n = parseInt(repeatCountText, 10);
+                        if (!isNaN(n) && n >= 1) setRepeatCountVal(n);
+                        setRepeatCountEditing(false);
+                      }}
+                    />
+                  ) : (
+                    <Pressable onPress={() => { setRepeatCountText(String(repeatCountVal)); setRepeatCountEditing(true); }}>
+                      <Text style={{ color: Colors.text, fontSize: 22, fontWeight: "700" }}>{`\u00D7${repeatCountVal}`}</Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    onPress={() => setRepeatCountVal(repeatCountVal + 1)}
+                    style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Ionicons name="add" size={16} color={Colors.textSecondary} />
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 16 }}>
+                  <Pressable
+                    onPress={() => {
+                      const total = Math.max(0, repeatMinVal * 60 + repeatSecVal - 10);
+                      setRepeatMinVal(Math.floor(total / 60));
+                      setRepeatSecVal(total % 60);
+                    }}
+                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Ionicons name="remove" size={14} color={Colors.textSecondary} />
+                  </Pressable>
+                  {repeatMinEditing ? (
+                    <TextInput
+                      style={{ color: Colors.text, fontSize: 20, fontWeight: "700", textAlign: "center", width: 30, borderBottomWidth: 1, borderBottomColor: C.accent, padding: 0 }}
+                      value={repeatMinText}
+                      onChangeText={setRepeatMinText}
+                      keyboardType="number-pad"
+                      autoFocus
+                      selectTextOnFocus
+                      onBlur={() => { const n = parseInt(repeatMinText, 10); if (!isNaN(n) && n >= 0) setRepeatMinVal(n); setRepeatMinEditing(false); }}
+                      onSubmitEditing={() => { const n = parseInt(repeatMinText, 10); if (!isNaN(n) && n >= 0) setRepeatMinVal(n); setRepeatMinEditing(false); }}
+                    />
+                  ) : (
+                    <Pressable onPress={() => { setRepeatMinText(String(repeatMinVal)); setRepeatMinEditing(true); }}>
+                      <Text style={{ color: Colors.text, fontSize: 20, fontWeight: "700" }}>{repeatMinVal}</Text>
+                    </Pressable>
+                  )}
+                  <Text style={{ color: Colors.textTertiary, fontSize: 12 }}>m</Text>
+                  {repeatSecEditing ? (
+                    <TextInput
+                      style={{ color: Colors.text, fontSize: 20, fontWeight: "700", textAlign: "center", width: 30, borderBottomWidth: 1, borderBottomColor: C.accent, padding: 0 }}
+                      value={repeatSecText}
+                      onChangeText={setRepeatSecText}
+                      keyboardType="number-pad"
+                      autoFocus
+                      selectTextOnFocus
+                      onBlur={() => { const n = parseInt(repeatSecText, 10); if (!isNaN(n) && n >= 0 && n < 60) setRepeatSecVal(n); setRepeatSecEditing(false); }}
+                      onSubmitEditing={() => { const n = parseInt(repeatSecText, 10); if (!isNaN(n) && n >= 0 && n < 60) setRepeatSecVal(n); setRepeatSecEditing(false); }}
+                    />
+                  ) : (
+                    <Pressable onPress={() => { setRepeatSecText(String(repeatSecVal)); setRepeatSecEditing(true); }}>
+                      <Text style={{ color: Colors.text, fontSize: 20, fontWeight: "700" }}>{String(repeatSecVal).padStart(2, "0")}</Text>
+                    </Pressable>
+                  )}
+                  <Text style={{ color: Colors.textTertiary, fontSize: 12 }}>s</Text>
+                  <Pressable
+                    onPress={() => {
+                      const total = repeatMinVal * 60 + repeatSecVal + 10;
+                      setRepeatMinVal(Math.floor(total / 60));
+                      setRepeatSecVal(total % 60);
+                    }}
+                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Ionicons name="add" size={14} color={Colors.textSecondary} />
+                  </Pressable>
+                </View>
+              )}
+
+              <View style={{ flexDirection: "row", gap: 10, justifyContent: "center" }}>
+                <Pressable
+                  onPress={clearRepeat}
+                  style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.08)" }}
+                >
+                  <Text style={{ color: Colors.textSecondary, fontSize: 13, fontWeight: "600" }}>Clear</Text>
+                </Pressable>
+                <Pressable
+                  onPress={saveRepeat}
+                  style={{ paddingHorizontal: 20, paddingVertical: 8, borderRadius: 16, backgroundColor: C.accent }}
+                >
+                  <Text style={{ color: Colors.white, fontSize: 13, fontWeight: "700" }}>Save</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         </Modal>
