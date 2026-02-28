@@ -456,9 +456,12 @@ export class MetronomeEngine {
       action();
     }
 
+    const now = performance.now();
+    const elapsed = now - this.measureStartTime;
+
     while (this.isRunning && this.scheduleIndex < this.schedule.length) {
       const tick = this.schedule[this.scheduleIndex];
-      if (tick.time > this.getElapsed() + 1) break;
+      if (tick.time > elapsed + 1) break;
 
       this.fireTick(tick);
       this.scheduleIndex++;
@@ -479,18 +482,26 @@ export class MetronomeEngine {
     }
 
     if (this.isRunning) {
-      const nextTick = this.schedule[this.scheduleIndex];
-      if (nextTick) {
-        const nextAbsolute = this.measureStartTime + nextTick.time;
-        const wait = nextAbsolute - performance.now();
-        if (wait > 50) {
-          this.timerId = setTimeout(this.loop, Math.min(wait - 30, 40));
-        } else {
-          this.scheduleRAF();
-        }
-      }
+      this.scheduleNext();
     }
   };
+
+  private scheduleNext() {
+    const nextTick = this.schedule[this.scheduleIndex];
+    if (!nextTick) return;
+    const nextAbsolute = this.measureStartTime + nextTick.time;
+    const wait = nextAbsolute - performance.now();
+
+    if (wait > 100) {
+      this.timerId = setTimeout(this.loop, wait - 80);
+    } else if (wait > 25) {
+      this.timerId = setTimeout(this.loop, wait - 16);
+    } else if (wait > 4) {
+      this.timerId = setTimeout(this.loop, 1);
+    } else {
+      this.scheduleRAF();
+    }
+  }
 
   private rafLoop = () => {
     this.rafId = null;
@@ -503,7 +514,7 @@ export class MetronomeEngine {
     if (typeof requestAnimationFrame !== "undefined") {
       this.rafId = requestAnimationFrame(this.rafLoop);
     } else {
-      this.timerId = setTimeout(this.loop, 1);
+      this.timerId = setTimeout(this.loop, 0);
     }
   }
 
@@ -518,6 +529,8 @@ export class MetronomeEngine {
 
   start(startFromBeat?: number) {
     if (this.isRunning) return;
+    if (this.timerId) { clearTimeout(this.timerId); this.timerId = null; }
+    this.cancelRAF();
     this.isRunning = true;
     if (this.schedule.length === 0) {
       this.schedule = this.buildSchedule();
