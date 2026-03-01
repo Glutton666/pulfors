@@ -1056,8 +1056,13 @@ export default function MetronomeScreen() {
       }
 
       if (barModeRef.current) {
+        engine.setBeatTypes([...(barConfigRef.current.beatTypes || [])]);
+        engine.setAllBeatSubdivisions(barConfigRef.current.beatSubdivisions || {});
         engine.setAllBarRepeats(barConfigRef.current.barRepeats || {});
         engine.setLoopBlocks(barConfigRef.current.loopBlocks || []);
+      } else {
+        engine.setBeatTypes([...(dialConfigRef.current.beatTypes || [])]);
+        engine.setAllBeatSubdivisions(dialConfigRef.current.beatSubdivisions || {});
       }
       engine.buildScheduleOnly();
 
@@ -1287,8 +1292,13 @@ export default function MetronomeScreen() {
     if (!engine || isPlaying || isPreparing) return;
     setIsPreparing(true);
     if (barModeRef.current) {
+      engine.setBeatTypes([...(barConfigRef.current.beatTypes || [])]);
+      engine.setAllBeatSubdivisions(barConfigRef.current.beatSubdivisions || {});
       engine.setAllBarRepeats(barConfigRef.current.barRepeats || {});
       engine.setLoopBlocks(barConfigRef.current.loopBlocks || []);
+    } else {
+      engine.setBeatTypes([...(dialConfigRef.current.beatTypes || [])]);
+      engine.setAllBeatSubdivisions(dialConfigRef.current.beatSubdivisions || {});
     }
     engine.buildScheduleOnly();
 

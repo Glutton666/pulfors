@@ -142,6 +142,9 @@ export class MetronomeEngine {
 
   setBeatTypes(types: BeatType[]) {
     this.beatTypes = types;
+    if (this.isRunning) {
+      this.rebuildSchedule();
+    }
   }
 
   getBeatTypes(): BeatType[] {
@@ -153,6 +156,9 @@ export class MetronomeEngine {
       this.beatSubdivisions.delete(beatIndex);
     } else {
       this.beatSubdivisions.set(beatIndex, [...pattern]);
+    }
+    if (this.isRunning) {
+      this.rebuildSchedule();
     }
   }
 
