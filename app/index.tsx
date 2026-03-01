@@ -1699,6 +1699,10 @@ export default function MetronomeScreen() {
     noteSampleNamesRef.current = {};
     setNoteSampleSources({});
     noteSampleSourcesRef.current = {};
+    for (const player of Object.values(noteSampleSoundsRef.current)) {
+      try { player.release(); } catch {}
+    }
+    noteSampleSoundsRef.current = {};
     saveNoteSamples({});
     saveNoteSampleNames({});
     saveNoteSampleSources({});
