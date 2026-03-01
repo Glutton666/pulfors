@@ -703,20 +703,68 @@ export function BeatIndicator({
     return `${m}:${s.toString().padStart(2, "0")}`;
   }, [barClockMode, barElapsedSec, barTimerRemaining, barTimerDuration, isPlaying]);
 
+  const shakeCountRef = useRef(0);
+  const shakeLastDirRef = useRef<"left" | "right" | null>(null);
+  const shakeLastTimeRef = useRef(0);
+  const SHAKE_THRESHOLD = 15;
+  const SHAKE_TIMEOUT = 800;
+  const SHAKE_REQUIRED = 6;
+  const resetShakeProgress = useSharedValue(0);
+  const resetFlash = useSharedValue(0);
+
   const barClockSwipePan = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => false,
     onMoveShouldSetPanResponder: (_e, g) => !isPlaying && Math.abs(g.dx) > 10 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
-    onPanResponderRelease: (_e, g) => {
-      if (Math.abs(g.dx) < 20) return;
-      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      if (g.dx < 0 && barClockMode === "stopwatch") {
-        setBarClockMode("timer");
-      } else if (g.dx > 0 && barClockMode === "timer") {
-        setBarClockMode("stopwatch");
-        setBarTimerEditing(false);
+    onPanResponderGrant: () => {
+      shakeCountRef.current = 0;
+      shakeLastDirRef.current = null;
+    },
+    onPanResponderMove: (_e, gs) => {
+      if (isPlaying) return;
+      const now = Date.now();
+      if (now - shakeLastTimeRef.current > SHAKE_TIMEOUT) {
+        shakeCountRef.current = 0;
+        shakeLastDirRef.current = null;
+      }
+      const dir = gs.dx > SHAKE_THRESHOLD ? "right" : gs.dx < -SHAKE_THRESHOLD ? "left" : null;
+      if (dir && dir !== shakeLastDirRef.current) {
+        shakeLastDirRef.current = dir;
+        shakeLastTimeRef.current = now;
+        shakeCountRef.current++;
+        resetShakeProgress.value = Math.min(1, shakeCountRef.current / SHAKE_REQUIRED);
+        if (Platform.OS !== "web") {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+        if (shakeCountRef.current >= SHAKE_REQUIRED) {
+          shakeCountRef.current = 0;
+          shakeLastDirRef.current = null;
+          resetShakeProgress.value = 0;
+          resetFlash.value = withSequence(
+            withTiming(1, { duration: 80 }),
+            withTiming(0, { duration: 400, easing: Easing.out(Easing.quad) })
+          );
+          if (Platform.OS !== "web") {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          }
+          onBarReset?.();
+        }
       }
     },
-  }), [isPlaying, barClockMode]);
+    onPanResponderRelease: (_e, g) => {
+      if (shakeCountRef.current <= 1 && Math.abs(g.dx) >= 20) {
+        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        if (g.dx < 0 && barClockMode === "stopwatch") {
+          setBarClockMode("timer");
+        } else if (g.dx > 0 && barClockMode === "timer") {
+          setBarClockMode("stopwatch");
+          setBarTimerEditing(false);
+        }
+      }
+      shakeCountRef.current = 0;
+      shakeLastDirRef.current = null;
+      resetShakeProgress.value = withTiming(0, { duration: 300 });
+    },
+  }), [isPlaying, barClockMode, onBarReset]);
 
   const handleBarClockTap = useCallback(() => {
     if (isPlaying) return;
@@ -870,62 +918,13 @@ export function BeatIndicator({
     return map;
   }, [loopBlocks, beatsPerMeasure]);
 
-  const shakeCountRef = useRef(0);
-  const shakeLastDirRef = useRef<"left" | "right" | null>(null);
-  const shakeLastTimeRef = useRef(0);
-  const shakeStartXRef = useRef(0);
-  const SHAKE_THRESHOLD = 15;
-  const SHAKE_TIMEOUT = 800;
-  const SHAKE_REQUIRED = 6;
-  const resetShakeProgress = useSharedValue(0);
-
-  const resetShakePan = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => !isPlaying,
-    onMoveShouldSetPanResponder: (_, gs) => !isPlaying && Math.abs(gs.dx) > 8,
-    onPanResponderGrant: (_, gs) => {
-      shakeStartXRef.current = 0;
-    },
-    onPanResponderMove: (_, gs) => {
-      if (isPlaying) return;
-      const now = Date.now();
-      if (now - shakeLastTimeRef.current > SHAKE_TIMEOUT) {
-        shakeCountRef.current = 0;
-        shakeLastDirRef.current = null;
-      }
-      const dir = gs.dx > SHAKE_THRESHOLD ? "right" : gs.dx < -SHAKE_THRESHOLD ? "left" : null;
-      if (dir && dir !== shakeLastDirRef.current) {
-        shakeLastDirRef.current = dir;
-        shakeLastTimeRef.current = now;
-        shakeCountRef.current++;
-        resetShakeProgress.value = Math.min(1, shakeCountRef.current / SHAKE_REQUIRED);
-        if (Platform.OS !== "web") {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }
-        if (shakeCountRef.current >= SHAKE_REQUIRED) {
-          shakeCountRef.current = 0;
-          shakeLastDirRef.current = null;
-          resetShakeProgress.value = 0;
-          if (Platform.OS !== "web") {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          }
-          onBarReset?.();
-        }
-      }
-    },
-    onPanResponderRelease: () => {
-      setTimeout(() => {
-        if (shakeCountRef.current < SHAKE_REQUIRED) {
-          shakeCountRef.current = 0;
-          shakeLastDirRef.current = null;
-          resetShakeProgress.value = withTiming(0, { duration: 300 });
-        }
-      }, SHAKE_TIMEOUT);
-    },
-  }), [isPlaying, onBarReset]);
-
   const resetProgressStyle = useAnimatedStyle(() => ({
     opacity: resetShakeProgress.value * 0.8,
     transform: [{ scaleX: resetShakeProgress.value }],
+  }));
+
+  const resetFlashStyle = useAnimatedStyle(() => ({
+    opacity: resetFlash.value * 0.6,
   }));
 
   const BAR_HEIGHT = 36;
@@ -1277,6 +1276,15 @@ export function BeatIndicator({
 
     return (
       <View style={styles.barModeContainer} testID="beat-indicator-bar-mode">
+        <Animated.View
+          pointerEvents="none"
+          style={[{
+            position: "absolute",
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: Colors.danger,
+            zIndex: 999,
+          }, resetFlashStyle]}
+        />
         <View style={styles.barTopRowCenter}>
           <Pressable
             onPress={() => onBarModeChange(false)}
@@ -1535,7 +1543,7 @@ export function BeatIndicator({
             >
               <Ionicons name="remove" size={16} color={Colors.textSecondary} />
             </Pressable>
-            <View style={styles.barInfoCol} {...(isPlaying ? barClockSwipePan.panHandlers : resetShakePan.panHandlers)}>
+            <View style={styles.barInfoCol} {...barClockSwipePan.panHandlers}>
               <Pressable onPress={handleBarClockTap}>
                 <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? Colors.danger : C.accent }]}>
                   {barTimeDisplay}
@@ -1862,6 +1870,15 @@ export function BeatIndicator({
       testID="beat-indicator-swipe"
       {...nativePanHandlers}
     >
+      <Animated.View
+        pointerEvents="none"
+        style={[{
+          position: "absolute",
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: Colors.danger,
+          zIndex: 999,
+        }, resetFlashStyle]}
+      />
       <View style={styles.dialContainer}>
         <View
           ref={dialRef}
