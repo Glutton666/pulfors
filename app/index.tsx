@@ -502,6 +502,7 @@ export default function MetronomeScreen() {
     samplePlayStateRef.current = {};
     for (const player of Object.values(noteSampleSoundsRef.current)) {
       try { player.pause(); } catch {}
+      try { player.currentTime = 0; } catch {}
     }
   }, []);
 
