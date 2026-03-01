@@ -373,21 +373,9 @@ export default function MetronomeScreen() {
       }).catch(() => {});
     });
 
-    loadNoteSamples().then((samples) => {
-      setNoteSamples(samples);
-      noteSamplesRef.current = samples;
-      preloadSounds(samples);
-    });
-
-    loadNoteSampleNames().then((names) => {
-      setNoteSampleNames(names);
-      noteSampleNamesRef.current = names;
-    });
-
-    loadNoteSampleSources().then((sources) => {
-      setNoteSampleSources(sources);
-      noteSampleSourcesRef.current = sources;
-    });
+    saveNoteSamples({});
+    saveNoteSampleNames({});
+    saveNoteSampleSources({});
 
     const sampleTimingCacheRef = { current: new Map<string, { startMs: number; durationMs: number }>() };
 
