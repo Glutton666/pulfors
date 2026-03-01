@@ -520,16 +520,17 @@ export class MetronomeEngine {
     const isMute = tick.type === "mute";
 
     const playAudio = () => {
-      if (isMute) return;
-      try {
-        if (isStrong) {
-          this.playStrongClick?.();
-        } else if (isAccent) {
-          this.playHighClick?.();
-        } else {
-          this.playLowClick?.();
-        }
-      } catch (e) {}
+      if (!isMute) {
+        try {
+          if (isStrong) {
+            this.playStrongClick?.();
+          } else if (isAccent) {
+            this.playHighClick?.();
+          } else {
+            this.playLowClick?.();
+          }
+        } catch (e) {}
+      }
       if (this.playCustomSample) {
         this.playCustomSample(tick.beat, tick.subBeat);
       }
