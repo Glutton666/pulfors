@@ -406,13 +406,15 @@ export default function MetronomeScreen() {
       samplePlayStateRef.current[key] = { playing: true, endTimer: null };
 
       try { player.pause(); } catch {}
-      try { player.currentTime = startMs / 1000; } catch {}
-      try { player.play(); } catch {}
+      const startSec = startMs / 1000;
+      Promise.resolve(player.seekTo(startSec)).then(() => {
+        try { player.play(); } catch {}
+      }).catch(() => {});
 
       const effectiveDur = durationMs > 0
         ? durationMs
         : player.duration > 0
-          ? (player.duration - startMs / 1000) * 1000
+          ? (player.duration - startSec) * 1000
           : 0;
       if (effectiveDur > 0) {
         const timer = setTimeout(() => {
@@ -497,7 +499,7 @@ export default function MetronomeScreen() {
         const parts = hashParts.split(",").map(Number);
         if (!isNaN(parts[0])) startSec = parts[0] / 1000;
       }
-      try { player.currentTime = startSec; } catch {}
+      try { player.seekTo(startSec); } catch {}
     }
   }, []);
 
@@ -583,9 +585,13 @@ export default function MetronomeScreen() {
       const toWarm = [players.highA, players.highB, players.lowA, players.lowB, players.strongA, players.strongB];
       const savedVolumes = toWarm.map(p => p.volume);
       toWarm.forEach(p => { p.volume = 0; });
-      toWarm.forEach(p => { try { p.seekTo(0); p.play(); } catch {} });
-      await new Promise(r => setTimeout(r, 30));
-      toWarm.forEach((p, i) => { try { p.pause(); p.seekTo(0); p.volume = savedVolumes[i]; } catch {} });
+      await Promise.all(toWarm.map(async (p) => {
+        try { await p.seekTo(0); p.play(); } catch {}
+      }));
+      await new Promise(r => setTimeout(r, 50));
+      await Promise.all(toWarm.map(async (p, i) => {
+        try { p.pause(); await p.seekTo(0); p.volume = savedVolumes[i]; } catch {}
+      }));
     } catch {}
   }, []);
 
