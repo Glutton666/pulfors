@@ -413,35 +413,31 @@ export default function MetronomeScreen() {
       if (samplePlayStateRef.current[key]?.endTimer) {
         clearTimeout(samplePlayStateRef.current[key].endTimer!);
       }
-      try { player.pause(); } catch {}
 
       const { startMs, durationMs } = parseSampleTiming(key);
       samplePlayStateRef.current[key] = { playing: true, endTimer: null };
 
-      player.seekTo(startMs / 1000).then(() => {
-        player.play();
-        const effectiveDur = durationMs > 0
-          ? durationMs
-          : player.duration > 0
-            ? (player.duration - startMs / 1000) * 1000
-            : 0;
-        if (effectiveDur > 0) {
-          const timer = setTimeout(() => {
-            try { player.pause(); } catch {}
-            if (samplePlayStateRef.current[key]) {
-              samplePlayStateRef.current[key].playing = false;
-              samplePlayStateRef.current[key].endTimer = null;
-            }
-          }, effectiveDur);
+      try { player.pause(); } catch {}
+      try { player.currentTime = startMs / 1000; } catch {}
+      try { player.play(); } catch {}
+
+      const effectiveDur = durationMs > 0
+        ? durationMs
+        : player.duration > 0
+          ? (player.duration - startMs / 1000) * 1000
+          : 0;
+      if (effectiveDur > 0) {
+        const timer = setTimeout(() => {
+          try { player.pause(); } catch {}
           if (samplePlayStateRef.current[key]) {
-            samplePlayStateRef.current[key].endTimer = timer;
+            samplePlayStateRef.current[key].playing = false;
+            samplePlayStateRef.current[key].endTimer = null;
           }
-        }
-      }).catch(() => {
+        }, effectiveDur);
         if (samplePlayStateRef.current[key]) {
-          samplePlayStateRef.current[key].playing = false;
+          samplePlayStateRef.current[key].endTimer = timer;
         }
-      });
+      }
     };
 
     engine.setCustomSampleCallback((beat: number, subBeat: number) => {
@@ -1699,7 +1695,12 @@ export default function MetronomeScreen() {
     noteSampleNamesRef.current = {};
     setNoteSampleSources({});
     noteSampleSourcesRef.current = {};
+    for (const [k, st] of Object.entries(samplePlayStateRef.current)) {
+      if (st.endTimer) clearTimeout(st.endTimer);
+    }
+    samplePlayStateRef.current = {};
     for (const player of Object.values(noteSampleSoundsRef.current)) {
+      try { player.pause(); } catch {}
       try { player.release(); } catch {}
     }
     noteSampleSoundsRef.current = {};
