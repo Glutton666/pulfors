@@ -500,9 +500,16 @@ export default function MetronomeScreen() {
       if (state.endTimer) clearTimeout(state.endTimer);
     }
     samplePlayStateRef.current = {};
-    for (const player of Object.values(noteSampleSoundsRef.current)) {
+    for (const [key, player] of Object.entries(noteSampleSoundsRef.current)) {
       try { player.pause(); } catch {}
-      try { player.currentTime = 0; } catch {}
+      const uri = noteSamplesRef.current[key] || "";
+      const hashParts = uri.split("#t=")[1];
+      let startSec = 0;
+      if (hashParts) {
+        const parts = hashParts.split(",").map(Number);
+        if (!isNaN(parts[0])) startSec = parts[0] / 1000;
+      }
+      try { player.currentTime = startSec; } catch {}
     }
   }, []);
 
