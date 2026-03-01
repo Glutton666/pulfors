@@ -139,6 +139,8 @@ export default function MetronomeScreen() {
     barTimerDuration: 180,
   });
 
+  const [progressInfo, setProgressInfo] = useState<{ beat: number; barRepeatCurrent: number; barRepeatTotal: number; blockIndex: number; blockRepeatCurrent: number; blockRepeatTotal: number } | null>(null);
+
   const [isDragging, setIsDragging] = useState(false);
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
   const [dropTargetBeat, setDropTargetBeat] = useState<number | null>(null);
@@ -832,6 +834,19 @@ export default function MetronomeScreen() {
         });
       }
     });
+
+    let progressRafPending = false;
+    let pendingProgress: typeof progressInfo = null;
+    engine.setOnProgress((info) => {
+      pendingProgress = info;
+      if (!progressRafPending) {
+        progressRafPending = true;
+        requestAnimationFrame(() => {
+          progressRafPending = false;
+          setProgressInfo(pendingProgress);
+        });
+      }
+    });
   }, [flashOpacity]);
 
   useEffect(() => {
@@ -1029,6 +1044,7 @@ export default function MetronomeScreen() {
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
+      setProgressInfo(null);
       showPausedNotification(bpm, modeLabel);
       if (loggingEnabled && practiceStartRef.current) {
         const dur = Math.round((Date.now() - practiceStartRef.current) / 1000);
@@ -1060,6 +1076,11 @@ export default function MetronomeScreen() {
         engine.setAllBeatSubdivisions(barConfigRef.current.beatSubdivisions || {});
         engine.setAllBarRepeats(barConfigRef.current.barRepeats || {});
         engine.setLoopBlocks(barConfigRef.current.loopBlocks || []);
+        const bpmOverrides: Record<number, number> = {};
+        for (const [k, v] of Object.entries(barConfigRef.current.barRepeats || {})) {
+          if (v.bpm) bpmOverrides[Number(k)] = v.bpm;
+        }
+        engine.setAllBarBpmOverrides(bpmOverrides);
       } else {
         engine.setBeatTypes([...(dialConfigRef.current.beatTypes || [])]);
         engine.setAllBeatSubdivisions(dialConfigRef.current.beatSubdivisions || {});
@@ -1226,6 +1247,7 @@ export default function MetronomeScreen() {
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
+      setProgressInfo(null);
     }
     setBarStartBeat(null);
 
@@ -1296,6 +1318,11 @@ export default function MetronomeScreen() {
       engine.setAllBeatSubdivisions(barConfigRef.current.beatSubdivisions || {});
       engine.setAllBarRepeats(barConfigRef.current.barRepeats || {});
       engine.setLoopBlocks(barConfigRef.current.loopBlocks || []);
+      const bpmOv: Record<number, number> = {};
+      for (const [k, v] of Object.entries(barConfigRef.current.barRepeats || {})) {
+        if (v.bpm) bpmOv[Number(k)] = v.bpm;
+      }
+      engine.setAllBarBpmOverrides(bpmOv);
     } else {
       engine.setBeatTypes([...(dialConfigRef.current.beatTypes || [])]);
       engine.setAllBeatSubdivisions(dialConfigRef.current.beatSubdivisions || {});
@@ -1343,6 +1370,7 @@ export default function MetronomeScreen() {
         setIsPlaying(false);
         setCurrentBeat(-1);
         setActiveSubNote(-1);
+        setProgressInfo(null);
         const modeLabel = barModeRef.current ? "Bar" : "Dial";
         showPausedNotification(bpmRef.current, modeLabel);
       }
@@ -1361,6 +1389,7 @@ export default function MetronomeScreen() {
       clearSamplePlayStates();
       setIsPlaying(false);
       setCurrentBeat(-1);
+      setProgressInfo(null);
       const modeLabel = barModeRef.current ? "Bar" : "Dial";
       showPausedNotification(bpmRef.current, modeLabel);
     } else {
@@ -1644,6 +1673,7 @@ export default function MetronomeScreen() {
       }
       barConfigRef.current.barRepeats = { ...next };
       engineRef.current?.setBarRepeat(beat, repeat);
+      engineRef.current?.setBarBpmOverride(beat, repeat?.bpm ?? null);
       return next;
     });
   }, []);
@@ -1704,6 +1734,7 @@ export default function MetronomeScreen() {
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
+      setProgressInfo(null);
     }
 
     if (!barMode) {
@@ -1731,6 +1762,11 @@ export default function MetronomeScreen() {
     engine.setAllBeatSubdivisions(entry.beatSubdivisions);
     engine.setLoopBlocks(entryBlocks);
     engine.setAllBarRepeats(entry.barRepeats || {});
+    const bpmOverridesEntry: Record<number, number> = {};
+    for (const [k, v] of Object.entries(entry.barRepeats || {})) {
+      if (v.bpm) bpmOverridesEntry[Number(k)] = v.bpm;
+    }
+    engine.setAllBarBpmOverrides(bpmOverridesEntry);
     barConfigRef.current = {
       beatsPerMeasure: entry.beatsPerMeasure,
       beatTypes: [...entry.beatTypes],
@@ -2108,6 +2144,7 @@ export default function MetronomeScreen() {
             bpm={bpm}
             barStartBeat={barStartBeat}
             onBarStartBeatSelect={setBarStartBeat}
+            progressInfo={progressInfo}
             subdivisionBarElement={barMode ? (
               <SubdivisionBar
                 pattern={subdivisionPattern}

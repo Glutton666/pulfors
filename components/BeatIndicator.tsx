@@ -210,6 +210,7 @@ function DialBeatDot({
 export interface BarRepeat {
   type: "count" | "duration";
   value: number;
+  bpm?: number;
 }
 
 export interface LoopBlock {
@@ -217,6 +218,7 @@ export interface LoopBlock {
   endBeat: number;
   type: "count" | "duration";
   value: number;
+  jumpToBlock?: number;
 }
 
 interface BeatIndicatorProps {
@@ -256,6 +258,7 @@ interface BeatIndicatorProps {
   bpm?: number;
   barStartBeat?: number | null;
   onBarStartBeatSelect?: (beat: number | null) => void;
+  progressInfo?: { beat: number; barRepeatCurrent: number; barRepeatTotal: number; blockIndex: number; blockRepeatCurrent: number; blockRepeatTotal: number } | null;
 }
 
 export function BeatIndicator({
@@ -295,6 +298,7 @@ export function BeatIndicator({
   bpm,
   barStartBeat,
   onBarStartBeatSelect,
+  progressInfo,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
 
@@ -751,6 +755,9 @@ export function BeatIndicator({
   const [repeatCountText, setRepeatCountText] = useState("");
   const [repeatMinEditing, setRepeatMinEditing] = useState(false);
   const [repeatMinText, setRepeatMinText] = useState("");
+  const [repeatBpmOverride, setRepeatBpmOverride] = useState<number | null>(null);
+  const [repeatBpmEditing, setRepeatBpmEditing] = useState(false);
+  const [repeatBpmText, setRepeatBpmText] = useState("");
   const [repeatSecEditing, setRepeatSecEditing] = useState(false);
   const [repeatSecText, setRepeatSecText] = useState("");
 
@@ -767,15 +774,18 @@ export function BeatIndicator({
         setRepeatMinVal(Math.floor(existing.value / 60));
         setRepeatSecVal(existing.value % 60);
       }
+      setRepeatBpmOverride(existing.bpm ?? null);
     } else {
       setRepeatType("count");
       setRepeatCountVal(2);
       setRepeatMinVal(0);
       setRepeatSecVal(30);
+      setRepeatBpmOverride(null);
     }
     setRepeatCountEditing(false);
     setRepeatMinEditing(false);
     setRepeatSecEditing(false);
+    setRepeatBpmEditing(false);
     setRepeatModalBeat(beat);
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   }, [barRepeats]);
@@ -784,13 +794,15 @@ export function BeatIndicator({
     if (repeatModalBeat === null) return;
     const val = repeatType === "count" ? repeatCountVal : repeatMinVal * 60 + repeatSecVal;
     if (val <= 0) return;
-    if (repeatType === "count" && val === 1) {
+    if (repeatType === "count" && val === 1 && repeatBpmOverride === null) {
       onBarRepeatChange(repeatModalBeat, null);
     } else {
-      onBarRepeatChange(repeatModalBeat, { type: repeatType, value: val });
+      const rep: BarRepeat = { type: repeatType, value: val };
+      if (repeatBpmOverride !== null) rep.bpm = repeatBpmOverride;
+      onBarRepeatChange(repeatModalBeat, rep);
     }
     setRepeatModalBeat(null);
-  }, [repeatModalBeat, repeatType, repeatCountVal, repeatMinVal, repeatSecVal, onBarRepeatChange]);
+  }, [repeatModalBeat, repeatType, repeatCountVal, repeatMinVal, repeatSecVal, repeatBpmOverride, onBarRepeatChange]);
 
   const clearRepeat = useCallback(() => {
     if (repeatModalBeat === null) return;
@@ -799,12 +811,17 @@ export function BeatIndicator({
   }, [repeatModalBeat, onBarRepeatChange]);
 
   const formatRepeat = (r: BarRepeat): string => {
-    if (r.type === "count") return `\u00D7${r.value}`;
-    const totalSec = r.value;
-    const m = Math.floor(totalSec / 60);
-    const s = totalSec % 60;
-    if (m > 0) return s > 0 ? `${m}'${s.toString().padStart(2, "0")}"` : `${m}'`;
-    return `${s}"`;
+    let label = "";
+    if (r.type === "count") label = `\u00D7${r.value}`;
+    else {
+      const totalSec = r.value;
+      const m = Math.floor(totalSec / 60);
+      const s = totalSec % 60;
+      if (m > 0) label = s > 0 ? `${m}'${s.toString().padStart(2, "0")}"` : `${m}'`;
+      else label = `${s}"`;
+    }
+    if (r.bpm) label += ` ${r.bpm}`;
+    return label;
   };
 
   const addLoopBlock = useCallback(() => {
@@ -1175,6 +1192,13 @@ export function BeatIndicator({
               )}
             </Pressable>
           )}
+          {isPrimary && isPlaying && barRepeats[beat] && progressInfo && progressInfo.beat === beat && progressInfo.barRepeatTotal > 1 && (
+            <View style={[styles.barBeatLabel, { marginLeft: 2, backgroundColor: C.accent + "30", borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }]}>
+              <Text style={{ color: C.accent, fontSize: 8, fontWeight: "800", fontFamily: "SpaceGrotesk_700Bold" }}>
+                {progressInfo.barRepeatCurrent + 1}/{progressInfo.barRepeatTotal}
+              </Text>
+            </View>
+          )}
         </View>
       );
     };
@@ -1240,9 +1264,24 @@ export function BeatIndicator({
                     <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: 10, color: C.accent }}>
                       {formatBlockRepeat(block)}
                     </Text>
-                    <Pressable onPress={() => removeLoopBlock(idx)} hitSlop={6} style={{ marginLeft: -2 }}>
-                      <Ionicons name="close-circle" size={12} color={Colors.textTertiary} />
-                    </Pressable>
+                    {block.jumpToBlock !== undefined && block.jumpToBlock !== null && (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                        <Ionicons name="arrow-forward" size={8} color={Colors.textTertiary} />
+                        <Text style={{ fontSize: 8, color: Colors.textTertiary, fontWeight: "600" }}>B{block.jumpToBlock + 1}</Text>
+                      </View>
+                    )}
+                    {isPlaying && progressInfo && progressInfo.blockIndex === idx && progressInfo.blockRepeatTotal > 1 && (
+                      <View style={{ backgroundColor: C.accent, borderRadius: 3, paddingHorizontal: 3, paddingVertical: 1 }}>
+                        <Text style={{ color: Colors.white, fontSize: 8, fontWeight: "800" }}>
+                          {progressInfo.blockRepeatCurrent + 1}/{progressInfo.blockRepeatTotal}
+                        </Text>
+                      </View>
+                    )}
+                    {!isPlaying && (
+                      <Pressable onPress={() => removeLoopBlock(idx)} hitSlop={6} style={{ marginLeft: -2 }}>
+                        <Ionicons name="close-circle" size={12} color={Colors.textTertiary} />
+                      </Pressable>
+                    )}
                   </Pressable>
                 ))}
                 <Pressable
@@ -1334,6 +1373,42 @@ export function BeatIndicator({
                         <Pressable onPress={() => updateLoopBlock(idx, { value: Math.min(3599, block.value + 10) })} style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}>
                           <Ionicons name="add" size={12} color={Colors.textSecondary} />
                         </Pressable>
+                      </View>
+                    )}
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+                    <Ionicons name="git-branch-outline" size={12} color={Colors.textTertiary} />
+                    <Text style={{ fontSize: 10, color: Colors.textTertiary }}>Jump to</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 6, paddingHorizontal: 6, height: 24 }}>
+                      {block.jumpToBlock !== undefined && block.jumpToBlock !== null ? (
+                        <Pressable
+                          onPress={() => updateLoopBlock(idx, { jumpToBlock: undefined })}
+                          style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                        >
+                          <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: 12, color: C.accent }}>Block {block.jumpToBlock + 1}</Text>
+                          <Ionicons name="close-circle" size={12} color={Colors.textTertiary} />
+                        </Pressable>
+                      ) : (
+                        <Text style={{ fontSize: 11, color: Colors.textTertiary }}>—</Text>
+                      )}
+                    </View>
+                    {loopBlocks.length > 1 && (
+                      <View style={{ flexDirection: "row", gap: 3 }}>
+                        {loopBlocks.map((_, bIdx) => bIdx !== idx ? (
+                          <Pressable
+                            key={bIdx}
+                            onPress={() => updateLoopBlock(idx, { jumpToBlock: bIdx })}
+                            style={{
+                              width: 22, height: 22, borderRadius: 11,
+                              backgroundColor: block.jumpToBlock === bIdx ? C.accent + "40" : "rgba(255,255,255,0.08)",
+                              alignItems: "center", justifyContent: "center",
+                              borderWidth: block.jumpToBlock === bIdx ? 1 : 0,
+                              borderColor: C.accent,
+                            }}
+                          >
+                            <Text style={{ fontSize: 10, fontWeight: "700", color: block.jumpToBlock === bIdx ? C.accent : Colors.textSecondary }}>{bIdx + 1}</Text>
+                          </Pressable>
+                        ) : null)}
                       </View>
                     )}
                   </View>
@@ -1619,6 +1694,75 @@ export function BeatIndicator({
                   </Pressable>
                 </View>
               )}
+
+              <View style={{ marginBottom: 14 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 4 }}>
+                  <Ionicons name="speedometer-outline" size={14} color={Colors.textSecondary} />
+                  <Text style={{ color: Colors.textSecondary, fontSize: 12, fontWeight: "600" }}>BPM Override</Text>
+                </View>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                  <Pressable
+                    onPress={() => {
+                      if (repeatBpmOverride === null) {
+                        setRepeatBpmOverride(bpm || 120);
+                      } else {
+                        setRepeatBpmOverride(Math.max(20, repeatBpmOverride - 5));
+                      }
+                    }}
+                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Ionicons name="remove" size={14} color={Colors.textSecondary} />
+                  </Pressable>
+                  {repeatBpmEditing ? (
+                    <TextInput
+                      style={{ color: Colors.text, fontSize: 18, fontWeight: "700", textAlign: "center", width: 50, borderBottomWidth: 1, borderBottomColor: C.accent, padding: 0 }}
+                      value={repeatBpmText}
+                      onChangeText={setRepeatBpmText}
+                      keyboardType="number-pad"
+                      autoFocus
+                      selectTextOnFocus
+                      onBlur={() => {
+                        const n = parseInt(repeatBpmText, 10);
+                        if (!isNaN(n) && n >= 20 && n <= 300) setRepeatBpmOverride(n);
+                        else if (repeatBpmText === "" || repeatBpmText === "0") setRepeatBpmOverride(null);
+                        setRepeatBpmEditing(false);
+                      }}
+                      onSubmitEditing={() => {
+                        const n = parseInt(repeatBpmText, 10);
+                        if (!isNaN(n) && n >= 20 && n <= 300) setRepeatBpmOverride(n);
+                        else if (repeatBpmText === "" || repeatBpmText === "0") setRepeatBpmOverride(null);
+                        setRepeatBpmEditing(false);
+                      }}
+                    />
+                  ) : (
+                    <Pressable onPress={() => { setRepeatBpmText(repeatBpmOverride !== null ? String(repeatBpmOverride) : ""); setRepeatBpmEditing(true); }}>
+                      <Text style={{ color: repeatBpmOverride !== null ? C.accent : Colors.textTertiary, fontSize: 18, fontWeight: "700" }}>
+                        {repeatBpmOverride !== null ? repeatBpmOverride : "—"}
+                      </Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    onPress={() => {
+                      if (repeatBpmOverride === null) {
+                        setRepeatBpmOverride(bpm || 120);
+                      } else {
+                        setRepeatBpmOverride(Math.min(300, repeatBpmOverride + 5));
+                      }
+                    }}
+                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Ionicons name="add" size={14} color={Colors.textSecondary} />
+                  </Pressable>
+                  {repeatBpmOverride !== null && (
+                    <Pressable
+                      onPress={() => setRepeatBpmOverride(null)}
+                      style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.08)" }}
+                    >
+                      <Text style={{ color: Colors.textTertiary, fontSize: 11 }}>Reset</Text>
+                    </Pressable>
+                  )}
+                </View>
+              </View>
 
               <View style={{ flexDirection: "row", gap: 10, justifyContent: "center" }}>
                 <Pressable

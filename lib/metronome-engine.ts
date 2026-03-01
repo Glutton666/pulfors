@@ -4,6 +4,15 @@ import { Platform } from "react-native";
 export type BeatType = "strong" | "accent" | "normal" | "mute";
 export type HapticMode = "all" | "accent" | "off";
 
+export interface ProgressInfo {
+  beat: number;
+  barRepeatCurrent: number;
+  barRepeatTotal: number;
+  blockIndex: number;
+  blockRepeatCurrent: number;
+  blockRepeatTotal: number;
+}
+
 export const soundSets = {
   classic: {
     high: require("@/assets/sounds/click-high.wav"),
@@ -39,6 +48,9 @@ interface ScheduledTick {
   isMainBeat: boolean;
   repeatIteration: number;
   barRepeatIteration: number;
+  barRepeatTotal: number;
+  blockIndex: number;
+  blockRepeatTotal: number;
 }
 
 export class MetronomeEngine {
@@ -61,10 +73,12 @@ export class MetronomeEngine {
   private playCustomSample: ((beat: number, subBeat: number) => boolean) | null = null;
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
-  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number }[] = [];
+  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number }[] = [];
   private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
+  private barBpmOverrides: Map<number, number> = new Map();
   private preRenderedAudio = false;
   private pendingMeasureStartAction: (() => void) | null = null;
+  private onProgress: ((info: ProgressInfo) => void) | null = null;
 
   private schedule: ScheduledTick[] = [];
   private scheduleIndex = 0;
@@ -181,7 +195,7 @@ export class MetronomeEngine {
     }
   }
 
-  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number }[]) {
+  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number }[]) {
     this.loopBlocks = blocks.map(b => ({ ...b }));
     if (this.isRunning) {
       this.rebuildSchedule();
@@ -193,6 +207,36 @@ export class MetronomeEngine {
     if (this.isRunning) {
       this.rebuildSchedule();
     }
+  }
+
+  setBarBpmOverride(beat: number, bpm: number | null) {
+    if (bpm !== null) {
+      this.barBpmOverrides.set(beat, Math.max(20, Math.min(300, bpm)));
+    } else {
+      this.barBpmOverrides.delete(beat);
+    }
+    if (this.isRunning) {
+      this.rebuildSchedule();
+    }
+  }
+
+  setAllBarBpmOverrides(overrides: Record<number, number>) {
+    this.barBpmOverrides.clear();
+    for (const [key, value] of Object.entries(overrides)) {
+      this.barBpmOverrides.set(Number(key), Math.max(20, Math.min(300, value)));
+    }
+  }
+
+  getBarBpmOverrides(): Record<number, number> {
+    const result: Record<number, number> = {};
+    for (const [key, value] of this.barBpmOverrides.entries()) {
+      result[key] = value;
+    }
+    return result;
+  }
+
+  setOnProgress(callback: ((info: ProgressInfo) => void) | null) {
+    this.onProgress = callback;
   }
 
   setBarRepeat(beat: number, repeat: { type: "count" | "duration"; value: number } | null) {
@@ -277,8 +321,12 @@ export class MetronomeEngine {
     return custom;
   }
 
+  private getBeatDur(beat: number): number {
+    const bpm = this.barBpmOverrides.get(beat) ?? this.bpm;
+    return 60000 / bpm;
+  }
+
   private buildSchedule(): ScheduledTick[] {
-    const beatDur = 60000 / this.bpm;
     const ticks: ScheduledTick[] = [];
     let time = 0;
 
@@ -286,8 +334,9 @@ export class MetronomeEngine {
       .filter(b => b.startBeat < this.beatsPerMeasure && b.endBeat >= b.startBeat)
       .sort((a, b) => a.startBeat - b.startBeat);
 
-    const addBeatTicks = (beat: number, iteration: number, barRepIter: number) => {
+    const addBeatTicks = (beat: number, iteration: number, barRepIter: number, barRepTotal: number, blkIdx: number, blkRepTotal: number) => {
       const subPattern = this.getSubPattern(beat);
+      const beatDur = this.getBeatDur(beat);
       const subDur = beatDur / subPattern.length;
       for (let sub = 0; sub < subPattern.length; sub++) {
         ticks.push({
@@ -298,57 +347,78 @@ export class MetronomeEngine {
           isMainBeat: sub === 0,
           repeatIteration: iteration,
           barRepeatIteration: barRepIter,
+          barRepeatTotal: barRepTotal,
+          blockIndex: blkIdx,
+          blockRepeatTotal: blkRepTotal,
         });
         time += subDur;
       }
     };
 
-    const addBarWithRepeat = (beat: number, blockIteration: number) => {
+    const addBarWithRepeat = (beat: number, blockIteration: number, blkIdx: number, blkRepTotal: number) => {
       const barRep = this.barRepeats.get(beat);
+      const beatDur = this.getBeatDur(beat);
       if (barRep) {
-        const subPattern = this.getSubPattern(beat);
-        const barDurMs = beatDur;
         let barRepeatCount = 1;
         if (barRep.type === "count") {
           barRepeatCount = Math.max(1, barRep.value);
         } else {
-          barRepeatCount = Math.max(1, Math.round((barRep.value * 1000) / barDurMs));
+          barRepeatCount = Math.max(1, Math.round((barRep.value * 1000) / beatDur));
         }
         for (let r = 0; r < barRepeatCount; r++) {
-          addBeatTicks(beat, blockIteration, r);
+          addBeatTicks(beat, blockIteration, r, barRepeatCount, blkIdx, blkRepTotal);
         }
       } else {
-        addBeatTicks(beat, blockIteration, 0);
+        addBeatTicks(beat, blockIteration, 0, 1, blkIdx, blkRepTotal);
+      }
+    };
+
+    const processBlock = (blockIdx: number, visited: Set<number>) => {
+      if (visited.has(blockIdx) || blockIdx < 0 || blockIdx >= sortedBlocks.length) return;
+      visited.add(blockIdx);
+      const block = sortedBlocks[blockIdx];
+      const endBeat = Math.min(block.endBeat, this.beatsPerMeasure - 1);
+
+      let singlePassDurMs = 0;
+      for (let b = block.startBeat; b <= endBeat; b++) {
+        const bd = this.getBeatDur(b);
+        const barRep = this.barRepeats.get(b);
+        const barRepCount = barRep ? (barRep.type === "count" ? Math.max(1, barRep.value) : Math.max(1, Math.round((barRep.value * 1000) / bd))) : 1;
+        singlePassDurMs += bd * barRepCount;
+      }
+
+      let blockRepeatCount = 1;
+      if (block.type === "count") {
+        blockRepeatCount = Math.max(1, block.value);
+      } else {
+        blockRepeatCount = Math.max(1, Math.round((block.value * 1000) / singlePassDurMs));
+      }
+      for (let r = 0; r < blockRepeatCount; r++) {
+        for (let b = block.startBeat; b <= endBeat; b++) {
+          addBarWithRepeat(b, r, blockIdx, blockRepeatCount);
+        }
+      }
+
+      if (block.jumpToBlock !== undefined && block.jumpToBlock !== null) {
+        const jumpTarget = sortedBlocks.findIndex((sb, si) => si === block.jumpToBlock);
+        if (jumpTarget >= 0 && !visited.has(jumpTarget)) {
+          processBlock(jumpTarget, visited);
+        }
       }
     };
 
     let beat = 0;
     while (beat < this.beatsPerMeasure) {
-      const block = sortedBlocks.find(b => b.startBeat === beat);
-      if (block) {
+      const blockIdx = sortedBlocks.findIndex(b => b.startBeat === beat);
+      if (blockIdx >= 0) {
+        const block = sortedBlocks[blockIdx];
         const endBeat = Math.min(block.endBeat, this.beatsPerMeasure - 1);
 
-        let singlePassDurMs = 0;
-        for (let b = block.startBeat; b <= endBeat; b++) {
-          const barRep = this.barRepeats.get(b);
-          const barRepCount = barRep ? (barRep.type === "count" ? Math.max(1, barRep.value) : Math.max(1, Math.round((barRep.value * 1000) / beatDur))) : 1;
-          singlePassDurMs += beatDur * barRepCount;
-        }
+        processBlock(blockIdx, new Set());
 
-        let blockRepeatCount = 1;
-        if (block.type === "count") {
-          blockRepeatCount = Math.max(1, block.value);
-        } else {
-          blockRepeatCount = Math.max(1, Math.round((block.value * 1000) / singlePassDurMs));
-        }
-        for (let r = 0; r < blockRepeatCount; r++) {
-          for (let b = block.startBeat; b <= endBeat; b++) {
-            addBarWithRepeat(b, r);
-          }
-        }
         beat = endBeat + 1;
       } else {
-        addBarWithRepeat(beat, 0);
+        addBarWithRepeat(beat, 0, -1, 1);
         beat++;
       }
     }
@@ -431,6 +501,17 @@ export class MetronomeEngine {
     const offset = this.audioOffsetMs;
 
     fireVisual();
+
+    if (tick.isMainBeat && this.onProgress) {
+      this.onProgress({
+        beat: tick.beat,
+        barRepeatCurrent: tick.barRepeatIteration,
+        barRepeatTotal: tick.barRepeatTotal,
+        blockIndex: tick.blockIndex,
+        blockRepeatCurrent: tick.repeatIteration,
+        blockRepeatTotal: tick.blockRepeatTotal,
+      });
+    }
 
     if (this.preRenderedAudio) {
       if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0 && this.playCustomSample) {
