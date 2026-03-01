@@ -373,49 +373,112 @@ export class MetronomeEngine {
       }
     };
 
-    const processBlock = (blockIdx: number, visited: Set<number>) => {
-      if (visited.has(blockIdx) || blockIdx < 0 || blockIdx >= sortedBlocks.length) return;
-      visited.add(blockIdx);
+    const calcSinglePassDur = (startB: number, endB: number, parentBlockIdx: number): number => {
+      let dur = 0;
+      let b = startB;
+      while (b <= endB) {
+        const innerIdx = sortedBlocks.findIndex((ib, iIdx) =>
+          iIdx !== parentBlockIdx && ib.startBeat === b && ib.startBeat >= startB && ib.endBeat <= endB
+        );
+        if (innerIdx >= 0) {
+          const inner = sortedBlocks[innerIdx];
+          const innerEnd = Math.min(inner.endBeat, endB);
+          const innerPassDur = calcSinglePassDur(inner.startBeat, innerEnd, innerIdx);
+          let innerRepCount = 1;
+          if (inner.type === "count") innerRepCount = Math.max(1, inner.value);
+          else innerRepCount = Math.max(1, Math.round((inner.value * 1000) / (innerPassDur || 1)));
+          dur += innerPassDur * innerRepCount;
+          b = innerEnd + 1;
+        } else {
+          const bd = this.getBeatDur(b);
+          const barRep = this.barRepeats.get(b);
+          const barRepCount = barRep ? (barRep.type === "count" ? Math.max(1, barRep.value) : Math.max(1, Math.round((barRep.value * 1000) / bd))) : 1;
+          dur += bd * barRepCount;
+          b++;
+        }
+      }
+      return dur;
+    };
+
+    const emitBeatsInRange = (startB: number, endB: number, outerBlockIdx: number, outerIter: number, outerRepTotal: number) => {
+      let b = startB;
+      while (b <= endB) {
+        const innerIdx = sortedBlocks.findIndex((ib, iIdx) =>
+          iIdx !== outerBlockIdx && ib.startBeat === b && ib.startBeat >= startB && ib.endBeat <= endB
+        );
+        if (innerIdx >= 0) {
+          const inner = sortedBlocks[innerIdx];
+          const innerEnd = Math.min(inner.endBeat, endB);
+          const innerPassDur = calcSinglePassDur(inner.startBeat, innerEnd, innerIdx);
+          let innerRepCount = 1;
+          if (inner.type === "count") innerRepCount = Math.max(1, inner.value);
+          else innerRepCount = Math.max(1, Math.round((inner.value * 1000) / (innerPassDur || 1)));
+          for (let ir = 0; ir < innerRepCount; ir++) {
+            emitBeatsInRange(inner.startBeat, innerEnd, innerIdx, ir, innerRepCount);
+          }
+          b = innerEnd + 1;
+        } else {
+          addBarWithRepeat(b, outerIter, outerBlockIdx, outerRepTotal);
+          b++;
+        }
+      }
+    };
+
+    const processBlock = (blockIdx: number, jumpVisited: Set<number>) => {
+      if (jumpVisited.has(blockIdx) || blockIdx < 0 || blockIdx >= sortedBlocks.length) return;
+      jumpVisited.add(blockIdx);
       const block = sortedBlocks[blockIdx];
       const endBeat = Math.min(block.endBeat, this.beatsPerMeasure - 1);
 
-      let singlePassDurMs = 0;
-      for (let b = block.startBeat; b <= endBeat; b++) {
-        const bd = this.getBeatDur(b);
-        const barRep = this.barRepeats.get(b);
-        const barRepCount = barRep ? (barRep.type === "count" ? Math.max(1, barRep.value) : Math.max(1, Math.round((barRep.value * 1000) / bd))) : 1;
-        singlePassDurMs += bd * barRepCount;
-      }
+      const singlePassDurMs = calcSinglePassDur(block.startBeat, endBeat, blockIdx);
 
       let blockRepeatCount = 1;
       if (block.type === "count") {
         blockRepeatCount = Math.max(1, block.value);
       } else {
-        blockRepeatCount = Math.max(1, Math.round((block.value * 1000) / singlePassDurMs));
+        blockRepeatCount = Math.max(1, Math.round((block.value * 1000) / (singlePassDurMs || 1)));
       }
+
       for (let r = 0; r < blockRepeatCount; r++) {
-        for (let b = block.startBeat; b <= endBeat; b++) {
-          addBarWithRepeat(b, r, blockIdx, blockRepeatCount);
-        }
+        emitBeatsInRange(block.startBeat, endBeat, blockIdx, r, blockRepeatCount);
       }
 
       if (block.jumpToBlock !== undefined && block.jumpToBlock !== null) {
-        const jumpTarget = sortedBlocks.findIndex((sb, si) => si === block.jumpToBlock);
-        if (jumpTarget >= 0 && !visited.has(jumpTarget)) {
-          processBlock(jumpTarget, visited);
+        const jumpTarget = block.jumpToBlock;
+        if (jumpTarget >= 0 && jumpTarget < sortedBlocks.length && !jumpVisited.has(jumpTarget)) {
+          processBlock(jumpTarget, jumpVisited);
         }
       }
     };
 
+    const processed = new Set<number>();
     let beat = 0;
     while (beat < this.beatsPerMeasure) {
-      const blockIdx = sortedBlocks.findIndex(b => b.startBeat === beat);
-      if (blockIdx >= 0) {
-        const block = sortedBlocks[blockIdx];
+      let outerIdx = -1;
+      let outerSpan = -1;
+      sortedBlocks.forEach((blk, idx) => {
+        if (blk.startBeat === beat && !processed.has(idx)) {
+          const isNested = sortedBlocks.some((ob, oi) =>
+            oi !== idx && ob.startBeat <= blk.startBeat && ob.endBeat >= blk.endBeat && !processed.has(oi)
+          );
+          if (!isNested) {
+            const span = blk.endBeat - blk.startBeat;
+            if (span > outerSpan) {
+              outerSpan = span;
+              outerIdx = idx;
+            }
+          }
+        }
+      });
+      if (outerIdx >= 0) {
+        const block = sortedBlocks[outerIdx];
         const endBeat = Math.min(block.endBeat, this.beatsPerMeasure - 1);
-
-        processBlock(blockIdx, new Set());
-
+        processBlock(outerIdx, new Set());
+        for (let bi = 0; bi < sortedBlocks.length; bi++) {
+          if (sortedBlocks[bi].startBeat >= block.startBeat && sortedBlocks[bi].endBeat <= endBeat) {
+            processed.add(bi);
+          }
+        }
         beat = endBeat + 1;
       } else {
         addBarWithRepeat(beat, 0, -1, 1);
