@@ -530,7 +530,7 @@ export class MetronomeEngine {
           this.playLowClick?.();
         }
       } catch (e) {}
-      if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0 && this.playCustomSample) {
+      if (this.playCustomSample) {
         this.playCustomSample(tick.beat, tick.subBeat);
       }
     };
@@ -577,7 +577,7 @@ export class MetronomeEngine {
     }
 
     if (this.preRenderedAudio) {
-      if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0 && this.playCustomSample) {
+      if (this.playCustomSample) {
         this.playCustomSample(tick.beat, tick.subBeat);
       }
       fireHaptic();
