@@ -1684,6 +1684,33 @@ export default function MetronomeScreen() {
     barConfigRef.current.loopBlocks = [...blocks];
   }, []);
 
+  const handleBarReset = useCallback(() => {
+    const engine = engineRef.current;
+    const beats = barConfigRef.current.beatsPerMeasure || 4;
+    const newTypes = defaultBeatTypes(beats);
+    setBeatTypes(newTypes);
+    setBeatSubdivisions({});
+    setBarRepeats({});
+    setLoopBlocks([]);
+    setBarStartBeat(null);
+    barConfigRef.current = {
+      beatsPerMeasure: beats,
+      beatTypes: [...newTypes],
+      beatSubdivisions: {},
+      barRepeats: {},
+      loopBlocks: [],
+      barClockMode: "stopwatch",
+      barTimerDuration: 180,
+    };
+    if (engine) {
+      engine.setBeatTypes([...newTypes]);
+      engine.setAllBeatSubdivisions({});
+      engine.setAllBarRepeats({});
+      engine.clearLoopBlocks();
+      engine.setAllBarBpmOverrides({});
+    }
+  }, []);
+
   useEffect(() => {
     if (loopBlocks.length === 0) return;
     const clamped = loopBlocks
@@ -2145,6 +2172,7 @@ export default function MetronomeScreen() {
             barStartBeat={barStartBeat}
             onBarStartBeatSelect={setBarStartBeat}
             progressInfo={progressInfo}
+            onBarReset={handleBarReset}
             subdivisionBarElement={barMode ? (
               <SubdivisionBar
                 pattern={subdivisionPattern}

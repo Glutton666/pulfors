@@ -259,6 +259,7 @@ interface BeatIndicatorProps {
   barStartBeat?: number | null;
   onBarStartBeatSelect?: (beat: number | null) => void;
   progressInfo?: { beat: number; barRepeatCurrent: number; barRepeatTotal: number; blockIndex: number; blockRepeatCurrent: number; blockRepeatTotal: number } | null;
+  onBarReset?: () => void;
 }
 
 export function BeatIndicator({
@@ -299,6 +300,7 @@ export function BeatIndicator({
   barStartBeat,
   onBarStartBeatSelect,
   progressInfo,
+  onBarReset,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
 
@@ -867,6 +869,64 @@ export function BeatIndicator({
     });
     return map;
   }, [loopBlocks, beatsPerMeasure]);
+
+  const shakeCountRef = useRef(0);
+  const shakeLastDirRef = useRef<"left" | "right" | null>(null);
+  const shakeLastTimeRef = useRef(0);
+  const shakeStartXRef = useRef(0);
+  const SHAKE_THRESHOLD = 15;
+  const SHAKE_TIMEOUT = 800;
+  const SHAKE_REQUIRED = 6;
+  const resetShakeProgress = useSharedValue(0);
+
+  const resetShakePan = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => !isPlaying,
+    onMoveShouldSetPanResponder: (_, gs) => !isPlaying && Math.abs(gs.dx) > 8,
+    onPanResponderGrant: (_, gs) => {
+      shakeStartXRef.current = 0;
+    },
+    onPanResponderMove: (_, gs) => {
+      if (isPlaying) return;
+      const now = Date.now();
+      if (now - shakeLastTimeRef.current > SHAKE_TIMEOUT) {
+        shakeCountRef.current = 0;
+        shakeLastDirRef.current = null;
+      }
+      const dir = gs.dx > SHAKE_THRESHOLD ? "right" : gs.dx < -SHAKE_THRESHOLD ? "left" : null;
+      if (dir && dir !== shakeLastDirRef.current) {
+        shakeLastDirRef.current = dir;
+        shakeLastTimeRef.current = now;
+        shakeCountRef.current++;
+        resetShakeProgress.value = Math.min(1, shakeCountRef.current / SHAKE_REQUIRED);
+        if (Platform.OS !== "web") {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+        if (shakeCountRef.current >= SHAKE_REQUIRED) {
+          shakeCountRef.current = 0;
+          shakeLastDirRef.current = null;
+          resetShakeProgress.value = 0;
+          if (Platform.OS !== "web") {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          }
+          onBarReset?.();
+        }
+      }
+    },
+    onPanResponderRelease: () => {
+      setTimeout(() => {
+        if (shakeCountRef.current < SHAKE_REQUIRED) {
+          shakeCountRef.current = 0;
+          shakeLastDirRef.current = null;
+          resetShakeProgress.value = withTiming(0, { duration: 300 });
+        }
+      }, SHAKE_TIMEOUT);
+    },
+  }), [isPlaying, onBarReset]);
+
+  const resetProgressStyle = useAnimatedStyle(() => ({
+    opacity: resetShakeProgress.value * 0.8,
+    transform: [{ scaleX: resetShakeProgress.value }],
+  }));
 
   const BAR_HEIGHT = 36;
   const BAR_LINE_COLOR = Colors.textSecondary;
@@ -1475,7 +1535,7 @@ export function BeatIndicator({
             >
               <Ionicons name="remove" size={16} color={Colors.textSecondary} />
             </Pressable>
-            <View style={styles.barInfoCol} {...barClockSwipePan.panHandlers}>
+            <View style={styles.barInfoCol} {...(isPlaying ? barClockSwipePan.panHandlers : resetShakePan.panHandlers)}>
               <Pressable onPress={handleBarClockTap}>
                 <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? Colors.danger : C.accent }]}>
                   {barTimeDisplay}
@@ -1489,6 +1549,15 @@ export function BeatIndicator({
                 <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
                 <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: Colors.danger }]} />
               </View>
+              <Animated.View style={[{
+                position: "absolute",
+                bottom: -2,
+                left: "10%" as any,
+                right: "10%" as any,
+                height: 3,
+                borderRadius: 1.5,
+                backgroundColor: Colors.danger,
+              }, resetProgressStyle]} />
             </View>
             <Pressable
               onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
