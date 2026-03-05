@@ -1007,29 +1007,78 @@ export default function MetronomeScreen() {
 
   const handleResetApp = useCallback(async () => {
     try {
-      if (engineRef.current?.isRunning) {
-        engineRef.current.stop();
+      const engine = engineRef.current;
+      if (engine?.isRunning) {
+        engine.stop();
       }
       await AsyncStorage.clear();
+
       setShowSettings(false);
       setShowMenu(false);
+      setShowTuner(false);
+      setShowSignalGen(false);
+      setShowPracticeBook(false);
+      setShowWorkUp(false);
+
       setBpm(120);
       setBeatsPerMeasure(4);
       setBeatTypes(defaultBeatTypes(4));
       setSubdivisionPattern(["accent"]);
       setBeatSubdivisions({});
+      setBarMode(false);
+      setBarStartBeat(null);
+      setBarLoopMode("loop");
+      setBarRepeats({});
+      setLoopBlocks([]);
+      barModeRef.current = false;
+      dialConfigRef.current = {
+        beatsPerMeasure: 4,
+        beatTypes: defaultBeatTypes(4),
+        beatSubdivisions: {},
+      };
+      barConfigRef.current = {
+        beatsPerMeasure: 4,
+        beatTypes: defaultBeatTypes(4),
+        beatSubdivisions: {},
+        barRepeats: {},
+        loopBlocks: [],
+        barClockMode: "stopwatch",
+        barTimerDuration: 180,
+      };
+
       setVolume(0.5);
       setSampleVolume(0.8);
+      sampleVolumeRef.current = 0.8;
       setBackgroundPlay(false);
       setSoundSet("classic");
       setFlashMode("accent");
       flashModeRef.current = "accent";
       setHapticMode("all");
-      engineRef.current?.setHapticMode("all");
       setAudioOffsetMs(0);
       setTimerStopMode("end-of-cycle");
       setUsername("");
       setLoggingEnabled(false);
+      setRoomTrackingActive(false);
+      setTrackingRoomName(null);
+      setProgressInfo(null);
+      setNoteSamples({});
+      setNoteSampleNames({});
+      setNoteSampleSources({});
+      noteSamplesRef.current = {};
+      noteSampleNamesRef.current = {};
+      noteSampleSourcesRef.current = {};
+      loadedPracticeNoteRef.current = null;
+
+      if (engine) {
+        engine.setBpm(120);
+        engine.setBeatsPerMeasure(4);
+        engine.setHapticMode("all");
+        engine.setAudioOffsetMs(0);
+        engine.setBeatTypes(defaultBeatTypes(4));
+        engine.setAllBeatSubdivisions({});
+        engine.setAllBarRepeats({});
+      }
+
       setThemeColor("gold");
       setShowOnboarding(true);
     } catch (e) {

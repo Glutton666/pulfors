@@ -1207,8 +1207,7 @@ export function SettingsModal({
                     style={styles.resetConfirmBtn}
                     onPress={() => {
                       setShowResetConfirm(false);
-                      onClose();
-                      setTimeout(() => onResetApp(), 100);
+                      onResetApp?.();
                     }}
                   >
                     <Text style={styles.resetConfirmBtnText}>초기화</Text>
