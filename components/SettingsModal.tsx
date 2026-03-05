@@ -86,16 +86,16 @@ interface SettingsModalProps {
 }
 
 const SOUND_SET_OPTIONS: { value: SoundSet; label: string; icon: string }[] = [
-  { value: "classic", label: "Classic", icon: "music-note" },
-  { value: "woodblock", label: "Woodblock", icon: "music-box" },
-  { value: "digital", label: "Digital", icon: "sine-wave" },
-  { value: "rimshot", label: "Rimshot", icon: "music-circle-outline" },
+  { value: "classic", label: "클래식", icon: "music-note" },
+  { value: "woodblock", label: "우드블럭", icon: "music-box" },
+  { value: "digital", label: "디지털", icon: "sine-wave" },
+  { value: "rimshot", label: "림샷", icon: "music-circle-outline" },
 ];
 
 const TRIPLE_OPTIONS: { value: "all" | "accent" | "off"; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "accent", label: "Accent" },
-  { value: "off", label: "Off" },
+  { value: "all", label: "전체" },
+  { value: "accent", label: "악센트" },
+  { value: "off", label: "끄기" },
 ];
 
 function TripleSelector({
@@ -204,7 +204,7 @@ export function SettingsModal({
     const granted = await requestLocationPermission();
     if (!granted) {
       setAddingRoom(false);
-      Alert.alert("Permission Needed", "Location permission is required to register a practice room.");
+      Alert.alert("권한 필요", "연습실을 등록하려면 위치 권한이 필요합니다.");
       return;
     }
     const room = await addPracticeRoom(newRoomName.trim());
@@ -213,7 +213,7 @@ export function SettingsModal({
       setNewRoomName("");
       setShowAddRoom(false);
     } else {
-      Alert.alert("Error", "Could not get your current location. Please try again.");
+      Alert.alert("오류", "현재 위치를 가져올 수 없습니다. 다시 시도해주세요.");
     }
     setAddingRoom(false);
   }, [newRoomName]);
@@ -557,7 +557,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="color-palette-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>Theme Color</Text>
+          <Text style={styles.sectionLabel}>테마 색상</Text>
         </View>
         <ScrollView
           horizontal
@@ -659,17 +659,17 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="image-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>Center Hub Images</Text>
+          <Text style={styles.sectionLabel}>중앙 허브 이미지</Text>
         </View>
         <Text style={styles.offsetHint}>
-          Add photos and assign them to beat types
+          사진을 추가하고 비트 타입에 할당하세요
         </Text>
 
         {hubImages.map((img) => {
           const beatTypeOptions: { key: BeatTypeKey; label: string; icon: any }[] = [
-            { key: "normal", label: "Normal", icon: "ellipse-outline" },
-            { key: "accent", label: "Accent", icon: "chevron-up-outline" },
-            { key: "strong", label: "Strong", icon: "chevron-up" },
+            { key: "normal", label: "노멀", icon: "ellipse-outline" },
+            { key: "accent", label: "악센트", icon: "chevron-up-outline" },
+            { key: "strong", label: "스트롱", icon: "chevron-up" },
           ];
           return (
             <View key={img.id} style={styles.hubImageCard}>
@@ -717,7 +717,7 @@ export function SettingsModal({
           >
             <Ionicons name="add-circle-outline" size={20} color={C.accent} />
             <Text style={[styles.addHubImageText, { color: C.accent }]}>
-              Add Image ({hubImages.length}/3)
+              이미지 추가 ({hubImages.length}/3)
             </Text>
           </Pressable>
         )}
@@ -728,7 +728,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="flash-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>Screen Flash</Text>
+          <Text style={styles.sectionLabel}>화면 플래시</Text>
         </View>
         <TripleSelector value={flashMode} onChange={onFlashModeChange} accentColor={C.accent} accentDimColor={C.accentDim} />
       </View>
@@ -738,7 +738,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="phone-portrait-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>Haptic Feedback</Text>
+          <Text style={styles.sectionLabel}>햅틱 피드백</Text>
         </View>
         <TripleSelector value={hapticMode} onChange={onHapticModeChange} accentColor={C.accent} accentDimColor={C.accentDim} />
       </View>
@@ -748,7 +748,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <MaterialCommunityIcons name="chart-line" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>Activity Logging</Text>
+          <Text style={styles.sectionLabel}>활동 로깅</Text>
           <Pressable onPress={() => setShowLoggingInfo(true)} hitSlop={8}>
             <Ionicons name="information-circle-outline" size={18} color={Colors.textTertiary} />
           </Pressable>
@@ -777,7 +777,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name={volumeIcon as any} size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>Volume</Text>
+          <Text style={styles.sectionLabel}>볼륨</Text>
           <Text style={[styles.sectionValue, { color: C.accent }]}>{pct}%</Text>
         </View>
         <View
@@ -809,7 +809,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name={sampleVolumeIcon as any} size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>Sample Volume</Text>
+          <Text style={styles.sectionLabel}>샘플 볼륨</Text>
           <Text style={[styles.sectionValue, { color: C.accent }]}>{sampleVolPct}%</Text>
         </View>
         <View
@@ -841,7 +841,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <MaterialCommunityIcons name="music-note-eighth" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>Sound Set</Text>
+          <Text style={styles.sectionLabel}>사운드 세트</Text>
         </View>
         <View style={styles.soundSetGrid}>
           {SOUND_SET_OPTIONS.map((opt) => {
@@ -885,7 +885,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="timer-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>Audio Offset</Text>
+          <Text style={styles.sectionLabel}>오디오 오프셋</Text>
           <Text style={[styles.sectionValue, { color: C.accent }]}>
             {audioOffsetMs > 0 ? "+" : ""}{audioOffsetMs}ms
           </Text>
@@ -942,7 +942,7 @@ export function SettingsModal({
           </Pressable>
         </View>
         <Text style={styles.offsetHint}>
-          - = audio earlier / + = audio later
+          - = 소리 빨라짐 / + = 소리 느려짐
         </Text>
       </View>
 
@@ -951,12 +951,12 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="stop-circle-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>Timer Stop</Text>
+          <Text style={styles.sectionLabel}>타이머 정지</Text>
         </View>
         <View style={styles.tripleRow}>
           {([
-            { value: "end-of-cycle" as const, label: "End of Cycle" },
-            { value: "immediate" as const, label: "Immediate" },
+            { value: "end-of-cycle" as const, label: "사이클 끝" },
+            { value: "immediate" as const, label: "즉시" },
           ]).map((opt) => {
             const active = timerStopMode === opt.value;
             return (
@@ -977,8 +977,8 @@ export function SettingsModal({
         </View>
         <Text style={styles.offsetHint}>
           {timerStopMode === "end-of-cycle"
-            ? "Stops after current measure ends"
-            : "Stops immediately when timer expires"}
+            ? "현재 마디가 끝나면 정지합니다"
+            : "타이머가 끝나면 즉시 정지합니다"}
         </Text>
       </View>
 
@@ -987,7 +987,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="play-circle-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>Background Play</Text>
+          <Text style={styles.sectionLabel}>백그라운드 재생</Text>
           <Switch
             value={backgroundPlay}
             onValueChange={onBackgroundPlayChange}

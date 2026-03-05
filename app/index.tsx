@@ -84,15 +84,15 @@ import {
 } from "@/lib/practice-room";
 
 function getTempoLabel(bpm: number): string {
-  if (bpm < 40) return "Grave";
-  if (bpm < 60) return "Largo";
-  if (bpm < 80) return "Adagio";
-  if (bpm < 100) return "Andante";
-  if (bpm < 120) return "Moderato";
-  if (bpm < 160) return "Allegro";
-  if (bpm < 200) return "Vivace";
-  if (bpm < 300) return "Presto";
-  return "Prestissimo";
+  if (bpm < 40) return "그라베";
+  if (bpm < 60) return "라르고";
+  if (bpm < 80) return "아다지오";
+  if (bpm < 100) return "안단테";
+  if (bpm < 120) return "모데라토";
+  if (bpm < 160) return "알레그로";
+  if (bpm < 200) return "비바체";
+  if (bpm < 300) return "프레스토";
+  return "프레스티시모";
 }
 
 function defaultBeatTypes(beats: number): BeatType[] {

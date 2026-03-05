@@ -537,7 +537,7 @@ export function StopwatchTimer({
                   color={mode === "stopwatch" ? C.accent : Colors.textTertiary}
                 />
                 <Text style={[styles.tabText, mode === "stopwatch" && styles.tabTextActive, mode === "stopwatch" && { color: C.accent }]}>
-                  STOPWATCH
+                  스톱워치
                 </Text>
               </Pressable>
               <Pressable
@@ -555,7 +555,7 @@ export function StopwatchTimer({
                   color={mode === "timer" ? C.accent : Colors.textTertiary}
                 />
                 <Text style={[styles.tabText, mode === "timer" && styles.tabTextActive, mode === "timer" && { color: C.accent }]}>
-                  TIMER
+                  타이머
                 </Text>
               </Pressable>
             </View>

@@ -48,10 +48,10 @@ const THEME_OPTIONS: { key: ThemeColor; label: string; color: string }[] = [
 const TOTAL_STEPS = 5;
 
 const DEMO_BEATS: { type: BeatType; label: string }[] = [
-  { type: "strong", label: "Strong" },
-  { type: "accent", label: "Accent" },
-  { type: "normal", label: "Normal" },
-  { type: "mute", label: "Mute" },
+  { type: "strong", label: "스트롱" },
+  { type: "accent", label: "악센트" },
+  { type: "normal", label: "노멀" },
+  { type: "mute", label: "뮤트" },
 ];
 
 const BEAT_COLORS: Record<BeatType, string> = {
@@ -487,14 +487,14 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       <View style={styles.modeList}>
         <ModeOption
           label="모든 비트"
-          description="Strong, Accent, Normal 비트에 모두 진동"
+          description="스트롱, 악센트, 노멀 비트에 모두 진동"
           value="all"
           current={hapticMode}
           onSelect={() => setHapticMode("all")}
         />
         <ModeOption
           label="악센트만"
-          description="Strong, Accent 비트에만 진동"
+          description="스트롱, 악센트 비트에만 진동"
           value="accent"
           current={hapticMode}
           onSelect={() => setHapticMode("accent")}
@@ -551,14 +551,14 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
         <View style={styles.modeList}>
           <ModeOption
             label="모든 비트"
-            description="Strong, Accent, Normal 비트에 모두 플래시"
+            description="스트롱, 악센트, 노멀 비트에 모두 플래시"
             value="all"
             current={flashMode}
             onSelect={() => setFlashMode("all")}
           />
           <ModeOption
             label="악센트만"
-            description="Strong, Accent 비트에만 플래시"
+            description="스트롱, 악센트 비트에만 플래시"
             value="accent"
             current={flashMode}
             onSelect={() => setFlashMode("accent")}
