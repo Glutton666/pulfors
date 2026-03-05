@@ -144,6 +144,7 @@ function SwipeableEntry({
     })
   ).current;
 
+  const isBeatMode = (item.mode || "bar") === "beat";
   const barCount = item.beatsPerMeasure;
   const secondsPerBeat = 60 / item.bpm;
   const onePlaySeconds = barCount * secondsPerBeat;
@@ -158,7 +159,9 @@ function SwipeableEntry({
   const clockMode = item.barClockMode || "stopwatch";
   const timerDur = item.barTimerDuration;
   let playModeText: string;
-  if (clockMode === "timer" && timerDur != null && timerDur > 0) {
+  if (isBeatMode) {
+    playModeText = "연속재생";
+  } else if (clockMode === "timer" && timerDur != null && timerDur > 0) {
     const tm = Math.floor(timerDur / 60);
     const ts = timerDur % 60;
     playModeText = tm > 0 ? `${tm}:${String(ts).padStart(2, "0")}` : `${ts}초`;
@@ -244,6 +247,9 @@ function SwipeableEntry({
           ) : null}
 
           <View style={styles.entryDetails}>
+            <View style={[styles.modeBadge, { backgroundColor: isBeatMode ? "#3B82F6" : accentColor }]}>
+              <Text style={styles.modeBadgeText}>{isBeatMode ? "Beat" : "Bar"}</Text>
+            </View>
             <View style={styles.detailChip}>
               <Text style={[styles.detailValue, { color: accentColor }]}>
                 {item.bpm}
@@ -254,7 +260,7 @@ function SwipeableEntry({
               <Text style={[styles.detailValue, { color: accentColor }]}>
                 {barCount}
               </Text>
-              <Text style={styles.detailUnit}>Bar</Text>
+              <Text style={styles.detailUnit}>{isBeatMode ? "Beat" : "Bar"}</Text>
             </View>
             <View style={styles.detailChip}>
               <Ionicons
@@ -386,6 +392,7 @@ export function PracticeBookModal({
       label: entry.label,
       createdAt: entry.createdAt,
       createdBy: entry.createdBy,
+      mode: entry.mode,
       bpm: entry.bpm,
       beatsPerMeasure: entry.beatsPerMeasure,
       beatTypes: entry.beatTypes,
@@ -516,7 +523,7 @@ export function PracticeBookModal({
               >
                 <Ionicons name="add-circle-outline" size={18} color={C.accent} />
                 <Text style={[styles.saveButtonText, { color: C.accent }]}>
-                  현재 바 설정 저장
+                  {currentConfig?.mode === "beat" ? "현재 비트 설정 저장" : "현재 바 설정 저장"}
                 </Text>
               </Pressable>
             )}
@@ -532,7 +539,7 @@ export function PracticeBookModal({
             />
             <Text style={styles.emptyText}>저장된 연습 설정이 없습니다</Text>
             <Text style={styles.emptySubtext}>
-              바 모드에서 설정을 구성한 후 저장하세요
+              비트 또는 바 모드에서 설정을 구성한 후 저장하세요
             </Text>
           </View>
         ) : (
@@ -753,6 +760,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     flexWrap: "wrap",
+  },
+  modeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  modeBadgeText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 10,
+    color: "#fff",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   detailChip: {
     flexDirection: "row",

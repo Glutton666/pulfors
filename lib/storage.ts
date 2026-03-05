@@ -82,6 +82,7 @@ export interface PracticeEntry {
   label: string;
   createdAt: number;
   createdBy?: string;
+  mode?: "beat" | "bar";
   bpm: number;
   beatsPerMeasure: number;
   beatTypes: BeatType[];

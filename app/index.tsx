@@ -1751,18 +1751,32 @@ export default function MetronomeScreen() {
   }, [beatSubdivisions]);
 
   const currentBarConfig = useMemo(() => {
-    if (!barMode) return null;
+    if (barMode) {
+      return {
+        mode: "bar" as const,
+        bpm,
+        beatsPerMeasure,
+        beatTypes: [...beatTypes],
+        beatSubdivisions: { ...beatSubdivisions },
+        barRepeats: { ...barRepeats },
+        loopBlocks: [...loopBlocks],
+        barLoopMode: barLoopMode as "loop" | "once",
+        subdivisionPattern: [...subdivisionPattern],
+        barClockMode: barConfigRef.current.barClockMode,
+        barTimerDuration: barConfigRef.current.barTimerDuration,
+      };
+    }
+    const dc = dialConfigRef.current;
     return {
+      mode: "beat" as const,
       bpm,
-      beatsPerMeasure,
-      beatTypes: [...beatTypes],
-      beatSubdivisions: { ...beatSubdivisions },
-      barRepeats: { ...barRepeats },
-      loopBlocks: [...loopBlocks],
-      barLoopMode: barLoopMode as "loop" | "once",
+      beatsPerMeasure: dc.beatsPerMeasure,
+      beatTypes: [...dc.beatTypes],
+      beatSubdivisions: { ...dc.beatSubdivisions },
+      barRepeats: {} as Record<number, any>,
+      loopBlocks: [] as any[],
+      barLoopMode: "loop" as const,
       subdivisionPattern: [...subdivisionPattern],
-      barClockMode: barConfigRef.current.barClockMode,
-      barTimerDuration: barConfigRef.current.barTimerDuration,
     };
   }, [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, subdivisionPattern]);
 
@@ -1780,47 +1794,83 @@ export default function MetronomeScreen() {
       setProgressInfo(null);
     }
 
-    if (!barMode) {
+    const entryMode = entry.mode || "bar";
+    const isBeatEntry = entryMode === "beat";
+
+    if (isBeatEntry) {
+      if (barMode) {
+        barConfigRef.current = {
+          beatsPerMeasure,
+          beatTypes: [...beatTypes],
+          beatSubdivisions: { ...beatSubdivisions },
+          barRepeats: { ...barRepeats },
+          loopBlocks: [...loopBlocks],
+          barClockMode: barConfigRef.current.barClockMode,
+          barTimerDuration: barConfigRef.current.barTimerDuration,
+        };
+        setBarMode(false);
+      }
+
       dialConfigRef.current = {
-        beatsPerMeasure,
-        beatTypes: [...beatTypes],
-        beatSubdivisions: { ...beatSubdivisions },
+        beatsPerMeasure: entry.beatsPerMeasure,
+        beatTypes: [...entry.beatTypes],
+        beatSubdivisions: { ...entry.beatSubdivisions },
       };
-      setBarMode(true);
+
+      setBpm(entry.bpm);
+      setBeatsPerMeasure(entry.beatsPerMeasure);
+      setBeatTypes([...entry.beatTypes]);
+      setBeatSubdivisions({ ...entry.beatSubdivisions });
+      if (entry.subdivisionPattern) setSubdivisionPattern([...entry.subdivisionPattern]);
+
+      engine.setBpm(entry.bpm);
+      engine.setBeatsPerMeasure(entry.beatsPerMeasure);
+      engine.setBeatTypes([...entry.beatTypes]);
+      engine.setAllBeatSubdivisions(entry.beatSubdivisions);
+    } else {
+      if (!barMode) {
+        dialConfigRef.current = {
+          beatsPerMeasure,
+          beatTypes: [...beatTypes],
+          beatSubdivisions: { ...beatSubdivisions },
+        };
+        setBarMode(true);
+      }
+
+      setBpm(entry.bpm);
+      setBeatsPerMeasure(entry.beatsPerMeasure);
+      setBeatTypes([...entry.beatTypes]);
+      setBeatSubdivisions({ ...entry.beatSubdivisions });
+      setBarRepeats({ ...entry.barRepeats });
+      const entryBlocks = (entry as any).loopBlocks || [];
+      setLoopBlocks([...entryBlocks]);
+      setBarLoopMode(entry.barLoopMode);
+      setSubdivisionPattern([...entry.subdivisionPattern]);
+
+      engine.setBpm(entry.bpm);
+      engine.setBeatsPerMeasure(entry.beatsPerMeasure);
+      engine.setBeatTypes([...entry.beatTypes]);
+      engine.setAllBeatSubdivisions(entry.beatSubdivisions);
+      engine.setLoopBlocks(entryBlocks);
+      engine.setAllBarRepeats(entry.barRepeats || {});
+      const bpmOverridesEntry: Record<number, number> = {};
+      for (const [k, v] of Object.entries(entry.barRepeats || {})) {
+        if (v.bpm) bpmOverridesEntry[Number(k)] = v.bpm;
+      }
+      engine.setAllBarBpmOverrides(bpmOverridesEntry);
+      barConfigRef.current = {
+        beatsPerMeasure: entry.beatsPerMeasure,
+        beatTypes: [...entry.beatTypes],
+        beatSubdivisions: { ...entry.beatSubdivisions },
+        barRepeats: { ...entry.barRepeats },
+        loopBlocks: [...entryBlocks],
+        barClockMode: entry.barClockMode || "stopwatch",
+        barTimerDuration: entry.barTimerDuration ?? 180,
+      };
     }
 
-    setBpm(entry.bpm);
-    setBeatsPerMeasure(entry.beatsPerMeasure);
-    setBeatTypes([...entry.beatTypes]);
-    setBeatSubdivisions({ ...entry.beatSubdivisions });
-    setBarRepeats({ ...entry.barRepeats });
-    const entryBlocks = (entry as any).loopBlocks || [];
-    setLoopBlocks([...entryBlocks]);
-    setBarLoopMode(entry.barLoopMode);
-    setSubdivisionPattern([...entry.subdivisionPattern]);
-
-    engine.setBpm(entry.bpm);
-    engine.setBeatsPerMeasure(entry.beatsPerMeasure);
-    engine.setBeatTypes([...entry.beatTypes]);
-    engine.setAllBeatSubdivisions(entry.beatSubdivisions);
-    engine.setLoopBlocks(entryBlocks);
-    engine.setAllBarRepeats(entry.barRepeats || {});
-    const bpmOverridesEntry: Record<number, number> = {};
-    for (const [k, v] of Object.entries(entry.barRepeats || {})) {
-      if (v.bpm) bpmOverridesEntry[Number(k)] = v.bpm;
-    }
-    engine.setAllBarBpmOverrides(bpmOverridesEntry);
-    barConfigRef.current = {
-      beatsPerMeasure: entry.beatsPerMeasure,
-      beatTypes: [...entry.beatTypes],
-      beatSubdivisions: { ...entry.beatSubdivisions },
-      barRepeats: { ...entry.barRepeats },
-      loopBlocks: [...entryBlocks],
-      barClockMode: entry.barClockMode || "stopwatch",
-      barTimerDuration: entry.barTimerDuration ?? 180,
-    };
     loadedPracticeNoteRef.current = { id: entry.id, label: entry.label };
-  }, [isPlaying, barMode, beatsPerMeasure, beatTypes, beatSubdivisions]);
+  }, [isPlaying, barMode, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks]);
 
   const handleDeepLinkImport = useCallback((url: string) => {
     try {
