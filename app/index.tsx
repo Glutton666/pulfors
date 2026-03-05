@@ -31,6 +31,7 @@ import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Colors from "@/constants/colors";
 import type { ThemeColor } from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -56,6 +57,8 @@ import { TunerModal } from "@/components/TunerModal";
 import { SignalGeneratorModal } from "@/components/SignalGeneratorModal";
 import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
+import { OnboardingModal } from "@/components/OnboardingModal";
+import type { OnboardingResult } from "@/components/OnboardingModal";
 import type { PracticeEntry } from "@/lib/storage";
 import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
 import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource } from "@/lib/note-samples";
@@ -172,6 +175,7 @@ export default function MetronomeScreen() {
   const [trackingRoomName, setTrackingRoomName] = useState<string | null>(null);
   const [completedGoalPopups, setCompletedGoalPopups] = useState<Goal[]>([]);
   const dismissedGoalIdsRef = useRef<Set<string>>(new Set());
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const [noteSamples, setNoteSamples] = useState<NoteSampleMap>({});
   const noteSamplesRef = useRef<NoteSampleMap>({});
@@ -442,6 +446,19 @@ export default function MetronomeScreen() {
     });
 
     loadLoggingEnabled().then((val) => setLoggingEnabled(val));
+    AsyncStorage.getItem("metronome_onboarding_done").then(async (val) => {
+      if (!val) {
+        const [existingSettings, existingTheme] = await Promise.all([
+          AsyncStorage.getItem("metronome_settings"),
+          AsyncStorage.getItem("metronome_theme_color"),
+        ]);
+        if (existingSettings || existingTheme) {
+          AsyncStorage.setItem("metronome_onboarding_done", "1");
+        } else {
+          setShowOnboarding(true);
+        }
+      }
+    });
     setupNotificationControls();
 
     return () => {
@@ -956,6 +973,37 @@ export default function MetronomeScreen() {
     },
     [persistSettings]
   );
+
+  const handleOnboardingComplete = useCallback(async (result: OnboardingResult) => {
+    setShowOnboarding(false);
+    AsyncStorage.setItem("metronome_onboarding_done", "1");
+
+    setThemeColor(result.themeColor);
+    persistSettings({ flashMode: result.flashMode, hapticMode: result.hapticMode });
+    setFlashMode(result.flashMode);
+    flashModeRef.current = result.flashMode;
+    setHapticMode(result.hapticMode);
+    engineRef.current?.setHapticMode(result.hapticMode);
+    setLoggingEnabled(result.loggingEnabled);
+    saveLoggingEnabled(result.loggingEnabled);
+
+    if (result.username) {
+      setUsername(result.username);
+      persistSettings({ username: result.username });
+    }
+
+    if (result.practiceRoomName) {
+      try {
+        const { requestLocationPermission, addPracticeRoom } = await import("@/lib/practice-room");
+        const granted = await requestLocationPermission();
+        if (granted) {
+          await addPracticeRoom(result.practiceRoomName);
+        }
+      } catch (e) {
+        console.warn("Failed to register practice room:", e);
+      }
+    }
+  }, [setThemeColor, persistSettings]);
 
   const updateBpm = useCallback(
     (newBpm: number) => {
@@ -2122,6 +2170,11 @@ export default function MetronomeScreen() {
         onSetGoal={handleSetPracticeNoteGoal}
         currentConfig={currentBarConfig}
         username={username}
+      />
+
+      <OnboardingModal
+        visible={showOnboarding}
+        onComplete={handleOnboardingComplete}
       />
 
       <WorkUpOverviewModal
