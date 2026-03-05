@@ -391,6 +391,12 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           </Text>
         </View>
         <View style={styles.infoRow}>
+          <Ionicons name="share-social-outline" size={18} color={accentColor} />
+          <Text style={styles.infoText}>
+            연습 기록을 이미지로 캡처하여 공유할 수 있습니다
+          </Text>
+        </View>
+        <View style={styles.infoRow}>
           <Ionicons name="shield-checkmark-outline" size={18} color={accentColor} />
           <Text style={styles.infoText}>
             모든 데이터는 기기에만 저장되며 외부로 전송되지 않습니다

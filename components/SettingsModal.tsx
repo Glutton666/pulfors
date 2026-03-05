@@ -53,7 +53,7 @@ const HUE_COLORS = [
   "#0000FF", "#8000FF", "#FF00FF", "#FF0080", "#FF0000",
 ];
 
-type SettingsTab = "theme" | "sound";
+type SettingsTab = "theme" | "sound" | "profile";
 
 interface SettingsModalProps {
   visible: boolean;
@@ -188,6 +188,7 @@ export function SettingsModal({
   const [newRoomName, setNewRoomName] = useState("");
   const [addingRoom, setAddingRoom] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showLoggingInfo, setShowLoggingInfo] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -748,16 +749,24 @@ export function SettingsModal({
         <View style={styles.sectionHeader}>
           <MaterialCommunityIcons name="chart-line" size={18} color={C.accent} />
           <Text style={styles.sectionLabel}>Activity Logging</Text>
+          <Pressable onPress={() => setShowLoggingInfo(true)} hitSlop={8}>
+            <Ionicons name="information-circle-outline" size={18} color={Colors.textTertiary} />
+          </Pressable>
           <Switch
             value={loggingEnabled}
-            onValueChange={onLoggingEnabledChange}
+            onValueChange={(val) => {
+              if (val && !loggingEnabled) {
+                setShowLoggingInfo(true);
+              }
+              onLoggingEnabledChange(val);
+            }}
             trackColor={{ false: Colors.surfaceLight, true: C.accentMuted }}
             thumbColor={loggingEnabled ? C.accent : Colors.textSecondary}
             style={{ transform: [{ scale: 0.85 }] }}
           />
         </View>
         <Text style={styles.offsetHint}>
-          Track practice sessions and feature usage
+          연습 기록을 분석하여 실력 향상을 도와줍니다
         </Text>
       </View>
     </>
@@ -991,6 +1000,181 @@ export function SettingsModal({
     </>
   );
 
+  const renderProfileTab = () => (
+    <>
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="person-outline" size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>닉네임</Text>
+        </View>
+        <TextInput
+          style={[styles.usernameInput, { borderColor: C.accentMuted }]}
+          value={localUsername}
+          onChangeText={setLocalUsername}
+          onBlur={() => onUsernameChange(localUsername)}
+          onSubmitEditing={() => onUsernameChange(localUsername)}
+          placeholder="이름을 입력하세요"
+          placeholderTextColor={Colors.textTertiary}
+          maxLength={30}
+          testID="settings-username"
+        />
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="location" size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>연습실</Text>
+        </View>
+
+        {roomTrackingActive && trackingRoomName && (
+          <View style={[styles.trackingBanner, { borderColor: Colors.success }]}>
+            <View style={styles.trackingDot} />
+            <Text style={[styles.trackingText, { color: Colors.success }]}>
+              {trackingRoomName}에서 추적 중
+            </Text>
+            <Pressable style={[styles.trackingStopBtn, { backgroundColor: Colors.danger }]} onPress={onStopRoomTracking}>
+              <Text style={styles.trackingStopText}>중지</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {practiceRooms.length === 0 && !showAddRoom && (
+          <Text style={styles.roomEmptyHint}>
+            등록된 연습실이 없습니다
+          </Text>
+        )}
+
+        {practiceRooms.map((room) => {
+          const isTracking = roomTrackingActive && trackingRoomName === room.name;
+          return (
+            <View key={room.id} style={styles.roomRow}>
+              <View style={styles.roomInfo}>
+                <Ionicons name="location-outline" size={14} color={C.accent} />
+                <Text style={styles.roomName} numberOfLines={1}>{room.name}</Text>
+              </View>
+              <View style={styles.roomActions}>
+                {!isTracking && !roomTrackingActive && (
+                  <Pressable
+                    style={[styles.roomStartBtn, { backgroundColor: C.accentDim }]}
+                    onPress={() => onStartRoomTracking({ id: room.id, name: room.name })}
+                  >
+                    <Ionicons name="play" size={12} color={C.accent} />
+                  </Pressable>
+                )}
+                <Pressable onPress={() => handleDeleteRoom(room.id)} hitSlop={8}>
+                  <Ionicons name="trash-outline" size={14} color={Colors.textTertiary} />
+                </Pressable>
+              </View>
+            </View>
+          );
+        })}
+
+        {showAddRoom ? (
+          <View style={[styles.addRoomForm, { borderColor: C.accentDim }]}>
+            <Text style={styles.addRoomHint}>현재 위치를 연습실로 등록합니다</Text>
+            <View style={styles.addRoomRow}>
+              <TextInput
+                style={[styles.usernameInput, { borderColor: C.accentMuted, flex: 1 }]}
+                value={newRoomName}
+                onChangeText={setNewRoomName}
+                placeholder="연습실 이름"
+                placeholderTextColor={Colors.textTertiary}
+                maxLength={30}
+              />
+              <Pressable style={[styles.addRoomSaveBtn, { backgroundColor: C.accent }]} onPress={handleAddRoom} disabled={addingRoom}>
+                {addingRoom ? (
+                  <ActivityIndicator size="small" color={Colors.surface} />
+                ) : (
+                  <Ionicons name="checkmark" size={16} color={Colors.surface} />
+                )}
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <Pressable
+            style={[styles.addRoomBtn, { borderColor: C.accentDim }]}
+            onPress={() => setShowAddRoom(true)}
+          >
+            <Ionicons name="add" size={16} color={C.accent} />
+            <Text style={[styles.addRoomBtnText, { color: C.accent }]}>연습실 추가</Text>
+          </Pressable>
+        )}
+      </View>
+
+      <View style={styles.divider} />
+
+      {onResetApp && !showResetConfirm && (
+        <Pressable
+          style={styles.resetButton}
+          onPress={() => setShowResetConfirm(true)}
+        >
+          <Ionicons name="refresh-circle-outline" size={18} color="#F85149" />
+          <Text style={styles.resetButtonText}>앱 초기화 및 재시작</Text>
+        </Pressable>
+      )}
+      {onResetApp && showResetConfirm && (
+        <View style={styles.resetConfirmBox}>
+          <Text style={styles.resetConfirmText}>
+            모든 설정과 데이터가 삭제됩니다.{"\n"}계속하시겠습니까?
+          </Text>
+          <View style={styles.resetConfirmButtons}>
+            <Pressable
+              style={styles.resetCancelBtn}
+              onPress={() => setShowResetConfirm(false)}
+            >
+              <Text style={styles.resetCancelText}>취소</Text>
+            </Pressable>
+            <Pressable
+              style={styles.resetConfirmBtn}
+              onPress={() => {
+                setShowResetConfirm(false);
+                onResetApp?.();
+              }}
+            >
+              <Text style={styles.resetConfirmBtnText}>초기화</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+    </>
+  );
+
+  const TAB_ITEMS: { key: SettingsTab; icon: string; label: string }[] = [
+    { key: "theme", icon: "color-palette-outline", label: "테마" },
+    { key: "sound", icon: "musical-notes-outline", label: "사운드" },
+    { key: "profile", icon: "person-circle-outline", label: "프로필" },
+  ];
+
+  const switchTab = useCallback((tab: SettingsTab) => {
+    if (activeTab === tab) return;
+    if (Platform.OS !== "web") Haptics.selectionAsync();
+    const tabs: SettingsTab[] = ["theme", "sound", "profile"];
+    const currentIdx = tabs.indexOf(activeTab);
+    const nextIdx = tabs.indexOf(tab);
+    const slideDir = nextIdx > currentIdx ? 1 : -1;
+    Animated.parallel([
+      Animated.timing(tabFadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
+      Animated.timing(tabSlideAnim, { toValue: slideDir * 30, duration: 100, useNativeDriver: true }),
+    ]).start(() => {
+      setActiveTab(tab);
+      tabSlideAnim.setValue(-slideDir * 30);
+      Animated.parallel([
+        Animated.timing(tabFadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.timing(tabSlideAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
+      ]).start();
+    });
+  }, [activeTab, tabFadeAnim, tabSlideAnim]);
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "theme": return renderThemeTab();
+      case "sound": return renderSoundTab();
+      case "profile": return renderProfileTab();
+    }
+  };
+
   return (
     <Modal
       visible={visible}
@@ -1022,202 +1206,90 @@ export function SettingsModal({
               </Pressable>
             </View>
 
-            <View style={styles.usernameSection}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="person-outline" size={18} color={C.accent} />
-                <Text style={styles.sectionLabel}>Username</Text>
-              </View>
-              <TextInput
-                style={[styles.usernameInput, { borderColor: C.accentMuted }]}
-                value={localUsername}
-                onChangeText={setLocalUsername}
-                onBlur={() => onUsernameChange(localUsername)}
-                onSubmitEditing={() => onUsernameChange(localUsername)}
-                placeholder="Enter your name"
-                placeholderTextColor={Colors.textTertiary}
-                maxLength={30}
-                testID="settings-username"
-              />
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.usernameSection}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="location" size={18} color={C.accent} />
-                <Text style={styles.sectionLabel}>Practice Rooms</Text>
-              </View>
-
-              {roomTrackingActive && trackingRoomName && (
-                <View style={[styles.trackingBanner, { borderColor: Colors.success }]}>
-                  <View style={styles.trackingDot} />
-                  <Text style={[styles.trackingText, { color: Colors.success }]}>
-                    Tracking at {trackingRoomName}
-                  </Text>
-                  <Pressable style={[styles.trackingStopBtn, { backgroundColor: Colors.danger }]} onPress={onStopRoomTracking}>
-                    <Text style={styles.trackingStopText}>Stop</Text>
-                  </Pressable>
-                </View>
-              )}
-
-              {practiceRooms.map((room) => {
-                const isTracking = roomTrackingActive && trackingRoomName === room.name;
-                return (
-                  <View key={room.id} style={styles.roomRow}>
-                    <View style={styles.roomInfo}>
-                      <Ionicons name="location-outline" size={14} color={C.accent} />
-                      <Text style={styles.roomName} numberOfLines={1}>{room.name}</Text>
-                    </View>
-                    <View style={styles.roomActions}>
-                      {!isTracking && !roomTrackingActive && (
-                        <Pressable
-                          style={[styles.roomStartBtn, { backgroundColor: C.accentDim }]}
-                          onPress={() => onStartRoomTracking({ id: room.id, name: room.name })}
-                        >
-                          <Ionicons name="play" size={12} color={C.accent} />
-                        </Pressable>
-                      )}
-                      <Pressable onPress={() => handleDeleteRoom(room.id)} hitSlop={8}>
-                        <Ionicons name="trash-outline" size={14} color={Colors.textTertiary} />
-                      </Pressable>
-                    </View>
-                  </View>
-                );
-              })}
-
-              {showAddRoom ? (
-                <View style={[styles.addRoomForm, { borderColor: C.accentDim }]}>
-                  <Text style={styles.addRoomHint}>Register your current location as a practice room</Text>
-                  <View style={styles.addRoomRow}>
-                    <TextInput
-                      style={[styles.usernameInput, { borderColor: C.accentMuted, flex: 1 }]}
-                      value={newRoomName}
-                      onChangeText={setNewRoomName}
-                      placeholder="Room name"
-                      placeholderTextColor={Colors.textTertiary}
-                      maxLength={30}
-                    />
-                    <Pressable style={[styles.addRoomSaveBtn, { backgroundColor: C.accent }]} onPress={handleAddRoom} disabled={addingRoom}>
-                      {addingRoom ? (
-                        <ActivityIndicator size="small" color={Colors.surface} />
-                      ) : (
-                        <Ionicons name="checkmark" size={16} color={Colors.surface} />
-                      )}
-                    </Pressable>
-                  </View>
-                </View>
-              ) : (
-                <Pressable
-                  style={[styles.addRoomBtn, { borderColor: C.accentDim }]}
-                  onPress={() => setShowAddRoom(true)}
-                >
-                  <Ionicons name="add" size={16} color={C.accent} />
-                  <Text style={[styles.addRoomBtnText, { color: C.accent }]}>Add Practice Room</Text>
-                </Pressable>
-              )}
-            </View>
-
-            <View style={styles.divider} />
-
             <View style={styles.tabBar}>
-              <Pressable
-                style={[styles.tabBtn, activeTab === "theme" && [styles.tabBtnActive, { borderColor: C.accent }]]}
-                onPress={() => {
-                  if (activeTab === "theme") return;
-                  if (Platform.OS !== "web") Haptics.selectionAsync();
-                  const slideDir = -1;
-                  Animated.parallel([
-                    Animated.timing(tabFadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
-                    Animated.timing(tabSlideAnim, { toValue: slideDir * 30, duration: 100, useNativeDriver: true }),
-                  ]).start(() => {
-                    setActiveTab("theme");
-                    tabSlideAnim.setValue(-slideDir * 30);
-                    Animated.parallel([
-                      Animated.timing(tabFadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
-                      Animated.timing(tabSlideAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
-                    ]).start();
-                  });
-                }}
-              >
-                <Ionicons
-                  name="color-palette-outline"
-                  size={16}
-                  color={activeTab === "theme" ? C.accent : Colors.textSecondary}
-                />
-                <Text style={[styles.tabBtnText, activeTab === "theme" && { color: C.accent }]}>Theme</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.tabBtn, activeTab === "sound" && [styles.tabBtnActive, { borderColor: C.accent }]]}
-                onPress={() => {
-                  if (activeTab === "sound") return;
-                  if (Platform.OS !== "web") Haptics.selectionAsync();
-                  const slideDir = 1;
-                  Animated.parallel([
-                    Animated.timing(tabFadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
-                    Animated.timing(tabSlideAnim, { toValue: slideDir * 30, duration: 100, useNativeDriver: true }),
-                  ]).start(() => {
-                    setActiveTab("sound");
-                    tabSlideAnim.setValue(-slideDir * 30);
-                    Animated.parallel([
-                      Animated.timing(tabFadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
-                      Animated.timing(tabSlideAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
-                    ]).start();
-                  });
-                }}
-              >
-                <Ionicons
-                  name="musical-notes-outline"
-                  size={16}
-                  color={activeTab === "sound" ? C.accent : Colors.textSecondary}
-                />
-                <Text style={[styles.tabBtnText, activeTab === "sound" && { color: C.accent }]}>Sound</Text>
-              </Pressable>
+              {TAB_ITEMS.map((tab) => (
+                <Pressable
+                  key={tab.key}
+                  style={[styles.tabBtn, activeTab === tab.key && [styles.tabBtnActive, { borderColor: C.accent }]]}
+                  onPress={() => switchTab(tab.key)}
+                >
+                  <Ionicons
+                    name={tab.icon as any}
+                    size={16}
+                    color={activeTab === tab.key ? C.accent : Colors.textSecondary}
+                  />
+                  <Text style={[styles.tabBtnText, activeTab === tab.key && { color: C.accent }]}>{tab.label}</Text>
+                </Pressable>
+              ))}
             </View>
 
             <View style={styles.divider} />
 
             <Animated.View style={{ opacity: tabFadeAnim, transform: [{ translateX: tabSlideAnim }] }}>
-              {activeTab === "theme" ? renderThemeTab() : renderSoundTab()}
+              {renderTabContent()}
             </Animated.View>
-
-            <View style={styles.divider} />
-
-            {onResetApp && !showResetConfirm && (
-              <Pressable
-                style={styles.resetButton}
-                onPress={() => setShowResetConfirm(true)}
-              >
-                <Ionicons name="refresh-circle-outline" size={18} color="#F85149" />
-                <Text style={styles.resetButtonText}>앱 초기화 및 재시작</Text>
-              </Pressable>
-            )}
-            {onResetApp && showResetConfirm && (
-              <View style={styles.resetConfirmBox}>
-                <Text style={styles.resetConfirmText}>
-                  모든 설정과 데이터가 삭제됩니다.{"\n"}계속하시겠습니까?
-                </Text>
-                <View style={styles.resetConfirmButtons}>
-                  <Pressable
-                    style={styles.resetCancelBtn}
-                    onPress={() => setShowResetConfirm(false)}
-                  >
-                    <Text style={styles.resetCancelText}>취소</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.resetConfirmBtn}
-                    onPress={() => {
-                      setShowResetConfirm(false);
-                      onResetApp?.();
-                    }}
-                  >
-                    <Text style={styles.resetConfirmBtnText}>초기화</Text>
-                  </Pressable>
-                </View>
-              </View>
-            )}
           </Pressable>
         </ScrollView>
       </Pressable>
+
+      <Modal
+        visible={showLoggingInfo}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowLoggingInfo(false)}
+        statusBarTranslucent
+      >
+        <Pressable style={styles.overlay} onPress={() => setShowLoggingInfo(false)}>
+          <View style={styles.loggingInfoContainer}>
+            <Pressable style={styles.loggingInfoSheet} onPress={(e) => e.stopPropagation()}>
+              <View style={styles.loggingInfoHeader}>
+                <Ionicons name="analytics-outline" size={28} color={C.accent} />
+                <Text style={styles.loggingInfoTitle}>사용 로그 분석</Text>
+              </View>
+              <Text style={styles.loggingInfoSubtitle}>연습 기록을 분석하여 실력 향상을 도와드립니다</Text>
+
+              <View style={styles.loggingInfoCard}>
+                <View style={styles.loggingInfoRow}>
+                  <Ionicons name="time-outline" size={16} color={C.accent} />
+                  <Text style={styles.loggingInfoText}>매일 연습 시간을 자동으로 기록합니다</Text>
+                </View>
+                <View style={styles.loggingInfoRow}>
+                  <Ionicons name="musical-notes-outline" size={16} color={C.accent} />
+                  <Text style={styles.loggingInfoText}>비트/바 모드 사용 비율을 분석합니다</Text>
+                </View>
+                <View style={styles.loggingInfoRow}>
+                  <Ionicons name="location-outline" size={16} color={C.accent} />
+                  <Text style={styles.loggingInfoText}>연습실별 연습 시간을 추적합니다</Text>
+                </View>
+                <View style={styles.loggingInfoRow}>
+                  <Ionicons name="bar-chart-outline" size={16} color={C.accent} />
+                  <Text style={styles.loggingInfoText}>Work Up에서 주간·일간 통계를 확인합니다</Text>
+                </View>
+                <View style={styles.loggingInfoRow}>
+                  <Ionicons name="trophy-outline" size={16} color={C.accent} />
+                  <Text style={styles.loggingInfoText}>목표 설정 및 달성률을 추적합니다</Text>
+                </View>
+                <View style={styles.loggingInfoRow}>
+                  <Ionicons name="share-social-outline" size={16} color={C.accent} />
+                  <Text style={styles.loggingInfoText}>연습 기록을 이미지로 캡처하여 공유합니다</Text>
+                </View>
+              </View>
+
+              <View style={styles.loggingInfoFooter}>
+                <Ionicons name="shield-checkmark-outline" size={14} color={Colors.textTertiary} />
+                <Text style={styles.loggingInfoFooterText}>모든 데이터는 기기에만 저장됩니다</Text>
+              </View>
+
+              <Pressable
+                style={[styles.loggingInfoCloseBtn, { backgroundColor: C.accent }]}
+                onPress={() => setShowLoggingInfo(false)}
+              >
+                <Text style={styles.loggingInfoCloseBtnText}>확인</Text>
+              </Pressable>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </Modal>
   );
 }
@@ -1765,5 +1837,78 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 13,
     color: "#fff",
+  },
+  loggingInfoContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  loggingInfoSheet: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 24,
+    width: "100%",
+    maxWidth: 360,
+  },
+  loggingInfoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 6,
+  },
+  loggingInfoTitle: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 18,
+    color: Colors.text,
+  },
+  loggingInfoSubtitle: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginBottom: 16,
+  },
+  loggingInfoCard: {
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: 12,
+    padding: 14,
+    gap: 12,
+  },
+  loggingInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  loggingInfoText: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 13,
+    color: Colors.text,
+    flex: 1,
+  },
+  loggingInfoFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 14,
+    marginBottom: 16,
+  },
+  loggingInfoFooterText: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 11,
+    color: Colors.textTertiary,
+  },
+  loggingInfoCloseBtn: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  loggingInfoCloseBtnText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 14,
+    color: Colors.background,
   },
 });
