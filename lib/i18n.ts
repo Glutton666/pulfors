@@ -1,0 +1,271 @@
+export type Language = "ko" | "en";
+
+const translations = {
+  settings: {
+    title: { ko: "설정", en: "Settings" },
+    themeTab: { ko: "테마", en: "Theme" },
+    soundTab: { ko: "사운드", en: "Sound" },
+    profileTab: { ko: "프로필", en: "Profile" },
+    themeColor: { ko: "테마 색상", en: "Theme Color" },
+    hubImages: { ko: "중앙 허브 이미지", en: "Center Hub Images" },
+    hubImagesHint: { ko: "사진을 추가하고 비트 타입에 할당하세요", en: "Add photos and assign them to beat types" },
+    addImage: { ko: "이미지 추가", en: "Add Image" },
+    screenFlash: { ko: "화면 플래시", en: "Screen Flash" },
+    hapticFeedback: { ko: "햅틱 피드백", en: "Haptic Feedback" },
+    activityLogging: { ko: "활동 로깅", en: "Activity Logging" },
+    loggingHint: { ko: "연습 기록을 분석하여 실력 향상을 도와줍니다", en: "Analyze practice records to help improve your skills" },
+    volume: { ko: "볼륨", en: "Volume" },
+    sampleVolume: { ko: "샘플 볼륨", en: "Sample Volume" },
+    soundSet: { ko: "사운드 세트", en: "Sound Set" },
+    audioOffset: { ko: "오디오 오프셋", en: "Audio Offset" },
+    audioOffsetHint: { ko: "- = 소리 빨라짐 / + = 소리 느려짐", en: "- = sound earlier / + = sound later" },
+    timerStop: { ko: "타이머 정지", en: "Timer Stop" },
+    timerStopEndCycle: { ko: "사이클 끝", en: "End of Cycle" },
+    timerStopImmediate: { ko: "즉시", en: "Immediate" },
+    timerStopHintEndCycle: { ko: "현재 마디가 끝나면 정지합니다", en: "Stops at the end of the current measure" },
+    timerStopHintImmediate: { ko: "타이머가 끝나면 즉시 정지합니다", en: "Stops immediately when the timer ends" },
+    backgroundPlay: { ko: "백그라운드 재생", en: "Background Play" },
+    nickname: { ko: "닉네임", en: "Nickname" },
+    nicknamePlaceholder: { ko: "이름을 입력하세요", en: "Enter your name" },
+    practiceRoom: { ko: "연습실", en: "Practice Room" },
+    trackingAt: { ko: "에서 추적 중", en: " tracking" },
+    trackingStop: { ko: "중지", en: "Stop" },
+    noRooms: { ko: "등록된 연습실이 없습니다", en: "No practice rooms registered" },
+    addRoom: { ko: "연습실 추가", en: "Add Practice Room" },
+    addRoomHint: { ko: "현재 위치를 연습실로 등록합니다", en: "Register current location as practice room" },
+    roomNamePlaceholder: { ko: "연습실 이름", en: "Room name" },
+    resetApp: { ko: "앱 초기화 및 재시작", en: "Reset App & Restart" },
+    resetConfirm: { ko: "모든 설정과 데이터가 삭제됩니다.\n계속하시겠습니까?", en: "All settings and data will be deleted.\nDo you want to continue?" },
+    cancel: { ko: "취소", en: "Cancel" },
+    reset: { ko: "초기화", en: "Reset" },
+    language: { ko: "언어", en: "Language" },
+    permissionNeeded: { ko: "권한 필요", en: "Permission Required" },
+    permissionLocationMsg: { ko: "연습실을 등록하려면 위치 권한이 필요합니다.", en: "Location permission is required to register a practice room." },
+    error: { ko: "오류", en: "Error" },
+    locationError: { ko: "현재 위치를 가져올 수 없습니다. 다시 시도해주세요.", en: "Could not get current location. Please try again." },
+  },
+  tripleOptions: {
+    all: { ko: "전체", en: "All" },
+    accent: { ko: "악센트", en: "Accent" },
+    off: { ko: "끄기", en: "Off" },
+  },
+  soundSets: {
+    classic: { ko: "클래식", en: "Classic" },
+    woodblock: { ko: "우드블럭", en: "Woodblock" },
+    digital: { ko: "디지털", en: "Digital" },
+    rimshot: { ko: "림샷", en: "Rimshot" },
+  },
+  beatTypes: {
+    normal: { ko: "노멀", en: "Normal" },
+    accent: { ko: "악센트", en: "Accent" },
+    strong: { ko: "스트롱", en: "Strong" },
+    mute: { ko: "뮤트", en: "Mute" },
+  },
+  loggingInfo: {
+    title: { ko: "사용 로그 분석", en: "Usage Log Analysis" },
+    subtitle: { ko: "연습 기록을 분석하여 실력 향상을 도와드립니다", en: "Analyze practice records to help improve your skills" },
+    row1: { ko: "매일 연습 시간을 자동으로 기록합니다", en: "Automatically records daily practice time" },
+    row2: { ko: "비트/바 모드 사용 비율을 분석합니다", en: "Analyzes beat/bar mode usage ratio" },
+    row3: { ko: "연습실별 연습 시간을 추적합니다", en: "Tracks practice time by practice room" },
+    row4: { ko: "Work Up에서 주간·일간 통계를 확인합니다", en: "View weekly/daily stats in Work Up" },
+    row5: { ko: "목표 설정 및 달성률을 추적합니다", en: "Track goals and achievement rates" },
+    row6: { ko: "연습 기록을 이미지로 캡처하여 공유합니다", en: "Capture and share practice records as images" },
+    footer: { ko: "모든 데이터는 기기에만 저장됩니다", en: "All data is stored only on this device" },
+    close: { ko: "확인", en: "OK" },
+  },
+  onboarding: {
+    skip: { ko: "건너뛰기", en: "Skip" },
+    next: { ko: "다음", en: "Next" },
+    start: { ko: "시작하기", en: "Get Started" },
+    themeTitle: { ko: "테마 색상", en: "Theme Color" },
+    themeSubtitle: { ko: "앱에서 사용할 색상을 선택하세요", en: "Choose a color for the app" },
+    loggingTitle: { ko: "사용 로그 분석", en: "Usage Log Analysis" },
+    loggingSubtitle: { ko: "연습 기록을 분석하여 실력 향상을 도와드립니다", en: "Analyze practice records to help improve your skills" },
+    loggingWhy: { ko: "왜 사용하나요?", en: "Why use it?" },
+    loggingHow: { ko: "어떻게 활용되나요?", en: "How is it used?" },
+    loggingRow1: { ko: "매일 얼마나 연습했는지 자동으로 기록합니다", en: "Automatically records how much you practice daily" },
+    loggingRow2: { ko: "비트모드와 바모드 사용 비율을 분석합니다", en: "Analyzes beat mode and bar mode usage ratio" },
+    loggingRow3: { ko: "연습실별 연습 시간을 추적할 수 있습니다", en: "Track practice time by practice room" },
+    loggingRow4: { ko: "Work Up 화면에서 주간·일간 연습 통계를 확인합니다", en: "View weekly/daily practice stats in Work Up" },
+    loggingRow5: { ko: "목표를 설정하고 달성률을 추적할 수 있습니다", en: "Set goals and track achievement rates" },
+    loggingRow6: { ko: "연습 기록을 이미지로 캡처하여 공유할 수 있습니다", en: "Capture and share practice records as images" },
+    loggingRow7: { ko: "모든 데이터는 기기에만 저장되며 외부로 전송되지 않습니다", en: "All data is stored only on this device and never transmitted externally" },
+    loggingOn: { ko: "사용함", en: "Enabled" },
+    loggingOff: { ko: "사용 안 함", en: "Disabled" },
+    hapticTitle: { ko: "햅틱 피드백", en: "Haptic Feedback" },
+    hapticSubtitle: { ko: "비트에 맞춰 진동으로 알려줍니다", en: "Vibrate with the beat" },
+    hapticAll: { ko: "모든 비트", en: "All Beats" },
+    hapticAllDesc: { ko: "스트롱, 악센트, 노멀 비트에 모두 진동", en: "Vibrate on strong, accent, and normal beats" },
+    hapticAccent: { ko: "악센트만", en: "Accent Only" },
+    hapticAccentDesc: { ko: "스트롱, 악센트 비트에만 진동", en: "Vibrate only on strong and accent beats" },
+    hapticOff: { ko: "끄기", en: "Off" },
+    hapticOffDesc: { ko: "진동 없이 소리와 시각으로만 확인", en: "No vibration, sound and visual only" },
+    flashTitle: { ko: "화면 플래시", en: "Screen Flash" },
+    flashSubtitle: { ko: "비트에 맞춰 화면이 깜빡입니다", en: "Screen flashes with the beat" },
+    flashAll: { ko: "모든 비트", en: "All Beats" },
+    flashAllDesc: { ko: "스트롱, 악센트, 노멀 비트에 모두 플래시", en: "Flash on strong, accent, and normal beats" },
+    flashAccent: { ko: "악센트만", en: "Accent Only" },
+    flashAccentDesc: { ko: "스트롱, 악센트 비트에만 플래시", en: "Flash only on strong and accent beats" },
+    flashOff: { ko: "끄기", en: "Off" },
+    flashOffDesc: { ko: "플래시 없이 소리와 진동으로만 확인", en: "No flash, sound and vibration only" },
+    stop: { ko: "정지", en: "Stop" },
+    preview: { ko: "미리보기", en: "Preview" },
+    profileTitle: { ko: "프로필 설정", en: "Profile Setup" },
+    profileSubtitle: { ko: "닉네임과 연습실을 설정하세요", en: "Set your nickname and practice room" },
+    nicknameLabel: { ko: "닉네임", en: "Nickname" },
+    nicknamePlaceholder: { ko: "닉네임을 입력하세요", en: "Enter your nickname" },
+    roomLabel: { ko: "연습실 이름", en: "Practice Room Name" },
+    roomPlaceholder: { ko: "연습실 이름 (예: 우리집)", en: "Room name (e.g. Home)" },
+    roomHint: { ko: "이름 입력 시 현재 위치가 자동으로 연습실로 등록됩니다", en: "Current location will be automatically registered as a practice room" },
+  },
+  stopwatchTimer: {
+    stopwatch: { ko: "스톱워치", en: "STOPWATCH" },
+    timer: { ko: "타이머", en: "TIMER" },
+  },
+  tempoLabels: {
+    grave: { ko: "그라베", en: "Grave" },
+    largo: { ko: "라르고", en: "Largo" },
+    adagio: { ko: "아다지오", en: "Adagio" },
+    andante: { ko: "안단테", en: "Andante" },
+    moderato: { ko: "모데라토", en: "Moderato" },
+    allegro: { ko: "알레그로", en: "Allegro" },
+    vivace: { ko: "비바체", en: "Vivace" },
+    presto: { ko: "프레스토", en: "Presto" },
+    prestissimo: { ko: "프레스티시모", en: "Prestissimo" },
+  },
+  practiceBook: {
+    continuousPlay: { ko: "연속재생", en: "Loop" },
+    singlePlay: { ko: "1회재생", en: "Single" },
+    share: { ko: "공유", en: "Share" },
+    edit: { ko: "수정", en: "Edit" },
+    delete: { ko: "삭제", en: "Delete" },
+    deleteConfirm: { ko: "이 연습 설정을 삭제하시겠습니까?", en: "Delete this practice preset?" },
+    cancel: { ko: "취소", en: "Cancel" },
+    namePlaceholder: { ko: "이름을 입력하세요", en: "Enter a name" },
+    save: { ko: "저장", en: "Save" },
+    saveBeatConfig: { ko: "현재 비트 설정 저장", en: "Save current beat config" },
+    saveBarConfig: { ko: "현재 바 설정 저장", en: "Save current bar config" },
+    emptyTitle: { ko: "저장된 연습 설정이 없습니다", en: "No saved practice presets" },
+    emptyHint: { ko: "비트 또는 바 모드에서 설정을 구성한 후 저장하세요", en: "Configure settings in beat or bar mode, then save" },
+    goalTitle: { ko: "목표 설정", en: "Goal Setting" },
+    goalSub: { ko: "연습 목표 시간 (분)", en: "Practice goal time (minutes)" },
+    goalUnit: { ko: "분", en: "min" },
+    goalSet: { ko: "설정", en: "Set" },
+    openInApp: { ko: "앱에서 바로 적용하기:", en: "Apply directly in app:" },
+    sec: { ko: "초", en: "s" },
+    minSec: { ko: "분", en: "m" },
+  },
+  workUp: {
+    title: { ko: "Work Up", en: "Work Up" },
+    totalPlayTime: { ko: "총 연습 시간", en: "Total Play Time" },
+    beatModeTime: { ko: "비트 모드 시간", en: "Beat Mode Time" },
+    barModeTime: { ko: "바 모드 시간", en: "Bar Mode Time" },
+    roomTime: { ko: "연습실 시간", en: "Practice Room Time" },
+    totalShort: { ko: "총합", en: "Total" },
+    beatShort: { ko: "비트", en: "Beat" },
+    barShort: { ko: "바", en: "Bar" },
+    roomShort: { ko: "연습실", en: "Room" },
+    today: { ko: "오늘", en: "Today" },
+    thisWeek: { ko: "이번 주", en: "This Week" },
+    thisMonth: { ko: "이번 달", en: "This Month" },
+    sharingNotAvailable: { ko: "이 기기에서는 공유를 사용할 수 없습니다", en: "Sharing not available on this device" },
+    shareError: { ko: "이미지를 캡처하거나 공유할 수 없습니다.", en: "Could not capture or share the image." },
+    shareTitle: { ko: "연습 요약 공유", en: "Share Practice Summary" },
+    goalUnit: { ko: "분", en: "min" },
+    minutesPlaceholder: { ko: "분", en: "Minutes" },
+  },
+  signalGenerator: {
+    sine: { ko: "사인", en: "Sine" },
+    square: { ko: "사각", en: "Square" },
+    triangle: { ko: "삼각", en: "Triangle" },
+    saw: { ko: "톱니", en: "Saw" },
+    play: { ko: "재생", en: "Play" },
+    stop: { ko: "정지", en: "Stop" },
+  },
+  noteRecorder: {
+    permissionRequired: { ko: "권한 필요", en: "Permission Required" },
+    micPermission: { ko: "오디오를 녹음하려면 마이크 접근 권한이 필요합니다.", en: "Microphone access is needed to record audio." },
+    fileTooLarge: { ko: "파일 크기 초과", en: "File Too Large" },
+    fileTooLargeMsg: { ko: "최대 파일 크기는 {size}MB입니다. 이 파일은 {actual}MB입니다.", en: "Maximum file size is {size}MB. This file is {actual}MB." },
+    tooLong: { ko: "너무 깁니다", en: "Too Long" },
+    error: { ko: "오류", en: "Error" },
+    loadError: { ko: "이 오디오 파일을 불러올 수 없습니다.", en: "Could not load this audio file." },
+    importError: { ko: "오디오 파일을 가져올 수 없습니다.", en: "Failed to import audio file." },
+    loadingAudio: { ko: "오디오 로딩 중...", en: "Loading audio..." },
+    selectingFile: { ko: "파일 선택 중...", en: "Selecting file..." },
+    loadingFile: { ko: "오디오 로딩 중...", en: "Loading audio..." },
+    ready: { ko: "준비 완료!", en: "Ready!" },
+    playing: { ko: "재생 중...", en: "Playing..." },
+    previewBtn: { ko: "미리듣기", en: "Preview" },
+    sampleName: { ko: "샘플 이름 (선택)", en: "Sample name (optional)" },
+  },
+  notification: {
+    playing: { ko: "재생 중", en: "Playing" },
+    paused: { ko: "일시정지", en: "Paused" },
+    channelName: { ko: "메트로놈 컨트롤", en: "Metronome Controls" },
+    pause: { ko: "일시정지", en: "Pause" },
+    play: { ko: "재생", en: "Play" },
+  },
+  main: {
+    importSettings: { ko: "설정 가져오기", en: "Import Settings" },
+    importConfirm: { ko: "설정을 적용하시겠습니까?", en: "Apply these settings?" },
+    apply: { ko: "적용", en: "Apply" },
+    saveAndApply: { ko: "저장 후 적용", en: "Save & Apply" },
+    saved: { ko: "저장 완료", en: "Saved" },
+    savedToNote: { ko: "Practice Note에 저장되었습니다.", en: "Saved to Practice Note." },
+    importComplete: { ko: "설정 가져오기 완료", en: "Import Complete" },
+    goalEdited: { ko: "목표 수정 완료", en: "Goal Updated" },
+    goalEditedMsg: { ko: "목표가 변경되었습니다.", en: "Goal has been updated." },
+    goalSet: { ko: "목표 설정 완료", en: "Goal Set" },
+    goalSetMsg: { ko: "연습 목표가 추가되었습니다.", en: "Practice goal has been added." },
+    cancel: { ko: "취소", en: "Cancel" },
+  },
+  duration: {
+    s: { ko: "초", en: "s" },
+    m: { ko: "분", en: "m" },
+    h: { ko: "시간", en: "h" },
+  },
+} as const;
+
+type TranslationKeys = typeof translations;
+
+export type TranslationFn = {
+  <S extends keyof TranslationKeys, K extends keyof TranslationKeys[S]>(
+    section: S,
+    key: K
+  ): string;
+};
+
+export function createT(lang: Language): TranslationFn {
+  return ((section: string, key: string) => {
+    const s = (translations as any)[section];
+    if (!s) return key;
+    const entry = s[key];
+    if (!entry) return key;
+    return entry[lang] || entry.en || key;
+  }) as TranslationFn;
+}
+
+export function getTempoLabel(bpm: number, lang: Language): string {
+  const t = createT(lang);
+  if (bpm < 40) return t("tempoLabels", "grave");
+  if (bpm < 60) return t("tempoLabels", "largo");
+  if (bpm < 80) return t("tempoLabels", "adagio");
+  if (bpm < 100) return t("tempoLabels", "andante");
+  if (bpm < 120) return t("tempoLabels", "moderato");
+  if (bpm < 160) return t("tempoLabels", "allegro");
+  if (bpm < 200) return t("tempoLabels", "vivace");
+  if (bpm < 300) return t("tempoLabels", "presto");
+  return t("tempoLabels", "prestissimo");
+}
+
+export function formatDurationLocalized(seconds: number, lang: Language): string {
+  const t = createT(lang);
+  if (seconds < 60) return `${Math.round(seconds)}${t("duration", "s")}`;
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.round(seconds % 60);
+  if (mins < 60) return secs > 0 ? `${mins}${t("duration", "m")} ${secs}${t("duration", "s")}` : `${mins}${t("duration", "m")}`;
+  const hrs = Math.floor(mins / 60);
+  const remainMins = mins % 60;
+  return remainMins > 0 ? `${hrs}${t("duration", "h")} ${remainMins}${t("duration", "m")}` : `${hrs}${t("duration", "h")}`;
+}
