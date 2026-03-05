@@ -1,4 +1,4 @@
-export type ThemeColor = "gold" | "blue" | "green" | "red" | "purple" | "cyan" | "orange" | "pink" | "rose" | "custom";
+export type ThemeColor = "gold" | "blue" | "green" | "red" | "purple" | "cyan" | "orange" | "pink" | "rose" | "neon" | "custom";
 
 export interface AccentColors {
   accent: string;
@@ -51,6 +51,11 @@ const ACCENT_PRESETS: Record<Exclude<ThemeColor, "custom">, AccentColors> = {
     accent: "#E07070",
     accentDim: "rgba(224, 112, 112, 0.15)",
     accentMuted: "rgba(224, 112, 112, 0.4)",
+  },
+  neon: {
+    accent: "#39FF14",
+    accentDim: "rgba(57, 255, 20, 0.15)",
+    accentMuted: "rgba(57, 255, 20, 0.4)",
   },
 };
 

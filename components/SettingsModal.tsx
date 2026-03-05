@@ -43,6 +43,8 @@ const PRESET_COLORS: { value: Exclude<ThemeColor, "custom">; label: string; colo
   { value: "cyan", label: "Cyan", color: ACCENT_PRESETS.cyan.accent },
   { value: "orange", label: "Orange", color: ACCENT_PRESETS.orange.accent },
   { value: "pink", label: "Pink", color: ACCENT_PRESETS.pink.accent },
+  { value: "rose", label: "Rose", color: ACCENT_PRESETS.rose.accent },
+  { value: "neon", label: "Neon", color: ACCENT_PRESETS.neon.accent },
 ];
 
 const HUE_COLORS = [

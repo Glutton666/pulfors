@@ -42,6 +42,7 @@ const THEME_OPTIONS: { key: ThemeColor; label: string; color: string }[] = [
   { key: "orange", label: "Orange", color: ACCENT_PRESETS.orange.accent },
   { key: "blue", label: "Blue", color: ACCENT_PRESETS.blue.accent },
   { key: "rose", label: "Rose", color: ACCENT_PRESETS.rose.accent },
+  { key: "neon", label: "Neon", color: ACCENT_PRESETS.neon.accent },
 ];
 
 const TOTAL_STEPS = 5;
