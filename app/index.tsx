@@ -32,7 +32,6 @@ import * as Crypto from "expo-crypto";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { reloadAppAsync } from "expo";
 import Colors from "@/constants/colors";
 import type { ThemeColor } from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -1012,15 +1011,31 @@ export default function MetronomeScreen() {
         engineRef.current.stop();
       }
       await AsyncStorage.clear();
-      if (Platform.OS === "web") {
-        window.location.reload();
-      } else {
-        reloadAppAsync();
-      }
+      setShowSettings(false);
+      setShowMenu(false);
+      setBpm(120);
+      setBeatsPerMeasure(4);
+      setBeatTypes(defaultBeatTypes(4));
+      setSubdivisionPattern(["accent"]);
+      setBeatSubdivisions({});
+      setVolume(0.5);
+      setSampleVolume(0.8);
+      setBackgroundPlay(false);
+      setSoundSet("classic");
+      setFlashMode("accent");
+      flashModeRef.current = "accent";
+      setHapticMode("all");
+      engineRef.current?.setHapticMode("all");
+      setAudioOffsetMs(0);
+      setTimerStopMode("end-of-cycle");
+      setUsername("");
+      setLoggingEnabled(false);
+      setThemeColor("gold");
+      setShowOnboarding(true);
     } catch (e) {
       console.warn("Reset failed:", e);
     }
-  }, []);
+  }, [setThemeColor]);
 
   const updateBpm = useCallback(
     (newBpm: number) => {

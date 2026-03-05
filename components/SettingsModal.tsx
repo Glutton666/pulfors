@@ -187,10 +187,12 @@ export function SettingsModal({
   const [showAddRoom, setShowAddRoom] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
   const [addingRoom, setAddingRoom] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setLocalUsername(username);
+      setShowResetConfirm(false);
       loadPracticeRooms().then(setPracticeRooms);
     }
   }, [visible, username]);
@@ -1180,27 +1182,39 @@ export function SettingsModal({
 
             <View style={styles.divider} />
 
-            {onResetApp && (
+            {onResetApp && !showResetConfirm && (
               <Pressable
                 style={styles.resetButton}
-                onPress={() => {
-                  Alert.alert(
-                    "앱 초기화",
-                    "모든 설정과 데이터가 삭제되고 앱이 재시작됩니다. 계속하시겠습니까?",
-                    [
-                      { text: "취소", style: "cancel" },
-                      {
-                        text: "초기화 및 재시작",
-                        style: "destructive",
-                        onPress: onResetApp,
-                      },
-                    ]
-                  );
-                }}
+                onPress={() => setShowResetConfirm(true)}
               >
                 <Ionicons name="refresh-circle-outline" size={18} color="#F85149" />
                 <Text style={styles.resetButtonText}>앱 초기화 및 재시작</Text>
               </Pressable>
+            )}
+            {onResetApp && showResetConfirm && (
+              <View style={styles.resetConfirmBox}>
+                <Text style={styles.resetConfirmText}>
+                  모든 설정과 데이터가 삭제됩니다.{"\n"}계속하시겠습니까?
+                </Text>
+                <View style={styles.resetConfirmButtons}>
+                  <Pressable
+                    style={styles.resetCancelBtn}
+                    onPress={() => setShowResetConfirm(false)}
+                  >
+                    <Text style={styles.resetCancelText}>취소</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.resetConfirmBtn}
+                    onPress={() => {
+                      setShowResetConfirm(false);
+                      onClose();
+                      setTimeout(() => onResetApp(), 100);
+                    }}
+                  >
+                    <Text style={styles.resetConfirmBtnText}>초기화</Text>
+                  </Pressable>
+                </View>
+              </View>
             )}
           </Pressable>
         </ScrollView>
@@ -1703,5 +1717,54 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 13,
     color: "#F85149",
+  },
+  resetConfirmBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(248, 81, 73, 0.3)",
+    backgroundColor: "rgba(248, 81, 73, 0.06)",
+    padding: 16,
+    gap: 14,
+    alignItems: "center",
+  },
+  resetConfirmText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
+    color: Colors.textSecondary,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  resetConfirmButtons: {
+    flexDirection: "row",
+    gap: 10,
+    width: "100%",
+  },
+  resetCancelBtn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceLight,
+  },
+  resetCancelText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  resetConfirmBtn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: "#F85149",
+  },
+  resetConfirmBtnText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 13,
+    color: "#fff",
   },
 });
