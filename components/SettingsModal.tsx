@@ -14,6 +14,7 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Animated,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -79,6 +80,7 @@ interface SettingsModalProps {
   trackingRoomName: string | null;
   onStartRoomTracking: (room: { id: string; name: string }) => void;
   onStopRoomTracking: () => void;
+  onResetApp?: () => void;
 }
 
 const SOUND_SET_OPTIONS: { value: SoundSet; label: string; icon: string }[] = [
@@ -162,6 +164,7 @@ export function SettingsModal({
   trackingRoomName,
   onStartRoomTracking,
   onStopRoomTracking,
+  onResetApp,
 }: SettingsModalProps) {
   const { themeColor, customHex, setThemeColor, setCustomHex, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
   const insets = useSafeAreaInsets();
@@ -175,6 +178,8 @@ export function SettingsModal({
   const trackLeftRef = useRef(0);
   const lastHapticRef = useRef(volume);
   const previewIndexRef = useRef<Record<string, number>>({});
+  const tabFadeAnim = useRef(new Animated.Value(1)).current;
+  const tabSlideAnim = useRef(new Animated.Value(0)).current;
 
   const [practiceRooms, setPracticeRooms] = useState<PracticeRoom[]>([]);
   const [showAddRoom, setShowAddRoom] = useState(false);
@@ -1114,8 +1119,20 @@ export function SettingsModal({
               <Pressable
                 style={[styles.tabBtn, activeTab === "theme" && [styles.tabBtnActive, { borderColor: C.accent }]]}
                 onPress={() => {
-                  setActiveTab("theme");
+                  if (activeTab === "theme") return;
                   if (Platform.OS !== "web") Haptics.selectionAsync();
+                  const slideDir = -1;
+                  Animated.parallel([
+                    Animated.timing(tabFadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
+                    Animated.timing(tabSlideAnim, { toValue: slideDir * 30, duration: 100, useNativeDriver: true }),
+                  ]).start(() => {
+                    setActiveTab("theme");
+                    tabSlideAnim.setValue(-slideDir * 30);
+                    Animated.parallel([
+                      Animated.timing(tabFadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
+                      Animated.timing(tabSlideAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
+                    ]).start();
+                  });
                 }}
               >
                 <Ionicons
@@ -1128,8 +1145,20 @@ export function SettingsModal({
               <Pressable
                 style={[styles.tabBtn, activeTab === "sound" && [styles.tabBtnActive, { borderColor: C.accent }]]}
                 onPress={() => {
-                  setActiveTab("sound");
+                  if (activeTab === "sound") return;
                   if (Platform.OS !== "web") Haptics.selectionAsync();
+                  const slideDir = 1;
+                  Animated.parallel([
+                    Animated.timing(tabFadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
+                    Animated.timing(tabSlideAnim, { toValue: slideDir * 30, duration: 100, useNativeDriver: true }),
+                  ]).start(() => {
+                    setActiveTab("sound");
+                    tabSlideAnim.setValue(-slideDir * 30);
+                    Animated.parallel([
+                      Animated.timing(tabFadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
+                      Animated.timing(tabSlideAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
+                    ]).start();
+                  });
                 }}
               >
                 <Ionicons
@@ -1143,7 +1172,34 @@ export function SettingsModal({
 
             <View style={styles.divider} />
 
-            {activeTab === "theme" ? renderThemeTab() : renderSoundTab()}
+            <Animated.View style={{ opacity: tabFadeAnim, transform: [{ translateX: tabSlideAnim }] }}>
+              {activeTab === "theme" ? renderThemeTab() : renderSoundTab()}
+            </Animated.View>
+
+            <View style={styles.divider} />
+
+            {onResetApp && (
+              <Pressable
+                style={styles.resetButton}
+                onPress={() => {
+                  Alert.alert(
+                    "앱 초기화",
+                    "모든 설정과 데이터가 삭제되고 앱이 재시작됩니다. 계속하시겠습니까?",
+                    [
+                      { text: "취소", style: "cancel" },
+                      {
+                        text: "초기화 및 재시작",
+                        style: "destructive",
+                        onPress: onResetApp,
+                      },
+                    ]
+                  );
+                }}
+              >
+                <Ionicons name="refresh-circle-outline" size={18} color="#F85149" />
+                <Text style={styles.resetButtonText}>앱 초기화 및 재시작</Text>
+              </Pressable>
+            )}
           </Pressable>
         </ScrollView>
       </Pressable>
@@ -1629,5 +1685,21 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
+  },
+  resetButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(248, 81, 73, 0.3)",
+    backgroundColor: "rgba(248, 81, 73, 0.08)",
+  },
+  resetButtonText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 13,
+    color: "#F85149",
   },
 });

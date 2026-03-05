@@ -32,6 +32,7 @@ import * as Crypto from "expo-crypto";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { reloadAppAsync } from "expo";
 import Colors from "@/constants/colors";
 import type { ThemeColor } from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -1004,6 +1005,22 @@ export default function MetronomeScreen() {
       }
     }
   }, [setThemeColor, persistSettings]);
+
+  const handleResetApp = useCallback(async () => {
+    try {
+      if (engineRef.current?.isRunning) {
+        engineRef.current.stop();
+      }
+      await AsyncStorage.clear();
+      if (Platform.OS === "web") {
+        window.location.reload();
+      } else {
+        reloadAppAsync();
+      }
+    } catch (e) {
+      console.warn("Reset failed:", e);
+    }
+  }, []);
 
   const updateBpm = useCallback(
     (newBpm: number) => {
@@ -2217,6 +2234,7 @@ export default function MetronomeScreen() {
         trackingRoomName={trackingRoomName}
         onStartRoomTracking={startRoomTracking}
         onStopRoomTracking={stopRoomTracking}
+        onResetApp={handleResetApp}
       />
 
       {completedGoalPopups.length > 0 && !showMenu && !showTuner && !showSignalGen && !showPracticeBook && !showWorkUp && !showSettings && (
