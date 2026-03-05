@@ -1712,7 +1712,7 @@ export default function MetronomeScreen() {
         }
       }
 
-      if (closestDist < 40) return closestBeat;
+      if (closestDist < 55) return closestBeat;
       return null;
     },
     [beatsPerMeasure, barMode]
@@ -1761,15 +1761,6 @@ export default function MetronomeScreen() {
     [beatsPerMeasure, persistSettings]
   );
 
-  const handleApplyAllSubdivisions = useCallback(() => {
-    if (subdivisionPattern.length > 1) {
-      applyToAllBeats(subdivisionPattern);
-      if (Platform.OS !== "web") {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-    }
-  }, [subdivisionPattern, applyToAllBeats]);
-
   const handleDragEnd = useCallback(
     (pageX: number, pageY: number) => {
       const target = findDropTarget(pageX, pageY);
@@ -1789,6 +1780,11 @@ export default function MetronomeScreen() {
         newSubs[String(target)] = [...subdivisionPattern];
         setBeatSubdivisions(newSubs);
         engineRef.current?.setBeatSubdivision(target, subdivisionPattern);
+        if (barModeRef.current) {
+          barConfigRef.current.beatSubdivisions = { ...newSubs };
+        } else {
+          dialConfigRef.current.beatSubdivisions = { ...newSubs };
+        }
         persistSettings({ beatSubdivisions: newSubs });
       } else if (target !== null && subdivisionPattern.length <= 1) {
         if (Platform.OS !== "web") {
@@ -1798,6 +1794,11 @@ export default function MetronomeScreen() {
         delete newSubs[String(target)];
         setBeatSubdivisions(newSubs);
         engineRef.current?.setBeatSubdivision(target, null);
+        if (barModeRef.current) {
+          barConfigRef.current.beatSubdivisions = { ...newSubs };
+        } else {
+          dialConfigRef.current.beatSubdivisions = { ...newSubs };
+        }
         persistSettings({ beatSubdivisions: newSubs });
       }
     },
@@ -2396,7 +2397,6 @@ export default function MetronomeScreen() {
                 onDragMove={handleDragMove}
                 onDragEnd={handleDragEnd}
                 onReset={handleReset}
-                onApplyAll={handleApplyAllSubdivisions}
                 isPlaying={isPlaying}
                 activeSubNote={activeSubNote}
                 activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
@@ -2414,7 +2414,6 @@ export default function MetronomeScreen() {
               onDragMove={handleDragMove}
               onDragEnd={handleDragEnd}
               onReset={handleReset}
-              onApplyAll={handleApplyAllSubdivisions}
               isPlaying={isPlaying}
               activeSubNote={activeSubNote}
               activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
