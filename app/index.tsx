@@ -1751,10 +1751,24 @@ export default function MetronomeScreen() {
         }
       }
       setBeatSubdivisions(newSubs);
+      if (barModeRef.current) {
+        barConfigRef.current.beatSubdivisions = newSubs;
+      } else {
+        dialConfigRef.current.beatSubdivisions = newSubs;
+      }
       persistSettings({ beatSubdivisions: newSubs });
     },
     [beatsPerMeasure, persistSettings]
   );
+
+  const handleApplyAllSubdivisions = useCallback(() => {
+    if (subdivisionPattern.length > 1) {
+      applyToAllBeats(subdivisionPattern);
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    }
+  }, [subdivisionPattern, applyToAllBeats]);
 
   const handleDragEnd = useCallback(
     (pageX: number, pageY: number) => {
@@ -2382,6 +2396,7 @@ export default function MetronomeScreen() {
                 onDragMove={handleDragMove}
                 onDragEnd={handleDragEnd}
                 onReset={handleReset}
+                onApplyAll={handleApplyAllSubdivisions}
                 isPlaying={isPlaying}
                 activeSubNote={activeSubNote}
                 activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
@@ -2399,6 +2414,7 @@ export default function MetronomeScreen() {
               onDragMove={handleDragMove}
               onDragEnd={handleDragEnd}
               onReset={handleReset}
+              onApplyAll={handleApplyAllSubdivisions}
               isPlaying={isPlaying}
               activeSubNote={activeSubNote}
               activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}

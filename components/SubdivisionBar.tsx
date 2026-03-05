@@ -28,6 +28,7 @@ interface SubdivisionBarProps {
   onDragMove: (pageX: number, pageY: number) => void;
   onDragEnd: (pageX: number, pageY: number) => void;
   onReset: () => void;
+  onApplyAll?: () => void;
   isPlaying?: boolean;
   activeSubNote?: number;
   activeBeatPattern?: BeatType[] | null;
@@ -61,6 +62,7 @@ export function SubdivisionBar({
   onDragMove,
   onDragEnd,
   onReset,
+  onApplyAll,
   isPlaying = false,
   activeSubNote = -1,
   activeBeatPattern = null,
@@ -398,7 +400,7 @@ export function SubdivisionBar({
                       end={{ x: 1, y: 1 }}
                       style={{ width: CELL_SIZE, height: CELL_SIZE, alignItems: "center", justifyContent: "center", borderRadius: 6 }}
                     >
-                      <View style={{ width: CELL_SIZE - 10, height: CELL_SIZE - 10, borderRadius: 3, backgroundColor: C.accentMuted }} />
+                      <Text style={{ color: Colors.white, fontSize: 11, fontWeight: "bold" as const, lineHeight: 13 }}>S</Text>
                     </LinearGradient>
                   </View>
                 ) : (
@@ -423,6 +425,16 @@ export function SubdivisionBar({
           <Feather name="chevron-right" size={12} color={Colors.textTertiary} />
         </View>
       </View>
+      {pattern.length > 1 && !isPlaying && onApplyAll && (
+        <Pressable
+          onPress={onApplyAll}
+          style={({ pressed }) => [styles.applyAllBtn, { borderColor: C.accent, opacity: pressed ? 0.6 : 1 }]}
+          hitSlop={6}
+        >
+          <Feather name="check-circle" size={13} color={C.accent} />
+          <Text style={[styles.applyAllText, { color: C.accent }]}>적용</Text>
+        </Pressable>
+      )}
     </Animated.View>
   );
 }
@@ -458,7 +470,7 @@ export function DragGhost({
               end={{ x: 1, y: 1 }}
               style={{ width: 18, height: 18, alignItems: "center", justifyContent: "center", borderRadius: 4 }}
             >
-              <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: GC.accentMuted }} />
+              <Text style={{ color: Colors.white, fontSize: 8, fontWeight: "bold" as const, lineHeight: 10 }}>S</Text>
             </LinearGradient>
           </View>
         ) : (
@@ -515,5 +527,19 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 4,
+  },
+  applyAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginLeft: 6,
+  },
+  applyAllText: {
+    fontSize: 11,
+    fontWeight: "600" as const,
   },
 });

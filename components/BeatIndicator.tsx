@@ -75,7 +75,7 @@ function DialBeatDot({
   const beatBorder = useSharedValue(
     isMute ? Colors.textSecondary : "transparent"
   );
-  const beatOpacity = useSharedValue(isStrong ? 0.65 : 1);
+  const beatOpacity = useSharedValue(isStrong ? 0.85 : 1);
 
   const handlePress = useCallback(() => {
     popScale.value = withSequence(
@@ -117,7 +117,7 @@ function DialBeatDot({
         { duration: 150 }
       );
       beatBorder.value = withTiming(isStrong ? C.accent : "transparent", { duration: 150 });
-      beatOpacity.value = withTiming(isStrong ? 0.65 : 1, { duration: 150 });
+      beatOpacity.value = withTiming(isStrong ? 0.85 : 1, { duration: 150 });
     }
   }, [isActive, beatType, C.accent, C.accentMuted]);
 
@@ -161,7 +161,9 @@ function DialBeatDot({
             end={{ x: 0.5, y: 1 }}
             style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}
           >
-            <View style={{ width: size - 14, height: size - 14, borderRadius: (size - 14) / 2, backgroundColor: C.accentMuted }} />
+            <View style={{ width: size - 10, height: size - 10, borderRadius: (size - 10) / 2, backgroundColor: C.accent, alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ color: Colors.white, fontSize: 11, fontWeight: "bold" as const, lineHeight: 13 }}>S</Text>
+            </View>
           </LinearGradient>
         </Animated.View>
       ) : (
@@ -1109,8 +1111,10 @@ export function BeatIndicator({
                         locations={[0, 0.35, 1]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
-                        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 4 }}
-                      />
+                        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 4, alignItems: "center", justifyContent: "center" }}
+                      >
+                        <Text style={{ color: Colors.white, fontSize: 10, fontWeight: "bold" as const, lineHeight: 12 }}>S</Text>
+                      </LinearGradient>
                     </View>
                   ) : type === "mute" ? (
                     <View style={[styles.barNoteFill, {
