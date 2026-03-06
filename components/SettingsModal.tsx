@@ -1580,9 +1580,10 @@ export function SettingsModal({
         <TextInput
           style={[styles.usernameInput, { borderColor: C.accentMuted }]}
           value={localUsername}
-          onChangeText={setLocalUsername}
-          onBlur={() => onUsernameChange(localUsername)}
-          onSubmitEditing={() => onUsernameChange(localUsername)}
+          onChangeText={(text) => {
+            setLocalUsername(text);
+            onUsernameChange(text);
+          }}
           placeholder={t("settings", "nicknamePlaceholder")}
           placeholderTextColor={Colors.textTertiary}
           maxLength={30}
