@@ -14,8 +14,11 @@ export type SoundSet = BuiltinSoundSet | "custom1" | "custom2" | "custom3";
 export type SoundRole = "strong" | "high" | "low";
 
 export interface CustomSoundSample {
-  sourceSet: BuiltinSoundSet;
-  sourceRole: SoundRole;
+  type: "builtin" | "custom";
+  sourceSet?: BuiltinSoundSet;
+  sourceRole?: SoundRole;
+  sampleUri?: string;
+  sampleName?: string;
   duration: number;
 }
 

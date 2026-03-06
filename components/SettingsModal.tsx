@@ -22,9 +22,11 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useAudioPlayer } from "expo-audio";
+import { Audio, InterruptionModeIOS } from "expo-av";
+import * as DocumentPicker from "expo-document-picker";
 import Colors, { ACCENT_PRESETS, accentFromHex, type ThemeColor } from "@/constants/colors";
 import { useTheme, type BeatTypeKey } from "@/contexts/ThemeContext";
-import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, SoundRole, CustomSoundSetConfig } from "@/lib/storage";
+import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, SoundRole, CustomSoundSetConfig, CustomSoundSample } from "@/lib/storage";
 import { loadCustomSoundSets, saveCustomSoundSets, BUILTIN_SOUND_SETS } from "@/lib/storage";
 import { soundSets } from "@/lib/metronome-engine";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -205,9 +207,16 @@ export function SettingsModal({
   const [showLoggingInfo, setShowLoggingInfo] = useState(false);
   const [editingCustomSlot, setEditingCustomSlot] = useState<string | null>(null);
   const [customName, setCustomName] = useState("");
-  const [customStrong, setCustomStrong] = useState<{ sourceSet: BuiltinSoundSet; sourceRole: SoundRole; duration: number }>({ sourceSet: "classic", sourceRole: "strong", duration: 0.5 });
-  const [customAccent, setCustomAccent] = useState<{ sourceSet: BuiltinSoundSet; sourceRole: SoundRole; duration: number }>({ sourceSet: "classic", sourceRole: "high", duration: 0.5 });
-  const [customNormal, setCustomNormal] = useState<{ sourceSet: BuiltinSoundSet; sourceRole: SoundRole; duration: number }>({ sourceSet: "classic", sourceRole: "low", duration: 0.5 });
+  const defaultSample = (role: SoundRole): CustomSoundSample => ({ type: "builtin", sourceSet: "classic", sourceRole: role, duration: 0.5 });
+  const [customStrong, setCustomStrong] = useState<CustomSoundSample>(defaultSample("strong"));
+  const [customAccent, setCustomAccent] = useState<CustomSoundSample>(defaultSample("high"));
+  const [customNormal, setCustomNormal] = useState<CustomSoundSample>(defaultSample("low"));
+  const [recordingSlot, setRecordingSlot] = useState<"strong" | "accent" | "normal" | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordDuration, setRecordDuration] = useState(0);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const previewSoundRef = useRef<Audio.Sound | null>(null);
 
   useEffect(() => {
     if (visible) {
@@ -578,16 +587,18 @@ export function SettingsModal({
     const existing = customSoundSets[slot];
     if (existing) {
       setCustomName(existing.name);
-      setCustomStrong(existing.strong);
-      setCustomAccent(existing.accent);
-      setCustomNormal(existing.normal);
+      setCustomStrong(existing.strong.type ? existing.strong : { ...existing.strong, type: "builtin" as const });
+      setCustomAccent(existing.accent.type ? existing.accent : { ...existing.accent, type: "builtin" as const });
+      setCustomNormal(existing.normal.type ? existing.normal : { ...existing.normal, type: "builtin" as const });
     } else {
       setCustomName(t("customSoundSet", "namePlaceholder"));
-      setCustomStrong({ sourceSet: "classic", sourceRole: "strong", duration: 0.5 });
-      setCustomAccent({ sourceSet: "classic", sourceRole: "high", duration: 0.5 });
-      setCustomNormal({ sourceSet: "classic", sourceRole: "low", duration: 0.5 });
+      setCustomStrong(defaultSample("strong"));
+      setCustomAccent(defaultSample("high"));
+      setCustomNormal(defaultSample("low"));
     }
     setEditingCustomSlot(slot);
+    setRecordingSlot(null);
+    setIsRecording(false);
   }, [customSoundSets, t]);
 
   const saveCustomSet = useCallback(() => {
@@ -650,6 +661,126 @@ export function SettingsModal({
     { value: "high", labelKey: "roleAccent" },
     { value: "low", labelKey: "roleNormal" },
   ];
+
+  const previewCustomUri = useCallback(async (uri: string, duration: number) => {
+    if (previewSoundRef.current) {
+      try { await previewSoundRef.current.unloadAsync(); } catch {}
+      previewSoundRef.current = null;
+    }
+    try {
+      const sound = new Audio.Sound();
+      const rawUri = uri.split("#")[0];
+      await sound.loadAsync({ uri: rawUri });
+      previewSoundRef.current = sound;
+      const hashParts = uri.split("#t=")[1];
+      let startMs = 0;
+      if (hashParts) {
+        const parts = hashParts.split(",").map(Number);
+        if (!isNaN(parts[0])) startMs = parts[0];
+      }
+      await sound.setPositionAsync(startMs);
+      await sound.playAsync();
+      const endMs = startMs + duration * 1000;
+      setTimeout(async () => {
+        try { await sound.stopAsync(); await sound.unloadAsync(); } catch {}
+        if (previewSoundRef.current === sound) previewSoundRef.current = null;
+      }, duration * 1000);
+    } catch (e) {
+      console.warn("Preview failed:", e);
+    }
+  }, []);
+
+  const startSampleRecording = useCallback(async (slot: "strong" | "accent" | "normal") => {
+    const { status } = await Audio.requestPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(t("customSoundSet", "micPermission"));
+      return;
+    }
+    setRecordingSlot(slot);
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
+      });
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync({
+        isMeteringEnabled: false,
+        android: { extension: ".wav", outputFormat: 6, audioEncoder: 1, sampleRate: 44100, numberOfChannels: 1, bitRate: 705600 },
+        ios: { extension: ".wav", outputFormat: "lpcm" as any, audioQuality: 127, sampleRate: 44100, numberOfChannels: 1, bitRate: 705600, linearPCMBitDepth: 16, linearPCMIsBigEndian: false, linearPCMIsFloat: false },
+        web: { mimeType: "audio/webm", bitsPerSecond: 128000 },
+      } as any);
+      recordingRef.current = recording;
+      await recording.startAsync();
+      setIsRecording(true);
+      setRecordDuration(0);
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const startTime = Date.now();
+      recordTimerRef.current = setInterval(() => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        setRecordDuration(elapsed);
+        if (elapsed >= 3) stopSampleRecording(slot);
+      }, 100);
+    } catch (e) {
+      console.error("Failed to start recording:", e);
+      setRecordingSlot(null);
+    }
+  }, []);
+
+  const stopSampleRecording = useCallback(async (slot: "strong" | "accent" | "normal") => {
+    if (recordTimerRef.current) { clearInterval(recordTimerRef.current); recordTimerRef.current = null; }
+    if (!recordingRef.current) { setIsRecording(false); setRecordingSlot(null); return; }
+    try {
+      await recordingRef.current.stopAndUnloadAsync();
+      const uri = recordingRef.current.getURI();
+      recordingRef.current = null;
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, interruptionModeIOS: InterruptionModeIOS.MixWithOthers });
+      if (uri) {
+        const sound = new Audio.Sound();
+        await sound.loadAsync({ uri });
+        const status = await sound.getStatusAsync();
+        let dur = 0.5;
+        if (status.isLoaded && status.durationMillis) dur = Math.min(3.0, Math.round(status.durationMillis / 100) / 10);
+        await sound.unloadAsync();
+        const sample: CustomSoundSample = { type: "custom", sampleUri: uri, sampleName: t("customSoundSet", "record"), duration: dur };
+        if (slot === "strong") setCustomStrong(sample);
+        else if (slot === "accent") setCustomAccent(sample);
+        else setCustomNormal(sample);
+        if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (e) { console.error("Failed to stop recording:", e); }
+    setIsRecording(false);
+    setRecordingSlot(null);
+  }, [t]);
+
+  const importSampleFile = useCallback(async (slot: "strong" | "accent" | "normal") => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: ["audio/*"], copyToCacheDirectory: true });
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+      const asset = result.assets[0];
+      const fileUri = asset.uri;
+      const fileSizeMB = asset.size ? asset.size / (1024 * 1024) : 0;
+      if (fileSizeMB > 50) {
+        Alert.alert(t("customSoundSet", "importError"));
+        return;
+      }
+      const sound = new Audio.Sound();
+      await sound.loadAsync({ uri: fileUri });
+      const status = await sound.getStatusAsync();
+      let dur = 0.5;
+      if (status.isLoaded && status.durationMillis) dur = Math.min(3.0, Math.round(status.durationMillis / 100) / 10);
+      await sound.unloadAsync();
+      const name = asset.name ? asset.name.replace(/\.[^.]+$/, "").substring(0, 12) : t("customSoundSet", "import");
+      const sample: CustomSoundSample = { type: "custom", sampleUri: fileUri, sampleName: name, duration: dur };
+      if (slot === "strong") setCustomStrong(sample);
+      else if (slot === "accent") setCustomAccent(sample);
+      else setCustomNormal(sample);
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      console.error("Failed to import audio:", e);
+      Alert.alert(t("customSoundSet", "importError"));
+    }
+  }, [t]);
 
   const renderThemeTab = () => (
     <>
@@ -1081,15 +1212,24 @@ export function SettingsModal({
             </View>
 
             {([
-              { label: t("customSoundSet", "strongSample"), state: customStrong, setter: setCustomStrong },
-              { label: t("customSoundSet", "accentSample"), state: customAccent, setter: setCustomAccent },
-              { label: t("customSoundSet", "normalSample"), state: customNormal, setter: setCustomNormal },
-            ] as const).map((item, idx) => (
+              { label: t("customSoundSet", "strongSample"), state: customStrong, setter: setCustomStrong, slot: "strong" as const },
+              { label: t("customSoundSet", "accentSample"), state: customAccent, setter: setCustomAccent, slot: "accent" as const },
+              { label: t("customSoundSet", "normalSample"), state: customNormal, setter: setCustomNormal, slot: "normal" as const },
+            ]).map((item, idx) => {
+              const sampleType = item.state.type || "builtin";
+              const isRecordingThis = recordingSlot === item.slot && isRecording;
+              return (
               <View key={idx} style={csStyles.sampleSection}>
                 <View style={csStyles.sampleHeader}>
                   <Text style={csStyles.sampleTitle}>{item.label}</Text>
                   <Pressable
-                    onPress={() => previewCustomSample(item.state.sourceSet, item.state.sourceRole)}
+                    onPress={() => {
+                      if (sampleType === "custom" && item.state.sampleUri) {
+                        previewCustomUri(item.state.sampleUri, item.state.duration);
+                      } else if (sampleType === "builtin" && item.state.sourceSet && item.state.sourceRole) {
+                        previewCustomSample(item.state.sourceSet, item.state.sourceRole);
+                      }
+                    }}
                     style={csStyles.previewBtn}
                   >
                     <Ionicons name="play" size={14} color={C.accent} />
@@ -1099,49 +1239,136 @@ export function SettingsModal({
                 <View style={csStyles.pickerRow}>
                   <Text style={csStyles.pickerLabel}>{t("customSoundSet", "source")}</Text>
                   <View style={csStyles.chipRow}>
-                    {BUILTIN_SOUND_SETS.map((bs) => {
-                      const active = item.state.sourceSet === bs;
-                      return (
-                        <Pressable
-                          key={bs}
-                          style={[csStyles.chip, active && { borderColor: C.accent, backgroundColor: C.accentDim }]}
-                          onPress={() => {
-                            item.setter({ ...item.state, sourceSet: bs });
-                            if (Platform.OS !== "web") Haptics.selectionAsync();
-                          }}
-                        >
-                          <Text style={[csStyles.chipText, active && { color: C.accent }]}>
-                            {t("soundSets", bs)}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
+                    <Pressable
+                      style={[csStyles.chip, sampleType === "builtin" && { borderColor: C.accent, backgroundColor: C.accentDim }]}
+                      onPress={() => {
+                        item.setter({ type: "builtin", sourceSet: item.state.sourceSet || "classic", sourceRole: item.state.sourceRole || "strong", duration: item.state.duration });
+                        if (Platform.OS !== "web") Haptics.selectionAsync();
+                      }}
+                    >
+                      <Text style={[csStyles.chipText, sampleType === "builtin" && { color: C.accent }]}>
+                        {t("customSoundSet", "sourceBuiltin")}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[csStyles.chip, sampleType === "custom" && { borderColor: C.accent, backgroundColor: C.accentDim }]}
+                      onPress={() => {
+                        item.setter({ ...item.state, type: "custom" });
+                        if (Platform.OS !== "web") Haptics.selectionAsync();
+                      }}
+                    >
+                      <Text style={[csStyles.chipText, sampleType === "custom" && { color: C.accent }]}>
+                        {t("customSoundSet", "sourceCustom")}
+                      </Text>
+                    </Pressable>
                   </View>
                 </View>
 
-                <View style={csStyles.pickerRow}>
-                  <Text style={csStyles.pickerLabel}>{t("customSoundSet", "role")}</Text>
-                  <View style={csStyles.chipRow}>
-                    {ROLE_OPTIONS.map((ro) => {
-                      const active = item.state.sourceRole === ro.value;
-                      return (
-                        <Pressable
-                          key={ro.value}
-                          style={[csStyles.chip, active && { borderColor: C.accent, backgroundColor: C.accentDim }]}
-                          onPress={() => {
-                            item.setter({ ...item.state, sourceRole: ro.value });
-                            previewCustomSample(item.state.sourceSet, ro.value);
-                            if (Platform.OS !== "web") Haptics.selectionAsync();
-                          }}
-                        >
-                          <Text style={[csStyles.chipText, active && { color: C.accent }]}>
-                            {t("customSoundSet", ro.labelKey)}
+                {sampleType === "builtin" ? (
+                  <>
+                    <View style={csStyles.pickerRow}>
+                      <Text style={csStyles.pickerLabel}>{t("customSoundSet", "source")}</Text>
+                      <View style={csStyles.chipRow}>
+                        {BUILTIN_SOUND_SETS.map((bs) => {
+                          const active = item.state.sourceSet === bs;
+                          return (
+                            <Pressable
+                              key={bs}
+                              style={[csStyles.chip, active && { borderColor: C.accent, backgroundColor: C.accentDim }]}
+                              onPress={() => {
+                                item.setter({ ...item.state, type: "builtin", sourceSet: bs });
+                                if (Platform.OS !== "web") Haptics.selectionAsync();
+                              }}
+                            >
+                              <Text style={[csStyles.chipText, active && { color: C.accent }]}>
+                                {t("soundSets", bs)}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+
+                    <View style={csStyles.pickerRow}>
+                      <Text style={csStyles.pickerLabel}>{t("customSoundSet", "role")}</Text>
+                      <View style={csStyles.chipRow}>
+                        {ROLE_OPTIONS.map((ro) => {
+                          const active = item.state.sourceRole === ro.value;
+                          return (
+                            <Pressable
+                              key={ro.value}
+                              style={[csStyles.chip, active && { borderColor: C.accent, backgroundColor: C.accentDim }]}
+                              onPress={() => {
+                                item.setter({ ...item.state, type: "builtin", sourceRole: ro.value });
+                                previewCustomSample(item.state.sourceSet || "classic", ro.value);
+                                if (Platform.OS !== "web") Haptics.selectionAsync();
+                              }}
+                            >
+                              <Text style={[csStyles.chipText, active && { color: C.accent }]}>
+                                {t("customSoundSet", ro.labelKey)}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    {item.state.sampleUri ? (
+                      <View style={csStyles.customSampleInfo}>
+                        <View style={csStyles.customSampleRow}>
+                          <Ionicons name="musical-note" size={16} color={C.accent} />
+                          <Text style={csStyles.customSampleName} numberOfLines={1}>
+                            {item.state.sampleName || t("customSoundSet", "sampleLoaded")}
                           </Text>
+                          <Pressable
+                            onPress={() => {
+                              item.setter({ ...item.state, sampleUri: undefined, sampleName: undefined });
+                              if (Platform.OS !== "web") Haptics.selectionAsync();
+                            }}
+                            style={csStyles.removeSampleBtn}
+                          >
+                            <Ionicons name="close-circle" size={16} color="#F85149" />
+                          </Pressable>
+                        </View>
+                      </View>
+                    ) : isRecordingThis ? (
+                      <View style={csStyles.recordingRow}>
+                        <View style={csStyles.recordingIndicator}>
+                          <View style={[csStyles.recordingDot, { backgroundColor: "#F85149" }]} />
+                          <Text style={csStyles.recordingText}>
+                            {t("customSoundSet", "recording")} {recordDuration.toFixed(1)}s
+                          </Text>
+                        </View>
+                        <Pressable
+                          style={[csStyles.recordActionBtn, { backgroundColor: "#F85149" }]}
+                          onPress={() => stopSampleRecording(item.slot)}
+                        >
+                          <Ionicons name="stop" size={14} color="#fff" />
+                          <Text style={csStyles.recordActionText}>{t("customSoundSet", "stopRecord")}</Text>
                         </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
+                      </View>
+                    ) : (
+                      <View style={csStyles.recordImportRow}>
+                        <Pressable
+                          style={[csStyles.recordActionBtn, { backgroundColor: C.accentDim, borderColor: C.accent, borderWidth: 1 }]}
+                          onPress={() => startSampleRecording(item.slot)}
+                        >
+                          <Ionicons name="mic" size={14} color={C.accent} />
+                          <Text style={[csStyles.recordActionText, { color: C.accent }]}>{t("customSoundSet", "record")}</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[csStyles.recordActionBtn, { backgroundColor: C.accentDim, borderColor: C.accent, borderWidth: 1 }]}
+                          onPress={() => importSampleFile(item.slot)}
+                        >
+                          <Ionicons name="folder-open" size={14} color={C.accent} />
+                          <Text style={[csStyles.recordActionText, { color: C.accent }]}>{t("customSoundSet", "import")}</Text>
+                        </Pressable>
+                      </View>
+                    )}
+                  </>
+                )}
 
                 <View style={csStyles.durationRow}>
                   <Text style={csStyles.pickerLabel}>{t("customSoundSet", "duration")}</Text>
@@ -1172,7 +1399,8 @@ export function SettingsModal({
                   </View>
                 </View>
               </View>
-            ))}
+              );
+            })}
 
             <View style={csStyles.editorActions}>
               {customSoundSets[editingCustomSlot] && (
@@ -2358,6 +2586,70 @@ const csStyles = StyleSheet.create({
     fontSize: 13,
     minWidth: 36,
     textAlign: "center",
+  },
+  customSampleInfo: {
+    gap: 4,
+  },
+  customSampleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.surface,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  customSampleName: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 11,
+    color: Colors.text,
+    flex: 1,
+  },
+  removeSampleBtn: {
+    padding: 2,
+  },
+  recordingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    paddingVertical: 4,
+  },
+  recordingIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  recordingText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 11,
+    color: "#F85149",
+  },
+  recordImportRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  recordActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    flex: 1,
+    justifyContent: "center",
+  },
+  recordActionText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 11,
+    color: "#fff",
   },
   editorActions: {
     flexDirection: "row",

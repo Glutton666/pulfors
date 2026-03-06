@@ -44,7 +44,7 @@ import {
 } from "@/lib/metronome-engine";
 import type { BeatType } from "@/lib/metronome-engine";
 import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets } from "@/lib/storage";
-import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig } from "@/lib/storage";
+import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample } from "@/lib/storage";
 import {
   BeatIndicator,
   DIAL_SIZE,
@@ -259,8 +259,15 @@ export default function MetronomeScreen() {
       const customCfg = customs[set];
       if (customCfg) {
         const mapping = role === "strong" ? customCfg.strong : role === "high" ? customCfg.accent : customCfg.normal;
-        const srcPlayers = allPlayersRef.current[mapping.sourceSet] || allPlayersRef.current.classic;
-        const r = mapping.sourceRole;
+        if (mapping.type === "custom" && mapping.sampleUri) {
+          const fallbackPlayers = allPlayersRef.current.classic;
+          if (role === "strong") return toggle ? fallbackPlayers.strongB : fallbackPlayers.strongA;
+          if (role === "high") return toggle ? fallbackPlayers.highB : fallbackPlayers.highA;
+          return toggle ? fallbackPlayers.lowB : fallbackPlayers.lowA;
+        }
+        const srcSet = mapping.sourceSet || "classic";
+        const srcPlayers = allPlayersRef.current[srcSet] || allPlayersRef.current.classic;
+        const r = mapping.sourceRole || "strong";
         if (r === "strong") return toggle ? srcPlayers.strongB : srcPlayers.strongA;
         if (r === "high") return toggle ? srcPlayers.highB : srcPlayers.highA;
         return toggle ? srcPlayers.lowB : srcPlayers.lowA;
@@ -547,16 +554,31 @@ export default function MetronomeScreen() {
 
     const customCfg = customSoundSetsRef.current[set];
     if (customCfg) {
-      const loadRole = async (cfg: { sourceSet: BuiltinSoundSet; sourceRole: string; duration: number }) => {
-        const src = soundSets[cfg.sourceSet];
-        const asset = cfg.sourceRole === "strong" ? src.strong : cfg.sourceRole === "high" ? src.high : src.low;
-        const decoded = await loadAssetPCM(asset);
-        return trimPCM(decoded, cfg.duration);
+      const loadSample = async (cfg: CustomSoundSample) => {
+        if (cfg.type === "custom" && cfg.sampleUri) {
+          try {
+            const pcm = await decodeSampleFile(cfg.sampleUri);
+            if (pcm) {
+              const trimmed = trimPCM({ pcm, trimStartSamples: 0, trimLenSamples: pcm.length }, cfg.duration);
+              return trimmed.pcm;
+            }
+            console.warn("[CustomSound] Decode returned null for:", cfg.sampleUri);
+          } catch (e) {
+            console.warn("[CustomSound] Failed to decode custom sample:", e);
+          }
+        }
+        const srcSet = cfg.sourceSet || "classic";
+        const srcRole = cfg.sourceRole || "strong";
+        const src = soundSets[srcSet];
+        const asset = srcRole === "strong" ? src.strong : srcRole === "high" ? src.high : src.low;
+        const raw = await loadAssetPCM(asset);
+        const trimmed = trimPCM({ pcm: raw, trimStartSamples: 0, trimLenSamples: raw.length }, cfg.duration);
+        return trimmed.pcm;
       };
       const [strong, high, low] = await Promise.all([
-        loadRole(customCfg.strong),
-        loadRole(customCfg.accent),
-        loadRole(customCfg.normal),
+        loadSample(customCfg.strong),
+        loadSample(customCfg.accent),
+        loadSample(customCfg.normal),
       ]);
       const result: ClickPCMs = { strong, high, low };
       clickPCMCacheRef.current[set] = result;

@@ -79,9 +79,9 @@ The app supports **Korean (한국어)** and **English** with Korean as the defau
 
 ## Custom Sound Sets
 
-Users can create up to 3 custom sound sets in the Sound tab of Settings. Each custom set allows mixing samples from the 4 built-in sets (Classic, Woodblock, Digital, Rimshot) for each role (Strong, Accent, Normal), with per-sample duration control (0.1~3.0s).
+Users can create up to 3 custom sound sets in the Sound tab of Settings. Each custom set allows mixing samples from the 4 built-in sets (Classic, Woodblock, Digital, Rimshot) for each role (Strong, Accent, Normal), with per-sample duration control (0.1~3.0s). Each sample slot can also use user-recorded audio (via microphone, max 3s) or imported audio files (via document picker). The `CustomSoundSample` type is a discriminated union: `type: "builtin"` (sourceSet + sourceRole) or `type: "custom"` (sampleUri + sampleName).
 
 ### Architecture
-- **`lib/storage.ts`**: Defines `CustomSoundSetConfig`, `BuiltinSoundSet`, `SoundRole` types. Custom configs stored in AsyncStorage under `metronome_custom_sound_sets` key. Up to 3 slots: `custom1`, `custom2`, `custom3`.
-- **`components/SettingsModal.tsx`**: Inline editor in Sound tab — source set picker, role picker, duration +/- buttons, preview, save/delete.
-- **`app/index.tsx`**: Custom set audio routing via `getCustomPlayer()` helper that maps custom configs to built-in set players at runtime. PCM rendering trims audio to specified duration with 10ms fade-out via `trimPCM()`. PCM cache invalidated on custom set changes.
+- **`lib/storage.ts`**: Defines `CustomSoundSetConfig`, `CustomSoundSample`, `BuiltinSoundSet`, `SoundRole` types. Custom configs stored in AsyncStorage under `metronome_custom_sound_sets` key. Up to 3 slots: `custom1`, `custom2`, `custom3`.
+- **`components/SettingsModal.tsx`**: Inline editor in Sound tab — source type toggle (Built-in / Record+File), source set picker, role picker, duration +/- buttons, mic recording with timer, file import via `expo-document-picker`, preview, save/delete. Recording uses `expo-av` Audio.Recording (max 3s, auto-stop).
+- **`app/index.tsx`**: Custom set audio routing via `getCustomPlayer()` helper. For builtin samples, maps to built-in set players. For custom audio samples, falls back to classic players for real-time playback (PCM rendering handles custom URIs properly via `decodeSampleFile`). PCM rendering trims audio to specified duration with 10ms fade-out via `trimPCM()`. PCM cache invalidated on custom set changes.
