@@ -271,16 +271,68 @@ export function SettingsModal({
     rimshot: [rimshotStrong, rimshotHigh, rimshotLow],
   };
 
+  const playCustomSampleUri = useCallback(async (uri: string, duration: number) => {
+    if (previewSoundRef.current) {
+      try { await previewSoundRef.current.unloadAsync(); } catch {}
+      previewSoundRef.current = null;
+    }
+    try {
+      const sound = new Audio.Sound();
+      const rawUri = uri.split("#")[0];
+      await sound.loadAsync({ uri: rawUri });
+      previewSoundRef.current = sound;
+      const hashParts = uri.split("#t=")[1];
+      let startMs = 0;
+      if (hashParts) {
+        const parts = hashParts.split(",").map(Number);
+        if (!isNaN(parts[0])) startMs = parts[0];
+      }
+      await sound.setPositionAsync(startMs);
+      await sound.playAsync();
+      setTimeout(async () => {
+        try { await sound.stopAsync(); await sound.unloadAsync(); } catch {}
+        if (previewSoundRef.current === sound) previewSoundRef.current = null;
+      }, duration * 1000);
+    } catch (e) {
+      console.warn("Preview failed:", e);
+    }
+  }, []);
+
   const playSoundPreview = useCallback((set: SoundSet) => {
     const idx = previewIndexRef.current[set] ?? 0;
-    const players = previewPlayers[set];
+    let players = previewPlayers[set];
+    if (!players) {
+      const cfg = customSoundSets[set];
+      if (cfg) {
+        const samples = [cfg.strong, cfg.accent, cfg.normal];
+        const sample = samples[idx % 3];
+        if (sample.type === "custom" && sample.sampleUri) {
+          playCustomSampleUri(sample.sampleUri, sample.duration);
+          previewIndexRef.current[set] = (idx + 1) % 3;
+          return;
+        }
+        const srcSet = sample.sourceSet || "classic";
+        const srcRole = sample.sourceRole || "strong";
+        players = previewPlayers[srcSet];
+        if (players) {
+          const roleIdx = srcRole === "strong" ? 0 : srcRole === "high" ? 1 : 2;
+          try {
+            players[roleIdx].seekTo(0);
+            players[roleIdx].play();
+          } catch {}
+          previewIndexRef.current[set] = (idx + 1) % 3;
+          return;
+        }
+      }
+      players = previewPlayers.classic;
+    }
     const player = players[idx];
     try {
       player.seekTo(0);
       player.play();
     } catch {}
     previewIndexRef.current[set] = (idx + 1) % 3;
-  }, []);
+  }, [customSoundSets, playCustomSampleUri]);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
@@ -662,33 +714,6 @@ export function SettingsModal({
     { value: "low", labelKey: "roleNormal" },
   ];
 
-  const previewCustomUri = useCallback(async (uri: string, duration: number) => {
-    if (previewSoundRef.current) {
-      try { await previewSoundRef.current.unloadAsync(); } catch {}
-      previewSoundRef.current = null;
-    }
-    try {
-      const sound = new Audio.Sound();
-      const rawUri = uri.split("#")[0];
-      await sound.loadAsync({ uri: rawUri });
-      previewSoundRef.current = sound;
-      const hashParts = uri.split("#t=")[1];
-      let startMs = 0;
-      if (hashParts) {
-        const parts = hashParts.split(",").map(Number);
-        if (!isNaN(parts[0])) startMs = parts[0];
-      }
-      await sound.setPositionAsync(startMs);
-      await sound.playAsync();
-      const endMs = startMs + duration * 1000;
-      setTimeout(async () => {
-        try { await sound.stopAsync(); await sound.unloadAsync(); } catch {}
-        if (previewSoundRef.current === sound) previewSoundRef.current = null;
-      }, duration * 1000);
-    } catch (e) {
-      console.warn("Preview failed:", e);
-    }
-  }, []);
 
   const startSampleRecording = useCallback(async (slot: "strong" | "accent" | "normal") => {
     const { status } = await Audio.requestPermissionsAsync();
@@ -1152,6 +1177,7 @@ export function SettingsModal({
                 ]}
                 onPress={() => {
                   onSoundSetChange(slot);
+                  playSoundPreview(slot);
                   if (Platform.OS !== "web") Haptics.selectionAsync();
                 }}
                 onLongPress={() => openCustomEditor(slot)}
@@ -1225,7 +1251,7 @@ export function SettingsModal({
                   <Pressable
                     onPress={() => {
                       if (sampleType === "custom" && item.state.sampleUri) {
-                        previewCustomUri(item.state.sampleUri, item.state.duration);
+                        playCustomSampleUri(item.state.sampleUri, item.state.duration);
                       } else if (sampleType === "builtin" && item.state.sourceSet && item.state.sourceRole) {
                         previewCustomSample(item.state.sourceSet, item.state.sourceRole);
                       }
