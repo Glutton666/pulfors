@@ -64,16 +64,10 @@ export default function RootLayout() {
   useEffect(() => {
     const configureAudio = async () => {
       try {
-        if (Platform.OS === "ios") {
+        if (Platform.OS !== "web") {
           await setAudioModeAsync({
             playsInSilentMode: true,
-            shouldPlayInBackground: false,
-            interruptionMode: "mixWithOthers",
-          });
-        } else if (Platform.OS === "android") {
-          await setAudioModeAsync({
-            playsInSilentMode: true,
-            shouldPlayInBackground: false,
+            shouldPlayInBackground: true,
             interruptionMode: "mixWithOthers",
           });
         }
