@@ -696,6 +696,34 @@ export function WorkUpOverviewModal({
                   </View>
                 </View>
 
+                {goals.length > 0 && goals.some(g => getGoalProgress(g) >= g.target) && (
+                  <View style={s.card}>
+                    <View style={s.cardHeader}>
+                      <View style={s.cardHeaderLeft}>
+                        <Ionicons name="checkmark-done" size={16} color="#3fb950" />
+                        <Text style={[s.cardTitle, { color: "#3fb950" }]}>{t("workUp", "completedGoals")}</Text>
+                      </View>
+                    </View>
+                    {goals.filter(g => getGoalProgress(g) >= g.target).map((goal) => {
+                      const progress = getGoalProgress(goal);
+                      const goalColor = goal.type === "beat_mode_time" ? BEAT_COLOR : goal.type === "bar_mode_time" ? BAR_COLOR : goal.type === "room_time" ? ROOM_COLOR : goal.type === "session_goal" ? BAR_COLOR : C.accent;
+                      return (
+                        <View key={goal.id} style={s.goalRow}>
+                          <View style={[s.completedIcon, { backgroundColor: "rgba(63, 185, 80, 0.15)" }]}>
+                            <Ionicons name="checkmark-circle" size={22} color="#3fb950" />
+                          </View>
+                          <View style={s.goalInfo}>
+                            <Text style={s.goalLabel}>{goal.label}</Text>
+                            <Text style={[s.goalProgress, { color: "#3fb950" }]}>
+                              {Math.round(progress)}m / {goal.target}m ✓
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
                 {hasLastYearData && (
                   <Pressable style={[s.card, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]} onPress={() => setShowYearlySummary(true)}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -841,7 +869,12 @@ export function WorkUpOverviewModal({
                     {goals.length > 0 && (
                       <View style={shareStyles.goalsSection}>
                         <Text style={shareStyles.sectionTitle}>Goals</Text>
-                        {goals.map((goal) => {
+                        {[...goals].sort((a, b) => {
+                          const aCompleted = getGoalProgress(a) >= a.target ? 1 : 0;
+                          const bCompleted = getGoalProgress(b) >= b.target ? 1 : 0;
+                          if (aCompleted !== bCompleted) return bCompleted - aCompleted;
+                          return (getGoalProgress(b) / b.target) - (getGoalProgress(a) / a.target);
+                        }).map((goal) => {
                           const progress = getGoalProgress(goal);
                           const pct = Math.min(1, progress / goal.target);
                           const goalColor = goal.type === "beat_mode_time" ? BEAT_COLOR : goal.type === "bar_mode_time" ? BAR_COLOR : goal.type === "room_time" ? ROOM_COLOR : C.accent;
@@ -850,14 +883,42 @@ export function WorkUpOverviewModal({
                             <View key={goal.id} style={shareStyles.goalItem}>
                               <View style={shareStyles.goalLeft}>
                                 <Ionicons name={completed ? "checkmark-circle" : "ellipse-outline"} size={16} color={completed ? "#3fb950" : goalColor} />
-                                <Text style={shareStyles.goalText}>{goal.label}</Text>
+                                <Text style={[shareStyles.goalText, completed && { color: "#3fb950" }]}>{goal.label}</Text>
                               </View>
-                              <Text style={[shareStyles.goalProg, { color: goalColor }]}>
-                                {Math.round(progress)}m / {goal.target}m
+                              <Text style={[shareStyles.goalProg, { color: completed ? "#3fb950" : goalColor }]}>
+                                {Math.round(progress)}m / {goal.target}m{completed ? " ✓" : ""}
                               </Text>
                             </View>
                           );
                         })}
+                      </View>
+                    )}
+
+                    {(beatSessionDetails.length > 0 || barSessionDetails.length > 0) && (
+                      <View style={shareStyles.goalsSection}>
+                        <Text style={shareStyles.sectionTitle}>{t("workUp", "sessionDetails")}</Text>
+                        {beatSessionDetails.map((sess, i) => (
+                          <View key={`b${i}`} style={shareStyles.goalItem}>
+                            <View style={shareStyles.goalLeft}>
+                              <View style={[shareStyles.shareDot, { backgroundColor: BEAT_COLOR }]} />
+                              <Text style={shareStyles.goalText}>{sess.bpm} BPM</Text>
+                            </View>
+                            <Text style={[shareStyles.goalProg, { color: BEAT_COLOR }]}>
+                              {formatDurationLocalized(sess.duration, language)}
+                            </Text>
+                          </View>
+                        ))}
+                        {barSessionDetails.map((sess, i) => (
+                          <View key={`r${i}`} style={shareStyles.goalItem}>
+                            <View style={shareStyles.goalLeft}>
+                              <View style={[shareStyles.shareDot, { backgroundColor: BAR_COLOR }]} />
+                              <Text style={shareStyles.goalText} numberOfLines={1}>{sess.label}</Text>
+                            </View>
+                            <Text style={[shareStyles.goalProg, { color: BAR_COLOR }]}>
+                              {formatDurationLocalized(sess.duration, language)}
+                            </Text>
+                          </View>
+                        ))}
                       </View>
                     )}
                   </View>
@@ -1030,6 +1091,13 @@ const s = StyleSheet.create({
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
     color: Colors.textSecondary,
+  },
+  completedIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
   },
   goalEditRow: {
     flexDirection: "row",
@@ -1476,6 +1544,11 @@ const shareStyles = StyleSheet.create({
   goalProg: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 12,
+  },
+  shareDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   weekSection: {
     gap: 10,

@@ -219,6 +219,9 @@ const translations = {
     total: { ko: "총합", en: "Total" },
     keepUp: { ko: "계속 화이팅!", en: "Keep up the great work!" },
     error: { ko: "오류", en: "Error" },
+    completedGoals: { ko: "달성 목표", en: "Completed Goals" },
+    sessionDetails: { ko: "세션 상세", en: "Session Details" },
+    noCompletedGoals: { ko: "아직 달성한 목표가 없습니다", en: "No completed goals yet" },
   },
   signalGenerator: {
     sine: { ko: "사인", en: "Sine" },
