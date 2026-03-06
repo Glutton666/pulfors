@@ -43,8 +43,8 @@ import {
   soundSets,
 } from "@/lib/metronome-engine";
 import type { BeatType } from "@/lib/metronome-engine";
-import { loadSettings, saveSettings } from "@/lib/storage";
-import type { FlashMode, HapticMode, SoundSet } from "@/lib/storage";
+import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets } from "@/lib/storage";
+import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig } from "@/lib/storage";
 import {
   BeatIndicator,
   DIAL_SIZE,
@@ -55,7 +55,6 @@ import { BpmSlider } from "@/components/BpmSlider";
 import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
 import { SettingsModal } from "@/components/SettingsModal";
-import { TunerModal } from "@/components/TunerModal";
 import { SignalGeneratorModal } from "@/components/SignalGeneratorModal";
 import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
@@ -75,7 +74,7 @@ import {
   renderMeasure,
   saveRenderedWav,
 } from "@/lib/audio-renderer";
-import type { ClickPCMs, SamplePCMEntry, TickInfo } from "@/lib/audio-renderer";
+import type { ClickPCMs, SamplePCMEntry, TickInfo, DecodedSample } from "@/lib/audio-renderer";
 import type { ActivityLog, Goal, PracticeSessionData, PracticeRoomVisitData } from "@/lib/activity-log";
 import {
   loadPracticeRooms,
@@ -155,7 +154,6 @@ export default function MetronomeScreen() {
   const [timerStopMode, setTimerStopMode] = useState<"immediate" | "end-of-cycle">("end-of-cycle");
   const [username, setUsername] = useState("");
   const [showMenu, setShowMenu] = useState(false);
-  const [showTuner, setShowTuner] = useState(false);
   const [showSignalGen, setShowSignalGen] = useState(false);
   const [showPracticeBook, setShowPracticeBook] = useState(false);
   const [showWorkUp, setShowWorkUp] = useState(false);
@@ -170,6 +168,9 @@ export default function MetronomeScreen() {
   const [completedGoalPopups, setCompletedGoalPopups] = useState<Goal[]>([]);
   const dismissedGoalIdsRef = useRef<Set<string>>(new Set());
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [customSoundSets, setCustomSoundSets] = useState<Record<string, CustomSoundSetConfig>>({});
+  const customSoundSetsRef = useRef<Record<string, CustomSoundSetConfig>>({});
+  useEffect(() => { customSoundSetsRef.current = customSoundSets; }, [customSoundSets]);
 
   const [noteSamples, setNoteSamples] = useState<NoteSampleMap>({});
   const noteSamplesRef = useRef<NoteSampleMap>({});
@@ -252,27 +253,42 @@ export default function MetronomeScreen() {
       } catch (e) {}
     };
 
+    const getCustomPlayer = (role: "high" | "low" | "strong", toggle: boolean) => {
+      const set = soundSetRef.current;
+      const customs = customSoundSetsRef.current;
+      const customCfg = customs[set];
+      if (customCfg) {
+        const mapping = role === "strong" ? customCfg.strong : role === "high" ? customCfg.accent : customCfg.normal;
+        const srcPlayers = allPlayersRef.current[mapping.sourceSet] || allPlayersRef.current.classic;
+        const r = mapping.sourceRole;
+        if (r === "strong") return toggle ? srcPlayers.strongB : srcPlayers.strongA;
+        if (r === "high") return toggle ? srcPlayers.highB : srcPlayers.highA;
+        return toggle ? srcPlayers.lowB : srcPlayers.lowA;
+      }
+      const players = allPlayersRef.current[set as keyof typeof allPlayersRef.current] || allPlayersRef.current.classic;
+      if (role === "strong") return toggle ? players.strongB : players.strongA;
+      if (role === "high") return toggle ? players.highB : players.highA;
+      return toggle ? players.lowB : players.lowA;
+    };
+
     engine.setAudioCallbacks(
       () => {
         try {
-          const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
-          const active = highToggle.current ? players.highB : players.highA;
+          const active = getCustomPlayer("high", highToggle.current);
           highToggle.current = !highToggle.current;
           restartPlayer(active);
         } catch (e) {}
       },
       () => {
         try {
-          const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
-          const active = lowToggle.current ? players.lowB : players.lowA;
+          const active = getCustomPlayer("low", lowToggle.current);
           lowToggle.current = !lowToggle.current;
           restartPlayer(active);
         } catch (e) {}
       },
       () => {
         try {
-          const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
-          const active = strongToggle.current ? players.strongB : players.strongA;
+          const active = getCustomPlayer("strong", strongToggle.current);
           strongToggle.current = !strongToggle.current;
           restartPlayer(active);
         } catch (e) {}
@@ -358,10 +374,11 @@ export default function MetronomeScreen() {
         setUsername(settings.username);
       }
 
+      loadCustomSoundSets().then(setCustomSoundSets);
       setIsLoaded(true);
 
       const set = settings.soundSet || "classic";
-      const src = soundSets[set] || soundSets.classic;
+      const src = soundSets[set as keyof typeof soundSets] || soundSets.classic;
       Promise.all([
         loadAssetPCM(src.strong),
         loadAssetPCM(src.high),
@@ -514,9 +531,39 @@ export default function MetronomeScreen() {
     }
   }, []);
 
+  const trimPCM = useCallback((decoded: DecodedSample, durationSec: number): DecodedSample => {
+    const maxSamples = Math.floor(durationSec * 44100);
+    if (decoded.pcm.length <= maxSamples) return decoded;
+    const trimmed = decoded.pcm.slice(0, maxSamples);
+    const fadeLen = Math.min(Math.floor(0.01 * 44100), trimmed.length);
+    for (let i = 0; i < fadeLen; i++) {
+      trimmed[trimmed.length - fadeLen + i] *= (fadeLen - i) / fadeLen;
+    }
+    return { pcm: trimmed, trimStartSamples: decoded.trimStartSamples, trimLenSamples: Math.min(decoded.trimLenSamples, maxSamples) };
+  }, []);
+
   const getClickPCMs = useCallback(async (set: SoundSet): Promise<ClickPCMs> => {
     if (clickPCMCacheRef.current[set]) return clickPCMCacheRef.current[set];
-    const src = soundSets[set] || soundSets.classic;
+
+    const customCfg = customSoundSetsRef.current[set];
+    if (customCfg) {
+      const loadRole = async (cfg: { sourceSet: BuiltinSoundSet; sourceRole: string; duration: number }) => {
+        const src = soundSets[cfg.sourceSet];
+        const asset = cfg.sourceRole === "strong" ? src.strong : cfg.sourceRole === "high" ? src.high : src.low;
+        const decoded = await loadAssetPCM(asset);
+        return trimPCM(decoded, cfg.duration);
+      };
+      const [strong, high, low] = await Promise.all([
+        loadRole(customCfg.strong),
+        loadRole(customCfg.accent),
+        loadRole(customCfg.normal),
+      ]);
+      const result: ClickPCMs = { strong, high, low };
+      clickPCMCacheRef.current[set] = result;
+      return result;
+    }
+
+    const src = soundSets[set as keyof typeof soundSets] || soundSets.classic;
     const [strong, high, low] = await Promise.all([
       loadAssetPCM(src.strong),
       loadAssetPCM(src.high),
@@ -525,7 +572,7 @@ export default function MetronomeScreen() {
     const result: ClickPCMs = { strong, high, low };
     clickPCMCacheRef.current[set] = result;
     return result;
-  }, []);
+  }, [trimPCM]);
 
   const getSamplePCMs = useCallback(async (samples: NoteSampleMap): Promise<Map<string, SamplePCMEntry>> => {
     const map = new Map<string, SamplePCMEntry>();
@@ -592,7 +639,10 @@ export default function MetronomeScreen() {
 
   const warmupAudioPlayers = useCallback(async () => {
     try {
-      const players = allPlayersRef.current[soundSetRef.current] || allPlayersRef.current.classic;
+      const set = soundSetRef.current;
+      const customCfg = customSoundSetsRef.current[set];
+      const builtinSet = customCfg ? customCfg.strong.sourceSet : (set as keyof typeof soundSets);
+      const players = allPlayersRef.current[builtinSet] || allPlayersRef.current.classic;
       const toWarm = [players.highA, players.highB, players.lowA, players.lowB, players.strongA, players.strongB];
       const savedVolumes = toWarm.map(p => p.volume);
       toWarm.forEach(p => { p.volume = 0; });
@@ -1009,7 +1059,6 @@ export default function MetronomeScreen() {
 
       setShowSettings(false);
       setShowMenu(false);
-      setShowTuner(false);
       setShowSignalGen(false);
       setShowPracticeBook(false);
       setShowWorkUp(false);
@@ -2153,18 +2202,6 @@ export default function MetronomeScreen() {
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
-                  setShowTuner(true);
-                  if (loggingEnabled) featureStartRef.current = { name: "tuner", start: Date.now() };
-                }}
-              >
-                <MaterialCommunityIcons name="tune-variant" size={18} color={C.accent} />
-                <Text style={styles.menuItemText}>Tuner</Text>
-              </Pressable>
-              <View style={styles.menuDivider} />
-              <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-                onPress={() => {
-                  setShowMenu(false);
                   setShowSignalGen(true);
                   if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
                 }}
@@ -2210,18 +2247,6 @@ export default function MetronomeScreen() {
           </Pressable>
         </Modal>
       )}
-
-      <TunerModal
-        visible={showTuner}
-        onClose={() => {
-          setShowTuner(false);
-          if (loggingEnabled && featureStartRef.current?.name === "tuner") {
-            const dur = Math.round((Date.now() - featureStartRef.current.start) / 1000);
-            if (dur >= 2) addActivityLog({ type: "feature_usage", data: { feature: "tuner", duration: dur } });
-            featureStartRef.current = null;
-          }
-        }}
-      />
 
       <SignalGeneratorModal
         visible={showSignalGen}
@@ -2308,9 +2333,16 @@ export default function MetronomeScreen() {
         onStartRoomTracking={startRoomTracking}
         onStopRoomTracking={stopRoomTracking}
         onResetApp={handleResetApp}
+        customSoundSets={customSoundSets}
+        onCustomSoundSetsChange={(configs) => {
+          setCustomSoundSets(configs);
+          for (const key of Object.keys(clickPCMCacheRef.current)) {
+            if (key.startsWith("custom")) delete clickPCMCacheRef.current[key];
+          }
+        }}
       />
 
-      {completedGoalPopups.length > 0 && !showMenu && !showTuner && !showSignalGen && !showPracticeBook && !showWorkUp && !showSettings && (
+      {completedGoalPopups.length > 0 && !showMenu && !showSignalGen && !showPracticeBook && !showWorkUp && !showSettings && (
         <View style={[styles.goalPopupContainer, { top: (insets.top || webTopInset) + 8, pointerEvents: "box-none" }]}>
           {completedGoalPopups.map((goal) => {
             const goalColor = goal.type === "beat_mode_time" ? "#58A6FF" : goal.type === "bar_mode_time" ? "#F0883E" : goal.type === "room_time" ? "#A371F7" : C.accent;

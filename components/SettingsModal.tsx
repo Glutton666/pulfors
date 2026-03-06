@@ -24,7 +24,8 @@ import * as ImagePicker from "expo-image-picker";
 import { useAudioPlayer } from "expo-audio";
 import Colors, { ACCENT_PRESETS, accentFromHex, type ThemeColor } from "@/constants/colors";
 import { useTheme, type BeatTypeKey } from "@/contexts/ThemeContext";
-import type { FlashMode, HapticMode, SoundSet } from "@/lib/storage";
+import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, SoundRole, CustomSoundSetConfig } from "@/lib/storage";
+import { loadCustomSoundSets, saveCustomSoundSets, BUILTIN_SOUND_SETS } from "@/lib/storage";
 import { soundSets } from "@/lib/metronome-engine";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { Language } from "@/lib/i18n";
@@ -85,6 +86,8 @@ interface SettingsModalProps {
   onStartRoomTracking: (room: { id: string; name: string }) => void;
   onStopRoomTracking: () => void;
   onResetApp?: () => void;
+  customSoundSets: Record<string, CustomSoundSetConfig>;
+  onCustomSoundSetsChange: (configs: Record<string, CustomSoundSetConfig>) => void;
 }
 
 function getSoundSetOptions(t: any): { value: SoundSet; label: string; icon: string }[] {
@@ -175,6 +178,8 @@ export function SettingsModal({
   onStartRoomTracking,
   onStopRoomTracking,
   onResetApp,
+  customSoundSets,
+  onCustomSoundSetsChange,
 }: SettingsModalProps) {
   const { themeColor, customHex, setThemeColor, setCustomHex, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
   const { language, setLanguage, t } = useLanguage();
@@ -198,6 +203,11 @@ export function SettingsModal({
   const [addingRoom, setAddingRoom] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showLoggingInfo, setShowLoggingInfo] = useState(false);
+  const [editingCustomSlot, setEditingCustomSlot] = useState<string | null>(null);
+  const [customName, setCustomName] = useState("");
+  const [customStrong, setCustomStrong] = useState<{ sourceSet: BuiltinSoundSet; sourceRole: SoundRole; duration: number }>({ sourceSet: "classic", sourceRole: "strong", duration: 0.5 });
+  const [customAccent, setCustomAccent] = useState<{ sourceSet: BuiltinSoundSet; sourceRole: SoundRole; duration: number }>({ sourceSet: "classic", sourceRole: "high", duration: 0.5 });
+  const [customNormal, setCustomNormal] = useState<{ sourceSet: BuiltinSoundSet; sourceRole: SoundRole; duration: number }>({ sourceSet: "classic", sourceRole: "low", duration: 0.5 });
 
   useEffect(() => {
     if (visible) {
@@ -564,6 +574,83 @@ export function SettingsModal({
   const TRIPLE_OPTS = getTripleOptions(t);
   const SOUND_OPTS = getSoundSetOptions(t);
 
+  const openCustomEditor = useCallback((slot: string) => {
+    const existing = customSoundSets[slot];
+    if (existing) {
+      setCustomName(existing.name);
+      setCustomStrong(existing.strong);
+      setCustomAccent(existing.accent);
+      setCustomNormal(existing.normal);
+    } else {
+      setCustomName(t("customSoundSet", "namePlaceholder"));
+      setCustomStrong({ sourceSet: "classic", sourceRole: "strong", duration: 0.5 });
+      setCustomAccent({ sourceSet: "classic", sourceRole: "high", duration: 0.5 });
+      setCustomNormal({ sourceSet: "classic", sourceRole: "low", duration: 0.5 });
+    }
+    setEditingCustomSlot(slot);
+  }, [customSoundSets, t]);
+
+  const saveCustomSet = useCallback(() => {
+    if (!editingCustomSlot) return;
+    const updated = {
+      ...customSoundSets,
+      [editingCustomSlot]: {
+        name: customName || t("customSoundSet", "namePlaceholder"),
+        strong: customStrong,
+        accent: customAccent,
+        normal: customNormal,
+      },
+    };
+    onCustomSoundSetsChange(updated);
+    saveCustomSoundSets(updated);
+    setEditingCustomSlot(null);
+  }, [editingCustomSlot, customName, customStrong, customAccent, customNormal, customSoundSets, onCustomSoundSetsChange, t]);
+
+  const deleteCustomSet = useCallback((slot: string) => {
+    Alert.alert(
+      t("customSoundSet", "deleteTitle"),
+      t("customSoundSet", "deleteConfirm"),
+      [
+        { text: t("customSoundSet", "cancel"), style: "cancel" },
+        {
+          text: t("customSoundSet", "delete"),
+          style: "destructive",
+          onPress: () => {
+            const updated = { ...customSoundSets };
+            delete updated[slot];
+            onCustomSoundSetsChange(updated);
+            saveCustomSoundSets(updated);
+            if (soundSet === slot) onSoundSetChange("classic");
+            if (editingCustomSlot === slot) setEditingCustomSlot(null);
+          },
+        },
+      ]
+    );
+  }, [customSoundSets, onCustomSoundSetsChange, soundSet, onSoundSetChange, editingCustomSlot, t]);
+
+  const getNextCustomSlot = useCallback((): string | null => {
+    const slots = ["custom1", "custom2", "custom3"];
+    for (const s of slots) {
+      if (!customSoundSets[s]) return s;
+    }
+    return null;
+  }, [customSoundSets]);
+
+  const previewCustomSample = useCallback((sourceSet: BuiltinSoundSet, sourceRole: SoundRole) => {
+    const players = previewPlayers[sourceSet];
+    const idx = sourceRole === "strong" ? 0 : sourceRole === "high" ? 1 : 2;
+    try {
+      players[idx].seekTo(0);
+      players[idx].play();
+    } catch {}
+  }, [previewPlayers]);
+
+  const ROLE_OPTIONS: { value: SoundRole; labelKey: string }[] = [
+    { value: "strong", labelKey: "roleStrong" },
+    { value: "high", labelKey: "roleAccent" },
+    { value: "low", labelKey: "roleNormal" },
+  ];
+
   const renderThemeTab = () => (
     <>
       <View style={styles.section}>
@@ -920,7 +1007,193 @@ export function SettingsModal({
               </Pressable>
             );
           })}
+
+          {(["custom1", "custom2", "custom3"] as const).map((slot) => {
+            const config = customSoundSets[slot];
+            if (!config) return null;
+            const active = soundSet === slot;
+            return (
+              <Pressable
+                key={slot}
+                style={[
+                  styles.soundSetBtn,
+                  active && [styles.soundSetBtnActive, { borderColor: C.accent, backgroundColor: C.accentDim }],
+                ]}
+                onPress={() => {
+                  onSoundSetChange(slot);
+                  if (Platform.OS !== "web") Haptics.selectionAsync();
+                }}
+                onLongPress={() => openCustomEditor(slot)}
+              >
+                <MaterialCommunityIcons
+                  name="tune-variant"
+                  size={20}
+                  color={active ? C.accent : Colors.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.soundSetLabel,
+                    active && [styles.soundSetLabelActive, { color: C.accent }],
+                  ]}
+                  numberOfLines={1}
+                >
+                  {config.name}
+                </Text>
+              </Pressable>
+            );
+          })}
+
+          {Object.keys(customSoundSets).length < 3 && (
+            <Pressable
+              style={[styles.soundSetBtn, styles.soundSetAddBtn]}
+              onPress={() => {
+                const slot = getNextCustomSlot();
+                if (slot) openCustomEditor(slot);
+              }}
+            >
+              <Ionicons name="add" size={20} color={Colors.textSecondary} />
+              <Text style={styles.soundSetLabel}>
+                {t("customSoundSet", "addCustom")}
+              </Text>
+            </Pressable>
+          )}
         </View>
+
+        {editingCustomSlot && (
+          <View style={csStyles.editorContainer}>
+            <View style={csStyles.editorHeader}>
+              <Text style={csStyles.editorTitle}>{t("customSoundSet", "title")}</Text>
+              <Pressable onPress={() => setEditingCustomSlot(null)}>
+                <Ionicons name="close" size={20} color={Colors.textSecondary} />
+              </Pressable>
+            </View>
+
+            <View style={csStyles.nameRow}>
+              <Text style={csStyles.fieldLabel}>{t("customSoundSet", "name")}</Text>
+              <TextInput
+                style={csStyles.nameInput}
+                value={customName}
+                onChangeText={setCustomName}
+                placeholder={t("customSoundSet", "namePlaceholder")}
+                placeholderTextColor={Colors.textTertiary}
+                maxLength={12}
+              />
+            </View>
+
+            {([
+              { label: t("customSoundSet", "strongSample"), state: customStrong, setter: setCustomStrong },
+              { label: t("customSoundSet", "accentSample"), state: customAccent, setter: setCustomAccent },
+              { label: t("customSoundSet", "normalSample"), state: customNormal, setter: setCustomNormal },
+            ] as const).map((item, idx) => (
+              <View key={idx} style={csStyles.sampleSection}>
+                <View style={csStyles.sampleHeader}>
+                  <Text style={csStyles.sampleTitle}>{item.label}</Text>
+                  <Pressable
+                    onPress={() => previewCustomSample(item.state.sourceSet, item.state.sourceRole)}
+                    style={csStyles.previewBtn}
+                  >
+                    <Ionicons name="play" size={14} color={C.accent} />
+                  </Pressable>
+                </View>
+
+                <View style={csStyles.pickerRow}>
+                  <Text style={csStyles.pickerLabel}>{t("customSoundSet", "source")}</Text>
+                  <View style={csStyles.chipRow}>
+                    {BUILTIN_SOUND_SETS.map((bs) => {
+                      const active = item.state.sourceSet === bs;
+                      return (
+                        <Pressable
+                          key={bs}
+                          style={[csStyles.chip, active && { borderColor: C.accent, backgroundColor: C.accentDim }]}
+                          onPress={() => {
+                            item.setter({ ...item.state, sourceSet: bs });
+                            if (Platform.OS !== "web") Haptics.selectionAsync();
+                          }}
+                        >
+                          <Text style={[csStyles.chipText, active && { color: C.accent }]}>
+                            {t("soundSets", bs)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <View style={csStyles.pickerRow}>
+                  <Text style={csStyles.pickerLabel}>{t("customSoundSet", "role")}</Text>
+                  <View style={csStyles.chipRow}>
+                    {ROLE_OPTIONS.map((ro) => {
+                      const active = item.state.sourceRole === ro.value;
+                      return (
+                        <Pressable
+                          key={ro.value}
+                          style={[csStyles.chip, active && { borderColor: C.accent, backgroundColor: C.accentDim }]}
+                          onPress={() => {
+                            item.setter({ ...item.state, sourceRole: ro.value });
+                            previewCustomSample(item.state.sourceSet, ro.value);
+                            if (Platform.OS !== "web") Haptics.selectionAsync();
+                          }}
+                        >
+                          <Text style={[csStyles.chipText, active && { color: C.accent }]}>
+                            {t("customSoundSet", ro.labelKey)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <View style={csStyles.durationRow}>
+                  <Text style={csStyles.pickerLabel}>{t("customSoundSet", "duration")}</Text>
+                  <View style={csStyles.durationControls}>
+                    <Pressable
+                      style={csStyles.durationBtn}
+                      onPress={() => {
+                        const next = Math.max(0.1, Math.round((item.state.duration - 0.1) * 10) / 10);
+                        item.setter({ ...item.state, duration: next });
+                        if (Platform.OS !== "web") Haptics.selectionAsync();
+                      }}
+                    >
+                      <Ionicons name="remove" size={14} color={Colors.text} />
+                    </Pressable>
+                    <Text style={[csStyles.durationValue, { color: C.accent }]}>
+                      {item.state.duration.toFixed(1)}s
+                    </Text>
+                    <Pressable
+                      style={csStyles.durationBtn}
+                      onPress={() => {
+                        const next = Math.min(3.0, Math.round((item.state.duration + 0.1) * 10) / 10);
+                        item.setter({ ...item.state, duration: next });
+                        if (Platform.OS !== "web") Haptics.selectionAsync();
+                      }}
+                    >
+                      <Ionicons name="add" size={14} color={Colors.text} />
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            ))}
+
+            <View style={csStyles.editorActions}>
+              {customSoundSets[editingCustomSlot] && (
+                <Pressable
+                  style={csStyles.deleteBtn}
+                  onPress={() => deleteCustomSet(editingCustomSlot)}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#F85149" />
+                  <Text style={csStyles.deleteBtnText}>{t("customSoundSet", "delete")}</Text>
+                </Pressable>
+              )}
+              <Pressable
+                style={[csStyles.saveBtn, { backgroundColor: C.accent }]}
+                onPress={saveCustomSet}
+              >
+                <Ionicons name="checkmark" size={16} color={Colors.background} />
+                <Text style={csStyles.saveBtnText}>{t("customSoundSet", "save")}</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
       </View>
 
       <View style={styles.divider} />
@@ -1952,6 +2225,172 @@ const styles = StyleSheet.create({
   loggingInfoCloseBtnText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
+    color: Colors.background,
+  },
+  soundSetAddBtn: {
+    borderStyle: "dashed" as any,
+    borderColor: Colors.border,
+  },
+});
+
+const csStyles = StyleSheet.create({
+  editorContainer: {
+    marginTop: 12,
+    backgroundColor: Colors.surfaceLight,
+    borderRadius: 12,
+    padding: 14,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  editorHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  editorTitle: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 14,
+    color: Colors.text,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  fieldLabel: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    color: Colors.textSecondary,
+    width: 60,
+  },
+  nameInput: {
+    flex: 1,
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 13,
+    color: Colors.text,
+    backgroundColor: Colors.surface,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  sampleSection: {
+    gap: 6,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingTop: 10,
+  },
+  sampleHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  sampleTitle: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 12,
+    color: Colors.text,
+  },
+  previewBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: Colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  pickerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  pickerLabel: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 11,
+    color: Colors.textTertiary,
+    width: 44,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    flex: 1,
+  },
+  chip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  chipText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 10,
+    color: Colors.textSecondary,
+  },
+  durationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  durationControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  durationBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  durationValue: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 13,
+    minWidth: 36,
+    textAlign: "center",
+  },
+  editorActions: {
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "flex-end",
+  },
+  deleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(248, 81, 73, 0.3)",
+    backgroundColor: "rgba(248, 81, 73, 0.08)",
+  },
+  deleteBtnText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 12,
+    color: "#F85149",
+  },
+  saveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  saveBtnText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 12,
     color: Colors.background,
   },
 });

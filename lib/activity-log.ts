@@ -15,7 +15,7 @@ export interface PracticeSessionData {
 }
 
 export interface FeatureUsageData {
-  feature: "tuner" | "signal_generator" | "practice_note";
+  feature: "signal_generator" | "practice_note";
   duration: number;
 }
 

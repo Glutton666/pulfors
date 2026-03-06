@@ -8,7 +8,46 @@ const PRACTICE_BOOK_KEY = "practice_book";
 
 export type FlashMode = "all" | "accent" | "off";
 export type HapticMode = "all" | "accent" | "off";
-export type SoundSet = "classic" | "woodblock" | "digital" | "rimshot";
+export type BuiltinSoundSet = "classic" | "woodblock" | "digital" | "rimshot";
+export type SoundSet = BuiltinSoundSet | "custom1" | "custom2" | "custom3";
+
+export type SoundRole = "strong" | "high" | "low";
+
+export interface CustomSoundSample {
+  sourceSet: BuiltinSoundSet;
+  sourceRole: SoundRole;
+  duration: number;
+}
+
+export interface CustomSoundSetConfig {
+  name: string;
+  strong: CustomSoundSample;
+  accent: CustomSoundSample;
+  normal: CustomSoundSample;
+}
+
+const CUSTOM_SOUND_SETS_KEY = "metronome_custom_sound_sets";
+
+export async function loadCustomSoundSets(): Promise<Record<string, CustomSoundSetConfig>> {
+  try {
+    const data = await AsyncStorage.getItem(CUSTOM_SOUND_SETS_KEY);
+    if (data) return JSON.parse(data);
+  } catch (e) {
+    console.warn("Failed to load custom sound sets:", e);
+  }
+  return {};
+}
+
+export async function saveCustomSoundSets(configs: Record<string, CustomSoundSetConfig>): Promise<void> {
+  try {
+    await AsyncStorage.setItem(CUSTOM_SOUND_SETS_KEY, JSON.stringify(configs));
+  } catch (e) {
+    console.warn("Failed to save custom sound sets:", e);
+  }
+}
+
+export const BUILTIN_SOUND_SETS: BuiltinSoundSet[] = ["classic", "woodblock", "digital", "rimshot"];
+export const CUSTOM_SOUND_SET_SLOTS: SoundSet[] = ["custom1", "custom2", "custom3"];
 
 export interface MetronomeSettings {
   bpm: number;
