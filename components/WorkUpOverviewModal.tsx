@@ -834,7 +834,6 @@ export function WorkUpOverviewModal({
                     <View style={shareStyles.brandRow}>
                       <View style={shareStyles.brandBadge}>
                         <Text style={[shareStyles.brandTextMain, { color: C.accent }]}>Pul</Text>
-                        <Text style={shareStyles.brandDash}>-</Text>
                         <Text style={[shareStyles.brandTextSub, { color: "#fff" }]}>Fors</Text>
                       </View>
                       {username ? (
@@ -1470,20 +1469,13 @@ const shareStyles = StyleSheet.create({
   },
   brandTextMain: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 20,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-  },
-  brandDash: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 20,
-    color: "#ffffff44",
-    marginHorizontal: 1,
+    fontSize: 22,
+    letterSpacing: 3,
   },
   brandTextSub: {
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 18,
-    letterSpacing: 1.5,
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 22,
+    letterSpacing: 1,
   },
   userBadge: {
     borderWidth: 1,
