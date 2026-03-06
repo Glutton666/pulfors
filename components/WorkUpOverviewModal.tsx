@@ -1476,7 +1476,7 @@ const shareStyles = StyleSheet.create({
   brandPlus: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 18,
-    color: "#ffffff55",
+    color: "#ffffffcc",
     marginHorizontal: 1,
   },
   brandTextSub: {
