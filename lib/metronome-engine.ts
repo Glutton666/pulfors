@@ -79,6 +79,7 @@ export class MetronomeEngine {
   private preRenderedAudio = false;
   private pendingMeasureStartAction: (() => void) | null = null;
   private onProgress: ((info: ProgressInfo) => void) | null = null;
+  private onScheduleRebuild: (() => void) | null = null;
 
   private schedule: ScheduledTick[] = [];
   private scheduleIndex = 0;
@@ -121,6 +122,10 @@ export class MetronomeEngine {
 
   setOnMeasureComplete(callback: (() => void) | null) {
     this.onMeasureComplete = callback;
+  }
+
+  setOnScheduleRebuild(callback: (() => void) | null) {
+    this.onScheduleRebuild = callback;
   }
 
   requestStopAfterMeasure() {
@@ -508,6 +513,11 @@ export class MetronomeEngine {
       const elapsed = performance.now() - this.measureStartTime;
       this.measureStartTime = performance.now() - this.schedule[bestIdx].time;
       this.scheduleIndex = bestIdx;
+    }
+
+    if (this.preRenderedAudio) {
+      this.preRenderedAudio = false;
+      this.onScheduleRebuild?.();
     }
   }
 

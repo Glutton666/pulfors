@@ -928,6 +928,16 @@ export default function MetronomeScreen() {
         });
       }
     });
+
+    engine.setOnScheduleRebuild(() => {
+      if (renderedPlayerRef.current) {
+        try {
+          renderedPlayerRef.current.pause();
+          renderedPlayerRef.current.release();
+        } catch {}
+        renderedPlayerRef.current = null;
+      }
+    });
   }, [flashOpacity]);
 
   useEffect(() => {
