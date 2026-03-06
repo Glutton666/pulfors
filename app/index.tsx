@@ -1292,12 +1292,12 @@ export default function MetronomeScreen() {
         renderedPlayer.pause();
         await renderedPlayer.seekTo(0);
         renderedPlayer.volume = 1.0;
-        renderedPlayer.play();
       } else {
         engine.setPreRenderedAudio(false);
       }
       setIsPreparing(false);
       setIsPlaying(true);
+      if (renderedPlayer) renderedPlayer.play();
       engine.start(startBeat ?? undefined);
 
       if (barModeRef.current && barLoopModeRef.current === "once") {
@@ -1534,12 +1534,12 @@ export default function MetronomeScreen() {
       renderedPlayer.pause();
       await renderedPlayer.seekTo(0);
       renderedPlayer.volume = 1.0;
-      renderedPlayer.play();
     } else {
       engine.setPreRenderedAudio(false);
     }
     setIsPreparing(false);
     setIsPlaying(true);
+    if (renderedPlayer) renderedPlayer.play();
     engine.start();
   }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio, warmupAudioPlayers]);
 
