@@ -25,6 +25,7 @@ import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 type Mode = "stopwatch" | "timer";
 type TimerState = "idle" | "running" | "paused" | "finishing";
 
@@ -76,6 +77,7 @@ export function StopwatchTimer({
   isMetronomePlaying,
   topInset,
 }: StopwatchTimerProps) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("stopwatch");
   const [state, setState] = useState<TimerState>("idle");
@@ -537,7 +539,7 @@ export function StopwatchTimer({
                   color={mode === "stopwatch" ? C.accent : Colors.textTertiary}
                 />
                 <Text style={[styles.tabText, mode === "stopwatch" && styles.tabTextActive, mode === "stopwatch" && { color: C.accent }]}>
-                  스톱워치
+                  {t("stopwatchTimer", "stopwatch")}
                 </Text>
               </Pressable>
               <Pressable
@@ -555,7 +557,7 @@ export function StopwatchTimer({
                   color={mode === "timer" ? C.accent : Colors.textTertiary}
                 />
                 <Text style={[styles.tabText, mode === "timer" && styles.tabTextActive, mode === "timer" && { color: C.accent }]}>
-                  타이머
+                  {t("stopwatchTimer", "timer")}
                 </Text>
               </Pressable>
             </View>

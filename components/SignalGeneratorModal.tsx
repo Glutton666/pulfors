@@ -24,12 +24,13 @@ import {
   generateToneDataUri,
 } from "@/lib/signal-generator-engine";
 import { autoCorrelate, frequencyToNote } from "@/lib/tuner-engine";
+import { useLanguage } from "@/contexts/LanguageContext";
 
-const WAVE_OPTIONS: { type: WaveType; label: string; icon: string }[] = [
-  { type: "sine", label: "Sine", icon: "sine-wave" },
-  { type: "square", label: "Square", icon: "square-wave" },
-  { type: "triangle", label: "Triangle", icon: "triangle-wave" },
-  { type: "sawtooth", label: "Saw", icon: "sawtooth-wave" },
+const WAVE_CONFIGS: { type: WaveType; key: "sine" | "square" | "triangle" | "saw"; icon: string }[] = [
+  { type: "sine", key: "sine", icon: "sine-wave" },
+  { type: "square", key: "square", icon: "square-wave" },
+  { type: "triangle", key: "triangle", icon: "triangle-wave" },
+  { type: "sawtooth", key: "saw", icon: "sawtooth-wave" },
 ];
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -287,6 +288,7 @@ interface SignalGeneratorModalProps {
 
 export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalProps) {
   const { colors: C } = useTheme();
+  const { t } = useLanguage();
   const [frequency, setFrequency] = useState(440);
   const [waveType, setWaveType] = useState<WaveType>("sine");
   const [isPlaying, setIsPlaying] = useState(false);
@@ -836,7 +838,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
           <View style={styles.waveSection}>
             <Text style={styles.sectionLabel}>WAVEFORM</Text>
             <View style={styles.waveRow}>
-              {WAVE_OPTIONS.map((w) => {
+              {WAVE_CONFIGS.map((w) => {
                 const active = waveType === w.type;
                 return (
                   <Pressable
@@ -849,7 +851,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                       size={20}
                       color={active ? C.accent : Colors.textTertiary}
                     />
-                    <Text style={[styles.waveBtnText, active && { color: C.accent }]}>{w.label}</Text>
+                    <Text style={[styles.waveBtnText, active && { color: C.accent }]}>{t("signalGenerator", w.key)}</Text>
                   </Pressable>
                 );
               })}
@@ -874,7 +876,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               color={isPlaying ? Colors.white : Colors.background}
             />
             <Text style={[styles.playBtnText, { color: isPlaying ? Colors.white : Colors.background }]}>
-              {isPlaying ? "Stop" : "Play"}
+              {isPlaying ? t("signalGenerator", "stop") : t("signalGenerator", "play")}
             </Text>
           </Pressable>
         </View>

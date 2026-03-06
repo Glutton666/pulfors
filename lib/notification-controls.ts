@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
+import { createT, type Language } from "@/lib/i18n";
 
 const CATEGORY_ID = "metronome_controls";
 const NOTIFICATION_ID = "metronome_playback";
@@ -11,7 +12,8 @@ const isExpoGo = Constants.appOwnership === "expo";
 
 async function getNotifications() {
   if (Notifications) return Notifications;
-  if (Platform.OS === "web" || isExpoGo) return null;
+  if (Platform.OS === "web") return null;
+  if (Platform.OS === "ios" && isExpoGo) return null;
   try {
     Notifications = await import("expo-notifications");
     return Notifications;
@@ -38,7 +40,8 @@ async function initHandler() {
 
 initHandler();
 
-function buildActions(isPlaying: boolean) {
+function buildActions(isPlaying: boolean, lang: Language = "ko") {
+  const t = createT(lang);
   return [
     {
       identifier: "BPM_DOWN",
@@ -47,7 +50,7 @@ function buildActions(isPlaying: boolean) {
     },
     {
       identifier: "TOGGLE_PLAY",
-      buttonTitle: isPlaying ? "⏸ Pause" : "▶ Play",
+      buttonTitle: isPlaying ? `⏸ ${t("notification", "pause")}` : `▶ ${t("notification", "play")}`,
       options: { opensAppToForeground: true },
     },
     {
@@ -58,10 +61,11 @@ function buildActions(isPlaying: boolean) {
   ];
 }
 
-function buildContent(bpm: number, _mode: string, isPlaying: boolean) {
+function buildContent(bpm: number, _mode: string, isPlaying: boolean, lang: Language = "ko") {
+  const t = createT(lang);
   return {
     title: `${isPlaying ? "▶" : "⏸"} ${bpm} BPM`,
-    body: isPlaying ? "Playing" : "Paused",
+    body: isPlaying ? t("notification", "playing") : t("notification", "paused"),
     categoryIdentifier: CATEGORY_ID,
     sticky: true,
     autoDismiss: false,
@@ -69,8 +73,10 @@ function buildContent(bpm: number, _mode: string, isPlaying: boolean) {
   };
 }
 
-export async function setupNotificationControls() {
-  if (isSetup || Platform.OS === "web" || isExpoGo) return;
+export async function setupNotificationControls(lang: Language = "ko") {
+  if (isSetup) return;
+  if (Platform.OS === "web") return;
+  if (Platform.OS === "ios" && isExpoGo) return;
 
   const N = await getNotifications();
   if (!N) return;
@@ -79,9 +85,10 @@ export async function setupNotificationControls() {
     const { status } = await N.requestPermissionsAsync();
     if (status !== "granted") return;
 
+    const t = createT(lang);
     if (Platform.OS === "android") {
       await N.setNotificationChannelAsync("metronome", {
-        name: "Metronome Controls",
+        name: t("notification", "channelName"),
         importance: N.AndroidImportance.LOW,
         sound: undefined,
         vibrationPattern: [],
@@ -91,7 +98,7 @@ export async function setupNotificationControls() {
 
     await N.setNotificationCategoryAsync(
       CATEGORY_ID,
-      buildActions(false)
+      buildActions(false, lang)
     );
 
     isSetup = true;
@@ -100,10 +107,11 @@ export async function setupNotificationControls() {
   }
 }
 
-export async function showPlayingNotification(bpm: number, mode: string) {
-  if (Platform.OS === "web" || isExpoGo) return;
+export async function showPlayingNotification(bpm: number, mode: string, lang: Language = "ko") {
+  if (Platform.OS === "web") return;
+  if (Platform.OS === "ios" && isExpoGo) return;
   if (!isSetup) {
-    await setupNotificationControls();
+    await setupNotificationControls(lang);
     if (!isSetup) return;
   }
 
@@ -113,12 +121,12 @@ export async function showPlayingNotification(bpm: number, mode: string) {
   try {
     await N.setNotificationCategoryAsync(
       CATEGORY_ID,
-      buildActions(true)
+      buildActions(true, lang)
     );
 
     await N.scheduleNotificationAsync({
       identifier: NOTIFICATION_ID,
-      content: buildContent(bpm, mode, true),
+      content: buildContent(bpm, mode, true, lang),
       trigger: null,
     });
   } catch (e) {
@@ -126,8 +134,9 @@ export async function showPlayingNotification(bpm: number, mode: string) {
   }
 }
 
-export async function updateNotificationBpm(bpm: number, mode: string, isPlaying: boolean = true) {
-  if (Platform.OS === "web" || !isSetup || isExpoGo) return;
+export async function updateNotificationBpm(bpm: number, mode: string, isPlaying: boolean = true, lang: Language = "ko") {
+  if (Platform.OS === "web" || !isSetup) return;
+  if (Platform.OS === "ios" && isExpoGo) return;
 
   const N = await getNotifications();
   if (!N) return;
@@ -135,7 +144,7 @@ export async function updateNotificationBpm(bpm: number, mode: string, isPlaying
   try {
     await N.scheduleNotificationAsync({
       identifier: NOTIFICATION_ID,
-      content: buildContent(bpm, mode, isPlaying),
+      content: buildContent(bpm, mode, isPlaying, lang),
       trigger: null,
     });
   } catch (e) {
@@ -143,8 +152,9 @@ export async function updateNotificationBpm(bpm: number, mode: string, isPlaying
   }
 }
 
-export async function showPausedNotification(bpm: number, mode: string) {
-  if (Platform.OS === "web" || !isSetup || isExpoGo) return;
+export async function showPausedNotification(bpm: number, mode: string, lang: Language = "ko") {
+  if (Platform.OS === "web" || !isSetup) return;
+  if (Platform.OS === "ios" && isExpoGo) return;
 
   const N = await getNotifications();
   if (!N) return;
@@ -152,12 +162,12 @@ export async function showPausedNotification(bpm: number, mode: string) {
   try {
     await N.setNotificationCategoryAsync(
       CATEGORY_ID,
-      buildActions(false)
+      buildActions(false, lang)
     );
 
     await N.scheduleNotificationAsync({
       identifier: NOTIFICATION_ID,
-      content: buildContent(bpm, mode, false),
+      content: buildContent(bpm, mode, false, lang),
       trigger: null,
     });
   } catch (e) {
@@ -166,7 +176,8 @@ export async function showPausedNotification(bpm: number, mode: string) {
 }
 
 export async function dismissNotification() {
-  if (Platform.OS === "web" || isExpoGo) return;
+  if (Platform.OS === "web") return;
+  if (Platform.OS === "ios" && isExpoGo) return;
 
   const N = await getNotifications();
   if (!N) return;
@@ -181,7 +192,10 @@ export async function dismissNotification() {
 export function addNotificationActionListener(
   callback: (actionId: string) => void
 ) {
-  if (Platform.OS === "web" || isExpoGo || !Notifications) {
+  if (Platform.OS === "web" || !Notifications) {
+    return { remove: () => {} };
+  }
+  if (Platform.OS === "ios" && isExpoGo) {
     return { remove: () => {} };
   }
 

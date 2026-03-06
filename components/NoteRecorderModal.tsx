@@ -23,6 +23,7 @@ import Animated, {
 } from "react-native-reanimated";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import type { SampleSource } from "@/lib/note-samples";
 
 type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
@@ -52,6 +53,7 @@ export function NoteRecorderModal({
   existingName,
 }: NoteRecorderModalProps) {
   const { colors: C } = useTheme();
+  const { t } = useLanguage();
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [countdownValue, setCountdownValue] = useState(COUNTDOWN_FROM);
@@ -121,7 +123,7 @@ export function NoteRecorderModal({
   const startCountdown = useCallback(async () => {
     const { status } = await Audio.requestPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission Required", "Microphone access is needed to record audio.");
+      Alert.alert(t("noteRecorder", "permissionRequired"), t("noteRecorder", "micPermission"));
       return;
     }
 
@@ -323,7 +325,7 @@ export function NoteRecorderModal({
       sourceTypeRef.current = "import";
       setPhase("loading");
       setLoadingProgress(0);
-      setLoadingMessage("Selecting file...");
+      setLoadingMessage(t("noteRecorder", "selectingFile"));
 
       const result = await DocumentPicker.getDocumentAsync({
         type: ["audio/*"],
@@ -341,13 +343,13 @@ export function NoteRecorderModal({
       const fileSizeMB = asset.size ? asset.size / (1024 * 1024) : 0;
 
       if (fileSizeMB > MAX_FILE_SIZE_MB) {
-        Alert.alert("File Too Large", `Maximum file size is ${MAX_FILE_SIZE_MB}MB. This file is ${Math.round(fileSizeMB)}MB.`);
+        Alert.alert(t("noteRecorder", "fileTooLarge"), t("noteRecorder", "fileTooLargeMsg").replace("{size}", String(MAX_FILE_SIZE_MB)).replace("{actual}", String(Math.round(fileSizeMB))));
         setPhase("idle");
         setLoadingMessage("");
         return;
       }
 
-      setLoadingMessage("Loading audio...");
+      setLoadingMessage(t("noteRecorder", "loadingAudio"));
       setLoadingProgress(0.2);
 
       const progressInterval = setInterval(() => {
@@ -377,7 +379,7 @@ export function NoteRecorderModal({
         }
 
         setLoadingProgress(1);
-        setLoadingMessage("Ready!");
+        setLoadingMessage(t("noteRecorder", "ready"));
 
         setRecordedUri(fileUri);
         setAudioDuration(durationSec);
@@ -390,7 +392,7 @@ export function NoteRecorderModal({
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
       } else {
-        Alert.alert("Error", "Could not load this audio file.");
+        Alert.alert(t("noteRecorder", "error"), t("noteRecorder", "loadError"));
         setPhase("idle");
         setLoadingMessage("");
         setLoadingProgress(0);
@@ -398,7 +400,7 @@ export function NoteRecorderModal({
       await sound.unloadAsync();
     } catch (e) {
       console.error("Failed to import audio:", e);
-      Alert.alert("Error", "Failed to import audio file.");
+      Alert.alert(t("noteRecorder", "error"), t("noteRecorder", "importError"));
       setPhase("idle");
       setLoadingMessage("");
       setLoadingProgress(0);
@@ -522,7 +524,7 @@ export function NoteRecorderModal({
           {phase === "loading" && (
             <View style={styles.content}>
               <ActivityIndicator size="large" color={C.accent} />
-              <Text style={styles.hintText}>{loadingMessage || "Loading audio..."}</Text>
+              <Text style={styles.hintText}>{loadingMessage || t("noteRecorder", "loadingAudio")}</Text>
               {loadingProgress > 0 && (
                 <View style={{ width: "80%", height: 4, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 2, marginTop: 12, overflow: "hidden" }}>
                   <View style={{ width: `${Math.round(loadingProgress * 100)}%` as any, height: "100%", backgroundColor: C.accent, borderRadius: 2 }} />
@@ -648,7 +650,7 @@ export function NoteRecorderModal({
                     color={C.accent}
                   />
                   <Text style={[styles.previewBtnText, { color: C.accent }]}>
-                    {isPlayingPreview ? "Playing..." : "Preview"}
+                    {isPlayingPreview ? t("noteRecorder", "playing") : t("noteRecorder", "previewBtn")}
                   </Text>
                 </Pressable>
               </View>
@@ -659,7 +661,7 @@ export function NoteRecorderModal({
                   style={[styles.nameInput, { borderColor: C.accent + "40" }]}
                   value={sampleName}
                   onChangeText={setSampleName}
-                  placeholder="Sample name (optional)"
+                  placeholder={t("noteRecorder", "sampleName")}
                   placeholderTextColor={Colors.textTertiary}
                   returnKeyType="done"
                   maxLength={30}

@@ -31,6 +31,8 @@ import {
   type PracticeSessionData,
   type PracticeRoomVisitData,
 } from "@/lib/activity-log";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { formatDurationLocalized } from "@/lib/i18n";
 
 interface WorkUpOverviewModalProps {
   visible: boolean;
@@ -42,12 +44,8 @@ interface WorkUpOverviewModalProps {
   onStopRoomTracking: () => void;
 }
 
-const GOAL_TYPE_OPTIONS: { value: Goal["type"]; label: string; short: string }[] = [
-  { value: "total_play_time", label: "Total Play Time", short: "Total" },
-  { value: "beat_mode_time", label: "Beat Mode Time", short: "Beat" },
-  { value: "bar_mode_time", label: "Bar Mode Time", short: "Bar" },
-  { value: "room_time", label: "Practice Room Time", short: "Room" },
-];
+type GoalTypeValue = Goal["type"];
+const GOAL_TYPE_VALUES: GoalTypeValue[] = ["total_play_time", "beat_mode_time", "bar_mode_time", "room_time"];
 
 const ROOM_COLOR = "#A371F7";
 
@@ -81,16 +79,6 @@ function getStartOfYear(date: Date): number {
 }
 
 type PlayTimePeriod = "today" | "week" | "month";
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.round(seconds % 60);
-  if (mins < 60) return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  const remainMins = mins % 60;
-  return remainMins > 0 ? `${hrs}h ${remainMins}m` : `${hrs}h`;
-}
 
 function formatMinutes(seconds: number): string {
   const mins = Math.round(seconds / 60);
@@ -218,6 +206,7 @@ export function WorkUpOverviewModal({
   onStopRoomTracking,
 }: WorkUpOverviewModalProps) {
   const { colors: C } = useTheme();
+  const { language, t } = useLanguage();
   const insets = useSafeAreaInsets();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
@@ -265,14 +254,14 @@ export function WorkUpOverviewModal({
       } else {
         const available = await Sharing.isAvailableAsync();
         if (available) {
-          await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: "Share Practice Summary" });
+          await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: t("workUp", "shareTitle") });
         } else {
-          Alert.alert("Sharing not available on this device");
+          Alert.alert(t("workUp", "sharingNotAvailable"));
         }
       }
     } catch (e) {
       console.warn("Share error:", e);
-      Alert.alert("Error", "Could not capture or share the image.");
+      Alert.alert(t("workUp", "error"), t("workUp", "shareError"));
     } finally {
       setShareCapturing(false);
     }
@@ -363,7 +352,7 @@ export function WorkUpOverviewModal({
     }
   }, [playTimePeriod, todayTotalTime, todayBeatTime, todayBarTime, weekTotalTime, weekBeatTime, weekBarTime, monthTotalTime, monthBeatTime, monthBarTime]);
 
-  const periodLabel = playTimePeriod === "today" ? "Today" : playTimePeriod === "week" ? "This Week" : "This Month";
+  const periodLabel = playTimePeriod === "today" ? t("workUp", "today") : playTimePeriod === "week" ? t("workUp", "thisWeek") : t("workUp", "thisMonth");
 
   const cyclePeriod = useCallback((direction: 1 | -1) => {
     const periods: PlayTimePeriod[] = ["today", "week", "month"];
@@ -461,7 +450,13 @@ export function WorkUpOverviewModal({
   const handleAddGoal = useCallback(async () => {
     const target = parseInt(newGoalTarget, 10);
     if (isNaN(target) || target <= 0) return;
-    const label = GOAL_TYPE_OPTIONS.find((o) => o.value === newGoalType)?.label || "";
+    const goalLabelMap: Record<GoalTypeValue, string> = {
+      total_play_time: t("workUp", "totalPlayTime"),
+      beat_mode_time: t("workUp", "beatModeTime"),
+      bar_mode_time: t("workUp", "barModeTime"),
+      room_time: t("workUp", "roomTime"),
+    };
+    const label = goalLabelMap[newGoalType] || "";
     const newGoal: Goal = { id: Crypto.randomUUID(), type: newGoalType, target, label };
     const updated = [...goals, newGoal];
     setGoals(updated);
@@ -547,24 +542,32 @@ export function WorkUpOverviewModal({
                   {showAddGoal && (
                     <View style={[s.addForm, { borderColor: C.accentDim }]}>
                       <View style={s.goalTypeRow}>
-                        {GOAL_TYPE_OPTIONS.map((opt) => (
+                        {GOAL_TYPE_VALUES.map((val) => {
+                          const shortMap: Record<GoalTypeValue, string> = {
+                            total_play_time: t("workUp", "totalShort"),
+                            beat_mode_time: t("workUp", "beatShort"),
+                            bar_mode_time: t("workUp", "barShort"),
+                            room_time: t("workUp", "roomShort"),
+                          };
+                          return (
                           <Pressable
-                            key={opt.value}
-                            style={[s.goalTypeChip, newGoalType === opt.value && { borderColor: C.accent, backgroundColor: C.accentDim }]}
-                            onPress={() => setNewGoalType(opt.value)}
+                            key={val}
+                            style={[s.goalTypeChip, newGoalType === val && { borderColor: C.accent, backgroundColor: C.accentDim }]}
+                            onPress={() => setNewGoalType(val)}
                           >
-                            <Text style={[s.goalTypeChipText, newGoalType === opt.value && { color: C.accent }]} numberOfLines={1}>
-                              {opt.short}
+                            <Text style={[s.goalTypeChipText, newGoalType === val && { color: C.accent }]} numberOfLines={1}>
+                              {shortMap[val]}
                             </Text>
                           </Pressable>
-                        ))}
+                          );
+                        })}
                       </View>
                       <View style={s.addFormRow}>
                         <TextInput
                           style={[s.formInput, { borderColor: C.accentMuted }]}
                           value={newGoalTarget}
                           onChangeText={setNewGoalTarget}
-                          placeholder="Minutes"
+                          placeholder={t("workUp", "minutesPlaceholder")}
                           placeholderTextColor={Colors.textTertiary}
                           keyboardType="numeric"
                         />
@@ -664,29 +667,29 @@ export function WorkUpOverviewModal({
                       bgColor={Colors.surfaceLight}
                     >
                       <Text style={[s.donutCenter, { color: C.accent }]}>{formatMinutes(periodData.total)}</Text>
-                      <Text style={s.donutUnit}>min</Text>
+                      <Text style={s.donutUnit}>{t("workUp", "goalUnit")}</Text>
                     </DonutChart>
 
                     <View style={s.donutLegend}>
                       <View style={s.legendItem}>
                         <View style={[s.legendDot, { backgroundColor: BEAT_COLOR }]} />
                         <View>
-                          <Text style={s.legendLabel}>Beat Mode</Text>
-                          <Text style={[s.legendValue, { color: BEAT_COLOR }]}>{formatDuration(periodData.beat)}</Text>
+                          <Text style={s.legendLabel}>{t("workUp", "beatMode")}</Text>
+                          <Text style={[s.legendValue, { color: BEAT_COLOR }]}>{formatDurationLocalized(periodData.beat, language)}</Text>
                         </View>
                       </View>
                       <View style={s.legendItem}>
                         <View style={[s.legendDot, { backgroundColor: BAR_COLOR }]} />
                         <View>
-                          <Text style={s.legendLabel}>Bar Mode</Text>
-                          <Text style={[s.legendValue, { color: BAR_COLOR }]}>{formatDuration(periodData.bar)}</Text>
+                          <Text style={s.legendLabel}>{t("workUp", "barMode")}</Text>
+                          <Text style={[s.legendValue, { color: BAR_COLOR }]}>{formatDurationLocalized(periodData.bar, language)}</Text>
                         </View>
                       </View>
                       <View style={s.legendItem}>
                         <View style={[s.legendDot, { backgroundColor: C.accent }]} />
                         <View>
-                          <Text style={s.legendLabel}>Total</Text>
-                          <Text style={[s.legendValue, { color: C.accent }]}>{formatDuration(periodData.total)}</Text>
+                          <Text style={s.legendLabel}>{t("workUp", "total")}</Text>
+                          <Text style={[s.legendValue, { color: C.accent }]}>{formatDurationLocalized(periodData.total, language)}</Text>
                         </View>
                       </View>
                     </View>
@@ -720,7 +723,7 @@ export function WorkUpOverviewModal({
                         <View style={s.detailSection}>
                           <View style={s.detailSectionHeader}>
                             <View style={[s.legendDot, { backgroundColor: BEAT_COLOR }]} />
-                            <Text style={[s.detailSectionTitle, { color: BEAT_COLOR }]}>Beat Mode Sessions</Text>
+                            <Text style={[s.detailSectionTitle, { color: BEAT_COLOR }]}>{t("workUp", "beatModeSessions")}</Text>
                           </View>
                           {beatSessionDetails.map((sess, i) => (
                             <View key={i} style={s.detailRow}>
@@ -728,7 +731,7 @@ export function WorkUpOverviewModal({
                                 <Text style={s.detailMain}>{sess.bpm} BPM</Text>
                                 <Text style={s.detailSub}>{sess.count} session{sess.count > 1 ? "s" : ""}</Text>
                               </View>
-                              <Text style={[s.detailTime, { color: BEAT_COLOR }]}>{formatDuration(sess.duration)}</Text>
+                              <Text style={[s.detailTime, { color: BEAT_COLOR }]}>{formatDurationLocalized(sess.duration, language)}</Text>
                             </View>
                           ))}
                         </View>
@@ -739,7 +742,7 @@ export function WorkUpOverviewModal({
                         <View style={s.detailSection}>
                           <View style={s.detailSectionHeader}>
                             <View style={[s.legendDot, { backgroundColor: BAR_COLOR }]} />
-                            <Text style={[s.detailSectionTitle, { color: BAR_COLOR }]}>Bar Mode Sessions</Text>
+                            <Text style={[s.detailSectionTitle, { color: BAR_COLOR }]}>{t("workUp", "barModeSessions")}</Text>
                           </View>
                           {barSessionDetails.map((sess, i) => (
                             <View key={i} style={s.detailRow}>
@@ -750,7 +753,7 @@ export function WorkUpOverviewModal({
                                 )}
                                 <Text style={s.detailSub}>{sess.count} session{sess.count > 1 ? "s" : ""}</Text>
                               </View>
-                              <Text style={[s.detailTime, { color: BAR_COLOR }]}>{formatDuration(sess.duration)}</Text>
+                              <Text style={[s.detailTime, { color: BAR_COLOR }]}>{formatDurationLocalized(sess.duration, language)}</Text>
                             </View>
                           ))}
                         </View>
@@ -777,12 +780,12 @@ export function WorkUpOverviewModal({
               <Pressable onPress={() => setShowShareModal(false)} hitSlop={12}>
                 <Ionicons name="close" size={24} color={Colors.text} />
               </Pressable>
-              <Text style={shareStyles.topTitle}>Share Summary</Text>
+              <Text style={shareStyles.topTitle}>{t("workUp", "shareSummary")}</Text>
               <Pressable onPress={handleShare} disabled={shareCapturing} style={[shareStyles.shareBtn, { backgroundColor: C.accent }]}>
                 {shareCapturing ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={shareStyles.shareBtnText}>Share</Text>
+                  <Text style={shareStyles.shareBtnText}>{t("workUp", "share")}</Text>
                 )}
               </Pressable>
             </View>
@@ -809,28 +812,28 @@ export function WorkUpOverviewModal({
                     <View style={shareStyles.comboSection}>
                       <View style={shareStyles.bigTimeWrap}>
                         <Text style={[shareStyles.bigTime, { color: "#fff" }]}>{formatMinutes(todayTotalTime)}</Text>
-                        <Text style={shareStyles.bigTimeUnit}>min</Text>
+                        <Text style={shareStyles.bigTimeUnit}>{t("workUp", "goalUnit")}</Text>
                       </View>
                       <View style={shareStyles.barChart}>
                         <View style={shareStyles.barRow}>
-                          <Text style={shareStyles.barLabel}>Beat</Text>
+                          <Text style={shareStyles.barLabel}>{t("workUp", "beatShort")}</Text>
                           <View style={shareStyles.barTrack}>
                             <View style={[shareStyles.barFill, {
                               backgroundColor: BEAT_COLOR,
                               width: todayTotalTime > 0 ? `${Math.max(5, (todayBeatTime / todayTotalTime) * 100)}%` : "5%"
                             }]} />
                           </View>
-                          <Text style={[shareStyles.barValue, { color: BEAT_COLOR }]}>{formatDuration(todayBeatTime)}</Text>
+                          <Text style={[shareStyles.barValue, { color: BEAT_COLOR }]}>{formatDurationLocalized(todayBeatTime, language)}</Text>
                         </View>
                         <View style={shareStyles.barRow}>
-                          <Text style={shareStyles.barLabel}>Bar</Text>
+                          <Text style={shareStyles.barLabel}>{t("workUp", "barShort")}</Text>
                           <View style={shareStyles.barTrack}>
                             <View style={[shareStyles.barFill, {
                               backgroundColor: BAR_COLOR,
                               width: todayTotalTime > 0 ? `${Math.max(5, (todayBarTime / todayTotalTime) * 100)}%` : "5%"
                             }]} />
                           </View>
-                          <Text style={[shareStyles.barValue, { color: BAR_COLOR }]}>{formatDuration(todayBarTime)}</Text>
+                          <Text style={[shareStyles.barValue, { color: BAR_COLOR }]}>{formatDurationLocalized(todayBarTime, language)}</Text>
                         </View>
                       </View>
                     </View>
@@ -908,25 +911,25 @@ export function WorkUpOverviewModal({
 
             <View style={yearStyles.bigStat}>
               <Text style={[yearStyles.bigNum, { color: C.accent }]}>{formatMinutes(lastYearTotalTime)}</Text>
-              <Text style={yearStyles.bigLabel}>minutes practiced</Text>
+              <Text style={yearStyles.bigLabel}>{t("workUp", "minutesPracticed")}</Text>
             </View>
 
             <View style={yearStyles.statsGrid}>
               <View style={yearStyles.statItem}>
-                <Text style={[yearStyles.statVal, { color: BEAT_COLOR }]}>{formatDuration(lastYearBeatTime)}</Text>
-                <Text style={yearStyles.statLabel}>Beat Mode</Text>
+                <Text style={[yearStyles.statVal, { color: BEAT_COLOR }]}>{formatDurationLocalized(lastYearBeatTime, language)}</Text>
+                <Text style={yearStyles.statLabel}>{t("workUp", "beatMode")}</Text>
               </View>
               <View style={yearStyles.statItem}>
-                <Text style={[yearStyles.statVal, { color: BAR_COLOR }]}>{formatDuration(lastYearBarTime)}</Text>
-                <Text style={yearStyles.statLabel}>Bar Mode</Text>
+                <Text style={[yearStyles.statVal, { color: BAR_COLOR }]}>{formatDurationLocalized(lastYearBarTime, language)}</Text>
+                <Text style={yearStyles.statLabel}>{t("workUp", "barMode")}</Text>
               </View>
               <View style={yearStyles.statItem}>
                 <Text style={[yearStyles.statVal, { color: C.accent }]}>{lastYearSessionCount}</Text>
-                <Text style={yearStyles.statLabel}>Sessions</Text>
+                <Text style={yearStyles.statLabel}>{t("workUp", "sessions")}</Text>
               </View>
             </View>
 
-            <Text style={yearStyles.footerText}>Keep up the great work!</Text>
+            <Text style={yearStyles.footerText}>{t("workUp", "keepUp")}</Text>
           </Pressable>
         </Pressable>
       </Modal>

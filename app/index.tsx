@@ -35,6 +35,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Colors from "@/constants/colors";
 import type { ThemeColor } from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { getTempoLabel as getTempoLabelI18n } from "@/lib/i18n";
 import { moderateScale } from "@/lib/scale";
 import {
   MetronomeEngine,
@@ -83,17 +85,6 @@ import {
   type PracticeRoom,
 } from "@/lib/practice-room";
 
-function getTempoLabel(bpm: number): string {
-  if (bpm < 40) return "그라베";
-  if (bpm < 60) return "라르고";
-  if (bpm < 80) return "아다지오";
-  if (bpm < 100) return "안단테";
-  if (bpm < 120) return "모데라토";
-  if (bpm < 160) return "알레그로";
-  if (bpm < 200) return "비바체";
-  if (bpm < 300) return "프레스토";
-  return "프레스티시모";
-}
 
 function defaultBeatTypes(beats: number): BeatType[] {
   return Array.from({ length: beats }, (_, i) =>
@@ -104,6 +95,9 @@ function defaultBeatTypes(beats: number): BeatType[] {
 export default function MetronomeScreen() {
   const insets = useSafeAreaInsets();
   const { setThemeColor, colors: C } = useTheme();
+  const { language, t } = useLanguage();
+  const languageRef = useRef(language);
+  useEffect(() => { languageRef.current = language; }, [language]);
 
   const [bpm, setBpm] = useState(120);
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
@@ -1172,7 +1166,7 @@ export default function MetronomeScreen() {
       setCurrentBeat(-1);
       setActiveSubNote(-1);
       setProgressInfo(null);
-      showPausedNotification(bpm, modeLabel);
+      showPausedNotification(bpm, modeLabel, languageRef.current);
       if (loggingEnabled && practiceStartRef.current) {
         const dur = Math.round((Date.now() - practiceStartRef.current) / 1000);
         if (dur >= 3) {
@@ -1193,7 +1187,7 @@ export default function MetronomeScreen() {
     } else {
       const startBeat = barModeRef.current ? barStartBeatRef.current : undefined;
       setIsPreparing(true);
-      showPlayingNotification(bpm, modeLabel);
+      showPlayingNotification(bpm, modeLabel, languageRef.current);
       if (loggingEnabled) {
         practiceStartRef.current = Date.now();
       }
@@ -1337,7 +1331,7 @@ export default function MetronomeScreen() {
           const newBpm = Math.max(20, Math.min(300, bpmRef.current + delta));
           updateBpmRef.current(newBpm);
           const modeLabel = barModeRef.current ? "Bar" : "Dial";
-          updateNotificationBpm(newBpm, modeLabel);
+          updateNotificationBpm(newBpm, modeLabel, true, languageRef.current);
         } else {
           if (bpmTapTimerRef.current) {
             clearTimeout(bpmTapTimerRef.current);
@@ -1352,7 +1346,7 @@ export default function MetronomeScreen() {
             const newBpm = Math.max(20, Math.min(300, bpmRef.current + delta));
             updateBpmRef.current(newBpm);
             const modeLabel = barModeRef.current ? "Bar" : "Dial";
-            updateNotificationBpm(newBpm, modeLabel);
+            updateNotificationBpm(newBpm, modeLabel, true, languageRef.current);
           }, 300);
         }
       }
@@ -1499,7 +1493,7 @@ export default function MetronomeScreen() {
         setActiveSubNote(-1);
         setProgressInfo(null);
         const modeLabel = barModeRef.current ? "Bar" : "Dial";
-        showPausedNotification(bpmRef.current, modeLabel);
+        showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
       }
     });
   }, []);
@@ -1518,7 +1512,7 @@ export default function MetronomeScreen() {
       setCurrentBeat(-1);
       setProgressInfo(null);
       const modeLabel = barModeRef.current ? "Bar" : "Dial";
-      showPausedNotification(bpmRef.current, modeLabel);
+      showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
     } else {
       engine.requestStopAfterMeasure();
     }
@@ -2027,22 +2021,22 @@ export default function MetronomeScreen() {
             ...decoded,
           };
           Alert.alert(
-            "설정 가져오기",
-            `"${entry.label}" 설정을 적용하시겠습니까?\n\nBPM: ${entry.bpm} | ${entry.beatsPerMeasure} beats`,
+            t("main", "importSettings"),
+            `"${entry.label}" ${t("main", "importConfirm")}\n\nBPM: ${entry.bpm} | ${entry.beatsPerMeasure} beats`,
             [
-              { text: "취소", style: "cancel" },
+              { text: t("main", "cancel"), style: "cancel" },
               {
-                text: "적용",
+                text: t("main", "apply"),
                 onPress: () => handleLoadPracticeEntry(entry),
               },
               {
-                text: "저장 후 적용",
+                text: t("main", "saveAndApply"),
                 onPress: async () => {
                   const { loadPracticeBook: lpb, savePracticeBook: spb } = await import("@/lib/storage");
                   const existing = await lpb();
                   await spb([entry, ...existing]);
                   handleLoadPracticeEntry(entry);
-                  Alert.alert("저장 완료", `"${entry.label}" 이(가) Practice Note에 저장되었습니다.`);
+                  Alert.alert(t("main", "saved"), `"${entry.label}" ${t("main", "savedToNote")}`);
                 },
               },
             ]
@@ -2079,7 +2073,7 @@ export default function MetronomeScreen() {
         const existing = await lpb();
         await spb([entry, ...existing]);
         handleLoadPracticeEntry(entry);
-        Alert.alert("설정 가져오기 완료", `"${entry.label}" 설정이 적용되고 Practice Note에 저장되었습니다.\n\nBPM: ${entry.bpm} | ${entry.beatsPerMeasure} beats`);
+        Alert.alert(t("main", "importComplete"), `"${entry.label}" ${t("main", "savedToNote")}\n\nBPM: ${entry.bpm} | ${entry.beatsPerMeasure} beats`);
       }
     }, 500);
     return () => clearTimeout(timer);
@@ -2093,7 +2087,7 @@ export default function MetronomeScreen() {
         g.id === existing.id ? { ...g, target: targetMinutes, label: `♫ ${entry.label}` } : g
       );
       await saveGoals(updated);
-      Alert.alert("목표 수정 완료", `"${entry.label}" 목표가 ${targetMinutes}분으로 변경되었습니다.`);
+      Alert.alert(t("main", "goalEdited"), `"${entry.label}" ${t("main", "goalEditedMsg")}`);
       return;
     }
     const newGoal: Goal = {
@@ -2106,10 +2100,10 @@ export default function MetronomeScreen() {
     };
     const updated = [...goals, newGoal];
     await saveGoals(updated);
-    Alert.alert("목표 설정 완료", `"${entry.label}" 연습 목표가 추가되었습니다 (${targetMinutes}분).`);
+    Alert.alert(t("main", "goalSet"), `"${entry.label}" ${t("main", "goalSetMsg")} (${targetMinutes}${t("duration", "m")})`);
   }, []);
 
-  const tempoLabel = getTempoLabel(bpm);
+  const tempoLabel = getTempoLabelI18n(bpm, language);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;

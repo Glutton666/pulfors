@@ -26,6 +26,8 @@ import Colors, { ACCENT_PRESETS, accentFromHex, type ThemeColor } from "@/consta
 import { useTheme, type BeatTypeKey } from "@/contexts/ThemeContext";
 import type { FlashMode, HapticMode, SoundSet } from "@/lib/storage";
 import { soundSets } from "@/lib/metronome-engine";
+import { useLanguage } from "@/contexts/LanguageContext";
+import type { Language } from "@/lib/i18n";
 import {
   loadPracticeRooms,
   addPracticeRoom,
@@ -85,33 +87,39 @@ interface SettingsModalProps {
   onResetApp?: () => void;
 }
 
-const SOUND_SET_OPTIONS: { value: SoundSet; label: string; icon: string }[] = [
-  { value: "classic", label: "클래식", icon: "music-note" },
-  { value: "woodblock", label: "우드블럭", icon: "music-box" },
-  { value: "digital", label: "디지털", icon: "sine-wave" },
-  { value: "rimshot", label: "림샷", icon: "music-circle-outline" },
-];
+function getSoundSetOptions(t: any): { value: SoundSet; label: string; icon: string }[] {
+  return [
+    { value: "classic", label: t("soundSets", "classic"), icon: "music-note" },
+    { value: "woodblock", label: t("soundSets", "woodblock"), icon: "music-box" },
+    { value: "digital", label: t("soundSets", "digital"), icon: "sine-wave" },
+    { value: "rimshot", label: t("soundSets", "rimshot"), icon: "music-circle-outline" },
+  ];
+}
 
-const TRIPLE_OPTIONS: { value: "all" | "accent" | "off"; label: string }[] = [
-  { value: "all", label: "전체" },
-  { value: "accent", label: "악센트" },
-  { value: "off", label: "끄기" },
-];
+function getTripleOptions(t: any): { value: "all" | "accent" | "off"; label: string }[] {
+  return [
+    { value: "all", label: t("tripleOptions", "all") },
+    { value: "accent", label: t("tripleOptions", "accent") },
+    { value: "off", label: t("tripleOptions", "off") },
+  ];
+}
 
 function TripleSelector({
   value,
   onChange,
   accentColor,
   accentDimColor,
+  options,
 }: {
   value: "all" | "accent" | "off";
   onChange: (v: "all" | "accent" | "off") => void;
   accentColor: string;
   accentDimColor: string;
+  options: { value: "all" | "accent" | "off"; label: string }[];
 }) {
   return (
     <View style={styles.tripleRow}>
-      {TRIPLE_OPTIONS.map((opt) => {
+      {options.map((opt) => {
         const active = value === opt.value;
         return (
           <Pressable
@@ -169,6 +177,7 @@ export function SettingsModal({
   onResetApp,
 }: SettingsModalProps) {
   const { themeColor, customHex, setThemeColor, setCustomHex, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
+  const { language, setLanguage, t } = useLanguage();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
   const [showCustomPicker, setShowCustomPicker] = useState(themeColor === "custom");
@@ -204,7 +213,7 @@ export function SettingsModal({
     const granted = await requestLocationPermission();
     if (!granted) {
       setAddingRoom(false);
-      Alert.alert("권한 필요", "연습실을 등록하려면 위치 권한이 필요합니다.");
+      Alert.alert(t("settings", "permissionNeeded"), t("settings", "permissionLocationMsg"));
       return;
     }
     const room = await addPracticeRoom(newRoomName.trim());
@@ -213,7 +222,7 @@ export function SettingsModal({
       setNewRoomName("");
       setShowAddRoom(false);
     } else {
-      Alert.alert("오류", "현재 위치를 가져올 수 없습니다. 다시 시도해주세요.");
+      Alert.alert(t("settings", "error"), t("settings", "locationError"));
     }
     setAddingRoom(false);
   }, [newRoomName]);
@@ -552,12 +561,46 @@ export function SettingsModal({
 
   const pct = Math.round(volume * 100);
 
+  const TRIPLE_OPTS = getTripleOptions(t);
+  const SOUND_OPTS = getSoundSetOptions(t);
+
   const renderThemeTab = () => (
     <>
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
+          <Ionicons name="language-outline" size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>{t("settings", "language")}</Text>
+        </View>
+        <View style={styles.tripleRow}>
+          {([
+            { value: "ko" as Language, label: "한국어" },
+            { value: "en" as Language, label: "English" },
+          ]).map((opt) => {
+            const active = language === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                style={[styles.tripleBtn, active && [styles.tripleBtnActive, { borderColor: C.accent, backgroundColor: C.accentDim }]]}
+                onPress={() => {
+                  setLanguage(opt.value);
+                  if (Platform.OS !== "web") Haptics.selectionAsync();
+                }}
+              >
+                <Text style={[styles.tripleBtnText, active && [styles.tripleBtnTextActive, { color: C.accent }]]}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
           <Ionicons name="color-palette-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>테마 색상</Text>
+          <Text style={styles.sectionLabel}>{t("settings", "themeColor")}</Text>
         </View>
         <ScrollView
           horizontal
@@ -659,17 +702,17 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="image-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>중앙 허브 이미지</Text>
+          <Text style={styles.sectionLabel}>{t("settings", "hubImages")}</Text>
         </View>
         <Text style={styles.offsetHint}>
-          사진을 추가하고 비트 타입에 할당하세요
+          {t("settings", "hubImagesHint")}
         </Text>
 
         {hubImages.map((img) => {
           const beatTypeOptions: { key: BeatTypeKey; label: string; icon: any }[] = [
-            { key: "normal", label: "노멀", icon: "ellipse-outline" },
-            { key: "accent", label: "악센트", icon: "chevron-up-outline" },
-            { key: "strong", label: "스트롱", icon: "chevron-up" },
+            { key: "normal", label: t("beatTypes", "normal"), icon: "ellipse-outline" },
+            { key: "accent", label: t("beatTypes", "accent"), icon: "chevron-up-outline" },
+            { key: "strong", label: t("beatTypes", "strong"), icon: "chevron-up" },
           ];
           return (
             <View key={img.id} style={styles.hubImageCard}>
@@ -717,7 +760,7 @@ export function SettingsModal({
           >
             <Ionicons name="add-circle-outline" size={20} color={C.accent} />
             <Text style={[styles.addHubImageText, { color: C.accent }]}>
-              이미지 추가 ({hubImages.length}/3)
+              {t("settings", "addImage")} ({hubImages.length}/3)
             </Text>
           </Pressable>
         )}
@@ -728,9 +771,9 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="flash-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>화면 플래시</Text>
+          <Text style={styles.sectionLabel}>{t("settings", "screenFlash")}</Text>
         </View>
-        <TripleSelector value={flashMode} onChange={onFlashModeChange} accentColor={C.accent} accentDimColor={C.accentDim} />
+        <TripleSelector value={flashMode} onChange={onFlashModeChange} accentColor={C.accent} accentDimColor={C.accentDim} options={TRIPLE_OPTS} />
       </View>
 
       <View style={styles.divider} />
@@ -738,9 +781,9 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="phone-portrait-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>햅틱 피드백</Text>
+          <Text style={styles.sectionLabel}>{t("settings", "hapticFeedback")}</Text>
         </View>
-        <TripleSelector value={hapticMode} onChange={onHapticModeChange} accentColor={C.accent} accentDimColor={C.accentDim} />
+        <TripleSelector value={hapticMode} onChange={onHapticModeChange} accentColor={C.accent} accentDimColor={C.accentDim} options={TRIPLE_OPTS} />
       </View>
 
       <View style={styles.divider} />
@@ -748,7 +791,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <MaterialCommunityIcons name="chart-line" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>활동 로깅</Text>
+          <Text style={styles.sectionLabel}>{t("settings", "activityLogging")}</Text>
           <Pressable onPress={() => setShowLoggingInfo(true)} hitSlop={8}>
             <Ionicons name="information-circle-outline" size={18} color={Colors.textTertiary} />
           </Pressable>
@@ -766,7 +809,7 @@ export function SettingsModal({
           />
         </View>
         <Text style={styles.offsetHint}>
-          연습 기록을 분석하여 실력 향상을 도와줍니다
+          {t("settings", "loggingHint")}
         </Text>
       </View>
     </>
@@ -777,7 +820,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name={volumeIcon as any} size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>볼륨</Text>
+          <Text style={styles.sectionLabel}>{t("settings", "volume")}</Text>
           <Text style={[styles.sectionValue, { color: C.accent }]}>{pct}%</Text>
         </View>
         <View
@@ -809,7 +852,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name={sampleVolumeIcon as any} size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>샘플 볼륨</Text>
+          <Text style={styles.sectionLabel}>{t("settings", "sampleVolume")}</Text>
           <Text style={[styles.sectionValue, { color: C.accent }]}>{sampleVolPct}%</Text>
         </View>
         <View
@@ -841,10 +884,10 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <MaterialCommunityIcons name="music-note-eighth" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>사운드 세트</Text>
+          <Text style={styles.sectionLabel}>{t("settings", "soundSet")}</Text>
         </View>
         <View style={styles.soundSetGrid}>
-          {SOUND_SET_OPTIONS.map((opt) => {
+          {SOUND_OPTS.map((opt) => {
             const active = soundSet === opt.value;
             return (
               <Pressable
@@ -885,7 +928,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="timer-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>오디오 오프셋</Text>
+          <Text style={styles.sectionLabel}>{t("settings", "audioOffset")}</Text>
           <Text style={[styles.sectionValue, { color: C.accent }]}>
             {audioOffsetMs > 0 ? "+" : ""}{audioOffsetMs}ms
           </Text>
@@ -942,7 +985,7 @@ export function SettingsModal({
           </Pressable>
         </View>
         <Text style={styles.offsetHint}>
-          - = 소리 빨라짐 / + = 소리 느려짐
+          {t("settings", "audioOffsetHint")}
         </Text>
       </View>
 
@@ -951,12 +994,12 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="stop-circle-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>타이머 정지</Text>
+          <Text style={styles.sectionLabel}>{t("settings", "timerStop")}</Text>
         </View>
         <View style={styles.tripleRow}>
           {([
-            { value: "end-of-cycle" as const, label: "사이클 끝" },
-            { value: "immediate" as const, label: "즉시" },
+            { value: "end-of-cycle" as const, label: t("settings", "timerStopEndCycle") },
+            { value: "immediate" as const, label: t("settings", "timerStopImmediate") },
           ]).map((opt) => {
             const active = timerStopMode === opt.value;
             return (
@@ -977,8 +1020,8 @@ export function SettingsModal({
         </View>
         <Text style={styles.offsetHint}>
           {timerStopMode === "end-of-cycle"
-            ? "현재 마디가 끝나면 정지합니다"
-            : "타이머가 끝나면 즉시 정지합니다"}
+            ? t("settings", "timerStopHintEndCycle")
+            : t("settings", "timerStopHintImmediate")}
         </Text>
       </View>
 
@@ -987,7 +1030,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="play-circle-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>백그라운드 재생</Text>
+          <Text style={styles.sectionLabel}>{t("settings", "backgroundPlay")}</Text>
           <Switch
             value={backgroundPlay}
             onValueChange={onBackgroundPlayChange}
@@ -1005,7 +1048,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="person-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>닉네임</Text>
+          <Text style={styles.sectionLabel}>{t("settings", "nickname")}</Text>
         </View>
         <TextInput
           style={[styles.usernameInput, { borderColor: C.accentMuted }]}
@@ -1013,7 +1056,7 @@ export function SettingsModal({
           onChangeText={setLocalUsername}
           onBlur={() => onUsernameChange(localUsername)}
           onSubmitEditing={() => onUsernameChange(localUsername)}
-          placeholder="이름을 입력하세요"
+          placeholder={t("settings", "nicknamePlaceholder")}
           placeholderTextColor={Colors.textTertiary}
           maxLength={30}
           testID="settings-username"
@@ -1025,24 +1068,24 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="location" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>연습실</Text>
+          <Text style={styles.sectionLabel}>{t("settings", "practiceRoom")}</Text>
         </View>
 
         {roomTrackingActive && trackingRoomName && (
           <View style={[styles.trackingBanner, { borderColor: Colors.success }]}>
             <View style={styles.trackingDot} />
             <Text style={[styles.trackingText, { color: Colors.success }]}>
-              {trackingRoomName}에서 추적 중
+              {trackingRoomName}{t("settings", "trackingAt")}
             </Text>
             <Pressable style={[styles.trackingStopBtn, { backgroundColor: Colors.danger }]} onPress={onStopRoomTracking}>
-              <Text style={styles.trackingStopText}>중지</Text>
+              <Text style={styles.trackingStopText}>{t("settings", "trackingStop")}</Text>
             </Pressable>
           </View>
         )}
 
         {practiceRooms.length === 0 && !showAddRoom && (
           <Text style={styles.roomEmptyHint}>
-            등록된 연습실이 없습니다
+            {t("settings", "noRooms")}
           </Text>
         )}
 
@@ -1073,13 +1116,13 @@ export function SettingsModal({
 
         {showAddRoom ? (
           <View style={[styles.addRoomForm, { borderColor: C.accentDim }]}>
-            <Text style={styles.addRoomHint}>현재 위치를 연습실로 등록합니다</Text>
+            <Text style={styles.addRoomHint}>{t("settings", "addRoomHint")}</Text>
             <View style={styles.addRoomRow}>
               <TextInput
                 style={[styles.usernameInput, { borderColor: C.accentMuted, flex: 1 }]}
                 value={newRoomName}
                 onChangeText={setNewRoomName}
-                placeholder="연습실 이름"
+                placeholder={t("settings", "roomNamePlaceholder")}
                 placeholderTextColor={Colors.textTertiary}
                 maxLength={30}
               />
@@ -1098,7 +1141,7 @@ export function SettingsModal({
             onPress={() => setShowAddRoom(true)}
           >
             <Ionicons name="add" size={16} color={C.accent} />
-            <Text style={[styles.addRoomBtnText, { color: C.accent }]}>연습실 추가</Text>
+            <Text style={[styles.addRoomBtnText, { color: C.accent }]}>{t("settings", "addRoom")}</Text>
           </Pressable>
         )}
       </View>
@@ -1111,20 +1154,20 @@ export function SettingsModal({
           onPress={() => setShowResetConfirm(true)}
         >
           <Ionicons name="refresh-circle-outline" size={18} color="#F85149" />
-          <Text style={styles.resetButtonText}>앱 초기화 및 재시작</Text>
+          <Text style={styles.resetButtonText}>{t("settings", "resetApp")}</Text>
         </Pressable>
       )}
       {onResetApp && showResetConfirm && (
         <View style={styles.resetConfirmBox}>
           <Text style={styles.resetConfirmText}>
-            모든 설정과 데이터가 삭제됩니다.{"\n"}계속하시겠습니까?
+            {t("settings", "resetConfirm")}
           </Text>
           <View style={styles.resetConfirmButtons}>
             <Pressable
               style={styles.resetCancelBtn}
               onPress={() => setShowResetConfirm(false)}
             >
-              <Text style={styles.resetCancelText}>취소</Text>
+              <Text style={styles.resetCancelText}>{t("settings", "cancel")}</Text>
             </Pressable>
             <Pressable
               style={styles.resetConfirmBtn}
@@ -1133,7 +1176,7 @@ export function SettingsModal({
                 onResetApp?.();
               }}
             >
-              <Text style={styles.resetConfirmBtnText}>초기화</Text>
+              <Text style={styles.resetConfirmBtnText}>{t("settings", "reset")}</Text>
             </Pressable>
           </View>
         </View>
@@ -1142,9 +1185,9 @@ export function SettingsModal({
   );
 
   const TAB_ITEMS: { key: SettingsTab; icon: string; label: string }[] = [
-    { key: "theme", icon: "color-palette-outline", label: "테마" },
-    { key: "sound", icon: "musical-notes-outline", label: "사운드" },
-    { key: "profile", icon: "person-circle-outline", label: "프로필" },
+    { key: "theme", icon: "color-palette-outline", label: t("settings", "themeTab") },
+    { key: "sound", icon: "musical-notes-outline", label: t("settings", "soundTab") },
+    { key: "profile", icon: "person-circle-outline", label: t("settings", "profileTab") },
   ];
 
   const switchTab = useCallback((tab: SettingsTab) => {
@@ -1196,7 +1239,7 @@ export function SettingsModal({
             onPress={(e) => e.stopPropagation()}
           >
             <View style={styles.header}>
-              <Text style={styles.title}>Settings</Text>
+              <Text style={styles.title}>{t("settings", "title")}</Text>
               <Pressable
                 onPress={onClose}
                 hitSlop={12}
@@ -1244,47 +1287,47 @@ export function SettingsModal({
             <Pressable style={styles.loggingInfoSheet} onPress={(e) => e.stopPropagation()}>
               <View style={styles.loggingInfoHeader}>
                 <Ionicons name="analytics-outline" size={28} color={C.accent} />
-                <Text style={styles.loggingInfoTitle}>사용 로그 분석</Text>
+                <Text style={styles.loggingInfoTitle}>{t("loggingInfo", "title")}</Text>
               </View>
-              <Text style={styles.loggingInfoSubtitle}>연습 기록을 분석하여 실력 향상을 도와드립니다</Text>
+              <Text style={styles.loggingInfoSubtitle}>{t("loggingInfo", "subtitle")}</Text>
 
               <View style={styles.loggingInfoCard}>
                 <View style={styles.loggingInfoRow}>
                   <Ionicons name="time-outline" size={16} color={C.accent} />
-                  <Text style={styles.loggingInfoText}>매일 연습 시간을 자동으로 기록합니다</Text>
+                  <Text style={styles.loggingInfoText}>{t("loggingInfo", "row1")}</Text>
                 </View>
                 <View style={styles.loggingInfoRow}>
                   <Ionicons name="musical-notes-outline" size={16} color={C.accent} />
-                  <Text style={styles.loggingInfoText}>비트/바 모드 사용 비율을 분석합니다</Text>
+                  <Text style={styles.loggingInfoText}>{t("loggingInfo", "row2")}</Text>
                 </View>
                 <View style={styles.loggingInfoRow}>
                   <Ionicons name="location-outline" size={16} color={C.accent} />
-                  <Text style={styles.loggingInfoText}>연습실별 연습 시간을 추적합니다</Text>
+                  <Text style={styles.loggingInfoText}>{t("loggingInfo", "row3")}</Text>
                 </View>
                 <View style={styles.loggingInfoRow}>
                   <Ionicons name="bar-chart-outline" size={16} color={C.accent} />
-                  <Text style={styles.loggingInfoText}>Work Up에서 주간·일간 통계를 확인합니다</Text>
+                  <Text style={styles.loggingInfoText}>{t("loggingInfo", "row4")}</Text>
                 </View>
                 <View style={styles.loggingInfoRow}>
                   <Ionicons name="trophy-outline" size={16} color={C.accent} />
-                  <Text style={styles.loggingInfoText}>목표 설정 및 달성률을 추적합니다</Text>
+                  <Text style={styles.loggingInfoText}>{t("loggingInfo", "row5")}</Text>
                 </View>
                 <View style={styles.loggingInfoRow}>
                   <Ionicons name="share-social-outline" size={16} color={C.accent} />
-                  <Text style={styles.loggingInfoText}>연습 기록을 이미지로 캡처하여 공유합니다</Text>
+                  <Text style={styles.loggingInfoText}>{t("loggingInfo", "row6")}</Text>
                 </View>
               </View>
 
               <View style={styles.loggingInfoFooter}>
                 <Ionicons name="shield-checkmark-outline" size={14} color={Colors.textTertiary} />
-                <Text style={styles.loggingInfoFooterText}>모든 데이터는 기기에만 저장됩니다</Text>
+                <Text style={styles.loggingInfoFooterText}>{t("loggingInfo", "footer")}</Text>
               </View>
 
               <Pressable
                 style={[styles.loggingInfoCloseBtn, { backgroundColor: C.accent }]}
                 onPress={() => setShowLoggingInfo(false)}
               >
-                <Text style={styles.loggingInfoCloseBtnText}>확인</Text>
+                <Text style={styles.loggingInfoCloseBtnText}>{t("loggingInfo", "close")}</Text>
               </Pressable>
             </Pressable>
           </View>

@@ -65,3 +65,14 @@ Preferred communication style: Simple, everyday language.
 - **Replit Environment**: The app relies on Replit-specific env vars (`REPLIT_DEV_DOMAIN`, `REPLIT_DOMAINS`, `REPLIT_INTERNAL_APP_DOMAIN`) for CORS, proxy configuration, and deployment URLs
 - **Google Fonts**: Space Grotesk font family loaded at runtime via `@expo-google-fonts/space-grotesk`
 - **No external APIs**: The metronome functionality is entirely self-contained with client-side audio generation and local storage
+
+## Internationalization (i18n)
+
+The app supports **Korean (한국어)** and **English** with Korean as the default language.
+
+### Architecture
+- **`lib/i18n.ts`**: Central translation file with all EN/KO string maps organized by section (e.g., `main`, `settings`, `onboarding`, `practiceBook`, `workUp`, `signalGenerator`, `noteRecorder`, `stopwatch`). Exports `createT(lang)` factory, `getTempoLabel(bpm, lang)`, and `formatDurationLocalized(seconds, lang)`.
+- **`contexts/LanguageContext.tsx`**: React context providing `language` state and `t(section, key)` translation function. Language persisted in AsyncStorage under `metronome_language` key.
+- **Usage pattern**: Components call `const { language, t } = useLanguage();` then use `t("section", "key")` for translated strings.
+- **Notification controls** (`lib/notification-controls.ts`): Accept optional `lang: Language` parameter (default `"ko"`). In `app/index.tsx`, a `languageRef` (updated via useEffect) passes current language to notification calls from callbacks/effects.
+- **Language picker**: Located in `components/SettingsModal.tsx` Theme tab, with "한국어" / "English" toggle buttons.

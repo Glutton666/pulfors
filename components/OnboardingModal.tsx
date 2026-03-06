@@ -19,6 +19,7 @@ import { ACCENT_PRESETS } from "@/constants/colors";
 import type { ThemeColor } from "@/constants/colors";
 import type { FlashMode, HapticMode } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -36,23 +37,18 @@ export interface OnboardingResult {
   practiceRoomName: string;
 }
 
-const THEME_OPTIONS: { key: ThemeColor; label: string; color: string }[] = [
-  { key: "gold", label: "Gold", color: ACCENT_PRESETS.gold.accent },
-  { key: "green", label: "Green", color: ACCENT_PRESETS.green.accent },
-  { key: "orange", label: "Orange", color: ACCENT_PRESETS.orange.accent },
-  { key: "blue", label: "Blue", color: ACCENT_PRESETS.blue.accent },
-  { key: "rose", label: "Rose", color: ACCENT_PRESETS.rose.accent },
-  { key: "neon", label: "Neon", color: ACCENT_PRESETS.neon.accent },
+const THEME_OPTIONS: { key: ThemeColor; color: string }[] = [
+  { key: "gold", color: ACCENT_PRESETS.gold.accent },
+  { key: "green", color: ACCENT_PRESETS.green.accent },
+  { key: "orange", color: ACCENT_PRESETS.orange.accent },
+  { key: "blue", color: ACCENT_PRESETS.blue.accent },
+  { key: "rose", color: ACCENT_PRESETS.rose.accent },
+  { key: "neon", color: ACCENT_PRESETS.neon.accent },
 ];
 
 const TOTAL_STEPS = 5;
 
-const DEMO_BEATS: { type: BeatType; label: string }[] = [
-  { type: "strong", label: "스트롱" },
-  { type: "accent", label: "악센트" },
-  { type: "normal", label: "노멀" },
-  { type: "mute", label: "뮤트" },
-];
+const DEMO_BEAT_TYPES: BeatType[] = ["strong", "accent", "normal", "mute"];
 
 const BEAT_COLORS: Record<BeatType, string> = {
   strong: "#F0883E",
@@ -67,15 +63,17 @@ const DEMO_INTERVAL = (60 / DEMO_BPM) * 1000;
 function DemoBar({
   activeBeat,
   accentColor,
+  beatLabels,
 }: {
   activeBeat: number;
   accentColor: string;
+  beatLabels: string[];
 }) {
   return (
     <View style={demoStyles.bar}>
-      {DEMO_BEATS.map((beat, i) => {
+      {DEMO_BEAT_TYPES.map((type, i) => {
         const isActive = activeBeat === i;
-        const dotColor = beat.type === "mute" ? Colors.textTertiary : BEAT_COLORS[beat.type];
+        const dotColor = type === "mute" ? Colors.textTertiary : BEAT_COLORS[type];
         return (
           <View key={i} style={demoStyles.beatCol}>
             <View
@@ -95,7 +93,7 @@ function DemoBar({
                 isActive && { color: accentColor },
               ]}
             >
-              {beat.label}
+              {beatLabels[i]}
             </Text>
           </View>
         );
@@ -151,7 +149,7 @@ function useDemo(
       const idx = beatRef.current;
       setActiveBeat(idx);
 
-      const beatType = DEMO_BEATS[idx].type;
+      const beatType = DEMO_BEAT_TYPES[idx];
       const isAccent = beatType === "strong" || beatType === "accent";
 
       if (mode === "haptic" && Platform.OS !== "web") {
@@ -192,6 +190,7 @@ function useDemo(
 }
 
 export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
 
@@ -310,8 +309,8 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   const renderThemeStep = () => (
     <View style={styles.stepContent}>
       <MaterialCommunityIcons name="palette-outline" size={40} color={accentColor} />
-      <Text style={styles.stepTitle}>테마 색상</Text>
-      <Text style={styles.stepSubtitle}>앱에서 사용할 색상을 선택하세요</Text>
+      <Text style={styles.stepTitle}>{t("onboarding", "themeTitle")}</Text>
+      <Text style={styles.stepSubtitle}>{t("onboarding", "themeSubtitle")}</Text>
       <View style={styles.themeGrid}>
         {THEME_OPTIONS.map((opt) => (
           <Pressable
@@ -336,7 +335,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
                 selectedTheme === opt.key && { color: opt.color },
               ]}
             >
-              {opt.label}
+              {opt.key.charAt(0).toUpperCase() + opt.key.slice(1)}
             </Text>
           </Pressable>
         ))}
@@ -351,55 +350,55 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       showsVerticalScrollIndicator={false}
     >
       <Ionicons name="analytics-outline" size={40} color={accentColor} />
-      <Text style={styles.stepTitle}>사용 로그 분석</Text>
-      <Text style={styles.stepSubtitle}>연습 기록을 분석하여 실력 향상을 도와드립니다</Text>
+      <Text style={styles.stepTitle}>{t("onboarding", "loggingTitle")}</Text>
+      <Text style={styles.stepSubtitle}>{t("onboarding", "loggingSubtitle")}</Text>
 
       <View style={styles.infoCard}>
-        <Text style={styles.infoCardTitle}>왜 사용하나요?</Text>
+        <Text style={styles.infoCardTitle}>{t("onboarding", "loggingWhy")}</Text>
         <View style={styles.infoRow}>
           <Ionicons name="time-outline" size={18} color={accentColor} />
           <Text style={styles.infoText}>
-            매일 얼마나 연습했는지 자동으로 기록합니다
+            {t("onboarding", "loggingRow1")}
           </Text>
         </View>
         <View style={styles.infoRow}>
           <Ionicons name="musical-notes-outline" size={18} color={accentColor} />
           <Text style={styles.infoText}>
-            비트모드와 바모드 사용 비율을 분석합니다
+            {t("onboarding", "loggingRow2")}
           </Text>
         </View>
         <View style={styles.infoRow}>
           <Ionicons name="location-outline" size={18} color={accentColor} />
           <Text style={styles.infoText}>
-            연습실별 연습 시간을 추적할 수 있습니다
+            {t("onboarding", "loggingRow3")}
           </Text>
         </View>
       </View>
 
       <View style={styles.infoCard}>
-        <Text style={styles.infoCardTitle}>어떻게 활용되나요?</Text>
+        <Text style={styles.infoCardTitle}>{t("onboarding", "loggingHow")}</Text>
         <View style={styles.infoRow}>
           <Ionicons name="bar-chart-outline" size={18} color={accentColor} />
           <Text style={styles.infoText}>
-            Work Up 화면에서 주간·일간 연습 통계를 확인합니다
+            {t("onboarding", "loggingRow4")}
           </Text>
         </View>
         <View style={styles.infoRow}>
           <Ionicons name="trophy-outline" size={18} color={accentColor} />
           <Text style={styles.infoText}>
-            목표를 설정하고 달성률을 추적할 수 있습니다
+            {t("onboarding", "loggingRow5")}
           </Text>
         </View>
         <View style={styles.infoRow}>
           <Ionicons name="share-social-outline" size={18} color={accentColor} />
           <Text style={styles.infoText}>
-            연습 기록을 이미지로 캡처하여 공유할 수 있습니다
+            {t("onboarding", "loggingRow6")}
           </Text>
         </View>
         <View style={styles.infoRow}>
           <Ionicons name="shield-checkmark-outline" size={18} color={accentColor} />
           <Text style={styles.infoText}>
-            모든 데이터는 기기에만 저장되며 외부로 전송되지 않습니다
+            {t("onboarding", "loggingRow7")}
           </Text>
         </View>
       </View>
@@ -424,7 +423,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             { color: loggingEnabled ? Colors.background : Colors.textSecondary },
           ]}
         >
-          {loggingEnabled ? "사용함" : "사용 안 함"}
+          {loggingEnabled ? t("onboarding", "loggingOn") : t("onboarding", "loggingOff")}
         </Text>
       </Pressable>
     </ScrollView>
@@ -481,27 +480,27 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       showsVerticalScrollIndicator={false}
     >
       <Ionicons name="phone-portrait-outline" size={40} color={accentColor} />
-      <Text style={styles.stepTitle}>햅틱 피드백</Text>
-      <Text style={styles.stepSubtitle}>비트에 맞춰 진동으로 알려줍니다</Text>
+      <Text style={styles.stepTitle}>{t("onboarding", "hapticTitle")}</Text>
+      <Text style={styles.stepSubtitle}>{t("onboarding", "hapticSubtitle")}</Text>
 
       <View style={styles.modeList}>
         <ModeOption
-          label="모든 비트"
-          description="스트롱, 악센트, 노멀 비트에 모두 진동"
+          label={t("onboarding", "hapticAll")}
+          description={t("onboarding", "hapticAllDesc")}
           value="all"
           current={hapticMode}
           onSelect={() => setHapticMode("all")}
         />
         <ModeOption
-          label="악센트만"
-          description="스트롱, 악센트 비트에만 진동"
+          label={t("onboarding", "hapticAccent")}
+          description={t("onboarding", "hapticAccentDesc")}
           value="accent"
           current={hapticMode}
           onSelect={() => setHapticMode("accent")}
         />
         <ModeOption
-          label="끄기"
-          description="진동 없이 소리와 시각으로만 확인"
+          label={t("onboarding", "hapticOff")}
+          description={t("onboarding", "hapticOffDesc")}
           value="off"
           current={hapticMode}
           onSelect={() => setHapticMode("off")}
@@ -509,7 +508,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       </View>
 
       <View style={styles.demoSection}>
-        <DemoBar activeBeat={hapticDemo.activeBeat} accentColor={accentColor} />
+        <DemoBar activeBeat={hapticDemo.activeBeat} accentColor={accentColor} beatLabels={[t("beatTypes", "strong"), t("beatTypes", "accent"), t("beatTypes", "normal"), t("beatTypes", "mute")]} />
         <Pressable
           style={[
             styles.demoButton,
@@ -530,7 +529,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
               { color: hapticDemo.playing ? accentColor : Colors.background },
             ]}
           >
-            {hapticDemo.playing ? "정지" : "미리보기"}
+            {hapticDemo.playing ? t("onboarding", "stop") : t("onboarding", "preview")}
           </Text>
         </Pressable>
       </View>
@@ -545,27 +544,27 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
         showsVerticalScrollIndicator={false}
       >
         <Ionicons name="flash-outline" size={40} color={accentColor} />
-        <Text style={styles.stepTitle}>화면 플래시</Text>
-        <Text style={styles.stepSubtitle}>비트에 맞춰 화면이 깜빡입니다</Text>
+        <Text style={styles.stepTitle}>{t("onboarding", "flashTitle")}</Text>
+        <Text style={styles.stepSubtitle}>{t("onboarding", "flashSubtitle")}</Text>
 
         <View style={styles.modeList}>
           <ModeOption
-            label="모든 비트"
-            description="스트롱, 악센트, 노멀 비트에 모두 플래시"
+            label={t("onboarding", "flashAll")}
+            description={t("onboarding", "flashAllDesc")}
             value="all"
             current={flashMode}
             onSelect={() => setFlashMode("all")}
           />
           <ModeOption
-            label="악센트만"
-            description="스트롱, 악센트 비트에만 플래시"
+            label={t("onboarding", "flashAccent")}
+            description={t("onboarding", "flashAccentDesc")}
             value="accent"
             current={flashMode}
             onSelect={() => setFlashMode("accent")}
           />
           <ModeOption
-            label="끄기"
-            description="플래시 없이 소리와 진동으로만 확인"
+            label={t("onboarding", "flashOff")}
+            description={t("onboarding", "flashOffDesc")}
             value="off"
             current={flashMode}
             onSelect={() => setFlashMode("off")}
@@ -573,7 +572,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
         </View>
 
         <View style={styles.demoSection}>
-          <DemoBar activeBeat={flashDemo.activeBeat} accentColor={accentColor} />
+          <DemoBar activeBeat={flashDemo.activeBeat} accentColor={accentColor} beatLabels={[t("beatTypes", "strong"), t("beatTypes", "accent"), t("beatTypes", "normal"), t("beatTypes", "mute")]} />
           <Pressable
             style={[
               styles.demoButton,
@@ -594,7 +593,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
                 { color: flashDemo.playing ? accentColor : Colors.background },
               ]}
             >
-              {flashDemo.playing ? "정지" : "미리보기"}
+              {flashDemo.playing ? t("onboarding", "stop") : t("onboarding", "preview")}
             </Text>
           </Pressable>
         </View>
@@ -616,33 +615,33 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       keyboardShouldPersistTaps="handled"
     >
       <Ionicons name="person-circle-outline" size={40} color={accentColor} />
-      <Text style={styles.stepTitle}>프로필 설정</Text>
-      <Text style={styles.stepSubtitle}>닉네임과 연습실을 설정하세요</Text>
+      <Text style={styles.stepTitle}>{t("onboarding", "profileTitle")}</Text>
+      <Text style={styles.stepSubtitle}>{t("onboarding", "profileSubtitle")}</Text>
       <View style={styles.inputSection}>
-        <Text style={styles.inputLabel}>닉네임</Text>
+        <Text style={styles.inputLabel}>{t("onboarding", "nicknameLabel")}</Text>
         <TextInput
           style={[styles.textInput, { borderColor: accentColor }]}
           value={username}
           onChangeText={setUsername}
-          placeholder="닉네임을 입력하세요"
+          placeholder={t("onboarding", "nicknamePlaceholder")}
           placeholderTextColor={Colors.textTertiary}
           maxLength={20}
         />
       </View>
       <View style={styles.inputSection}>
-        <Text style={styles.inputLabel}>연습실 이름</Text>
+        <Text style={styles.inputLabel}>{t("onboarding", "roomLabel")}</Text>
         <TextInput
           style={[styles.textInput, { borderColor: accentColor }]}
           value={roomName}
           onChangeText={setRoomName}
-          placeholder="연습실 이름 (예: 우리집)"
+          placeholder={t("onboarding", "roomPlaceholder")}
           placeholderTextColor={Colors.textTertiary}
           maxLength={30}
         />
         <View style={styles.locationHint}>
           <Ionicons name="location" size={14} color={accentColor} />
           <Text style={styles.locationHintText}>
-            이름 입력 시 현재 위치가 자동으로 연습실로 등록됩니다
+            {t("onboarding", "roomHint")}
           </Text>
         </View>
       </View>
@@ -687,7 +686,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           )}
           {renderStepIndicator()}
           <Pressable onPress={handleSkip} hitSlop={10}>
-            <Text style={styles.skipText}>건너뛰기</Text>
+            <Text style={styles.skipText}>{t("onboarding", "skip")}</Text>
           </Pressable>
         </View>
 
@@ -703,7 +702,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             onPress={handleNext}
           >
             <Text style={styles.nextButtonText}>
-              {step === TOTAL_STEPS - 1 ? "시작하기" : "다음"}
+              {step === TOTAL_STEPS - 1 ? t("onboarding", "start") : t("onboarding", "next")}
             </Text>
             {step < TOTAL_STEPS - 1 && (
               <Ionicons name="arrow-forward" size={18} color={Colors.background} />

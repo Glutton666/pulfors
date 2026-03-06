@@ -26,6 +26,7 @@ import {
   createPracticeEntry,
 } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface PracticeBookModalProps {
   visible: boolean;
@@ -103,6 +104,7 @@ function SwipeableEntry({
   openItemId: string | null;
   setOpenItemId: (id: string | null) => void;
 }) {
+  const { t } = useLanguage();
   const translateX = useRef(new Animated.Value(0)).current;
   const isOpenRef = useRef(false);
 
@@ -152,23 +154,23 @@ function SwipeableEntry({
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
     const s = Math.round(sec % 60);
-    if (m > 0) return `${m}분 ${s}초`;
-    return `${s}초`;
+    if (m > 0) return `${m}${t("practiceBook", "minSec")} ${s}${t("practiceBook", "sec")}`;
+    return `${s}${t("practiceBook", "sec")}`;
   };
 
   const clockMode = item.barClockMode || "stopwatch";
   const timerDur = item.barTimerDuration;
   let playModeText: string;
   if (isBeatMode) {
-    playModeText = "연속재생";
+    playModeText = t("practiceBook", "continuousPlay");
   } else if (clockMode === "timer" && timerDur != null && timerDur > 0) {
     const tm = Math.floor(timerDur / 60);
     const ts = timerDur % 60;
-    playModeText = tm > 0 ? `${tm}:${String(ts).padStart(2, "0")}` : `${ts}초`;
+    playModeText = tm > 0 ? `${tm}:${String(ts).padStart(2, "0")}` : `${ts}${t("practiceBook", "sec")}`;
   } else if (item.barLoopMode === "loop") {
-    playModeText = "연속재생";
+    playModeText = t("practiceBook", "continuousPlay");
   } else {
-    playModeText = "1회재생";
+    playModeText = t("practiceBook", "singlePlay");
   }
 
   return (
@@ -184,7 +186,7 @@ function SwipeableEntry({
           }}
         >
           <Ionicons name="share-outline" size={18} color="#fff" />
-          <Text style={styles.swipeActionText}>공유</Text>
+          <Text style={styles.swipeActionText}>{t("practiceBook", "share")}</Text>
         </Pressable>
         <Pressable
           style={[styles.swipeAction, { backgroundColor: "#F59E0B" }]}
@@ -196,7 +198,7 @@ function SwipeableEntry({
           }}
         >
           <Ionicons name="pencil" size={18} color="#fff" />
-          <Text style={styles.swipeActionText}>수정</Text>
+          <Text style={styles.swipeActionText}>{t("practiceBook", "edit")}</Text>
         </Pressable>
         <Pressable
           style={[styles.swipeAction, { backgroundColor: Colors.danger }]}
@@ -208,7 +210,7 @@ function SwipeableEntry({
           }}
         >
           <Ionicons name="trash-outline" size={18} color="#fff" />
-          <Text style={styles.swipeActionText}>삭제</Text>
+          <Text style={styles.swipeActionText}>{t("practiceBook", "delete")}</Text>
         </Pressable>
       </View>
 
@@ -291,6 +293,7 @@ export function PracticeBookModal({
 }: PracticeBookModalProps) {
   const insets = useSafeAreaInsets();
   const { colors: C } = useTheme();
+  const { t } = useLanguage();
   const [entries, setEntries] = useState<PracticeEntry[]>([]);
   const [showSaveInput, setShowSaveInput] = useState(false);
   const [saveLabel, setSaveLabel] = useState("");
@@ -331,9 +334,9 @@ export function PracticeBookModal({
       if (Platform.OS === "web") {
         doDelete();
       } else {
-        Alert.alert("삭제", "이 연습 설정을 삭제하시겠습니까?", [
-          { text: "취소", style: "cancel" },
-          { text: "삭제", style: "destructive", onPress: doDelete },
+        Alert.alert(t("practiceBook", "delete"), t("practiceBook", "deleteConfirm"), [
+          { text: t("practiceBook", "cancel"), style: "cancel" },
+          { text: t("practiceBook", "delete"), style: "destructive", onPress: doDelete },
         ]);
       }
     },
@@ -380,7 +383,7 @@ export function PracticeBookModal({
       strong: "Strong",
     };
     const clockMode = entry.barClockMode || "stopwatch";
-    const loopText = entry.barLoopMode === "loop" ? "연속재생" : "1회재생";
+    const loopText = entry.barLoopMode === "loop" ? t("practiceBook", "continuousPlay") : t("practiceBook", "singlePlay");
     let timerText = "";
     if (clockMode === "timer" && entry.barTimerDuration) {
       const tm = Math.floor(entry.barTimerDuration / 60);
@@ -413,10 +416,10 @@ export function PracticeBookModal({
       ``,
       `BPM: ${entry.bpm}`,
       `Beats: ${entry.beatsPerMeasure}`,
-      `Pattern: ${entry.beatTypes.map((t) => beatTypeNames[t]).join(" → ")}`,
-      `Mode: ${loopText}${timerText}`,
+      `Pattern: ${entry.beatTypes.map((bt) => beatTypeNames[bt]).join(" → ")}`,
+      `${t("practiceBook", "mode")}: ${loopText}${timerText}`,
       ``,
-      `앱에서 바로 적용하기:`,
+      t("practiceBook", "openInApp"),
       deepLink,
     ].filter(Boolean).join("\n");
 
@@ -490,7 +493,7 @@ export function PracticeBookModal({
                   style={[styles.saveInput, { borderColor: C.accent }]}
                   value={saveLabel}
                   onChangeText={setSaveLabel}
-                  placeholder="이름을 입력하세요"
+                  placeholder={t("practiceBook", "namePlaceholder")}
                   placeholderTextColor={Colors.textTertiary}
                   onSubmitEditing={handleSave}
                   autoFocus
@@ -504,7 +507,7 @@ export function PracticeBookModal({
                   onPress={handleSave}
                   disabled={!saveLabel.trim()}
                 >
-                  <Text style={styles.saveConfirmText}>저장</Text>
+                  <Text style={styles.saveConfirmText}>{t("practiceBook", "save")}</Text>
                 </Pressable>
                 <Pressable
                   style={styles.saveCancelBtn}
@@ -513,7 +516,7 @@ export function PracticeBookModal({
                     setSaveLabel("");
                   }}
                 >
-                  <Text style={styles.saveCancelText}>취소</Text>
+                  <Text style={styles.saveCancelText}>{t("practiceBook", "cancel")}</Text>
                 </Pressable>
               </View>
             ) : (
@@ -523,7 +526,7 @@ export function PracticeBookModal({
               >
                 <Ionicons name="add-circle-outline" size={18} color={C.accent} />
                 <Text style={[styles.saveButtonText, { color: C.accent }]}>
-                  {currentConfig?.mode === "beat" ? "현재 비트 설정 저장" : "현재 바 설정 저장"}
+                  {currentConfig?.mode === "beat" ? t("practiceBook", "saveBeatConfig") : t("practiceBook", "saveBarConfig")}
                 </Text>
               </Pressable>
             )}
@@ -537,9 +540,9 @@ export function PracticeBookModal({
               size={48}
               color={Colors.textTertiary}
             />
-            <Text style={styles.emptyText}>저장된 연습 설정이 없습니다</Text>
+            <Text style={styles.emptyText}>{t("practiceBook", "emptyTitle")}</Text>
             <Text style={styles.emptySubtext}>
-              비트 또는 바 모드에서 설정을 구성한 후 저장하세요
+              {t("practiceBook", "emptyHint")}
             </Text>
           </View>
         ) : (
@@ -555,8 +558,8 @@ export function PracticeBookModal({
         {goalEntry && (
           <View style={styles.goalOverlay}>
             <View style={[styles.goalDialog, { borderColor: C.accent }]}>
-              <Text style={styles.goalDialogTitle}>목표 설정</Text>
-              <Text style={styles.goalDialogSub}>"{goalEntry.label}" 연습 목표 시간 (분)</Text>
+              <Text style={styles.goalDialogTitle}>{t("practiceBook", "goalTitle")}</Text>
+              <Text style={styles.goalDialogSub}>"{goalEntry.label}" {t("practiceBook", "goalSub")}</Text>
               <View style={styles.goalInputRow}>
                 <TextInput
                   style={[styles.goalInput, { borderColor: C.accent }]}
@@ -566,14 +569,14 @@ export function PracticeBookModal({
                   autoFocus
                   selectTextOnFocus
                 />
-                <Text style={styles.goalInputUnit}>분</Text>
+                <Text style={styles.goalInputUnit}>{t("practiceBook", "goalUnit")}</Text>
               </View>
               <View style={styles.goalBtnRow}>
                 <Pressable
                   style={styles.goalCancelBtn}
                   onPress={() => setGoalEntry(null)}
                 >
-                  <Text style={styles.goalCancelText}>취소</Text>
+                  <Text style={styles.goalCancelText}>{t("practiceBook", "cancel")}</Text>
                 </Pressable>
                 <Pressable
                   style={[styles.goalConfirmBtn, { backgroundColor: C.accent }, !goalMinutes.trim() && { opacity: 0.4 }]}
@@ -586,7 +589,7 @@ export function PracticeBookModal({
                   }}
                   disabled={!goalMinutes.trim()}
                 >
-                  <Text style={styles.goalConfirmText}>설정</Text>
+                  <Text style={styles.goalConfirmText}>{t("practiceBook", "goalSet")}</Text>
                 </Pressable>
               </View>
             </View>
