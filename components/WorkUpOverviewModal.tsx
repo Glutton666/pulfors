@@ -832,7 +832,7 @@ export function WorkUpOverviewModal({
 
                   <View style={shareStyles.cardContent}>
                     <View style={shareStyles.brandRow}>
-                      <Text style={[shareStyles.brandText, { color: C.accent }]}>PurPors</Text>
+                      <Text style={[shareStyles.brandText, { color: C.accent }]}>Purfors</Text>
                       {username ? (
                         <Text style={shareStyles.usernameText}>{username}</Text>
                       ) : null}
