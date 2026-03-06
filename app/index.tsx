@@ -65,7 +65,7 @@ import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLog
 import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource } from "@/lib/note-samples";
 import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, SampleSource } from "@/lib/note-samples";
 import { NoteRecorderModal } from "@/components/NoteRecorderModal";
-import { AudioModule, createAudioPlayer, setAudioModeAsync } from "expo-audio";
+import { AudioModule, createAudioPlayer } from "expo-audio";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import {
   decodeSampleFile,
@@ -661,13 +661,6 @@ export default function MetronomeScreen() {
 
   const warmupAudioPlayers = useCallback(async () => {
     try {
-      if (Platform.OS !== "web") {
-        await setAudioModeAsync({
-          playsInSilentMode: true,
-          shouldPlayInBackground: true,
-          interruptionMode: "mixWithOthers",
-        });
-      }
       const set = soundSetRef.current;
       const customCfg = customSoundSetsRef.current[set];
       const builtinSet = customCfg ? customCfg.strong.sourceSet : (set as keyof typeof soundSets);
@@ -678,7 +671,7 @@ export default function MetronomeScreen() {
       await Promise.all(toWarm.map(async (p) => {
         try { await p.seekTo(0); p.play(); } catch {}
       }));
-      await new Promise(r => setTimeout(r, 80));
+      await new Promise(r => setTimeout(r, 50));
       await Promise.all(toWarm.map(async (p, i) => {
         try { p.pause(); await p.seekTo(0); p.volume = savedVolumes[i]; } catch {}
       }));
@@ -1293,12 +1286,6 @@ export default function MetronomeScreen() {
         stopRenderedAudio();
         renderedPlayerRef.current = renderedPlayer;
         engine.setPreRenderedAudio(true);
-        renderedPlayer.volume = 0;
-        renderedPlayer.play();
-        await new Promise(r => setTimeout(r, 50));
-        renderedPlayer.pause();
-        await renderedPlayer.seekTo(0);
-        await new Promise(r => setTimeout(r, 10));
         renderedPlayer.volume = 1.0;
       } else {
         engine.setPreRenderedAudio(false);
@@ -1536,12 +1523,6 @@ export default function MetronomeScreen() {
       stopRenderedAudio();
       renderedPlayerRef.current = renderedPlayer;
       engine.setPreRenderedAudio(true);
-      renderedPlayer.volume = 0;
-      renderedPlayer.play();
-      await new Promise(r => setTimeout(r, 50));
-      renderedPlayer.pause();
-      await renderedPlayer.seekTo(0);
-      await new Promise(r => setTimeout(r, 10));
       renderedPlayer.volume = 1.0;
     } else {
       engine.setPreRenderedAudio(false);
