@@ -2322,6 +2322,7 @@ export default function MetronomeScreen() {
         trackingRoomName={trackingRoomName}
         onStartRoomTracking={startRoomTracking}
         onStopRoomTracking={stopRoomTracking}
+        username={username}
       />
 
       <SettingsModal

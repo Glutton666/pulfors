@@ -42,6 +42,7 @@ interface WorkUpOverviewModalProps {
   trackingRoomName: string | null;
   onStartRoomTracking: (room: { id: string; name: string }) => void;
   onStopRoomTracking: () => void;
+  username?: string;
 }
 
 type GoalTypeValue = Goal["type"];
@@ -204,6 +205,7 @@ export function WorkUpOverviewModal({
   trackingRoomName,
   onStartRoomTracking,
   onStopRoomTracking,
+  username,
 }: WorkUpOverviewModalProps) {
   const { colors: C } = useTheme();
   const { language, t } = useLanguage();
@@ -831,6 +833,9 @@ export function WorkUpOverviewModal({
                   <View style={shareStyles.cardContent}>
                     <View style={shareStyles.brandRow}>
                       <Text style={[shareStyles.brandText, { color: C.accent }]}>PurPors</Text>
+                      {username ? (
+                        <Text style={shareStyles.usernameText}>{username}</Text>
+                      ) : null}
                     </View>
 
                     <Text style={shareStyles.dateText}>
@@ -1457,6 +1462,11 @@ const shareStyles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 16,
     letterSpacing: 1,
+  },
+  usernameText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
+    color: "#ffffffcc",
   },
   dateText: {
     fontFamily: "SpaceGrotesk_400Regular",
