@@ -37,13 +37,16 @@ export interface OnboardingResult {
   practiceRoomName: string;
 }
 
-const THEME_OPTIONS: { key: ThemeColor; color: string }[] = [
-  { key: "gold", color: ACCENT_PRESETS.gold.accent },
-  { key: "green", color: ACCENT_PRESETS.green.accent },
-  { key: "orange", color: ACCENT_PRESETS.orange.accent },
-  { key: "blue", color: ACCENT_PRESETS.blue.accent },
-  { key: "rose", color: ACCENT_PRESETS.rose.accent },
-  { key: "neon", color: ACCENT_PRESETS.neon.accent },
+const THEME_OPTIONS: { key: ThemeColor; color: string; label: string }[] = [
+  { key: "gold", color: ACCENT_PRESETS.gold.accent, label: "Gold" },
+  { key: "green", color: ACCENT_PRESETS.green.accent, label: "Green" },
+  { key: "orange", color: ACCENT_PRESETS.orange.accent, label: "Orange" },
+  { key: "blue", color: ACCENT_PRESETS.blue.accent, label: "Blue" },
+  { key: "saintspurple", color: ACCENT_PRESETS.saintspurple.accent, label: "Saints" },
+  { key: "deepred", color: ACCENT_PRESETS.deepred.accent, label: "Deep Red" },
+  { key: "beige", color: ACCENT_PRESETS.beige.accent, label: "Beige" },
+  { key: "rose", color: ACCENT_PRESETS.rose.accent, label: "Rose" },
+  { key: "neon", color: ACCENT_PRESETS.neon.accent, label: "Neon" },
 ];
 
 const TOTAL_STEPS = 5;
@@ -335,7 +338,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
                 selectedTheme === opt.key && { color: opt.color },
               ]}
             >
-              {opt.key.charAt(0).toUpperCase() + opt.key.slice(1)}
+              {opt.label}
             </Text>
           </Pressable>
         ))}

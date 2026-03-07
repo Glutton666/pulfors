@@ -50,6 +50,9 @@ const PRESET_COLORS: { value: Exclude<ThemeColor, "custom">; label: string; colo
   { value: "pink", label: "Pink", color: ACCENT_PRESETS.pink.accent },
   { value: "rose", label: "Rose", color: ACCENT_PRESETS.rose.accent },
   { value: "neon", label: "Neon", color: ACCENT_PRESETS.neon.accent },
+  { value: "saintspurple", label: "Saints", color: ACCENT_PRESETS.saintspurple.accent },
+  { value: "deepred", label: "Deep Red", color: ACCENT_PRESETS.deepred.accent },
+  { value: "beige", label: "Beige", color: ACCENT_PRESETS.beige.accent },
 ];
 
 const HUE_COLORS = [
