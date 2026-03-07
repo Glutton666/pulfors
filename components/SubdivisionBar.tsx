@@ -38,8 +38,8 @@ const CELL_GAP = 3;
 const MAX_CELLS = 8;
 const MIN_CELLS = 1;
 const SWIPE_THRESHOLD = 30;
-const SHAKE_WINDOW_MS = 3000;
-const SHAKE_COUNT_TRIGGER = 10;
+const SHAKE_WINDOW_MS = 2000;
+const SHAKE_COUNT_TRIGGER = 4;
 
 function getCellColor(type: BeatType, active: boolean, accentColor: string, accentMutedColor: string): string {
   if (type === "strong") return accentColor;
@@ -196,6 +196,15 @@ export function SubdivisionBar({
     onResetRef.current();
   }, []);
 
+  const trackShakeRef = useRef(trackShake);
+  const triggerResetRef = useRef(triggerReset);
+  const addCellRef = useRef(addCell);
+  const removeCellRef = useRef(removeCell);
+  useEffect(() => { trackShakeRef.current = trackShake; }, [trackShake]);
+  useEffect(() => { triggerResetRef.current = triggerReset; }, [triggerReset]);
+  useEffect(() => { addCellRef.current = addCell; }, [addCell]);
+  useEffect(() => { removeCellRef.current = removeCell; }, [removeCell]);
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
@@ -263,7 +272,7 @@ export function SubdivisionBar({
     })
   ).current;
 
-  const containerRef = useRef<View>(null);
+  const webContainerRef = useRef<View>(null);
   const webGestureRef = useRef({
     isDown: false,
     startX: 0,
@@ -274,11 +283,10 @@ export function SubdivisionBar({
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
-    const node = containerRef.current as any;
+    const node = webContainerRef.current as unknown as HTMLElement;
     if (!node?.addEventListener) return;
-    const el = node as unknown as HTMLElement;
 
-    const handleDown = (e: MouseEvent) => {
+    const handleDown = (e: PointerEvent) => {
       webGestureRef.current = {
         isDown: true,
         startX: e.clientX,
@@ -287,9 +295,10 @@ export function SubdivisionBar({
         horizontalTriggered: false,
       };
       lastDirectionRef.current = null;
+      directionChangesRef.current = [];
     };
 
-    const handleMove = (e: MouseEvent) => {
+    const handleMove = (e: PointerEvent) => {
       const g = webGestureRef.current;
       if (!g.isDown || isPlayingRef.current) return;
 
@@ -298,6 +307,13 @@ export function SubdivisionBar({
 
       if (g.isDraggingUp) {
         onDragMoveRef.current(e.clientX, e.clientY);
+        return;
+      }
+
+      if (trackShakeRef.current(dx)) {
+        triggerResetRef.current();
+        g.horizontalTriggered = true;
+        g.isDown = false;
         return;
       }
 
@@ -312,23 +328,17 @@ export function SubdivisionBar({
         return;
       }
 
-      if (trackShake(dx)) {
-        triggerReset();
-        g.horizontalTriggered = true;
-        return;
-      }
-
       if (!g.horizontalTriggered && Math.abs(dx) > SWIPE_THRESHOLD) {
         g.horizontalTriggered = true;
         if (dx > 0) {
-          addCell();
+          addCellRef.current();
         } else {
-          removeCell();
+          removeCellRef.current();
         }
       }
     };
 
-    const handleUp = (e: MouseEvent) => {
+    const handleUp = (e: PointerEvent) => {
       const g = webGestureRef.current;
       if (g.isDraggingUp) {
         onDragEndRef.current(e.clientX, e.clientY);
@@ -343,16 +353,16 @@ export function SubdivisionBar({
       lastDirectionRef.current = null;
     };
 
-    el.addEventListener("mousedown", handleDown);
-    document.addEventListener("mousemove", handleMove);
-    document.addEventListener("mouseup", handleUp);
+    node.addEventListener("pointerdown", handleDown, true);
+    document.addEventListener("pointermove", handleMove);
+    document.addEventListener("pointerup", handleUp);
 
     return () => {
-      el.removeEventListener("mousedown", handleDown);
-      document.removeEventListener("mousemove", handleMove);
-      document.removeEventListener("mouseup", handleUp);
+      node.removeEventListener("pointerdown", handleDown, true);
+      document.removeEventListener("pointermove", handleMove);
+      document.removeEventListener("pointerup", handleUp);
     };
-  }, [trackShake, triggerReset, addCell, removeCell]);
+  }, []);
 
   const shakeAnimStyle = useAnimatedStyle(() => ({
     transform: [
@@ -361,14 +371,12 @@ export function SubdivisionBar({
     ],
   }));
 
-  const nativePanHandlers =
-    Platform.OS !== "web" ? panResponder.panHandlers : {};
+  const nativePanHandlers = Platform.OS !== "web" ? panResponder.panHandlers : {};
 
   return (
+    <View ref={webContainerRef} style={styles.gestureWrapper} {...nativePanHandlers}>
     <Animated.View
-      ref={containerRef}
       style={[styles.wrapper, shakeAnimStyle]}
-      {...nativePanHandlers}
     >
       <View style={styles.cellsContainer} testID="subdivision-cells">
         <View style={styles.swipeHint}>
@@ -424,6 +432,7 @@ export function SubdivisionBar({
         </View>
       </View>
     </Animated.View>
+    </View>
   );
 }
 
@@ -480,14 +489,17 @@ export function DragGhost({
 }
 
 const styles = StyleSheet.create({
+  gestureWrapper: {
+    width: "100%",
+    cursor: "grab" as any,
+    userSelect: "none" as any,
+  },
   wrapper: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 6,
     width: "100%",
-    cursor: "grab" as any,
-    userSelect: "none" as any,
   },
   swipeHint: {
     opacity: 0.4,

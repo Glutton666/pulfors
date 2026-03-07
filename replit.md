@@ -85,3 +85,13 @@ Users can create up to 3 custom sound sets in the Sound tab of Settings. Each cu
 - **`lib/storage.ts`**: Defines `CustomSoundSetConfig`, `CustomSoundSample`, `BuiltinSoundSet`, `SoundRole` types. Custom configs stored in AsyncStorage under `metronome_custom_sound_sets` key. Up to 3 slots: `custom1`, `custom2`, `custom3`.
 - **`components/SettingsModal.tsx`**: Inline editor in Sound tab — source type toggle (Built-in / Record+File), source set picker, role picker, duration +/- buttons, mic recording with timer, file import via `expo-document-picker`, preview, save/delete. Recording uses `expo-av` Audio.Recording (max 3s, auto-stop).
 - **`app/index.tsx`**: Custom set audio routing via `getCustomPlayer()` helper. For builtin samples, maps to built-in set players. For custom audio samples, falls back to classic players for real-time playback (PCM rendering handles custom URIs properly via `decodeSampleFile`). PCM rendering trims audio to specified duration with 10ms fade-out via `trimPCM()`. PCM cache invalidated on custom set changes.
+
+## Web Gesture Handling (SubdivisionBar)
+
+The `SubdivisionBar` component uses platform-specific gesture handling:
+- **Native (iOS/Android)**: Uses PanResponder for swipe (add/remove cells), drag-up (reorder), and shake-to-reset gestures via accelerometer
+- **Web**: Uses pointer events (pointerdown/pointermove/pointerup) attached to a wrapper `<View ref={webContainerRef}>` element. The useEffect that sets up listeners uses an empty dependency array (`[]`) with callback refs (`trackShakeRef`, `triggerResetRef`, `addCellRef`, `removeCellRef`) to prevent React re-renders from tearing down/re-attaching listeners mid-gesture. Shake detection requires 4 direction changes within 2000ms.
+
+## Security
+
+- `tar` package overridden to `>=7.5.10` in package.json for CVE fix
