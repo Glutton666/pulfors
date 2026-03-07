@@ -479,6 +479,10 @@ export default function MetronomeScreen() {
     });
     setupNotificationControls();
 
+    setTimeout(() => {
+      warmupAudioPlayers().catch(() => {});
+    }, 500);
+
     return () => {
       engine.cleanup();
       if (renderedPlayerRef.current) {
@@ -1267,7 +1271,6 @@ export default function MetronomeScreen() {
       }
     } else {
       const startBeat = barModeRef.current ? barStartBeatRef.current : undefined;
-      setIsPreparing(true);
       showPlayingNotification(bpm, modeLabel, languageRef.current);
       if (loggingEnabled) {
         practiceStartRef.current = Date.now();
@@ -1289,20 +1292,8 @@ export default function MetronomeScreen() {
       }
       engine.buildScheduleOnly();
 
-      await warmupAudioPlayers();
-
-      const renderedPlayer = await buildRenderedPlayer();
-      if (renderedPlayer) {
-        stopRenderedAudio();
-        renderedPlayerRef.current = renderedPlayer;
-        engine.setPreRenderedAudio(true);
-        renderedPlayer.volume = 1.0;
-      } else {
-        engine.setPreRenderedAudio(false);
-      }
-      setIsPreparing(false);
+      engine.setPreRenderedAudio(false);
       setIsPlaying(true);
-      if (renderedPlayer) renderedPlayer.play();
       engine.start(startBeat ?? undefined);
 
       if (barModeRef.current && barLoopModeRef.current === "once") {
@@ -1375,8 +1366,32 @@ export default function MetronomeScreen() {
           }
         }, 0);
       }
+
+      buildRenderedPlayer().then((renderedPlayer) => {
+        const eng = engineRef.current;
+        if (!eng?.getIsRunning()) {
+          if (renderedPlayer) {
+            try { renderedPlayer.release(); } catch {}
+          }
+          return;
+        }
+        if (renderedPlayer) {
+          stopRenderedAudio();
+          renderedPlayerRef.current = renderedPlayer;
+          renderedPlayer.volume = 1.0;
+          const elapsedMs = eng.getMeasureElapsedMs();
+          const measureMs = eng.getMeasureDurationMs();
+          const seekSec = measureMs > 0 ? (elapsedMs % measureMs) / 1000 : 0;
+          Promise.resolve(renderedPlayer.seekTo(seekSec)).then(() => {
+            if (eng.getIsRunning()) {
+              eng.setPreRenderedAudio(true);
+              renderedPlayer.play();
+            }
+          }).catch(() => {});
+        }
+      }).catch(() => {});
     }
-  }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure, warmupAudioPlayers]);
+  }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure]);
 
   const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
@@ -1509,7 +1524,6 @@ export default function MetronomeScreen() {
   const startMetronome = useCallback(async () => {
     const engine = engineRef.current;
     if (!engine || isPlaying || isPreparing) return;
-    setIsPreparing(true);
     if (barModeRef.current) {
       engine.setBeatTypes([...(barConfigRef.current.beatTypes || [])]);
       engine.setAllBeatSubdivisions(barConfigRef.current.beatSubdivisions || {});
@@ -1526,22 +1540,34 @@ export default function MetronomeScreen() {
     }
     engine.buildScheduleOnly();
 
-    await warmupAudioPlayers();
-
-    const renderedPlayer = await buildRenderedPlayer();
-    if (renderedPlayer) {
-      stopRenderedAudio();
-      renderedPlayerRef.current = renderedPlayer;
-      engine.setPreRenderedAudio(true);
-      renderedPlayer.volume = 1.0;
-    } else {
-      engine.setPreRenderedAudio(false);
-    }
-    setIsPreparing(false);
+    engine.setPreRenderedAudio(false);
     setIsPlaying(true);
-    if (renderedPlayer) renderedPlayer.play();
     engine.start();
-  }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio, warmupAudioPlayers]);
+
+    buildRenderedPlayer().then((renderedPlayer) => {
+      const eng = engineRef.current;
+      if (!eng?.getIsRunning()) {
+        if (renderedPlayer) {
+          try { renderedPlayer.release(); } catch {}
+        }
+        return;
+      }
+      if (renderedPlayer) {
+        stopRenderedAudio();
+        renderedPlayerRef.current = renderedPlayer;
+        renderedPlayer.volume = 1.0;
+        const elapsedMs = eng.getMeasureElapsedMs();
+        const measureMs = eng.getMeasureDurationMs();
+        const seekSec = measureMs > 0 ? (elapsedMs % measureMs) / 1000 : 0;
+        Promise.resolve(renderedPlayer.seekTo(seekSec)).then(() => {
+          if (eng.getIsRunning()) {
+            eng.setPreRenderedAudio(true);
+            renderedPlayer.play();
+          }
+        }).catch(() => {});
+      }
+    }).catch(() => {});
+  }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio]);
 
   useEffect(() => {
     const engine = engineRef.current;

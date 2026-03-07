@@ -608,6 +608,15 @@ export class MetronomeEngine {
     return performance.now() - this.measureStartTime;
   }
 
+  getMeasureElapsedMs(): number {
+    if (!this.isRunning) return 0;
+    return performance.now() - this.measureStartTime;
+  }
+
+  getMeasureDurationMs(): number {
+    return this.measureDurationMs;
+  }
+
   private loop = () => {
     if (!this.isRunning) return;
 
