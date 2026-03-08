@@ -555,6 +555,16 @@ export default function MetronomeScreen() {
     }
   }, []);
 
+  const resetPlaybackState = useCallback(() => {
+    setIsPreparing(false);
+    setIsPlaying(false);
+    setCurrentBeat(-1);
+    setMeasureCount(0);
+    setActiveSubNote(-1);
+    activeSubNoteRef.current = -1;
+    setProgressInfo(null);
+  }, []);
+
   const trimPCM = useCallback((decoded: DecodedSample, durationSec: number): DecodedSample => {
     const maxSamples = Math.floor(durationSec * 44100);
     if (decoded.pcm.length <= maxSamples) return decoded;
@@ -956,6 +966,10 @@ export default function MetronomeScreen() {
         } catch {}
         renderedPlayerRef.current = null;
       }
+      if (Platform.OS === "web" && renderedUrlRef.current) {
+        try { URL.revokeObjectURL(renderedUrlRef.current); } catch {}
+        renderedUrlRef.current = null;
+      }
     });
   }, [flashOpacity]);
 
@@ -1272,12 +1286,7 @@ export default function MetronomeScreen() {
       engine.stop();
       stopRenderedAudio();
       clearSamplePlayStates();
-      setIsPreparing(false);
-      setIsPlaying(false);
-      setCurrentBeat(-1);
-      setMeasureCount(0);
-      setActiveSubNote(-1);
-      setProgressInfo(null);
+      resetPlaybackState();
       showPausedNotification(bpm, modeLabel, languageRef.current);
       if (loggingEnabled && practiceStartRef.current) {
         const dur = Math.round((Date.now() - practiceStartRef.current) / 1000);
@@ -1419,12 +1428,7 @@ export default function MetronomeScreen() {
       engine.stop();
       stopRenderedAudio();
       clearSamplePlayStates();
-      setIsPreparing(false);
-      setIsPlaying(false);
-      setCurrentBeat(-1);
-      setMeasureCount(0);
-      setActiveSubNote(-1);
-      setProgressInfo(null);
+      resetPlaybackState();
     }
     setBarStartBeat(null);
 
@@ -1554,12 +1558,7 @@ export default function MetronomeScreen() {
         for (const snd of Object.values(noteSampleSoundsRef.current)) {
           try { snd.pause(); } catch {}
         }
-        setIsPreparing(false);
-        setIsPlaying(false);
-        setCurrentBeat(-1);
-        setMeasureCount(0);
-        setActiveSubNote(-1);
-        setProgressInfo(null);
+        resetPlaybackState();
         const modeLabel = barModeRef.current ? "Bar" : "Dial";
         showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
       }
@@ -1576,11 +1575,7 @@ export default function MetronomeScreen() {
       engine.stop();
       stopRenderedAudio();
       clearSamplePlayStates();
-      setIsPreparing(false);
-      setIsPlaying(false);
-      setCurrentBeat(-1);
-      setMeasureCount(0);
-      setProgressInfo(null);
+      resetPlaybackState();
       const modeLabel = barModeRef.current ? "Bar" : "Dial";
       showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
     } else {
@@ -1892,6 +1887,12 @@ export default function MetronomeScreen() {
 
   const handleBarReset = useCallback(() => {
     const engine = engineRef.current;
+    if (engine && engine.getIsRunning()) {
+      engine.stop();
+      stopRenderedAudio();
+    }
+    clearSamplePlayStates();
+    resetPlaybackState();
     const beats = barConfigRef.current.beatsPerMeasure || 4;
     const newTypes = defaultBeatTypes(beats);
     setBeatTypes(newTypes);
@@ -1905,15 +1906,12 @@ export default function MetronomeScreen() {
     noteSampleNamesRef.current = {};
     setNoteSampleSources({});
     noteSampleSourcesRef.current = {};
-    for (const [k, st] of Object.entries(samplePlayStateRef.current)) {
-      if (st.endTimer) clearTimeout(st.endTimer);
-    }
-    samplePlayStateRef.current = {};
     for (const player of Object.values(noteSampleSoundsRef.current)) {
       try { player.pause(); } catch {}
       try { player.release(); } catch {}
     }
     noteSampleSoundsRef.current = {};
+    invalidateSamplePCMCache();
     saveNoteSamples({});
     saveNoteSampleNames({});
     saveNoteSampleSources({});
@@ -1996,12 +1994,7 @@ export default function MetronomeScreen() {
       engine.stop();
       stopRenderedAudio();
       clearSamplePlayStates();
-      setIsPreparing(false);
-      setIsPlaying(false);
-      setCurrentBeat(-1);
-      setMeasureCount(0);
-      setActiveSubNote(-1);
-      setProgressInfo(null);
+      resetPlaybackState();
     }
 
     const entryMode = entry.mode || "bar";

@@ -818,6 +818,12 @@ export function BeatIndicator({
   const [loopBlockExpanded, setLoopBlockExpanded] = useState(false);
   const [editingBlockIndex, setEditingBlockIndex] = useState<number | null>(null);
 
+  useEffect(() => {
+    if (isPlaying) {
+      setEditingBlockIndex(null);
+    }
+  }, [isPlaying]);
+
   const openRepeatModal = useCallback((beat: number) => {
     const existing = barRepeats[beat];
     if (existing) {
