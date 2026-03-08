@@ -643,11 +643,10 @@ export default function MetronomeScreen() {
 
     try {
       const scheduleInfo = engine.getScheduleInfo();
-      const currentSamples = barModeRef.current ? noteSamplesRef.current : {};
-      const [clickPCMs, samplePCMs] = await Promise.all([
+      const [clickPCMs] = await Promise.all([
         getClickPCMs(soundSetRef.current),
-        getSamplePCMs(currentSamples),
       ]);
+      const samplePCMs = new Map<string, SamplePCMEntry>();
 
       await new Promise(r => setTimeout(r, 0));
 
