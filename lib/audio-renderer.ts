@@ -274,7 +274,6 @@ export function renderMeasure(params: {
   samplePCMs: Map<string, SamplePCMEntry>;
   clickVolume: number;
   sampleVolume: number;
-  repeatCount?: number;
 }): Float32Array {
   const {
     schedule,
@@ -283,58 +282,46 @@ export function renderMeasure(params: {
     samplePCMs,
     clickVolume,
     sampleVolume,
-    repeatCount = 4,
   } = params;
 
   const measureSamples = Math.ceil((measureDurationMs / 1000) * RENDER_SR);
-  const totalMeasureSamples = measureSamples * repeatCount;
   const tailSamples = Math.ceil(RENDER_SR * 0.15);
-  const buffer = new Float32Array(totalMeasureSamples + tailSamples);
+  const totalSamples = measureSamples + tailSamples;
+  const buffer = new Float32Array(totalSamples);
 
-  for (let rep = 0; rep < repeatCount; rep++) {
-    const baseOffset = rep * measureSamples;
-    for (const tick of schedule) {
-      if (tick.type === "mute") continue;
-      const offsetSamples = baseOffset + Math.round((tick.time / 1000) * RENDER_SR);
-      const key = `${tick.beat}-${tick.subBeat}`;
+  for (const tick of schedule) {
+    if (tick.type === "mute") continue;
+    const offsetSamples = Math.round((tick.time / 1000) * RENDER_SR);
+    const key = `${tick.beat}-${tick.subBeat}`;
 
-      let clickPCM: Float32Array;
-      if (tick.type === "strong") clickPCM = clickPCMs.strong;
-      else if (tick.type === "accent") clickPCM = clickPCMs.high;
-      else clickPCM = clickPCMs.low;
-      mixInto(buffer, clickPCM, offsetSamples, clickVolume);
+    let clickPCM: Float32Array;
+    if (tick.type === "strong") clickPCM = clickPCMs.strong;
+    else if (tick.type === "accent") clickPCM = clickPCMs.high;
+    else clickPCM = clickPCMs.low;
+    mixInto(buffer, clickPCM, offsetSamples, clickVolume);
 
-      if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0 && samplePCMs.has(key)) {
-        const sample = samplePCMs.get(key)!;
-        const trimStart = Math.round(
-          (sample.trimStartMs / 1000) * RENDER_SR
-        );
-        const trimLen =
-          sample.trimDurationMs > 0
-            ? Math.round((sample.trimDurationMs / 1000) * RENDER_SR)
-            : sample.pcm.length - trimStart;
-        const trimmed = sample.pcm.subarray(
-          trimStart,
-          Math.min(trimStart + trimLen, sample.pcm.length)
-        );
-        mixInto(buffer, trimmed, offsetSamples, sampleVolume);
-      }
+    if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0 && samplePCMs.has(key)) {
+      const sample = samplePCMs.get(key)!;
+      const trimStart = Math.round(
+        (sample.trimStartMs / 1000) * RENDER_SR
+      );
+      const trimLen =
+        sample.trimDurationMs > 0
+          ? Math.round((sample.trimDurationMs / 1000) * RENDER_SR)
+          : sample.pcm.length - trimStart;
+      const trimmed = sample.pcm.subarray(
+        trimStart,
+        Math.min(trimStart + trimLen, sample.pcm.length)
+      );
+      mixInto(buffer, trimmed, offsetSamples, sampleVolume);
     }
   }
 
-  for (let i = totalMeasureSamples; i < totalMeasureSamples + tailSamples; i++) {
-    buffer[i - totalMeasureSamples] += buffer[i];
+  for (let i = measureSamples; i < totalSamples; i++) {
+    buffer[i - measureSamples] += buffer[i];
   }
 
-  const out = buffer.subarray(0, totalMeasureSamples);
-
-  const fadeSamples = Math.min(Math.ceil(RENDER_SR * 0.001), totalMeasureSamples);
-  for (let i = 0; i < fadeSamples; i++) {
-    const t = i / fadeSamples;
-    out[i] *= t;
-    out[totalMeasureSamples - 1 - i] *= t;
-  }
-
+  const out = buffer.subarray(0, measureSamples);
   for (let i = 0; i < out.length; i++) {
     out[i] = Math.max(-1, Math.min(1, out[i]));
   }

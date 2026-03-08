@@ -818,12 +818,6 @@ export function BeatIndicator({
   const [loopBlockExpanded, setLoopBlockExpanded] = useState(false);
   const [editingBlockIndex, setEditingBlockIndex] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (isPlaying) {
-      setEditingBlockIndex(null);
-    }
-  }, [isPlaying]);
-
   const openRepeatModal = useCallback((beat: number) => {
     const existing = barRepeats[beat];
     if (existing) {
@@ -944,20 +938,20 @@ export function BeatIndicator({
   const rowH = BAR_HEIGHT + 1 + barGap;
   const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
   const copyHeight = beatsPerMeasure * rowH;
+  const [activeCopy, setActiveCopy] = useState(1);
+  const activeCopyRef = useRef(1);
   const barPrevBeatRef = useRef(-1);
   const prevMeasureCountRef = useRef(0);
 
-  const NUM_COPIES = 5;
-  const CENTER_COPY = 2;
-  const activeCopyRef = useRef(CENTER_COPY);
-  const [activeCopy, setActiveCopy] = useState(CENTER_COPY);
+  const NUM_COPIES = 3;
+  const CENTER_COPY = 1;
 
   useEffect(() => {
     if (!isPlaying) {
-      barPrevBeatRef.current = -1;
-      prevMeasureCountRef.current = 0;
       activeCopyRef.current = CENTER_COPY;
       setActiveCopy(CENTER_COPY);
+      barPrevBeatRef.current = -1;
+      prevMeasureCountRef.current = 0;
       if (barMode && barContainerHeight > 0) {
         barScrollRef.current?.scrollTo({ y: 0, animated: false });
         onBarScrollOffset?.(0);
@@ -969,8 +963,6 @@ export function BeatIndicator({
         const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
         barScrollRef.current?.scrollTo({ y: scrollTarget, animated: false });
       } else {
-        activeCopyRef.current = CENTER_COPY;
-        setActiveCopy(CENTER_COPY);
         const beatTop = centerPad + CENTER_COPY * copyHeight + startBeat * rowH;
         const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
         barScrollRef.current?.scrollTo({ y: scrollTarget, animated: false });
@@ -991,27 +983,29 @@ export function BeatIndicator({
       return;
     }
 
+    const prev = barPrevBeatRef.current;
+    barPrevBeatRef.current = currentBeat;
+
     const prevMC = prevMeasureCountRef.current;
     prevMeasureCountRef.current = measureCount;
     const isMeasureWrap = measureCount > prevMC;
 
     if (isMeasureWrap) {
-      if (activeCopyRef.current >= NUM_COPIES - 1) {
-        activeCopyRef.current = CENTER_COPY;
-        setActiveCopy(CENTER_COPY);
-        const snapTop = centerPad + CENTER_COPY * copyHeight + currentBeat * rowH;
-        const snapTarget = Math.max(0, snapTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
-        barScrollRef.current?.scrollTo({ y: snapTarget, animated: false });
-      } else {
-        activeCopyRef.current++;
-        setActiveCopy(activeCopyRef.current);
-      }
+      activeCopyRef.current++;
+      setActiveCopy(activeCopyRef.current);
+    }
+
+    if (activeCopyRef.current > CENTER_COPY && isMeasureWrap && currentBeat > 0) {
+      activeCopyRef.current = CENTER_COPY;
+      setActiveCopy(CENTER_COPY);
+      const snapTop = centerPad + CENTER_COPY * copyHeight + (currentBeat - 1) * rowH;
+      const snapTarget = Math.max(0, snapTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
+      barScrollRef.current?.scrollTo({ y: snapTarget, animated: false });
     }
 
     const beatTop = centerPad + activeCopyRef.current * copyHeight + currentBeat * rowH;
     const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
-    const isFirstTick = barPrevBeatRef.current < 0;
-    barPrevBeatRef.current = currentBeat;
+    const isFirstTick = prev < 0;
     barScrollRef.current?.scrollTo({ y: scrollTarget, animated: !isFirstTick });
   }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, copyHeight, barLoopMode, measureCount]);
 
@@ -1023,7 +1017,7 @@ export function BeatIndicator({
       const bType = beatTypes[beat] || "normal";
       const isDropTarget = isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
       const beatBlocks = blockForBeat.get(beat) || [];
-      const isPrimary = isPlaying ? (barLoopMode === "once" ? copyIndex === 0 : copyIndex === activeCopy) : copyIndex === 0;
+      const isPrimary = isPlaying ? (barLoopMode === "once" ? copyIndex === 0 : copyIndex === CENTER_COPY) : copyIndex === 0;
       return (
         <View
           key={`bar-${copyIndex}-${beat}`}
