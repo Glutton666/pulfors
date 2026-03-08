@@ -1250,7 +1250,8 @@ export default function MetronomeScreen() {
 
   const togglePlayPause = useCallback(async () => {
     const engine = engineRef.current;
-    if (!engine || isPreparing) return;
+    if (!engine) return;
+    if (isPreparing && !isPlaying) return;
 
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
