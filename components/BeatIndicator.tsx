@@ -155,14 +155,14 @@ function DialBeatDot({
           ]}
         >
           <LinearGradient
-            colors={[Colors.white, C.accent, C.accentMuted]}
-            locations={[0, 0.35, 1]}
+            colors={[Colors.white, C.accent, C.accent]}
+            locations={[0, 0.4, 1]}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}
           >
             <View style={{ width: size - 10, height: size - 10, borderRadius: (size - 10) / 2, backgroundColor: C.accent, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: Colors.white, fontSize: 11, fontWeight: "bold" as const, lineHeight: 13 }}>S</Text>
+              <Text style={{ color: Colors.white, fontSize: 11, fontWeight: "bold" as const, lineHeight: 13, textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
             </View>
           </LinearGradient>
         </Animated.View>
@@ -1107,13 +1107,13 @@ export function BeatIndicator({
                   {isStrongType ? (
                     <View style={[styles.barNoteFill, { margin: 3, overflow: "hidden", opacity: isActiveCell ? 1 : 0.75 }]}>
                       <LinearGradient
-                        colors={[Colors.white, C.accent, C.accentMuted]}
-                        locations={[0, 0.35, 1]}
+                        colors={[Colors.white, C.accent, C.accent]}
+                        locations={[0, 0.4, 1]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 4, alignItems: "center", justifyContent: "center" }}
                       >
-                        <Text style={{ color: Colors.white, fontSize: 10, fontWeight: "bold" as const, lineHeight: 12 }}>S</Text>
+                        <Text style={{ color: Colors.white, fontSize: 10, fontWeight: "bold" as const, lineHeight: 12, textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 }}>S</Text>
                       </LinearGradient>
                     </View>
                   ) : type === "mute" ? (

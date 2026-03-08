@@ -398,15 +398,15 @@ export function SubdivisionBar({
                 testID={`subdivision-cell-${i}`}
               >
                 {type === "strong" ? (
-                  <View style={[styles.cell, { overflow: "hidden", opacity: isPlaying ? (isActive ? 1 : 0.3) : 1 }]}>
+                  <View style={[styles.cell, { overflow: "hidden", opacity: isPlaying ? (isActive ? 1 : 0.55) : 1 }]}>
                     <LinearGradient
-                      colors={[Colors.white, C.accent, C.accentMuted]}
-                      locations={[0, 0.35, 1]}
+                      colors={[Colors.white, C.accent, C.accent]}
+                      locations={[0, 0.4, 1]}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={{ width: CELL_SIZE, height: CELL_SIZE, alignItems: "center", justifyContent: "center", borderRadius: 6 }}
                     >
-                      <Text style={{ color: Colors.white, fontSize: 11, fontWeight: "bold" as const, lineHeight: 13 }}>S</Text>
+                      <Text style={{ color: Colors.white, fontSize: 11, fontWeight: "bold" as const, lineHeight: 13, textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
                     </LinearGradient>
                   </View>
                 ) : (
@@ -461,13 +461,13 @@ export function DragGhost({
         type === "strong" ? (
           <View key={i} style={[styles.ghostCell, { overflow: "hidden" }]}>
             <LinearGradient
-              colors={[Colors.white, GC.accent, GC.accentMuted]}
-              locations={[0, 0.35, 1]}
+              colors={[Colors.white, GC.accent, GC.accent]}
+              locations={[0, 0.4, 1]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={{ width: 18, height: 18, alignItems: "center", justifyContent: "center", borderRadius: 4 }}
             >
-              <Text style={{ color: Colors.white, fontSize: 8, fontWeight: "bold" as const, lineHeight: 10 }}>S</Text>
+              <Text style={{ color: Colors.white, fontSize: 8, fontWeight: "bold" as const, lineHeight: 10, textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 }}>S</Text>
             </LinearGradient>
           </View>
         ) : (
