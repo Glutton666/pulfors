@@ -1297,6 +1297,13 @@ export default function MetronomeScreen() {
         practiceStartRef.current = null;
       }
     } else {
+      setCurrentBeat(-1);
+      setMeasureCount(0);
+      setActiveSubNote(-1);
+      activeSubNoteRef.current = -1;
+      setProgressInfo(null);
+      clearSamplePlayStates();
+
       const startBeat = barModeRef.current ? barStartBeatRef.current : undefined;
       showPlayingNotification(bpm, modeLabel, languageRef.current);
       if (loggingEnabled) {
@@ -1489,6 +1496,14 @@ export default function MetronomeScreen() {
   const startMetronome = useCallback(async () => {
     const engine = engineRef.current;
     if (!engine || isPlaying || isPreparing) return;
+
+    setCurrentBeat(-1);
+    setMeasureCount(0);
+    setActiveSubNote(-1);
+    activeSubNoteRef.current = -1;
+    setProgressInfo(null);
+    clearSamplePlayStates();
+
     if (barModeRef.current) {
       engine.setBeatTypes([...(barConfigRef.current.beatTypes || [])]);
       engine.setAllBeatSubdivisions(barConfigRef.current.beatSubdivisions || {});
