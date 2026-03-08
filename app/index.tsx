@@ -643,10 +643,13 @@ export default function MetronomeScreen() {
 
     try {
       const scheduleInfo = engine.getScheduleInfo();
-      const [clickPCMs] = await Promise.all([
+      const currentSamples = barModeRef.current ? noteSamplesRef.current : {};
+      const [clickPCMs, samplePCMs] = await Promise.all([
         getClickPCMs(soundSetRef.current),
+        getSamplePCMs(currentSamples),
       ]);
-      const samplePCMs = new Map<string, SamplePCMEntry>();
+
+      await new Promise(r => setTimeout(r, 0));
 
       const pcm = renderMeasure({
         schedule: scheduleInfo.ticks as TickInfo[],
@@ -672,7 +675,7 @@ export default function MetronomeScreen() {
       console.warn("[PreRender] Failed, falling back to per-tick audio:", e);
       return null;
     }
-  }, [getClickPCMs]);
+  }, [getClickPCMs, getSamplePCMs]);
 
   const warmupAudioPlayers = useCallback(async () => {
     try {
@@ -1253,6 +1256,12 @@ export default function MetronomeScreen() {
     const engine = engineRef.current;
     if (!engine) return;
 
+    if (isPreparing && !isPlaying) {
+      preparingCancelledRef.current = true;
+      setIsPreparing(false);
+      return;
+    }
+
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
@@ -1308,79 +1317,39 @@ export default function MetronomeScreen() {
       }
       engine.buildScheduleOnly();
 
-      engine.setPreRenderedAudio(false);
-      setIsPlaying(true);
-      engine.start(startBeat ?? undefined);
+      preparingCancelledRef.current = false;
+      setIsPreparing(true);
 
-      if (barModeRef.current && barLoopModeRef.current === "once") {
-        engine.requestStopAfterMeasure();
-      }
+      try {
+        const renderedPlayer = await buildRenderedPlayer();
+        if (preparingCancelledRef.current) {
+          if (renderedPlayer) { try { renderedPlayer.release(); } catch {} }
+          setIsPreparing(false);
+          return;
+        }
+        setIsPreparing(false);
 
-      if (startBeat && startBeat > 0) {
-        setTimeout(() => {
-          const beatDurMs = 60000 / bpm;
-          const samples = noteSamplesRef.current;
-          for (const [key, uri] of Object.entries(samples)) {
-            const [bStr, sStr] = key.split("-");
-            const trigBeat = parseInt(bStr, 10);
-            const trigSub = parseInt(sStr, 10);
-            if (isNaN(trigBeat) || isNaN(trigSub) || trigBeat >= startBeat) continue;
+        if (renderedPlayer) {
+          stopRenderedAudio();
+          renderedPlayerRef.current = renderedPlayer;
+          renderedPlayer.volume = 1.0;
+          engine.setPreRenderedAudio(true);
+        } else {
+          engine.setPreRenderedAudio(false);
+        }
 
-            const hashParts = uri.split("#t=")[1];
-            let sampleStartMs = 0;
-            let sampleEndMs = 0;
-            if (hashParts) {
-              const parts = hashParts.split(",").map(Number);
-              if (!isNaN(parts[0])) sampleStartMs = parts[0];
-              if (parts.length > 1 && !isNaN(parts[1])) sampleEndMs = parts[1];
-            }
-            const sampleDurMs = sampleEndMs > sampleStartMs ? sampleEndMs - sampleStartMs : 0;
-            if (sampleDurMs <= 0) continue;
+        setIsPlaying(true);
+        engine.start(startBeat ?? undefined);
 
-            let elapsedMs = 0;
-            const curBarRepeats = barConfigRef.current.barRepeats || {};
-            for (let b = trigBeat; b < startBeat; b++) {
-              const pat = engine.getBeatSubdivision(b);
-              const subCount = pat ? pat.length : 1;
-              const rep = curBarRepeats[b];
-              let repeatCount = 1;
-              if (rep) {
-                if (rep.type === "count") repeatCount = Math.max(1, rep.value);
-                else repeatCount = Math.max(1, Math.round((rep.value * 1000) / beatDurMs));
-              }
-              if (b === trigBeat) {
-                elapsedMs += (subCount - trigSub) * (beatDurMs / subCount);
-                elapsedMs += (repeatCount - 1) * beatDurMs;
-              } else {
-                elapsedMs += beatDurMs * repeatCount;
-              }
-            }
+        if (renderedPlayer) {
+          renderedPlayer.play();
+        }
 
-            if (elapsedMs < sampleDurMs) {
-              const player = noteSampleSoundsRef.current[key];
-              if (player) {
-                const seekToMs = sampleStartMs + elapsedMs;
-                const remainingMs = sampleDurMs - elapsedMs;
-                samplePlayStateRef.current[key] = { playing: true, endTimer: null };
-                player.seekTo(seekToMs / 1000).then(() => {
-                  player.play();
-                  if (remainingMs > 0) {
-                    const timer = setTimeout(() => {
-                      try { player.pause(); } catch {}
-                      if (samplePlayStateRef.current[key]) {
-                        samplePlayStateRef.current[key].playing = false;
-                        samplePlayStateRef.current[key].endTimer = null;
-                      }
-                    }, remainingMs);
-                    if (samplePlayStateRef.current[key]) {
-                      samplePlayStateRef.current[key].endTimer = timer;
-                    }
-                  }
-                }).catch(() => {});
-              }
-            }
-          }
-        }, 0);
+        if (barModeRef.current && barLoopModeRef.current === "once") {
+          engine.requestStopAfterMeasure();
+        }
+      } catch {
+        setIsPreparing(false);
       }
     }
   }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure]);
@@ -1533,10 +1502,37 @@ export default function MetronomeScreen() {
     }
     engine.buildScheduleOnly();
 
-    engine.setPreRenderedAudio(false);
-    setIsPlaying(true);
-    engine.start();
-  }, [isPlaying, isPreparing]);
+    preparingCancelledRef.current = false;
+    setIsPreparing(true);
+
+    try {
+      const renderedPlayer = await buildRenderedPlayer();
+      if (preparingCancelledRef.current) {
+        if (renderedPlayer) { try { renderedPlayer.release(); } catch {} }
+        setIsPreparing(false);
+        return;
+      }
+      setIsPreparing(false);
+
+      if (renderedPlayer) {
+        stopRenderedAudio();
+        renderedPlayerRef.current = renderedPlayer;
+        renderedPlayer.volume = 1.0;
+        engine.setPreRenderedAudio(true);
+      } else {
+        engine.setPreRenderedAudio(false);
+      }
+
+      setIsPlaying(true);
+      engine.start();
+
+      if (renderedPlayer) {
+        renderedPlayer.play();
+      }
+    } catch {
+      setIsPreparing(false);
+    }
+  }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio]);
 
   useEffect(() => {
     const engine = engineRef.current;
