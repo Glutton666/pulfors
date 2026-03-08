@@ -23,7 +23,7 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import Colors, { getContrastText } from "@/constants/colors";
+import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { moderateScale, SCREEN_WIDTH } from "@/lib/scale";
 
@@ -162,7 +162,7 @@ function DialBeatDot({
             style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}
           >
             <View style={{ width: size - 10, height: size - 10, borderRadius: (size - 10) / 2, backgroundColor: C.accent, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: getContrastText(C.accent), fontSize: 11, fontWeight: "bold" as const, lineHeight: 13 }}>S</Text>
+              <Text style={{ color: Colors.white, fontSize: 11, fontWeight: "bold" as const, lineHeight: 13 }}>S</Text>
             </View>
           </LinearGradient>
         </Animated.View>
@@ -1113,9 +1113,7 @@ export function BeatIndicator({
                         end={{ x: 1, y: 1 }}
                         style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 4, alignItems: "center", justifyContent: "center" }}
                       >
-                        <View style={{ paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3, backgroundColor: C.accent, alignItems: "center", justifyContent: "center" }}>
-                          <Text style={{ color: getContrastText(C.accent), fontSize: 10, fontWeight: "bold" as const, lineHeight: 12 }}>S</Text>
-                        </View>
+                        <Text style={{ color: Colors.white, fontSize: 10, fontWeight: "bold" as const, lineHeight: 12 }}>S</Text>
                       </LinearGradient>
                     </View>
                   ) : type === "mute" ? (

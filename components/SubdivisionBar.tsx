@@ -17,7 +17,7 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import Colors, { getContrastText } from "@/constants/colors";
+import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import type { BeatType } from "@/lib/metronome-engine";
 
@@ -406,9 +406,7 @@ export function SubdivisionBar({
                       end={{ x: 1, y: 1 }}
                       style={{ width: CELL_SIZE, height: CELL_SIZE, alignItems: "center", justifyContent: "center", borderRadius: 6 }}
                     >
-                      <View style={{ width: CELL_SIZE - 6, height: CELL_SIZE - 6, borderRadius: 4, backgroundColor: C.accent, alignItems: "center", justifyContent: "center" }}>
-                        <Text style={{ color: getContrastText(C.accent), fontSize: 11, fontWeight: "bold" as const, lineHeight: 13 }}>S</Text>
-                      </View>
+                      <Text style={{ color: Colors.white, fontSize: 11, fontWeight: "bold" as const, lineHeight: 13 }}>S</Text>
                     </LinearGradient>
                   </View>
                 ) : (
@@ -469,9 +467,7 @@ export function DragGhost({
               end={{ x: 1, y: 1 }}
               style={{ width: 18, height: 18, alignItems: "center", justifyContent: "center", borderRadius: 4 }}
             >
-              <View style={{ width: 13, height: 13, borderRadius: 3, backgroundColor: GC.accent, alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ color: getContrastText(GC.accent), fontSize: 8, fontWeight: "bold" as const, lineHeight: 10 }}>S</Text>
-              </View>
+              <Text style={{ color: Colors.white, fontSize: 8, fontWeight: "bold" as const, lineHeight: 10 }}>S</Text>
             </LinearGradient>
           </View>
         ) : (
