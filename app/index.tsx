@@ -397,9 +397,17 @@ export default function MetronomeScreen() {
       }).catch(() => {});
     });
 
-    saveNoteSamples({});
-    saveNoteSampleNames({});
-    saveNoteSampleSources({});
+    Promise.all([loadNoteSamples(), loadNoteSampleNames(), loadNoteSampleSources()]).then(async ([samples, names, sources]) => {
+      setNoteSamples(samples);
+      noteSamplesRef.current = samples;
+      setNoteSampleNames(names);
+      noteSampleNamesRef.current = names;
+      setNoteSampleSources(sources);
+      noteSampleSourcesRef.current = sources;
+      if (Object.keys(samples).length > 0) {
+        await preloadSounds(samples);
+      }
+    }).catch(() => {});
 
     const sampleTimingCacheRef = { current: new Map<string, { startMs: number; durationMs: number }>() };
 
@@ -1253,6 +1261,7 @@ export default function MetronomeScreen() {
       engine.stop();
       stopRenderedAudio();
       clearSamplePlayStates();
+      setIsPreparing(false);
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
@@ -1298,6 +1307,7 @@ export default function MetronomeScreen() {
       }
       engine.buildScheduleOnly();
 
+      setIsPreparing(true);
       engine.setPreRenderedAudio(false);
       setIsPlaying(true);
       engine.start(startBeat ?? undefined);
@@ -1375,6 +1385,7 @@ export default function MetronomeScreen() {
 
       buildRenderedPlayer().then((renderedPlayer) => {
         const eng = engineRef.current;
+        setIsPreparing(false);
         if (!eng?.getIsRunning()) {
           if (renderedPlayer) {
             try { renderedPlayer.release(); } catch {}
@@ -1395,7 +1406,9 @@ export default function MetronomeScreen() {
             }
           }).catch(() => {});
         }
-      }).catch(() => {});
+      }).catch(() => {
+        setIsPreparing(false);
+      });
     }
   }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure]);
 
@@ -1462,6 +1475,7 @@ export default function MetronomeScreen() {
       engine.stop();
       stopRenderedAudio();
       clearSamplePlayStates();
+      setIsPreparing(false);
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
@@ -1546,12 +1560,14 @@ export default function MetronomeScreen() {
     }
     engine.buildScheduleOnly();
 
+    setIsPreparing(true);
     engine.setPreRenderedAudio(false);
     setIsPlaying(true);
     engine.start();
 
     buildRenderedPlayer().then((renderedPlayer) => {
       const eng = engineRef.current;
+      setIsPreparing(false);
       if (!eng?.getIsRunning()) {
         if (renderedPlayer) {
           try { renderedPlayer.release(); } catch {}
@@ -1572,7 +1588,9 @@ export default function MetronomeScreen() {
           }
         }).catch(() => {});
       }
-    }).catch(() => {});
+    }).catch(() => {
+      setIsPreparing(false);
+    });
   }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio]);
 
   useEffect(() => {
@@ -1591,6 +1609,7 @@ export default function MetronomeScreen() {
         for (const snd of Object.values(noteSampleSoundsRef.current)) {
           try { snd.pause(); } catch {}
         }
+        setIsPreparing(false);
         setIsPlaying(false);
         setCurrentBeat(-1);
         setActiveSubNote(-1);
@@ -1611,6 +1630,7 @@ export default function MetronomeScreen() {
       engine.stop();
       stopRenderedAudio();
       clearSamplePlayStates();
+      setIsPreparing(false);
       setIsPlaying(false);
       setCurrentBeat(-1);
       setProgressInfo(null);
@@ -2029,6 +2049,7 @@ export default function MetronomeScreen() {
       engine.stop();
       stopRenderedAudio();
       clearSamplePlayStates();
+      setIsPreparing(false);
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
