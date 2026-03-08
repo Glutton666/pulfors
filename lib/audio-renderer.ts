@@ -285,7 +285,7 @@ export function renderMeasure(params: {
   } = params;
 
   const measureSamples = Math.ceil((measureDurationMs / 1000) * RENDER_SR);
-  const tailSamples = Math.ceil(RENDER_SR * 0.06);
+  const tailSamples = Math.ceil(RENDER_SR * 0.15);
   const totalSamples = measureSamples + tailSamples;
   const buffer = new Float32Array(totalSamples);
 
@@ -317,12 +317,15 @@ export function renderMeasure(params: {
     }
   }
 
-  for (let i = 0; i < buffer.length; i++) {
-    buffer[i] = Math.max(-1, Math.min(1, buffer[i]));
+  for (let i = measureSamples; i < totalSamples; i++) {
+    buffer[i - measureSamples] += buffer[i];
   }
 
-  const trimmed = buffer.subarray(0, measureSamples);
-  return trimmed;
+  const out = buffer.subarray(0, measureSamples);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = Math.max(-1, Math.min(1, out[i]));
+  }
+  return out;
 }
 
 export async function saveRenderedWav(pcm: Float32Array): Promise<string> {
