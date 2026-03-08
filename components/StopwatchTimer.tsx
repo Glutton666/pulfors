@@ -87,9 +87,7 @@ export function StopwatchTimer({
   const [timerDuration, setTimerDuration] = useState(180);
   const [remaining, setRemaining] = useState(180);
   const [editingTimer, setEditingTimer] = useState(false);
-  const [editingStopwatch, setEditingStopwatch] = useState(false);
   const [timerEditInput, setTimerEditInput] = useState("");
-  const [stopwatchEditInput, setStopwatchEditInput] = useState("");
   const [countdownLeft, setCountdownLeft] = useState(0);
   const countdownBeatCountRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -513,7 +511,6 @@ export function StopwatchTimer({
       if (state !== "idle") return;
       hapticFeedback();
       setEditingTimer(false);
-      setEditingStopwatch(false);
       setMode(newMode);
     },
     [state, hapticFeedback, mode]
@@ -560,39 +557,6 @@ export function StopwatchTimer({
     setTimerDuration(totalSeconds);
     setRemaining(totalSeconds);
   }, [timerEditInput]);
-
-  const startEditingStopwatch = useCallback(() => {
-    if (state !== "idle" && state !== "paused") return;
-    const totalSeconds = Math.floor(elapsed / 1000);
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    setStopwatchEditInput(
-      `${mins}:${String(secs).padStart(2, "0")}`
-    );
-    setEditingStopwatch(true);
-  }, [state, elapsed]);
-
-  const commitStopwatchEdit = useCallback(() => {
-    setEditingStopwatch(false);
-    const trimmed = stopwatchEditInput.trim();
-    if (!trimmed) return;
-
-    let totalSeconds = 0;
-    if (trimmed.includes(":")) {
-      const parts = trimmed.split(":");
-      const mins = parseInt(parts[0], 10) || 0;
-      const secs = parseInt(parts[1], 10) || 0;
-      totalSeconds = mins * 60 + secs;
-    } else {
-      const val = parseInt(trimmed, 10) || 0;
-      totalSeconds = val < 10 ? val * 60 : val;
-    }
-
-    totalSeconds = Math.max(0, Math.min(totalSeconds, 5999));
-    const newElapsedMs = totalSeconds * 1000;
-    setElapsed(newElapsedMs);
-    elapsedAtPauseRef.current = newElapsedMs;
-  }, [stopwatchEditInput]);
 
   const isActive = state !== "idle";
 
@@ -780,33 +744,8 @@ export function StopwatchTimer({
               {state === "running" && (
                 <Animated.View style={[styles.runningDot, runningDotStyle]} />
               )}
-              {(state === "idle" || state === "paused") && editingStopwatch ? (
-                <TextInput
-                  style={[styles.timeText, styles.timeInput, { borderBottomColor: C.accent }]}
-                  value={stopwatchEditInput}
-                  onChangeText={setStopwatchEditInput}
-                  onBlur={commitStopwatchEdit}
-                  onSubmitEditing={commitStopwatchEdit}
-                  keyboardType="numbers-and-punctuation"
-                  autoFocus
-                  selectTextOnFocus
-                  placeholder="m:ss"
-                  placeholderTextColor={Colors.textTertiary}
-                  testID="stopwatch-time-input"
-                />
-              ) : (
-                <Pressable
-                  onPress={(state === "idle" || state === "paused") ? startEditingStopwatch : undefined}
-                  disabled={state !== "idle" && state !== "paused"}
-                  style={(state === "idle" || state === "paused") ? { flexDirection: "row", alignItems: "center", gap: 4 } : undefined}
-                >
-                  <Text style={[styles.timeText, state === "finishing" && styles.finishingText]}>{main}</Text>
-                  <Text style={[styles.fractionText, state === "finishing" && { color: Colors.danger }]}>{fraction}</Text>
-                  {(state === "idle" || state === "paused") && (
-                    <Feather name="edit-2" size={12} color={Colors.textTertiary} />
-                  )}
-                </Pressable>
-              )}
+              <Text style={[styles.timeText, state === "finishing" && styles.finishingText]}>{main}</Text>
+              <Text style={[styles.fractionText, state === "finishing" && { color: Colors.danger }]}>{fraction}</Text>
             </View>
 
             {state === "finishing" && (
