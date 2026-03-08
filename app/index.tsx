@@ -103,6 +103,7 @@ export default function MetronomeScreen() {
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(-1);
+  const [measureCount, setMeasureCount] = useState(0);
   const [activeSubNote, setActiveSubNote] = useState(-1);
   const activeSubNoteRef = useRef(-1);
   const [subdivisionPattern, setSubdivisionPattern] = useState<BeatType[]>([
@@ -1274,6 +1275,7 @@ export default function MetronomeScreen() {
       setIsPreparing(false);
       setIsPlaying(false);
       setCurrentBeat(-1);
+      setMeasureCount(0);
       setActiveSubNote(-1);
       setProgressInfo(null);
       showPausedNotification(bpm, modeLabel, languageRef.current);
@@ -1420,6 +1422,7 @@ export default function MetronomeScreen() {
       setIsPreparing(false);
       setIsPlaying(false);
       setCurrentBeat(-1);
+      setMeasureCount(0);
       setActiveSubNote(-1);
       setProgressInfo(null);
     }
@@ -1538,6 +1541,7 @@ export default function MetronomeScreen() {
     const engine = engineRef.current;
     if (!engine) return;
     engine.setOnMeasureComplete(() => {
+      setMeasureCount(c => c + 1);
       if (!engine.getIsRunning()) {
         if (renderedPlayerRef.current) {
           try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
@@ -1553,6 +1557,7 @@ export default function MetronomeScreen() {
         setIsPreparing(false);
         setIsPlaying(false);
         setCurrentBeat(-1);
+        setMeasureCount(0);
         setActiveSubNote(-1);
         setProgressInfo(null);
         const modeLabel = barModeRef.current ? "Bar" : "Dial";
@@ -1574,6 +1579,7 @@ export default function MetronomeScreen() {
       setIsPreparing(false);
       setIsPlaying(false);
       setCurrentBeat(-1);
+      setMeasureCount(0);
       setProgressInfo(null);
       const modeLabel = barModeRef.current ? "Bar" : "Dial";
       showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
@@ -1993,6 +1999,7 @@ export default function MetronomeScreen() {
       setIsPreparing(false);
       setIsPlaying(false);
       setCurrentBeat(-1);
+      setMeasureCount(0);
       setActiveSubNote(-1);
       setProgressInfo(null);
     }
@@ -2453,6 +2460,7 @@ export default function MetronomeScreen() {
             barStartBeat={barStartBeat}
             onBarStartBeatSelect={setBarStartBeat}
             progressInfo={progressInfo}
+            measureCount={measureCount}
             onBarReset={handleBarReset}
             subdivisionBarElement={barMode ? (
               <SubdivisionBar

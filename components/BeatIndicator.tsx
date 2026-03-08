@@ -261,6 +261,7 @@ interface BeatIndicatorProps {
   barStartBeat?: number | null;
   onBarStartBeatSelect?: (beat: number | null) => void;
   progressInfo?: { beat: number; barRepeatCurrent: number; barRepeatTotal: number; blockIndex: number; blockRepeatCurrent: number; blockRepeatTotal: number } | null;
+  measureCount?: number;
   onBarReset?: () => void;
 }
 
@@ -302,6 +303,7 @@ export function BeatIndicator({
   barStartBeat,
   onBarStartBeatSelect,
   progressInfo,
+  measureCount = 0,
   onBarReset,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
@@ -939,6 +941,7 @@ export function BeatIndicator({
   const [activeCopy, setActiveCopy] = useState(1);
   const activeCopyRef = useRef(1);
   const barPrevBeatRef = useRef(-1);
+  const prevMeasureCountRef = useRef(0);
 
   const NUM_COPIES = 3;
   const CENTER_COPY = 1;
@@ -948,6 +951,7 @@ export function BeatIndicator({
       activeCopyRef.current = CENTER_COPY;
       setActiveCopy(CENTER_COPY);
       barPrevBeatRef.current = -1;
+      prevMeasureCountRef.current = 0;
       if (barMode && barContainerHeight > 0) {
         barScrollRef.current?.scrollTo({ y: 0, animated: false });
         onBarScrollOffset?.(0);
@@ -982,12 +986,16 @@ export function BeatIndicator({
     const prev = barPrevBeatRef.current;
     barPrevBeatRef.current = currentBeat;
 
-    if (prev >= 0 && currentBeat < prev) {
+    const prevMC = prevMeasureCountRef.current;
+    prevMeasureCountRef.current = measureCount;
+    const isMeasureWrap = measureCount > prevMC;
+
+    if (isMeasureWrap) {
       activeCopyRef.current++;
       setActiveCopy(activeCopyRef.current);
     }
 
-    if (activeCopyRef.current > CENTER_COPY && currentBeat > 0) {
+    if (activeCopyRef.current > CENTER_COPY && isMeasureWrap && currentBeat > 0) {
       activeCopyRef.current = CENTER_COPY;
       setActiveCopy(CENTER_COPY);
       const snapTop = centerPad + CENTER_COPY * copyHeight + (currentBeat - 1) * rowH;
@@ -999,7 +1007,7 @@ export function BeatIndicator({
     const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
     const isFirstTick = prev < 0;
     barScrollRef.current?.scrollTo({ y: scrollTarget, animated: !isFirstTick });
-  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, copyHeight, barLoopMode]);
+  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, copyHeight, barLoopMode, measureCount]);
 
   if (barMode) {
     const isDropping = dropTargetBeat !== null;
