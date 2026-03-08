@@ -468,6 +468,7 @@ export default function MetronomeScreen() {
       const key = `${beat}-${subBeat}`;
       const player = noteSampleSoundsRef.current[key];
       if (player) {
+        if (samplePlayStateRef.current[key]?.playing) return true;
         setTimeout(() => playSampleAsync(key, player), 0);
         return true;
       }
