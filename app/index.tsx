@@ -1253,11 +1253,6 @@ export default function MetronomeScreen() {
     const engine = engineRef.current;
     if (!engine) return;
 
-    if (isPreparing && !isPlaying) {
-      setIsPreparing(false);
-      return;
-    }
-
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
@@ -1313,7 +1308,6 @@ export default function MetronomeScreen() {
       }
       engine.buildScheduleOnly();
 
-      setIsPreparing(true);
       engine.setPreRenderedAudio(false);
       setIsPlaying(true);
       engine.start(startBeat ?? undefined);
@@ -1388,33 +1382,6 @@ export default function MetronomeScreen() {
           }
         }, 0);
       }
-
-      buildRenderedPlayer().then((renderedPlayer) => {
-        const eng = engineRef.current;
-        setIsPreparing(false);
-        if (!eng?.getIsRunning()) {
-          if (renderedPlayer) {
-            try { renderedPlayer.release(); } catch {}
-          }
-          return;
-        }
-        if (renderedPlayer) {
-          stopRenderedAudio();
-          renderedPlayerRef.current = renderedPlayer;
-          renderedPlayer.volume = 1.0;
-          const elapsedMs = eng.getMeasureElapsedMs();
-          const measureMs = eng.getMeasureDurationMs();
-          const seekSec = measureMs > 0 ? (elapsedMs % measureMs) / 1000 : 0;
-          Promise.resolve(renderedPlayer.seekTo(seekSec)).then(() => {
-            if (eng.getIsRunning()) {
-              eng.setPreRenderedAudio(true);
-              renderedPlayer.play();
-            }
-          }).catch(() => {});
-        }
-      }).catch(() => {
-        setIsPreparing(false);
-      });
     }
   }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure]);
 
@@ -1566,38 +1533,10 @@ export default function MetronomeScreen() {
     }
     engine.buildScheduleOnly();
 
-    setIsPreparing(true);
     engine.setPreRenderedAudio(false);
     setIsPlaying(true);
     engine.start();
-
-    buildRenderedPlayer().then((renderedPlayer) => {
-      const eng = engineRef.current;
-      setIsPreparing(false);
-      if (!eng?.getIsRunning()) {
-        if (renderedPlayer) {
-          try { renderedPlayer.release(); } catch {}
-        }
-        return;
-      }
-      if (renderedPlayer) {
-        stopRenderedAudio();
-        renderedPlayerRef.current = renderedPlayer;
-        renderedPlayer.volume = 1.0;
-        const elapsedMs = eng.getMeasureElapsedMs();
-        const measureMs = eng.getMeasureDurationMs();
-        const seekSec = measureMs > 0 ? (elapsedMs % measureMs) / 1000 : 0;
-        Promise.resolve(renderedPlayer.seekTo(seekSec)).then(() => {
-          if (eng.getIsRunning()) {
-            eng.setPreRenderedAudio(true);
-            renderedPlayer.play();
-          }
-        }).catch(() => {});
-      }
-    }).catch(() => {
-      setIsPreparing(false);
-    });
-  }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio]);
+  }, [isPlaying, isPreparing]);
 
   useEffect(() => {
     const engine = engineRef.current;
