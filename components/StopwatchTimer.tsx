@@ -69,7 +69,6 @@ interface StopwatchTimerProps {
   isMetronomePlaying: boolean;
   currentBeat: number;
   topInset: number;
-  onMeasureRepeatSet?: (count: number) => void;
 }
 
 export function StopwatchTimer({
@@ -79,7 +78,6 @@ export function StopwatchTimer({
   isMetronomePlaying,
   currentBeat,
   topInset,
-  onMeasureRepeatSet,
 }: StopwatchTimerProps) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
@@ -93,7 +91,6 @@ export function StopwatchTimer({
   const [timerEditInput, setTimerEditInput] = useState("");
   const [stopwatchEditInput, setStopwatchEditInput] = useState("");
   const [countdownLeft, setCountdownLeft] = useState(0);
-  const [measureRepeat, setMeasureRepeat] = useState(0);
   const countdownBeatCountRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(0);
@@ -317,9 +314,6 @@ export function StopwatchTimer({
 
   const startStopwatch = useCallback(() => {
     hapticFeedback();
-    if (measureRepeat > 0) {
-      onMeasureRepeatSet?.(measureRepeat);
-    }
     setCountdownLeft(3);
     countdownBeatCountRef.current = 0;
     setState("countdown");
@@ -327,7 +321,7 @@ export function StopwatchTimer({
     if (!isPlayingRef.current) {
       onStartMetronome();
     }
-  }, [hapticFeedback, onStartMetronome, measureRepeat, onMeasureRepeatSet]);
+  }, [hapticFeedback, onStartMetronome]);
 
   const pauseStopwatch = useCallback(() => {
     hapticFeedback();
@@ -601,10 +595,6 @@ export function StopwatchTimer({
   }, [stopwatchEditInput]);
 
   const isActive = state !== "idle";
-  const handleMeasureRepeatChange = useCallback((delta: number) => {
-    hapticFeedback();
-    setMeasureRepeat(prev => Math.max(0, Math.min(99, prev + delta)));
-  }, [hapticFeedback]);
 
   const handleStatusIcon = () => {
     if (state === "countdown") return "timer-sand" as const;
@@ -769,35 +759,6 @@ export function StopwatchTimer({
     </>
   );
 
-  function renderMeasureRepeatControl() {
-    if (state !== "idle") return null;
-    return (
-      <View style={styles.repeatSection}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <MaterialCommunityIcons name="repeat" size={12} color={Colors.textTertiary} />
-          <Text style={styles.repeatLabel}>반복 횟수</Text>
-        </View>
-        <View style={styles.repeatControl}>
-          <Pressable
-            onPress={() => handleMeasureRepeatChange(-1)}
-            style={({ pressed }) => [styles.repeatBtn, pressed && styles.buttonPressed]}
-          >
-            <Ionicons name="remove" size={14} color={Colors.textSecondary} />
-          </Pressable>
-          <Text style={[styles.repeatValue, measureRepeat > 0 && { color: C.accent }]}>
-            {measureRepeat === 0 ? "∞" : measureRepeat}
-          </Text>
-          <Pressable
-            onPress={() => handleMeasureRepeatChange(1)}
-            style={({ pressed }) => [styles.repeatBtn, pressed && styles.buttonPressed]}
-          >
-            <Ionicons name="add" size={14} color={Colors.textSecondary} />
-          </Pressable>
-        </View>
-      </View>
-    );
-  }
-
   function renderStopwatchContent() {
     const { main, fraction } = formatTime(elapsed);
     return (
@@ -853,8 +814,6 @@ export function StopwatchTimer({
             )}
           </>
         )}
-
-        {renderMeasureRepeatControl()}
 
         <View style={styles.controlRow}>
           {state === "idle" && (
@@ -1250,44 +1209,6 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
     textDecorationColor: Colors.textTertiary,
     textDecorationStyle: "dotted",
-  },
-  repeatSection: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    width: "100%",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderRadius: 8,
-  },
-  repeatLabel: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 10,
-    color: Colors.textTertiary,
-    letterSpacing: 0.5,
-  },
-  repeatControl: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  repeatBtn: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: Colors.surfaceLight,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  repeatValue: {
-    fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 14,
-    color: Colors.textSecondary,
-    minWidth: 20,
-    textAlign: "center",
   },
   progressBarContainer: {
     width: "80%",
