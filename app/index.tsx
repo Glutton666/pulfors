@@ -168,6 +168,7 @@ export default function MetronomeScreen() {
   const [completedGoalPopups, setCompletedGoalPopups] = useState<Goal[]>([]);
   const dismissedGoalIdsRef = useRef<Set<string>>(new Set());
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showReboot, setShowReboot] = useState(false);
   const [customSoundSets, setCustomSoundSets] = useState<Record<string, CustomSoundSetConfig>>({});
   const customSoundSetsRef = useRef<Record<string, CustomSoundSetConfig>>({});
   useEffect(() => { customSoundSetsRef.current = customSoundSets; }, [customSoundSets]);
@@ -1159,7 +1160,11 @@ export default function MetronomeScreen() {
       }
 
       setThemeColor("gold");
-      setShowOnboarding(true);
+      setShowReboot(true);
+      setTimeout(() => {
+        setShowReboot(false);
+        setShowOnboarding(true);
+      }, 800);
     } catch (e) {
       console.warn("Reset failed:", e);
     }
@@ -2339,6 +2344,28 @@ export default function MetronomeScreen() {
         visible={showOnboarding}
         onComplete={handleOnboardingComplete}
       />
+
+      {showReboot && (
+        <View style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "#0D1117",
+          justifyContent: "center",
+          alignItems: "center",
+          zIndex: 9999,
+        }}>
+          <Ionicons name="refresh" size={36} color="#D4A846" />
+          <Text style={{
+            color: "#8B949E",
+            fontSize: 14,
+            marginTop: 12,
+            fontFamily: "SpaceGrotesk_400Regular",
+          }}>Rebooting...</Text>
+        </View>
+      )}
 
       <WorkUpOverviewModal
         visible={showWorkUp}

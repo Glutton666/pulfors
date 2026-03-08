@@ -204,6 +204,20 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   const [username, setUsername] = useState("");
   const [roomName, setRoomName] = useState("");
 
+  const prevVisibleRef = useRef(visible);
+  useEffect(() => {
+    if (visible && !prevVisibleRef.current) {
+      setStep(0);
+      setSelectedTheme("gold");
+      setLoggingEnabled(true);
+      setHapticMode("all");
+      setFlashMode("accent");
+      setUsername("");
+      setRoomName("");
+    }
+    prevVisibleRef.current = visible;
+  }, [visible]);
+
   const slideAnim = useRef(new Animated.Value(0)).current;
   const hapticFlashAnim = useRef(new Animated.Value(0)).current;
   const flashFlashAnim = useRef(new Animated.Value(0)).current;
