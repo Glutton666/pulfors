@@ -285,8 +285,13 @@ export function renderMeasure(params: {
   } = params;
 
   const measureSamples = Math.ceil((measureDurationMs / 1000) * RENDER_SR);
-  const tailSamples = Math.ceil(RENDER_SR * 0.15);
-  const totalSamples = measureSamples + tailSamples;
+  const maxClickLen = Math.max(
+    clickPCMs.strong.length,
+    clickPCMs.high.length,
+    clickPCMs.low.length,
+    Math.ceil(RENDER_SR * 0.15),
+  );
+  const totalSamples = measureSamples + maxClickLen;
   const buffer = new Float32Array(totalSamples);
 
   for (const tick of schedule) {
