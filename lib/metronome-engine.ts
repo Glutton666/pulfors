@@ -335,9 +335,15 @@ export class MetronomeEngine {
     const ticks: ScheduledTick[] = [];
     let time = 0;
 
-    const sortedBlocks = this.loopBlocks
-      .filter(b => b.startBeat < this.beatsPerMeasure && b.endBeat >= b.startBeat)
-      .sort((a, b) => a.startBeat - b.startBeat);
+    const filteredWithOrigIdx = this.loopBlocks
+      .map((b, i) => ({ block: b, origIdx: i }))
+      .filter(({ block: b }) => b.startBeat < this.beatsPerMeasure && b.endBeat >= b.startBeat)
+      .sort((a, b) => a.block.startBeat - b.block.startBeat);
+    const sortedBlocks = filteredWithOrigIdx.map(e => e.block);
+    const origToSorted = new Map<number, number>();
+    filteredWithOrigIdx.forEach((e, sortedIdx) => {
+      origToSorted.set(e.origIdx, sortedIdx);
+    });
 
     const addBeatTicks = (beat: number, iteration: number, barRepIter: number, barRepTotal: number, blkIdx: number, blkRepTotal: number) => {
       const subPattern = this.getSubPattern(beat);
@@ -449,9 +455,9 @@ export class MetronomeEngine {
       }
 
       if (block.jumpToBlock !== undefined && block.jumpToBlock !== null) {
-        const jumpTarget = block.jumpToBlock;
-        if (jumpTarget >= 0 && jumpTarget < sortedBlocks.length && !jumpVisited.has(jumpTarget)) {
-          processBlock(jumpTarget, jumpVisited);
+        const jumpSortedIdx = origToSorted.get(block.jumpToBlock);
+        if (jumpSortedIdx !== undefined && !jumpVisited.has(jumpSortedIdx)) {
+          processBlock(jumpSortedIdx, jumpVisited);
         }
       }
     };

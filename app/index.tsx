@@ -249,8 +249,9 @@ export default function MetronomeScreen() {
 
     const restartPlayer = (active: any) => {
       try {
-        active.seekTo(0);
-        active.play();
+        Promise.resolve(active.seekTo(0)).then(() => {
+          try { active.play(); } catch {}
+        });
       } catch (e) {}
     };
 
