@@ -155,6 +155,8 @@ const translations = {
   stopwatchTimer: {
     stopwatch: { ko: "스톱워치", en: "STOPWATCH" },
     timer: { ko: "타이머", en: "TIMER" },
+    min: { ko: "분", en: "min" },
+    sec: { ko: "초", en: "sec" },
   },
   tempoLabels: {
     grave: { ko: "그라베", en: "Grave" },

@@ -38,7 +38,6 @@ const SWIPE_THRESHOLD = 50;
 const TIMER_PRESETS = [
   { label: "30s", seconds: 30 },
   { label: "1m", seconds: 60 },
-  { label: "3m", seconds: 180 },
   { label: "5m", seconds: 300 },
   { label: "10m", seconds: 600 },
 ];
@@ -87,7 +86,8 @@ export function StopwatchTimer({
   const [timerDuration, setTimerDuration] = useState(180);
   const [remaining, setRemaining] = useState(180);
   const [editingTimer, setEditingTimer] = useState(false);
-  const [timerEditInput, setTimerEditInput] = useState("");
+  const [timerMinInput, setTimerMinInput] = useState("");
+  const [timerSecInput, setTimerSecInput] = useState("");
   const [countdownLeft, setCountdownLeft] = useState(0);
   const countdownBeatCountRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -529,34 +529,27 @@ export function StopwatchTimer({
 
   const startEditingTimer = useCallback(() => {
     if (state !== "idle") return;
+    hapticFeedback();
     const mins = Math.floor(timerDuration / 60);
     const secs = timerDuration % 60;
-    setTimerEditInput(
-      mins > 0 ? `${mins}:${String(secs).padStart(2, "0")}` : `${secs}`
-    );
+    setTimerMinInput(String(mins));
+    setTimerSecInput(String(secs));
     setEditingTimer(true);
-  }, [state, timerDuration]);
+  }, [state, timerDuration, hapticFeedback]);
 
   const commitTimerEdit = useCallback(() => {
-    setEditingTimer(false);
-    const trimmed = timerEditInput.trim();
-    if (!trimmed) return;
-
-    let totalSeconds = 0;
-    if (trimmed.includes(":")) {
-      const parts = trimmed.split(":");
-      const mins = parseInt(parts[0], 10) || 0;
-      const secs = parseInt(parts[1], 10) || 0;
-      totalSeconds = mins * 60 + secs;
-    } else {
-      const val = parseInt(trimmed, 10) || 0;
-      totalSeconds = val < 10 ? val * 60 : val;
-    }
-
+    const mins = parseInt(timerMinInput, 10) || 0;
+    const secs = parseInt(timerSecInput, 10) || 0;
+    let totalSeconds = mins * 60 + secs;
     totalSeconds = Math.max(1, Math.min(totalSeconds, 5999));
     setTimerDuration(totalSeconds);
     setRemaining(totalSeconds);
-  }, [timerEditInput]);
+    setEditingTimer(false);
+  }, [timerMinInput, timerSecInput]);
+
+  const cancelTimerEdit = useCallback(() => {
+    setEditingTimer(false);
+  }, []);
 
   const isActive = state !== "idle";
 
@@ -801,7 +794,7 @@ export function StopwatchTimer({
     const progress = timerDuration > 0 ? remaining / timerDuration : 1;
     return (
       <View style={styles.displaySection}>
-        {state === "idle" && (
+        {state === "idle" && !editingTimer && (
           <View style={styles.presetRow}>
             {TIMER_PRESETS.map((p) => (
               <Pressable
@@ -825,6 +818,64 @@ export function StopwatchTimer({
                 </Text>
               </Pressable>
             ))}
+            <Pressable
+              onPress={startEditingTimer}
+              style={({ pressed }) => [
+                styles.presetChip,
+                editingTimer && styles.presetChipActive,
+                editingTimer && { backgroundColor: C.accentDim, borderColor: C.accent },
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Feather name="edit-2" size={11} color={editingTimer ? C.accent : Colors.textTertiary} />
+            </Pressable>
+          </View>
+        )}
+
+        {state === "idle" && editingTimer && (
+          <View style={styles.timerEditRow}>
+            <View style={styles.timerEditField}>
+              <TextInput
+                style={[styles.timerEditInput, { borderColor: C.accent }]}
+                value={timerMinInput}
+                onChangeText={(v) => setTimerMinInput(v.replace(/[^0-9]/g, "").slice(0, 2))}
+                keyboardType="number-pad"
+                maxLength={2}
+                placeholder="0"
+                placeholderTextColor={Colors.textTertiary}
+                autoFocus
+                selectTextOnFocus
+                testID="timer-min-input"
+              />
+              <Text style={styles.timerEditUnit}>{t("stopwatchTimer", "min")}</Text>
+            </View>
+            <Text style={styles.timerEditColon}>:</Text>
+            <View style={styles.timerEditField}>
+              <TextInput
+                style={[styles.timerEditInput, { borderColor: C.accent }]}
+                value={timerSecInput}
+                onChangeText={(v) => setTimerSecInput(v.replace(/[^0-9]/g, "").slice(0, 2))}
+                keyboardType="number-pad"
+                maxLength={2}
+                placeholder="0"
+                placeholderTextColor={Colors.textTertiary}
+                selectTextOnFocus
+                testID="timer-sec-input"
+              />
+              <Text style={styles.timerEditUnit}>{t("stopwatchTimer", "sec")}</Text>
+            </View>
+            <Pressable
+              onPress={commitTimerEdit}
+              style={({ pressed }) => [styles.timerEditConfirm, { backgroundColor: C.accent }, pressed && { opacity: 0.7 }]}
+            >
+              <Ionicons name="checkmark" size={16} color={Colors.background} />
+            </Pressable>
+            <Pressable
+              onPress={cancelTimerEdit}
+              style={({ pressed }) => [styles.timerEditCancel, pressed && { opacity: 0.7 }]}
+            >
+              <Ionicons name="close" size={14} color={Colors.textTertiary} />
+            </Pressable>
           </View>
         )}
 
@@ -845,41 +896,15 @@ export function StopwatchTimer({
             {state === "running" && (
               <Animated.View style={[styles.runningDot, runningDotStyle]} />
             )}
-            {state === "idle" && editingTimer ? (
-              <TextInput
-                style={[styles.timeText, styles.timeInput, { borderBottomColor: C.accent }]}
-                value={timerEditInput}
-                onChangeText={setTimerEditInput}
-                onBlur={commitTimerEdit}
-                onSubmitEditing={commitTimerEdit}
-                keyboardType="numbers-and-punctuation"
-                autoFocus
-                selectTextOnFocus
-                placeholder="m:ss"
-                placeholderTextColor={Colors.textTertiary}
-                testID="timer-input"
-              />
-            ) : (
-              <Pressable
-                onPress={state === "idle" ? startEditingTimer : undefined}
-                disabled={state !== "idle"}
-                style={state === "idle" ? { flexDirection: "row", alignItems: "center", gap: 4 } : undefined}
-              >
-                <Animated.Text
-                  style={[
-                    styles.timeText,
-                    state === "idle" && styles.timeTextEditable,
-                    state === "finishing" && styles.finishingText,
-                    state === "finishing" ? finishingStyle : undefined,
-                  ]}
-                >
-                  {display}
-                </Animated.Text>
-                {state === "idle" && (
-                  <Feather name="edit-2" size={12} color={Colors.textTertiary} />
-                )}
-              </Pressable>
-            )}
+            <Animated.Text
+              style={[
+                styles.timeText,
+                state === "finishing" && styles.finishingText,
+                state === "finishing" ? finishingStyle : undefined,
+              ]}
+            >
+              {display}
+            </Animated.Text>
           </View>
         )}
 
@@ -1136,18 +1161,53 @@ const styles = StyleSheet.create({
   presetTextActive: {
     color: Colors.accent,
   },
-  timeInput: {
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.accent,
-    textAlign: "center",
-    minWidth: 100,
-    paddingVertical: 2,
-    color: Colors.text,
+  timerEditRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: 6,
   },
-  timeTextEditable: {
-    textDecorationLine: "underline",
-    textDecorationColor: Colors.textTertiary,
-    textDecorationStyle: "dotted",
+  timerEditField: {
+    alignItems: "center" as const,
+    gap: 2,
+  },
+  timerEditInput: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 24,
+    color: Colors.text,
+    textAlign: "center" as const,
+    width: 52,
+    borderBottomWidth: 2,
+    paddingVertical: 2,
+  },
+  timerEditUnit: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 9,
+    color: Colors.textTertiary,
+    letterSpacing: 1,
+  },
+  timerEditColon: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 24,
+    color: Colors.textTertiary,
+    marginBottom: 14,
+  },
+  timerEditConfirm: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    marginLeft: 6,
+    marginBottom: 14,
+  },
+  timerEditCancel: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    marginBottom: 14,
   },
   progressBarContainer: {
     width: "80%",
