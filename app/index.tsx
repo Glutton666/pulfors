@@ -159,6 +159,8 @@ export default function MetronomeScreen() {
   const [showWorkUp, setShowWorkUp] = useState(false);
   const [loggingEnabled, setLoggingEnabled] = useState(false);
   const practiceStartRef = useRef<number | null>(null);
+  const measureRepeatTargetRef = useRef(0);
+  const measureRepeatCountRef = useRef(0);
   const featureStartRef = useRef<{ name: string; start: number } | null>(null);
   const loadedPracticeNoteRef = useRef<{ id: string; label: string } | null>(null);
   const roomTrackRef = useRef<{ roomId: string; roomName: string; start: number } | null>(null);
@@ -1253,6 +1255,8 @@ export default function MetronomeScreen() {
       engine.stop();
       stopRenderedAudio();
       clearSamplePlayStates();
+      measureRepeatTargetRef.current = 0;
+      measureRepeatCountRef.current = 0;
       setIsPlaying(false);
       setCurrentBeat(-1);
       setActiveSubNote(-1);
@@ -1550,6 +1554,12 @@ export default function MetronomeScreen() {
     setIsPlaying(true);
     engine.start();
 
+    if (measureRepeatTargetRef.current === 1) {
+      engine.requestStopAfterMeasure();
+      measureRepeatTargetRef.current = 0;
+      measureRepeatCountRef.current = 0;
+    }
+
     buildRenderedPlayer().then((renderedPlayer) => {
       const eng = engineRef.current;
       if (!eng?.getIsRunning()) {
@@ -1591,12 +1601,21 @@ export default function MetronomeScreen() {
         for (const snd of Object.values(noteSampleSoundsRef.current)) {
           try { snd.pause(); } catch {}
         }
+        measureRepeatTargetRef.current = 0;
+        measureRepeatCountRef.current = 0;
         setIsPlaying(false);
         setCurrentBeat(-1);
         setActiveSubNote(-1);
         setProgressInfo(null);
         const modeLabel = barModeRef.current ? "Bar" : "Dial";
         showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
+      } else if (measureRepeatTargetRef.current > 1) {
+        measureRepeatCountRef.current++;
+        if (measureRepeatCountRef.current >= measureRepeatTargetRef.current - 1) {
+          engine.requestStopAfterMeasure();
+          measureRepeatTargetRef.current = 0;
+          measureRepeatCountRef.current = 0;
+        }
       }
     });
   }, []);
@@ -1619,6 +1638,11 @@ export default function MetronomeScreen() {
     } else {
       engine.requestStopAfterMeasure();
     }
+  }, []);
+
+  const handleMeasureRepeatSet = useCallback((count: number) => {
+    measureRepeatTargetRef.current = count;
+    measureRepeatCountRef.current = 0;
   }, []);
 
   const updateTimerStopMode = useCallback(
@@ -2537,7 +2561,9 @@ export default function MetronomeScreen() {
           onStopRequested={handleTimerExpired}
           onStartMetronome={startMetronome}
           isMetronomePlaying={isPlaying}
+          currentBeat={currentBeat}
           topInset={insets.top || webTopInset}
+          onMeasureRepeatSet={handleMeasureRepeatSet}
         />
       )}
 

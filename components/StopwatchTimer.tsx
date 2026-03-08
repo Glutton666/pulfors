@@ -27,7 +27,7 @@ import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 type Mode = "stopwatch" | "timer";
-type TimerState = "idle" | "running" | "paused" | "finishing";
+type TimerState = "idle" | "running" | "paused" | "finishing" | "countdown";
 
 const PANEL_WIDTH = 260;
 const HANDLE_WIDTH = 28;
@@ -67,7 +67,9 @@ interface StopwatchTimerProps {
   onStopRequested: () => void;
   onStartMetronome: () => void;
   isMetronomePlaying: boolean;
+  currentBeat: number;
   topInset: number;
+  onMeasureRepeatSet?: (count: number) => void;
 }
 
 export function StopwatchTimer({
@@ -75,7 +77,9 @@ export function StopwatchTimer({
   onStopRequested,
   onStartMetronome,
   isMetronomePlaying,
+  currentBeat,
   topInset,
+  onMeasureRepeatSet,
 }: StopwatchTimerProps) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
@@ -86,17 +90,61 @@ export function StopwatchTimer({
   const [remaining, setRemaining] = useState(180);
   const [editingTimer, setEditingTimer] = useState(false);
   const [editInput, setEditInput] = useState("");
+  const [countdownLeft, setCountdownLeft] = useState(0);
+  const [measureRepeat, setMeasureRepeat] = useState(0);
+  const countdownBeatCountRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(0);
   const elapsedAtPauseRef = useRef(0);
   const isPlayingRef = useRef(isMetronomePlaying);
+  const stateRef = useRef<TimerState>(state);
+  const modeRef = useRef<Mode>(mode);
 
   const { colors: C } = useTheme();
 
+  useEffect(() => { stateRef.current = state; }, [state]);
+  useEffect(() => { modeRef.current = mode; }, [mode]);
 
   useEffect(() => {
     isPlayingRef.current = isMetronomePlaying;
   }, [isMetronomePlaying]);
+
+  useEffect(() => {
+    if (!isMetronomePlaying && stateRef.current === "running") {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      if (modeRef.current === "stopwatch") {
+        elapsedAtPauseRef.current = Date.now() - startTimeRef.current;
+      } else {
+        elapsedAtPauseRef.current += Date.now() - startTimeRef.current;
+      }
+      setState("paused");
+    }
+    if (!isMetronomePlaying && stateRef.current === "countdown") {
+      setCountdownLeft(0);
+      countdownBeatCountRef.current = 0;
+      setState("idle");
+    }
+  }, [isMetronomePlaying]);
+
+  useEffect(() => {
+    if (state !== "countdown" || !isMetronomePlaying) return;
+    countdownBeatCountRef.current++;
+    const beatsLeft = 3 - countdownBeatCountRef.current;
+    if (beatsLeft <= 0) {
+      countdownBeatCountRef.current = 0;
+      setCountdownLeft(0);
+      if (modeRef.current === "stopwatch") {
+        actualStartStopwatch();
+      } else {
+        actualStartTimer();
+      }
+    } else {
+      setCountdownLeft(beatsLeft);
+    }
+  }, [currentBeat]);
 
   const slideX = useSharedValue(-PANEL_WIDTH);
   const pulseOpacity = useSharedValue(1);
@@ -117,7 +165,7 @@ export function StopwatchTimer({
   }, [open]);
 
   useEffect(() => {
-    if (state === "running" || state === "finishing") {
+    if (state === "running" || state === "finishing" || state === "countdown") {
       handleGlow.value = withRepeat(
         withSequence(
           withTiming(1, { duration: 1000 }),
@@ -257,18 +305,27 @@ export function StopwatchTimer({
     }
   }, []);
 
-  const startStopwatch = useCallback(() => {
-    hapticFeedback();
+  const actualStartStopwatch = useCallback(() => {
     startTimeRef.current = Date.now() - elapsedAtPauseRef.current;
     setState("running");
     intervalRef.current = setInterval(() => {
       setElapsed(Date.now() - startTimeRef.current);
     }, 33);
+  }, []);
+
+  const startStopwatch = useCallback(() => {
+    hapticFeedback();
+    if (measureRepeat > 0) {
+      onMeasureRepeatSet?.(measureRepeat);
+    }
+    setCountdownLeft(3);
+    countdownBeatCountRef.current = 0;
+    setState("countdown");
+    setOpen(false);
     if (!isPlayingRef.current) {
       onStartMetronome();
     }
-    setOpen(false);
-  }, [hapticFeedback, onStartMetronome]);
+  }, [hapticFeedback, onStartMetronome, measureRepeat, onMeasureRepeatSet]);
 
   const pauseStopwatch = useCallback(() => {
     hapticFeedback();
@@ -290,9 +347,8 @@ export function StopwatchTimer({
     setState("idle");
   }, [hapticFeedback, clearTimerInterval]);
 
-  const startTimer = useCallback(() => {
-    hapticFeedback();
-    const startRemaining = state === "paused" ? remaining : timerDuration;
+  const actualStartTimer = useCallback(() => {
+    const startRemaining = stateRef.current === "paused" ? remaining : timerDuration;
     setRemaining(startRemaining);
     startTimeRef.current = Date.now();
     elapsedAtPauseRef.current = 0;
@@ -301,10 +357,6 @@ export function StopwatchTimer({
     thermoBreakTop.value = 0;
     thermoBreakBottom.value = 0;
     thermoHeight.value = startRemaining / timerDuration;
-    if (!isPlayingRef.current) {
-      onStartMetronome();
-    }
-    setOpen(false);
     intervalRef.current = setInterval(() => {
       const el = Date.now() - startTimeRef.current + elapsedAtPauseRef.current;
       const leftSec = Math.max(0, startRemaining - Math.floor(el / 1000));
@@ -321,7 +373,21 @@ export function StopwatchTimer({
         }
       }
     }, 50);
-  }, [hapticFeedback, timerDuration, remaining, state, onTimerExpired]);
+  }, [timerDuration, remaining, onTimerExpired]);
+
+  const startTimer = useCallback(() => {
+    hapticFeedback();
+    if (measureRepeat > 0) {
+      onMeasureRepeatSet?.(measureRepeat);
+    }
+    setCountdownLeft(3);
+    countdownBeatCountRef.current = 0;
+    setState("countdown");
+    setOpen(false);
+    if (!isPlayingRef.current) {
+      onStartMetronome();
+    }
+  }, [hapticFeedback, onStartMetronome, measureRepeat, onMeasureRepeatSet]);
 
   const pauseTimer = useCallback(() => {
     hapticFeedback();
@@ -361,7 +427,16 @@ export function StopwatchTimer({
   }, [isMetronomePlaying, state, timerDuration, mode, clearTimerInterval]);
 
   useEffect(() => {
-    if (state === "running") {
+    if (state === "countdown") {
+      pulseOpacity.value = withRepeat(
+        withSequence(
+          withTiming(0.2, { duration: 300, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 300, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        true
+      );
+    } else if (state === "running") {
       pulseOpacity.value = withRepeat(
         withSequence(
           withTiming(0.4, { duration: 800, easing: Easing.inOut(Easing.ease) }),
@@ -492,8 +567,13 @@ export function StopwatchTimer({
   }, [editInput]);
 
   const isActive = state !== "idle";
+  const handleMeasureRepeatChange = useCallback((delta: number) => {
+    hapticFeedback();
+    setMeasureRepeat(prev => Math.max(0, Math.min(99, prev + delta)));
+  }, [hapticFeedback]);
 
   const handleStatusIcon = () => {
+    if (state === "countdown") return "timer-sand" as const;
     if (state === "running") return "radiobox-marked" as const;
     if (state === "finishing") return "radiobox-marked" as const;
     if (mode === "stopwatch") return "timer-outline" as const;
@@ -501,6 +581,7 @@ export function StopwatchTimer({
   };
 
   const handleStatusColor = () => {
+    if (state === "countdown") return C.accent;
     if (state === "running") return Colors.success;
     if (state === "finishing") return Colors.danger;
     return Colors.textTertiary;
@@ -581,7 +662,13 @@ export function StopwatchTimer({
           >
             <Animated.View style={[styles.handleGlow, { backgroundColor: C.accent }, handleGlowStyle]} />
             <Animated.View style={[styles.handleFlash, handleFlashStyle]} />
-            {!open && isActive && mode === "timer" && (state === "running" || state === "finishing") ? (
+            {!open && isActive && state === "countdown" ? (
+              <View style={{ alignItems: "center", justifyContent: "center" }}>
+                <Animated.Text style={[{ fontFamily: "SpaceGrotesk_700Bold", fontSize: 16, color: C.accent }, runningDotStyle]}>
+                  {countdownLeft}
+                </Animated.Text>
+              </View>
+            ) : !open && isActive && mode === "timer" && (state === "running" || state === "finishing") ? (
               <View style={styles.thermometer}>
                 {state === "finishing" && (
                   <>
@@ -648,24 +735,67 @@ export function StopwatchTimer({
     </>
   );
 
+  function renderMeasureRepeatControl() {
+    if (state !== "idle") return null;
+    return (
+      <View style={styles.repeatSection}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <MaterialCommunityIcons name="repeat" size={12} color={Colors.textTertiary} />
+          <Text style={styles.repeatLabel}>반복 횟수</Text>
+        </View>
+        <View style={styles.repeatControl}>
+          <Pressable
+            onPress={() => handleMeasureRepeatChange(-1)}
+            style={({ pressed }) => [styles.repeatBtn, pressed && styles.buttonPressed]}
+          >
+            <Ionicons name="remove" size={14} color={Colors.textSecondary} />
+          </Pressable>
+          <Text style={[styles.repeatValue, measureRepeat > 0 && { color: C.accent }]}>
+            {measureRepeat === 0 ? "∞" : measureRepeat}
+          </Text>
+          <Pressable
+            onPress={() => handleMeasureRepeatChange(1)}
+            style={({ pressed }) => [styles.repeatBtn, pressed && styles.buttonPressed]}
+          >
+            <Ionicons name="add" size={14} color={Colors.textSecondary} />
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   function renderStopwatchContent() {
     const { main, fraction } = formatTime(elapsed);
     return (
       <View style={styles.displaySection}>
-        <View style={styles.timeRow}>
-          {state === "finishing" && (
-            <Animated.View style={[styles.finishingDot, finishingStyle]} />
-          )}
-          {state === "running" && (
-            <Animated.View style={[styles.runningDot, runningDotStyle]} />
-          )}
-          <Text style={[styles.timeText, state === "finishing" && styles.finishingText]}>{main}</Text>
-          <Text style={[styles.fractionText, state === "finishing" && { color: Colors.danger }]}>{fraction}</Text>
-        </View>
-
-        {state === "finishing" && (
-          <Text style={styles.finishingLabel}>completing measure...</Text>
+        {state === "countdown" && (
+          <View style={{ alignItems: "center", gap: 4 }}>
+            <Animated.Text style={[{ fontFamily: "SpaceGrotesk_700Bold", fontSize: 36, color: C.accent, letterSpacing: 2 }, runningDotStyle]}>
+              {countdownLeft}
+            </Animated.Text>
+            <Text style={{ fontFamily: "SpaceGrotesk_400Regular", fontSize: 10, color: Colors.textTertiary, letterSpacing: 1 }}>준비 중...</Text>
+          </View>
         )}
+        {state !== "countdown" && (
+          <>
+            <View style={styles.timeRow}>
+              {state === "finishing" && (
+                <Animated.View style={[styles.finishingDot, finishingStyle]} />
+              )}
+              {state === "running" && (
+                <Animated.View style={[styles.runningDot, runningDotStyle]} />
+              )}
+              <Text style={[styles.timeText, state === "finishing" && styles.finishingText]}>{main}</Text>
+              <Text style={[styles.fractionText, state === "finishing" && { color: Colors.danger }]}>{fraction}</Text>
+            </View>
+
+            {state === "finishing" && (
+              <Text style={styles.finishingLabel}>completing measure...</Text>
+            )}
+          </>
+        )}
+
+        {renderMeasureRepeatControl()}
 
         <View style={styles.controlRow}>
           {state === "idle" && (
@@ -741,45 +871,60 @@ export function StopwatchTimer({
           </View>
         )}
 
-        <View style={styles.timeRow}>
-          {state === "finishing" && (
-            <Animated.View style={[styles.finishingDot, finishingStyle]} />
-          )}
-          {state === "running" && (
-            <Animated.View style={[styles.runningDot, runningDotStyle]} />
-          )}
-          {state === "idle" && editingTimer ? (
-            <TextInput
-              style={[styles.timeText, styles.timeInput, { borderBottomColor: C.accent }]}
-              value={editInput}
-              onChangeText={setEditInput}
-              onBlur={commitEditInput}
-              onSubmitEditing={commitEditInput}
-              keyboardType="numbers-and-punctuation"
-              autoFocus
-              selectTextOnFocus
-              placeholder="m:ss"
-              placeholderTextColor={Colors.textTertiary}
-              testID="timer-input"
-            />
-          ) : (
-            <Pressable
-              onPress={state === "idle" ? startEditingTimer : undefined}
-              disabled={state !== "idle"}
-            >
-              <Animated.Text
-                style={[
-                  styles.timeText,
-                  state === "idle" && styles.timeTextEditable,
-                  state === "finishing" && styles.finishingText,
-                  state === "finishing" ? finishingStyle : undefined,
-                ]}
+        {state === "countdown" && (
+          <View style={{ alignItems: "center", gap: 4 }}>
+            <Animated.Text style={[{ fontFamily: "SpaceGrotesk_700Bold", fontSize: 36, color: C.accent, letterSpacing: 2 }, runningDotStyle]}>
+              {countdownLeft}
+            </Animated.Text>
+            <Text style={{ fontFamily: "SpaceGrotesk_400Regular", fontSize: 10, color: Colors.textTertiary, letterSpacing: 1 }}>준비 중...</Text>
+          </View>
+        )}
+
+        {state !== "countdown" && (
+          <View style={styles.timeRow}>
+            {state === "finishing" && (
+              <Animated.View style={[styles.finishingDot, finishingStyle]} />
+            )}
+            {state === "running" && (
+              <Animated.View style={[styles.runningDot, runningDotStyle]} />
+            )}
+            {state === "idle" && editingTimer ? (
+              <TextInput
+                style={[styles.timeText, styles.timeInput, { borderBottomColor: C.accent }]}
+                value={editInput}
+                onChangeText={setEditInput}
+                onBlur={commitEditInput}
+                onSubmitEditing={commitEditInput}
+                keyboardType="numbers-and-punctuation"
+                autoFocus
+                selectTextOnFocus
+                placeholder="m:ss"
+                placeholderTextColor={Colors.textTertiary}
+                testID="timer-input"
+              />
+            ) : (
+              <Pressable
+                onPress={state === "idle" ? startEditingTimer : undefined}
+                disabled={state !== "idle"}
+                style={state === "idle" ? { flexDirection: "row", alignItems: "center", gap: 4 } : undefined}
               >
-                {display}
-              </Animated.Text>
-            </Pressable>
-          )}
-        </View>
+                <Animated.Text
+                  style={[
+                    styles.timeText,
+                    state === "idle" && styles.timeTextEditable,
+                    state === "finishing" && styles.finishingText,
+                    state === "finishing" ? finishingStyle : undefined,
+                  ]}
+                >
+                  {display}
+                </Animated.Text>
+                {state === "idle" && (
+                  <Feather name="edit-2" size={12} color={Colors.textTertiary} />
+                )}
+              </Pressable>
+            )}
+          </View>
+        )}
 
         {(state === "running" || state === "finishing") && (
           <View style={styles.progressBarContainer}>
@@ -798,6 +943,8 @@ export function StopwatchTimer({
         {state === "finishing" && (
           <Text style={styles.finishingLabel}>completing measure...</Text>
         )}
+
+        {renderMeasureRepeatControl()}
 
         <View style={styles.controlRow}>
           {state === "idle" && (
@@ -1046,6 +1193,44 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
     textDecorationColor: Colors.textTertiary,
     textDecorationStyle: "dotted",
+  },
+  repeatSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderRadius: 8,
+  },
+  repeatLabel: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 10,
+    color: Colors.textTertiary,
+    letterSpacing: 0.5,
+  },
+  repeatControl: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  repeatBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.surfaceLight,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  repeatValue: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 14,
+    color: Colors.textSecondary,
+    minWidth: 20,
+    textAlign: "center",
   },
   progressBarContainer: {
     width: "80%",
