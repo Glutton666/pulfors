@@ -5,6 +5,16 @@ import type { BeatType } from "./metronome-engine";
 
 const RENDER_SR = 44100;
 
+let sharedAudioCtx: AudioContext | null = null;
+function getSharedAudioContext(): AudioContext | null {
+  if (Platform.OS !== "web") return null;
+  if (sharedAudioCtx && sharedAudioCtx.state !== "closed") return sharedAudioCtx;
+  const AC = (globalThis as any).AudioContext || (globalThis as any).webkitAudioContext;
+  if (!AC) return null;
+  sharedAudioCtx = new AC();
+  return sharedAudioCtx;
+}
+
 export interface TickInfo {
   time: number;
   type: BeatType;
@@ -89,7 +99,7 @@ export function parseWav(buf: ArrayBuffer): {
   return { pcm, sampleRate: sr };
 }
 
-export function encodeWav(pcm: Float32Array, sr: number): ArrayBuffer {
+export function encodeWav(pcm: Float32Array, sr: number, preClamped = false): ArrayBuffer {
   const n = pcm.length;
   const buf = new ArrayBuffer(44 + n * 2);
   const v = new DataView(buf);
@@ -106,9 +116,16 @@ export function encodeWav(pcm: Float32Array, sr: number): ArrayBuffer {
   v.setUint16(34, 16, true);
   writeStr(v, 36, "data");
   v.setUint32(40, n * 2, true);
-  for (let i = 0; i < n; i++) {
-    const s = Math.max(-1, Math.min(1, pcm[i]));
-    v.setInt16(44 + i * 2, s < 0 ? s * 32768 : s * 32767, true);
+  if (preClamped) {
+    for (let i = 0; i < n; i++) {
+      const s = pcm[i];
+      v.setInt16(44 + i * 2, s < 0 ? s * 32768 : s * 32767, true);
+    }
+  } else {
+    for (let i = 0; i < n; i++) {
+      const s = Math.max(-1, Math.min(1, pcm[i]));
+      v.setInt16(44 + i * 2, s < 0 ? s * 32768 : s * 32767, true);
+    }
   }
   return buf;
 }
@@ -163,14 +180,11 @@ export async function loadAssetPCM(
     const resp = await fetch(url);
     const ab = await resp.arrayBuffer();
     try {
-      const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
-      if (AC) {
-        const ctx = new AC();
+      const ctx = getSharedAudioContext();
+      if (ctx) {
         const audioBuf = await ctx.decodeAudioData(ab.slice(0));
         const pcm = audioBuf.getChannelData(0);
-        const r = resample(new Float32Array(pcm), audioBuf.sampleRate, RENDER_SR);
-        ctx.close();
-        return r;
+        return resample(new Float32Array(pcm), audioBuf.sampleRate, RENDER_SR);
       }
     } catch {}
     const { pcm, sampleRate } = parseWav(ab);
@@ -196,14 +210,11 @@ export async function decodeSampleFile(
       const resp = await fetch(rawUri);
       const ab = await resp.arrayBuffer();
       try {
-        const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
-        if (AC) {
-          const ctx = new AC();
+        const ctx = getSharedAudioContext();
+        if (ctx) {
           const audioBuf = await ctx.decodeAudioData(ab.slice(0));
           const pcm = audioBuf.getChannelData(0);
-          const r = resample(new Float32Array(pcm), audioBuf.sampleRate, RENDER_SR);
-          ctx.close();
-          return r;
+          return resample(new Float32Array(pcm), audioBuf.sampleRate, RENDER_SR);
         }
       } catch {}
       const { pcm, sampleRate } = parseWav(ab);
@@ -247,11 +258,10 @@ function mixInto(
   offset: number,
   vol: number
 ) {
+  const start = offset < 0 ? -offset : 0;
   const end = Math.min(src.length, dest.length - offset);
-  for (let i = 0; i < end; i++) {
-    if (offset + i >= 0 && offset + i < dest.length) {
-      dest[offset + i] += src[i] * vol;
-    }
+  for (let i = start; i < end; i++) {
+    dest[offset + i] += src[i] * vol;
   }
 }
 
@@ -339,7 +349,7 @@ export function renderMeasure(params: {
 }
 
 export async function saveRenderedWav(pcm: Float32Array): Promise<string> {
-  const wav = encodeWav(pcm, RENDER_SR);
+  const wav = encodeWav(pcm, RENDER_SR, true);
 
   if (Platform.OS === "web") {
     const blob = new Blob([wav], { type: "audio/wav" });

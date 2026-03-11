@@ -368,6 +368,15 @@ export class MetronomeEngine {
       origToSorted.set(e.origIdx, sortedIdx);
     });
 
+    const startBeatToBlocks = new Map<number, number[]>();
+    sortedBlocks.forEach((blk, idx) => {
+      const arr = startBeatToBlocks.get(blk.startBeat);
+      if (arr) arr.push(idx);
+      else startBeatToBlocks.set(blk.startBeat, [idx]);
+    });
+
+    const durCache = new Map<string, number>();
+
     const addBeatTicks = (beat: number, iteration: number, barRepIter: number, barRepTotal: number, blkIdx: number, blkRepTotal: number) => {
       const subPattern = this.getSubPattern(beat);
       const beatDur = this.getBeatDur(beat);
@@ -407,13 +416,27 @@ export class MetronomeEngine {
       }
     };
 
+    const findInnerBlock = (startB: number, endB: number, parentBlockIdx: number): number => {
+      const candidates = startBeatToBlocks.get(startB);
+      if (!candidates) return -1;
+      for (const iIdx of candidates) {
+        if (iIdx !== parentBlockIdx) {
+          const ib = sortedBlocks[iIdx];
+          if (ib.startBeat >= startB && ib.endBeat <= endB) return iIdx;
+        }
+      }
+      return -1;
+    };
+
     const calcSinglePassDur = (startB: number, endB: number, parentBlockIdx: number): number => {
+      const cacheKey = `${startB}:${endB}:${parentBlockIdx}`;
+      const cached = durCache.get(cacheKey);
+      if (cached !== undefined) return cached;
+
       let dur = 0;
       let b = startB;
       while (b <= endB) {
-        const innerIdx = sortedBlocks.findIndex((ib, iIdx) =>
-          iIdx !== parentBlockIdx && ib.startBeat === b && ib.startBeat >= startB && ib.endBeat <= endB
-        );
+        const innerIdx = findInnerBlock(b, endB, parentBlockIdx);
         if (innerIdx >= 0) {
           const inner = sortedBlocks[innerIdx];
           const innerEnd = Math.min(inner.endBeat, endB);
@@ -431,15 +454,14 @@ export class MetronomeEngine {
           b++;
         }
       }
+      durCache.set(cacheKey, dur);
       return dur;
     };
 
     const emitBeatsInRange = (startB: number, endB: number, outerBlockIdx: number, outerIter: number, outerRepTotal: number) => {
       let b = startB;
       while (b <= endB) {
-        const innerIdx = sortedBlocks.findIndex((ib, iIdx) =>
-          iIdx !== outerBlockIdx && ib.startBeat === b && ib.startBeat >= startB && ib.endBeat <= endB
-        );
+        const innerIdx = findInnerBlock(b, endB, outerBlockIdx);
         if (innerIdx >= 0) {
           const inner = sortedBlocks[innerIdx];
           const innerEnd = Math.min(inner.endBeat, endB);
@@ -490,20 +512,24 @@ export class MetronomeEngine {
     while (beat < this.beatsPerMeasure) {
       let outerIdx = -1;
       let outerSpan = -1;
-      sortedBlocks.forEach((blk, idx) => {
-        if (blk.startBeat === beat && !processed.has(idx)) {
-          const isNested = sortedBlocks.some((ob, oi) =>
-            oi !== idx && ob.startBeat <= blk.startBeat && ob.endBeat >= blk.endBeat && !processed.has(oi)
-          );
-          if (!isNested) {
-            const span = blk.endBeat - blk.startBeat;
-            if (span > outerSpan) {
-              outerSpan = span;
-              outerIdx = idx;
+      const candidates = startBeatToBlocks.get(beat);
+      if (candidates) {
+        for (const idx of candidates) {
+          if (!processed.has(idx)) {
+            const blk = sortedBlocks[idx];
+            const isNested = sortedBlocks.some((ob, oi) =>
+              oi !== idx && ob.startBeat <= blk.startBeat && ob.endBeat >= blk.endBeat && !processed.has(oi)
+            );
+            if (!isNested) {
+              const span = blk.endBeat - blk.startBeat;
+              if (span > outerSpan) {
+                outerSpan = span;
+                outerIdx = idx;
+              }
             }
           }
         }
-      });
+      }
       if (outerIdx >= 0) {
         const block = sortedBlocks[outerIdx];
         const endBeat = Math.min(block.endBeat, this.beatsPerMeasure - 1);
@@ -553,6 +579,40 @@ export class MetronomeEngine {
     }
   }
 
+  private playTickAudio(beat: number, subBeat: number, isStrong: boolean, isAccent: boolean, isMute: boolean) {
+    if (!isMute) {
+      try {
+        if (isStrong) {
+          this.playStrongClick?.();
+        } else if (isAccent) {
+          this.playHighClick?.();
+        } else {
+          this.playLowClick?.();
+        }
+      } catch (e) {}
+    }
+    if (this.playCustomSample) {
+      this.playCustomSample(beat, subBeat);
+    }
+  }
+
+  private fireTickHaptic(isMute: boolean, isStrong: boolean, isAccent: boolean, isMainBeat: boolean) {
+    if (!isMute && Platform.OS !== "web" && this.hapticMode !== "off") {
+      const shouldHaptic = this.hapticMode === "all" || (this.hapticMode === "accent" && isAccent);
+      if (shouldHaptic) {
+        try {
+          Haptics.impactAsync(
+            isStrong || isAccent
+              ? Haptics.ImpactFeedbackStyle.Heavy
+              : isMainBeat
+              ? Haptics.ImpactFeedbackStyle.Light
+              : Haptics.ImpactFeedbackStyle.Soft
+          );
+        } catch (e) {}
+      }
+    }
+  }
+
   private fireTick(tick: ScheduledTick) {
     this.currentBeat = tick.beat;
     this.currentSubBeat = tick.subBeat;
@@ -561,52 +621,10 @@ export class MetronomeEngine {
     const isAccent = tick.type === "accent" || isStrong;
     const isMute = tick.type === "mute";
 
-    const playAudio = () => {
-      if (!isMute) {
-        try {
-          if (isStrong) {
-            this.playStrongClick?.();
-          } else if (isAccent) {
-            this.playHighClick?.();
-          } else {
-            this.playLowClick?.();
-          }
-        } catch (e) {}
-      }
-      if (this.playCustomSample) {
-        this.playCustomSample(tick.beat, tick.subBeat);
-      }
-    };
-
-    const fireVisual = () => {
-      this.onSubBeat?.(tick.beat, tick.subBeat);
-      if (tick.isMainBeat) {
-        this.onBeat?.(tick.beat, isAccent);
-      }
-    };
-
-    const fireHaptic = () => {
-      if (!isMute && Platform.OS !== "web" && this.hapticMode !== "off") {
-        const shouldHaptic = this.hapticMode === "all" || (this.hapticMode === "accent" && isAccent);
-        if (shouldHaptic) {
-          try {
-            Haptics.impactAsync(
-              isStrong
-                ? Haptics.ImpactFeedbackStyle.Heavy
-                : isAccent
-                ? Haptics.ImpactFeedbackStyle.Heavy
-                : tick.isMainBeat
-                ? Haptics.ImpactFeedbackStyle.Light
-                : Haptics.ImpactFeedbackStyle.Soft
-            );
-          } catch (e) {}
-        }
-      }
-    };
-
-    const offset = this.audioOffsetMs;
-
-    fireVisual();
+    this.onSubBeat?.(tick.beat, tick.subBeat);
+    if (tick.isMainBeat) {
+      this.onBeat?.(tick.beat, isAccent);
+    }
 
     if (tick.isMainBeat && this.onProgress) {
       this.onProgress({
@@ -619,20 +637,22 @@ export class MetronomeEngine {
       });
     }
 
+    const offset = this.audioOffsetMs;
+
     if (this.preRenderedAudio) {
       if (this.playCustomSample) {
         this.playCustomSample(tick.beat, tick.subBeat);
       }
-      fireHaptic();
+      this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat);
     } else if (offset > 0) {
-      fireHaptic();
-      setTimeout(playAudio, offset);
+      this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat);
+      setTimeout(() => this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute), offset);
     } else if (offset < 0) {
-      playAudio();
-      setTimeout(fireHaptic, Math.abs(offset));
+      this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute);
+      setTimeout(() => this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat), Math.abs(offset));
     } else {
-      playAudio();
-      fireHaptic();
+      this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute);
+      this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat);
     }
   }
 

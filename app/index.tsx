@@ -900,52 +900,64 @@ export default function MetronomeScreen() {
     const engine = engineRef.current;
     if (!engine) return;
 
-    let beatRafPending = false;
+    let rafPending = false;
     let pendingBeat = -1;
     let pendingAccent = false;
+    let pendingSubBeat = -1;
+    let pendingProgress: typeof progressInfo = null;
+    let hasBeatUpdate = false;
+    let hasSubBeatUpdate = false;
+    let hasProgressUpdate = false;
+
+    const flushUpdates = () => {
+      rafPending = false;
+      if (hasBeatUpdate) {
+        hasBeatUpdate = false;
+        setCurrentBeat(pendingBeat);
+        const fm = flashModeRef.current;
+        const shouldFlash = fm === "all" || (fm === "accent" && pendingAccent);
+        if (shouldFlash) {
+          flashOpacity.value = withSequence(
+            withTiming(0.12, { duration: 50 }),
+            withTiming(0, { duration: 250, easing: Easing.out(Easing.quad) })
+          );
+        }
+      }
+      if (hasSubBeatUpdate) {
+        hasSubBeatUpdate = false;
+        setActiveSubNote(pendingSubBeat);
+      }
+      if (hasProgressUpdate) {
+        hasProgressUpdate = false;
+        setProgressInfo(pendingProgress);
+      }
+    };
+
+    const scheduleFlush = () => {
+      if (!rafPending) {
+        rafPending = true;
+        requestAnimationFrame(flushUpdates);
+      }
+    };
+
     engine.setOnBeat((beat: number, isAccent: boolean) => {
       pendingBeat = beat;
       pendingAccent = isAccent;
-      if (!beatRafPending) {
-        beatRafPending = true;
-        requestAnimationFrame(() => {
-          beatRafPending = false;
-          setCurrentBeat(pendingBeat);
-          const fm = flashModeRef.current;
-          const shouldFlash = fm === "all" || (fm === "accent" && pendingAccent);
-          if (shouldFlash) {
-            flashOpacity.value = withSequence(
-              withTiming(0.12, { duration: 50 }),
-              withTiming(0, { duration: 250, easing: Easing.out(Easing.quad) })
-            );
-          }
-        });
-      }
+      hasBeatUpdate = true;
+      scheduleFlush();
     });
 
-    let subBeatRafPending = false;
     engine.setOnSubBeat((_beat: number, subBeat: number) => {
       activeSubNoteRef.current = subBeat;
-      if (!subBeatRafPending) {
-        subBeatRafPending = true;
-        requestAnimationFrame(() => {
-          subBeatRafPending = false;
-          setActiveSubNote(activeSubNoteRef.current);
-        });
-      }
+      pendingSubBeat = subBeat;
+      hasSubBeatUpdate = true;
+      scheduleFlush();
     });
 
-    let progressRafPending = false;
-    let pendingProgress: typeof progressInfo = null;
     engine.setOnProgress((info) => {
       pendingProgress = info;
-      if (!progressRafPending) {
-        progressRafPending = true;
-        requestAnimationFrame(() => {
-          progressRafPending = false;
-          setProgressInfo(pendingProgress);
-        });
-      }
+      hasProgressUpdate = true;
+      scheduleFlush();
     });
 
     engine.setOnScheduleRebuild(() => {

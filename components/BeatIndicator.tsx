@@ -15,6 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   useAnimatedStyle,
+  useAnimatedReaction,
   withTiming,
   withSequence,
   withSpring,
@@ -77,6 +78,12 @@ function DialBeatDot({
   );
   const beatOpacity = useSharedValue(isStrong ? 0.85 : 1);
 
+  const activeSV = useSharedValue(isActive ? 1 : 0);
+  activeSV.value = isActive ? 1 : 0;
+
+  const accentColor = C.accent;
+  const accentMutedColor = C.accentMuted;
+
   const handlePress = useCallback(() => {
     popScale.value = withSequence(
       withTiming(0.85, { duration: 40, easing: Easing.out(Easing.quad) }),
@@ -85,41 +92,64 @@ function DialBeatDot({
     onPress();
   }, [onPress]);
 
-  useEffect(() => {
-    if (isMute) {
-      if (isActive) {
-        beatScale.value = withSequence(
-          withTiming(1.15, { duration: 50, easing: Easing.out(Easing.quad) }),
-          withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) })
+  const beatTypeTag = useSharedValue(0);
+  const prevBeatTypeTag = useRef(0);
+  const currentTag = (isMute ? 1 : isStrong ? 2 : isAccent ? 3 : 0) + accentColor.length * 0.001;
+  if (currentTag !== prevBeatTypeTag.current) {
+    prevBeatTypeTag.current = currentTag;
+    beatTypeTag.value = currentTag;
+  }
+
+  useAnimatedReaction(
+    () => [activeSV.value, beatTypeTag.value] as const,
+    ([curActive, _curTag], prev) => {
+      const prevActive = prev ? prev[0] : -1;
+      const activeChanged = curActive !== prevActive;
+      const active = curActive === 1;
+      if (isMute) {
+        if (active) {
+          if (activeChanged) {
+            beatScale.value = withSequence(
+              withTiming(1.15, { duration: 50, easing: Easing.out(Easing.quad) }),
+              withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) })
+            );
+          }
+          beatBg.value = withTiming("rgba(72, 79, 88, 0.35)", { duration: 50 });
+          beatBorder.value = withTiming(Colors.textSecondary, { duration: 50 });
+        } else {
+          if (activeChanged) {
+            beatScale.value = withTiming(1, { duration: 150 });
+          }
+          beatBg.value = withTiming("transparent", { duration: 150 });
+          beatBorder.value = withTiming(Colors.textSecondary, { duration: 150 });
+        }
+      } else if (active) {
+        if (activeChanged) {
+          beatScale.value = withSequence(
+            withTiming(isStrong ? 1.35 : 1.2, { duration: 50, easing: Easing.out(Easing.quad) }),
+            withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) })
+          );
+        }
+        beatBg.value = withTiming(
+          isAccent ? accentColor : Colors.text,
+          { duration: 50 }
         );
-        beatBg.value = withTiming("rgba(72, 79, 88, 0.35)", { duration: 50 });
-        beatBorder.value = withTiming(Colors.textSecondary, { duration: 50 });
+        beatBorder.value = withTiming(isStrong ? accentColor : "transparent", { duration: 50 });
+        beatOpacity.value = withTiming(1, { duration: 50 });
       } else {
-        beatScale.value = withTiming(1, { duration: 150 });
-        beatBg.value = withTiming("transparent", { duration: 150 });
-        beatBorder.value = withTiming(Colors.textSecondary, { duration: 150 });
+        if (activeChanged) {
+          beatScale.value = withTiming(1, { duration: 150 });
+        }
+        beatBg.value = withTiming(
+          isStrong ? accentColor : isAccent ? accentMutedColor : Colors.textTertiary,
+          { duration: 150 }
+        );
+        beatBorder.value = withTiming(isStrong ? accentColor : "transparent", { duration: 150 });
+        beatOpacity.value = withTiming(isStrong ? 0.85 : 1, { duration: 150 });
       }
-    } else if (isActive) {
-      beatScale.value = withSequence(
-        withTiming(isStrong ? 1.35 : 1.2, { duration: 50, easing: Easing.out(Easing.quad) }),
-        withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) })
-      );
-      beatBg.value = withTiming(
-        isAccent ? C.accent : Colors.text,
-        { duration: 50 }
-      );
-      beatBorder.value = withTiming(isStrong ? C.accent : "transparent", { duration: 50 });
-      beatOpacity.value = withTiming(1, { duration: 50 });
-    } else {
-      beatScale.value = withTiming(1, { duration: 150 });
-      beatBg.value = withTiming(
-        isStrong ? C.accent : isAccent ? C.accentMuted : Colors.textTertiary,
-        { duration: 150 }
-      );
-      beatBorder.value = withTiming(isStrong ? C.accent : "transparent", { duration: 150 });
-      beatOpacity.value = withTiming(isStrong ? 0.85 : 1, { duration: 150 });
-    }
-  }, [isActive, beatType, C.accent, C.accentMuted]);
+    },
+    [isMute, isStrong, isAccent, accentColor, accentMutedColor]
+  );
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: beatScale.value * popScale.value }],
