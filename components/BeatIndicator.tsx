@@ -277,6 +277,8 @@ interface BeatIndicatorProps {
   onLoopBlocksChange: (blocks: LoopBlock[]) => void;
   barLoopMode: "loop" | "once";
   onBarLoopModeChange: (mode: "loop" | "once") => void;
+  onBarQuickSave?: () => void;
+  onResetFlash?: () => void;
   onBarScrollOffset?: (offset: number) => void;
   onBarTimerExpired?: () => void;
   subdivisionBarElement?: React.ReactNode;
@@ -319,6 +321,8 @@ export function BeatIndicator({
   onLoopBlocksChange,
   barLoopMode,
   onBarLoopModeChange,
+  onBarQuickSave,
+  onResetFlash,
   onBarScrollOffset,
   onBarTimerExpired,
   subdivisionBarElement,
@@ -737,55 +741,13 @@ export function BeatIndicator({
     return `${m}:${s.toString().padStart(2, "0")}`;
   }, [barClockMode, barElapsedSec, barTimerRemaining, barTimerDuration, isPlaying]);
 
-  const shakeCountRef = useRef(0);
-  const shakeLastDirRef = useRef<"left" | "right" | null>(null);
-  const shakeLastTimeRef = useRef(0);
-  const SHAKE_THRESHOLD = 15;
-  const SHAKE_TIMEOUT = 800;
-  const SHAKE_REQUIRED = 6;
-  const resetShakeProgress = useSharedValue(0);
   const resetFlash = useSharedValue(0);
 
   const barClockSwipePan = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => false,
     onMoveShouldSetPanResponder: (_e, g) => !isPlaying && Math.abs(g.dx) > 10 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
-    onPanResponderGrant: () => {
-      shakeCountRef.current = 0;
-      shakeLastDirRef.current = null;
-    },
-    onPanResponderMove: (_e, gs) => {
-      if (isPlaying) return;
-      const now = Date.now();
-      if (now - shakeLastTimeRef.current > SHAKE_TIMEOUT) {
-        shakeCountRef.current = 0;
-        shakeLastDirRef.current = null;
-      }
-      const dir = gs.dx > SHAKE_THRESHOLD ? "right" : gs.dx < -SHAKE_THRESHOLD ? "left" : null;
-      if (dir && dir !== shakeLastDirRef.current) {
-        shakeLastDirRef.current = dir;
-        shakeLastTimeRef.current = now;
-        shakeCountRef.current++;
-        resetShakeProgress.value = Math.min(1, shakeCountRef.current / SHAKE_REQUIRED);
-        if (Platform.OS !== "web") {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }
-        if (shakeCountRef.current >= SHAKE_REQUIRED) {
-          shakeCountRef.current = 0;
-          shakeLastDirRef.current = null;
-          resetShakeProgress.value = 0;
-          resetFlash.value = withSequence(
-            withTiming(1, { duration: 80 }),
-            withTiming(0, { duration: 400, easing: Easing.out(Easing.quad) })
-          );
-          if (Platform.OS !== "web") {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          }
-          onBarReset?.();
-        }
-      }
-    },
     onPanResponderRelease: (_e, g) => {
-      if (shakeCountRef.current <= 1 && Math.abs(g.dx) >= 20) {
+      if (Math.abs(g.dx) >= 20) {
         if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         if (g.dx < 0 && barClockMode === "stopwatch") {
           setBarClockMode("timer");
@@ -794,11 +756,38 @@ export function BeatIndicator({
           setBarTimerEditing(false);
         }
       }
-      shakeCountRef.current = 0;
-      shakeLastDirRef.current = null;
-      resetShakeProgress.value = withTiming(0, { duration: 300 });
     },
-  }), [isPlaying, barClockMode, onBarReset]);
+  }), [isPlaying, barClockMode]);
+
+  const saveResetLongPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSaveResetPressIn = useCallback(() => {
+    saveResetLongPressRef.current = setTimeout(() => {
+      saveResetLongPressRef.current = null;
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      }
+      resetFlash.value = withSequence(
+        withTiming(1, { duration: 80 }),
+        withTiming(0, { duration: 500, easing: Easing.out(Easing.quad) })
+      );
+      onResetFlash?.();
+      onBarReset?.();
+    }, 600);
+  }, [onBarReset, onResetFlash]);
+
+  const handleSaveResetPressOut = useCallback(() => {
+    if (saveResetLongPressRef.current) {
+      clearTimeout(saveResetLongPressRef.current);
+      saveResetLongPressRef.current = null;
+    }
+  }, []);
+
+  const handleSaveResetTap = useCallback(() => {
+    if (!saveResetLongPressRef.current) return;
+    clearTimeout(saveResetLongPressRef.current);
+    saveResetLongPressRef.current = null;
+    onBarQuickSave?.();
+  }, [onBarQuickSave]);
 
   const handleBarClockTap = useCallback(() => {
     if (isPlaying) return;
@@ -951,11 +940,6 @@ export function BeatIndicator({
     });
     return map;
   }, [loopBlocks, beatsPerMeasure]);
-
-  const resetProgressStyle = useAnimatedStyle(() => ({
-    opacity: resetShakeProgress.value * 0.8,
-    transform: [{ scaleX: resetShakeProgress.value }],
-  }));
 
   const resetFlashStyle = useAnimatedStyle(() => ({
     opacity: resetFlash.value * 0.6,
@@ -1565,16 +1549,18 @@ export function BeatIndicator({
 
         <View style={styles.barBottomRow}>
           <Pressable
-            onPress={() => { if (!isPlaying) onBarLoopModeChange(barLoopMode === "loop" ? "once" : "loop"); }}
-            style={[styles.barLoopBtn, barLoopMode === "once" && { backgroundColor: "rgba(255,255,255,0.12)" }, isPlaying && { opacity: 0.3 }]}
+            onPressIn={isPlaying ? undefined : handleSaveResetPressIn}
+            onPressOut={isPlaying ? undefined : handleSaveResetPressOut}
+            onPress={isPlaying ? undefined : handleSaveResetTap}
+            style={[styles.barLoopBtn, isPlaying && { opacity: 0.3 }]}
             hitSlop={6}
-            testID="bar-loop-toggle"
+            testID="bar-save-reset"
             disabled={isPlaying}
           >
             <Ionicons
-              name={barLoopMode === "loop" ? "repeat" : "play-forward"}
+              name="bookmark-outline"
               size={18}
-              color={barLoopMode === "loop" ? C.accent : Colors.textSecondary}
+              color={C.accent}
             />
           </Pressable>
           <View style={styles.barTimeSigRow}>
@@ -1599,15 +1585,6 @@ export function BeatIndicator({
                 <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
                 <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: Colors.danger }]} />
               </View>
-              <Animated.View style={[{
-                position: "absolute",
-                bottom: -2,
-                left: "10%" as any,
-                right: "10%" as any,
-                height: 3,
-                borderRadius: 1.5,
-                backgroundColor: Colors.danger,
-              }, resetProgressStyle]} />
             </View>
             <Pressable
               onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}

@@ -270,6 +270,11 @@ const translations = {
     goalSet: { ko: "목표 설정 완료", en: "Goal Set" },
     goalSetMsg: { ko: "연습 목표가 추가되었습니다.", en: "Practice goal has been added." },
     cancel: { ko: "취소", en: "Cancel" },
+    quickSaved: { ko: "저장 완료", en: "Saved" },
+    quickSavedMsg: { ko: "현재 설정이 Practice Note에 저장되었습니다.", en: "Current settings saved to Practice Note." },
+    resetConfirm: { ko: "초기화", en: "Reset" },
+    resetConfirmMsg: { ko: "모든 바 설정을 초기화하시겠습니까?", en: "Reset all bar settings?" },
+    resetDone: { ko: "초기화 완료", en: "Reset Complete" },
   },
   duration: {
     s: { ko: "초", en: "s" },
