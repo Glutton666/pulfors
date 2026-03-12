@@ -1436,8 +1436,12 @@ export function BeatIndicator({
             onPress={handleSaveResetTap}
             onLongPress={handleSaveResetLongPress}
             delayLongPress={600}
-            style={[styles.barLoopBtn, isPlaying && { opacity: 0.3 }]}
-            hitSlop={6}
+            style={({ pressed }) => [
+              styles.barLoopBtn,
+              isPlaying && { opacity: 0.3 },
+              pressed && !isPlaying && { opacity: 0.5, transform: [{ scale: 0.9 }] },
+            ]}
+            hitSlop={10}
             testID="bar-save-reset"
             disabled={isPlaying}
           >
