@@ -759,35 +759,19 @@ export function BeatIndicator({
     },
   }), [isPlaying, barClockMode]);
 
-  const saveResetLongFiredRef = useRef(false);
-  const saveResetLongPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleSaveResetPressIn = useCallback(() => {
-    saveResetLongFiredRef.current = false;
-    saveResetLongPressRef.current = setTimeout(() => {
-      saveResetLongPressRef.current = null;
-      saveResetLongFiredRef.current = true;
-      if (Platform.OS !== "web") {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      }
-      resetFlash.value = withSequence(
-        withTiming(1, { duration: 80 }),
-        withTiming(0, { duration: 500, easing: Easing.out(Easing.quad) })
-      );
-      onResetFlash?.();
-      onBarReset?.();
-    }, 600);
+  const handleSaveResetLongPress = useCallback(() => {
+    if (Platform.OS !== "web") {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    }
+    resetFlash.value = withSequence(
+      withTiming(1, { duration: 80 }),
+      withTiming(0, { duration: 500, easing: Easing.out(Easing.quad) })
+    );
+    onResetFlash?.();
+    onBarReset?.();
   }, [onBarReset, onResetFlash]);
 
-  const handleSaveResetPressOut = useCallback(() => {
-    if (saveResetLongPressRef.current) {
-      clearTimeout(saveResetLongPressRef.current);
-      saveResetLongPressRef.current = null;
-    }
-  }, []);
-
   const handleSaveResetTap = useCallback(() => {
-    if (saveResetLongFiredRef.current) return;
     onBarQuickSave?.();
   }, [onBarQuickSave]);
 
@@ -1449,9 +1433,9 @@ export function BeatIndicator({
 
         <View style={styles.barBottomRow}>
           <Pressable
-            onPressIn={isPlaying ? undefined : handleSaveResetPressIn}
-            onPressOut={isPlaying ? undefined : handleSaveResetPressOut}
-            onPress={isPlaying ? undefined : handleSaveResetTap}
+            onPress={handleSaveResetTap}
+            onLongPress={handleSaveResetLongPress}
+            delayLongPress={600}
             style={[styles.barLoopBtn, isPlaying && { opacity: 0.3 }]}
             hitSlop={6}
             testID="bar-save-reset"
