@@ -759,10 +759,14 @@ export function BeatIndicator({
     },
   }), [isPlaying, barClockMode]);
 
+  const saveResetLongFiredRef = useRef(false);
   const saveResetLongPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleSaveResetPressIn = useCallback(() => {
+    saveResetLongFiredRef.current = false;
     saveResetLongPressRef.current = setTimeout(() => {
       saveResetLongPressRef.current = null;
+      saveResetLongFiredRef.current = true;
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       }
@@ -783,9 +787,7 @@ export function BeatIndicator({
   }, []);
 
   const handleSaveResetTap = useCallback(() => {
-    if (!saveResetLongPressRef.current) return;
-    clearTimeout(saveResetLongPressRef.current);
-    saveResetLongPressRef.current = null;
+    if (saveResetLongFiredRef.current) return;
     onBarQuickSave?.();
   }, [onBarQuickSave]);
 

@@ -1979,6 +1979,46 @@ export default function MetronomeScreen() {
     barConfigRef.current.loopBlocks = [...blocks];
   }, []);
 
+  const fullScreenResetFlash = useSharedValue(0);
+  const fullScreenResetFlashStyle = useAnimatedStyle(() => ({
+    opacity: fullScreenResetFlash.value * 0.5,
+  }));
+
+  const handleBarQuickSave = useCallback(async () => {
+    try {
+      const { loadPracticeBook: lpb, savePracticeBook: spb, createPracticeEntry } = await import("@/lib/storage");
+      const config = {
+        mode: "bar" as const,
+        bpm,
+        beatsPerMeasure,
+        beatTypes: [...beatTypes],
+        beatSubdivisions: { ...beatSubdivisions },
+        barRepeats: { ...barRepeats },
+        loopBlocks: [...loopBlocks],
+        barLoopMode: barLoopMode as "loop" | "once",
+        subdivisionPattern: [...subdivisionPattern],
+        barClockMode: barConfigRef.current.barClockMode,
+        barTimerDuration: barConfigRef.current.barTimerDuration,
+      };
+      const now = new Date();
+      const label = `Bar ${beatsPerMeasure}/${bpm} ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
+      const entry = createPracticeEntry(label, config, username);
+      const existing = await lpb();
+      await spb([entry, ...existing]);
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(t("main", "quickSaved"), t("main", "quickSavedMsg"));
+    } catch (e) {
+      console.warn("Quick save error:", e);
+    }
+  }, [bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, subdivisionPattern, username, t]);
+
+  const handleResetFlash = useCallback(() => {
+    fullScreenResetFlash.value = withSequence(
+      withTiming(1, { duration: 80 }),
+      withTiming(0, { duration: 500, easing: Easing.out(Easing.quad) })
+    );
+  }, []);
+
   const handleBarReset = useCallback(() => {
     const engine = engineRef.current;
     const beats = barConfigRef.current.beatsPerMeasure || 4;
@@ -1988,6 +2028,7 @@ export default function MetronomeScreen() {
     setBarRepeats({});
     setLoopBlocks([]);
     setBarStartBeat(null);
+    setBarLoopMode("loop");
     setNoteSamples({});
     noteSamplesRef.current = {};
     setNoteSampleNames({});
@@ -2419,6 +2460,16 @@ export default function MetronomeScreen() {
         onComplete={handleOnboardingComplete}
       />
 
+      <Animated.View
+        pointerEvents="none"
+        style={[{
+          position: "absolute",
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: Colors.danger,
+          zIndex: 9998,
+        }, fullScreenResetFlashStyle]}
+      />
+
       {showReboot && (
         <View style={{
           position: "absolute",
@@ -2566,6 +2617,8 @@ export default function MetronomeScreen() {
             progressInfo={progressInfo}
             measureCount={measureCount}
             onBarReset={handleBarReset}
+            onBarQuickSave={handleBarQuickSave}
+            onResetFlash={handleResetFlash}
             subdivisionBarElement={barMode ? (
               <SubdivisionBar
                 pattern={subdivisionPattern}
