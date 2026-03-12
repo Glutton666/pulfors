@@ -836,7 +836,7 @@ export function BeatIndicator({
   const [repeatSecEditing, setRepeatSecEditing] = useState(false);
   const [repeatSecText, setRepeatSecText] = useState("");
 
-  const [loopBlockExpanded, setLoopBlockExpanded] = useState(false);
+  const [blockSelectStart, setBlockSelectStart] = useState<number | null>(null);
   const [editingBlockIndex, setEditingBlockIndex] = useState<number | null>(null);
 
   const openRepeatModal = useCallback((beat: number) => {
@@ -899,21 +899,26 @@ export function BeatIndicator({
     return label;
   };
 
-  const addLoopBlock = useCallback(() => {
-    const newBlock: LoopBlock = { startBeat: 0, endBeat: Math.min(beatsPerMeasure - 1, 3), type: "count", value: 2 };
-    const updated = [...loopBlocks, newBlock];
-    onLoopBlocksChange(updated);
-    setEditingBlockIndex(updated.length - 1);
-    setLoopBlockExpanded(true);
-  }, [loopBlocks, onLoopBlocksChange, beatsPerMeasure]);
+  const barLongPressedRef = useRef(false);
 
-  const updateLoopBlock = useCallback((index: number, patch: Partial<LoopBlock>) => {
-    const merged = { ...loopBlocks[index], ...patch };
-    merged.startBeat = Math.max(0, Math.min(beatsPerMeasure - 1, merged.startBeat));
-    merged.endBeat = Math.max(merged.startBeat, Math.min(beatsPerMeasure - 1, merged.endBeat));
-    const updated = loopBlocks.map((b, i) => i === index ? merged : b);
-    onLoopBlocksChange(updated);
-  }, [loopBlocks, onLoopBlocksChange, beatsPerMeasure]);
+  const handleBarNumberLongPress = useCallback((beat: number) => {
+    if (isPlaying) return;
+    barLongPressedRef.current = true;
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    if (blockSelectStart === null) {
+      setBlockSelectStart(beat);
+    } else {
+      const start = Math.min(blockSelectStart, beat);
+      const end = Math.max(blockSelectStart, beat);
+      if (start === end) {
+        setBlockSelectStart(null);
+        return;
+      }
+      const newBlock: LoopBlock = { startBeat: start, endBeat: end, type: "count", value: 2 };
+      onLoopBlocksChange([...loopBlocks, newBlock]);
+      setBlockSelectStart(null);
+    }
+  }, [isPlaying, blockSelectStart, loopBlocks, onLoopBlocksChange]);
 
   const removeLoopBlock = useCallback((index: number) => {
     const updated = loopBlocks.filter((_, i) => i !== index);
@@ -921,14 +926,6 @@ export function BeatIndicator({
     if (editingBlockIndex === index) setEditingBlockIndex(null);
     else if (editingBlockIndex !== null && editingBlockIndex > index) setEditingBlockIndex(editingBlockIndex - 1);
   }, [loopBlocks, onLoopBlocksChange, editingBlockIndex]);
-
-  const formatBlockRepeat = (b: LoopBlock): string => {
-    if (b.type === "count") return `\u00D7${b.value}`;
-    const m = Math.floor(b.value / 60);
-    const s = b.value % 60;
-    if (m === 0) return `${s}s`;
-    return `${m}m${s.toString().padStart(2, "0")}s`;
-  };
 
   const blockForBeat = useMemo(() => {
     const map = new Map<number, { block: LoopBlock; index: number; isFirst: boolean; isLast: boolean }[]>();
@@ -1063,8 +1060,12 @@ export function BeatIndicator({
             style={[
               styles.barBeatLabel,
               barStartBeat === beat && !isPlaying && { backgroundColor: C.accent + "30", borderRadius: 4 },
+              blockSelectStart === beat && !isPlaying && { backgroundColor: C.accent + "50", borderRadius: 4 },
+              blockSelectStart !== null && blockSelectStart !== beat && !isPlaying && { borderColor: C.accent + "40", borderWidth: 1, borderRadius: 4 },
             ]}
+            onPressIn={() => { barLongPressedRef.current = false; }}
             onPress={() => {
+              if (barLongPressedRef.current) return;
               if (isPrimary && !isPlaying && onBarStartBeatSelect) {
                 onBarStartBeatSelect(barStartBeat === beat ? null : beat);
                 if (Platform.OS !== "web") Haptics.selectionAsync();
@@ -1072,9 +1073,15 @@ export function BeatIndicator({
                 cycleBeatType(beat);
               }
             }}
+            onLongPress={() => {
+              if (isPrimary) handleBarNumberLongPress(beat);
+            }}
+            delayLongPress={300}
           >
             {barStartBeat === beat && !isPlaying ? (
               <Ionicons name="play" size={12} color={C.accent} style={{ marginLeft: 1 }} />
+            ) : blockSelectStart === beat && !isPlaying ? (
+              <Ionicons name="locate" size={12} color={C.accent} />
             ) : (
               <Text style={[
                 styles.barBeatLabelText,
@@ -1333,7 +1340,19 @@ export function BeatIndicator({
           </Pressable>
         </View>
 
-        {!isPlaying && (
+        {blockSelectStart !== null && !isPlaying && (
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 4, gap: 6 }}>
+            <Ionicons name="locate" size={12} color={C.accent} />
+            <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: 11, color: C.accent }}>
+              Bar {blockSelectStart + 1} selected — long press another bar to create block
+            </Text>
+            <Pressable onPress={() => setBlockSelectStart(null)} hitSlop={8}>
+              <Ionicons name="close-circle" size={14} color={Colors.textTertiary} />
+            </Pressable>
+          </View>
+        )}
+
+        {loopBlocks.length > 0 && (
           <View style={{ paddingHorizontal: 12, paddingBottom: 4 }}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 4 }}>
@@ -1355,17 +1374,11 @@ export function BeatIndicator({
                   >
                     <View style={{ width: 2, height: 12, backgroundColor: C.accent, borderRadius: 1 }} />
                     <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: 10, color: Colors.text }}>
-                      {block.startBeat + 1}{block.startBeat !== block.endBeat ? `-${Math.min(block.endBeat + 1, beatsPerMeasure)}` : ""}
+                      {block.startBeat + 1}-{Math.min(block.endBeat + 1, beatsPerMeasure)}
                     </Text>
                     <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: 10, color: C.accent }}>
-                      {formatBlockRepeat(block)}
+                      ×{block.value}
                     </Text>
-                    {block.jumpToBlock !== undefined && block.jumpToBlock !== null && (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-                        <Ionicons name="arrow-forward" size={8} color={Colors.textTertiary} />
-                        <Text style={{ fontSize: 8, color: Colors.textTertiary, fontWeight: "600" }}>B{block.jumpToBlock + 1}</Text>
-                      </View>
-                    )}
                     {isPlaying && progressInfo && progressInfo.blockIndex === idx && progressInfo.blockRepeatTotal > 1 && (
                       <View style={{ backgroundColor: C.accent, borderRadius: 3, paddingHorizontal: 3, paddingVertical: 1 }}>
                         <Text style={{ color: Colors.white, fontSize: 8, fontWeight: "800" }}>
@@ -1380,137 +1393,8 @@ export function BeatIndicator({
                     )}
                   </Pressable>
                 ))}
-                <Pressable
-                  onPress={addLoopBlock}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 3, paddingVertical: 3, paddingHorizontal: 7, backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 6 }}
-                  hitSlop={4}
-                >
-                  <Ionicons name="add" size={12} color={Colors.textSecondary} />
-                  <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: 10, color: Colors.textSecondary }}>Block</Text>
-                </Pressable>
               </View>
             </ScrollView>
-
-            {editingBlockIndex !== null && editingBlockIndex < loopBlocks.length && (() => {
-              const idx = editingBlockIndex;
-              const block = loopBlocks[idx];
-              return (
-                <View style={{ marginTop: 4, marginBottom: 2, backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 8, borderWidth: 1, borderColor: C.accent + "40", padding: 8, gap: 8 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Text style={{ fontSize: 10, color: Colors.textTertiary }}>Range</Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 6, paddingHorizontal: 6, height: 28 }}>
-                      <TextInput
-                        style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: 13, color: Colors.text, textAlign: "center" as const, width: 24, padding: 0 }}
-                        keyboardType="number-pad"
-                        value={String(block.startBeat + 1)}
-                        onChangeText={(t) => { const v = parseInt(t, 10); if (!isNaN(v) && v >= 1 && v <= beatsPerMeasure) updateLoopBlock(idx, { startBeat: v - 1, endBeat: Math.max(v - 1, block.endBeat) }); }}
-                        selectTextOnFocus
-                        maxLength={2}
-                      />
-                    </View>
-                    <Ionicons name="arrow-forward" size={10} color={Colors.textTertiary} />
-                    <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 6, paddingHorizontal: 6, height: 28 }}>
-                      <TextInput
-                        style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: 13, color: Colors.text, textAlign: "center" as const, width: 24, padding: 0 }}
-                        keyboardType="number-pad"
-                        value={String(Math.min(block.endBeat + 1, beatsPerMeasure))}
-                        onChangeText={(t) => { const v = parseInt(t, 10); if (!isNaN(v) && v >= 1 && v <= beatsPerMeasure) updateLoopBlock(idx, { endBeat: Math.max(block.startBeat, v - 1) }); }}
-                        selectTextOnFocus
-                        maxLength={2}
-                      />
-                    </View>
-                    <View style={{ width: 1, height: 16, backgroundColor: "rgba(255,255,255,0.1)", marginHorizontal: 2 }} />
-                    <Pressable
-                      onPress={() => updateLoopBlock(idx, { type: block.type === "count" ? "duration" : "count", value: block.type === "count" ? 30 : 2 })}
-                      style={{ paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, backgroundColor: C.accent + "20" }}
-                    >
-                      <Text style={{ fontSize: 10, fontWeight: "600", color: C.accent }}>{block.type === "count" ? "Count" : "Time"}</Text>
-                    </Pressable>
-                    {block.type === "count" ? (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                        <Pressable onPress={() => updateLoopBlock(idx, { value: Math.max(1, block.value - 1) })} style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}>
-                          <Ionicons name="remove" size={12} color={Colors.textSecondary} />
-                        </Pressable>
-                        <TextInput
-                          style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: 14, color: Colors.text, textAlign: "center" as const, width: 28, padding: 0 }}
-                          keyboardType="number-pad"
-                          value={String(block.value)}
-                          onChangeText={(t) => { const v = parseInt(t, 10); if (!isNaN(v) && v >= 1 && v <= 99) updateLoopBlock(idx, { value: v }); }}
-                          selectTextOnFocus
-                          maxLength={2}
-                        />
-                        <Pressable onPress={() => updateLoopBlock(idx, { value: Math.min(99, block.value + 1) })} style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}>
-                          <Ionicons name="add" size={12} color={Colors.textSecondary} />
-                        </Pressable>
-                      </View>
-                    ) : (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-                        <Pressable onPress={() => updateLoopBlock(idx, { value: Math.max(0, block.value - 10) })} style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}>
-                          <Ionicons name="remove" size={12} color={Colors.textSecondary} />
-                        </Pressable>
-                        <TextInput
-                          style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: 13, color: Colors.text, textAlign: "center" as const, width: 22, padding: 0 }}
-                          keyboardType="number-pad"
-                          value={String(Math.floor(block.value / 60))}
-                          onChangeText={(t) => { const v = parseInt(t, 10); if (!isNaN(v) && v >= 0 && v <= 59) updateLoopBlock(idx, { value: v * 60 + (block.value % 60) }); }}
-                          selectTextOnFocus
-                          maxLength={2}
-                        />
-                        <Text style={{ fontSize: 9, color: Colors.textTertiary }}>m</Text>
-                        <TextInput
-                          style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: 13, color: Colors.text, textAlign: "center" as const, width: 22, padding: 0 }}
-                          keyboardType="number-pad"
-                          value={String(block.value % 60).padStart(2, "0")}
-                          onChangeText={(t) => { const v = parseInt(t, 10); if (!isNaN(v) && v >= 0 && v <= 59) updateLoopBlock(idx, { value: Math.floor(block.value / 60) * 60 + v }); }}
-                          selectTextOnFocus
-                          maxLength={2}
-                        />
-                        <Text style={{ fontSize: 9, color: Colors.textTertiary }}>s</Text>
-                        <Pressable onPress={() => updateLoopBlock(idx, { value: Math.min(3599, block.value + 10) })} style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}>
-                          <Ionicons name="add" size={12} color={Colors.textSecondary} />
-                        </Pressable>
-                      </View>
-                    )}
-                  </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
-                    <Ionicons name="git-branch-outline" size={12} color={Colors.textTertiary} />
-                    <Text style={{ fontSize: 10, color: Colors.textTertiary }}>Jump to</Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 6, paddingHorizontal: 6, height: 24 }}>
-                      {block.jumpToBlock !== undefined && block.jumpToBlock !== null ? (
-                        <Pressable
-                          onPress={() => updateLoopBlock(idx, { jumpToBlock: undefined })}
-                          style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-                        >
-                          <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: 12, color: C.accent }}>Block {block.jumpToBlock + 1}</Text>
-                          <Ionicons name="close-circle" size={12} color={Colors.textTertiary} />
-                        </Pressable>
-                      ) : (
-                        <Text style={{ fontSize: 11, color: Colors.textTertiary }}>—</Text>
-                      )}
-                    </View>
-                    {loopBlocks.length > 1 && (
-                      <View style={{ flexDirection: "row", gap: 3 }}>
-                        {loopBlocks.map((_, bIdx) => bIdx !== idx ? (
-                          <Pressable
-                            key={bIdx}
-                            onPress={() => updateLoopBlock(idx, { jumpToBlock: bIdx })}
-                            style={{
-                              width: 22, height: 22, borderRadius: 11,
-                              backgroundColor: block.jumpToBlock === bIdx ? C.accent + "40" : "rgba(255,255,255,0.08)",
-                              alignItems: "center", justifyContent: "center",
-                              borderWidth: block.jumpToBlock === bIdx ? 1 : 0,
-                              borderColor: C.accent,
-                            }}
-                          >
-                            <Text style={{ fontSize: 10, fontWeight: "700", color: block.jumpToBlock === bIdx ? C.accent : Colors.textSecondary }}>{bIdx + 1}</Text>
-                          </Pressable>
-                        ) : null)}
-                      </View>
-                    )}
-                  </View>
-                </View>
-              );
-            })()}
           </View>
         )}
 

@@ -275,6 +275,7 @@ const translations = {
     resetConfirm: { ko: "초기화", en: "Reset" },
     resetConfirmMsg: { ko: "모든 바 설정을 초기화하시겠습니까?", en: "Reset all bar settings?" },
     resetDone: { ko: "초기화 완료", en: "Reset Complete" },
+    blockSelectHint: { ko: "바 {0} 선택됨 — 다른 바를 길게 눌러 블록 생성", en: "Bar {0} selected — long press another bar to create block" },
   },
   duration: {
     s: { ko: "초", en: "s" },
