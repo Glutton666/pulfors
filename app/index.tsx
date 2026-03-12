@@ -125,6 +125,9 @@ export default function MetronomeScreen() {
     beatsPerMeasure: 4,
     beatTypes: defaultBeatTypes(4),
     beatSubdivisions: {} as Record<string, BeatType[]>,
+    noteSamples: {} as NoteSampleMap,
+    noteSampleNames: {} as NoteSampleNameMap,
+    noteSampleSources: {} as NoteSampleSourceMap,
   });
   const barConfigRef = useRef({
     beatsPerMeasure: 4,
@@ -134,6 +137,11 @@ export default function MetronomeScreen() {
     loopBlocks: [] as LoopBlock[],
     barClockMode: "stopwatch" as "stopwatch" | "timer",
     barTimerDuration: 180,
+    noteSamples: {} as NoteSampleMap,
+    noteSampleNames: {} as NoteSampleNameMap,
+    noteSampleSources: {} as NoteSampleSourceMap,
+    barLoopMode: "loop" as "loop" | "once",
+    hasBeenConfigured: false,
   });
 
   const [progressInfo, setProgressInfo] = useState<{ beat: number; barRepeatCurrent: number; barRepeatTotal: number; blockIndex: number; blockRepeatCurrent: number; blockRepeatTotal: number } | null>(null);
@@ -1141,6 +1149,9 @@ export default function MetronomeScreen() {
         beatsPerMeasure: 4,
         beatTypes: defaultBeatTypes(4),
         beatSubdivisions: {},
+        noteSamples: {},
+        noteSampleNames: {},
+        noteSampleSources: {},
       };
       barConfigRef.current = {
         beatsPerMeasure: 4,
@@ -1150,6 +1161,11 @@ export default function MetronomeScreen() {
         loopBlocks: [],
         barClockMode: "stopwatch",
         barTimerDuration: 180,
+        noteSamples: {},
+        noteSampleNames: {},
+        noteSampleSources: {},
+        barLoopMode: "loop",
+        hasBeenConfigured: false,
       };
 
       setVolume(0.5);
@@ -1452,34 +1468,69 @@ export default function MetronomeScreen() {
         beatsPerMeasure,
         beatTypes: [...beatTypes],
         beatSubdivisions: { ...beatSubdivisions },
+        noteSamples: { ...noteSamples },
+        noteSampleNames: { ...noteSampleNames },
+        noteSampleSources: { ...noteSampleSources },
       };
-      const defaultBeats = 4;
-      const defaultTypes = defaultBeatTypes(defaultBeats);
-      barConfigRef.current = {
-        beatsPerMeasure: defaultBeats,
-        beatTypes: [...defaultTypes],
-        beatSubdivisions: {},
-        barRepeats: {},
-        barClockMode: "stopwatch",
-        barTimerDuration: 180,
-      };
-      setBeatsPerMeasure(defaultBeats);
-      setBeatTypes([...defaultTypes]);
-      setBeatSubdivisions({});
-      setBarRepeats({});
-      setLoopBlocks([]);
-      setBarLoopMode("loop");
-      setNoteSamples({});
-      noteSamplesRef.current = {};
-      setNoteSampleNames({});
-      noteSampleNamesRef.current = {};
-      setNoteSampleSources({});
-      noteSampleSourcesRef.current = {};
-      engine.setBeatsPerMeasure(defaultBeats);
-      engine.setBeatTypes([...defaultTypes]);
-      engine.setAllBeatSubdivisions({});
-      engine.clearLoopBlocks();
-      engine.clearBarRepeats();
+
+      const bc = barConfigRef.current;
+      if (bc.hasBeenConfigured) {
+        setBeatsPerMeasure(bc.beatsPerMeasure);
+        setBeatTypes([...bc.beatTypes]);
+        setBeatSubdivisions({ ...bc.beatSubdivisions });
+        setBarRepeats({ ...bc.barRepeats });
+        setLoopBlocks([...bc.loopBlocks]);
+        setBarLoopMode(bc.barLoopMode);
+        setNoteSamples({ ...bc.noteSamples });
+        noteSamplesRef.current = { ...bc.noteSamples };
+        setNoteSampleNames({ ...bc.noteSampleNames });
+        noteSampleNamesRef.current = { ...bc.noteSampleNames };
+        setNoteSampleSources({ ...bc.noteSampleSources });
+        noteSampleSourcesRef.current = { ...bc.noteSampleSources };
+        engine.setBeatsPerMeasure(bc.beatsPerMeasure);
+        engine.setBeatTypes([...bc.beatTypes]);
+        engine.setAllBeatSubdivisions(bc.beatSubdivisions);
+        engine.setAllBarRepeats(bc.barRepeats);
+        engine.setLoopBlocks(bc.loopBlocks);
+        for (const [k, v] of Object.entries(bc.barRepeats)) {
+          if (v.bpm) engine.setBarBpmOverride(Number(k), v.bpm);
+        }
+      } else {
+        const defaultBeats = 4;
+        const defaultTypes = defaultBeatTypes(defaultBeats);
+        barConfigRef.current = {
+          ...bc,
+          beatsPerMeasure: defaultBeats,
+          beatTypes: [...defaultTypes],
+          beatSubdivisions: {},
+          barRepeats: {},
+          loopBlocks: [],
+          barClockMode: "stopwatch",
+          barTimerDuration: 180,
+          noteSamples: {},
+          noteSampleNames: {},
+          noteSampleSources: {},
+          barLoopMode: "loop",
+          hasBeenConfigured: true,
+        };
+        setBeatsPerMeasure(defaultBeats);
+        setBeatTypes([...defaultTypes]);
+        setBeatSubdivisions({});
+        setBarRepeats({});
+        setLoopBlocks([]);
+        setBarLoopMode("loop");
+        setNoteSamples({});
+        noteSamplesRef.current = {};
+        setNoteSampleNames({});
+        noteSampleNamesRef.current = {};
+        setNoteSampleSources({});
+        noteSampleSourcesRef.current = {};
+        engine.setBeatsPerMeasure(defaultBeats);
+        engine.setBeatTypes([...defaultTypes]);
+        engine.setAllBeatSubdivisions({});
+        engine.clearLoopBlocks();
+        engine.clearBarRepeats();
+      }
     } else {
       barConfigRef.current = {
         ...barConfigRef.current,
@@ -1488,6 +1539,11 @@ export default function MetronomeScreen() {
         beatSubdivisions: { ...beatSubdivisions },
         barRepeats: { ...barRepeats },
         loopBlocks: [...loopBlocks],
+        noteSamples: { ...noteSamples },
+        noteSampleNames: { ...noteSampleNames },
+        noteSampleSources: { ...noteSampleSources },
+        barLoopMode,
+        hasBeenConfigured: true,
       };
       const dc = dialConfigRef.current;
       setBeatsPerMeasure(dc.beatsPerMeasure);
@@ -1495,6 +1551,12 @@ export default function MetronomeScreen() {
       setBeatSubdivisions({ ...dc.beatSubdivisions });
       setBarRepeats({});
       setLoopBlocks([]);
+      setNoteSamples({ ...dc.noteSamples });
+      noteSamplesRef.current = { ...dc.noteSamples };
+      setNoteSampleNames({ ...dc.noteSampleNames });
+      noteSampleNamesRef.current = { ...dc.noteSampleNames };
+      setNoteSampleSources({ ...dc.noteSampleSources });
+      noteSampleSourcesRef.current = { ...dc.noteSampleSources };
       engine.setBeatsPerMeasure(dc.beatsPerMeasure);
       engine.setBeatTypes([...dc.beatTypes]);
       engine.setAllBeatSubdivisions(dc.beatSubdivisions);
@@ -1503,7 +1565,7 @@ export default function MetronomeScreen() {
     }
 
     setBarMode(toBarMode);
-  }, [isPlaying, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks]);
+  }, [isPlaying, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, noteSamples, noteSampleNames, noteSampleSources]);
 
   const startMetronome = useCallback(async () => {
     const engine = engineRef.current;
@@ -1952,6 +2014,11 @@ export default function MetronomeScreen() {
       loopBlocks: [],
       barClockMode: "stopwatch",
       barTimerDuration: 180,
+      noteSamples: {},
+      noteSampleNames: {},
+      noteSampleSources: {},
+      barLoopMode: "loop",
+      hasBeenConfigured: true,
     };
     if (engine) {
       engine.setBeatTypes([...newTypes]);
@@ -2037,18 +2104,22 @@ export default function MetronomeScreen() {
     if (isBeatEntry) {
       if (barMode) {
         barConfigRef.current = {
+          ...barConfigRef.current,
           beatsPerMeasure,
           beatTypes: [...beatTypes],
           beatSubdivisions: { ...beatSubdivisions },
           barRepeats: { ...barRepeats },
           loopBlocks: [...loopBlocks],
-          barClockMode: barConfigRef.current.barClockMode,
-          barTimerDuration: barConfigRef.current.barTimerDuration,
+          noteSamples: { ...noteSamples },
+          noteSampleNames: { ...noteSampleNames },
+          noteSampleSources: { ...noteSampleSources },
+          hasBeenConfigured: true,
         };
         setBarMode(false);
       }
 
       dialConfigRef.current = {
+        ...dialConfigRef.current,
         beatsPerMeasure: entry.beatsPerMeasure,
         beatTypes: [...entry.beatTypes],
         beatSubdivisions: { ...entry.beatSubdivisions },
@@ -2067,9 +2138,13 @@ export default function MetronomeScreen() {
     } else {
       if (!barMode) {
         dialConfigRef.current = {
+          ...dialConfigRef.current,
           beatsPerMeasure,
           beatTypes: [...beatTypes],
           beatSubdivisions: { ...beatSubdivisions },
+          noteSamples: { ...noteSamples },
+          noteSampleNames: { ...noteSampleNames },
+          noteSampleSources: { ...noteSampleSources },
         };
         setBarMode(true);
       }
@@ -2096,6 +2171,7 @@ export default function MetronomeScreen() {
       }
       engine.setAllBarBpmOverrides(bpmOverridesEntry);
       barConfigRef.current = {
+        ...barConfigRef.current,
         beatsPerMeasure: entry.beatsPerMeasure,
         beatTypes: [...entry.beatTypes],
         beatSubdivisions: { ...entry.beatSubdivisions },
@@ -2103,11 +2179,12 @@ export default function MetronomeScreen() {
         loopBlocks: [...entryBlocks],
         barClockMode: entry.barClockMode || "stopwatch",
         barTimerDuration: entry.barTimerDuration ?? 180,
+        hasBeenConfigured: true,
       };
     }
 
     loadedPracticeNoteRef.current = { id: entry.id, label: entry.label };
-  }, [isPlaying, barMode, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks]);
+  }, [isPlaying, barMode, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, noteSamples, noteSampleNames, noteSampleSources]);
 
   const handleDeepLinkImport = useCallback((url: string) => {
     try {

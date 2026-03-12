@@ -79,7 +79,9 @@ function DialBeatDot({
   const beatOpacity = useSharedValue(isStrong ? 0.85 : 1);
 
   const activeSV = useSharedValue(isActive ? 1 : 0);
-  activeSV.value = isActive ? 1 : 0;
+  useEffect(() => {
+    activeSV.value = isActive ? 1 : 0;
+  }, [isActive]);
 
   const accentColor = C.accent;
   const accentMutedColor = C.accentMuted;
@@ -93,12 +95,10 @@ function DialBeatDot({
   }, [onPress]);
 
   const beatTypeTag = useSharedValue(0);
-  const prevBeatTypeTag = useRef(0);
   const currentTag = (isMute ? 1 : isStrong ? 2 : isAccent ? 3 : 0) + accentColor.length * 0.001;
-  if (currentTag !== prevBeatTypeTag.current) {
-    prevBeatTypeTag.current = currentTag;
+  useEffect(() => {
     beatTypeTag.value = currentTag;
-  }
+  }, [currentTag]);
 
   useAnimatedReaction(
     () => [activeSV.value, beatTypeTag.value] as const,

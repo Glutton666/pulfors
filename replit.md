@@ -92,6 +92,14 @@ The `SubdivisionBar` component uses platform-specific gesture handling:
 - **Native (iOS/Android)**: Uses PanResponder for swipe (add/remove cells), drag-up (reorder), and shake-to-reset gestures via accelerometer
 - **Web**: Uses pointer events (pointerdown/pointermove/pointerup) attached to a wrapper `<View ref={webContainerRef}>` element. The useEffect that sets up listeners uses an empty dependency array (`[]`) with callback refs (`trackShakeRef`, `triggerResetRef`, `addCellRef`, `removeCellRef`) to prevent React re-renders from tearing down/re-attaching listeners mid-gesture. Shake detection requires 4 direction changes within 2000ms.
 
+## Mode-Switching State Preservation
+
+The app has two independent modes — **Beat Mode** (dial) and **Bar Mode** — each with their own configuration ref:
+- **`dialConfigRef`**: Stores `beatsPerMeasure`, `beatTypes`, `beatSubdivisions`, `noteSamples`, `noteSampleNames`, `noteSampleSources`
+- **`barConfigRef`**: Stores all dial fields plus `barRepeats`, `loopBlocks`, `barClockMode`, `barTimerDuration`, `barLoopMode`, `hasBeenConfigured`
+
+When switching modes, the current config is saved to the appropriate ref and the other mode's config is restored. The `hasBeenConfigured` flag on barConfigRef ensures first-time bar mode entry uses defaults, while subsequent entries restore previous settings. All assignments to these refs use spread operators to preserve fields not explicitly overwritten.
+
 ## Security
 
 - `tar` package overridden to `>=7.5.10` in package.json for CVE fix
