@@ -914,6 +914,20 @@ export function BeatIndicator({
         setBlockSelectStart(null);
         return;
       }
+      const crosses = loopBlocks.some((b) => {
+        const bS = b.startBeat;
+        const bE = b.endBeat;
+        const newInside = start >= bS && start <= bE;
+        const newOutside = end > bE;
+        const newInsideEnd = end >= bS && end <= bE;
+        const newOutsideStart = start < bS;
+        return (newInside && newOutside) || (newInsideEnd && newOutsideStart);
+      });
+      if (crosses) {
+        if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setBlockSelectStart(null);
+        return;
+      }
       const newBlock: LoopBlock = { startBeat: start, endBeat: end, type: "count", value: 2 };
       onLoopBlocksChange([...loopBlocks, newBlock]);
       setBlockSelectStart(null);
