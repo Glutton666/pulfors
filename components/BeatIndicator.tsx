@@ -898,10 +898,14 @@ export function BeatIndicator({
         setBlockSelectStart(null);
         return;
       }
-      const overlaps = loopBlocks.some((b) => {
-        return !(end < b.startBeat || start > b.endBeat);
+      const crosses = loopBlocks.some((b) => {
+        const newContainsOld = start <= b.startBeat && end >= b.endBeat;
+        const oldContainsNew = b.startBeat <= start && b.endBeat >= end;
+        const fullyNested = newContainsOld || oldContainsNew;
+        const disjoint = end < b.startBeat || start > b.endBeat;
+        return !disjoint && !fullyNested;
       });
-      if (overlaps) {
+      if (crosses) {
         if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         setBlockSelectStart(null);
         return;
@@ -1033,36 +1037,35 @@ export function BeatIndicator({
           ]}
         >
           {(() => {
-            const blockStart = isPrimary ? beatBlocks.find((bb) => bb.isFirst) : null;
-            const blockMid = isPrimary && beatBlocks.length > 0 && !beatBlocks.some((bb) => bb.isFirst);
-            const blockEnd = isPrimary ? beatBlocks.find((bb) => bb.isLast) : null;
-            const inBlock = beatBlocks.length > 0;
+            const blockStarts = isPrimary ? beatBlocks.filter((bb) => bb.isFirst) : [];
+            const blockMid = isPrimary && beatBlocks.length > 0 && blockStarts.length === 0;
             return (
               <>
-                {isPrimary && inBlock && (
-                  <View style={{
+                {isPrimary && beatBlocks.map((bb, bbi) => (
+                  <View key={`line-${bbi}`} style={{
                     position: "absolute",
-                    left: 8,
-                    top: blockStart ? "50%" : 0,
-                    bottom: blockEnd && !blockStart ? "50%" : blockEnd ? undefined : 0,
-                    height: blockStart && blockEnd ? "50%" : undefined,
+                    left: 6 + bbi * 4,
+                    top: bb.isFirst ? "50%" : 0,
+                    bottom: bb.isLast && !bb.isFirst ? "50%" : bb.isLast ? undefined : 0,
+                    height: bb.isFirst && bb.isLast ? "50%" : undefined,
                     width: 2,
                     backgroundColor: C.accent,
-                    borderTopLeftRadius: blockStart ? 2 : 0,
-                    borderTopRightRadius: blockStart ? 2 : 0,
-                    borderBottomLeftRadius: blockEnd ? 2 : 0,
-                    borderBottomRightRadius: blockEnd ? 2 : 0,
+                    borderTopLeftRadius: bb.isFirst ? 2 : 0,
+                    borderTopRightRadius: bb.isFirst ? 2 : 0,
+                    borderBottomLeftRadius: bb.isLast ? 2 : 0,
+                    borderBottomRightRadius: bb.isLast ? 2 : 0,
                     zIndex: 10,
-                    opacity: 0.8,
+                    opacity: 0.6 + 0.2 / (bbi + 1),
                   }} />
-                )}
+                ))}
                 <Pressable
                   style={[
                     styles.barBeatLabel,
                     barStartBeat === beat && !isPlaying && { backgroundColor: C.accent + "30", borderRadius: 4 },
                     blockSelectStart === beat && !isPlaying && { backgroundColor: C.accent + "50", borderRadius: 4 },
                     blockSelectStart !== null && blockSelectStart !== beat && !isPlaying && { borderColor: C.accent + "40", borderWidth: 1, borderRadius: 4 },
-                    isPrimary && blockStart && { minWidth: 28, paddingHorizontal: 2 },
+                    isPrimary && blockStarts.length > 0 && { minWidth: 28, paddingHorizontal: 2, marginLeft: beatBlocks.length * 4 },
+                    isPrimary && blockMid && { marginLeft: beatBlocks.length * 4 },
                   ]}
                   onPressIn={() => { barLongPressedRef.current = false; }}
                   onPress={() => {
@@ -1083,28 +1086,28 @@ export function BeatIndicator({
                     <Ionicons name="play" size={12} color={C.accent} style={{ marginLeft: 1 }} />
                   ) : blockSelectStart === beat && !isPlaying ? (
                     <Ionicons name="locate" size={12} color={C.accent} />
-                  ) : isPrimary && blockStart ? (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 1 }}>
-                      <Text style={[styles.barBeatLabelText, { color: C.accent, opacity: 1, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }]}>
-                        {blockStart.block.startBeat + 1}-{Math.min(blockStart.block.endBeat + 1, beatsPerMeasure)}
-                      </Text>
-                      {!isPlaying && (
-                        <Pressable
-                          onPress={() => removeLoopBlock(blockStart.index)}
-                          hitSlop={6}
-                          style={{ marginLeft: 0 }}
-                        >
-                          <Ionicons name="close-circle" size={10} color={Colors.textTertiary} />
-                        </Pressable>
-                      )}
-                      {isPlaying && progressInfo && progressInfo.blockIndex === blockStart.index && progressInfo.blockRepeatTotal > 1 && (
-                        <Text style={{ color: C.accent, fontSize: 7, fontFamily: "SpaceGrotesk_700Bold" }}>
-                          {progressInfo.blockRepeatCurrent + 1}/{progressInfo.blockRepeatTotal}
-                        </Text>
-                      )}
+                  ) : isPrimary && blockStarts.length > 0 ? (
+                    <View style={{ flexDirection: "column", alignItems: "flex-start", gap: 0 }}>
+                      {blockStarts.map((bs, bsi) => (
+                        <View key={bsi} style={{ flexDirection: "row", alignItems: "center", gap: 1 }}>
+                          <Text style={[styles.barBeatLabelText, { color: C.accent, opacity: 1, fontSize: blockStarts.length > 1 ? 8 : 10, fontFamily: "SpaceGrotesk_700Bold" }]}>
+                            {bs.block.startBeat + 1}-{Math.min(bs.block.endBeat + 1, beatsPerMeasure)}
+                          </Text>
+                          {!isPlaying && (
+                            <Pressable onPress={() => removeLoopBlock(bs.index)} hitSlop={6}>
+                              <Ionicons name="close-circle" size={blockStarts.length > 1 ? 8 : 10} color={Colors.textTertiary} />
+                            </Pressable>
+                          )}
+                          {isPlaying && progressInfo && progressInfo.blockIndex === bs.index && progressInfo.blockRepeatTotal > 1 && (
+                            <Text style={{ color: C.accent, fontSize: 7, fontFamily: "SpaceGrotesk_700Bold" }}>
+                              {progressInfo.blockRepeatCurrent + 1}/{progressInfo.blockRepeatTotal}
+                            </Text>
+                          )}
+                        </View>
+                      ))}
                     </View>
                   ) : isPrimary && blockMid ? (
-                    <View style={{ width: 6 }} />
+                    <View style={{ width: 4 }} />
                   ) : (
                     <Text style={[
                       styles.barBeatLabelText,
