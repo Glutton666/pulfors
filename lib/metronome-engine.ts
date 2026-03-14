@@ -11,6 +11,9 @@ export interface ProgressInfo {
   blockIndex: number;
   blockRepeatCurrent: number;
   blockRepeatTotal: number;
+  jumpCurrent?: number;
+  jumpTotal?: number;
+  jumpSourceBlockIndex?: number;
 }
 
 export const soundSets = {
@@ -51,6 +54,9 @@ interface ScheduledTick {
   barRepeatTotal: number;
   blockIndex: number;
   blockRepeatTotal: number;
+  jumpIteration: number;
+  jumpTotal: number;
+  jumpSourceBlockIndex: number;
 }
 
 export class MetronomeEngine {
@@ -73,7 +79,7 @@ export class MetronomeEngine {
   private playCustomSample: ((beat: number, subBeat: number) => boolean) | null = null;
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
-  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number }[] = [];
+  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number }[] = [];
   private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
   private barBpmOverrides: Map<number, number> = new Map();
   private preRenderedAudio = false;
@@ -213,7 +219,7 @@ export class MetronomeEngine {
     this.invalidateScheduleCache();
   }
 
-  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number }[]) {
+  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number }[]) {
     this.loopBlocks = blocks.map(b => ({ ...b }));
     this.invalidateScheduleCache();
     if (this.isRunning) {
@@ -364,8 +370,10 @@ export class MetronomeEngine {
       .sort((a, b) => a.block.startBeat - b.block.startBeat);
     const sortedBlocks = filteredWithOrigIdx.map(e => e.block);
     const origToSorted = new Map<number, number>();
+    const sortedToOrig = new Map<number, number>();
     filteredWithOrigIdx.forEach((e, sortedIdx) => {
       origToSorted.set(e.origIdx, sortedIdx);
+      sortedToOrig.set(sortedIdx, e.origIdx);
     });
 
     const startBeatToBlocks = new Map<number, number[]>();
@@ -376,6 +384,10 @@ export class MetronomeEngine {
     });
 
     const durCache = new Map<string, number>();
+
+    let currentJumpIteration = 0;
+    let currentJumpTotal = 0;
+    let currentJumpSourceBlockIndex = -1;
 
     const addBeatTicks = (beat: number, iteration: number, barRepIter: number, barRepTotal: number, blkIdx: number, blkRepTotal: number) => {
       const subPattern = this.getSubPattern(beat);
@@ -393,6 +405,9 @@ export class MetronomeEngine {
           barRepeatTotal: barRepTotal,
           blockIndex: blkIdx,
           blockRepeatTotal: blkRepTotal,
+          jumpIteration: currentJumpIteration,
+          jumpTotal: currentJumpTotal,
+          jumpSourceBlockIndex: currentJumpSourceBlockIndex,
         });
         time += subDur;
       }
@@ -501,8 +516,21 @@ export class MetronomeEngine {
 
       if (block.jumpToBlock !== undefined && block.jumpToBlock !== null) {
         const jumpSortedIdx = origToSorted.get(block.jumpToBlock);
-        if (jumpSortedIdx !== undefined && !jumpVisited.has(jumpSortedIdx)) {
-          processBlock(jumpSortedIdx, jumpVisited);
+        if (jumpSortedIdx !== undefined) {
+          const jumpCount = Math.max(1, block.jumpCount || 1);
+          const prevJumpTotal = currentJumpTotal;
+          const prevJumpIteration = currentJumpIteration;
+          const prevJumpSource = currentJumpSourceBlockIndex;
+          currentJumpTotal = jumpCount;
+          currentJumpSourceBlockIndex = sortedToOrig.get(blockIdx) ?? blockIdx;
+          for (let ji = 0; ji < jumpCount; ji++) {
+            currentJumpIteration = ji;
+            const jumpVisitedCopy = new Set(jumpVisited);
+            processBlock(jumpSortedIdx, jumpVisitedCopy);
+          }
+          currentJumpIteration = prevJumpIteration;
+          currentJumpTotal = prevJumpTotal;
+          currentJumpSourceBlockIndex = prevJumpSource;
         }
       }
     };
@@ -634,6 +662,9 @@ export class MetronomeEngine {
         blockIndex: tick.blockIndex,
         blockRepeatCurrent: tick.repeatIteration,
         blockRepeatTotal: tick.blockRepeatTotal,
+        jumpCurrent: tick.jumpIteration,
+        jumpTotal: tick.jumpTotal,
+        jumpSourceBlockIndex: tick.jumpSourceBlockIndex >= 0 ? tick.jumpSourceBlockIndex : undefined,
       });
     }
 

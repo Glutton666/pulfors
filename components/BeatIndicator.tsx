@@ -251,6 +251,7 @@ export interface LoopBlock {
   type: "count" | "duration";
   value: number;
   jumpToBlock?: number;
+  jumpCount?: number;
 }
 
 interface BeatIndicatorProps {
@@ -292,7 +293,7 @@ interface BeatIndicatorProps {
   bpm?: number;
   barStartBeat?: number | null;
   onBarStartBeatSelect?: (beat: number | null) => void;
-  progressInfo?: { beat: number; barRepeatCurrent: number; barRepeatTotal: number; blockIndex: number; blockRepeatCurrent: number; blockRepeatTotal: number } | null;
+  progressInfo?: { beat: number; barRepeatCurrent: number; barRepeatTotal: number; blockIndex: number; blockRepeatCurrent: number; blockRepeatTotal: number; jumpCurrent?: number; jumpTotal?: number; jumpSourceBlockIndex?: number } | null;
   measureCount?: number;
   onBarReset?: () => void;
 }
@@ -917,7 +918,20 @@ export function BeatIndicator({
   }, [isPlaying, blockSelectStart, loopBlocks, onLoopBlocksChange]);
 
   const removeLoopBlock = useCallback((index: number) => {
-    const updated = loopBlocks.filter((_, i) => i !== index);
+    const updated = loopBlocks
+      .filter((_, i) => i !== index)
+      .map((block) => {
+        let newBlock = { ...block };
+        if (newBlock.jumpToBlock !== undefined && newBlock.jumpToBlock !== null) {
+          if (newBlock.jumpToBlock === index) {
+            newBlock.jumpToBlock = undefined;
+            newBlock.jumpCount = undefined;
+          } else if (newBlock.jumpToBlock > index) {
+            newBlock.jumpToBlock = newBlock.jumpToBlock - 1;
+          }
+        }
+        return newBlock;
+      });
     onLoopBlocksChange(updated);
     if (editingBlockIndex === index) setEditingBlockIndex(null);
     else if (editingBlockIndex !== null && editingBlockIndex > index) setEditingBlockIndex(editingBlockIndex - 1);
@@ -1018,6 +1032,23 @@ export function BeatIndicator({
     barScrollRef.current?.scrollTo({ y: scrollTarget, animated: !isFirstTick });
   }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, copyHeight, barLoopMode, measureCount]);
 
+  const jumpConnections = useMemo(() => {
+    return loopBlocks
+      .map((block, idx) => {
+        if (block.jumpToBlock === undefined || block.jumpToBlock === null) return null;
+        const targetBlock = loopBlocks[block.jumpToBlock];
+        if (!targetBlock) return null;
+        return {
+          fromIndex: idx,
+          toIndex: block.jumpToBlock,
+          fromBeat: block.startBeat,
+          toBeat: targetBlock.startBeat,
+          jumpCount: block.jumpCount || 1,
+        };
+      })
+      .filter(Boolean) as { fromIndex: number; toIndex: number; fromBeat: number; toBeat: number; jumpCount: number }[];
+  }, [loopBlocks]);
+
   if (barMode) {
     const isDropping = dropTargetBeat !== null;
     const renderBarRow = (beat: number, copyIndex: number) => {
@@ -1089,12 +1120,24 @@ export function BeatIndicator({
                   ) : isPrimary && blockStarts.length > 0 ? (
                     <View style={{ flexDirection: "column", alignItems: "flex-start", gap: 0 }}>
                       {blockStarts.map((bs, bsi) => (
-                        <View key={bsi} style={{ flexDirection: "row", alignItems: "center", gap: 1 }}>
+                        <Pressable
+                          key={bsi}
+                          onPress={() => {
+                            if (!isPlaying) {
+                              setEditingBlockIndex(editingBlockIndex === bs.index ? null : bs.index);
+                              if (Platform.OS !== "web") Haptics.selectionAsync();
+                            }
+                          }}
+                          style={{ flexDirection: "row", alignItems: "center", gap: 1 }}
+                        >
                           <Text style={[styles.barBeatLabelText, { color: C.accent, opacity: 1, fontSize: blockStarts.length > 1 ? 8 : 10, fontFamily: "SpaceGrotesk_700Bold" }]}>
                             {bs.block.startBeat + 1}-{Math.min(bs.block.endBeat + 1, beatsPerMeasure)}
                           </Text>
+                          <Text style={{ color: C.accent, fontSize: blockStarts.length > 1 ? 7 : 8, fontFamily: "SpaceGrotesk_700Bold", opacity: 0.7 }}>
+                            ×{bs.block.value}
+                          </Text>
                           {!isPlaying && (
-                            <Pressable onPress={() => removeLoopBlock(bs.index)} hitSlop={6}>
+                            <Pressable onPress={(e) => { e.stopPropagation(); removeLoopBlock(bs.index); }} hitSlop={6}>
                               <Ionicons name="close-circle" size={blockStarts.length > 1 ? 8 : 10} color={Colors.textTertiary} />
                             </Pressable>
                           )}
@@ -1103,7 +1146,12 @@ export function BeatIndicator({
                               {progressInfo.blockRepeatCurrent + 1}/{progressInfo.blockRepeatTotal}
                             </Text>
                           )}
-                        </View>
+                          {isPlaying && progressInfo && progressInfo.jumpSourceBlockIndex === bs.index && (progressInfo.jumpTotal ?? 0) > 1 && (
+                            <Text style={{ color: "#f0ad4e", fontSize: 7, fontFamily: "SpaceGrotesk_700Bold" }}>
+                              J{(progressInfo.jumpCurrent ?? 0) + 1}/{progressInfo.jumpTotal}
+                            </Text>
+                          )}
+                        </Pressable>
                       ))}
                     </View>
                   ) : isPrimary && blockMid ? (
@@ -1325,6 +1373,113 @@ export function BeatIndicator({
         </View>
       );
     };
+    const updateBlock = (index: number, changes: Partial<LoopBlock>) => {
+      const updated = loopBlocks.map((b, i) => i === index ? { ...b, ...changes } : b);
+      onLoopBlocksChange(updated);
+    };
+
+    const renderBlockInlineSettings = (blockIndex: number) => {
+      const block = loopBlocks[blockIndex];
+      if (!block) return null;
+      const otherBlocks = loopBlocks.map((b, i) => ({ b, i })).filter(({ i }) => i !== blockIndex);
+      const hasJump = block.jumpToBlock !== undefined && block.jumpToBlock !== null;
+      const jumpCount = block.jumpCount || 1;
+      return (
+        <View key={`block-settings-${blockIndex}`} style={{
+          backgroundColor: C.accent + "10",
+          borderRadius: 8,
+          marginHorizontal: 4,
+          marginTop: -4,
+          marginBottom: 8,
+          padding: 8,
+          borderWidth: 1,
+          borderColor: C.accent + "30",
+        }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+            <Text style={{ color: C.accent, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" }}>
+              Block {block.startBeat + 1}-{Math.min(block.endBeat + 1, beatsPerMeasure)}
+            </Text>
+            <Pressable onPress={() => setEditingBlockIndex(null)} hitSlop={8}>
+              <Ionicons name="chevron-up" size={14} color={Colors.textTertiary} />
+            </Pressable>
+          </View>
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <Text style={{ color: Colors.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Repeat</Text>
+            <Pressable
+              onPress={() => { if (block.value > 1) updateBlock(blockIndex, { value: block.value - 1 }); }}
+              style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
+            >
+              <Ionicons name="remove" size={14} color={C.accent} />
+            </Pressable>
+            <Text style={{ color: Colors.text, fontSize: 13, fontFamily: "SpaceGrotesk_700Bold", minWidth: 28, textAlign: "center" }}>
+              ×{block.value}
+            </Text>
+            <Pressable
+              onPress={() => { if (block.value < 16) updateBlock(blockIndex, { value: block.value + 1 }); }}
+              style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
+            >
+              <Ionicons name="add" size={14} color={C.accent} />
+            </Pressable>
+          </View>
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: hasJump ? 6 : 0 }}>
+            <Text style={{ color: Colors.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Jump to</Text>
+            <Pressable
+              onPress={() => {
+                if (hasJump) {
+                  updateBlock(blockIndex, { jumpToBlock: undefined, jumpCount: undefined });
+                }
+              }}
+              style={{
+                paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4,
+                backgroundColor: !hasJump ? C.accent + "30" : "transparent",
+                borderWidth: 1, borderColor: C.accent + "30",
+              }}
+            >
+              <Text style={{ color: !hasJump ? C.accent : Colors.textTertiary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium" }}>None</Text>
+            </Pressable>
+            {otherBlocks.map(({ b: ob, i: oi }) => (
+              <Pressable
+                key={oi}
+                onPress={() => updateBlock(blockIndex, { jumpToBlock: oi, jumpCount: jumpCount || 1 })}
+                style={{
+                  paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4,
+                  backgroundColor: block.jumpToBlock === oi ? C.accent + "30" : "transparent",
+                  borderWidth: 1, borderColor: C.accent + "30",
+                }}
+              >
+                <Text style={{ color: block.jumpToBlock === oi ? C.accent : Colors.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium" }}>
+                  {ob.startBeat + 1}-{Math.min(ob.endBeat + 1, beatsPerMeasure)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {hasJump && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={{ color: Colors.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Jump ×</Text>
+              <Pressable
+                onPress={() => { if (jumpCount > 1) updateBlock(blockIndex, { jumpCount: jumpCount - 1 }); }}
+                style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
+              >
+                <Ionicons name="remove" size={14} color="#f0ad4e" />
+              </Pressable>
+              <Text style={{ color: Colors.text, fontSize: 13, fontFamily: "SpaceGrotesk_700Bold", minWidth: 28, textAlign: "center" }}>
+                ×{jumpCount}
+              </Text>
+              <Pressable
+                onPress={() => { if (jumpCount < 16) updateBlock(blockIndex, { jumpCount: jumpCount + 1 }); }}
+                style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
+              >
+                <Ionicons name="add" size={14} color="#f0ad4e" />
+              </Pressable>
+            </View>
+          )}
+        </View>
+      );
+    };
+
     const allBarRows: React.ReactNode[] = [];
     if (isPlaying && barLoopMode !== "once") {
       for (let copy = 0; copy < NUM_COPIES; copy++) {
@@ -1335,6 +1490,12 @@ export function BeatIndicator({
     } else {
       for (const beat of beats) {
         allBarRows.push(renderBarRow(beat, 0));
+        if (!isPlaying && editingBlockIndex !== null) {
+          const block = loopBlocks[editingBlockIndex];
+          if (block && block.startBeat === beat) {
+            allBarRows.push(renderBlockInlineSettings(editingBlockIndex));
+          }
+        }
       }
     }
 
@@ -1396,7 +1557,71 @@ export function BeatIndicator({
             onScroll={(e) => onBarScrollOffset?.(e.nativeEvent.contentOffset.y)}
             scrollEventThrottle={16}
           >
-            <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>{allBarRows}</View>
+            <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>
+              {allBarRows}
+              {(() => {
+                const copies = (isPlaying && barLoopMode !== "once") ? [0, 1, 2] : [0];
+                return copies.flatMap((copyIdx) => {
+                  const isPrimaryCopy = isPlaying ? (barLoopMode === "once" ? copyIdx === 0 : copyIdx === CENTER_COPY) : copyIdx === 0;
+                  return jumpConnections.map((jc, jci) => {
+                    const copyOffset = copyIdx * copyHeight;
+                    const fromY = centerPad + copyOffset + jc.fromBeat * rowH + BAR_HEIGHT / 2;
+                    const toY = centerPad + copyOffset + jc.toBeat * rowH + BAR_HEIGHT / 2;
+                    const topY = Math.min(fromY, toY);
+                    const height = Math.abs(toY - fromY);
+                    const goesDown = toY > fromY;
+                    const isActiveJump = isPrimaryCopy && isPlaying && progressInfo && progressInfo.jumpSourceBlockIndex === jc.fromIndex && (progressInfo.jumpTotal ?? 0) > 0;
+                    const jumpProgressText = isActiveJump
+                      ? `${(progressInfo!.jumpCurrent ?? 0) + 1}/${progressInfo!.jumpTotal}`
+                      : `×${jc.jumpCount}`;
+                    return (
+                      <View key={`jump-${copyIdx}-${jci}`} pointerEvents="none" style={{
+                        position: "absolute",
+                        left: 0,
+                        top: topY,
+                        width: 22,
+                        height: Math.max(height, 1),
+                      }}>
+                        <View style={{
+                          position: "absolute",
+                          left: 2,
+                          top: 0,
+                          bottom: 0,
+                          width: 2,
+                          backgroundColor: "#f0ad4e",
+                          opacity: isActiveJump ? 1 : 0.6,
+                          borderRadius: 1,
+                        }} />
+                        <View style={{
+                          position: "absolute",
+                          left: 0,
+                          top: goesDown ? undefined : 0,
+                          bottom: goesDown ? 0 : undefined,
+                          width: 8,
+                          height: 8,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}>
+                          <Ionicons name={goesDown ? "caret-down" : "caret-up"} size={8} color="#f0ad4e" />
+                        </View>
+                        <View style={{
+                          position: "absolute",
+                          left: 6,
+                          top: height / 2 - 7,
+                          backgroundColor: Colors.background,
+                          paddingHorizontal: 2,
+                          borderRadius: 3,
+                        }}>
+                          <Text style={{ color: "#f0ad4e", fontSize: 7, fontFamily: "SpaceGrotesk_700Bold" }}>
+                            {jumpProgressText}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  });
+                });
+              })()}
+            </View>
           </ScrollView>
           <LinearGradient
             colors={[Colors.background, Colors.background, Colors.background + "80", "transparent"]}
