@@ -1115,16 +1115,9 @@ export function BeatIndicator({
                   ) : blockSelectStart === beat && !isPlaying ? (
                     <Ionicons name="locate" size={12} color={C.accent} />
                   ) : isPrimary && blockStarts.length > 0 ? (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-                      <Text style={[styles.barBeatLabelText, { color: C.accent, opacity: 1, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }]}>
-                        {blockStarts[0].block.startBeat + 1}-{Math.min(blockStarts[0].block.endBeat + 1, beatsPerMeasure)}
-                      </Text>
-                      {!isPlaying && (
-                        <Pressable onPress={(e) => { e.stopPropagation(); removeLoopBlock(blockStarts[0].index); }} hitSlop={6}>
-                          <Ionicons name="close-circle" size={10} color={Colors.textTertiary} style={{ opacity: 0.6 }} />
-                        </Pressable>
-                      )}
-                    </View>
+                    <Text style={[styles.barBeatLabelText, { color: C.accent, opacity: 1, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }]}>
+                      {blockStarts[0].block.startBeat + 1}-{Math.min(blockStarts[0].block.endBeat + 1, beatsPerMeasure)}
+                    </Text>
                   ) : isPrimary && blockMid ? (
                     <Text style={[styles.barBeatLabelText, { color: Colors.textTertiary, opacity: 0.3, fontSize: 9 }]}>
                       {beat + 1}
@@ -1492,9 +1485,18 @@ export function BeatIndicator({
                     <Text style={{ color: C.accent, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" }}>
                       Block {editBlock.startBeat + 1}-{Math.min(editBlock.endBeat + 1, beatsPerMeasure)}
                     </Text>
-                    <Pressable onPress={() => setEditingBlockIndex(null)} hitSlop={8}>
-                      <Ionicons name="close" size={14} color={Colors.textTertiary} />
-                    </Pressable>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <Pressable
+                        onPress={() => { setEditingBlockIndex(null); removeLoopBlock(editingBlockIndex!); }}
+                        hitSlop={8}
+                        style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+                      >
+                        <Ionicons name="trash-outline" size={12} color={Colors.danger} />
+                      </Pressable>
+                      <Pressable onPress={() => setEditingBlockIndex(null)} hitSlop={8}>
+                        <Ionicons name="close" size={14} color={Colors.textTertiary} />
+                      </Pressable>
+                    </View>
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
                     <Text style={{ color: Colors.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Repeat</Text>
