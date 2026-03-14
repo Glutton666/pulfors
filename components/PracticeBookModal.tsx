@@ -550,6 +550,7 @@ export function PracticeBookModal({
             data={entries}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
+            extraData={editingId}
             contentContainerStyle={styles.list}
             scrollEnabled={!!entries.length}
           />
