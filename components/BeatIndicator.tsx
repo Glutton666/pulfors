@@ -1562,17 +1562,44 @@ export function BeatIndicator({
                         {isActive && progressInfo!.blockRepeatTotal > 1 && ` ${progressInfo!.blockRepeatCurrent + 1}/${progressInfo!.blockRepeatTotal}`}
                       </Text>
                     </Pressable>
-                    {hasJump && jumpTarget && (
-                      <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 2 }}>
-                        <View style={{ width: 12, height: 1.5, backgroundColor: "#f0ad4e", marginRight: -1 }} />
-                        <Ionicons name="caret-forward" size={10} color="#f0ad4e" />
-                        <Text style={{ color: "#f0ad4e", fontSize: 8, fontFamily: "SpaceGrotesk_700Bold", marginLeft: 1 }}>
-                          {isPlaying && progressInfo && progressInfo.jumpSourceBlockIndex === origIndex && (progressInfo.jumpTotal ?? 0) > 0
-                            ? `${(progressInfo.jumpCurrent ?? 0) + 1}/${progressInfo.jumpTotal}`
-                            : `×${block.jumpCount || 1}`}
-                        </Text>
-                      </View>
-                    )}
+                    {hasJump && jumpTarget && (() => {
+                      const targetSortedIdx = sorted.findIndex(s => s.origIndex === block.jumpToBlock);
+                      const goesBack = targetSortedIdx >= 0 && targetSortedIdx <= si;
+                      const isActiveJump = isPlaying && progressInfo && progressInfo.jumpSourceBlockIndex === origIndex && (progressInfo.jumpTotal ?? 0) > 0;
+                      const jumpLabel = isActiveJump
+                        ? `${(progressInfo!.jumpCurrent ?? 0) + 1}/${progressInfo!.jumpTotal}`
+                        : `×${block.jumpCount || 1}`;
+                      return goesBack ? (
+                        <View style={{ alignItems: "center", marginLeft: 4, marginRight: 2 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center" }}>
+                            <Ionicons name="return-up-back" size={14} color="#f0ad4e" />
+                            <View style={{
+                              paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4,
+                              backgroundColor: isActiveJump ? "#f0ad4e30" : "#f0ad4e15",
+                              marginLeft: 2,
+                            }}>
+                              <Text style={{ color: "#f0ad4e", fontSize: 8, fontFamily: "SpaceGrotesk_700Bold" }}>
+                                → {jumpTarget.startBeat + 1}-{Math.min(jumpTarget.endBeat + 1, beatsPerMeasure)} {jumpLabel}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 2 }}>
+                          <View style={{ width: 10, height: 1.5, backgroundColor: "#f0ad4e" }} />
+                          <Ionicons name="caret-forward" size={10} color="#f0ad4e" style={{ marginLeft: -2 }} />
+                          <View style={{
+                            paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4,
+                            backgroundColor: isActiveJump ? "#f0ad4e30" : "#f0ad4e15",
+                            marginLeft: 2,
+                          }}>
+                            <Text style={{ color: "#f0ad4e", fontSize: 8, fontFamily: "SpaceGrotesk_700Bold" }}>
+                              {jumpTarget.startBeat + 1}-{Math.min(jumpTarget.endBeat + 1, beatsPerMeasure)} {jumpLabel}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })()}
                     {si < sorted.length - 1 && !hasJump && (
                       <Ionicons name="chevron-forward" size={10} color={Colors.textTertiary} style={{ marginLeft: 2, opacity: 0.4 }} />
                     )}
