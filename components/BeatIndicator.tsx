@@ -898,16 +898,10 @@ export function BeatIndicator({
         setBlockSelectStart(null);
         return;
       }
-      const crosses = loopBlocks.some((b) => {
-        const bS = b.startBeat;
-        const bE = b.endBeat;
-        const newInside = start >= bS && start <= bE;
-        const newOutside = end > bE;
-        const newInsideEnd = end >= bS && end <= bE;
-        const newOutsideStart = start < bS;
-        return (newInside && newOutside) || (newInsideEnd && newOutsideStart);
+      const overlaps = loopBlocks.some((b) => {
+        return !(end < b.startBeat || start > b.endBeat);
       });
-      if (crosses) {
+      if (overlaps) {
         if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         setBlockSelectStart(null);
         return;
@@ -1038,63 +1032,97 @@ export function BeatIndicator({
             isPrimary && isDropTarget && { backgroundColor: "rgba(255,255,255,0.06)", borderColor: C.accent, borderWidth: 1, borderRadius: 4, marginHorizontal: -1 },
           ]}
         >
-          {isPrimary && beatBlocks.map((bb, bbi) => (
-            <View key={`bracket-${bbi}`} style={{
-              position: "absolute",
-              left: bbi * 5,
-              top: bb.isFirst ? "50%" : 0,
-              bottom: bb.isLast ? "50%" : 0,
-              width: 3,
-              backgroundColor: C.accent,
-              borderTopLeftRadius: bb.isFirst ? 3 : 0,
-              borderTopRightRadius: bb.isFirst ? 3 : 0,
-              borderBottomLeftRadius: bb.isLast ? 3 : 0,
-              borderBottomRightRadius: bb.isLast ? 3 : 0,
-              zIndex: 10,
-              opacity: 0.7 + 0.3 / (bbi + 1),
-            }} />
-          ))}
-          <Pressable
-            style={[
-              styles.barBeatLabel,
-              barStartBeat === beat && !isPlaying && { backgroundColor: C.accent + "30", borderRadius: 4 },
-              blockSelectStart === beat && !isPlaying && { backgroundColor: C.accent + "50", borderRadius: 4 },
-              blockSelectStart !== null && blockSelectStart !== beat && !isPlaying && { borderColor: C.accent + "40", borderWidth: 1, borderRadius: 4 },
-            ]}
-            onPressIn={() => { barLongPressedRef.current = false; }}
-            onPress={() => {
-              if (barLongPressedRef.current) return;
-              if (isPrimary && !isPlaying && onBarStartBeatSelect) {
-                onBarStartBeatSelect(barStartBeat === beat ? null : beat);
-                if (Platform.OS !== "web") Haptics.selectionAsync();
-              } else if (isPrimary) {
-                cycleBeatType(beat);
-              }
-            }}
-            onLongPress={() => {
-              if (isPrimary) handleBarNumberLongPress(beat);
-            }}
-            delayLongPress={300}
-          >
-            {barStartBeat === beat && !isPlaying ? (
-              <Ionicons name="play" size={12} color={C.accent} style={{ marginLeft: 1 }} />
-            ) : blockSelectStart === beat && !isPlaying ? (
-              <Ionicons name="locate" size={12} color={C.accent} />
-            ) : (
-              <Text style={[
-                styles.barBeatLabelText,
-                {
-                  color: bType === "strong" ? C.accent
-                    : bType === "accent" ? C.accentMuted
-                    : bType === "mute" ? Colors.textTertiary
-                    : Colors.textSecondary,
-                  opacity: isCurrent ? 1 : 0.6,
-                }
-              ]}>
-                {beat + 1}
-              </Text>
-            )}
-          </Pressable>
+          {(() => {
+            const blockStart = isPrimary ? beatBlocks.find((bb) => bb.isFirst) : null;
+            const blockMid = isPrimary && beatBlocks.length > 0 && !beatBlocks.some((bb) => bb.isFirst);
+            const blockEnd = isPrimary ? beatBlocks.find((bb) => bb.isLast) : null;
+            const inBlock = beatBlocks.length > 0;
+            return (
+              <>
+                {isPrimary && inBlock && (
+                  <View style={{
+                    position: "absolute",
+                    left: 8,
+                    top: blockStart ? "50%" : 0,
+                    bottom: blockEnd && !blockStart ? "50%" : blockEnd ? undefined : 0,
+                    height: blockStart && blockEnd ? "50%" : undefined,
+                    width: 2,
+                    backgroundColor: C.accent,
+                    borderTopLeftRadius: blockStart ? 2 : 0,
+                    borderTopRightRadius: blockStart ? 2 : 0,
+                    borderBottomLeftRadius: blockEnd ? 2 : 0,
+                    borderBottomRightRadius: blockEnd ? 2 : 0,
+                    zIndex: 10,
+                    opacity: 0.8,
+                  }} />
+                )}
+                <Pressable
+                  style={[
+                    styles.barBeatLabel,
+                    barStartBeat === beat && !isPlaying && { backgroundColor: C.accent + "30", borderRadius: 4 },
+                    blockSelectStart === beat && !isPlaying && { backgroundColor: C.accent + "50", borderRadius: 4 },
+                    blockSelectStart !== null && blockSelectStart !== beat && !isPlaying && { borderColor: C.accent + "40", borderWidth: 1, borderRadius: 4 },
+                    isPrimary && blockStart && { minWidth: 28, paddingHorizontal: 2 },
+                  ]}
+                  onPressIn={() => { barLongPressedRef.current = false; }}
+                  onPress={() => {
+                    if (barLongPressedRef.current) return;
+                    if (isPrimary && !isPlaying && onBarStartBeatSelect) {
+                      onBarStartBeatSelect(barStartBeat === beat ? null : beat);
+                      if (Platform.OS !== "web") Haptics.selectionAsync();
+                    } else if (isPrimary) {
+                      cycleBeatType(beat);
+                    }
+                  }}
+                  onLongPress={() => {
+                    if (isPrimary) handleBarNumberLongPress(beat);
+                  }}
+                  delayLongPress={300}
+                >
+                  {barStartBeat === beat && !isPlaying ? (
+                    <Ionicons name="play" size={12} color={C.accent} style={{ marginLeft: 1 }} />
+                  ) : blockSelectStart === beat && !isPlaying ? (
+                    <Ionicons name="locate" size={12} color={C.accent} />
+                  ) : isPrimary && blockStart ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 1 }}>
+                      <Text style={[styles.barBeatLabelText, { color: C.accent, opacity: 1, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }]}>
+                        {blockStart.block.startBeat + 1}-{Math.min(blockStart.block.endBeat + 1, beatsPerMeasure)}
+                      </Text>
+                      {!isPlaying && (
+                        <Pressable
+                          onPress={() => removeLoopBlock(blockStart.index)}
+                          hitSlop={6}
+                          style={{ marginLeft: 0 }}
+                        >
+                          <Ionicons name="close-circle" size={10} color={Colors.textTertiary} />
+                        </Pressable>
+                      )}
+                      {isPlaying && progressInfo && progressInfo.blockIndex === blockStart.index && progressInfo.blockRepeatTotal > 1 && (
+                        <Text style={{ color: C.accent, fontSize: 7, fontFamily: "SpaceGrotesk_700Bold" }}>
+                          {progressInfo.blockRepeatCurrent + 1}/{progressInfo.blockRepeatTotal}
+                        </Text>
+                      )}
+                    </View>
+                  ) : isPrimary && blockMid ? (
+                    <View style={{ width: 6 }} />
+                  ) : (
+                    <Text style={[
+                      styles.barBeatLabelText,
+                      {
+                        color: bType === "strong" ? C.accent
+                          : bType === "accent" ? C.accentMuted
+                          : bType === "mute" ? Colors.textTertiary
+                          : Colors.textSecondary,
+                        opacity: isCurrent ? 1 : 0.6,
+                      }
+                    ]}>
+                      {beat + 1}
+                    </Text>
+                  )}
+                </Pressable>
+              </>
+            );
+          })()}
           <View style={[
             styles.barBeatContent,
             { height: BAR_HEIGHT },
@@ -1347,52 +1375,6 @@ export function BeatIndicator({
             <Pressable onPress={() => setBlockSelectStart(null)} hitSlop={8}>
               <Ionicons name="close-circle" size={14} color={Colors.textTertiary} />
             </Pressable>
-          </View>
-        )}
-
-        {loopBlocks.length > 0 && (
-          <View style={{ paddingHorizontal: 12, paddingBottom: 4 }}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 4 }}>
-                {loopBlocks.map((block, idx) => (
-                  <Pressable
-                    key={idx}
-                    onPress={() => setEditingBlockIndex(editingBlockIndex === idx ? null : idx)}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 4,
-                      paddingVertical: 3,
-                      paddingHorizontal: 7,
-                      backgroundColor: editingBlockIndex === idx ? C.accent + "25" : "rgba(255,255,255,0.08)",
-                      borderRadius: 6,
-                      borderWidth: 1,
-                      borderColor: editingBlockIndex === idx ? C.accent + "60" : "transparent",
-                    }}
-                  >
-                    <View style={{ width: 2, height: 12, backgroundColor: C.accent, borderRadius: 1 }} />
-                    <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: 10, color: Colors.text }}>
-                      {block.startBeat + 1}-{Math.min(block.endBeat + 1, beatsPerMeasure)}
-                    </Text>
-                    <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: 10, color: C.accent }}>
-                      ×{block.value}
-                    </Text>
-                    {isPlaying && progressInfo && progressInfo.blockIndex === idx && progressInfo.blockRepeatTotal > 1 && (
-                      <View style={{ backgroundColor: C.accent, borderRadius: 3, paddingHorizontal: 3, paddingVertical: 1 }}>
-                        <Text style={{ color: Colors.white, fontSize: 8, fontWeight: "800" }}>
-                          {progressInfo.blockRepeatCurrent + 1}/{progressInfo.blockRepeatTotal}
-                        </Text>
-                      </View>
-                    )}
-                    {!isPlaying && (
-                      <Pressable onPress={() => removeLoopBlock(idx)} hitSlop={6} style={{ marginLeft: -2 }}>
-                        <Ionicons name="close-circle" size={12} color={Colors.textTertiary} />
-                      </Pressable>
-                    )}
-                  </Pressable>
-                ))}
-              </View>
-            </ScrollView>
           </View>
         )}
 
