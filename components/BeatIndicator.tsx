@@ -1115,7 +1115,7 @@ export function BeatIndicator({
             const blockMid = isPrimary && beatBlocks.length > 0 && blockStarts.length === 0;
             const inBlock = isPrimary && beatBlocks.length > 0;
             const maxDepth = isPrimary ? Math.max(0, ...beatBlocks.map(bb => blockDepths.get(bb.index) || 0)) : 0;
-            const leftPad = inBlock ? 6 + maxDepth * 6 : 0;
+            const leftPad = inBlock ? 10 + maxDepth * 10 : 0;
             return (
               <>
                 <Pressable
@@ -1146,8 +1146,8 @@ export function BeatIndicator({
                   ) : blockSelectStart === beat && !isPlaying ? (
                     <Ionicons name="locate" size={12} color={C.accent} />
                   ) : isPrimary && blockStarts.length > 0 ? (
-                    <Text style={[styles.barBeatLabelText, { color: C.accent, opacity: 1, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }]}>
-                      {blockStarts[0].block.startBeat + 1}-{Math.min(blockStarts[0].block.endBeat + 1, beatsPerMeasure)}
+                    <Text style={[styles.barBeatLabelText, { color: C.accent, opacity: 0.9, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" }]}>
+                      {beat + 1}
                     </Text>
                   ) : isPrimary && blockMid ? (
                     <Text style={[styles.barBeatLabelText, { color: Colors.textTertiary, opacity: 0.3, fontSize: 9 }]}>
@@ -1668,93 +1668,69 @@ export function BeatIndicator({
               {loopBlocks.length > 0 && (() => {
                 const copies = isPlaying && barLoopMode !== "once" ? NUM_COPIES : 1;
                 const primaryCopy = isPlaying && barLoopMode !== "once" ? CENTER_COPY : 0;
-                const labelText = (block: LoopBlock) => block.startBeat === block.endBeat ? `${block.startBeat + 1}` : `${block.startBeat + 1}-${Math.min(block.endBeat + 1, beatsPerMeasure)}`;
-                const labelFontSize = (depth: number) => Math.max(7, 9 - depth);
-                const labelH = 12;
-                const labelGap = 4;
+                const BLOCK_INDENT = 10;
+                const LINE_BASE_LEFT = 3;
 
                 return loopBlocks.map((block, idx) => {
                   const depth = blockDepths.get(idx) || 0;
-                  const lineWidth = Math.max(1.5, 3 - depth * 0.5);
-                  const lineLeft = 2 + depth * 7;
-                  const lineOpacity = Math.max(0.25, 0.6 - depth * 0.15);
+                  const lineWidth = Math.max(2, 3 - depth * 0.5);
+                  const lineLeft = LINE_BASE_LEFT + depth * BLOCK_INDENT;
+                  const lineOpacity = Math.max(0.3, 0.7 - depth * 0.15);
                   const startBeat = block.startBeat;
                   const endBeat = Math.min(block.endBeat, beatsPerMeasure - 1);
-                  const fSize = labelFontSize(depth);
                   const isEditing = editingBlockIndex === idx;
                   const isActive = isPlaying && progressInfo && progressInfo.blockIndex === idx;
-                  const text = labelText(block);
+                  const isSingleBeat = startBeat === endBeat;
+                  const bracketW = 5;
 
                   const elements: React.ReactNode[] = [];
                   for (let copy = 0; copy < copies; copy++) {
                     const copyOffset = copy * copyHeight;
-                    const topPos = centerPad + copyOffset + startBeat * rowH + 4;
-                    const bottomPos = centerPad + copyOffset + endBeat * rowH + BAR_HEIGHT - 4;
+                    const topPos = centerPad + copyOffset + startBeat * rowH + (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
+                    const bottomPos = centerPad + copyOffset + endBeat * rowH + BAR_HEIGHT - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
                     const totalH = bottomPos - topPos;
                     if (totalH <= 0) continue;
-                    const midY = topPos + totalH / 2;
                     const isPrimaryCopy = copy === primaryCopy;
                     const copyOp = isPrimaryCopy ? 1 : 0.3;
-                    const lineOp = (isActive ? 0.9 : isEditing ? 0.8 : lineOpacity) * copyOp;
-
-                    const gapTop = midY - labelH / 2 - labelGap;
-                    const gapBottom = midY + labelH / 2 + labelGap;
-                    const upperH = Math.max(0, gapTop - topPos);
-                    const lowerH = Math.max(0, bottomPos - gapBottom);
+                    const lineOp = (isActive ? 0.95 : isEditing ? 0.85 : lineOpacity) * copyOp;
 
                     elements.push(
                       <React.Fragment key={`blk-${idx}-c${copy}`}>
-                        {upperH > 0 && (
-                          <View pointerEvents="none" style={{
-                            position: "absolute",
-                            left: lineLeft,
-                            top: topPos,
-                            width: lineWidth,
-                            height: upperH,
-                            backgroundColor: C.accent,
-                            borderTopLeftRadius: lineWidth / 2,
-                            borderTopRightRadius: lineWidth / 2,
-                            opacity: lineOp,
-                            zIndex: 10 + depth,
-                          }} />
-                        )}
-                        {lowerH > 0 && (
-                          <View pointerEvents="none" style={{
-                            position: "absolute",
-                            left: lineLeft,
-                            top: gapBottom,
-                            width: lineWidth,
-                            height: lowerH,
-                            backgroundColor: C.accent,
-                            borderBottomLeftRadius: lineWidth / 2,
-                            borderBottomRightRadius: lineWidth / 2,
-                            opacity: lineOp,
-                            zIndex: 10 + depth,
-                          }} />
-                        )}
-                        {isPrimaryCopy && (
-                          <View pointerEvents="none" style={{
-                            position: "absolute",
-                            left: lineLeft + lineWidth / 2,
-                            top: midY - labelH / 2,
-                            height: labelH,
-                            transform: [{ translateX: -1 }],
-                            paddingHorizontal: 2,
-                            alignItems: "center",
-                            justifyContent: "center",
-                            zIndex: 12 + depth,
-                          }}>
-                            <Text style={{
-                              color: isActive ? C.accent : isEditing ? C.accent : C.accent,
-                              opacity: isActive ? 1 : isEditing ? 0.9 : 0.7,
-                              fontSize: fSize,
-                              fontFamily: "SpaceGrotesk_700Bold",
-                              lineHeight: labelH,
-                            }}>
-                              {text}
-                            </Text>
-                          </View>
-                        )}
+                        <View pointerEvents="none" style={{
+                          position: "absolute",
+                          left: lineLeft,
+                          top: topPos,
+                          width: lineWidth,
+                          height: totalH,
+                          backgroundColor: C.accent,
+                          borderRadius: lineWidth / 2,
+                          opacity: lineOp,
+                          zIndex: 10 + depth,
+                        }} />
+                        <View pointerEvents="none" style={{
+                          position: "absolute",
+                          left: lineLeft,
+                          top: topPos,
+                          width: bracketW,
+                          height: lineWidth,
+                          backgroundColor: C.accent,
+                          borderTopLeftRadius: lineWidth / 2,
+                          borderTopRightRadius: lineWidth / 2,
+                          opacity: lineOp,
+                          zIndex: 10 + depth,
+                        }} />
+                        <View pointerEvents="none" style={{
+                          position: "absolute",
+                          left: lineLeft,
+                          top: bottomPos - lineWidth,
+                          width: bracketW,
+                          height: lineWidth,
+                          backgroundColor: C.accent,
+                          borderBottomLeftRadius: lineWidth / 2,
+                          borderBottomRightRadius: lineWidth / 2,
+                          opacity: lineOp,
+                          zIndex: 10 + depth,
+                        }} />
                       </React.Fragment>
                     );
                   }
