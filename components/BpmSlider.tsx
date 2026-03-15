@@ -25,11 +25,13 @@ interface BpmSliderProps {
   bpm: number;
   onBpmChange: (bpm: number) => void;
   onTapTempo: () => void;
+  halfTime?: boolean;
+  onHalfTimeToggle?: () => void;
 }
 
 type Zone = "left" | "center" | "right";
 
-export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
+export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeToggle }: BpmSliderProps) {
   const { colors: C } = useTheme();
   const bpmRef = useRef(bpm);
   const startBpmRef = useRef(bpm);
@@ -47,6 +49,8 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
   useEffect(() => { onBpmChangeRef.current = onBpmChange; }, [onBpmChange]);
   useEffect(() => { onTapTempoRef.current = onTapTempo; }, [onTapTempo]);
+  const onHalfTimeToggleRef = useRef(onHalfTimeToggle);
+  useEffect(() => { onHalfTimeToggleRef.current = onHalfTimeToggle; }, [onHalfTimeToggle]);
 
   const offsetX = useSharedValue(0);
   const flash = useSharedValue(0);
@@ -118,7 +122,15 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
 
         const zone = resolveZone(e.nativeEvent.pageX);
         zoneRef.current = zone;
-        if (zone !== "center") beginLongPress(zone);
+        if (zone !== "center") {
+          beginLongPress(zone);
+        } else {
+          longPressTimer.current = setTimeout(() => {
+            longPressFired.current = true;
+            if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            onHalfTimeToggleRef.current?.();
+          }, 500);
+        }
       },
 
       onPanResponderMove: (_, gs) => {
@@ -190,7 +202,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
         onLayout={() => measureLayout()}
         {...panResponder.panHandlers}
       >
-        <Animated.View style={[styles.card, bodyStyle]} testID="bpm-slider">
+        <Animated.View style={[styles.card, bodyStyle, halfTime && { borderColor: C.accent + "80" }]} testID="bpm-slider">
           <Animated.View style={[styles.flashOverlay, flashStyle, { backgroundColor: C.accent }]} />
           <Animated.View style={[styles.glowLeft, leftGlowStyle]}>
             <LinearGradient
@@ -218,7 +230,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo }: BpmSliderProps) {
             <Feather name="minus" size={24} color={Colors.textSecondary} style={styles.bpmIcon} />
             <View style={styles.bpmContent}>
               <Text style={styles.bpmValue} testID="bpm-display">{bpm}</Text>
-              <Text style={styles.bpmUnit}>BPM</Text>
+              <Text style={[styles.bpmUnit, halfTime && { color: C.accent }]}>{halfTime ? "½× BPM" : "BPM"}</Text>
             </View>
             <Feather name="plus" size={24} color={Colors.textSecondary} style={styles.bpmIcon} />
           </View>

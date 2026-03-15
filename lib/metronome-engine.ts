@@ -64,6 +64,7 @@ export class MetronomeEngine {
   private rafId: number | null = null;
   private isRunning = false;
   private bpm = 120;
+  private halfTime = false;
   private beatsPerMeasure = 4;
   private currentBeat = 0;
   private currentSubBeat = 0;
@@ -364,9 +365,22 @@ export class MetronomeEngine {
     return custom;
   }
 
+  setHalfTime(enabled: boolean) {
+    this.halfTime = enabled;
+    this.invalidateScheduleCache();
+    if (this.isRunning) {
+      this.rebuildSchedule();
+    }
+  }
+
+  getHalfTime() {
+    return this.halfTime;
+  }
+
   private getBeatDur(beat: number): number {
     const bpm = this.barBpmOverrides.get(beat) ?? this.bpm;
-    return 60000 / bpm;
+    const effectiveBpm = this.halfTime ? bpm / 2 : bpm;
+    return 60000 / effectiveBpm;
   }
 
   private buildSchedule(): ScheduledTick[] {

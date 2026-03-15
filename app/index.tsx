@@ -104,6 +104,7 @@ export default function MetronomeScreen() {
   useEffect(() => { languageRef.current = language; }, [language]);
 
   const [bpm, setBpm] = useState(120);
+  const [halfTime, setHalfTime] = useState(false);
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
   const [isPlaying, setIsPlaying] = useState(false);
@@ -257,9 +258,13 @@ export default function MetronomeScreen() {
   useEffect(() => { allPlayersRef.current = allPlayers; }, [allPlayers]);
 
   const flashOpacity = useSharedValue(0);
+  const halfTimeFlash = useSharedValue(0);
 
   const flashStyle = useAnimatedStyle(() => ({
     opacity: flashOpacity.value,
+  }));
+  const halfTimeFlashStyle = useAnimatedStyle(() => ({
+    opacity: halfTimeFlash.value,
   }));
 
   useEffect(() => {
@@ -1249,6 +1254,18 @@ export default function MetronomeScreen() {
     },
     [persistSettings, scheduleReRender]
   );
+
+  const toggleHalfTime = useCallback(() => {
+    setHalfTime((prev) => {
+      const next = !prev;
+      engineRef.current?.setHalfTime(next);
+      halfTimeFlash.value = withSequence(
+        withTiming(next ? 0.25 : 0.15, { duration: 80 }),
+        withTiming(0, { duration: 600, easing: Easing.out(Easing.quad) })
+      );
+      return next;
+    });
+  }, []);
 
   const updateTimeSignature = useCallback(
     (beats: number) => {
@@ -2441,6 +2458,18 @@ export default function MetronomeScreen() {
         ]}
       />
 
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: halfTime ? C.accent : Colors.text,
+            pointerEvents: "none" as const,
+            zIndex: 9999,
+          },
+          halfTimeFlashStyle,
+        ]}
+      />
+
       <Pressable
         style={[
           styles.menuButton,
@@ -2747,6 +2776,8 @@ export default function MetronomeScreen() {
             bpm={bpm}
             onBpmChange={updateBpm}
             onTapTempo={handleTapTempo}
+            halfTime={halfTime}
+            onHalfTimeToggle={toggleHalfTime}
           />
         </View>
       </View>
