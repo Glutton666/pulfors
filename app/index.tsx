@@ -105,6 +105,7 @@ export default function MetronomeScreen() {
 
   const [bpm, setBpm] = useState(120);
   const [halfTime, setHalfTime] = useState(false);
+  const [halfTimeLabel, setHalfTimeLabel] = useState("");
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1255,14 +1256,21 @@ export default function MetronomeScreen() {
     [persistSettings, scheduleReRender]
   );
 
+  const halfTimeLabelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toggleHalfTime = useCallback(() => {
     setHalfTime((prev) => {
       const next = !prev;
       engineRef.current?.setHalfTime(next);
       halfTimeFlash.value = withSequence(
-        withTiming(next ? 0.25 : 0.15, { duration: 80 }),
-        withTiming(0, { duration: 600, easing: Easing.out(Easing.quad) })
+        withTiming(next ? 0.35 : 0.2, { duration: 100 }),
+        withTiming(0, { duration: 800, easing: Easing.out(Easing.quad) })
       );
+      setHalfTimeLabel(next ? "1/2" : "1/1");
+      if (halfTimeLabelTimer.current) clearTimeout(halfTimeLabelTimer.current);
+      halfTimeLabelTimer.current = setTimeout(() => {
+        setHalfTimeLabel("");
+        halfTimeLabelTimer.current = null;
+      }, 900);
       return next;
     });
   }, []);
@@ -2465,10 +2473,23 @@ export default function MetronomeScreen() {
             backgroundColor: halfTime ? C.accent : Colors.text,
             pointerEvents: "none" as const,
             zIndex: 9999,
+            alignItems: "center",
+            justifyContent: "center",
           },
           halfTimeFlashStyle,
         ]}
-      />
+      >
+        {halfTimeLabel !== "" && (
+          <Text style={{
+            fontFamily: "SpaceGrotesk_700Bold",
+            fontSize: 96,
+            color: Colors.background,
+            letterSpacing: 4,
+          }}>
+            {halfTimeLabel}
+          </Text>
+        )}
+      </Animated.View>
 
       <Pressable
         style={[

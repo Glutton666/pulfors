@@ -137,8 +137,14 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
         if (Math.abs(gs.dx) > 5) {
           didDragRef.current = true;
           if (zoneRef.current !== "center") { clearTimers(); return; }
+          if (longPressTimer.current && !longPressFired.current) {
+            clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+          }
+          if (longPressFired.current) return;
         }
         if (zoneRef.current !== "center") return;
+        if (longPressFired.current) return;
 
         const delta = gs.dx * 0.4;
         const next = Math.max(20, Math.min(300, Math.round(startBpmRef.current + delta)));
