@@ -2257,13 +2257,6 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     opacity: 0.15,
   },
-  digitalSignatureSlash: {
-    fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: moderateScale(70, 0.4),
-    color: Colors.textTertiary,
-    opacity: 0.15,
-    marginHorizontal: -2,
-  },
   centerImageContainer: {
     position: "absolute",
     width: moderateScale(130),

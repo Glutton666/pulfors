@@ -15,7 +15,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useAudioPlayer } from "expo-audio";
 import { Audio, InterruptionModeIOS } from "expo-av";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import {

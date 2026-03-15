@@ -7,6 +7,8 @@ import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { setAudioModeAsync } from "expo-audio";
+import { configureReanimatedLogger, ReanimatedLogLevel } from "react-native-reanimated";
+
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { ThemeProvider } from "@/contexts/ThemeContext";
@@ -21,6 +23,7 @@ import {
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 
 SplashScreen.preventAutoHideAsync();
+configureReanimatedLogger({ level: ReanimatedLogLevel.warn, strict: false });
 
 function RootLayoutNav() {
   return (
