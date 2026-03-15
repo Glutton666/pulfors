@@ -668,6 +668,7 @@ export function BeatIndicator({
   }, [isPlaying, beatSubdivisions, onBeatSubdivisionChange, cycleBeatType]);
 
   const barScrollRef = useRef<ScrollView>(null);
+  const barScrollYRef = useRef(0);
   const [barElapsedSec, setBarElapsedSec] = useState(0);
   const barStartTimeRef = useRef(0);
   const [barClockMode, setBarClockModeRaw] = useState<"stopwatch" | "timer">(initialBarClockMode || "stopwatch");
@@ -917,10 +918,6 @@ export function BeatIndicator({
     } else {
       const start = Math.min(blockSelectStart, beat);
       const end = Math.max(blockSelectStart, beat);
-      if (start === end) {
-        setBlockSelectStart(null);
-        return;
-      }
       const crosses = loopBlocks.some((b) => {
         const newContainsOld = start <= b.startBeat && end >= b.endBeat;
         const oldContainsNew = b.startBeat <= start && b.endBeat >= end;
@@ -933,9 +930,13 @@ export function BeatIndicator({
         setBlockSelectStart(null);
         return;
       }
+      const savedY = barScrollYRef.current;
       const newBlock: LoopBlock = { startBeat: start, endBeat: end, type: "count", value: 2 };
       onLoopBlocksChange([...loopBlocks, newBlock]);
       setBlockSelectStart(null);
+      requestAnimationFrame(() => {
+        barScrollRef.current?.scrollTo({ y: savedY, animated: false });
+      });
     }
   }, [isPlaying, blockSelectStart, loopBlocks, onLoopBlocksChange]);
 
@@ -1640,7 +1641,7 @@ export function BeatIndicator({
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 4, gap: 6 }}>
             <Ionicons name="locate" size={12} color={C.accent} />
             <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: 11, color: C.accent }}>
-              Bar {blockSelectStart + 1} selected — long press another bar to create block
+              Bar {blockSelectStart + 1} selected — long press same or another bar to create block
             </Text>
             <Pressable onPress={() => setBlockSelectStart(null)} hitSlop={8}>
               <Ionicons name="close-circle" size={14} color={Colors.textTertiary} />
@@ -1659,7 +1660,7 @@ export function BeatIndicator({
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
             scrollEnabled={!isPlaying}
-            onScroll={(e) => onBarScrollOffset?.(e.nativeEvent.contentOffset.y)}
+            onScroll={(e) => { barScrollYRef.current = e.nativeEvent.contentOffset.y; onBarScrollOffset?.(e.nativeEvent.contentOffset.y); }}
             scrollEventThrottle={16}
           >
             <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>
@@ -1667,7 +1668,7 @@ export function BeatIndicator({
               {loopBlocks.length > 0 && (() => {
                 const copies = isPlaying && barLoopMode !== "once" ? NUM_COPIES : 1;
                 const primaryCopy = isPlaying && barLoopMode !== "once" ? CENTER_COPY : 0;
-                const labelText = (block: LoopBlock) => `${block.startBeat + 1}-${Math.min(block.endBeat + 1, beatsPerMeasure)}`;
+                const labelText = (block: LoopBlock) => block.startBeat === block.endBeat ? `${block.startBeat + 1}` : `${block.startBeat + 1}-${Math.min(block.endBeat + 1, beatsPerMeasure)}`;
                 const labelFontSize = (depth: number) => Math.max(7, 9 - depth);
                 const labelH = 12;
                 const labelGap = 4;
