@@ -298,7 +298,7 @@ interface BeatIndicatorProps {
   progressInfo?: { beat: number; barRepeatCurrent: number; barRepeatTotal: number; blockIndex: number; blockRepeatCurrent: number; blockRepeatTotal: number; jumpCurrent?: number; jumpTotal?: number; jumpSourceBlockIndex?: number } | null;
   measureCount?: number;
   onBarReset?: () => void;
-  halfTimeLabel?: string;
+  halfTime?: boolean;
 }
 
 export function BeatIndicator({
@@ -2157,9 +2157,9 @@ export function BeatIndicator({
           })()}
 
           <View style={styles.signatureRow} pointerEvents="none">
-            {halfTimeLabel ? (
+            {halfTime ? (
               <Text style={[styles.digitalSignature, { fontSize: moderateScale(28, 0.3), color: C.accent }]} numberOfLines={1}>
-                {halfTimeLabel}
+                1/2
               </Text>
             ) : (
               <>
