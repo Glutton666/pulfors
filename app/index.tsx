@@ -105,7 +105,6 @@ export default function MetronomeScreen() {
 
   const [bpm, setBpm] = useState(120);
   const [halfTime, setHalfTime] = useState(false);
-  const [halfTimeLabel, setHalfTimeLabel] = useState("");
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1256,26 +1255,14 @@ export default function MetronomeScreen() {
     [persistSettings, scheduleReRender]
   );
 
-  const halfTimeLabelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const barModeRef2 = useRef(barMode);
-  useEffect(() => { barModeRef2.current = barMode; }, [barMode]);
   const toggleHalfTime = useCallback(() => {
     setHalfTime((prev) => {
       const next = !prev;
       engineRef.current?.setHalfTime(next);
-      const label = next ? "1/2" : "1/1";
-      if (barModeRef2.current) {
-        halfTimeFlash.value = withSequence(
-          withTiming(next ? 0.35 : 0.2, { duration: 100 }),
-          withTiming(0, { duration: 800, easing: Easing.out(Easing.quad) })
-        );
-      }
-      setHalfTimeLabel(label);
-      if (halfTimeLabelTimer.current) clearTimeout(halfTimeLabelTimer.current);
-      halfTimeLabelTimer.current = setTimeout(() => {
-        setHalfTimeLabel("");
-        halfTimeLabelTimer.current = null;
-      }, 1200);
+      halfTimeFlash.value = withSequence(
+        withTiming(next ? 0.35 : 0.2, { duration: 100 }),
+        withTiming(0, { duration: 800, easing: Easing.out(Easing.quad) })
+      );
       return next;
     });
   }, []);
@@ -2484,16 +2471,14 @@ export default function MetronomeScreen() {
           halfTimeFlashStyle,
         ]}
       >
-        {halfTimeLabel !== "" && barMode && (
-          <Text style={{
-            fontFamily: "SpaceGrotesk_700Bold",
-            fontSize: 96,
-            color: Colors.background,
-            letterSpacing: 4,
-          }}>
-            {halfTimeLabel}
-          </Text>
-        )}
+        <Text style={{
+          fontFamily: "SpaceGrotesk_700Bold",
+          fontSize: 96,
+          color: Colors.background,
+          letterSpacing: 4,
+        }}>
+          {halfTime ? "1/2" : "1/1"}
+        </Text>
       </Animated.View>
 
       <Pressable
@@ -2767,7 +2752,7 @@ export default function MetronomeScreen() {
             onBarReset={handleBarReset}
             onBarQuickSave={handleBarQuickSave}
             onResetFlash={handleResetFlash}
-            halfTimeLabel={!barMode ? halfTimeLabel : undefined}
+            halfTime={halfTime}
             subdivisionBarElement={barMode ? (
               <SubdivisionBar
                 pattern={subdivisionPattern}
