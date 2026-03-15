@@ -504,6 +504,8 @@ export class MetronomeEngine {
       }
     };
 
+    const jumpProcessed = new Set<number>();
+
     const processBlock = (blockIdx: number, jumpVisited: Set<number>) => {
       if (jumpVisited.has(blockIdx) || blockIdx < 0 || blockIdx >= sortedBlocks.length) return;
       jumpVisited.add(blockIdx);
@@ -540,6 +542,7 @@ export class MetronomeEngine {
           currentJumpIteration = prevJumpIteration;
           currentJumpTotal = prevJumpTotal;
           currentJumpSourceBlockIndex = prevJumpSource;
+          jumpProcessed.add(jumpSortedIdx);
         }
       }
     };
@@ -568,10 +571,10 @@ export class MetronomeEngine {
         const candidates = startBeatToBlocks.get(beat);
         if (candidates) {
           for (const idx of candidates) {
-            if (!processed.has(idx)) {
+            if (!processed.has(idx) && !jumpProcessed.has(idx)) {
               const blk = sortedBlocks[idx];
               const isNested = sortedBlocks.some((ob, oi) =>
-                oi !== idx && ob.startBeat <= blk.startBeat && ob.endBeat >= blk.endBeat && !processed.has(oi)
+                oi !== idx && ob.startBeat <= blk.startBeat && ob.endBeat >= blk.endBeat && !processed.has(oi) && !jumpProcessed.has(oi)
               );
               if (!isNested) {
                 const span = blk.endBeat - blk.startBeat;
@@ -594,8 +597,13 @@ export class MetronomeEngine {
           }
           beat = endBeat + 1;
         } else {
-          addBarWithRepeat(beat, 0, -1, 1);
-          beat++;
+          if (candidates && candidates.some(idx => jumpProcessed.has(idx))) {
+            const jumpedBlock = sortedBlocks[candidates.find(idx => jumpProcessed.has(idx))!];
+            beat = Math.min(jumpedBlock.endBeat + 1, this.beatsPerMeasure);
+          } else {
+            addBarWithRepeat(beat, 0, -1, 1);
+            beat++;
+          }
         }
       }
     }
