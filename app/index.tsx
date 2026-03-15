@@ -73,6 +73,11 @@ import {
   parseTrimInfo,
   renderMeasure,
   saveRenderedWav,
+  ensureWebClickBuffers,
+  playWebClick,
+  clearWebClickBuffers,
+  playWebRenderedLoop,
+  getWebAudioContext,
 } from "@/lib/audio-renderer";
 import type { ClickPCMs, SamplePCMEntry, TickInfo, DecodedSample } from "@/lib/audio-renderer";
 import type { ActivityLog, Goal, PracticeSessionData, PracticeRoomVisitData } from "@/lib/activity-log";
@@ -200,6 +205,8 @@ export default function MetronomeScreen() {
   const clickPCMCacheRef = useRef<Record<string, ClickPCMs>>({});
   const samplePCMCacheRef = useRef<Map<string, SamplePCMEntry>>(new Map());
   const renderedUrlRef = useRef<string | null>(null);
+  const webRenderedLoopRef = useRef<{ stop: () => void } | null>(null);
+  const webClickReadyRef = useRef(false);
 
   const engineRef = useRef<MetronomeEngine | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -260,6 +267,7 @@ export default function MetronomeScreen() {
     engineRef.current = engine;
 
     const restartPlayer = (active: any) => {
+      if (Platform.OS === "web") return;
       try {
         Promise.resolve(active.seekTo(0)).then(() => {
           try { active.play(); } catch {}
@@ -294,6 +302,10 @@ export default function MetronomeScreen() {
 
     engine.setAudioCallbacks(
       () => {
+        if (Platform.OS === "web" && webClickReadyRef.current) {
+          playWebClick("high");
+          return;
+        }
         try {
           const active = getCustomPlayer("high", highToggle.current);
           highToggle.current = !highToggle.current;
@@ -301,6 +313,10 @@ export default function MetronomeScreen() {
         } catch (e) {}
       },
       () => {
+        if (Platform.OS === "web" && webClickReadyRef.current) {
+          playWebClick("low");
+          return;
+        }
         try {
           const active = getCustomPlayer("low", lowToggle.current);
           lowToggle.current = !lowToggle.current;
@@ -308,6 +324,10 @@ export default function MetronomeScreen() {
         } catch (e) {}
       },
       () => {
+        if (Platform.OS === "web" && webClickReadyRef.current) {
+          playWebClick("strong");
+          return;
+        }
         try {
           const active = getCustomPlayer("strong", strongToggle.current);
           strongToggle.current = !strongToggle.current;
@@ -708,6 +728,10 @@ export default function MetronomeScreen() {
   }, []);
 
   const stopRenderedAudio = useCallback(() => {
+    if (webRenderedLoopRef.current) {
+      webRenderedLoopRef.current.stop();
+      webRenderedLoopRef.current = null;
+    }
     if (renderedPlayerRef.current) {
       try {
         renderedPlayerRef.current.pause();
@@ -1609,33 +1633,78 @@ export default function MetronomeScreen() {
     setIsPreparing(true);
 
     try {
-      const renderedPlayer = await buildRenderedPlayer();
-      if (preparingCancelledRef.current) {
-        if (renderedPlayer) { try { renderedPlayer.release(); } catch {} }
+      if (Platform.OS === "web") {
+        const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
+        await ensureWebClickBuffers(src as any);
+        webClickReadyRef.current = true;
+
+        const ctx = getWebAudioContext();
+        if (ctx && ctx.state === "suspended") {
+          await ctx.resume();
+        }
+
+        if (preparingCancelledRef.current) {
+          setIsPreparing(false);
+          return;
+        }
         setIsPreparing(false);
-        return;
-      }
-      setIsPreparing(false);
 
-      if (renderedPlayer) {
-        stopRenderedAudio();
-        renderedPlayerRef.current = renderedPlayer;
-        renderedPlayer.volume = 1.0;
-        engine.setPreRenderedAudio(true);
+        if (webRenderedLoopRef.current) {
+          webRenderedLoopRef.current.stop();
+          webRenderedLoopRef.current = null;
+        }
+
+        try {
+          const scheduleInfo = engine.getScheduleInfo();
+          const clickPCMs = await getClickPCMs(soundSetRef.current);
+          const pcm = renderMeasure({
+            schedule: scheduleInfo.ticks as TickInfo[],
+            measureDurationMs: scheduleInfo.durationMs,
+            clickPCMs,
+            samplePCMs: new Map(),
+            clickVolume: 1.0,
+            sampleVolume: 0,
+          });
+          const loop = playWebRenderedLoop(pcm);
+          webRenderedLoopRef.current = loop;
+          engine.setPreRenderedAudio(true);
+        } catch (renderErr) {
+          console.warn("[startMetronome] Web pre-render failed, using per-tick:", renderErr);
+          engine.setPreRenderedAudio(false);
+        }
+
+        setIsPlaying(true);
+        engine.start();
       } else {
-        engine.setPreRenderedAudio(false);
-      }
+        const renderedPlayer = await buildRenderedPlayer();
+        if (preparingCancelledRef.current) {
+          if (renderedPlayer) { try { renderedPlayer.release(); } catch {} }
+          setIsPreparing(false);
+          return;
+        }
+        setIsPreparing(false);
 
-      setIsPlaying(true);
-      engine.start();
+        if (renderedPlayer) {
+          stopRenderedAudio();
+          renderedPlayerRef.current = renderedPlayer;
+          renderedPlayer.volume = 1.0;
+          engine.setPreRenderedAudio(true);
+        } else {
+          engine.setPreRenderedAudio(false);
+        }
 
-      if (renderedPlayer) {
-        renderedPlayer.play();
+        setIsPlaying(true);
+        engine.start();
+
+        if (renderedPlayer) {
+          renderedPlayer.play();
+        }
       }
-    } catch {
+    } catch (e) {
+      console.warn("[startMetronome] Error:", e);
       setIsPreparing(false);
     }
-  }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio]);
+  }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio, getClickPCMs]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -1643,6 +1712,10 @@ export default function MetronomeScreen() {
     engine.setOnMeasureComplete(() => {
       setMeasureCount(c => c + 1);
       if (!engine.getIsRunning()) {
+        if (webRenderedLoopRef.current) {
+          webRenderedLoopRef.current.stop();
+          webRenderedLoopRef.current = null;
+        }
         if (renderedPlayerRef.current) {
           try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
           renderedPlayerRef.current = null;

@@ -366,3 +366,87 @@ export async function saveRenderedWav(pcm: Float32Array): Promise<string> {
 export function getRenderSampleRate(): number {
   return RENDER_SR;
 }
+
+let webClickBuffers: { strong: AudioBuffer; high: AudioBuffer; low: AudioBuffer } | null = null;
+
+export function getWebAudioContext(): AudioContext | null {
+  return getSharedAudioContext();
+}
+
+export async function ensureWebClickBuffers(
+  soundSet: Record<string, number | string>
+): Promise<boolean> {
+  if (Platform.OS !== "web") return false;
+  const ctx = getSharedAudioContext();
+  if (!ctx) return false;
+
+  if (webClickBuffers) return true;
+
+  try {
+    const loadOne = async (src: number | string): Promise<AudioBuffer> => {
+      const url = typeof src === "string" ? src : Asset.fromModule(src).uri;
+      const resp = await fetch(url);
+      const ab = await resp.arrayBuffer();
+      return ctx.decodeAudioData(ab.slice(0));
+    };
+    const [strong, high, low] = await Promise.all([
+      loadOne(soundSet.strong),
+      loadOne(soundSet.high),
+      loadOne(soundSet.low),
+    ]);
+    webClickBuffers = { strong, high, low };
+    return true;
+  } catch (e) {
+    console.warn("[WebAudio] Failed to load click buffers:", e);
+    return false;
+  }
+}
+
+export function playWebClick(role: "strong" | "high" | "low"): void {
+  if (Platform.OS !== "web" || !webClickBuffers) return;
+  const ctx = getSharedAudioContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") {
+    ctx.resume().catch(() => {});
+  }
+  const buffer = webClickBuffers[role];
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(ctx.destination);
+  source.start(0);
+}
+
+export function clearWebClickBuffers(): void {
+  webClickBuffers = null;
+}
+
+export function playWebRenderedLoop(pcm: Float32Array, onEnded?: () => void): { stop: () => void } {
+  if (Platform.OS !== "web") return { stop: () => {} };
+  const ctx = getSharedAudioContext();
+  if (!ctx) return { stop: () => {} };
+  if (ctx.state === "suspended") {
+    ctx.resume().catch(() => {});
+  }
+
+  const audioBuffer = ctx.createBuffer(1, pcm.length, RENDER_SR);
+  audioBuffer.getChannelData(0).set(pcm);
+
+  const source = ctx.createBufferSource();
+  source.buffer = audioBuffer;
+  source.loop = true;
+  source.connect(ctx.destination);
+  source.start(0);
+
+  let stopped = false;
+  source.onended = () => {
+    if (!stopped) onEnded?.();
+  };
+
+  return {
+    stop: () => {
+      stopped = true;
+      try { source.stop(); } catch {}
+      try { source.disconnect(); } catch {}
+    },
+  };
+}
