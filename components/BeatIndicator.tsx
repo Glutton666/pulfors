@@ -1667,64 +1667,90 @@ export function BeatIndicator({
               {loopBlocks.length > 0 && (() => {
                 const copies = isPlaying && barLoopMode !== "once" ? NUM_COPIES : 1;
                 const primaryCopy = isPlaying && barLoopMode !== "once" ? CENTER_COPY : 0;
+                const labelText = (block: LoopBlock) => `${block.startBeat + 1}-${Math.min(block.endBeat + 1, beatsPerMeasure)}`;
+                const labelFontSize = (depth: number) => Math.max(7, 9 - depth);
+                const labelH = 12;
+                const labelGap = 4;
+
                 return loopBlocks.map((block, idx) => {
                   const depth = blockDepths.get(idx) || 0;
                   const lineWidth = Math.max(1.5, 3 - depth * 0.5);
-                  const lineLeft = 2 + depth * 6;
+                  const lineLeft = 2 + depth * 7;
                   const lineOpacity = Math.max(0.25, 0.6 - depth * 0.15);
                   const startBeat = block.startBeat;
                   const endBeat = Math.min(block.endBeat, beatsPerMeasure - 1);
-                  const badgeSize = Math.max(12, 16 - depth * 2);
-                  const fontSize = Math.max(7, 9 - depth);
+                  const fSize = labelFontSize(depth);
                   const isEditing = editingBlockIndex === idx;
                   const isActive = isPlaying && progressInfo && progressInfo.blockIndex === idx;
+                  const text = labelText(block);
 
                   const elements: React.ReactNode[] = [];
                   for (let copy = 0; copy < copies; copy++) {
                     const copyOffset = copy * copyHeight;
                     const topPos = centerPad + copyOffset + startBeat * rowH + 4;
                     const bottomPos = centerPad + copyOffset + endBeat * rowH + BAR_HEIGHT - 4;
-                    const lineHeight = bottomPos - topPos;
-                    if (lineHeight <= 0) continue;
-                    const midY = topPos + lineHeight / 2;
-                    const isPrimary = copy === primaryCopy;
-                    const copyOpacity = isPrimary ? 1 : 0.3;
+                    const totalH = bottomPos - topPos;
+                    if (totalH <= 0) continue;
+                    const midY = topPos + totalH / 2;
+                    const isPrimaryCopy = copy === primaryCopy;
+                    const copyOp = isPrimaryCopy ? 1 : 0.3;
+                    const lineOp = (isActive ? 0.9 : isEditing ? 0.8 : lineOpacity) * copyOp;
+
+                    const gapTop = midY - labelH / 2 - labelGap;
+                    const gapBottom = midY + labelH / 2 + labelGap;
+                    const upperH = Math.max(0, gapTop - topPos);
+                    const lowerH = Math.max(0, bottomPos - gapBottom);
 
                     elements.push(
                       <React.Fragment key={`blk-${idx}-c${copy}`}>
-                        <View pointerEvents="none" style={{
-                          position: "absolute",
-                          left: lineLeft,
-                          top: topPos,
-                          width: lineWidth,
-                          height: lineHeight,
-                          backgroundColor: C.accent,
-                          borderRadius: lineWidth / 2,
-                          opacity: (isActive ? 0.9 : isEditing ? 0.8 : lineOpacity) * copyOpacity,
-                          zIndex: 10 + depth,
-                        }} />
-                        {isPrimary && (
+                        {upperH > 0 && (
                           <View pointerEvents="none" style={{
                             position: "absolute",
-                            left: lineLeft + lineWidth / 2 - badgeSize / 2,
-                            top: midY - badgeSize / 2,
-                            width: badgeSize,
-                            height: badgeSize,
-                            borderRadius: badgeSize / 2,
-                            backgroundColor: isActive ? C.accent : isEditing ? C.accent + "E0" : Colors.backgroundSecondary,
-                            borderWidth: 1,
-                            borderColor: isActive ? C.accent : isEditing ? C.accent + "80" : C.accent + "50",
+                            left: lineLeft,
+                            top: topPos,
+                            width: lineWidth,
+                            height: upperH,
+                            backgroundColor: C.accent,
+                            borderTopLeftRadius: lineWidth / 2,
+                            borderTopRightRadius: lineWidth / 2,
+                            opacity: lineOp,
+                            zIndex: 10 + depth,
+                          }} />
+                        )}
+                        {lowerH > 0 && (
+                          <View pointerEvents="none" style={{
+                            position: "absolute",
+                            left: lineLeft,
+                            top: gapBottom,
+                            width: lineWidth,
+                            height: lowerH,
+                            backgroundColor: C.accent,
+                            borderBottomLeftRadius: lineWidth / 2,
+                            borderBottomRightRadius: lineWidth / 2,
+                            opacity: lineOp,
+                            zIndex: 10 + depth,
+                          }} />
+                        )}
+                        {isPrimaryCopy && (
+                          <View pointerEvents="none" style={{
+                            position: "absolute",
+                            left: lineLeft + lineWidth / 2,
+                            top: midY - labelH / 2,
+                            height: labelH,
+                            transform: [{ translateX: -1 }],
+                            paddingHorizontal: 2,
                             alignItems: "center",
                             justifyContent: "center",
-                            zIndex: 11 + depth,
+                            zIndex: 12 + depth,
                           }}>
                             <Text style={{
-                              color: isActive ? Colors.background : isEditing ? Colors.background : C.accent,
-                              fontSize,
+                              color: isActive ? C.accent : isEditing ? C.accent : C.accent,
+                              opacity: isActive ? 1 : isEditing ? 0.9 : 0.7,
+                              fontSize: fSize,
                               fontFamily: "SpaceGrotesk_700Bold",
-                              lineHeight: fontSize + 2,
+                              lineHeight: labelH,
                             }}>
-                              {block.value}
+                              {text}
                             </Text>
                           </View>
                         )}
