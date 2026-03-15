@@ -2247,6 +2247,8 @@ const styles = StyleSheet.create({
   },
   signatureRow: {
     position: "absolute",
+    width: moderateScale(120),
+    height: moderateScale(120),
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
