@@ -298,6 +298,7 @@ interface BeatIndicatorProps {
   progressInfo?: { beat: number; barRepeatCurrent: number; barRepeatTotal: number; blockIndex: number; blockRepeatCurrent: number; blockRepeatTotal: number; jumpCurrent?: number; jumpTotal?: number; jumpSourceBlockIndex?: number } | null;
   measureCount?: number;
   onBarReset?: () => void;
+  halfTimeLabel?: string;
 }
 
 export function BeatIndicator({
@@ -344,6 +345,7 @@ export function BeatIndicator({
   progressInfo,
   measureCount = 0,
   onBarReset,
+  halfTimeLabel,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
 
@@ -2155,15 +2157,23 @@ export function BeatIndicator({
           })()}
 
           <View style={styles.signatureRow} pointerEvents="none">
-            <Text style={styles.digitalSignature} numberOfLines={1}>
-              {beatsPerMeasure}
-            </Text>
-            <Text style={styles.digitalSignatureSlash} numberOfLines={1}>
-              /
-            </Text>
-            <Text style={styles.digitalSignature} numberOfLines={1}>
-              {beatsPerMeasure <= 4 ? "4" : "8"}
-            </Text>
+            {halfTimeLabel ? (
+              <Text style={[styles.digitalSignature, { fontSize: moderateScale(28, 0.3), color: C.accent }]} numberOfLines={1}>
+                {halfTimeLabel}
+              </Text>
+            ) : (
+              <>
+                <Text style={styles.digitalSignature} numberOfLines={1}>
+                  {beatsPerMeasure}
+                </Text>
+                <Text style={styles.digitalSignatureSlash} numberOfLines={1}>
+                  /
+                </Text>
+                <Text style={styles.digitalSignature} numberOfLines={1}>
+                  {beatsPerMeasure <= 4 ? "4" : "8"}
+                </Text>
+              </>
+            )}
           </View>
 
           <Animated.View

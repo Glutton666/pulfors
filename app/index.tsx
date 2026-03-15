@@ -1257,20 +1257,25 @@ export default function MetronomeScreen() {
   );
 
   const halfTimeLabelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const barModeRef2 = useRef(barMode);
+  useEffect(() => { barModeRef2.current = barMode; }, [barMode]);
   const toggleHalfTime = useCallback(() => {
     setHalfTime((prev) => {
       const next = !prev;
       engineRef.current?.setHalfTime(next);
-      halfTimeFlash.value = withSequence(
-        withTiming(next ? 0.35 : 0.2, { duration: 100 }),
-        withTiming(0, { duration: 800, easing: Easing.out(Easing.quad) })
-      );
-      setHalfTimeLabel(next ? "1/2" : "1/1");
+      const label = next ? "1/2" : "1/1";
+      if (barModeRef2.current) {
+        halfTimeFlash.value = withSequence(
+          withTiming(next ? 0.35 : 0.2, { duration: 100 }),
+          withTiming(0, { duration: 800, easing: Easing.out(Easing.quad) })
+        );
+      }
+      setHalfTimeLabel(label);
       if (halfTimeLabelTimer.current) clearTimeout(halfTimeLabelTimer.current);
       halfTimeLabelTimer.current = setTimeout(() => {
         setHalfTimeLabel("");
         halfTimeLabelTimer.current = null;
-      }, 900);
+      }, 1200);
       return next;
     });
   }, []);
@@ -2479,7 +2484,7 @@ export default function MetronomeScreen() {
           halfTimeFlashStyle,
         ]}
       >
-        {halfTimeLabel !== "" && (
+        {halfTimeLabel !== "" && barMode && (
           <Text style={{
             fontFamily: "SpaceGrotesk_700Bold",
             fontSize: 96,
@@ -2762,6 +2767,7 @@ export default function MetronomeScreen() {
             onBarReset={handleBarReset}
             onBarQuickSave={handleBarQuickSave}
             onResetFlash={handleResetFlash}
+            halfTimeLabel={!barMode ? halfTimeLabel : undefined}
             subdivisionBarElement={barMode ? (
               <SubdivisionBar
                 pattern={subdivisionPattern}
