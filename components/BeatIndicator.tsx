@@ -476,13 +476,13 @@ export function BeatIndicator({
     const canAdd = beatsRef.current < MAX_BEATS;
     const canRemove = beatsRef.current > MIN_BEATS;
 
-    dialRotation.value = dx * -0.08;
+    dialRotation.value = dx * 0.08;
 
-    if (dx < 0 && canAdd) {
-      swipeDirection.value = -1;
-      swipeProgress.value = progress;
-    } else if (dx > 0 && canRemove) {
+    if (dx > 0 && canAdd) {
       swipeDirection.value = 1;
+      swipeProgress.value = progress;
+    } else if (dx < 0 && canRemove) {
+      swipeDirection.value = -1;
       swipeProgress.value = progress;
     } else {
       swipeDirection.value = 0;
@@ -491,12 +491,12 @@ export function BeatIndicator({
 
     if (progress >= 1 && !triggeredRef.current) {
       triggeredRef.current = true;
-      if (dx < 0 && canAdd) {
+      if (dx > 0 && canAdd) {
         if (Platform.OS !== "web") {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         }
         onBeatsChangeRef.current(beatsRef.current + 1);
-      } else if (dx > 0 && canRemove) {
+      } else if (dx < 0 && canRemove) {
         if (Platform.OS !== "web") {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         }
