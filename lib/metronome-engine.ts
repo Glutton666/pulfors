@@ -80,7 +80,7 @@ export class MetronomeEngine {
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
   private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number }[] = [];
-  private blockPlayMode: "sequential" | "random" = "sequential";
+  private blockPlayMode: "sequential" | "loop" | "random" = "loop";
   private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
   private barBpmOverrides: Map<number, number> = new Map();
   private preRenderedAudio = false;
@@ -228,7 +228,7 @@ export class MetronomeEngine {
     }
   }
 
-  setBlockPlayMode(mode: "sequential" | "random") {
+  setBlockPlayMode(mode: "sequential" | "loop" | "random") {
     this.blockPlayMode = mode;
     this.invalidateScheduleCache();
     if (this.isRunning) {
@@ -746,7 +746,7 @@ export class MetronomeEngine {
       this.scheduleIndex++;
 
       if (this.scheduleIndex >= this.schedule.length) {
-        if (this.stopAfterMeasure) {
+        if (this.stopAfterMeasure || (this.blockPlayMode === "sequential" && this.loopBlocks.length > 0)) {
           this.stopAfterMeasure = false;
           this.stop();
           this.onMeasureComplete?.();

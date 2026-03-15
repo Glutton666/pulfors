@@ -278,8 +278,8 @@ interface BeatIndicatorProps {
   onLoopBlocksChange: (blocks: LoopBlock[]) => void;
   barLoopMode: "loop" | "once";
   onBarLoopModeChange: (mode: "loop" | "once") => void;
-  blockPlayMode: "sequential" | "random";
-  onBlockPlayModeChange: (mode: "sequential" | "random") => void;
+  blockPlayMode: "sequential" | "loop" | "random";
+  onBlockPlayModeChange: (mode: "sequential" | "loop" | "random") => void;
   onBarQuickSave?: () => void;
   onResetFlash?: () => void;
   onBarScrollOffset?: (offset: number) => void;
@@ -1474,36 +1474,42 @@ export function BeatIndicator({
                     </View>
                   );
                 })}
-                {!isPlaying && loopBlocks.length >= 2 && (
-                  <Pressable
-                    onPress={() => onBlockPlayModeChange(blockPlayMode === "sequential" ? "random" : "sequential")}
-                    style={{
-                      paddingHorizontal: 6,
-                      paddingVertical: 4,
-                      borderRadius: 6,
-                      backgroundColor: blockPlayMode === "random" ? "#f0ad4e20" : Colors.backgroundSecondary,
-                      borderWidth: blockPlayMode === "random" ? 1 : 0,
-                      borderColor: "#f0ad4e60",
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 3,
-                    }}
-                    hitSlop={4}
-                  >
-                    <Ionicons
-                      name={blockPlayMode === "random" ? "shuffle" : "swap-horizontal"}
-                      size={12}
-                      color={blockPlayMode === "random" ? "#f0ad4e" : Colors.textTertiary}
-                    />
-                    <Text style={{
-                      color: blockPlayMode === "random" ? "#f0ad4e" : Colors.textTertiary,
-                      fontSize: 9,
-                      fontFamily: "SpaceGrotesk_600SemiBold",
-                    }}>
-                      {blockPlayMode === "random" ? "Random" : "All"}
-                    </Text>
-                  </Pressable>
-                )}
+                {!isPlaying && loopBlocks.length >= 2 && (() => {
+                  const nextMode = blockPlayMode === "sequential" ? "loop" : blockPlayMode === "loop" ? "random" : "sequential";
+                  const icon = blockPlayMode === "sequential" ? "arrow-forward" : blockPlayMode === "loop" ? "repeat" : "shuffle";
+                  const label = blockPlayMode === "sequential" ? "Once" : blockPlayMode === "loop" ? "Loop" : "Random";
+                  const isHighlight = blockPlayMode !== "loop";
+                  return (
+                    <Pressable
+                      onPress={() => onBlockPlayModeChange(nextMode)}
+                      style={{
+                        paddingHorizontal: 6,
+                        paddingVertical: 4,
+                        borderRadius: 6,
+                        backgroundColor: isHighlight ? "#f0ad4e20" : Colors.backgroundSecondary,
+                        borderWidth: isHighlight ? 1 : 0,
+                        borderColor: "#f0ad4e60",
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 3,
+                      }}
+                      hitSlop={4}
+                    >
+                      <Ionicons
+                        name={icon}
+                        size={12}
+                        color={isHighlight ? "#f0ad4e" : Colors.textTertiary}
+                      />
+                      <Text style={{
+                        color: isHighlight ? "#f0ad4e" : Colors.textTertiary,
+                        fontSize: 9,
+                        fontFamily: "SpaceGrotesk_600SemiBold",
+                      }}>
+                        {label}
+                      </Text>
+                    </Pressable>
+                  );
+                })()}
               </ScrollView>
               {!isPlaying && editingBlockIndex !== null && editBlock && (
                 <View style={{
