@@ -577,6 +577,11 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
 
   const startMicWeb = useCallback(async () => {
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.warn("[MicTuner] getUserMedia not available");
+        setMicListening(false);
+        return;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: false,
@@ -590,6 +595,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({
         sampleRate: 48000,
       });
+      if (audioCtx.state === "suspended") await audioCtx.resume();
       micAudioCtxRef.current = audioCtx;
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 8192;
@@ -636,7 +642,8 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
         micRafRef.current = requestAnimationFrame(detect);
       };
       detect();
-    } catch {
+    } catch (e) {
+      console.warn("[MicTuner] Web mic error:", e);
       setMicListening(false);
     }
   }, [pickDominantFreq]);
@@ -644,7 +651,10 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const startMicMobile = useCallback(async () => {
     try {
       const perm = await Audio.requestPermissionsAsync();
-      if (!perm.granted) return;
+      if (!perm.granted) {
+        console.warn("[MicTuner] Mic permission denied");
+        return;
+      }
 
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
@@ -660,41 +670,47 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       const MIC_GATE = 0.08;
       const WINDOW_SIZE = 8192;
 
+      const recordingOptions = {
+        isMeteringEnabled: false,
+        android: {
+          extension: ".wav",
+          outputFormat: (Audio as any).AndroidOutputFormat?.DEFAULT ?? 0,
+          audioEncoder: (Audio as any).AndroidAudioEncoder?.DEFAULT ?? 0,
+          sampleRate: SAMPLE_RATE,
+          numberOfChannels: 1,
+          bitRate: 768000,
+        },
+        ios: {
+          extension: ".wav",
+          outputFormat: (Audio as any).IOSOutputFormat?.LINEARPCM ?? 1819304813,
+          audioQuality: (Audio as any).IOSAudioQuality?.MAX ?? 127,
+          sampleRate: SAMPLE_RATE,
+          numberOfChannels: 1,
+          bitRate: 768000,
+          linearPCMBitDepth: 16,
+          linearPCMIsBigEndian: false,
+          linearPCMIsFloat: false,
+        },
+        web: { mimeType: "audio/wav", bitsPerSecond: 768000 },
+      };
+
       const recordAndAnalyze = async () => {
         if (!micActiveRef.current) return;
+        let rec: Audio.Recording | null = null;
         try {
-          const recording = new Audio.Recording();
-          await recording.prepareToRecordAsync({
-            isMeteringEnabled: false,
-            android: {
-              extension: ".wav",
-              outputFormat: (Audio as any).AndroidOutputFormat?.DEFAULT ?? 0,
-              audioEncoder: (Audio as any).AndroidAudioEncoder?.DEFAULT ?? 0,
-              sampleRate: SAMPLE_RATE,
-              numberOfChannels: 1,
-              bitRate: 768000,
-            },
-            ios: {
-              extension: ".wav",
-              outputFormat: (Audio as any).IOSOutputFormat?.LINEARPCM ?? 1819304813,
-              audioQuality: (Audio as any).IOSAudioQuality?.MAX ?? 127,
-              sampleRate: SAMPLE_RATE,
-              numberOfChannels: 1,
-              bitRate: 768000,
-              linearPCMBitDepth: 16,
-              linearPCMIsBigEndian: false,
-              linearPCMIsFloat: false,
-            },
-            web: { mimeType: "audio/wav", bitsPerSecond: 768000 },
-          });
-          micRecordingRef.current = recording;
-          await recording.startAsync();
+          const result = await Audio.Recording.createAsync(recordingOptions);
+          rec = result.recording;
+          micRecordingRef.current = rec;
 
           micMobileTimerRef.current = setTimeout(async () => {
-            if (!micActiveRef.current) return;
+            if (!micActiveRef.current) {
+              if (rec) { try { await rec.stopAndUnloadAsync(); } catch {} }
+              micRecordingRef.current = null;
+              return;
+            }
             try {
-              await recording.stopAndUnloadAsync();
-              const uri = recording.getURI();
+              await rec!.stopAndUnloadAsync();
+              const uri = rec!.getURI();
               micRecordingRef.current = null;
               if (uri) {
                 const base64 = await FileSystem.readAsStringAsync(uri, {
@@ -705,8 +721,8 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                   const readings: number[] = [];
                   const step = Math.floor(WINDOW_SIZE / 2);
                   for (let offset = 0; offset + WINDOW_SIZE <= decoded.samples.length; offset += step) {
-                    const window = decoded.samples.slice(offset, offset + WINDOW_SIZE);
-                    const freq = autoCorrelate(window, decoded.rate, MIC_GATE);
+                    const win = decoded.samples.slice(offset, offset + WINDOW_SIZE);
+                    const freq = autoCorrelate(win, decoded.rate, MIC_GATE);
                     if (freq > 20 && freq <= MAX_FREQ) {
                       readings.push(freq);
                     }
@@ -725,12 +741,19 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                 }
                 try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
               }
-            } catch {}
+            } catch (e) {
+              console.warn("[MicTuner] Mobile analyze error:", e);
+            }
             if (micActiveRef.current) {
               recordAndAnalyze();
             }
           }, RECORD_MS);
-        } catch {
+        } catch (e) {
+          console.warn("[MicTuner] Mobile record error:", e);
+          if (rec) {
+            try { await rec.stopAndUnloadAsync(); } catch {}
+          }
+          micRecordingRef.current = null;
           if (micActiveRef.current) {
             micMobileTimerRef.current = setTimeout(recordAndAnalyze, 500);
           }
@@ -738,10 +761,11 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       };
 
       recordAndAnalyze();
-    } catch {
+    } catch (e) {
+      console.warn("[MicTuner] Mobile start error:", e);
       setMicListening(false);
     }
-  }, [decodeWavBase64]);
+  }, [decodeWavBase64, pickDominantFreq]);
 
   const startMic = useCallback(async () => {
     if (Platform.OS === "web") {
