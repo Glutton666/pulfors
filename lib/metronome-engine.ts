@@ -506,7 +506,7 @@ export class MetronomeEngine {
 
     const jumpProcessed = new Set<number>();
 
-    const processBlock = (blockIdx: number, jumpVisited: Set<number>) => {
+    const emitBlock = (blockIdx: number, jumpVisited: Set<number>) => {
       if (jumpVisited.has(blockIdx) || blockIdx < 0 || blockIdx >= sortedBlocks.length) return;
       jumpVisited.add(blockIdx);
       const block = sortedBlocks[blockIdx];
@@ -524,6 +524,11 @@ export class MetronomeEngine {
       for (let r = 0; r < blockRepeatCount; r++) {
         emitBeatsInRange(block.startBeat, endBeat, blockIdx, r, blockRepeatCount);
       }
+    };
+
+    const processBlock = (blockIdx: number, jumpVisited: Set<number>) => {
+      if (blockIdx < 0 || blockIdx >= sortedBlocks.length) return;
+      const block = sortedBlocks[blockIdx];
 
       if (block.jumpToBlock !== undefined && block.jumpToBlock !== null) {
         const jumpSortedIdx = origToSorted.get(block.jumpToBlock);
@@ -534,17 +539,25 @@ export class MetronomeEngine {
           const prevJumpSource = currentJumpSourceBlockIndex;
           currentJumpTotal = jumpCount;
           currentJumpSourceBlockIndex = sortedToOrig.get(blockIdx) ?? blockIdx;
+
           for (let ji = 0; ji < jumpCount; ji++) {
             currentJumpIteration = ji;
+            emitBlock(blockIdx, new Set(jumpVisited));
             const jumpVisitedCopy = new Set(jumpVisited);
-            processBlock(jumpSortedIdx, jumpVisitedCopy);
+            emitBlock(jumpSortedIdx, jumpVisitedCopy);
           }
+
           currentJumpIteration = prevJumpIteration;
           currentJumpTotal = prevJumpTotal;
           currentJumpSourceBlockIndex = prevJumpSource;
+
+          emitBlock(blockIdx, new Set(jumpVisited));
           jumpProcessed.add(jumpSortedIdx);
+          return;
         }
       }
+
+      emitBlock(blockIdx, jumpVisited);
     };
 
     if (this.blockPlayMode === "random" && sortedBlocks.length >= 2) {
