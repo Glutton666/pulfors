@@ -972,6 +972,26 @@ export function BeatIndicator({
     return map;
   }, [loopBlocks, beatsPerMeasure]);
 
+  const blockDepths = useMemo(() => {
+    const depths = new Map<number, number>();
+    const sorted = loopBlocks.map((b, i) => ({ b, i })).sort((a, b) => {
+      const spanA = a.b.endBeat - a.b.startBeat;
+      const spanB = b.b.endBeat - b.b.startBeat;
+      return spanB - spanA || a.b.startBeat - b.b.startBeat;
+    });
+    for (const { b: block, i: idx } of sorted) {
+      let depth = 0;
+      for (const { b: other, i: oi } of sorted) {
+        if (oi === idx) continue;
+        if (other.startBeat <= block.startBeat && other.endBeat >= block.endBeat && (other.endBeat - other.startBeat) > (block.endBeat - block.startBeat)) {
+          depth++;
+        }
+      }
+      depths.set(idx, depth);
+    }
+    return depths;
+  }, [loopBlocks]);
+
   const resetFlashStyle = useAnimatedStyle(() => ({
     opacity: resetFlash.value * 0.6,
   }));
@@ -1093,29 +1113,17 @@ export function BeatIndicator({
             const blockStarts = isPrimary ? beatBlocks.filter((bb) => bb.isFirst) : [];
             const blockMid = isPrimary && beatBlocks.length > 0 && blockStarts.length === 0;
             const inBlock = isPrimary && beatBlocks.length > 0;
+            const maxDepth = isPrimary ? Math.max(0, ...beatBlocks.map(bb => blockDepths.get(bb.index) || 0)) : 0;
+            const leftPad = inBlock ? 6 + maxDepth * 6 : 0;
             return (
               <>
-                {inBlock && (
-                  <View pointerEvents="none" style={{
-                    position: "absolute",
-                    left: 2,
-                    top: blockStarts.length > 0 ? 4 : 0,
-                    bottom: beatBlocks.some(bb => bb.isLast) && blockStarts.length === 0 ? 4 : beatBlocks.some(bb => bb.isLast) ? undefined : 0,
-                    height: blockStarts.length > 0 && beatBlocks.some(bb => bb.isLast) ? undefined : undefined,
-                    width: 3,
-                    backgroundColor: C.accent,
-                    borderRadius: 1.5,
-                    zIndex: 10,
-                    opacity: 0.5,
-                  }} />
-                )}
                 <Pressable
                   style={[
                     styles.barBeatLabel,
                     barStartBeat === beat && !isPlaying && { backgroundColor: C.accent + "30", borderRadius: 4 },
                     blockSelectStart === beat && !isPlaying && { backgroundColor: C.accent + "50", borderRadius: 4 },
                     blockSelectStart !== null && blockSelectStart !== beat && !isPlaying && { borderColor: C.accent + "40", borderWidth: 1, borderRadius: 4 },
-                    inBlock && { paddingLeft: 8 },
+                    leftPad > 0 && { paddingLeft: leftPad },
                   ]}
                   onPressIn={() => { barLongPressedRef.current = false; }}
                   onPress={() => {
@@ -1656,6 +1664,76 @@ export function BeatIndicator({
           >
             <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>
               {allBarRows}
+              {loopBlocks.length > 0 && (() => {
+                const copies = isPlaying && barLoopMode !== "once" ? NUM_COPIES : 1;
+                const primaryCopy = isPlaying && barLoopMode !== "once" ? CENTER_COPY : 0;
+                return loopBlocks.map((block, idx) => {
+                  const depth = blockDepths.get(idx) || 0;
+                  const lineWidth = Math.max(1.5, 3 - depth * 0.5);
+                  const lineLeft = 2 + depth * 6;
+                  const lineOpacity = Math.max(0.25, 0.6 - depth * 0.15);
+                  const startBeat = block.startBeat;
+                  const endBeat = Math.min(block.endBeat, beatsPerMeasure - 1);
+                  const badgeSize = Math.max(12, 16 - depth * 2);
+                  const fontSize = Math.max(7, 9 - depth);
+                  const isEditing = editingBlockIndex === idx;
+                  const isActive = isPlaying && progressInfo && progressInfo.blockIndex === idx;
+
+                  const elements: React.ReactNode[] = [];
+                  for (let copy = 0; copy < copies; copy++) {
+                    const copyOffset = copy * copyHeight;
+                    const topPos = centerPad + copyOffset + startBeat * rowH + 4;
+                    const bottomPos = centerPad + copyOffset + endBeat * rowH + BAR_HEIGHT - 4;
+                    const lineHeight = bottomPos - topPos;
+                    if (lineHeight <= 0) continue;
+                    const midY = topPos + lineHeight / 2;
+                    const isPrimary = copy === primaryCopy;
+                    const copyOpacity = isPrimary ? 1 : 0.3;
+
+                    elements.push(
+                      <React.Fragment key={`blk-${idx}-c${copy}`}>
+                        <View pointerEvents="none" style={{
+                          position: "absolute",
+                          left: lineLeft,
+                          top: topPos,
+                          width: lineWidth,
+                          height: lineHeight,
+                          backgroundColor: C.accent,
+                          borderRadius: lineWidth / 2,
+                          opacity: (isActive ? 0.9 : isEditing ? 0.8 : lineOpacity) * copyOpacity,
+                          zIndex: 10 + depth,
+                        }} />
+                        {isPrimary && (
+                          <View pointerEvents="none" style={{
+                            position: "absolute",
+                            left: lineLeft + lineWidth / 2 - badgeSize / 2,
+                            top: midY - badgeSize / 2,
+                            width: badgeSize,
+                            height: badgeSize,
+                            borderRadius: badgeSize / 2,
+                            backgroundColor: isActive ? C.accent : isEditing ? C.accent + "E0" : Colors.backgroundSecondary,
+                            borderWidth: 1,
+                            borderColor: isActive ? C.accent : isEditing ? C.accent + "80" : C.accent + "50",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            zIndex: 11 + depth,
+                          }}>
+                            <Text style={{
+                              color: isActive ? Colors.background : isEditing ? Colors.background : C.accent,
+                              fontSize,
+                              fontFamily: "SpaceGrotesk_700Bold",
+                              lineHeight: fontSize + 2,
+                            }}>
+                              {block.value}
+                            </Text>
+                          </View>
+                        )}
+                      </React.Fragment>
+                    );
+                  }
+                  return elements;
+                });
+              })()}
             </View>
           </ScrollView>
           <LinearGradient
