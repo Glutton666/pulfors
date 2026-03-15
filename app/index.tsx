@@ -2068,7 +2068,7 @@ export default function MetronomeScreen() {
     opacity: fullScreenResetFlash.value * 0.5,
   }));
 
-  const handleBarQuickSave = useCallback(async () => {
+  const handleBarQuickSave = useCallback(async (): Promise<boolean> => {
     try {
       const { loadPracticeBook: lpb, savePracticeBook: spb, createPracticeEntry } = await import("@/lib/storage");
       const config = {
@@ -2091,9 +2091,10 @@ export default function MetronomeScreen() {
       const existing = await lpb();
       await spb([entry, ...existing]);
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(t("main", "quickSaved"), t("main", "quickSavedMsg"));
+      return true;
     } catch (e) {
       console.warn("Quick save error:", e);
+      return false;
     }
   }, [bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, blockPlayMode, subdivisionPattern, username, t]);
 

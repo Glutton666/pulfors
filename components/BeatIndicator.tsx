@@ -280,7 +280,7 @@ interface BeatIndicatorProps {
   onBarLoopModeChange: (mode: "loop" | "once") => void;
   blockPlayMode: "sequential" | "loop" | "random";
   onBlockPlayModeChange: (mode: "sequential" | "loop" | "random") => void;
-  onBarQuickSave?: () => void;
+  onBarQuickSave?: () => Promise<boolean> | void;
   onResetFlash?: () => void;
   onBarScrollOffset?: (offset: number) => void;
   onBarTimerExpired?: () => void;
@@ -776,8 +776,26 @@ export function BeatIndicator({
     onBarReset?.();
   }, [onBarReset, onResetFlash]);
 
-  const handleSaveResetTap = useCallback(() => {
-    onBarQuickSave?.();
+  const [saveFlashVisible, setSaveFlashVisible] = useState(false);
+  const saveFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (saveFlashTimer.current) clearTimeout(saveFlashTimer.current);
+    };
+  }, []);
+
+  const handleSaveResetTap = useCallback(async () => {
+    const result = onBarQuickSave?.();
+    let ok = true;
+    if (result && typeof (result as any).then === "function") {
+      ok = await (result as Promise<boolean>);
+    }
+    if (ok) {
+      setSaveFlashVisible(true);
+      if (saveFlashTimer.current) clearTimeout(saveFlashTimer.current);
+      saveFlashTimer.current = setTimeout(() => setSaveFlashVisible(false), 1500);
+    }
   }, [onBarQuickSave]);
 
   const handleBarClockTap = useCallback(() => {
@@ -1673,9 +1691,9 @@ export function BeatIndicator({
             disabled={isPlaying}
           >
             <Ionicons
-              name="bookmark-outline"
+              name={saveFlashVisible ? "checkmark-circle" : "bookmark-outline"}
               size={18}
-              color={C.accent}
+              color={saveFlashVisible ? "#4CAF50" : C.accent}
             />
           </Pressable>
           <View style={styles.barTimeSigRow}>
