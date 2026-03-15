@@ -80,6 +80,7 @@ export class MetronomeEngine {
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
   private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number }[] = [];
+  private blockPlayMode: "sequential" | "random" = "sequential";
   private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
   private barBpmOverrides: Map<number, number> = new Map();
   private preRenderedAudio = false;
@@ -221,6 +222,14 @@ export class MetronomeEngine {
 
   setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number }[]) {
     this.loopBlocks = blocks.map(b => ({ ...b }));
+    this.invalidateScheduleCache();
+    if (this.isRunning) {
+      this.rebuildSchedule();
+    }
+  }
+
+  setBlockPlayMode(mode: "sequential" | "random") {
+    this.blockPlayMode = mode;
     this.invalidateScheduleCache();
     if (this.isRunning) {
       this.rebuildSchedule();
@@ -535,42 +544,59 @@ export class MetronomeEngine {
       }
     };
 
-    const processed = new Set<number>();
-    let beat = 0;
-    while (beat < this.beatsPerMeasure) {
-      let outerIdx = -1;
-      let outerSpan = -1;
-      const candidates = startBeatToBlocks.get(beat);
-      if (candidates) {
-        for (const idx of candidates) {
-          if (!processed.has(idx)) {
-            const blk = sortedBlocks[idx];
-            const isNested = sortedBlocks.some((ob, oi) =>
-              oi !== idx && ob.startBeat <= blk.startBeat && ob.endBeat >= blk.endBeat && !processed.has(oi)
-            );
-            if (!isNested) {
-              const span = blk.endBeat - blk.startBeat;
-              if (span > outerSpan) {
-                outerSpan = span;
-                outerIdx = idx;
+    if (this.blockPlayMode === "random" && sortedBlocks.length >= 2) {
+      const outerBlocks: number[] = [];
+      for (let idx = 0; idx < sortedBlocks.length; idx++) {
+        const blk = sortedBlocks[idx];
+        const isNested = sortedBlocks.some((ob, oi) =>
+          oi !== idx && ob.startBeat <= blk.startBeat && ob.endBeat >= blk.endBeat
+        );
+        if (!isNested) outerBlocks.push(idx);
+      }
+      if (outerBlocks.length >= 2) {
+        const randomIdx = outerBlocks[Math.floor(Math.random() * outerBlocks.length)];
+        processBlock(randomIdx, new Set());
+      } else {
+        processBlock(outerBlocks[0] ?? 0, new Set());
+      }
+    } else {
+      const processed = new Set<number>();
+      let beat = 0;
+      while (beat < this.beatsPerMeasure) {
+        let outerIdx = -1;
+        let outerSpan = -1;
+        const candidates = startBeatToBlocks.get(beat);
+        if (candidates) {
+          for (const idx of candidates) {
+            if (!processed.has(idx)) {
+              const blk = sortedBlocks[idx];
+              const isNested = sortedBlocks.some((ob, oi) =>
+                oi !== idx && ob.startBeat <= blk.startBeat && ob.endBeat >= blk.endBeat && !processed.has(oi)
+              );
+              if (!isNested) {
+                const span = blk.endBeat - blk.startBeat;
+                if (span > outerSpan) {
+                  outerSpan = span;
+                  outerIdx = idx;
+                }
               }
             }
           }
         }
-      }
-      if (outerIdx >= 0) {
-        const block = sortedBlocks[outerIdx];
-        const endBeat = Math.min(block.endBeat, this.beatsPerMeasure - 1);
-        processBlock(outerIdx, new Set());
-        for (let bi = 0; bi < sortedBlocks.length; bi++) {
-          if (sortedBlocks[bi].startBeat >= block.startBeat && sortedBlocks[bi].endBeat <= endBeat) {
-            processed.add(bi);
+        if (outerIdx >= 0) {
+          const block = sortedBlocks[outerIdx];
+          const endBeat = Math.min(block.endBeat, this.beatsPerMeasure - 1);
+          processBlock(outerIdx, new Set());
+          for (let bi = 0; bi < sortedBlocks.length; bi++) {
+            if (sortedBlocks[bi].startBeat >= block.startBeat && sortedBlocks[bi].endBeat <= endBeat) {
+              processed.add(bi);
+            }
           }
+          beat = endBeat + 1;
+        } else {
+          addBarWithRepeat(beat, 0, -1, 1);
+          beat++;
         }
-        beat = endBeat + 1;
-      } else {
-        addBarWithRepeat(beat, 0, -1, 1);
-        beat++;
       }
     }
 
@@ -728,10 +754,12 @@ export class MetronomeEngine {
         }
         this.onMeasureComplete?.();
         this.measureStartTime += this.measureDurationMs;
-        if (this.scheduleDirty || !this.cachedSchedule) {
+        if (this.scheduleDirty || !this.cachedSchedule || this.blockPlayMode === "random") {
           this.schedule = this.buildSchedule();
-          this.cachedSchedule = this.schedule;
-          this.cachedMeasureDurationMs = this.measureDurationMs;
+          if (this.blockPlayMode !== "random") {
+            this.cachedSchedule = this.schedule;
+            this.cachedMeasureDurationMs = this.measureDurationMs;
+          }
           this.scheduleDirty = false;
         } else {
           this.schedule = this.cachedSchedule;

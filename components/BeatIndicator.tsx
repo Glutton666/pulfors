@@ -278,6 +278,8 @@ interface BeatIndicatorProps {
   onLoopBlocksChange: (blocks: LoopBlock[]) => void;
   barLoopMode: "loop" | "once";
   onBarLoopModeChange: (mode: "loop" | "once") => void;
+  blockPlayMode: "sequential" | "random";
+  onBlockPlayModeChange: (mode: "sequential" | "random") => void;
   onBarQuickSave?: () => void;
   onResetFlash?: () => void;
   onBarScrollOffset?: (offset: number) => void;
@@ -322,6 +324,8 @@ export function BeatIndicator({
   onLoopBlocksChange,
   barLoopMode,
   onBarLoopModeChange,
+  blockPlayMode,
+  onBlockPlayModeChange,
   onBarQuickSave,
   onResetFlash,
   onBarScrollOffset,
@@ -1397,7 +1401,7 @@ export function BeatIndicator({
           const editJumpCount = editBlock ? (editBlock.jumpCount || 1) : 1;
           return (
             <View style={{ flexGrow: 0 }}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 72 }} contentContainerStyle={{ paddingHorizontal: 8, paddingVertical: 6, gap: 6, alignItems: "flex-start" }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 72 }} contentContainerStyle={{ paddingHorizontal: 8, paddingVertical: 6, gap: 6, alignItems: "center" }}>
                 {sorted.map(({ block, origIndex }, si) => {
                   const isEditing = editingBlockIndex === origIndex;
                   const isActive = isPlaying && progressInfo && progressInfo.blockIndex === origIndex;
@@ -1470,6 +1474,36 @@ export function BeatIndicator({
                     </View>
                   );
                 })}
+                {!isPlaying && loopBlocks.length >= 2 && (
+                  <Pressable
+                    onPress={() => onBlockPlayModeChange(blockPlayMode === "sequential" ? "random" : "sequential")}
+                    style={{
+                      paddingHorizontal: 6,
+                      paddingVertical: 4,
+                      borderRadius: 6,
+                      backgroundColor: blockPlayMode === "random" ? "#f0ad4e20" : Colors.backgroundSecondary,
+                      borderWidth: blockPlayMode === "random" ? 1 : 0,
+                      borderColor: "#f0ad4e60",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 3,
+                    }}
+                    hitSlop={4}
+                  >
+                    <Ionicons
+                      name={blockPlayMode === "random" ? "shuffle" : "swap-horizontal"}
+                      size={12}
+                      color={blockPlayMode === "random" ? "#f0ad4e" : Colors.textTertiary}
+                    />
+                    <Text style={{
+                      color: blockPlayMode === "random" ? "#f0ad4e" : Colors.textTertiary,
+                      fontSize: 9,
+                      fontFamily: "SpaceGrotesk_600SemiBold",
+                    }}>
+                      {blockPlayMode === "random" ? "Random" : "All"}
+                    </Text>
+                  </Pressable>
+                )}
               </ScrollView>
               {!isPlaying && editingBlockIndex !== null && editBlock && (
                 <View style={{
@@ -1592,7 +1626,6 @@ export function BeatIndicator({
             style={styles.barScrollView}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
-            contentOffset={{ x: 0, y: 0 }}
             scrollEnabled={!isPlaying}
             onScroll={(e) => onBarScrollOffset?.(e.nativeEvent.contentOffset.y)}
             scrollEventThrottle={16}

@@ -115,6 +115,7 @@ export default function MetronomeScreen() {
   const [barMode, setBarMode] = useState(false);
   const [barStartBeat, setBarStartBeat] = useState<number | null>(null);
   const [barLoopMode, setBarLoopMode] = useState<"loop" | "once">("loop");
+  const [blockPlayMode, setBlockPlayMode] = useState<"sequential" | "random">("sequential");
   const [barRepeats, setBarRepeats] = useState<Record<number, BarRepeat>>({});
   const [loopBlocks, setLoopBlocks] = useState<LoopBlock[]>([]);
   const barAreaRef = useRef<View>(null);
@@ -141,6 +142,7 @@ export default function MetronomeScreen() {
     noteSampleNames: {} as NoteSampleNameMap,
     noteSampleSources: {} as NoteSampleSourceMap,
     barLoopMode: "loop" as "loop" | "once",
+    blockPlayMode: "sequential" as "sequential" | "random",
     hasBeenConfigured: false,
   });
 
@@ -1165,6 +1167,7 @@ export default function MetronomeScreen() {
         noteSampleNames: {},
         noteSampleSources: {},
         barLoopMode: "loop",
+        blockPlayMode: "sequential",
         hasBeenConfigured: false,
       };
 
@@ -1280,6 +1283,8 @@ export default function MetronomeScreen() {
   useEffect(() => { barStartBeatRef.current = barStartBeat; }, [barStartBeat]);
   const barLoopModeRef = useRef(barLoopMode);
   useEffect(() => { barLoopModeRef.current = barLoopMode; }, [barLoopMode]);
+  const blockPlayModeRef = useRef(blockPlayMode);
+  useEffect(() => { blockPlayModeRef.current = blockPlayMode; }, [blockPlayMode]);
 
   const togglePlayPause = useCallback(async () => {
     const engine = engineRef.current;
@@ -1343,6 +1348,7 @@ export default function MetronomeScreen() {
         engine.setAllBeatSubdivisions(barConfigRef.current.beatSubdivisions || {});
         engine.setAllBarRepeats(barConfigRef.current.barRepeats || {});
         engine.setLoopBlocks(barConfigRef.current.loopBlocks || []);
+        engine.setBlockPlayMode(blockPlayModeRef.current);
         const bpmOverrides: Record<number, number> = {};
         for (const [k, v] of Object.entries(barConfigRef.current.barRepeats || {})) {
           if (v.bpm) bpmOverrides[Number(k)] = v.bpm;
@@ -1481,6 +1487,7 @@ export default function MetronomeScreen() {
         setBarRepeats({ ...bc.barRepeats });
         setLoopBlocks([...bc.loopBlocks]);
         setBarLoopMode(bc.barLoopMode);
+        setBlockPlayMode((bc as any).blockPlayMode || "sequential");
         setNoteSamples({ ...bc.noteSamples });
         noteSamplesRef.current = { ...bc.noteSamples };
         setNoteSampleNames({ ...bc.noteSampleNames });
@@ -1492,6 +1499,7 @@ export default function MetronomeScreen() {
         engine.setAllBeatSubdivisions(bc.beatSubdivisions);
         engine.setAllBarRepeats(bc.barRepeats);
         engine.setLoopBlocks(bc.loopBlocks);
+        engine.setBlockPlayMode((bc as any).blockPlayMode || "sequential");
         for (const [k, v] of Object.entries(bc.barRepeats)) {
           if (v.bpm) engine.setBarBpmOverride(Number(k), v.bpm);
         }
@@ -1511,6 +1519,7 @@ export default function MetronomeScreen() {
           noteSampleNames: {},
           noteSampleSources: {},
           barLoopMode: "loop",
+          blockPlayMode: "sequential",
           hasBeenConfigured: true,
         };
         setBeatsPerMeasure(defaultBeats);
@@ -1543,6 +1552,7 @@ export default function MetronomeScreen() {
         noteSampleNames: { ...noteSampleNames },
         noteSampleSources: { ...noteSampleSources },
         barLoopMode,
+        blockPlayMode,
         hasBeenConfigured: true,
       };
       const dc = dialConfigRef.current;
@@ -1583,6 +1593,7 @@ export default function MetronomeScreen() {
       engine.setAllBeatSubdivisions(barConfigRef.current.beatSubdivisions || {});
       engine.setAllBarRepeats(barConfigRef.current.barRepeats || {});
       engine.setLoopBlocks(barConfigRef.current.loopBlocks || []);
+      engine.setBlockPlayMode(blockPlayModeRef.current);
       const bpmOv: Record<number, number> = {};
       for (const [k, v] of Object.entries(barConfigRef.current.barRepeats || {})) {
         if (v.bpm) bpmOv[Number(k)] = v.bpm;
@@ -1996,6 +2007,7 @@ export default function MetronomeScreen() {
         barRepeats: { ...barRepeats },
         loopBlocks: [...loopBlocks],
         barLoopMode: barLoopMode as "loop" | "once",
+        blockPlayMode: blockPlayMode as "sequential" | "random",
         subdivisionPattern: [...subdivisionPattern],
         barClockMode: barConfigRef.current.barClockMode,
         barTimerDuration: barConfigRef.current.barTimerDuration,
@@ -2010,7 +2022,7 @@ export default function MetronomeScreen() {
     } catch (e) {
       console.warn("Quick save error:", e);
     }
-  }, [bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, subdivisionPattern, username, t]);
+  }, [bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, blockPlayMode, subdivisionPattern, username, t]);
 
   const handleResetFlash = useCallback(() => {
     fullScreenResetFlash.value = withSequence(
@@ -2059,6 +2071,7 @@ export default function MetronomeScreen() {
       noteSampleNames: {},
       noteSampleSources: {},
       barLoopMode: "loop",
+      blockPlayMode: "sequential",
       hasBeenConfigured: true,
     };
     if (engine) {
@@ -2104,6 +2117,7 @@ export default function MetronomeScreen() {
         barRepeats: { ...barRepeats },
         loopBlocks: [...loopBlocks],
         barLoopMode: barLoopMode as "loop" | "once",
+        blockPlayMode: blockPlayMode as "sequential" | "random",
         subdivisionPattern: [...subdivisionPattern],
         barClockMode: barConfigRef.current.barClockMode,
         barTimerDuration: barConfigRef.current.barTimerDuration,
@@ -2119,9 +2133,10 @@ export default function MetronomeScreen() {
       barRepeats: {} as Record<number, any>,
       loopBlocks: [] as any[],
       barLoopMode: "loop" as const,
+      blockPlayMode: "sequential" as const,
       subdivisionPattern: [...subdivisionPattern],
     };
-  }, [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, subdivisionPattern]);
+  }, [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, blockPlayMode, subdivisionPattern]);
 
   const handleLoadPracticeEntry = useCallback((entry: PracticeEntry) => {
     const engine = engineRef.current;
@@ -2198,6 +2213,7 @@ export default function MetronomeScreen() {
       const entryBlocks = (entry as any).loopBlocks || [];
       setLoopBlocks([...entryBlocks]);
       setBarLoopMode(entry.barLoopMode);
+      setBlockPlayMode((entry as any).blockPlayMode || "sequential");
       setSubdivisionPattern([...entry.subdivisionPattern]);
 
       engine.setBpm(entry.bpm);
@@ -2205,6 +2221,7 @@ export default function MetronomeScreen() {
       engine.setBeatTypes([...entry.beatTypes]);
       engine.setAllBeatSubdivisions(entry.beatSubdivisions);
       engine.setLoopBlocks(entryBlocks);
+      engine.setBlockPlayMode((entry as any).blockPlayMode || "sequential");
       engine.setAllBarRepeats(entry.barRepeats || {});
       const bpmOverridesEntry: Record<number, number> = {};
       for (const [k, v] of Object.entries(entry.barRepeats || {})) {
@@ -2599,6 +2616,8 @@ export default function MetronomeScreen() {
             onLoopBlocksChange={handleLoopBlocksChange}
             barLoopMode={barLoopMode}
             onBarLoopModeChange={setBarLoopMode}
+            blockPlayMode={blockPlayMode}
+            onBlockPlayModeChange={setBlockPlayMode}
             onBarScrollOffset={(offset) => { barScrollOffsetRef.current = offset; }}
             onBarTimerExpired={handleTimerExpired}
             onBarClockConfigChange={(mode, dur) => {
