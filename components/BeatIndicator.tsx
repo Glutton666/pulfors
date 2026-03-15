@@ -2157,7 +2157,7 @@ export function BeatIndicator({
           })()}
 
           <View style={styles.signatureRow} pointerEvents="none">
-            <Text style={[styles.digitalSignature, { fontSize: moderateScale(28, 0.3), color: halfTime ? C.accent : Colors.textTertiary }]} numberOfLines={1}>
+            <Text style={[styles.digitalSignature, { color: halfTime ? C.accent : Colors.textTertiary, opacity: halfTime ? 0.25 : 0.15 }]} numberOfLines={1} adjustsFontSizeToFit>
               {halfTime ? "1/2" : "1/1"}
             </Text>
           </View>
