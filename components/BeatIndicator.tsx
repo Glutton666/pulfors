@@ -2253,7 +2253,7 @@ const styles = StyleSheet.create({
   },
   digitalSignature: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: moderateScale(166, 0.4),
+    fontSize: moderateScale(145, 0.4),
     color: Colors.textTertiary,
     opacity: 0.15,
   },
