@@ -2299,6 +2299,9 @@ export default function MetronomeScreen() {
       saveNoteSamples(entrySamples);
       saveNoteSampleNames(entryNames);
       saveNoteSampleSources(entrySources);
+      if (Object.keys(entrySamples).length > 0) {
+        preloadNoteSampleSounds(entrySamples);
+      }
 
       engine.setBpm(entry.bpm);
       engine.setBeatsPerMeasure(entry.beatsPerMeasure);
@@ -2341,6 +2344,9 @@ export default function MetronomeScreen() {
       saveNoteSamples(barSamples);
       saveNoteSampleNames(barNames);
       saveNoteSampleSources(barSources);
+      if (Object.keys(barSamples).length > 0) {
+        preloadNoteSampleSounds(barSamples);
+      }
 
       engine.setBpm(entry.bpm);
       engine.setBeatsPerMeasure(entry.beatsPerMeasure);
@@ -2371,7 +2377,7 @@ export default function MetronomeScreen() {
     }
 
     loadedPracticeNoteRef.current = { id: entry.id, label: entry.label };
-  }, [isPlaying, barMode, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, noteSamples, noteSampleNames, noteSampleSources]);
+  }, [isPlaying, barMode, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, noteSamples, noteSampleNames, noteSampleSources, preloadNoteSampleSounds]);
 
   const handleDeepLinkImport = useCallback((url: string) => {
     try {

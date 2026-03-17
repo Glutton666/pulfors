@@ -105,8 +105,9 @@ When switching modes, the current config is saved to the appropriate ref and the
 The app supports full data backup/restore and individual practice entry sharing.
 
 ### Architecture
-- **`lib/backup.ts`**: Core backup utilities. `exportBackup()` collects all 15 AsyncStorage keys into a single JSON file with metadata (app name, version, creation date, key count). `importBackup()` reads a backup file and restores all data with overwrite confirmation. `sharePracticeEntry()` exports a single practice entry as a shareable JSON file. `importPracticeEntry()` imports a practice entry from file and adds it to the practice book.
-- **File formats**: Full backup uses `.metronome.json` extension. Practice entries use `.metronome-practice.json` extension. Both include `_meta` headers for validation.
+- **`lib/backup.ts`**: Core backup utilities. `exportBackup()` collects all 15 AsyncStorage keys into a single JSON file with metadata. `importBackup()` reads a backup file and restores all data with overwrite confirmation. `sharePracticeEntry()` exports a single practice entry as a shareable JSON file. `importPracticeEntry()` imports a practice entry from file and adds it to the practice book.
+- **Audio file embedding**: Backup and share files embed actual audio files as base64 in an `audioFiles` field. On export, all note sample URIs (from global `@note_samples` and per-entry `noteSamples`) are collected, the corresponding audio files are read as base64, and stored in the JSON. On import, audio files are written to `documentDirectory/note_samples/` (persistent) and all URIs are remapped to the new paths.
+- **File formats**: Full backup uses `.metronome.json` extension (version 2). Practice entries use `.metronome-practice.json` extension. Both include `_meta` headers for validation.
 - **Platform support**: Web uses Blob download/file input. Native (iOS/Android) uses `expo-sharing` and `expo-document-picker`.
 - **UI**: Backup/restore buttons in Settings → Profile tab under "데이터 백업" section. Practice entry import button (download icon) next to save button in Practice Book modal. Share button on each practice entry via swipe actions.
 

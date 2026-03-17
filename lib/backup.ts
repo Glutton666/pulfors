@@ -24,6 +24,8 @@ const ALL_KEYS = [
   "metronome_onboarding_done",
 ];
 
+const SAMPLES_DIR = "note_samples/";
+
 interface BackupFile {
   _meta: {
     app: string;
@@ -32,6 +34,7 @@ interface BackupFile {
     keyCount: number;
   };
   data: Record<string, string | null>;
+  audioFiles?: Record<string, string>;
 }
 
 interface PracticeShareFile {
@@ -41,6 +44,7 @@ interface PracticeShareFile {
     createdAt: string;
   };
   entry: PracticeEntry;
+  audioFiles?: Record<string, string>;
 }
 
 function formatDateForFilename(): string {
@@ -105,6 +109,186 @@ function downloadJsonWeb(json: string, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
+function extractBaseUri(uri: string): string {
+  return uri.split("#")[0];
+}
+
+function extractFragment(uri: string): string {
+  const idx = uri.indexOf("#");
+  return idx >= 0 ? uri.substring(idx) : "";
+}
+
+function filenameFromUri(uri: string): string {
+  const base = extractBaseUri(uri);
+  const parts = base.split("/");
+  return parts[parts.length - 1] || `sample_${Date.now()}`;
+}
+
+async function ensureSamplesDir(): Promise<string> {
+  const dir = FileSystem.documentDirectory + SAMPLES_DIR;
+  const info = await FileSystem.getInfoAsync(dir);
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+  }
+  return dir;
+}
+
+async function readAudioAsBase64(uri: string): Promise<string | null> {
+  if (Platform.OS === "web") return null;
+  const baseUri = extractBaseUri(uri);
+  if (!baseUri.startsWith("file://")) return null;
+  try {
+    const info = await FileSystem.getInfoAsync(baseUri);
+    if (!info.exists) return null;
+    return await FileSystem.readAsStringAsync(baseUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+  } catch (e) {
+    console.warn("[Backup] Failed to read audio file:", baseUri, e);
+    return null;
+  }
+}
+
+async function writeAudioFromBase64(filename: string, base64: string): Promise<string> {
+  const dir = await ensureSamplesDir();
+  const fileUri = dir + filename;
+  await FileSystem.writeAsStringAsync(fileUri, base64, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  return fileUri;
+}
+
+function collectUrisFromSampleMap(
+  samples: Record<string, string> | undefined
+): Map<string, string> {
+  const uris = new Map<string, string>();
+  if (!samples) return uris;
+  for (const uri of Object.values(samples)) {
+    if (uri) {
+      const fname = filenameFromUri(uri);
+      uris.set(fname, extractBaseUri(uri));
+    }
+  }
+  return uris;
+}
+
+function collectAllAudioUris(
+  data: Record<string, string | null>
+): Map<string, string> {
+  const uris = new Map<string, string>();
+
+  const samplesJson = data["@note_samples"];
+  if (samplesJson) {
+    try {
+      const samples: Record<string, string> = JSON.parse(samplesJson);
+      for (const [, uri] of Object.entries(samples)) {
+        if (uri) {
+          const fname = filenameFromUri(uri);
+          uris.set(fname, extractBaseUri(uri));
+        }
+      }
+    } catch {}
+  }
+
+  const bookJson = data["practice_book"];
+  if (bookJson) {
+    try {
+      const entries: PracticeEntry[] = JSON.parse(bookJson);
+      for (const entry of entries) {
+        if (entry.noteSamples) {
+          for (const [, uri] of Object.entries(entry.noteSamples)) {
+            if (uri) {
+              const fname = filenameFromUri(uri);
+              uris.set(fname, extractBaseUri(uri));
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+
+  return uris;
+}
+
+async function readAllAudioFiles(
+  uris: Map<string, string>
+): Promise<Record<string, string>> {
+  const audioFiles: Record<string, string> = {};
+  for (const [fname, baseUri] of uris) {
+    const base64 = await readAudioAsBase64(baseUri);
+    if (base64) {
+      audioFiles[fname] = base64;
+    }
+  }
+  return audioFiles;
+}
+
+function remapUri(
+  oldUri: string,
+  uriMapping: Map<string, string>
+): string {
+  const fname = filenameFromUri(oldUri);
+  const newBase = uriMapping.get(fname);
+  if (newBase) {
+    return newBase + extractFragment(oldUri);
+  }
+  return oldUri;
+}
+
+function remapSampleMap(
+  samples: Record<string, string>,
+  uriMapping: Map<string, string>
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, uri] of Object.entries(samples)) {
+    result[key] = remapUri(uri, uriMapping);
+  }
+  return result;
+}
+
+async function restoreAudioFiles(
+  audioFiles: Record<string, string>
+): Promise<Map<string, string>> {
+  const uriMapping = new Map<string, string>();
+  for (const [fname, base64] of Object.entries(audioFiles)) {
+    try {
+      const newUri = await writeAudioFromBase64(fname, base64);
+      uriMapping.set(fname, newUri);
+    } catch (e) {
+      console.warn("[Backup] Failed to restore audio file:", fname, e);
+    }
+  }
+  return uriMapping;
+}
+
+function remapDataUris(
+  data: Record<string, string | null>,
+  uriMapping: Map<string, string>
+): Record<string, string | null> {
+  const result = { ...data };
+
+  if (result["@note_samples"]) {
+    try {
+      const samples: Record<string, string> = JSON.parse(result["@note_samples"]!);
+      result["@note_samples"] = JSON.stringify(remapSampleMap(samples, uriMapping));
+    } catch {}
+  }
+
+  if (result["practice_book"]) {
+    try {
+      const entries: PracticeEntry[] = JSON.parse(result["practice_book"]!);
+      for (const entry of entries) {
+        if (entry.noteSamples && Object.keys(entry.noteSamples).length > 0) {
+          entry.noteSamples = remapSampleMap(entry.noteSamples, uriMapping);
+        }
+      }
+      result["practice_book"] = JSON.stringify(entries);
+    } catch {}
+  }
+
+  return result;
+}
+
 export async function exportBackup(): Promise<boolean> {
   try {
     const pairs = await AsyncStorage.multiGet(ALL_KEYS);
@@ -113,17 +297,21 @@ export async function exportBackup(): Promise<boolean> {
       data[key] = value;
     }
 
+    const allUris = collectAllAudioUris(data);
+    const audioFiles = await readAllAudioFiles(allUris);
+
     const backup: BackupFile = {
       _meta: {
         app: "metronome",
-        version: 1,
+        version: 2,
         createdAt: new Date().toISOString(),
         keyCount: Object.keys(data).filter((k) => data[k] !== null).length,
       },
       data,
+      ...(Object.keys(audioFiles).length > 0 ? { audioFiles } : {}),
     };
 
-    const json = JSON.stringify(backup, null, 2);
+    const json = JSON.stringify(backup);
     const filename = `metronome_backup_${formatDateForFilename()}.metronome.json`;
 
     if (Platform.OS === "web") {
@@ -186,10 +374,19 @@ async function restoreFromJson(json: string): Promise<{ success: boolean; keyCou
       return { success: false, keyCount: 0 };
     }
 
+    let data = backup.data;
+
+    if (backup.audioFiles && Object.keys(backup.audioFiles).length > 0 && Platform.OS !== "web") {
+      const uriMapping = await restoreAudioFiles(backup.audioFiles);
+      if (uriMapping.size > 0) {
+        data = remapDataUris(data, uriMapping);
+      }
+    }
+
     await AsyncStorage.multiRemove(ALL_KEYS);
 
     const pairs: [string, string][] = [];
-    for (const [key, value] of Object.entries(backup.data)) {
+    for (const [key, value] of Object.entries(data)) {
       if (value !== null && value !== undefined && ALL_KEYS.includes(key)) {
         pairs.push([key, value]);
       }
@@ -208,6 +405,9 @@ async function restoreFromJson(json: string): Promise<{ success: boolean; keyCou
 
 export async function sharePracticeEntry(entry: PracticeEntry): Promise<boolean> {
   try {
+    const entryUris = collectUrisFromSampleMap(entry.noteSamples);
+    const audioFiles = await readAllAudioFiles(entryUris);
+
     const shareData: PracticeShareFile = {
       _meta: {
         app: "metronome",
@@ -215,9 +415,10 @@ export async function sharePracticeEntry(entry: PracticeEntry): Promise<boolean>
         createdAt: new Date().toISOString(),
       },
       entry,
+      ...(Object.keys(audioFiles).length > 0 ? { audioFiles } : {}),
     };
 
-    const json = JSON.stringify(shareData, null, 2);
+    const json = JSON.stringify(shareData);
     const safeName = (entry.label || "practice").replace(/[^a-zA-Z0-9가-힣_-]/g, "_").slice(0, 30);
     const filename = `${safeName}.metronome-practice.json`;
 
@@ -285,6 +486,13 @@ async function parsePracticeJson(json: string): Promise<{ success: boolean; entr
 
     if (!entry.bpm || !entry.beatsPerMeasure || !entry.beatTypes) {
       return { success: false };
+    }
+
+    if (data.audioFiles && Object.keys(data.audioFiles).length > 0 && Platform.OS !== "web") {
+      const uriMapping = await restoreAudioFiles(data.audioFiles);
+      if (uriMapping.size > 0 && entry.noteSamples) {
+        entry.noteSamples = remapSampleMap(entry.noteSamples, uriMapping);
+      }
     }
 
     const newId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
