@@ -24,6 +24,7 @@ interface NoteModeViewProps {
   isPlaying: boolean;
   onAddToQueue: (entry: PracticeEntry) => void;
   onRemoveFromQueue: (index: number) => void;
+  onReorderQueue: (fromIndex: number, toIndex: number) => void;
   onInsertNext: (entry: PracticeEntry) => void;
   onPlayModeChange: (mode: "once" | "loop" | "random") => void;
   onTogglePlay: () => void;
@@ -64,18 +65,34 @@ function QueueItem({
   entry,
   index,
   isCurrent,
+  isFirst,
+  isLast,
   accentColor,
   onRemove,
+  onMoveUp,
+  onMoveDown,
 }: {
   entry: PracticeEntry;
   index: number;
   isCurrent: boolean;
+  isFirst: boolean;
+  isLast: boolean;
   accentColor: string;
   onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
 }) {
   const { t } = useLanguage();
   return (
     <View style={[styles.queueItem, isCurrent && { borderColor: accentColor, borderWidth: 1.5, backgroundColor: "rgba(212,168,70,0.08)" }]}>
+      <View style={styles.reorderBtns}>
+        <Pressable onPress={onMoveUp} hitSlop={4} disabled={isFirst} style={{ opacity: isFirst ? 0.25 : 1 }}>
+          <Ionicons name="chevron-up" size={14} color={Colors.textTertiary} />
+        </Pressable>
+        <Pressable onPress={onMoveDown} hitSlop={4} disabled={isLast} style={{ opacity: isLast ? 0.25 : 1 }}>
+          <Ionicons name="chevron-down" size={14} color={Colors.textTertiary} />
+        </Pressable>
+      </View>
       <View style={styles.queueIndex}>
         {isCurrent ? (
           <Ionicons name="play" size={12} color={accentColor} />
@@ -150,6 +167,7 @@ export function NoteModeView({
   isPlaying,
   onAddToQueue,
   onRemoveFromQueue,
+  onReorderQueue,
   onInsertNext,
   onPlayModeChange,
   onTogglePlay,
@@ -209,6 +227,9 @@ export function NoteModeView({
             {currentEntry.label}
           </Text>
           <Text style={styles.nowPlayingBpm}>{currentEntry.bpm} BPM</Text>
+          <View style={[styles.progressBadge, { backgroundColor: C.accent + "22" }]}>
+            <Text style={[styles.progressText, { color: C.accent }]}>{currentIndex + 1}/{queue.length}</Text>
+          </View>
         </View>
       )}
 
@@ -273,8 +294,12 @@ export function NoteModeView({
                 entry={item}
                 index={index}
                 isCurrent={isPlaying && index === currentIndex}
+                isFirst={index === 0}
+                isLast={index === queue.length - 1}
                 accentColor={C.accent}
                 onRemove={() => onRemoveFromQueue(index)}
+                onMoveUp={() => onReorderQueue(index, index - 1)}
+                onMoveDown={() => onReorderQueue(index, index + 1)}
               />
             )}
             showsVerticalScrollIndicator={false}
@@ -363,6 +388,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
   },
+  progressBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  progressText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 11,
+  },
   playControls: {
     flexDirection: "row",
     alignItems: "center",
@@ -444,6 +478,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     marginBottom: 6,
+  },
+  reorderBtns: {
+    alignItems: "center",
+    gap: 0,
   },
   queueIndex: {
     width: 22,

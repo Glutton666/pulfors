@@ -172,6 +172,8 @@ export default function MetronomeScreen() {
   useEffect(() => { noteIsPlayingRef.current = noteIsPlaying; }, [noteIsPlaying]);
   const [noteBarEntries, setNoteBarEntries] = useState<PracticeEntry[]>([]);
   const noteAdvanceQueueRef = useRef<() => void>(() => {});
+  const noteShuffledOrderRef = useRef<number[]>([]);
+  const noteShuffledPosRef = useRef(0);
 
   const [isDragging, setIsDragging] = useState(false);
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
@@ -2313,6 +2315,15 @@ export default function MetronomeScreen() {
     showPlayingNotification(entry.bpm, modeLabel, languageRef.current);
   }, [applyEntryToEngine]);
 
+  const createShuffledOrder = useCallback((length: number) => {
+    const order = [...Array(length).keys()];
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    return order;
+  }, []);
+
   const noteAdvanceQueue = useCallback(() => {
     const q = noteQueueRef.current;
     const mode = notePlayModeRef.current;
@@ -2332,15 +2343,16 @@ export default function MetronomeScreen() {
     } else if (mode === "loop") {
       nextIndex = (ci + 1) % q.length;
     } else if (mode === "random") {
-      if (q.length === 1) {
-        nextIndex = 0;
+      const pos = noteShuffledPosRef.current + 1;
+      const order = noteShuffledOrderRef.current;
+      if (pos < order.length) {
+        noteShuffledPosRef.current = pos;
+        nextIndex = order[pos];
       } else {
-        const shuffled = [...Array(q.length).keys()].filter(i => i !== ci);
-        for (let i = shuffled.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-        nextIndex = shuffled[0];
+        const newOrder = createShuffledOrder(q.length);
+        noteShuffledOrderRef.current = newOrder;
+        noteShuffledPosRef.current = 0;
+        nextIndex = newOrder[0];
       }
     }
 
@@ -2354,7 +2366,7 @@ export default function MetronomeScreen() {
       setProgressInfo(null);
       showPausedNotification(bpmRef.current, "Note", languageRef.current);
     }
-  }, [noteStartPlayingEntry]);
+  }, [noteStartPlayingEntry, createShuffledOrder]);
 
   useEffect(() => { noteAdvanceQueueRef.current = noteAdvanceQueue; }, [noteAdvanceQueue]);
 
@@ -2430,6 +2442,23 @@ export default function MetronomeScreen() {
     }
   }, [noteStartPlayingEntry]);
 
+  const handleNoteReorderQueue = useCallback((fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= noteQueueRef.current.length) return;
+    const updated = [...noteQueueRef.current];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    noteQueueRef.current = updated;
+    setNoteQueue(updated);
+    const ci = noteCurrentIndexRef.current;
+    if (ci === fromIndex) {
+      setNoteCurrentIndex(toIndex);
+    } else if (fromIndex < ci && toIndex >= ci) {
+      setNoteCurrentIndex(ci - 1);
+    } else if (fromIndex > ci && toIndex <= ci) {
+      setNoteCurrentIndex(ci + 1);
+    }
+  }, []);
+
   const handleNoteInsertNext = useCallback((entry: PracticeEntry) => {
     const ci = noteCurrentIndexRef.current;
     setNoteQueue(prev => {
@@ -2457,12 +2486,16 @@ export default function MetronomeScreen() {
     } else {
       const q = noteQueueRef.current;
       if (q.length === 0) return;
-      const startIndex = notePlayModeRef.current === "random"
-        ? Math.floor(Math.random() * q.length)
-        : 0;
+      let startIndex = 0;
+      if (notePlayModeRef.current === "random") {
+        const order = createShuffledOrder(q.length);
+        noteShuffledOrderRef.current = order;
+        noteShuffledPosRef.current = 0;
+        startIndex = order[0];
+      }
       noteStartPlayingEntry(startIndex);
     }
-  }, [noteStartPlayingEntry]);
+  }, [noteStartPlayingEntry, createShuffledOrder]);
 
   const handleNoteSave = useCallback(async () => {
     const q = noteQueueRef.current;
@@ -3152,6 +3185,7 @@ export default function MetronomeScreen() {
             isPlaying={noteIsPlaying}
             onAddToQueue={handleNoteAddToQueue}
             onRemoveFromQueue={handleNoteRemoveFromQueue}
+            onReorderQueue={handleNoteReorderQueue}
             onInsertNext={handleNoteInsertNext}
             onPlayModeChange={setNotePlayMode}
             onTogglePlay={handleNoteTogglePlay}
