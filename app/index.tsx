@@ -2954,6 +2954,7 @@ export default function MetronomeScreen() {
         </Text>
       </Animated.View>
 
+      {!noteMode && (
       <Pressable
         style={[
           styles.menuButton,
@@ -2965,6 +2966,7 @@ export default function MetronomeScreen() {
       >
         <Ionicons name="menu" size={22} color={Colors.textSecondary} />
       </Pressable>
+      )}
 
       {showMenu && (
         <Modal transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
@@ -3160,7 +3162,7 @@ export default function MetronomeScreen() {
         }}
       />
 
-      {completedGoalPopups.length > 0 && !showMenu && !showSignalGen && !showPracticeBook && !showWorkUp && !showSettings && (
+      {completedGoalPopups.length > 0 && !showMenu && !showSignalGen && !showPracticeBook && !showWorkUp && !showSettings && !noteMode && (
         <View style={[styles.goalPopupContainer, { top: (insets.top || webTopInset) + 8, pointerEvents: "box-none" }]}>
           {completedGoalPopups.map((goal) => {
             const goalColor = goal.type === "beat_mode_time" ? "#58A6FF" : goal.type === "bar_mode_time" ? "#F0883E" : goal.type === "room_time" ? "#A371F7" : C.accent;
