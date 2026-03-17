@@ -2976,35 +2976,23 @@ export default function MetronomeScreen() {
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
+                  setShowSettings(true);
+                }}
+              >
+                <Ionicons name="settings-outline" size={18} color={Colors.textSecondary} />
+                <Text style={styles.menuItemText}>{t("main", "menuSettings")}</Text>
+              </Pressable>
+              <View style={styles.menuDivider} />
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                onPress={() => {
+                  setShowMenu(false);
                   setShowSignalGen(true);
                   if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
                 }}
               >
                 <MaterialCommunityIcons name="waveform" size={18} color={C.accent} />
                 <Text style={styles.menuItemText}>{t("main", "menuSignalGenerator")}</Text>
-              </Pressable>
-              <View style={styles.menuDivider} />
-              <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-                onPress={() => {
-                  setShowMenu(false);
-                  setShowPracticeBook(true);
-                  if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
-                }}
-              >
-                <MaterialCommunityIcons name="notebook-outline" size={18} color={C.accent} />
-                <Text style={styles.menuItemText}>{t("main", "menuPracticeNote")}</Text>
-              </Pressable>
-              <View style={styles.menuDivider} />
-              <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-                onPress={() => {
-                  setShowMenu(false);
-                  handleEnterNoteMode();
-                }}
-              >
-                <MaterialCommunityIcons name="playlist-music" size={18} color={C.accent} />
-                <Text style={styles.menuItemText}>{t("main", "menuNoteMode")}</Text>
               </Pressable>
               <View style={styles.menuDivider} />
               <Pressable
@@ -3022,11 +3010,23 @@ export default function MetronomeScreen() {
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
-                  setShowSettings(true);
+                  handleEnterNoteMode();
                 }}
               >
-                <Ionicons name="settings-outline" size={18} color={Colors.textSecondary} />
-                <Text style={styles.menuItemText}>{t("main", "menuSettings")}</Text>
+                <MaterialCommunityIcons name="playlist-music" size={18} color={C.accent} />
+                <Text style={styles.menuItemText}>{t("main", "menuNoteMode")}</Text>
+              </Pressable>
+              <View style={styles.menuDivider} />
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                onPress={() => {
+                  setShowMenu(false);
+                  setShowPracticeBook(true);
+                  if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
+                }}
+              >
+                <MaterialCommunityIcons name="notebook-outline" size={18} color={C.accent} />
+                <Text style={styles.menuItemText}>{t("main", "menuPracticeNote")}</Text>
               </Pressable>
             </View>
           </Pressable>
