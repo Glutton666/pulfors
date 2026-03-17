@@ -162,47 +162,7 @@ export function NoteRecorderModal({
     }
   }, [visible, cleanup, existingName]);
 
-  const startCountdown = useCallback(async () => {
-    const { status } = await Audio.requestPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert(t("noteRecorder", "permissionRequired"), t("noteRecorder", "micPermission"));
-      return;
-    }
-
-    sourceTypeRef.current = "recording";
-    setPhase("countdown");
-    setCountdownValue(1);
-    let count = 1;
-    const interval = 60000 / bpm;
-
-    const tick = () => {
-      if (Platform.OS !== "web") {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
-      countScale.value = 0.5;
-      countOpacity.value = 0;
-      countScale.value = withSpring(1, { damping: 8, stiffness: 300 });
-      countOpacity.value = withTiming(1, { duration: 200 });
-      playClick();
-    };
-
-    tick();
-
-    const doTick = () => {
-      count++;
-      if (count <= COUNTDOWN_BEATS) {
-        setCountdownValue(count);
-        tick();
-        countdownTimerRef.current = setTimeout(doTick, interval);
-      } else {
-        startRecording();
-      }
-    };
-
-    countdownTimerRef.current = setTimeout(doTick, interval);
-  }, [bpm, playClick]);
-
-  const startRecording = useCallback(async () => {
+  const prepareRecording = useCallback(async () => {
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
@@ -239,7 +199,64 @@ export function NoteRecorderModal({
       } as any);
 
       recordingRef.current = recording;
-      await recording.startAsync();
+    } catch (e) {
+      console.error("Failed to prepare recording:", e);
+    }
+  }, []);
+
+  const startCountdown = useCallback(async () => {
+    const { status } = await Audio.requestPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(t("noteRecorder", "permissionRequired"), t("noteRecorder", "micPermission"));
+      return;
+    }
+
+    sourceTypeRef.current = "recording";
+    setPhase("countdown");
+    setCountdownValue(1);
+    let count = 1;
+    const interval = 60000 / bpm;
+
+    prepareRecording();
+
+    const tick = () => {
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      countScale.value = 0.5;
+      countOpacity.value = 0;
+      countScale.value = withSpring(1, { damping: 8, stiffness: 300 });
+      countOpacity.value = withTiming(1, { duration: 200 });
+      playClick();
+    };
+
+    tick();
+
+    const doTick = () => {
+      count++;
+      if (count <= COUNTDOWN_BEATS) {
+        setCountdownValue(count);
+        tick();
+        countdownTimerRef.current = setTimeout(doTick, interval);
+      } else {
+        startRecording();
+      }
+    };
+
+    countdownTimerRef.current = setTimeout(doTick, interval);
+  }, [bpm, playClick, prepareRecording]);
+
+  const startRecording = useCallback(async () => {
+    try {
+      if (!recordingRef.current) {
+        await prepareRecording();
+      }
+      if (!recordingRef.current) {
+        setPhase("idle");
+        return;
+      }
+
+      await recordingRef.current.startAsync();
       setPhase("recording");
       setRecordDuration(0);
 
@@ -261,7 +278,7 @@ export function NoteRecorderModal({
       console.error("Failed to start recording:", e);
       setPhase("idle");
     }
-  }, [bpm, startMetronomeClicks]);
+  }, [bpm, startMetronomeClicks, prepareRecording]);
 
   const stopRecording = useCallback(async () => {
     stopMetronomeClicks();
