@@ -2550,7 +2550,7 @@ export default function MetronomeScreen() {
                 }}
               >
                 <MaterialCommunityIcons name="waveform" size={18} color={C.accent} />
-                <Text style={styles.menuItemText}>Signal Generator</Text>
+                <Text style={styles.menuItemText}>{t("main", "menuSignalGenerator")}</Text>
               </Pressable>
               <View style={styles.menuDivider} />
               <Pressable
@@ -2562,7 +2562,7 @@ export default function MetronomeScreen() {
                 }}
               >
                 <MaterialCommunityIcons name="notebook-outline" size={18} color={C.accent} />
-                <Text style={styles.menuItemText}>Practice Note</Text>
+                <Text style={styles.menuItemText}>{t("main", "menuPracticeNote")}</Text>
               </Pressable>
               <View style={styles.menuDivider} />
               <Pressable
@@ -2573,7 +2573,7 @@ export default function MetronomeScreen() {
                 }}
               >
                 <MaterialCommunityIcons name="chart-line" size={18} color={C.accent} />
-                <Text style={styles.menuItemText}>Work Up</Text>
+                <Text style={styles.menuItemText}>{t("main", "menuWorkUp")}</Text>
               </Pressable>
               <View style={styles.menuDivider} />
               <Pressable
@@ -2584,7 +2584,7 @@ export default function MetronomeScreen() {
                 }}
               >
                 <Ionicons name="settings-outline" size={18} color={Colors.textSecondary} />
-                <Text style={styles.menuItemText}>Settings</Text>
+                <Text style={styles.menuItemText}>{t("main", "menuSettings")}</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -2612,6 +2612,7 @@ export default function MetronomeScreen() {
         subIndex={recorderTarget?.sub ?? 0}
         hasExisting={recorderTarget ? hasNoteSample(recorderTarget.beat, recorderTarget.sub, noteSamples) : false}
         existingName={recorderTarget ? (noteSampleNames[`${recorderTarget.beat}-${recorderTarget.sub}`] || "") : ""}
+        bpm={bpm}
       />
 
       <PracticeBookModal
@@ -2663,7 +2664,7 @@ export default function MetronomeScreen() {
             fontSize: 14,
             marginTop: 12,
             fontFamily: "SpaceGrotesk_400Regular",
-          }}>Rebooting...</Text>
+          }}>{t("main", "rebooting")}</Text>
         </View>
       )}
 
@@ -2730,8 +2731,8 @@ export default function MetronomeScreen() {
               >
                 <Ionicons name="checkmark-circle" size={22} color={goalColor} />
                 <View style={styles.goalPopupInfo}>
-                  <Text style={[styles.goalPopupTitle, { color: goalColor }]}>{goal.label} Complete!</Text>
-                  <Text style={styles.goalPopupSub}>Tap to dismiss</Text>
+                  <Text style={[styles.goalPopupTitle, { color: goalColor }]}>{goal.label} {t("main", "goalComplete")}</Text>
+                  <Text style={styles.goalPopupSub}>{t("main", "tapToDismiss")}</Text>
                 </View>
                 <Ionicons name="close" size={16} color={Colors.textTertiary} />
               </Pressable>

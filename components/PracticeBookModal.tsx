@@ -248,7 +248,7 @@ function SwipeableEntry({
 
           <View style={styles.entryDetails}>
             <View style={[styles.modeBadge, { backgroundColor: isBeatMode ? "#3B82F6" : accentColor }]}>
-              <Text style={styles.modeBadgeText}>{isBeatMode ? "Beat" : "Bar"}</Text>
+              <Text style={styles.modeBadgeText}>{isBeatMode ? t("practiceBook", "badgeBeat") : t("practiceBook", "badgeBar")}</Text>
             </View>
             <View style={styles.detailChip}>
               <Text style={[styles.detailValue, { color: accentColor }]}>
@@ -260,7 +260,7 @@ function SwipeableEntry({
               <Text style={[styles.detailValue, { color: accentColor }]}>
                 {barCount}
               </Text>
-              <Text style={styles.detailUnit}>{isBeatMode ? "Beat" : "Bar"}</Text>
+              <Text style={styles.detailUnit}>{isBeatMode ? t("practiceBook", "badgeBeat") : t("practiceBook", "badgeBar")}</Text>
             </View>
             <View style={styles.detailChip}>
               <Ionicons
@@ -445,7 +445,7 @@ export function PracticeBookModal({
               size={22}
               color={C.accent}
             />
-            <Text style={styles.title}>Practice Note</Text>
+            <Text style={styles.title}>{t("practiceBook", "title")}</Text>
           </View>
           <Pressable onPress={onClose} hitSlop={10}>
             <Ionicons name="close" size={24} color={Colors.textSecondary} />

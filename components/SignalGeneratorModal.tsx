@@ -830,7 +830,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
         <View style={styles.card}>
           <View style={styles.header}>
             <MaterialCommunityIcons name="waveform" size={20} color={C.accent} />
-            <Text style={[styles.title, { color: C.accent }]}>Signal Generator</Text>
+            <Text style={[styles.title, { color: C.accent }]}>{t("signalGenerator", "title")}</Text>
             <Pressable onPress={handleClose} hitSlop={12} style={styles.closeBtn}>
               <Ionicons name="close" size={20} color={Colors.textSecondary} />
             </Pressable>
@@ -909,7 +909,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
           </Text>
 
           <View style={styles.waveSection}>
-            <Text style={styles.sectionLabel}>WAVEFORM</Text>
+            <Text style={styles.sectionLabel}>{t("signalGenerator", "waveform")}</Text>
             <View style={styles.waveRow}>
               {WAVE_CONFIGS.map((w) => {
                 const active = waveType === w.type;

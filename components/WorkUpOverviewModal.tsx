@@ -509,7 +509,7 @@ export function WorkUpOverviewModal({
           <Pressable style={[s.sheet, { backgroundColor: Colors.surface }]} onPress={(e) => e.stopPropagation()}>
 
             <View style={s.header}>
-              <Text style={s.title}>Work Up</Text>
+              <Text style={s.title}>{t("workUp", "title")}</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                 {loggingEnabled && (
                   <Pressable onPress={() => setShowShareModal(true)} hitSlop={12}>
@@ -525,7 +525,7 @@ export function WorkUpOverviewModal({
             {!loggingEnabled ? (
               <View style={s.disabledWrap}>
                 <MaterialCommunityIcons name="chart-line" size={48} color={Colors.textTertiary} />
-                <Text style={s.disabledText}>Enable activity logging in Settings to track your practice</Text>
+                <Text style={s.disabledText}>{t("workUp", "enableLogging")}</Text>
               </View>
             ) : (
               <>
@@ -534,7 +534,7 @@ export function WorkUpOverviewModal({
                   <View style={s.cardHeader}>
                     <View style={s.cardHeaderLeft}>
                       <Ionicons name="flag" size={16} color={C.accent} />
-                      <Text style={[s.cardTitle, { color: C.accent }]}>Goals</Text>
+                      <Text style={[s.cardTitle, { color: C.accent }]}>{t("workUp", "goals")}</Text>
                     </View>
                     <Pressable testID="add-goal-btn" onPress={() => setShowAddGoal(!showAddGoal)} hitSlop={12} style={{ padding: 4 }}>
                       <Ionicons name={showAddGoal ? "close-circle" : "add-circle"} size={20} color={C.accent} />
@@ -581,7 +581,7 @@ export function WorkUpOverviewModal({
                   )}
 
                   {goals.length === 0 && !showAddGoal ? (
-                    <Text style={s.emptyHint}>Tap + to set a practice goal</Text>
+                    <Text style={s.emptyHint}>{t("workUp", "tapToSetGoal")}</Text>
                   ) : (
                     goals.map((goal) => {
                       const progress = getGoalProgress(goal);
@@ -741,7 +741,7 @@ export function WorkUpOverviewModal({
                   <Pressable style={s.cardHeader} onPress={() => setShowDetails(!showDetails)}>
                     <View style={s.cardHeaderLeft}>
                       <MaterialCommunityIcons name="format-list-bulleted" size={16} color={C.accent} />
-                      <Text style={[s.cardTitle, { color: Colors.text }]}>Session Details</Text>
+                      <Text style={[s.cardTitle, { color: Colors.text }]}>{t("workUp", "sessionDetails")}</Text>
                     </View>
                     <Ionicons name={showDetails ? "chevron-up" : "chevron-down"} size={18} color={Colors.textSecondary} />
                   </Pressable>
@@ -879,7 +879,7 @@ export function WorkUpOverviewModal({
 
                     {goals.length > 0 && (
                       <View style={shareStyles.goalsSection}>
-                        <Text style={shareStyles.sectionTitle}>Goals</Text>
+                        <Text style={shareStyles.sectionTitle}>{t("workUp", "goals")}</Text>
                         {[...goals].sort((a, b) => {
                           const aCompleted = getGoalProgress(a) >= a.target ? 1 : 0;
                           const bCompleted = getGoalProgress(b) >= b.target ? 1 : 0;
@@ -938,7 +938,7 @@ export function WorkUpOverviewModal({
 
               {/* Background option */}
               <View style={shareStyles.bgOptions}>
-                <Text style={shareStyles.bgTitle}>Background</Text>
+                <Text style={shareStyles.bgTitle}>{t("workUp", "shareBackground")}</Text>
                 <View style={shareStyles.bgRow}>
                   <Pressable
                     style={[shareStyles.bgChip, shareBgUri ? { borderColor: C.accent, backgroundColor: C.accentDim } : {}]}
@@ -951,7 +951,7 @@ export function WorkUpOverviewModal({
                         <Ionicons name="image-outline" size={14} color={Colors.textTertiary} />
                       </View>
                     )}
-                    <Text style={[shareStyles.bgChipText, shareBgUri ? { color: C.accent } : {}]}>Custom Image</Text>
+                    <Text style={[shareStyles.bgChipText, shareBgUri ? { color: C.accent } : {}]}>{t("workUp", "shareCustomImage")}</Text>
                   </Pressable>
                   {shareBgUri && (
                     <Pressable

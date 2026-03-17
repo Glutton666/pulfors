@@ -25,6 +25,7 @@ import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { SampleSource } from "@/lib/note-samples";
+import { lowClickSource } from "@/lib/metronome-engine";
 
 type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
 
@@ -37,10 +38,11 @@ interface NoteRecorderModalProps {
   subIndex: number;
   hasExisting: boolean;
   existingName?: string;
+  bpm: number;
 }
 
 const MAX_RECORD_SECONDS = 10;
-const COUNTDOWN_FROM = 3;
+const COUNTDOWN_BEATS = 4;
 
 export function NoteRecorderModal({
   visible,
@@ -51,12 +53,13 @@ export function NoteRecorderModal({
   subIndex,
   hasExisting,
   existingName,
+  bpm,
 }: NoteRecorderModalProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
 
   const [phase, setPhase] = useState<Phase>("idle");
-  const [countdownValue, setCountdownValue] = useState(COUNTDOWN_FROM);
+  const [countdownValue, setCountdownValue] = useState(1);
   const [recordDuration, setRecordDuration] = useState(0);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
   const [sampleName, setSampleName] = useState("");
@@ -73,6 +76,8 @@ export function NoteRecorderModal({
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewSoundRef = useRef<Audio.Sound | null>(null);
+  const clickSoundRef = useRef<Audio.Sound | null>(null);
+  const metronomeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const countScale = useSharedValue(1);
   const countOpacity = useSharedValue(1);
@@ -86,6 +91,10 @@ export function NoteRecorderModal({
       clearTimeout(countdownTimerRef.current);
       countdownTimerRef.current = null;
     }
+    if (metronomeTimerRef.current) {
+      clearInterval(metronomeTimerRef.current);
+      metronomeTimerRef.current = null;
+    }
     if (recordingRef.current) {
       try {
         await recordingRef.current.stopAndUnloadAsync();
@@ -98,16 +107,49 @@ export function NoteRecorderModal({
       } catch {}
       previewSoundRef.current = null;
     }
+    if (clickSoundRef.current) {
+      try {
+        await clickSoundRef.current.unloadAsync();
+      } catch {}
+      clickSoundRef.current = null;
+    }
     try {
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false, interruptionModeIOS: InterruptionModeIOS.MixWithOthers });
     } catch {}
+  }, []);
+
+  const playClick = useCallback(async () => {
+    try {
+      if (clickSoundRef.current) {
+        await clickSoundRef.current.replayAsync();
+      } else {
+        const { sound } = await Audio.Sound.createAsync(lowClickSource, { shouldPlay: true });
+        clickSoundRef.current = sound;
+      }
+    } catch {}
+  }, []);
+
+  const startMetronomeClicks = useCallback((currentBpm: number) => {
+    if (metronomeTimerRef.current) clearInterval(metronomeTimerRef.current);
+    const interval = 60000 / currentBpm;
+    playClick();
+    metronomeTimerRef.current = setInterval(() => {
+      playClick();
+    }, interval);
+  }, [playClick]);
+
+  const stopMetronomeClicks = useCallback(() => {
+    if (metronomeTimerRef.current) {
+      clearInterval(metronomeTimerRef.current);
+      metronomeTimerRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
     if (!visible) {
       cleanup();
       setPhase("idle");
-      setCountdownValue(COUNTDOWN_FROM);
+      setCountdownValue(1);
       setRecordDuration(0);
       setRecordedUri(null);
       setTrimStart(0);
@@ -129,8 +171,9 @@ export function NoteRecorderModal({
 
     sourceTypeRef.current = "recording";
     setPhase("countdown");
-    setCountdownValue(COUNTDOWN_FROM);
-    let count = COUNTDOWN_FROM;
+    setCountdownValue(1);
+    let count = 1;
+    const interval = 60000 / bpm;
 
     const tick = () => {
       if (Platform.OS !== "web") {
@@ -140,23 +183,24 @@ export function NoteRecorderModal({
       countOpacity.value = 0;
       countScale.value = withSpring(1, { damping: 8, stiffness: 300 });
       countOpacity.value = withTiming(1, { duration: 200 });
+      playClick();
     };
 
     tick();
 
     const doTick = () => {
-      count--;
-      if (count > 0) {
+      count++;
+      if (count <= COUNTDOWN_BEATS) {
         setCountdownValue(count);
         tick();
-        countdownTimerRef.current = setTimeout(doTick, 1000);
+        countdownTimerRef.current = setTimeout(doTick, interval);
       } else {
         startRecording();
       }
     };
 
-    countdownTimerRef.current = setTimeout(doTick, 1000);
-  }, []);
+    countdownTimerRef.current = setTimeout(doTick, interval);
+  }, [bpm, playClick]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -203,6 +247,8 @@ export function NoteRecorderModal({
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
 
+      startMetronomeClicks(bpm);
+
       const startTime = Date.now();
       recordTimerRef.current = setInterval(() => {
         const elapsed = (Date.now() - startTime) / 1000;
@@ -215,9 +261,10 @@ export function NoteRecorderModal({
       console.error("Failed to start recording:", e);
       setPhase("idle");
     }
-  }, []);
+  }, [bpm, startMetronomeClicks]);
 
   const stopRecording = useCallback(async () => {
+    stopMetronomeClicks();
     if (recordTimerRef.current) {
       clearInterval(recordTimerRef.current);
       recordTimerRef.current = null;
@@ -368,7 +415,7 @@ export function NoteRecorderModal({
 
         if (durationSec > MAX_DURATION_SEC) {
           Alert.alert(
-            "Too Long",
+            t("noteRecorder", "tooLongTitle"),
             `Maximum audio length is 10 minutes. This file is ${Math.floor(durationSec / 60)}m ${Math.round(durationSec % 60)}s.`
           );
           await sound.unloadAsync();
@@ -487,7 +534,7 @@ export function NoteRecorderModal({
         <Pressable style={[styles.container, { backgroundColor: Colors.surface }]} onPress={(e) => e.stopPropagation()}>
           <View style={styles.header}>
             <Text style={styles.title}>
-              Beat {beatIndex + 1}, Note {subIndex + 1}
+              {t("noteRecorder", "beatNote").replace("{0}", String(beatIndex + 1)).replace("{1}", String(subIndex + 1))}
             </Text>
             <Pressable onPress={handleClose} hitSlop={12}>
               <Ionicons name="close" size={22} color={Colors.textSecondary} />
@@ -502,20 +549,20 @@ export function NoteRecorderModal({
                   onPress={startCountdown}
                 >
                   <Ionicons name="mic" size={24} color={Colors.white} />
-                  <Text style={styles.sourceButtonText}>Record</Text>
+                  <Text style={styles.sourceButtonText}>{t("noteRecorder", "record")}</Text>
                 </Pressable>
                 <Pressable
                   style={[styles.sourceButton, { backgroundColor: Colors.surfaceLight }]}
                   onPress={handleImportFile}
                 >
                   <Ionicons name="musical-notes" size={24} color={Colors.text} />
-                  <Text style={[styles.sourceButtonText, { color: Colors.text }]}>Import</Text>
+                  <Text style={[styles.sourceButtonText, { color: Colors.text }]}>{t("noteRecorder", "import")}</Text>
                 </Pressable>
               </View>
               {hasExisting && (
                 <Pressable style={styles.deleteButton} onPress={handleDelete}>
                   <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
-                  <Text style={[styles.deleteText]}>Remove Sample</Text>
+                  <Text style={[styles.deleteText]}>{t("noteRecorder", "removeSample")}</Text>
                 </Pressable>
               )}
             </View>
@@ -541,7 +588,7 @@ export function NoteRecorderModal({
               <Animated.View style={[styles.countdownCircle, { borderColor: C.accent }, countAnimStyle]}>
                 <Text style={[styles.countdownText, { color: C.accent }]}>{countdownValue}</Text>
               </Animated.View>
-              <Text style={styles.hintText}>Get ready...</Text>
+              <Text style={styles.hintText}>{t("noteRecorder", "getReady")}</Text>
             </View>
           )}
 
@@ -559,27 +606,27 @@ export function NoteRecorderModal({
                   ]}
                 />
               </View>
-              <Text style={styles.hintText}>Max {MAX_RECORD_SECONDS}s</Text>
+              <Text style={styles.hintText}>{t("noteRecorder", "maxSeconds").replace("{0}", String(MAX_RECORD_SECONDS))}</Text>
               <Pressable
                 style={[styles.stopButton, { backgroundColor: "#FF4444" }]}
                 onPress={stopRecording}
               >
                 <Ionicons name="stop" size={24} color={Colors.white} />
-                <Text style={styles.recordButtonText}>Stop</Text>
+                <Text style={styles.recordButtonText}>{t("noteRecorder", "stop")}</Text>
               </Pressable>
             </View>
           )}
 
           {phase === "trimming" && recordedUri && (
             <View style={styles.content}>
-              <Text style={styles.sectionLabel}>Trim Audio</Text>
+              <Text style={styles.sectionLabel}>{t("noteRecorder", "trimAudio")}</Text>
               <Text style={styles.trimInfo}>
-                Duration: {trimDuration}s
+                {t("noteRecorder", "duration").replace("{0}", trimDuration)}
               </Text>
 
               <View style={styles.trimTimeInputRow}>
                 <View style={styles.trimTimeInputGroup}>
-                  <Text style={styles.trimTimeLabel}>Start</Text>
+                  <Text style={styles.trimTimeLabel}>{t("noteRecorder", "trimStart")}</Text>
                   <TextInput
                     style={[styles.trimTimeInput, { borderColor: C.accent + "60" }]}
                     value={startTimeText}
@@ -595,7 +642,7 @@ export function NoteRecorderModal({
                 </View>
                 <Text style={styles.trimTimeSeparator}>—</Text>
                 <View style={styles.trimTimeInputGroup}>
-                  <Text style={styles.trimTimeLabel}>End</Text>
+                  <Text style={styles.trimTimeLabel}>{t("noteRecorder", "trimEnd")}</Text>
                   <TextInput
                     style={[styles.trimTimeInput, { borderColor: C.accent + "60" }]}
                     value={endTimeText}
@@ -670,14 +717,14 @@ export function NoteRecorderModal({
 
               <View style={styles.saveRow}>
                 <Pressable style={styles.cancelBtn} onPress={handleClose}>
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                  <Text style={styles.cancelBtnText}>{t("noteRecorder", "cancel")}</Text>
                 </Pressable>
                 <Pressable
                   style={[styles.saveBtn, { backgroundColor: C.accent }]}
                   onPress={handleSave}
                 >
                   <Ionicons name="checkmark" size={18} color={Colors.white} />
-                  <Text style={styles.saveBtnText}>Save</Text>
+                  <Text style={styles.saveBtnText}>{t("noteRecorder", "save")}</Text>
                 </Pressable>
               </View>
             </View>

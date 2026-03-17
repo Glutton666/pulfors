@@ -39,20 +39,20 @@ import {
   type PracticeRoom,
 } from "@/lib/practice-room";
 
-const PRESET_COLORS: { value: Exclude<ThemeColor, "custom">; label: string; color: string }[] = [
-  { value: "gold", label: "Gold", color: ACCENT_PRESETS.gold.accent },
-  { value: "blue", label: "Blue", color: ACCENT_PRESETS.blue.accent },
-  { value: "green", label: "Green", color: ACCENT_PRESETS.green.accent },
-  { value: "red", label: "Red", color: ACCENT_PRESETS.red.accent },
-  { value: "purple", label: "Purple", color: ACCENT_PRESETS.purple.accent },
-  { value: "cyan", label: "Cyan", color: ACCENT_PRESETS.cyan.accent },
-  { value: "orange", label: "Orange", color: ACCENT_PRESETS.orange.accent },
-  { value: "pink", label: "Pink", color: ACCENT_PRESETS.pink.accent },
-  { value: "rose", label: "Rose", color: ACCENT_PRESETS.rose.accent },
-  { value: "neon", label: "Neon", color: ACCENT_PRESETS.neon.accent },
-  { value: "saintspurple", label: "Saints", color: ACCENT_PRESETS.saintspurple.accent },
-  { value: "deepred", label: "Deep Red", color: ACCENT_PRESETS.deepred.accent },
-  { value: "beige", label: "Beige", color: ACCENT_PRESETS.beige.accent },
+const PRESET_COLORS: { value: Exclude<ThemeColor, "custom">; labelKey: "colorGold" | "colorBlue" | "colorGreen" | "colorRed" | "colorPurple" | "colorCyan" | "colorOrange" | "colorPink" | "colorRose" | "colorNeon" | "colorSaints" | "colorDeepRed" | "colorBeige"; color: string }[] = [
+  { value: "gold", labelKey: "colorGold", color: ACCENT_PRESETS.gold.accent },
+  { value: "blue", labelKey: "colorBlue", color: ACCENT_PRESETS.blue.accent },
+  { value: "green", labelKey: "colorGreen", color: ACCENT_PRESETS.green.accent },
+  { value: "red", labelKey: "colorRed", color: ACCENT_PRESETS.red.accent },
+  { value: "purple", labelKey: "colorPurple", color: ACCENT_PRESETS.purple.accent },
+  { value: "cyan", labelKey: "colorCyan", color: ACCENT_PRESETS.cyan.accent },
+  { value: "orange", labelKey: "colorOrange", color: ACCENT_PRESETS.orange.accent },
+  { value: "pink", labelKey: "colorPink", color: ACCENT_PRESETS.pink.accent },
+  { value: "rose", labelKey: "colorRose", color: ACCENT_PRESETS.rose.accent },
+  { value: "neon", labelKey: "colorNeon", color: ACCENT_PRESETS.neon.accent },
+  { value: "saintspurple", labelKey: "colorSaints", color: ACCENT_PRESETS.saintspurple.accent },
+  { value: "deepred", labelKey: "colorDeepRed", color: ACCENT_PRESETS.deepred.accent },
+  { value: "beige", labelKey: "colorBeige", color: ACCENT_PRESETS.beige.accent },
 ];
 
 const HUE_COLORS = [
