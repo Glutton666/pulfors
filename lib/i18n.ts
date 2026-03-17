@@ -39,7 +39,7 @@ const translations = {
     restoreBackup: { ko: "백업 불러오기", en: "Restore Backup" },
     backupSuccess: { ko: "백업이 완료되었습니다", en: "Backup created successfully" },
     backupFail: { ko: "백업에 실패했습니다", en: "Backup failed" },
-    restoreSuccess: { ko: "복원이 완료되었습니다. 앱을 다시 시작해주세요.", en: "Restore complete. Please restart the app." },
+    restoreSuccess: { ko: "복원이 완료되었습니다. 앱을 새로고침합니다.", en: "Restore complete. The app will reload now." },
     restoreFail: { ko: "복원에 실패했습니다. 올바른 백업 파일인지 확인해주세요.", en: "Restore failed. Please check if the file is a valid backup." },
     restoreWarning: { ko: "현재 데이터를 백업 파일로 덮어씁니다.\n계속하시겠습니까?", en: "This will overwrite your current data with the backup file.\nDo you want to continue?" },
     restoreConfirm: { ko: "복원", en: "Restore" },

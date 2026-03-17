@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
-import { Platform, Alert } from "react-native";
+import { Platform } from "react-native";
 import type { PracticeEntry } from "./storage";
 import { loadPracticeBook, savePracticeBook } from "./storage";
 
@@ -53,6 +53,58 @@ function formatDateForFilename(): string {
   return `${y}${m}${day}_${h}${min}`;
 }
 
+function writeStringToFile(fileUri: string, content: string): Promise<void> {
+  return FileSystem.writeAsStringAsync(fileUri, content, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+}
+
+function readStringFromFile(fileUri: string): Promise<string> {
+  return FileSystem.readAsStringAsync(fileUri, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+}
+
+function pickFileWeb<T>(
+  accept: string,
+  handler: (text: string) => Promise<T>,
+  fallback: T
+): Promise<T> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = accept;
+    const onChange = async (evt: Event) => {
+      const target = evt.target as HTMLInputElement;
+      const file = target.files?.[0];
+      if (!file) {
+        resolve(fallback);
+        return;
+      }
+      try {
+        const text = await file.text();
+        resolve(await handler(text));
+      } catch {
+        resolve(fallback);
+      }
+    };
+    input.addEventListener("change", onChange);
+    input.click();
+  });
+}
+
+function downloadJsonWeb(json: string, filename: string): void {
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export async function exportBackup(): Promise<boolean> {
   try {
     const pairs = await AsyncStorage.multiGet(ALL_KEYS);
@@ -72,23 +124,15 @@ export async function exportBackup(): Promise<boolean> {
     };
 
     const json = JSON.stringify(backup, null, 2);
+    const filename = `metronome_backup_${formatDateForFilename()}.metronome.json`;
 
     if (Platform.OS === "web") {
-      const blob = new Blob([json], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `metronome_backup_${formatDateForFilename()}.metronome.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      downloadJsonWeb(json, filename);
       return true;
     }
 
-    const filename = `metronome_backup_${formatDateForFilename()}.metronome.json`;
     const fileUri = FileSystem.cacheDirectory + filename;
-    await FileSystem.writeAsStringAsync(fileUri, json, { encoding: "utf8" as any });
+    await writeStringToFile(fileUri, json);
 
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {
@@ -108,7 +152,11 @@ export async function exportBackup(): Promise<boolean> {
 export async function importBackup(): Promise<{ success: boolean; keyCount: number }> {
   try {
     if (Platform.OS === "web") {
-      return await importBackupWeb();
+      return pickFileWeb(
+        ".json,.metronome.json",
+        restoreFromJson,
+        { success: false, keyCount: 0 }
+      );
     }
 
     const result = await DocumentPicker.getDocumentAsync({
@@ -121,35 +169,12 @@ export async function importBackup(): Promise<{ success: boolean; keyCount: numb
     }
 
     const uri = result.assets[0].uri;
-    const json = await FileSystem.readAsStringAsync(uri, { encoding: "utf8" as any });
+    const json = await readStringFromFile(uri);
     return await restoreFromJson(json);
   } catch (e) {
     console.warn("[Backup] Import error:", e);
     return { success: false, keyCount: 0 };
   }
-}
-
-async function importBackupWeb(): Promise<{ success: boolean; keyCount: number }> {
-  return new Promise((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json,.metronome.json";
-    input.onchange = async (e: any) => {
-      const file = e.target?.files?.[0];
-      if (!file) {
-        resolve({ success: false, keyCount: 0 });
-        return;
-      }
-      try {
-        const text = await file.text();
-        const result = await restoreFromJson(text);
-        resolve(result);
-      } catch {
-        resolve({ success: false, keyCount: 0 });
-      }
-    };
-    input.click();
-  });
 }
 
 async function restoreFromJson(json: string): Promise<{ success: boolean; keyCount: number }> {
@@ -158,6 +183,8 @@ async function restoreFromJson(json: string): Promise<{ success: boolean; keyCou
     if (!backup._meta || backup._meta.app !== "metronome" || !backup.data) {
       return { success: false, keyCount: 0 };
     }
+
+    await AsyncStorage.multiRemove(ALL_KEYS);
 
     const pairs: [string, string][] = [];
     for (const [key, value] of Object.entries(backup.data)) {
@@ -190,23 +217,15 @@ export async function sharePracticeEntry(entry: PracticeEntry): Promise<boolean>
 
     const json = JSON.stringify(shareData, null, 2);
     const safeName = (entry.label || "practice").replace(/[^a-zA-Z0-9가-힣_-]/g, "_").slice(0, 30);
+    const filename = `${safeName}.metronome-practice.json`;
 
     if (Platform.OS === "web") {
-      const blob = new Blob([json], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${safeName}.metronome-practice.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      downloadJsonWeb(json, filename);
       return true;
     }
 
-    const filename = `${safeName}.metronome-practice.json`;
     const fileUri = FileSystem.cacheDirectory + filename;
-    await FileSystem.writeAsStringAsync(fileUri, json, { encoding: "utf8" as any });
+    await writeStringToFile(fileUri, json);
 
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {
@@ -226,7 +245,11 @@ export async function sharePracticeEntry(entry: PracticeEntry): Promise<boolean>
 export async function importPracticeEntry(): Promise<{ success: boolean; entry?: PracticeEntry }> {
   try {
     if (Platform.OS === "web") {
-      return await importPracticeEntryWeb();
+      return pickFileWeb(
+        ".json,.metronome-practice.json",
+        parsePracticeJson,
+        { success: false }
+      );
     }
 
     const result = await DocumentPicker.getDocumentAsync({
@@ -239,35 +262,12 @@ export async function importPracticeEntry(): Promise<{ success: boolean; entry?:
     }
 
     const uri = result.assets[0].uri;
-    const json = await FileSystem.readAsStringAsync(uri, { encoding: "utf8" as any });
+    const json = await readStringFromFile(uri);
     return await parsePracticeJson(json);
   } catch (e) {
     console.warn("[Backup] Import practice entry error:", e);
     return { success: false };
   }
-}
-
-async function importPracticeEntryWeb(): Promise<{ success: boolean; entry?: PracticeEntry }> {
-  return new Promise((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json,.metronome-practice.json";
-    input.onchange = async (e: any) => {
-      const file = e.target?.files?.[0];
-      if (!file) {
-        resolve({ success: false });
-        return;
-      }
-      try {
-        const text = await file.text();
-        const result = await parsePracticeJson(text);
-        resolve(result);
-      } catch {
-        resolve({ success: false });
-      }
-    };
-    input.click();
-  });
 }
 
 async function parsePracticeJson(json: string): Promise<{ success: boolean; entry?: PracticeEntry }> {

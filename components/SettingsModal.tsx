@@ -1713,10 +1713,25 @@ export function SettingsModal({
                     onPress: async () => {
                       const { importBackup } = await import("@/lib/backup");
                       const result = await importBackup();
-                      Alert.alert(
-                        result.success ? t("settings", "complete") : t("settings", "error"),
-                        result.success ? t("settings", "restoreSuccess") : t("settings", "restoreFail")
-                      );
+                      if (result.success) {
+                        Alert.alert(
+                          t("settings", "complete"),
+                          t("settings", "restoreSuccess"),
+                          [{
+                            text: "OK",
+                            onPress: async () => {
+                              if (Platform.OS === "web") {
+                                window.location.reload();
+                              } else {
+                                const { reloadAppAsync } = await import("expo");
+                                await reloadAppAsync();
+                              }
+                            },
+                          }]
+                        );
+                      } else {
+                        Alert.alert(t("settings", "error"), t("settings", "restoreFail"));
+                      }
                     },
                   },
                 ]
