@@ -135,6 +135,9 @@ export interface PracticeEntry {
   subdivisionPattern: BeatType[];
   barClockMode?: "stopwatch" | "timer";
   barTimerDuration?: number;
+  noteSamples?: Record<string, string>;
+  noteSampleNames?: Record<string, string>;
+  noteSampleSources?: Record<string, "recording" | "import">;
 }
 
 export async function loadPracticeBook(): Promise<PracticeEntry[]> {

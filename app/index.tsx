@@ -2212,6 +2212,9 @@ export default function MetronomeScreen() {
         subdivisionPattern: [...subdivisionPattern],
         barClockMode: barConfigRef.current.barClockMode,
         barTimerDuration: barConfigRef.current.barTimerDuration,
+        noteSamples: { ...noteSamples },
+        noteSampleNames: { ...noteSampleNames },
+        noteSampleSources: { ...noteSampleSources },
       };
     }
     const dc = dialConfigRef.current;
@@ -2226,8 +2229,11 @@ export default function MetronomeScreen() {
       barLoopMode: "loop" as const,
       blockPlayMode: "loop" as const,
       subdivisionPattern: [...subdivisionPattern],
+      noteSamples: { ...dc.noteSamples },
+      noteSampleNames: { ...dc.noteSampleNames },
+      noteSampleSources: { ...dc.noteSampleSources },
     };
-  }, [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, blockPlayMode, subdivisionPattern]);
+  }, [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, blockPlayMode, subdivisionPattern, noteSamples, noteSampleNames, noteSampleSources]);
 
   const handleLoadPracticeEntry = useCallback((entry: PracticeEntry) => {
     const engine = engineRef.current;
@@ -2265,11 +2271,18 @@ export default function MetronomeScreen() {
         setBarMode(false);
       }
 
+      const entrySamples = entry.noteSamples || {};
+      const entryNames = entry.noteSampleNames || {};
+      const entrySources = entry.noteSampleSources || {};
+
       dialConfigRef.current = {
         ...dialConfigRef.current,
         beatsPerMeasure: entry.beatsPerMeasure,
         beatTypes: [...entry.beatTypes],
         beatSubdivisions: { ...entry.beatSubdivisions },
+        noteSamples: { ...entrySamples },
+        noteSampleNames: { ...entryNames },
+        noteSampleSources: { ...entrySources },
       };
 
       setBpm(entry.bpm);
@@ -2277,6 +2290,15 @@ export default function MetronomeScreen() {
       setBeatTypes([...entry.beatTypes]);
       setBeatSubdivisions({ ...entry.beatSubdivisions });
       if (entry.subdivisionPattern) setSubdivisionPattern([...entry.subdivisionPattern]);
+      setNoteSamples({ ...entrySamples });
+      noteSamplesRef.current = { ...entrySamples };
+      setNoteSampleNames({ ...entryNames });
+      noteSampleNamesRef.current = { ...entryNames };
+      setNoteSampleSources({ ...entrySources });
+      noteSampleSourcesRef.current = { ...entrySources };
+      saveNoteSamples(entrySamples);
+      saveNoteSampleNames(entryNames);
+      saveNoteSampleSources(entrySources);
 
       engine.setBpm(entry.bpm);
       engine.setBeatsPerMeasure(entry.beatsPerMeasure);
@@ -2296,6 +2318,10 @@ export default function MetronomeScreen() {
         setBarMode(true);
       }
 
+      const barSamples = entry.noteSamples || {};
+      const barNames = entry.noteSampleNames || {};
+      const barSources = entry.noteSampleSources || {};
+
       setBpm(entry.bpm);
       setBeatsPerMeasure(entry.beatsPerMeasure);
       setBeatTypes([...entry.beatTypes]);
@@ -2306,6 +2332,15 @@ export default function MetronomeScreen() {
       setBarLoopMode(entry.barLoopMode);
       setBlockPlayMode((entry as any).blockPlayMode || "loop");
       setSubdivisionPattern([...entry.subdivisionPattern]);
+      setNoteSamples({ ...barSamples });
+      noteSamplesRef.current = { ...barSamples };
+      setNoteSampleNames({ ...barNames });
+      noteSampleNamesRef.current = { ...barNames };
+      setNoteSampleSources({ ...barSources });
+      noteSampleSourcesRef.current = { ...barSources };
+      saveNoteSamples(barSamples);
+      saveNoteSampleNames(barNames);
+      saveNoteSampleSources(barSources);
 
       engine.setBpm(entry.bpm);
       engine.setBeatsPerMeasure(entry.beatsPerMeasure);
@@ -2328,6 +2363,9 @@ export default function MetronomeScreen() {
         loopBlocks: [...entryBlocks],
         barClockMode: entry.barClockMode || "stopwatch",
         barTimerDuration: entry.barTimerDuration ?? 180,
+        noteSamples: { ...barSamples },
+        noteSampleNames: { ...barNames },
+        noteSampleSources: { ...barSources },
         hasBeenConfigured: true,
       };
     }
