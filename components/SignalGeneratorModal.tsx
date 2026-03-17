@@ -381,6 +381,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const [micListening, setMicListening] = useState(false);
   const [micDetectedFreq, setMicDetectedFreq] = useState<number | null>(null);
   const [micDetectedNote, setMicDetectedNote] = useState<string | null>(null);
+  const [micAnalyzed, setMicAnalyzed] = useState(false);
   const micActiveRef = useRef(false);
   const micAudioCtxRef = useRef<any>(null);
   const micAnalyserRef = useRef<any>(null);
@@ -550,6 +551,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
     }
     setMicDetectedFreq(null);
     setMicDetectedNote(null);
+    setMicAnalyzed(false);
   }, [stopMobileMic]);
 
   const pickDominantFreq = useCallback((readings: number[]): number | null => {
@@ -625,6 +627,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
         const elapsed = Date.now() - windowStart;
         if (elapsed >= WINDOW_MS) {
           const dominant = pickDominantFreq(readings);
+          setMicAnalyzed(true);
           if (dominant) {
             const rounded = Math.round(dominant * 10) / 10;
             setMicDetectedFreq(rounded);
@@ -728,6 +731,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                     }
                   }
                   const dominant = pickDominantFreq(readings);
+                  setMicAnalyzed(true);
                   if (dominant) {
                     const rounded = Math.round(dominant * 10) / 10;
                     setMicDetectedFreq(rounded);
@@ -802,7 +806,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
     return f >= 100 ? Math.round(f).toString() : f.toFixed(1);
   };
 
-  const freqDisplayUnit = frequency >= 1000 ? "kHz" : "Hz";
+  const freqDisplayUnit = frequency >= 1000 ? "kHz" : t("signalGenerator", "hzUnit");
 
   const commitFreqInput = useCallback(() => {
     setEditingFreq(false);
@@ -868,7 +872,9 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                 {micDetectedNote} {micDetectedFreq} {t("signalGenerator", "hzUnit")}
               </Text>
             ) : micListening ? (
-              <Text style={styles.micDetectedHint}>{t("signalGenerator", "detecting")}</Text>
+              <Text style={styles.micDetectedHint}>
+                {micAnalyzed ? t("signalGenerator", "noSignal") : t("signalGenerator", "detecting")}
+              </Text>
             ) : null}
           </View>
 
@@ -884,7 +890,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                 autoFocus
                 selectTextOnFocus
               />
-              <Text style={styles.freqEditUnit}>Hz</Text>
+              <Text style={styles.freqEditUnit}>{t("signalGenerator", "hzUnit")}</Text>
             </View>
           )}
 
@@ -905,7 +911,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
             />
           </View>
           <Text style={styles.pickerHzHint}>
-            {noteToFreq(selectedNote, selectedOctave)} Hz
+            {noteToFreq(selectedNote, selectedOctave)} {t("signalGenerator", "hzUnit")}
           </Text>
 
           <View style={styles.waveSection}>
