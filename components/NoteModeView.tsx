@@ -140,7 +140,7 @@ function SourceItem({
           <Text style={styles.sourceItemLabel} numberOfLines={1}>{entry.label}</Text>
           <View style={styles.sourceItemMeta}>
             <Text style={styles.sourceItemBpm}>{entry.bpm} BPM</Text>
-            <Text style={styles.sourceItemBeats}>{entry.beatsPerMeasure} bars</Text>
+            <Text style={styles.sourceItemBeats}>{entry.beatsPerMeasure} {t("practiceBook", "beatsUnit")}</Text>
           </View>
         </View>
         <Ionicons name="add-circle-outline" size={22} color={accentColor} />
