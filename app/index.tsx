@@ -2419,7 +2419,11 @@ export default function MetronomeScreen() {
   }, [isPlaying]);
 
   const handleNoteAddToQueue = useCallback((entry: PracticeEntry) => {
-    setNoteQueue(prev => [...prev, entry]);
+    setNoteQueue(prev => {
+      const updated = [...prev, entry];
+      noteQueueRef.current = updated;
+      return updated;
+    });
   }, []);
 
   const handleNoteRemoveFromQueue = useCallback((index: number) => {
@@ -2468,6 +2472,7 @@ export default function MetronomeScreen() {
     setNoteQueue(prev => {
       const updated = [...prev];
       updated.splice(ci + 1, 0, entry);
+      noteQueueRef.current = updated;
       return updated;
     });
     if (notePlayModeRef.current === "random") {
