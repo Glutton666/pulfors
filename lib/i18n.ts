@@ -228,6 +228,8 @@ const translations = {
     bpmUnit: { ko: "BPM", en: "BPM" },
     randomPlay: { ko: "랜덤", en: "Random" },
     beatsUnit: { ko: "비트", en: "beats" },
+    viewGrid: { ko: "격자", en: "Grid" },
+    viewList: { ko: "줄", en: "List" },
   },
   workUp: {
     title: { ko: "활동 기록", en: "Work Up" },

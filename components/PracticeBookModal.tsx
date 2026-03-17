@@ -13,6 +13,7 @@ import {
   PanResponder,
   Dimensions,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
@@ -307,6 +308,105 @@ function SwipeableEntry({
   );
 }
 
+function GridItem({
+  item,
+  onLoad,
+  onLongPress,
+  onDelete,
+  onShare,
+  accentColor,
+}: {
+  item: PracticeEntry;
+  onLoad: (entry: PracticeEntry) => void;
+  onLongPress: () => void;
+  onDelete: (id: string) => void;
+  onShare: (entry: PracticeEntry) => void;
+  accentColor: string;
+}) {
+  const { t } = useLanguage();
+  const isBeatMode = (item.mode || "bar") === "beat";
+  const isNoteMode = item.mode === "note";
+
+  let playModeText: string;
+  if (isNoteMode) {
+    const pm = item.notePlayMode || "once";
+    playModeText = pm === "loop" ? t("practiceBook", "continuousPlay") : pm === "random" ? t("practiceBook", "randomPlay") : t("practiceBook", "singlePlay");
+  } else if (isBeatMode) {
+    playModeText = t("practiceBook", "continuousPlay");
+  } else {
+    const clockMode = item.barClockMode || "stopwatch";
+    if (clockMode === "timer" && item.barTimerDuration != null && item.barTimerDuration > 0) {
+      const tm = Math.floor(item.barTimerDuration / 60);
+      const ts = item.barTimerDuration % 60;
+      playModeText = tm > 0 ? `${tm}:${String(ts).padStart(2, "0")}` : `${ts}${t("practiceBook", "sec")}`;
+    } else if (item.barLoopMode === "loop") {
+      playModeText = t("practiceBook", "continuousPlay");
+    } else {
+      playModeText = t("practiceBook", "singlePlay");
+    }
+  }
+
+  const handleLongPressActions = useCallback(() => {
+    if (Platform.OS === "web") {
+      onLongPress();
+      return;
+    }
+    Alert.alert(
+      item.label,
+      undefined,
+      [
+        { text: t("practiceBook", "share"), onPress: () => onShare(item) },
+        { text: t("practiceBook", "delete"), style: "destructive", onPress: () => onDelete(item.id) },
+        { text: t("practiceBook", "cancel"), style: "cancel" },
+      ]
+    );
+  }, [item, onDelete, onShare, onLongPress, t]);
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        gridStyles.card,
+        pressed && { opacity: 0.7 },
+      ]}
+      onPress={() => onLoad(item)}
+      onLongPress={handleLongPressActions}
+      delayLongPress={500}
+    >
+      <View style={gridStyles.cardHeader}>
+        <Text style={gridStyles.cardLabel} numberOfLines={1}>{item.label}</Text>
+        <View style={[gridStyles.modeDot, { backgroundColor: isNoteMode ? "#22c55e" : isBeatMode ? "#3B82F6" : accentColor }]} />
+      </View>
+      {isNoteMode ? (
+        <View style={gridStyles.cardStats}>
+          <Text style={[gridStyles.cardBpm, { color: accentColor }]}>
+            {(item.noteQueueEntries || item.noteQueueEntryIds || []).length}
+          </Text>
+          <Text style={gridStyles.cardUnit}>{t("practiceBook", "badgeBar")}</Text>
+        </View>
+      ) : (
+        <View style={gridStyles.cardStats}>
+          <Text style={[gridStyles.cardBpm, { color: accentColor }]}>{item.bpm}</Text>
+          <Text style={gridStyles.cardUnit}>{t("practiceBook", "bpmUnit")}</Text>
+        </View>
+      )}
+      <View style={gridStyles.cardFooter}>
+        <Text style={gridStyles.cardMeta} numberOfLines={1}>
+          {isNoteMode ? t("practiceBook", "badgeNote") : isBeatMode ? t("practiceBook", "badgeBeat") : t("practiceBook", "badgeBar")}
+          {" · "}
+          {isNoteMode ? `${(item.noteQueueEntries || item.noteQueueEntryIds || []).length}` : `${item.beatsPerMeasure}`}
+          {!isNoteMode && ` ${t("practiceBook", "beatsUnit")}`}
+        </Text>
+        <Text style={gridStyles.cardPlayMode} numberOfLines={1}>{playModeText}</Text>
+      </View>
+      {item.createdBy ? (
+        <Text style={gridStyles.cardBy} numberOfLines={1}>{item.createdBy}</Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
+const VIEW_MODE_KEY = "@practice_book_view_mode";
+
 export function PracticeBookModal({
   visible,
   onClose,
@@ -326,8 +426,23 @@ export function PracticeBookModal({
   const [goalEntry, setGoalEntry] = useState<PracticeEntry | null>(null);
   const [goalMinutes, setGoalMinutes] = useState("10");
   const [openItemId, setOpenItemId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const saveInputRef = useRef<TextInput>(null);
   const editInputRef = useRef<TextInput | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(VIEW_MODE_KEY).then(v => {
+      if (v === "grid" || v === "list") setViewMode(v);
+    });
+  }, []);
+
+  const toggleViewMode = useCallback(() => {
+    setViewMode(prev => {
+      const next = prev === "list" ? "grid" : "list";
+      AsyncStorage.setItem(VIEW_MODE_KEY, next);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (visible) {
@@ -473,9 +588,22 @@ export function PracticeBookModal({
             />
             <Text style={styles.title}>{t("practiceBook", "title")}</Text>
           </View>
-          <Pressable onPress={onClose} hitSlop={10}>
-            <Ionicons name="close" size={24} color={Colors.textSecondary} />
-          </Pressable>
+          <View style={styles.headerRight}>
+            <Pressable
+              onPress={toggleViewMode}
+              hitSlop={6}
+              style={styles.viewToggleBtn}
+            >
+              <Ionicons
+                name={viewMode === "grid" ? "grid" : "list"}
+                size={18}
+                color={C.accent}
+              />
+            </Pressable>
+            <Pressable onPress={onClose} hitSlop={10}>
+              <Ionicons name="close" size={24} color={Colors.textSecondary} />
+            </Pressable>
+          </View>
         </View>
 
         {currentConfig && (
@@ -547,8 +675,34 @@ export function PracticeBookModal({
               {t("practiceBook", "emptyHint")}
             </Text>
           </View>
+        ) : viewMode === "grid" ? (
+          <FlatList
+            key="grid"
+            data={entries}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            columnWrapperStyle={gridStyles.row}
+            renderItem={({ item }) => (
+              <GridItem
+                item={item}
+                onLoad={handleLoad}
+                onLongPress={() => {
+                  if (onSetGoal) {
+                    setGoalEntry(item);
+                    setGoalMinutes("10");
+                  }
+                }}
+                onDelete={handleDelete}
+                onShare={handleShare}
+                accentColor={C.accent}
+              />
+            )}
+            contentContainerStyle={gridStyles.list}
+            scrollEnabled={!!entries.length}
+          />
         ) : (
           <FlatList
+            key="list"
             data={entries}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
@@ -621,6 +775,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  viewToggleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: Colors.surfaceLight,
+    alignItems: "center",
+    justifyContent: "center",
   },
   title: {
     fontFamily: "SpaceGrotesk_600SemiBold",
@@ -891,5 +1058,76 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
     color: Colors.background,
+  },
+});
+
+const gridStyles = StyleSheet.create({
+  list: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 20,
+  },
+  row: {
+    gap: 10,
+    marginBottom: 10,
+  },
+  card: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 12,
+    gap: 6,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 4,
+  },
+  cardLabel: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 13,
+    color: Colors.text,
+    flex: 1,
+  },
+  modeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  cardStats: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 4,
+  },
+  cardBpm: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 22,
+  },
+  cardUnit: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 11,
+    color: Colors.textSecondary,
+  },
+  cardFooter: {
+    gap: 2,
+  },
+  cardMeta: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 11,
+    color: Colors.textSecondary,
+  },
+  cardPlayMode: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 10,
+    color: Colors.textTertiary,
+  },
+  cardBy: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 10,
+    color: Colors.textTertiary,
+    marginTop: 2,
   },
 });
