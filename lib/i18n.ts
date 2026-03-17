@@ -224,6 +224,8 @@ const translations = {
     badgeBar: { ko: "바", en: "Bar" },
     badgeNote: { ko: "노트", en: "Note" },
     saveNoteConfig: { ko: "현재 노트 설정 저장", en: "Save current note config" },
+    byPrefix: { ko: "by", en: "by" },
+    bpmUnit: { ko: "BPM", en: "BPM" },
   },
   workUp: {
     title: { ko: "활동 기록", en: "Work Up" },
@@ -306,6 +308,7 @@ const translations = {
     cancel: { ko: "취소", en: "Cancel" },
     save: { ko: "저장", en: "Save" },
     tooLongTitle: { ko: "너무 깁니다", en: "Too Long" },
+    tooLongMsg: { ko: "최대 오디오 길이는 10분입니다. 이 파일은 {0}분 {1}초입니다.", en: "Maximum audio length is 10 minutes. This file is {0}m {1}s." },
   },
   notification: {
     playing: { ko: "재생 중", en: "Playing" },

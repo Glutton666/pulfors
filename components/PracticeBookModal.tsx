@@ -247,7 +247,7 @@ function SwipeableEntry({
           </View>
 
           {item.createdBy ? (
-            <Text style={styles.createdBy}>by {item.createdBy}</Text>
+            <Text style={styles.createdBy}>{t("practiceBook", "byPrefix")} {item.createdBy}</Text>
           ) : null}
 
           <View style={styles.entryDetails}>
@@ -278,7 +278,7 @@ function SwipeableEntry({
                   <Text style={[styles.detailValue, { color: accentColor }]}>
                     {item.bpm}
                   </Text>
-                  <Text style={styles.detailUnit}>BPM</Text>
+                  <Text style={styles.detailUnit}>{t("practiceBook", "bpmUnit")}</Text>
                 </View>
                 <View style={styles.detailChip}>
                   <Text style={[styles.detailValue, { color: accentColor }]}>

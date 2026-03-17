@@ -433,7 +433,7 @@ export function NoteRecorderModal({
         if (durationSec > MAX_DURATION_SEC) {
           Alert.alert(
             t("noteRecorder", "tooLongTitle"),
-            `Maximum audio length is 10 minutes. This file is ${Math.floor(durationSec / 60)}m ${Math.round(durationSec % 60)}s.`
+            t("noteRecorder", "tooLongMsg").replace("{0}", String(Math.floor(durationSec / 60))).replace("{1}", String(Math.round(durationSec % 60)))
           );
           await sound.unloadAsync();
           setPhase("idle");
