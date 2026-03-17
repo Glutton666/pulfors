@@ -730,7 +730,7 @@ export function WorkUpOverviewModal({
                   <Pressable style={[s.card, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]} onPress={() => setShowYearlySummary(true)}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                       <Ionicons name="trophy-outline" size={20} color="#FFD700" />
-                      <Text style={[s.cardTitle, { color: Colors.text }]}>{new Date().getFullYear() - 1} Year in Review</Text>
+                      <Text style={[s.cardTitle, { color: Colors.text }]}>{new Date().getFullYear() - 1} {t("workUp", "yearInReview")}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
                   </Pressable>
@@ -790,7 +790,7 @@ export function WorkUpOverviewModal({
                       )}
 
                       {beatSessionDetails.length === 0 && barSessionDetails.length === 0 && (
-                        <Text style={s.emptyHint}>No sessions recorded {periodLabel.toLowerCase()}</Text>
+                        <Text style={s.emptyHint}>{t("workUp", "noSessionsRecorded").replace("{0}", periodLabel.toLowerCase())}</Text>
                       )}
                     </View>
                   )}
@@ -975,7 +975,7 @@ export function WorkUpOverviewModal({
           <Pressable style={[yearStyles.card, { backgroundColor: Colors.surface }]} onPress={(e) => e.stopPropagation()}>
             <View style={yearStyles.header}>
               <Ionicons name="trophy" size={28} color="#FFD700" />
-              <Text style={yearStyles.title}>{new Date().getFullYear() - 1} Year in Review</Text>
+              <Text style={yearStyles.title}>{new Date().getFullYear() - 1} {t("workUp", "yearInReview")}</Text>
               <Pressable onPress={() => setShowYearlySummary(false)} hitSlop={12}>
                 <Ionicons name="close" size={22} color={Colors.textSecondary} />
               </Pressable>
