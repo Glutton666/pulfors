@@ -923,7 +923,7 @@ export function StopwatchTimer({
         )}
 
         {state === "finishing" && (
-          <Text style={styles.finishingLabel}>completing measure...</Text>
+          <Text style={styles.finishingLabel}>{t("stopwatchTimer", "completingMeasure")}</Text>
         )}
 
         <View style={styles.controlRow}>

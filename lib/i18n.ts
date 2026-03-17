@@ -261,6 +261,7 @@ const translations = {
     goals: { ko: "목표", en: "Goals" },
     tapToSetGoal: { ko: "+를 눌러 연습 목표를 설정하세요", en: "Tap + to set a practice goal" },
     shareBackground: { ko: "배경", en: "Background" },
+    shareReset: { ko: "초기화", en: "Reset" },
     shareCustomImage: { ko: "커스텀 이미지", en: "Custom Image" },
   },
   signalGenerator: {

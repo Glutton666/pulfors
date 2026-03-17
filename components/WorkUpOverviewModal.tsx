@@ -959,7 +959,7 @@ export function WorkUpOverviewModal({
                       onPress={() => setShareBgUri(null)}
                     >
                       <View style={[shareStyles.bgPreview, { backgroundColor: Colors.background }]} />
-                      <Text style={shareStyles.bgChipText}>Reset</Text>
+                      <Text style={shareStyles.bgChipText}>{t("workUp", "shareReset")}</Text>
                     </Pressable>
                   )}
                 </View>
