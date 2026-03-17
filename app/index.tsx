@@ -172,7 +172,7 @@ export default function MetronomeScreen() {
   useEffect(() => { noteIsPlayingRef.current = noteIsPlaying; }, [noteIsPlaying]);
   const [noteBarEntries, setNoteBarEntries] = useState<PracticeEntry[]>([]);
   const noteAdvanceQueueRef = useRef<() => void>(() => {});
-  const noteShuffledIdsRef = useRef<string[]>([]);
+  const noteShuffledIndicesRef = useRef<number[]>([]);
   const noteShuffledPosRef = useRef(0);
 
   const [isDragging, setIsDragging] = useState(false);
@@ -2315,13 +2315,13 @@ export default function MetronomeScreen() {
     showPlayingNotification(entry.bpm, modeLabel, languageRef.current);
   }, [applyEntryToEngine]);
 
-  const createShuffledIds = useCallback((entries: PracticeEntry[]) => {
-    const ids = entries.map(e => e.id);
-    for (let i = ids.length - 1; i > 0; i--) {
+  const createShuffledIndices = useCallback((length: number) => {
+    const indices = Array.from({ length }, (_, i) => i);
+    for (let i = indices.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [ids[i], ids[j]] = [ids[j], ids[i]];
+      [indices[i], indices[j]] = [indices[j], indices[i]];
     }
-    return ids;
+    return indices;
   }, []);
 
   const noteAdvanceQueue = useCallback(() => {
@@ -2343,20 +2343,16 @@ export default function MetronomeScreen() {
     } else if (mode === "loop") {
       nextIndex = (ci + 1) % q.length;
     } else if (mode === "random") {
-      const shuffledIds = noteShuffledIdsRef.current;
       let pos = noteShuffledPosRef.current + 1;
-      const validIds = shuffledIds.filter(id => q.some(e => e.id === id));
-      if (pos < validIds.length) {
+      const indices = noteShuffledIndicesRef.current;
+      if (pos < indices.length && indices[pos] < q.length) {
         noteShuffledPosRef.current = pos;
-        const targetId = validIds[pos];
-        nextIndex = q.findIndex(e => e.id === targetId);
-      }
-      if (nextIndex < 0) {
-        const newIds = createShuffledIds(q);
-        noteShuffledIdsRef.current = newIds;
+        nextIndex = indices[pos];
+      } else {
+        const newIndices = createShuffledIndices(q.length);
+        noteShuffledIndicesRef.current = newIndices;
         noteShuffledPosRef.current = 0;
-        nextIndex = q.findIndex(e => e.id === newIds[0]);
-        if (nextIndex < 0) nextIndex = 0;
+        nextIndex = newIndices[0];
       }
     }
 
@@ -2370,7 +2366,7 @@ export default function MetronomeScreen() {
       setProgressInfo(null);
       showPausedNotification(bpmRef.current, "Note", languageRef.current);
     }
-  }, [noteStartPlayingEntry, createShuffledIds]);
+  }, [noteStartPlayingEntry, createShuffledIndices]);
 
   useEffect(() => { noteAdvanceQueueRef.current = noteAdvanceQueue; }, [noteAdvanceQueue]);
 
@@ -2477,9 +2473,13 @@ export default function MetronomeScreen() {
     });
     if (notePlayModeRef.current === "random") {
       const pos = noteShuffledPosRef.current;
-      const ids = [...noteShuffledIdsRef.current];
-      ids.splice(pos + 1, 0, entry.id);
-      noteShuffledIdsRef.current = ids;
+      const indices = [...noteShuffledIndicesRef.current];
+      const insertedQueueIdx = ci + 1;
+      for (let i = 0; i < indices.length; i++) {
+        if (indices[i] >= insertedQueueIdx) indices[i]++;
+      }
+      indices.splice(pos + 1, 0, insertedQueueIdx);
+      noteShuffledIndicesRef.current = indices;
     }
   }, []);
 
@@ -2503,15 +2503,14 @@ export default function MetronomeScreen() {
       if (q.length === 0) return;
       let startIndex = 0;
       if (notePlayModeRef.current === "random") {
-        const ids = createShuffledIds(q);
-        noteShuffledIdsRef.current = ids;
+        const indices = createShuffledIndices(q.length);
+        noteShuffledIndicesRef.current = indices;
         noteShuffledPosRef.current = 0;
-        const idx = q.findIndex(e => e.id === ids[0]);
-        startIndex = idx >= 0 ? idx : 0;
+        startIndex = indices[0];
       }
       noteStartPlayingEntry(startIndex);
     }
-  }, [noteStartPlayingEntry, createShuffledIds]);
+  }, [noteStartPlayingEntry, createShuffledIndices]);
 
   const handleNoteSave = useCallback(async () => {
     const q = noteQueueRef.current;
