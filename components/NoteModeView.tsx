@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Alert,
   Platform,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -159,6 +160,47 @@ function SourceItem({
   );
 }
 
+function SourceGridItem({
+  entry,
+  accentColor,
+  onAdd,
+  onInsertNext,
+  isPlaying,
+}: {
+  entry: PracticeEntry;
+  accentColor: string;
+  onAdd: () => void;
+  onInsertNext: () => void;
+  isPlaying: boolean;
+}) {
+  const { t } = useLanguage();
+  return (
+    <Pressable
+      style={({ pressed }) => [srcGridStyles.card, pressed && { opacity: 0.6 }]}
+      onPress={onAdd}
+    >
+      <Text style={srcGridStyles.cardLabel} numberOfLines={1}>{entry.label}</Text>
+      <View style={srcGridStyles.cardStats}>
+        <Text style={[srcGridStyles.cardBpm, { color: accentColor }]}>{entry.bpm}</Text>
+        <Text style={srcGridStyles.cardUnit}>BPM</Text>
+      </View>
+      <Text style={srcGridStyles.cardBeats}>{entry.beatsPerMeasure} {t("practiceBook", "beatsUnit")}</Text>
+      {isPlaying && (
+        <Pressable
+          onPress={(e) => { e.stopPropagation?.(); onInsertNext(); }}
+          hitSlop={4}
+          style={[srcGridStyles.insertBtn, { borderColor: accentColor }]}
+        >
+          <Ionicons name="arrow-forward" size={10} color={accentColor} />
+          <Text style={[srcGridStyles.insertText, { color: accentColor }]}>{t("noteMode", "insertNext")}</Text>
+        </Pressable>
+      )}
+    </Pressable>
+  );
+}
+
+const NOTE_SOURCE_VIEW_KEY = "@note_source_view_mode";
+
 export function NoteModeView({
   queue,
   barEntries,
@@ -177,6 +219,27 @@ export function NoteModeView({
 }: NoteModeViewProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
+  const [sourceViewMode, setSourceViewMode] = useState<"list" | "grid">("list");
+  const [sourceCollapsed, setSourceCollapsed] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(NOTE_SOURCE_VIEW_KEY).then(v => {
+      if (v === "grid" || v === "list") setSourceViewMode(v);
+    });
+  }, []);
+
+  const toggleSourceView = useCallback(() => {
+    setSourceViewMode(prev => {
+      const next = prev === "list" ? "grid" : "list";
+      AsyncStorage.setItem(NOTE_SOURCE_VIEW_KEY, next);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (isPlaying) setSourceCollapsed(true);
+    else setSourceCollapsed(false);
+  }, [isPlaying]);
 
   const playModes: Array<"once" | "loop" | "random"> = ["once", "loop", "random"];
   const playModeLabels = {
@@ -279,7 +342,7 @@ export function NoteModeView({
         <Text style={styles.sectionCount}>{queue.length} {t("noteMode", "items")}</Text>
       </View>
 
-      <View style={styles.queueContainer}>
+      <View style={[styles.queueContainer, sourceCollapsed && { flex: 2 }]}>
         {queue.length === 0 ? (
           <View style={styles.emptyQueue}>
             <Ionicons name="musical-notes-outline" size={32} color={Colors.textTertiary} />
@@ -308,33 +371,81 @@ export function NoteModeView({
         )}
       </View>
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{t("noteMode", "source")}</Text>
-      </View>
-
-      <View style={styles.sourceContainer}>
-        {barEntries.length === 0 ? (
-          <View style={styles.emptySource}>
-            <Text style={styles.emptySourceText}>{t("noteMode", "noBarEntries")}</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={barEntries}
-            keyExtractor={(item) => `source-${item.id}`}
-            renderItem={({ item }) => (
-              <SourceItem
-                entry={item}
-                accentColor={C.accent}
-                onAdd={() => onAddToQueue(item)}
-                onInsertNext={() => onInsertNext(item)}
-                isPlaying={isPlaying}
-              />
-            )}
-            showsVerticalScrollIndicator={false}
-            scrollEnabled={barEntries.length > 0}
+      <Pressable
+        style={styles.sectionHeader}
+        onPress={() => setSourceCollapsed(prev => !prev)}
+      >
+        <View style={styles.sectionHeaderLeft}>
+          <Ionicons
+            name={sourceCollapsed ? "chevron-forward" : "chevron-down"}
+            size={14}
+            color={Colors.textSecondary}
           />
+          <Text style={styles.sectionTitle}>{t("noteMode", "source")}</Text>
+          {sourceCollapsed && barEntries.length > 0 && (
+            <Text style={styles.sectionCount}>{barEntries.length}</Text>
+          )}
+        </View>
+        {!sourceCollapsed && (
+          <Pressable
+            onPress={toggleSourceView}
+            hitSlop={6}
+            style={styles.sourceViewToggle}
+          >
+            <Ionicons
+              name={sourceViewMode === "grid" ? "grid" : "list"}
+              size={14}
+              color={C.accent}
+            />
+          </Pressable>
         )}
-      </View>
+      </Pressable>
+
+      {!sourceCollapsed && (
+        <View style={styles.sourceContainer}>
+          {barEntries.length === 0 ? (
+            <View style={styles.emptySource}>
+              <Text style={styles.emptySourceText}>{t("noteMode", "noBarEntries")}</Text>
+            </View>
+          ) : sourceViewMode === "grid" ? (
+            <FlatList
+              key="src-grid"
+              data={barEntries}
+              keyExtractor={(item) => `srcg-${item.id}`}
+              numColumns={2}
+              columnWrapperStyle={srcGridStyles.row}
+              renderItem={({ item }) => (
+                <SourceGridItem
+                  entry={item}
+                  accentColor={C.accent}
+                  onAdd={() => onAddToQueue(item)}
+                  onInsertNext={() => onInsertNext(item)}
+                  isPlaying={isPlaying}
+                />
+              )}
+              showsVerticalScrollIndicator={false}
+              scrollEnabled={barEntries.length > 0}
+            />
+          ) : (
+            <FlatList
+              key="src-list"
+              data={barEntries}
+              keyExtractor={(item) => `source-${item.id}`}
+              renderItem={({ item }) => (
+                <SourceItem
+                  entry={item}
+                  accentColor={C.accent}
+                  onAdd={() => onAddToQueue(item)}
+                  onInsertNext={() => onInsertNext(item)}
+                  isPlaying={isPlaying}
+                />
+              )}
+              showsVerticalScrollIndicator={false}
+              scrollEnabled={barEntries.length > 0}
+            />
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -437,6 +548,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 6,
   },
+  sectionHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
   sectionTitle: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 13,
@@ -448,6 +564,16 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 12,
     color: Colors.textTertiary,
+  },
+  sourceViewToggle: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
   },
   queueContainer: {
     flex: 1,
@@ -581,5 +707,60 @@ const styles = StyleSheet.create({
   insertNextText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 10,
+  },
+});
+
+const srcGridStyles = StyleSheet.create({
+  row: {
+    gap: 8,
+    marginBottom: 8,
+  },
+  card: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 10,
+    gap: 4,
+  },
+  cardLabel: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    color: Colors.text,
+  },
+  cardStats: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 3,
+  },
+  cardBpm: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 20,
+  },
+  cardUnit: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 10,
+    color: Colors.textSecondary,
+  },
+  cardBeats: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 10,
+    color: Colors.textTertiary,
+  },
+  insertBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 2,
+    borderWidth: 1,
+    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    marginTop: 2,
+  },
+  insertText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 9,
   },
 });
