@@ -1679,6 +1679,58 @@ export function SettingsModal({
 
       <View style={styles.divider} />
 
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="cloud-download-outline" size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>{t("settings", "backupData")}</Text>
+        </View>
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 6 }}>
+          <Pressable
+            style={[styles.addRoomBtn, { borderColor: C.accentDim, flex: 1 }]}
+            onPress={async () => {
+              const { exportBackup } = await import("@/lib/backup");
+              const ok = await exportBackup();
+              Alert.alert(
+                ok ? t("settings", "complete") : t("settings", "error"),
+                ok ? t("settings", "backupSuccess") : t("settings", "backupFail")
+              );
+            }}
+          >
+            <Ionicons name="download-outline" size={15} color={C.accent} />
+            <Text style={[styles.addRoomBtnText, { color: C.accent }]}>{t("settings", "createBackup")}</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.addRoomBtn, { borderColor: C.accentDim, flex: 1 }]}
+            onPress={() => {
+              Alert.alert(
+                t("settings", "restoreBackup"),
+                t("settings", "restoreWarning"),
+                [
+                  { text: t("settings", "cancel"), style: "cancel" },
+                  {
+                    text: t("settings", "restoreConfirm"),
+                    style: "destructive",
+                    onPress: async () => {
+                      const { importBackup } = await import("@/lib/backup");
+                      const result = await importBackup();
+                      Alert.alert(
+                        result.success ? t("settings", "complete") : t("settings", "error"),
+                        result.success ? t("settings", "restoreSuccess") : t("settings", "restoreFail")
+                      );
+                    },
+                  },
+                ]
+              );
+            }}
+          >
+            <Ionicons name="push-outline" size={15} color={C.accent} />
+            <Text style={[styles.addRoomBtnText, { color: C.accent }]}>{t("settings", "restoreBackup")}</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={styles.divider} />
+
       {onResetApp && !showResetConfirm && (
         <Pressable
           style={styles.resetButton}

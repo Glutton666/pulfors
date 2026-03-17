@@ -100,6 +100,19 @@ The app has two independent modes — **Beat Mode** (dial) and **Bar Mode** — 
 
 When switching modes, the current config is saved to the appropriate ref and the other mode's config is restored. The `hasBeenConfigured` flag on barConfigRef ensures first-time bar mode entry uses defaults, while subsequent entries restore previous settings. All assignments to these refs use spread operators to preserve fields not explicitly overwritten.
 
+## Backup & Sharing
+
+The app supports full data backup/restore and individual practice entry sharing.
+
+### Architecture
+- **`lib/backup.ts`**: Core backup utilities. `exportBackup()` collects all 15 AsyncStorage keys into a single JSON file with metadata (app name, version, creation date, key count). `importBackup()` reads a backup file and restores all data with overwrite confirmation. `sharePracticeEntry()` exports a single practice entry as a shareable JSON file. `importPracticeEntry()` imports a practice entry from file and adds it to the practice book.
+- **File formats**: Full backup uses `.metronome.json` extension. Practice entries use `.metronome-practice.json` extension. Both include `_meta` headers for validation.
+- **Platform support**: Web uses Blob download/file input. Native (iOS/Android) uses `expo-sharing` and `expo-document-picker`.
+- **UI**: Backup/restore buttons in Settings → Profile tab under "데이터 백업" section. Practice entry import button (download icon) next to save button in Practice Book modal. Share button on each practice entry via swipe actions.
+
+### Backed up data (15 keys)
+`metronome_settings`, `practice_book`, `metronome_custom_sound_sets`, `metronome_practice_rooms`, `metronome_theme_color`, `metronome_custom_hex`, `metronome_hub_images`, `metronome_language`, `metronome_activity_log`, `metronome_activity_settings`, `metronome_goals`, `@note_samples`, `@note_sample_names`, `@note_sample_sources`, `metronome_onboarding_done`
+
 ## Security
 
 - `tar` package overridden to `>=7.5.10` in package.json for CVE fix

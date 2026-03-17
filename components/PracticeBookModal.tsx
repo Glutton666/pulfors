@@ -11,10 +11,8 @@ import {
   Platform,
   Animated,
   PanResponder,
-  Share,
   Dimensions,
 } from "react-native";
-import * as Linking from "expo-linking";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
@@ -376,56 +374,26 @@ export function PracticeBookModal({
   );
 
   const handleShare = useCallback(async (entry: PracticeEntry) => {
-    const beatTypeNames: Record<BeatType, string> = {
-      accent: "Accent",
-      normal: "Normal",
-      mute: "Mute",
-      strong: "Strong",
-    };
-    const clockMode = entry.barClockMode || "stopwatch";
-    const loopText = entry.barLoopMode === "loop" ? t("practiceBook", "continuousPlay") : t("practiceBook", "singlePlay");
-    let timerText = "";
-    if (clockMode === "timer" && entry.barTimerDuration) {
-      const tm = Math.floor(entry.barTimerDuration / 60);
-      const ts = entry.barTimerDuration % 60;
-      timerText = `\nTimer: ${tm}:${String(ts).padStart(2, "0")}`;
-    }
-
-    const shareData: Omit<PracticeEntry, "id"> = {
-      label: entry.label,
-      createdAt: entry.createdAt,
-      createdBy: entry.createdBy,
-      mode: entry.mode,
-      bpm: entry.bpm,
-      beatsPerMeasure: entry.beatsPerMeasure,
-      beatTypes: entry.beatTypes,
-      beatSubdivisions: entry.beatSubdivisions,
-      barRepeats: entry.barRepeats,
-      loopBlocks: (entry as any).loopBlocks || [],
-      barLoopMode: entry.barLoopMode,
-      subdivisionPattern: entry.subdivisionPattern,
-      barClockMode: entry.barClockMode,
-      barTimerDuration: entry.barTimerDuration,
-    };
-    const encoded = encodeURIComponent(btoa(JSON.stringify(shareData)));
-    const deepLink = Linking.createURL("practice", { queryParams: { d: encoded } });
-
-    const message = [
-      `🎵 ${entry.label}`,
-      entry.createdBy ? `by ${entry.createdBy}` : "",
-      ``,
-      `BPM: ${entry.bpm}`,
-      `Beats: ${entry.beatsPerMeasure}`,
-      `Pattern: ${entry.beatTypes.map((bt) => beatTypeNames[bt]).join(" → ")}`,
-      `${t("practiceBook", "mode")}: ${loopText}${timerText}`,
-      ``,
-      t("practiceBook", "openInApp"),
-      deepLink,
-    ].filter(Boolean).join("\n");
-
     try {
-      await Share.share({ message, title: entry.label, url: deepLink });
+      const { sharePracticeEntry } = await import("@/lib/backup");
+      await sharePracticeEntry(entry);
     } catch (_) {}
+  }, []);
+
+  const handleImportEntry = useCallback(async () => {
+    try {
+      const { importPracticeEntry } = await import("@/lib/backup");
+      const result = await importPracticeEntry();
+      if (result.success) {
+        Alert.alert(t("practiceBook", "importEntry"), t("practiceBook", "importSuccess"));
+        const fresh = await loadPracticeBook();
+        setEntries(fresh);
+      } else {
+        Alert.alert(t("practiceBook", "importEntry"), t("practiceBook", "importFail"));
+      }
+    } catch (_) {
+      Alert.alert(t("practiceBook", "importEntry"), t("practiceBook", "importFail"));
+    }
   }, []);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -520,15 +488,23 @@ export function PracticeBookModal({
                 </Pressable>
               </View>
             ) : (
-              <Pressable
-                style={[styles.saveButton, { borderColor: C.accent }]}
-                onPress={() => setShowSaveInput(true)}
-              >
-                <Ionicons name="add-circle-outline" size={18} color={C.accent} />
-                <Text style={[styles.saveButtonText, { color: C.accent }]}>
-                  {currentConfig?.mode === "beat" ? t("practiceBook", "saveBeatConfig") : t("practiceBook", "saveBarConfig")}
-                </Text>
-              </Pressable>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <Pressable
+                  style={[styles.saveButton, { borderColor: C.accent, flex: 1 }]}
+                  onPress={() => setShowSaveInput(true)}
+                >
+                  <Ionicons name="add-circle-outline" size={18} color={C.accent} />
+                  <Text style={[styles.saveButtonText, { color: C.accent }]}>
+                    {currentConfig?.mode === "beat" ? t("practiceBook", "saveBeatConfig") : t("practiceBook", "saveBarConfig")}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.saveButton, { borderColor: C.accentDim, paddingHorizontal: 12 }]}
+                  onPress={handleImportEntry}
+                >
+                  <Ionicons name="download-outline" size={18} color={C.accent} />
+                </Pressable>
+              </View>
             )}
           </View>
         )}
