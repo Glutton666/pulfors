@@ -3005,6 +3005,7 @@ export default function MetronomeScreen() {
         hasExisting={recorderTarget ? hasNoteSample(recorderTarget.beat, recorderTarget.sub, noteSamples) : false}
         existingName={recorderTarget ? (noteSampleNames[`${recorderTarget.beat}-${recorderTarget.sub}`] || "") : ""}
         bpm={bpm}
+        soundSet={soundSet.startsWith("custom") ? "classic" : soundSet as any}
       />
 
       <PracticeBookModal

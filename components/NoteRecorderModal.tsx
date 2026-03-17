@@ -25,7 +25,8 @@ import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { SampleSource } from "@/lib/note-samples";
-import { lowClickSource } from "@/lib/metronome-engine";
+import { soundSets } from "@/lib/metronome-engine";
+import type { BuiltinSoundSet } from "@/lib/storage";
 
 type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
 
@@ -39,6 +40,7 @@ interface NoteRecorderModalProps {
   hasExisting: boolean;
   existingName?: string;
   bpm: number;
+  soundSet?: BuiltinSoundSet;
 }
 
 const MAX_RECORD_SECONDS = 10;
@@ -54,6 +56,7 @@ export function NoteRecorderModal({
   hasExisting,
   existingName,
   bpm,
+  soundSet = "classic",
 }: NoteRecorderModalProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -118,12 +121,17 @@ export function NoteRecorderModal({
     } catch {}
   }, []);
 
+  const clickSourceRef = useRef(soundSets[soundSet]?.low ?? soundSets.classic.low);
+  useEffect(() => {
+    clickSourceRef.current = soundSets[soundSet]?.low ?? soundSets.classic.low;
+  }, [soundSet]);
+
   const playClick = useCallback(async () => {
     try {
       if (clickSoundRef.current) {
         await clickSoundRef.current.replayAsync();
       } else {
-        const { sound } = await Audio.Sound.createAsync(lowClickSource, { shouldPlay: true });
+        const { sound } = await Audio.Sound.createAsync(clickSourceRef.current, { shouldPlay: true });
         clickSoundRef.current = sound;
       }
     } catch {}
