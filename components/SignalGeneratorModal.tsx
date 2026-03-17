@@ -865,10 +865,10 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
             </Pressable>
             {micListening && micDetectedFreq ? (
               <Text style={[styles.micDetectedHint, { color: C.accent }]}>
-                {micDetectedNote} {micDetectedFreq} Hz
+                {micDetectedNote} {micDetectedFreq} {t("signalGenerator", "hzUnit")}
               </Text>
             ) : micListening ? (
-              <Text style={styles.micDetectedHint}>...</Text>
+              <Text style={styles.micDetectedHint}>{t("signalGenerator", "detecting")}</Text>
             ) : null}
           </View>
 
