@@ -124,7 +124,7 @@ export interface PracticeEntry {
   label: string;
   createdAt: number;
   createdBy?: string;
-  mode?: "beat" | "bar";
+  mode?: "beat" | "bar" | "note";
   bpm: number;
   beatsPerMeasure: number;
   beatTypes: BeatType[];
@@ -138,6 +138,9 @@ export interface PracticeEntry {
   noteSamples?: Record<string, string>;
   noteSampleNames?: Record<string, string>;
   noteSampleSources?: Record<string, "recording" | "import">;
+  noteQueueEntryIds?: string[];
+  notePlayMode?: "once" | "loop" | "random";
+  noteQueueEntries?: PracticeEntry[];
 }
 
 export async function loadPracticeBook(): Promise<PracticeEntry[]> {

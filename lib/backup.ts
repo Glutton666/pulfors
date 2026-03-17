@@ -405,7 +405,21 @@ async function restoreFromJson(json: string): Promise<{ success: boolean; keyCou
 
 export async function sharePracticeEntry(entry: PracticeEntry): Promise<boolean> {
   try {
+    if (entry.mode === "note" && entry.noteQueueEntryIds?.length) {
+      const book = await loadPracticeBook();
+      const queueEntries = entry.noteQueueEntryIds
+        .map(id => book.find(e => e.id === id))
+        .filter((e): e is PracticeEntry => !!e);
+      entry = { ...entry, noteQueueEntries: queueEntries };
+    }
+
     const entryUris = collectUrisFromSampleMap(entry.noteSamples);
+    if (entry.noteQueueEntries) {
+      for (const qe of entry.noteQueueEntries) {
+        const qeUris = collectUrisFromSampleMap(qe.noteSamples);
+        for (const [k, v] of qeUris) entryUris.set(k, v);
+      }
+    }
     const audioFiles = await readAllAudioFiles(entryUris);
 
     const shareData: PracticeShareFile = {
@@ -493,16 +507,43 @@ async function parsePracticeJson(json: string): Promise<{ success: boolean; entr
       if (uriMapping.size > 0 && entry.noteSamples) {
         entry.noteSamples = remapSampleMap(entry.noteSamples, uriMapping);
       }
+      if (uriMapping.size > 0 && entry.noteQueueEntries) {
+        entry.noteQueueEntries = entry.noteQueueEntries.map(qe => ({
+          ...qe,
+          noteSamples: qe.noteSamples ? remapSampleMap(qe.noteSamples, uriMapping) : qe.noteSamples,
+        }));
+      }
     }
 
     const newId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+
+    const book = await loadPracticeBook();
+
+    if (entry.mode === "note" && entry.noteQueueEntries?.length) {
+      const idMap = new Map<string, string>();
+      for (const qe of entry.noteQueueEntries) {
+        const existsInBook = book.some(b => b.id === qe.id);
+        if (!existsInBook) {
+          const qeNewId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+          idMap.set(qe.id, qeNewId);
+          book.unshift({ ...qe, id: qeNewId, createdAt: Date.now() });
+        } else {
+          idMap.set(qe.id, qe.id);
+        }
+      }
+      entry.noteQueueEntryIds = (entry.noteQueueEntryIds || []).map(id => idMap.get(id) || id);
+      entry.noteQueueEntries = entry.noteQueueEntries.map(qe => ({
+        ...qe,
+        id: idMap.get(qe.id) || qe.id,
+      }));
+    }
+
     const importedEntry: PracticeEntry = {
       ...entry,
       id: newId,
       createdAt: Date.now(),
     };
 
-    const book = await loadPracticeBook();
     book.unshift(importedEntry);
     await savePracticeBook(book);
 

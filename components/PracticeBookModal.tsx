@@ -145,6 +145,7 @@ function SwipeableEntry({
   ).current;
 
   const isBeatMode = (item.mode || "bar") === "beat";
+  const isNoteMode = item.mode === "note";
   const barCount = item.beatsPerMeasure;
   const secondsPerBeat = 60 / item.bpm;
   const onePlaySeconds = barCount * secondsPerBeat;
@@ -159,7 +160,10 @@ function SwipeableEntry({
   const clockMode = item.barClockMode || "stopwatch";
   const timerDur = item.barTimerDuration;
   let playModeText: string;
-  if (isBeatMode) {
+  if (isNoteMode) {
+    const pm = item.notePlayMode || "once";
+    playModeText = pm === "loop" ? t("practiceBook", "continuousPlay") : pm === "random" ? "Random" : t("practiceBook", "singlePlay");
+  } else if (isBeatMode) {
     playModeText = t("practiceBook", "continuousPlay");
   } else if (clockMode === "timer" && timerDur != null && timerDur > 0) {
     const tm = Math.floor(timerDur / 60);
@@ -247,33 +251,55 @@ function SwipeableEntry({
           ) : null}
 
           <View style={styles.entryDetails}>
-            <View style={[styles.modeBadge, { backgroundColor: isBeatMode ? "#3B82F6" : accentColor }]}>
-              <Text style={styles.modeBadgeText}>{isBeatMode ? t("practiceBook", "badgeBeat") : t("practiceBook", "badgeBar")}</Text>
+            <View style={[styles.modeBadge, { backgroundColor: isNoteMode ? "#22c55e" : isBeatMode ? "#3B82F6" : accentColor }]}>
+              <Text style={styles.modeBadgeText}>{isNoteMode ? t("practiceBook", "badgeNote") : isBeatMode ? t("practiceBook", "badgeBeat") : t("practiceBook", "badgeBar")}</Text>
             </View>
-            <View style={styles.detailChip}>
-              <Text style={[styles.detailValue, { color: accentColor }]}>
-                {item.bpm}
-              </Text>
-              <Text style={styles.detailUnit}>BPM</Text>
-            </View>
-            <View style={styles.detailChip}>
-              <Text style={[styles.detailValue, { color: accentColor }]}>
-                {barCount}
-              </Text>
-              <Text style={styles.detailUnit}>{isBeatMode ? t("practiceBook", "badgeBeat") : t("practiceBook", "badgeBar")}</Text>
-            </View>
-            <View style={styles.detailChip}>
-              <Ionicons
-                name={clockMode === "timer" ? "timer-outline" : "infinite"}
-                size={12}
-                color={Colors.textSecondary}
-              />
-              <Text style={styles.detailUnit}>{playModeText}</Text>
-            </View>
-            <View style={styles.detailChip}>
-              <Ionicons name="time-outline" size={12} color={Colors.textSecondary} />
-              <Text style={styles.detailUnit}>{formatTime(onePlaySeconds)}</Text>
-            </View>
+            {isNoteMode ? (
+              <>
+                <View style={styles.detailChip}>
+                  <MaterialCommunityIcons name="playlist-music" size={12} color={Colors.textSecondary} />
+                  <Text style={[styles.detailValue, { color: accentColor }]}>
+                    {(item.noteQueueEntries || item.noteQueueEntryIds || []).length}
+                  </Text>
+                  <Text style={styles.detailUnit}>{t("practiceBook", "badgeBar")}</Text>
+                </View>
+                <View style={styles.detailChip}>
+                  <Ionicons
+                    name={item.notePlayMode === "loop" ? "infinite" : item.notePlayMode === "random" ? "shuffle" : "play"}
+                    size={12}
+                    color={Colors.textSecondary}
+                  />
+                  <Text style={styles.detailUnit}>{playModeText}</Text>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.detailChip}>
+                  <Text style={[styles.detailValue, { color: accentColor }]}>
+                    {item.bpm}
+                  </Text>
+                  <Text style={styles.detailUnit}>BPM</Text>
+                </View>
+                <View style={styles.detailChip}>
+                  <Text style={[styles.detailValue, { color: accentColor }]}>
+                    {barCount}
+                  </Text>
+                  <Text style={styles.detailUnit}>{isBeatMode ? t("practiceBook", "badgeBeat") : t("practiceBook", "badgeBar")}</Text>
+                </View>
+                <View style={styles.detailChip}>
+                  <Ionicons
+                    name={clockMode === "timer" ? "timer-outline" : "infinite"}
+                    size={12}
+                    color={Colors.textSecondary}
+                  />
+                  <Text style={styles.detailUnit}>{playModeText}</Text>
+                </View>
+                <View style={styles.detailChip}>
+                  <Ionicons name="time-outline" size={12} color={Colors.textSecondary} />
+                  <Text style={styles.detailUnit}>{formatTime(onePlaySeconds)}</Text>
+                </View>
+              </>
+            )}
           </View>
         </Pressable>
       </Animated.View>

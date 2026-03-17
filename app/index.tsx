@@ -65,6 +65,7 @@ import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLog
 import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource } from "@/lib/note-samples";
 import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, SampleSource } from "@/lib/note-samples";
 import { NoteRecorderModal } from "@/components/NoteRecorderModal";
+import { NoteModeView } from "@/components/NoteModeView";
 import { AudioModule, createAudioPlayer } from "expo-audio";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import {
@@ -153,6 +154,24 @@ export default function MetronomeScreen() {
   });
 
   const [progressInfo, setProgressInfo] = useState<{ beat: number; barRepeatCurrent: number; barRepeatTotal: number; blockIndex: number; blockRepeatCurrent: number; blockRepeatTotal: number; jumpCurrent?: number; jumpTotal?: number; jumpSourceBlockIndex?: number } | null>(null);
+
+  const [noteMode, setNoteMode] = useState(false);
+  const noteModeRef = useRef(false);
+  useEffect(() => { noteModeRef.current = noteMode; }, [noteMode]);
+  const [noteQueue, setNoteQueue] = useState<PracticeEntry[]>([]);
+  const noteQueueRef = useRef<PracticeEntry[]>([]);
+  useEffect(() => { noteQueueRef.current = noteQueue; }, [noteQueue]);
+  const [notePlayMode, setNotePlayMode] = useState<"once" | "loop" | "random">("once");
+  const notePlayModeRef = useRef<"once" | "loop" | "random">("once");
+  useEffect(() => { notePlayModeRef.current = notePlayMode; }, [notePlayMode]);
+  const [noteCurrentIndex, setNoteCurrentIndex] = useState(-1);
+  const noteCurrentIndexRef = useRef(-1);
+  useEffect(() => { noteCurrentIndexRef.current = noteCurrentIndex; }, [noteCurrentIndex]);
+  const [noteIsPlaying, setNoteIsPlaying] = useState(false);
+  const noteIsPlayingRef = useRef(false);
+  useEffect(() => { noteIsPlayingRef.current = noteIsPlaying; }, [noteIsPlaying]);
+  const [noteBarEntries, setNoteBarEntries] = useState<PracticeEntry[]>([]);
+  const noteAdvanceQueueRef = useRef<() => void>(() => {});
 
   const [isDragging, setIsDragging] = useState(false);
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
@@ -1729,6 +1748,12 @@ export default function MetronomeScreen() {
     engine.setOnMeasureComplete(() => {
       setMeasureCount(c => c + 1);
       if (!engine.getIsRunning()) {
+        if (noteModeRef.current && noteIsPlayingRef.current) {
+          setTimeout(() => {
+            noteAdvanceQueueRef.current();
+          }, 50);
+          return;
+        }
         if (webRenderedLoopRef.current) {
           webRenderedLoopRef.current.stop();
           webRenderedLoopRef.current = null;
@@ -2174,6 +2199,336 @@ export default function MetronomeScreen() {
     }
   }, []);
 
+  const applyEntryToEngine = useCallback((entry: PracticeEntry) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+
+    setBpm(entry.bpm);
+    setBeatsPerMeasure(entry.beatsPerMeasure);
+    setBeatTypes([...entry.beatTypes]);
+    setBeatSubdivisions({ ...entry.beatSubdivisions });
+    setBarRepeats({ ...entry.barRepeats });
+    const entryBlocks = (entry as any).loopBlocks || [];
+    setLoopBlocks([...entryBlocks]);
+    setBarLoopMode(entry.barLoopMode || "once");
+    setBlockPlayMode((entry as any).blockPlayMode || "loop");
+    if (entry.subdivisionPattern) setSubdivisionPattern([...entry.subdivisionPattern]);
+
+    const entrySamples = entry.noteSamples || {};
+    const entryNames = entry.noteSampleNames || {};
+    const entrySources = entry.noteSampleSources || {};
+    setNoteSamples({ ...entrySamples });
+    noteSamplesRef.current = { ...entrySamples };
+    setNoteSampleNames({ ...entryNames });
+    noteSampleNamesRef.current = { ...entryNames };
+    setNoteSampleSources({ ...entrySources });
+    noteSampleSourcesRef.current = { ...entrySources };
+
+    if (Object.keys(entrySamples).length > 0) {
+      preloadNoteSampleSounds(entrySamples);
+    }
+
+    engine.setBpm(entry.bpm);
+    engine.setBeatsPerMeasure(entry.beatsPerMeasure);
+    engine.setBeatTypes([...entry.beatTypes]);
+    engine.setAllBeatSubdivisions(entry.beatSubdivisions);
+    engine.setLoopBlocks(entryBlocks);
+    engine.setBlockPlayMode((entry as any).blockPlayMode || "loop");
+    engine.setAllBarRepeats(entry.barRepeats || {});
+    const bpmOverrides: Record<number, number> = {};
+    for (const [k, v] of Object.entries(entry.barRepeats || {})) {
+      if ((v as any).bpm) bpmOverrides[Number(k)] = (v as any).bpm;
+    }
+    engine.setAllBarBpmOverrides(bpmOverrides);
+
+    barConfigRef.current = {
+      ...barConfigRef.current,
+      beatsPerMeasure: entry.beatsPerMeasure,
+      beatTypes: [...entry.beatTypes],
+      beatSubdivisions: { ...entry.beatSubdivisions },
+      barRepeats: { ...entry.barRepeats },
+      loopBlocks: [...entryBlocks],
+      barClockMode: entry.barClockMode || "stopwatch",
+      barTimerDuration: entry.barTimerDuration ?? 180,
+      noteSamples: { ...entrySamples },
+      noteSampleNames: { ...entryNames },
+      noteSampleSources: { ...entrySources },
+      barLoopMode: "once",
+      blockPlayMode: (entry as any).blockPlayMode || "loop",
+      hasBeenConfigured: true,
+    };
+
+    if (!barMode) {
+      dialConfigRef.current = {
+        beatsPerMeasure,
+        beatTypes: [...beatTypes],
+        beatSubdivisions: { ...beatSubdivisions },
+        noteSamples: { ...noteSamples },
+        noteSampleNames: { ...noteSampleNames },
+        noteSampleSources: { ...noteSampleSources },
+      };
+      setBarMode(true);
+    }
+  }, [barMode, beatsPerMeasure, beatTypes, beatSubdivisions, noteSamples, noteSampleNames, noteSampleSources, preloadNoteSampleSounds]);
+
+  const noteStartPlayingEntry = useCallback(async (index: number) => {
+    const q = noteQueueRef.current;
+    if (index < 0 || index >= q.length) return;
+    const entry = q[index];
+    const engine = engineRef.current;
+    if (!engine) return;
+
+    if (engine.getIsRunning()) {
+      engine.stop();
+      stopRenderedAudio();
+      clearSamplePlayStates();
+    }
+
+    setCurrentBeat(-1);
+    setMeasureCount(0);
+    setActiveSubNote(-1);
+    activeSubNoteRef.current = -1;
+    setProgressInfo(null);
+
+    applyEntryToEngine(entry);
+    setNoteCurrentIndex(index);
+
+    await new Promise(r => setTimeout(r, 50));
+
+    const eng = engineRef.current;
+    if (!eng) return;
+    eng.setBeatTypes([...entry.beatTypes]);
+    eng.setAllBeatSubdivisions(entry.beatSubdivisions);
+    eng.setAllBarRepeats(entry.barRepeats || {});
+    const entryBlocks2 = (entry as any).loopBlocks || [];
+    eng.setLoopBlocks(entryBlocks2);
+    eng.setBlockPlayMode((entry as any).blockPlayMode || "loop");
+    eng.buildScheduleOnly();
+
+    setIsPlaying(true);
+    setNoteIsPlaying(true);
+    eng.start();
+    eng.requestStopAfterMeasure();
+    const modeLabel = "Note";
+    showPlayingNotification(entry.bpm, modeLabel, languageRef.current);
+  }, [applyEntryToEngine]);
+
+  const noteAdvanceQueue = useCallback(() => {
+    const q = noteQueueRef.current;
+    const mode = notePlayModeRef.current;
+    const ci = noteCurrentIndexRef.current;
+
+    if (q.length === 0) {
+      setNoteIsPlaying(false);
+      return;
+    }
+
+    let nextIndex = -1;
+
+    if (mode === "once") {
+      if (ci + 1 < q.length) {
+        nextIndex = ci + 1;
+      }
+    } else if (mode === "loop") {
+      nextIndex = (ci + 1) % q.length;
+    } else if (mode === "random") {
+      if (q.length === 1) {
+        nextIndex = 0;
+      } else {
+        const shuffled = [...Array(q.length).keys()].filter(i => i !== ci);
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        nextIndex = shuffled[0];
+      }
+    }
+
+    if (nextIndex >= 0) {
+      noteStartPlayingEntry(nextIndex);
+    } else {
+      setNoteIsPlaying(false);
+      setIsPlaying(false);
+      setCurrentBeat(-1);
+      setMeasureCount(0);
+      setProgressInfo(null);
+      showPausedNotification(bpmRef.current, "Note", languageRef.current);
+    }
+  }, [noteStartPlayingEntry]);
+
+  useEffect(() => { noteAdvanceQueueRef.current = noteAdvanceQueue; }, [noteAdvanceQueue]);
+
+  const handleEnterNoteMode = useCallback(async () => {
+    const engine = engineRef.current;
+    if (engine && isPlaying) {
+      engine.stop();
+      stopRenderedAudio();
+      clearSamplePlayStates();
+      setIsPreparing(false);
+      setIsPlaying(false);
+      setCurrentBeat(-1);
+      setMeasureCount(0);
+      setActiveSubNote(-1);
+      setProgressInfo(null);
+    }
+    const { loadPracticeBook } = await import("@/lib/storage");
+    const book = await loadPracticeBook();
+    const barItems = book.filter(e => (e.mode || "bar") === "bar");
+    setNoteBarEntries(barItems);
+    setNoteMode(true);
+    noteModeRef.current = true;
+    setNoteIsPlaying(false);
+    setNoteCurrentIndex(-1);
+  }, [isPlaying]);
+
+  const handleExitNoteMode = useCallback(() => {
+    const engine = engineRef.current;
+    if (engine && isPlaying) {
+      engine.stop();
+      stopRenderedAudio();
+      clearSamplePlayStates();
+      setIsPlaying(false);
+      setCurrentBeat(-1);
+      setMeasureCount(0);
+      setProgressInfo(null);
+    }
+    setNoteMode(false);
+    noteModeRef.current = false;
+    setNoteIsPlaying(false);
+    noteIsPlayingRef.current = false;
+    setNoteCurrentIndex(-1);
+    setNoteQueue([]);
+    noteQueueRef.current = [];
+    setNoteBarEntries([]);
+  }, [isPlaying]);
+
+  const handleNoteAddToQueue = useCallback((entry: PracticeEntry) => {
+    setNoteQueue(prev => [...prev, entry]);
+  }, []);
+
+  const handleNoteRemoveFromQueue = useCallback((index: number) => {
+    const curIdx = noteCurrentIndexRef.current;
+    const wasPlaying = noteIsPlayingRef.current;
+    const updated = noteQueueRef.current.filter((_, i) => i !== index);
+    noteQueueRef.current = updated;
+    setNoteQueue(updated);
+
+    if (curIdx === index && wasPlaying) {
+      const nextIdx = curIdx < updated.length ? curIdx : 0;
+      if (updated.length > 0) {
+        noteStartPlayingEntry(nextIdx);
+      } else {
+        const engine = engineRef.current;
+        if (engine && engine.getIsRunning()) { engine.stop(); stopRenderedAudio(); clearSamplePlayStates(); }
+        setNoteIsPlaying(false);
+        noteIsPlayingRef.current = false;
+        setIsPlaying(false);
+        setNoteCurrentIndex(-1);
+      }
+    } else if (curIdx > index) {
+      setNoteCurrentIndex(curIdx - 1);
+    }
+  }, [noteStartPlayingEntry]);
+
+  const handleNoteInsertNext = useCallback((entry: PracticeEntry) => {
+    const ci = noteCurrentIndexRef.current;
+    setNoteQueue(prev => {
+      const updated = [...prev];
+      updated.splice(ci + 1, 0, entry);
+      return updated;
+    });
+  }, []);
+
+  const handleNoteTogglePlay = useCallback(() => {
+    if (noteIsPlayingRef.current) {
+      noteIsPlayingRef.current = false;
+      const engine = engineRef.current;
+      if (engine) {
+        engine.stop();
+        stopRenderedAudio();
+        clearSamplePlayStates();
+      }
+      setIsPlaying(false);
+      setNoteIsPlaying(false);
+      setCurrentBeat(-1);
+      setMeasureCount(0);
+      setProgressInfo(null);
+      showPausedNotification(bpmRef.current, "Note", languageRef.current);
+    } else {
+      const q = noteQueueRef.current;
+      if (q.length === 0) return;
+      const startIndex = notePlayModeRef.current === "random"
+        ? Math.floor(Math.random() * q.length)
+        : 0;
+      noteStartPlayingEntry(startIndex);
+    }
+  }, [noteStartPlayingEntry]);
+
+  const handleNoteSave = useCallback(async () => {
+    const q = noteQueueRef.current;
+    if (q.length === 0) return;
+    try {
+      const { loadPracticeBook: lpb, savePracticeBook: spb, createPracticeEntry } = await import("@/lib/storage");
+      const firstEntry = q[0];
+      const now = new Date();
+      const label = `Note ${q.length} items ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
+      const noteEntry = createPracticeEntry(label, {
+        mode: "note" as const,
+        bpm: firstEntry.bpm,
+        beatsPerMeasure: firstEntry.beatsPerMeasure,
+        beatTypes: [...firstEntry.beatTypes],
+        beatSubdivisions: {},
+        barRepeats: {},
+        barLoopMode: "once",
+        subdivisionPattern: firstEntry.subdivisionPattern || ["accent"],
+        noteQueueEntryIds: q.map(e => e.id),
+        notePlayMode: notePlayModeRef.current,
+        noteQueueEntries: q.map(e => ({
+          id: e.id,
+          label: e.label,
+          createdAt: e.createdAt,
+          bpm: e.bpm,
+          beatsPerMeasure: e.beatsPerMeasure,
+          beatTypes: [...e.beatTypes],
+          beatSubdivisions: { ...e.beatSubdivisions },
+          barRepeats: { ...e.barRepeats },
+          barLoopMode: e.barLoopMode,
+          subdivisionPattern: e.subdivisionPattern || ["accent"],
+          mode: e.mode || "bar",
+          noteSamples: e.noteSamples,
+          noteSampleNames: e.noteSampleNames,
+          noteSampleSources: e.noteSampleSources,
+          loopBlocks: (e as any).loopBlocks,
+          blockPlayMode: (e as any).blockPlayMode,
+        })),
+      }, username);
+      const existing = await lpb();
+      await spb([noteEntry, ...existing]);
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(t("noteMode", "saved"), t("noteMode", "savedMsg"));
+    } catch (e) {
+      console.warn("Note save error:", e);
+    }
+  }, [username, t]);
+
+  const handleNoteReset = useCallback(() => {
+    noteIsPlayingRef.current = false;
+    const engine = engineRef.current;
+    if (engine && engine.getIsRunning()) {
+      engine.stop();
+      stopRenderedAudio();
+      clearSamplePlayStates();
+    }
+    setNoteQueue([]);
+    noteQueueRef.current = [];
+    setNoteCurrentIndex(-1);
+    setNoteIsPlaying(false);
+    setIsPlaying(false);
+    setCurrentBeat(-1);
+    setMeasureCount(0);
+    setProgressInfo(null);
+  }, []);
+
   useEffect(() => {
     if (loopBlocks.length === 0) return;
     const clamped = loopBlocks
@@ -2253,6 +2608,32 @@ export default function MetronomeScreen() {
 
     const entryMode = entry.mode || "bar";
     const isBeatEntry = entryMode === "beat";
+    const isNoteEntry = entryMode === "note";
+
+    if (isNoteEntry) {
+      if (!noteMode) {
+        setNoteMode(true);
+        noteModeRef.current = true;
+      }
+      const queueEntries = entry.noteQueueEntries || [];
+      setNoteQueue(queueEntries);
+      noteQueueRef.current = queueEntries;
+      setNotePlayMode(entry.notePlayMode || "once");
+      notePlayModeRef.current = entry.notePlayMode || "once";
+      setNoteCurrentIndex(-1);
+      setNoteIsPlaying(false);
+      noteIsPlayingRef.current = false;
+      (async () => {
+        const { loadPracticeBook } = await import("@/lib/storage");
+        const book = await loadPracticeBook();
+        setNoteBarEntries(book.filter(e => (e.mode || "bar") === "bar"));
+      })();
+      return;
+    }
+
+    if (noteMode) {
+      handleExitNoteMode();
+    }
 
     if (isBeatEntry) {
       if (barMode) {
@@ -2357,7 +2738,7 @@ export default function MetronomeScreen() {
       engine.setAllBarRepeats(entry.barRepeats || {});
       const bpmOverridesEntry: Record<number, number> = {};
       for (const [k, v] of Object.entries(entry.barRepeats || {})) {
-        if (v.bpm) bpmOverridesEntry[Number(k)] = v.bpm;
+        if ((v as any).bpm) bpmOverridesEntry[Number(k)] = (v as any).bpm;
       }
       engine.setAllBarBpmOverrides(bpmOverridesEntry);
       barConfigRef.current = {
@@ -2569,6 +2950,17 @@ export default function MetronomeScreen() {
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
+                  handleEnterNoteMode();
+                }}
+              >
+                <MaterialCommunityIcons name="playlist-music" size={18} color={C.accent} />
+                <Text style={styles.menuItemText}>{t("main", "menuNoteMode")}</Text>
+              </Pressable>
+              <View style={styles.menuDivider} />
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                onPress={() => {
+                  setShowMenu(false);
                   setShowWorkUp(true);
                 }}
               >
@@ -2750,6 +3142,24 @@ export default function MetronomeScreen() {
           },
         ]}
       >
+        {noteMode ? (
+          <NoteModeView
+            queue={noteQueue}
+            barEntries={noteBarEntries}
+            playMode={notePlayMode}
+            currentIndex={noteCurrentIndex}
+            isPlaying={noteIsPlaying}
+            onAddToQueue={handleNoteAddToQueue}
+            onRemoveFromQueue={handleNoteRemoveFromQueue}
+            onInsertNext={handleNoteInsertNext}
+            onPlayModeChange={setNotePlayMode}
+            onTogglePlay={handleNoteTogglePlay}
+            onSave={handleNoteSave}
+            onReset={handleNoteReset}
+            onExitNoteMode={handleExitNoteMode}
+          />
+        ) : (
+        <>
         <View style={[styles.topSection, barMode && { justifyContent: "flex-start", flex: 3 }]}>
           <BeatIndicator
             beatsPerMeasure={beatsPerMeasure}
@@ -2837,9 +3247,11 @@ export default function MetronomeScreen() {
             onHalfTimeToggle={toggleHalfTime}
           />
         </View>
+        </>
+        )}
       </View>
 
-      {!barMode && (
+      {!barMode && !noteMode && (
         <StopwatchTimer
           onTimerExpired={handleTimerExpired}
           onStopRequested={handleTimerExpired}
@@ -2850,7 +3262,7 @@ export default function MetronomeScreen() {
         />
       )}
 
-      {isDragging && (
+      {isDragging && !noteMode && (
         <DragGhost
           pattern={subdivisionPattern}
           x={dragPos.x}

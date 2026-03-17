@@ -7,6 +7,7 @@ This project is a Metronome mobile application built with Expo (React Native) an
 The app also incorporates advanced features such as:
 - A **Loop System** with progress indicators, block-jumping logic, and per-bar BPM overrides.
 - A **Practice Note** system for saving and managing complex beat and bar mode configurations.
+- A **Note Mode** that queues bar mode practice entries for sequential, loop, or random playback — with save/reset/share support and a NOTE badge in the practice book.
 - A **Work Up Overview** for tracking practice sessions, feature usage, and managing goals, including GPS-based practice room location tracking.
 - Support for **custom sound sets**, allowing users to mix built-in samples, record audio, or import files.
 - **Data backup and sharing** functionality for all user data and individual practice entries, including embedded audio files.
