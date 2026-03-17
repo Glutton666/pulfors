@@ -162,7 +162,7 @@ function SwipeableEntry({
   let playModeText: string;
   if (isNoteMode) {
     const pm = item.notePlayMode || "once";
-    playModeText = pm === "loop" ? t("practiceBook", "continuousPlay") : pm === "random" ? "Random" : t("practiceBook", "singlePlay");
+    playModeText = pm === "loop" ? t("practiceBook", "continuousPlay") : pm === "random" ? t("practiceBook", "randomPlay") : t("practiceBook", "singlePlay");
   } else if (isBeatMode) {
     playModeText = t("practiceBook", "continuousPlay");
   } else if (clockMode === "timer" && timerDur != null && timerDur > 0) {

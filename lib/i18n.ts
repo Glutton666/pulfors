@@ -226,6 +226,8 @@ const translations = {
     saveNoteConfig: { ko: "현재 노트 설정 저장", en: "Save current note config" },
     byPrefix: { ko: "by", en: "by" },
     bpmUnit: { ko: "BPM", en: "BPM" },
+    randomPlay: { ko: "랜덤", en: "Random" },
+    beatsUnit: { ko: "비트", en: "beats" },
   },
   workUp: {
     title: { ko: "활동 기록", en: "Work Up" },
@@ -277,6 +279,7 @@ const translations = {
     play: { ko: "재생", en: "Play" },
     stop: { ko: "정지", en: "Stop" },
     waveform: { ko: "파형", en: "WAVEFORM" },
+    tunerMic: { ko: "튜너 / 마이크", en: "TUNER / MIC" },
     detecting: { ko: "감지 중...", en: "Detecting..." },
     noSignal: { ko: "신호 없음", en: "No signal" },
     hzUnit: { ko: "Hz", en: "Hz" },

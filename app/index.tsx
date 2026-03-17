@@ -2772,7 +2772,7 @@ export default function MetronomeScreen() {
           };
           Alert.alert(
             t("main", "importSettings"),
-            `"${entry.label}" ${t("main", "importConfirm")}\n\nBPM: ${entry.bpm} | ${entry.beatsPerMeasure} beats`,
+            `"${entry.label}" ${t("main", "importConfirm")}\n\n${t("practiceBook", "bpmUnit")}: ${entry.bpm} | ${entry.beatsPerMeasure} ${t("practiceBook", "beatsUnit")}`,
             [
               { text: t("main", "cancel"), style: "cancel" },
               {
@@ -2823,7 +2823,7 @@ export default function MetronomeScreen() {
         const existing = await lpb();
         await spb([entry, ...existing]);
         handleLoadPracticeEntry(entry);
-        Alert.alert(t("main", "importComplete"), `"${entry.label}" ${t("main", "savedToNote")}\n\nBPM: ${entry.bpm} | ${entry.beatsPerMeasure} beats`);
+        Alert.alert(t("main", "importComplete"), `"${entry.label}" ${t("main", "savedToNote")}\n\n${t("practiceBook", "bpmUnit")}: ${entry.bpm} | ${entry.beatsPerMeasure} ${t("practiceBook", "beatsUnit")}`);
       }
     }, 500);
     return () => clearTimeout(timer);

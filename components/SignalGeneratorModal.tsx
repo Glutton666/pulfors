@@ -860,6 +860,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               ]}
               hitSlop={8}
               testID="signal-mic-toggle"
+              accessibilityLabel={t("signalGenerator", "tunerMic")}
             >
               <MaterialCommunityIcons
                 name={micListening ? "microphone-off" : "microphone"}
