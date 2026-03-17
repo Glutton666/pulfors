@@ -135,13 +135,15 @@ export async function exportBackup(): Promise<boolean> {
     await writeStringToFile(fileUri, json);
 
     const canShare = await Sharing.isAvailableAsync();
-    if (canShare) {
-      await Sharing.shareAsync(fileUri, {
-        mimeType: "application/json",
-        dialogTitle: "Metronome Backup",
-        UTI: "public.json",
-      });
+    if (!canShare) {
+      console.warn("[Backup] Sharing not available on this device");
+      return false;
     }
+    await Sharing.shareAsync(fileUri, {
+      mimeType: "application/json",
+      dialogTitle: "Metronome Backup",
+      UTI: "public.json",
+    });
     return true;
   } catch (e) {
     console.warn("[Backup] Export error:", e);
@@ -188,7 +190,7 @@ async function restoreFromJson(json: string): Promise<{ success: boolean; keyCou
 
     const pairs: [string, string][] = [];
     for (const [key, value] of Object.entries(backup.data)) {
-      if (value !== null && value !== undefined) {
+      if (value !== null && value !== undefined && ALL_KEYS.includes(key)) {
         pairs.push([key, value]);
       }
     }
@@ -228,13 +230,15 @@ export async function sharePracticeEntry(entry: PracticeEntry): Promise<boolean>
     await writeStringToFile(fileUri, json);
 
     const canShare = await Sharing.isAvailableAsync();
-    if (canShare) {
-      await Sharing.shareAsync(fileUri, {
-        mimeType: "application/json",
-        dialogTitle: entry.label,
-        UTI: "public.json",
-      });
+    if (!canShare) {
+      console.warn("[Backup] Sharing not available on this device");
+      return false;
     }
+    await Sharing.shareAsync(fileUri, {
+      mimeType: "application/json",
+      dialogTitle: entry.label,
+      UTI: "public.json",
+    });
     return true;
   } catch (e) {
     console.warn("[Backup] Share practice entry error:", e);
