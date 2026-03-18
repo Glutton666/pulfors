@@ -368,7 +368,6 @@ export default function MetronomeScreen() {
       }
       noteSampleSoundsRef.current = {};
 
-      const invalidKeys: string[] = [];
       for (const [key, uri] of Object.entries(samples)) {
         try {
           const rawUri = uri.split("#")[0];
@@ -378,18 +377,7 @@ export default function MetronomeScreen() {
           noteSampleSoundsRef.current[key] = player;
         } catch (e) {
           console.warn("[SamplePreload] Failed to preload:", key, e);
-          invalidKeys.push(key);
         }
-      }
-
-      if (invalidKeys.length > 0) {
-        let cleaned = { ...samples };
-        for (const k of invalidKeys) {
-          delete cleaned[k];
-        }
-        setNoteSamples(cleaned);
-        noteSamplesRef.current = cleaned;
-        saveNoteSamples(cleaned);
       }
     };
 
@@ -568,7 +556,6 @@ export default function MetronomeScreen() {
     }
     noteSampleSoundsRef.current = {};
 
-    const invalidKeys: string[] = [];
     for (const [key, uri] of Object.entries(samples)) {
       try {
         const rawUri = uri.split("#")[0];
@@ -578,18 +565,7 @@ export default function MetronomeScreen() {
         noteSampleSoundsRef.current[key] = player;
       } catch (e) {
         console.warn("[SamplePreload] Failed:", key, e);
-        invalidKeys.push(key);
       }
-    }
-
-    if (invalidKeys.length > 0) {
-      let cleaned = { ...samples };
-      for (const k of invalidKeys) {
-        delete cleaned[k];
-      }
-      setNoteSamples(cleaned);
-      noteSamplesRef.current = cleaned;
-      saveNoteSamples(cleaned);
     }
   }, []);
 
