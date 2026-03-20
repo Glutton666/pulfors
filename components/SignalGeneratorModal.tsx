@@ -610,6 +610,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const [micDetectedNote, setMicDetectedNote] = useState<string | null>(null);
   const [micAnalyzed, setMicAnalyzed] = useState(false);
   const micTargetFreqRef = useRef<number>(440);
+  const micHasTargetRef = useRef(false);
   const micActiveRef = useRef(false);
   const micAudioCtxRef = useRef<any>(null);
   const micAnalyserRef = useRef<any>(null);
@@ -1010,6 +1011,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
     if (micListening) {
       stopMic();
     } else {
+      micHasTargetRef.current = false;
       micTargetFreqRef.current = frequency;
       startMic();
     }
@@ -1033,12 +1035,13 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
 
   useEffect(() => {
     if (micListening) {
+      micHasTargetRef.current = true;
       micTargetFreqRef.current = frequency;
     }
   }, [frequency, micListening]);
 
   const pitchComparison = useMemo(() => {
-    if (!micListening || !micDetectedFreq) return null;
+    if (!micListening || !micDetectedFreq || !micHasTargetRef.current) return null;
     const target = micTargetFreqRef.current;
     const centsDiff = Math.round(1200 * Math.log2(micDetectedFreq / target));
     const targetNote = frequencyToNote(target);
