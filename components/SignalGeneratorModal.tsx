@@ -1033,11 +1033,13 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const currentNote = useMemo(() => frequencyToNote(frequency), [frequency]);
   const currentNoteLabel = `${currentNote.name}${currentNote.octave}`;
 
+  const prevFreqForMicRef = useRef(frequency);
   useEffect(() => {
-    if (micListening) {
+    if (micListening && prevFreqForMicRef.current !== frequency) {
       micHasTargetRef.current = true;
       micTargetFreqRef.current = frequency;
     }
+    prevFreqForMicRef.current = frequency;
   }, [frequency, micListening]);
 
   const pitchComparison = useMemo(() => {
