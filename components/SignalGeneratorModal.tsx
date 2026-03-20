@@ -141,13 +141,16 @@ interface KnobProps {
   accentColor: string;
   accentDim: string;
   onTapCenter?: () => void;
+  onLongPress?: () => void;
   noteLabel?: string;
 }
 
-function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentDim, onTapCenter, noteLabel }: KnobProps) {
+function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentDim, onTapCenter, onLongPress, noteLabel }: KnobProps) {
   const knobRef = useRef<View>(null);
   const valRef = useRef(value);
   const movedRef = useRef(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFiredRef = useRef(false);
   valRef.current = value;
 
   const haptic = useCallback(() => {
@@ -160,10 +163,25 @@ function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentD
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
         movedRef.current = false;
+        longPressFiredRef.current = false;
         haptic();
+        if (onLongPress) {
+          longPressTimerRef.current = setTimeout(() => {
+            if (!movedRef.current) {
+              longPressFiredRef.current = true;
+              onLongPress();
+            }
+          }, 400);
+        }
       },
       onPanResponderMove: (_, gs) => {
-        if (Math.abs(gs.dy) > 3) movedRef.current = true;
+        if (Math.abs(gs.dy) > 3) {
+          movedRef.current = true;
+          if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+          }
+        }
         const sensitivity = 0.0015;
         const delta = -gs.dy * sensitivity;
         const next = Math.max(0, Math.min(1, valRef.current + delta));
@@ -172,11 +190,15 @@ function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentD
         }
       },
       onPanResponderRelease: () => {
-        if (!movedRef.current && onTapCenter) {
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
+        if (!movedRef.current && !longPressFiredRef.current && onTapCenter) {
           onTapCenter();
         }
       },
-    }), [onChange, haptic, onTapCenter]);
+    }), [onChange, haptic, onTapCenter, onLongPress]);
 
   const angle = ARC_START + value * ARC_RANGE;
   const indicator = polarToXY(angle, INDICATOR_RADIUS, KNOB_RADIUS, KNOB_RADIUS);
@@ -1106,6 +1128,13 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               accentColor={C.accent}
               accentDim={C.accentDim}
               onTapCenter={openFreqEdit}
+              onLongPress={micListening && micDetectedFreqRef.current ? () => {
+                const captured = micDetectedFreqRef.current;
+                if (captured) {
+                  hapticFeedback();
+                  setFrequency(captured);
+                }
+              } : undefined}
               noteLabel={currentNoteLabel}
             />
             <Pressable
@@ -1126,24 +1155,9 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
             </Pressable>
             {micListening && micDetectedFreq ? (
               <View style={styles.micDetectedWrap}>
-                <Pressable
-                  onLongPress={() => {
-                    const captured = micDetectedFreqRef.current;
-                    if (captured) {
-                      hapticFeedback();
-                      setFrequency(captured);
-                    }
-                  }}
-                  delayLongPress={300}
-                  style={styles.micDetectedPressable}
-                >
-                  <Text style={[styles.micDetectedHint, { color: C.accent }]}>
-                    {micDetectedNote} {micDetectedFreq} {t("signalGenerator", "hzUnit")}
-                  </Text>
-                  <Text style={styles.micLongPressHint}>
-                    {t("signalGenerator", "longPressToSet")}
-                  </Text>
-                </Pressable>
+                <Text style={[styles.micDetectedHint, { color: C.accent }]}>
+                  {micDetectedNote} {micDetectedFreq} {t("signalGenerator", "hzUnit")}
+                </Text>
                 {pitchComparison ? (
                   <View style={[
                     styles.pitchIndicator,
@@ -1515,25 +1529,11 @@ const styles = StyleSheet.create({
     gap: 4,
     marginTop: 2,
   },
-  micDetectedPressable: {
-    alignItems: "center",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-  },
   micDetectedHint: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 11,
     color: Colors.textTertiary,
     textAlign: "center",
-  },
-  micLongPressHint: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 9,
-    color: Colors.textTertiary,
-    opacity: 0.6,
-    textAlign: "center",
-    marginTop: 1,
   },
   pitchIndicator: {
     flexDirection: "row",
