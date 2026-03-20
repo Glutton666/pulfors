@@ -839,7 +839,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       setMicListening(true);
 
       const buf = new Float32Array(analyser.fftSize);
-      const MIC_GATE = 0.08;
+      const MIC_GATE = 0.03;
       const WINDOW_MS = 500;
       let readings: number[] = [];
       let windowStart = Date.now();
@@ -897,7 +897,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
 
       const SAMPLE_RATE = 48000;
       const RECORD_MS = 500;
-      const MIC_GATE = 0.08;
+      const MIC_GATE = 0.03;
       const WINDOW_SIZE = 8192;
 
       const recordingOptions = {
