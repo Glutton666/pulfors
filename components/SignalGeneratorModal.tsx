@@ -806,13 +806,22 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const currentNote = useMemo(() => frequencyToNote(frequency), [frequency]);
   const currentNoteLabel = `${currentNote.name}${currentNote.octave}`;
 
+  useEffect(() => {
+    if (!micListening) return;
+    if (pickerDrivenRef.current) {
+      micTargetFreqRef.current = frequency;
+    }
+  }, [frequency, micListening]);
+
   const pitchComparison = useMemo(() => {
     if (!micListening || !micDetectedFreq) return null;
     const target = micTargetFreqRef.current;
     const centsDiff = Math.round(1200 * Math.log2(micDetectedFreq / target));
-    if (Math.abs(centsDiff) <= 5) return { status: "exact" as const, cents: centsDiff, target };
-    if (centsDiff > 0) return { status: "high" as const, cents: centsDiff, target };
-    return { status: "low" as const, cents: centsDiff, target };
+    const targetNote = frequencyToNote(target);
+    const targetLabel = `${targetNote.name}${targetNote.octave}`;
+    if (Math.abs(centsDiff) <= 5) return { status: "exact" as const, cents: centsDiff, targetLabel };
+    if (centsDiff > 0) return { status: "high" as const, cents: centsDiff, targetLabel };
+    return { status: "low" as const, cents: centsDiff, targetLabel };
   }, [micListening, micDetectedFreq]);
 
   const formatFreqDisplay = (f: number) => {
@@ -932,7 +941,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                       }
                     ]}>
                       {pitchComparison.status === "exact"
-                        ? `${t("signalGenerator", "pitchExact")} (${frequencyToNote(pitchComparison.target).name}${frequencyToNote(pitchComparison.target).octave})`
+                        ? `${t("signalGenerator", "pitchExact")} (${pitchComparison.targetLabel})`
                         : pitchComparison.status === "high"
                         ? `${t("signalGenerator", "pitchHigh")} +${pitchComparison.cents}¢`
                         : `${t("signalGenerator", "pitchLow")} ${pitchComparison.cents}¢`}
