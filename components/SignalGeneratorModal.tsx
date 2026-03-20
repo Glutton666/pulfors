@@ -191,11 +191,11 @@ function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentD
         <View style={[styles.knobBg, { borderColor: accentDim }]}>
           <View style={[styles.knobIndicatorDot, { backgroundColor: accentColor, left: indicator.x - 6, top: indicator.y - 6 }]} />
         </View>
-        <View style={styles.knobCenter} pointerEvents="none">
+        <Pressable style={styles.knobCenter} onPress={onTapCenter}>
           <Text style={[styles.knobValue, { color: accentColor }]}>{displayValue}</Text>
           <Text style={styles.knobUnit}>{displayUnit}</Text>
           {noteLabel ? <Text style={[styles.knobNoteLabel, { color: accentColor }]}>{noteLabel}</Text> : null}
-        </View>
+        </Pressable>
       </View>
     </View>
   );
@@ -1123,9 +1123,17 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
             </Pressable>
             {micListening && micDetectedFreq ? (
               <View style={styles.micDetectedWrap}>
-                <Text style={[styles.micDetectedHint, { color: C.accent }]}>
-                  {micDetectedNote} {micDetectedFreq} {t("signalGenerator", "hzUnit")}
-                </Text>
+                <Pressable
+                  onLongPress={() => {
+                    hapticFeedback();
+                    setFrequency(micDetectedFreq);
+                  }}
+                  delayLongPress={400}
+                >
+                  <Text style={[styles.micDetectedHint, { color: C.accent }]}>
+                    {micDetectedNote} {micDetectedFreq} {t("signalGenerator", "hzUnit")}
+                  </Text>
+                </Pressable>
                 {pitchComparison ? (
                   <View style={[
                     styles.pitchIndicator,
