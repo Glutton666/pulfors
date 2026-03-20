@@ -868,8 +868,6 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
 
           <View style={styles.divider} />
 
-          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-
           <View style={styles.knobWrap}>
             <Knob
               value={freqNorm}
@@ -1128,8 +1126,6 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               })}
             </View>
           </View>
-
-          </ScrollView>
 
           <Pressable
             onPress={() => {
