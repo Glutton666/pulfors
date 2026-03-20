@@ -333,6 +333,229 @@ const pickerStyles = StyleSheet.create({
   },
 });
 
+interface TuningGuideModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onSelectFreq: (freq: number) => void;
+  lang: "ko" | "en";
+  accentColor: string;
+  accentDim: string;
+}
+
+function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, accentDim }: TuningGuideModalProps) {
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [expandedInstrument, setExpandedInstrument] = useState<string | null>(null);
+  const { t } = useLanguage();
+
+  const handleClose = useCallback(() => {
+    setExpandedCategory(null);
+    setExpandedInstrument(null);
+    onClose();
+  }, [onClose]);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose} statusBarTranslucent>
+      <View style={tgStyles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+        <View style={tgStyles.card}>
+          <View style={tgStyles.header}>
+            <MaterialCommunityIcons name="music-note-outline" size={18} color={accentColor} />
+            <Text style={[tgStyles.title, { color: accentColor }]}>{t("signalGenerator", "tuningGuide")}</Text>
+            <Pressable onPress={handleClose} hitSlop={12} style={tgStyles.closeBtn}>
+              <Ionicons name="close" size={18} color={Colors.textSecondary} />
+            </Pressable>
+          </View>
+          <Text style={tgStyles.hint}>{t("signalGenerator", "tapToSet")}</Text>
+          <View style={tgStyles.divider} />
+          <ScrollView style={tgStyles.scrollBody} showsVerticalScrollIndicator={false}>
+            {TUNING_DATA.map((cat) => (
+              <View key={cat.id}>
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setExpandedCategory(expandedCategory === cat.id ? null : cat.id);
+                    setExpandedInstrument(null);
+                  }}
+                  style={[tgStyles.categoryRow, expandedCategory === cat.id && { backgroundColor: accentDim }]}
+                >
+                  <MaterialCommunityIcons
+                    name={cat.icon}
+                    size={16}
+                    color={expandedCategory === cat.id ? accentColor : Colors.textSecondary}
+                  />
+                  <Text style={[tgStyles.categoryText, expandedCategory === cat.id && { color: accentColor }]}>
+                    {cat.name[lang]}
+                  </Text>
+                  <Ionicons
+                    name={expandedCategory === cat.id ? "chevron-up" : "chevron-forward"}
+                    size={14}
+                    color={Colors.textTertiary}
+                  />
+                </Pressable>
+
+                {expandedCategory === cat.id && cat.instruments.map((inst) => (
+                  <View key={inst.id}>
+                    <Pressable
+                      onPress={() => {
+                        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setExpandedInstrument(expandedInstrument === inst.id ? null : inst.id);
+                      }}
+                      style={[tgStyles.instrumentRow, expandedInstrument === inst.id && { backgroundColor: "rgba(255,255,255,0.04)" }]}
+                    >
+                      <Text style={[tgStyles.instrumentText, expandedInstrument === inst.id && { color: accentColor }]}>
+                        {inst.name[lang]}
+                      </Text>
+                      <Ionicons
+                        name={expandedInstrument === inst.id ? "chevron-down" : "chevron-forward"}
+                        size={12}
+                        color={Colors.textTertiary}
+                      />
+                    </Pressable>
+
+                    {expandedInstrument === inst.id && (
+                      <View style={tgStyles.stringList}>
+                        {inst.strings.map((s, i) => (
+                          <Pressable
+                            key={`${inst.id}-${i}`}
+                            onPress={() => {
+                              if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              onSelectFreq(s.freq);
+                            }}
+                            style={({ pressed }) => [
+                              tgStyles.stringRow,
+                              pressed && { backgroundColor: accentDim },
+                            ]}
+                          >
+                            <Text style={[tgStyles.stringNote, { color: accentColor }]}>
+                              {s.note}{s.octave}
+                            </Text>
+                            <Text style={tgStyles.stringLabel}>
+                              {s.label[lang]}
+                            </Text>
+                            <Text style={tgStyles.stringFreq}>
+                              {s.freq} Hz
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const tgStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.6)",
+  },
+  card: {
+    width: 320,
+    maxHeight: "75%",
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  title: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 16,
+    flex: 1,
+  },
+  closeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.surfaceLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  hint: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 11,
+    color: Colors.textTertiary,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginBottom: 8,
+  },
+  scrollBody: {
+    flexGrow: 0,
+  },
+  categoryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  categoryText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 13,
+    color: Colors.textSecondary,
+    flex: 1,
+  },
+  instrumentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 7,
+    paddingHorizontal: 24,
+    borderRadius: 6,
+  },
+  instrumentText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    color: Colors.textSecondary,
+    flex: 1,
+  },
+  stringList: {
+    paddingLeft: 20,
+    paddingBottom: 4,
+  },
+  stringRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    gap: 8,
+  },
+  stringNote: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 13,
+    width: 36,
+  },
+  stringLabel: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 12,
+    color: Colors.textSecondary,
+    flex: 1,
+  },
+  stringFreq: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 11,
+    color: Colors.textTertiary,
+  },
+});
+
 interface SignalGeneratorModalProps {
   visible: boolean;
   onClose: () => void;
@@ -349,8 +572,6 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const [selectedNote, setSelectedNote] = useState("A");
   const [selectedOctave, setSelectedOctave] = useState(4);
   const [tuningGuideOpen, setTuningGuideOpen] = useState(false);
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
-  const [expandedInstrument, setExpandedInstrument] = useState<string | null>(null);
 
   const pickerDrivenRef = useRef(false);
 
@@ -995,114 +1216,31 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
             {noteToFreq(selectedNote, selectedOctave)} {t("signalGenerator", "hzUnit")}
           </Text>
 
-          <View style={styles.tuningGuideWrap}>
-            <Pressable
-              onPress={() => {
-                hapticFeedback();
-                setTuningGuideOpen(!tuningGuideOpen);
-                if (tuningGuideOpen) {
-                  setExpandedCategory(null);
-                  setExpandedInstrument(null);
-                }
-              }}
-              style={[styles.tuningGuideToggle, tuningGuideOpen && { borderColor: C.accent, backgroundColor: C.accentDim }]}
-            >
-              <MaterialCommunityIcons
-                name="music-note-outline"
-                size={14}
-                color={tuningGuideOpen ? C.accent : Colors.textTertiary}
-              />
-              <Text style={[styles.tuningGuideToggleText, tuningGuideOpen && { color: C.accent }]}>
-                {t("signalGenerator", "tuningGuide")}
-              </Text>
-              <Ionicons
-                name={tuningGuideOpen ? "chevron-up" : "chevron-down"}
-                size={14}
-                color={tuningGuideOpen ? C.accent : Colors.textTertiary}
-              />
-            </Pressable>
+          <Pressable
+            onPress={() => {
+              hapticFeedback();
+              setTuningGuideOpen(true);
+            }}
+            style={[styles.tuningGuideToggle]}
+          >
+            <MaterialCommunityIcons name="music-note-outline" size={14} color={Colors.textTertiary} />
+            <Text style={styles.tuningGuideToggleText}>
+              {t("signalGenerator", "tuningGuide")}
+            </Text>
+            <Ionicons name="chevron-forward" size={14} color={Colors.textTertiary} />
+          </Pressable>
 
-            {tuningGuideOpen && (
-              <ScrollView style={styles.tuningGuidePanel} nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                {TUNING_DATA.map((cat) => (
-                  <View key={cat.id}>
-                    <Pressable
-                      onPress={() => {
-                        hapticFeedback();
-                        setExpandedCategory(expandedCategory === cat.id ? null : cat.id);
-                        setExpandedInstrument(null);
-                      }}
-                      style={[styles.tuningCategoryRow, expandedCategory === cat.id && { backgroundColor: C.accentDim }]}
-                    >
-                      <MaterialCommunityIcons
-                        name={cat.icon}
-                        size={14}
-                        color={expandedCategory === cat.id ? C.accent : Colors.textSecondary}
-                      />
-                      <Text style={[styles.tuningCategoryText, expandedCategory === cat.id && { color: C.accent }]}>
-                        {cat.name[lang]}
-                      </Text>
-                      <Ionicons
-                        name={expandedCategory === cat.id ? "chevron-up" : "chevron-forward"}
-                        size={12}
-                        color={Colors.textTertiary}
-                      />
-                    </Pressable>
-
-                    {expandedCategory === cat.id && cat.instruments.map((inst) => (
-                      <View key={inst.id}>
-                        <Pressable
-                          onPress={() => {
-                            hapticFeedback();
-                            setExpandedInstrument(expandedInstrument === inst.id ? null : inst.id);
-                          }}
-                          style={[styles.tuningInstrumentRow, expandedInstrument === inst.id && { backgroundColor: "rgba(255,255,255,0.03)" }]}
-                        >
-                          <Text style={[styles.tuningInstrumentText, expandedInstrument === inst.id && { color: C.accent }]}>
-                            {inst.name[lang]}
-                          </Text>
-                          <Ionicons
-                            name={expandedInstrument === inst.id ? "chevron-down" : "chevron-forward"}
-                            size={11}
-                            color={Colors.textTertiary}
-                          />
-                        </Pressable>
-
-                        {expandedInstrument === inst.id && (
-                          <View style={styles.tuningStringList}>
-                            {inst.strings.map((s, i) => (
-                              <Pressable
-                                key={`${inst.id}-${i}`}
-                                onPress={() => {
-                                  hapticFeedback();
-                                  setFrequency(s.freq);
-                                }}
-                                style={({ pressed }) => [
-                                  styles.tuningStringRow,
-                                  pressed && { backgroundColor: C.accentDim },
-                                ]}
-                              >
-                                <Text style={[styles.tuningStringNote, { color: C.accent }]}>
-                                  {s.note}{s.octave}
-                                </Text>
-                                <Text style={styles.tuningStringLabel}>
-                                  {s.label[lang]}
-                                </Text>
-                                <Text style={styles.tuningStringFreq}>
-                                  {s.freq} Hz
-                                </Text>
-                              </Pressable>
-                            ))}
-                          </View>
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                ))}
-                <Text style={styles.tuningHint}>{t("signalGenerator", "tapToSet")}</Text>
-              </ScrollView>
-            )}
-          </View>
+          <TuningGuideModal
+            visible={tuningGuideOpen}
+            onClose={() => setTuningGuideOpen(false)}
+            onSelectFreq={(freq) => {
+              setFrequency(freq);
+              setTuningGuideOpen(false);
+            }}
+            lang={lang}
+            accentColor={C.accent}
+            accentDim={C.accentDim}
+          />
 
           <View style={styles.waveSection}>
             <Text style={styles.sectionLabel}>{t("signalGenerator", "waveform")}</Text>
@@ -1385,11 +1523,6 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 15,
   },
-  tuningGuideWrap: {
-    width: "100%",
-    marginTop: -8,
-    marginBottom: -8,
-  },
   tuningGuideToggle: {
     flexDirection: "row",
     alignItems: "center",
@@ -1400,80 +1533,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: Colors.border,
+    marginTop: -8,
+    marginBottom: -8,
   },
   tuningGuideToggleText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 11,
     color: Colors.textTertiary,
-  },
-  tuningGuidePanel: {
-    maxHeight: 220,
-    marginTop: 8,
-    borderRadius: 8,
-    backgroundColor: "rgba(0,0,0,0.15)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  tuningCategoryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 7,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-  },
-  tuningCategoryText: {
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 12,
-    color: Colors.textSecondary,
-    flex: 1,
-  },
-  tuningInstrumentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 5,
-    paddingHorizontal: 20,
-    borderRadius: 4,
-  },
-  tuningInstrumentText: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 11,
-    color: Colors.textSecondary,
-    flex: 1,
-  },
-  tuningStringList: {
-    paddingLeft: 16,
-    paddingBottom: 4,
-  },
-  tuningStringRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 4,
-    gap: 6,
-  },
-  tuningStringNote: {
-    fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 12,
-    width: 32,
-  },
-  tuningStringLabel: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
-    color: Colors.textSecondary,
-    flex: 1,
-  },
-  tuningStringFreq: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 10,
-    color: Colors.textTertiary,
-  },
-  tuningHint: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 10,
-    color: Colors.textTertiary,
-    textAlign: "center",
-    paddingVertical: 6,
   },
 });

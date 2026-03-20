@@ -11,7 +11,7 @@ export interface Instrument {
   strings: TuningString[];
 }
 
-export type TuningCategoryIcon = "guitar-acoustic" | "music-note" | "violin" | "music-circle" | "music-box";
+export type TuningCategoryIcon = "guitar-acoustic" | "music-note" | "violin" | "music-circle" | "music-box" | "drum";
 
 export interface InstrumentCategory {
   id: string;
@@ -294,6 +294,115 @@ export const TUNING_DATA: InstrumentCategory[] = [
           { note: "D#", octave: 5, freq: 622.25, label: { ko: "11현", en: "11th" } },
           { note: "G", octave: 5, freq: 783.99, label: { ko: "12현", en: "12th" } },
           { note: "A", octave: 5, freq: 880.00, label: { ko: "13현 (巾)", en: "13th (Kin)" } },
+        ],
+      },
+    ],
+  },
+  {
+    id: "percussion",
+    name: { ko: "타악기", en: "Percussion" },
+    icon: "drum",
+    instruments: [
+      {
+        id: "timpani",
+        name: { ko: "팀파니", en: "Timpani" },
+        strings: [
+          { note: "D", octave: 2, freq: 73.42, label: { ko: '32" D', en: '32" D' } },
+          { note: "F", octave: 2, freq: 87.31, label: { ko: '32" F', en: '32" F' } },
+          { note: "A", octave: 2, freq: 110.00, label: { ko: '29" A', en: '29" A' } },
+          { note: "B♭", octave: 2, freq: 116.54, label: { ko: '29" B♭', en: '29" B♭' } },
+          { note: "C", octave: 3, freq: 130.81, label: { ko: '26" C', en: '26" C' } },
+          { note: "D", octave: 3, freq: 146.83, label: { ko: '26" D', en: '26" D' } },
+          { note: "E", octave: 3, freq: 164.81, label: { ko: '23" E', en: '23" E' } },
+          { note: "F", octave: 3, freq: 174.61, label: { ko: '23" F', en: '23" F' } },
+        ],
+      },
+      {
+        id: "tabla",
+        name: { ko: "타블라", en: "Tabla" },
+        strings: [
+          { note: "C", octave: 3, freq: 130.81, label: { ko: "다야 C", en: "Daya C" } },
+          { note: "C#", octave: 3, freq: 138.59, label: { ko: "다야 C#", en: "Daya C#" } },
+          { note: "D", octave: 3, freq: 146.83, label: { ko: "다야 D", en: "Daya D" } },
+          { note: "D#", octave: 3, freq: 155.56, label: { ko: "다야 D#", en: "Daya D#" } },
+          { note: "E", octave: 3, freq: 164.81, label: { ko: "다야 E", en: "Daya E" } },
+          { note: "F", octave: 3, freq: 174.61, label: { ko: "다야 F", en: "Daya F" } },
+        ],
+      },
+      {
+        id: "djembe",
+        name: { ko: "젬베", en: "Djembe" },
+        strings: [
+          { note: "D", octave: 3, freq: 146.83, label: { ko: "베이스 D", en: "Bass D" } },
+          { note: "F", octave: 3, freq: 174.61, label: { ko: "톤 F", en: "Tone F" } },
+          { note: "A", octave: 3, freq: 220.00, label: { ko: "슬랩 A", en: "Slap A" } },
+        ],
+      },
+      {
+        id: "steelpan",
+        name: { ko: "스틸팬", en: "Steel Pan" },
+        strings: [
+          { note: "C", octave: 4, freq: 261.63, label: { ko: "C4", en: "C4" } },
+          { note: "D", octave: 4, freq: 293.66, label: { ko: "D4", en: "D4" } },
+          { note: "E", octave: 4, freq: 329.63, label: { ko: "E4", en: "E4" } },
+          { note: "F", octave: 4, freq: 349.23, label: { ko: "F4", en: "F4" } },
+          { note: "G", octave: 4, freq: 392.00, label: { ko: "G4", en: "G4" } },
+          { note: "A", octave: 4, freq: 440.00, label: { ko: "A4", en: "A4" } },
+          { note: "B", octave: 4, freq: 493.88, label: { ko: "B4", en: "B4" } },
+          { note: "C", octave: 5, freq: 523.25, label: { ko: "C5", en: "C5" } },
+        ],
+      },
+      {
+        id: "bongo",
+        name: { ko: "봉고", en: "Bongo" },
+        strings: [
+          { note: "A", octave: 3, freq: 220.00, label: { ko: "마초 (작은북)", en: "Macho (small)" } },
+          { note: "E", octave: 3, freq: 164.81, label: { ko: "헴브라 (큰북)", en: "Hembra (large)" } },
+        ],
+      },
+      {
+        id: "conga",
+        name: { ko: "콩가", en: "Conga" },
+        strings: [
+          { note: "C", octave: 3, freq: 130.81, label: { ko: "툼바 (낮은음)", en: "Tumba (low)" } },
+          { note: "D", octave: 3, freq: 146.83, label: { ko: "콩가 (중간음)", en: "Conga (mid)" } },
+          { note: "F", octave: 3, freq: 174.61, label: { ko: "퀸토 (높은음)", en: "Quinto (high)" } },
+        ],
+      },
+      {
+        id: "snare_drum",
+        name: { ko: "스네어 드럼", en: "Snare Drum" },
+        strings: [
+          { note: "E", octave: 3, freq: 164.81, label: { ko: "배터 헤드 E3", en: "Batter head E3" } },
+          { note: "A", octave: 3, freq: 220.00, label: { ko: "배터 헤드 A3", en: "Batter head A3" } },
+          { note: "B", octave: 3, freq: 246.94, label: { ko: "스네어 사이드 B3", en: "Snare side B3" } },
+        ],
+      },
+      {
+        id: "tom_drum",
+        name: { ko: "탐 (드럼셋)", en: "Toms (Drum Set)" },
+        strings: [
+          { note: "E", octave: 2, freq: 82.41, label: { ko: "플로어탐 16\"", en: "Floor tom 16\"" } },
+          { note: "A", octave: 2, freq: 110.00, label: { ko: "로우탐 14\"", en: "Low tom 14\"" } },
+          { note: "D", octave: 3, freq: 146.83, label: { ko: "미드탐 12\"", en: "Mid tom 12\"" } },
+          { note: "G", octave: 3, freq: 196.00, label: { ko: "하이탐 10\"", en: "High tom 10\"" } },
+        ],
+      },
+      {
+        id: "bass_drum",
+        name: { ko: "베이스 드럼", en: "Bass Drum (Kick)" },
+        strings: [
+          { note: "C", octave: 2, freq: 65.41, label: { ko: "배터 헤드 C2", en: "Batter head C2" } },
+          { note: "E", octave: 2, freq: 82.41, label: { ko: "배터 헤드 E2", en: "Batter head E2" } },
+          { note: "G", octave: 2, freq: 98.00, label: { ko: "레조넌트 헤드 G2", en: "Resonant head G2" } },
+        ],
+      },
+      {
+        id: "janggu",
+        name: { ko: "장구", en: "Janggu" },
+        strings: [
+          { note: "A", octave: 2, freq: 110.00, label: { ko: "궁편 (왼쪽)", en: "Gung (left)" } },
+          { note: "E", octave: 3, freq: 164.81, label: { ko: "열편 (오른쪽)", en: "Yeol (right)" } },
         ],
       },
     ],
