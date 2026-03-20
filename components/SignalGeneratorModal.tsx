@@ -1037,7 +1037,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                       style={[styles.tuningCategoryRow, expandedCategory === cat.id && { backgroundColor: C.accentDim }]}
                     >
                       <MaterialCommunityIcons
-                        name={cat.icon as any}
+                        name={cat.icon}
                         size={14}
                         color={expandedCategory === cat.id ? C.accent : Colors.textSecondary}
                       />

@@ -11,10 +11,12 @@ export interface Instrument {
   strings: TuningString[];
 }
 
+export type TuningCategoryIcon = "guitar-acoustic" | "music-note" | "violin" | "music-circle" | "music-box";
+
 export interface InstrumentCategory {
   id: string;
   name: { ko: string; en: string };
-  icon: string;
+  icon: TuningCategoryIcon;
   instruments: Instrument[];
 }
 
