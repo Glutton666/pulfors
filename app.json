@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "PurFors<alpha>",
-    "slug": "purforsalpha",
+    "name": "PulFors<alpha>",
+    "slug": "pulforsalpha",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "purforsalpha",
+    "scheme": "pulforsalpha",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -15,10 +15,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.purforsalpha.app"
+      "bundleIdentifier": "com.pulforsalpha.app"
     },
     "android": {
-      "package": "com.purforsalpha.app",
+      "package": "com.pulforsalpha.app",
       "adaptiveIcon": {
         "backgroundColor": "#0D1117",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
