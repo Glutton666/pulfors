@@ -288,6 +288,8 @@ const translations = {
     pitchExact: { ko: "정확", en: "In Tune" },
     pitchHigh: { ko: "높음", en: "High" },
     pitchLow: { ko: "낮음", en: "Low" },
+    tuningGuide: { ko: "튜닝 가이드", en: "Tuning Guide" },
+    tapToSet: { ko: "탭하여 주파수 설정", en: "Tap to set frequency" },
   },
   noteRecorder: {
     permissionRequired: { ko: "권한 필요", en: "Permission Required" },
