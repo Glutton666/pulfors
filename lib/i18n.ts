@@ -285,6 +285,9 @@ const translations = {
     detecting: { ko: "감지 중...", en: "Detecting..." },
     noSignal: { ko: "신호 없음", en: "No signal" },
     hzUnit: { ko: "Hz", en: "Hz" },
+    pitchExact: { ko: "정확", en: "In Tune" },
+    pitchHigh: { ko: "높음", en: "High" },
+    pitchLow: { ko: "낮음", en: "Low" },
   },
   noteRecorder: {
     permissionRequired: { ko: "권한 필요", en: "Permission Required" },

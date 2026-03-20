@@ -140,9 +140,10 @@ interface KnobProps {
   accentColor: string;
   accentDim: string;
   onTapCenter?: () => void;
+  noteLabel?: string;
 }
 
-function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentDim, onTapCenter }: KnobProps) {
+function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentDim, onTapCenter, noteLabel }: KnobProps) {
   const knobRef = useRef<View>(null);
   const valRef = useRef(value);
   const movedRef = useRef(false);
@@ -192,6 +193,7 @@ function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentD
         <View style={styles.knobCenter} pointerEvents="none">
           <Text style={[styles.knobValue, { color: accentColor }]}>{displayValue}</Text>
           <Text style={styles.knobUnit}>{displayUnit}</Text>
+          {noteLabel ? <Text style={[styles.knobNoteLabel, { color: accentColor }]}>{noteLabel}</Text> : null}
         </View>
       </View>
     </View>
@@ -382,6 +384,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const [micDetectedFreq, setMicDetectedFreq] = useState<number | null>(null);
   const [micDetectedNote, setMicDetectedNote] = useState<string | null>(null);
   const [micAnalyzed, setMicAnalyzed] = useState(false);
+  const micTargetFreqRef = useRef<number>(440);
   const micActiveRef = useRef(false);
   const micAudioCtxRef = useRef<any>(null);
   const micAnalyserRef = useRef<any>(null);
@@ -784,9 +787,10 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
     if (micListening) {
       stopMic();
     } else {
+      micTargetFreqRef.current = frequency;
       startMic();
     }
-  }, [micListening, stopMic, startMic, hapticFeedback]);
+  }, [micListening, stopMic, startMic, hapticFeedback, frequency]);
 
   const handleClose = useCallback(() => {
     stopPlayback();
@@ -800,6 +804,18 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   }, []);
 
   const freqNorm = freqToNorm(frequency);
+
+  const currentNote = useMemo(() => frequencyToNote(frequency), [frequency]);
+  const currentNoteLabel = `${currentNote.name}${currentNote.octave}`;
+
+  const pitchComparison = useMemo(() => {
+    if (!micListening || !micDetectedFreq) return null;
+    const target = micTargetFreqRef.current;
+    const centsDiff = Math.round(1200 * Math.log2(micDetectedFreq / target));
+    if (Math.abs(centsDiff) <= 5) return { status: "exact" as const, cents: centsDiff, target };
+    if (centsDiff > 0) return { status: "high" as const, cents: centsDiff, target };
+    return { status: "low" as const, cents: centsDiff, target };
+  }, [micListening, micDetectedFreq]);
 
   const formatFreqDisplay = (f: number) => {
     if (f >= 1000) return (f / 1000).toFixed(f >= 10000 ? 1 : 2);
@@ -851,6 +867,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               accentColor={C.accent}
               accentDim={C.accentDim}
               onTapCenter={openFreqEdit}
+              noteLabel={currentNoteLabel}
             />
             <Pressable
               onPress={toggleMic}
@@ -869,9 +886,62 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               />
             </Pressable>
             {micListening && micDetectedFreq ? (
-              <Text style={[styles.micDetectedHint, { color: C.accent }]}>
-                {micDetectedNote} {micDetectedFreq} {t("signalGenerator", "hzUnit")}
-              </Text>
+              <View style={styles.micDetectedWrap}>
+                <Text style={[styles.micDetectedHint, { color: C.accent }]}>
+                  {micDetectedNote} {micDetectedFreq} {t("signalGenerator", "hzUnit")}
+                </Text>
+                {pitchComparison ? (
+                  <View style={[
+                    styles.pitchIndicator,
+                    {
+                      backgroundColor: pitchComparison.status === "exact"
+                        ? "rgba(48,209,88,0.15)"
+                        : pitchComparison.status === "high"
+                        ? "rgba(255,159,10,0.15)"
+                        : "rgba(100,149,237,0.15)",
+                      borderColor: pitchComparison.status === "exact"
+                        ? "rgba(48,209,88,0.4)"
+                        : pitchComparison.status === "high"
+                        ? "rgba(255,159,10,0.4)"
+                        : "rgba(100,149,237,0.4)",
+                    }
+                  ]}>
+                    <Ionicons
+                      name={
+                        pitchComparison.status === "exact"
+                          ? "checkmark-circle"
+                          : pitchComparison.status === "high"
+                          ? "arrow-up"
+                          : "arrow-down"
+                      }
+                      size={12}
+                      color={
+                        pitchComparison.status === "exact"
+                          ? "#30D158"
+                          : pitchComparison.status === "high"
+                          ? "#FF9F0A"
+                          : "#6495ED"
+                      }
+                    />
+                    <Text style={[
+                      styles.pitchIndicatorText,
+                      {
+                        color: pitchComparison.status === "exact"
+                          ? "#30D158"
+                          : pitchComparison.status === "high"
+                          ? "#FF9F0A"
+                          : "#6495ED",
+                      }
+                    ]}>
+                      {pitchComparison.status === "exact"
+                        ? `${t("signalGenerator", "pitchExact")} (${frequencyToNote(pitchComparison.target).name}${frequencyToNote(pitchComparison.target).octave})`
+                        : pitchComparison.status === "high"
+                        ? `${t("signalGenerator", "pitchHigh")} +${pitchComparison.cents}¢`
+                        : `${t("signalGenerator", "pitchLow")} ${pitchComparison.cents}¢`}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
             ) : micListening ? (
               <Text style={styles.micDetectedHint}>
                 {micAnalyzed ? t("signalGenerator", "noSignal") : t("signalGenerator", "detecting")}
@@ -1048,6 +1118,13 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     lineHeight: 18,
   },
+  knobNoteLabel: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 11,
+    opacity: 0.7,
+    marginTop: 2,
+    lineHeight: 14,
+  },
   freqEditRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1153,12 +1230,29 @@ const styles = StyleSheet.create({
     borderColor: Colors.danger,
     backgroundColor: "rgba(255,59,48,0.15)",
   },
+  micDetectedWrap: {
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
   micDetectedHint: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 11,
     color: Colors.textTertiary,
-    marginTop: 2,
     textAlign: "center",
+  },
+  pitchIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  pitchIndicatorText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 10,
   },
   playBtn: {
     flexDirection: "row",
