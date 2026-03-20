@@ -611,6 +611,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const [micAnalyzed, setMicAnalyzed] = useState(false);
   const micTargetFreqRef = useRef<number>(440);
   const micHasTargetRef = useRef(false);
+  const micDetectedFreqRef = useRef<number | null>(null);
   const micActiveRef = useRef(false);
   const micAudioCtxRef = useRef<any>(null);
   const micAnalyserRef = useRef<any>(null);
@@ -1033,6 +1034,8 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const currentNote = useMemo(() => frequencyToNote(frequency), [frequency]);
   const currentNoteLabel = `${currentNote.name}${currentNote.octave}`;
 
+  useEffect(() => { micDetectedFreqRef.current = micDetectedFreq; }, [micDetectedFreq]);
+
   const prevFreqForMicRef = useRef(frequency);
   useEffect(() => {
     if (micListening && prevFreqForMicRef.current !== frequency) {
@@ -1125,13 +1128,20 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               <View style={styles.micDetectedWrap}>
                 <Pressable
                   onLongPress={() => {
-                    hapticFeedback();
-                    setFrequency(micDetectedFreq);
+                    const captured = micDetectedFreqRef.current;
+                    if (captured) {
+                      hapticFeedback();
+                      setFrequency(captured);
+                    }
                   }}
-                  delayLongPress={400}
+                  delayLongPress={300}
+                  style={styles.micDetectedPressable}
                 >
                   <Text style={[styles.micDetectedHint, { color: C.accent }]}>
                     {micDetectedNote} {micDetectedFreq} {t("signalGenerator", "hzUnit")}
+                  </Text>
+                  <Text style={styles.micLongPressHint}>
+                    {t("signalGenerator", "longPressToSet")}
                   </Text>
                 </Pressable>
                 {pitchComparison ? (
@@ -1505,11 +1515,25 @@ const styles = StyleSheet.create({
     gap: 4,
     marginTop: 2,
   },
+  micDetectedPressable: {
+    alignItems: "center",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
   micDetectedHint: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 11,
     color: Colors.textTertiary,
     textAlign: "center",
+  },
+  micLongPressHint: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 9,
+    color: Colors.textTertiary,
+    opacity: 0.6,
+    textAlign: "center",
+    marginTop: 1,
   },
   pitchIndicator: {
     flexDirection: "row",

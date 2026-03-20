@@ -290,6 +290,7 @@ const translations = {
     pitchLow: { ko: "낮음", en: "Low" },
     tuningGuide: { ko: "튜닝 가이드", en: "Tuning Guide" },
     tapToSet: { ko: "탭하여 주파수 설정", en: "Tap to set frequency" },
+    longPressToSet: { ko: "길게 눌러 주파수 설정", en: "Long press to set freq" },
   },
   noteRecorder: {
     permissionRequired: { ko: "권한 필요", en: "Permission Required" },
