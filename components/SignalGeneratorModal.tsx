@@ -636,7 +636,6 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
             setMicDetectedFreq(rounded);
             const noteInfo = frequencyToNote(dominant);
             setMicDetectedNote(`${noteInfo.name}${noteInfo.octave}`);
-            setFrequency(rounded);
           } else {
             setMicDetectedFreq(null);
             setMicDetectedNote(null);
@@ -740,7 +739,6 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                     setMicDetectedFreq(rounded);
                     const noteInfo = frequencyToNote(dominant);
                     setMicDetectedNote(`${noteInfo.name}${noteInfo.octave}`);
-                    setFrequency(rounded);
                   } else {
                     setMicDetectedFreq(null);
                     setMicDetectedNote(null);
