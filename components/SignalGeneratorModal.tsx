@@ -807,8 +807,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const currentNoteLabel = `${currentNote.name}${currentNote.octave}`;
 
   useEffect(() => {
-    if (!micListening) return;
-    if (pickerDrivenRef.current) {
+    if (micListening) {
       micTargetFreqRef.current = frequency;
     }
   }, [frequency, micListening]);
