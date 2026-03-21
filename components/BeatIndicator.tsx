@@ -2544,7 +2544,7 @@ export function BeatIndicator({
               accessibilityRole="button"
               accessibilityLabel="Open note mode"
             >
-              <Ionicons name="musical-note-outline" size={16} color={Colors.textTertiary} />
+              <Ionicons name="musical-notes-outline" size={16} color={Colors.textTertiary} />
             </Pressable>
           )}
           <Pressable
@@ -2555,35 +2555,36 @@ export function BeatIndicator({
             accessibilityRole="button"
             accessibilityLabel="Open bar mode"
           >
-            <Ionicons name="chevron-up" size={18} color={Colors.textTertiary} />
+            <Ionicons name="musical-note-outline" size={18} color={Colors.textTertiary} />
           </Pressable>
         </View>
       )}
 
-      {isLandscape && onEnterNoteMode && (
-        <Pressable
-          onPress={onEnterNoteMode}
-          style={styles.noteModeHandleLandscape}
-          testID="open-note-mode"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-          accessibilityLabel="Open note mode"
-        >
-          <Ionicons name="musical-note-outline" size={14} color={Colors.textTertiary} />
-        </Pressable>
-      )}
-
       {isLandscape && (
-        <Pressable
-          onPress={() => onBarModeChange(true)}
-          style={styles.barModeHandleLandscape}
-          testID="open-bar-mode"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-          accessibilityLabel="Open bar mode"
-        >
-          <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
-        </Pressable>
+        <View style={styles.landscapeModeButtonsContainer}>
+          <Pressable
+            onPress={() => onBarModeChange(true)}
+            style={styles.landscapeModeBtn}
+            testID="open-bar-mode"
+            hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Open bar mode"
+          >
+            <Ionicons name="musical-note-outline" size={14} color={Colors.textTertiary} />
+          </Pressable>
+          {onEnterNoteMode && (
+            <Pressable
+              onPress={onEnterNoteMode}
+              style={styles.landscapeModeBtn}
+              testID="open-note-mode"
+              hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Open note mode"
+            >
+              <Ionicons name="musical-notes-outline" size={14} color={Colors.textTertiary} />
+            </Pressable>
+          )}
+        </View>
       )}
 
       {!isLandscape && <Text style={styles.hintText}>swipe to add or remove beats</Text>}
@@ -2939,6 +2940,21 @@ const styles = StyleSheet.create({
     alignItems: "center" as const,
     justifyContent: "center" as const,
     paddingVertical: 12,
+    paddingHorizontal: 4,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderRadius: 8,
+  },
+  landscapeModeButtonsContainer: {
+    position: "absolute" as const,
+    right: -30,
+    flexDirection: "column" as const,
+    alignItems: "center" as const,
+    gap: 8,
+  },
+  landscapeModeBtn: {
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    paddingVertical: 10,
     paddingHorizontal: 4,
     backgroundColor: "rgba(255,255,255,0.07)",
     borderRadius: 8,
