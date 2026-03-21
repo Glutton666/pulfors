@@ -3266,8 +3266,8 @@ export default function MetronomeScreen() {
         style={[
           isLandscape ? styles.contentLandscape : styles.content,
           {
-            paddingTop: (insets.top || webTopInset) + (isLandscape ? 8 : 16),
-            paddingBottom: (insets.bottom || webBottomInset) + (isLandscape ? 8 : 16),
+            paddingTop: (insets.top || webTopInset) + (isLandscape && noteMode ? 2 : isLandscape ? 8 : 16),
+            paddingBottom: (insets.bottom || webBottomInset) + (isLandscape && noteMode ? 2 : isLandscape ? 8 : 16),
           },
         ]}
       >

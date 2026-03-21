@@ -619,7 +619,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   title: {
     fontFamily: "SpaceGrotesk_700Bold",
@@ -738,15 +738,15 @@ const styles = StyleSheet.create({
   },
   queueContainer: {
     flex: 1,
-    minHeight: 80,
-    marginBottom: 10,
+    minHeight: 60,
+    marginBottom: 6,
   },
   emptyQueue: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingVertical: 16,
+    gap: 6,
+    paddingVertical: 10,
   },
   emptyQueueText: {
     fontFamily: "SpaceGrotesk_400Regular",
