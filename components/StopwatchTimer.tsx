@@ -618,11 +618,10 @@ export function StopwatchTimer({
               {countdownLeft}
             </Animated.Text>
           ) : mode === "stopwatch" ? (
-            <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
               {state === "running" && <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.success, marginRight: 4 }, runningDotStyle]} />}
               {state === "finishing" && <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.danger, marginRight: 4 }, finishingStyle]} />}
               <Text style={[styles.landscapeTime, state === "finishing" && { color: Colors.danger }]}>{swTime.main}</Text>
-              <Text style={[styles.landscapeFraction, state === "finishing" && { color: Colors.danger }]}>{swTime.fraction}</Text>
             </View>
           ) : (
             <Text style={[styles.landscapeTime, state === "finishing" && { color: Colors.danger }]}>
