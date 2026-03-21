@@ -1598,7 +1598,7 @@ export function BeatIndicator({
               </View>
             </View>
 
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}>
               <Pressable
                 onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
                 style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure <= MIN_BEATS) && { opacity: 0.3 }]}
@@ -1606,16 +1606,6 @@ export function BeatIndicator({
               >
                 <Ionicons name="remove" size={14} color={Colors.textSecondary} />
               </Pressable>
-              <Pressable
-                onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
-                style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
-                hitSlop={8}
-              >
-                <Ionicons name="add" size={14} color={Colors.textSecondary} />
-              </Pressable>
-            </View>
-
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <Pressable
                 onPress={handleSaveResetTap}
                 onLongPress={handleSaveResetLongPress}
@@ -1646,6 +1636,13 @@ export function BeatIndicator({
                 ) : (
                   <Ionicons name={isPlaying ? "stop" : "play"} size={20} color={isPlaying ? Colors.danger : C.accent} style={!isPlaying ? { marginLeft: 2 } : undefined} />
                 )}
+              </Pressable>
+              <Pressable
+                onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+                style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
+                hitSlop={8}
+              >
+                <Ionicons name="add" size={14} color={Colors.textSecondary} />
               </Pressable>
             </View>
             {bpmSliderElement && (
