@@ -209,7 +209,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
         onLayout={() => measureLayout()}
         {...panResponder.panHandlers}
       >
-        <Animated.View style={[styles.card, bodyStyle, halfTime && { borderColor: C.accent + "80" }, isLandscape && { paddingTop: 8, paddingBottom: 6 }]} testID="bpm-slider">
+        <Animated.View style={[styles.card, bodyStyle, halfTime && { borderColor: C.accent + "80" }, isLandscape && { paddingTop: moderateScale(8, 0.3), paddingBottom: moderateScale(6, 0.3) }]} testID="bpm-slider">
           <Animated.View style={[styles.flashOverlay, flashStyle, { backgroundColor: C.accent }]} />
           <Animated.View style={[styles.glowLeft, leftGlowStyle]}>
             <LinearGradient
@@ -230,14 +230,14 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
 
           <View style={styles.zoneRow} pointerEvents="none">
             <Feather name="activity" size={isLandscape ? 10 : 12} color={Colors.textTertiary} />
-            <Text style={[styles.tapLabel, isLandscape && { fontSize: 8 }]}>TAP</Text>
+            <Text style={[styles.tapLabel, isLandscape && { fontSize: moderateScale(8, 0.3) }]}>TAP</Text>
           </View>
 
           <View style={styles.bpmRow} pointerEvents="none">
             <Feather name="minus" size={isLandscape ? 18 : 24} color={Colors.textSecondary} style={styles.bpmIcon} />
             <View style={styles.bpmContent}>
-              <Text style={[styles.bpmValue, isLandscape && { fontSize: 40, lineHeight: 46 }]} testID="bpm-display">{bpm}</Text>
-              <Text style={[styles.bpmUnit, halfTime && { color: C.accent }, isLandscape && { fontSize: 10, marginTop: -2 }]}>{halfTime ? "½× BPM" : "BPM"}</Text>
+              <Text style={[styles.bpmValue, isLandscape && { fontSize: moderateScale(40, 0.4), lineHeight: moderateScale(46, 0.4) }]} testID="bpm-display">{bpm}</Text>
+              <Text style={[styles.bpmUnit, halfTime && { color: C.accent }, isLandscape && { fontSize: moderateScale(10, 0.3), marginTop: -2 }]}>{halfTime ? "½× BPM" : "BPM"}</Text>
             </View>
             <Feather name="plus" size={isLandscape ? 18 : 24} color={Colors.textSecondary} style={styles.bpmIcon} />
           </View>
@@ -266,16 +266,16 @@ const styles = StyleSheet.create({
   wrapper: {
     alignItems: "center",
     alignSelf: "stretch",
-    gap: 6,
+    gap: moderateScale(6, 0.3),
   },
   touchLayer: {
     alignSelf: "stretch",
   },
   card: {
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 10,
+    paddingHorizontal: moderateScale(16, 0.3),
+    paddingTop: moderateScale(14, 0.3),
+    paddingBottom: moderateScale(10, 0.3),
     borderRadius: moderateScale(20, 0.3),
     backgroundColor: Colors.surface,
     overflow: "hidden",
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "stretch",
-    paddingHorizontal: 8,
+    paddingHorizontal: moderateScale(8, 0.3),
   },
   bpmContent: {
     alignItems: "center",
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
+    gap: moderateScale(4, 0.3),
     marginBottom: 2,
     opacity: 0.4,
   },
@@ -352,25 +352,25 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignSelf: "stretch",
-    height: 6,
-    marginTop: 6,
-    paddingHorizontal: 4,
+    height: moderateScale(6, 0.3),
+    marginTop: moderateScale(6, 0.3),
+    paddingHorizontal: moderateScale(4, 0.3),
   },
   tick: {
     width: 1,
-    height: 3,
+    height: moderateScale(3, 0.3),
     backgroundColor: Colors.textTertiary,
     opacity: 0.3,
     borderRadius: 0.5,
   },
   tickBig: {
-    height: 5,
+    height: moderateScale(5, 0.3),
     opacity: 0.5,
   },
   tickMid: {
     backgroundColor: Colors.accent,
     opacity: 0.7,
-    height: 5,
+    height: moderateScale(5, 0.3),
   },
   hint: {
     fontFamily: "SpaceGrotesk_400Regular",

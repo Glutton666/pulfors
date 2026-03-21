@@ -19,6 +19,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
+import { moderateScale } from "@/lib/scale";
 import type { BeatType } from "@/lib/metronome-engine";
 
 interface SubdivisionBarProps {
@@ -33,8 +34,8 @@ interface SubdivisionBarProps {
   activeBeatPattern?: BeatType[] | null;
 }
 
-const CELL_SIZE = 28;
-const CELL_GAP = 3;
+const CELL_SIZE = moderateScale(28, 0.4);
+const CELL_GAP = moderateScale(3, 0.3);
 const MAX_CELLS = 8;
 const MIN_CELLS = 1;
 const SWIPE_THRESHOLD = 30;
@@ -510,7 +511,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 6,
+    paddingVertical: moderateScale(6, 0.3),
     width: "100%",
   },
   swipeHint: {
@@ -526,7 +527,7 @@ const styles = StyleSheet.create({
   cell: {
     width: CELL_SIZE,
     height: CELL_SIZE,
-    borderRadius: 6,
+    borderRadius: moderateScale(6, 0.3),
   } as any,
   ghost: {
     position: "absolute",
@@ -536,8 +537,8 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   ghostCell: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
+    width: moderateScale(18, 0.4),
+    height: moderateScale(18, 0.4),
+    borderRadius: moderateScale(4, 0.3),
   },
 });

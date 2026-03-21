@@ -47,7 +47,7 @@ const BEAT_COLORS: Record<BeatType, string> = {
 
 function BeatDots({ beatTypes, size = 6 }: { beatTypes: BeatType[]; size?: number }) {
   return (
-    <View style={{ flexDirection: "row", gap: 2 }}>
+    <View style={{ flexDirection: "row", gap: moderateScale(2, 0.3) }}>
       {beatTypes.slice(0, 12).map((bt, i) => (
         <View
           key={i}
@@ -60,7 +60,7 @@ function BeatDots({ beatTypes, size = 6 }: { beatTypes: BeatType[]; size?: numbe
         />
       ))}
       {beatTypes.length > 12 && (
-        <Text style={{ fontSize: 8, color: Colors.textTertiary }}>+{beatTypes.length - 12}</Text>
+        <Text style={{ fontSize: moderateScale(8, 0.3), color: Colors.textTertiary }}>+{beatTypes.length - 12}</Text>
       )}
     </View>
   );
@@ -355,18 +355,18 @@ export function NoteModeView({
               ) : (
                 <View style={styles.playingImagePlaceholder}>
                   <Ionicons name="musical-notes" size={36} color={Colors.textTertiary} />
-                  <Text style={[styles.playingImagePlaceholderText, { fontSize: 14 }]}>{currentEntry?.label}</Text>
+                  <Text style={[styles.playingImagePlaceholderText, { fontSize: moderateScale(14, 0.3) }]}>{currentEntry?.label}</Text>
                 </View>
               )}
             </View>
           </View>
           <View style={styles.landscapePlayingRight}>
-            <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 8, marginBottom: 6 }}>
+            <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: moderateScale(8, 0.3), marginBottom: moderateScale(6, 0.3) }}>
               <View style={[styles.progressBadge, { backgroundColor: C.accent + "22" }]}>
                 <Text style={[styles.progressText, { color: C.accent }]}>{currentIndex + 1}/{queue.length}</Text>
               </View>
               <Pressable
-                style={[styles.playButton, { backgroundColor: Colors.danger, width: 36, height: 36, borderRadius: 18 }]}
+                style={[styles.playButton, { backgroundColor: Colors.danger, width: moderateScale(36, 0.4), height: moderateScale(36, 0.4), borderRadius: moderateScale(18, 0.4) }]}
                 onPress={onTogglePlay}
               >
                 <Ionicons name="stop" size={20} color="#fff" />
@@ -416,9 +416,9 @@ export function NoteModeView({
 
   const renderQueueSection = () => (
     <>
-      <View style={[styles.sectionHeader, isLandscape && { marginBottom: 2 }]}>
-        <Text style={[styles.sectionTitle, isLandscape && { fontSize: 11 }]}>{t("noteMode", "queue")}</Text>
-        <Text style={[styles.sectionCount, isLandscape && { fontSize: 10 }]}>{queue.length} {t("noteMode", "items")}</Text>
+      <View style={[styles.sectionHeader, isLandscape && { marginBottom: moderateScale(2, 0.3) }]}>
+        <Text style={[styles.sectionTitle, isLandscape && { fontSize: moderateScale(11, 0.3) }]}>{t("noteMode", "queue")}</Text>
+        <Text style={[styles.sectionCount, isLandscape && { fontSize: moderateScale(10, 0.3) }]}>{queue.length} {t("noteMode", "items")}</Text>
       </View>
       <View style={[styles.queueContainer, !isLandscape && sourceCollapsed && { flex: 2 }, isLandscape && { marginBottom: 0 }]}>
         {queue.length === 0 ? (
@@ -513,7 +513,7 @@ export function NoteModeView({
   );
 
   const renderPlayControls = () => (
-    <View style={[styles.playControls, isLandscape && { marginBottom: 4 }]}>
+    <View style={[styles.playControls, isLandscape && { marginBottom: moderateScale(4, 0.3) }]}>
       <View style={styles.playModeRow}>
         {playModes.map((mode) => (
           <Pressable
@@ -521,7 +521,7 @@ export function NoteModeView({
             style={[
               styles.playModeBtn,
               playMode === mode && { backgroundColor: C.accent + "22", borderColor: C.accent },
-              isLandscape && { paddingHorizontal: 6, paddingVertical: 4 },
+              isLandscape && { paddingHorizontal: moderateScale(6, 0.3), paddingVertical: moderateScale(4, 0.3) },
             ]}
             onPress={() => onPlayModeChange(mode)}
           >
@@ -534,7 +534,7 @@ export function NoteModeView({
               style={[
                 styles.playModeText,
                 playMode === mode && { color: C.accent },
-                isLandscape && { fontSize: 9 },
+                isLandscape && { fontSize: moderateScale(9, 0.3) },
               ]}
             >
               {playModeLabels[mode]}
@@ -547,7 +547,7 @@ export function NoteModeView({
           styles.playButton,
           { backgroundColor: isPlaying ? Colors.danger : C.accent },
           queue.length === 0 && { opacity: 0.4 },
-          isLandscape && { width: 60, height: 30, borderRadius: 8 },
+          isLandscape && { width: moderateScale(60, 0.4), height: moderateScale(30, 0.4), borderRadius: moderateScale(8, 0.3) },
         ]}
         onPress={onTogglePlay}
         disabled={queue.length === 0}
@@ -559,19 +559,19 @@ export function NoteModeView({
 
   if (isLandscape) {
     return (
-      <View style={[styles.container, { flexDirection: "row" as const, gap: 8 }]}>
+      <View style={[styles.container, { flexDirection: "row" as const, gap: moderateScale(8, 0.3) }]}>
         <View style={{ flex: 2 }}>
-          <View style={[styles.header, { marginBottom: 2, gap: 8 }]}>
+          <View style={[styles.header, { marginBottom: moderateScale(2, 0.3), gap: moderateScale(8, 0.3) }]}>
             <Pressable onPress={onExitNoteMode} hitSlop={8}>
-              <Ionicons name="arrow-back" size={18} color={Colors.textSecondary} />
+              <Ionicons name="arrow-back" size={moderateScale(18, 0.3)} color={Colors.textSecondary} />
             </Pressable>
-            <Text style={[styles.title, { color: C.accent, fontSize: 14 }]}>{t("noteMode", "title")}</Text>
-            <View style={[styles.headerActions, { gap: 6 }]}>
-              <Pressable onPress={onSave} hitSlop={6} style={[styles.headerBtn, { borderColor: C.accent, width: 28, height: 28 }]}>
-                <Ionicons name="save-outline" size={13} color={C.accent} />
+            <Text style={[styles.title, { color: C.accent, fontSize: moderateScale(14, 0.3) }]}>{t("noteMode", "title")}</Text>
+            <View style={[styles.headerActions, { gap: moderateScale(6, 0.3) }]}>
+              <Pressable onPress={onSave} hitSlop={6} style={[styles.headerBtn, { borderColor: C.accent, width: moderateScale(28, 0.4), height: moderateScale(28, 0.4) }]}>
+                <Ionicons name="save-outline" size={moderateScale(13, 0.3)} color={C.accent} />
               </Pressable>
-              <Pressable onPress={handleReset} hitSlop={6} style={[styles.headerBtn, { borderColor: Colors.danger, width: 28, height: 28 }]}>
-                <Ionicons name="refresh" size={13} color={Colors.danger} />
+              <Pressable onPress={handleReset} hitSlop={6} style={[styles.headerBtn, { borderColor: Colors.danger, width: moderateScale(28, 0.4), height: moderateScale(28, 0.4) }]}>
+                <Ionicons name="refresh" size={moderateScale(13, 0.3)} color={Colors.danger} />
               </Pressable>
             </View>
           </View>
@@ -618,8 +618,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginBottom: 8,
+    gap: moderateScale(12, 0.3),
+    marginBottom: moderateScale(8, 0.3),
   },
   title: {
     fontFamily: "SpaceGrotesk_700Bold",
@@ -628,12 +628,12 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: "row",
-    gap: 8,
+    gap: moderateScale(8, 0.3),
   },
   headerBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: moderateScale(32, 0.4),
+    height: moderateScale(32, 0.4),
+    borderRadius: moderateScale(8, 0.3),
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -642,64 +642,64 @@ const styles = StyleSheet.create({
   nowPlaying: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: moderateScale(8, 0.3),
     borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: moderateScale(10, 0.3),
+    paddingHorizontal: moderateScale(12, 0.3),
+    paddingVertical: moderateScale(8, 0.3),
     backgroundColor: Colors.surface,
-    marginBottom: 10,
+    marginBottom: moderateScale(10, 0.3),
   },
   nowPlayingLabel: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 14,
+    fontSize: moderateScale(14, 0.3),
     flex: 1,
   },
   nowPlayingBpm: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
+    fontSize: moderateScale(12, 0.3),
     color: Colors.textSecondary,
   },
   progressBadge: {
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    borderRadius: moderateScale(6, 0.3),
+    paddingHorizontal: moderateScale(6, 0.3),
+    paddingVertical: moderateScale(2, 0.3),
   },
   progressText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 11,
+    fontSize: moderateScale(11, 0.3),
   },
   playControls: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginBottom: 12,
+    gap: moderateScale(12, 0.3),
+    marginBottom: moderateScale(12, 0.3),
   },
   playModeRow: {
     flex: 1,
     flexDirection: "row",
-    gap: 6,
+    gap: moderateScale(6, 0.3),
   },
   playModeBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    gap: moderateScale(4, 0.3),
+    paddingHorizontal: moderateScale(10, 0.3),
+    paddingVertical: moderateScale(6, 0.3),
+    borderRadius: moderateScale(8, 0.3),
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
   },
   playModeText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 11,
+    fontSize: moderateScale(11, 0.3),
     color: Colors.textTertiary,
   },
   playButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: moderateScale(48, 0.4),
+    height: moderateScale(48, 0.4),
+    borderRadius: moderateScale(24, 0.4),
     alignItems: "center",
     justifyContent: "center",
   },
@@ -707,29 +707,29 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 6,
+    marginBottom: moderateScale(6, 0.3),
   },
   sectionHeaderLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: moderateScale(4, 0.3),
   },
   sectionTitle: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 13,
+    fontSize: moderateScale(13, 0.3),
     color: Colors.textSecondary,
     textTransform: "uppercase",
     letterSpacing: 1,
   },
   sectionCount: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 12,
+    fontSize: moderateScale(12, 0.3),
     color: Colors.textTertiary,
   },
   sourceViewToggle: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
+    width: moderateScale(28, 0.4),
+    height: moderateScale(28, 0.4),
+    borderRadius: moderateScale(6, 0.3),
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -738,45 +738,45 @@ const styles = StyleSheet.create({
   },
   queueContainer: {
     flex: 1,
-    minHeight: 60,
-    marginBottom: 6,
+    minHeight: moderateScale(60, 0.3),
+    marginBottom: moderateScale(6, 0.3),
   },
   emptyQueue: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
+    gap: moderateScale(6, 0.3),
+    paddingVertical: moderateScale(10, 0.3),
   },
   emptyQueueText: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 13,
+    fontSize: moderateScale(13, 0.3),
     color: Colors.textTertiary,
     textAlign: "center",
   },
   queueItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    gap: moderateScale(10, 0.3),
+    paddingHorizontal: moderateScale(12, 0.3),
+    paddingVertical: moderateScale(10, 0.3),
     backgroundColor: Colors.surface,
-    borderRadius: 10,
+    borderRadius: moderateScale(10, 0.3),
     borderWidth: 1,
     borderColor: Colors.border,
-    marginBottom: 6,
+    marginBottom: moderateScale(6, 0.3),
   },
   reorderBtns: {
     alignItems: "center",
     gap: 0,
   },
   queueIndex: {
-    width: 22,
+    width: moderateScale(22, 0.3),
     alignItems: "center",
   },
   queueIndexText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 13,
+    fontSize: moderateScale(13, 0.3),
     color: Colors.textTertiary,
   },
   queueItemInfo: {
@@ -785,7 +785,7 @@ const styles = StyleSheet.create({
   },
   queueItemLabel: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 13,
+    fontSize: moderateScale(13, 0.3),
     color: Colors.text,
   },
   queueItemMeta: {
@@ -795,13 +795,13 @@ const styles = StyleSheet.create({
   },
   queueItemBpm: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: moderateScale(11, 0.3),
     color: Colors.textSecondary,
   },
   queueThumb: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
+    width: moderateScale(32, 0.4),
+    height: moderateScale(32, 0.4),
+    borderRadius: moderateScale(6, 0.3),
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -810,9 +810,9 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   queueThumbImg: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
+    width: moderateScale(32, 0.4),
+    height: moderateScale(32, 0.4),
+    borderRadius: moderateScale(6, 0.3),
   },
   playingImageArea: {
     flex: 1,
@@ -836,31 +836,31 @@ const styles = StyleSheet.create({
   },
   playingImagePlaceholderText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 18,
+    fontSize: moderateScale(18, 0.3),
     color: Colors.textTertiary,
     textAlign: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: moderateScale(20, 0.3),
   },
   playingStripContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginTop: 8,
-    marginBottom: 4,
+    gap: moderateScale(12, 0.3),
+    marginTop: moderateScale(8, 0.3),
+    marginBottom: moderateScale(4, 0.3),
   },
   playingStrip: {
     flex: 1,
     flexDirection: "row",
-    gap: 6,
+    gap: moderateScale(6, 0.3),
   },
   stripItem: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 8,
+    gap: moderateScale(6, 0.3),
+    paddingHorizontal: moderateScale(8, 0.3),
+    paddingVertical: moderateScale(6, 0.3),
+    borderRadius: moderateScale(8, 0.3),
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -873,9 +873,9 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   stripThumb: {
-    width: 24,
-    height: 24,
-    borderRadius: 4,
+    width: moderateScale(24, 0.4),
+    height: moderateScale(24, 0.4),
+    borderRadius: moderateScale(4, 0.3),
     overflow: "hidden",
   },
   stripThumbEmpty: {
@@ -888,12 +888,12 @@ const styles = StyleSheet.create({
   stripLabel: {
     flex: 1,
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: moderateScale(11, 0.3),
     color: Colors.textSecondary,
   },
   landscapePlayingLeft: {
     flex: 2,
-    marginRight: 10,
+    marginRight: moderateScale(10, 0.3),
   },
   landscapePlayingRight: {
     flex: 1,
@@ -907,33 +907,33 @@ const styles = StyleSheet.create({
   },
   sourceContainer: {
     flex: 1,
-    minHeight: 80,
+    minHeight: moderateScale(80, 0.3),
   },
   emptySource: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 16,
+    paddingVertical: moderateScale(16, 0.3),
   },
   emptySourceText: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 13,
+    fontSize: moderateScale(13, 0.3),
     color: Colors.textTertiary,
   },
   sourceItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 5,
+    gap: moderateScale(6, 0.3),
+    marginBottom: moderateScale(5, 0.3),
   },
   sourceItemContent: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    gap: moderateScale(10, 0.3),
+    paddingHorizontal: moderateScale(12, 0.3),
+    paddingVertical: moderateScale(9, 0.3),
     backgroundColor: Colors.surface,
-    borderRadius: 8,
+    borderRadius: moderateScale(8, 0.3),
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -943,89 +943,89 @@ const styles = StyleSheet.create({
   },
   sourceItemLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 13,
+    fontSize: moderateScale(13, 0.3),
     color: Colors.text,
   },
   sourceItemMeta: {
     flexDirection: "row",
-    gap: 8,
+    gap: moderateScale(8, 0.3),
   },
   sourceItemBpm: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: moderateScale(11, 0.3),
     color: Colors.textSecondary,
   },
   sourceItemBeats: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: moderateScale(11, 0.3),
     color: Colors.textTertiary,
   },
   insertNextBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
+    gap: moderateScale(3, 0.3),
     borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    borderRadius: moderateScale(6, 0.3),
+    paddingHorizontal: moderateScale(8, 0.3),
+    paddingVertical: moderateScale(5, 0.3),
   },
   insertNextText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 10,
+    fontSize: moderateScale(10, 0.3),
   },
 });
 
 const srcGridStyles = StyleSheet.create({
   row: {
-    gap: 8,
-    marginBottom: 8,
+    gap: moderateScale(8, 0.3),
+    marginBottom: moderateScale(8, 0.3),
   },
   card: {
     flex: 1,
     backgroundColor: Colors.surface,
-    borderRadius: 10,
+    borderRadius: moderateScale(10, 0.3),
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: 10,
-    gap: 4,
+    padding: moderateScale(10, 0.3),
+    gap: moderateScale(4, 0.3),
   },
   cardLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
+    fontSize: moderateScale(12, 0.3),
     color: Colors.text,
   },
   cardStats: {
     flexDirection: "row",
     alignItems: "baseline",
-    gap: 3,
+    gap: moderateScale(3, 0.3),
   },
   cardBpm: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 20,
+    fontSize: moderateScale(20, 0.3),
   },
   cardUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 10,
+    fontSize: moderateScale(10, 0.3),
     color: Colors.textSecondary,
   },
   cardBeats: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 10,
+    fontSize: moderateScale(10, 0.3),
     color: Colors.textTertiary,
   },
   insertBtn: {
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    gap: 2,
+    gap: moderateScale(2, 0.3),
     borderWidth: 1,
-    borderRadius: 5,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    marginTop: 2,
+    borderRadius: moderateScale(5, 0.3),
+    paddingHorizontal: moderateScale(6, 0.3),
+    paddingVertical: moderateScale(3, 0.3),
+    marginTop: moderateScale(2, 0.3),
   },
   insertText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 9,
+    fontSize: moderateScale(9, 0.3),
   },
 });
