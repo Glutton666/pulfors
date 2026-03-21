@@ -3055,17 +3055,6 @@ export default function MetronomeScreen() {
                 style={({ pressed }) => [styles.menuItem, isLandscape && styles.menuItemLandscape, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
-                  handleEnterNoteMode();
-                }}
-              >
-                <MaterialCommunityIcons name="playlist-music" size={isLandscape ? 14 : 18} color={C.accent} />
-                <Text style={[styles.menuItemText, isLandscape && styles.menuItemTextLandscape]}>{t("main", "menuNoteMode")}</Text>
-              </Pressable>
-              <View style={styles.menuDivider} />
-              <Pressable
-                style={({ pressed }) => [styles.menuItem, isLandscape && styles.menuItemLandscape, pressed && styles.menuItemPressed]}
-                onPress={() => {
-                  setShowMenu(false);
                   setShowPracticeBook(true);
                   if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
                 }}
