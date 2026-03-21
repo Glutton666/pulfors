@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect } from "react";
+import React, { useRef, useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -66,6 +66,7 @@ export function SubdivisionBar({
   activeBeatPattern = null,
 }: SubdivisionBarProps) {
   const { colors: C } = useTheme();
+  const [containerWidth, setContainerWidth] = useState(0);
   const isDraggingUpRef = useRef(false);
   const horizontalTriggeredRef = useRef(false);
   const patternRef = useRef(pattern);
@@ -373,59 +374,70 @@ export function SubdivisionBar({
 
   const nativePanHandlers = Platform.OS !== "web" ? panResponder.panHandlers : {};
 
+  const displayPattern = isPlaying && activeBeatPattern ? activeBeatPattern : pattern;
+  const hintWidth = 16;
+  const availableWidth = containerWidth > 0 ? containerWidth - hintWidth * 2 : 0;
+  const cellCount = displayPattern.length;
+  const dynamicCellSize = availableWidth > 0
+    ? Math.min(CELL_SIZE, Math.floor((availableWidth - CELL_GAP * (cellCount - 1)) / cellCount))
+    : CELL_SIZE;
+  const clampedCellSize = Math.max(14, dynamicCellSize);
+  const dynamicRadius = Math.max(3, Math.round(clampedCellSize * 6 / CELL_SIZE));
+  const dynamicFontSize = Math.max(7, Math.round(clampedCellSize * 11 / CELL_SIZE));
+
   return (
     <View ref={webContainerRef} style={styles.gestureWrapper} {...nativePanHandlers}>
     <Animated.View
       style={[styles.wrapper, shakeAnimStyle]}
+      onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
     >
       <View style={styles.cellsContainer} testID="subdivision-cells">
         <View style={styles.swipeHint}>
           <Feather name="chevron-left" size={12} color={Colors.textTertiary} />
         </View>
 
-        {(() => {
-          const displayPattern = isPlaying && activeBeatPattern ? activeBeatPattern : pattern;
-          return displayPattern.map((type, i) => {
-            const isActive = isPlaying && i === activeSubNote;
-            return (
-              <Pressable
-                key={i}
-                onPress={() => {
-                  if (!activeBeatPattern) cycleType(i);
-                }}
-                style={({ pressed }) => [pressed && !activeBeatPattern && { opacity: 0.6 }]}
-                hitSlop={2}
-                testID={`subdivision-cell-${i}`}
-              >
-                {type === "strong" ? (
-                  <View style={[styles.cell, { overflow: "hidden", opacity: isPlaying ? (isActive ? 1 : 0.55) : 1 }]}>
-                    <LinearGradient
-                      colors={[Colors.white, C.accent, C.accent]}
-                      locations={[0, 0.4, 1]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={{ width: CELL_SIZE, height: CELL_SIZE, alignItems: "center", justifyContent: "center", borderRadius: 6 }}
-                    >
-                      <Text style={{ color: Colors.white, fontSize: 11, fontWeight: "bold" as const, lineHeight: 13, textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
-                    </LinearGradient>
-                  </View>
-                ) : (
-                  <View
-                    style={[
-                      styles.cell,
-                      {
-                        backgroundColor: getCellColor(type, true, C.accent, C.accentMuted),
-                        borderColor: getCellBorder(type),
-                        borderWidth: type === "mute" ? 2 : 0,
-                        opacity: isPlaying ? (isActive ? 1 : 0.3) : 1,
-                      },
-                    ]}
-                  />
-                )}
-              </Pressable>
-            );
-          });
-        })()}
+        {displayPattern.map((type, i) => {
+          const isActive = isPlaying && i === activeSubNote;
+          return (
+            <Pressable
+              key={i}
+              onPress={() => {
+                if (!activeBeatPattern) cycleType(i);
+              }}
+              style={({ pressed }) => [pressed && !activeBeatPattern && { opacity: 0.6 }]}
+              hitSlop={2}
+              testID={`subdivision-cell-${i}`}
+            >
+              {type === "strong" ? (
+                <View style={[{ width: clampedCellSize, height: clampedCellSize, borderRadius: dynamicRadius, overflow: "hidden", opacity: isPlaying ? (isActive ? 1 : 0.55) : 1 }]}>
+                  <LinearGradient
+                    colors={[Colors.white, C.accent, C.accent]}
+                    locations={[0, 0.4, 1]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{ width: clampedCellSize, height: clampedCellSize, alignItems: "center", justifyContent: "center", borderRadius: dynamicRadius }}
+                  >
+                    <Text style={{ color: Colors.white, fontSize: dynamicFontSize, fontWeight: "bold" as const, lineHeight: dynamicFontSize + 2, textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
+                  </LinearGradient>
+                </View>
+              ) : (
+                <View
+                  style={[
+                    {
+                      width: clampedCellSize,
+                      height: clampedCellSize,
+                      borderRadius: dynamicRadius,
+                      backgroundColor: getCellColor(type, true, C.accent, C.accentMuted),
+                      borderColor: getCellBorder(type),
+                      borderWidth: type === "mute" ? 2 : 0,
+                      opacity: isPlaying ? (isActive ? 1 : 0.3) : 1,
+                    },
+                  ]}
+                />
+              )}
+            </Pressable>
+          );
+        })}
 
         <View style={styles.swipeHint}>
           <Feather name="chevron-right" size={12} color={Colors.textTertiary} />
@@ -515,7 +527,7 @@ const styles = StyleSheet.create({
     width: CELL_SIZE,
     height: CELL_SIZE,
     borderRadius: 6,
-  },
+  } as any,
   ghost: {
     position: "absolute",
     flexDirection: "row",
