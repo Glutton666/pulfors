@@ -3269,13 +3269,22 @@ export default function MetronomeScreen() {
           />
         ) : (
         <>
-        <View style={isLandscape && !barMode ? { flexDirection: landscapeReversed ? "row-reverse" as const : "row" as const, flex: 1 } : (isLandscape && barMode ? { flex: 1 } : undefined)}>
-        <View style={[
-          styles.topSection,
-          barMode && { justifyContent: "flex-start", flex: 3 },
-          isLandscape && barMode && { flex: 1, alignItems: "stretch" as const },
-          isLandscape && !barMode && { flex: 3, justifyContent: "center", paddingRight: 50 },
-        ]}>
+        <View style={
+          isLandscape && !barMode
+            ? { flexDirection: landscapeReversed ? "row-reverse" as const : "row" as const, flex: 1 }
+            : isLandscape && barMode
+              ? { flex: 1 }
+              : undefined
+        }>
+        <View style={
+          isLandscape
+            ? barMode
+              ? styles.topSectionLandscapeBar
+              : styles.topSectionLandscapeBeat
+            : barMode
+              ? styles.topSectionPortraitBar
+              : styles.topSection
+        }>
           <BeatIndicator
             beatsPerMeasure={beatsPerMeasure}
             currentBeat={currentBeat}
@@ -3434,6 +3443,22 @@ const styles = StyleSheet.create({
     flex: 2,
     justifyContent: "center",
     alignItems: "center",
+  },
+  topSectionPortraitBar: {
+    flex: 3,
+    justifyContent: "flex-start",
+    alignItems: "center",
+  },
+  topSectionLandscapeBar: {
+    flex: 1,
+    justifyContent: "flex-start",
+    alignItems: "stretch",
+  },
+  topSectionLandscapeBeat: {
+    flex: 3,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingRight: 50,
   },
   bpmSection: {
     alignItems: "center",
