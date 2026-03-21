@@ -91,7 +91,6 @@ export function StopwatchTimer({
   const [timerMinInput, setTimerMinInput] = useState("");
   const [timerSecInput, setTimerSecInput] = useState("");
   const [countdownLeft, setCountdownLeft] = useState(0);
-  const countdownBeatCountRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(0);
   const elapsedAtPauseRef = useRef(0);
@@ -108,6 +107,15 @@ export function StopwatchTimer({
     isPlayingRef.current = isMetronomePlaying;
   }, [isMetronomePlaying]);
 
+  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearCountdownInterval = useCallback(() => {
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     if (!isMetronomePlaying && stateRef.current === "running") {
       if (intervalRef.current) {
@@ -121,29 +129,7 @@ export function StopwatchTimer({
       }
       setState("paused");
     }
-    if (!isMetronomePlaying && stateRef.current === "countdown") {
-      setCountdownLeft(0);
-      countdownBeatCountRef.current = 0;
-      setState("idle");
-    }
   }, [isMetronomePlaying]);
-
-  useEffect(() => {
-    if (state !== "countdown" || !isMetronomePlaying) return;
-    countdownBeatCountRef.current++;
-    const beatsLeft = 3 - countdownBeatCountRef.current;
-    if (beatsLeft <= 0) {
-      countdownBeatCountRef.current = 0;
-      setCountdownLeft(0);
-      if (modeRef.current === "stopwatch") {
-        actualStartStopwatch();
-      } else {
-        actualStartTimer();
-      }
-    } else {
-      setCountdownLeft(beatsLeft);
-    }
-  }, [currentBeat]);
 
   const slideX = useSharedValue(-PANEL_WIDTH);
   const pulseOpacity = useSharedValue(1);
@@ -315,13 +301,25 @@ export function StopwatchTimer({
   const startStopwatch = useCallback(() => {
     hapticFeedback();
     setCountdownLeft(3);
-    countdownBeatCountRef.current = 0;
     setState("countdown");
     setOpen(false);
-    if (!isPlayingRef.current) {
-      onStartMetronome();
-    }
-  }, [hapticFeedback, onStartMetronome]);
+    clearCountdownInterval();
+    let count = 3;
+    countdownIntervalRef.current = setInterval(() => {
+      count--;
+      if (count <= 0) {
+        clearInterval(countdownIntervalRef.current!);
+        countdownIntervalRef.current = null;
+        setCountdownLeft(0);
+        if (!isPlayingRef.current) {
+          onStartMetronome();
+        }
+        actualStartStopwatch();
+      } else {
+        setCountdownLeft(count);
+      }
+    }, 1000);
+  }, [hapticFeedback, onStartMetronome, clearCountdownInterval, actualStartStopwatch]);
 
   const pauseStopwatch = useCallback(() => {
     hapticFeedback();
@@ -338,10 +336,12 @@ export function StopwatchTimer({
   const resetStopwatch = useCallback(() => {
     hapticFeedback();
     clearTimerInterval();
+    clearCountdownInterval();
     setElapsed(0);
+    setCountdownLeft(0);
     elapsedAtPauseRef.current = 0;
     setState("idle");
-  }, [hapticFeedback, clearTimerInterval]);
+  }, [hapticFeedback, clearTimerInterval, clearCountdownInterval]);
 
   const actualStartTimer = useCallback(() => {
     const startRemaining = stateRef.current === "paused" ? remaining : timerDuration;
@@ -374,13 +374,25 @@ export function StopwatchTimer({
   const startTimer = useCallback(() => {
     hapticFeedback();
     setCountdownLeft(3);
-    countdownBeatCountRef.current = 0;
     setState("countdown");
     setOpen(false);
-    if (!isPlayingRef.current) {
-      onStartMetronome();
-    }
-  }, [hapticFeedback, onStartMetronome]);
+    clearCountdownInterval();
+    let count = 3;
+    countdownIntervalRef.current = setInterval(() => {
+      count--;
+      if (count <= 0) {
+        clearInterval(countdownIntervalRef.current!);
+        countdownIntervalRef.current = null;
+        setCountdownLeft(0);
+        if (!isPlayingRef.current) {
+          onStartMetronome();
+        }
+        actualStartTimer();
+      } else {
+        setCountdownLeft(count);
+      }
+    }, 1000);
+  }, [hapticFeedback, onStartMetronome, clearCountdownInterval, actualStartTimer]);
 
   const pauseTimer = useCallback(() => {
     hapticFeedback();
@@ -392,11 +404,13 @@ export function StopwatchTimer({
   const resetTimer = useCallback(() => {
     hapticFeedback();
     clearTimerInterval();
+    clearCountdownInterval();
     setRemaining(timerDuration);
+    setCountdownLeft(0);
     elapsedAtPauseRef.current = 0;
     thermoHeight.value = 1;
     setState("idle");
-  }, [hapticFeedback, clearTimerInterval, timerDuration]);
+  }, [hapticFeedback, clearTimerInterval, clearCountdownInterval, timerDuration]);
 
   useEffect(() => {
     if (state === "finishing" && !isMetronomePlaying) {
