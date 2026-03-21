@@ -1239,7 +1239,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                 }}
                 style={({ pressed }) => [
                   styles.playBtn,
-                  { backgroundColor: isPlaying ? Colors.danger : C.accent, marginTop: 6, alignSelf: "center" as const, width: "80%" as const, paddingVertical: 5, borderRadius: 8 },
+                  { backgroundColor: isPlaying ? Colors.danger : C.accent, marginTop: 6, alignSelf: "center" as const, width: "60%" as const, paddingVertical: 5, borderRadius: 8 },
                   pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
                 ]}
                 testID="signal-toggle"
