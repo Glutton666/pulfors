@@ -291,7 +291,6 @@ interface BeatIndicatorProps {
   onBarScrollOffset?: (offset: number) => void;
   onBarTimerExpired?: () => void;
   subdivisionBarElement?: React.ReactNode;
-  stopwatchElement?: React.ReactNode;
   onBarClockConfigChange?: (mode: "stopwatch" | "timer", duration: number) => void;
   initialBarClockMode?: "stopwatch" | "timer";
   initialBarTimerDuration?: number;
@@ -341,7 +340,6 @@ export function BeatIndicator({
   onBarScrollOffset,
   onBarTimerExpired,
   subdivisionBarElement,
-  stopwatchElement,
   onBarClockConfigChange,
   initialBarClockMode,
   initialBarTimerDuration,
@@ -1770,8 +1768,6 @@ export function BeatIndicator({
           pointerEvents="none"
         />
 
-        {stopwatchElement}
-
         {subdivisionBarElement && (
           <View style={styles.barSubdivisionSlot}>{subdivisionBarElement}</View>
         )}
@@ -2272,8 +2268,8 @@ const styles = StyleSheet.create({
   },
   signatureRow: {
     position: "absolute",
-    width: moderateScale(160),
-    height: moderateScale(160),
+    width: moderateScale(120),
+    height: moderateScale(120),
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

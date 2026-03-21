@@ -3003,7 +3003,6 @@ export default function MetronomeScreen() {
         style={[
           styles.menuButton,
           { top: (insets.top || webTopInset) + 12 },
-          barMode && { right: undefined, left: 20 },
         ]}
         onPress={() => setShowMenu(!showMenu)}
         hitSlop={8}
@@ -3016,7 +3015,7 @@ export default function MetronomeScreen() {
       {showMenu && (
         <Modal transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
           <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
-            <View style={[styles.menuDropdown, { top: (insets.top || webTopInset) + 52 }, barMode && { right: undefined, left: 20 }]}>
+            <View style={[styles.menuDropdown, { top: (insets.top || webTopInset) + 52 }]}>
               <Pressable
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
@@ -3323,17 +3322,6 @@ export default function MetronomeScreen() {
             halfTime={halfTime}
             isLandscape={isLandscape}
             beatDirection={beatDirection}
-            stopwatchElement={barMode ? (
-              <StopwatchTimer
-                onTimerExpired={handleTimerExpired}
-                onStopRequested={handleTimerExpired}
-                onStartMetronome={startMetronome}
-                isMetronomePlaying={isPlaying}
-                currentBeat={currentBeat}
-                topInset={insets.top || webTopInset}
-                barMode={true}
-              />
-            ) : undefined}
             subdivisionBarElement={barMode ? (
               <SubdivisionBar
                 pattern={subdivisionPattern}
@@ -3353,7 +3341,6 @@ export default function MetronomeScreen() {
         <View style={[
           styles.bpmSection,
           isLandscape && !barMode && { flex: 2, justifyContent: "center" },
-          barMode && { transform: [{ scale: 0.67 }], marginVertical: -8 },
         ]}>
           {!barMode && (
             <SubdivisionBar

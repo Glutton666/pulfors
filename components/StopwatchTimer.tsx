@@ -68,7 +68,6 @@ interface StopwatchTimerProps {
   isMetronomePlaying: boolean;
   currentBeat: number;
   topInset: number;
-  barMode?: boolean;
 }
 
 export function StopwatchTimer({
@@ -78,7 +77,6 @@ export function StopwatchTimer({
   isMetronomePlaying,
   currentBeat,
   topInset,
-  barMode = false,
 }: StopwatchTimerProps) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
@@ -569,91 +567,6 @@ export function StopwatchTimer({
     if (state === "finishing") return Colors.danger;
     return Colors.textTertiary;
   };
-
-  if (barMode) {
-    const swDisplay = (() => {
-      const { main, fraction } = formatTime(elapsed);
-      return { main, fraction };
-    })();
-    const tmDisplay = formatCountdown(remaining);
-    const tmProgress = timerDuration > 0 ? remaining / timerDuration : 1;
-    const isActive = state !== "idle";
-
-    return (
-      <View style={barStyles.container}>
-        <View style={barStyles.tabs}>
-          <Pressable
-            onPress={() => switchMode("stopwatch")}
-            style={[barStyles.tab, mode === "stopwatch" && { backgroundColor: C.accentDim }]}
-            hitSlop={4}
-          >
-            <MaterialCommunityIcons name="timer-outline" size={12} color={mode === "stopwatch" ? C.accent : Colors.textTertiary} />
-          </Pressable>
-          <Pressable
-            onPress={() => switchMode("timer")}
-            style={[barStyles.tab, mode === "timer" && { backgroundColor: C.accentDim }]}
-            hitSlop={4}
-          >
-            <MaterialCommunityIcons name="av-timer" size={12} color={mode === "timer" ? C.accent : Colors.textTertiary} />
-          </Pressable>
-        </View>
-
-        <View style={barStyles.display}>
-          {state === "countdown" ? (
-            <Animated.Text style={[barStyles.timeText, { color: C.accent }, runningDotStyle]}>
-              {countdownLeft}
-            </Animated.Text>
-          ) : mode === "stopwatch" ? (
-            <View style={{ flexDirection: "row", alignItems: "baseline" }}>
-              {state === "running" && <Animated.View style={[{ width: 4, height: 4, borderRadius: 2, backgroundColor: C.accent, marginRight: 4 }, runningDotStyle]} />}
-              {state === "finishing" && <Animated.View style={[{ width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.danger, marginRight: 4 }, finishingStyle]} />}
-              <Text style={[barStyles.timeText, state === "finishing" && { color: Colors.danger }]}>{swDisplay.main}</Text>
-              <Text style={[barStyles.fractionText, state === "finishing" && { color: Colors.danger }]}>{swDisplay.fraction}</Text>
-            </View>
-          ) : (
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              {state === "running" && <Animated.View style={[{ width: 4, height: 4, borderRadius: 2, backgroundColor: C.accent, marginRight: 4 }, runningDotStyle]} />}
-              {state === "finishing" && <Animated.View style={[{ width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.danger, marginRight: 4 }, finishingStyle]} />}
-              <Text style={[barStyles.timeText, state === "finishing" && { color: Colors.danger }]}>{tmDisplay}</Text>
-              {(state === "running" || state === "finishing") && (
-                <View style={barStyles.miniProgress}>
-                  <View style={[barStyles.miniProgressFill, { width: `${tmProgress * 100}%` as any, backgroundColor: state === "finishing" ? Colors.danger : C.accent }]} />
-                </View>
-              )}
-            </View>
-          )}
-        </View>
-
-        <View style={barStyles.controls}>
-          {state === "idle" && (
-            <Pressable onPress={mode === "stopwatch" ? startStopwatch : startTimer} style={[barStyles.ctrlBtn, { backgroundColor: C.accent }]} hitSlop={6}>
-              <Ionicons name="play" size={12} color={Colors.background} />
-            </Pressable>
-          )}
-          {(state === "running" || state === "countdown") && (
-            <Pressable onPress={mode === "stopwatch" ? pauseStopwatch : pauseTimer} style={[barStyles.ctrlBtn, { backgroundColor: Colors.surfaceLight }]} hitSlop={6}>
-              <Ionicons name="pause" size={12} color={Colors.text} />
-            </Pressable>
-          )}
-          {state === "paused" && (
-            <>
-              <Pressable onPress={mode === "stopwatch" ? resetStopwatch : resetTimer} style={[barStyles.ctrlBtn, { backgroundColor: Colors.surfaceLight }]} hitSlop={6}>
-                <Feather name="rotate-ccw" size={10} color={Colors.danger} />
-              </Pressable>
-              <Pressable onPress={mode === "stopwatch" ? startStopwatch : startTimer} style={[barStyles.ctrlBtn, { backgroundColor: C.accent }]} hitSlop={6}>
-                <Ionicons name="play" size={12} color={Colors.background} />
-              </Pressable>
-            </>
-          )}
-          {state === "finishing" && (
-            <Pressable onPress={mode === "stopwatch" ? resetStopwatch : resetTimer} style={[barStyles.ctrlBtn, { backgroundColor: Colors.surfaceLight }]} hitSlop={6}>
-              <Feather name="rotate-ccw" size={10} color={Colors.danger} />
-            </Pressable>
-          )}
-        </View>
-      </View>
-    );
-  }
 
   return (
     <>
@@ -1365,70 +1278,5 @@ const styles = StyleSheet.create({
     borderRadius: 1.5,
     top: 20,
     zIndex: 2,
-  },
-});
-
-const barStyles = StyleSheet.create({
-  container: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "center",
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    gap: 8,
-    marginBottom: 6,
-  },
-  tabs: {
-    flexDirection: "row",
-    gap: 2,
-  },
-  tab: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  display: {
-    minWidth: 70,
-    alignItems: "center",
-  },
-  timeText: {
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 15,
-    color: Colors.text,
-    letterSpacing: 1,
-  },
-  fractionText: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
-    color: Colors.textTertiary,
-  },
-  miniProgress: {
-    width: 30,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: Colors.border,
-    marginLeft: 6,
-    overflow: "hidden" as const,
-  },
-  miniProgressFill: {
-    height: "100%",
-    borderRadius: 1.5,
-  },
-  controls: {
-    flexDirection: "row",
-    gap: 4,
-  },
-  ctrlBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: "center",
-    justifyContent: "center",
   },
 });
