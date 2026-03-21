@@ -3272,7 +3272,7 @@ export default function MetronomeScreen() {
         <View style={[
           styles.topSection,
           barMode && { justifyContent: "flex-start", flex: 3 },
-          isLandscape && !barMode && { flex: 3, justifyContent: "center" },
+          isLandscape && !barMode && { flex: 3, justifyContent: "center", paddingRight: 20 },
         ]}>
           <BeatIndicator
             beatsPerMeasure={beatsPerMeasure}
