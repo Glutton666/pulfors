@@ -2591,7 +2591,7 @@ const styles = StyleSheet.create({
   },
   barModeHandleLandscape: {
     position: "absolute" as const,
-    right: -4,
+    right: -30,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     paddingVertical: 12,
