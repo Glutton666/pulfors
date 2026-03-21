@@ -1157,7 +1157,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               style={[
                 styles.micEmoji,
                 micListening && styles.micEmojiActive,
-                isLandscape && { position: "relative" as const, right: 0, top: 0, marginTop: 8 },
+                isLandscape && { top: 0, right: -4, width: 30, height: 30, borderRadius: 15 },
               ]}
               hitSlop={8}
               testID="signal-mic-toggle"
@@ -1165,13 +1165,13 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
             >
               <MaterialCommunityIcons
                 name={micListening ? "microphone-off" : "microphone"}
-                size={isLandscape ? 16 : 20}
+                size={isLandscape ? 14 : 20}
                 color={micListening ? Colors.danger : Colors.textSecondary}
               />
             </Pressable>
             {micListening && micDetectedFreq ? (
-              <View style={styles.micDetectedWrap}>
-                <Text style={[styles.micDetectedHint, { color: C.accent }]}>
+              <View style={[styles.micDetectedWrap, isLandscape && { marginTop: 4 }]}>
+                <Text style={[styles.micDetectedHint, { color: C.accent }, isLandscape && { fontSize: 10 }]}>
                   {micDetectedNote} {micDetectedFreq} {t("signalGenerator", "hzUnit")}
                 </Text>
                 {pitchComparison ? (
@@ -1227,10 +1227,33 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                 ) : null}
               </View>
             ) : micListening ? (
-              <Text style={styles.micDetectedHint}>
+              <Text style={[styles.micDetectedHint, isLandscape && { fontSize: 10 }]}>
                 {micAnalyzed ? t("signalGenerator", "noSignal") : t("signalGenerator", "detecting")}
               </Text>
             ) : null}
+            {isLandscape && (
+              <Pressable
+                onPress={() => {
+                  hapticFeedback();
+                  isPlaying ? stopPlayback() : startPlayback();
+                }}
+                style={({ pressed }) => [
+                  styles.playBtn,
+                  { backgroundColor: isPlaying ? Colors.danger : C.accent, marginTop: 10, alignSelf: "stretch" as const, paddingVertical: 8 },
+                  pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+                ]}
+                testID="signal-toggle"
+              >
+                <Ionicons
+                  name={isPlaying ? "stop" : "play"}
+                  size={16}
+                  color={isPlaying ? Colors.white : Colors.background}
+                />
+                <Text style={[styles.playBtnText, { color: isPlaying ? Colors.white : Colors.background, fontSize: 13 }]}>
+                  {isPlaying ? t("signalGenerator", "stop") : t("signalGenerator", "play")}
+                </Text>
+              </Pressable>
+            )}
           </View>
 
           {isLandscape ? (
@@ -1319,29 +1342,6 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                 })}
               </View>
             </View>
-
-            <Pressable
-              onPress={() => {
-                hapticFeedback();
-                isPlaying ? stopPlayback() : startPlayback();
-              }}
-              style={({ pressed }) => [
-                styles.playBtn,
-                { backgroundColor: isPlaying ? Colors.danger : C.accent },
-                pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
-                isLandscape && { paddingVertical: 8, alignSelf: "stretch" as const },
-              ]}
-              testID="signal-toggle"
-            >
-              <Ionicons
-                name={isPlaying ? "stop" : "play"}
-                size={isLandscape ? 16 : 20}
-                color={isPlaying ? Colors.white : Colors.background}
-              />
-              <Text style={[styles.playBtnText, { color: isPlaying ? Colors.white : Colors.background }, isLandscape && { fontSize: 13 }]}>
-                {isPlaying ? t("signalGenerator", "stop") : t("signalGenerator", "play")}
-              </Text>
-            </Pressable>
             </ScrollView>
           ) : (
             <View style={{ alignItems: "center" as const, gap: 18, width: "100%" as const }}>
