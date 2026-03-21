@@ -547,7 +547,7 @@ export function NoteModeView({
           styles.playButton,
           { backgroundColor: isPlaying ? Colors.danger : C.accent },
           queue.length === 0 && { opacity: 0.4 },
-          isLandscape && { width: "100%" as any, height: 40, borderRadius: 10 },
+          isLandscape && { width: 44, height: 40, borderRadius: 10, alignSelf: "center" as const },
         ]}
         onPress={onTogglePlay}
         disabled={queue.length === 0}
