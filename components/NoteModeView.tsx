@@ -416,11 +416,11 @@ export function NoteModeView({
 
   const renderQueueSection = () => (
     <>
-      <View style={[styles.sectionHeader, isLandscape && { marginBottom: 4 }]}>
-        <Text style={styles.sectionTitle}>{t("noteMode", "queue")}</Text>
-        <Text style={styles.sectionCount}>{queue.length} {t("noteMode", "items")}</Text>
+      <View style={[styles.sectionHeader, isLandscape && { marginBottom: 2 }]}>
+        <Text style={[styles.sectionTitle, isLandscape && { fontSize: 11 }]}>{t("noteMode", "queue")}</Text>
+        <Text style={[styles.sectionCount, isLandscape && { fontSize: 10 }]}>{queue.length} {t("noteMode", "items")}</Text>
       </View>
-      <View style={[styles.queueContainer, !isLandscape && sourceCollapsed && { flex: 2 }]}>
+      <View style={[styles.queueContainer, !isLandscape && sourceCollapsed && { flex: 2 }, isLandscape && { marginBottom: 0 }]}>
         {queue.length === 0 ? (
           <View style={styles.emptyQueue}>
             <Ionicons name="musical-notes-outline" size={isLandscape ? 24 : 32} color={Colors.textTertiary} />
@@ -455,7 +455,7 @@ export function NoteModeView({
   const renderSourceSection = () => (
     <>
       <Pressable
-        style={[styles.sectionHeader, isLandscape && { marginBottom: 4 }]}
+        style={[styles.sectionHeader, isLandscape && { marginBottom: 2 }]}
         onPress={() => setSourceCollapsed(prev => !prev)}
       >
         <View style={styles.sectionHeaderLeft}>
@@ -513,7 +513,7 @@ export function NoteModeView({
   );
 
   const renderPlayControls = () => (
-    <View style={[styles.playControls, isLandscape && { marginBottom: 6 }]}>
+    <View style={[styles.playControls, isLandscape && { marginBottom: 4 }]}>
       <View style={styles.playModeRow}>
         {playModes.map((mode) => (
           <Pressable
@@ -559,9 +559,9 @@ export function NoteModeView({
 
   if (isLandscape) {
     return (
-      <View style={[styles.container, { flexDirection: "row" as const, gap: 12 }]}>
+      <View style={[styles.container, { flexDirection: "row" as const, gap: 8 }]}>
         <View style={{ flex: 2 }}>
-          <View style={[styles.header, { marginBottom: 4 }]}>
+          <View style={[styles.header, { marginBottom: 2, gap: 8 }]}>
             <Pressable onPress={onExitNoteMode} hitSlop={8}>
               <Ionicons name="arrow-back" size={18} color={Colors.textSecondary} />
             </Pressable>
