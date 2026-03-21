@@ -331,6 +331,19 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       {icon}
       <Text style={[styles.stepTitle, isLandscape && styles.landStepTitle]}>{t("onboarding", titleKey)}</Text>
       <Text style={[styles.stepSubtitle, isLandscape && styles.landStepSubtitle]}>{t("onboarding", subtitleKey)}</Text>
+      {isLandscape && (
+        <Pressable
+          style={[styles.landNextButton, { backgroundColor: accentColor }]}
+          onPress={handleNext}
+        >
+          <Text style={styles.landNextButtonText}>
+            {step === TOTAL_STEPS - 1 ? t("onboarding", "start") : t("onboarding", "next")}
+          </Text>
+          {step < TOTAL_STEPS - 1 && (
+            <Ionicons name="arrow-forward" size={14} color={Colors.background} />
+          )}
+        </Pressable>
+      )}
     </View>
   );
 
@@ -749,19 +762,21 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           {renderCurrentStep()}
         </Animated.View>
 
-        <View style={[styles.bottomBar, isLandscape && { paddingVertical: 6, paddingHorizontal: 16 }]}>
-          <Pressable
-            style={[styles.nextButton, isLandscape && { height: 40, borderRadius: 10 }, { backgroundColor: accentColor }]}
-            onPress={handleNext}
-          >
-            <Text style={styles.nextButtonText}>
-              {step === TOTAL_STEPS - 1 ? t("onboarding", "start") : t("onboarding", "next")}
-            </Text>
-            {step < TOTAL_STEPS - 1 && (
-              <Ionicons name="arrow-forward" size={18} color={Colors.background} />
-            )}
-          </Pressable>
-        </View>
+        {!isLandscape && (
+          <View style={styles.bottomBar}>
+            <Pressable
+              style={[styles.nextButton, { backgroundColor: accentColor }]}
+              onPress={handleNext}
+            >
+              <Text style={styles.nextButtonText}>
+                {step === TOTAL_STEPS - 1 ? t("onboarding", "start") : t("onboarding", "next")}
+              </Text>
+              {step < TOTAL_STEPS - 1 && (
+                <Ionicons name="arrow-forward" size={18} color={Colors.background} />
+              )}
+            </Pressable>
+          </View>
+        )}
       </View>
     </Modal>
   );
@@ -1056,6 +1071,22 @@ const styles = StyleSheet.create({
   landStepSubtitle: {
     fontSize: 12,
     textAlign: "center",
+  },
+  landNextButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    width: "80%",
+    maxWidth: 200,
+    height: 36,
+    borderRadius: 10,
+    marginTop: 12,
+  },
+  landNextButtonText: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 14,
+    color: Colors.background,
   },
   bottomBar: {
     paddingHorizontal: 28,
