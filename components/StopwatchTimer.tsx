@@ -399,21 +399,29 @@ export function StopwatchTimer({
 
   const pauseTimer = useCallback(() => {
     hapticFeedback();
-    clearTimerInterval();
-    elapsedAtPauseRef.current += Date.now() - startTimeRef.current;
-    setState("paused");
-  }, [hapticFeedback, clearTimerInterval]);
+    if (isPlayingRef.current) {
+      setState("finishing");
+      onStopRequested();
+    } else {
+      clearTimerInterval();
+      elapsedAtPauseRef.current += Date.now() - startTimeRef.current;
+      setState("paused");
+    }
+  }, [hapticFeedback, clearTimerInterval, onStopRequested]);
 
   const resetTimer = useCallback(() => {
     hapticFeedback();
     clearTimerInterval();
     clearCountdownInterval();
+    if (isPlayingRef.current) {
+      onStopRequested();
+    }
     setRemaining(timerDuration);
     setCountdownLeft(0);
     elapsedAtPauseRef.current = 0;
     thermoHeight.value = 1;
     setState("idle");
-  }, [hapticFeedback, clearTimerInterval, clearCountdownInterval, timerDuration]);
+  }, [hapticFeedback, clearTimerInterval, clearCountdownInterval, timerDuration, onStopRequested]);
 
   useEffect(() => {
     if (state === "finishing" && !isMetronomePlaying) {
