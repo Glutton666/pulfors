@@ -577,9 +577,9 @@ export function NoteModeView({
           </View>
           {renderQueueSection()}
         </View>
-        <View style={styles.landscapeRightPanel}>
-          {renderPlayControls()}
+        <View style={[styles.landscapeRightPanel, { justifyContent: "space-between" as const }]}>
           {renderSourceSection()}
+          {renderPlayControls()}
         </View>
       </View>
     );
