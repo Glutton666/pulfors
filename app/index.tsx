@@ -561,23 +561,35 @@ export default function MetronomeScreen() {
     };
   }, []);
 
-  const preloadNoteSampleSounds = useCallback(async (samples: NoteSampleMap) => {
-    for (const s of Object.values(noteSampleSoundsRef.current)) {
-      try { s.release(); } catch {}
-    }
-    noteSampleSoundsRef.current = {};
+  const preloadNoteSampleSounds = useCallback(async (samples: NoteSampleMap, keepExisting?: boolean) => {
+    const existing = noteSampleSoundsRef.current;
+    const existingUris = noteSamplesRef.current;
+    const newPlayers: Record<string, AudioPlayer> = {};
+    const keysToKeep = new Set<string>();
 
     for (const [key, uri] of Object.entries(samples)) {
-      try {
-        const rawUri = uri.split("#")[0];
-        const isFileUri = rawUri.startsWith("file://");
-        const player = createAudioPlayer(rawUri, { downloadFirst: isFileUri });
-        player.volume = sampleVolumeRef.current * 5.0;
-        noteSampleSoundsRef.current[key] = player;
-      } catch (e) {
-        console.warn("[SamplePreload] Failed:", key, e);
+      const rawUri = uri.split("#")[0];
+      if (keepExisting && existing[key] && existingUris[key]?.split("#")[0] === rawUri) {
+        newPlayers[key] = existing[key];
+        keysToKeep.add(key);
+      } else {
+        try {
+          const isFileUri = rawUri.startsWith("file://");
+          const player = createAudioPlayer(rawUri, { downloadFirst: isFileUri });
+          player.volume = sampleVolumeRef.current * 5.0;
+          newPlayers[key] = player;
+        } catch (e) {
+          console.warn("[SamplePreload] Failed:", key, e);
+        }
       }
     }
+
+    for (const [key, s] of Object.entries(existing)) {
+      if (!keysToKeep.has(key)) {
+        try { s.release(); } catch {}
+      }
+    }
+    noteSampleSoundsRef.current = newPlayers;
   }, []);
 
   const clearSamplePlayStates = useCallback(() => {
@@ -1816,9 +1828,10 @@ export default function MetronomeScreen() {
       if (!engine.getIsRunning()) {
         if (noteModeRef.current && noteIsPlayingRef.current) {
           const beatMs = Math.round(60000 / (bpmRef.current || 120));
+          const gapMs = Math.min(beatMs, 300);
           setTimeout(() => {
             noteAdvanceQueueRef.current();
-          }, beatMs);
+          }, gapMs);
           return;
         }
         if (webRenderedLoopRef.current) {
@@ -2345,11 +2358,58 @@ export default function MetronomeScreen() {
     const engine = engineRef.current;
     if (!engine) return;
 
-    if (engine.getIsRunning()) {
+    const wasRunning = engine.getIsRunning();
+    if (wasRunning) {
       engine.stop();
-      stopRenderedAudio();
       clearSamplePlayStates();
     }
+
+    setNoteCurrentIndex(index);
+    noteCurrentIndexRef.current = index;
+
+    const entrySamples = entry.noteSamples || {};
+    const entryNames = entry.noteSampleNames || {};
+    const entrySources = entry.noteSampleSources || {};
+    if (Object.keys(entrySamples).length > 0) {
+      preloadNoteSampleSounds(entrySamples, true);
+    } else {
+      for (const s of Object.values(noteSampleSoundsRef.current)) {
+        try { s.release(); } catch {}
+      }
+      noteSampleSoundsRef.current = {};
+    }
+    noteSamplesRef.current = { ...entrySamples };
+    noteSampleNamesRef.current = { ...entryNames };
+    noteSampleSourcesRef.current = { ...entrySources };
+
+    setBpm(entry.bpm);
+    bpmRef.current = entry.bpm;
+    setBeatsPerMeasure(entry.beatsPerMeasure);
+    setBeatTypes([...entry.beatTypes]);
+    setBeatSubdivisions({ ...entry.beatSubdivisions });
+    setBarRepeats({ ...entry.barRepeats });
+    const entryBlocks = (entry as any).loopBlocks || [];
+    setLoopBlocks([...entryBlocks]);
+    setBarLoopMode(entry.barLoopMode || "once");
+    setBlockPlayMode((entry as any).blockPlayMode || "loop");
+    if (entry.subdivisionPattern) setSubdivisionPattern([...entry.subdivisionPattern]);
+    setNoteSamples({ ...entrySamples });
+    setNoteSampleNames({ ...entryNames });
+    setNoteSampleSources({ ...entrySources });
+
+    engine.setBpm(entry.bpm);
+    engine.setBeatsPerMeasure(entry.beatsPerMeasure);
+    engine.setBeatTypes([...entry.beatTypes]);
+    engine.setAllBeatSubdivisions(entry.beatSubdivisions);
+    engine.setLoopBlocks(entryBlocks);
+    engine.setBlockPlayMode((entry as any).blockPlayMode || "loop");
+    engine.setAllBarRepeats(entry.barRepeats || {});
+    const bpmOverrides: Record<number, number> = {};
+    for (const [k, v] of Object.entries(entry.barRepeats || {})) {
+      if ((v as any).bpm) bpmOverrides[Number(k)] = (v as any).bpm;
+    }
+    engine.setAllBarBpmOverrides(bpmOverrides);
+    engine.buildScheduleOnly();
 
     setCurrentBeat(-1);
     setMeasureCount(0);
@@ -2357,28 +2417,29 @@ export default function MetronomeScreen() {
     activeSubNoteRef.current = -1;
     setProgressInfo(null);
 
-    applyEntryToEngine(entry);
-    setNoteCurrentIndex(index);
-
-    await new Promise(r => setTimeout(r, 50));
-
-    const eng = engineRef.current;
-    if (!eng) return;
-    eng.setBeatTypes([...entry.beatTypes]);
-    eng.setAllBeatSubdivisions(entry.beatSubdivisions);
-    eng.setAllBarRepeats(entry.barRepeats || {});
-    const entryBlocks2 = (entry as any).loopBlocks || [];
-    eng.setLoopBlocks(entryBlocks2);
-    eng.setBlockPlayMode((entry as any).blockPlayMode || "loop");
-    eng.buildScheduleOnly();
+    barConfigRef.current = {
+      ...barConfigRef.current,
+      beatsPerMeasure: entry.beatsPerMeasure,
+      beatTypes: [...entry.beatTypes],
+      beatSubdivisions: { ...entry.beatSubdivisions },
+      barRepeats: { ...entry.barRepeats },
+      loopBlocks: [...entryBlocks],
+      barClockMode: entry.barClockMode || "stopwatch",
+      barTimerDuration: entry.barTimerDuration ?? 180,
+      noteSamples: { ...entrySamples },
+      noteSampleNames: { ...entryNames },
+      noteSampleSources: { ...entrySources },
+      barLoopMode: "once",
+      blockPlayMode: (entry as any).blockPlayMode || "loop",
+      hasBeenConfigured: true,
+    };
 
     setIsPlaying(true);
     setNoteIsPlaying(true);
-    eng.start();
-    eng.requestStopAfterMeasure();
-    const modeLabel = "Note";
-    showPlayingNotification(entry.bpm, modeLabel, languageRef.current);
-  }, [applyEntryToEngine]);
+    engine.start();
+    engine.requestStopAfterMeasure();
+    showPlayingNotification(entry.bpm, "Note", languageRef.current);
+  }, [preloadNoteSampleSounds]);
 
   const createShuffledIndices = useCallback((length: number) => {
     const indices = Array.from({ length }, (_, i) => i);
