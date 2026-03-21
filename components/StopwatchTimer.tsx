@@ -627,6 +627,21 @@ export function StopwatchTimer({
             </Text>
           )}
         </View>
+        {mode === "timer" && state === "idle" && (
+          <View style={styles.landscapePresetRow}>
+            {TIMER_PRESETS.map((p) => (
+              <Pressable
+                key={p.seconds}
+                onPress={() => adjustTimerDuration(p.seconds)}
+                style={[styles.landscapePresetChip, timerDuration === p.seconds && { backgroundColor: C.accentDim, borderColor: C.accent }]}
+              >
+                <Text style={[styles.landscapePresetText, timerDuration === p.seconds && { color: C.accent }]}>
+                  {p.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
         <View style={styles.landscapeBtnRow}>
           {state === "idle" && (
             <Pressable
@@ -1127,6 +1142,23 @@ const styles = StyleSheet.create({
   landscapeFraction: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
+    color: Colors.textTertiary,
+  },
+  landscapePresetRow: {
+    flexDirection: "row" as const,
+    gap: 4,
+  },
+  landscapePresetChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceLight,
+  },
+  landscapePresetText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 9,
     color: Colors.textTertiary,
   },
   landscapeBtnRow: {
