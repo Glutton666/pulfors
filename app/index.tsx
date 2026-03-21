@@ -3003,7 +3003,7 @@ export default function MetronomeScreen() {
         style={[
           styles.menuButton,
           { top: (insets.top || webTopInset) + 12 },
-          isLandscape && { right: undefined, left: 20, top: (insets.top || webTopInset) + 4 },
+          isLandscape && { right: undefined, left: 20, top: (insets.top || webTopInset) },
         ]}
         onPress={() => setShowMenu(!showMenu)}
         hitSlop={8}
@@ -3272,7 +3272,7 @@ export default function MetronomeScreen() {
         <View style={[
           styles.topSection,
           barMode && { justifyContent: "flex-start", flex: 3 },
-          isLandscape && !barMode && { flex: 3, justifyContent: "center", paddingRight: 20 },
+          isLandscape && !barMode && { flex: 3, justifyContent: "center", paddingRight: 30 },
         ]}>
           <BeatIndicator
             beatsPerMeasure={beatsPerMeasure}
