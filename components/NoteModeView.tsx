@@ -513,7 +513,7 @@ export function NoteModeView({
   );
 
   const renderPlayControls = () => (
-    <View style={[styles.playControls, isLandscape && { marginBottom: 4 }]}>
+    <View style={[styles.playControls, isLandscape && { marginBottom: 4, flexDirection: "column" as const, gap: 6 }]}>
       <View style={styles.playModeRow}>
         {playModes.map((mode) => (
           <Pressable
@@ -547,7 +547,7 @@ export function NoteModeView({
           styles.playButton,
           { backgroundColor: isPlaying ? Colors.danger : C.accent },
           queue.length === 0 && { opacity: 0.4 },
-          isLandscape && { width: 44, height: 44, borderRadius: 10 },
+          isLandscape && { width: "100%" as any, height: 40, borderRadius: 10 },
         ]}
         onPress={onTogglePlay}
         disabled={queue.length === 0}
