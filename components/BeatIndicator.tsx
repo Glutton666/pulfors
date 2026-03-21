@@ -1419,7 +1419,7 @@ export function BeatIndicator({
             }, resetFlashStyle]}
           />
 
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, maxWidth: "45%" }}>
             <View style={[styles.barTopRowCenter, { paddingTop: 6, paddingBottom: 2 }]}>
               <Pressable
                 onPress={() => onBarModeChange(false)}
@@ -1578,7 +1578,7 @@ export function BeatIndicator({
             />
           </View>
 
-          <View style={{ width: 180, justifyContent: "center", alignItems: "center", gap: 6, paddingVertical: 6 }}>
+          <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 6, paddingVertical: 6 }}>
             {subdivisionBarElement && (
               <View style={{ width: "100%", paddingHorizontal: 8 }}>{subdivisionBarElement}</View>
             )}
