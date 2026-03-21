@@ -10,6 +10,7 @@ import {
   Animated,
   Dimensions,
   ScrollView,
+  useWindowDimensions,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -195,6 +196,8 @@ function useDemo(
 export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
+  const { width: winW, height: winH } = useWindowDimensions();
+  const isLandscape = winW > winH;
   const [step, setStep] = useState(0);
 
   const [selectedTheme, setSelectedTheme] = useState<ThemeColor>("gold");
@@ -234,12 +237,12 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       const direction = nextStep > step ? -1 : 1;
       Animated.sequence([
         Animated.timing(slideAnim, {
-          toValue: direction * SCREEN_WIDTH,
+          toValue: direction * winW,
           duration: 150,
           useNativeDriver: true,
         }),
         Animated.timing(slideAnim, {
-          toValue: -direction * SCREEN_WIDTH,
+          toValue: -direction * winW,
           duration: 0,
           useNativeDriver: true,
         }),
@@ -251,7 +254,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       ]).start();
       setStep(nextStep);
     },
-    [step, slideAnim]
+    [step, slideAnim, winW]
   );
 
   const handleNext = useCallback(() => {
@@ -323,17 +326,23 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
     </View>
   );
 
-  const renderThemeStep = () => (
-    <View style={styles.stepContent}>
-      <MaterialCommunityIcons name="palette-outline" size={40} color={accentColor} />
-      <Text style={styles.stepTitle}>{t("onboarding", "themeTitle")}</Text>
-      <Text style={styles.stepSubtitle}>{t("onboarding", "themeSubtitle")}</Text>
-      <View style={styles.themeGrid}>
+  const renderStepHeader = (icon: React.ReactNode, titleKey: string, subtitleKey: string) => (
+    <View style={isLandscape ? styles.landHeaderCol : undefined}>
+      {icon}
+      <Text style={[styles.stepTitle, isLandscape && styles.landStepTitle]}>{t("onboarding", titleKey)}</Text>
+      <Text style={[styles.stepSubtitle, isLandscape && styles.landStepSubtitle]}>{t("onboarding", subtitleKey)}</Text>
+    </View>
+  );
+
+  const renderThemeStep = () => {
+    const themeGrid = (
+      <View style={[styles.themeGrid, isLandscape && { marginTop: 0 }]}>
         {THEME_OPTIONS.map((opt) => (
           <Pressable
             key={opt.key}
             style={[
               styles.themeOption,
+              isLandscape && { width: "auto", minWidth: 70, paddingVertical: 8, paddingHorizontal: 10 },
               selectedTheme === opt.key && {
                 borderColor: opt.color,
                 borderWidth: 2,
@@ -341,9 +350,9 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             ]}
             onPress={() => setSelectedTheme(opt.key)}
           >
-            <View style={[styles.themeCircle, { backgroundColor: opt.color }]}>
+            <View style={[styles.themeCircle, isLandscape && { width: 32, height: 32, borderRadius: 16 }, { backgroundColor: opt.color }]}>
               {selectedTheme === opt.key && (
-                <Ionicons name="checkmark" size={20} color="#fff" />
+                <Ionicons name="checkmark" size={isLandscape ? 16 : 20} color="#fff" />
               )}
             </View>
             <Text
@@ -357,94 +366,125 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           </Pressable>
         ))}
       </View>
-    </View>
-  );
+    );
 
-  const renderLoggingStep = () => (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={styles.stepContent}
-      showsVerticalScrollIndicator={false}
-    >
-      <Ionicons name="analytics-outline" size={40} color={accentColor} />
-      <Text style={styles.stepTitle}>{t("onboarding", "loggingTitle")}</Text>
-      <Text style={styles.stepSubtitle}>{t("onboarding", "loggingSubtitle")}</Text>
+    if (isLandscape) {
+      return (
+        <View style={styles.landRow}>
+          {renderStepHeader(
+            <MaterialCommunityIcons name="palette-outline" size={32} color={accentColor} />,
+            "themeTitle", "themeSubtitle"
+          )}
+          <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} showsVerticalScrollIndicator={false}>
+            {themeGrid}
+          </ScrollView>
+        </View>
+      );
+    }
 
-      <View style={styles.infoCard}>
-        <Text style={styles.infoCardTitle}>{t("onboarding", "loggingWhy")}</Text>
-        <View style={styles.infoRow}>
-          <Ionicons name="time-outline" size={18} color={accentColor} />
-          <Text style={styles.infoText}>
-            {t("onboarding", "loggingRow1")}
-          </Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="musical-notes-outline" size={18} color={accentColor} />
-          <Text style={styles.infoText}>
-            {t("onboarding", "loggingRow2")}
-          </Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="location-outline" size={18} color={accentColor} />
-          <Text style={styles.infoText}>
-            {t("onboarding", "loggingRow3")}
-          </Text>
-        </View>
+    return (
+      <View style={styles.stepContent}>
+        <MaterialCommunityIcons name="palette-outline" size={40} color={accentColor} />
+        <Text style={styles.stepTitle}>{t("onboarding", "themeTitle")}</Text>
+        <Text style={styles.stepSubtitle}>{t("onboarding", "themeSubtitle")}</Text>
+        {themeGrid}
       </View>
+    );
+  };
 
-      <View style={styles.infoCard}>
-        <Text style={styles.infoCardTitle}>{t("onboarding", "loggingHow")}</Text>
-        <View style={styles.infoRow}>
-          <Ionicons name="bar-chart-outline" size={18} color={accentColor} />
-          <Text style={styles.infoText}>
-            {t("onboarding", "loggingRow4")}
-          </Text>
+  const renderLoggingStep = () => {
+    const loggingContent = (
+      <>
+        <View style={[styles.infoCard, isLandscape && { padding: 10, gap: 8 }]}>
+          <Text style={styles.infoCardTitle}>{t("onboarding", "loggingWhy")}</Text>
+          <View style={styles.infoRow}>
+            <Ionicons name="time-outline" size={isLandscape ? 14 : 18} color={accentColor} />
+            <Text style={styles.infoText}>{t("onboarding", "loggingRow1")}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="musical-notes-outline" size={isLandscape ? 14 : 18} color={accentColor} />
+            <Text style={styles.infoText}>{t("onboarding", "loggingRow2")}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="location-outline" size={isLandscape ? 14 : 18} color={accentColor} />
+            <Text style={styles.infoText}>{t("onboarding", "loggingRow3")}</Text>
+          </View>
         </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="trophy-outline" size={18} color={accentColor} />
-          <Text style={styles.infoText}>
-            {t("onboarding", "loggingRow5")}
-          </Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="share-social-outline" size={18} color={accentColor} />
-          <Text style={styles.infoText}>
-            {t("onboarding", "loggingRow6")}
-          </Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="shield-checkmark-outline" size={18} color={accentColor} />
-          <Text style={styles.infoText}>
-            {t("onboarding", "loggingRow7")}
-          </Text>
-        </View>
-      </View>
 
-      <Pressable
-        style={[
-          styles.bigToggle,
-          loggingEnabled
-            ? { backgroundColor: accentColor }
-            : { backgroundColor: Colors.surfaceLight, borderWidth: 1, borderColor: Colors.border },
-        ]}
-        onPress={() => setLoggingEnabled(!loggingEnabled)}
-      >
-        <Ionicons
-          name={loggingEnabled ? "checkmark-circle" : "close-circle-outline"}
-          size={22}
-          color={loggingEnabled ? Colors.background : Colors.textSecondary}
-        />
-        <Text
+        <View style={[styles.infoCard, isLandscape && { padding: 10, gap: 8 }]}>
+          <Text style={styles.infoCardTitle}>{t("onboarding", "loggingHow")}</Text>
+          <View style={styles.infoRow}>
+            <Ionicons name="bar-chart-outline" size={isLandscape ? 14 : 18} color={accentColor} />
+            <Text style={styles.infoText}>{t("onboarding", "loggingRow4")}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="trophy-outline" size={isLandscape ? 14 : 18} color={accentColor} />
+            <Text style={styles.infoText}>{t("onboarding", "loggingRow5")}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="share-social-outline" size={isLandscape ? 14 : 18} color={accentColor} />
+            <Text style={styles.infoText}>{t("onboarding", "loggingRow6")}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="shield-checkmark-outline" size={isLandscape ? 14 : 18} color={accentColor} />
+            <Text style={styles.infoText}>{t("onboarding", "loggingRow7")}</Text>
+          </View>
+        </View>
+
+        <Pressable
           style={[
-            styles.bigToggleText,
-            { color: loggingEnabled ? Colors.background : Colors.textSecondary },
+            styles.bigToggle,
+            isLandscape && { height: 38, marginTop: 4, marginBottom: 8 },
+            loggingEnabled
+              ? { backgroundColor: accentColor }
+              : { backgroundColor: Colors.surfaceLight, borderWidth: 1, borderColor: Colors.border },
           ]}
+          onPress={() => setLoggingEnabled(!loggingEnabled)}
         >
-          {loggingEnabled ? t("onboarding", "loggingOn") : t("onboarding", "loggingOff")}
-        </Text>
-      </Pressable>
-    </ScrollView>
-  );
+          <Ionicons
+            name={loggingEnabled ? "checkmark-circle" : "close-circle-outline"}
+            size={22}
+            color={loggingEnabled ? Colors.background : Colors.textSecondary}
+          />
+          <Text
+            style={[
+              styles.bigToggleText,
+              { color: loggingEnabled ? Colors.background : Colors.textSecondary },
+            ]}
+          >
+            {loggingEnabled ? t("onboarding", "loggingOn") : t("onboarding", "loggingOff")}
+          </Text>
+        </Pressable>
+      </>
+    );
+
+    if (isLandscape) {
+      return (
+        <View style={styles.landRow}>
+          {renderStepHeader(
+            <Ionicons name="analytics-outline" size={32} color={accentColor} />,
+            "loggingTitle", "loggingSubtitle"
+          )}
+          <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} showsVerticalScrollIndicator={false}>
+            {loggingContent}
+          </ScrollView>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.stepContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Ionicons name="analytics-outline" size={40} color={accentColor} />
+        <Text style={styles.stepTitle}>{t("onboarding", "loggingTitle")}</Text>
+        <Text style={styles.stepSubtitle}>{t("onboarding", "loggingSubtitle")}</Text>
+        {loggingContent}
+      </ScrollView>
+    );
+  };
 
   const ModeOption = ({
     label,
@@ -490,180 +530,175 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
     );
   };
 
-  const renderHapticStep = () => (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={styles.stepContent}
-      showsVerticalScrollIndicator={false}
-    >
-      <Ionicons name="phone-portrait-outline" size={40} color={accentColor} />
-      <Text style={styles.stepTitle}>{t("onboarding", "hapticTitle")}</Text>
-      <Text style={styles.stepSubtitle}>{t("onboarding", "hapticSubtitle")}</Text>
-
-      <View style={styles.modeList}>
-        <ModeOption
-          label={t("onboarding", "hapticAll")}
-          description={t("onboarding", "hapticAllDesc")}
-          value="all"
-          current={hapticMode}
-          onSelect={() => setHapticMode("all")}
-        />
-        <ModeOption
-          label={t("onboarding", "hapticAccent")}
-          description={t("onboarding", "hapticAccentDesc")}
-          value="accent"
-          current={hapticMode}
-          onSelect={() => setHapticMode("accent")}
-        />
-        <ModeOption
-          label={t("onboarding", "hapticOff")}
-          description={t("onboarding", "hapticOffDesc")}
-          value="off"
-          current={hapticMode}
-          onSelect={() => setHapticMode("off")}
-        />
-      </View>
-
-      <View style={styles.demoSection}>
-        <DemoBar activeBeat={hapticDemo.activeBeat} accentColor={accentColor} beatLabels={[t("beatTypes", "strong"), t("beatTypes", "accent"), t("beatTypes", "normal"), t("beatTypes", "mute")]} />
-        <Pressable
-          style={[
-            styles.demoButton,
-            hapticDemo.playing
-              ? { backgroundColor: Colors.surfaceLight, borderColor: accentColor, borderWidth: 1 }
-              : { backgroundColor: accentColor },
-          ]}
-          onPress={hapticDemo.toggle}
-        >
-          <Ionicons
-            name={hapticDemo.playing ? "stop" : "play"}
-            size={16}
-            color={hapticDemo.playing ? accentColor : Colors.background}
-          />
-          <Text
-            style={[
-              styles.demoButtonText,
-              { color: hapticDemo.playing ? accentColor : Colors.background },
-            ]}
-          >
-            {hapticDemo.playing ? t("onboarding", "stop") : t("onboarding", "preview")}
-          </Text>
-        </Pressable>
-      </View>
-    </ScrollView>
-  );
-
-  const renderFlashStep = () => (
-    <View style={{ flex: 1 }}>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={styles.stepContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <Ionicons name="flash-outline" size={40} color={accentColor} />
-        <Text style={styles.stepTitle}>{t("onboarding", "flashTitle")}</Text>
-        <Text style={styles.stepSubtitle}>{t("onboarding", "flashSubtitle")}</Text>
-
-        <View style={styles.modeList}>
-          <ModeOption
-            label={t("onboarding", "flashAll")}
-            description={t("onboarding", "flashAllDesc")}
-            value="all"
-            current={flashMode}
-            onSelect={() => setFlashMode("all")}
-          />
-          <ModeOption
-            label={t("onboarding", "flashAccent")}
-            description={t("onboarding", "flashAccentDesc")}
-            value="accent"
-            current={flashMode}
-            onSelect={() => setFlashMode("accent")}
-          />
-          <ModeOption
-            label={t("onboarding", "flashOff")}
-            description={t("onboarding", "flashOffDesc")}
-            value="off"
-            current={flashMode}
-            onSelect={() => setFlashMode("off")}
-          />
+  const renderHapticStep = () => {
+    const hapticContent = (
+      <>
+        <View style={[styles.modeList, isLandscape && { gap: 6 }]}>
+          <ModeOption label={t("onboarding", "hapticAll")} description={t("onboarding", "hapticAllDesc")} value="all" current={hapticMode} onSelect={() => setHapticMode("all")} />
+          <ModeOption label={t("onboarding", "hapticAccent")} description={t("onboarding", "hapticAccentDesc")} value="accent" current={hapticMode} onSelect={() => setHapticMode("accent")} />
+          <ModeOption label={t("onboarding", "hapticOff")} description={t("onboarding", "hapticOffDesc")} value="off" current={hapticMode} onSelect={() => setHapticMode("off")} />
         </View>
 
-        <View style={styles.demoSection}>
+        <View style={[styles.demoSection, isLandscape && { marginTop: 8, paddingVertical: 10 }]}>
+          <DemoBar activeBeat={hapticDemo.activeBeat} accentColor={accentColor} beatLabels={[t("beatTypes", "strong"), t("beatTypes", "accent"), t("beatTypes", "normal"), t("beatTypes", "mute")]} />
+          <Pressable
+            style={[
+              styles.demoButton,
+              isLandscape && { height: 32 },
+              hapticDemo.playing
+                ? { backgroundColor: Colors.surfaceLight, borderColor: accentColor, borderWidth: 1 }
+                : { backgroundColor: accentColor },
+            ]}
+            onPress={hapticDemo.toggle}
+          >
+            <Ionicons name={hapticDemo.playing ? "stop" : "play"} size={16} color={hapticDemo.playing ? accentColor : Colors.background} />
+            <Text style={[styles.demoButtonText, { color: hapticDemo.playing ? accentColor : Colors.background }]}>
+              {hapticDemo.playing ? t("onboarding", "stop") : t("onboarding", "preview")}
+            </Text>
+          </Pressable>
+        </View>
+      </>
+    );
+
+    if (isLandscape) {
+      return (
+        <View style={styles.landRow}>
+          {renderStepHeader(
+            <Ionicons name="phone-portrait-outline" size={32} color={accentColor} />,
+            "hapticTitle", "hapticSubtitle"
+          )}
+          <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} showsVerticalScrollIndicator={false}>
+            {hapticContent}
+          </ScrollView>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.stepContent} showsVerticalScrollIndicator={false}>
+        <Ionicons name="phone-portrait-outline" size={40} color={accentColor} />
+        <Text style={styles.stepTitle}>{t("onboarding", "hapticTitle")}</Text>
+        <Text style={styles.stepSubtitle}>{t("onboarding", "hapticSubtitle")}</Text>
+        {hapticContent}
+      </ScrollView>
+    );
+  };
+
+  const renderFlashStep = () => {
+    const flashContent = (
+      <>
+        <View style={[styles.modeList, isLandscape && { gap: 6 }]}>
+          <ModeOption label={t("onboarding", "flashAll")} description={t("onboarding", "flashAllDesc")} value="all" current={flashMode} onSelect={() => setFlashMode("all")} />
+          <ModeOption label={t("onboarding", "flashAccent")} description={t("onboarding", "flashAccentDesc")} value="accent" current={flashMode} onSelect={() => setFlashMode("accent")} />
+          <ModeOption label={t("onboarding", "flashOff")} description={t("onboarding", "flashOffDesc")} value="off" current={flashMode} onSelect={() => setFlashMode("off")} />
+        </View>
+
+        <View style={[styles.demoSection, isLandscape && { marginTop: 8, paddingVertical: 10 }]}>
           <DemoBar activeBeat={flashDemo.activeBeat} accentColor={accentColor} beatLabels={[t("beatTypes", "strong"), t("beatTypes", "accent"), t("beatTypes", "normal"), t("beatTypes", "mute")]} />
           <Pressable
             style={[
               styles.demoButton,
+              isLandscape && { height: 32 },
               flashDemo.playing
                 ? { backgroundColor: Colors.surfaceLight, borderColor: accentColor, borderWidth: 1 }
                 : { backgroundColor: accentColor },
             ]}
             onPress={flashDemo.toggle}
           >
-            <Ionicons
-              name={flashDemo.playing ? "stop" : "play"}
-              size={16}
-              color={flashDemo.playing ? accentColor : Colors.background}
-            />
-            <Text
-              style={[
-                styles.demoButtonText,
-                { color: flashDemo.playing ? accentColor : Colors.background },
-              ]}
-            >
+            <Ionicons name={flashDemo.playing ? "stop" : "play"} size={16} color={flashDemo.playing ? accentColor : Colors.background} />
+            <Text style={[styles.demoButtonText, { color: flashDemo.playing ? accentColor : Colors.background }]}>
               {flashDemo.playing ? t("onboarding", "stop") : t("onboarding", "preview")}
             </Text>
           </Pressable>
         </View>
-      </ScrollView>
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.flashOverlay,
-          { backgroundColor: accentColor, opacity: flashFlashAnim },
-        ]}
-      />
-    </View>
-  );
+      </>
+    );
 
-  const renderProfileStep = () => (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={styles.stepContent}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Ionicons name="person-circle-outline" size={40} color={accentColor} />
-      <Text style={styles.stepTitle}>{t("onboarding", "profileTitle")}</Text>
-      <Text style={styles.stepSubtitle}>{t("onboarding", "profileSubtitle")}</Text>
-      <View style={styles.inputSection}>
-        <Text style={styles.inputLabel}>{t("onboarding", "nicknameLabel")}</Text>
-        <TextInput
-          style={[styles.textInput, { borderColor: accentColor }]}
-          value={username}
-          onChangeText={setUsername}
-          placeholder={t("onboarding", "nicknamePlaceholder")}
-          placeholderTextColor={Colors.textTertiary}
-          maxLength={20}
-        />
-      </View>
-      <View style={styles.inputSection}>
-        <Text style={styles.inputLabel}>{t("onboarding", "roomLabel")}</Text>
-        <TextInput
-          style={[styles.textInput, { borderColor: accentColor }]}
-          value={roomName}
-          onChangeText={setRoomName}
-          placeholder={t("onboarding", "roomPlaceholder")}
-          placeholderTextColor={Colors.textTertiary}
-          maxLength={30}
-        />
-        <View style={styles.locationHint}>
-          <Ionicons name="location" size={14} color={accentColor} />
-          <Text style={styles.locationHintText}>
-            {t("onboarding", "roomHint")}
-          </Text>
+    if (isLandscape) {
+      return (
+        <View style={{ flex: 1 }}>
+          <View style={styles.landRow}>
+            {renderStepHeader(
+              <Ionicons name="flash-outline" size={32} color={accentColor} />,
+              "flashTitle", "flashSubtitle"
+            )}
+            <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} showsVerticalScrollIndicator={false}>
+              {flashContent}
+            </ScrollView>
+          </View>
+          <Animated.View pointerEvents="none" style={[styles.flashOverlay, { backgroundColor: accentColor, opacity: flashFlashAnim }]} />
         </View>
+      );
+    }
+
+    return (
+      <View style={{ flex: 1 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.stepContent} showsVerticalScrollIndicator={false}>
+          <Ionicons name="flash-outline" size={40} color={accentColor} />
+          <Text style={styles.stepTitle}>{t("onboarding", "flashTitle")}</Text>
+          <Text style={styles.stepSubtitle}>{t("onboarding", "flashSubtitle")}</Text>
+          {flashContent}
+        </ScrollView>
+        <Animated.View pointerEvents="none" style={[styles.flashOverlay, { backgroundColor: accentColor, opacity: flashFlashAnim }]} />
       </View>
-    </ScrollView>
-  );
+    );
+  };
+
+  const renderProfileStep = () => {
+    const profileContent = (
+      <>
+        <View style={styles.inputSection}>
+          <Text style={styles.inputLabel}>{t("onboarding", "nicknameLabel")}</Text>
+          <TextInput
+            style={[styles.textInput, isLandscape && { height: 40 }, { borderColor: accentColor }]}
+            value={username}
+            onChangeText={setUsername}
+            placeholder={t("onboarding", "nicknamePlaceholder")}
+            placeholderTextColor={Colors.textTertiary}
+            maxLength={20}
+          />
+        </View>
+        <View style={styles.inputSection}>
+          <Text style={styles.inputLabel}>{t("onboarding", "roomLabel")}</Text>
+          <TextInput
+            style={[styles.textInput, isLandscape && { height: 40 }, { borderColor: accentColor }]}
+            value={roomName}
+            onChangeText={setRoomName}
+            placeholder={t("onboarding", "roomPlaceholder")}
+            placeholderTextColor={Colors.textTertiary}
+            maxLength={30}
+          />
+          <View style={styles.locationHint}>
+            <Ionicons name="location" size={14} color={accentColor} />
+            <Text style={styles.locationHintText}>{t("onboarding", "roomHint")}</Text>
+          </View>
+        </View>
+      </>
+    );
+
+    if (isLandscape) {
+      return (
+        <View style={styles.landRow}>
+          {renderStepHeader(
+            <Ionicons name="person-circle-outline" size={32} color={accentColor} />,
+            "profileTitle", "profileSubtitle"
+          )}
+          <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            {profileContent}
+          </ScrollView>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.stepContent} keyboardShouldPersistTaps="handled">
+        <Ionicons name="person-circle-outline" size={40} color={accentColor} />
+        <Text style={styles.stepTitle}>{t("onboarding", "profileTitle")}</Text>
+        <Text style={styles.stepSubtitle}>{t("onboarding", "profileSubtitle")}</Text>
+        {profileContent}
+      </ScrollView>
+    );
+  };
 
   const renderCurrentStep = () => {
     switch (step) {
@@ -688,12 +723,13 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
         style={[
           styles.container,
           {
-            paddingTop: (insets.top || webTopInset) + 12,
-            paddingBottom: (insets.bottom || webBottomInset) + 12,
+            paddingTop: (insets.top || webTopInset) + (isLandscape ? 4 : 12),
+            paddingBottom: (insets.bottom || webBottomInset) + (isLandscape ? 4 : 12),
           },
+          isLandscape && { paddingLeft: insets.left || 0, paddingRight: insets.right || 0 },
         ]}
       >
-        <View style={styles.topBar}>
+        <View style={[styles.topBar, isLandscape && { paddingVertical: 4 }]}>
           {step > 0 ? (
             <Pressable onPress={handleBack} hitSlop={10} style={styles.backBtn}>
               <Ionicons name="chevron-back" size={22} color={Colors.textSecondary} />
@@ -713,9 +749,9 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           {renderCurrentStep()}
         </Animated.View>
 
-        <View style={styles.bottomBar}>
+        <View style={[styles.bottomBar, isLandscape && { paddingVertical: 6, paddingHorizontal: 16 }]}>
           <Pressable
-            style={[styles.nextButton, { backgroundColor: accentColor }]}
+            style={[styles.nextButton, isLandscape && { height: 40, borderRadius: 10 }, { backgroundColor: accentColor }]}
             onPress={handleNext}
           >
             <Text style={styles.nextButtonText}>
@@ -991,6 +1027,35 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     flex: 1,
     lineHeight: 17,
+  },
+  landRow: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 16,
+    paddingHorizontal: 16,
+  },
+  landHeaderCol: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 8,
+  },
+  landContentCol: {
+    flex: 1,
+  },
+  landContentInner: {
+    gap: 10,
+    paddingVertical: 4,
+    paddingRight: 4,
+  },
+  landStepTitle: {
+    fontSize: 18,
+    textAlign: "center",
+  },
+  landStepSubtitle: {
+    fontSize: 12,
+    textAlign: "center",
   },
   bottomBar: {
     paddingHorizontal: 28,
