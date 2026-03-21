@@ -3252,12 +3252,11 @@ export default function MetronomeScreen() {
 
       <View
         style={[
-          styles.content,
+          isLandscape ? styles.contentLandscape : styles.content,
           {
             paddingTop: (insets.top || webTopInset) + (isLandscape ? 8 : 16),
             paddingBottom: (insets.bottom || webBottomInset) + (isLandscape ? 8 : 16),
           },
-          isLandscape && { maxWidth: undefined, paddingHorizontal: 16 },
         ]}
       >
         {noteMode ? (
@@ -3448,6 +3447,10 @@ const styles = StyleSheet.create({
     alignSelf: IS_TABLET ? "center" as const : undefined,
     width: IS_TABLET ? "100%" as any : undefined,
     justifyContent: "flex-end",
+  },
+  contentLandscape: {
+    flex: 1,
+    paddingHorizontal: 16,
   },
   topSection: {
     flex: 2,
