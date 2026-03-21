@@ -1254,7 +1254,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
           </View>
 
           {isLandscape ? (
-            <View style={{ flex: 1, alignItems: "center" as const, justifyContent: "flex-end" as const, gap: 10, paddingBottom: 4 }}>
+            <View style={{ flex: 1, alignItems: "center" as const, justifyContent: "flex-end" as const, gap: 10, paddingBottom: 4, marginTop: 24 }}>
             {editingFreq && (
               <View style={styles.freqEditRow}>
                 <TextInput
