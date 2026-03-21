@@ -1586,6 +1586,16 @@ export function BeatIndicator({
             )}
 
             <View style={{ alignItems: "center", gap: 4 }}>
+              <View style={styles.barClockLegendRow}>
+                <View style={[styles.barClockLegendItem]}>
+                  <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
+                  <Text style={[styles.barClockLegendText, barClockMode === "stopwatch" && { color: C.accent }]}>SW</Text>
+                </View>
+                <View style={[styles.barClockLegendItem]}>
+                  <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: Colors.danger }]} />
+                  <Text style={[styles.barClockLegendText, barClockMode === "timer" && { color: Colors.danger }]}>TM</Text>
+                </View>
+              </View>
               <Pressable onPress={handleBarClockTap}>
                 <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? Colors.danger : C.accent, fontSize: 16 }]}>
                   {barTimeDisplay}
@@ -1594,10 +1604,6 @@ export function BeatIndicator({
               <Text style={[styles.barInfoText, { color: Colors.textTertiary, fontSize: 9 }]}>
                 {beatsPerMeasure} bars
               </Text>
-              <View style={styles.barClockDots}>
-                <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
-                <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: Colors.danger }]} />
-              </View>
             </View>
 
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}>
@@ -2094,6 +2100,16 @@ export function BeatIndicator({
               <Ionicons name="remove" size={16} color={Colors.textSecondary} />
             </Pressable>
             <View style={styles.barInfoCol} {...barClockSwipePan.panHandlers}>
+              <View style={styles.barClockLegendRow}>
+                <View style={[styles.barClockLegendItem]}>
+                  <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
+                  <Text style={[styles.barClockLegendText, barClockMode === "stopwatch" && { color: C.accent }]}>SW</Text>
+                </View>
+                <View style={[styles.barClockLegendItem]}>
+                  <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: Colors.danger }]} />
+                  <Text style={[styles.barClockLegendText, barClockMode === "timer" && { color: Colors.danger }]}>TM</Text>
+                </View>
+              </View>
               <Pressable onPress={handleBarClockTap}>
                 <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? Colors.danger : C.accent }]}>
                   {barTimeDisplay}
@@ -2103,10 +2119,6 @@ export function BeatIndicator({
               <Text style={[styles.barInfoText, { color: Colors.textTertiary, fontSize: 10 }]}>
                 {beatsPerMeasure} bars
               </Text>
-              <View style={styles.barClockDots}>
-                <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
-                <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: Colors.danger }]} />
-              </View>
             </View>
             <Pressable
               onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
@@ -2737,6 +2749,23 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: Colors.textTertiary,
+  },
+  barClockLegendRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  barClockLegendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  barClockLegendText: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 8,
+    color: Colors.textTertiary,
   },
   barInfoCol: {
     alignItems: "center",
