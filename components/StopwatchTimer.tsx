@@ -626,9 +626,11 @@ export function StopwatchTimer({
               <Text style={[styles.landscapeTime, { color: Colors.text }, state === "finishing" && { color: Colors.danger }]} numberOfLines={1}>{swTime.main}</Text>
             </View>
           ) : (
-            <Text style={[styles.landscapeTime, { color: Colors.text }, state === "finishing" && { color: Colors.danger }]} numberOfLines={1}>
-              {timerDisplay}
-            </Text>
+            <Pressable onPress={state === "idle" ? startEditingTimer : undefined} disabled={state !== "idle"}>
+              <Text style={[styles.landscapeTime, { color: Colors.text }, state === "finishing" && { color: Colors.danger }]} numberOfLines={1}>
+                {timerDisplay}
+              </Text>
+            </Pressable>
           )}
           {state === "idle" && (
             <Pressable
