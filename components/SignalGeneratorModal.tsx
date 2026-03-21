@@ -10,6 +10,7 @@ import {
   PanResponder,
   ScrollView,
   FlatList,
+  useWindowDimensions,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -586,6 +587,8 @@ interface SignalGeneratorModalProps {
 export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalProps) {
   const { colors: C } = useTheme();
   const { t, language: lang } = useLanguage();
+  const { width: winW, height: winH } = useWindowDimensions();
+  const isLandscape = winW > winH;
   const [frequency, setFrequency] = useState(440);
   const [waveType, setWaveType] = useState<WaveType>("sine");
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1108,18 +1111,30 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
     >
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
-        <View style={styles.card}>
-          <View style={styles.header}>
-            <MaterialCommunityIcons name="waveform" size={20} color={C.accent} />
-            <Text style={[styles.title, { color: C.accent }]}>{t("signalGenerator", "title")}</Text>
-            <Pressable onPress={handleClose} hitSlop={12} style={styles.closeBtn}>
-              <Ionicons name="close" size={20} color={Colors.textSecondary} />
-            </Pressable>
-          </View>
+        <View style={[styles.card, isLandscape && { flexDirection: "row" as const, width: winW * 0.85, maxWidth: 680, padding: 16, gap: 12, alignItems: "flex-start" as const }]}>
+          {!isLandscape && (
+            <>
+              <View style={styles.header}>
+                <MaterialCommunityIcons name="waveform" size={20} color={C.accent} />
+                <Text style={[styles.title, { color: C.accent }]}>{t("signalGenerator", "title")}</Text>
+                <Pressable onPress={handleClose} hitSlop={12} style={styles.closeBtn}>
+                  <Ionicons name="close" size={20} color={Colors.textSecondary} />
+                </Pressable>
+              </View>
+              <View style={styles.divider} />
+            </>
+          )}
 
-          <View style={styles.divider} />
-
-          <View style={styles.knobWrap}>
+          <View style={[styles.knobWrap, isLandscape && { flex: 1, overflow: "hidden" as const }]}>
+            {isLandscape && (
+              <View style={[styles.header, { alignSelf: "stretch" as const, marginBottom: 8 }]}>
+                <MaterialCommunityIcons name="waveform" size={16} color={C.accent} />
+                <Text style={[styles.title, { color: C.accent, fontSize: 14 }]}>{t("signalGenerator", "title")}</Text>
+                <Pressable onPress={handleClose} hitSlop={12} style={styles.closeBtn}>
+                  <Ionicons name="close" size={18} color={Colors.textSecondary} />
+                </Pressable>
+              </View>
+            )}
             <Knob
               value={freqNorm}
               onChange={handleFreqKnob}
@@ -1142,6 +1157,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               style={[
                 styles.micEmoji,
                 micListening && styles.micEmojiActive,
+                isLandscape && { position: "relative" as const, right: 0, top: 0, marginTop: 8 },
               ]}
               hitSlop={8}
               testID="signal-mic-toggle"
@@ -1149,7 +1165,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
             >
               <MaterialCommunityIcons
                 name={micListening ? "microphone-off" : "microphone"}
-                size={20}
+                size={isLandscape ? 16 : 20}
                 color={micListening ? Colors.danger : Colors.textSecondary}
               />
             </Pressable>
@@ -1217,112 +1233,226 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
             ) : null}
           </View>
 
-          {editingFreq && (
-            <View style={styles.freqEditRow}>
-              <TextInput
-                style={[styles.freqEditInput, { color: C.accent, borderBottomColor: C.accent }]}
-                value={freqInput}
-                onChangeText={setFreqInput}
-                onSubmitEditing={commitFreqInput}
-                onBlur={commitFreqInput}
-                keyboardType="numeric"
-                autoFocus
-                selectTextOnFocus
+          {isLandscape ? (
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ alignItems: "center" as const, gap: 10, paddingBottom: 4 }} showsVerticalScrollIndicator={false} bounces={false}>
+            {editingFreq && (
+              <View style={styles.freqEditRow}>
+                <TextInput
+                  style={[styles.freqEditInput, { color: C.accent, borderBottomColor: C.accent }]}
+                  value={freqInput}
+                  onChangeText={setFreqInput}
+                  onSubmitEditing={commitFreqInput}
+                  onBlur={commitFreqInput}
+                  keyboardType="numeric"
+                  autoFocus
+                  selectTextOnFocus
+                />
+                <Text style={styles.freqEditUnit}>{t("signalGenerator", "hzUnit")}</Text>
+              </View>
+            )}
+
+            <View style={styles.notePickerRow}>
+              <PickerColumn
+                data={NOTE_NAMES}
+                selected={selectedNote}
+                onSelect={handleNoteSelect}
+                accentColor={C.accent}
+                accentDim={C.accentDim}
               />
-              <Text style={styles.freqEditUnit}>{t("signalGenerator", "hzUnit")}</Text>
+              <PickerColumn
+                data={OCTAVES}
+                selected={selectedOctave}
+                onSelect={handleOctaveSelect}
+                accentColor={C.accent}
+                accentDim={C.accentDim}
+              />
+            </View>
+            <Text style={styles.pickerHzHint}>
+              {noteToFreq(selectedNote, selectedOctave)} {t("signalGenerator", "hzUnit")}
+            </Text>
+
+            <Pressable
+              onPress={() => {
+                hapticFeedback();
+                setTuningGuideOpen(true);
+              }}
+              style={[styles.tuningGuideToggle]}
+            >
+              <MaterialCommunityIcons name="music-note-outline" size={14} color={Colors.textTertiary} />
+              <Text style={styles.tuningGuideToggleText}>
+                {t("signalGenerator", "tuningGuide")}
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color={Colors.textTertiary} />
+            </Pressable>
+
+            <TuningGuideModal
+              visible={tuningGuideOpen}
+              onClose={() => setTuningGuideOpen(false)}
+              onSelectFreq={(freq) => {
+                setFrequency(freq);
+                setTuningGuideOpen(false);
+              }}
+              lang={lang}
+              accentColor={C.accent}
+              accentDim={C.accentDim}
+            />
+
+            <View style={[styles.waveSection, isLandscape && { gap: 6 }]}>
+              <Text style={[styles.sectionLabel, isLandscape && { fontSize: 10 }]}>{t("signalGenerator", "waveform")}</Text>
+              <View style={styles.waveRow}>
+                {WAVE_CONFIGS.map((w) => {
+                  const active = waveType === w.type;
+                  return (
+                    <Pressable
+                      key={w.type}
+                      onPress={() => { hapticFeedback(); setWaveType(w.type); }}
+                      style={[styles.waveBtn, active && { backgroundColor: C.accentDim, borderColor: C.accent }, isLandscape && { paddingHorizontal: 8, paddingVertical: 6 }]}
+                    >
+                      <MaterialCommunityIcons
+                        name={w.icon as any}
+                        size={isLandscape ? 16 : 20}
+                        color={active ? C.accent : Colors.textTertiary}
+                      />
+                      <Text style={[styles.waveBtnText, active && { color: C.accent }, isLandscape && { fontSize: 9 }]}>{t("signalGenerator", w.key)}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <Pressable
+              onPress={() => {
+                hapticFeedback();
+                isPlaying ? stopPlayback() : startPlayback();
+              }}
+              style={({ pressed }) => [
+                styles.playBtn,
+                { backgroundColor: isPlaying ? Colors.danger : C.accent },
+                pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+                isLandscape && { paddingVertical: 8, alignSelf: "stretch" as const },
+              ]}
+              testID="signal-toggle"
+            >
+              <Ionicons
+                name={isPlaying ? "stop" : "play"}
+                size={isLandscape ? 16 : 20}
+                color={isPlaying ? Colors.white : Colors.background}
+              />
+              <Text style={[styles.playBtnText, { color: isPlaying ? Colors.white : Colors.background }, isLandscape && { fontSize: 13 }]}>
+                {isPlaying ? t("signalGenerator", "stop") : t("signalGenerator", "play")}
+              </Text>
+            </Pressable>
+            </ScrollView>
+          ) : (
+            <View style={{ alignItems: "center" as const, gap: 18, width: "100%" as const }}>
+            {editingFreq && (
+              <View style={styles.freqEditRow}>
+                <TextInput
+                  style={[styles.freqEditInput, { color: C.accent, borderBottomColor: C.accent }]}
+                  value={freqInput}
+                  onChangeText={setFreqInput}
+                  onSubmitEditing={commitFreqInput}
+                  onBlur={commitFreqInput}
+                  keyboardType="numeric"
+                  autoFocus
+                  selectTextOnFocus
+                />
+                <Text style={styles.freqEditUnit}>{t("signalGenerator", "hzUnit")}</Text>
+              </View>
+            )}
+
+            <View style={styles.notePickerRow}>
+              <PickerColumn
+                data={NOTE_NAMES}
+                selected={selectedNote}
+                onSelect={handleNoteSelect}
+                accentColor={C.accent}
+                accentDim={C.accentDim}
+              />
+              <PickerColumn
+                data={OCTAVES}
+                selected={selectedOctave}
+                onSelect={handleOctaveSelect}
+                accentColor={C.accent}
+                accentDim={C.accentDim}
+              />
+            </View>
+            <Text style={styles.pickerHzHint}>
+              {noteToFreq(selectedNote, selectedOctave)} {t("signalGenerator", "hzUnit")}
+            </Text>
+
+            <Pressable
+              onPress={() => {
+                hapticFeedback();
+                setTuningGuideOpen(true);
+              }}
+              style={[styles.tuningGuideToggle]}
+            >
+              <MaterialCommunityIcons name="music-note-outline" size={14} color={Colors.textTertiary} />
+              <Text style={styles.tuningGuideToggleText}>
+                {t("signalGenerator", "tuningGuide")}
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color={Colors.textTertiary} />
+            </Pressable>
+
+            <TuningGuideModal
+              visible={tuningGuideOpen}
+              onClose={() => setTuningGuideOpen(false)}
+              onSelectFreq={(freq) => {
+                setFrequency(freq);
+                setTuningGuideOpen(false);
+              }}
+              lang={lang}
+              accentColor={C.accent}
+              accentDim={C.accentDim}
+            />
+
+            <View style={styles.waveSection}>
+              <Text style={styles.sectionLabel}>{t("signalGenerator", "waveform")}</Text>
+              <View style={styles.waveRow}>
+                {WAVE_CONFIGS.map((w) => {
+                  const active = waveType === w.type;
+                  return (
+                    <Pressable
+                      key={w.type}
+                      onPress={() => { hapticFeedback(); setWaveType(w.type); }}
+                      style={[styles.waveBtn, active && { backgroundColor: C.accentDim, borderColor: C.accent }]}
+                    >
+                      <MaterialCommunityIcons
+                        name={w.icon as any}
+                        size={20}
+                        color={active ? C.accent : Colors.textTertiary}
+                      />
+                      <Text style={[styles.waveBtnText, active && { color: C.accent }]}>{t("signalGenerator", w.key)}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <Pressable
+              onPress={() => {
+                hapticFeedback();
+                isPlaying ? stopPlayback() : startPlayback();
+              }}
+              style={({ pressed }) => [
+                styles.playBtn,
+                { backgroundColor: isPlaying ? Colors.danger : C.accent },
+                pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+              ]}
+              testID="signal-toggle"
+            >
+              <Ionicons
+                name={isPlaying ? "stop" : "play"}
+                size={20}
+                color={isPlaying ? Colors.white : Colors.background}
+              />
+              <Text style={[styles.playBtnText, { color: isPlaying ? Colors.white : Colors.background }]}>
+                {isPlaying ? t("signalGenerator", "stop") : t("signalGenerator", "play")}
+              </Text>
+            </Pressable>
             </View>
           )}
-
-          <View style={styles.notePickerRow}>
-            <PickerColumn
-              data={NOTE_NAMES}
-              selected={selectedNote}
-              onSelect={handleNoteSelect}
-              accentColor={C.accent}
-              accentDim={C.accentDim}
-            />
-            <PickerColumn
-              data={OCTAVES}
-              selected={selectedOctave}
-              onSelect={handleOctaveSelect}
-              accentColor={C.accent}
-              accentDim={C.accentDim}
-            />
-          </View>
-          <Text style={styles.pickerHzHint}>
-            {noteToFreq(selectedNote, selectedOctave)} {t("signalGenerator", "hzUnit")}
-          </Text>
-
-          <Pressable
-            onPress={() => {
-              hapticFeedback();
-              setTuningGuideOpen(true);
-            }}
-            style={[styles.tuningGuideToggle]}
-          >
-            <MaterialCommunityIcons name="music-note-outline" size={14} color={Colors.textTertiary} />
-            <Text style={styles.tuningGuideToggleText}>
-              {t("signalGenerator", "tuningGuide")}
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={Colors.textTertiary} />
-          </Pressable>
-
-          <TuningGuideModal
-            visible={tuningGuideOpen}
-            onClose={() => setTuningGuideOpen(false)}
-            onSelectFreq={(freq) => {
-              setFrequency(freq);
-              setTuningGuideOpen(false);
-            }}
-            lang={lang}
-            accentColor={C.accent}
-            accentDim={C.accentDim}
-          />
-
-          <View style={styles.waveSection}>
-            <Text style={styles.sectionLabel}>{t("signalGenerator", "waveform")}</Text>
-            <View style={styles.waveRow}>
-              {WAVE_CONFIGS.map((w) => {
-                const active = waveType === w.type;
-                return (
-                  <Pressable
-                    key={w.type}
-                    onPress={() => { hapticFeedback(); setWaveType(w.type); }}
-                    style={[styles.waveBtn, active && { backgroundColor: C.accentDim, borderColor: C.accent }]}
-                  >
-                    <MaterialCommunityIcons
-                      name={w.icon as any}
-                      size={20}
-                      color={active ? C.accent : Colors.textTertiary}
-                    />
-                    <Text style={[styles.waveBtnText, active && { color: C.accent }]}>{t("signalGenerator", w.key)}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          <Pressable
-            onPress={() => {
-              hapticFeedback();
-              isPlaying ? stopPlayback() : startPlayback();
-            }}
-            style={({ pressed }) => [
-              styles.playBtn,
-              { backgroundColor: isPlaying ? Colors.danger : C.accent },
-              pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
-            ]}
-            testID="signal-toggle"
-          >
-            <Ionicons
-              name={isPlaying ? "stop" : "play"}
-              size={20}
-              color={isPlaying ? Colors.white : Colors.background}
-            />
-            <Text style={[styles.playBtnText, { color: isPlaying ? Colors.white : Colors.background }]}>
-              {isPlaying ? t("signalGenerator", "stop") : t("signalGenerator", "play")}
-            </Text>
-          </Pressable>
         </View>
       </View>
     </Modal>
