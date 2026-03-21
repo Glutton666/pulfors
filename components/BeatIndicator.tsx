@@ -2544,7 +2544,7 @@ export function BeatIndicator({
               accessibilityRole="button"
               accessibilityLabel="Open note mode"
             >
-              <Ionicons name="musical-notes-outline" size={16} color={Colors.textTertiary} />
+              <Ionicons name="musical-note-outline" size={16} color={Colors.textTertiary} />
             </Pressable>
           )}
           <Pressable
@@ -2569,7 +2569,7 @@ export function BeatIndicator({
           accessibilityRole="button"
           accessibilityLabel="Open note mode"
         >
-          <Ionicons name="musical-notes-outline" size={14} color={Colors.textTertiary} />
+          <Ionicons name="musical-note-outline" size={14} color={Colors.textTertiary} />
         </Pressable>
       )}
 
