@@ -592,7 +592,7 @@ export function StopwatchTimer({
     const timerDisplay = formatCountdown(remaining);
     return (
       <View style={[styles.landscapeContainer, { flexDirection: "column" as const, alignItems: "stretch" as const }]}>
-        <View style={[styles.landscapeDisplay, { flex: 0 }]}>
+        <View style={styles.landscapeDisplay}>
           {state === "countdown" ? (
             <Animated.Text style={[styles.landscapeTime, { color: C.accent }, runningDotStyle]}>
               {countdownLeft}
