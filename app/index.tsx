@@ -3049,7 +3049,7 @@ export default function MetronomeScreen() {
       {showMenu && (
         <Modal transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
           <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
-            <View style={[styles.menuDropdown, { top: (insets.top || webTopInset) + 52 }, isLandscape && { right: undefined, left: 20, top: (insets.top || webTopInset) + 40, paddingVertical: 2, minWidth: 140 }]}>
+            <View style={[styles.menuDropdown, { top: (insets.top || webTopInset) + 52 }, isLandscape && { right: undefined, left: 20, top: (insets.top || webTopInset) + 40, paddingVertical: 2, minWidth: 120, maxWidth: 180 }]}>
               <Pressable
                 style={({ pressed }) => [styles.menuItem, isLandscape && styles.menuItemLandscape, pressed && styles.menuItemPressed]}
                 onPress={() => {
@@ -3545,12 +3545,12 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   menuItemLandscape: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 6,
   },
   menuItemTextLandscape: {
-    fontSize: 12,
+    fontSize: 11,
   },
   menuDivider: {
     height: 1,
