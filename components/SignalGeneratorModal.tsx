@@ -1157,7 +1157,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               style={[
                 styles.micEmoji,
                 micListening && styles.micEmojiActive,
-                isLandscape && { top: 8, right: 24, width: 24, height: 24, borderRadius: 12 },
+                isLandscape && { top: 48, right: 84, width: 24, height: 24, borderRadius: 12 },
               ]}
               hitSlop={8}
               testID="signal-mic-toggle"
@@ -1257,7 +1257,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
           </View>
 
           {isLandscape ? (
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ alignItems: "center" as const, gap: 10, paddingTop: 12, paddingBottom: 4 }} showsVerticalScrollIndicator={false} bounces={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ alignItems: "center" as const, gap: 10, paddingTop: 0, paddingBottom: 4 }} showsVerticalScrollIndicator={false} bounces={false}>
             {editingFreq && (
               <View style={styles.freqEditRow}>
                 <TextInput
