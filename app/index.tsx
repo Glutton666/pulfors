@@ -3272,9 +3272,7 @@ export default function MetronomeScreen() {
         <View style={
           isLandscape && !barMode
             ? { flexDirection: landscapeReversed ? "row-reverse" as const : "row" as const, flex: 1 }
-            : isLandscape && barMode
-              ? { flex: 1 }
-              : undefined
+            : { flex: 1 }
         }>
         <View style={
           isLandscape
