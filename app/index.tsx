@@ -194,6 +194,8 @@ export default function MetronomeScreen() {
   const [hapticMode, setHapticMode] = useState<HapticMode>("all");
   const [audioOffsetMs, setAudioOffsetMs] = useState(0);
   const [timerStopMode, setTimerStopMode] = useState<"immediate" | "end-of-cycle">("end-of-cycle");
+  const [landscapeReversed, setLandscapeReversed] = useState(false);
+  const [beatDirection, setBeatDirection] = useState<"cw" | "ccw">("cw");
   const [username, setUsername] = useState("");
   const [showMenu, setShowMenu] = useState(false);
   const [showSignalGen, setShowSignalGen] = useState(false);
@@ -427,6 +429,12 @@ export default function MetronomeScreen() {
       }
       if (settings.timerStopMode) {
         setTimerStopMode(settings.timerStopMode);
+      }
+      if (settings.landscapeReversed !== undefined) {
+        setLandscapeReversed(settings.landscapeReversed);
+      }
+      if (settings.beatDirection) {
+        setBeatDirection(settings.beatDirection);
       }
       if (settings.username) {
         setUsername(settings.username);
@@ -1041,11 +1049,13 @@ export default function MetronomeScreen() {
         hapticMode,
         audioOffsetMs,
         timerStopMode,
+        landscapeReversed,
+        beatDirection,
         ...overrides,
       };
       saveSettings(current);
     },
-    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, flashMode, hapticMode, audioOffsetMs, timerStopMode]
+    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, flashMode, hapticMode, audioOffsetMs, timerStopMode, landscapeReversed, beatDirection]
   );
 
   const updateVolume = useCallback(
@@ -1210,6 +1220,8 @@ export default function MetronomeScreen() {
       setHapticMode("all");
       setAudioOffsetMs(0);
       setTimerStopMode("end-of-cycle");
+      setLandscapeReversed(false);
+      setBeatDirection("cw");
       setUsername("");
       setLoggingEnabled(false);
       setRoomTrackingActive(false);
@@ -3192,6 +3204,16 @@ export default function MetronomeScreen() {
             if (key.startsWith("custom")) delete clickPCMCacheRef.current[key];
           }
         }}
+        landscapeReversed={landscapeReversed}
+        onLandscapeReversedChange={(val) => {
+          setLandscapeReversed(val);
+          persistSettings({ landscapeReversed: val });
+        }}
+        beatDirection={beatDirection}
+        onBeatDirectionChange={(val) => {
+          setBeatDirection(val);
+          persistSettings({ beatDirection: val });
+        }}
       />
 
       {completedGoalPopups.length > 0 && !showMenu && !showSignalGen && !showPracticeBook && !showWorkUp && !showSettings && !noteMode && (
@@ -3245,7 +3267,7 @@ export default function MetronomeScreen() {
           />
         ) : (
         <>
-        <View style={isLandscape && !barMode ? { flexDirection: "row", flex: 1 } : undefined}>
+        <View style={isLandscape && !barMode ? { flexDirection: landscapeReversed ? "row-reverse" as const : "row" as const, flex: 1 } : undefined}>
         <View style={[
           styles.topSection,
           barMode && { justifyContent: "flex-start", flex: 3 },
@@ -3299,6 +3321,7 @@ export default function MetronomeScreen() {
             onResetFlash={handleResetFlash}
             halfTime={halfTime}
             isLandscape={isLandscape}
+            beatDirection={beatDirection}
             subdivisionBarElement={barMode ? (
               <SubdivisionBar
                 pattern={subdivisionPattern}

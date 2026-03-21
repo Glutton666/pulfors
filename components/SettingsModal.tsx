@@ -93,6 +93,10 @@ interface SettingsModalProps {
   onResetApp?: () => void;
   customSoundSets: Record<string, CustomSoundSetConfig>;
   onCustomSoundSetsChange: (configs: Record<string, CustomSoundSetConfig>) => void;
+  landscapeReversed: boolean;
+  onLandscapeReversedChange: (val: boolean) => void;
+  beatDirection: "cw" | "ccw";
+  onBeatDirectionChange: (val: "cw" | "ccw") => void;
 }
 
 function getSoundSetOptions(t: any): { value: SoundSet; label: string; icon: string }[] {
@@ -185,6 +189,10 @@ export function SettingsModal({
   onResetApp,
   customSoundSets,
   onCustomSoundSetsChange,
+  landscapeReversed,
+  onLandscapeReversedChange,
+  beatDirection,
+  onBeatDirectionChange,
 }: SettingsModalProps) {
   const { themeColor, customHex, setThemeColor, setCustomHex, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
   const { language, setLanguage, t } = useLanguage();
@@ -1010,6 +1018,64 @@ export function SettingsModal({
             </Text>
           </Pressable>
         )}
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="swap-horizontal-outline" size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>{t("settings", "landscapeReversed")}</Text>
+        </View>
+        <Text style={styles.offsetHint}>{t("settings", "landscapeReversedHint")}</Text>
+        <Pressable
+          onPress={() => {
+            onLandscapeReversedChange(!landscapeReversed);
+            if (Platform.OS !== "web") Haptics.selectionAsync();
+          }}
+          style={[
+            styles.toggleRow,
+            { borderColor: landscapeReversed ? C.accent : Colors.border, backgroundColor: landscapeReversed ? C.accentDim : Colors.surface },
+          ]}
+        >
+          <Ionicons name={landscapeReversed ? "checkmark-circle" : "ellipse-outline"} size={20} color={landscapeReversed ? C.accent : Colors.textTertiary} />
+          <Text style={[styles.toggleLabel, { color: landscapeReversed ? C.accent : Colors.textSecondary }]}>
+            {landscapeReversed ? "ON" : "OFF"}
+          </Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="refresh-outline" size={18} color={C.accent} />
+          <Text style={styles.sectionLabel}>{t("settings", "beatDirection")}</Text>
+        </View>
+        <Text style={styles.offsetHint}>{t("settings", "beatDirectionHint")}</Text>
+        <View style={styles.tripleRow}>
+          {([
+            { value: "cw" as const, label: t("settings", "clockwise"), icon: "arrow-redo-outline" as const },
+            { value: "ccw" as const, label: t("settings", "counterclockwise"), icon: "arrow-undo-outline" as const },
+          ]).map((opt) => {
+            const active = beatDirection === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                style={[styles.tripleBtn, active && [styles.tripleBtnActive, { borderColor: C.accent, backgroundColor: C.accentDim }]]}
+                onPress={() => {
+                  onBeatDirectionChange(opt.value);
+                  if (Platform.OS !== "web") Haptics.selectionAsync();
+                }}
+              >
+                <Ionicons name={opt.icon} size={14} color={active ? C.accent : Colors.textTertiary} style={{ marginRight: 4 }} />
+                <Text style={[styles.tripleBtnText, active && [styles.tripleBtnTextActive, { color: C.accent }]]}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       <View style={styles.divider} />
@@ -2133,6 +2199,22 @@ const styles = StyleSheet.create({
   },
   tripleBtnTextActive: {
     color: Colors.accent,
+  },
+  toggleRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceLight,
+  },
+  toggleLabel: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 14,
+    color: Colors.textSecondary,
   },
   offsetRow: {
     flexDirection: "row",

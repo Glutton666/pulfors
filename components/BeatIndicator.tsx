@@ -51,6 +51,7 @@ interface DialBeatDotProps {
   onPress: () => void;
   isDropTarget: boolean;
   subdivisionCount: number;
+  beatDirection?: "cw" | "ccw";
 }
 
 function DialBeatDot({
@@ -61,12 +62,14 @@ function DialBeatDot({
   onPress,
   isDropTarget,
   subdivisionCount,
+  beatDirection = "cw",
 }: DialBeatDotProps) {
   const { colors: C } = useTheme();
   const isStrong = beatType === "strong";
   const isAccent = beatType === "accent" || isStrong;
   const isMute = beatType === "mute";
-  const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
+  const dirMul = beatDirection === "ccw" ? -1 : 1;
+  const angle = dirMul * (index / total) * 2 * Math.PI - Math.PI / 2;
   const size = DOT_SIZE;
   const x = DIAL_RADIUS + DOT_RADIUS_FROM_CENTER * Math.cos(angle) - size / 2;
   const y = DIAL_RADIUS + DOT_RADIUS_FROM_CENTER * Math.sin(angle) - size / 2;
@@ -303,6 +306,7 @@ interface BeatIndicatorProps {
   onBarReset?: () => void;
   halfTime?: boolean;
   isLandscape?: boolean;
+  beatDirection?: "cw" | "ccw";
 }
 
 export function BeatIndicator({
@@ -351,6 +355,7 @@ export function BeatIndicator({
   onBarReset,
   halfTime,
   isLandscape = false,
+  beatDirection = "cw",
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
   const { height: winH } = useWindowDimensions();
@@ -2146,6 +2151,7 @@ export function BeatIndicator({
                 onPress={() => cycleBeatType(beat)}
                 isDropTarget={dropTargetBeat === beat || dropTargetBeat === -1}
                 subdivisionCount={beatSubdivisionCounts[beat] || 0}
+                beatDirection={beatDirection}
               />
             ))}
           </Animated.View>

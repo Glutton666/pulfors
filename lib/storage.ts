@@ -68,6 +68,8 @@ export interface MetronomeSettings {
   themeColor?: ThemeColor;
   timerStopMode?: "immediate" | "end-of-cycle";
   username?: string;
+  landscapeReversed?: boolean;
+  beatDirection?: "cw" | "ccw";
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
@@ -85,6 +87,8 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   themeColor: "gold",
   timerStopMode: "end-of-cycle",
   username: "",
+  landscapeReversed: false,
+  beatDirection: "cw",
 };
 
 export async function loadSettings(): Promise<MetronomeSettings> {
