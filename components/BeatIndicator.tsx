@@ -1582,7 +1582,7 @@ export function BeatIndicator({
 
           <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 6, paddingVertical: 6 }}>
             {subdivisionBarElement && (
-              <View style={{ width: "100%", paddingHorizontal: 8 }}>{subdivisionBarElement}</View>
+              <View style={{ width: "125%", paddingHorizontal: 8 }}>{subdivisionBarElement}</View>
             )}
 
             <View style={{ alignItems: "center", gap: 4 }}>
