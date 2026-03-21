@@ -13,7 +13,7 @@ const isExpoGo = Constants.appOwnership === "expo";
 async function getNotifications() {
   if (Notifications) return Notifications;
   if (Platform.OS === "web") return null;
-  if (Platform.OS === "ios" && isExpoGo) return null;
+  if (isExpoGo) return null;
   try {
     Notifications = await import("expo-notifications");
     return Notifications;
@@ -76,7 +76,7 @@ function buildContent(bpm: number, _mode: string, isPlaying: boolean, lang: Lang
 export async function setupNotificationControls(lang: Language = "ko") {
   if (isSetup) return;
   if (Platform.OS === "web") return;
-  if (Platform.OS === "ios" && isExpoGo) return;
+  if (isExpoGo) return;
 
   const N = await getNotifications();
   if (!N) return;
@@ -109,7 +109,7 @@ export async function setupNotificationControls(lang: Language = "ko") {
 
 export async function showPlayingNotification(bpm: number, mode: string, lang: Language = "ko") {
   if (Platform.OS === "web") return;
-  if (Platform.OS === "ios" && isExpoGo) return;
+  if (isExpoGo) return;
   if (!isSetup) {
     await setupNotificationControls(lang);
     if (!isSetup) return;
@@ -136,7 +136,7 @@ export async function showPlayingNotification(bpm: number, mode: string, lang: L
 
 export async function updateNotificationBpm(bpm: number, mode: string, isPlaying: boolean = true, lang: Language = "ko") {
   if (Platform.OS === "web" || !isSetup) return;
-  if (Platform.OS === "ios" && isExpoGo) return;
+  if (isExpoGo) return;
 
   const N = await getNotifications();
   if (!N) return;
@@ -154,7 +154,7 @@ export async function updateNotificationBpm(bpm: number, mode: string, isPlaying
 
 export async function showPausedNotification(bpm: number, mode: string, lang: Language = "ko") {
   if (Platform.OS === "web" || !isSetup) return;
-  if (Platform.OS === "ios" && isExpoGo) return;
+  if (isExpoGo) return;
 
   const N = await getNotifications();
   if (!N) return;
@@ -177,7 +177,7 @@ export async function showPausedNotification(bpm: number, mode: string, lang: La
 
 export async function dismissNotification() {
   if (Platform.OS === "web") return;
-  if (Platform.OS === "ios" && isExpoGo) return;
+  if (isExpoGo) return;
 
   const N = await getNotifications();
   if (!N) return;
@@ -195,7 +195,7 @@ export function addNotificationActionListener(
   if (Platform.OS === "web" || !Notifications) {
     return { remove: () => {} };
   }
-  if (Platform.OS === "ios" && isExpoGo) {
+  if (isExpoGo) {
     return { remove: () => {} };
   }
 
