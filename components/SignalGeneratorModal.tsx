@@ -1254,7 +1254,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
           </View>
 
           {isLandscape ? (
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ alignItems: "center" as const, gap: 10, paddingTop: 0, paddingBottom: 4 }} showsVerticalScrollIndicator={false} bounces={false}>
+            <View style={{ flex: 1, alignItems: "center" as const, justifyContent: "space-evenly" as const }}>
             {editingFreq && (
               <View style={styles.freqEditRow}>
                 <TextInput
@@ -1337,7 +1337,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                 })}
               </View>
             </View>
-            </ScrollView>
+            </View>
           ) : (
             <View style={{ alignItems: "center" as const, gap: 18, width: "100%" as const }}>
             {editingFreq && (
