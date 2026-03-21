@@ -308,6 +308,7 @@ interface BeatIndicatorProps {
   halfTime?: boolean;
   isLandscape?: boolean;
   beatDirection?: "cw" | "ccw";
+  onEnterNoteMode?: () => void;
 }
 
 export function BeatIndicator({
@@ -358,6 +359,7 @@ export function BeatIndicator({
   halfTime,
   isLandscape = false,
   beatDirection = "cw",
+  onEnterNoteMode,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
   const { height: winH } = useWindowDimensions();
@@ -2489,6 +2491,19 @@ export function BeatIndicator({
         </Pressable>
       )}
 
+      {isLandscape && onEnterNoteMode && (
+        <Pressable
+          onPress={onEnterNoteMode}
+          style={styles.noteModeHandleLandscape}
+          testID="open-note-mode"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Open note mode"
+        >
+          <Ionicons name="musical-notes-outline" size={14} color={Colors.textTertiary} />
+        </Pressable>
+      )}
+
       {isLandscape && (
         <Pressable
           onPress={() => onBarModeChange(true)}
@@ -2842,6 +2857,16 @@ const styles = StyleSheet.create({
   barModeHandleLandscape: {
     position: "absolute" as const,
     right: -30,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderRadius: 8,
+  },
+  noteModeHandleLandscape: {
+    position: "absolute" as const,
+    left: -30,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     paddingVertical: 12,

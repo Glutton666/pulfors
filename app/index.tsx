@@ -3215,6 +3215,7 @@ export default function MetronomeScreen() {
           setBeatDirection(val);
           persistSettings({ beatDirection: val });
         }}
+        onEnterNoteMode={handleEnterNoteMode}
       />
 
       {completedGoalPopups.length > 0 && !showMenu && !showSignalGen && !showPracticeBook && !showWorkUp && !showSettings && !noteMode && (
