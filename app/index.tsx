@@ -3268,10 +3268,11 @@ export default function MetronomeScreen() {
           />
         ) : (
         <>
-        <View style={isLandscape && !barMode ? { flexDirection: landscapeReversed ? "row-reverse" as const : "row" as const, flex: 1 } : undefined}>
+        <View style={isLandscape && !barMode ? { flexDirection: landscapeReversed ? "row-reverse" as const : "row" as const, flex: 1 } : (isLandscape && barMode ? { flex: 1 } : undefined)}>
         <View style={[
           styles.topSection,
           barMode && { justifyContent: "flex-start", flex: 3 },
+          isLandscape && barMode && { flex: 1 },
           isLandscape && !barMode && { flex: 3, justifyContent: "center", paddingRight: 50 },
         ]}>
           <BeatIndicator
@@ -3336,9 +3337,20 @@ export default function MetronomeScreen() {
                 activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
               />
             ) : undefined}
+            bpmSliderElement={barMode && isLandscape ? (
+              <BpmSlider
+                bpm={bpm}
+                onBpmChange={updateBpm}
+                onTapTempo={handleTapTempo}
+                halfTime={halfTime}
+                onHalfTimeToggle={toggleHalfTime}
+                isLandscape={true}
+              />
+            ) : undefined}
           />
         </View>
 
+        {!(isLandscape && barMode) && (
         <View style={[
           styles.bpmSection,
           isLandscape && !barMode && { flex: 2, justifyContent: "center", gap: 6 },
@@ -3377,6 +3389,7 @@ export default function MetronomeScreen() {
             isLandscape={isLandscape}
           />
         </View>
+        )}
         </View>
         </>
         )}

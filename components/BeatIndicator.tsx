@@ -291,6 +291,7 @@ interface BeatIndicatorProps {
   onBarScrollOffset?: (offset: number) => void;
   onBarTimerExpired?: () => void;
   subdivisionBarElement?: React.ReactNode;
+  bpmSliderElement?: React.ReactNode;
   onBarClockConfigChange?: (mode: "stopwatch" | "timer", duration: number) => void;
   initialBarClockMode?: "stopwatch" | "timer";
   initialBarTimerDuration?: number;
@@ -340,6 +341,7 @@ export function BeatIndicator({
   onBarScrollOffset,
   onBarTimerExpired,
   subdivisionBarElement,
+  bpmSliderElement,
   onBarClockConfigChange,
   initialBarClockMode,
   initialBarTimerDuration,
@@ -1402,6 +1404,257 @@ export function BeatIndicator({
       for (const beat of beats) {
         allBarRows.push(renderBarRow(beat, 0));
       }
+    }
+
+    if (isLandscape) {
+      return (
+        <View style={[styles.barModeContainer, { flexDirection: "row" }]} testID="beat-indicator-bar-mode">
+          <Animated.View
+            pointerEvents="none"
+            style={[{
+              position: "absolute",
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: Colors.danger,
+              zIndex: 999,
+            }, resetFlashStyle]}
+          />
+
+          <View style={{ flex: 1 }}>
+            <View style={[styles.barTopRowCenter, { paddingTop: 6, paddingBottom: 2 }]}>
+              <Pressable
+                onPress={() => onBarModeChange(false)}
+                style={[
+                  styles.barModeHandle,
+                  dropTargetBeat === -1 && { backgroundColor: C.accent },
+                ]}
+                testID="close-bar-mode"
+                hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+                accessibilityRole="button"
+                accessibilityLabel="Close bar mode"
+              >
+                {dropTargetBeat === -1 ? (
+                  <Ionicons name="layers" size={16} color={Colors.white} />
+                ) : (
+                  <Ionicons name="chevron-down" size={18} color={Colors.textTertiary} />
+                )}
+              </Pressable>
+            </View>
+
+            {loopBlocks.length > 0 && (() => {
+              const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).sort((a, b) => a.block.startBeat - b.block.startBeat);
+              const editBlock = editingBlockIndex !== null ? loopBlocks[editingBlockIndex] : null;
+              const otherBlocks = editBlock ? loopBlocks.map((b, i) => ({ b, i })).filter(({ i }) => i !== editingBlockIndex) : [];
+              const editHasJump = editBlock ? editBlock.jumpToBlock !== undefined && editBlock.jumpToBlock !== null : false;
+              const editJumpCount = editBlock ? (editBlock.jumpCount || 1) : 1;
+              return (
+                <View style={{ flexGrow: 0 }}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 42 }} contentContainerStyle={{ paddingHorizontal: 6, paddingVertical: 3, gap: 4, alignItems: "center" }}>
+                    {sorted.map(({ block, origIndex }, si) => {
+                      const isEditing = editingBlockIndex === origIndex;
+                      const isActive = isPlaying && progressInfo && progressInfo.blockIndex === origIndex;
+                      const hasJump = block.jumpToBlock !== undefined && block.jumpToBlock !== null;
+                      const jumpTarget = hasJump ? loopBlocks[block.jumpToBlock!] : null;
+                      return (
+                        <View key={`flow-${origIndex}`} style={{ flexDirection: "row", alignItems: "center" }}>
+                          <Pressable
+                            onPress={() => { if (!isPlaying) setEditingBlockIndex(isEditing ? null : origIndex); }}
+                            style={{
+                              paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+                              backgroundColor: isActive ? C.accent + "30" : isEditing ? C.accent + "20" : Colors.backgroundSecondary,
+                              borderWidth: isActive ? 1 : isEditing ? 1 : 0,
+                              borderColor: isActive ? C.accent : isEditing ? C.accent + "60" : "transparent",
+                              minWidth: 36, alignItems: "center",
+                            }}
+                          >
+                            <Text style={{ color: isActive ? C.accent : Colors.text, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
+                              {block.startBeat + 1}-{Math.min(block.endBeat + 1, beatsPerMeasure)}
+                            </Text>
+                            <Text style={{ color: isActive ? C.accent : Colors.textTertiary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium" }}>
+                              ×{block.value}
+                              {isActive && progressInfo!.blockRepeatTotal > 1 && ` ${progressInfo!.blockRepeatCurrent + 1}/${progressInfo!.blockRepeatTotal}`}
+                            </Text>
+                          </Pressable>
+                          {hasJump && jumpTarget && (() => {
+                            const targetSortedIdx = sorted.findIndex(s => s.origIndex === block.jumpToBlock);
+                            const goesBack = targetSortedIdx >= 0 && targetSortedIdx <= si;
+                            return goesBack ? (
+                              <View style={{ alignItems: "center", marginLeft: 3 }}>
+                                <Ionicons name="return-up-back" size={10} color="#f0ad4e" />
+                              </View>
+                            ) : (
+                              <Ionicons name="caret-forward" size={8} color="#f0ad4e" style={{ marginLeft: 1 }} />
+                            );
+                          })()}
+                          {si < sorted.length - 1 && !hasJump && (
+                            <Ionicons name="chevron-forward" size={8} color={Colors.textTertiary} style={{ marginLeft: 1, opacity: 0.4 }} />
+                          )}
+                        </View>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              );
+            })()}
+
+            {blockSelectStart !== null && !isPlaying && (
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 2, gap: 4 }}>
+                <Ionicons name="locate" size={10} color={C.accent} />
+                <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: 9, color: C.accent }}>
+                  Bar {blockSelectStart + 1} selected
+                </Text>
+                <Pressable onPress={() => setBlockSelectStart(null)} hitSlop={8}>
+                  <Ionicons name="close-circle" size={12} color={Colors.textTertiary} />
+                </Pressable>
+              </View>
+            )}
+
+            <View
+              ref={barAreaRef}
+              style={styles.barMeasureOuter}
+              onLayout={(e) => setBarContainerHeight(e.nativeEvent.layout.height)}
+            >
+              <ScrollView
+                ref={barScrollRef}
+                style={styles.barScrollView}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+                scrollEnabled={!isPlaying}
+                onScroll={(e) => { barScrollYRef.current = e.nativeEvent.contentOffset.y; onBarScrollOffset?.(e.nativeEvent.contentOffset.y); }}
+                scrollEventThrottle={16}
+              >
+                <View style={[styles.barMeasureInner, { paddingTop: centerPad, paddingBottom: centerPad, gap: barGap }]}>
+                  {allBarRows}
+                  {loopBlocks.length > 0 && (() => {
+                    const copies = isPlaying && barLoopMode !== "once" ? NUM_COPIES : 1;
+                    const primaryCopy = isPlaying && barLoopMode !== "once" ? CENTER_COPY : 0;
+                    const BLOCK_INDENT = 10;
+                    const LINE_BASE_LEFT = 3;
+                    return loopBlocks.map((block, idx) => {
+                      const depth = blockDepths.get(idx) || 0;
+                      const lineWidth = Math.max(2, 3 - depth * 0.5);
+                      const lineLeft = LINE_BASE_LEFT + depth * BLOCK_INDENT;
+                      const lineOpacity = Math.max(0.3, 0.7 - depth * 0.15);
+                      const startBeat = block.startBeat;
+                      const endBeat = Math.min(block.endBeat, beatsPerMeasure - 1);
+                      const isEditingB = editingBlockIndex === idx;
+                      const isActiveB = isPlaying && progressInfo && progressInfo.blockIndex === idx;
+                      const isSingleBeat = startBeat === endBeat;
+                      const bracketW = 5;
+                      const elements: React.ReactNode[] = [];
+                      for (let copy = 0; copy < copies; copy++) {
+                        const copyOffset = copy * copyHeight;
+                        const topPos = centerPad + copyOffset + startBeat * rowH + (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
+                        const bottomPos = centerPad + copyOffset + endBeat * rowH + BAR_HEIGHT - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
+                        const totalH = bottomPos - topPos;
+                        if (totalH <= 0) continue;
+                        const isPrimaryCopy = copy === (isPlaying && barLoopMode !== "once" ? CENTER_COPY : 0);
+                        const copyOp = isPrimaryCopy ? 1 : 0.3;
+                        const lineOp = (isActiveB ? 0.95 : isEditingB ? 0.85 : lineOpacity) * copyOp;
+                        elements.push(
+                          <React.Fragment key={`blk-${idx}-c${copy}`}>
+                            <View pointerEvents="none" style={{ position: "absolute", left: lineLeft, top: topPos, width: lineWidth, height: totalH, backgroundColor: C.accent, borderRadius: lineWidth / 2, opacity: lineOp, zIndex: 10 + depth }} />
+                            <View pointerEvents="none" style={{ position: "absolute", left: lineLeft, top: topPos, width: bracketW, height: lineWidth, backgroundColor: C.accent, borderTopLeftRadius: lineWidth / 2, borderTopRightRadius: lineWidth / 2, opacity: lineOp, zIndex: 10 + depth }} />
+                            <View pointerEvents="none" style={{ position: "absolute", left: lineLeft, top: bottomPos - lineWidth, width: bracketW, height: lineWidth, backgroundColor: C.accent, borderBottomLeftRadius: lineWidth / 2, borderBottomRightRadius: lineWidth / 2, opacity: lineOp, zIndex: 10 + depth }} />
+                          </React.Fragment>
+                        );
+                      }
+                      return elements;
+                    });
+                  })()}
+                </View>
+              </ScrollView>
+              <LinearGradient
+                colors={[Colors.background, Colors.background, Colors.background + "80", "transparent"]}
+                locations={[0, 0.45, 0.75, 1]}
+                style={[styles.barFadeGradient, { top: 0, height: rowH * 1.2 }]}
+                pointerEvents="none"
+              />
+            </View>
+            <LinearGradient
+              colors={["transparent", Colors.background + "60", Colors.background + "C0", Colors.background]}
+              locations={[0, 0.3, 0.65, 1]}
+              style={[styles.barFadeGradientBottom, { height: rowH + 60, marginTop: -(rowH + 60) }]}
+              pointerEvents="none"
+            />
+          </View>
+
+          <View style={{ width: 180, justifyContent: "center", alignItems: "center", gap: 6, paddingVertical: 6 }}>
+            {subdivisionBarElement && (
+              <View style={{ width: "100%", paddingHorizontal: 8 }}>{subdivisionBarElement}</View>
+            )}
+            {bpmSliderElement && (
+              <View style={{ width: "100%", paddingHorizontal: 4 }}>{bpmSliderElement}</View>
+            )}
+
+            <View style={{ alignItems: "center", gap: 4 }}>
+              <Pressable onPress={handleBarClockTap}>
+                <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? Colors.danger : C.accent, fontSize: 16 }]}>
+                  {barTimeDisplay}
+                </Text>
+              </Pressable>
+              <Text style={[styles.barInfoText, { color: Colors.textTertiary, fontSize: 9 }]}>
+                {beatsPerMeasure} bars
+              </Text>
+              <View style={styles.barClockDots}>
+                <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
+                <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: Colors.danger }]} />
+              </View>
+            </View>
+
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Pressable
+                onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+                style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure <= MIN_BEATS) && { opacity: 0.3 }]}
+                hitSlop={8}
+              >
+                <Ionicons name="remove" size={14} color={Colors.textSecondary} />
+              </Pressable>
+              <Pressable
+                onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+                style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
+                hitSlop={8}
+              >
+                <Ionicons name="add" size={14} color={Colors.textSecondary} />
+              </Pressable>
+            </View>
+
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <Pressable
+                onPress={handleSaveResetTap}
+                onLongPress={handleSaveResetLongPress}
+                delayLongPress={600}
+                style={({ pressed }) => [
+                  styles.barLoopBtn,
+                  isPlaying && { opacity: 0.3 },
+                  pressed && !isPlaying && { opacity: 0.5, transform: [{ scale: 0.9 }] },
+                ]}
+                hitSlop={10}
+                testID="bar-save-reset"
+                disabled={isPlaying}
+              >
+                <Ionicons name={saveFlashVisible ? "checkmark-circle" : "bookmark-outline"} size={16} color={saveFlashVisible ? "#4CAF50" : C.accent} />
+              </Pressable>
+              <Pressable
+                onPress={onTogglePlay}
+                style={({ pressed }) => [
+                  styles.barPlayBtn, { width: 40, height: 40, borderRadius: 20 },
+                  pressed && { opacity: 0.7 },
+                  isPreparing && { opacity: 0.5 },
+                ]}
+                testID="bar-play-button"
+                disabled={isPreparing}
+              >
+                {isPreparing ? (
+                  <ActivityIndicator size="small" color={C.accent} />
+                ) : (
+                  <Ionicons name={isPlaying ? "stop" : "play"} size={20} color={isPlaying ? Colors.danger : C.accent} style={!isPlaying ? { marginLeft: 2 } : undefined} />
+                )}
+              </Pressable>
+            </View>
+          </View>
+
+        </View>
+      );
     }
 
     return (
