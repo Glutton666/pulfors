@@ -592,7 +592,7 @@ export function StopwatchTimer({
     const timerDisplay = formatCountdown(remaining);
     return (
       <View style={[styles.landscapeContainer, { flexDirection: "column" as const, alignItems: "stretch" as const }]}>
-        <View style={styles.landscapeDisplay}>
+        <View style={[styles.landscapeDisplay, { flex: 0 }]}>
           {state === "countdown" ? (
             <Animated.Text style={[styles.landscapeTime, { color: C.accent }, runningDotStyle]}>
               {countdownLeft}
@@ -601,10 +601,10 @@ export function StopwatchTimer({
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
               {state === "running" && <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.success, marginRight: 4 }, runningDotStyle]} />}
               {state === "finishing" && <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.danger, marginRight: 4 }, finishingStyle]} />}
-              <Text style={[styles.landscapeTime, state === "finishing" && { color: Colors.danger }]}>{swTime.main}</Text>
+              <Text style={[styles.landscapeTime, { color: Colors.text }, state === "finishing" && { color: Colors.danger }]}>{swTime.main}</Text>
             </View>
           ) : (
-            <Text style={[styles.landscapeTime, { textAlign: "center" as const }, state === "finishing" && { color: Colors.danger }]}>
+            <Text style={[styles.landscapeTime, { textAlign: "center" as const, color: Colors.text }, state === "finishing" && { color: Colors.danger }]}>
               {timerDisplay}
             </Text>
           )}
