@@ -1157,7 +1157,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               style={[
                 styles.micEmoji,
                 micListening && styles.micEmojiActive,
-                isLandscape && { top: -2, right: 2, width: 28, height: 28, borderRadius: 14 },
+                isLandscape && { top: 2, right: 12, width: 26, height: 26, borderRadius: 13 },
               ]}
               hitSlop={8}
               testID="signal-mic-toggle"
@@ -1239,17 +1239,17 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                 }}
                 style={({ pressed }) => [
                   styles.playBtn,
-                  { backgroundColor: isPlaying ? Colors.danger : C.accent, marginTop: 10, alignSelf: "stretch" as const, paddingVertical: 8 },
+                  { backgroundColor: isPlaying ? Colors.danger : C.accent, marginTop: 6, alignSelf: "stretch" as const, paddingVertical: 5, borderRadius: 8 },
                   pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
                 ]}
                 testID="signal-toggle"
               >
                 <Ionicons
                   name={isPlaying ? "stop" : "play"}
-                  size={16}
+                  size={14}
                   color={isPlaying ? Colors.white : Colors.background}
                 />
-                <Text style={[styles.playBtnText, { color: isPlaying ? Colors.white : Colors.background, fontSize: 13 }]}>
+                <Text style={[styles.playBtnText, { color: isPlaying ? Colors.white : Colors.background, fontSize: 11 }]}>
                   {isPlaying ? t("signalGenerator", "stop") : t("signalGenerator", "play")}
                 </Text>
               </Pressable>
@@ -1257,7 +1257,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
           </View>
 
           {isLandscape ? (
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ alignItems: "center" as const, gap: 10, paddingBottom: 4 }} showsVerticalScrollIndicator={false} bounces={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ alignItems: "center" as const, gap: 10, paddingTop: 28, paddingBottom: 4 }} showsVerticalScrollIndicator={false} bounces={false}>
             {editingFreq && (
               <View style={styles.freqEditRow}>
                 <TextInput
@@ -1320,7 +1320,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               {noteToFreq(selectedNote, selectedOctave)} {t("signalGenerator", "hzUnit")}
             </Text>
 
-            <View style={[styles.waveSection, { gap: 6 }]}>
+            <View style={[styles.waveSection, { gap: 0 }]}>
               <View style={styles.waveRow}>
                 {WAVE_CONFIGS.map((w) => {
                   const active = waveType === w.type;
@@ -1336,14 +1336,6 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                         color={active ? C.accent : Colors.textTertiary}
                       />
                     </Pressable>
-                  );
-                })}
-              </View>
-              <View style={{ flexDirection: "row" as const, justifyContent: "space-around" as const, width: "100%" as const }}>
-                {WAVE_CONFIGS.map((w) => {
-                  const active = waveType === w.type;
-                  return (
-                    <Text key={w.type} style={[styles.waveBtnText, active && { color: C.accent }, { fontSize: 8, textAlign: "center" as const }]}>{t("signalGenerator", w.key)}</Text>
                   );
                 })}
               </View>
