@@ -3016,62 +3016,62 @@ export default function MetronomeScreen() {
       {showMenu && (
         <Modal transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
           <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
-            <View style={[styles.menuDropdown, { top: (insets.top || webTopInset) + 52 }, isLandscape && { right: undefined, left: 20 }]}>
+            <View style={[styles.menuDropdown, { top: (insets.top || webTopInset) + 52 }, isLandscape && { right: undefined, left: 20, top: (insets.top || webTopInset) + 40, paddingVertical: 2, minWidth: 140 }]}>
               <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                style={({ pressed }) => [styles.menuItem, isLandscape && styles.menuItemLandscape, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
                   setShowSettings(true);
                 }}
               >
-                <Ionicons name="settings-outline" size={18} color={Colors.textSecondary} />
-                <Text style={styles.menuItemText}>{t("main", "menuSettings")}</Text>
+                <Ionicons name="settings-outline" size={isLandscape ? 14 : 18} color={Colors.textSecondary} />
+                <Text style={[styles.menuItemText, isLandscape && styles.menuItemTextLandscape]}>{t("main", "menuSettings")}</Text>
               </Pressable>
               <View style={styles.menuDivider} />
               <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                style={({ pressed }) => [styles.menuItem, isLandscape && styles.menuItemLandscape, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
                   setShowSignalGen(true);
                   if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
                 }}
               >
-                <MaterialCommunityIcons name="waveform" size={18} color={C.accent} />
-                <Text style={styles.menuItemText}>{t("main", "menuSignalGenerator")}</Text>
+                <MaterialCommunityIcons name="waveform" size={isLandscape ? 14 : 18} color={C.accent} />
+                <Text style={[styles.menuItemText, isLandscape && styles.menuItemTextLandscape]}>{t("main", "menuSignalGenerator")}</Text>
               </Pressable>
               <View style={styles.menuDivider} />
               <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                style={({ pressed }) => [styles.menuItem, isLandscape && styles.menuItemLandscape, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
                   setShowWorkUp(true);
                 }}
               >
-                <MaterialCommunityIcons name="chart-line" size={18} color={C.accent} />
-                <Text style={styles.menuItemText}>{t("main", "menuWorkUp")}</Text>
+                <MaterialCommunityIcons name="chart-line" size={isLandscape ? 14 : 18} color={C.accent} />
+                <Text style={[styles.menuItemText, isLandscape && styles.menuItemTextLandscape]}>{t("main", "menuWorkUp")}</Text>
               </Pressable>
               <View style={styles.menuDivider} />
               <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                style={({ pressed }) => [styles.menuItem, isLandscape && styles.menuItemLandscape, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
                   handleEnterNoteMode();
                 }}
               >
-                <MaterialCommunityIcons name="playlist-music" size={18} color={C.accent} />
-                <Text style={styles.menuItemText}>{t("main", "menuNoteMode")}</Text>
+                <MaterialCommunityIcons name="playlist-music" size={isLandscape ? 14 : 18} color={C.accent} />
+                <Text style={[styles.menuItemText, isLandscape && styles.menuItemTextLandscape]}>{t("main", "menuNoteMode")}</Text>
               </Pressable>
               <View style={styles.menuDivider} />
               <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                style={({ pressed }) => [styles.menuItem, isLandscape && styles.menuItemLandscape, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
                   setShowPracticeBook(true);
                   if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
                 }}
               >
-                <MaterialCommunityIcons name="notebook-outline" size={18} color={C.accent} />
-                <Text style={styles.menuItemText}>{t("main", "menuPracticeNote")}</Text>
+                <MaterialCommunityIcons name="notebook-outline" size={isLandscape ? 14 : 18} color={C.accent} />
+                <Text style={[styles.menuItemText, isLandscape && styles.menuItemTextLandscape]}>{t("main", "menuPracticeNote")}</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -3478,6 +3478,14 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(14, 0.3),
     color: Colors.text,
+  },
+  menuItemLandscape: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 8,
+  },
+  menuItemTextLandscape: {
+    fontSize: 12,
   },
   menuDivider: {
     height: 1,
