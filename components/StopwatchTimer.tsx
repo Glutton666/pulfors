@@ -591,7 +591,25 @@ export function StopwatchTimer({
     const swTime = formatTime(elapsed);
     const timerDisplay = formatCountdown(remaining);
     return (
-      <View style={styles.landscapeContainer}>
+      <View style={[styles.landscapeContainer, { flexDirection: "column" as const, alignItems: "stretch" as const }]}>
+        <View style={styles.landscapeDisplay}>
+          {state === "countdown" ? (
+            <Animated.Text style={[styles.landscapeTime, { color: C.accent }, runningDotStyle]}>
+              {countdownLeft}
+            </Animated.Text>
+          ) : mode === "stopwatch" ? (
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
+              {state === "running" && <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.success, marginRight: 4 }, runningDotStyle]} />}
+              {state === "finishing" && <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.danger, marginRight: 4 }, finishingStyle]} />}
+              <Text style={[styles.landscapeTime, state === "finishing" && { color: Colors.danger }]}>{swTime.main}</Text>
+            </View>
+          ) : (
+            <Text style={[styles.landscapeTime, { textAlign: "center" as const }, state === "finishing" && { color: Colors.danger }]}>
+              {timerDisplay}
+            </Text>
+          )}
+        </View>
+        <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 6 }}>
         <View style={styles.landscapeTabRow}>
           <Pressable
             onPress={() => switchMode("stopwatch")}
@@ -611,23 +629,6 @@ export function StopwatchTimer({
               {t("stopwatchTimer", "timer")}
             </Text>
           </Pressable>
-        </View>
-        <View style={styles.landscapeDisplay}>
-          {state === "countdown" ? (
-            <Animated.Text style={[styles.landscapeTime, { color: C.accent }, runningDotStyle]}>
-              {countdownLeft}
-            </Animated.Text>
-          ) : mode === "stopwatch" ? (
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              {state === "running" && <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.success, marginRight: 4 }, runningDotStyle]} />}
-              {state === "finishing" && <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.danger, marginRight: 4 }, finishingStyle]} />}
-              <Text style={[styles.landscapeTime, state === "finishing" && { color: Colors.danger }]}>{swTime.main}</Text>
-            </View>
-          ) : (
-            <Text style={[styles.landscapeTime, state === "finishing" && { color: Colors.danger }]}>
-              {timerDisplay}
-            </Text>
-          )}
         </View>
         {mode === "timer" && state === "idle" && (
           <View style={styles.landscapePresetRow}>
@@ -693,6 +694,7 @@ export function StopwatchTimer({
               <Ionicons name="close" size={14} color={Colors.textSecondary} />
             </Pressable>
           )}
+        </View>
         </View>
       </View>
     );
