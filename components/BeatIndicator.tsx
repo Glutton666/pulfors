@@ -26,14 +26,16 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
-import { moderateScale, SCREEN_WIDTH } from "@/lib/scale";
+import { moderateScale, SCREEN_WIDTH, IS_TABLET } from "@/lib/scale";
 
 export type BeatType = "strong" | "accent" | "normal" | "mute";
 
-const DIAL_SIZE = Math.min(SCREEN_WIDTH - 48, moderateScale(300));
+const DIAL_SIZE = IS_TABLET
+  ? Math.min(SCREEN_WIDTH - 80, 420)
+  : Math.min(SCREEN_WIDTH - 48, moderateScale(300));
 const DIAL_RADIUS = DIAL_SIZE / 2;
 const DOT_RADIUS_FROM_CENTER = DIAL_RADIUS - moderateScale(30, 0.4);
-const DOT_SIZE = moderateScale(34, 0.4);
+const DOT_SIZE = IS_TABLET ? moderateScale(40, 0.4) : moderateScale(34, 0.4);
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.35;
 const MIN_BEATS = 1;
 const MAX_BEATS = 32;

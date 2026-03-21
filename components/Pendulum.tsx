@@ -9,9 +9,11 @@ import Animated, {
 } from "react-native-reanimated";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
-import { moderateScale, SCREEN_WIDTH } from "@/lib/scale";
+import { moderateScale, SCREEN_WIDTH, IS_TABLET } from "@/lib/scale";
 
-const PENDULUM_LENGTH = Math.min(SCREEN_WIDTH * 0.5, moderateScale(200));
+const PENDULUM_LENGTH = IS_TABLET
+  ? Math.min(SCREEN_WIDTH * 0.35, 280)
+  : Math.min(SCREEN_WIDTH * 0.5, moderateScale(200));
 const BOB_SIZE = moderateScale(14, 0.4);
 
 interface PendulumProps {

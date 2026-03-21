@@ -37,7 +37,7 @@ import type { ThemeColor } from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getTempoLabel as getTempoLabelI18n } from "@/lib/i18n";
-import { moderateScale } from "@/lib/scale";
+import { moderateScale, IS_TABLET, CONTENT_MAX_WIDTH } from "@/lib/scale";
 import {
   MetronomeEngine,
   soundSets,
@@ -3361,7 +3361,10 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: IS_TABLET ? 40 : 24,
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: IS_TABLET ? "center" as const : undefined,
+    width: IS_TABLET ? "100%" as any : undefined,
   },
   topSection: {
     flex: 2,

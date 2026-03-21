@@ -2492,7 +2492,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     padding: 24,
     width: "100%",
-    maxWidth: 360,
+    maxWidth: 480,
   },
   loggingInfoHeader: {
     flexDirection: "row",
