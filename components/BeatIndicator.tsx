@@ -2177,8 +2177,8 @@ export function BeatIndicator({
             );
           })()}
 
-          <View style={styles.signatureRow} pointerEvents="none">
-            <Text style={[styles.digitalSignature, { color: halfTime ? C.accent : Colors.textTertiary, opacity: halfTime ? 0.25 : 0.15 }]} numberOfLines={1} adjustsFontSizeToFit>
+          <View style={[styles.signatureRow, isLandscape && { width: moderateScale(120) * landscapeDialScale, height: moderateScale(120) * landscapeDialScale }]} pointerEvents="none">
+            <Text style={[styles.digitalSignature, { color: halfTime ? C.accent : Colors.textTertiary, opacity: halfTime ? 0.25 : 0.15 }, isLandscape && { fontSize: moderateScale(116, 0.4) * landscapeDialScale }]} numberOfLines={1} adjustsFontSizeToFit>
               {halfTime ? "1/2" : "1/1"}
             </Text>
           </View>
