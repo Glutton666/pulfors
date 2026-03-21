@@ -599,22 +599,43 @@ export function StopwatchTimer({
     const swTime = formatTime(elapsed);
     const timerDisplay = formatCountdown(remaining);
     return (
-      <View style={[styles.landscapeContainer, { flexDirection: "row" as const, alignItems: "center" as const, overflow: "hidden" as const }]}>
-        <View style={styles.landscapeTabRow}>
+      <View style={[styles.landscapeContainer, { flexDirection: "column" as const, alignItems: "stretch" as const, overflow: "hidden" as const, gap: 4 }]}>
+        <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 4 }}>
           <Pressable
             onPress={() => switchMode("stopwatch")}
             style={[styles.landscapeTab, mode === "stopwatch" && { backgroundColor: C.accentDim }]}
           >
             <MaterialCommunityIcons name="timer-outline" size={12} color={mode === "stopwatch" ? C.accent : Colors.textTertiary} />
+            <Text style={[styles.landscapeTabText, mode === "stopwatch" && { color: C.accent }]}>
+              {t("stopwatchTimer", "stopwatch")}
+            </Text>
           </Pressable>
           <Pressable
             onPress={() => switchMode("timer")}
             style={[styles.landscapeTab, mode === "timer" && { backgroundColor: C.accentDim }]}
           >
             <MaterialCommunityIcons name="av-timer" size={12} color={mode === "timer" ? C.accent : Colors.textTertiary} />
+            <Text style={[styles.landscapeTabText, mode === "timer" && { color: C.accent }]}>
+              {t("stopwatchTimer", "timer")}
+            </Text>
           </Pressable>
         </View>
-        <View style={{ flex: 1, flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 6 }}>
+        {mode === "timer" && state === "idle" && (
+          <View style={[styles.landscapePresetRow, { justifyContent: "center" as const }]}>
+            {TIMER_PRESETS.map((p) => (
+              <Pressable
+                key={p.seconds}
+                onPress={() => adjustTimerDuration(p.seconds)}
+                style={[styles.landscapePresetChip, timerDuration === p.seconds && { backgroundColor: C.accentDim, borderColor: C.accent }]}
+              >
+                <Text style={[styles.landscapePresetText, timerDuration === p.seconds && { color: C.accent }]}>
+                  {p.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 6 }}>
           {state === "countdown" ? (
             <Animated.Text style={[styles.landscapeTime, { color: C.accent }, runningDotStyle]} numberOfLines={1}>
               {countdownLeft}
@@ -681,21 +702,6 @@ export function StopwatchTimer({
             </Pressable>
           )}
         </View>
-        {mode === "timer" && state === "idle" && (
-          <View style={[styles.landscapePresetRow, { marginLeft: 4 }]}>
-            {TIMER_PRESETS.map((p) => (
-              <Pressable
-                key={p.seconds}
-                onPress={() => adjustTimerDuration(p.seconds)}
-                style={[styles.landscapePresetChip, timerDuration === p.seconds && { backgroundColor: C.accentDim, borderColor: C.accent }]}
-              >
-                <Text style={[styles.landscapePresetText, timerDuration === p.seconds && { color: C.accent }]}>
-                  {p.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
       </View>
     );
   }
