@@ -2071,17 +2071,18 @@ export function BeatIndicator({
           <View style={styles.barSubdivisionSlot}>{subdivisionBarElement}</View>
         )}
 
-        <View style={styles.barClockLegendRow} {...barClockSwipePan.panHandlers}>
-          <View style={[styles.barClockLegendItem]}>
-            <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
-            <Text style={[styles.barClockLegendText, barClockMode === "stopwatch" && { color: C.accent }]}>SW</Text>
+        <View style={{ alignItems: "center", gap: 2 }}>
+          <View style={styles.barClockLegendRow} {...barClockSwipePan.panHandlers}>
+            <View style={[styles.barClockLegendItem]}>
+              <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
+              <Text style={[styles.barClockLegendText, barClockMode === "stopwatch" && { color: C.accent }]}>SW</Text>
+            </View>
+            <View style={[styles.barClockLegendItem]}>
+              <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: Colors.danger }]} />
+              <Text style={[styles.barClockLegendText, barClockMode === "timer" && { color: Colors.danger }]}>TM</Text>
+            </View>
           </View>
-          <View style={[styles.barClockLegendItem]}>
-            <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: Colors.danger }]} />
-            <Text style={[styles.barClockLegendText, barClockMode === "timer" && { color: Colors.danger }]}>TM</Text>
-          </View>
-        </View>
-        <View style={styles.barBottomRow}>
+          <View style={styles.barBottomRow}>
           <Pressable
             onPress={handleSaveResetTap}
             onLongPress={handleSaveResetLongPress}
@@ -2149,6 +2150,7 @@ export function BeatIndicator({
               />
             )}
           </Pressable>
+          </View>
         </View>
 
         <Modal
