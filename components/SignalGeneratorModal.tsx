@@ -1157,7 +1157,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               style={[
                 styles.micEmoji,
                 micListening && styles.micEmojiActive,
-                isLandscape && { top: 0, right: -4, width: 30, height: 30, borderRadius: 15 },
+                isLandscape && { top: -2, right: 2, width: 28, height: 28, borderRadius: 14 },
               ]}
               hitSlop={8}
               testID="signal-mic-toggle"
@@ -1274,26 +1274,6 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               </View>
             )}
 
-            <View style={styles.notePickerRow}>
-              <PickerColumn
-                data={NOTE_NAMES}
-                selected={selectedNote}
-                onSelect={handleNoteSelect}
-                accentColor={C.accent}
-                accentDim={C.accentDim}
-              />
-              <PickerColumn
-                data={OCTAVES}
-                selected={selectedOctave}
-                onSelect={handleOctaveSelect}
-                accentColor={C.accent}
-                accentDim={C.accentDim}
-              />
-            </View>
-            <Text style={styles.pickerHzHint}>
-              {noteToFreq(selectedNote, selectedOctave)} {t("signalGenerator", "hzUnit")}
-            </Text>
-
             <Pressable
               onPress={() => {
                 hapticFeedback();
@@ -1320,8 +1300,27 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               accentDim={C.accentDim}
             />
 
-            <View style={[styles.waveSection, isLandscape && { gap: 6 }]}>
-              <Text style={[styles.sectionLabel, isLandscape && { fontSize: 10 }]}>{t("signalGenerator", "waveform")}</Text>
+            <View style={styles.notePickerRow}>
+              <PickerColumn
+                data={NOTE_NAMES}
+                selected={selectedNote}
+                onSelect={handleNoteSelect}
+                accentColor={C.accent}
+                accentDim={C.accentDim}
+              />
+              <PickerColumn
+                data={OCTAVES}
+                selected={selectedOctave}
+                onSelect={handleOctaveSelect}
+                accentColor={C.accent}
+                accentDim={C.accentDim}
+              />
+            </View>
+            <Text style={styles.pickerHzHint}>
+              {noteToFreq(selectedNote, selectedOctave)} {t("signalGenerator", "hzUnit")}
+            </Text>
+
+            <View style={[styles.waveSection, { gap: 6 }]}>
               <View style={styles.waveRow}>
                 {WAVE_CONFIGS.map((w) => {
                   const active = waveType === w.type;
@@ -1329,15 +1328,22 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                     <Pressable
                       key={w.type}
                       onPress={() => { hapticFeedback(); setWaveType(w.type); }}
-                      style={[styles.waveBtn, active && { backgroundColor: C.accentDim, borderColor: C.accent }, isLandscape && { paddingHorizontal: 8, paddingVertical: 6 }]}
+                      style={[styles.waveBtn, active && { backgroundColor: C.accentDim, borderColor: C.accent }, { paddingHorizontal: 8, paddingVertical: 6 }]}
                     >
                       <MaterialCommunityIcons
                         name={w.icon as any}
-                        size={isLandscape ? 16 : 20}
+                        size={16}
                         color={active ? C.accent : Colors.textTertiary}
                       />
-                      <Text style={[styles.waveBtnText, active && { color: C.accent }, isLandscape && { fontSize: 9 }]}>{t("signalGenerator", w.key)}</Text>
                     </Pressable>
+                  );
+                })}
+              </View>
+              <View style={{ flexDirection: "row" as const, justifyContent: "space-around" as const, width: "100%" as const }}>
+                {WAVE_CONFIGS.map((w) => {
+                  const active = waveType === w.type;
+                  return (
+                    <Text key={w.type} style={[styles.waveBtnText, active && { color: C.accent }, { fontSize: 8, textAlign: "center" as const }]}>{t("signalGenerator", w.key)}</Text>
                   );
                 })}
               </View>
