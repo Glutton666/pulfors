@@ -1403,11 +1403,15 @@ export default function MetronomeScreen() {
 
       try {
         if (Platform.OS === "web") {
+          const ctx = getWebAudioContext();
+          if (ctx && ctx.state === "suspended") {
+            ctx.resume().catch(() => {});
+          }
+
           const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
           await ensureWebClickBuffers(src as any);
           webClickReadyRef.current = true;
 
-          const ctx = getWebAudioContext();
           if (ctx && ctx.state === "suspended") {
             await ctx.resume();
           }
@@ -1692,11 +1696,15 @@ export default function MetronomeScreen() {
 
     try {
       if (Platform.OS === "web") {
+        const ctx = getWebAudioContext();
+        if (ctx && ctx.state === "suspended") {
+          ctx.resume().catch(() => {});
+        }
+
         const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
         await ensureWebClickBuffers(src as any);
         webClickReadyRef.current = true;
 
-        const ctx = getWebAudioContext();
         if (ctx && ctx.state === "suspended") {
           await ctx.resume();
         }
