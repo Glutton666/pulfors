@@ -337,11 +337,14 @@ export function StopwatchTimer({
     hapticFeedback();
     clearTimerInterval();
     clearCountdownInterval();
+    if (isPlayingRef.current) {
+      onStopRequested();
+    }
     setElapsed(0);
     setCountdownLeft(0);
     elapsedAtPauseRef.current = 0;
     setState("idle");
-  }, [hapticFeedback, clearTimerInterval, clearCountdownInterval]);
+  }, [hapticFeedback, clearTimerInterval, clearCountdownInterval, onStopRequested]);
 
   const actualStartTimer = useCallback(() => {
     const startRemaining = stateRef.current === "paused" ? remaining : timerDuration;
