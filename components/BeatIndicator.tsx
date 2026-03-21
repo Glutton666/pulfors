@@ -1408,7 +1408,7 @@ export function BeatIndicator({
 
     if (isLandscape) {
       return (
-        <View style={[styles.barModeContainer, { flexDirection: "column" }]} testID="beat-indicator-bar-mode">
+        <View style={[styles.barModeContainer, { flexDirection: "row" }]} testID="beat-indicator-bar-mode">
           <Animated.View
             pointerEvents="none"
             style={[{
@@ -1418,27 +1418,27 @@ export function BeatIndicator({
               zIndex: 999,
             }, resetFlashStyle]}
           />
-          <View style={{ flex: 1, flexDirection: "row" }}>
-            <View style={{ flex: 1 }}>
-              <View style={[styles.barTopRowCenter, { paddingTop: 6, paddingBottom: 2 }]}>
-                <Pressable
-                  onPress={() => onBarModeChange(false)}
-                  style={[
-                    styles.barModeHandle,
-                    dropTargetBeat === -1 && { backgroundColor: C.accent },
-                  ]}
-                  testID="close-bar-mode"
-                  hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close bar mode"
-                >
-                  {dropTargetBeat === -1 ? (
-                    <Ionicons name="layers" size={16} color={Colors.white} />
-                  ) : (
-                    <Ionicons name="chevron-down" size={18} color={Colors.textTertiary} />
-                  )}
-                </Pressable>
-              </View>
+
+          <View style={{ flex: 1 }}>
+            <View style={[styles.barTopRowCenter, { paddingTop: 6, paddingBottom: 2 }]}>
+              <Pressable
+                onPress={() => onBarModeChange(false)}
+                style={[
+                  styles.barModeHandle,
+                  dropTargetBeat === -1 && { backgroundColor: C.accent },
+                ]}
+                testID="close-bar-mode"
+                hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+                accessibilityRole="button"
+                accessibilityLabel="Close bar mode"
+              >
+                {dropTargetBeat === -1 ? (
+                  <Ionicons name="layers" size={16} color={Colors.white} />
+                ) : (
+                  <Ionicons name="chevron-down" size={18} color={Colors.textTertiary} />
+                )}
+              </Pressable>
+            </View>
 
             {loopBlocks.length > 0 && (() => {
               const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).sort((a, b) => a.block.startBeat - b.block.startBeat);
@@ -1578,43 +1578,47 @@ export function BeatIndicator({
             />
           </View>
 
-          <View style={{ width: 140, justifyContent: "center", alignItems: "center", gap: 4, paddingVertical: 4 }}>
-            <View style={{ alignItems: "center", gap: 2 }}>
+          <View style={{ width: 180, justifyContent: "center", alignItems: "center", gap: 6, paddingVertical: 6 }}>
+            {subdivisionBarElement && (
+              <View style={{ width: "100%", paddingHorizontal: 8 }}>{subdivisionBarElement}</View>
+            )}
+            {bpmSliderElement && (
+              <View style={{ width: "100%", paddingHorizontal: 4 }}>{bpmSliderElement}</View>
+            )}
+
+            <View style={{ alignItems: "center", gap: 4 }}>
               <Pressable onPress={handleBarClockTap}>
-                <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? Colors.danger : C.accent, fontSize: 14 }]}>
+                <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? Colors.danger : C.accent, fontSize: 16 }]}>
                   {barTimeDisplay}
                 </Text>
               </Pressable>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Text style={[styles.barInfoText, { color: Colors.textTertiary, fontSize: 9 }]}>
-                  {beatsPerMeasure} bars
-                </Text>
-                <View style={styles.barClockDots}>
-                  <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
-                  <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: Colors.danger }]} />
-                </View>
+              <Text style={[styles.barInfoText, { color: Colors.textTertiary, fontSize: 9 }]}>
+                {beatsPerMeasure} bars
+              </Text>
+              <View style={styles.barClockDots}>
+                <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
+                <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: Colors.danger }]} />
               </View>
             </View>
 
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <Pressable
                 onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
                 style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure <= MIN_BEATS) && { opacity: 0.3 }]}
                 hitSlop={8}
               >
-                <Ionicons name="remove" size={12} color={Colors.textSecondary} />
+                <Ionicons name="remove" size={14} color={Colors.textSecondary} />
               </Pressable>
-              <Text style={{ color: Colors.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_600SemiBold" }}>BARS</Text>
               <Pressable
                 onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
                 style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
                 hitSlop={8}
               >
-                <Ionicons name="add" size={12} color={Colors.textSecondary} />
+                <Ionicons name="add" size={14} color={Colors.textSecondary} />
               </Pressable>
             </View>
 
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <Pressable
                 onPress={handleSaveResetTap}
                 onLongPress={handleSaveResetLongPress}
@@ -1633,7 +1637,7 @@ export function BeatIndicator({
               <Pressable
                 onPress={onTogglePlay}
                 style={({ pressed }) => [
-                  styles.barPlayBtn, { width: 38, height: 38, borderRadius: 19 },
+                  styles.barPlayBtn, { width: 40, height: 40, borderRadius: 20 },
                   pressed && { opacity: 0.7 },
                   isPreparing && { opacity: 0.5 },
                 ]}
@@ -1643,23 +1647,12 @@ export function BeatIndicator({
                 {isPreparing ? (
                   <ActivityIndicator size="small" color={C.accent} />
                 ) : (
-                  <Ionicons name={isPlaying ? "stop" : "play"} size={18} color={isPlaying ? Colors.danger : C.accent} style={!isPlaying ? { marginLeft: 2 } : undefined} />
+                  <Ionicons name={isPlaying ? "stop" : "play"} size={20} color={isPlaying ? Colors.danger : C.accent} style={!isPlaying ? { marginLeft: 2 } : undefined} />
                 )}
               </Pressable>
             </View>
           </View>
-        </View>
 
-        {(subdivisionBarElement || bpmSliderElement) && (
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, paddingVertical: 4, paddingHorizontal: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.backgroundSecondary }}>
-            {subdivisionBarElement && (
-              <View style={{ flexShrink: 1 }}>{subdivisionBarElement}</View>
-            )}
-            {bpmSliderElement && (
-              <View style={{ flexShrink: 1, maxWidth: 280 }}>{bpmSliderElement}</View>
-            )}
-          </View>
-        )}
         </View>
       );
     }
