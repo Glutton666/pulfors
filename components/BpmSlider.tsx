@@ -209,7 +209,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
         onLayout={() => measureLayout()}
         {...panResponder.panHandlers}
       >
-        <Animated.View style={[styles.card, bodyStyle, halfTime && { borderColor: C.accent + "80" }]} testID="bpm-slider">
+        <Animated.View style={[styles.card, bodyStyle, halfTime && { borderColor: C.accent + "80" }, isLandscape && { paddingTop: 8, paddingBottom: 6 }]} testID="bpm-slider">
           <Animated.View style={[styles.flashOverlay, flashStyle, { backgroundColor: C.accent }]} />
           <Animated.View style={[styles.glowLeft, leftGlowStyle]}>
             <LinearGradient
@@ -229,17 +229,17 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
           </Animated.View>
 
           <View style={styles.zoneRow} pointerEvents="none">
-            <Feather name="activity" size={12} color={Colors.textTertiary} />
-            <Text style={styles.tapLabel}>TAP</Text>
+            <Feather name="activity" size={isLandscape ? 10 : 12} color={Colors.textTertiary} />
+            <Text style={[styles.tapLabel, isLandscape && { fontSize: 8 }]}>TAP</Text>
           </View>
 
           <View style={styles.bpmRow} pointerEvents="none">
-            <Feather name="minus" size={24} color={Colors.textSecondary} style={styles.bpmIcon} />
+            <Feather name="minus" size={isLandscape ? 18 : 24} color={Colors.textSecondary} style={styles.bpmIcon} />
             <View style={styles.bpmContent}>
-              <Text style={styles.bpmValue} testID="bpm-display">{bpm}</Text>
-              <Text style={[styles.bpmUnit, halfTime && { color: C.accent }]}>{halfTime ? "½× BPM" : "BPM"}</Text>
+              <Text style={[styles.bpmValue, isLandscape && { fontSize: 40, lineHeight: 46 }]} testID="bpm-display">{bpm}</Text>
+              <Text style={[styles.bpmUnit, halfTime && { color: C.accent }, isLandscape && { fontSize: 10, marginTop: -2 }]}>{halfTime ? "½× BPM" : "BPM"}</Text>
             </View>
-            <Feather name="plus" size={24} color={Colors.textSecondary} style={styles.bpmIcon} />
+            <Feather name="plus" size={isLandscape ? 18 : 24} color={Colors.textSecondary} style={styles.bpmIcon} />
           </View>
 
           <View style={styles.ticks} pointerEvents="none">
@@ -257,7 +257,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
         </Animated.View>
       </View>
 
-      <Text style={styles.hint}>hold sides ±10 · slide center to adjust</Text>
+      {!isLandscape && <Text style={styles.hint}>hold sides ±10 · slide center to adjust</Text>}
     </View>
   );
 }

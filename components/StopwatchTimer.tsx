@@ -1110,9 +1110,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     paddingHorizontal: 8,
-    paddingVertical: 6,
-    marginBottom: 8,
-    gap: 8,
+    paddingVertical: 4,
+    gap: 6,
   },
   landscapeTabRow: {
     flexDirection: "row" as const,

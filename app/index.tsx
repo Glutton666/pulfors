@@ -3341,7 +3341,7 @@ export default function MetronomeScreen() {
 
         <View style={[
           styles.bpmSection,
-          isLandscape && !barMode && { flex: 2, justifyContent: "center" },
+          isLandscape && !barMode && { flex: 2, justifyContent: "center", gap: 6 },
         ]}>
           {isLandscape && !barMode && !noteMode && (
             <StopwatchTimer
@@ -3367,7 +3367,7 @@ export default function MetronomeScreen() {
               activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
             />
           )}
-          <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
+          {!isLandscape && <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>}
           <BpmSlider
             bpm={bpm}
             onBpmChange={updateBpm}
