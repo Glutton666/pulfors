@@ -1804,30 +1804,20 @@ export function BeatIndicator({
             >
               <Ionicons name="remove" size={16} color={Colors.textSecondary} />
             </Pressable>
-            <View style={styles.barInfoCol}>
-              {stopwatchElement ? (
-                <Text style={[styles.barInfoText, { color: Colors.textTertiary, fontSize: 12 }]}>
-                  {beatsPerMeasure} bars
+            <View style={styles.barInfoCol} {...barClockSwipePan.panHandlers}>
+              <Pressable onPress={handleBarClockTap}>
+                <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? Colors.danger : C.accent }]}>
+                  {barTimeDisplay}
+                  {barClockMode === "timer" && !isPlaying && <Text style={{ fontSize: 9, color: Colors.textTertiary }}> &#9202;</Text>}
                 </Text>
-              ) : (
-                <>
-                  <View {...barClockSwipePan.panHandlers}>
-                    <Pressable onPress={handleBarClockTap}>
-                      <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? Colors.danger : C.accent }]}>
-                        {barTimeDisplay}
-                        {barClockMode === "timer" && !isPlaying && <Text style={{ fontSize: 9, color: Colors.textTertiary }}> &#9202;</Text>}
-                      </Text>
-                    </Pressable>
-                  </View>
-                  <Text style={[styles.barInfoText, { color: Colors.textTertiary, fontSize: 10 }]}>
-                    {beatsPerMeasure} bars
-                  </Text>
-                  <View style={styles.barClockDots}>
-                    <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
-                    <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: Colors.danger }]} />
-                  </View>
-                </>
-              )}
+              </Pressable>
+              <Text style={[styles.barInfoText, { color: Colors.textTertiary, fontSize: 10 }]}>
+                {beatsPerMeasure} bars
+              </Text>
+              <View style={styles.barClockDots}>
+                <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
+                <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: Colors.danger }]} />
+              </View>
             </View>
             <Pressable
               onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
