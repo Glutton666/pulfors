@@ -566,19 +566,19 @@ export function NoteModeView({
               <Ionicons name="arrow-back" size={18} color={Colors.textSecondary} />
             </Pressable>
             <Text style={[styles.title, { color: C.accent, fontSize: 14 }]}>{t("noteMode", "title")}</Text>
-            <View style={[styles.headerActions, { gap: 6 }]}>
-              <Pressable onPress={onSave} hitSlop={6} style={[styles.headerBtn, { borderColor: C.accent, width: 28, height: 28 }]}>
-                <Ionicons name="save-outline" size={13} color={C.accent} />
-              </Pressable>
-              <Pressable onPress={handleReset} hitSlop={6} style={[styles.headerBtn, { borderColor: Colors.danger, width: 28, height: 28 }]}>
-                <Ionicons name="refresh" size={13} color={Colors.danger} />
-              </Pressable>
-            </View>
+            {renderPlayControls()}
           </View>
           {renderQueueSection()}
         </View>
         <View style={styles.landscapeRightPanel}>
-          {renderPlayControls()}
+          <View style={[styles.header, { marginBottom: 4, gap: 6, justifyContent: "flex-end" as const }]}>
+            <Pressable onPress={onSave} hitSlop={6} style={[styles.headerBtn, { borderColor: C.accent, width: 28, height: 28 }]}>
+              <Ionicons name="save-outline" size={13} color={C.accent} />
+            </Pressable>
+            <Pressable onPress={handleReset} hitSlop={6} style={[styles.headerBtn, { borderColor: Colors.danger, width: 28, height: 28 }]}>
+              <Ionicons name="refresh" size={13} color={Colors.danger} />
+            </Pressable>
+          </View>
           {renderSourceSection()}
         </View>
       </View>
