@@ -499,6 +499,183 @@ export function WorkUpOverviewModal({
   const BEAT_COLOR = "#58A6FF";
   const BAR_COLOR = "#F0883E";
 
+  const renderGoals = () => (
+    <View style={s.card}>
+      <View style={s.cardHeader}>
+        <View style={s.cardHeaderLeft}>
+          <Ionicons name="flag" size={16} color={C.accent} />
+          <Text style={[s.cardTitle, { color: C.accent }]}>{t("workUp", "goals")}</Text>
+        </View>
+        <Pressable testID="add-goal-btn" onPress={() => setShowAddGoal(!showAddGoal)} hitSlop={12} style={{ padding: 4 }}>
+          <Ionicons name={showAddGoal ? "close-circle" : "add-circle"} size={20} color={C.accent} />
+        </Pressable>
+      </View>
+      {showAddGoal && (
+        <View style={[s.addForm, { borderColor: C.accentDim }]}>
+          <View style={s.goalTypeRow}>
+            {GOAL_TYPE_VALUES.map((val) => {
+              const shortMap: Record<GoalTypeValue, string> = {
+                total_play_time: t("workUp", "totalShort"),
+                beat_mode_time: t("workUp", "beatShort"),
+                bar_mode_time: t("workUp", "barShort"),
+                room_time: t("workUp", "roomShort"),
+              };
+              return (
+                <Pressable key={val} style={[s.goalTypeChip, newGoalType === val && { borderColor: C.accent, backgroundColor: C.accentDim }]} onPress={() => setNewGoalType(val)}>
+                  <Text style={[s.goalTypeChipText, newGoalType === val && { color: C.accent }]} numberOfLines={1}>{shortMap[val]}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={s.addFormRow}>
+            <TextInput style={[s.formInput, { borderColor: C.accentMuted }]} value={newGoalTarget} onChangeText={setNewGoalTarget} placeholder={t("workUp", "minutesPlaceholder")} placeholderTextColor={Colors.textTertiary} keyboardType="numeric" />
+            <Pressable style={[s.formSaveBtn, { backgroundColor: C.accent }]} onPress={handleAddGoal}>
+              <Ionicons name="checkmark" size={16} color={Colors.surface} />
+            </Pressable>
+          </View>
+        </View>
+      )}
+      {goals.length === 0 && !showAddGoal ? (
+        <Text style={s.emptyHint}>{t("workUp", "tapToSetGoal")}</Text>
+      ) : (
+        goals.map((goal) => {
+          const progress = getGoalProgress(goal);
+          const pct = Math.min(1, progress / goal.target);
+          const goalColor = goal.type === "beat_mode_time" ? BEAT_COLOR : goal.type === "bar_mode_time" ? BAR_COLOR : goal.type === "room_time" ? ROOM_COLOR : goal.type === "session_goal" ? BAR_COLOR : C.accent;
+          const isEditing = editingGoalId === goal.id;
+          return (
+            <Pressable key={goal.id} style={s.goalRow} onLongPress={() => { setEditingGoalId(goal.id); setEditGoalTarget(String(goal.target)); }} delayLongPress={500}>
+              <CircularProgress size={44} strokeWidth={4} progress={pct} color={goalColor} bgColor={Colors.surfaceLight}>
+                <Text style={[s.goalPct, { color: goalColor }]}>{Math.round(pct * 100)}%</Text>
+              </CircularProgress>
+              <View style={s.goalInfo}>
+                <Text style={s.goalLabel}>{goal.label}</Text>
+                {isEditing ? (
+                  <View style={s.goalEditRow}>
+                    <TextInput style={[s.goalEditInput, { borderColor: goalColor }]} value={editGoalTarget} onChangeText={setEditGoalTarget} keyboardType="numeric" autoFocus selectTextOnFocus onSubmitEditing={handleUpdateGoalTarget} />
+                    <Text style={s.goalEditUnit}>분</Text>
+                    <Pressable style={[s.goalEditSave, { backgroundColor: goalColor }]} onPress={handleUpdateGoalTarget}><Ionicons name="checkmark" size={14} color={Colors.surface} /></Pressable>
+                    <Pressable style={s.goalEditCancel} onPress={() => setEditingGoalId(null)}><Ionicons name="close" size={14} color={Colors.textTertiary} /></Pressable>
+                  </View>
+                ) : (
+                  <Text style={s.goalProgress}>{Math.round(progress)}m / {goal.target}m</Text>
+                )}
+              </View>
+              <Pressable onPress={() => handleDeleteGoal(goal.id)} hitSlop={8}><Ionicons name="trash-outline" size={14} color={Colors.textTertiary} /></Pressable>
+            </Pressable>
+          );
+        })
+      )}
+    </View>
+  );
+
+  const renderPlayTime = () => (
+    <View style={s.card}>
+      <View style={s.cardHeader}>
+        <Pressable onPress={() => cyclePeriod(-1)} hitSlop={12} style={{ opacity: playTimePeriod === "today" ? 0.2 : 1 }}>
+          <Ionicons name="chevron-back" size={18} color={C.accent} />
+        </Pressable>
+        <View style={s.cardHeaderLeft}>
+          <Ionicons name="time-outline" size={16} color={C.accent} />
+          <Text style={[s.cardTitle, { color: Colors.text }]}>{periodLabel}</Text>
+        </View>
+        <Pressable onPress={() => cyclePeriod(1)} hitSlop={12} style={{ opacity: playTimePeriod === "month" ? 0.2 : 1 }}>
+          <Ionicons name="chevron-forward" size={18} color={C.accent} />
+        </Pressable>
+      </View>
+      <View style={s.periodDots}>
+        {(["today", "week", "month"] as PlayTimePeriod[]).map((p) => (
+          <View key={p} style={[s.periodDot, { backgroundColor: p === playTimePeriod ? C.accent : Colors.surfaceLight }]} />
+        ))}
+      </View>
+      <View style={s.donutRow}>
+        <DonutChart size={120} strokeWidth={10} segments={[{ value: periodData.beat || 0.01, color: BEAT_COLOR }, { value: periodData.bar || 0.01, color: BAR_COLOR }]} bgColor={Colors.surfaceLight}>
+          <Text style={[s.donutCenter, { color: C.accent }]}>{formatMinutes(periodData.total)}</Text>
+          <Text style={s.donutUnit}>{t("workUp", "goalUnit")}</Text>
+        </DonutChart>
+        <View style={s.donutLegend}>
+          <View style={s.legendItem}><View style={[s.legendDot, { backgroundColor: BEAT_COLOR }]} /><View><Text style={s.legendLabel}>{t("workUp", "beatMode")}</Text><Text style={[s.legendValue, { color: BEAT_COLOR }]}>{formatDurationLocalized(periodData.beat, language)}</Text></View></View>
+          <View style={s.legendItem}><View style={[s.legendDot, { backgroundColor: BAR_COLOR }]} /><View><Text style={s.legendLabel}>{t("workUp", "barMode")}</Text><Text style={[s.legendValue, { color: BAR_COLOR }]}>{formatDurationLocalized(periodData.bar, language)}</Text></View></View>
+          <View style={s.legendItem}><View style={[s.legendDot, { backgroundColor: C.accent }]} /><View><Text style={s.legendLabel}>{t("workUp", "total")}</Text><Text style={[s.legendValue, { color: C.accent }]}>{formatDurationLocalized(periodData.total, language)}</Text></View></View>
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderCompletedGoals = () => (
+    goals.length > 0 && goals.some(g => getGoalProgress(g) >= g.target) ? (
+      <View style={s.card}>
+        <View style={s.cardHeader}>
+          <View style={s.cardHeaderLeft}>
+            <Ionicons name="checkmark-done" size={16} color="#3fb950" />
+            <Text style={[s.cardTitle, { color: "#3fb950" }]}>{t("workUp", "completedGoals")}</Text>
+          </View>
+        </View>
+        {goals.filter(g => getGoalProgress(g) >= g.target).map((goal) => {
+          const progress = getGoalProgress(goal);
+          return (
+            <View key={goal.id} style={s.goalRow}>
+              <View style={[s.completedIcon, { backgroundColor: "rgba(63, 185, 80, 0.15)" }]}>
+                <Ionicons name="checkmark-circle" size={22} color="#3fb950" />
+              </View>
+              <View style={s.goalInfo}>
+                <Text style={s.goalLabel}>{goal.label}</Text>
+                <Text style={[s.goalProgress, { color: "#3fb950" }]}>{Math.round(progress)}m / {goal.target}m ✓</Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    ) : null
+  );
+
+  const renderYearReview = () => (
+    hasLastYearData ? (
+      <Pressable style={[s.card, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]} onPress={() => setShowYearlySummary(true)}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Ionicons name="trophy-outline" size={20} color="#FFD700" />
+          <Text style={[s.cardTitle, { color: Colors.text }]}>{new Date().getFullYear() - 1} {t("workUp", "yearInReview")}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
+      </Pressable>
+    ) : null
+  );
+
+  const renderSessionDetails = () => (
+    <View style={s.card}>
+      <Pressable style={s.cardHeader} onPress={() => setShowDetails(!showDetails)}>
+        <View style={s.cardHeaderLeft}>
+          <MaterialCommunityIcons name="format-list-bulleted" size={16} color={C.accent} />
+          <Text style={[s.cardTitle, { color: Colors.text }]}>{t("workUp", "sessionDetails")}</Text>
+        </View>
+        <Ionicons name={showDetails ? "chevron-up" : "chevron-down"} size={18} color={Colors.textSecondary} />
+      </Pressable>
+      {showDetails && (
+        <View style={s.detailsWrap}>
+          {beatSessionDetails.length > 0 && (
+            <View style={s.detailSection}>
+              <View style={s.detailSectionHeader}><View style={[s.legendDot, { backgroundColor: BEAT_COLOR }]} /><Text style={[s.detailSectionTitle, { color: BEAT_COLOR }]}>{t("workUp", "beatModeSessions")}</Text></View>
+              {beatSessionDetails.map((sess, i) => (
+                <View key={i} style={s.detailRow}><View style={s.detailInfo}><Text style={s.detailMain}>{sess.bpm} BPM</Text><Text style={s.detailSub}>{sess.count} session{sess.count > 1 ? "s" : ""}</Text></View><Text style={[s.detailTime, { color: BEAT_COLOR }]}>{formatDurationLocalized(sess.duration, language)}</Text></View>
+              ))}
+            </View>
+          )}
+          {barSessionDetails.length > 0 && (
+            <View style={s.detailSection}>
+              <View style={s.detailSectionHeader}><View style={[s.legendDot, { backgroundColor: BAR_COLOR }]} /><Text style={[s.detailSectionTitle, { color: BAR_COLOR }]}>{t("workUp", "barModeSessions")}</Text></View>
+              {barSessionDetails.map((sess, i) => (
+                <View key={i} style={s.detailRow}><View style={s.detailInfo}><Text style={s.detailMain}>{sess.label}</Text>{sess.sublabel && <Text style={s.detailSub}>{sess.sublabel}</Text>}<Text style={s.detailSub}>{sess.count} session{sess.count > 1 ? "s" : ""}</Text></View><Text style={[s.detailTime, { color: BAR_COLOR }]}>{formatDurationLocalized(sess.duration, language)}</Text></View>
+              ))}
+            </View>
+          )}
+          {beatSessionDetails.length === 0 && barSessionDetails.length === 0 && (
+            <Text style={s.emptyHint}>{t("workUp", "noSessionsRecorded").replace("{0}", periodLabel.toLowerCase())}</Text>
+          )}
+        </View>
+      )}
+    </View>
+  );
+
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={s.overlay} onPress={onClose}>
@@ -531,280 +708,36 @@ export function WorkUpOverviewModal({
                 <Text style={s.disabledText}>{t("workUp", "enableLogging")}</Text>
               </View>
             ) : (
-              <View style={isLandscape ? { flexDirection: "row" as const, gap: 12 } : undefined}>
-              {/* ── Left column (landscape) ── */}
-              <View style={isLandscape ? { flex: 1 } : undefined}>
-                {/* ── Goals (top) ── */}
-                <View style={s.card}>
-                  <View style={s.cardHeader}>
-                    <View style={s.cardHeaderLeft}>
-                      <Ionicons name="flag" size={16} color={C.accent} />
-                      <Text style={[s.cardTitle, { color: C.accent }]}>{t("workUp", "goals")}</Text>
-                    </View>
-                    <Pressable testID="add-goal-btn" onPress={() => setShowAddGoal(!showAddGoal)} hitSlop={12} style={{ padding: 4 }}>
-                      <Ionicons name={showAddGoal ? "close-circle" : "add-circle"} size={20} color={C.accent} />
-                    </Pressable>
-                  </View>
+              <View style={isLandscape ? { flexDirection: "row" as const, gap: 12, flex: 1 } : undefined}>
 
-                  {showAddGoal && (
-                    <View style={[s.addForm, { borderColor: C.accentDim }]}>
-                      <View style={s.goalTypeRow}>
-                        {GOAL_TYPE_VALUES.map((val) => {
-                          const shortMap: Record<GoalTypeValue, string> = {
-                            total_play_time: t("workUp", "totalShort"),
-                            beat_mode_time: t("workUp", "beatShort"),
-                            bar_mode_time: t("workUp", "barShort"),
-                            room_time: t("workUp", "roomShort"),
-                          };
-                          return (
-                          <Pressable
-                            key={val}
-                            style={[s.goalTypeChip, newGoalType === val && { borderColor: C.accent, backgroundColor: C.accentDim }]}
-                            onPress={() => setNewGoalType(val)}
-                          >
-                            <Text style={[s.goalTypeChipText, newGoalType === val && { color: C.accent }]} numberOfLines={1}>
-                              {shortMap[val]}
-                            </Text>
-                          </Pressable>
-                          );
-                        })}
-                      </View>
-                      <View style={s.addFormRow}>
-                        <TextInput
-                          style={[s.formInput, { borderColor: C.accentMuted }]}
-                          value={newGoalTarget}
-                          onChangeText={setNewGoalTarget}
-                          placeholder={t("workUp", "minutesPlaceholder")}
-                          placeholderTextColor={Colors.textTertiary}
-                          keyboardType="numeric"
-                        />
-                        <Pressable style={[s.formSaveBtn, { backgroundColor: C.accent }]} onPress={handleAddGoal}>
-                          <Ionicons name="checkmark" size={16} color={Colors.surface} />
-                        </Pressable>
-                      </View>
-                    </View>
-                  )}
+              {/* ── Left: Play Time summary (landscape: ScrollView, portrait: inline) ── */}
+              {isLandscape ? (
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 10 }} showsVerticalScrollIndicator={false} bounces={false} nestedScrollEnabled>
+                  {renderPlayTime()}
+                </ScrollView>
+              ) : (
+                <>
+                  {renderGoals()}
+                  {renderPlayTime()}
+                </>
+              )}
 
-                  {goals.length === 0 && !showAddGoal ? (
-                    <Text style={s.emptyHint}>{t("workUp", "tapToSetGoal")}</Text>
-                  ) : (
-                    goals.map((goal) => {
-                      const progress = getGoalProgress(goal);
-                      const pct = Math.min(1, progress / goal.target);
-                      const goalColor = goal.type === "beat_mode_time" ? BEAT_COLOR : goal.type === "bar_mode_time" ? BAR_COLOR : goal.type === "room_time" ? ROOM_COLOR : goal.type === "session_goal" ? BAR_COLOR : C.accent;
-                      const isEditing = editingGoalId === goal.id;
-                      return (
-                        <Pressable
-                          key={goal.id}
-                          style={s.goalRow}
-                          onLongPress={() => {
-                            setEditingGoalId(goal.id);
-                            setEditGoalTarget(String(goal.target));
-                          }}
-                          delayLongPress={500}
-                        >
-                          <CircularProgress size={44} strokeWidth={4} progress={pct} color={goalColor} bgColor={Colors.surfaceLight}>
-                            <Text style={[s.goalPct, { color: goalColor }]}>{Math.round(pct * 100)}%</Text>
-                          </CircularProgress>
-                          <View style={s.goalInfo}>
-                            <Text style={s.goalLabel}>{goal.label}</Text>
-                            {isEditing ? (
-                              <View style={s.goalEditRow}>
-                                <TextInput
-                                  style={[s.goalEditInput, { borderColor: goalColor }]}
-                                  value={editGoalTarget}
-                                  onChangeText={setEditGoalTarget}
-                                  keyboardType="numeric"
-                                  autoFocus
-                                  selectTextOnFocus
-                                  onSubmitEditing={handleUpdateGoalTarget}
-                                />
-                                <Text style={s.goalEditUnit}>분</Text>
-                                <Pressable style={[s.goalEditSave, { backgroundColor: goalColor }]} onPress={handleUpdateGoalTarget}>
-                                  <Ionicons name="checkmark" size={14} color={Colors.surface} />
-                                </Pressable>
-                                <Pressable style={s.goalEditCancel} onPress={() => setEditingGoalId(null)}>
-                                  <Ionicons name="close" size={14} color={Colors.textTertiary} />
-                                </Pressable>
-                              </View>
-                            ) : (
-                              <Text style={s.goalProgress}>
-                                {Math.round(progress)}m / {goal.target}m
-                              </Text>
-                            )}
-                          </View>
-                          <Pressable onPress={() => handleDeleteGoal(goal.id)} hitSlop={8}>
-                            <Ionicons name="trash-outline" size={14} color={Colors.textTertiary} />
-                          </Pressable>
-                        </Pressable>
-                      );
-                    })
-                  )}
-                </View>
+              {/* ── Right: Goals + Completed + Year + Details (landscape: ScrollView, portrait: inline) ── */}
+              {isLandscape ? (
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 10 }} showsVerticalScrollIndicator={false} bounces={false} nestedScrollEnabled>
+                  {renderGoals()}
+                  {renderCompletedGoals()}
+                  {renderYearReview()}
+                  {renderSessionDetails()}
+                </ScrollView>
+              ) : (
+                <>
+                  {renderCompletedGoals()}
+                  {renderYearReview()}
+                  {renderSessionDetails()}
+                </>
+              )}
 
-                {/* ── Play Time (Today / Week / Month) ── */}
-                <View style={s.card}>
-                  <View style={s.cardHeader}>
-                    <Pressable onPress={() => cyclePeriod(-1)} hitSlop={12} style={{ opacity: playTimePeriod === "today" ? 0.2 : 1 }}>
-                      <Ionicons name="chevron-back" size={18} color={C.accent} />
-                    </Pressable>
-                    <View style={s.cardHeaderLeft}>
-                      <Ionicons name="time-outline" size={16} color={C.accent} />
-                      <Text style={[s.cardTitle, { color: Colors.text }]}>{periodLabel}</Text>
-                    </View>
-                    <Pressable onPress={() => cyclePeriod(1)} hitSlop={12} style={{ opacity: playTimePeriod === "month" ? 0.2 : 1 }}>
-                      <Ionicons name="chevron-forward" size={18} color={C.accent} />
-                    </Pressable>
-                  </View>
-
-                  <View style={s.periodDots}>
-                    {(["today", "week", "month"] as PlayTimePeriod[]).map((p) => (
-                      <View key={p} style={[s.periodDot, { backgroundColor: p === playTimePeriod ? C.accent : Colors.surfaceLight }]} />
-                    ))}
-                  </View>
-
-                  <View style={s.donutRow}>
-                    <DonutChart
-                      size={120}
-                      strokeWidth={10}
-                      segments={[
-                        { value: periodData.beat || 0.01, color: BEAT_COLOR },
-                        { value: periodData.bar || 0.01, color: BAR_COLOR },
-                      ]}
-                      bgColor={Colors.surfaceLight}
-                    >
-                      <Text style={[s.donutCenter, { color: C.accent }]}>{formatMinutes(periodData.total)}</Text>
-                      <Text style={s.donutUnit}>{t("workUp", "goalUnit")}</Text>
-                    </DonutChart>
-
-                    <View style={s.donutLegend}>
-                      <View style={s.legendItem}>
-                        <View style={[s.legendDot, { backgroundColor: BEAT_COLOR }]} />
-                        <View>
-                          <Text style={s.legendLabel}>{t("workUp", "beatMode")}</Text>
-                          <Text style={[s.legendValue, { color: BEAT_COLOR }]}>{formatDurationLocalized(periodData.beat, language)}</Text>
-                        </View>
-                      </View>
-                      <View style={s.legendItem}>
-                        <View style={[s.legendDot, { backgroundColor: BAR_COLOR }]} />
-                        <View>
-                          <Text style={s.legendLabel}>{t("workUp", "barMode")}</Text>
-                          <Text style={[s.legendValue, { color: BAR_COLOR }]}>{formatDurationLocalized(periodData.bar, language)}</Text>
-                        </View>
-                      </View>
-                      <View style={s.legendItem}>
-                        <View style={[s.legendDot, { backgroundColor: C.accent }]} />
-                        <View>
-                          <Text style={s.legendLabel}>{t("workUp", "total")}</Text>
-                          <Text style={[s.legendValue, { color: C.accent }]}>{formatDurationLocalized(periodData.total, language)}</Text>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              </View>
-              {/* ── Right column (landscape) ── */}
-              <View style={isLandscape ? { flex: 1 } : undefined}>
-
-                {goals.length > 0 && goals.some(g => getGoalProgress(g) >= g.target) && (
-                  <View style={s.card}>
-                    <View style={s.cardHeader}>
-                      <View style={s.cardHeaderLeft}>
-                        <Ionicons name="checkmark-done" size={16} color="#3fb950" />
-                        <Text style={[s.cardTitle, { color: "#3fb950" }]}>{t("workUp", "completedGoals")}</Text>
-                      </View>
-                    </View>
-                    {goals.filter(g => getGoalProgress(g) >= g.target).map((goal) => {
-                      const progress = getGoalProgress(goal);
-                      const goalColor = goal.type === "beat_mode_time" ? BEAT_COLOR : goal.type === "bar_mode_time" ? BAR_COLOR : goal.type === "room_time" ? ROOM_COLOR : goal.type === "session_goal" ? BAR_COLOR : C.accent;
-                      return (
-                        <View key={goal.id} style={s.goalRow}>
-                          <View style={[s.completedIcon, { backgroundColor: "rgba(63, 185, 80, 0.15)" }]}>
-                            <Ionicons name="checkmark-circle" size={22} color="#3fb950" />
-                          </View>
-                          <View style={s.goalInfo}>
-                            <Text style={s.goalLabel}>{goal.label}</Text>
-                            <Text style={[s.goalProgress, { color: "#3fb950" }]}>
-                              {Math.round(progress)}m / {goal.target}m ✓
-                            </Text>
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-
-                {hasLastYearData && (
-                  <Pressable style={[s.card, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]} onPress={() => setShowYearlySummary(true)}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                      <Ionicons name="trophy-outline" size={20} color="#FFD700" />
-                      <Text style={[s.cardTitle, { color: Colors.text }]}>{new Date().getFullYear() - 1} {t("workUp", "yearInReview")}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
-                  </Pressable>
-                )}
-
-                {/* ── Detailed Breakdown (+ button) ── */}
-                <View style={s.card}>
-                  <Pressable style={s.cardHeader} onPress={() => setShowDetails(!showDetails)}>
-                    <View style={s.cardHeaderLeft}>
-                      <MaterialCommunityIcons name="format-list-bulleted" size={16} color={C.accent} />
-                      <Text style={[s.cardTitle, { color: Colors.text }]}>{t("workUp", "sessionDetails")}</Text>
-                    </View>
-                    <Ionicons name={showDetails ? "chevron-up" : "chevron-down"} size={18} color={Colors.textSecondary} />
-                  </Pressable>
-
-                  {showDetails && (
-                    <View style={s.detailsWrap}>
-                      {/* Beat mode details */}
-                      {beatSessionDetails.length > 0 && (
-                        <View style={s.detailSection}>
-                          <View style={s.detailSectionHeader}>
-                            <View style={[s.legendDot, { backgroundColor: BEAT_COLOR }]} />
-                            <Text style={[s.detailSectionTitle, { color: BEAT_COLOR }]}>{t("workUp", "beatModeSessions")}</Text>
-                          </View>
-                          {beatSessionDetails.map((sess, i) => (
-                            <View key={i} style={s.detailRow}>
-                              <View style={s.detailInfo}>
-                                <Text style={s.detailMain}>{sess.bpm} BPM</Text>
-                                <Text style={s.detailSub}>{sess.count} session{sess.count > 1 ? "s" : ""}</Text>
-                              </View>
-                              <Text style={[s.detailTime, { color: BEAT_COLOR }]}>{formatDurationLocalized(sess.duration, language)}</Text>
-                            </View>
-                          ))}
-                        </View>
-                      )}
-
-                      {/* Bar mode details */}
-                      {barSessionDetails.length > 0 && (
-                        <View style={s.detailSection}>
-                          <View style={s.detailSectionHeader}>
-                            <View style={[s.legendDot, { backgroundColor: BAR_COLOR }]} />
-                            <Text style={[s.detailSectionTitle, { color: BAR_COLOR }]}>{t("workUp", "barModeSessions")}</Text>
-                          </View>
-                          {barSessionDetails.map((sess, i) => (
-                            <View key={i} style={s.detailRow}>
-                              <View style={s.detailInfo}>
-                                <Text style={s.detailMain}>{sess.label}</Text>
-                                {sess.sublabel && (
-                                  <Text style={s.detailSub}>{sess.sublabel}</Text>
-                                )}
-                                <Text style={s.detailSub}>{sess.count} session{sess.count > 1 ? "s" : ""}</Text>
-                              </View>
-                              <Text style={[s.detailTime, { color: BAR_COLOR }]}>{formatDurationLocalized(sess.duration, language)}</Text>
-                            </View>
-                          ))}
-                        </View>
-                      )}
-
-                      {beatSessionDetails.length === 0 && barSessionDetails.length === 0 && (
-                        <Text style={s.emptyHint}>{t("workUp", "noSessionsRecorded").replace("{0}", periodLabel.toLowerCase())}</Text>
-                      )}
-                    </View>
-                  )}
-                </View>
-
-              </View>
               </View>
             )}
           </Pressable>
