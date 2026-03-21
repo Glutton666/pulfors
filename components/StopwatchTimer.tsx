@@ -591,47 +591,88 @@ export function StopwatchTimer({
     const swTime = formatTime(elapsed);
     const timerDisplay = formatCountdown(remaining);
     return (
-      <View style={[styles.landscapeContainer, { flexDirection: "column" as const, alignItems: "stretch" as const }]}>
-        <View style={[styles.landscapeDisplay, { flex: 0 }]}>
-          {state === "countdown" ? (
-            <Animated.Text style={[styles.landscapeTime, { color: C.accent }, runningDotStyle]}>
-              {countdownLeft}
-            </Animated.Text>
-          ) : mode === "stopwatch" ? (
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-              {state === "running" && <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.success, marginRight: 4 }, runningDotStyle]} />}
-              {state === "finishing" && <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.danger, marginRight: 4 }, finishingStyle]} />}
-              <Text style={[styles.landscapeTime, { color: Colors.text }, state === "finishing" && { color: Colors.danger }]}>{swTime.main}</Text>
-            </View>
-          ) : (
-            <Text style={[styles.landscapeTime, { textAlign: "center" as const, color: Colors.text }, state === "finishing" && { color: Colors.danger }]}>
-              {timerDisplay}
-            </Text>
-          )}
-        </View>
-        <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 6 }}>
+      <View style={[styles.landscapeContainer, { flexDirection: "row" as const, alignItems: "center" as const, overflow: "hidden" as const }]}>
         <View style={styles.landscapeTabRow}>
           <Pressable
             onPress={() => switchMode("stopwatch")}
             style={[styles.landscapeTab, mode === "stopwatch" && { backgroundColor: C.accentDim }]}
           >
             <MaterialCommunityIcons name="timer-outline" size={12} color={mode === "stopwatch" ? C.accent : Colors.textTertiary} />
-            <Text style={[styles.landscapeTabText, mode === "stopwatch" && { color: C.accent }]}>
-              {t("stopwatchTimer", "stopwatch")}
-            </Text>
           </Pressable>
           <Pressable
             onPress={() => switchMode("timer")}
             style={[styles.landscapeTab, mode === "timer" && { backgroundColor: C.accentDim }]}
           >
             <MaterialCommunityIcons name="av-timer" size={12} color={mode === "timer" ? C.accent : Colors.textTertiary} />
-            <Text style={[styles.landscapeTabText, mode === "timer" && { color: C.accent }]}>
-              {t("stopwatchTimer", "timer")}
-            </Text>
           </Pressable>
         </View>
+        <View style={{ flex: 1, flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 6 }}>
+          {state === "countdown" ? (
+            <Animated.Text style={[styles.landscapeTime, { color: C.accent }, runningDotStyle]} numberOfLines={1}>
+              {countdownLeft}
+            </Animated.Text>
+          ) : mode === "stopwatch" ? (
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              {state === "running" && <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.success, marginRight: 4 }, runningDotStyle]} />}
+              {state === "finishing" && <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.danger, marginRight: 4 }, finishingStyle]} />}
+              <Text style={[styles.landscapeTime, { color: Colors.text }, state === "finishing" && { color: Colors.danger }]} numberOfLines={1}>{swTime.main}</Text>
+            </View>
+          ) : (
+            <Text style={[styles.landscapeTime, { color: Colors.text }, state === "finishing" && { color: Colors.danger }]} numberOfLines={1}>
+              {timerDisplay}
+            </Text>
+          )}
+          {state === "idle" && (
+            <Pressable
+              onPress={mode === "stopwatch" ? startStopwatch : startTimer}
+              style={[styles.landscapeBtn, { backgroundColor: C.accentDim, borderColor: C.accent, width: 28, height: 20, borderRadius: 6 }]}
+            >
+              <Ionicons name="play" size={10} color={C.accent} />
+            </Pressable>
+          )}
+          {state === "running" && (
+            <Pressable
+              onPress={mode === "stopwatch" ? pauseStopwatch : pauseTimer}
+              style={[styles.landscapeBtn, { backgroundColor: Colors.surfaceLight, borderColor: Colors.border, width: 28, height: 20, borderRadius: 6 }]}
+            >
+              <Ionicons name="pause" size={10} color={Colors.textSecondary} />
+            </Pressable>
+          )}
+          {state === "finishing" && (
+            <Pressable
+              onPress={mode === "stopwatch" ? resetStopwatch : resetTimer}
+              style={[styles.landscapeBtn, { backgroundColor: "#3a1a1a", borderColor: Colors.danger, width: 28, height: 20, borderRadius: 6 }]}
+            >
+              <Ionicons name="stop" size={10} color={Colors.danger} />
+            </Pressable>
+          )}
+          {state === "paused" && (
+            <>
+              <Pressable
+                onPress={mode === "stopwatch" ? startStopwatch : startTimer}
+                style={[styles.landscapeBtn, { backgroundColor: C.accentDim, borderColor: C.accent, width: 28, height: 20, borderRadius: 6 }]}
+              >
+                <Ionicons name="play" size={10} color={C.accent} />
+              </Pressable>
+              <Pressable
+                onPress={mode === "stopwatch" ? resetStopwatch : resetTimer}
+                style={[styles.landscapeBtn, { backgroundColor: Colors.surfaceLight, borderColor: Colors.border, width: 28, height: 20, borderRadius: 6 }]}
+              >
+                <Ionicons name="refresh" size={10} color={Colors.textSecondary} />
+              </Pressable>
+            </>
+          )}
+          {state === "countdown" && (
+            <Pressable
+              onPress={mode === "stopwatch" ? resetStopwatch : resetTimer}
+              style={[styles.landscapeBtn, { backgroundColor: Colors.surfaceLight, borderColor: Colors.border, width: 28, height: 20, borderRadius: 6 }]}
+            >
+              <Ionicons name="close" size={10} color={Colors.textSecondary} />
+            </Pressable>
+          )}
+        </View>
         {mode === "timer" && state === "idle" && (
-          <View style={styles.landscapePresetRow}>
+          <View style={[styles.landscapePresetRow, { marginLeft: 4 }]}>
             {TIMER_PRESETS.map((p) => (
               <Pressable
                 key={p.seconds}
@@ -645,57 +686,6 @@ export function StopwatchTimer({
             ))}
           </View>
         )}
-        <View style={styles.landscapeBtnRow}>
-          {state === "idle" && (
-            <Pressable
-              onPress={mode === "stopwatch" ? startStopwatch : startTimer}
-              style={[styles.landscapeBtn, { backgroundColor: C.accentDim, borderColor: C.accent }]}
-            >
-              <Ionicons name="play" size={14} color={C.accent} />
-            </Pressable>
-          )}
-          {state === "running" && (
-            <Pressable
-              onPress={mode === "stopwatch" ? pauseStopwatch : pauseTimer}
-              style={[styles.landscapeBtn, { backgroundColor: Colors.surfaceLight, borderColor: Colors.border }]}
-            >
-              <Ionicons name="pause" size={14} color={Colors.textSecondary} />
-            </Pressable>
-          )}
-          {state === "finishing" && (
-            <Pressable
-              onPress={mode === "stopwatch" ? resetStopwatch : resetTimer}
-              style={[styles.landscapeBtn, { backgroundColor: "#3a1a1a", borderColor: Colors.danger }]}
-            >
-              <Ionicons name="stop" size={14} color={Colors.danger} />
-            </Pressable>
-          )}
-          {state === "paused" && (
-            <>
-              <Pressable
-                onPress={mode === "stopwatch" ? startStopwatch : startTimer}
-                style={[styles.landscapeBtn, { backgroundColor: C.accentDim, borderColor: C.accent }]}
-              >
-                <Ionicons name="play" size={14} color={C.accent} />
-              </Pressable>
-              <Pressable
-                onPress={mode === "stopwatch" ? resetStopwatch : resetTimer}
-                style={[styles.landscapeBtn, { backgroundColor: Colors.surfaceLight, borderColor: Colors.border }]}
-              >
-                <Ionicons name="refresh" size={14} color={Colors.textSecondary} />
-              </Pressable>
-            </>
-          )}
-          {state === "countdown" && (
-            <Pressable
-              onPress={mode === "stopwatch" ? resetStopwatch : resetTimer}
-              style={[styles.landscapeBtn, { backgroundColor: Colors.surfaceLight, borderColor: Colors.border }]}
-            >
-              <Ionicons name="close" size={14} color={Colors.textSecondary} />
-            </Pressable>
-          )}
-        </View>
-        </View>
       </View>
     );
   }
