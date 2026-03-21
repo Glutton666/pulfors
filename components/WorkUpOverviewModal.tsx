@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Dimensions,
   Image,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -211,6 +212,8 @@ export function WorkUpOverviewModal({
   const { language, t } = useLanguage();
   const insets = useSafeAreaInsets();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
+  const { width: winW, height: winH } = useWindowDimensions();
+  const isLandscape = winW > winH;
 
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -528,7 +531,9 @@ export function WorkUpOverviewModal({
                 <Text style={s.disabledText}>{t("workUp", "enableLogging")}</Text>
               </View>
             ) : (
-              <>
+              <View style={isLandscape ? { flexDirection: "row" as const, gap: 12 } : undefined}>
+              {/* ── Left column (landscape) ── */}
+              <View style={isLandscape ? { flex: 1 } : undefined}>
                 {/* ── Goals (top) ── */}
                 <View style={s.card}>
                   <View style={s.cardHeader}>
@@ -697,6 +702,9 @@ export function WorkUpOverviewModal({
                     </View>
                   </View>
                 </View>
+              </View>
+              {/* ── Right column (landscape) ── */}
+              <View style={isLandscape ? { flex: 1 } : undefined}>
 
                 {goals.length > 0 && goals.some(g => getGoalProgress(g) >= g.target) && (
                   <View style={s.card}>
@@ -796,7 +804,8 @@ export function WorkUpOverviewModal({
                   )}
                 </View>
 
-              </>
+              </View>
+              </View>
             )}
           </Pressable>
         </ScrollView>
