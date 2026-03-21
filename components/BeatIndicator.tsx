@@ -2283,15 +2283,15 @@ const styles = StyleSheet.create({
   },
   signatureRow: {
     position: "absolute",
-    width: moderateScale(90),
-    height: moderateScale(90),
+    width: moderateScale(160),
+    height: moderateScale(160),
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
   },
   digitalSignature: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: moderateScale(72, 0.4),
+    fontSize: moderateScale(116, 0.4),
     color: Colors.textTertiary,
     opacity: 0.15,
   },
