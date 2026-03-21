@@ -1125,16 +1125,22 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
             </>
           )}
 
+          {isLandscape && (
+            <Pressable
+              onPress={handleClose}
+              hitSlop={12}
+              style={{
+                position: "absolute" as const, top: -14, left: "50%" as any, marginLeft: -13, zIndex: 10,
+                width: 26, height: 26, borderRadius: 6,
+                backgroundColor: Colors.surfaceLight, borderWidth: 1, borderColor: Colors.border,
+                alignItems: "center" as const, justifyContent: "center" as const,
+              }}
+            >
+              <Ionicons name="close" size={14} color={Colors.textSecondary} />
+            </Pressable>
+          )}
+
           <View style={[styles.knobWrap, isLandscape && { flex: 1, overflow: "hidden" as const }]}>
-            {isLandscape && (
-              <View style={[styles.header, { alignSelf: "stretch" as const, marginBottom: 8 }]}>
-                <MaterialCommunityIcons name="waveform" size={16} color={C.accent} />
-                <Text style={[styles.title, { color: C.accent, fontSize: 14 }]}>{t("signalGenerator", "title")}</Text>
-                <Pressable onPress={handleClose} hitSlop={12} style={styles.closeBtn}>
-                  <Ionicons name="close" size={18} color={Colors.textSecondary} />
-                </Pressable>
-              </View>
-            )}
             <Knob
               value={freqNorm}
               onChange={handleFreqKnob}
@@ -1239,17 +1245,17 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                 }}
                 style={({ pressed }) => [
                   styles.playBtn,
-                  { backgroundColor: isPlaying ? Colors.danger : C.accent, marginTop: 6, alignSelf: "stretch" as const, paddingVertical: 5, borderRadius: 8 },
+                  { backgroundColor: isPlaying ? Colors.danger : C.accent, marginTop: 4, alignSelf: "stretch" as const, paddingVertical: 3, borderRadius: 6 },
                   pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
                 ]}
                 testID="signal-toggle"
               >
                 <Ionicons
                   name={isPlaying ? "stop" : "play"}
-                  size={14}
+                  size={12}
                   color={isPlaying ? Colors.white : Colors.background}
                 />
-                <Text style={[styles.playBtnText, { color: isPlaying ? Colors.white : Colors.background, fontSize: 11 }]}>
+                <Text style={[styles.playBtnText, { color: isPlaying ? Colors.white : Colors.background, fontSize: 10 }]}>
                   {isPlaying ? t("signalGenerator", "stop") : t("signalGenerator", "play")}
                 </Text>
               </Pressable>
