@@ -3003,7 +3003,7 @@ export default function MetronomeScreen() {
         style={[
           styles.menuButton,
           { top: (insets.top || webTopInset) + 12 },
-          isLandscape && { right: undefined, left: 20 },
+          isLandscape && { right: undefined, left: 20, top: (insets.top || webTopInset) + 4 },
         ]}
         onPress={() => setShowMenu(!showMenu)}
         hitSlop={8}

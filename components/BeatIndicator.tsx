@@ -2226,18 +2226,33 @@ export function BeatIndicator({
         </View>
       </View>
 
-      <Pressable
-        onPress={() => onBarModeChange(true)}
-        style={styles.barModeHandle}
-        testID="open-bar-mode"
-        hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
-        accessibilityRole="button"
-        accessibilityLabel="Open bar mode"
-      >
-        <Ionicons name="chevron-up" size={18} color={Colors.textTertiary} />
-      </Pressable>
+      {!isLandscape && (
+        <Pressable
+          onPress={() => onBarModeChange(true)}
+          style={styles.barModeHandle}
+          testID="open-bar-mode"
+          hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+          accessibilityRole="button"
+          accessibilityLabel="Open bar mode"
+        >
+          <Ionicons name="chevron-up" size={18} color={Colors.textTertiary} />
+        </Pressable>
+      )}
 
-      <Text style={styles.hintText}>swipe to add or remove beats</Text>
+      {isLandscape && (
+        <Pressable
+          onPress={() => onBarModeChange(true)}
+          style={styles.barModeHandleLandscape}
+          testID="open-bar-mode"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Open bar mode"
+        >
+          <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
+        </Pressable>
+      )}
+
+      {!isLandscape && <Text style={styles.hintText}>swipe to add or remove beats</Text>}
     </View>
   );
 }
@@ -2573,6 +2588,16 @@ const styles = StyleSheet.create({
     minHeight: 36,
     backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: 12,
+  },
+  barModeHandleLandscape: {
+    position: "absolute" as const,
+    right: -4,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderRadius: 8,
   },
   barSubdivisionSlot: {
     paddingHorizontal: 8,
