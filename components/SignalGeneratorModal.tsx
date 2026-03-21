@@ -1157,7 +1157,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
               style={[
                 styles.micEmoji,
                 micListening && styles.micEmojiActive,
-                isLandscape && { top: 48, right: 84, width: 24, height: 24, borderRadius: 12 },
+                isLandscape && { top: 24, right: 42, width: 24, height: 24, borderRadius: 12 },
               ]}
               hitSlop={8}
               testID="signal-mic-toggle"
