@@ -1276,7 +1276,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                 hapticFeedback();
                 setTuningGuideOpen(true);
               }}
-              style={[styles.tuningGuideToggle, { marginTop: -24 }]}
+              style={[styles.tuningGuideToggle]}
             >
               <MaterialCommunityIcons name="music-note-outline" size={14} color={Colors.textTertiary} />
               <Text style={styles.tuningGuideToggleText}>
