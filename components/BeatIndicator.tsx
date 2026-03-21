@@ -1652,6 +1652,47 @@ export function BeatIndicator({
             )}
           </View>
 
+          <Modal visible={barTimerEditing} transparent animationType="fade" onRequestClose={() => setBarTimerEditing(false)}>
+            <View style={styles.barTimerOverlay}>
+              <Pressable style={StyleSheet.absoluteFill} onPress={() => setBarTimerEditing(false)} />
+              <View style={{ alignItems: "center", gap: 10 }}>
+                <View style={{ backgroundColor: Colors.backgroundSecondary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, gap: 6, minWidth: 200 }}>
+                  <Text style={{ color: Colors.textSecondary, fontSize: 11, fontWeight: "600" as const, textAlign: "center", marginBottom: 2 }}>Clock Mode</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.accent }} />
+                    <Text style={{ color: Colors.text, fontSize: 12 }}>Stopwatch — tap to start/reset</Text>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.danger }} />
+                    <Text style={{ color: Colors.text, fontSize: 12 }}>Timer — set time, auto-stop</Text>
+                  </View>
+                  <Text style={{ color: Colors.textTertiary, fontSize: 10, textAlign: "center", marginTop: 2 }}>Swipe left/right to switch mode</Text>
+                </View>
+                <View style={styles.barTimerCard}>
+                  <View style={styles.barTimerHeader}>
+                    <Ionicons name="timer-outline" size={20} color={Colors.danger} />
+                    <Text style={styles.barTimerTitle}>Timer</Text>
+                  </View>
+                  <TextInput
+                    style={[styles.barTimerInput, { borderBottomColor: C.accent, color: C.accent }]}
+                    value={barTimerInput}
+                    onChangeText={setBarTimerInput}
+                    onSubmitEditing={commitBarTimerInput}
+                    keyboardType="numbers-and-punctuation"
+                    autoFocus
+                    selectTextOnFocus
+                    placeholder="M:SS"
+                    placeholderTextColor={Colors.textTertiary}
+                  />
+                  <Text style={styles.barTimerHint}>M:SS or seconds</Text>
+                  <Pressable onPress={commitBarTimerInput} style={[styles.barTimerSetBtn, { backgroundColor: Colors.danger }]}>
+                    <Text style={styles.barTimerSetText}>Set</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
         </View>
       );
     }
