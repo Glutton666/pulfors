@@ -547,12 +547,12 @@ export function NoteModeView({
           styles.playButton,
           { backgroundColor: isPlaying ? Colors.danger : C.accent },
           queue.length === 0 && { opacity: 0.4 },
-          isLandscape && { width: 36, height: 36, borderRadius: 18 },
+          isLandscape && { width: 44, height: 44, borderRadius: 10 },
         ]}
         onPress={onTogglePlay}
         disabled={queue.length === 0}
       >
-        <Ionicons name={isPlaying ? "stop" : "play"} size={isLandscape ? 20 : 28} color="#fff" />
+        <Ionicons name={isPlaying ? "stop" : "play"} size={isLandscape ? 24 : 28} color="#fff" />
       </Pressable>
     </View>
   );
