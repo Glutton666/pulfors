@@ -1828,10 +1828,9 @@ export default function MetronomeScreen() {
       if (!engine.getIsRunning()) {
         if (noteModeRef.current && noteIsPlayingRef.current) {
           const beatMs = Math.round(60000 / (bpmRef.current || 120));
-          const gapMs = Math.min(beatMs, 300);
           setTimeout(() => {
             noteAdvanceQueueRef.current();
-          }, gapMs);
+          }, beatMs);
           return;
         }
         if (webRenderedLoopRef.current) {
