@@ -8,6 +8,7 @@ import {
   Alert,
   Platform,
   Image,
+  useWindowDimensions,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
@@ -249,6 +250,8 @@ export function NoteModeView({
 }: NoteModeViewProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
+  const { width: winW, height: winH } = useWindowDimensions();
+  const isLandscape = winW > winH;
   const [sourceViewMode, setSourceViewMode] = useState<"list" | "grid">("list");
   const [sourceCollapsed, setSourceCollapsed] = useState(false);
 
@@ -298,7 +301,83 @@ export function NoteModeView({
   const prevEntry = currentIndex > 0 ? queue[currentIndex - 1] : (playMode === "loop" && queue.length > 0 ? queue[queue.length - 1] : null);
   const nextEntry = currentIndex < queue.length - 1 ? queue[currentIndex + 1] : (playMode === "loop" && queue.length > 0 ? queue[0] : null);
 
+  const renderPlayingStrip = () => (
+    <View style={[styles.playingStrip, isLandscape && { flexDirection: "column" as const }]}>
+      <View style={[styles.stripItem, styles.stripItemDim]}>
+        {prevEntry ? (
+          <>
+            {prevEntry.imageUri ? (
+              <Image source={{ uri: prevEntry.imageUri }} style={styles.stripThumb} />
+            ) : (
+              <View style={[styles.stripThumb, styles.stripThumbEmpty]}>
+                <Ionicons name="musical-note" size={10} color={Colors.textTertiary} />
+              </View>
+            )}
+            <Text style={styles.stripLabel} numberOfLines={1}>{prevEntry.label}</Text>
+          </>
+        ) : <View style={{ flex: 1 }} />}
+      </View>
+      <View style={[styles.stripItem, styles.stripItemActive, { borderColor: C.accent }]}>
+        {currentEntry?.imageUri ? (
+          <Image source={{ uri: currentEntry.imageUri }} style={styles.stripThumb} />
+        ) : (
+          <View style={[styles.stripThumb, styles.stripThumbEmpty, { borderColor: C.accent }]}>
+            <Ionicons name="play" size={10} color={C.accent} />
+          </View>
+        )}
+        <Text style={[styles.stripLabel, { color: C.accent, fontFamily: "SpaceGrotesk_600SemiBold" }]} numberOfLines={1}>{currentEntry?.label}</Text>
+      </View>
+      <View style={[styles.stripItem, styles.stripItemDim]}>
+        {nextEntry ? (
+          <>
+            {nextEntry.imageUri ? (
+              <Image source={{ uri: nextEntry.imageUri }} style={styles.stripThumb} />
+            ) : (
+              <View style={[styles.stripThumb, styles.stripThumbEmpty]}>
+                <Ionicons name="musical-note" size={10} color={Colors.textTertiary} />
+              </View>
+            )}
+            <Text style={styles.stripLabel} numberOfLines={1}>{nextEntry.label}</Text>
+          </>
+        ) : <View style={{ flex: 1 }} />}
+      </View>
+    </View>
+  );
+
   if (isPlaying && queue.length > 0) {
+    if (isLandscape) {
+      return (
+        <View style={[styles.container, { flexDirection: "row" as const }]}>
+          <View style={styles.landscapePlayingLeft}>
+            <View style={styles.playingImageArea}>
+              {currentEntry?.imageUri ? (
+                <Image source={{ uri: currentEntry.imageUri }} style={styles.playingImage} resizeMode="contain" />
+              ) : (
+                <View style={styles.playingImagePlaceholder}>
+                  <Ionicons name="musical-notes" size={36} color={Colors.textTertiary} />
+                  <Text style={[styles.playingImagePlaceholderText, { fontSize: 14 }]}>{currentEntry?.label}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+          <View style={styles.landscapePlayingRight}>
+            <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 8, marginBottom: 6 }}>
+              <View style={[styles.progressBadge, { backgroundColor: C.accent + "22" }]}>
+                <Text style={[styles.progressText, { color: C.accent }]}>{currentIndex + 1}/{queue.length}</Text>
+              </View>
+              <Pressable
+                style={[styles.playButton, { backgroundColor: Colors.danger, width: 36, height: 36, borderRadius: 18 }]}
+                onPress={onTogglePlay}
+              >
+                <Ionicons name="stop" size={20} color="#fff" />
+              </Pressable>
+            </View>
+            {renderPlayingStrip()}
+          </View>
+        </View>
+      );
+    }
+
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -323,49 +402,7 @@ export function NoteModeView({
         </View>
 
         <View style={styles.playingStripContainer}>
-          <View style={styles.playingStrip}>
-            <View style={[styles.stripItem, styles.stripItemDim]}>
-              {prevEntry ? (
-                <>
-                  {prevEntry.imageUri ? (
-                    <Image source={{ uri: prevEntry.imageUri }} style={styles.stripThumb} />
-                  ) : (
-                    <View style={[styles.stripThumb, styles.stripThumbEmpty]}>
-                      <Ionicons name="musical-note" size={10} color={Colors.textTertiary} />
-                    </View>
-                  )}
-                  <Text style={styles.stripLabel} numberOfLines={1}>{prevEntry.label}</Text>
-                </>
-              ) : <View style={{ flex: 1 }} />}
-            </View>
-
-            <View style={[styles.stripItem, styles.stripItemActive, { borderColor: C.accent }]}>
-              {currentEntry?.imageUri ? (
-                <Image source={{ uri: currentEntry.imageUri }} style={styles.stripThumb} />
-              ) : (
-                <View style={[styles.stripThumb, styles.stripThumbEmpty, { borderColor: C.accent }]}>
-                  <Ionicons name="play" size={10} color={C.accent} />
-                </View>
-              )}
-              <Text style={[styles.stripLabel, { color: C.accent, fontFamily: "SpaceGrotesk_600SemiBold" }]} numberOfLines={1}>{currentEntry?.label}</Text>
-            </View>
-
-            <View style={[styles.stripItem, styles.stripItemDim]}>
-              {nextEntry ? (
-                <>
-                  {nextEntry.imageUri ? (
-                    <Image source={{ uri: nextEntry.imageUri }} style={styles.stripThumb} />
-                  ) : (
-                    <View style={[styles.stripThumb, styles.stripThumbEmpty]}>
-                      <Ionicons name="musical-note" size={10} color={Colors.textTertiary} />
-                    </View>
-                  )}
-                  <Text style={styles.stripLabel} numberOfLines={1}>{nextEntry.label}</Text>
-                </>
-              ) : <View style={{ flex: 1 }} />}
-            </View>
-          </View>
-
+          {renderPlayingStrip()}
           <Pressable
             style={[styles.playButton, { backgroundColor: Colors.danger }]}
             onPress={onTogglePlay}
@@ -377,73 +414,16 @@ export function NoteModeView({
     );
   }
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Pressable onPress={onExitNoteMode} hitSlop={8}>
-          <Ionicons name="arrow-back" size={22} color={Colors.textSecondary} />
-        </Pressable>
-        <Text style={[styles.title, { color: C.accent }]}>{t("noteMode", "title")}</Text>
-        <View style={styles.headerActions}>
-          <Pressable onPress={onSave} hitSlop={6} style={[styles.headerBtn, { borderColor: C.accent }]}>
-            <Ionicons name="save-outline" size={16} color={C.accent} />
-          </Pressable>
-          <Pressable onPress={handleReset} hitSlop={6} style={[styles.headerBtn, { borderColor: Colors.danger }]}>
-            <Ionicons name="refresh" size={16} color={Colors.danger} />
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.playControls}>
-        <View style={styles.playModeRow}>
-          {playModes.map((mode) => (
-            <Pressable
-              key={mode}
-              style={[
-                styles.playModeBtn,
-                playMode === mode && { backgroundColor: C.accent + "22", borderColor: C.accent },
-              ]}
-              onPress={() => onPlayModeChange(mode)}
-            >
-              <Ionicons
-                name={playModeIcons[mode] as any}
-                size={14}
-                color={playMode === mode ? C.accent : Colors.textTertiary}
-              />
-              <Text
-                style={[
-                  styles.playModeText,
-                  playMode === mode && { color: C.accent },
-                ]}
-              >
-                {playModeLabels[mode]}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Pressable
-          style={[
-            styles.playButton,
-            { backgroundColor: isPlaying ? Colors.danger : C.accent },
-            queue.length === 0 && { opacity: 0.4 },
-          ]}
-          onPress={onTogglePlay}
-          disabled={queue.length === 0}
-        >
-          <Ionicons name={isPlaying ? "stop" : "play"} size={28} color="#fff" />
-        </Pressable>
-      </View>
-
-      <View style={styles.sectionHeader}>
+  const renderQueueSection = () => (
+    <>
+      <View style={[styles.sectionHeader, isLandscape && { marginBottom: 4 }]}>
         <Text style={styles.sectionTitle}>{t("noteMode", "queue")}</Text>
         <Text style={styles.sectionCount}>{queue.length} {t("noteMode", "items")}</Text>
       </View>
-
-      <View style={[styles.queueContainer, sourceCollapsed && { flex: 2 }]}>
+      <View style={[styles.queueContainer, !isLandscape && sourceCollapsed && { flex: 2 }]}>
         {queue.length === 0 ? (
           <View style={styles.emptyQueue}>
-            <Ionicons name="musical-notes-outline" size={32} color={Colors.textTertiary} />
+            <Ionicons name="musical-notes-outline" size={isLandscape ? 24 : 32} color={Colors.textTertiary} />
             <Text style={styles.emptyQueueText}>{t("noteMode", "emptyQueue")}</Text>
           </View>
         ) : (
@@ -469,9 +449,13 @@ export function NoteModeView({
           />
         )}
       </View>
+    </>
+  );
 
+  const renderSourceSection = () => (
+    <>
       <Pressable
-        style={styles.sectionHeader}
+        style={[styles.sectionHeader, isLandscape && { marginBottom: 4 }]}
         onPress={() => setSourceCollapsed(prev => !prev)}
       >
         <View style={styles.sectionHeaderLeft}>
@@ -499,35 +483,15 @@ export function NoteModeView({
           </Pressable>
         )}
       </Pressable>
-
       {!sourceCollapsed && (
-        <View style={styles.sourceContainer}>
+        <View style={[styles.sourceContainer, isLandscape && { flex: 1 }]}>
           {barEntries.length === 0 ? (
             <View style={styles.emptySource}>
               <Text style={styles.emptySourceText}>{t("noteMode", "noBarEntries")}</Text>
             </View>
-          ) : sourceViewMode === "grid" ? (
-            <FlatList
-              key="src-grid"
-              data={barEntries}
-              keyExtractor={(item) => `srcg-${item.id}`}
-              numColumns={2}
-              columnWrapperStyle={srcGridStyles.row}
-              renderItem={({ item }) => (
-                <SourceGridItem
-                  entry={item}
-                  accentColor={C.accent}
-                  onAdd={() => onAddToQueue(item)}
-                  onInsertNext={() => onInsertNext(item)}
-                  isPlaying={isPlaying}
-                />
-              )}
-              showsVerticalScrollIndicator={false}
-              scrollEnabled={barEntries.length > 0}
-            />
           ) : (
             <FlatList
-              key="src-list"
+              key="src-list-ls"
               data={barEntries}
               keyExtractor={(item) => `source-${item.id}`}
               renderItem={({ item }) => (
@@ -545,6 +509,104 @@ export function NoteModeView({
           )}
         </View>
       )}
+    </>
+  );
+
+  const renderPlayControls = () => (
+    <View style={[styles.playControls, isLandscape && { marginBottom: 6 }]}>
+      <View style={styles.playModeRow}>
+        {playModes.map((mode) => (
+          <Pressable
+            key={mode}
+            style={[
+              styles.playModeBtn,
+              playMode === mode && { backgroundColor: C.accent + "22", borderColor: C.accent },
+              isLandscape && { paddingHorizontal: 6, paddingVertical: 4 },
+            ]}
+            onPress={() => onPlayModeChange(mode)}
+          >
+            <Ionicons
+              name={playModeIcons[mode] as any}
+              size={isLandscape ? 12 : 14}
+              color={playMode === mode ? C.accent : Colors.textTertiary}
+            />
+            <Text
+              style={[
+                styles.playModeText,
+                playMode === mode && { color: C.accent },
+                isLandscape && { fontSize: 9 },
+              ]}
+            >
+              {playModeLabels[mode]}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      <Pressable
+        style={[
+          styles.playButton,
+          { backgroundColor: isPlaying ? Colors.danger : C.accent },
+          queue.length === 0 && { opacity: 0.4 },
+          isLandscape && { width: 36, height: 36, borderRadius: 18 },
+        ]}
+        onPress={onTogglePlay}
+        disabled={queue.length === 0}
+      >
+        <Ionicons name={isPlaying ? "stop" : "play"} size={isLandscape ? 20 : 28} color="#fff" />
+      </Pressable>
+    </View>
+  );
+
+  if (isLandscape) {
+    return (
+      <View style={[styles.container, { flexDirection: "row" as const, gap: 12 }]}>
+        <View style={{ flex: 2 }}>
+          <View style={[styles.header, { marginBottom: 4 }]}>
+            <Pressable onPress={onExitNoteMode} hitSlop={8}>
+              <Ionicons name="arrow-back" size={18} color={Colors.textSecondary} />
+            </Pressable>
+            <Text style={[styles.title, { color: C.accent, fontSize: 14 }]}>{t("noteMode", "title")}</Text>
+            <View style={[styles.headerActions, { gap: 6 }]}>
+              <Pressable onPress={onSave} hitSlop={6} style={[styles.headerBtn, { borderColor: C.accent, width: 28, height: 28 }]}>
+                <Ionicons name="save-outline" size={13} color={C.accent} />
+              </Pressable>
+              <Pressable onPress={handleReset} hitSlop={6} style={[styles.headerBtn, { borderColor: Colors.danger, width: 28, height: 28 }]}>
+                <Ionicons name="refresh" size={13} color={Colors.danger} />
+              </Pressable>
+            </View>
+          </View>
+          {renderQueueSection()}
+        </View>
+        <View style={styles.landscapeRightPanel}>
+          {renderPlayControls()}
+          {renderSourceSection()}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Pressable onPress={onExitNoteMode} hitSlop={8}>
+          <Ionicons name="arrow-back" size={22} color={Colors.textSecondary} />
+        </Pressable>
+        <Text style={[styles.title, { color: C.accent }]}>{t("noteMode", "title")}</Text>
+        <View style={styles.headerActions}>
+          <Pressable onPress={onSave} hitSlop={6} style={[styles.headerBtn, { borderColor: C.accent }]}>
+            <Ionicons name="save-outline" size={16} color={C.accent} />
+          </Pressable>
+          <Pressable onPress={handleReset} hitSlop={6} style={[styles.headerBtn, { borderColor: Colors.danger }]}>
+            <Ionicons name="refresh" size={16} color={Colors.danger} />
+          </Pressable>
+        </View>
+      </View>
+
+      {renderPlayControls()}
+
+      {renderQueueSection()}
+
+      {renderSourceSection()}
     </View>
   );
 }
@@ -828,6 +890,17 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
     color: Colors.textSecondary,
+  },
+  landscapePlayingLeft: {
+    flex: 2,
+    marginRight: 10,
+  },
+  landscapePlayingRight: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  landscapeRightPanel: {
+    flex: 1,
   },
   removeBtn: {
     padding: 2,
