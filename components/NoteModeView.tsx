@@ -7,8 +7,10 @@ import {
   FlatList,
   Alert,
   Platform,
+  Image,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as ImagePicker from "expo-image-picker";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -32,6 +34,7 @@ interface NoteModeViewProps {
   onSave: () => void;
   onReset: () => void;
   onExitNoteMode: () => void;
+  onQueueItemImageChange?: (index: number, imageUri: string | undefined) => void;
 }
 
 const BEAT_COLORS: Record<BeatType, string> = {
@@ -72,6 +75,7 @@ function QueueItem({
   onRemove,
   onMoveUp,
   onMoveDown,
+  onImageChange,
 }: {
   entry: PracticeEntry;
   index: number;
@@ -82,8 +86,21 @@ function QueueItem({
   onRemove: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onImageChange?: (imageUri: string | undefined) => void;
 }) {
   const { t } = useLanguage();
+
+  const handlePickImage = useCallback(async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      onImageChange?.(result.assets[0].uri);
+    }
+  }, [onImageChange]);
+
   return (
     <View style={[styles.queueItem, isCurrent && { borderColor: accentColor, borderWidth: 1.5, backgroundColor: "rgba(212,168,70,0.08)" }]}>
       <View style={styles.reorderBtns}>
@@ -101,6 +118,13 @@ function QueueItem({
           <Text style={[styles.queueIndexText, isCurrent && { color: accentColor }]}>{index + 1}</Text>
         )}
       </View>
+      <Pressable onPress={handlePickImage} style={styles.queueThumb}>
+        {entry.imageUri ? (
+          <Image source={{ uri: entry.imageUri }} style={styles.queueThumbImg} />
+        ) : (
+          <Ionicons name="image-outline" size={16} color={Colors.textTertiary} />
+        )}
+      </Pressable>
       <View style={styles.queueItemInfo}>
         <Text style={[styles.queueItemLabel, isCurrent && { color: accentColor }]} numberOfLines={1}>
           {entry.label}
@@ -110,6 +134,11 @@ function QueueItem({
           <BeatDots beatTypes={entry.beatTypes} />
         </View>
       </View>
+      {entry.imageUri && (
+        <Pressable onPress={() => onImageChange?.(undefined)} hitSlop={6} style={{ padding: 2 }}>
+          <Ionicons name="image" size={14} color={accentColor} />
+        </Pressable>
+      )}
       <Pressable onPress={onRemove} hitSlop={8} style={styles.removeBtn}>
         <Ionicons name="close-circle" size={18} color={Colors.textTertiary} />
       </Pressable>
@@ -216,6 +245,7 @@ export function NoteModeView({
   onSave,
   onReset,
   onExitNoteMode,
+  onQueueItemImageChange,
 }: NoteModeViewProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -265,6 +295,87 @@ export function NoteModeView({
   }, [onReset, t]);
 
   const currentEntry = queue[currentIndex];
+  const prevEntry = currentIndex > 0 ? queue[currentIndex - 1] : (playMode === "loop" && queue.length > 0 ? queue[queue.length - 1] : null);
+  const nextEntry = currentIndex < queue.length - 1 ? queue[currentIndex + 1] : (playMode === "loop" && queue.length > 0 ? queue[0] : null);
+
+  if (isPlaying && queue.length > 0) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Pressable onPress={onExitNoteMode} hitSlop={8}>
+            <Ionicons name="arrow-back" size={22} color={Colors.textSecondary} />
+          </Pressable>
+          <Text style={[styles.title, { color: C.accent }]}>{t("noteMode", "title")}</Text>
+          <View style={[styles.progressBadge, { backgroundColor: C.accent + "22" }]}>
+            <Text style={[styles.progressText, { color: C.accent }]}>{currentIndex + 1}/{queue.length}</Text>
+          </View>
+        </View>
+
+        <View style={styles.playingImageArea}>
+          {currentEntry?.imageUri ? (
+            <Image source={{ uri: currentEntry.imageUri }} style={styles.playingImage} resizeMode="contain" />
+          ) : (
+            <View style={styles.playingImagePlaceholder}>
+              <Ionicons name="musical-notes" size={48} color={Colors.textTertiary} />
+              <Text style={styles.playingImagePlaceholderText}>{currentEntry?.label}</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.playingStripContainer}>
+          <View style={styles.playingStrip}>
+            <View style={[styles.stripItem, styles.stripItemDim]}>
+              {prevEntry ? (
+                <>
+                  {prevEntry.imageUri ? (
+                    <Image source={{ uri: prevEntry.imageUri }} style={styles.stripThumb} />
+                  ) : (
+                    <View style={[styles.stripThumb, styles.stripThumbEmpty]}>
+                      <Ionicons name="musical-note" size={10} color={Colors.textTertiary} />
+                    </View>
+                  )}
+                  <Text style={styles.stripLabel} numberOfLines={1}>{prevEntry.label}</Text>
+                </>
+              ) : <View style={{ flex: 1 }} />}
+            </View>
+
+            <View style={[styles.stripItem, styles.stripItemActive, { borderColor: C.accent }]}>
+              {currentEntry?.imageUri ? (
+                <Image source={{ uri: currentEntry.imageUri }} style={styles.stripThumb} />
+              ) : (
+                <View style={[styles.stripThumb, styles.stripThumbEmpty, { borderColor: C.accent }]}>
+                  <Ionicons name="play" size={10} color={C.accent} />
+                </View>
+              )}
+              <Text style={[styles.stripLabel, { color: C.accent, fontFamily: "SpaceGrotesk_600SemiBold" }]} numberOfLines={1}>{currentEntry?.label}</Text>
+            </View>
+
+            <View style={[styles.stripItem, styles.stripItemDim]}>
+              {nextEntry ? (
+                <>
+                  {nextEntry.imageUri ? (
+                    <Image source={{ uri: nextEntry.imageUri }} style={styles.stripThumb} />
+                  ) : (
+                    <View style={[styles.stripThumb, styles.stripThumbEmpty]}>
+                      <Ionicons name="musical-note" size={10} color={Colors.textTertiary} />
+                    </View>
+                  )}
+                  <Text style={styles.stripLabel} numberOfLines={1}>{nextEntry.label}</Text>
+                </>
+              ) : <View style={{ flex: 1 }} />}
+            </View>
+          </View>
+
+          <Pressable
+            style={[styles.playButton, { backgroundColor: Colors.danger }]}
+            onPress={onTogglePlay}
+          >
+            <Ionicons name="stop" size={28} color="#fff" />
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -282,19 +393,6 @@ export function NoteModeView({
           </Pressable>
         </View>
       </View>
-
-      {isPlaying && currentEntry && (
-        <View style={[styles.nowPlaying, { borderColor: C.accent }]}>
-          <MaterialCommunityIcons name="music-note" size={16} color={C.accent} />
-          <Text style={[styles.nowPlayingLabel, { color: C.accent }]} numberOfLines={1}>
-            {currentEntry.label}
-          </Text>
-          <Text style={styles.nowPlayingBpm}>{currentEntry.bpm} BPM</Text>
-          <View style={[styles.progressBadge, { backgroundColor: C.accent + "22" }]}>
-            <Text style={[styles.progressText, { color: C.accent }]}>{currentIndex + 1}/{queue.length}</Text>
-          </View>
-        </View>
-      )}
 
       <View style={styles.playControls}>
         <View style={styles.playModeRow}>
@@ -363,6 +461,7 @@ export function NoteModeView({
                 onRemove={() => onRemoveFromQueue(index)}
                 onMoveUp={() => onReorderQueue(index, index - 1)}
                 onMoveDown={() => onReorderQueue(index, index + 1)}
+                onImageChange={(uri) => onQueueItemImageChange?.(index, uri)}
               />
             )}
             showsVerticalScrollIndicator={false}
@@ -633,6 +732,99 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   queueItemBpm: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 11,
+    color: Colors.textSecondary,
+  },
+  queueThumb: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  queueThumbImg: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+  },
+  playingImageArea: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: 8,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: "hidden",
+  },
+  playingImage: {
+    width: "100%",
+    height: "100%",
+  },
+  playingImagePlaceholder: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  playingImagePlaceholderText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 18,
+    color: Colors.textTertiary,
+    textAlign: "center",
+    paddingHorizontal: 20,
+  },
+  playingStripContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  playingStrip: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 6,
+  },
+  stripItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  stripItemActive: {
+    borderWidth: 1.5,
+    backgroundColor: "rgba(212,168,70,0.08)",
+  },
+  stripItemDim: {
+    opacity: 0.5,
+  },
+  stripThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  stripThumbEmpty: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stripLabel: {
+    flex: 1,
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
     color: Colors.textSecondary,

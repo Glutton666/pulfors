@@ -145,6 +145,7 @@ export interface PracticeEntry {
   noteQueueEntryIds?: string[];
   notePlayMode?: "once" | "loop" | "random";
   noteQueueEntries?: PracticeEntry[];
+  imageUri?: string;
 }
 
 export async function loadPracticeBook(): Promise<PracticeEntry[]> {

@@ -2528,6 +2528,17 @@ export default function MetronomeScreen() {
     }
   }, []);
 
+  const handleNoteQueueItemImageChange = useCallback((index: number, imageUri: string | undefined) => {
+    setNoteQueue(prev => {
+      const updated = [...prev];
+      if (updated[index]) {
+        updated[index] = { ...updated[index], imageUri };
+      }
+      noteQueueRef.current = updated;
+      return updated;
+    });
+  }, []);
+
   const handleNoteInsertNext = useCallback((entry: PracticeEntry) => {
     const ci = noteCurrentIndexRef.current;
     setNoteQueue(prev => {
@@ -2613,6 +2624,7 @@ export default function MetronomeScreen() {
           noteSampleSources: e.noteSampleSources,
           loopBlocks: (e as any).loopBlocks,
           blockPlayMode: (e as any).blockPlayMode,
+          imageUri: e.imageUri,
         })),
       }, username);
       const existing = await lpb();
@@ -3275,6 +3287,7 @@ export default function MetronomeScreen() {
             onSave={handleNoteSave}
             onReset={handleNoteReset}
             onExitNoteMode={handleExitNoteMode}
+            onQueueItemImageChange={handleNoteQueueItemImageChange}
           />
         ) : (
         <>
