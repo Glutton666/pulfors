@@ -3386,7 +3386,7 @@ export default function MetronomeScreen() {
         {!(isLandscape && barMode) && (
         <View style={[
           styles.bpmSection,
-          isLandscape && !barMode && { flex: 1, justifyContent: "center", gap: moderateScale(6, 0.3) },
+          isLandscape && !barMode && { flex: 2, justifyContent: "center", gap: 6 },
         ]}>
           {isLandscape && !barMode && !noteMode && (
             <StopwatchTimer
@@ -3483,9 +3483,10 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
   },
   topSectionLandscapeBeat: {
-    flex: 1,
+    flex: 3,
     justifyContent: "center",
     alignItems: "center",
+    paddingRight: moderateScale(50, 0.3),
   },
   bpmSection: {
     alignItems: "center",
