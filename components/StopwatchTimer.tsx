@@ -612,6 +612,21 @@ export function StopwatchTimer({
             </Text>
           </Pressable>
         </View>
+        {mode === "timer" && state === "idle" && (
+          <View style={styles.landscapePresetRow}>
+            {TIMER_PRESETS.map((p) => (
+              <Pressable
+                key={p.seconds}
+                onPress={() => adjustTimerDuration(p.seconds)}
+                style={[styles.landscapePresetChip, timerDuration === p.seconds && { backgroundColor: C.accentDim, borderColor: C.accent }]}
+              >
+                <Text style={[styles.landscapePresetText, timerDuration === p.seconds && { color: C.accent }]}>
+                  {p.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
         <View style={styles.landscapeDisplay}>
           {state === "countdown" ? (
             <Animated.Text style={[styles.landscapeTime, { color: C.accent }, runningDotStyle]}>
@@ -629,21 +644,6 @@ export function StopwatchTimer({
             </Text>
           )}
         </View>
-        {mode === "timer" && state === "idle" && (
-          <View style={styles.landscapePresetRow}>
-            {TIMER_PRESETS.map((p) => (
-              <Pressable
-                key={p.seconds}
-                onPress={() => adjustTimerDuration(p.seconds)}
-                style={[styles.landscapePresetChip, timerDuration === p.seconds && { backgroundColor: C.accentDim, borderColor: C.accent }]}
-              >
-                <Text style={[styles.landscapePresetText, timerDuration === p.seconds && { color: C.accent }]}>
-                  {p.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
         <View style={styles.landscapeBtnRow}>
           {state === "idle" && (
             <Pressable
