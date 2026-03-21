@@ -3438,10 +3438,11 @@ const styles = StyleSheet.create({
     maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: IS_TABLET ? "center" as const : undefined,
     width: IS_TABLET ? "100%" as any : undefined,
+    justifyContent: "flex-end",
   },
   topSection: {
     flex: 2,
-    justifyContent: "center",
+    justifyContent: "flex-end",
     alignItems: "center",
   },
   topSectionPortraitBar: {
