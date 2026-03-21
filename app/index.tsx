@@ -3268,11 +3268,11 @@ export default function MetronomeScreen() {
           />
         ) : (
         <>
-        <View style={isLandscape && !barMode ? { flexDirection: landscapeReversed ? "row-reverse" as const : "row" as const, flex: 1 } : undefined}>
+        <View style={isLandscape && !barMode ? { flexDirection: landscapeReversed ? "row-reverse" as const : "row" as const, flex: 1, alignItems: "center" as const } : undefined}>
         <View style={[
           styles.topSection,
           barMode && { justifyContent: "flex-start", flex: 3 },
-          isLandscape && !barMode && { flex: 3, justifyContent: "center", paddingRight: 20 },
+          isLandscape && !barMode && { flex: 0, justifyContent: "center", marginHorizontal: 12 },
         ]}>
           <BeatIndicator
             beatsPerMeasure={beatsPerMeasure}
@@ -3339,44 +3339,69 @@ export default function MetronomeScreen() {
           />
         </View>
 
-        <View style={[
-          styles.bpmSection,
-          isLandscape && !barMode && { flex: 2, justifyContent: "center", gap: 6 },
-        ]}>
-          {isLandscape && !barMode && !noteMode && (
-            <StopwatchTimer
-              onTimerExpired={handleTimerExpired}
-              onStopRequested={handleTimerExpired}
-              onStartMetronome={startMetronome}
-              isMetronomePlaying={isPlaying}
-              currentBeat={currentBeat}
-              topInset={insets.top || webTopInset}
-              isLandscape={true}
+        {isLandscape && !barMode ? (
+          <View style={{ flex: 1, flexDirection: "row" as const, alignItems: "center" as const, gap: 12 }}>
+            <View style={{ flex: 1, justifyContent: "center" as const, alignItems: "center" as const, gap: 6 }}>
+              <BpmSlider
+                bpm={bpm}
+                onBpmChange={updateBpm}
+                onTapTempo={handleTapTempo}
+                halfTime={halfTime}
+                onHalfTimeToggle={toggleHalfTime}
+                isLandscape={isLandscape}
+              />
+            </View>
+            <View style={{ flex: 1, justifyContent: "center" as const, gap: 6 }}>
+              {!noteMode && (
+                <StopwatchTimer
+                  onTimerExpired={handleTimerExpired}
+                  onStopRequested={handleTimerExpired}
+                  onStartMetronome={startMetronome}
+                  isMetronomePlaying={isPlaying}
+                  currentBeat={currentBeat}
+                  topInset={insets.top || webTopInset}
+                  isLandscape={true}
+                />
+              )}
+              <SubdivisionBar
+                pattern={subdivisionPattern}
+                onPatternChange={handlePatternChange}
+                onDragStart={handleDragStart}
+                onDragMove={handleDragMove}
+                onDragEnd={handleDragEnd}
+                onReset={handleReset}
+                isPlaying={isPlaying}
+                activeSubNote={activeSubNote}
+                activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
+              />
+            </View>
+          </View>
+        ) : (
+          <View style={styles.bpmSection}>
+            {!barMode && (
+              <SubdivisionBar
+                pattern={subdivisionPattern}
+                onPatternChange={handlePatternChange}
+                onDragStart={handleDragStart}
+                onDragMove={handleDragMove}
+                onDragEnd={handleDragEnd}
+                onReset={handleReset}
+                isPlaying={isPlaying}
+                activeSubNote={activeSubNote}
+                activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
+              />
+            )}
+            <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
+            <BpmSlider
+              bpm={bpm}
+              onBpmChange={updateBpm}
+              onTapTempo={handleTapTempo}
+              halfTime={halfTime}
+              onHalfTimeToggle={toggleHalfTime}
+              isLandscape={false}
             />
-          )}
-          {!barMode && (
-            <SubdivisionBar
-              pattern={subdivisionPattern}
-              onPatternChange={handlePatternChange}
-              onDragStart={handleDragStart}
-              onDragMove={handleDragMove}
-              onDragEnd={handleDragEnd}
-              onReset={handleReset}
-              isPlaying={isPlaying}
-              activeSubNote={activeSubNote}
-              activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
-            />
-          )}
-          {!isLandscape && <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>}
-          <BpmSlider
-            bpm={bpm}
-            onBpmChange={updateBpm}
-            onTapTempo={handleTapTempo}
-            halfTime={halfTime}
-            onHalfTimeToggle={toggleHalfTime}
-            isLandscape={isLandscape}
-          />
-        </View>
+          </View>
+        )}
         </View>
         </>
         )}
