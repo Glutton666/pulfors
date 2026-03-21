@@ -1600,13 +1600,6 @@ export function BeatIndicator({
 
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}>
               <Pressable
-                onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
-                style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure <= MIN_BEATS) && { opacity: 0.3 }]}
-                hitSlop={8}
-              >
-                <Ionicons name="remove" size={14} color={Colors.textSecondary} />
-              </Pressable>
-              <Pressable
                 onPress={handleSaveResetTap}
                 onLongPress={handleSaveResetLongPress}
                 delayLongPress={600}
@@ -1620,6 +1613,13 @@ export function BeatIndicator({
                 disabled={isPlaying}
               >
                 <Ionicons name={saveFlashVisible ? "checkmark-circle" : "bookmark-outline"} size={16} color={saveFlashVisible ? "#4CAF50" : C.accent} />
+              </Pressable>
+              <Pressable
+                onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+                style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure <= MIN_BEATS) && { opacity: 0.3 }]}
+                hitSlop={8}
+              >
+                <Ionicons name="remove" size={14} color={Colors.textSecondary} />
               </Pressable>
               <Pressable
                 onPress={onTogglePlay}
