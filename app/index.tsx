@@ -1402,28 +1402,72 @@ export default function MetronomeScreen() {
       setIsPreparing(true);
 
       try {
-        const renderedPlayer = await buildRenderedPlayer();
-        if (preparingCancelledRef.current) {
-          if (renderedPlayer) { try { renderedPlayer.release(); } catch {} }
+        if (Platform.OS === "web") {
+          const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
+          await ensureWebClickBuffers(src as any);
+          webClickReadyRef.current = true;
+
+          const ctx = getWebAudioContext();
+          if (ctx && ctx.state === "suspended") {
+            await ctx.resume();
+          }
+
+          if (preparingCancelledRef.current) {
+            setIsPreparing(false);
+            return;
+          }
           setIsPreparing(false);
-          return;
-        }
-        setIsPreparing(false);
 
-        if (renderedPlayer) {
-          stopRenderedAudio();
-          renderedPlayerRef.current = renderedPlayer;
-          renderedPlayer.volume = 1.0;
-          engine.setPreRenderedAudio(true);
+          if (webRenderedLoopRef.current) {
+            webRenderedLoopRef.current.stop();
+            webRenderedLoopRef.current = null;
+          }
+
+          try {
+            const scheduleInfo = engine.getScheduleInfo();
+            const clickPCMs = await getClickPCMs(soundSetRef.current);
+            const pcm = renderMeasure({
+              schedule: scheduleInfo.ticks as TickInfo[],
+              measureDurationMs: scheduleInfo.durationMs,
+              clickPCMs,
+              samplePCMs: new Map(),
+              clickVolume: 1.0,
+              sampleVolume: 0,
+            });
+            const loop = playWebRenderedLoop(pcm);
+            webRenderedLoopRef.current = loop;
+            engine.setPreRenderedAudio(true);
+          } catch (renderErr) {
+            console.warn("[togglePlayPause] Web pre-render failed, using per-tick:", renderErr);
+            engine.setPreRenderedAudio(false);
+          }
+
+          setIsPlaying(true);
+          engine.start(startBeat ?? undefined);
         } else {
-          engine.setPreRenderedAudio(false);
-        }
+          const renderedPlayer = await buildRenderedPlayer();
+          if (preparingCancelledRef.current) {
+            if (renderedPlayer) { try { renderedPlayer.release(); } catch {} }
+            setIsPreparing(false);
+            return;
+          }
+          setIsPreparing(false);
 
-        setIsPlaying(true);
-        engine.start(startBeat ?? undefined);
+          if (renderedPlayer) {
+            stopRenderedAudio();
+            renderedPlayerRef.current = renderedPlayer;
+            renderedPlayer.volume = 1.0;
+            engine.setPreRenderedAudio(true);
+          } else {
+            engine.setPreRenderedAudio(false);
+          }
 
-        if (renderedPlayer) {
-          renderedPlayer.play();
+          setIsPlaying(true);
+          engine.start(startBeat ?? undefined);
+
+          if (renderedPlayer) {
+            renderedPlayer.play();
+          }
         }
 
         if (barModeRef.current && barLoopModeRef.current === "once") {
@@ -1433,7 +1477,7 @@ export default function MetronomeScreen() {
         setIsPreparing(false);
       }
     }
-  }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure]);
+  }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure, getClickPCMs]);
 
   const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
