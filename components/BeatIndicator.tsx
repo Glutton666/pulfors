@@ -1419,7 +1419,7 @@ export function BeatIndicator({
             }, resetFlashStyle]}
           />
 
-          <View style={{ flex: 1, maxWidth: "45%" }}>
+          <View style={{ flex: 2 }}>
             <View style={[styles.barTopRowCenter, { paddingTop: 6, paddingBottom: 2 }]}>
               <Pressable
                 onPress={() => onBarModeChange(false)}
