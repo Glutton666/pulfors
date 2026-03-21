@@ -1582,9 +1582,6 @@ export function BeatIndicator({
             {subdivisionBarElement && (
               <View style={{ width: "100%", paddingHorizontal: 8 }}>{subdivisionBarElement}</View>
             )}
-            {bpmSliderElement && (
-              <View style={{ width: "100%", paddingHorizontal: 4 }}>{bpmSliderElement}</View>
-            )}
 
             <View style={{ alignItems: "center", gap: 4 }}>
               <Pressable onPress={handleBarClockTap}>
@@ -1651,6 +1648,9 @@ export function BeatIndicator({
                 )}
               </Pressable>
             </View>
+            {bpmSliderElement && (
+              <View style={{ width: "100%", paddingHorizontal: 4 }}>{bpmSliderElement}</View>
+            )}
           </View>
 
         </View>
