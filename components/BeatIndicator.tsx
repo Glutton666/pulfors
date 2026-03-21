@@ -2534,16 +2534,30 @@ export function BeatIndicator({
       </View>
 
       {!isLandscape && (
-        <Pressable
-          onPress={() => onBarModeChange(true)}
-          style={styles.barModeHandle}
-          testID="open-bar-mode"
-          hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
-          accessibilityRole="button"
-          accessibilityLabel="Open bar mode"
-        >
-          <Ionicons name="chevron-up" size={18} color={Colors.textTertiary} />
-        </Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 24 }}>
+          {onEnterNoteMode && (
+            <Pressable
+              onPress={onEnterNoteMode}
+              style={styles.barModeHandle}
+              testID="open-note-mode-portrait"
+              hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+              accessibilityRole="button"
+              accessibilityLabel="Open note mode"
+            >
+              <Ionicons name="musical-notes-outline" size={16} color={Colors.textTertiary} />
+            </Pressable>
+          )}
+          <Pressable
+            onPress={() => onBarModeChange(true)}
+            style={styles.barModeHandle}
+            testID="open-bar-mode"
+            hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+            accessibilityRole="button"
+            accessibilityLabel="Open bar mode"
+          >
+            <Ionicons name="chevron-up" size={18} color={Colors.textTertiary} />
+          </Pressable>
+        </View>
       )}
 
       {isLandscape && onEnterNoteMode && (

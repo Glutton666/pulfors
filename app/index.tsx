@@ -3357,6 +3357,7 @@ export default function MetronomeScreen() {
                 isLandscape={true}
               />
             ) : undefined}
+            onEnterNoteMode={handleEnterNoteMode}
           />
         </View>
 
