@@ -68,6 +68,7 @@ interface StopwatchTimerProps {
   isMetronomePlaying: boolean;
   currentBeat: number;
   topInset: number;
+  isLandscape?: boolean;
 }
 
 export function StopwatchTimer({
@@ -77,6 +78,7 @@ export function StopwatchTimer({
   isMetronomePlaying,
   currentBeat,
   topInset,
+  isLandscape = false,
 }: StopwatchTimerProps) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
@@ -568,6 +570,103 @@ export function StopwatchTimer({
     return Colors.textTertiary;
   };
 
+  if (isLandscape) {
+    const swTime = formatTime(elapsed);
+    const timerDisplay = formatCountdown(remaining);
+    return (
+      <View style={styles.landscapeContainer}>
+        <View style={styles.landscapeTabRow}>
+          <Pressable
+            onPress={() => switchMode("stopwatch")}
+            style={[styles.landscapeTab, mode === "stopwatch" && { backgroundColor: C.accentDim }]}
+          >
+            <MaterialCommunityIcons name="timer-outline" size={12} color={mode === "stopwatch" ? C.accent : Colors.textTertiary} />
+            <Text style={[styles.landscapeTabText, mode === "stopwatch" && { color: C.accent }]}>
+              {t("stopwatchTimer", "stopwatch")}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => switchMode("timer")}
+            style={[styles.landscapeTab, mode === "timer" && { backgroundColor: C.accentDim }]}
+          >
+            <MaterialCommunityIcons name="av-timer" size={12} color={mode === "timer" ? C.accent : Colors.textTertiary} />
+            <Text style={[styles.landscapeTabText, mode === "timer" && { color: C.accent }]}>
+              {t("stopwatchTimer", "timer")}
+            </Text>
+          </Pressable>
+        </View>
+        <View style={styles.landscapeDisplay}>
+          {state === "countdown" ? (
+            <Animated.Text style={[styles.landscapeTime, { color: C.accent }, runningDotStyle]}>
+              {countdownLeft}
+            </Animated.Text>
+          ) : mode === "stopwatch" ? (
+            <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+              {state === "running" && <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.success, marginRight: 4 }, runningDotStyle]} />}
+              {state === "finishing" && <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.danger, marginRight: 4 }, finishingStyle]} />}
+              <Text style={[styles.landscapeTime, state === "finishing" && { color: Colors.danger }]}>{swTime.main}</Text>
+              <Text style={[styles.landscapeFraction, state === "finishing" && { color: Colors.danger }]}>{swTime.fraction}</Text>
+            </View>
+          ) : (
+            <Text style={[styles.landscapeTime, state === "finishing" && { color: Colors.danger }]}>
+              {timerDisplay}
+            </Text>
+          )}
+        </View>
+        <View style={styles.landscapeBtnRow}>
+          {state === "idle" && (
+            <Pressable
+              onPress={mode === "stopwatch" ? startStopwatch : startTimer}
+              style={[styles.landscapeBtn, { backgroundColor: C.accentDim, borderColor: C.accent }]}
+            >
+              <Ionicons name="play" size={14} color={C.accent} />
+            </Pressable>
+          )}
+          {state === "running" && (
+            <Pressable
+              onPress={mode === "stopwatch" ? pauseStopwatch : pauseTimer}
+              style={[styles.landscapeBtn, { backgroundColor: Colors.surfaceLight, borderColor: Colors.border }]}
+            >
+              <Ionicons name="pause" size={14} color={Colors.textSecondary} />
+            </Pressable>
+          )}
+          {state === "finishing" && (
+            <Pressable
+              onPress={mode === "stopwatch" ? resetStopwatch : resetTimer}
+              style={[styles.landscapeBtn, { backgroundColor: "#3a1a1a", borderColor: Colors.danger }]}
+            >
+              <Ionicons name="stop" size={14} color={Colors.danger} />
+            </Pressable>
+          )}
+          {state === "paused" && (
+            <>
+              <Pressable
+                onPress={mode === "stopwatch" ? startStopwatch : startTimer}
+                style={[styles.landscapeBtn, { backgroundColor: C.accentDim, borderColor: C.accent }]}
+              >
+                <Ionicons name="play" size={14} color={C.accent} />
+              </Pressable>
+              <Pressable
+                onPress={mode === "stopwatch" ? resetStopwatch : resetTimer}
+                style={[styles.landscapeBtn, { backgroundColor: Colors.surfaceLight, borderColor: Colors.border }]}
+              >
+                <Ionicons name="refresh" size={14} color={Colors.textSecondary} />
+              </Pressable>
+            </>
+          )}
+          {state === "countdown" && (
+            <Pressable
+              onPress={mode === "stopwatch" ? resetStopwatch : resetTimer}
+              style={[styles.landscapeBtn, { backgroundColor: Colors.surfaceLight, borderColor: Colors.border }]}
+            >
+              <Ionicons name="close" size={14} color={Colors.textSecondary} />
+            </Pressable>
+          )}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <>
       {!open && (
@@ -971,6 +1070,63 @@ export function StopwatchTimer({
 }
 
 const styles = StyleSheet.create({
+  landscapeContainer: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginBottom: 8,
+    gap: 8,
+  },
+  landscapeTabRow: {
+    flexDirection: "row" as const,
+    gap: 2,
+  },
+  landscapeTab: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 3,
+  },
+  landscapeTabText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 10,
+    color: Colors.textTertiary,
+  },
+  landscapeDisplay: {
+    flex: 1,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  landscapeTime: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 16,
+    color: Colors.textPrimary,
+    letterSpacing: 1,
+  },
+  landscapeFraction: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 11,
+    color: Colors.textTertiary,
+  },
+  landscapeBtnRow: {
+    flexDirection: "row" as const,
+    gap: 6,
+  },
+  landscapeBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
   edgeSwipeZone: {
     position: "absolute",
     left: 0,

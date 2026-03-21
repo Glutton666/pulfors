@@ -27,11 +27,12 @@ interface BpmSliderProps {
   onTapTempo: () => void;
   halfTime?: boolean;
   onHalfTimeToggle?: () => void;
+  isLandscape?: boolean;
 }
 
 type Zone = "left" | "center" | "right";
 
-export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeToggle }: BpmSliderProps) {
+export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeToggle, isLandscape = false }: BpmSliderProps) {
   const { colors: C } = useTheme();
   const bpmRef = useRef(bpm);
   const startBpmRef = useRef(bpm);
@@ -200,7 +201,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
   const rightGlowStyle = useAnimatedStyle(() => ({ opacity: glowR.value * 0.3 }));
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, isLandscape && { transform: [{ scale: 0.75 }], marginVertical: -8 }]}>
       <View
         ref={touchViewRef}
         style={styles.touchLayer}

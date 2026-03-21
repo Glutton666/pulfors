@@ -3003,6 +3003,7 @@ export default function MetronomeScreen() {
         style={[
           styles.menuButton,
           { top: (insets.top || webTopInset) + 12 },
+          isLandscape && { right: undefined, left: 20 },
         ]}
         onPress={() => setShowMenu(!showMenu)}
         hitSlop={8}
@@ -3015,7 +3016,7 @@ export default function MetronomeScreen() {
       {showMenu && (
         <Modal transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
           <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
-            <View style={[styles.menuDropdown, { top: (insets.top || webTopInset) + 52 }]}>
+            <View style={[styles.menuDropdown, { top: (insets.top || webTopInset) + 52 }, isLandscape && { right: undefined, left: 20 }]}>
               <Pressable
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
@@ -3342,6 +3343,17 @@ export default function MetronomeScreen() {
           styles.bpmSection,
           isLandscape && !barMode && { flex: 2, justifyContent: "center" },
         ]}>
+          {isLandscape && !barMode && !noteMode && (
+            <StopwatchTimer
+              onTimerExpired={handleTimerExpired}
+              onStopRequested={handleTimerExpired}
+              onStartMetronome={startMetronome}
+              isMetronomePlaying={isPlaying}
+              currentBeat={currentBeat}
+              topInset={insets.top || webTopInset}
+              isLandscape={true}
+            />
+          )}
           {!barMode && (
             <SubdivisionBar
               pattern={subdivisionPattern}
@@ -3362,6 +3374,7 @@ export default function MetronomeScreen() {
             onTapTempo={handleTapTempo}
             halfTime={halfTime}
             onHalfTimeToggle={toggleHalfTime}
+            isLandscape={isLandscape}
           />
         </View>
         </View>
@@ -3369,7 +3382,7 @@ export default function MetronomeScreen() {
         )}
       </View>
 
-      {!barMode && !noteMode && (
+      {!barMode && !noteMode && !isLandscape && (
         <StopwatchTimer
           onTimerExpired={handleTimerExpired}
           onStopRequested={handleTimerExpired}
