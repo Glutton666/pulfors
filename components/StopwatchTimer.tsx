@@ -1102,6 +1102,7 @@ const styles = StyleSheet.create({
   landscapeContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
+    alignSelf: "stretch" as const,
     backgroundColor: Colors.surface,
     borderRadius: 10,
     borderWidth: 1,

@@ -201,7 +201,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
   const rightGlowStyle = useAnimatedStyle(() => ({ opacity: glowR.value * 0.3 }));
 
   return (
-    <View style={[styles.wrapper, isLandscape && { transform: [{ scale: 0.75 }], marginVertical: -8 }]}>
+    <View style={[styles.wrapper, isLandscape && { alignSelf: "stretch" as const }]}>
       <View
         ref={touchViewRef}
         style={styles.touchLayer}
