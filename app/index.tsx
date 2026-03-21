@@ -1281,7 +1281,20 @@ export default function MetronomeScreen() {
 
   const updateTimeSignature = useCallback(
     (beats: number) => {
-      const newTypes = defaultBeatTypes(beats);
+      const oldBeats = beatsPerMeasure;
+      const oldTypes = beatTypes;
+      const isAdding = beats > oldBeats;
+
+      let newTypes: BeatType[];
+      if (isAdding) {
+        newTypes = [...oldTypes];
+        for (let i = oldTypes.length; i < beats; i++) {
+          newTypes.push("normal");
+        }
+      } else {
+        newTypes = defaultBeatTypes(beats);
+      }
+
       setBeatsPerMeasure(beats);
       setBeatTypes(newTypes);
       engineRef.current?.setBeatsPerMeasure(beats);
@@ -1292,6 +1305,14 @@ export default function MetronomeScreen() {
       const cleaned: Record<string, BeatType[]> = {};
       for (const [k, v] of Object.entries(beatSubdivisions)) {
         if (Number(k) < beats) cleaned[k] = v;
+      }
+      if (isAdding && barModeRef.current) {
+        const currentPattern = subdivisionPattern;
+        for (let i = oldBeats; i < beats; i++) {
+          if (currentPattern.length > 1 || (currentPattern.length === 1 && currentPattern[0] !== "normal")) {
+            cleaned[String(i)] = [...currentPattern];
+          }
+        }
       }
       setBeatSubdivisions(cleaned);
       if (barModeRef.current) {
@@ -1305,7 +1326,7 @@ export default function MetronomeScreen() {
         persistSettings({ beatsPerMeasure: beats, beatSubdivisions: cleaned });
       }
     },
-    [persistSettings, beatSubdivisions]
+    [persistSettings, beatSubdivisions, beatsPerMeasure, beatTypes, subdivisionPattern]
   );
 
   const handleBeatTypeChange = useCallback(
