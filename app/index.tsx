@@ -7,6 +7,7 @@ import {
   Pressable,
   Modal,
   Alert,
+  useWindowDimensions,
 } from "react-native";
 import * as Linking from "expo-linking";
 import {
@@ -99,6 +100,8 @@ function defaultBeatTypes(beats: number): BeatType[] {
 
 export default function MetronomeScreen() {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isLandscape = windowWidth > windowHeight;
   const { setThemeColor, colors: C } = useTheme();
   const { language, t } = useLanguage();
   const languageRef = useRef(language);
@@ -3217,9 +3220,10 @@ export default function MetronomeScreen() {
         style={[
           styles.content,
           {
-            paddingTop: (insets.top || webTopInset) + 16,
-            paddingBottom: (insets.bottom || webBottomInset) + 16,
+            paddingTop: (insets.top || webTopInset) + (isLandscape ? 8 : 16),
+            paddingBottom: (insets.bottom || webBottomInset) + (isLandscape ? 8 : 16),
           },
+          isLandscape && { maxWidth: undefined, paddingHorizontal: 16 },
         ]}
       >
         {noteMode ? (
@@ -3241,7 +3245,12 @@ export default function MetronomeScreen() {
           />
         ) : (
         <>
-        <View style={[styles.topSection, barMode && { justifyContent: "flex-start", flex: 3 }]}>
+        <View style={isLandscape && !barMode ? { flexDirection: "row", flex: 1 } : undefined}>
+        <View style={[
+          styles.topSection,
+          barMode && { justifyContent: "flex-start", flex: 3 },
+          isLandscape && !barMode && { flex: 3, justifyContent: "center" },
+        ]}>
           <BeatIndicator
             beatsPerMeasure={beatsPerMeasure}
             currentBeat={currentBeat}
@@ -3289,6 +3298,7 @@ export default function MetronomeScreen() {
             onBarQuickSave={handleBarQuickSave}
             onResetFlash={handleResetFlash}
             halfTime={halfTime}
+            isLandscape={isLandscape}
             subdivisionBarElement={barMode ? (
               <SubdivisionBar
                 pattern={subdivisionPattern}
@@ -3305,7 +3315,10 @@ export default function MetronomeScreen() {
           />
         </View>
 
-        <View style={styles.bpmSection}>
+        <View style={[
+          styles.bpmSection,
+          isLandscape && !barMode && { flex: 2, justifyContent: "center" },
+        ]}>
           {!barMode && (
             <SubdivisionBar
               pattern={subdivisionPattern}
@@ -3327,6 +3340,7 @@ export default function MetronomeScreen() {
             halfTime={halfTime}
             onHalfTimeToggle={toggleHalfTime}
           />
+        </View>
         </View>
         </>
         )}

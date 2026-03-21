@@ -11,6 +11,7 @@ import {
   TextInput,
   Image,
   ActivityIndicator,
+  useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
@@ -301,6 +302,7 @@ interface BeatIndicatorProps {
   measureCount?: number;
   onBarReset?: () => void;
   halfTime?: boolean;
+  isLandscape?: boolean;
 }
 
 export function BeatIndicator({
@@ -348,8 +350,12 @@ export function BeatIndicator({
   measureCount = 0,
   onBarReset,
   halfTime,
+  isLandscape = false,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
+  const { height: winH } = useWindowDimensions();
+
+  const landscapeDialScale = isLandscape ? Math.max(0.5, Math.min((winH - 100) / DIAL_SIZE, 0.85)) : 1;
 
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
 
@@ -2116,7 +2122,14 @@ export function BeatIndicator({
           zIndex: 999,
         }, resetFlashStyle]}
       />
-      <View style={styles.dialContainer}>
+      <View style={[
+        styles.dialContainer,
+        isLandscape && {
+          width: DIAL_SIZE * landscapeDialScale,
+          height: DIAL_SIZE * landscapeDialScale,
+          transform: [{ scale: landscapeDialScale }],
+        },
+      ]}>
         <View
           ref={dialRef}
           style={{ width: DIAL_SIZE, height: DIAL_SIZE }}
