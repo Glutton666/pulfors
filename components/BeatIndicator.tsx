@@ -2555,7 +2555,7 @@ export function BeatIndicator({
             accessibilityRole="button"
             accessibilityLabel="Open bar mode"
           >
-            <Ionicons name="musical-note-outline" size={18} color={Colors.textTertiary} />
+            <Ionicons name="reorder-three" size={20} color={Colors.textTertiary} />
           </Pressable>
         </View>
       )}
@@ -2570,7 +2570,7 @@ export function BeatIndicator({
             accessibilityRole="button"
             accessibilityLabel="Open bar mode"
           >
-            <Ionicons name="musical-note-outline" size={14} color={Colors.textTertiary} />
+            <Ionicons name="reorder-three" size={16} color={Colors.textTertiary} />
           </Pressable>
           {onEnterNoteMode && (
             <Pressable
