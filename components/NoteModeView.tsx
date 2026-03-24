@@ -390,9 +390,7 @@ export function NoteModeView({
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Pressable onPress={onExitNoteMode} hitSlop={8}>
-            <Ionicons name="arrow-back" size={22} color={Colors.textSecondary} />
-          </Pressable>
+          <View style={{ width: 22 }} />
           <Text style={[styles.title, { color: C.accent }]}>{t("noteMode", "title")}</Text>
           <View style={[styles.progressBadge, { backgroundColor: C.accent + "22" }]}>
             <Text style={[styles.progressText, { color: C.accent }]}>{currentIndex + 1}/{queue.length}</Text>
@@ -419,6 +417,10 @@ export function NoteModeView({
             <Ionicons name="stop" size={28} color="#fff" />
           </Pressable>
         </View>
+
+        <Pressable onPress={onExitNoteMode} hitSlop={12} style={styles.closeButtonCenter}>
+          <Ionicons name="close" size={28} color={Colors.textSecondary} />
+        </Pressable>
       </View>
     );
   }
@@ -597,9 +599,7 @@ export function NoteModeView({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={onExitNoteMode} hitSlop={8}>
-          <Ionicons name="arrow-back" size={22} color={Colors.textSecondary} />
-        </Pressable>
+        <View style={{ width: 22 }} />
         <Text style={[styles.title, { color: C.accent }]}>{t("noteMode", "title")}</Text>
         <View style={styles.headerActions}>
           <Pressable onPress={handleSaveWithFeedback} hitSlop={6} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : Colors.surface }]}>
@@ -616,6 +616,10 @@ export function NoteModeView({
       {renderQueueSection()}
 
       {renderSourceSection()}
+
+      <Pressable onPress={onExitNoteMode} hitSlop={12} style={styles.closeButtonCenter}>
+        <Ionicons name="close" size={28} color={Colors.textSecondary} />
+      </Pressable>
     </View>
   );
 }
@@ -638,6 +642,12 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: "row",
     gap: moderateScale(8, 0.3),
+  },
+  closeButtonCenter: {
+    alignSelf: "center",
+    marginTop: moderateScale(8, 0.3),
+    marginBottom: moderateScale(4, 0.3),
+    padding: moderateScale(8, 0.3),
   },
   headerBtn: {
     width: moderateScale(32, 0.4),
