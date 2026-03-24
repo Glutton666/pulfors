@@ -24,9 +24,97 @@ import {
   SignalGeneratorEngine,
   generateToneDataUri,
 } from "@/lib/signal-generator-engine";
-import { getApiUrl } from "@/lib/query-client";
 import { TUNING_DATA } from "@/lib/tuning-data";
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+function decodeWavBase64(base64: string, sampleRate: number): { samples: Float32Array; rate: number } | null {
+  try {
+    const binaryStr = atob(base64);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+    const view = new DataView(bytes.buffer);
+    const riffTag = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+    if (riffTag !== "RIFF") return null;
+    const numChannels = view.getUint16(22, true);
+    const wavSampleRate = view.getUint32(24, true);
+    const bitsPerSample = view.getUint16(34, true);
+    let dataOffset = 36;
+    while (dataOffset < bytes.length - 8) {
+      const tag = String.fromCharCode(bytes[dataOffset], bytes[dataOffset + 1], bytes[dataOffset + 2], bytes[dataOffset + 3]);
+      const chunkSize = view.getUint32(dataOffset + 4, true);
+      if (tag === "data") {
+        dataOffset += 8;
+        const bytesPerSample = bitsPerSample / 8;
+        const numSamples = Math.floor(chunkSize / (bytesPerSample * numChannels));
+        const samples = new Float32Array(numSamples);
+        for (let i = 0; i < numSamples; i++) {
+          const offset = dataOffset + i * bytesPerSample * numChannels;
+          if (offset + bytesPerSample > bytes.length) break;
+          if (bitsPerSample === 16) {
+            samples[i] = view.getInt16(offset, true) / 32768;
+          } else if (bitsPerSample === 8) {
+            samples[i] = (bytes[offset] - 128) / 128;
+          }
+        }
+        return { samples, rate: wavSampleRate || sampleRate };
+      }
+      dataOffset += 8 + chunkSize;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function analyzeWavLocally(base64: string, sampleRate: number): { frequency: number | null; note: string | null } {
+  const decoded = decodeWavBase64(base64, sampleRate);
+  const WINDOW_SIZE = 8192;
+  const MIC_GATE = 0.03;
+  if (!decoded || decoded.samples.length <= WINDOW_SIZE) return { frequency: null, note: null };
+  const readings: number[] = [];
+  const step = Math.floor(WINDOW_SIZE / 2);
+  for (let offset = 0; offset + WINDOW_SIZE <= decoded.samples.length; offset += step) {
+    const win = decoded.samples.slice(offset, offset + WINDOW_SIZE);
+    const freq = autoCorrelate(win, decoded.rate, MIC_GATE);
+    if (freq > 20 && freq <= 20000) readings.push(freq);
+  }
+  const noteMap = new Map<string, number[]>();
+  for (const f of readings) {
+    const info = frequencyToNote(f);
+    const key = `${info.name}${info.octave}`;
+    if (!noteMap.has(key)) noteMap.set(key, []);
+    noteMap.get(key)!.push(f);
+  }
+  let bestKey = "";
+  let bestCount = 0;
+  for (const [key, freqs] of noteMap) {
+    if (freqs.length > bestCount) { bestCount = freqs.length; bestKey = key; }
+  }
+  if (!bestKey) return { frequency: null, note: null };
+  const freqs = noteMap.get(bestKey)!;
+  freqs.sort((a, b) => a - b);
+  const dominant = freqs[Math.floor(freqs.length / 2)];
+  const rounded = Math.round(dominant * 10) / 10;
+  const noteInfo = frequencyToNote(dominant);
+  return { frequency: rounded, note: `${noteInfo.name}${noteInfo.octave}` };
+}
+
+async function analyzeViaServer(base64: string, ext: string): Promise<{ frequency: number | null; note: string | null } | null> {
+  try {
+    const domain = process.env.EXPO_PUBLIC_DOMAIN;
+    if (!domain) return null;
+    const apiUrl = `https://${domain}`;
+    const resp = await fetch(new URL("/api/analyze-audio", apiUrl).href, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ audio: base64, format: ext }),
+    });
+    if (resp.ok) return await resp.json();
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 function frequencyToNote(freq: number): { name: string; octave: number; cents: number } {
   const semitones = 12 * Math.log2(freq / 440);
@@ -892,26 +980,25 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       micActiveRef.current = true;
       setMicListening(true);
 
+      const isAndroid = Platform.OS === "android";
       const RECORD_MS = 600;
-
-      const androidExt = ".m4a";
-      const iosExt = ".wav";
+      const SAMPLE_RATE = 48000;
 
       const recordingOptions = {
         isMeteringEnabled: false,
         android: {
-          extension: androidExt,
+          extension: ".m4a",
           outputFormat: 2,
           audioEncoder: 3,
-          sampleRate: 48000,
+          sampleRate: SAMPLE_RATE,
           numberOfChannels: 1,
           bitRate: 128000,
         },
         ios: {
-          extension: iosExt,
+          extension: ".wav",
           outputFormat: (Audio as any).IOSOutputFormat?.LINEARPCM ?? 1819304813,
           audioQuality: (Audio as any).IOSAudioQuality?.MAX ?? 127,
-          sampleRate: 48000,
+          sampleRate: SAMPLE_RATE,
           numberOfChannels: 1,
           bitRate: 768000,
           linearPCMBitDepth: 16,
@@ -921,7 +1008,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
         web: { mimeType: "audio/wav", bitsPerSecond: 768000 },
       };
 
-      const ext = Platform.OS === "android" ? androidExt : iosExt;
+      const ext = isAndroid ? ".m4a" : ".wav";
 
       const recordAndAnalyze = async () => {
         if (!micActiveRef.current) return;
@@ -946,23 +1033,29 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                   encoding: "base64" as any,
                 });
 
-                const apiUrl = getApiUrl();
-                const resp = await fetch(new URL("/api/analyze-audio", apiUrl).href, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ audio: base64, format: ext }),
-                });
+                let analysisResult: { frequency: number | null; note: string | null } | null = null;
 
-                if (resp.ok) {
-                  const data = await resp.json();
+                if (!isAndroid) {
+                  analysisResult = analyzeWavLocally(base64, SAMPLE_RATE);
+                }
+
+                if (!analysisResult || (!analysisResult.frequency && isAndroid)) {
+                  analysisResult = await analyzeViaServer(base64, ext);
+                }
+
+                if (analysisResult) {
                   setMicAnalyzed(true);
-                  if (data.frequency) {
-                    setMicDetectedFreq(data.frequency);
-                    setMicDetectedNote(data.note);
+                  if (analysisResult.frequency) {
+                    setMicDetectedFreq(analysisResult.frequency);
+                    setMicDetectedNote(analysisResult.note);
                   } else {
                     setMicDetectedFreq(null);
                     setMicDetectedNote(null);
                   }
+                } else if (isAndroid) {
+                  setMicAnalyzed(true);
+                  setMicDetectedFreq(null);
+                  setMicDetectedNote(null);
                 }
 
                 try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
