@@ -3108,8 +3108,9 @@ export default function MetronomeScreen() {
       <Pressable
         style={[
           styles.menuButton,
-          { top: (insets.top || webTopInset) + 12 },
-          isLandscape && { right: undefined, left: 20, top: (insets.top || webTopInset) },
+          isLandscape
+            ? { left: 20, right: "auto" as any, top: (insets.top || webTopInset) }
+            : { right: moderateScale(20, 0.3), top: (insets.top || webTopInset) + 12 },
         ]}
         onPress={() => setShowMenu(!showMenu)}
         hitSlop={8}
@@ -3122,7 +3123,7 @@ export default function MetronomeScreen() {
       {showMenu && (
         <Modal transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
           <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
-            <View style={[styles.menuDropdown, { top: (insets.top || webTopInset) + 52 }, isLandscape && { right: undefined, left: 20, top: (insets.top || webTopInset) + 40, paddingVertical: 2, minWidth: 120, maxWidth: 180 }]}>
+            <View style={[styles.menuDropdown, isLandscape ? { left: 20, right: "auto" as any, top: (insets.top || webTopInset) + 40, paddingVertical: 2, minWidth: 120, maxWidth: 180 } : { top: (insets.top || webTopInset) + 52 }]}>
               <Pressable
                 style={({ pressed }) => [styles.menuItem, isLandscape && styles.menuItemLandscape, pressed && styles.menuItemPressed]}
                 onPress={() => {
