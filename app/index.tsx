@@ -58,6 +58,7 @@ import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
 import { SettingsModal } from "@/components/SettingsModal";
 import { SignalGeneratorModal } from "@/components/SignalGeneratorModal";
+import { MicWebView, MicWebViewHandle } from "@/components/MicWebView";
 import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import { OnboardingModal } from "@/components/OnboardingModal";
@@ -200,6 +201,10 @@ export default function MetronomeScreen() {
   const [username, setUsername] = useState("");
   const [showMenu, setShowMenu] = useState(false);
   const [showSignalGen, setShowSignalGen] = useState(false);
+  const [androidMicActive, setAndroidMicActive] = useState(false);
+  const [androidMicFreq, setAndroidMicFreq] = useState<number | null>(null);
+  const [androidMicNote, setAndroidMicNote] = useState<string | null>(null);
+  const androidMicRef = useRef<MicWebViewHandle | null>(null);
   const [showPracticeBook, setShowPracticeBook] = useState(false);
   const [showWorkUp, setShowWorkUp] = useState(false);
   const [loggingEnabled, setLoggingEnabled] = useState(false);
@@ -3172,13 +3177,30 @@ export default function MetronomeScreen() {
         visible={showSignalGen}
         onClose={() => {
           setShowSignalGen(false);
+          setAndroidMicActive(false);
+          if (androidMicRef.current) androidMicRef.current.stop();
           if (loggingEnabled && featureStartRef.current?.name === "signal_generator") {
             const dur = Math.round((Date.now() - featureStartRef.current.start) / 1000);
             if (dur >= 2) addActivityLog({ type: "feature_usage", data: { feature: "signal_generator", duration: dur } });
             featureStartRef.current = null;
           }
         }}
+        onAndroidMicToggle={(active) => {
+          setAndroidMicActive(active);
+          if (!active && androidMicRef.current) androidMicRef.current.stop();
+        }}
+        androidMicFrequency={androidMicFreq}
+        androidMicNote={androidMicNote}
       />
+      {androidMicActive && Platform.OS === "android" && (
+        <MicWebView
+          ref={androidMicRef}
+          onFrequency={(freq, note) => {
+            setAndroidMicFreq(freq);
+            setAndroidMicNote(note);
+          }}
+        />
+      )}
 
       <NoteRecorderModal
         visible={recorderTarget !== null}

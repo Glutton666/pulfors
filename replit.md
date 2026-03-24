@@ -60,3 +60,4 @@ Preferred communication style: Simple, everyday language.
 - **expo-location**: For GPS-based practice room tracking.
 - **expo-sharing**: For sharing backup files and practice entries on native platforms.
 - **expo-document-picker**: For importing audio files and backup files.
+- **react-native-webview**: Used for Android offline microphone analysis via Web Audio API in a hidden WebView (components/MicWebView.tsx). iOS uses native WAV recording + local analysis; web uses Web Audio API directly.

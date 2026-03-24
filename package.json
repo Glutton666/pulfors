@@ -63,6 +63,7 @@
     "react-native-svg": "15.12.1",
     "react-native-view-shot": "^3.8.0",
     "react-native-web": "^0.21.0",
+    "react-native-webview": "^13.16.1",
     "react-native-worklets": "0.5.1",
     "tsx": "^4.20.6",
     "undici": "^6.24.0",

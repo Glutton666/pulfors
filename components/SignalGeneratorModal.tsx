@@ -27,6 +27,7 @@ import {
 import { TUNING_DATA } from "@/lib/tuning-data";
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
+
 function decodeWavBase64(base64: string, sampleRate: number): { samples: Float32Array; rate: number } | null {
   try {
     const binaryStr = atob(base64);
@@ -678,9 +679,12 @@ const tgStyles = StyleSheet.create({
 interface SignalGeneratorModalProps {
   visible: boolean;
   onClose: () => void;
+  onAndroidMicToggle?: (active: boolean) => void;
+  androidMicFrequency?: number | null;
+  androidMicNote?: string | null;
 }
 
-export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalProps) {
+export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, androidMicFrequency, androidMicNote }: SignalGeneratorModalProps) {
   const { colors: C } = useTheme();
   const { t, language: lang } = useLanguage();
   const { width: winW, height: winH } = useWindowDimensions();
@@ -741,6 +745,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const micRafRef = useRef<number | null>(null);
   const micRecordingRef = useRef<Audio.Recording | null>(null);
   const micMobileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [micWebViewActive, setMicWebViewActive] = useState(false);
 
   const engineRef = useRef(new SignalGeneratorEngine());
   const isPlayingRef = useRef(false);
@@ -813,6 +818,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       engineRef.current.stopWeb();
       if (mobileLoopRef.current) clearTimeout(mobileLoopRef.current);
       micActiveRef.current = false;
+      setMicWebViewActive(false);
       if (micRafRef.current) cancelAnimationFrame(micRafRef.current);
       if (micSourceRef.current) micSourceRef.current.disconnect();
       if (micAudioCtxRef.current) micAudioCtxRef.current.close();
@@ -824,6 +830,23 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
     };
   }, []);
 
+
+  const stopMicAndroid = useCallback(() => {
+    setMicWebViewActive(false);
+    onAndroidMicToggle?.(false);
+  }, [onAndroidMicToggle]);
+
+  const startMicAndroid = useCallback(async () => {
+    const perm = await Audio.requestPermissionsAsync();
+    if (!perm.granted) {
+      console.warn("[MicTuner] Mic permission denied");
+      return;
+    }
+    micActiveRef.current = true;
+    setMicListening(true);
+    setMicWebViewActive(true);
+    onAndroidMicToggle?.(true);
+  }, [onAndroidMicToggle]);
 
   const stopMobileMic = useCallback(async () => {
     if (micMobileTimerRef.current) {
@@ -842,7 +865,9 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
   const stopMic = useCallback(() => {
     micActiveRef.current = false;
     setMicListening(false);
-    if (Platform.OS === "web") {
+    if (Platform.OS === "android") {
+      stopMicAndroid();
+    } else if (Platform.OS === "web") {
       if (micRafRef.current) {
         cancelAnimationFrame(micRafRef.current);
         micRafRef.current = null;
@@ -865,7 +890,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
     setMicDetectedFreq(null);
     setMicDetectedNote(null);
     setMicAnalyzed(false);
-  }, [stopMobileMic]);
+  }, [stopMobileMic, stopMicAndroid]);
 
   const pickDominantFreq = useCallback((readings: number[]): number | null => {
     if (readings.length === 0) return null;
@@ -963,7 +988,23 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
     }
   }, [pickDominantFreq]);
 
+  useEffect(() => {
+    if (!micWebViewActive || Platform.OS !== "android") return;
+    setMicAnalyzed(true);
+    if (androidMicFrequency) {
+      setMicDetectedFreq(androidMicFrequency);
+      setMicDetectedNote(androidMicNote ?? null);
+    } else {
+      setMicDetectedFreq(null);
+      setMicDetectedNote(null);
+    }
+  }, [micWebViewActive, androidMicFrequency, androidMicNote]);
+
   const startMicMobile = useCallback(async () => {
+    if (Platform.OS === "android") {
+      startMicAndroid();
+      return;
+    }
     try {
       const perm = await Audio.requestPermissionsAsync();
       if (!perm.granted) {
@@ -980,20 +1021,11 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       micActiveRef.current = true;
       setMicListening(true);
 
-      const isAndroid = Platform.OS === "android";
       const RECORD_MS = 600;
       const SAMPLE_RATE = 48000;
 
       const recordingOptions = {
         isMeteringEnabled: false,
-        android: {
-          extension: ".m4a",
-          outputFormat: 2,
-          audioEncoder: 3,
-          sampleRate: SAMPLE_RATE,
-          numberOfChannels: 1,
-          bitRate: 128000,
-        },
         ios: {
           extension: ".wav",
           outputFormat: (Audio as any).IOSOutputFormat?.LINEARPCM ?? 1819304813,
@@ -1005,10 +1037,16 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
           linearPCMIsBigEndian: false,
           linearPCMIsFloat: false,
         },
+        android: {
+          extension: ".wav",
+          outputFormat: 0,
+          audioEncoder: 0,
+          sampleRate: SAMPLE_RATE,
+          numberOfChannels: 1,
+          bitRate: 768000,
+        },
         web: { mimeType: "audio/wav", bitsPerSecond: 768000 },
       };
-
-      const ext = isAndroid ? ".m4a" : ".wav";
 
       const recordAndAnalyze = async () => {
         if (!micActiveRef.current) return;
@@ -1032,43 +1070,26 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
                 const base64 = await FileSystem.readAsStringAsync(uri, {
                   encoding: "base64" as any,
                 });
-
-                let analysisResult: { frequency: number | null; note: string | null } | null = null;
-
-                if (!isAndroid) {
-                  analysisResult = analyzeWavLocally(base64, SAMPLE_RATE);
-                }
-
-                if (!analysisResult || (!analysisResult.frequency && isAndroid)) {
-                  analysisResult = await analyzeViaServer(base64, ext);
-                }
-
-                if (analysisResult) {
-                  setMicAnalyzed(true);
-                  if (analysisResult.frequency) {
-                    setMicDetectedFreq(analysisResult.frequency);
-                    setMicDetectedNote(analysisResult.note);
-                  } else {
-                    setMicDetectedFreq(null);
-                    setMicDetectedNote(null);
-                  }
-                } else if (isAndroid) {
-                  setMicAnalyzed(true);
+                const analysisResult = analyzeWavLocally(base64, SAMPLE_RATE);
+                setMicAnalyzed(true);
+                if (analysisResult.frequency) {
+                  setMicDetectedFreq(analysisResult.frequency);
+                  setMicDetectedNote(analysisResult.note);
+                } else {
                   setMicDetectedFreq(null);
                   setMicDetectedNote(null);
                 }
-
                 try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
               }
             } catch (e) {
-              console.warn("[MicTuner] Mobile analyze error:", e);
+              console.warn("[MicTuner] iOS analyze error:", e);
             }
             if (micActiveRef.current) {
               recordAndAnalyze();
             }
           }, RECORD_MS);
         } catch (e) {
-          console.warn("[MicTuner] Mobile record error:", e);
+          console.warn("[MicTuner] iOS record error:", e);
           if (rec) {
             try { await rec.stopAndUnloadAsync(); } catch {}
           }
@@ -1084,7 +1105,7 @@ export function SignalGeneratorModal({ visible, onClose }: SignalGeneratorModalP
       console.warn("[MicTuner] Mobile start error:", e);
       setMicListening(false);
     }
-  }, []);
+  }, [startMicAndroid]);
 
   const startMic = useCallback(async () => {
     if (Platform.OS === "web") {
