@@ -248,21 +248,28 @@ function PickerColumn<T extends string | number>({
 }) {
   const flatListRef = useRef<FlatList<T>>(null);
   const scrollingRef = useRef(false);
+  const programmaticRef = useRef(false);
   const selectedIdx = data.indexOf(selected);
 
   useEffect(() => {
     if (!scrollingRef.current && selectedIdx >= 0) {
+      programmaticRef.current = true;
       setTimeout(() => {
         flatListRef.current?.scrollToOffset({
           offset: selectedIdx * PICKER_ITEM_H,
           animated: true,
         });
+        setTimeout(() => { programmaticRef.current = false; }, 300);
       }, 50);
     }
   }, [selectedIdx]);
 
   const onMomentumEnd = useCallback(
     (e: any) => {
+      if (programmaticRef.current) {
+        scrollingRef.current = false;
+        return;
+      }
       const y = e.nativeEvent.contentOffset.y;
       const idx = Math.round(y / PICKER_ITEM_H);
       const clamped = Math.max(0, Math.min(data.length - 1, idx));
