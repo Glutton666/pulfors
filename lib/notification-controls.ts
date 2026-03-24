@@ -51,7 +51,7 @@ function buildActions(isPlaying: boolean, lang: Language = "ko") {
     {
       identifier: "TOGGLE_PLAY",
       buttonTitle: isPlaying ? `⏸ ${t("notification", "pause")}` : `▶ ${t("notification", "play")}`,
-      options: { opensAppToForeground: true },
+      options: { opensAppToForeground: false },
     },
     {
       identifier: "BPM_UP",
