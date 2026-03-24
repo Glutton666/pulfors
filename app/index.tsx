@@ -104,7 +104,7 @@ export default function MetronomeScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isLandscape = windowWidth > windowHeight;
-  const { setThemeColor, colors: C } = useTheme();
+  const { setThemeColor, setCustomHex, colors: C } = useTheme();
   const { language, t } = useLanguage();
   const languageRef = useRef(language);
   useEffect(() => { languageRef.current = language; }, [language]);
@@ -1165,6 +1165,9 @@ export default function MetronomeScreen() {
     AsyncStorage.setItem("metronome_onboarding_done", "1");
 
     setThemeColor(result.themeColor);
+    if (result.themeColor === "custom" && result.customHex) {
+      setCustomHex(result.customHex);
+    }
     persistSettings({ flashMode: result.flashMode, hapticMode: result.hapticMode });
     setFlashMode(result.flashMode);
     flashModeRef.current = result.flashMode;
@@ -1189,7 +1192,7 @@ export default function MetronomeScreen() {
         console.warn("Failed to register practice room:", e);
       }
     }
-  }, [setThemeColor, persistSettings]);
+  }, [setThemeColor, setCustomHex, persistSettings]);
 
   const handleResetApp = useCallback(async () => {
     try {

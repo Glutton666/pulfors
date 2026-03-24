@@ -11,9 +11,11 @@ import {
   Dimensions,
   ScrollView,
   useWindowDimensions,
+  PanResponder,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { ACCENT_PRESETS } from "@/constants/colors";
@@ -31,6 +33,7 @@ interface OnboardingModalProps {
 
 export interface OnboardingResult {
   themeColor: ThemeColor;
+  customHex?: string;
   loggingEnabled: boolean;
   hapticMode: HapticMode;
   flashMode: FlashMode;
@@ -38,11 +41,19 @@ export interface OnboardingResult {
   practiceRoomName: string;
 }
 
+const HUE_COLORS = [
+  "#FF0000", "#FF8000", "#FFFF00", "#80FF00",
+  "#00FF00", "#00FF80", "#00FFFF", "#0080FF",
+  "#0000FF", "#8000FF", "#FF00FF", "#FF0080", "#FF0000",
+];
+
 const THEME_OPTIONS: { key: ThemeColor; color: string; label: string }[] = [
   { key: "gold", color: ACCENT_PRESETS.gold.accent, label: "Gold" },
   { key: "green", color: ACCENT_PRESETS.green.accent, label: "Green" },
   { key: "orange", color: ACCENT_PRESETS.orange.accent, label: "Orange" },
   { key: "blue", color: ACCENT_PRESETS.blue.accent, label: "Blue" },
+  { key: "cyan", color: ACCENT_PRESETS.cyan.accent, label: "Cyan" },
+  { key: "pink", color: ACCENT_PRESETS.pink.accent, label: "Pink" },
   { key: "saintspurple", color: ACCENT_PRESETS.saintspurple.accent, label: "Saints" },
   { key: "deepred", color: ACCENT_PRESETS.deepred.accent, label: "Deep Red" },
   { key: "beige", color: ACCENT_PRESETS.beige.accent, label: "Beige" },
@@ -201,17 +212,25 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   const [step, setStep] = useState(0);
 
   const [selectedTheme, setSelectedTheme] = useState<ThemeColor>("gold");
+  const [customHex, setCustomHex] = useState("#D4A846");
+  const [hexInput, setHexInput] = useState("#D4A846");
+  const [showCustomPicker, setShowCustomPicker] = useState(false);
   const [loggingEnabled, setLoggingEnabled] = useState(true);
   const [hapticMode, setHapticMode] = useState<HapticMode>("all");
   const [flashMode, setFlashMode] = useState<FlashMode>("accent");
   const [username, setUsername] = useState("");
   const [roomName, setRoomName] = useState("");
+  const hueTrackRef = useRef<View>(null);
+  const hueTrackWidthRef = useRef(0);
 
   const prevVisibleRef = useRef(visible);
   useEffect(() => {
     if (visible && !prevVisibleRef.current) {
       setStep(0);
       setSelectedTheme("gold");
+      setCustomHex("#D4A846");
+      setHexInput("#D4A846");
+      setShowCustomPicker(false);
       setLoggingEnabled(true);
       setHapticMode("all");
       setFlashMode("accent");
@@ -225,9 +244,89 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   const hapticFlashAnim = useRef(new Animated.Value(0)).current;
   const flashFlashAnim = useRef(new Animated.Value(0)).current;
 
-  const accentColor =
-    ACCENT_PRESETS[selectedTheme === "custom" ? "gold" : selectedTheme]?.accent ||
-    ACCENT_PRESETS.gold.accent;
+  const accentColor = selectedTheme === "custom"
+    ? customHex
+    : (ACCENT_PRESETS[selectedTheme]?.accent || ACCENT_PRESETS.gold.accent);
+
+  const hueFromPosition = useCallback((ratio: number): string => {
+    const r = Math.max(0, Math.min(1, ratio));
+    const segment = r * (HUE_COLORS.length - 1);
+    const idx = Math.floor(segment);
+    const t2 = segment - idx;
+    const c1 = HUE_COLORS[Math.min(idx, HUE_COLORS.length - 1)];
+    const c2 = HUE_COLORS[Math.min(idx + 1, HUE_COLORS.length - 1)];
+    const r1 = parseInt(c1.slice(1, 3), 16), g1 = parseInt(c1.slice(3, 5), 16), b1 = parseInt(c1.slice(5, 7), 16);
+    const r2 = parseInt(c2.slice(1, 3), 16), g2 = parseInt(c2.slice(3, 5), 16), b2 = parseInt(c2.slice(5, 7), 16);
+    const rr = Math.round(r1 + (r2 - r1) * t2);
+    const gg = Math.round(g1 + (g2 - g1) * t2);
+    const bb = Math.round(b1 + (b2 - b1) * t2);
+    return `#${rr.toString(16).padStart(2, "0")}${gg.toString(16).padStart(2, "0")}${bb.toString(16).padStart(2, "0")}`.toUpperCase();
+  }, []);
+
+  const updateHueFromX = useCallback(
+    (pageX: number) => {
+      const w = hueTrackWidthRef.current;
+      if (w <= 0) return;
+      if (hueTrackRef.current) {
+        (hueTrackRef.current as any).measureInWindow?.((x: number) => {
+          const relX = pageX - x;
+          const ratio = Math.max(0, Math.min(1, relX / w));
+          const hex = hueFromPosition(ratio);
+          setCustomHex(hex);
+          setHexInput(hex);
+          setSelectedTheme("custom");
+        });
+      }
+    },
+    [hueFromPosition]
+  );
+
+  const huePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => { updateHueFromX(e.nativeEvent.pageX); },
+      onPanResponderMove: (e) => { updateHueFromX(e.nativeEvent.pageX); },
+      onPanResponderRelease: () => {},
+    })
+  ).current;
+
+  const handleHueWebMouse = useCallback(
+    (e: any) => {
+      if (Platform.OS !== "web") return;
+      const el = e.currentTarget as HTMLElement;
+      const rect = el.getBoundingClientRect();
+      const w = rect.width;
+      const doUpdate = (pageX: number) => {
+        const relX = pageX - rect.left;
+        const ratio = Math.max(0, Math.min(1, relX / w));
+        const hex = hueFromPosition(ratio);
+        setCustomHex(hex);
+        setHexInput(hex);
+        setSelectedTheme("custom");
+      };
+      doUpdate(e.nativeEvent.clientX);
+      const handleMove = (me: MouseEvent) => { doUpdate(me.clientX); };
+      const handleUp = () => {
+        document.removeEventListener("mousemove", handleMove);
+        document.removeEventListener("mouseup", handleUp);
+      };
+      document.addEventListener("mousemove", handleMove);
+      document.addEventListener("mouseup", handleUp);
+    },
+    [hueFromPosition]
+  );
+
+  const handleHexSubmit = useCallback(() => {
+    let h = hexInput.trim();
+    if (!h.startsWith("#")) h = "#" + h;
+    if (/^#[0-9A-Fa-f]{6}$/.test(h)) {
+      setCustomHex(h.toUpperCase());
+      setSelectedTheme("custom");
+    } else {
+      setHexInput(customHex);
+    }
+  }, [hexInput, customHex]);
 
   const hapticDemo = useDemo(step === 2, visible, "haptic", hapticMode, flashMode, hapticFlashAnim);
   const flashDemo = useDemo(step === 3, visible, "flash", hapticMode, flashMode, flashFlashAnim);
@@ -265,6 +364,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
     } else {
       onComplete({
         themeColor: selectedTheme,
+        customHex: selectedTheme === "custom" ? customHex : undefined,
         loggingEnabled,
         hapticMode,
         flashMode,
@@ -275,6 +375,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   }, [
     step,
     selectedTheme,
+    customHex,
     loggingEnabled,
     hapticMode,
     flashMode,
@@ -291,6 +392,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
     flashDemo.stop();
     onComplete({
       themeColor: selectedTheme,
+      customHex: selectedTheme === "custom" ? customHex : undefined,
       loggingEnabled,
       hapticMode,
       flashMode,
@@ -347,6 +449,40 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
     </View>
   );
 
+  const renderCustomPicker = () => (
+    <View style={cpStyles.container}>
+      <View
+        ref={hueTrackRef}
+        style={cpStyles.trackWrapper}
+        onLayout={(e) => { hueTrackWidthRef.current = e.nativeEvent.layout.width; }}
+        {...(Platform.OS !== "web" ? huePanResponder.panHandlers : {})}
+        {...(Platform.OS === "web" ? { onMouseDown: handleHueWebMouse } as any : {})}
+      >
+        <LinearGradient
+          colors={HUE_COLORS as any}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={cpStyles.track}
+        />
+        <View style={[cpStyles.thumb, { backgroundColor: customHex, borderColor: Colors.white }]} />
+      </View>
+      <View style={cpStyles.hexRow}>
+        <View style={[cpStyles.preview, { backgroundColor: customHex }]} />
+        <TextInput
+          style={[cpStyles.hexInput, { borderColor: accentColor }]}
+          value={hexInput}
+          onChangeText={setHexInput}
+          onBlur={handleHexSubmit}
+          onSubmitEditing={handleHexSubmit}
+          placeholder="#FFFFFF"
+          placeholderTextColor={Colors.textTertiary}
+          maxLength={7}
+          autoCapitalize="characters"
+        />
+      </View>
+    </View>
+  );
+
   const renderThemeStep = () => {
     const themeGrid = (
       <View style={[styles.themeGrid, isLandscape && { marginTop: 0 }]}>
@@ -361,7 +497,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
                 borderWidth: 2,
               },
             ]}
-            onPress={() => setSelectedTheme(opt.key)}
+            onPress={() => { setSelectedTheme(opt.key); setShowCustomPicker(false); }}
           >
             <View style={[styles.themeCircle, isLandscape && { width: 32, height: 32, borderRadius: 16 }, { backgroundColor: opt.color }]}>
               {selectedTheme === opt.key && (
@@ -378,6 +514,23 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             </Text>
           </Pressable>
         ))}
+        <Pressable
+          style={[
+            styles.themeOption,
+            isLandscape && { width: "auto", minWidth: 70, paddingVertical: 8, paddingHorizontal: 10 },
+            selectedTheme === "custom" && { borderColor: customHex, borderWidth: 2 },
+          ]}
+          onPress={() => { setSelectedTheme("custom"); setShowCustomPicker(true); }}
+        >
+          <View style={[styles.themeCircle, isLandscape && { width: 32, height: 32, borderRadius: 16 }, selectedTheme === "custom" ? { backgroundColor: customHex } : { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border }]}>
+            {selectedTheme === "custom" ? (
+              <Ionicons name="checkmark" size={isLandscape ? 16 : 20} color="#fff" />
+            ) : (
+              <Ionicons name="color-wand-outline" size={isLandscape ? 14 : 18} color={Colors.textSecondary} />
+            )}
+          </View>
+          <Text style={[styles.themeLabel, selectedTheme === "custom" && { color: customHex }]}>Custom</Text>
+        </Pressable>
       </View>
     );
 
@@ -390,18 +543,20 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           )}
           <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} showsVerticalScrollIndicator={false}>
             {themeGrid}
+            {(showCustomPicker || selectedTheme === "custom") && renderCustomPicker()}
           </ScrollView>
         </View>
       );
     }
 
     return (
-      <View style={styles.stepContent}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.stepContent} showsVerticalScrollIndicator={false}>
         <MaterialCommunityIcons name="palette-outline" size={40} color={accentColor} />
         <Text style={styles.stepTitle}>{t("onboarding", "themeTitle")}</Text>
         <Text style={styles.stepSubtitle}>{t("onboarding", "themeSubtitle")}</Text>
         {themeGrid}
-      </View>
+        {(showCustomPicker || selectedTheme === "custom") && renderCustomPicker()}
+      </ScrollView>
     );
   };
 
@@ -1105,5 +1260,57 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 16,
     color: Colors.background,
+  },
+});
+
+const cpStyles = StyleSheet.create({
+  container: {
+    width: "100%",
+    gap: 12,
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
+  trackWrapper: {
+    height: 32,
+    borderRadius: 16,
+    overflow: "hidden",
+    justifyContent: "center",
+    position: "relative",
+  },
+  track: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 16,
+  },
+  thumb: {
+    position: "absolute",
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 3,
+    left: "50%",
+    marginLeft: -12,
+  },
+  hexRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  preview: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  hexInput: {
+    flex: 1,
+    height: 36,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 14,
+    color: Colors.text,
+    backgroundColor: Colors.surface,
   },
 });
