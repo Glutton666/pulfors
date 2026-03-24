@@ -553,17 +553,9 @@ export default function MetronomeScreen() {
     });
 
     loadLoggingEnabled().then((val) => setLoggingEnabled(val));
-    AsyncStorage.getItem("metronome_onboarding_done").then(async (val) => {
+    AsyncStorage.getItem("metronome_onboarding_done").then((val) => {
       if (!val) {
-        const [existingSettings, existingTheme] = await Promise.all([
-          AsyncStorage.getItem("metronome_settings"),
-          AsyncStorage.getItem("metronome_theme_color"),
-        ]);
-        if (existingSettings || existingTheme) {
-          AsyncStorage.setItem("metronome_onboarding_done", "1");
-        } else {
-          setShowOnboarding(true);
-        }
+        setShowOnboarding(true);
       }
     });
     setupNotificationControls();
