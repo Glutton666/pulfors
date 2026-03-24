@@ -493,7 +493,7 @@ export function BeatIndicator({
     const canAdd = beatsRef.current < MAX_BEATS;
     const canRemove = beatsRef.current > MIN_BEATS;
 
-    dialRotation.value = dx * 0.08;
+    dialRotation.value = dx * -0.08;
 
     if (dx > 0 && canAdd) {
       swipeDirection.value = 1;
