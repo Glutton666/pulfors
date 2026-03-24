@@ -389,10 +389,6 @@ export function NoteModeView({
 
     return (
       <View style={styles.container}>
-        <Pressable onPress={onExitNoteMode} hitSlop={12} style={styles.closeButtonCenter}>
-          <Ionicons name="close" size={28} color={Colors.textSecondary} />
-        </Pressable>
-
         <View style={styles.header}>
           <View style={{ width: 22 }} />
           <Text style={[styles.title, { color: C.accent }]}>{t("noteMode", "title")}</Text>
