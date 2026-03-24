@@ -45,7 +45,7 @@ import {
   soundSets,
 } from "@/lib/metronome-engine";
 import type { BeatType } from "@/lib/metronome-engine";
-import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets } from "@/lib/storage";
+import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry } from "@/lib/storage";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample } from "@/lib/storage";
 import {
   BeatIndicator,
@@ -2204,7 +2204,6 @@ export default function MetronomeScreen() {
 
   const handleBarQuickSave = useCallback(async (): Promise<boolean> => {
     try {
-      const { loadPracticeBook: lpb, savePracticeBook: spb, createPracticeEntry } = await import("@/lib/storage");
       const config = {
         mode: "bar" as const,
         bpm,
@@ -2222,8 +2221,8 @@ export default function MetronomeScreen() {
       const now = new Date();
       const label = `Bar ${beatsPerMeasure}/${bpm} ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
       const entry = createPracticeEntry(label, config, username);
-      const existing = await lpb();
-      await spb([entry, ...existing]);
+      const existing = await loadPracticeBook();
+      await savePracticeBook([entry, ...existing]);
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return true;
     } catch (e) {
@@ -2521,7 +2520,6 @@ export default function MetronomeScreen() {
       setActiveSubNote(-1);
       setProgressInfo(null);
     }
-    const { loadPracticeBook } = await import("@/lib/storage");
     const book = await loadPracticeBook();
     const barItems = book.filter(e => (e.mode || "bar") === "bar");
     setNoteBarEntries(barItems);
@@ -2665,7 +2663,6 @@ export default function MetronomeScreen() {
     const q = noteQueueRef.current;
     if (q.length === 0) return;
     try {
-      const { loadPracticeBook: lpb, savePracticeBook: spb, createPracticeEntry } = await import("@/lib/storage");
       const firstEntry = q[0];
       const now = new Date();
       const label = `Note ${q.length} items ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
@@ -2700,8 +2697,8 @@ export default function MetronomeScreen() {
           imageUri: e.imageUri,
         })),
       }, username);
-      const existing = await lpb();
-      await spb([noteEntry, ...existing]);
+      const existing = await loadPracticeBook();
+      await savePracticeBook([noteEntry, ...existing]);
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(t("noteMode", "saved"), t("noteMode", "savedMsg"));
     } catch (e) {
@@ -2822,7 +2819,6 @@ export default function MetronomeScreen() {
       setNoteIsPlaying(false);
       noteIsPlayingRef.current = false;
       (async () => {
-        const { loadPracticeBook } = await import("@/lib/storage");
         const book = await loadPracticeBook();
         setNoteBarEntries(book.filter(e => (e.mode || "bar") === "bar"));
       })();
@@ -2980,9 +2976,8 @@ export default function MetronomeScreen() {
               {
                 text: t("main", "saveAndApply"),
                 onPress: async () => {
-                  const { loadPracticeBook: lpb, savePracticeBook: spb } = await import("@/lib/storage");
-                  const existing = await lpb();
-                  await spb([entry, ...existing]);
+                  const existing = await loadPracticeBook();
+                  await savePracticeBook([entry, ...existing]);
                   handleLoadPracticeEntry(entry);
                   Alert.alert(t("main", "saved"), `"${entry.label}" ${t("main", "savedToNote")}`);
                 },
@@ -3017,9 +3012,8 @@ export default function MetronomeScreen() {
           id: Crypto.randomUUID(),
           ...decoded,
         };
-        const { loadPracticeBook: lpb, savePracticeBook: spb } = await import("@/lib/storage");
-        const existing = await lpb();
-        await spb([entry, ...existing]);
+        const existing = await loadPracticeBook();
+        await savePracticeBook([entry, ...existing]);
         handleLoadPracticeEntry(entry);
         Alert.alert(t("main", "importComplete"), `"${entry.label}" ${t("main", "savedToNote")}\n\n${t("practiceBook", "bpmUnit")}: ${entry.bpm} | ${entry.beatsPerMeasure} ${t("practiceBook", "beatsUnit")}`);
       }

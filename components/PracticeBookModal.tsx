@@ -427,6 +427,7 @@ export function PracticeBookModal({
   const [goalMinutes, setGoalMinutes] = useState("10");
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [filterMode, setFilterMode] = useState<"all" | "beat" | "bar" | "note">("all");
   const saveInputRef = useRef<TextInput>(null);
   const editInputRef = useRef<TextInput | null>(null);
 
@@ -536,6 +537,17 @@ export function PracticeBookModal({
       Alert.alert(t("practiceBook", "importEntry"), t("practiceBook", "importFail"));
     }
   }, []);
+
+  const filteredEntries = filterMode === "all"
+    ? entries
+    : entries.filter(e => (e.mode || "beat") === filterMode);
+
+  const modeCounts = {
+    all: entries.length,
+    beat: entries.filter(e => !e.mode || e.mode === "beat").length,
+    bar: entries.filter(e => e.mode === "bar").length,
+    note: entries.filter(e => e.mode === "note").length,
+  };
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
@@ -649,7 +661,7 @@ export function PracticeBookModal({
                 >
                   <Ionicons name="add-circle-outline" size={18} color={C.accent} />
                   <Text style={[styles.saveButtonText, { color: C.accent }]}>
-                    {currentConfig?.mode === "beat" ? t("practiceBook", "saveBeatConfig") : t("practiceBook", "saveBarConfig")}
+                    {currentConfig?.mode === "note" ? t("practiceBook", "saveNoteConfig") : currentConfig?.mode === "beat" ? t("practiceBook", "saveBeatConfig") : t("practiceBook", "saveBarConfig")}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -663,7 +675,37 @@ export function PracticeBookModal({
           </View>
         )}
 
-        {entries.length === 0 ? (
+        {entries.length > 0 && (
+          <View style={styles.tabBar}>
+            {(["all", "beat", "bar", "note"] as const).map((mode) => {
+              const isActive = filterMode === mode;
+              const label = mode === "all" ? t("practiceBook", "tabAll")
+                : mode === "beat" ? t("practiceBook", "tabBeat")
+                : mode === "bar" ? t("practiceBook", "tabBar")
+                : t("practiceBook", "tabNote");
+              const count = modeCounts[mode];
+              return (
+                <Pressable
+                  key={mode}
+                  onPress={() => setFilterMode(mode)}
+                  style={[
+                    styles.tabItem,
+                    isActive && { borderBottomColor: C.accent, borderBottomWidth: 2 },
+                  ]}
+                >
+                  <Text style={[
+                    styles.tabText,
+                    isActive && { color: C.accent },
+                  ]}>
+                    {label} {count > 0 ? `(${count})` : ""}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        {filteredEntries.length === 0 ? (
           <View style={styles.emptyState}>
             <MaterialCommunityIcons
               name="notebook-outline"
@@ -677,8 +719,8 @@ export function PracticeBookModal({
           </View>
         ) : viewMode === "grid" ? (
           <FlatList
-            key="grid"
-            data={entries}
+            key={`grid-${filterMode}`}
+            data={filteredEntries}
             keyExtractor={(item) => item.id}
             numColumns={2}
             columnWrapperStyle={gridStyles.row}
@@ -698,17 +740,17 @@ export function PracticeBookModal({
               />
             )}
             contentContainerStyle={gridStyles.list}
-            scrollEnabled={!!entries.length}
+            scrollEnabled={!!filteredEntries.length}
           />
         ) : (
           <FlatList
-            key="list"
-            data={entries}
+            key={`list-${filterMode}`}
+            data={filteredEntries}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
             extraData={editingId}
             contentContainerStyle={styles.list}
-            scrollEnabled={!!entries.length}
+            scrollEnabled={!!filteredEntries.length}
           />
         )}
 
@@ -793,6 +835,24 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 18,
     color: Colors.text,
+  },
+  tabBar: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 10,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  tabText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    color: Colors.textSecondary,
   },
   saveSection: {
     paddingHorizontal: 20,
