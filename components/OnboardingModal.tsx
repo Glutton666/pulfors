@@ -385,7 +385,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       return (
         <View style={styles.landRow}>
           {renderStepHeader(
-            <MaterialCommunityIcons name="palette-outline" size={32} color={accentColor} />,
+            <MaterialCommunityIcons name="palette-outline" size={36} color={accentColor} />,
             "themeTitle", "themeSubtitle"
           )}
           <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} showsVerticalScrollIndicator={false}>
@@ -475,7 +475,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       return (
         <View style={styles.landRow}>
           {renderStepHeader(
-            <Ionicons name="analytics-outline" size={32} color={accentColor} />,
+            <Ionicons name="analytics-outline" size={36} color={accentColor} />,
             "loggingTitle", "loggingSubtitle"
           )}
           <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} showsVerticalScrollIndicator={false}>
@@ -577,7 +577,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       return (
         <View style={styles.landRow}>
           {renderStepHeader(
-            <Ionicons name="phone-portrait-outline" size={32} color={accentColor} />,
+            <Ionicons name="phone-portrait-outline" size={36} color={accentColor} />,
             "hapticTitle", "hapticSubtitle"
           )}
           <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} showsVerticalScrollIndicator={false}>
@@ -632,7 +632,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
         <View style={{ flex: 1 }}>
           <View style={styles.landRow}>
             {renderStepHeader(
-              <Ionicons name="flash-outline" size={32} color={accentColor} />,
+              <Ionicons name="flash-outline" size={36} color={accentColor} />,
               "flashTitle", "flashSubtitle"
             )}
             <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} showsVerticalScrollIndicator={false}>
@@ -693,7 +693,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       return (
         <View style={styles.landRow}>
           {renderStepHeader(
-            <Ionicons name="person-circle-outline" size={32} color={accentColor} />,
+            <Ionicons name="person-circle-outline" size={36} color={accentColor} />,
             "profileTitle", "profileSubtitle"
           )}
           <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -1046,46 +1046,47 @@ const styles = StyleSheet.create({
   landRow: {
     flex: 1,
     flexDirection: "row",
-    gap: 16,
-    paddingHorizontal: 16,
+    gap: 20,
+    paddingHorizontal: 20,
   },
   landHeaderCol: {
-    flex: 1,
+    width: "35%",
     justifyContent: "center",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 8,
+    gap: 10,
+    paddingHorizontal: 12,
   },
   landContentCol: {
     flex: 1,
   },
   landContentInner: {
     gap: 10,
-    paddingVertical: 4,
-    paddingRight: 4,
+    paddingVertical: 6,
+    paddingRight: 8,
   },
   landStepTitle: {
-    fontSize: 18,
+    fontSize: 20,
     textAlign: "center",
   },
   landStepSubtitle: {
-    fontSize: 12,
+    fontSize: 13,
     textAlign: "center",
+    lineHeight: 18,
   },
   landNextButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    width: "80%",
-    maxWidth: 200,
-    height: 36,
-    borderRadius: 10,
-    marginTop: 12,
+    width: "85%",
+    maxWidth: 220,
+    height: 40,
+    borderRadius: 12,
+    marginTop: 14,
   },
   landNextButtonText: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 14,
+    fontSize: 15,
     color: Colors.background,
   },
   bottomBar: {
