@@ -1195,6 +1195,11 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
         <View style={[styles.card, isLandscape && { flexDirection: "row" as const, width: winW * 0.85, maxWidth: 680, padding: 16, gap: 12, alignItems: "flex-start" as const }]}>
+          {isLandscape && (
+            <Pressable onPress={handleClose} hitSlop={12} style={{ position: "absolute" as const, top: 8, right: 8, zIndex: 10 }}>
+              <Ionicons name="close" size={22} color={Colors.textSecondary} />
+            </Pressable>
+          )}
           {!isLandscape && (
             <>
               <View style={styles.header}>
@@ -1213,9 +1218,6 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               <View style={[styles.header, { alignSelf: "stretch" as const, marginBottom: 8 }]}>
                 <MaterialCommunityIcons name="waveform" size={16} color={C.accent} />
                 <Text style={[styles.title, { color: C.accent, fontSize: 14 }]}>{t("signalGenerator", "title")}</Text>
-                <Pressable onPress={handleClose} hitSlop={12} style={styles.closeBtn}>
-                  <Ionicons name="close" size={18} color={Colors.textSecondary} />
-                </Pressable>
               </View>
             )}
             <Knob
