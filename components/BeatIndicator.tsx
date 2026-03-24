@@ -452,10 +452,8 @@ export function BeatIndicator({
   const swipeProgress = useSharedValue(0);
   const swipeDirection = useSharedValue(0);
   const dialRotation = useSharedValue(0);
-  const dialTranslateX = useSharedValue(0);
   const centerGlow = useSharedValue(0);
   const prevBeatRef = useRef(-1);
-  const prevBeatsCountRef = useRef(beatsPerMeasure);
 
   useEffect(() => {
     if (isPlaying && currentBeat >= 0 && currentBeat !== prevBeatRef.current) {
@@ -478,13 +476,6 @@ export function BeatIndicator({
   const containerRef = useRef<View>(null);
 
   useEffect(() => {
-    const prev = prevBeatsCountRef.current;
-    if (prev !== beatsPerMeasure && prev > 0) {
-      const dir = beatsPerMeasure > prev ? 1 : -1;
-      dialTranslateX.value = dir * 20;
-      dialTranslateX.value = withSpring(0, { damping: 12, stiffness: 200 });
-    }
-    prevBeatsCountRef.current = beatsPerMeasure;
     beatsRef.current = beatsPerMeasure;
   }, [beatsPerMeasure]);
   useEffect(() => {
@@ -495,7 +486,6 @@ export function BeatIndicator({
     swipeProgress.value = withTiming(0, { duration: 200 });
     swipeDirection.value = 0;
     dialRotation.value = withSpring(0, { damping: 15, stiffness: 300 });
-    dialTranslateX.value = withSpring(0, { damping: 12, stiffness: 200 });
   }, []);
 
   const processMoveByDx = useCallback((dx: number) => {
@@ -504,7 +494,6 @@ export function BeatIndicator({
     const canRemove = beatsRef.current > MIN_BEATS;
 
     dialRotation.value = dx * 0.08;
-    dialTranslateX.value = dx * 0.15;
 
     if (dx > 0 && canAdd) {
       swipeDirection.value = 1;
@@ -597,10 +586,7 @@ export function BeatIndicator({
   ).current;
 
   const dialStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: dialTranslateX.value },
-      { rotate: `${dialRotation.value}deg` },
-    ],
+    transform: [{ rotate: `${dialRotation.value}deg` }],
   }));
 
   const centerGlowStyle = useAnimatedStyle(() => ({
