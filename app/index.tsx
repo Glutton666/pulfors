@@ -8,6 +8,7 @@ import {
   Modal,
   Alert,
   useWindowDimensions,
+  BackHandler,
 } from "react-native";
 import * as Linking from "expo-linking";
 import {
@@ -216,6 +217,22 @@ export default function MetronomeScreen() {
   const [customSoundSets, setCustomSoundSets] = useState<Record<string, CustomSoundSetConfig>>({});
   const customSoundSetsRef = useRef<Record<string, CustomSoundSetConfig>>({});
   useEffect(() => { customSoundSetsRef.current = customSoundSets; }, [customSoundSets]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const onBack = () => {
+      if (showSettings) { setShowSettings(false); return true; }
+      if (showSignalGen) { setShowSignalGen(false); return true; }
+      if (showPracticeBook) { setShowPracticeBook(false); return true; }
+      if (showWorkUp) { setShowWorkUp(false); return true; }
+      if (showMenu) { setShowMenu(false); return true; }
+      if (showOnboarding) { setShowOnboarding(false); return true; }
+      if (showReboot) { setShowReboot(false); return true; }
+      return true;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+    return () => sub.remove();
+  }, [showSettings, showSignalGen, showPracticeBook, showWorkUp, showMenu, showOnboarding, showReboot]);
 
   const [noteSamples, setNoteSamples] = useState<NoteSampleMap>({});
   const noteSamplesRef = useRef<NoteSampleMap>({});
