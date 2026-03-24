@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00c8ff;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#0066ff;stop-opacity:1"/>
+    </linearGradient>
+  </defs>
+  
+  <rect width="1024" height="1024" rx="200" fill="#0d0d1a"/>
+  
+  <g fill="none" stroke="url(#grad1)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+    <!-- P vertical -->
+    <path d="M100,310 L100,720"/>
+    <!-- P bowl -->
+    <path d="M100,310 L180,310 Q240,310 240,380 Q240,450 180,450 L100,450"/>
+    
+    <!-- u -->
+    <path d="M280,450 L280,640 Q280,720 340,720 Q400,720 400,640 L400,450"/>
+    
+    <!-- l/F shared vertical (THE KEY) -->
+    <path d="M460,310 L460,720"/>
+    <!-- F top bar -->
+    <path d="M460,310 L580,310"/>
+    <!-- F middle bar -->
+    <path d="M460,450 L560,450"/>
+    
+    <!-- o -->
+    <ellipse cx="670" cy="580" rx="60" ry="140"/>
+    
+    <!-- r vertical -->
+    <path d="M790,450 L790,720"/>
+    <!-- r curve -->
+    <path d="M790,520 Q790,450 840,450"/>
+    
+    <!-- s -->
+    <path d="M930,490 Q930,450 905,450 Q875,450 875,500 Q875,555 905,555 Q935,555 935,610 Q935,720 905,720 Q875,720 875,680"/>
+  </g>
+</svg>
