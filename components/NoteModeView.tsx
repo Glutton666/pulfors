@@ -32,7 +32,7 @@ interface NoteModeViewProps {
   onInsertNext: (entry: PracticeEntry) => void;
   onPlayModeChange: (mode: "once" | "loop" | "random") => void;
   onTogglePlay: () => void;
-  onSave: () => void;
+  onSave: () => Promise<boolean>;
   onReset: () => void;
   onExitNoteMode: () => void;
   onQueueItemImageChange?: (index: number, imageUri: string | undefined) => void;
@@ -252,6 +252,15 @@ export function NoteModeView({
   const { t } = useLanguage();
   const { width: winW, height: winH } = useWindowDimensions();
   const isLandscape = winW > winH;
+  const [saved, setSaved] = useState(false);
+
+  const handleSaveWithFeedback = useCallback(async () => {
+    const ok = await onSave();
+    if (ok) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    }
+  }, [onSave]);
   const [sourceViewMode, setSourceViewMode] = useState<"list" | "grid">("list");
   const [sourceCollapsed, setSourceCollapsed] = useState(false);
 
@@ -567,8 +576,8 @@ export function NoteModeView({
             </Pressable>
             <Text style={[styles.title, { color: C.accent, fontSize: moderateScale(14, 0.3) }]}>{t("noteMode", "title")}</Text>
             <View style={[styles.headerActions, { gap: moderateScale(6, 0.3) }]}>
-              <Pressable onPress={onSave} hitSlop={6} style={[styles.headerBtn, { borderColor: C.accent, width: moderateScale(28, 0.4), height: moderateScale(28, 0.4) }]}>
-                <Ionicons name="save-outline" size={moderateScale(13, 0.3)} color={C.accent} />
+              <Pressable onPress={handleSaveWithFeedback} hitSlop={6} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : Colors.surface, width: moderateScale(28, 0.4), height: moderateScale(28, 0.4) }]}>
+                <Ionicons name={saved ? "checkmark" : "save-outline"} size={moderateScale(13, 0.3)} color={saved ? "#4CAF50" : C.accent} />
               </Pressable>
               <Pressable onPress={handleReset} hitSlop={6} style={[styles.headerBtn, { borderColor: Colors.danger, width: moderateScale(28, 0.4), height: moderateScale(28, 0.4) }]}>
                 <Ionicons name="refresh" size={moderateScale(13, 0.3)} color={Colors.danger} />
@@ -593,8 +602,8 @@ export function NoteModeView({
         </Pressable>
         <Text style={[styles.title, { color: C.accent }]}>{t("noteMode", "title")}</Text>
         <View style={styles.headerActions}>
-          <Pressable onPress={onSave} hitSlop={6} style={[styles.headerBtn, { borderColor: C.accent }]}>
-            <Ionicons name="save-outline" size={16} color={C.accent} />
+          <Pressable onPress={handleSaveWithFeedback} hitSlop={6} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : Colors.surface }]}>
+            <Ionicons name={saved ? "checkmark" : "save-outline"} size={16} color={saved ? "#4CAF50" : C.accent} />
           </Pressable>
           <Pressable onPress={handleReset} hitSlop={6} style={[styles.headerBtn, { borderColor: Colors.danger }]}>
             <Ionicons name="refresh" size={16} color={Colors.danger} />

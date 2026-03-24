@@ -2659,9 +2659,9 @@ export default function MetronomeScreen() {
     }
   }, [noteStartPlayingEntry, createShuffledIndices]);
 
-  const handleNoteSave = useCallback(async () => {
+  const handleNoteSave = useCallback(async (): Promise<boolean> => {
     const q = noteQueueRef.current;
-    if (q.length === 0) return;
+    if (q.length === 0) return false;
     try {
       const firstEntry = q[0];
       const now = new Date();
@@ -2700,9 +2700,10 @@ export default function MetronomeScreen() {
       const existing = await loadPracticeBook();
       await savePracticeBook([noteEntry, ...existing]);
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(t("noteMode", "saved"), t("noteMode", "savedMsg"));
+      return true;
     } catch (e) {
       console.warn("Note save error:", e);
+      return false;
     }
   }, [username, t]);
 
