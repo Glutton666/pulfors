@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "PulFors<alpha>",
-    "slug": "pulforsalpha",
+    "name": "PulFors",
+    "slug": "pulfors",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
-    "scheme": "pulforsalpha",
+    "scheme": "pulfors",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -15,10 +15,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.pulforsalpha.app"
+      "bundleIdentifier": "com.pulfors.app"
     },
     "android": {
-      "package": "com.pulforsalpha.app",
+      "package": "com.pulfors.app",
       "adaptiveIcon": {
         "backgroundColor": "#0D1117",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
