@@ -70,6 +70,7 @@ export interface MetronomeSettings {
   username?: string;
   landscapeReversed?: boolean;
   beatDirection?: "cw" | "ccw";
+  micMethod?: "native" | "webview";
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
@@ -89,6 +90,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   username: "",
   landscapeReversed: false,
   beatDirection: "cw",
+  micMethod: "native",
 };
 
 export async function loadSettings(): Promise<MetronomeSettings> {

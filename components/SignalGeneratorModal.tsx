@@ -682,9 +682,10 @@ interface SignalGeneratorModalProps {
   onAndroidMicToggle?: (active: boolean) => void;
   androidMicFrequency?: number | null;
   androidMicNote?: string | null;
+  micMethod?: "native" | "webview";
 }
 
-export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, androidMicFrequency, androidMicNote }: SignalGeneratorModalProps) {
+export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, androidMicFrequency, androidMicNote, micMethod = "native" }: SignalGeneratorModalProps) {
   const { colors: C } = useTheme();
   const { t, language: lang } = useLanguage();
   const { width: winW, height: winH } = useWindowDimensions();
@@ -745,6 +746,8 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const micRafRef = useRef<number | null>(null);
   const micRecordingRef = useRef<Audio.Recording | null>(null);
   const micMobileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nativeFailCountRef = useRef(0);
+  const nativeFallenBackRef = useRef(false);
   const [micWebViewActive, setMicWebViewActive] = useState(false);
 
   const engineRef = useRef(new SignalGeneratorEngine());
@@ -865,8 +868,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const stopMic = useCallback(() => {
     micActiveRef.current = false;
     setMicListening(false);
-    if (Platform.OS === "android") {
+    if (Platform.OS === "android" && (micMethod === "webview" || nativeFallenBackRef.current)) {
       stopMicAndroid();
+      nativeFallenBackRef.current = false;
     } else if (Platform.OS === "web") {
       if (micRafRef.current) {
         cancelAnimationFrame(micRafRef.current);
@@ -890,7 +894,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     setMicDetectedFreq(null);
     setMicDetectedNote(null);
     setMicAnalyzed(false);
-  }, [stopMobileMic, stopMicAndroid]);
+  }, [stopMobileMic, stopMicAndroid, micMethod]);
 
   const pickDominantFreq = useCallback((readings: number[]): number | null => {
     if (readings.length === 0) return null;
@@ -990,6 +994,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 
   useEffect(() => {
     if (!micWebViewActive || Platform.OS !== "android") return;
+    if (micMethod !== "webview" && !nativeFallenBackRef.current) return;
     setMicAnalyzed(true);
     if (androidMicFrequency) {
       setMicDetectedFreq(androidMicFrequency);
@@ -998,13 +1003,26 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       setMicDetectedFreq(null);
       setMicDetectedNote(null);
     }
-  }, [micWebViewActive, androidMicFrequency, androidMicNote]);
+  }, [micWebViewActive, androidMicFrequency, androidMicNote, micMethod]);
+
+  const autoFallbackToWebView = useCallback(() => {
+    if (Platform.OS !== "android" || nativeFallenBackRef.current) return;
+    nativeFallenBackRef.current = true;
+    console.warn("[MicTuner] Native decode failed, auto-falling back to WebView");
+    stopMobileMic();
+    micActiveRef.current = true;
+    setMicListening(true);
+    setMicWebViewActive(true);
+    onAndroidMicToggle?.(true);
+  }, [stopMobileMic, onAndroidMicToggle]);
 
   const startMicMobile = useCallback(async () => {
-    if (Platform.OS === "android") {
+    if (Platform.OS === "android" && micMethod === "webview") {
       startMicAndroid();
       return;
     }
+    nativeFailCountRef.current = 0;
+    nativeFallenBackRef.current = false;
     try {
       const perm = await Audio.requestPermissionsAsync();
       if (!perm.granted) {
@@ -1073,27 +1091,40 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 const analysisResult = analyzeWavLocally(base64, SAMPLE_RATE);
                 setMicAnalyzed(true);
                 if (analysisResult.frequency) {
+                  nativeFailCountRef.current = 0;
                   setMicDetectedFreq(analysisResult.frequency);
                   setMicDetectedNote(analysisResult.note);
                 } else {
+                  if (Platform.OS === "android") {
+                    nativeFailCountRef.current++;
+                    if (nativeFailCountRef.current >= 3) {
+                      autoFallbackToWebView();
+                      try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
+                      return;
+                    }
+                  }
                   setMicDetectedFreq(null);
                   setMicDetectedNote(null);
                 }
                 try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
               }
             } catch (e) {
-              console.warn("[MicTuner] iOS analyze error:", e);
+              console.warn("[MicTuner] native analyze error:", e);
             }
             if (micActiveRef.current) {
               recordAndAnalyze();
             }
           }, RECORD_MS);
         } catch (e) {
-          console.warn("[MicTuner] iOS record error:", e);
+          console.warn("[MicTuner] native record error:", e);
           if (rec) {
             try { await rec.stopAndUnloadAsync(); } catch {}
           }
           micRecordingRef.current = null;
+          if (Platform.OS === "android") {
+            autoFallbackToWebView();
+            return;
+          }
           if (micActiveRef.current) {
             micMobileTimerRef.current = setTimeout(recordAndAnalyze, 500);
           }
@@ -1105,7 +1136,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       console.warn("[MicTuner] Mobile start error:", e);
       setMicListening(false);
     }
-  }, [startMicAndroid]);
+  }, [startMicAndroid, micMethod, autoFallbackToWebView]);
 
   const startMic = useCallback(async () => {
     if (Platform.OS === "web") {
