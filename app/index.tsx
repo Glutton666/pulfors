@@ -1570,12 +1570,65 @@ export default function MetronomeScreen() {
   useEffect(() => {
     const sub = addNotificationActionListener((actionId) => {
       if (actionId === "TOGGLE_PLAY") {
-        togglePlayPauseRef.current();
+        const engine = engineRef.current;
+        if (!engine) return;
+
+        const modeLabel = barModeRef.current ? "Bar" : "Dial";
+
+        if (engine.getIsRunning()) {
+          engine.stop();
+          stopRenderedAudio();
+          clearSamplePlayStates();
+          setIsPreparing(false);
+          setIsPlaying(false);
+          setCurrentBeat(-1);
+          setMeasureCount(0);
+          setActiveSubNote(-1);
+          activeSubNoteRef.current = -1;
+          setProgressInfo(null);
+          showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
+        } else {
+          stopRenderedAudio();
+          engine.setPreRenderedAudio(false);
+          setIsPreparing(false);
+
+          if (barModeRef.current) {
+            engine.setBeatTypes([...(barConfigRef.current.beatTypes || [])]);
+            engine.setAllBeatSubdivisions(barConfigRef.current.beatSubdivisions || {});
+            engine.setAllBarRepeats(barConfigRef.current.barRepeats || {});
+            engine.setLoopBlocks(barConfigRef.current.loopBlocks || []);
+            engine.setBlockPlayMode(blockPlayModeRef.current);
+            const bpmOverrides: Record<number, number> = {};
+            for (const [k, v] of Object.entries(barConfigRef.current.barRepeats || {})) {
+              if (v.bpm) bpmOverrides[Number(k)] = v.bpm;
+            }
+            engine.setAllBarBpmOverrides(bpmOverrides);
+          } else {
+            engine.setBeatTypes([...(dialConfigRef.current.beatTypes || [])]);
+            engine.setAllBeatSubdivisions(dialConfigRef.current.beatSubdivisions || {});
+          }
+          engine.buildScheduleOnly();
+
+          setCurrentBeat(-1);
+          setMeasureCount(0);
+          setActiveSubNote(-1);
+          activeSubNoteRef.current = -1;
+          setProgressInfo(null);
+
+          setIsPlaying(true);
+          engine.start(barModeRef.current ? (barStartBeatRef.current ?? undefined) : undefined);
+          showPlayingNotification(bpmRef.current, modeLabel, languageRef.current);
+
+          if (barModeRef.current && barLoopModeRef.current === "once") {
+            engine.requestStopAfterMeasure();
+          }
+        }
         return;
       }
 
       if (actionId === "BPM_DOWN" || actionId === "BPM_UP") {
         const dir = actionId;
+        const engine = engineRef.current;
 
         if (bpmTapCountRef.current.direction === dir && bpmTapTimerRef.current) {
           clearTimeout(bpmTapTimerRef.current);
@@ -1585,8 +1638,12 @@ export default function MetronomeScreen() {
           const delta = dir === "BPM_DOWN" ? -5 : 5;
           const newBpm = Math.max(20, Math.min(300, bpmRef.current + delta));
           updateBpmRef.current(newBpm);
+          const isCurrentlyPlaying = engine?.getIsRunning() ?? false;
+          if (isCurrentlyPlaying) {
+            stopRenderedAudio();
+          }
           const modeLabel = barModeRef.current ? "Bar" : "Dial";
-          updateNotificationBpm(newBpm, modeLabel, true, languageRef.current);
+          updateNotificationBpm(newBpm, modeLabel, isCurrentlyPlaying, languageRef.current);
         } else {
           if (bpmTapTimerRef.current) {
             clearTimeout(bpmTapTimerRef.current);
@@ -1600,8 +1657,12 @@ export default function MetronomeScreen() {
             const delta = dir === "BPM_DOWN" ? -1 : 1;
             const newBpm = Math.max(20, Math.min(300, bpmRef.current + delta));
             updateBpmRef.current(newBpm);
+            const isNowPlaying = engineRef.current?.getIsRunning() ?? false;
+            if (isNowPlaying) {
+              stopRenderedAudio();
+            }
             const modeLabel = barModeRef.current ? "Bar" : "Dial";
-            updateNotificationBpm(newBpm, modeLabel, true, languageRef.current);
+            updateNotificationBpm(newBpm, modeLabel, isNowPlaying, languageRef.current);
           }, 300);
         }
       }
