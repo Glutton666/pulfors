@@ -934,6 +934,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     marginBottom: 10,
     borderRadius: 12,
     overflow: "hidden",
+    backgroundColor: C.surface,
   },
   actionsBackground: {
     position: "absolute",
@@ -942,6 +943,9 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     bottom: 0,
     width: ACTION_WIDTH,
     flexDirection: "row",
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+    overflow: "hidden",
   },
   swipeAction: {
     flex: 1,
