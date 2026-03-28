@@ -2541,7 +2541,7 @@ export function BeatIndicator({
       </View>
 
       {!isLandscape && (
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 24 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: S.ms(24, 0.4) }}>
           {onEnterNoteMode && (
             <Pressable
               onPress={onEnterNoteMode}
@@ -2551,7 +2551,7 @@ export function BeatIndicator({
               accessibilityRole="button"
               accessibilityLabel="Open note mode"
             >
-              <Ionicons name="musical-notes-outline" size={16} color={C.textTertiary} />
+              <Ionicons name="musical-notes-outline" size={S.ms(16, 0.4)} color={C.textTertiary} />
             </Pressable>
           )}
           <Pressable
@@ -2562,7 +2562,7 @@ export function BeatIndicator({
             accessibilityRole="button"
             accessibilityLabel="Open bar mode"
           >
-            <Ionicons name="reorder-three" size={20} color={C.textTertiary} />
+            <Ionicons name="reorder-three" size={S.ms(20, 0.4)} color={C.textTertiary} />
           </Pressable>
         </View>
       )}
@@ -2577,7 +2577,7 @@ export function BeatIndicator({
             accessibilityRole="button"
             accessibilityLabel="Open bar mode"
           >
-            <Ionicons name="reorder-three" size={16} color={C.textTertiary} />
+            <Ionicons name="reorder-three" size={S.ms(16, 0.4)} color={C.textTertiary} />
           </Pressable>
           {onEnterNoteMode && (
             <Pressable
@@ -2588,7 +2588,7 @@ export function BeatIndicator({
               accessibilityRole="button"
               accessibilityLabel="Open note mode"
             >
-              <Ionicons name="musical-notes-outline" size={14} color={C.textTertiary} />
+              <Ionicons name="musical-notes-outline" size={S.ms(14, 0.4)} color={C.textTertiary} />
             </Pressable>
           )}
         </View>
@@ -2920,12 +2920,12 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   barModeHandle: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 24,
-    minWidth: 80,
-    minHeight: 36,
+    paddingVertical: S.ms(8, 0.4),
+    paddingHorizontal: S.ms(24, 0.4),
+    minWidth: S.ms(80, 0.4),
+    minHeight: S.ms(36, 0.4),
     backgroundColor: C.overlay05,
-    borderRadius: 12,
+    borderRadius: S.ms(12, 0.3),
   },
   barModeHandleLandscape: {
     position: "absolute" as const,
@@ -2957,10 +2957,10 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   landscapeModeBtn: {
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
+    paddingVertical: S.ms(10, 0.4),
+    paddingHorizontal: S.ms(4, 0.3),
     backgroundColor: C.overlay07,
-    borderRadius: 8,
+    borderRadius: S.ms(8, 0.3),
   },
   barSubdivisionSlot: {
     paddingHorizontal: 8,
