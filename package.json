@@ -103,6 +103,8 @@
     },
     "tinyglobby": {
       "picomatch": "^4.0.4"
-    }
+    },
+    "node-forge": ">=1.4.0",
+    "path-to-regexp": ">=8.4.0"
   }
 }
