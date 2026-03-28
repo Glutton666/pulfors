@@ -527,7 +527,7 @@ function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, a
                         if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         setExpandedInstrument(expandedInstrument === inst.id ? null : inst.id);
                       }}
-                      style={[tgStyles.instrumentRow, expandedInstrument === inst.id && { backgroundColor: "rgba(255,255,255,0.04)" }]}
+                      style={[tgStyles.instrumentRow, expandedInstrument === inst.id && { backgroundColor: C.overlay05 }]}
                     >
                       <Text style={[tgStyles.instrumentText, expandedInstrument === inst.id && { color: accentColor }]}>
                         {inst.name[lang]}

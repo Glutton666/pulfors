@@ -362,6 +362,7 @@ export function BeatIndicator({
   onEnterNoteMode,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
+  const styles = make_styles(C);
   const { height: winH } = useWindowDimensions();
 
   const landscapeDialScale = isLandscape ? Math.max(0.5, Math.min((winH - 100) / DIAL_SIZE, 0.85)) : 1;
@@ -1126,7 +1127,7 @@ export function BeatIndicator({
           style={[
             styles.barBeatWrapper,
             isCurrent && styles.barBeatWrapperActive,
-            isPrimary && isDropTarget && { backgroundColor: "rgba(255,255,255,0.06)", borderColor: C.accent, borderWidth: 1, borderRadius: 4, marginHorizontal: -1 },
+            isPrimary && isDropTarget && { backgroundColor: C.overlay06, borderColor: C.accent, borderWidth: 1, borderRadius: 4, marginHorizontal: -1 },
           ]}
         >
           {(() => {
@@ -1193,7 +1194,7 @@ export function BeatIndicator({
           <View style={[
             styles.barBeatContent,
             { height: BAR_HEIGHT },
-            isCurrent && { backgroundColor: "rgba(255,255,255,0.08)" },
+            isCurrent && { backgroundColor: C.overlay08 },
           ]}>
             {pattern.map((type, ci) => {
               const isActiveCell = isCurrent && ci === activeSubNote;
@@ -1226,7 +1227,7 @@ export function BeatIndicator({
                   }}
                   onTouchEnd={() => { clearNoteHold(); }}
                   onTouchCancel={() => { clearNoteHold(); }}
-                  style={[styles.barNoteCell, !isLast && { borderRightWidth: 1, borderRightColor: "rgba(255,255,255,0.08)" }]}
+                  style={[styles.barNoteCell, !isLast && { borderRightWidth: 1, borderRightColor: C.overlay08 }]}
                 >
                   {isStrongType ? (
                     <View style={[styles.barNoteFill, { margin: 3, overflow: "hidden", opacity: isActiveCell ? 1 : 0.75 }]}>
@@ -2211,7 +2212,7 @@ export function BeatIndicator({
                     paddingHorizontal: 14,
                     paddingVertical: 6,
                     borderRadius: 14,
-                    backgroundColor: repeatType === "count" ? C.accent + "30" : "rgba(255,255,255,0.08)",
+                    backgroundColor: repeatType === "count" ? C.accent + "30" : C.overlay08,
                   }}
                 >
                   <Text style={{ color: repeatType === "count" ? C.accent : C.textSecondary, fontSize: 13, fontWeight: "600" }}>Count</Text>
@@ -2222,7 +2223,7 @@ export function BeatIndicator({
                     paddingHorizontal: 14,
                     paddingVertical: 6,
                     borderRadius: 14,
-                    backgroundColor: repeatType === "duration" ? C.accent + "30" : "rgba(255,255,255,0.08)",
+                    backgroundColor: repeatType === "duration" ? C.accent + "30" : C.overlay08,
                   }}
                 >
                   <Text style={{ color: repeatType === "duration" ? C.accent : C.textSecondary, fontSize: 13, fontWeight: "600" }}>Time</Text>
@@ -2233,7 +2234,7 @@ export function BeatIndicator({
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 16 }}>
                   <Pressable
                     onPress={() => setRepeatCountVal(Math.max(1, repeatCountVal - 1))}
-                    style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
+                    style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: C.overlay10, alignItems: "center", justifyContent: "center" }}
                   >
                     <Ionicons name="remove" size={16} color={C.textSecondary} />
                   </Pressable>
@@ -2263,7 +2264,7 @@ export function BeatIndicator({
                   )}
                   <Pressable
                     onPress={() => setRepeatCountVal(repeatCountVal + 1)}
-                    style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
+                    style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: C.overlay10, alignItems: "center", justifyContent: "center" }}
                   >
                     <Ionicons name="add" size={16} color={C.textSecondary} />
                   </Pressable>
@@ -2276,7 +2277,7 @@ export function BeatIndicator({
                       setRepeatMinVal(Math.floor(total / 60));
                       setRepeatSecVal(total % 60);
                     }}
-                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
+                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: C.overlay10, alignItems: "center", justifyContent: "center" }}
                   >
                     <Ionicons name="remove" size={14} color={C.textSecondary} />
                   </Pressable>
@@ -2320,7 +2321,7 @@ export function BeatIndicator({
                       setRepeatMinVal(Math.floor(total / 60));
                       setRepeatSecVal(total % 60);
                     }}
-                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
+                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: C.overlay10, alignItems: "center", justifyContent: "center" }}
                   >
                     <Ionicons name="add" size={14} color={C.textSecondary} />
                   </Pressable>
@@ -2341,7 +2342,7 @@ export function BeatIndicator({
                         setRepeatBpmOverride(Math.max(20, repeatBpmOverride - 5));
                       }
                     }}
-                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
+                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: C.overlay10, alignItems: "center", justifyContent: "center" }}
                   >
                     <Ionicons name="remove" size={14} color={C.textSecondary} />
                   </Pressable>
@@ -2381,14 +2382,14 @@ export function BeatIndicator({
                         setRepeatBpmOverride(Math.min(300, repeatBpmOverride + 5));
                       }
                     }}
-                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
+                    style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: C.overlay10, alignItems: "center", justifyContent: "center" }}
                   >
                     <Ionicons name="add" size={14} color={C.textSecondary} />
                   </Pressable>
                   {repeatBpmOverride !== null && (
                     <Pressable
                       onPress={() => setRepeatBpmOverride(null)}
-                      style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.08)" }}
+                      style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, backgroundColor: C.overlay08 }}
                     >
                       <Text style={{ color: C.textTertiary, fontSize: 11 }}>Reset</Text>
                     </Pressable>
@@ -2399,7 +2400,7 @@ export function BeatIndicator({
               <View style={{ flexDirection: "row", gap: 10, justifyContent: "center" }}>
                 <Pressable
                   onPress={clearRepeat}
-                  style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.08)" }}
+                  style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, backgroundColor: C.overlay08 }}
                 >
                   <Text style={{ color: C.textSecondary, fontSize: 13, fontWeight: "600" }}>Clear</Text>
                 </Pressable>
@@ -2592,7 +2593,7 @@ export function BeatIndicator({
   );
 }
 
-const styles = StyleSheet.create({
+const make_styles = (C: typeof Colors) => StyleSheet.create({
   touchArea: {
     alignItems: "center",
     justifyContent: "center",
@@ -2676,7 +2677,7 @@ const styles = StyleSheet.create({
   },
   barTimerOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: C.scrim,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -2798,7 +2799,7 @@ const styles = StyleSheet.create({
     width: moderateScale(32, 0.4),
     height: moderateScale(32, 0.4),
     borderRadius: moderateScale(16, 0.4),
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: C.overlay06,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2806,7 +2807,7 @@ const styles = StyleSheet.create({
     width: moderateScale(32, 0.4),
     height: moderateScale(32, 0.4),
     borderRadius: moderateScale(16, 0.4),
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: C.overlay06,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2814,7 +2815,7 @@ const styles = StyleSheet.create({
     width: moderateScale(32, 0.4),
     height: moderateScale(32, 0.4),
     borderRadius: moderateScale(16, 0.4),
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: C.overlay06,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2827,7 +2828,7 @@ const styles = StyleSheet.create({
     width: moderateScale(28, 0.4),
     height: moderateScale(28, 0.4),
     borderRadius: moderateScale(14, 0.4),
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: C.overlay08,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2853,7 +2854,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.08)",
+    borderBottomColor: C.overlay08,
     overflow: "visible" as any,
   },
   barNoteCell: {
@@ -2898,7 +2899,7 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   barBeatWrapperActive: {
-    backgroundColor: "rgba(255,255,255,0.03)",
+    backgroundColor: C.overlay03,
   },
   barModeHandle: {
     alignItems: "center",
@@ -2907,7 +2908,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     minWidth: 80,
     minHeight: 36,
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: C.overlay05,
     borderRadius: 12,
   },
   barModeHandleLandscape: {
@@ -2917,7 +2918,7 @@ const styles = StyleSheet.create({
     justifyContent: "center" as const,
     paddingVertical: 12,
     paddingHorizontal: 4,
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: C.overlay07,
     borderRadius: 8,
   },
   noteModeHandleLandscape: {
@@ -2927,7 +2928,7 @@ const styles = StyleSheet.create({
     justifyContent: "center" as const,
     paddingVertical: 12,
     paddingHorizontal: 4,
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: C.overlay07,
     borderRadius: 8,
   },
   landscapeModeButtonsContainer: {
@@ -2942,7 +2943,7 @@ const styles = StyleSheet.create({
     justifyContent: "center" as const,
     paddingVertical: 10,
     paddingHorizontal: 4,
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: C.overlay07,
     borderRadius: 8,
   },
   barSubdivisionSlot: {

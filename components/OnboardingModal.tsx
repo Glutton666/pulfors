@@ -18,6 +18,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 import { ACCENT_PRESETS } from "@/constants/colors";
 import type { ThemeColor } from "@/constants/colors";
 import type { FlashMode, HapticMode } from "@/lib/storage";
@@ -88,7 +89,7 @@ function DemoBar({
     <View style={demoStyles.bar}>
       {DEMO_BEAT_TYPES.map((type, i) => {
         const isActive = activeBeat === i;
-        const dotColor = type === "mute" ? Colors.textTertiary : BEAT_COLORS[type];
+        const dotColor = type === "mute" ? C.textTertiary : BEAT_COLORS[type];
         return (
           <View key={i} style={demoStyles.beatCol}>
             <View
@@ -205,6 +206,9 @@ function useDemo(
 }
 
 export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
+  const { colors: C } = useTheme();
+  const styles = make_styles(C);
+  const cpStyles = make_cpStyles(C);
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const { width: winW, height: winH } = useWindowDimensions();
@@ -421,7 +425,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             styles.stepDot,
             i === step
               ? { backgroundColor: accentColor, width: 24 }
-              : { backgroundColor: Colors.textTertiary },
+              : { backgroundColor: C.textTertiary },
           ]}
         />
       ))}
@@ -442,7 +446,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             {step === TOTAL_STEPS - 1 ? t("onboarding", "start") : t("onboarding", "next")}
           </Text>
           {step < TOTAL_STEPS - 1 && (
-            <Ionicons name="arrow-forward" size={14} color={Colors.background} />
+            <Ionicons name="arrow-forward" size={14} color={C.background} />
           )}
         </Pressable>
       )}
@@ -464,7 +468,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           end={{ x: 1, y: 0 }}
           style={cpStyles.track}
         />
-        <View style={[cpStyles.thumb, { backgroundColor: customHex, borderColor: Colors.white }]} />
+        <View style={[cpStyles.thumb, { backgroundColor: customHex, borderColor: C.white }]} />
       </View>
       <View style={cpStyles.hexRow}>
         <View style={[cpStyles.preview, { backgroundColor: customHex }]} />
@@ -475,7 +479,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           onBlur={handleHexSubmit}
           onSubmitEditing={handleHexSubmit}
           placeholder="#FFFFFF"
-          placeholderTextColor={Colors.textTertiary}
+          placeholderTextColor={C.textTertiary}
           maxLength={7}
           autoCapitalize="characters"
         />
@@ -522,11 +526,11 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           ]}
           onPress={() => { setSelectedTheme("custom"); setShowCustomPicker(true); }}
         >
-          <View style={[styles.themeCircle, isLandscape && { width: 32, height: 32, borderRadius: 16 }, selectedTheme === "custom" ? { backgroundColor: customHex } : { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border }]}>
+          <View style={[styles.themeCircle, isLandscape && { width: 32, height: 32, borderRadius: 16 }, selectedTheme === "custom" ? { backgroundColor: customHex } : { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }]}>
             {selectedTheme === "custom" ? (
               <Ionicons name="checkmark" size={isLandscape ? 16 : 20} color="#fff" />
             ) : (
-              <Ionicons name="color-wand-outline" size={isLandscape ? 14 : 18} color={Colors.textSecondary} />
+              <Ionicons name="color-wand-outline" size={isLandscape ? 14 : 18} color={C.textSecondary} />
             )}
           </View>
           <Text style={[styles.themeLabel, selectedTheme === "custom" && { color: customHex }]}>Custom</Text>
@@ -605,19 +609,19 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             isLandscape && { height: 38, marginTop: 4, marginBottom: 8 },
             loggingEnabled
               ? { backgroundColor: accentColor }
-              : { backgroundColor: Colors.surfaceLight, borderWidth: 1, borderColor: Colors.border },
+              : { backgroundColor: C.surfaceLight, borderWidth: 1, borderColor: C.border },
           ]}
           onPress={() => setLoggingEnabled(!loggingEnabled)}
         >
           <Ionicons
             name={loggingEnabled ? "checkmark-circle" : "close-circle-outline"}
             size={22}
-            color={loggingEnabled ? Colors.background : Colors.textSecondary}
+            color={loggingEnabled ? C.background : C.textSecondary}
           />
           <Text
             style={[
               styles.bigToggleText,
-              { color: loggingEnabled ? Colors.background : Colors.textSecondary },
+              { color: loggingEnabled ? C.background : C.textSecondary },
             ]}
           >
             {loggingEnabled ? t("onboarding", "loggingOn") : t("onboarding", "loggingOff")}
@@ -714,13 +718,13 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
               styles.demoButton,
               isLandscape && { height: 32 },
               hapticDemo.playing
-                ? { backgroundColor: Colors.surfaceLight, borderColor: accentColor, borderWidth: 1 }
+                ? { backgroundColor: C.surfaceLight, borderColor: accentColor, borderWidth: 1 }
                 : { backgroundColor: accentColor },
             ]}
             onPress={hapticDemo.toggle}
           >
-            <Ionicons name={hapticDemo.playing ? "stop" : "play"} size={16} color={hapticDemo.playing ? accentColor : Colors.background} />
-            <Text style={[styles.demoButtonText, { color: hapticDemo.playing ? accentColor : Colors.background }]}>
+            <Ionicons name={hapticDemo.playing ? "stop" : "play"} size={16} color={hapticDemo.playing ? accentColor : C.background} />
+            <Text style={[styles.demoButtonText, { color: hapticDemo.playing ? accentColor : C.background }]}>
               {hapticDemo.playing ? t("onboarding", "stop") : t("onboarding", "preview")}
             </Text>
           </Pressable>
@@ -768,13 +772,13 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
               styles.demoButton,
               isLandscape && { height: 32 },
               flashDemo.playing
-                ? { backgroundColor: Colors.surfaceLight, borderColor: accentColor, borderWidth: 1 }
+                ? { backgroundColor: C.surfaceLight, borderColor: accentColor, borderWidth: 1 }
                 : { backgroundColor: accentColor },
             ]}
             onPress={flashDemo.toggle}
           >
-            <Ionicons name={flashDemo.playing ? "stop" : "play"} size={16} color={flashDemo.playing ? accentColor : Colors.background} />
-            <Text style={[styles.demoButtonText, { color: flashDemo.playing ? accentColor : Colors.background }]}>
+            <Ionicons name={flashDemo.playing ? "stop" : "play"} size={16} color={flashDemo.playing ? accentColor : C.background} />
+            <Text style={[styles.demoButtonText, { color: flashDemo.playing ? accentColor : C.background }]}>
               {flashDemo.playing ? t("onboarding", "stop") : t("onboarding", "preview")}
             </Text>
           </Pressable>
@@ -822,7 +826,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             value={username}
             onChangeText={setUsername}
             placeholder={t("onboarding", "nicknamePlaceholder")}
-            placeholderTextColor={Colors.textTertiary}
+            placeholderTextColor={C.textTertiary}
             maxLength={20}
           />
         </View>
@@ -833,7 +837,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             value={roomName}
             onChangeText={setRoomName}
             placeholder={t("onboarding", "roomPlaceholder")}
-            placeholderTextColor={Colors.textTertiary}
+            placeholderTextColor={C.textTertiary}
             maxLength={30}
           />
           <View style={styles.locationHint}>
@@ -900,7 +904,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
         <View style={[styles.topBar, isLandscape && { paddingVertical: 4 }]}>
           {step > 0 ? (
             <Pressable onPress={handleBack} hitSlop={10} style={styles.backBtn}>
-              <Ionicons name="chevron-back" size={22} color={Colors.textSecondary} />
+              <Ionicons name="chevron-back" size={22} color={C.textSecondary} />
             </Pressable>
           ) : (
             <View style={styles.backBtn} />
@@ -927,7 +931,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
                 {step === TOTAL_STEPS - 1 ? t("onboarding", "start") : t("onboarding", "next")}
               </Text>
               {step < TOTAL_STEPS - 1 && (
-                <Ionicons name="arrow-forward" size={18} color={Colors.background} />
+                <Ionicons name="arrow-forward" size={18} color={C.background} />
               )}
             </Pressable>
           </View>
@@ -937,7 +941,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   );
 }
 
-const demoStyles = StyleSheet.create({
+const make_demoStyles = (C: typeof Colors) => StyleSheet.create({
   bar: {
     flexDirection: "row",
     alignItems: "center",
@@ -956,14 +960,14 @@ const demoStyles = StyleSheet.create({
   beatLabel: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 10,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
 });
 
-const styles = StyleSheet.create({
+const make_styles = (C: typeof Colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: C.background,
   },
   topBar: {
     flexDirection: "row",
@@ -978,7 +982,7 @@ const styles = StyleSheet.create({
   skipText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     width: 60,
     textAlign: "right",
   },
@@ -1005,13 +1009,13 @@ const styles = StyleSheet.create({
   stepTitle: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 24,
-    color: Colors.text,
+    color: C.text,
     marginTop: 8,
   },
   stepSubtitle: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     textAlign: "center",
     marginBottom: 12,
   },
@@ -1029,8 +1033,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: C.border,
+    backgroundColor: C.surface,
     width: (SCREEN_WIDTH - 56 - 32) / 3,
     minWidth: 90,
   },
@@ -1044,21 +1048,21 @@ const styles = StyleSheet.create({
   themeLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   infoCard: {
     width: "100%",
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     padding: 16,
     gap: 12,
   },
   infoCardTitle: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
-    color: Colors.text,
+    color: C.text,
     marginBottom: 2,
   },
   infoRow: {
@@ -1069,7 +1073,7 @@ const styles = StyleSheet.create({
   infoText: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     flex: 1,
     lineHeight: 19,
   },
@@ -1099,9 +1103,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   modeOptionLeft: {
     flexDirection: "row",
@@ -1114,7 +1118,7 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: Colors.textTertiary,
+    borderColor: C.textTertiary,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1126,12 +1130,12 @@ const styles = StyleSheet.create({
   modeOptionLabel: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
-    color: Colors.text,
+    color: C.text,
   },
   modeOptionDesc: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     marginTop: 2,
   },
   demoSection: {
@@ -1141,9 +1145,9 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingVertical: 16,
     borderRadius: 14,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   demoButton: {
     flexDirection: "row",
@@ -1172,7 +1176,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
-    color: Colors.text,
+    color: C.text,
   },
   textInput: {
     width: "100%",
@@ -1182,8 +1186,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 15,
-    color: Colors.text,
-    backgroundColor: Colors.surface,
+    color: C.text,
+    backgroundColor: C.surface,
   },
   locationHint: {
     flexDirection: "row",
@@ -1194,7 +1198,7 @@ const styles = StyleSheet.create({
   locationHintText: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     flex: 1,
     lineHeight: 17,
   },
@@ -1242,7 +1246,7 @@ const styles = StyleSheet.create({
   landNextButtonText: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 15,
-    color: Colors.background,
+    color: C.background,
   },
   bottomBar: {
     paddingHorizontal: 28,
@@ -1259,11 +1263,11 @@ const styles = StyleSheet.create({
   nextButtonText: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 16,
-    color: Colors.background,
+    color: C.background,
   },
 });
 
-const cpStyles = StyleSheet.create({
+const make_cpStyles = (C: typeof Colors) => StyleSheet.create({
   container: {
     width: "100%",
     gap: 12,
@@ -1300,7 +1304,7 @@ const cpStyles = StyleSheet.create({
     height: 32,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   hexInput: {
     flex: 1,
@@ -1310,7 +1314,7 @@ const cpStyles = StyleSheet.create({
     paddingHorizontal: 12,
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 14,
-    color: Colors.text,
-    backgroundColor: Colors.surface,
+    color: C.text,
+    backgroundColor: C.surface,
   },
 });

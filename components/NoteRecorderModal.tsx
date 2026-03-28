@@ -599,7 +599,7 @@ export function NoteRecorderModal({
               <ActivityIndicator size="large" color={C.accent} />
               <Text style={styles.hintText}>{loadingMessage || t("noteRecorder", "loadingAudio")}</Text>
               {loadingProgress > 0 && (
-                <View style={{ width: "80%", height: 4, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 2, marginTop: 12, overflow: "hidden" }}>
+                <View style={{ width: "80%", height: 4, backgroundColor: C.overlay10, borderRadius: 2, marginTop: 12, overflow: "hidden" }}>
                   <View style={{ width: `${Math.round(loadingProgress * 100)}%` as any, height: "100%", backgroundColor: C.accent, borderRadius: 2 }} />
                 </View>
               )}
@@ -1015,7 +1015,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   trimHandleLine: {
     width: 2,
     height: 20,
-    backgroundColor: "rgba(255,255,255,0.6)",
+    backgroundColor: C.textSecondary,
     borderRadius: 1,
   },
   trimActions: {

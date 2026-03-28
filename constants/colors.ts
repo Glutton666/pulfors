@@ -123,6 +123,14 @@ const DarkColors = {
   danger: "#F85149",
   success: "#3FB950",
   white: "#FFFFFF",
+  textPrimary: "#F0F6FC",
+  overlay03: "rgba(255,255,255,0.03)",
+  overlay05: "rgba(255,255,255,0.05)",
+  overlay06: "rgba(255,255,255,0.06)",
+  overlay07: "rgba(255,255,255,0.07)",
+  overlay08: "rgba(255,255,255,0.08)",
+  overlay10: "rgba(255,255,255,0.10)",
+  scrim: "rgba(0,0,0,0.6)",
 };
 
 const LightColors = {
@@ -140,6 +148,14 @@ const LightColors = {
   danger: "#D32F2F",
   success: "#2E7D32",
   white: "#FFFFFF",
+  textPrimary: "#1A1A1A",
+  overlay03: "rgba(0,0,0,0.03)",
+  overlay05: "rgba(0,0,0,0.05)",
+  overlay06: "rgba(0,0,0,0.06)",
+  overlay07: "rgba(0,0,0,0.07)",
+  overlay08: "rgba(0,0,0,0.08)",
+  overlay10: "rgba(0,0,0,0.10)",
+  scrim: "rgba(0,0,0,0.5)",
 };
 
 const Colors = DarkColors;
