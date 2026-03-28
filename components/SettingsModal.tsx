@@ -896,78 +896,66 @@ export function SettingsModal({
           <Ionicons name="color-palette-outline" size={18} color={C.accent} />
           <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "themeColor")}</Text>
         </View>
-        <View style={styles.themeGrid}>
-          {(() => {
-            const allItems = [...PRESET_COLORS];
-            const rows: typeof PRESET_COLORS[] = [];
-            for (let i = 0; i < allItems.length; i += 3) {
-              rows.push(allItems.slice(i, i + 3));
-            }
-            return rows.map((row, rowIdx) => (
-              <View key={rowIdx} style={styles.themeGridRow}>
-                {row.map((opt) => {
-                  const active = themeColor === opt.value;
-                  return (
-                    <Pressable
-                      key={opt.value}
-                      testID={`theme-${opt.value}`}
-                      onPress={() => {
-                        setThemeColor(opt.value);
-                        setShowCustomPicker(false);
-                        if (Platform.OS !== "web") {
-                          Haptics.selectionAsync();
-                        }
-                      }}
-                      style={[
-                        styles.themeGridItem,
-                        active && { borderColor: opt.color, backgroundColor: `${opt.color}15` },
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.themeDot,
-                          { backgroundColor: opt.color },
-                        ]}
-                      />
-                      {active && (
-                        <Ionicons name="checkmark" size={10} color={C.white} style={styles.themeCheck} />
-                      )}
-                    </Pressable>
-                  );
-                })}
-                {row.length < 3 && Array.from({ length: 3 - row.length }).map((_, i) => (
-                  <View key={`spacer-${i}`} style={styles.themeGridItem} />
-                ))}
-              </View>
-            ));
-          })()}
-          <View style={styles.themeGridRow}>
-            <Pressable
-              testID="theme-custom"
-              onPress={() => {
-                setShowCustomPicker(true);
-                setThemeColor("custom");
-                if (Platform.OS !== "web") {
-                  Haptics.selectionAsync();
-                }
-              }}
-              style={[
-                styles.themeGridItem,
-                styles.customChip,
-                themeColor === "custom" && { borderColor: customHex, backgroundColor: `${customHex}15` },
-              ]}
-            >
-              {themeColor === "custom" ? (
-                <>
-                  <View style={[styles.themeDot, { backgroundColor: customHex }]} />
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.themeScroll}
+        >
+          {PRESET_COLORS.map((opt) => {
+            const active = themeColor === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                testID={`theme-${opt.value}`}
+                onPress={() => {
+                  setThemeColor(opt.value);
+                  setShowCustomPicker(false);
+                  if (Platform.OS !== "web") {
+                    Haptics.selectionAsync();
+                  }
+                }}
+                style={[
+                  styles.themeChip,
+                  active && { borderColor: opt.color },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.themeDot,
+                    { backgroundColor: opt.color },
+                  ]}
+                />
+                {active && (
                   <Ionicons name="checkmark" size={10} color={C.white} style={styles.themeCheck} />
-                </>
-              ) : (
-                <Ionicons name="color-wand-outline" size={18} color={C.textSecondary} />
-              )}
-            </Pressable>
-          </View>
-        </View>
+                )}
+              </Pressable>
+            );
+          })}
+          <Pressable
+            testID="theme-custom"
+            onPress={() => {
+              setShowCustomPicker(true);
+              setThemeColor("custom");
+              if (Platform.OS !== "web") {
+                Haptics.selectionAsync();
+              }
+            }}
+            style={[
+              styles.themeChip,
+              styles.customChip,
+              themeColor === "custom" && { borderColor: customHex },
+            ]}
+          >
+            {themeColor === "custom" ? (
+              <>
+                <View style={[styles.themeDot, { backgroundColor: customHex }]} />
+                <Ionicons name="checkmark" size={10} color={C.white} style={styles.themeCheck} />
+              </>
+            ) : (
+              <Ionicons name="color-wand-outline" size={18} color={C.textSecondary} />
+            )}
+          </Pressable>
+        </ScrollView>
         {showCustomPicker && (
           <View style={styles.customPickerContainer}>
             <View
@@ -2343,22 +2331,11 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     textAlign: "center" as const,
     letterSpacing: 0.5,
   },
-  themeGrid: {
-    gap: 8,
+  themeScroll: {
+    flexDirection: "row-reverse",
+    gap: 10,
     paddingVertical: 4,
-  },
-  themeGridRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  themeGridItem: {
-    flex: 1,
-    height: 40,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: C.border,
-    alignItems: "center",
-    justifyContent: "center",
+    paddingHorizontal: 2,
   },
   themeChip: {
     width: 36,
