@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useCallback } from "react";
+import { useLanguage } from "@/contexts/LanguageContext";
 import {
   View,
   Text,
@@ -33,6 +34,7 @@ type Zone = "left" | "center" | "right";
 
 export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeToggle, isLandscape = false }: BpmSliderProps) {
   const { colors: C } = useTheme();
+  const { t } = useLanguage();
   const bpmRef = useRef(bpm);
   const startBpmRef = useRef(bpm);
   const lastHapticRef = useRef(bpm);
@@ -257,7 +259,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
         </Animated.View>
       </View>
 
-      {!isLandscape && <Text style={[styles.hint, { color: C.text }]}>hold sides ±10 · slide center to adjust</Text>}
+      {!isLandscape && <Text style={[styles.hint, { color: C.text }]}>{t("main.bpmHint")}</Text>}
     </View>
   );
 }

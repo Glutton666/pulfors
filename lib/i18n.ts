@@ -375,6 +375,8 @@ const translations = {
     rebooting: { ko: "재시작 중...", en: "Rebooting..." },
     goalComplete: { ko: "달성!", en: "Complete!" },
     tapToDismiss: { ko: "탭하여 닫기", en: "Tap to dismiss" },
+    bpmHint: { ko: "양쪽 홀드 ±10 · 중앙 슬라이드로 조절", en: "hold sides ±10 · slide center to adjust" },
+    beatHint: { ko: "스와이프하여 비트 추가/제거", en: "swipe to add or remove beats" },
   },
   noteMode: {
     title: { ko: "노트 모드", en: "Note Mode" },

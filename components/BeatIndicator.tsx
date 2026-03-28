@@ -27,6 +27,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { moderateScale, SCREEN_WIDTH, IS_TABLET } from "@/lib/scale";
 
 export type BeatType = "strong" | "accent" | "normal" | "mute";
@@ -362,6 +363,7 @@ export function BeatIndicator({
   onEnterNoteMode,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
+  const { t } = useLanguage();
   const styles = make_styles(C);
   const { height: winH } = useWindowDimensions();
 
@@ -2588,7 +2590,7 @@ export function BeatIndicator({
         </View>
       )}
 
-      {!isLandscape && <Text style={styles.hintText}>swipe to add or remove beats</Text>}
+      {!isLandscape && <Text style={styles.hintText}>{t("main.beatHint")}</Text>}
     </View>
   );
 }
