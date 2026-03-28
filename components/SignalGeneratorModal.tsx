@@ -894,7 +894,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const stopMic = useCallback(() => {
     micActiveRef.current = false;
     setMicListening(false);
-    if (Platform.OS === "android" && (micMethod === "webview" || nativeFallenBackRef.current)) {
+    if (Platform.OS === "android") {
       stopMicAndroid();
       nativeFallenBackRef.current = false;
     } else if (Platform.OS === "web") {
@@ -1043,7 +1043,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   }, [stopMobileMic, onAndroidMicToggle]);
 
   const startMicMobile = useCallback(async () => {
-    if (Platform.OS === "android" && micMethod === "webview") {
+    if (Platform.OS === "android") {
       startMicAndroid();
       return;
     }

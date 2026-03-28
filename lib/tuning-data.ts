@@ -11,7 +11,7 @@ export interface Instrument {
   strings: TuningString[];
 }
 
-export type TuningCategoryIcon = "guitar-acoustic" | "music-note" | "violin" | "music-circle" | "music-box" | "drum";
+export type TuningCategoryIcon = "guitar-acoustic" | "music-note" | "violin" | "music-circle" | "music-box" | "bell-outline";
 
 export interface InstrumentCategory {
   id: string;
@@ -301,7 +301,7 @@ export const TUNING_DATA: InstrumentCategory[] = [
   {
     id: "percussion",
     name: { ko: "타악기", en: "Percussion" },
-    icon: "drum",
+    icon: "bell-outline",
     instruments: [
       {
         id: "timpani",
