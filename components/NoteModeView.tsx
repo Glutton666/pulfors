@@ -646,6 +646,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   title: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: moderateScale(18, 0.3),
+    color: C.text,
     flex: 1,
   },
   headerActions: {
@@ -681,6 +682,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   nowPlayingLabel: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: moderateScale(14, 0.3),
+    color: C.text,
     flex: 1,
   },
   nowPlayingBpm: {
@@ -696,6 +698,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   progressText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: moderateScale(11, 0.3),
+    color: C.text,
   },
   playControls: {
     flexDirection: "row",
@@ -1000,6 +1003,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   insertNextText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(10, 0.3),
+    color: C.text,
   },
 });
 
@@ -1030,6 +1034,7 @@ const make_srcGridStyles = (C: typeof Colors) => StyleSheet.create({
   cardBpm: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: moderateScale(20, 0.3),
+    color: C.text,
   },
   cardUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
@@ -1055,5 +1060,6 @@ const make_srcGridStyles = (C: typeof Colors) => StyleSheet.create({
   insertText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(9, 0.3),
+    color: C.text,
   },
 });

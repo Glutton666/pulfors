@@ -885,6 +885,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   saveButtonText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 14,
+    color: C.text,
   },
   saveInputRow: {
     flexDirection: "row",
@@ -1030,6 +1031,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   detailValue: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 12,
+    color: C.text,
   },
   detailUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
@@ -1177,6 +1179,7 @@ const make_gridStyles = (C: typeof Colors) => StyleSheet.create({
   cardBpm: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 22,
+    color: C.text,
   },
   cardUnit: {
     fontFamily: "SpaceGrotesk_400Regular",

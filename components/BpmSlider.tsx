@@ -308,12 +308,14 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: moderateScale(64, 0.4),
     lineHeight: moderateScale(72, 0.4),
+    color: C.text,
   },
   bpmUnit: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(13, 0.3),
     letterSpacing: 4,
     marginTop: -4,
+    color: C.text,
   },
   bpmRow: {
     flexDirection: "row",
@@ -341,6 +343,7 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(8, 0.3),
     letterSpacing: 1.5,
+    color: C.text,
   },
   ticks: {
     flexDirection: "row",
@@ -368,6 +371,7 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: moderateScale(11, 0.3),
     letterSpacing: 1,
+    color: C.text,
     opacity: 0.6,
   },
 });

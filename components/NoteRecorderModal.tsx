@@ -900,6 +900,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   countdownText: {
     fontSize: 36,
     fontWeight: "800",
+    color: C.text,
   },
   hintText: {
     color: C.textSecondary,
@@ -1034,6 +1035,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   previewBtnText: {
     fontSize: 14,
     fontWeight: "600",
+    color: C.text,
   },
   nameInputRow: {
     flexDirection: "row",

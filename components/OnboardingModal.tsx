@@ -1093,6 +1093,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   bigToggleText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 15,
+    color: C.text,
   },
   modeList: {
     width: "100%",
@@ -1163,6 +1164,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   demoButtonText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 13,
+    color: C.text,
   },
   flashOverlay: {
     position: "absolute",

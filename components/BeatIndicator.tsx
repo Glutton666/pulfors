@@ -2628,6 +2628,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   digitalSignature: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: moderateScale(116, 0.4),
+    color: C.text,
     opacity: 0.15,
   },
   centerImageContainer: {
@@ -2663,6 +2664,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
     letterSpacing: 1,
+    color: C.text,
     opacity: 0.5,
   },
   barFadeGradient: {
@@ -2697,11 +2699,13 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   barTimerTitle: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 16,
+    color: C.text,
   },
   barTimerInput: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 32,
     textAlign: "center",
+    color: C.text,
     padding: 8,
     borderBottomWidth: 2,
     width: "100%" as any,
@@ -2710,6 +2714,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     fontSize: 11,
     marginTop: 8,
     fontFamily: "SpaceGrotesk_400Regular",
+    color: C.textTertiary,
   },
   barTimerSetBtn: {
     marginTop: 16,
@@ -2720,6 +2725,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   barTimerSetText: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 14,
+    color: C.white,
   },
   barClockDots: {
     flexDirection: "row",
@@ -2740,6 +2746,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(12, 0.4),
     letterSpacing: 0.5,
+    color: C.text,
   },
   dropTargetRing: {
     position: "absolute",
@@ -2761,6 +2768,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   subdivBadgeText: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 9,
+    color: C.text,
   },
   centerDropRing: {
     position: "absolute",
@@ -2776,6 +2784,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     fontSize: 11,
     letterSpacing: 2,
     marginTop: 8,
+    color: C.text,
     opacity: 0.9,
   },
   barModeContainer: {
@@ -2849,6 +2858,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   barBeatLabelText: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: moderateScale(13, 0.4),
+    color: C.text,
   },
   barBeatContent: {
     flex: 1,

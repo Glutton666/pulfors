@@ -1014,6 +1014,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
     letterSpacing: 0.2,
+    color: C.text,
   },
   emptyHint: {
     fontFamily: "SpaceGrotesk_400Regular",
@@ -1033,6 +1034,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   goalPct: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 10,
+    color: C.text,
   },
   goalInfo: {
     flex: 1,
@@ -1158,6 +1160,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   donutCenter: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 22,
+    color: C.text,
   },
   donutUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
@@ -1186,6 +1189,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   legendValue: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 13,
+    color: C.text,
   },
 
   // Week
@@ -1203,6 +1207,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   weekValue: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 15,
+    color: C.text,
   },
   weekLabel: {
     fontFamily: "SpaceGrotesk_400Regular",
@@ -1230,6 +1235,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   detailSectionTitle: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 12,
+    color: C.text,
   },
   detailRow: {
     flexDirection: "row",
@@ -1255,6 +1261,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   detailTime: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 12,
+    color: C.text,
   },
   detailTimeSec: {
     fontFamily: "SpaceGrotesk_600SemiBold",
@@ -1281,6 +1288,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   trackingText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 12,
+    color: C.text,
     flex: 1,
   },
   trackingStopBtn: {
@@ -1417,6 +1425,7 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 22,
     letterSpacing: 3,
+    color: C.text,
   },
   brandPlus: {
     fontFamily: "SpaceGrotesk_700Bold",
@@ -1428,6 +1437,7 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 22,
     letterSpacing: 1,
+    color: C.text,
   },
   userBadge: {
     borderWidth: 1,
@@ -1439,6 +1449,7 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 12,
     letterSpacing: 0.5,
+    color: C.text,
   },
   dateText: {
     fontFamily: "SpaceGrotesk_400Regular",
@@ -1458,6 +1469,7 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 48,
     lineHeight: 54,
+    color: C.text,
   },
   bigTimeUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
@@ -1496,6 +1508,7 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
     fontSize: 12,
     width: 50,
     textAlign: "right",
+    color: C.text,
   },
   goalsSection: {
     gap: 8,
@@ -1526,6 +1539,7 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
   goalProg: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 12,
+    color: C.text,
   },
   shareDot: {
     width: 8,
@@ -1550,6 +1564,7 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
   weekVal: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 15,
+    color: C.text,
   },
   weekLbl: {
     fontFamily: "SpaceGrotesk_400Regular",
@@ -1636,6 +1651,7 @@ const make_yearStyles = (C: typeof Colors) => StyleSheet.create({
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 56,
     lineHeight: 62,
+    color: C.text,
   },
   bigLabel: {
     fontFamily: "SpaceGrotesk_400Regular",
@@ -1657,6 +1673,7 @@ const make_yearStyles = (C: typeof Colors) => StyleSheet.create({
   statVal: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 16,
+    color: C.text,
   },
   statLabel: {
     fontFamily: "SpaceGrotesk_400Regular",

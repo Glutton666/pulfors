@@ -2447,6 +2447,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   beatTypeChipText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 11,
+    color: C.text,
   },
   hubImageRemove: {
     padding: 2,
@@ -2466,6 +2467,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   addHubImageText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 13,
+    color: C.text,
   },
   trackingBanner: {
     flexDirection: "row",
@@ -2485,6 +2487,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   trackingText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 12,
+    color: C.text,
     flex: 1,
   },
   trackingStopBtn: {
@@ -2535,6 +2538,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   addRoomBtnText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 13,
+    color: C.text,
   },
   roomEmptyHint: {
     fontFamily: "SpaceGrotesk_400Regular",
@@ -2840,6 +2844,7 @@ const make_csStyles = (C: typeof Colors) => StyleSheet.create({
   durationValue: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 13,
+    color: C.text,
     minWidth: 36,
     textAlign: "center",
   },

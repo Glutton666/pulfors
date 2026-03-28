@@ -601,6 +601,7 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
   title: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 16,
+    color: C.text,
     flex: 1,
   },
   closeBtn: {
@@ -668,6 +669,7 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
   stringNote: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 13,
+    color: C.text,
     width: 36,
   },
   stringLabel: {
@@ -1607,6 +1609,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   title: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 18,
+    color: C.text,
     flex: 1,
   },
   closeBtn: {
@@ -1656,6 +1659,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 28,
     lineHeight: 32,
+    color: C.text,
   },
   knobUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
@@ -1666,6 +1670,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   knobNoteLabel: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 11,
+    color: C.text,
     opacity: 0.7,
     marginTop: 2,
     lineHeight: 14,
@@ -1682,6 +1687,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   freqEditInput: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 20,
+    color: C.text,
     borderBottomWidth: 2,
     paddingVertical: 4,
     minWidth: 100,
@@ -1703,6 +1709,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   freqTapText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 14,
+    color: C.text,
   },
   sectionLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
@@ -1798,6 +1805,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   pitchIndicatorText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 10,
+    color: C.text,
   },
   playBtn: {
     flexDirection: "row",
@@ -1810,6 +1818,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   playBtnText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 15,
+    color: C.white,
   },
   tuningGuideToggle: {
     flexDirection: "row",

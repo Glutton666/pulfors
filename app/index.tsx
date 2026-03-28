@@ -3762,6 +3762,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: moderateScale(14, 0.3),
     letterSpacing: 0.2,
+    color: C.text,
   },
   goalPopupSub: {
     fontFamily: "SpaceGrotesk_400Regular",
