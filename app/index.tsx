@@ -1915,10 +1915,7 @@ export default function MetronomeScreen() {
       setMeasureCount(c => c + 1);
       if (!engine.getIsRunning()) {
         if (noteModeRef.current && noteIsPlayingRef.current) {
-          const beatMs = Math.round(60000 / (bpmRef.current || 120));
-          setTimeout(() => {
-            noteAdvanceQueueRef.current();
-          }, beatMs);
+          noteAdvanceQueueRef.current();
           return;
         }
         if (webRenderedLoopRef.current) {
