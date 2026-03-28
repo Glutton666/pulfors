@@ -257,7 +257,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
         </Animated.View>
       </View>
 
-      {!isLandscape && <Text style={[styles.hint, { color: C.textTertiary }]}>hold sides ±10 · slide center to adjust</Text>}
+      {!isLandscape && <Text style={[styles.hint, { color: C.text }]}>hold sides ±10 · slide center to adjust</Text>}
     </View>
   );
 }
@@ -366,8 +366,8 @@ const styles = StyleSheet.create({
   },
   hint: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: moderateScale(11, 0.3),
+    fontSize: 11,
     letterSpacing: 1,
-    opacity: 0.6,
+    opacity: 0.5,
   },
 });

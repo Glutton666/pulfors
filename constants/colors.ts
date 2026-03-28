@@ -149,12 +149,12 @@ const LightColors = {
   success: "#2E7D32",
   white: "#FFFFFF",
   textPrimary: "#1A1A1A",
-  overlay03: "rgba(0,0,0,0.03)",
-  overlay05: "rgba(0,0,0,0.05)",
-  overlay06: "rgba(0,0,0,0.06)",
-  overlay07: "rgba(0,0,0,0.07)",
-  overlay08: "rgba(0,0,0,0.08)",
-  overlay10: "rgba(0,0,0,0.10)",
+  overlay03: "rgba(0,0,0,0.06)",
+  overlay05: "rgba(0,0,0,0.10)",
+  overlay06: "rgba(0,0,0,0.12)",
+  overlay07: "rgba(0,0,0,0.14)",
+  overlay08: "rgba(0,0,0,0.16)",
+  overlay10: "rgba(0,0,0,0.20)",
   scrim: "rgba(0,0,0,0.5)",
 };
 
