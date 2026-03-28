@@ -241,7 +241,6 @@ const translations = {
     badgeBeat: { ko: "비트", en: "Beat" },
     badgeBar: { ko: "바", en: "Bar" },
     badgeNote: { ko: "노트", en: "Note" },
-    saveNoteConfig: { ko: "현재 노트 설정 저장", en: "Save current note config" },
     byPrefix: { ko: "작성자:", en: "by" },
     bpmUnit: { ko: "BPM", en: "BPM" },
     randomPlay: { ko: "랜덤", en: "Random" },

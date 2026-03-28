@@ -85,6 +85,8 @@ function DemoBar({
   accentColor: string;
   beatLabels: string[];
 }) {
+  const { colors: C } = useTheme();
+  const demoStyles = make_demoStyles(C);
   return (
     <View style={demoStyles.bar}>
       {DEMO_BEAT_TYPES.map((type, i) => {

@@ -166,6 +166,8 @@ function SourceItem({
   onInsertNext: () => void;
   isPlaying: boolean;
 }) {
+  const { colors: C } = useTheme();
+  const styles = make_styles(C);
   const { t } = useLanguage();
   return (
     <View style={styles.sourceItem}>
@@ -209,6 +211,9 @@ function SourceGridItem({
   onInsertNext: () => void;
   isPlaying: boolean;
 }) {
+  const { colors: C } = useTheme();
+  const styles = make_styles(C);
+  const srcGridStyles = make_srcGridStyles(C);
   const { t } = useLanguage();
   return (
     <Pressable

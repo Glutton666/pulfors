@@ -329,6 +329,9 @@ function GridItem({
   onShare: (entry: PracticeEntry) => void;
   accentColor: string;
 }) {
+  const { colors: C } = useTheme();
+  const styles = make_styles(C);
+  const gridStyles = make_gridStyles(C);
   const { t } = useLanguage();
   const isBeatMode = (item.mode || "bar") === "beat";
   const isNoteMode = item.mode === "note";

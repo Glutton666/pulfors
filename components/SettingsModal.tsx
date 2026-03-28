@@ -131,6 +131,8 @@ function TripleSelector({
   accentDimColor: string;
   options: { value: "all" | "accent" | "off"; label: string }[];
 }) {
+  const { colors: C } = useTheme();
+  const styles = make_styles(C);
   return (
     <View style={styles.tripleRow}>
       {options.map((opt) => {
