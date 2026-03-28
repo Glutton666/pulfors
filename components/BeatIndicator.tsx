@@ -231,22 +231,38 @@ function DialBeatDot({
       )}
       {isDropTarget && (
         <View
-          style={[
-            styles.dropTargetRing,
-            {
-              width: size + 12,
-              height: size + 12,
-              borderRadius: (size + 12) / 2,
-              top: -6,
-              left: -6,
-              borderColor: C.accent,
-            },
-          ]}
+          style={{
+            position: "absolute",
+            borderWidth: 2,
+            borderStyle: "dashed" as any,
+            opacity: 0.8,
+            width: size + 12,
+            height: size + 12,
+            borderRadius: (size + 12) / 2,
+            top: -6,
+            left: -6,
+            borderColor: C.accent,
+          }}
         />
       )}
       {subdivisionCount > 1 && (
-        <View style={[styles.subdivBadge, { borderColor: C.accent }]}>
-          <Text style={[styles.subdivBadgeText, { color: C.accent }]}>{subdivisionCount}</Text>
+        <View style={{
+          position: "absolute",
+          bottom: -4,
+          right: -4,
+          width: 16,
+          height: 16,
+          borderRadius: 8,
+          borderWidth: 1,
+          alignItems: "center" as const,
+          justifyContent: "center" as const,
+          borderColor: C.accent,
+        }}>
+          <Text style={{
+            fontFamily: "SpaceGrotesk_700Bold",
+            fontSize: 9,
+            color: C.accent,
+          }}>{subdivisionCount}</Text>
         </View>
       )}
     </Pressable>
