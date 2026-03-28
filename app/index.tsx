@@ -523,11 +523,18 @@ export default function MetronomeScreen() {
       const { startMs, durationMs } = parseSampleTiming(key);
       samplePlayStateRef.current[key] = { playing: true, endTimer: null };
 
-      try { player.pause(); } catch {}
       const startSec = startMs / 1000;
-      Promise.resolve(player.seekTo(startSec)).then(() => {
-        try { player.play(); } catch {}
-      }).catch(() => {});
+      if (Platform.OS === "web") {
+        try {
+          player.seekTo(startSec);
+          setTimeout(() => { try { player.play(); } catch {} }, 10);
+        } catch {}
+      } else {
+        try { player.pause(); } catch {}
+        Promise.resolve(player.seekTo(startSec)).then(() => {
+          try { player.play(); } catch {}
+        }).catch(() => {});
+      }
 
       const effectiveDur = durationMs > 0
         ? durationMs
