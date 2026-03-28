@@ -2070,7 +2070,7 @@ export function BeatIndicator({
           pointerEvents="none"
         />
 
-        <View style={{ flex: 2, justifyContent: "flex-end" }}>
+        <View style={{ flexShrink: 0 }}>
           {subdivisionBarElement && (
             <View style={styles.barSubdivisionSlot}>{subdivisionBarElement}</View>
           )}
@@ -2897,7 +2897,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     opacity: 0.4,
   },
   barMeasureOuter: {
-    flex: 7,
+    flex: 1,
     flexShrink: 1,
     width: "100%" as any,
     paddingHorizontal: 0,
