@@ -1248,7 +1248,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   landNextButtonText: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 15,
-    color: C.background,
+    color: C.white,
   },
   bottomBar: {
     paddingHorizontal: 28,
@@ -1265,7 +1265,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   nextButtonText: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 16,
-    color: C.background,
+    color: C.white,
   },
 });
 

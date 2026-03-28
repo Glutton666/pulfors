@@ -912,7 +912,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   saveConfirmText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
-    color: C.background,
+    color: C.white,
   },
   saveCancelBtn: {
     height: 40,
@@ -1129,7 +1129,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   goalConfirmText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
-    color: C.background,
+    color: C.white,
   },
 });
 

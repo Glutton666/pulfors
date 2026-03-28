@@ -2709,7 +2709,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   loggingInfoCloseBtnText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
-    color: C.background,
+    color: C.white,
   },
   soundSetAddBtn: {
     borderStyle: "dashed" as any,
@@ -2939,6 +2939,6 @@ const make_csStyles = (C: typeof Colors) => StyleSheet.create({
   saveBtnText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 12,
-    color: C.background,
+    color: C.white,
   },
 });
