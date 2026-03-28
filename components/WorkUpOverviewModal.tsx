@@ -209,6 +209,9 @@ export function WorkUpOverviewModal({
   username,
 }: WorkUpOverviewModalProps) {
   const { colors: C } = useTheme();
+  const s = make_s(C);
+  const shareStyles = make_shareStyles(C);
+  const yearStyles = make_yearStyles(C);
   const { language, t } = useLanguage();
   const insets = useSafeAreaInsets();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -951,7 +954,7 @@ export function WorkUpOverviewModal({
   );
 }
 
-const s = StyleSheet.create({
+const make_s = (C: typeof Colors) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.65)",
@@ -974,7 +977,7 @@ const s = StyleSheet.create({
   title: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 20,
-    color: Colors.text,
+    color: C.text,
     letterSpacing: 0.3,
   },
   disabledWrap: {
@@ -986,13 +989,13 @@ const s = StyleSheet.create({
   disabledText: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     textAlign: "center",
     lineHeight: 20,
     paddingHorizontal: 20,
   },
   card: {
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     borderRadius: 14,
     padding: 14,
     gap: 10,
@@ -1015,7 +1018,7 @@ const s = StyleSheet.create({
   emptyHint: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 12,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     textAlign: "center",
     paddingVertical: 6,
   },
@@ -1038,12 +1041,12 @@ const s = StyleSheet.create({
   goalLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 13,
-    color: Colors.text,
+    color: C.text,
   },
   goalProgress: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   completedIcon: {
     width: 36,
@@ -1063,8 +1066,8 @@ const s = StyleSheet.create({
     height: 28,
     borderWidth: 1,
     borderRadius: 6,
-    backgroundColor: Colors.surfaceLight,
-    color: Colors.text,
+    backgroundColor: C.surfaceLight,
+    color: C.text,
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 13,
     textAlign: "center",
@@ -1073,7 +1076,7 @@ const s = StyleSheet.create({
   goalEditUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   goalEditSave: {
     width: 24,
@@ -1088,7 +1091,7 @@ const s = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
   },
   goalTypeRow: {
     flexDirection: "row",
@@ -1099,18 +1102,18 @@ const s = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     alignItems: "center",
   },
   goalTypeChipText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
 
   // Forms
   addForm: {
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 10,
     borderWidth: 1,
     padding: 10,
@@ -1124,7 +1127,7 @@ const s = StyleSheet.create({
   formInput: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 13,
-    color: Colors.text,
+    color: C.text,
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 10,
@@ -1141,7 +1144,7 @@ const s = StyleSheet.create({
   formHint: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
 
   // Donut
@@ -1159,7 +1162,7 @@ const s = StyleSheet.create({
   donutUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 10,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     marginTop: -2,
   },
   donutLegend: {
@@ -1178,7 +1181,7 @@ const s = StyleSheet.create({
   legendLabel: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   legendValue: {
     fontFamily: "SpaceGrotesk_600SemiBold",
@@ -1204,7 +1207,7 @@ const s = StyleSheet.create({
   weekLabel: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   weekDivider: {
     width: 1,
@@ -1242,12 +1245,12 @@ const s = StyleSheet.create({
   detailMain: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 12,
-    color: Colors.text,
+    color: C.text,
   },
   detailSub: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 10,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
   detailTime: {
     fontFamily: "SpaceGrotesk_600SemiBold",
@@ -1256,7 +1259,7 @@ const s = StyleSheet.create({
   detailTimeSec: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
 
   // Practice rooms
@@ -1273,7 +1276,7 @@ const s = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.success,
+    backgroundColor: C.success,
   },
   trackingText: {
     fontFamily: "SpaceGrotesk_500Medium",
@@ -1288,7 +1291,7 @@ const s = StyleSheet.create({
   trackingStopText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 11,
-    color: Colors.white,
+    color: C.white,
   },
   roomRow: {
     flexDirection: "row",
@@ -1305,7 +1308,7 @@ const s = StyleSheet.create({
   roomName: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 13,
-    color: Colors.text,
+    color: C.text,
     flex: 1,
   },
   roomActions: {
@@ -1316,7 +1319,7 @@ const s = StyleSheet.create({
   roomStat: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   roomStartBtn: {
     width: 24,
@@ -1339,7 +1342,7 @@ const s = StyleSheet.create({
   },
 });
 
-const shareStyles = StyleSheet.create({
+const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.85)",
@@ -1357,7 +1360,7 @@ const shareStyles = StyleSheet.create({
   topTitle: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 16,
-    color: Colors.text,
+    color: C.text,
   },
   shareBtn: {
     paddingHorizontal: 18,
@@ -1567,7 +1570,7 @@ const shareStyles = StyleSheet.create({
   bgTitle: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   bgRow: {
     flexDirection: "row",
@@ -1577,7 +1580,7 @@ const shareStyles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     borderRadius: 12,
     padding: 10,
     flex: 1,
@@ -1592,11 +1595,11 @@ const shareStyles = StyleSheet.create({
   bgChipText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
 });
 
-const yearStyles = StyleSheet.create({
+const make_yearStyles = (C: typeof Colors) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.7)",
@@ -1622,7 +1625,7 @@ const yearStyles = StyleSheet.create({
   title: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 18,
-    color: Colors.text,
+    color: C.text,
     flex: 1,
   },
   bigStat: {
@@ -1637,13 +1640,13 @@ const yearStyles = StyleSheet.create({
   bigLabel: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   statsGrid: {
     flexDirection: "row",
     width: "100%",
     justifyContent: "space-around",
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     borderRadius: 14,
     paddingVertical: 14,
   },
@@ -1658,12 +1661,12 @@ const yearStyles = StyleSheet.create({
   statLabel: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   footerText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     textAlign: "center",
   },
 });

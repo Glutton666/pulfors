@@ -59,6 +59,7 @@ export function NoteRecorderModal({
   soundSet = "classic",
 }: NoteRecorderModalProps) {
   const { colors: C } = useTheme();
+  const styles = make_styles(C);
   const { t } = useLanguage();
 
   const [phase, setPhase] = useState<Phase>("idle");
@@ -771,6 +772,8 @@ function TrimHandle({
   color: string;
   side: "left" | "right";
 }) {
+  const { colors: C } = useTheme();
+  const styles = make_styles(C);
   const containerRef = useRef<View>(null);
   const layoutRef = useRef({ x: 0, width: 0 });
 
@@ -816,7 +819,7 @@ function TrimHandle({
   );
 }
 
-const styles = StyleSheet.create({
+const make_styles = (C: typeof Colors) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.7)",
@@ -837,7 +840,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    color: Colors.text,
+    color: C.text,
     fontSize: 16,
     fontWeight: "700",
   },
@@ -859,7 +862,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   sourceButtonText: {
-    color: Colors.white,
+    color: C.white,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -872,7 +875,7 @@ const styles = StyleSheet.create({
     borderRadius: 30,
   },
   recordButtonText: {
-    color: Colors.white,
+    color: C.white,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -899,7 +902,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   hintText: {
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     fontSize: 13,
   },
   recordingIndicator: {
@@ -913,7 +916,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   recordingTimeText: {
-    color: Colors.text,
+    color: C.text,
     fontSize: 24,
     fontWeight: "700",
     fontVariant: ["tabular-nums"],
@@ -921,7 +924,7 @@ const styles = StyleSheet.create({
   recordingBar: {
     width: "100%",
     height: 6,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     borderRadius: 3,
     overflow: "hidden",
   },
@@ -938,13 +941,13 @@ const styles = StyleSheet.create({
     borderRadius: 24,
   },
   sectionLabel: {
-    color: Colors.text,
+    color: C.text,
     fontSize: 14,
     fontWeight: "600",
     alignSelf: "flex-start",
   },
   trimInfo: {
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     fontSize: 12,
     fontVariant: ["tabular-nums"],
     alignSelf: "flex-start",
@@ -960,13 +963,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   trimTimeLabel: {
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     fontSize: 11,
     fontWeight: "600",
   },
   trimTimeInput: {
-    backgroundColor: Colors.surfaceLight,
-    color: Colors.text,
+    backgroundColor: C.surfaceLight,
+    color: C.text,
     fontSize: 14,
     fontVariant: ["tabular-nums"],
     borderWidth: 1,
@@ -976,7 +979,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   trimTimeSeparator: {
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     fontSize: 16,
     marginTop: 18,
   },
@@ -988,7 +991,7 @@ const styles = StyleSheet.create({
   waveformBar: {
     width: "100%",
     height: 40,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     borderRadius: 6,
     overflow: "visible",
     position: "relative",
@@ -1046,7 +1049,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    color: Colors.text,
+    color: C.text,
     fontSize: 13,
   },
   saveRow: {
@@ -1059,11 +1062,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     alignItems: "center",
   },
   cancelBtnText: {
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -1077,7 +1080,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   saveBtnText: {
-    color: Colors.white,
+    color: C.white,
     fontSize: 14,
     fontWeight: "600",
   },

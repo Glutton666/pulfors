@@ -58,6 +58,8 @@ function formatDate(ts: number) {
 
 function BeatPreview({ beatTypes, size = 10 }: { beatTypes: BeatType[]; size?: number }) {
   const { colors: C } = useTheme();
+  const styles = make_styles(C);
+  const gridStyles = make_gridStyles(C);
   return (
     <View style={{ flexDirection: "row", gap: 3 }}>
       {beatTypes.map((t, i) => (
@@ -105,6 +107,8 @@ function SwipeableEntry({
   setOpenItemId: (id: string | null) => void;
 }) {
   const { colors: C } = useTheme();
+  const styles = make_styles(C);
+  const gridStyles = make_gridStyles(C);
   const { t } = useLanguage();
   const translateX = useRef(new Animated.Value(0)).current;
   const isOpenRef = useRef(false);
@@ -419,6 +423,8 @@ export function PracticeBookModal({
 }: PracticeBookModalProps) {
   const insets = useSafeAreaInsets();
   const { colors: C } = useTheme();
+  const styles = make_styles(C);
+  const gridStyles = make_gridStyles(C);
   const { t } = useLanguage();
   const [entries, setEntries] = useState<PracticeEntry[]>([]);
   const [showSaveInput, setShowSaveInput] = useState(false);
@@ -802,10 +808,10 @@ export function PracticeBookModal({
   );
 }
 
-const styles = StyleSheet.create({
+const make_styles = (C: typeof Colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: C.background,
   },
   header: {
     flexDirection: "row",
@@ -814,7 +820,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: C.border,
   },
   headerLeft: {
     flexDirection: "row",
@@ -830,20 +836,20 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     alignItems: "center",
     justifyContent: "center",
   },
   title: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 18,
-    color: Colors.text,
+    color: C.text,
   },
   tabBar: {
     flexDirection: "row",
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: C.border,
   },
   tabItem: {
     flex: 1,
@@ -855,13 +861,13 @@ const styles = StyleSheet.create({
   tabText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   saveSection: {
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: C.border,
   },
   saveButton: {
     flexDirection: "row",
@@ -890,8 +896,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 14,
-    color: Colors.text,
-    backgroundColor: Colors.surface,
+    color: C.text,
+    backgroundColor: C.surface,
   },
   saveConfirmBtn: {
     height: 40,
@@ -903,7 +909,7 @@ const styles = StyleSheet.create({
   saveConfirmText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
-    color: Colors.background,
+    color: C.background,
   },
   saveCancelBtn: {
     height: 40,
@@ -914,7 +920,7 @@ const styles = StyleSheet.create({
   saveCancelText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   list: {
     paddingHorizontal: 20,
@@ -946,10 +952,10 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   entryCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     overflow: "hidden",
   },
   entryMain: {
@@ -964,19 +970,19 @@ const styles = StyleSheet.create({
   entryLabel: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 15,
-    color: Colors.text,
+    color: C.text,
     flex: 1,
     marginRight: 8,
   },
   entryDate: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
   createdBy: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     marginTop: -2,
   },
   editInput: {
@@ -987,8 +993,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 14,
-    color: Colors.text,
-    backgroundColor: Colors.surfaceLight,
+    color: C.text,
+    backgroundColor: C.surfaceLight,
     marginRight: 8,
   },
   entryDetails: {
@@ -1013,7 +1019,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -1025,7 +1031,7 @@ const styles = StyleSheet.create({
   detailUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   emptyState: {
     flex: 1,
@@ -1037,13 +1043,13 @@ const styles = StyleSheet.create({
   emptyText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     marginTop: 8,
   },
   emptySubtext: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 13,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     textAlign: "center",
   },
   goalOverlay: {
@@ -1055,7 +1061,7 @@ const styles = StyleSheet.create({
   },
   goalDialog: {
     width: "80%",
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 14,
     borderWidth: 1,
     padding: 20,
@@ -1064,13 +1070,13 @@ const styles = StyleSheet.create({
   goalDialogTitle: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 16,
-    color: Colors.text,
+    color: C.text,
     textAlign: "center",
   },
   goalDialogSub: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     textAlign: "center",
   },
   goalInputRow: {
@@ -1084,8 +1090,8 @@ const styles = StyleSheet.create({
     height: 42,
     borderWidth: 1,
     borderRadius: 8,
-    backgroundColor: Colors.surfaceLight,
-    color: Colors.text,
+    backgroundColor: C.surfaceLight,
+    color: C.text,
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 18,
     textAlign: "center",
@@ -1093,7 +1099,7 @@ const styles = StyleSheet.create({
   goalInputUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   goalBtnRow: {
     flexDirection: "row",
@@ -1105,12 +1111,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
   },
   goalCancelText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   goalConfirmBtn: {
     paddingHorizontal: 20,
@@ -1120,11 +1126,11 @@ const styles = StyleSheet.create({
   goalConfirmText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
-    color: Colors.background,
+    color: C.background,
   },
 });
 
-const gridStyles = StyleSheet.create({
+const make_gridStyles = (C: typeof Colors) => StyleSheet.create({
   list: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -1136,10 +1142,10 @@ const gridStyles = StyleSheet.create({
   },
   card: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     padding: 12,
     gap: 6,
   },
@@ -1152,7 +1158,7 @@ const gridStyles = StyleSheet.create({
   cardLabel: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 13,
-    color: Colors.text,
+    color: C.text,
     flex: 1,
   },
   modeDot: {
@@ -1172,7 +1178,7 @@ const gridStyles = StyleSheet.create({
   cardUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   cardFooter: {
     gap: 2,
@@ -1180,17 +1186,17 @@ const gridStyles = StyleSheet.create({
   cardMeta: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   cardPlayMode: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 10,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
   cardBy: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 10,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     marginTop: 2,
   },
 });

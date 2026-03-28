@@ -10,6 +10,7 @@ export default function PracticeDeepLink() {
   const router = useRouter();
   const processed = useRef(false);
   const { colors: C } = useTheme();
+  const styles = make_styles(C);
 
   useEffect(() => {
     if (processed.current) return;
@@ -41,7 +42,7 @@ export default function PracticeDeepLink() {
   );
 }
 
-const styles = StyleSheet.create({
+const make_styles = (C: typeof Colors) => StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",

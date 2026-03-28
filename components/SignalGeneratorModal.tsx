@@ -237,6 +237,8 @@ interface KnobProps {
 }
 
 function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentDim, onTapCenter, onLongPress, noteLabel }: KnobProps) {
+  const { colors: C } = useTheme();
+  const styles = make_styles(C);
   const knobRef = useRef<View>(null);
   const valRef = useRef(value);
   const movedRef = useRef(false);
@@ -336,6 +338,8 @@ function PickerColumn<T extends string | number>({
   accentDim: string;
   renderLabel?: (item: T) => string;
 }) {
+  const { colors: C } = useTheme();
+  const pickerStyles = make_pickerStyles(C);
   const flatListRef = useRef<FlatList<T>>(null);
   const scrollingRef = useRef(false);
   const programmaticRef = useRef(false);
@@ -421,14 +425,14 @@ function PickerColumn<T extends string | number>({
   );
 }
 
-const pickerStyles = StyleSheet.create({
+const make_pickerStyles = (C: typeof Colors) => StyleSheet.create({
   column: {
     width: 90,
     overflow: "hidden",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: C.border,
+    backgroundColor: C.surface,
   },
   highlight: {
     position: "absolute",
@@ -449,7 +453,7 @@ const pickerStyles = StyleSheet.create({
   itemText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 16,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
 });
 
@@ -463,6 +467,9 @@ interface TuningGuideModalProps {
 }
 
 function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, accentDim }: TuningGuideModalProps) {
+  const { colors: C } = useTheme();
+  const tgStyles = make_tgStyles(C);
+  const styles = make_styles(C);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [expandedInstrument, setExpandedInstrument] = useState<string | null>(null);
   const { t } = useLanguage();
@@ -482,7 +489,7 @@ function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, a
             <MaterialCommunityIcons name="music-note-outline" size={18} color={accentColor} />
             <Text style={[tgStyles.title, { color: accentColor }]}>{t("signalGenerator", "tuningGuide")}</Text>
             <Pressable onPress={handleClose} hitSlop={12} style={tgStyles.closeBtn}>
-              <Ionicons name="close" size={18} color={Colors.textSecondary} />
+              <Ionicons name="close" size={18} color={C.textSecondary} />
             </Pressable>
           </View>
           <Text style={tgStyles.hint}>{t("signalGenerator", "tapToSet")}</Text>
@@ -501,7 +508,7 @@ function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, a
                   <MaterialCommunityIcons
                     name={cat.icon}
                     size={16}
-                    color={expandedCategory === cat.id ? accentColor : Colors.textSecondary}
+                    color={expandedCategory === cat.id ? accentColor : C.textSecondary}
                   />
                   <Text style={[tgStyles.categoryText, expandedCategory === cat.id && { color: accentColor }]}>
                     {cat.name[lang]}
@@ -509,7 +516,7 @@ function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, a
                   <Ionicons
                     name={expandedCategory === cat.id ? "chevron-up" : "chevron-forward"}
                     size={14}
-                    color={Colors.textTertiary}
+                    color={C.textTertiary}
                   />
                 </Pressable>
 
@@ -528,7 +535,7 @@ function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, a
                       <Ionicons
                         name={expandedInstrument === inst.id ? "chevron-down" : "chevron-forward"}
                         size={12}
-                        color={Colors.textTertiary}
+                        color={C.textTertiary}
                       />
                     </Pressable>
 
@@ -570,7 +577,7 @@ function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, a
   );
 }
 
-const tgStyles = StyleSheet.create({
+const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: "center",
@@ -580,11 +587,11 @@ const tgStyles = StyleSheet.create({
   card: {
     width: 320,
     maxHeight: "75%",
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   header: {
     flexDirection: "row",
@@ -600,20 +607,20 @@ const tgStyles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     alignItems: "center",
     justifyContent: "center",
   },
   hint: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     marginTop: 4,
     marginBottom: 8,
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: C.border,
     marginBottom: 8,
   },
   scrollBody: {
@@ -630,7 +637,7 @@ const tgStyles = StyleSheet.create({
   categoryText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     flex: 1,
   },
   instrumentRow: {
@@ -643,7 +650,7 @@ const tgStyles = StyleSheet.create({
   instrumentText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     flex: 1,
   },
   stringList: {
@@ -666,13 +673,13 @@ const tgStyles = StyleSheet.create({
   stringLabel: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     flex: 1,
   },
   stringFreq: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
 });
 
@@ -687,6 +694,9 @@ interface SignalGeneratorModalProps {
 
 export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, androidMicFrequency, androidMicNote, micMethod = "native" }: SignalGeneratorModalProps) {
   const { colors: C } = useTheme();
+  const pickerStyles = make_pickerStyles(C);
+  const tgStyles = make_tgStyles(C);
+  const styles = make_styles(C);
   const { t, language: lang } = useLanguage();
   const { width: winW, height: winH } = useWindowDimensions();
   const isLandscape = winW > winH;
@@ -1570,7 +1580,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   );
 }
 
-const styles = StyleSheet.create({
+const make_styles = (C: typeof Colors) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.65)",
@@ -1578,13 +1588,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 20,
     padding: 24,
     width: 340,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     gap: 18,
     maxHeight: "85%",
   },
@@ -1603,13 +1613,13 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     alignItems: "center",
     justifyContent: "center",
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: C.border,
     opacity: 0.5,
     width: "100%",
   },
@@ -1625,7 +1635,7 @@ const styles = StyleSheet.create({
     height: KNOB_SIZE,
     borderRadius: KNOB_RADIUS,
     borderWidth: KNOB_STROKE,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
   },
   knobIndicatorDot: {
     position: "absolute",
@@ -1650,7 +1660,7 @@ const styles = StyleSheet.create({
   knobUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 14,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     lineHeight: 18,
   },
   knobNoteLabel: {
@@ -1664,7 +1674,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -1680,12 +1690,12 @@ const styles = StyleSheet.create({
   freqEditUnit: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 16,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
   freqTapBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 6,
@@ -1697,7 +1707,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 9,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     letterSpacing: 2,
     textTransform: "uppercase",
     marginBottom: 6,
@@ -1707,7 +1717,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 2,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 6,
@@ -1716,7 +1726,7 @@ const styles = StyleSheet.create({
   pickerHzHint: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 10,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     opacity: 0.6,
     marginLeft: 6,
   },
@@ -1736,12 +1746,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   waveBtnText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 9,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     letterSpacing: 0.5,
   },
   knobWrap: {
@@ -1755,14 +1765,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   micEmojiActive: {
-    borderColor: Colors.danger,
+    borderColor: C.danger,
     backgroundColor: "rgba(255,59,48,0.15)",
   },
   micDetectedWrap: {
@@ -1773,7 +1783,7 @@ const styles = StyleSheet.create({
   micDetectedHint: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     textAlign: "center",
   },
   pitchIndicator: {
@@ -1810,13 +1820,13 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     marginTop: -8,
     marginBottom: -8,
   },
   tuningGuideToggleText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
 });

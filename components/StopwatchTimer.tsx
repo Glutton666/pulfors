@@ -100,6 +100,7 @@ export function StopwatchTimer({
   const modeRef = useRef<Mode>(mode);
 
   const { colors: C } = useTheme();
+  const styles = make_styles(C);
 
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { modeRef.current = mode; }, [mode]);
@@ -1111,15 +1112,15 @@ export function StopwatchTimer({
 
 }
 
-const styles = StyleSheet.create({
+const make_styles = (C: typeof Colors) => StyleSheet.create({
   landscapeContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     alignSelf: "stretch" as const,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: moderateScale(10, 0.3),
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     paddingHorizontal: moderateScale(8, 0.3),
     paddingVertical: moderateScale(4, 0.3),
     gap: moderateScale(6, 0.3),
@@ -1139,7 +1140,7 @@ const styles = StyleSheet.create({
   landscapeTabText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(10, 0.3),
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
   landscapeDisplay: {
     flex: 1,
@@ -1149,13 +1150,13 @@ const styles = StyleSheet.create({
   landscapeTime: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: moderateScale(16, 0.3),
-    color: Colors.textPrimary,
+    color: C.textPrimary,
     letterSpacing: 1,
   },
   landscapeFraction: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: moderateScale(11, 0.3),
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
   landscapePresetRow: {
     flexDirection: "row" as const,
@@ -1166,13 +1167,13 @@ const styles = StyleSheet.create({
     paddingVertical: moderateScale(2, 0.3),
     borderRadius: moderateScale(6, 0.3),
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceLight,
+    borderColor: C.border,
+    backgroundColor: C.surfaceLight,
   },
   landscapePresetText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(9, 0.3),
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
   landscapeBtnRow: {
     flexDirection: "row" as const,
@@ -1207,12 +1208,12 @@ const styles = StyleSheet.create({
   handle: {
     width: HANDLE_WIDTH,
     minHeight: HANDLE_HEIGHT,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderTopRightRadius: moderateScale(12, 0.3),
     borderBottomRightRadius: moderateScale(12, 0.3),
     borderWidth: 1,
     borderLeftWidth: 0,
-    borderColor: Colors.border,
+    borderColor: C.border,
     alignItems: "center",
     justifyContent: "center",
     gap: moderateScale(4, 0.3),
@@ -1220,31 +1221,31 @@ const styles = StyleSheet.create({
     paddingVertical: moderateScale(6, 0.3),
   },
   handleOpen: {
-    backgroundColor: Colors.surfaceLight,
-    borderColor: Colors.accent,
+    backgroundColor: C.surfaceLight,
+    borderColor: C.accent,
   },
   handlePressed: {
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
   },
   handleGlow: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.accent,
+    backgroundColor: C.accent,
   },
   handleLine: {
     width: moderateScale(3, 0.3),
     height: moderateScale(10, 0.3),
     borderRadius: 1.5,
-    backgroundColor: Colors.textTertiary,
+    backgroundColor: C.textTertiary,
     opacity: 0.4,
   },
   panel: {
     width: PANEL_WIDTH,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRightWidth: 1,
     borderBottomWidth: 1,
     borderBottomRightRadius: moderateScale(16, 0.3),
-    borderRightColor: Colors.border,
-    borderBottomColor: Colors.border,
+    borderRightColor: C.border,
+    borderBottomColor: C.border,
     paddingHorizontal: moderateScale(14, 0.3),
     paddingTop: moderateScale(12, 0.3),
     paddingBottom: moderateScale(16, 0.3),
@@ -1264,20 +1265,20 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(8, 0.3),
   },
   tabActive: {
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
   },
   tabText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(8, 0.3),
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     letterSpacing: 1.5,
   },
   tabTextActive: {
-    color: Colors.accent,
+    color: C.accent,
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: C.border,
     opacity: 0.5,
   },
   displaySection: {
@@ -1291,25 +1292,25 @@ const styles = StyleSheet.create({
   timeText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: moderateScale(28, 0.3),
-    color: Colors.text,
+    color: C.text,
     letterSpacing: 2,
     fontVariant: ["tabular-nums"],
   },
   fractionText: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: moderateScale(16, 0.3),
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     letterSpacing: 1,
     fontVariant: ["tabular-nums"],
   },
   finishingText: {
-    color: Colors.danger,
+    color: C.danger,
   },
   runningDot: {
     width: moderateScale(5, 0.3),
     height: moderateScale(5, 0.3),
     borderRadius: 2.5,
-    backgroundColor: Colors.success,
+    backgroundColor: C.success,
     marginRight: moderateScale(6, 0.3),
     marginBottom: 3,
   },
@@ -1317,7 +1318,7 @@ const styles = StyleSheet.create({
     width: moderateScale(5, 0.3),
     height: moderateScale(5, 0.3),
     borderRadius: 2.5,
-    backgroundColor: Colors.danger,
+    backgroundColor: C.danger,
     marginRight: moderateScale(6, 0.3),
     marginBottom: 3,
   },
@@ -1334,17 +1335,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   startButton: {
-    backgroundColor: Colors.accent,
+    backgroundColor: C.accent,
   },
   pauseButton: {
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   resetButton: {
     backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   buttonPressed: {
     opacity: 0.7,
@@ -1361,20 +1362,20 @@ const styles = StyleSheet.create({
     paddingVertical: moderateScale(4, 0.3),
     borderRadius: moderateScale(10, 0.3),
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   presetChipActive: {
-    backgroundColor: Colors.accentDim,
-    borderColor: Colors.accent,
+    backgroundColor: C.accentDim,
+    borderColor: C.accent,
   },
   presetText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(10, 0.3),
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     letterSpacing: 1,
   },
   presetTextActive: {
-    color: Colors.accent,
+    color: C.accent,
   },
   timerEditRow: {
     flexDirection: "row" as const,
@@ -1389,7 +1390,7 @@ const styles = StyleSheet.create({
   timerEditInput: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: moderateScale(24, 0.3),
-    color: Colors.text,
+    color: C.text,
     textAlign: "center" as const,
     width: moderateScale(52, 0.3),
     borderBottomWidth: 2,
@@ -1398,13 +1399,13 @@ const styles = StyleSheet.create({
   timerEditUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: moderateScale(9, 0.3),
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     letterSpacing: 1,
   },
   timerEditColon: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: moderateScale(24, 0.3),
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     marginBottom: moderateScale(14, 0.3),
   },
   timerEditConfirm: {
@@ -1428,7 +1429,7 @@ const styles = StyleSheet.create({
     width: "80%",
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     overflow: "hidden",
   },
   progressBarFill: {
@@ -1438,13 +1439,13 @@ const styles = StyleSheet.create({
   finishingLabel: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: moderateScale(9, 0.3),
-    color: Colors.danger,
+    color: C.danger,
     letterSpacing: 1,
     opacity: 0.8,
   },
   handleFlash: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.danger,
+    backgroundColor: C.danger,
     borderRadius: 12,
     zIndex: 10,
   },
@@ -1463,7 +1464,7 @@ const styles = StyleSheet.create({
   },
   thermoTrack: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     borderRadius: 3,
   },
   thermoFill: {

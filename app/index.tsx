@@ -105,6 +105,7 @@ export default function MetronomeScreen() {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isLandscape = windowWidth > windowHeight;
   const { setThemeColor, setCustomHex, colors: C, themeMode } = useTheme();
+  const styles = make_styles(C);
   const { language, t } = useLanguage();
   const languageRef = useRef(language);
   useEffect(() => { languageRef.current = language; }, [language]);
@@ -3624,7 +3625,7 @@ export default function MetronomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const make_styles = (C: typeof Colors) => StyleSheet.create({
   screen: {
     flex: 1,
   },
@@ -3668,7 +3669,7 @@ const styles = StyleSheet.create({
   tempoLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(14, 0.3),
-    color: Colors.accentMuted,
+    color: C.accentMuted,
     letterSpacing: 3,
     textTransform: "uppercase",
   },
@@ -3679,9 +3680,9 @@ const styles = StyleSheet.create({
     width: moderateScale(36, 0.3),
     height: moderateScale(36, 0.3),
     borderRadius: moderateScale(18, 0.3),
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -3692,10 +3693,10 @@ const styles = StyleSheet.create({
   menuDropdown: {
     position: "absolute",
     right: moderateScale(20, 0.3),
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: moderateScale(12, 0.3),
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     paddingVertical: moderateScale(4, 0.3),
     minWidth: moderateScale(160, 0.4),
     shadowColor: "#000",
@@ -3712,12 +3713,12 @@ const styles = StyleSheet.create({
     paddingVertical: moderateScale(12, 0.3),
   },
   menuItemPressed: {
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
   },
   menuItemText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(14, 0.3),
-    color: Colors.text,
+    color: C.text,
   },
   menuItemLandscape: {
     paddingHorizontal: moderateScale(10, 0.3),
@@ -3729,7 +3730,7 @@ const styles = StyleSheet.create({
   },
   menuDivider: {
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: C.border,
     marginHorizontal: moderateScale(12, 0.3),
     opacity: 0.5,
   },
@@ -3765,6 +3766,6 @@ const styles = StyleSheet.create({
   goalPopupSub: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: moderateScale(11, 0.3),
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
 });

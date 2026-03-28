@@ -47,6 +47,8 @@ const BEAT_COLORS: Record<BeatType, string> = {
 
 function BeatDots({ beatTypes, size = 6 }: { beatTypes: BeatType[]; size?: number }) {
   const { colors: C } = useTheme();
+  const styles = make_styles(C);
+  const srcGridStyles = make_srcGridStyles(C);
   return (
     <View style={{ flexDirection: "row", gap: moderateScale(2, 0.3) }}>
       {beatTypes.slice(0, 12).map((bt, i) => (
@@ -91,6 +93,8 @@ function QueueItem({
   onImageChange?: (imageUri: string | undefined) => void;
 }) {
   const { colors: C } = useTheme();
+  const styles = make_styles(C);
+  const srcGridStyles = make_srcGridStyles(C);
   const { t } = useLanguage();
 
   const handlePickImage = useCallback(async () => {
@@ -251,6 +255,8 @@ export function NoteModeView({
   onQueueItemImageChange,
 }: NoteModeViewProps) {
   const { colors: C } = useTheme();
+  const styles = make_styles(C);
+  const srcGridStyles = make_srcGridStyles(C);
   const { t } = useLanguage();
   const { width: winW, height: winH } = useWindowDimensions();
   const isLandscape = winW > winH;
@@ -622,7 +628,7 @@ export function NoteModeView({
   );
 }
 
-const styles = StyleSheet.create({
+const make_styles = (C: typeof Colors) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -654,7 +660,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
   },
   nowPlaying: {
     flexDirection: "row",
@@ -664,7 +670,7 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(10, 0.3),
     paddingHorizontal: moderateScale(12, 0.3),
     paddingVertical: moderateScale(8, 0.3),
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     marginBottom: moderateScale(10, 0.3),
   },
   nowPlayingLabel: {
@@ -675,7 +681,7 @@ const styles = StyleSheet.create({
   nowPlayingBpm: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(12, 0.3),
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   progressBadge: {
     borderRadius: moderateScale(6, 0.3),
@@ -705,13 +711,13 @@ const styles = StyleSheet.create({
     paddingVertical: moderateScale(6, 0.3),
     borderRadius: moderateScale(8, 0.3),
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: C.border,
+    backgroundColor: C.surface,
   },
   playModeText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(11, 0.3),
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
   playButton: {
     width: moderateScale(48, 0.4),
@@ -734,22 +740,22 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: moderateScale(13, 0.3),
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     textTransform: "uppercase",
     letterSpacing: 1,
   },
   sectionCount: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: moderateScale(12, 0.3),
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
   sourceViewToggle: {
     width: moderateScale(28, 0.4),
     height: moderateScale(28, 0.4),
     borderRadius: moderateScale(6, 0.3),
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -768,7 +774,7 @@ const styles = StyleSheet.create({
   emptyQueueText: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: moderateScale(13, 0.3),
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     textAlign: "center",
   },
   queueItem: {
@@ -777,10 +783,10 @@ const styles = StyleSheet.create({
     gap: moderateScale(10, 0.3),
     paddingHorizontal: moderateScale(12, 0.3),
     paddingVertical: moderateScale(10, 0.3),
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: moderateScale(10, 0.3),
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     marginBottom: moderateScale(6, 0.3),
   },
   reorderBtns: {
@@ -794,7 +800,7 @@ const styles = StyleSheet.create({
   queueIndexText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: moderateScale(13, 0.3),
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
   queueItemInfo: {
     flex: 1,
@@ -803,7 +809,7 @@ const styles = StyleSheet.create({
   queueItemLabel: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: moderateScale(13, 0.3),
-    color: Colors.text,
+    color: C.text,
   },
   queueItemMeta: {
     flexDirection: "row",
@@ -813,15 +819,15 @@ const styles = StyleSheet.create({
   queueItemBpm: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: moderateScale(11, 0.3),
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   queueThumb: {
     width: moderateScale(32, 0.4),
     height: moderateScale(32, 0.4),
     borderRadius: moderateScale(6, 0.3),
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -837,9 +843,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginVertical: 8,
     borderRadius: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     overflow: "hidden",
   },
   playingImage: {
@@ -854,7 +860,7 @@ const styles = StyleSheet.create({
   playingImagePlaceholderText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: moderateScale(18, 0.3),
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     textAlign: "center",
     paddingHorizontal: moderateScale(20, 0.3),
   },
@@ -878,9 +884,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: moderateScale(8, 0.3),
     paddingVertical: moderateScale(6, 0.3),
     borderRadius: moderateScale(8, 0.3),
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   stripItemActive: {
     borderWidth: 1.5,
@@ -896,9 +902,9 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   stripThumbEmpty: {
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -906,7 +912,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: moderateScale(11, 0.3),
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   landscapePlayingLeft: {
     flex: 2,
@@ -934,7 +940,7 @@ const styles = StyleSheet.create({
   emptySourceText: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: moderateScale(13, 0.3),
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
   sourceItem: {
     flexDirection: "row",
@@ -949,10 +955,10 @@ const styles = StyleSheet.create({
     gap: moderateScale(10, 0.3),
     paddingHorizontal: moderateScale(12, 0.3),
     paddingVertical: moderateScale(9, 0.3),
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: moderateScale(8, 0.3),
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   sourceItemInfo: {
     flex: 1,
@@ -961,7 +967,7 @@ const styles = StyleSheet.create({
   sourceItemLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(13, 0.3),
-    color: Colors.text,
+    color: C.text,
   },
   sourceItemMeta: {
     flexDirection: "row",
@@ -970,12 +976,12 @@ const styles = StyleSheet.create({
   sourceItemBpm: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: moderateScale(11, 0.3),
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   sourceItemBeats: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: moderateScale(11, 0.3),
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
   insertNextBtn: {
     flexDirection: "row",
@@ -992,24 +998,24 @@ const styles = StyleSheet.create({
   },
 });
 
-const srcGridStyles = StyleSheet.create({
+const make_srcGridStyles = (C: typeof Colors) => StyleSheet.create({
   row: {
     gap: moderateScale(8, 0.3),
     marginBottom: moderateScale(8, 0.3),
   },
   card: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: moderateScale(10, 0.3),
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     padding: moderateScale(10, 0.3),
     gap: moderateScale(4, 0.3),
   },
   cardLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(12, 0.3),
-    color: Colors.text,
+    color: C.text,
   },
   cardStats: {
     flexDirection: "row",
@@ -1023,12 +1029,12 @@ const srcGridStyles = StyleSheet.create({
   cardUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: moderateScale(10, 0.3),
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   cardBeats: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: moderateScale(10, 0.3),
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
   insertBtn: {
     flexDirection: "row",

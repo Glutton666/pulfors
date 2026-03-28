@@ -199,6 +199,8 @@ export function SettingsModal({
   onMicMethodChange,
 }: SettingsModalProps) {
   const { themeColor, customHex, themeMode, setThemeColor, setCustomHex, setThemeMode, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
+  const styles = make_styles(C);
+  const csStyles = make_csStyles(C);
   const { language, setLanguage, t } = useLanguage();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
@@ -2074,7 +2076,7 @@ export function SettingsModal({
   );
 }
 
-const styles = StyleSheet.create({
+const make_styles = (C: typeof Colors) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
@@ -2084,10 +2086,10 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
   },
   sheet: {
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     padding: 20,
   },
   header: {
@@ -2099,7 +2101,7 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 18,
-    color: Colors.text,
+    color: C.text,
     letterSpacing: 0.5,
   },
   usernameSection: {
@@ -2112,8 +2114,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 14,
-    color: Colors.text,
-    backgroundColor: Colors.surfaceLight,
+    color: C.text,
+    backgroundColor: C.surfaceLight,
   },
   tabBar: {
     flexDirection: "row",
@@ -2129,16 +2131,16 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceLight,
+    borderColor: C.border,
+    backgroundColor: C.surfaceLight,
   },
   tabBtnActive: {
-    backgroundColor: Colors.accentDim,
+    backgroundColor: C.accentDim,
   },
   tabBtnText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   section: {
     gap: 10,
@@ -2151,19 +2153,19 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 14,
-    color: Colors.text,
+    color: C.text,
     flex: 1,
   },
   sectionValue: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
-    color: Colors.accent,
+    color: C.accent,
     minWidth: 40,
     textAlign: "right" as const,
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: C.border,
     marginVertical: 16,
   },
   sliderContainer: {
@@ -2174,12 +2176,12 @@ const styles = StyleSheet.create({
   sliderTrack: {
     height: 10,
     borderRadius: 5,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     overflow: "hidden",
   },
   sliderFill: {
     height: "100%",
-    backgroundColor: Colors.accent,
+    backgroundColor: C.accent,
     borderRadius: 5,
   },
   sliderThumb: {
@@ -2187,11 +2189,11 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: Colors.accent,
+    backgroundColor: C.accent,
     marginLeft: -5,
     top: 11,
     borderWidth: 2,
-    borderColor: Colors.surface,
+    borderColor: C.surface,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
@@ -2215,7 +2217,7 @@ const styles = StyleSheet.create({
   sliderLabelText: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 10,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     letterSpacing: 0.5,
   },
   soundSetGrid: {
@@ -2233,20 +2235,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceLight,
+    borderColor: C.border,
+    backgroundColor: C.surfaceLight,
   },
   soundSetBtnActive: {
-    borderColor: Colors.accent,
-    backgroundColor: Colors.accentDim,
+    borderColor: C.accent,
+    backgroundColor: C.accentDim,
   },
   soundSetLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   soundSetLabelActive: {
-    color: Colors.accent,
+    color: C.accent,
   },
   tripleRow: {
     flexDirection: "row",
@@ -2258,20 +2260,20 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceLight,
+    borderColor: C.border,
+    backgroundColor: C.surfaceLight,
   },
   tripleBtnActive: {
-    borderColor: Colors.accent,
-    backgroundColor: Colors.accentDim,
+    borderColor: C.accent,
+    backgroundColor: C.accentDim,
   },
   tripleBtnText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   tripleBtnTextActive: {
-    color: Colors.accent,
+    color: C.accent,
   },
   toggleRow: {
     flexDirection: "row" as const,
@@ -2281,13 +2283,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceLight,
+    borderColor: C.border,
+    backgroundColor: C.surfaceLight,
   },
   toggleLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   offsetRow: {
     flexDirection: "row",
@@ -2300,30 +2302,30 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceLight,
+    borderColor: C.border,
+    backgroundColor: C.surfaceLight,
     alignItems: "center" as const,
     justifyContent: "center" as const,
   },
   offsetBtnText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 13,
-    color: Colors.text,
+    color: C.text,
   },
   offsetResetBtn: {
-    borderColor: Colors.accentMuted,
-    backgroundColor: Colors.accentDim,
+    borderColor: C.accentMuted,
+    backgroundColor: C.accentDim,
     width: 52,
   },
   offsetResetText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
-    color: Colors.accent,
+    color: C.accent,
   },
   offsetHint: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 10,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     textAlign: "center" as const,
     letterSpacing: 0.5,
   },
@@ -2338,7 +2340,7 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: C.border,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2394,7 +2396,7 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   hexInput: {
     flex: 1,
@@ -2404,16 +2406,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 14,
-    color: Colors.text,
-    backgroundColor: Colors.surfaceLight,
+    color: C.text,
+    backgroundColor: C.surfaceLight,
   },
   hubImageCard: {
     marginTop: 10,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 12,
     padding: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   hubImageTop: {
     flexDirection: "row",
@@ -2457,7 +2459,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderStyle: "dashed" as any,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
   },
   addHubImageText: {
     fontFamily: "SpaceGrotesk_500Medium",
@@ -2476,7 +2478,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.success,
+    backgroundColor: C.success,
   },
   trackingText: {
     fontFamily: "SpaceGrotesk_500Medium",
@@ -2503,7 +2505,7 @@ const styles = StyleSheet.create({
   addRoomHint: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   addRoomRow: {
     flexDirection: "row",
@@ -2535,7 +2537,7 @@ const styles = StyleSheet.create({
   roomEmptyHint: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 12,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     textAlign: "center",
     paddingVertical: 8,
   },
@@ -2554,7 +2556,7 @@ const styles = StyleSheet.create({
   roomName: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 13,
-    color: Colors.text,
+    color: C.text,
     flex: 1,
   },
   roomActions: {
@@ -2597,7 +2599,7 @@ const styles = StyleSheet.create({
   resetConfirmText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     textAlign: "center",
     lineHeight: 20,
   },
@@ -2613,13 +2615,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceLight,
+    borderColor: C.border,
+    backgroundColor: C.surfaceLight,
   },
   resetCancelText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   resetConfirmBtn: {
     flex: 1,
@@ -2641,10 +2643,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   loggingInfoSheet: {
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
     padding: 24,
     width: "100%",
     maxWidth: 480,
@@ -2658,16 +2660,16 @@ const styles = StyleSheet.create({
   loggingInfoTitle: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 18,
-    color: Colors.text,
+    color: C.text,
   },
   loggingInfoSubtitle: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     marginBottom: 16,
   },
   loggingInfoCard: {
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     borderRadius: 12,
     padding: 14,
     gap: 12,
@@ -2680,7 +2682,7 @@ const styles = StyleSheet.create({
   loggingInfoText: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 13,
-    color: Colors.text,
+    color: C.text,
     flex: 1,
   },
   loggingInfoFooter: {
@@ -2694,7 +2696,7 @@ const styles = StyleSheet.create({
   loggingInfoFooterText: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
   },
   loggingInfoCloseBtn: {
     alignItems: "center",
@@ -2705,23 +2707,23 @@ const styles = StyleSheet.create({
   loggingInfoCloseBtnText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
-    color: Colors.background,
+    color: C.background,
   },
   soundSetAddBtn: {
     borderStyle: "dashed" as any,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
 });
 
-const csStyles = StyleSheet.create({
+const make_csStyles = (C: typeof Colors) => StyleSheet.create({
   editorContainer: {
     marginTop: 12,
-    backgroundColor: Colors.surfaceLight,
+    backgroundColor: C.surfaceLight,
     borderRadius: 12,
     padding: 14,
     gap: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   editorHeader: {
     flexDirection: "row",
@@ -2731,7 +2733,7 @@ const csStyles = StyleSheet.create({
   editorTitle: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
-    color: Colors.text,
+    color: C.text,
   },
   nameRow: {
     flexDirection: "row",
@@ -2741,25 +2743,25 @@ const csStyles = StyleSheet.create({
   fieldLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
     width: 60,
   },
   nameInput: {
     flex: 1,
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 13,
-    color: Colors.text,
-    backgroundColor: Colors.surface,
+    color: C.text,
+    backgroundColor: C.surface,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   sampleSection: {
     gap: 6,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: C.border,
     paddingTop: 10,
   },
   sampleHeader: {
@@ -2770,17 +2772,17 @@ const csStyles = StyleSheet.create({
   sampleTitle: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 12,
-    color: Colors.text,
+    color: C.text,
   },
   previewBtn: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   pickerRow: {
     flexDirection: "row",
@@ -2790,7 +2792,7 @@ const csStyles = StyleSheet.create({
   pickerLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: C.textTertiary,
     width: 44,
   },
   chipRow: {
@@ -2804,13 +2806,13 @@ const csStyles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
+    borderColor: C.border,
+    backgroundColor: C.surface,
   },
   chipText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 10,
-    color: Colors.textSecondary,
+    color: C.textSecondary,
   },
   durationRow: {
     flexDirection: "row",
@@ -2829,9 +2831,9 @@ const csStyles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   durationValue: {
     fontFamily: "SpaceGrotesk_600SemiBold",
@@ -2846,17 +2848,17 @@ const csStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: C.border,
   },
   customSampleName: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 11,
-    color: Colors.text,
+    color: C.text,
     flex: 1,
   },
   removeSampleBtn: {
@@ -2935,6 +2937,6 @@ const csStyles = StyleSheet.create({
   saveBtnText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 12,
-    color: Colors.background,
+    color: C.background,
   },
 });
