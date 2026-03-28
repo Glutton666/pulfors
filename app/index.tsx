@@ -3574,7 +3574,8 @@ export default function MetronomeScreen() {
         {!(isLandscape && barMode) && (
         <View style={[
           styles.bpmSection,
-          !isLandscape && { flex: 3 },
+          !isLandscape && !barMode && { flex: 3 },
+          !isLandscape && barMode && { flex: 0, flexShrink: 0 },
           isLandscape && !barMode && { flex: 2, justifyContent: "center", gap: 6 },
         ]}>
           {isLandscape && !barMode && !noteMode && (
