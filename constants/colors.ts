@@ -134,17 +134,17 @@ const DarkColors = {
 };
 
 const LightColors = {
-  background: "#F5F5F0",
-  surface: "#EAEAE4",
-  surfaceLight: "#DDDDD6",
+  background: "#FAFAF7",
+  surface: "#E6E5DD",
+  surfaceLight: "#D6D5CC",
   accent: "#B8922E",
   accentDim: "rgba(184, 146, 46, 0.12)",
   accentMuted: "rgba(184, 146, 46, 0.3)",
   text: "#1A1A1A",
   textSecondary: "#5C5C5C",
   textTertiary: "#7A7A72",
-  border: "#C8C8BE",
-  backgroundSecondary: "#E2E2DC",
+  border: "#B8B8AD",
+  backgroundSecondary: "#EFEFEA",
   danger: "#D32F2F",
   success: "#2E7D32",
   white: "#FFFFFF",
