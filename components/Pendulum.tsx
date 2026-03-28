@@ -8,7 +8,9 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import { useTheme } from "@/contexts/ThemeContext";
-import { moderateScale, SCREEN_WIDTH, IS_TABLET } from "@/lib/scale";
+import Colors from "@/constants/colors";
+import { moderateScale, SCREEN_WIDTH, IS_TABLET, useScale } from "@/lib/scale";
+import type { ScaleValues } from "@/lib/scale";
 
 const PENDULUM_LENGTH = IS_TABLET
   ? Math.min(SCREEN_WIDTH * 0.35, 280)
@@ -22,6 +24,8 @@ interface PendulumProps {
 
 export function Pendulum({ isPlaying, bpm }: PendulumProps) {
   const { colors: C } = useTheme();
+  const S = useScale();
+  const styles = make_styles(C, S);
   const swingDuration = (60000 / bpm) * 1;
   const maxAngle = Math.max(15, Math.min(35, 40 - bpm / 15));
 
@@ -71,7 +75,7 @@ export function Pendulum({ isPlaying, bpm }: PendulumProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   container: {
     alignItems: "center",
     justifyContent: "flex-end",

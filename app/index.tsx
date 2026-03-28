@@ -39,7 +39,8 @@ import type { ThemeColor } from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getTempoLabel as getTempoLabelI18n } from "@/lib/i18n";
-import { moderateScale, IS_TABLET, CONTENT_MAX_WIDTH } from "@/lib/scale";
+import { useScale } from "@/lib/scale";
+import type { ScaleValues } from "@/lib/scale";
 import {
   MetronomeEngine,
   soundSets,
@@ -47,11 +48,7 @@ import {
 import type { BeatType } from "@/lib/metronome-engine";
 import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry } from "@/lib/storage";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample } from "@/lib/storage";
-import {
-  BeatIndicator,
-  DIAL_SIZE,
-  DOT_RADIUS_FROM_CENTER,
-} from "@/components/BeatIndicator";
+import { BeatIndicator } from "@/components/BeatIndicator";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
 import { BpmSlider } from "@/components/BpmSlider";
 import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
@@ -105,7 +102,8 @@ export default function MetronomeScreen() {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isLandscape = windowWidth > windowHeight;
   const { setThemeColor, setCustomHex, colors: C, themeMode } = useTheme();
-  const styles = make_styles(C);
+  const S = useScale();
+  const styles = make_styles(C, S);
   const { language, t } = useLanguage();
   const languageRef = useRef(language);
   useEffect(() => { languageRef.current = language; }, [language]);
@@ -2099,7 +2097,7 @@ export default function MetronomeScreen() {
     }
   }, []);
 
-  const CENTER_HUB_RADIUS = 55;
+  const CENTER_HUB_RADIUS = S.ms(55, 0.3);
 
   const measureBarArea = useCallback(() => {
     const ref = barAreaRef.current as any;
@@ -2148,8 +2146,8 @@ export default function MetronomeScreen() {
 
       for (let i = 0; i < beatsPerMeasure; i++) {
         const angle = (i / beatsPerMeasure) * 2 * Math.PI - Math.PI / 2;
-        const dotX = center.x + DOT_RADIUS_FROM_CENTER * Math.cos(angle);
-        const dotY = center.y + DOT_RADIUS_FROM_CENTER * Math.sin(angle);
+        const dotX = center.x + S.dotRadiusFromCenter * Math.cos(angle);
+        const dotY = center.y + S.dotRadiusFromCenter * Math.sin(angle);
 
         const dist = Math.sqrt((pageX - dotX) ** 2 + (pageY - dotY) ** 2);
         if (dist < closestDist) {
@@ -2158,10 +2156,10 @@ export default function MetronomeScreen() {
         }
       }
 
-      if (closestDist < 55) return closestBeat;
+      if (closestDist < S.ms(55, 0.3)) return closestBeat;
       return null;
     },
-    [beatsPerMeasure, barMode]
+    [beatsPerMeasure, barMode, S]
   );
 
   const handleDragStart = useCallback(() => {
@@ -3203,7 +3201,7 @@ export default function MetronomeScreen() {
           { backgroundColor: C.surface, borderColor: C.border },
           isLandscape
             ? { left: 20, right: "auto" as any, top: (insets.top || webTopInset) }
-            : { right: moderateScale(20, 0.3), top: (insets.top || webTopInset) + 12 },
+            : { right: S.ms(20, 0.3), top: (insets.top || webTopInset) + 12 },
         ]}
         onPress={() => setShowMenu(!showMenu)}
         hitSlop={8}
@@ -3216,7 +3214,7 @@ export default function MetronomeScreen() {
       {showMenu && (
         <Modal transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
           <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
-            <View style={[styles.menuDropdown, { backgroundColor: C.surface, borderColor: C.border }, isLandscape ? { left: moderateScale(20, 0.3), right: "auto" as any, top: (insets.top || webTopInset) + moderateScale(40, 0.3) } : { top: (insets.top || webTopInset) + 52 }]}>
+            <View style={[styles.menuDropdown, { backgroundColor: C.surface, borderColor: C.border }, isLandscape ? { left: S.ms(20, 0.3), right: "auto" as any, top: (insets.top || webTopInset) + S.ms(40, 0.3) } : { top: (insets.top || webTopInset) + 52 }]}>
               <Pressable
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
@@ -3224,7 +3222,7 @@ export default function MetronomeScreen() {
                   setShowSettings(true);
                 }}
               >
-                <Ionicons name="settings-outline" size={moderateScale(18, 0.3)} color={C.textSecondary} />
+                <Ionicons name="settings-outline" size={S.ms(18, 0.3)} color={C.textSecondary} />
                 <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuSettings")}</Text>
               </Pressable>
               <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
@@ -3236,7 +3234,7 @@ export default function MetronomeScreen() {
                   if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
                 }}
               >
-                <MaterialCommunityIcons name="waveform" size={moderateScale(18, 0.3)} color={C.accent} />
+                <MaterialCommunityIcons name="waveform" size={S.ms(18, 0.3)} color={C.accent} />
                 <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuSignalGenerator")}</Text>
               </Pressable>
               <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
@@ -3247,7 +3245,7 @@ export default function MetronomeScreen() {
                   setShowWorkUp(true);
                 }}
               >
-                <MaterialCommunityIcons name="chart-line" size={moderateScale(18, 0.3)} color={C.accent} />
+                <MaterialCommunityIcons name="chart-line" size={S.ms(18, 0.3)} color={C.accent} />
                 <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuWorkUp")}</Text>
               </Pressable>
               <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
@@ -3259,7 +3257,7 @@ export default function MetronomeScreen() {
                   if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
                 }}
               >
-                <MaterialCommunityIcons name="notebook-outline" size={moderateScale(18, 0.3)} color={C.accent} />
+                <MaterialCommunityIcons name="notebook-outline" size={S.ms(18, 0.3)} color={C.accent} />
                 <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuPracticeNote")}</Text>
               </Pressable>
             </View>
@@ -3640,21 +3638,21 @@ export default function MetronomeScreen() {
   );
 }
 
-const make_styles = (C: typeof Colors) => StyleSheet.create({
+const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   screen: {
     flex: 1,
   },
   content: {
     flex: 1,
-    paddingHorizontal: IS_TABLET ? 40 : 24,
-    maxWidth: CONTENT_MAX_WIDTH,
-    alignSelf: IS_TABLET ? "center" as const : undefined,
-    width: IS_TABLET ? "100%" as any : undefined,
+    paddingHorizontal: S.isTablet ? 40 : 24,
+    maxWidth: S.contentMaxWidth,
+    alignSelf: S.isTablet ? "center" as const : undefined,
+    width: S.isTablet ? "100%" as any : undefined,
     justifyContent: "flex-end",
   },
   contentLandscape: {
     flex: 1,
-    paddingHorizontal: moderateScale(16, 0.3),
+    paddingHorizontal: S.ms(16, 0.3),
   },
   topSection: {
     flex: 2,
@@ -3675,26 +3673,26 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     flex: 3,
     justifyContent: "center",
     alignItems: "center",
-    paddingRight: moderateScale(50, 0.3),
+    paddingRight: S.ms(50, 0.3),
   },
   bpmSection: {
     alignItems: "center",
-    gap: moderateScale(4, 0.3),
+    gap: S.ms(4, 0.3),
   },
   tempoLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: moderateScale(14, 0.3),
+    fontSize: S.ms(14, 0.3),
     color: C.accentMuted,
     letterSpacing: 3,
     textTransform: "uppercase",
   },
   menuButton: {
     position: "absolute",
-    right: moderateScale(20, 0.3),
+    right: S.ms(20, 0.3),
     zIndex: 20,
-    width: moderateScale(36, 0.3),
-    height: moderateScale(36, 0.3),
-    borderRadius: moderateScale(18, 0.3),
+    width: S.ms(36, 0.3),
+    height: S.ms(36, 0.3),
+    borderRadius: S.ms(18, 0.3),
     backgroundColor: C.surface,
     borderWidth: 1,
     borderColor: C.border,
@@ -3707,13 +3705,13 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   menuDropdown: {
     position: "absolute",
-    right: moderateScale(20, 0.3),
+    right: S.ms(20, 0.3),
     backgroundColor: C.surface,
-    borderRadius: moderateScale(12, 0.3),
+    borderRadius: S.ms(12, 0.3),
     borderWidth: 1,
     borderColor: C.border,
-    paddingVertical: moderateScale(4, 0.3),
-    minWidth: moderateScale(160, 0.4),
+    paddingVertical: S.ms(4, 0.3),
+    minWidth: S.ms(160, 0.4),
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -3723,46 +3721,46 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: moderateScale(10, 0.3),
-    paddingHorizontal: moderateScale(16, 0.3),
-    paddingVertical: moderateScale(12, 0.3),
+    gap: S.ms(10, 0.3),
+    paddingHorizontal: S.ms(16, 0.3),
+    paddingVertical: S.ms(12, 0.3),
   },
   menuItemPressed: {
     backgroundColor: C.surfaceLight,
   },
   menuItemText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: moderateScale(14, 0.3),
+    fontSize: S.ms(14, 0.3),
     color: C.text,
   },
   menuItemLandscape: {
-    paddingHorizontal: moderateScale(10, 0.3),
-    paddingVertical: moderateScale(8, 0.3),
-    gap: moderateScale(8, 0.3),
+    paddingHorizontal: S.ms(10, 0.3),
+    paddingVertical: S.ms(8, 0.3),
+    gap: S.ms(8, 0.3),
   },
   menuItemTextLandscape: {
-    fontSize: moderateScale(13, 0.3),
+    fontSize: S.ms(13, 0.3),
   },
   menuDivider: {
     height: 1,
     backgroundColor: C.border,
-    marginHorizontal: moderateScale(12, 0.3),
+    marginHorizontal: S.ms(12, 0.3),
     opacity: 0.5,
   },
   goalPopupContainer: {
     position: "absolute",
-    left: moderateScale(16, 0.3),
-    right: moderateScale(16, 0.3),
+    left: S.ms(16, 0.3),
+    right: S.ms(16, 0.3),
     zIndex: 100,
-    gap: moderateScale(8, 0.3),
+    gap: S.ms(8, 0.3),
   },
   goalPopup: {
     flexDirection: "row",
     alignItems: "center",
-    gap: moderateScale(10, 0.3),
+    gap: S.ms(10, 0.3),
     borderWidth: 1,
-    borderRadius: moderateScale(14, 0.3),
-    padding: moderateScale(14, 0.3),
+    borderRadius: S.ms(14, 0.3),
+    padding: S.ms(14, 0.3),
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -3775,13 +3773,13 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   goalPopupTitle: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: moderateScale(14, 0.3),
+    fontSize: S.ms(14, 0.3),
     letterSpacing: 0.2,
     color: C.text,
   },
   goalPopupSub: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: moderateScale(11, 0.3),
+    fontSize: S.ms(11, 0.3),
     color: C.textTertiary,
   },
 });

@@ -26,7 +26,8 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { moderateScale } from "@/lib/scale";
+import { moderateScale, useScale } from "@/lib/scale";
+import type { ScaleValues } from "@/lib/scale";
 type Mode = "stopwatch" | "timer";
 type TimerState = "idle" | "running" | "paused" | "finishing" | "countdown";
 
@@ -100,7 +101,8 @@ export function StopwatchTimer({
   const modeRef = useRef<Mode>(mode);
 
   const { colors: C } = useTheme();
-  const styles = make_styles(C);
+  const S = useScale();
+  const styles = make_styles(C, S);
 
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { modeRef.current = mode; }, [mode]);
@@ -601,8 +603,8 @@ export function StopwatchTimer({
     const swTime = formatTime(elapsed);
     const timerDisplay = formatCountdown(remaining);
     return (
-      <View style={[styles.landscapeContainer, { flexDirection: "column" as const, alignItems: "stretch" as const, overflow: "hidden" as const, gap: moderateScale(4, 0.3) }]}>
-        <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: moderateScale(4, 0.3) }}>
+      <View style={[styles.landscapeContainer, { flexDirection: "column" as const, alignItems: "stretch" as const, overflow: "hidden" as const, gap: S.ms(4, 0.3) }]}>
+        <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: S.ms(4, 0.3) }}>
           <Pressable
             onPress={() => switchMode("stopwatch")}
             style={[styles.landscapeTab, mode === "stopwatch" && { backgroundColor: C.accentDim }]}
@@ -637,15 +639,15 @@ export function StopwatchTimer({
             ))}
           </View>
         )}
-        <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: moderateScale(6, 0.3) }}>
+        <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: S.ms(6, 0.3) }}>
           {state === "countdown" ? (
             <Animated.Text style={[styles.landscapeTime, { color: C.accent }, runningDotStyle]} numberOfLines={1}>
               {countdownLeft}
             </Animated.Text>
           ) : mode === "stopwatch" ? (
             <View style={{ flexDirection: "row", alignItems: "center" }}>
-              {state === "running" && <Animated.View style={[{ width: moderateScale(5, 0.3), height: moderateScale(5, 0.3), borderRadius: 2.5, backgroundColor: C.success, marginRight: moderateScale(4, 0.3) }, runningDotStyle]} />}
-              {state === "finishing" && <Animated.View style={[{ width: moderateScale(5, 0.3), height: moderateScale(5, 0.3), borderRadius: 2.5, backgroundColor: C.danger, marginRight: moderateScale(4, 0.3) }, finishingStyle]} />}
+              {state === "running" && <Animated.View style={[{ width: S.ms(5, 0.3), height: S.ms(5, 0.3), borderRadius: 2.5, backgroundColor: C.success, marginRight: S.ms(4, 0.3) }, runningDotStyle]} />}
+              {state === "finishing" && <Animated.View style={[{ width: S.ms(5, 0.3), height: S.ms(5, 0.3), borderRadius: 2.5, backgroundColor: C.danger, marginRight: S.ms(4, 0.3) }, finishingStyle]} />}
               <Text style={[styles.landscapeTime, { color: C.text }, state === "finishing" && { color: C.danger }]} numberOfLines={1}>{swTime.main}</Text>
             </View>
           ) : (
@@ -658,49 +660,49 @@ export function StopwatchTimer({
           {state === "idle" && (
             <Pressable
               onPress={mode === "stopwatch" ? startStopwatch : startTimer}
-              style={[styles.landscapeBtn, { backgroundColor: C.accentDim, borderColor: C.accent, width: moderateScale(28, 0.4), height: moderateScale(20, 0.4), borderRadius: moderateScale(6, 0.3) }]}
+              style={[styles.landscapeBtn, { backgroundColor: C.accentDim, borderColor: C.accent, width: S.ms(28, 0.4), height: S.ms(20, 0.4), borderRadius: S.ms(6, 0.3) }]}
             >
-              <Ionicons name="play" size={moderateScale(10, 0.3)} color={C.accent} />
+              <Ionicons name="play" size={S.ms(10, 0.3)} color={C.accent} />
             </Pressable>
           )}
           {state === "running" && (
             <Pressable
               onPress={mode === "stopwatch" ? pauseStopwatch : pauseTimer}
-              style={[styles.landscapeBtn, { backgroundColor: C.surfaceLight, borderColor: C.border, width: moderateScale(28, 0.4), height: moderateScale(20, 0.4), borderRadius: moderateScale(6, 0.3) }]}
+              style={[styles.landscapeBtn, { backgroundColor: C.surfaceLight, borderColor: C.border, width: S.ms(28, 0.4), height: S.ms(20, 0.4), borderRadius: S.ms(6, 0.3) }]}
             >
-              <Ionicons name="pause" size={moderateScale(10, 0.3)} color={C.textSecondary} />
+              <Ionicons name="pause" size={S.ms(10, 0.3)} color={C.textSecondary} />
             </Pressable>
           )}
           {state === "finishing" && (
             <Pressable
               onPress={mode === "stopwatch" ? resetStopwatch : resetTimer}
-              style={[styles.landscapeBtn, { backgroundColor: "#3a1a1a", borderColor: C.danger, width: moderateScale(28, 0.4), height: moderateScale(20, 0.4), borderRadius: moderateScale(6, 0.3) }]}
+              style={[styles.landscapeBtn, { backgroundColor: "#3a1a1a", borderColor: C.danger, width: S.ms(28, 0.4), height: S.ms(20, 0.4), borderRadius: S.ms(6, 0.3) }]}
             >
-              <Ionicons name="stop" size={moderateScale(10, 0.3)} color={C.danger} />
+              <Ionicons name="stop" size={S.ms(10, 0.3)} color={C.danger} />
             </Pressable>
           )}
           {state === "paused" && (
             <>
               <Pressable
                 onPress={mode === "stopwatch" ? startStopwatch : startTimer}
-                style={[styles.landscapeBtn, { backgroundColor: C.accentDim, borderColor: C.accent, width: moderateScale(28, 0.4), height: moderateScale(20, 0.4), borderRadius: moderateScale(6, 0.3) }]}
+                style={[styles.landscapeBtn, { backgroundColor: C.accentDim, borderColor: C.accent, width: S.ms(28, 0.4), height: S.ms(20, 0.4), borderRadius: S.ms(6, 0.3) }]}
               >
-                <Ionicons name="play" size={moderateScale(10, 0.3)} color={C.accent} />
+                <Ionicons name="play" size={S.ms(10, 0.3)} color={C.accent} />
               </Pressable>
               <Pressable
                 onPress={mode === "stopwatch" ? resetStopwatch : resetTimer}
-                style={[styles.landscapeBtn, { backgroundColor: C.surfaceLight, borderColor: C.border, width: moderateScale(28, 0.4), height: moderateScale(20, 0.4), borderRadius: moderateScale(6, 0.3) }]}
+                style={[styles.landscapeBtn, { backgroundColor: C.surfaceLight, borderColor: C.border, width: S.ms(28, 0.4), height: S.ms(20, 0.4), borderRadius: S.ms(6, 0.3) }]}
               >
-                <Ionicons name="refresh" size={moderateScale(10, 0.3)} color={C.textSecondary} />
+                <Ionicons name="refresh" size={S.ms(10, 0.3)} color={C.textSecondary} />
               </Pressable>
             </>
           )}
           {state === "countdown" && (
             <Pressable
               onPress={mode === "stopwatch" ? resetStopwatch : resetTimer}
-              style={[styles.landscapeBtn, { backgroundColor: C.surfaceLight, borderColor: C.border, width: moderateScale(28, 0.4), height: moderateScale(20, 0.4), borderRadius: moderateScale(6, 0.3) }]}
+              style={[styles.landscapeBtn, { backgroundColor: C.surfaceLight, borderColor: C.border, width: S.ms(28, 0.4), height: S.ms(20, 0.4), borderRadius: S.ms(6, 0.3) }]}
             >
-              <Ionicons name="close" size={moderateScale(10, 0.3)} color={C.textSecondary} />
+              <Ionicons name="close" size={S.ms(10, 0.3)} color={C.textSecondary} />
             </Pressable>
           )}
         </View>
@@ -786,7 +788,7 @@ export function StopwatchTimer({
             <Animated.View style={[styles.handleFlash, handleFlashStyle]} />
             {!open && isActive && state === "countdown" ? (
               <View style={{ alignItems: "center", justifyContent: "center" }}>
-                <Animated.Text style={[{ fontFamily: "SpaceGrotesk_700Bold", fontSize: moderateScale(16, 0.3), color: C.accent }, runningDotStyle]}>
+                <Animated.Text style={[{ fontFamily: "SpaceGrotesk_700Bold", fontSize: S.ms(16, 0.3), color: C.accent }, runningDotStyle]}>
                   {countdownLeft}
                 </Animated.Text>
               </View>
@@ -862,11 +864,11 @@ export function StopwatchTimer({
     return (
       <View style={styles.displaySection}>
         {state === "countdown" && (
-          <View style={{ alignItems: "center", gap: moderateScale(4, 0.3) }}>
-            <Animated.Text style={[{ fontFamily: "SpaceGrotesk_700Bold", fontSize: moderateScale(36, 0.3), color: C.accent, letterSpacing: 2 }, runningDotStyle]}>
+          <View style={{ alignItems: "center", gap: S.ms(4, 0.3) }}>
+            <Animated.Text style={[{ fontFamily: "SpaceGrotesk_700Bold", fontSize: S.ms(36, 0.3), color: C.accent, letterSpacing: 2 }, runningDotStyle]}>
               {countdownLeft}
             </Animated.Text>
-            <Text style={{ fontFamily: "SpaceGrotesk_400Regular", fontSize: moderateScale(10, 0.3), color: C.textTertiary, letterSpacing: 1 }}>준비 중...</Text>
+            <Text style={{ fontFamily: "SpaceGrotesk_400Regular", fontSize: S.ms(10, 0.3), color: C.textTertiary, letterSpacing: 1 }}>준비 중...</Text>
           </View>
         )}
         {state !== "countdown" && (
@@ -1112,34 +1114,34 @@ export function StopwatchTimer({
 
 }
 
-const make_styles = (C: typeof Colors) => StyleSheet.create({
+const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   landscapeContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     alignSelf: "stretch" as const,
     backgroundColor: C.surface,
-    borderRadius: moderateScale(10, 0.3),
+    borderRadius: S.ms(10, 0.3),
     borderWidth: 1,
     borderColor: C.border,
-    paddingHorizontal: moderateScale(8, 0.3),
-    paddingVertical: moderateScale(4, 0.3),
-    gap: moderateScale(6, 0.3),
+    paddingHorizontal: S.ms(8, 0.3),
+    paddingVertical: S.ms(4, 0.3),
+    gap: S.ms(6, 0.3),
   },
   landscapeTabRow: {
     flexDirection: "row" as const,
-    gap: moderateScale(2, 0.3),
+    gap: S.ms(2, 0.3),
   },
   landscapeTab: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    paddingHorizontal: moderateScale(6, 0.3),
-    paddingVertical: moderateScale(4, 0.3),
-    borderRadius: moderateScale(6, 0.3),
-    gap: moderateScale(3, 0.3),
+    paddingHorizontal: S.ms(6, 0.3),
+    paddingVertical: S.ms(4, 0.3),
+    borderRadius: S.ms(6, 0.3),
+    gap: S.ms(3, 0.3),
   },
   landscapeTabText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: moderateScale(10, 0.3),
+    fontSize: S.ms(10, 0.3),
     color: C.textTertiary,
   },
   landscapeDisplay: {
@@ -1149,40 +1151,40 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   landscapeTime: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: moderateScale(16, 0.3),
+    fontSize: S.ms(16, 0.3),
     color: C.textPrimary,
     letterSpacing: 1,
   },
   landscapeFraction: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: moderateScale(11, 0.3),
+    fontSize: S.ms(11, 0.3),
     color: C.textTertiary,
   },
   landscapePresetRow: {
     flexDirection: "row" as const,
-    gap: moderateScale(4, 0.3),
+    gap: S.ms(4, 0.3),
   },
   landscapePresetChip: {
-    paddingHorizontal: moderateScale(6, 0.3),
-    paddingVertical: moderateScale(2, 0.3),
-    borderRadius: moderateScale(6, 0.3),
+    paddingHorizontal: S.ms(6, 0.3),
+    paddingVertical: S.ms(2, 0.3),
+    borderRadius: S.ms(6, 0.3),
     borderWidth: 1,
     borderColor: C.border,
     backgroundColor: C.surfaceLight,
   },
   landscapePresetText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: moderateScale(9, 0.3),
+    fontSize: S.ms(9, 0.3),
     color: C.textTertiary,
   },
   landscapeBtnRow: {
     flexDirection: "row" as const,
-    gap: moderateScale(6, 0.3),
+    gap: S.ms(6, 0.3),
   },
   landscapeBtn: {
-    width: moderateScale(30, 0.4),
-    height: moderateScale(30, 0.4),
-    borderRadius: moderateScale(15, 0.4),
+    width: S.ms(30, 0.4),
+    height: S.ms(30, 0.4),
+    borderRadius: S.ms(15, 0.4),
     borderWidth: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
@@ -1209,16 +1211,16 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     width: HANDLE_WIDTH,
     minHeight: HANDLE_HEIGHT,
     backgroundColor: C.surface,
-    borderTopRightRadius: moderateScale(12, 0.3),
-    borderBottomRightRadius: moderateScale(12, 0.3),
+    borderTopRightRadius: S.ms(12, 0.3),
+    borderBottomRightRadius: S.ms(12, 0.3),
     borderWidth: 1,
     borderLeftWidth: 0,
     borderColor: C.border,
     alignItems: "center",
     justifyContent: "center",
-    gap: moderateScale(4, 0.3),
+    gap: S.ms(4, 0.3),
     overflow: "hidden",
-    paddingVertical: moderateScale(6, 0.3),
+    paddingVertical: S.ms(6, 0.3),
   },
   handleOpen: {
     backgroundColor: C.surfaceLight,
@@ -1232,8 +1234,8 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     backgroundColor: C.accent,
   },
   handleLine: {
-    width: moderateScale(3, 0.3),
-    height: moderateScale(10, 0.3),
+    width: S.ms(3, 0.3),
+    height: S.ms(10, 0.3),
     borderRadius: 1.5,
     backgroundColor: C.textTertiary,
     opacity: 0.4,
@@ -1243,33 +1245,33 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     backgroundColor: C.surface,
     borderRightWidth: 1,
     borderBottomWidth: 1,
-    borderBottomRightRadius: moderateScale(16, 0.3),
+    borderBottomRightRadius: S.ms(16, 0.3),
     borderRightColor: C.border,
     borderBottomColor: C.border,
-    paddingHorizontal: moderateScale(14, 0.3),
-    paddingTop: moderateScale(12, 0.3),
-    paddingBottom: moderateScale(16, 0.3),
-    gap: moderateScale(10, 0.3),
+    paddingHorizontal: S.ms(14, 0.3),
+    paddingTop: S.ms(12, 0.3),
+    paddingBottom: S.ms(16, 0.3),
+    gap: S.ms(10, 0.3),
   },
   tabRow: {
     flexDirection: "row",
-    gap: moderateScale(4, 0.3),
+    gap: S.ms(4, 0.3),
   },
   tab: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: moderateScale(4, 0.3),
-    paddingVertical: moderateScale(6, 0.3),
-    borderRadius: moderateScale(8, 0.3),
+    gap: S.ms(4, 0.3),
+    paddingVertical: S.ms(6, 0.3),
+    borderRadius: S.ms(8, 0.3),
   },
   tabActive: {
     backgroundColor: C.surfaceLight,
   },
   tabText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: moderateScale(8, 0.3),
+    fontSize: S.ms(8, 0.3),
     color: C.textTertiary,
     letterSpacing: 1.5,
   },
@@ -1283,7 +1285,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   displaySection: {
     alignItems: "center",
-    gap: moderateScale(10, 0.3),
+    gap: S.ms(10, 0.3),
   },
   timeRow: {
     flexDirection: "row",
@@ -1291,14 +1293,14 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   timeText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: moderateScale(28, 0.3),
+    fontSize: S.ms(28, 0.3),
     color: C.text,
     letterSpacing: 2,
     fontVariant: ["tabular-nums"],
   },
   fractionText: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: moderateScale(16, 0.3),
+    fontSize: S.ms(16, 0.3),
     color: C.textSecondary,
     letterSpacing: 1,
     fontVariant: ["tabular-nums"],
@@ -1307,30 +1309,30 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     color: C.danger,
   },
   runningDot: {
-    width: moderateScale(5, 0.3),
-    height: moderateScale(5, 0.3),
+    width: S.ms(5, 0.3),
+    height: S.ms(5, 0.3),
     borderRadius: 2.5,
     backgroundColor: C.success,
-    marginRight: moderateScale(6, 0.3),
+    marginRight: S.ms(6, 0.3),
     marginBottom: 3,
   },
   finishingDot: {
-    width: moderateScale(5, 0.3),
-    height: moderateScale(5, 0.3),
+    width: S.ms(5, 0.3),
+    height: S.ms(5, 0.3),
     borderRadius: 2.5,
     backgroundColor: C.danger,
-    marginRight: moderateScale(6, 0.3),
+    marginRight: S.ms(6, 0.3),
     marginBottom: 3,
   },
   controlRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: moderateScale(10, 0.3),
+    gap: S.ms(10, 0.3),
   },
   controlButton: {
-    width: moderateScale(36, 0.4),
-    height: moderateScale(36, 0.4),
-    borderRadius: moderateScale(18, 0.4),
+    width: S.ms(36, 0.4),
+    height: S.ms(36, 0.4),
+    borderRadius: S.ms(18, 0.4),
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1355,12 +1357,12 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
-    gap: moderateScale(5, 0.3),
+    gap: S.ms(5, 0.3),
   },
   presetChip: {
-    paddingHorizontal: moderateScale(8, 0.3),
-    paddingVertical: moderateScale(4, 0.3),
-    borderRadius: moderateScale(10, 0.3),
+    paddingHorizontal: S.ms(8, 0.3),
+    paddingVertical: S.ms(4, 0.3),
+    borderRadius: S.ms(10, 0.3),
     borderWidth: 1,
     borderColor: C.border,
   },
@@ -1370,7 +1372,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   presetText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: moderateScale(10, 0.3),
+    fontSize: S.ms(10, 0.3),
     color: C.textTertiary,
     letterSpacing: 1,
   },
@@ -1389,41 +1391,41 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   timerEditInput: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: moderateScale(24, 0.3),
+    fontSize: S.ms(24, 0.3),
     color: C.text,
     textAlign: "center" as const,
-    width: moderateScale(52, 0.3),
+    width: S.ms(52, 0.3),
     borderBottomWidth: 2,
     paddingVertical: 2,
   },
   timerEditUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: moderateScale(9, 0.3),
+    fontSize: S.ms(9, 0.3),
     color: C.textTertiary,
     letterSpacing: 1,
   },
   timerEditColon: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: moderateScale(24, 0.3),
+    fontSize: S.ms(24, 0.3),
     color: C.textTertiary,
-    marginBottom: moderateScale(14, 0.3),
+    marginBottom: S.ms(14, 0.3),
   },
   timerEditConfirm: {
-    width: moderateScale(28, 0.4),
-    height: moderateScale(28, 0.4),
-    borderRadius: moderateScale(14, 0.4),
+    width: S.ms(28, 0.4),
+    height: S.ms(28, 0.4),
+    borderRadius: S.ms(14, 0.4),
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    marginLeft: moderateScale(6, 0.3),
-    marginBottom: moderateScale(14, 0.3),
+    marginLeft: S.ms(6, 0.3),
+    marginBottom: S.ms(14, 0.3),
   },
   timerEditCancel: {
-    width: moderateScale(24, 0.4),
-    height: moderateScale(24, 0.4),
-    borderRadius: moderateScale(12, 0.4),
+    width: S.ms(24, 0.4),
+    height: S.ms(24, 0.4),
+    borderRadius: S.ms(12, 0.4),
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    marginBottom: moderateScale(14, 0.3),
+    marginBottom: S.ms(14, 0.3),
   },
   progressBarContainer: {
     width: "80%",
@@ -1438,7 +1440,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   finishingLabel: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: moderateScale(9, 0.3),
+    fontSize: S.ms(9, 0.3),
     color: C.danger,
     letterSpacing: 1,
     opacity: 0.8,
@@ -1453,8 +1455,8 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     alignItems: "center",
   },
   thermoTube: {
-    width: moderateScale(6, 0.3),
-    height: moderateScale(48, 0.3),
+    width: S.ms(6, 0.3),
+    height: S.ms(48, 0.3),
     borderTopLeftRadius: 3,
     borderTopRightRadius: 3,
     overflow: "hidden",
@@ -1474,17 +1476,17 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     zIndex: 1,
   },
   thermoBulb: {
-    width: moderateScale(14, 0.3),
-    height: moderateScale(14, 0.3),
-    borderRadius: moderateScale(7, 0.3),
+    width: S.ms(14, 0.3),
+    height: S.ms(14, 0.3),
+    borderRadius: S.ms(7, 0.3),
     alignItems: "center",
     justifyContent: "center",
     zIndex: 1,
   },
   thermoBulbInner: {
-    width: moderateScale(8, 0.3),
-    height: moderateScale(8, 0.3),
-    borderRadius: moderateScale(4, 0.3),
+    width: S.ms(8, 0.3),
+    height: S.ms(8, 0.3),
+    borderRadius: S.ms(4, 0.3),
     opacity: 0.6,
   },
   thermoBreakShard: {

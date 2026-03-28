@@ -18,7 +18,9 @@ import Animated, {
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/contexts/ThemeContext";
-import { moderateScale } from "@/lib/scale";
+import Colors from "@/constants/colors";
+import { moderateScale, useScale } from "@/lib/scale";
+import type { ScaleValues } from "@/lib/scale";
 import type { BeatType } from "@/lib/metronome-engine";
 
 interface SubdivisionBarProps {
@@ -66,6 +68,8 @@ export function SubdivisionBar({
   activeBeatPattern = null,
 }: SubdivisionBarProps) {
   const { colors: C } = useTheme();
+  const S = useScale();
+  const styles = make_styles(C, S);
   const [containerWidth, setContainerWidth] = useState(0);
   const isDraggingUpRef = useRef(false);
   const horizontalTriggeredRef = useRef(false);
@@ -458,6 +462,8 @@ export function DragGhost({
   y: number;
 }) {
   const { colors: GC } = useTheme();
+  const S = useScale();
+  const styles = make_styles(GC, S);
   return (
     <View
       style={[
@@ -500,7 +506,7 @@ export function DragGhost({
   );
 }
 
-const styles = StyleSheet.create({
+const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   gestureWrapper: {
     width: "100%",
     cursor: "grab" as any,
@@ -510,7 +516,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: moderateScale(6, 0.3),
+    paddingVertical: S.ms(6, 0.3),
     width: "100%",
   },
   swipeHint: {
@@ -526,7 +532,7 @@ const styles = StyleSheet.create({
   cell: {
     width: CELL_SIZE,
     height: CELL_SIZE,
-    borderRadius: moderateScale(6, 0.3),
+    borderRadius: S.ms(6, 0.3),
   } as any,
   ghost: {
     position: "absolute",
@@ -536,8 +542,8 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   ghostCell: {
-    width: moderateScale(18, 0.4),
-    height: moderateScale(18, 0.4),
-    borderRadius: moderateScale(4, 0.3),
+    width: S.ms(18, 0.4),
+    height: S.ms(18, 0.4),
+    borderRadius: S.ms(4, 0.3),
   },
 });

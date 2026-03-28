@@ -28,7 +28,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { moderateScale, SCREEN_WIDTH, IS_TABLET } from "@/lib/scale";
+import { moderateScale, SCREEN_WIDTH, IS_TABLET, useScale } from "@/lib/scale";
+import type { ScaleValues } from "@/lib/scale";
 
 export type BeatType = "strong" | "accent" | "normal" | "mute";
 
@@ -38,7 +39,6 @@ const DIAL_SIZE = IS_TABLET
 const DIAL_RADIUS = DIAL_SIZE / 2;
 const DOT_RADIUS_FROM_CENTER = DIAL_RADIUS - moderateScale(30, 0.4);
 const DOT_SIZE = IS_TABLET ? moderateScale(40, 0.4) : moderateScale(34, 0.4);
-const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.35;
 const MIN_BEATS = 1;
 const MAX_BEATS = 32;
 
@@ -53,6 +53,9 @@ interface DialBeatDotProps {
   isDropTarget: boolean;
   subdivisionCount: number;
   beatDirection?: "cw" | "ccw";
+  dDialRadius: number;
+  dDotRadiusFromCenter: number;
+  dDotSize: number;
 }
 
 function DialBeatDot({
@@ -64,6 +67,9 @@ function DialBeatDot({
   isDropTarget,
   subdivisionCount,
   beatDirection = "cw",
+  dDialRadius,
+  dDotRadiusFromCenter,
+  dDotSize,
 }: DialBeatDotProps) {
   const { colors: C } = useTheme();
   const isStrong = beatType === "strong";
@@ -71,9 +77,9 @@ function DialBeatDot({
   const isMute = beatType === "mute";
   const dirMul = beatDirection === "ccw" ? -1 : 1;
   const angle = dirMul * (index / total) * 2 * Math.PI - Math.PI / 2;
-  const size = DOT_SIZE;
-  const x = DIAL_RADIUS + DOT_RADIUS_FROM_CENTER * Math.cos(angle) - size / 2;
-  const y = DIAL_RADIUS + DOT_RADIUS_FROM_CENTER * Math.sin(angle) - size / 2;
+  const size = dDotSize;
+  const x = dDialRadius + dDotRadiusFromCenter * Math.cos(angle) - size / 2;
+  const y = dDialRadius + dDotRadiusFromCenter * Math.sin(angle) - size / 2;
 
   const popScale = useSharedValue(1);
   const beatScale = useSharedValue(1);
@@ -364,10 +370,10 @@ export function BeatIndicator({
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
   const { t } = useLanguage();
-  const styles = make_styles(C);
-  const { height: winH } = useWindowDimensions();
+  const S = useScale();
+  const styles = make_styles(C, S);
 
-  const landscapeDialScale = isLandscape ? Math.max(0.5, Math.min((winH - 100) / DIAL_SIZE, 0.85)) : 1;
+  const SWIPE_THRESHOLD = S.screenWidth * 0.35;
 
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
 
@@ -2437,17 +2443,10 @@ export function BeatIndicator({
           zIndex: 999,
         }, resetFlashStyle]}
       />
-      <View style={[
-        styles.dialContainer,
-        isLandscape && {
-          width: DIAL_SIZE * landscapeDialScale,
-          height: DIAL_SIZE * landscapeDialScale,
-          transform: [{ scale: landscapeDialScale }],
-        },
-      ]}>
+      <View style={styles.dialContainer}>
         <View
           ref={dialRef}
-          style={{ width: DIAL_SIZE, height: DIAL_SIZE }}
+          style={{ width: S.dialSize, height: S.dialSize }}
           collapsable={false}
         >
           <Animated.View style={[styles.dial, dialStyle]}>
@@ -2462,6 +2461,9 @@ export function BeatIndicator({
                 isDropTarget={dropTargetBeat === beat || dropTargetBeat === -1}
                 subdivisionCount={beatSubdivisionCounts[beat] || 0}
                 beatDirection={beatDirection}
+                dDialRadius={S.dialRadius}
+                dDotRadiusFromCenter={S.dotRadiusFromCenter}
+                dDotSize={S.dotSize}
               />
             ))}
           </Animated.View>
@@ -2595,7 +2597,7 @@ export function BeatIndicator({
   );
 }
 
-const make_styles = (C: typeof Colors) => StyleSheet.create({
+const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   touchArea: {
     alignItems: "center",
     justifyContent: "center",
@@ -2604,15 +2606,15 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     userSelect: "none" as any,
   },
   dialContainer: {
-    width: DIAL_SIZE,
-    height: DIAL_SIZE,
+    width: S.dialSize,
+    height: S.dialSize,
     alignItems: "center",
     justifyContent: "center",
   },
   dial: {
-    width: DIAL_SIZE,
-    height: DIAL_SIZE,
-    borderRadius: DIAL_RADIUS,
+    width: S.dialSize,
+    height: S.dialSize,
+    borderRadius: S.dialRadius,
   },
   centerArea: {
     position: "absolute",
@@ -2621,36 +2623,36 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   signatureRow: {
     position: "absolute",
-    width: moderateScale(160),
-    height: moderateScale(160),
+    width: S.ms(160),
+    height: S.ms(160),
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
   },
   digitalSignature: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: moderateScale(116, 0.4),
+    fontSize: S.ms(116, 0.4),
     color: C.text,
     opacity: 0.15,
   },
   centerImageContainer: {
     position: "absolute",
-    width: moderateScale(130),
-    height: moderateScale(130),
-    borderRadius: moderateScale(65),
+    width: S.ms(130),
+    height: S.ms(130),
+    borderRadius: S.ms(65),
     overflow: "hidden",
     opacity: 0.35,
   },
   centerImage: {
-    width: moderateScale(130),
-    height: moderateScale(130),
-    borderRadius: moderateScale(65),
+    width: S.ms(130),
+    height: S.ms(130),
+    borderRadius: S.ms(65),
   },
   centerGlow: {
     position: "absolute",
-    width: moderateScale(120),
-    height: moderateScale(120),
-    borderRadius: moderateScale(60),
+    width: S.ms(120),
+    height: S.ms(120),
+    borderRadius: S.ms(60),
     opacity: 0,
   },
   playButton: {
@@ -2688,7 +2690,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   barTimerCard: {
     borderRadius: 16,
     padding: 24,
-    width: moderateScale(220, 0.5),
+    width: S.ms(220, 0.5),
     alignItems: "center",
     borderWidth: 1,
   },
@@ -2742,11 +2744,11 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   barInfoCol: {
     alignItems: "center",
     justifyContent: "center",
-    minWidth: moderateScale(48, 0.4),
+    minWidth: S.ms(48, 0.4),
   },
   barInfoText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: moderateScale(12, 0.4),
+    fontSize: S.ms(12, 0.4),
     letterSpacing: 0.5,
     color: C.text,
   },
@@ -2774,9 +2776,9 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   centerDropRing: {
     position: "absolute",
-    width: moderateScale(110),
-    height: moderateScale(110),
-    borderRadius: moderateScale(55),
+    width: S.ms(110),
+    height: S.ms(110),
+    borderRadius: S.ms(55),
     borderWidth: 2,
     borderStyle: "dashed" as any,
     opacity: 0.8,
@@ -2807,25 +2809,25 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     gap: 16,
   },
   barModeCloseBtn: {
-    width: moderateScale(32, 0.4),
-    height: moderateScale(32, 0.4),
-    borderRadius: moderateScale(16, 0.4),
+    width: S.ms(32, 0.4),
+    height: S.ms(32, 0.4),
+    borderRadius: S.ms(16, 0.4),
     backgroundColor: C.overlay06,
     alignItems: "center",
     justifyContent: "center",
   },
   barPlayBtn: {
-    width: moderateScale(32, 0.4),
-    height: moderateScale(32, 0.4),
-    borderRadius: moderateScale(16, 0.4),
+    width: S.ms(32, 0.4),
+    height: S.ms(32, 0.4),
+    borderRadius: S.ms(16, 0.4),
     backgroundColor: C.overlay06,
     alignItems: "center",
     justifyContent: "center",
   },
   barLoopBtn: {
-    width: moderateScale(32, 0.4),
-    height: moderateScale(32, 0.4),
-    borderRadius: moderateScale(16, 0.4),
+    width: S.ms(32, 0.4),
+    height: S.ms(32, 0.4),
+    borderRadius: S.ms(16, 0.4),
     backgroundColor: C.overlay06,
     alignItems: "center",
     justifyContent: "center",
@@ -2836,9 +2838,9 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     gap: 12,
   },
   barTimeSigBtn: {
-    width: moderateScale(28, 0.4),
-    height: moderateScale(28, 0.4),
-    borderRadius: moderateScale(14, 0.4),
+    width: S.ms(28, 0.4),
+    height: S.ms(28, 0.4),
+    borderRadius: S.ms(14, 0.4),
     backgroundColor: C.overlay08,
     alignItems: "center",
     justifyContent: "center",
@@ -2853,13 +2855,13 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     overflow: "visible" as any,
   },
   barBeatLabel: {
-    width: moderateScale(22, 0.4),
+    width: S.ms(22, 0.4),
     alignItems: "center",
     justifyContent: "center",
   },
   barBeatLabelText: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: moderateScale(13, 0.4),
+    fontSize: S.ms(13, 0.4),
     color: C.text,
   },
   barBeatContent: {
