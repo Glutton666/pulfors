@@ -71,6 +71,7 @@ function DialBeatDot({
   dDotRadiusFromCenter,
   dDotSize,
 }: DialBeatDotProps) {
+  "use no memo";
   const { colors: C } = useTheme();
   const isStrong = beatType === "strong";
   const isAccent = beatType === "accent" || isStrong;
@@ -368,6 +369,7 @@ export function BeatIndicator({
   beatDirection = "cw",
   onEnterNoteMode,
 }: BeatIndicatorProps) {
+  "use no memo";
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
