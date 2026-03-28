@@ -35,9 +35,12 @@ import {
   loadPracticeRooms,
   addPracticeRoom,
   deletePracticeRoom,
+  renamePracticeRoom,
   requestLocationPermission,
   type PracticeRoom,
 } from "@/lib/practice-room";
+import { Share } from "react-native";
+import { loadGoals, saveGoals, type Goal } from "@/lib/activity-log";
 
 const PRESET_COLORS: { value: Exclude<ThemeColor, "custom">; labelKey: "colorGold" | "colorBlue" | "colorGreen" | "colorRed" | "colorPurple" | "colorCyan" | "colorOrange" | "colorPink" | "colorRose" | "colorNeon" | "colorSaints" | "colorDeepRed" | "colorBeige"; color: string }[] = [
   { value: "gold", labelKey: "colorGold", color: ACCENT_PRESETS.gold.accent },
@@ -269,6 +272,78 @@ export function SettingsModal({
     await deletePracticeRoom(id);
     setPracticeRooms((prev) => prev.filter((r) => r.id !== id));
   }, []);
+
+  const handleRenameRoom = useCallback((room: PracticeRoom) => {
+    Alert.prompt?.(
+      t("settings", "renameRoom"),
+      undefined,
+      async (newName: string) => {
+        if (!newName?.trim()) return;
+        await renamePracticeRoom(room.id, newName.trim());
+        setPracticeRooms((prev) => prev.map((r) => r.id === room.id ? { ...r, name: newName.trim() } : r));
+      },
+      "plain-text",
+      room.name
+    ) || (() => {
+      const newName = Platform.OS === "web" ? window.prompt(t("settings", "renameRoom"), room.name) : null;
+      if (newName?.trim()) {
+        renamePracticeRoom(room.id, newName.trim());
+        setPracticeRooms((prev) => prev.map((r) => r.id === room.id ? { ...r, name: newName.trim() } : r));
+      }
+    })();
+  }, [t]);
+
+  const handleShareRoom = useCallback(async (room: PracticeRoom) => {
+    const msg = t("settings", "shareRoomMsg").replace("%s", room.name);
+    try {
+      await Share.share({ message: msg });
+    } catch {}
+  }, [t]);
+
+  const handleAddRoomGoal = useCallback((room: PracticeRoom) => {
+    const promptGoal = (defaultVal: string) => {
+      if (Platform.OS === "ios") {
+        Alert.prompt?.(
+          t("settings", "addGoal"),
+          t("settings", "goalMinutes"),
+          async (val: string) => {
+            const mins = parseInt(val, 10);
+            if (!mins || mins <= 0) return;
+            const goals = await loadGoals();
+            const newGoal: Goal = {
+              id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+              type: "room_time",
+              target: mins,
+              label: room.name,
+            };
+            goals.push(newGoal);
+            await saveGoals(goals);
+            Alert.alert(t("settings", "goalAdded"), t("settings", "goalAddedMsg").replace("%s", String(mins)));
+          },
+          "plain-text",
+          defaultVal
+        );
+      } else {
+        const val = Platform.OS === "web" ? window.prompt(t("settings", "goalMinutes"), defaultVal) : null;
+        if (val) {
+          const mins = parseInt(val, 10);
+          if (!mins || mins <= 0) return;
+          loadGoals().then(async (goals) => {
+            const newGoal: Goal = {
+              id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+              type: "room_time",
+              target: mins,
+              label: room.name,
+            };
+            goals.push(newGoal);
+            await saveGoals(goals);
+            Alert.alert(t("settings", "goalAdded"), t("settings", "goalAddedMsg").replace("%s", String(mins)));
+          });
+        }
+      }
+    };
+    promptGoal("30");
+  }, [t]);
 
   const classicStrong = useAudioPlayer(soundSets.classic.strong);
   const classicHigh = useAudioPlayer(soundSets.classic.high);
@@ -1780,6 +1855,15 @@ export function SettingsModal({
                     <Ionicons name="play" size={12} color={C.accent} />
                   </Pressable>
                 )}
+                <Pressable onPress={() => handleShareRoom(room)} hitSlop={8}>
+                  <Ionicons name="share-social-outline" size={14} color={C.textTertiary} />
+                </Pressable>
+                <Pressable onPress={() => handleRenameRoom(room)} hitSlop={8}>
+                  <Ionicons name="create-outline" size={14} color={C.textTertiary} />
+                </Pressable>
+                <Pressable onPress={() => handleAddRoomGoal(room)} hitSlop={8}>
+                  <Ionicons name="flag-outline" size={14} color={C.textTertiary} />
+                </Pressable>
                 <Pressable onPress={() => handleDeleteRoom(room.id)} hitSlop={8}>
                   <Ionicons name="trash-outline" size={14} color={C.textTertiary} />
                 </Pressable>

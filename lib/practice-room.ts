@@ -61,6 +61,15 @@ export async function deletePracticeRoom(id: string): Promise<void> {
   await savePracticeRooms(updated);
 }
 
+export async function renamePracticeRoom(id: string, newName: string): Promise<void> {
+  const rooms = await loadPracticeRooms();
+  const idx = rooms.findIndex((r) => r.id === id);
+  if (idx >= 0) {
+    rooms[idx].name = newName;
+    await savePracticeRooms(rooms);
+  }
+}
+
 export async function requestLocationPermission(): Promise<boolean> {
   if (Platform.OS === "web") {
     try {
