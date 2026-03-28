@@ -2517,6 +2517,21 @@ export default function MetronomeScreen() {
       hasBeenConfigured: true,
     };
 
+    if (Platform.OS === "web") {
+      if (webRenderedLoopRef.current) {
+        webRenderedLoopRef.current.stop();
+        webRenderedLoopRef.current = null;
+      }
+      const ctx = getWebAudioContext();
+      if (ctx && ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
+      const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
+      await ensureWebClickBuffers(src as any);
+      webClickReadyRef.current = true;
+      engine.setPreRenderedAudio(false);
+    }
+
     setIsPlaying(true);
     setNoteIsPlaying(true);
     engine.start();
