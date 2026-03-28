@@ -19,6 +19,8 @@ import { Audio, InterruptionModeIOS } from "expo-av";
 import * as FileSystem from "expo-file-system/legacy";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useScale } from "@/lib/scale";
+import type { ScaleValues } from "@/lib/scale";
 import {
   WaveType,
   SignalGeneratorEngine,
@@ -195,13 +197,11 @@ function freqToNoteOctave(freq: number): { name: string; octave: number } {
   return { name: NOTE_NAMES[noteIndex], octave: Math.max(0, Math.min(8, octave)) };
 }
 
-const KNOB_SIZE = 165;
-const KNOB_RADIUS = KNOB_SIZE / 2;
+const DEFAULT_KNOB_SIZE = 165;
 const KNOB_STROKE = 5;
 const ARC_START = 135;
 const ARC_END = 405;
 const ARC_RANGE = ARC_END - ARC_START;
-const INDICATOR_RADIUS = KNOB_RADIUS - 14;
 
 const MIN_FREQ = 20;
 const MAX_FREQ = 20000;
@@ -234,9 +234,10 @@ interface KnobProps {
   onTapCenter?: () => void;
   onLongPress?: () => void;
   noteLabel?: string;
+  knobSize?: number;
 }
 
-function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentDim, onTapCenter, onLongPress, noteLabel }: KnobProps) {
+function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentDim, onTapCenter, onLongPress, noteLabel, knobSize = DEFAULT_KNOB_SIZE }: KnobProps) {
   const { colors: C } = useTheme();
   const styles = make_styles(C);
   const knobRef = useRef<View>(null);
@@ -245,6 +246,8 @@ function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentD
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressFiredRef = useRef(false);
   valRef.current = value;
+  const knobRadius = knobSize / 2;
+  const indicatorRadius = knobRadius - 14;
 
   const haptic = useCallback(() => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -294,21 +297,24 @@ function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentD
     }), [onChange, haptic, onTapCenter, onLongPress]);
 
   const angle = ARC_START + value * ARC_RANGE;
-  const indicator = polarToXY(angle, INDICATOR_RADIUS, KNOB_RADIUS, KNOB_RADIUS);
+  const indicator = polarToXY(angle, indicatorRadius, knobRadius, knobRadius);
+  const dotR = Math.max(8, knobSize * 0.042);
+  const valueFontSize = Math.max(18, knobSize * 0.17);
+  const unitFontSize = Math.max(10, knobSize * 0.085);
 
   return (
     <View style={styles.knobContainer}>
       <View
         ref={knobRef}
         {...panResponder.panHandlers}
-        style={styles.knobOuter}
+        style={[styles.knobOuter, { width: knobSize, height: knobSize }]}
       >
-        <View style={[styles.knobBg, { borderColor: accentDim }]}>
-          <View style={[styles.knobIndicatorDot, { backgroundColor: accentColor, left: indicator.x - 6, top: indicator.y - 6 }]} />
+        <View style={[styles.knobBg, { width: knobSize, height: knobSize, borderRadius: knobRadius, borderColor: accentDim }]}>
+          <View style={[styles.knobIndicatorDot, { backgroundColor: accentColor, width: dotR * 2, height: dotR * 2, borderRadius: dotR, left: indicator.x - dotR, top: indicator.y - dotR }]} />
         </View>
         <Pressable style={styles.knobCenter} onPress={onTapCenter}>
-          <Text style={[styles.knobValue, { color: accentColor }]}>{displayValue}</Text>
-          <Text style={styles.knobUnit}>{displayUnit}</Text>
+          <Text style={[styles.knobValue, { color: accentColor, fontSize: valueFontSize }]}>{displayValue}</Text>
+          <Text style={[styles.knobUnit, { fontSize: unitFontSize }]}>{displayUnit}</Text>
           {noteLabel ? <Text style={[styles.knobNoteLabel, { color: accentColor }]}>{noteLabel}</Text> : null}
         </Pressable>
       </View>
@@ -702,6 +708,14 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const { t, language: lang } = useLanguage();
   const { width: winW, height: winH } = useWindowDimensions();
   const isLandscape = winW > winH;
+  const S = useScale();
+  const dynamicKnobSize = Math.min(
+    Math.max(120, S.minDim * 0.35),
+    220
+  );
+  const dynamicCardWidth = isLandscape
+    ? Math.min(winW * 0.85, 680)
+    : Math.min(Math.max(300, S.screenWidth * 0.88), 400);
   const [frequency, setFrequency] = useState(440);
   const [waveType, setWaveType] = useState<WaveType>("sine");
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1237,7 +1251,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     >
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
-        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }, isLandscape && { flexDirection: "row" as const, width: winW * 0.85, maxWidth: 680, padding: 16, gap: 12, alignItems: "flex-start" as const }]}>
+        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border, width: dynamicCardWidth }, isLandscape && { flexDirection: "row" as const, padding: 16, gap: 12, alignItems: "flex-start" as const }]}>
           {isLandscape && (
             <Pressable onPress={handleClose} hitSlop={12} style={{ position: "absolute" as const, top: 8, right: 8, zIndex: 10 }}>
               <Ionicons name="close" size={22} color={C.textSecondary} />
@@ -1279,6 +1293,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 }
               } : undefined}
               noteLabel={currentNoteLabel}
+              knobSize={dynamicKnobSize}
             />
             <Pressable
               onPress={toggleMic}
@@ -1593,7 +1608,6 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     backgroundColor: C.surface,
     borderRadius: 20,
     padding: 24,
-    width: 340,
     alignItems: "center",
     borderWidth: 1,
     borderColor: C.border,
@@ -1630,13 +1644,13 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     alignItems: "center",
   },
   knobOuter: {
-    width: KNOB_SIZE,
-    height: KNOB_SIZE,
+    width: DEFAULT_KNOB_SIZE,
+    height: DEFAULT_KNOB_SIZE,
   },
   knobBg: {
-    width: KNOB_SIZE,
-    height: KNOB_SIZE,
-    borderRadius: KNOB_RADIUS,
+    width: DEFAULT_KNOB_SIZE,
+    height: DEFAULT_KNOB_SIZE,
+    borderRadius: DEFAULT_KNOB_SIZE / 2,
     borderWidth: KNOB_STROKE,
     backgroundColor: C.surfaceLight,
   },

@@ -3489,11 +3489,11 @@ export default function MetronomeScreen() {
         <View style={
           isLandscape
             ? barMode
-              ? styles.topSectionLandscapeBar
-              : styles.topSectionLandscapeBeat
+              ? { flex: 1, justifyContent: "flex-start" as const, alignItems: "stretch" as const }
+              : { flex: 3, justifyContent: "center" as const, alignItems: "center" as const, paddingRight: S.ms(50, 0.3) }
             : barMode
-              ? styles.topSectionPortraitBar
-              : styles.topSection
+              ? { flex: 3, justifyContent: "flex-start" as const, alignItems: "center" as const }
+              : { flex: 5, justifyContent: "flex-end" as const, alignItems: "center" as const }
         }>
           <BeatIndicator
             beatsPerMeasure={beatsPerMeasure}
@@ -3574,6 +3574,7 @@ export default function MetronomeScreen() {
         {!(isLandscape && barMode) && (
         <View style={[
           styles.bpmSection,
+          !isLandscape && !barMode && { flex: 5 },
           isLandscape && !barMode && { flex: 2, justifyContent: "center", gap: 6 },
         ]}>
           {isLandscape && !barMode && !noteMode && (
@@ -3655,7 +3656,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     paddingHorizontal: S.ms(16, 0.3),
   },
   topSection: {
-    flex: 2,
+    flex: 5,
     justifyContent: "flex-end",
     alignItems: "center",
   },
