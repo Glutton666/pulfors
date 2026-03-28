@@ -2590,7 +2590,7 @@ export function BeatIndicator({
         </View>
       )}
 
-      {!isLandscape && <Text style={styles.hintText}>{t("main.beatHint")}</Text>}
+      {!isLandscape && <Text style={styles.hintText}>{t("main", "beatHint")}</Text>}
     </View>
   );
 }
