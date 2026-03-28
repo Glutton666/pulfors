@@ -2070,82 +2070,84 @@ export function BeatIndicator({
           pointerEvents="none"
         />
 
-        {subdivisionBarElement && (
-          <View style={styles.barSubdivisionSlot}>{subdivisionBarElement}</View>
-        )}
+        <View style={{ flex: 3, justifyContent: "flex-end" }}>
+          {subdivisionBarElement && (
+            <View style={styles.barSubdivisionSlot}>{subdivisionBarElement}</View>
+          )}
 
-        <View style={styles.barBottomRow}>
-          <Pressable
-            onPress={handleSaveResetTap}
-            onLongPress={handleSaveResetLongPress}
-            delayLongPress={600}
-            style={({ pressed }) => [
-              styles.barLoopBtn,
-              isPlaying && { opacity: 0.3 },
-              pressed && !isPlaying && { opacity: 0.5, transform: [{ scale: 0.9 }] },
-            ]}
-            hitSlop={10}
-            testID="bar-save-reset"
-            disabled={isPlaying}
-          >
-            <Ionicons
-              name={saveFlashVisible ? "checkmark-circle" : "bookmark-outline"}
-              size={18}
-              color={saveFlashVisible ? "#4CAF50" : C.accent}
-            />
-          </Pressable>
-          <View style={styles.barTimeSigRow}>
+          <View style={styles.barBottomRow}>
             <Pressable
-              onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
-              style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure <= MIN_BEATS) && { opacity: 0.3 }]}
-              hitSlop={8}
+              onPress={handleSaveResetTap}
+              onLongPress={handleSaveResetLongPress}
+              delayLongPress={600}
+              style={({ pressed }) => [
+                styles.barLoopBtn,
+                isPlaying && { opacity: 0.3 },
+                pressed && !isPlaying && { opacity: 0.5, transform: [{ scale: 0.9 }] },
+              ]}
+              hitSlop={10}
+              testID="bar-save-reset"
+              disabled={isPlaying}
             >
-              <Ionicons name="remove" size={16} color={C.textSecondary} />
+              <Ionicons
+                name={saveFlashVisible ? "checkmark-circle" : "bookmark-outline"}
+                size={18}
+                color={saveFlashVisible ? "#4CAF50" : C.accent}
+              />
             </Pressable>
-            <View style={styles.barInfoCol} {...barClockSwipePan.panHandlers}>
-              <Pressable onPress={handleBarClockTap}>
-                <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? C.danger : C.accent }]}>
-                  {barTimeDisplay}
-                  {barClockMode === "timer" && !isPlaying && <Text style={{ fontSize: 9, color: C.textTertiary }}> &#9202;</Text>}
-                </Text>
+            <View style={styles.barTimeSigRow}>
+              <Pressable
+                onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+                style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure <= MIN_BEATS) && { opacity: 0.3 }]}
+                hitSlop={8}
+              >
+                <Ionicons name="remove" size={16} color={C.textSecondary} />
               </Pressable>
-              <Text style={[styles.barInfoText, { color: C.textTertiary, fontSize: 10 }]}>
-                {beatsPerMeasure} bars
-              </Text>
-              <View style={styles.barClockDots}>
-                <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
-                <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: C.danger }]} />
+              <View style={styles.barInfoCol} {...barClockSwipePan.panHandlers}>
+                <Pressable onPress={handleBarClockTap}>
+                  <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? C.danger : C.accent }]}>
+                    {barTimeDisplay}
+                    {barClockMode === "timer" && !isPlaying && <Text style={{ fontSize: 9, color: C.textTertiary }}> &#9202;</Text>}
+                  </Text>
+                </Pressable>
+                <Text style={[styles.barInfoText, { color: C.textTertiary, fontSize: 10 }]}>
+                  {beatsPerMeasure} bars
+                </Text>
+                <View style={styles.barClockDots}>
+                  <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
+                  <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: C.danger }]} />
+                </View>
               </View>
+              <Pressable
+                onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+                style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
+                hitSlop={8}
+              >
+                <Ionicons name="add" size={16} color={C.textSecondary} />
+              </Pressable>
             </View>
             <Pressable
-              onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
-              style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
-              hitSlop={8}
+              onPress={onTogglePlay}
+              style={({ pressed }) => [
+                styles.barPlayBtn,
+                pressed && { opacity: 0.7 },
+                isPreparing && { opacity: 0.5 },
+              ]}
+              testID="bar-play-button"
+              disabled={isPreparing}
             >
-              <Ionicons name="add" size={16} color={C.textSecondary} />
+              {isPreparing ? (
+                <ActivityIndicator size="small" color={C.accent} />
+              ) : (
+                <Ionicons
+                  name={isPlaying ? "stop" : "play"}
+                  size={22}
+                  color={isPlaying ? C.danger : C.accent}
+                  style={!isPlaying ? { marginLeft: 2 } : undefined}
+                />
+              )}
             </Pressable>
           </View>
-          <Pressable
-            onPress={onTogglePlay}
-            style={({ pressed }) => [
-              styles.barPlayBtn,
-              pressed && { opacity: 0.7 },
-              isPreparing && { opacity: 0.5 },
-            ]}
-            testID="bar-play-button"
-            disabled={isPreparing}
-          >
-            {isPreparing ? (
-              <ActivityIndicator size="small" color={C.accent} />
-            ) : (
-              <Ionicons
-                name={isPlaying ? "stop" : "play"}
-                size={22}
-                color={isPlaying ? C.danger : C.accent}
-                style={!isPlaying ? { marginLeft: 2 } : undefined}
-              />
-            )}
-          </Pressable>
         </View>
 
         <Modal
@@ -2895,7 +2897,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     opacity: 0.4,
   },
   barMeasureOuter: {
-    flex: 1,
+    flex: 5,
     flexShrink: 1,
     width: "100%" as any,
     paddingHorizontal: 0,

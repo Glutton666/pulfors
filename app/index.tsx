@@ -3493,7 +3493,7 @@ export default function MetronomeScreen() {
               : { flex: 3, justifyContent: "center" as const, alignItems: "center" as const, paddingRight: S.ms(50, 0.3) }
             : barMode
               ? { flex: 5, justifyContent: "flex-start" as const, alignItems: "center" as const }
-              : { flex: 5, justifyContent: "flex-end" as const, alignItems: "center" as const }
+              : { flex: 5, justifyContent: "center" as const, alignItems: "center" as const }
         }>
           <BeatIndicator
             beatsPerMeasure={beatsPerMeasure}
