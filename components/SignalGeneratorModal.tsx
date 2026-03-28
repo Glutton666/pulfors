@@ -1225,10 +1225,10 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     >
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
-        <View style={[styles.card, isLandscape && { flexDirection: "row" as const, width: winW * 0.85, maxWidth: 680, padding: 16, gap: 12, alignItems: "flex-start" as const }]}>
+        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }, isLandscape && { flexDirection: "row" as const, width: winW * 0.85, maxWidth: 680, padding: 16, gap: 12, alignItems: "flex-start" as const }]}>
           {isLandscape && (
             <Pressable onPress={handleClose} hitSlop={12} style={{ position: "absolute" as const, top: 8, right: 8, zIndex: 10 }}>
-              <Ionicons name="close" size={22} color={Colors.textSecondary} />
+              <Ionicons name="close" size={22} color={C.textSecondary} />
             </Pressable>
           )}
           {!isLandscape && (
@@ -1237,10 +1237,10 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 <MaterialCommunityIcons name="waveform" size={20} color={C.accent} />
                 <Text style={[styles.title, { color: C.accent }]}>{t("signalGenerator", "title")}</Text>
                 <Pressable onPress={handleClose} hitSlop={12} style={styles.closeBtn}>
-                  <Ionicons name="close" size={20} color={Colors.textSecondary} />
+                  <Ionicons name="close" size={20} color={C.textSecondary} />
                 </Pressable>
               </View>
-              <View style={styles.divider} />
+              <View style={[styles.divider, { backgroundColor: C.border }]} />
             </>
           )}
 
@@ -1282,7 +1282,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               <MaterialCommunityIcons
                 name={micListening ? "microphone-off" : "microphone"}
                 size={isLandscape ? 14 : 20}
-                color={micListening ? Colors.danger : Colors.textSecondary}
+                color={micListening ? C.danger : C.textSecondary}
               />
             </Pressable>
             {micListening && micDetectedFreq ? (
@@ -1355,7 +1355,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 }}
                 style={({ pressed }) => [
                   styles.playBtn,
-                  { backgroundColor: isPlaying ? Colors.danger : C.accent, marginTop: 6, alignSelf: "center" as const, width: "30%" as const, paddingVertical: 5, borderRadius: 8, justifyContent: "center" as const },
+                  { backgroundColor: isPlaying ? C.danger : C.accent, marginTop: 6, alignSelf: "center" as const, width: "30%" as const, paddingVertical: 5, borderRadius: 8, justifyContent: "center" as const },
                   pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
                 ]}
                 testID="signal-toggle"
@@ -1363,7 +1363,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 <Ionicons
                   name={isPlaying ? "stop" : "play"}
                   size={14}
-                  color={isPlaying ? Colors.white : Colors.background}
+                  color={isPlaying ? C.white : C.background}
                 />
               </Pressable>
             )}
@@ -1394,11 +1394,11 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               }}
               style={[styles.tuningGuideToggle]}
             >
-              <MaterialCommunityIcons name="music-note-outline" size={14} color={Colors.textTertiary} />
+              <MaterialCommunityIcons name="music-note-outline" size={14} color={C.textTertiary} />
               <Text style={styles.tuningGuideToggleText}>
                 {t("signalGenerator", "tuningGuide")}
               </Text>
-              <Ionicons name="chevron-forward" size={14} color={Colors.textTertiary} />
+              <Ionicons name="chevron-forward" size={14} color={C.textTertiary} />
             </Pressable>
 
             <TuningGuideModal
@@ -1446,7 +1446,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                       <MaterialCommunityIcons
                         name={w.icon as any}
                         size={16}
-                        color={active ? C.accent : Colors.textTertiary}
+                        color={active ? C.accent : C.textTertiary}
                       />
                     </Pressable>
                   );
@@ -1499,11 +1499,11 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               }}
               style={[styles.tuningGuideToggle]}
             >
-              <MaterialCommunityIcons name="music-note-outline" size={14} color={Colors.textTertiary} />
+              <MaterialCommunityIcons name="music-note-outline" size={14} color={C.textTertiary} />
               <Text style={styles.tuningGuideToggleText}>
                 {t("signalGenerator", "tuningGuide")}
               </Text>
-              <Ionicons name="chevron-forward" size={14} color={Colors.textTertiary} />
+              <Ionicons name="chevron-forward" size={14} color={C.textTertiary} />
             </Pressable>
 
             <TuningGuideModal
@@ -1532,7 +1532,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                       <MaterialCommunityIcons
                         name={w.icon as any}
                         size={20}
-                        color={active ? C.accent : Colors.textTertiary}
+                        color={active ? C.accent : C.textTertiary}
                       />
                       <Text style={[styles.waveBtnText, active && { color: C.accent }]}>{t("signalGenerator", w.key)}</Text>
                     </Pressable>
@@ -1548,7 +1548,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               }}
               style={({ pressed }) => [
                 styles.playBtn,
-                { backgroundColor: isPlaying ? Colors.danger : C.accent },
+                { backgroundColor: isPlaying ? C.danger : C.accent },
                 pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
               ]}
               testID="signal-toggle"
@@ -1556,9 +1556,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               <Ionicons
                 name={isPlaying ? "stop" : "play"}
                 size={20}
-                color={isPlaying ? Colors.white : Colors.background}
+                color={isPlaying ? C.white : C.background}
               />
-              <Text style={[styles.playBtnText, { color: isPlaying ? Colors.white : Colors.background }]}>
+              <Text style={[styles.playBtnText, { color: isPlaying ? C.white : C.background }]}>
                 {isPlaying ? t("signalGenerator", "stop") : t("signalGenerator", "play")}
               </Text>
             </Pressable>

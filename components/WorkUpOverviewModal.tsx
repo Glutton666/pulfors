@@ -528,9 +528,9 @@ export function WorkUpOverviewModal({
             })}
           </View>
           <View style={s.addFormRow}>
-            <TextInput style={[s.formInput, { borderColor: C.accentMuted }]} value={newGoalTarget} onChangeText={setNewGoalTarget} placeholder={t("workUp", "minutesPlaceholder")} placeholderTextColor={Colors.textTertiary} keyboardType="numeric" />
+            <TextInput style={[s.formInput, { borderColor: C.accentMuted }]} value={newGoalTarget} onChangeText={setNewGoalTarget} placeholder={t("workUp", "minutesPlaceholder")} placeholderTextColor={C.textTertiary} keyboardType="numeric" />
             <Pressable style={[s.formSaveBtn, { backgroundColor: C.accent }]} onPress={handleAddGoal}>
-              <Ionicons name="checkmark" size={16} color={Colors.surface} />
+              <Ionicons name="checkmark" size={16} color={C.surface} />
             </Pressable>
           </View>
         </View>
@@ -545,7 +545,7 @@ export function WorkUpOverviewModal({
           const isEditing = editingGoalId === goal.id;
           return (
             <Pressable key={goal.id} style={s.goalRow} onLongPress={() => { setEditingGoalId(goal.id); setEditGoalTarget(String(goal.target)); }} delayLongPress={500}>
-              <CircularProgress size={44} strokeWidth={4} progress={pct} color={goalColor} bgColor={Colors.surfaceLight}>
+              <CircularProgress size={44} strokeWidth={4} progress={pct} color={goalColor} bgColor={C.surfaceLight}>
                 <Text style={[s.goalPct, { color: goalColor }]}>{Math.round(pct * 100)}%</Text>
               </CircularProgress>
               <View style={s.goalInfo}>
@@ -554,14 +554,14 @@ export function WorkUpOverviewModal({
                   <View style={s.goalEditRow}>
                     <TextInput style={[s.goalEditInput, { borderColor: goalColor }]} value={editGoalTarget} onChangeText={setEditGoalTarget} keyboardType="numeric" autoFocus selectTextOnFocus onSubmitEditing={handleUpdateGoalTarget} />
                     <Text style={s.goalEditUnit}>분</Text>
-                    <Pressable style={[s.goalEditSave, { backgroundColor: goalColor }]} onPress={handleUpdateGoalTarget}><Ionicons name="checkmark" size={14} color={Colors.surface} /></Pressable>
-                    <Pressable style={s.goalEditCancel} onPress={() => setEditingGoalId(null)}><Ionicons name="close" size={14} color={Colors.textTertiary} /></Pressable>
+                    <Pressable style={[s.goalEditSave, { backgroundColor: goalColor }]} onPress={handleUpdateGoalTarget}><Ionicons name="checkmark" size={14} color={C.surface} /></Pressable>
+                    <Pressable style={s.goalEditCancel} onPress={() => setEditingGoalId(null)}><Ionicons name="close" size={14} color={C.textTertiary} /></Pressable>
                   </View>
                 ) : (
                   <Text style={s.goalProgress}>{Math.round(progress)}m / {goal.target}m</Text>
                 )}
               </View>
-              <Pressable onPress={() => handleDeleteGoal(goal.id)} hitSlop={8}><Ionicons name="trash-outline" size={14} color={Colors.textTertiary} /></Pressable>
+              <Pressable onPress={() => handleDeleteGoal(goal.id)} hitSlop={8}><Ionicons name="trash-outline" size={14} color={C.textTertiary} /></Pressable>
             </Pressable>
           );
         })
@@ -577,7 +577,7 @@ export function WorkUpOverviewModal({
         </Pressable>
         <View style={s.cardHeaderLeft}>
           <Ionicons name="time-outline" size={16} color={C.accent} />
-          <Text style={[s.cardTitle, { color: Colors.text }]}>{periodLabel}</Text>
+          <Text style={[s.cardTitle, { color: C.text }]}>{periodLabel}</Text>
         </View>
         <Pressable onPress={() => cyclePeriod(1)} hitSlop={12} style={{ opacity: playTimePeriod === "month" ? 0.2 : 1 }}>
           <Ionicons name="chevron-forward" size={18} color={C.accent} />
@@ -585,11 +585,11 @@ export function WorkUpOverviewModal({
       </View>
       <View style={s.periodDots}>
         {(["today", "week", "month"] as PlayTimePeriod[]).map((p) => (
-          <View key={p} style={[s.periodDot, { backgroundColor: p === playTimePeriod ? C.accent : Colors.surfaceLight }]} />
+          <View key={p} style={[s.periodDot, { backgroundColor: p === playTimePeriod ? C.accent : C.surfaceLight }]} />
         ))}
       </View>
       <View style={s.donutRow}>
-        <DonutChart size={120} strokeWidth={10} segments={[{ value: periodData.beat || 0.01, color: BEAT_COLOR }, { value: periodData.bar || 0.01, color: BAR_COLOR }]} bgColor={Colors.surfaceLight}>
+        <DonutChart size={120} strokeWidth={10} segments={[{ value: periodData.beat || 0.01, color: BEAT_COLOR }, { value: periodData.bar || 0.01, color: BAR_COLOR }]} bgColor={C.surfaceLight}>
           <Text style={[s.donutCenter, { color: C.accent }]}>{formatMinutes(periodData.total)}</Text>
           <Text style={s.donutUnit}>{t("workUp", "goalUnit")}</Text>
         </DonutChart>
@@ -634,9 +634,9 @@ export function WorkUpOverviewModal({
       <Pressable style={[s.card, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]} onPress={() => setShowYearlySummary(true)}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <Ionicons name="trophy-outline" size={20} color="#FFD700" />
-          <Text style={[s.cardTitle, { color: Colors.text }]}>{new Date().getFullYear() - 1} {t("workUp", "yearInReview")}</Text>
+          <Text style={[s.cardTitle, { color: C.text }]}>{new Date().getFullYear() - 1} {t("workUp", "yearInReview")}</Text>
         </View>
-        <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
+        <Ionicons name="chevron-forward" size={18} color={C.textSecondary} />
       </Pressable>
     ) : null
   );
@@ -646,9 +646,9 @@ export function WorkUpOverviewModal({
       <Pressable style={s.cardHeader} onPress={() => setShowDetails(!showDetails)}>
         <View style={s.cardHeaderLeft}>
           <MaterialCommunityIcons name="format-list-bulleted" size={16} color={C.accent} />
-          <Text style={[s.cardTitle, { color: Colors.text }]}>{t("workUp", "sessionDetails")}</Text>
+          <Text style={[s.cardTitle, { color: C.text }]}>{t("workUp", "sessionDetails")}</Text>
         </View>
-        <Ionicons name={showDetails ? "chevron-up" : "chevron-down"} size={18} color={Colors.textSecondary} />
+        <Ionicons name={showDetails ? "chevron-up" : "chevron-down"} size={18} color={C.textSecondary} />
       </Pressable>
       {showDetails && (
         <View style={s.detailsWrap}>
@@ -686,10 +686,10 @@ export function WorkUpOverviewModal({
           bounces={false}
           onStartShouldSetResponder={() => true}
         >
-          <Pressable style={[s.sheet, { backgroundColor: Colors.surface }]} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={[s.sheet, { backgroundColor: C.surface }]} onPress={(e) => e.stopPropagation()}>
 
             <View style={s.header}>
-              <Text style={s.title}>{t("workUp", "title")}</Text>
+              <Text style={[s.title, { color: C.text }]}>{t("workUp", "title")}</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                 {loggingEnabled && (
                   <Pressable onPress={() => setShowShareModal(true)} hitSlop={12}>
@@ -697,14 +697,14 @@ export function WorkUpOverviewModal({
                   </Pressable>
                 )}
                 <Pressable onPress={onClose} hitSlop={12}>
-                  <Ionicons name="close" size={22} color={Colors.textSecondary} />
+                  <Ionicons name="close" size={22} color={C.textSecondary} />
                 </Pressable>
               </View>
             </View>
 
             {!loggingEnabled ? (
               <View style={s.disabledWrap}>
-                <MaterialCommunityIcons name="chart-line" size={48} color={Colors.textTertiary} />
+                <MaterialCommunityIcons name="chart-line" size={48} color={C.textTertiary} />
                 <Text style={s.disabledText}>{t("workUp", "enableLogging")}</Text>
               </View>
             ) : (
@@ -750,7 +750,7 @@ export function WorkUpOverviewModal({
           <View style={[shareStyles.container, { paddingTop: (insets.top || webTopInset) + 10, paddingBottom: insets.bottom + 10 }]}>
             <View style={shareStyles.topBar}>
               <Pressable onPress={() => setShowShareModal(false)} hitSlop={12}>
-                <Ionicons name="close" size={24} color={Colors.text} />
+                <Ionicons name="close" size={24} color={C.text} />
               </Pressable>
               <Text style={shareStyles.topTitle}>{t("workUp", "shareSummary")}</Text>
               <Pressable onPress={handleShare} disabled={shareCapturing} style={[shareStyles.shareBtn, { backgroundColor: C.accent }]}>
@@ -764,7 +764,7 @@ export function WorkUpOverviewModal({
 
             <ScrollView contentContainerStyle={shareStyles.scrollContent} showsVerticalScrollIndicator={false}>
               <View ref={shareRef} collapsable={false} style={shareStyles.cardOuter}>
-                <View style={[shareStyles.card, { backgroundColor: shareBgUri ? "transparent" : Colors.background }]}>
+                <View style={[shareStyles.card, { backgroundColor: shareBgUri ? "transparent" : C.background }]}>
                   {shareBgUri && (
                     <Image source={{ uri: shareBgUri }} style={shareStyles.bgImage} blurRadius={2} />
                   )}
@@ -889,18 +889,18 @@ export function WorkUpOverviewModal({
                     {shareBgUri ? (
                       <Image source={{ uri: shareBgUri }} style={shareStyles.bgPreview} />
                     ) : (
-                      <View style={[shareStyles.bgPreview, { backgroundColor: Colors.surfaceLight }]}>
-                        <Ionicons name="image-outline" size={14} color={Colors.textTertiary} />
+                      <View style={[shareStyles.bgPreview, { backgroundColor: C.surfaceLight }]}>
+                        <Ionicons name="image-outline" size={14} color={C.textTertiary} />
                       </View>
                     )}
                     <Text style={[shareStyles.bgChipText, shareBgUri ? { color: C.accent } : {}]}>{t("workUp", "shareCustomImage")}</Text>
                   </Pressable>
                   {shareBgUri && (
                     <Pressable
-                      style={[shareStyles.bgChip, { borderColor: Colors.border }]}
+                      style={[shareStyles.bgChip, { borderColor: C.border }]}
                       onPress={() => setShareBgUri(null)}
                     >
-                      <View style={[shareStyles.bgPreview, { backgroundColor: Colors.background }]} />
+                      <View style={[shareStyles.bgPreview, { backgroundColor: C.background }]} />
                       <Text style={shareStyles.bgChipText}>{t("workUp", "shareReset")}</Text>
                     </Pressable>
                   )}
@@ -914,12 +914,12 @@ export function WorkUpOverviewModal({
       {/* ── Yearly Summary Modal ── */}
       <Modal visible={showYearlySummary} animationType="fade" transparent onRequestClose={() => setShowYearlySummary(false)} statusBarTranslucent>
         <Pressable style={yearStyles.overlay} onPress={() => setShowYearlySummary(false)}>
-          <Pressable style={[yearStyles.card, { backgroundColor: Colors.surface }]} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={[yearStyles.card, { backgroundColor: C.surface }]} onPress={(e) => e.stopPropagation()}>
             <View style={yearStyles.header}>
               <Ionicons name="trophy" size={28} color="#FFD700" />
               <Text style={yearStyles.title}>{new Date().getFullYear() - 1} {t("workUp", "yearInReview")}</Text>
               <Pressable onPress={() => setShowYearlySummary(false)} hitSlop={12}>
-                <Ionicons name="close" size={22} color={Colors.textSecondary} />
+                <Ionicons name="close" size={22} color={C.textSecondary} />
               </Pressable>
             </View>
 

@@ -591,9 +591,9 @@ export function StopwatchTimer({
 
   const handleStatusColor = () => {
     if (state === "countdown") return C.accent;
-    if (state === "running") return Colors.success;
-    if (state === "finishing") return Colors.danger;
-    return Colors.textTertiary;
+    if (state === "running") return C.success;
+    if (state === "finishing") return C.danger;
+    return C.textTertiary;
   };
 
   if (isLandscape) {
@@ -606,7 +606,7 @@ export function StopwatchTimer({
             onPress={() => switchMode("stopwatch")}
             style={[styles.landscapeTab, mode === "stopwatch" && { backgroundColor: C.accentDim }]}
           >
-            <MaterialCommunityIcons name="timer-outline" size={12} color={mode === "stopwatch" ? C.accent : Colors.textTertiary} />
+            <MaterialCommunityIcons name="timer-outline" size={12} color={mode === "stopwatch" ? C.accent : C.textTertiary} />
             <Text style={[styles.landscapeTabText, mode === "stopwatch" && { color: C.accent }]}>
               {t("stopwatchTimer", "stopwatch")}
             </Text>
@@ -615,7 +615,7 @@ export function StopwatchTimer({
             onPress={() => switchMode("timer")}
             style={[styles.landscapeTab, mode === "timer" && { backgroundColor: C.accentDim }]}
           >
-            <MaterialCommunityIcons name="av-timer" size={12} color={mode === "timer" ? C.accent : Colors.textTertiary} />
+            <MaterialCommunityIcons name="av-timer" size={12} color={mode === "timer" ? C.accent : C.textTertiary} />
             <Text style={[styles.landscapeTabText, mode === "timer" && { color: C.accent }]}>
               {t("stopwatchTimer", "timer")}
             </Text>
@@ -643,13 +643,13 @@ export function StopwatchTimer({
             </Animated.Text>
           ) : mode === "stopwatch" ? (
             <View style={{ flexDirection: "row", alignItems: "center" }}>
-              {state === "running" && <Animated.View style={[{ width: moderateScale(5, 0.3), height: moderateScale(5, 0.3), borderRadius: 2.5, backgroundColor: Colors.success, marginRight: moderateScale(4, 0.3) }, runningDotStyle]} />}
-              {state === "finishing" && <Animated.View style={[{ width: moderateScale(5, 0.3), height: moderateScale(5, 0.3), borderRadius: 2.5, backgroundColor: Colors.danger, marginRight: moderateScale(4, 0.3) }, finishingStyle]} />}
-              <Text style={[styles.landscapeTime, { color: Colors.text }, state === "finishing" && { color: Colors.danger }]} numberOfLines={1}>{swTime.main}</Text>
+              {state === "running" && <Animated.View style={[{ width: moderateScale(5, 0.3), height: moderateScale(5, 0.3), borderRadius: 2.5, backgroundColor: C.success, marginRight: moderateScale(4, 0.3) }, runningDotStyle]} />}
+              {state === "finishing" && <Animated.View style={[{ width: moderateScale(5, 0.3), height: moderateScale(5, 0.3), borderRadius: 2.5, backgroundColor: C.danger, marginRight: moderateScale(4, 0.3) }, finishingStyle]} />}
+              <Text style={[styles.landscapeTime, { color: C.text }, state === "finishing" && { color: C.danger }]} numberOfLines={1}>{swTime.main}</Text>
             </View>
           ) : (
             <Pressable onPress={state === "idle" ? startEditingTimer : undefined} disabled={state !== "idle"}>
-              <Text style={[styles.landscapeTime, { color: Colors.text }, state === "finishing" && { color: Colors.danger }]} numberOfLines={1}>
+              <Text style={[styles.landscapeTime, { color: C.text }, state === "finishing" && { color: C.danger }]} numberOfLines={1}>
                 {timerDisplay}
               </Text>
             </Pressable>
@@ -665,17 +665,17 @@ export function StopwatchTimer({
           {state === "running" && (
             <Pressable
               onPress={mode === "stopwatch" ? pauseStopwatch : pauseTimer}
-              style={[styles.landscapeBtn, { backgroundColor: Colors.surfaceLight, borderColor: Colors.border, width: moderateScale(28, 0.4), height: moderateScale(20, 0.4), borderRadius: moderateScale(6, 0.3) }]}
+              style={[styles.landscapeBtn, { backgroundColor: C.surfaceLight, borderColor: C.border, width: moderateScale(28, 0.4), height: moderateScale(20, 0.4), borderRadius: moderateScale(6, 0.3) }]}
             >
-              <Ionicons name="pause" size={moderateScale(10, 0.3)} color={Colors.textSecondary} />
+              <Ionicons name="pause" size={moderateScale(10, 0.3)} color={C.textSecondary} />
             </Pressable>
           )}
           {state === "finishing" && (
             <Pressable
               onPress={mode === "stopwatch" ? resetStopwatch : resetTimer}
-              style={[styles.landscapeBtn, { backgroundColor: "#3a1a1a", borderColor: Colors.danger, width: moderateScale(28, 0.4), height: moderateScale(20, 0.4), borderRadius: moderateScale(6, 0.3) }]}
+              style={[styles.landscapeBtn, { backgroundColor: "#3a1a1a", borderColor: C.danger, width: moderateScale(28, 0.4), height: moderateScale(20, 0.4), borderRadius: moderateScale(6, 0.3) }]}
             >
-              <Ionicons name="stop" size={moderateScale(10, 0.3)} color={Colors.danger} />
+              <Ionicons name="stop" size={moderateScale(10, 0.3)} color={C.danger} />
             </Pressable>
           )}
           {state === "paused" && (
@@ -688,18 +688,18 @@ export function StopwatchTimer({
               </Pressable>
               <Pressable
                 onPress={mode === "stopwatch" ? resetStopwatch : resetTimer}
-                style={[styles.landscapeBtn, { backgroundColor: Colors.surfaceLight, borderColor: Colors.border, width: moderateScale(28, 0.4), height: moderateScale(20, 0.4), borderRadius: moderateScale(6, 0.3) }]}
+                style={[styles.landscapeBtn, { backgroundColor: C.surfaceLight, borderColor: C.border, width: moderateScale(28, 0.4), height: moderateScale(20, 0.4), borderRadius: moderateScale(6, 0.3) }]}
               >
-                <Ionicons name="refresh" size={moderateScale(10, 0.3)} color={Colors.textSecondary} />
+                <Ionicons name="refresh" size={moderateScale(10, 0.3)} color={C.textSecondary} />
               </Pressable>
             </>
           )}
           {state === "countdown" && (
             <Pressable
               onPress={mode === "stopwatch" ? resetStopwatch : resetTimer}
-              style={[styles.landscapeBtn, { backgroundColor: Colors.surfaceLight, borderColor: Colors.border, width: moderateScale(28, 0.4), height: moderateScale(20, 0.4), borderRadius: moderateScale(6, 0.3) }]}
+              style={[styles.landscapeBtn, { backgroundColor: C.surfaceLight, borderColor: C.border, width: moderateScale(28, 0.4), height: moderateScale(20, 0.4), borderRadius: moderateScale(6, 0.3) }]}
             >
-              <Ionicons name="close" size={moderateScale(10, 0.3)} color={Colors.textSecondary} />
+              <Ionicons name="close" size={moderateScale(10, 0.3)} color={C.textSecondary} />
             </Pressable>
           )}
         </View>
@@ -723,7 +723,7 @@ export function StopwatchTimer({
           style={[styles.drawerWrapper, panelStyle]}
           {...drawerPanResponder.panHandlers}
         >
-          <View style={styles.panel}>
+          <View style={[styles.panel, { backgroundColor: C.surface, borderColor: C.border }]}>
             <View style={styles.tabRow}>
               <Pressable
                 onPress={() => switchMode("stopwatch")}
@@ -737,9 +737,9 @@ export function StopwatchTimer({
                 <MaterialCommunityIcons
                   name="timer-outline"
                   size={14}
-                  color={mode === "stopwatch" ? C.accent : Colors.textTertiary}
+                  color={mode === "stopwatch" ? C.accent : C.textTertiary}
                 />
-                <Text style={[styles.tabText, mode === "stopwatch" && styles.tabTextActive, mode === "stopwatch" && { color: C.accent }]}>
+                <Text style={[styles.tabText, { color: C.textTertiary }, mode === "stopwatch" && styles.tabTextActive, mode === "stopwatch" && { color: C.accent }]}>
                   {t("stopwatchTimer", "stopwatch")}
                 </Text>
               </Pressable>
@@ -755,15 +755,15 @@ export function StopwatchTimer({
                 <MaterialCommunityIcons
                   name="av-timer"
                   size={14}
-                  color={mode === "timer" ? C.accent : Colors.textTertiary}
+                  color={mode === "timer" ? C.accent : C.textTertiary}
                 />
-                <Text style={[styles.tabText, mode === "timer" && styles.tabTextActive, mode === "timer" && { color: C.accent }]}>
+                <Text style={[styles.tabText, { color: C.textTertiary }, mode === "timer" && styles.tabTextActive, mode === "timer" && { color: C.accent }]}>
                   {t("stopwatchTimer", "timer")}
                 </Text>
               </Pressable>
             </View>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: C.border }]} />
 
             {mode === "stopwatch"
               ? renderStopwatchContent()
@@ -774,8 +774,9 @@ export function StopwatchTimer({
             onPress={togglePanel}
             style={({ pressed }) => [
               styles.handle,
+              { backgroundColor: C.surface, borderColor: C.border },
               open && styles.handleOpen,
-              open && { borderColor: "transparent" },
+              open && { backgroundColor: C.surfaceLight, borderColor: "transparent" },
               pressed && styles.handlePressed,
             ]}
             testID="panel-toggle"
@@ -795,14 +796,14 @@ export function StopwatchTimer({
                     <Animated.View
                       style={[
                         styles.thermoBreakShard,
-                        { backgroundColor: Colors.danger },
+                        { backgroundColor: C.danger },
                         thermoBreakTopStyle,
                       ]}
                     />
                     <Animated.View
                       style={[
                         styles.thermoBreakShard,
-                        { backgroundColor: Colors.danger, top: 26 },
+                        { backgroundColor: C.danger, top: 26 },
                         thermoBreakBottomStyle,
                       ]}
                     />
@@ -814,7 +815,7 @@ export function StopwatchTimer({
                     style={[
                       styles.thermoFill,
                       {
-                        backgroundColor: state === "finishing" ? Colors.danger : C.accent,
+                        backgroundColor: state === "finishing" ? C.danger : C.accent,
                       },
                       thermoFillStyle,
                     ]}
@@ -824,7 +825,7 @@ export function StopwatchTimer({
                   style={[
                     styles.thermoBulb,
                     {
-                      backgroundColor: state === "finishing" ? Colors.danger : C.accent,
+                      backgroundColor: state === "finishing" ? C.danger : C.accent,
                     },
                   ]}
                 >
@@ -832,7 +833,7 @@ export function StopwatchTimer({
                     style={[
                       styles.thermoBulbInner,
                       {
-                        backgroundColor: state === "finishing" ? Colors.danger : C.accent,
+                        backgroundColor: state === "finishing" ? C.danger : C.accent,
                       },
                     ]}
                   />
@@ -864,7 +865,7 @@ export function StopwatchTimer({
             <Animated.Text style={[{ fontFamily: "SpaceGrotesk_700Bold", fontSize: moderateScale(36, 0.3), color: C.accent, letterSpacing: 2 }, runningDotStyle]}>
               {countdownLeft}
             </Animated.Text>
-            <Text style={{ fontFamily: "SpaceGrotesk_400Regular", fontSize: moderateScale(10, 0.3), color: Colors.textTertiary, letterSpacing: 1 }}>준비 중...</Text>
+            <Text style={{ fontFamily: "SpaceGrotesk_400Regular", fontSize: moderateScale(10, 0.3), color: C.textTertiary, letterSpacing: 1 }}>준비 중...</Text>
           </View>
         )}
         {state !== "countdown" && (
@@ -876,8 +877,8 @@ export function StopwatchTimer({
               {state === "running" && (
                 <Animated.View style={[styles.runningDot, runningDotStyle]} />
               )}
-              <Text style={[styles.timeText, state === "finishing" && styles.finishingText]}>{main}</Text>
-              <Text style={[styles.fractionText, state === "finishing" && { color: Colors.danger }]}>{fraction}</Text>
+              <Text style={[styles.timeText, { color: C.text }, state === "finishing" && styles.finishingText]}>{main}</Text>
+              <Text style={[styles.fractionText, { color: C.textTertiary }, state === "finishing" && { color: C.danger }]}>{fraction}</Text>
             </View>
 
             {state === "finishing" && (
@@ -893,7 +894,7 @@ export function StopwatchTimer({
               style={({ pressed }) => [styles.controlButton, styles.startButton, { backgroundColor: C.accent }, pressed && styles.buttonPressed]}
               testID="stopwatch-start"
             >
-              <Ionicons name="play" size={16} color={Colors.background} />
+              <Ionicons name="play" size={16} color={C.background} />
             </Pressable>
           )}
           {state === "running" && (
@@ -902,7 +903,7 @@ export function StopwatchTimer({
               style={({ pressed }) => [styles.controlButton, styles.pauseButton, pressed && styles.buttonPressed]}
               testID="stopwatch-pause"
             >
-              <Ionicons name="pause" size={16} color={Colors.text} />
+              <Ionicons name="pause" size={16} color={C.text} />
             </Pressable>
           )}
           {state === "paused" && (
@@ -912,14 +913,14 @@ export function StopwatchTimer({
                 style={({ pressed }) => [styles.controlButton, styles.resetButton, pressed && styles.buttonPressed]}
                 testID="stopwatch-reset"
               >
-                <Feather name="rotate-ccw" size={14} color={Colors.danger} />
+                <Feather name="rotate-ccw" size={14} color={C.danger} />
               </Pressable>
               <Pressable
                 onPress={startStopwatch}
                 style={({ pressed }) => [styles.controlButton, styles.startButton, { backgroundColor: C.accent }, pressed && styles.buttonPressed]}
                 testID="stopwatch-resume"
               >
-                <Ionicons name="play" size={16} color={Colors.background} />
+                <Ionicons name="play" size={16} color={C.background} />
               </Pressable>
             </>
           )}
@@ -966,7 +967,7 @@ export function StopwatchTimer({
                 pressed && styles.buttonPressed,
               ]}
             >
-              <Feather name="edit-2" size={11} color={editingTimer ? C.accent : Colors.textTertiary} />
+              <Feather name="edit-2" size={11} color={editingTimer ? C.accent : C.textTertiary} />
             </Pressable>
           </View>
         )}
@@ -981,7 +982,7 @@ export function StopwatchTimer({
                 keyboardType="number-pad"
                 maxLength={2}
                 placeholder="0"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={C.textTertiary}
                 autoFocus
                 selectTextOnFocus
                 testID="timer-min-input"
@@ -997,7 +998,7 @@ export function StopwatchTimer({
                 keyboardType="number-pad"
                 maxLength={2}
                 placeholder="0"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={C.textTertiary}
                 selectTextOnFocus
                 testID="timer-sec-input"
               />
@@ -1007,13 +1008,13 @@ export function StopwatchTimer({
               onPress={commitTimerEdit}
               style={({ pressed }) => [styles.timerEditConfirm, { backgroundColor: C.accent }, pressed && { opacity: 0.7 }]}
             >
-              <Ionicons name="checkmark" size={16} color={Colors.background} />
+              <Ionicons name="checkmark" size={16} color={C.background} />
             </Pressable>
             <Pressable
               onPress={cancelTimerEdit}
               style={({ pressed }) => [styles.timerEditCancel, pressed && { opacity: 0.7 }]}
             >
-              <Ionicons name="close" size={14} color={Colors.textTertiary} />
+              <Ionicons name="close" size={14} color={C.textTertiary} />
             </Pressable>
           </View>
         )}
@@ -1023,7 +1024,7 @@ export function StopwatchTimer({
             <Animated.Text style={[{ fontFamily: "SpaceGrotesk_700Bold", fontSize: 36, color: C.accent, letterSpacing: 2 }, runningDotStyle]}>
               {countdownLeft}
             </Animated.Text>
-            <Text style={{ fontFamily: "SpaceGrotesk_400Regular", fontSize: 10, color: Colors.textTertiary, letterSpacing: 1 }}>준비 중...</Text>
+            <Text style={{ fontFamily: "SpaceGrotesk_400Regular", fontSize: 10, color: C.textTertiary, letterSpacing: 1 }}>준비 중...</Text>
           </View>
         )}
 
@@ -1038,6 +1039,7 @@ export function StopwatchTimer({
             <Animated.Text
               style={[
                 styles.timeText,
+                { color: C.text },
                 state === "finishing" && styles.finishingText,
                 state === "finishing" ? finishingStyle : undefined,
               ]}
@@ -1054,7 +1056,7 @@ export function StopwatchTimer({
                 styles.progressBarFill,
                 {
                   width: `${progress * 100}%` as any,
-                  backgroundColor: state === "finishing" ? Colors.danger : C.accent,
+                  backgroundColor: state === "finishing" ? C.danger : C.accent,
                 },
               ]}
             />
@@ -1072,7 +1074,7 @@ export function StopwatchTimer({
               style={({ pressed }) => [styles.controlButton, styles.startButton, { backgroundColor: C.accent }, pressed && styles.buttonPressed]}
               testID="timer-start"
             >
-              <Ionicons name="play" size={16} color={Colors.background} />
+              <Ionicons name="play" size={16} color={C.background} />
             </Pressable>
           )}
           {state === "running" && (
@@ -1081,7 +1083,7 @@ export function StopwatchTimer({
               style={({ pressed }) => [styles.controlButton, styles.pauseButton, pressed && styles.buttonPressed]}
               testID="timer-pause"
             >
-              <Ionicons name="pause" size={16} color={Colors.text} />
+              <Ionicons name="pause" size={16} color={C.text} />
             </Pressable>
           )}
           {state === "paused" && (
@@ -1091,14 +1093,14 @@ export function StopwatchTimer({
                 style={({ pressed }) => [styles.controlButton, styles.resetButton, pressed && styles.buttonPressed]}
                 testID="timer-reset"
               >
-                <Feather name="rotate-ccw" size={14} color={Colors.danger} />
+                <Feather name="rotate-ccw" size={14} color={C.danger} />
               </Pressable>
               <Pressable
                 onPress={startTimer}
                 style={({ pressed }) => [styles.controlButton, styles.startButton, { backgroundColor: C.accent }, pressed && styles.buttonPressed]}
                 testID="timer-resume"
               >
-                <Ionicons name="play" size={16} color={Colors.background} />
+                <Ionicons name="play" size={16} color={C.background} />
               </Pressable>
             </>
           )}

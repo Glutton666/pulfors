@@ -57,6 +57,7 @@ function formatDate(ts: number) {
 }
 
 function BeatPreview({ beatTypes, size = 10 }: { beatTypes: BeatType[]; size?: number }) {
+  const { colors: C } = useTheme();
   return (
     <View style={{ flexDirection: "row", gap: 3 }}>
       {beatTypes.map((t, i) => (
@@ -66,7 +67,7 @@ function BeatPreview({ beatTypes, size = 10 }: { beatTypes: BeatType[]; size?: n
             width: size,
             height: size,
             borderRadius: size / 2,
-            backgroundColor: BEAT_COLORS[t] || Colors.textSecondary,
+            backgroundColor: BEAT_COLORS[t] || C.textSecondary,
           }}
         />
       ))}
@@ -103,6 +104,7 @@ function SwipeableEntry({
   openItemId: string | null;
   setOpenItemId: (id: string | null) => void;
 }) {
+  const { colors: C } = useTheme();
   const { t } = useLanguage();
   const translateX = useRef(new Animated.Value(0)).current;
   const isOpenRef = useRef(false);
@@ -204,7 +206,7 @@ function SwipeableEntry({
           <Text style={styles.swipeActionText}>{t("practiceBook", "edit")}</Text>
         </Pressable>
         <Pressable
-          style={[styles.swipeAction, { backgroundColor: Colors.danger }]}
+          style={[styles.swipeAction, { backgroundColor: C.danger }]}
           onPress={() => {
             Animated.spring(translateX, { toValue: 0, useNativeDriver: true, friction: 8 }).start();
             isOpenRef.current = false;
@@ -258,7 +260,7 @@ function SwipeableEntry({
             {isNoteMode ? (
               <>
                 <View style={styles.detailChip}>
-                  <MaterialCommunityIcons name="playlist-music" size={12} color={Colors.textSecondary} />
+                  <MaterialCommunityIcons name="playlist-music" size={12} color={C.textSecondary} />
                   <Text style={[styles.detailValue, { color: accentColor }]}>
                     {(item.noteQueueEntries || item.noteQueueEntryIds || []).length}
                   </Text>
@@ -268,7 +270,7 @@ function SwipeableEntry({
                   <Ionicons
                     name={item.notePlayMode === "loop" ? "infinite" : item.notePlayMode === "random" ? "shuffle" : "play"}
                     size={12}
-                    color={Colors.textSecondary}
+                    color={C.textSecondary}
                   />
                   <Text style={styles.detailUnit}>{playModeText}</Text>
                 </View>
@@ -291,12 +293,12 @@ function SwipeableEntry({
                   <Ionicons
                     name={clockMode === "timer" ? "timer-outline" : "infinite"}
                     size={12}
-                    color={Colors.textSecondary}
+                    color={C.textSecondary}
                   />
                   <Text style={styles.detailUnit}>{playModeText}</Text>
                 </View>
                 <View style={styles.detailChip}>
-                  <Ionicons name="time-outline" size={12} color={Colors.textSecondary} />
+                  <Ionicons name="time-outline" size={12} color={C.textSecondary} />
                   <Text style={styles.detailUnit}>{formatTime(onePlaySeconds)}</Text>
                 </View>
               </>
@@ -588,6 +590,7 @@ export function PracticeBookModal({
           {
             paddingTop: (insets.top || webTopInset) + 8,
             paddingBottom: (insets.bottom || webBottomInset) + 8,
+            backgroundColor: C.background,
           },
         ]}
       >
@@ -598,7 +601,7 @@ export function PracticeBookModal({
               size={22}
               color={C.accent}
             />
-            <Text style={styles.title}>{t("practiceBook", "title")}</Text>
+            <Text style={[styles.title, { color: C.text }]}>{t("practiceBook", "title")}</Text>
           </View>
           <View style={styles.headerRight}>
             <Pressable
@@ -613,7 +616,7 @@ export function PracticeBookModal({
               />
             </Pressable>
             <Pressable onPress={onClose} hitSlop={10}>
-              <Ionicons name="close" size={24} color={Colors.textSecondary} />
+              <Ionicons name="close" size={24} color={C.textSecondary} />
             </Pressable>
           </View>
         </View>
@@ -628,7 +631,7 @@ export function PracticeBookModal({
                   value={saveLabel}
                   onChangeText={setSaveLabel}
                   placeholder={t("practiceBook", "namePlaceholder")}
-                  placeholderTextColor={Colors.textTertiary}
+                  placeholderTextColor={C.textTertiary}
                   onSubmitEditing={handleSave}
                   autoFocus
                 />
@@ -710,7 +713,7 @@ export function PracticeBookModal({
             <MaterialCommunityIcons
               name="notebook-outline"
               size={48}
-              color={Colors.textTertiary}
+              color={C.textTertiary}
             />
             <Text style={styles.emptyText}>{t("practiceBook", "emptyTitle")}</Text>
             <Text style={styles.emptySubtext}>

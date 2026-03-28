@@ -104,7 +104,7 @@ export default function MetronomeScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isLandscape = windowWidth > windowHeight;
-  const { setThemeColor, setCustomHex, colors: C } = useTheme();
+  const { setThemeColor, setCustomHex, colors: C, themeMode } = useTheme();
   const { language, t } = useLanguage();
   const languageRef = useRef(language);
   useEffect(() => { languageRef.current = language; }, [language]);
@@ -3127,17 +3127,24 @@ export default function MetronomeScreen() {
 
   if (!isLoaded) {
     return (
-      <View style={[styles.screen, { backgroundColor: Colors.background }]} />
+      <View style={[styles.screen, { backgroundColor: C.background }]} />
     );
   }
 
   return (
     <View style={styles.screen}>
-      <StatusBar style="light" />
+      <StatusBar style={themeMode === "day" ? "dark" : "light"} />
       <LinearGradient
-        colors={[Colors.background, "#0A0E14", Colors.background]}
+        colors={themeMode === "day" ? [C.background, C.background] : [C.background, "#0A0E14", C.background]}
         style={StyleSheet.absoluteFill}
       />
+      {themeMode === "day" && (
+        <LinearGradient
+          colors={["rgba(255,255,255,0.6)", "rgba(255,255,255,0.2)", "transparent"]}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, height: 180, zIndex: 0 }}
+          pointerEvents="none"
+        />
+      )}
 
       <Animated.View
         style={[
@@ -3154,7 +3161,7 @@ export default function MetronomeScreen() {
         style={[
           StyleSheet.absoluteFill,
           {
-            backgroundColor: halfTime ? C.accent : Colors.text,
+            backgroundColor: halfTime ? C.accent : C.text,
             pointerEvents: "none" as const,
             zIndex: 9999,
             alignItems: "center",
@@ -3166,7 +3173,7 @@ export default function MetronomeScreen() {
         <Text style={{
           fontFamily: "SpaceGrotesk_700Bold",
           fontSize: 96,
-          color: Colors.background,
+          color: C.background,
           letterSpacing: 4,
         }}>
           {halfTime ? "1/2" : "1/1"}
@@ -3177,6 +3184,7 @@ export default function MetronomeScreen() {
       <Pressable
         style={[
           styles.menuButton,
+          { backgroundColor: C.surface, borderColor: C.border },
           isLandscape
             ? { left: 20, right: "auto" as any, top: (insets.top || webTopInset) }
             : { right: moderateScale(20, 0.3), top: (insets.top || webTopInset) + 12 },
@@ -3185,14 +3193,14 @@ export default function MetronomeScreen() {
         hitSlop={8}
         testID="menu-button"
       >
-        <Ionicons name="menu" size={22} color={Colors.textSecondary} />
+        <Ionicons name="menu" size={22} color={C.textSecondary} />
       </Pressable>
       )}
 
       {showMenu && (
         <Modal transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
           <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
-            <View style={[styles.menuDropdown, isLandscape ? { left: moderateScale(20, 0.3), right: "auto" as any, top: (insets.top || webTopInset) + moderateScale(40, 0.3) } : { top: (insets.top || webTopInset) + 52 }]}>
+            <View style={[styles.menuDropdown, { backgroundColor: C.surface, borderColor: C.border }, isLandscape ? { left: moderateScale(20, 0.3), right: "auto" as any, top: (insets.top || webTopInset) + moderateScale(40, 0.3) } : { top: (insets.top || webTopInset) + 52 }]}>
               <Pressable
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
@@ -3200,10 +3208,10 @@ export default function MetronomeScreen() {
                   setShowSettings(true);
                 }}
               >
-                <Ionicons name="settings-outline" size={moderateScale(18, 0.3)} color={Colors.textSecondary} />
-                <Text style={styles.menuItemText}>{t("main", "menuSettings")}</Text>
+                <Ionicons name="settings-outline" size={moderateScale(18, 0.3)} color={C.textSecondary} />
+                <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuSettings")}</Text>
               </Pressable>
-              <View style={styles.menuDivider} />
+              <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
               <Pressable
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
@@ -3213,9 +3221,9 @@ export default function MetronomeScreen() {
                 }}
               >
                 <MaterialCommunityIcons name="waveform" size={moderateScale(18, 0.3)} color={C.accent} />
-                <Text style={styles.menuItemText}>{t("main", "menuSignalGenerator")}</Text>
+                <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuSignalGenerator")}</Text>
               </Pressable>
-              <View style={styles.menuDivider} />
+              <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
               <Pressable
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
@@ -3224,9 +3232,9 @@ export default function MetronomeScreen() {
                 }}
               >
                 <MaterialCommunityIcons name="chart-line" size={moderateScale(18, 0.3)} color={C.accent} />
-                <Text style={styles.menuItemText}>{t("main", "menuWorkUp")}</Text>
+                <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuWorkUp")}</Text>
               </Pressable>
-              <View style={styles.menuDivider} />
+              <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
               <Pressable
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
@@ -3236,7 +3244,7 @@ export default function MetronomeScreen() {
                 }}
               >
                 <MaterialCommunityIcons name="notebook-outline" size={moderateScale(18, 0.3)} color={C.accent} />
-                <Text style={styles.menuItemText}>{t("main", "menuPracticeNote")}</Text>
+                <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuPracticeNote")}</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -3312,7 +3320,7 @@ export default function MetronomeScreen() {
         style={[{
           position: "absolute",
           top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: Colors.danger,
+          backgroundColor: C.danger,
           zIndex: 9998,
         }, fullScreenResetFlashStyle]}
       />
@@ -3413,7 +3421,7 @@ export default function MetronomeScreen() {
             return (
               <Pressable
                 key={`popup-${goal.id}`}
-                style={[styles.goalPopup, { borderColor: goalColor, backgroundColor: Colors.surface }]}
+                style={[styles.goalPopup, { borderColor: goalColor, backgroundColor: C.surface }]}
                 onPress={() => dismissGoalPopup(goal.id)}
               >
                 <Ionicons name="checkmark-circle" size={22} color={goalColor} />
@@ -3421,7 +3429,7 @@ export default function MetronomeScreen() {
                   <Text style={[styles.goalPopupTitle, { color: goalColor }]}>{goal.label} {t("main", "goalComplete")}</Text>
                   <Text style={styles.goalPopupSub}>{t("main", "tapToDismiss")}</Text>
                 </View>
-                <Ionicons name="close" size={16} color={Colors.textTertiary} />
+                <Ionicons name="close" size={16} color={C.textTertiary} />
               </Pressable>
             );
           })}
@@ -3619,7 +3627,6 @@ export default function MetronomeScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   content: {
     flex: 1,

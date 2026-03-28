@@ -556,13 +556,13 @@ export function NoteRecorderModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <Pressable style={styles.overlay} onPress={handleClose}>
-        <Pressable style={[styles.container, { backgroundColor: Colors.surface }]} onPress={(e) => e.stopPropagation()}>
+        <Pressable style={[styles.container, { backgroundColor: C.surface }]} onPress={(e) => e.stopPropagation()}>
           <View style={styles.header}>
-            <Text style={styles.title}>
+            <Text style={[styles.title, { color: C.text }]}>
               {t("noteRecorder", "beatNote").replace("{0}", String(beatIndex + 1)).replace("{1}", String(subIndex + 1))}
             </Text>
             <Pressable onPress={handleClose} hitSlop={12}>
-              <Ionicons name="close" size={22} color={Colors.textSecondary} />
+              <Ionicons name="close" size={22} color={C.textSecondary} />
             </Pressable>
           </View>
 
@@ -573,15 +573,15 @@ export function NoteRecorderModal({
                   style={[styles.sourceButton, { backgroundColor: C.accent }]}
                   onPress={startCountdown}
                 >
-                  <Ionicons name="mic" size={24} color={Colors.white} />
+                  <Ionicons name="mic" size={24} color={C.white} />
                   <Text style={styles.sourceButtonText}>{t("noteRecorder", "record")}</Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.sourceButton, { backgroundColor: Colors.surfaceLight }]}
+                  style={[styles.sourceButton, { backgroundColor: C.surfaceLight }]}
                   onPress={handleImportFile}
                 >
-                  <Ionicons name="musical-notes" size={24} color={Colors.text} />
-                  <Text style={[styles.sourceButtonText, { color: Colors.text }]}>{t("noteRecorder", "import")}</Text>
+                  <Ionicons name="musical-notes" size={24} color={C.text} />
+                  <Text style={[styles.sourceButtonText, { color: C.text }]}>{t("noteRecorder", "import")}</Text>
                 </Pressable>
               </View>
               {hasExisting && (
@@ -636,7 +636,7 @@ export function NoteRecorderModal({
                 style={[styles.stopButton, { backgroundColor: "#FF4444" }]}
                 onPress={stopRecording}
               >
-                <Ionicons name="stop" size={24} color={Colors.white} />
+                <Ionicons name="stop" size={24} color={C.white} />
                 <Text style={styles.recordButtonText}>{t("noteRecorder", "stop")}</Text>
               </Pressable>
             </View>
@@ -661,7 +661,7 @@ export function NoteRecorderModal({
                     onSubmitEditing={applyStartTime}
                     keyboardType="decimal-pad"
                     placeholder="0:00.00"
-                    placeholderTextColor={Colors.textTertiary}
+                    placeholderTextColor={C.textTertiary}
                     returnKeyType="done"
                   />
                 </View>
@@ -677,7 +677,7 @@ export function NoteRecorderModal({
                     onSubmitEditing={applyEndTime}
                     keyboardType="decimal-pad"
                     placeholder="0:00.00"
-                    placeholderTextColor={Colors.textTertiary}
+                    placeholderTextColor={C.textTertiary}
                     returnKeyType="done"
                   />
                 </View>
@@ -728,13 +728,13 @@ export function NoteRecorderModal({
               </View>
 
               <View style={styles.nameInputRow}>
-                <Ionicons name="pricetag-outline" size={14} color={Colors.textSecondary} />
+                <Ionicons name="pricetag-outline" size={14} color={C.textSecondary} />
                 <TextInput
                   style={[styles.nameInput, { borderColor: C.accent + "40" }]}
                   value={sampleName}
                   onChangeText={setSampleName}
                   placeholder={t("noteRecorder", "sampleName")}
-                  placeholderTextColor={Colors.textTertiary}
+                  placeholderTextColor={C.textTertiary}
                   returnKeyType="done"
                   maxLength={30}
                 />
@@ -748,7 +748,7 @@ export function NoteRecorderModal({
                   style={[styles.saveBtn, { backgroundColor: C.accent }]}
                   onPress={handleSave}
                 >
-                  <Ionicons name="checkmark" size={18} color={Colors.white} />
+                  <Ionicons name="checkmark" size={18} color={C.white} />
                   <Text style={styles.saveBtnText}>{t("noteRecorder", "save")}</Text>
                 </Pressable>
               </View>

@@ -77,10 +77,10 @@ function DialBeatDot({
   const popScale = useSharedValue(1);
   const beatScale = useSharedValue(1);
   const beatBg = useSharedValue(
-    isMute ? "transparent" : isAccent ? C.accentMuted : Colors.textTertiary
+    isMute ? "transparent" : isAccent ? C.accentMuted : C.textTertiary
   );
   const beatBorder = useSharedValue(
-    isMute ? Colors.textSecondary : "transparent"
+    isMute ? C.textSecondary : "transparent"
   );
   const beatOpacity = useSharedValue(isStrong ? 0.85 : 1);
 
@@ -121,13 +121,13 @@ function DialBeatDot({
             );
           }
           beatBg.value = withTiming("rgba(72, 79, 88, 0.35)", { duration: 50 });
-          beatBorder.value = withTiming(Colors.textSecondary, { duration: 50 });
+          beatBorder.value = withTiming(C.textSecondary, { duration: 50 });
         } else {
           if (activeChanged) {
             beatScale.value = withTiming(1, { duration: 150 });
           }
           beatBg.value = withTiming("transparent", { duration: 150 });
-          beatBorder.value = withTiming(Colors.textSecondary, { duration: 150 });
+          beatBorder.value = withTiming(C.textSecondary, { duration: 150 });
         }
       } else if (active) {
         if (activeChanged) {
@@ -137,7 +137,7 @@ function DialBeatDot({
           );
         }
         beatBg.value = withTiming(
-          isAccent ? accentColor : Colors.text,
+          isAccent ? accentColor : C.text,
           { duration: 50 }
         );
         beatBorder.value = withTiming(isStrong ? accentColor : "transparent", { duration: 50 });
@@ -147,7 +147,7 @@ function DialBeatDot({
           beatScale.value = withTiming(1, { duration: 150 });
         }
         beatBg.value = withTiming(
-          isStrong ? accentColor : isAccent ? accentMutedColor : Colors.textTertiary,
+          isStrong ? accentColor : isAccent ? accentMutedColor : C.textTertiary,
           { duration: 150 }
         );
         beatBorder.value = withTiming(isStrong ? accentColor : "transparent", { duration: 150 });
@@ -191,14 +191,14 @@ function DialBeatDot({
           ]}
         >
           <LinearGradient
-            colors={[Colors.white, C.accent, C.accent]}
+            colors={[C.white, C.accent, C.accent]}
             locations={[0, 0.4, 1]}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}
           >
             <View style={{ width: size - 10, height: size - 10, borderRadius: (size - 10) / 2, backgroundColor: C.accent, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: Colors.white, fontSize: 11, fontWeight: "bold" as const, lineHeight: 13, textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
+              <Text style={{ color: C.white, fontSize: 11, fontWeight: "bold" as const, lineHeight: 13, textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
             </View>
           </LinearGradient>
         </Animated.View>
@@ -213,9 +213,9 @@ function DialBeatDot({
                 ? "transparent"
                 : isAccent
                 ? C.accentMuted
-                : Colors.textTertiary,
+                : C.textTertiary,
               borderWidth: isMute ? 2.5 : 0,
-              borderColor: isMute ? Colors.textSecondary : "transparent",
+              borderColor: isMute ? C.textSecondary : "transparent",
             },
             animatedStyle,
           ]}
@@ -1017,7 +1017,7 @@ export function BeatIndicator({
   }));
 
   const BAR_HEIGHT = 36;
-  const BAR_LINE_COLOR = Colors.textSecondary;
+  const BAR_LINE_COLOR = C.textSecondary;
   const [barContainerHeight, setBarContainerHeight] = useState(0);
   const barGap = 18;
   const rowH = BAR_HEIGHT + 1 + barGap;
@@ -1169,7 +1169,7 @@ export function BeatIndicator({
                       {beat + 1}
                     </Text>
                   ) : isPrimary && blockMid ? (
-                    <Text style={[styles.barBeatLabelText, { color: Colors.textTertiary, opacity: 0.3, fontSize: 9 }]}>
+                    <Text style={[styles.barBeatLabelText, { color: C.textTertiary, opacity: 0.3, fontSize: 9 }]}>
                       {beat + 1}
                     </Text>
                   ) : (
@@ -1178,8 +1178,8 @@ export function BeatIndicator({
                       {
                         color: bType === "strong" ? C.accent
                           : bType === "accent" ? C.accentMuted
-                          : bType === "mute" ? Colors.textTertiary
-                          : Colors.textSecondary,
+                          : bType === "mute" ? C.textTertiary
+                          : C.textSecondary,
                         opacity: isCurrent ? 1 : 0.6,
                       }
                     ]}>
@@ -1231,13 +1231,13 @@ export function BeatIndicator({
                   {isStrongType ? (
                     <View style={[styles.barNoteFill, { margin: 3, overflow: "hidden", opacity: isActiveCell ? 1 : 0.75 }]}>
                       <LinearGradient
-                        colors={[Colors.white, C.accent, C.accent]}
+                        colors={[C.white, C.accent, C.accent]}
                         locations={[0, 0.4, 1]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 4, alignItems: "center", justifyContent: "center" }}
                       >
-                        <Text style={{ color: Colors.white, fontSize: 10, fontWeight: "bold" as const, lineHeight: 12, textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 }}>S</Text>
+                        <Text style={{ color: C.white, fontSize: 10, fontWeight: "bold" as const, lineHeight: 12, textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 }}>S</Text>
                       </LinearGradient>
                     </View>
                   ) : type === "mute" ? (
@@ -1245,7 +1245,7 @@ export function BeatIndicator({
                       margin: 3,
                       backgroundColor: "transparent",
                       borderWidth: 1,
-                      borderColor: Colors.textTertiary,
+                      borderColor: C.textTertiary,
                       borderStyle: "dashed" as any,
                       opacity: isActiveCell ? 0.9 : 0.4,
                     }]} />
@@ -1254,7 +1254,7 @@ export function BeatIndicator({
                       margin: 3,
                       backgroundColor: isAccentType
                         ? (isActiveCell ? C.accent : C.accentMuted)
-                        : (isActiveCell ? Colors.text : Colors.textTertiary),
+                        : (isActiveCell ? C.text : C.textTertiary),
                       opacity: isActiveCell ? 1 : 0.7,
                     }]} />
                   )}
@@ -1375,7 +1375,7 @@ export function BeatIndicator({
                   {formatRepeat(barRepeats[beat])}
                 </Text>
               ) : (
-                <Ionicons name="repeat-outline" size={11} color={Colors.textTertiary} style={{ opacity: 0.4 }} />
+                <Ionicons name="repeat-outline" size={11} color={C.textTertiary} style={{ opacity: 0.4 }} />
               )}
             </Pressable>
           )}
@@ -1416,7 +1416,7 @@ export function BeatIndicator({
             style={[{
               position: "absolute",
               top: 0, left: 0, right: 0, bottom: 0,
-              backgroundColor: Colors.danger,
+              backgroundColor: C.danger,
               zIndex: 999,
             }, resetFlashStyle]}
           />
@@ -1435,9 +1435,9 @@ export function BeatIndicator({
                 accessibilityLabel="Close bar mode"
               >
                 {dropTargetBeat === -1 ? (
-                  <Ionicons name="layers" size={16} color={Colors.white} />
+                  <Ionicons name="layers" size={16} color={C.white} />
                 ) : (
-                  <Ionicons name="chevron-down" size={18} color={Colors.textTertiary} />
+                  <Ionicons name="chevron-down" size={18} color={C.textTertiary} />
                 )}
               </Pressable>
             </View>
@@ -1462,16 +1462,16 @@ export function BeatIndicator({
                             onPress={() => { if (!isPlaying) setEditingBlockIndex(isEditing ? null : origIndex); }}
                             style={{
                               paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
-                              backgroundColor: isActive ? C.accent + "30" : isEditing ? C.accent + "20" : Colors.backgroundSecondary,
+                              backgroundColor: isActive ? C.accent + "30" : isEditing ? C.accent + "20" : C.backgroundSecondary,
                               borderWidth: isActive ? 1 : isEditing ? 1 : 0,
                               borderColor: isActive ? C.accent : isEditing ? C.accent + "60" : "transparent",
                               minWidth: 36, alignItems: "center",
                             }}
                           >
-                            <Text style={{ color: isActive ? C.accent : Colors.text, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
+                            <Text style={{ color: isActive ? C.accent : C.text, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
                               {block.startBeat + 1}-{Math.min(block.endBeat + 1, beatsPerMeasure)}
                             </Text>
-                            <Text style={{ color: isActive ? C.accent : Colors.textTertiary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium" }}>
+                            <Text style={{ color: isActive ? C.accent : C.textTertiary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium" }}>
                               ×{block.value}
                               {isActive && progressInfo!.blockRepeatTotal > 1 && ` ${progressInfo!.blockRepeatCurrent + 1}/${progressInfo!.blockRepeatTotal}`}
                             </Text>
@@ -1488,7 +1488,7 @@ export function BeatIndicator({
                             );
                           })()}
                           {si < sorted.length - 1 && !hasJump && (
-                            <Ionicons name="chevron-forward" size={8} color={Colors.textTertiary} style={{ marginLeft: 1, opacity: 0.4 }} />
+                            <Ionicons name="chevron-forward" size={8} color={C.textTertiary} style={{ marginLeft: 1, opacity: 0.4 }} />
                           )}
                         </View>
                       );
@@ -1505,7 +1505,7 @@ export function BeatIndicator({
                   Bar {blockSelectStart + 1} selected
                 </Text>
                 <Pressable onPress={() => setBlockSelectStart(null)} hitSlop={8}>
-                  <Ionicons name="close-circle" size={12} color={Colors.textTertiary} />
+                  <Ionicons name="close-circle" size={12} color={C.textTertiary} />
                 </Pressable>
               </View>
             )}
@@ -1566,14 +1566,14 @@ export function BeatIndicator({
                 </View>
               </ScrollView>
               <LinearGradient
-                colors={[Colors.background, Colors.background, Colors.background + "80", "transparent"]}
+                colors={[C.background, C.background, C.background + "80", "transparent"]}
                 locations={[0, 0.45, 0.75, 1]}
                 style={[styles.barFadeGradient, { top: 0, height: rowH * 1.2 }]}
                 pointerEvents="none"
               />
             </View>
             <LinearGradient
-              colors={["transparent", Colors.background + "60", Colors.background + "C0", Colors.background]}
+              colors={["transparent", C.background + "60", C.background + "C0", C.background]}
               locations={[0, 0.3, 0.65, 1]}
               style={[styles.barFadeGradientBottom, { height: rowH + 60, marginTop: -(rowH + 60) }]}
               pointerEvents="none"
@@ -1587,16 +1587,16 @@ export function BeatIndicator({
 
             <View style={{ alignItems: "center", gap: 4 }}>
               <Pressable onPress={handleBarClockTap}>
-                <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? Colors.danger : C.accent, fontSize: 16 }]}>
+                <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? C.danger : C.accent, fontSize: 16 }]}>
                   {barTimeDisplay}
                 </Text>
               </Pressable>
-              <Text style={[styles.barInfoText, { color: Colors.textTertiary, fontSize: 9 }]}>
+              <Text style={[styles.barInfoText, { color: C.textTertiary, fontSize: 9 }]}>
                 {beatsPerMeasure} bars
               </Text>
               <View style={styles.barClockDots}>
                 <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
-                <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: Colors.danger }]} />
+                <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: C.danger }]} />
               </View>
             </View>
 
@@ -1621,7 +1621,7 @@ export function BeatIndicator({
                 style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure <= MIN_BEATS) && { opacity: 0.3 }]}
                 hitSlop={8}
               >
-                <Ionicons name="remove" size={14} color={Colors.textSecondary} />
+                <Ionicons name="remove" size={14} color={C.textSecondary} />
               </Pressable>
               <Pressable
                 onPress={onTogglePlay}
@@ -1636,7 +1636,7 @@ export function BeatIndicator({
                 {isPreparing ? (
                   <ActivityIndicator size="small" color={C.accent} />
                 ) : (
-                  <Ionicons name={isPlaying ? "stop" : "play"} size={20} color={isPlaying ? Colors.danger : C.accent} style={!isPlaying ? { marginLeft: 2 } : undefined} />
+                  <Ionicons name={isPlaying ? "stop" : "play"} size={20} color={isPlaying ? C.danger : C.accent} style={!isPlaying ? { marginLeft: 2 } : undefined} />
                 )}
               </Pressable>
               <Pressable
@@ -1644,7 +1644,7 @@ export function BeatIndicator({
                 style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
                 hitSlop={8}
               >
-                <Ionicons name="add" size={14} color={Colors.textSecondary} />
+                <Ionicons name="add" size={14} color={C.textSecondary} />
               </Pressable>
             </View>
             {bpmSliderElement && (
@@ -1656,21 +1656,21 @@ export function BeatIndicator({
             <View style={styles.barTimerOverlay}>
               <Pressable style={StyleSheet.absoluteFill} onPress={() => setBarTimerEditing(false)} />
               <View style={{ alignItems: "center", gap: 10 }}>
-                <View style={{ backgroundColor: Colors.backgroundSecondary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, gap: 6, minWidth: 200 }}>
-                  <Text style={{ color: Colors.textSecondary, fontSize: 11, fontWeight: "600" as const, textAlign: "center", marginBottom: 2 }}>Clock Mode</Text>
+                <View style={{ backgroundColor: C.backgroundSecondary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, gap: 6, minWidth: 200 }}>
+                  <Text style={{ color: C.textSecondary, fontSize: 11, fontWeight: "600" as const, textAlign: "center", marginBottom: 2 }}>Clock Mode</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.accent }} />
-                    <Text style={{ color: Colors.text, fontSize: 12 }}>Stopwatch — tap to start/reset</Text>
+                    <Text style={{ color: C.text, fontSize: 12 }}>Stopwatch — tap to start/reset</Text>
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.danger }} />
-                    <Text style={{ color: Colors.text, fontSize: 12 }}>Timer — set time, auto-stop</Text>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.danger }} />
+                    <Text style={{ color: C.text, fontSize: 12 }}>Timer — set time, auto-stop</Text>
                   </View>
-                  <Text style={{ color: Colors.textTertiary, fontSize: 10, textAlign: "center", marginTop: 2 }}>Swipe left/right to switch mode</Text>
+                  <Text style={{ color: C.textTertiary, fontSize: 10, textAlign: "center", marginTop: 2 }}>Swipe left/right to switch mode</Text>
                 </View>
                 <View style={styles.barTimerCard}>
                   <View style={styles.barTimerHeader}>
-                    <Ionicons name="timer-outline" size={20} color={Colors.danger} />
+                    <Ionicons name="timer-outline" size={20} color={C.danger} />
                     <Text style={styles.barTimerTitle}>Timer</Text>
                   </View>
                   <TextInput
@@ -1682,10 +1682,10 @@ export function BeatIndicator({
                     autoFocus
                     selectTextOnFocus
                     placeholder="M:SS"
-                    placeholderTextColor={Colors.textTertiary}
+                    placeholderTextColor={C.textTertiary}
                   />
                   <Text style={styles.barTimerHint}>M:SS or seconds</Text>
-                  <Pressable onPress={commitBarTimerInput} style={[styles.barTimerSetBtn, { backgroundColor: Colors.danger }]}>
+                  <Pressable onPress={commitBarTimerInput} style={[styles.barTimerSetBtn, { backgroundColor: C.danger }]}>
                     <Text style={styles.barTimerSetText}>Set</Text>
                   </Pressable>
                 </View>
@@ -1704,7 +1704,7 @@ export function BeatIndicator({
           style={[{
             position: "absolute",
             top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: Colors.danger,
+            backgroundColor: C.danger,
             zIndex: 999,
           }, resetFlashStyle]}
         />
@@ -1721,9 +1721,9 @@ export function BeatIndicator({
             accessibilityLabel="Close bar mode"
           >
             {dropTargetBeat === -1 ? (
-              <Ionicons name="layers" size={16} color={Colors.white} />
+              <Ionicons name="layers" size={16} color={C.white} />
             ) : (
-              <Ionicons name="chevron-down" size={18} color={Colors.textTertiary} />
+              <Ionicons name="chevron-down" size={18} color={C.textTertiary} />
             )}
           </Pressable>
         </View>
@@ -1750,17 +1750,17 @@ export function BeatIndicator({
                           paddingHorizontal: 8,
                           paddingVertical: 4,
                           borderRadius: 6,
-                          backgroundColor: isActive ? C.accent + "30" : isEditing ? C.accent + "20" : Colors.backgroundSecondary,
+                          backgroundColor: isActive ? C.accent + "30" : isEditing ? C.accent + "20" : C.backgroundSecondary,
                           borderWidth: isActive ? 1.5 : isEditing ? 1 : 0,
                           borderColor: isActive ? C.accent : isEditing ? C.accent + "60" : "transparent",
                           minWidth: 48,
                           alignItems: "center",
                         }}
                       >
-                        <Text style={{ color: isActive ? C.accent : Colors.text, fontSize: 12, fontFamily: "SpaceGrotesk_700Bold" }}>
+                        <Text style={{ color: isActive ? C.accent : C.text, fontSize: 12, fontFamily: "SpaceGrotesk_700Bold" }}>
                           {block.startBeat + 1}-{Math.min(block.endBeat + 1, beatsPerMeasure)}
                         </Text>
-                        <Text style={{ color: isActive ? C.accent : Colors.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium" }}>
+                        <Text style={{ color: isActive ? C.accent : C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium" }}>
                           ×{block.value}
                           {isActive && progressInfo!.blockRepeatTotal > 1 && ` ${progressInfo!.blockRepeatCurrent + 1}/${progressInfo!.blockRepeatTotal}`}
                         </Text>
@@ -1804,7 +1804,7 @@ export function BeatIndicator({
                         );
                       })()}
                       {si < sorted.length - 1 && !hasJump && (
-                        <Ionicons name="chevron-forward" size={10} color={Colors.textTertiary} style={{ marginLeft: 2, opacity: 0.4 }} />
+                        <Ionicons name="chevron-forward" size={10} color={C.textTertiary} style={{ marginLeft: 2, opacity: 0.4 }} />
                       )}
                     </View>
                   );
@@ -1821,7 +1821,7 @@ export function BeatIndicator({
                         paddingHorizontal: 6,
                         paddingVertical: 4,
                         borderRadius: 6,
-                        backgroundColor: isHighlight ? "#f0ad4e20" : Colors.backgroundSecondary,
+                        backgroundColor: isHighlight ? "#f0ad4e20" : C.backgroundSecondary,
                         borderWidth: isHighlight ? 1 : 0,
                         borderColor: "#f0ad4e60",
                         flexDirection: "row",
@@ -1833,10 +1833,10 @@ export function BeatIndicator({
                       <Ionicons
                         name={icon}
                         size={12}
-                        color={isHighlight ? "#f0ad4e" : Colors.textTertiary}
+                        color={isHighlight ? "#f0ad4e" : C.textTertiary}
                       />
                       <Text style={{
-                        color: isHighlight ? "#f0ad4e" : Colors.textTertiary,
+                        color: isHighlight ? "#f0ad4e" : C.textTertiary,
                         fontSize: 9,
                         fontFamily: "SpaceGrotesk_600SemiBold",
                       }}>
@@ -1866,22 +1866,22 @@ export function BeatIndicator({
                         hitSlop={8}
                         style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
                       >
-                        <Ionicons name="trash-outline" size={12} color={Colors.danger} />
+                        <Ionicons name="trash-outline" size={12} color={C.danger} />
                       </Pressable>
                       <Pressable onPress={() => setEditingBlockIndex(null)} hitSlop={8}>
-                        <Ionicons name="close" size={14} color={Colors.textTertiary} />
+                        <Ionicons name="close" size={14} color={C.textTertiary} />
                       </Pressable>
                     </View>
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <Text style={{ color: Colors.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Repeat</Text>
+                    <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Repeat</Text>
                     <Pressable
                       onPress={() => { if (editBlock.value > 1) updateBlock(editingBlockIndex!, { value: editBlock.value - 1 }); }}
                       style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
                     >
                       <Ionicons name="remove" size={14} color={C.accent} />
                     </Pressable>
-                    <Text style={{ color: Colors.text, fontSize: 13, fontFamily: "SpaceGrotesk_700Bold", minWidth: 28, textAlign: "center" }}>
+                    <Text style={{ color: C.text, fontSize: 13, fontFamily: "SpaceGrotesk_700Bold", minWidth: 28, textAlign: "center" }}>
                       ×{editBlock.value}
                     </Text>
                     <Pressable
@@ -1892,7 +1892,7 @@ export function BeatIndicator({
                     </Pressable>
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: editHasJump ? 6 : 0 }}>
-                    <Text style={{ color: Colors.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Jump</Text>
+                    <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Jump</Text>
                     <Pressable
                       onPress={() => { if (editHasJump) updateBlock(editingBlockIndex!, { jumpToBlock: undefined, jumpCount: undefined }); }}
                       style={{
@@ -1901,7 +1901,7 @@ export function BeatIndicator({
                         borderWidth: 1, borderColor: C.accent + "30",
                       }}
                     >
-                      <Text style={{ color: !editHasJump ? C.accent : Colors.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium" }}>None</Text>
+                      <Text style={{ color: !editHasJump ? C.accent : C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium" }}>None</Text>
                     </Pressable>
                     {otherBlocks.map(({ b: ob, i: oi }) => (
                       <Pressable
@@ -1913,7 +1913,7 @@ export function BeatIndicator({
                           borderWidth: 1, borderColor: editBlock.jumpToBlock === oi ? "#f0ad4e50" : C.accent + "30",
                         }}
                       >
-                        <Text style={{ color: editBlock.jumpToBlock === oi ? "#f0ad4e" : Colors.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium" }}>
+                        <Text style={{ color: editBlock.jumpToBlock === oi ? "#f0ad4e" : C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium" }}>
                           {ob.startBeat + 1}-{Math.min(ob.endBeat + 1, beatsPerMeasure)}
                         </Text>
                       </Pressable>
@@ -1921,14 +1921,14 @@ export function BeatIndicator({
                   </View>
                   {editHasJump && (
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <Text style={{ color: Colors.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Jump ×</Text>
+                      <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Jump ×</Text>
                       <Pressable
                         onPress={() => { if (editJumpCount > 1) updateBlock(editingBlockIndex!, { jumpCount: editJumpCount - 1 }); }}
                         style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
                       >
                         <Ionicons name="remove" size={14} color="#f0ad4e" />
                       </Pressable>
-                      <Text style={{ color: Colors.text, fontSize: 13, fontFamily: "SpaceGrotesk_700Bold", minWidth: 28, textAlign: "center" }}>
+                      <Text style={{ color: C.text, fontSize: 13, fontFamily: "SpaceGrotesk_700Bold", minWidth: 28, textAlign: "center" }}>
                         ×{editJumpCount}
                       </Text>
                       <Pressable
@@ -1952,7 +1952,7 @@ export function BeatIndicator({
               Bar {blockSelectStart + 1} selected — long press same or another bar to create block
             </Text>
             <Pressable onPress={() => setBlockSelectStart(null)} hitSlop={8}>
-              <Ionicons name="close-circle" size={14} color={Colors.textTertiary} />
+              <Ionicons name="close-circle" size={14} color={C.textTertiary} />
             </Pressable>
           </View>
         )}
@@ -2048,14 +2048,14 @@ export function BeatIndicator({
             </View>
           </ScrollView>
           <LinearGradient
-            colors={[Colors.background, Colors.background, Colors.background + "80", "transparent"]}
+            colors={[C.background, C.background, C.background + "80", "transparent"]}
             locations={[0, 0.45, 0.75, 1]}
             style={[styles.barFadeGradient, { top: 0, height: rowH * 1.8 }]}
             pointerEvents="none"
           />
         </View>
         <LinearGradient
-          colors={["transparent", Colors.background + "60", Colors.background + "C0", Colors.background]}
+          colors={["transparent", C.background + "60", C.background + "C0", C.background]}
           locations={[0, 0.3, 0.65, 1]}
           style={[styles.barFadeGradientBottom, { height: rowH + 100, marginTop: -(rowH + 100) }]}
           pointerEvents="none"
@@ -2091,21 +2091,21 @@ export function BeatIndicator({
               style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure <= MIN_BEATS) && { opacity: 0.3 }]}
               hitSlop={8}
             >
-              <Ionicons name="remove" size={16} color={Colors.textSecondary} />
+              <Ionicons name="remove" size={16} color={C.textSecondary} />
             </Pressable>
             <View style={styles.barInfoCol} {...barClockSwipePan.panHandlers}>
               <Pressable onPress={handleBarClockTap}>
-                <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? Colors.danger : C.accent }]}>
+                <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? C.danger : C.accent }]}>
                   {barTimeDisplay}
-                  {barClockMode === "timer" && !isPlaying && <Text style={{ fontSize: 9, color: Colors.textTertiary }}> &#9202;</Text>}
+                  {barClockMode === "timer" && !isPlaying && <Text style={{ fontSize: 9, color: C.textTertiary }}> &#9202;</Text>}
                 </Text>
               </Pressable>
-              <Text style={[styles.barInfoText, { color: Colors.textTertiary, fontSize: 10 }]}>
+              <Text style={[styles.barInfoText, { color: C.textTertiary, fontSize: 10 }]}>
                 {beatsPerMeasure} bars
               </Text>
               <View style={styles.barClockDots}>
                 <View style={[styles.barClockDot, barClockMode === "stopwatch" && { backgroundColor: C.accent }]} />
-                <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: Colors.danger }]} />
+                <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: C.danger }]} />
               </View>
             </View>
             <Pressable
@@ -2113,7 +2113,7 @@ export function BeatIndicator({
               style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
               hitSlop={8}
             >
-              <Ionicons name="add" size={16} color={Colors.textSecondary} />
+              <Ionicons name="add" size={16} color={C.textSecondary} />
             </Pressable>
           </View>
           <Pressable
@@ -2132,7 +2132,7 @@ export function BeatIndicator({
               <Ionicons
                 name={isPlaying ? "stop" : "play"}
                 size={22}
-                color={isPlaying ? Colors.danger : C.accent}
+                color={isPlaying ? C.danger : C.accent}
                 style={!isPlaying ? { marginLeft: 2 } : undefined}
               />
             )}
@@ -2148,21 +2148,21 @@ export function BeatIndicator({
           <View style={styles.barTimerOverlay}>
             <Pressable style={StyleSheet.absoluteFill} onPress={() => setBarTimerEditing(false)} />
             <View style={{ alignItems: "center", gap: 10 }}>
-              <View style={{ backgroundColor: Colors.backgroundSecondary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, gap: 6, minWidth: 200 }}>
-                <Text style={{ color: Colors.textSecondary, fontSize: 11, fontWeight: "600" as const, textAlign: "center", marginBottom: 2 }}>Clock Mode</Text>
+              <View style={{ backgroundColor: C.backgroundSecondary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, gap: 6, minWidth: 200 }}>
+                <Text style={{ color: C.textSecondary, fontSize: 11, fontWeight: "600" as const, textAlign: "center", marginBottom: 2 }}>Clock Mode</Text>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.accent }} />
-                  <Text style={{ color: Colors.text, fontSize: 12 }}>Stopwatch — tap to start/reset</Text>
+                  <Text style={{ color: C.text, fontSize: 12 }}>Stopwatch — tap to start/reset</Text>
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.danger }} />
-                  <Text style={{ color: Colors.text, fontSize: 12 }}>Timer — set time, auto-stop</Text>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.danger }} />
+                  <Text style={{ color: C.text, fontSize: 12 }}>Timer — set time, auto-stop</Text>
                 </View>
-                <Text style={{ color: Colors.textTertiary, fontSize: 10, textAlign: "center", marginTop: 2 }}>Swipe left/right to switch mode</Text>
+                <Text style={{ color: C.textTertiary, fontSize: 10, textAlign: "center", marginTop: 2 }}>Swipe left/right to switch mode</Text>
               </View>
               <View style={styles.barTimerCard}>
                 <View style={styles.barTimerHeader}>
-                  <Ionicons name="timer-outline" size={20} color={Colors.danger} />
+                  <Ionicons name="timer-outline" size={20} color={C.danger} />
                   <Text style={styles.barTimerTitle}>Timer</Text>
                 </View>
                 <TextInput
@@ -2174,12 +2174,12 @@ export function BeatIndicator({
                   autoFocus
                   selectTextOnFocus
                   placeholder="M:SS"
-                  placeholderTextColor={Colors.textTertiary}
+                  placeholderTextColor={C.textTertiary}
                 />
                 <Text style={styles.barTimerHint}>M:SS or seconds</Text>
                 <Pressable
                   onPress={commitBarTimerInput}
-                  style={[styles.barTimerSetBtn, { backgroundColor: Colors.danger }]}
+                  style={[styles.barTimerSetBtn, { backgroundColor: C.danger }]}
                 >
                   <Text style={styles.barTimerSetText}>Set</Text>
                 </Pressable>
@@ -2214,7 +2214,7 @@ export function BeatIndicator({
                     backgroundColor: repeatType === "count" ? C.accent + "30" : "rgba(255,255,255,0.08)",
                   }}
                 >
-                  <Text style={{ color: repeatType === "count" ? C.accent : Colors.textSecondary, fontSize: 13, fontWeight: "600" }}>Count</Text>
+                  <Text style={{ color: repeatType === "count" ? C.accent : C.textSecondary, fontSize: 13, fontWeight: "600" }}>Count</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => setRepeatType("duration")}
@@ -2225,7 +2225,7 @@ export function BeatIndicator({
                     backgroundColor: repeatType === "duration" ? C.accent + "30" : "rgba(255,255,255,0.08)",
                   }}
                 >
-                  <Text style={{ color: repeatType === "duration" ? C.accent : Colors.textSecondary, fontSize: 13, fontWeight: "600" }}>Time</Text>
+                  <Text style={{ color: repeatType === "duration" ? C.accent : C.textSecondary, fontSize: 13, fontWeight: "600" }}>Time</Text>
                 </Pressable>
               </View>
 
@@ -2235,11 +2235,11 @@ export function BeatIndicator({
                     onPress={() => setRepeatCountVal(Math.max(1, repeatCountVal - 1))}
                     style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
                   >
-                    <Ionicons name="remove" size={16} color={Colors.textSecondary} />
+                    <Ionicons name="remove" size={16} color={C.textSecondary} />
                   </Pressable>
                   {repeatCountEditing ? (
                     <TextInput
-                      style={{ color: Colors.text, fontSize: 22, fontWeight: "700", textAlign: "center", width: 50, borderBottomWidth: 1, borderBottomColor: C.accent, padding: 0 }}
+                      style={{ color: C.text, fontSize: 22, fontWeight: "700", textAlign: "center", width: 50, borderBottomWidth: 1, borderBottomColor: C.accent, padding: 0 }}
                       value={repeatCountText}
                       onChangeText={setRepeatCountText}
                       keyboardType="number-pad"
@@ -2258,14 +2258,14 @@ export function BeatIndicator({
                     />
                   ) : (
                     <Pressable onPress={() => { setRepeatCountText(String(repeatCountVal)); setRepeatCountEditing(true); }}>
-                      <Text style={{ color: Colors.text, fontSize: 22, fontWeight: "700" }}>{`\u00D7${repeatCountVal}`}</Text>
+                      <Text style={{ color: C.text, fontSize: 22, fontWeight: "700" }}>{`\u00D7${repeatCountVal}`}</Text>
                     </Pressable>
                   )}
                   <Pressable
                     onPress={() => setRepeatCountVal(repeatCountVal + 1)}
                     style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
                   >
-                    <Ionicons name="add" size={16} color={Colors.textSecondary} />
+                    <Ionicons name="add" size={16} color={C.textSecondary} />
                   </Pressable>
                 </View>
               ) : (
@@ -2278,11 +2278,11 @@ export function BeatIndicator({
                     }}
                     style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
                   >
-                    <Ionicons name="remove" size={14} color={Colors.textSecondary} />
+                    <Ionicons name="remove" size={14} color={C.textSecondary} />
                   </Pressable>
                   {repeatMinEditing ? (
                     <TextInput
-                      style={{ color: Colors.text, fontSize: 20, fontWeight: "700", textAlign: "center", width: 30, borderBottomWidth: 1, borderBottomColor: C.accent, padding: 0 }}
+                      style={{ color: C.text, fontSize: 20, fontWeight: "700", textAlign: "center", width: 30, borderBottomWidth: 1, borderBottomColor: C.accent, padding: 0 }}
                       value={repeatMinText}
                       onChangeText={setRepeatMinText}
                       keyboardType="number-pad"
@@ -2293,13 +2293,13 @@ export function BeatIndicator({
                     />
                   ) : (
                     <Pressable onPress={() => { setRepeatMinText(String(repeatMinVal)); setRepeatMinEditing(true); }}>
-                      <Text style={{ color: Colors.text, fontSize: 20, fontWeight: "700" }}>{repeatMinVal}</Text>
+                      <Text style={{ color: C.text, fontSize: 20, fontWeight: "700" }}>{repeatMinVal}</Text>
                     </Pressable>
                   )}
-                  <Text style={{ color: Colors.textTertiary, fontSize: 12 }}>m</Text>
+                  <Text style={{ color: C.textTertiary, fontSize: 12 }}>m</Text>
                   {repeatSecEditing ? (
                     <TextInput
-                      style={{ color: Colors.text, fontSize: 20, fontWeight: "700", textAlign: "center", width: 30, borderBottomWidth: 1, borderBottomColor: C.accent, padding: 0 }}
+                      style={{ color: C.text, fontSize: 20, fontWeight: "700", textAlign: "center", width: 30, borderBottomWidth: 1, borderBottomColor: C.accent, padding: 0 }}
                       value={repeatSecText}
                       onChangeText={setRepeatSecText}
                       keyboardType="number-pad"
@@ -2310,10 +2310,10 @@ export function BeatIndicator({
                     />
                   ) : (
                     <Pressable onPress={() => { setRepeatSecText(String(repeatSecVal)); setRepeatSecEditing(true); }}>
-                      <Text style={{ color: Colors.text, fontSize: 20, fontWeight: "700" }}>{String(repeatSecVal).padStart(2, "0")}</Text>
+                      <Text style={{ color: C.text, fontSize: 20, fontWeight: "700" }}>{String(repeatSecVal).padStart(2, "0")}</Text>
                     </Pressable>
                   )}
-                  <Text style={{ color: Colors.textTertiary, fontSize: 12 }}>s</Text>
+                  <Text style={{ color: C.textTertiary, fontSize: 12 }}>s</Text>
                   <Pressable
                     onPress={() => {
                       const total = repeatMinVal * 60 + repeatSecVal + 10;
@@ -2322,15 +2322,15 @@ export function BeatIndicator({
                     }}
                     style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
                   >
-                    <Ionicons name="add" size={14} color={Colors.textSecondary} />
+                    <Ionicons name="add" size={14} color={C.textSecondary} />
                   </Pressable>
                 </View>
               )}
 
               <View style={{ marginBottom: 14 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 4 }}>
-                  <Ionicons name="speedometer-outline" size={14} color={Colors.textSecondary} />
-                  <Text style={{ color: Colors.textSecondary, fontSize: 12, fontWeight: "600" }}>BPM Override</Text>
+                  <Ionicons name="speedometer-outline" size={14} color={C.textSecondary} />
+                  <Text style={{ color: C.textSecondary, fontSize: 12, fontWeight: "600" }}>BPM Override</Text>
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}>
                   <Pressable
@@ -2343,11 +2343,11 @@ export function BeatIndicator({
                     }}
                     style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
                   >
-                    <Ionicons name="remove" size={14} color={Colors.textSecondary} />
+                    <Ionicons name="remove" size={14} color={C.textSecondary} />
                   </Pressable>
                   {repeatBpmEditing ? (
                     <TextInput
-                      style={{ color: Colors.text, fontSize: 18, fontWeight: "700", textAlign: "center", width: 50, borderBottomWidth: 1, borderBottomColor: C.accent, padding: 0 }}
+                      style={{ color: C.text, fontSize: 18, fontWeight: "700", textAlign: "center", width: 50, borderBottomWidth: 1, borderBottomColor: C.accent, padding: 0 }}
                       value={repeatBpmText}
                       onChangeText={setRepeatBpmText}
                       keyboardType="number-pad"
@@ -2368,7 +2368,7 @@ export function BeatIndicator({
                     />
                   ) : (
                     <Pressable onPress={() => { setRepeatBpmText(repeatBpmOverride !== null ? String(repeatBpmOverride) : ""); setRepeatBpmEditing(true); }}>
-                      <Text style={{ color: repeatBpmOverride !== null ? C.accent : Colors.textTertiary, fontSize: 18, fontWeight: "700" }}>
+                      <Text style={{ color: repeatBpmOverride !== null ? C.accent : C.textTertiary, fontSize: 18, fontWeight: "700" }}>
                         {repeatBpmOverride !== null ? repeatBpmOverride : "—"}
                       </Text>
                     </Pressable>
@@ -2383,14 +2383,14 @@ export function BeatIndicator({
                     }}
                     style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}
                   >
-                    <Ionicons name="add" size={14} color={Colors.textSecondary} />
+                    <Ionicons name="add" size={14} color={C.textSecondary} />
                   </Pressable>
                   {repeatBpmOverride !== null && (
                     <Pressable
                       onPress={() => setRepeatBpmOverride(null)}
                       style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.08)" }}
                     >
-                      <Text style={{ color: Colors.textTertiary, fontSize: 11 }}>Reset</Text>
+                      <Text style={{ color: C.textTertiary, fontSize: 11 }}>Reset</Text>
                     </Pressable>
                   )}
                 </View>
@@ -2401,13 +2401,13 @@ export function BeatIndicator({
                   onPress={clearRepeat}
                   style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.08)" }}
                 >
-                  <Text style={{ color: Colors.textSecondary, fontSize: 13, fontWeight: "600" }}>Clear</Text>
+                  <Text style={{ color: C.textSecondary, fontSize: 13, fontWeight: "600" }}>Clear</Text>
                 </Pressable>
                 <Pressable
                   onPress={saveRepeat}
                   style={{ paddingHorizontal: 20, paddingVertical: 8, borderRadius: 16, backgroundColor: C.accent }}
                 >
-                  <Text style={{ color: Colors.white, fontSize: 13, fontWeight: "700" }}>Save</Text>
+                  <Text style={{ color: C.white, fontSize: 13, fontWeight: "700" }}>Save</Text>
                 </Pressable>
               </View>
             </View>
@@ -2430,7 +2430,7 @@ export function BeatIndicator({
         style={[{
           position: "absolute",
           top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: Colors.danger,
+          backgroundColor: C.danger,
           zIndex: 999,
         }, resetFlashStyle]}
       />
@@ -2485,7 +2485,7 @@ export function BeatIndicator({
           })()}
 
           <View style={styles.signatureRow} pointerEvents="none">
-            <Text style={[styles.digitalSignature, { color: halfTime ? C.accent : Colors.textTertiary, opacity: halfTime ? 0.25 : 0.15 }]} numberOfLines={1} adjustsFontSizeToFit>
+            <Text style={[styles.digitalSignature, { color: halfTime ? C.accent : C.textTertiary, opacity: halfTime ? 0.25 : 0.15 }]} numberOfLines={1} adjustsFontSizeToFit>
               {halfTime ? "1/2" : "1/1"}
             </Text>
           </View>
@@ -2494,7 +2494,7 @@ export function BeatIndicator({
             style={[
               styles.centerGlow,
               {
-                backgroundColor: isAccentBeat ? C.accent : Colors.text,
+                backgroundColor: isAccentBeat ? C.accent : C.text,
               },
               centerGlowStyle,
             ]}
@@ -2521,7 +2521,7 @@ export function BeatIndicator({
               <Ionicons
                 name={isPlaying ? "stop" : "play"}
                 size={56}
-                color={isPlaying ? Colors.danger : C.accent}
+                color={isPlaying ? C.danger : C.accent}
                 style={!isPlaying ? { marginLeft: 5 } : undefined}
               />
             )}
@@ -2544,7 +2544,7 @@ export function BeatIndicator({
               accessibilityRole="button"
               accessibilityLabel="Open note mode"
             >
-              <Ionicons name="musical-notes-outline" size={16} color={Colors.textTertiary} />
+              <Ionicons name="musical-notes-outline" size={16} color={C.textTertiary} />
             </Pressable>
           )}
           <Pressable
@@ -2555,7 +2555,7 @@ export function BeatIndicator({
             accessibilityRole="button"
             accessibilityLabel="Open bar mode"
           >
-            <Ionicons name="reorder-three" size={20} color={Colors.textTertiary} />
+            <Ionicons name="reorder-three" size={20} color={C.textTertiary} />
           </Pressable>
         </View>
       )}
@@ -2570,7 +2570,7 @@ export function BeatIndicator({
             accessibilityRole="button"
             accessibilityLabel="Open bar mode"
           >
-            <Ionicons name="reorder-three" size={16} color={Colors.textTertiary} />
+            <Ionicons name="reorder-three" size={16} color={C.textTertiary} />
           </Pressable>
           {onEnterNoteMode && (
             <Pressable
@@ -2581,7 +2581,7 @@ export function BeatIndicator({
               accessibilityRole="button"
               accessibilityLabel="Open note mode"
             >
-              <Ionicons name="musical-notes-outline" size={14} color={Colors.textTertiary} />
+              <Ionicons name="musical-notes-outline" size={14} color={C.textTertiary} />
             </Pressable>
           )}
         </View>
@@ -2627,7 +2627,6 @@ const styles = StyleSheet.create({
   digitalSignature: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: moderateScale(116, 0.4),
-    color: Colors.textTertiary,
     opacity: 0.15,
   },
   centerImageContainer: {
@@ -2662,7 +2661,6 @@ const styles = StyleSheet.create({
   hintText: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 11,
-    color: Colors.textTertiary,
     letterSpacing: 1,
     opacity: 0.5,
   },
@@ -2683,13 +2681,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   barTimerCard: {
-    backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 24,
     width: moderateScale(220, 0.5),
     alignItems: "center",
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   barTimerHeader: {
     flexDirection: "row",
@@ -2700,7 +2696,6 @@ const styles = StyleSheet.create({
   barTimerTitle: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 16,
-    color: Colors.danger,
   },
   barTimerInput: {
     fontFamily: "SpaceGrotesk_700Bold",
@@ -2711,7 +2706,6 @@ const styles = StyleSheet.create({
     width: "100%" as any,
   },
   barTimerHint: {
-    color: Colors.textTertiary,
     fontSize: 11,
     marginTop: 8,
     fontFamily: "SpaceGrotesk_400Regular",
@@ -2725,7 +2719,6 @@ const styles = StyleSheet.create({
   barTimerSetText: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 14,
-    color: Colors.white,
   },
   barClockDots: {
     flexDirection: "row",
@@ -2736,7 +2729,6 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.textTertiary,
   },
   barInfoCol: {
     alignItems: "center",
@@ -2751,7 +2743,6 @@ const styles = StyleSheet.create({
   dropTargetRing: {
     position: "absolute",
     borderWidth: 2,
-    borderColor: Colors.accent,
     borderStyle: "dashed" as any,
     opacity: 0.8,
   },
@@ -2762,16 +2753,13 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.accent,
     alignItems: "center",
     justifyContent: "center",
   },
   subdivBadgeText: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 9,
-    color: Colors.accent,
   },
   centerDropRing: {
     position: "absolute",
@@ -2779,14 +2767,12 @@ const styles = StyleSheet.create({
     height: moderateScale(110),
     borderRadius: moderateScale(55),
     borderWidth: 2,
-    borderColor: Colors.accent,
     borderStyle: "dashed" as any,
     opacity: 0.8,
   },
   centerDropLabel: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 11,
-    color: Colors.accent,
     letterSpacing: 2,
     marginTop: 8,
     opacity: 0.9,

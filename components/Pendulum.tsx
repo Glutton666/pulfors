@@ -7,7 +7,6 @@ import Animated, {
   withSequence,
   Easing,
 } from "react-native-reanimated";
-import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { moderateScale, SCREEN_WIDTH, IS_TABLET } from "@/lib/scale";
 
@@ -66,7 +65,7 @@ export function Pendulum({ isPlaying, bpm }: PendulumProps) {
         <View style={[styles.bob, { backgroundColor: C.accent }]} />
       </Animated.View>
       <View style={styles.base}>
-        <View style={styles.baseTriangle} />
+        <View style={[styles.baseTriangle, { borderBottomColor: C.surfaceLight }]} />
       </View>
     </View>
   );
@@ -83,7 +82,6 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: Colors.accent,
     position: "absolute",
     top: 0,
     zIndex: 10,
@@ -97,7 +95,6 @@ const styles = StyleSheet.create({
   armLine: {
     width: 3,
     height: PENDULUM_LENGTH,
-    backgroundColor: Colors.accentMuted,
     borderRadius: 1.5,
   },
   weightTrack: {
@@ -108,14 +105,12 @@ const styles = StyleSheet.create({
   weight: {
     width: 22,
     height: 14,
-    backgroundColor: Colors.accent,
     borderRadius: 3,
   },
   bob: {
     width: BOB_SIZE,
     height: BOB_SIZE,
     borderRadius: BOB_SIZE / 2,
-    backgroundColor: Colors.accent,
     marginTop: -2,
   },
   base: {
@@ -131,7 +126,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 30,
     borderLeftColor: "transparent",
     borderRightColor: "transparent",
-    borderBottomColor: Colors.surfaceLight,
     transform: [{ rotate: "180deg" }],
   },
 });

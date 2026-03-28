@@ -1,5 +1,7 @@
 export type ThemeColor = "gold" | "blue" | "green" | "red" | "purple" | "cyan" | "orange" | "pink" | "rose" | "neon" | "saintspurple" | "deepred" | "beige" | "custom";
 
+export type ThemeMode = "day" | "night";
+
 export interface AccentColors {
   accent: string;
   accentDim: string;
@@ -94,7 +96,19 @@ export function accentFromHex(hex: string): AccentColors {
   };
 }
 
-const Colors = {
+export function accentForMode(base: AccentColors, mode: ThemeMode): AccentColors {
+  if (mode === "night") return base;
+  const { r, g, b } = hexToRgb(base.accent);
+  const darken = (v: number) => Math.round(v * 0.82);
+  const darkened = `#${darken(r).toString(16).padStart(2, "0")}${darken(g).toString(16).padStart(2, "0")}${darken(b).toString(16).padStart(2, "0")}`;
+  return {
+    accent: darkened,
+    accentDim: `rgba(${r}, ${g}, ${b}, 0.12)`,
+    accentMuted: `rgba(${r}, ${g}, ${b}, 0.3)`,
+  };
+}
+
+const DarkColors = {
   background: "#0D1117",
   surface: "#161B22",
   surfaceLight: "#21262D",
@@ -105,22 +119,51 @@ const Colors = {
   textSecondary: "#8B949E",
   textTertiary: "#484F58",
   border: "#30363D",
+  backgroundSecondary: "#1C2028",
   danger: "#F85149",
   success: "#3FB950",
   white: "#FFFFFF",
 };
 
-export function getColors(theme: ThemeColor, customHex?: string) {
+const LightColors = {
+  background: "#F5F5F0",
+  surface: "#EAEAE4",
+  surfaceLight: "#DDDDD6",
+  accent: "#B8922E",
+  accentDim: "rgba(184, 146, 46, 0.12)",
+  accentMuted: "rgba(184, 146, 46, 0.3)",
+  text: "#1A1A1A",
+  textSecondary: "#5C5C5C",
+  textTertiary: "#7A7A72",
+  border: "#C8C8BE",
+  backgroundSecondary: "#E2E2DC",
+  danger: "#D32F2F",
+  success: "#2E7D32",
+  white: "#FFFFFF",
+};
+
+const Colors = DarkColors;
+
+export { DarkColors, LightColors };
+
+export function getBaseColors(mode: ThemeMode) {
+  return mode === "day" ? LightColors : DarkColors;
+}
+
+export function getColors(theme: ThemeColor, customHex?: string, mode: ThemeMode = "night") {
+  const base = getBaseColors(mode);
   if (theme === "custom" && customHex) {
     const custom = accentFromHex(customHex);
-    return { ...Colors, ...custom };
+    const adjusted = mode === "day" ? accentForMode(custom, mode) : custom;
+    return { ...base, ...adjusted };
   }
   const preset = ACCENT_PRESETS[theme === "custom" ? "gold" : theme];
+  const adjusted = mode === "day" ? accentForMode(preset, mode) : preset;
   return {
-    ...Colors,
-    accent: preset.accent,
-    accentDim: preset.accentDim,
-    accentMuted: preset.accentMuted,
+    ...base,
+    accent: adjusted.accent,
+    accentDim: adjusted.accentDim,
+    accentMuted: adjusted.accentMuted,
   };
 }
 

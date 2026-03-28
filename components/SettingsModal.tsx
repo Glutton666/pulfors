@@ -198,7 +198,7 @@ export function SettingsModal({
   micMethod,
   onMicMethodChange,
 }: SettingsModalProps) {
-  const { themeColor, customHex, setThemeColor, setCustomHex, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
+  const { themeColor, customHex, themeMode, setThemeColor, setCustomHex, setThemeMode, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
   const { language, setLanguage, t } = useLanguage();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
@@ -826,8 +826,40 @@ export function SettingsModal({
     <>
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
+          <Ionicons name={themeMode === "day" ? "sunny" : "moon"} size={18} color={C.accent} />
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "themeMode")}</Text>
+        </View>
+        <View style={styles.tripleRow}>
+          {([
+            { value: "night" as const, icon: "moon" as const, labelKey: "nightMode" },
+            { value: "day" as const, icon: "sunny" as const, labelKey: "dayMode" },
+          ]).map((opt) => {
+            const active = themeMode === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                style={[styles.tripleBtn, { borderColor: C.border, backgroundColor: C.surface }, active && [styles.tripleBtnActive, { borderColor: C.accent, backgroundColor: C.accentDim }]]}
+                onPress={() => {
+                  setThemeMode(opt.value);
+                  if (Platform.OS !== "web") Haptics.selectionAsync();
+                }}
+              >
+                <Ionicons name={opt.icon} size={14} color={active ? C.accent : C.textSecondary} style={{ marginRight: 4 }} />
+                <Text style={[styles.tripleBtnText, { color: C.textSecondary }, active && [styles.tripleBtnTextActive, { color: C.accent }]]}>
+                  {t("settings", opt.labelKey)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
           <Ionicons name="language-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "language")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "language")}</Text>
         </View>
         <View style={styles.tripleRow}>
           {([
@@ -853,12 +885,12 @@ export function SettingsModal({
         </View>
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="color-palette-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "themeColor")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "themeColor")}</Text>
         </View>
         <ScrollView
           horizontal
@@ -890,7 +922,7 @@ export function SettingsModal({
                   ]}
                 />
                 {active && (
-                  <Ionicons name="checkmark" size={10} color={Colors.white} style={styles.themeCheck} />
+                  <Ionicons name="checkmark" size={10} color={C.white} style={styles.themeCheck} />
                 )}
               </Pressable>
             );
@@ -913,10 +945,10 @@ export function SettingsModal({
             {themeColor === "custom" ? (
               <>
                 <View style={[styles.themeDot, { backgroundColor: customHex }]} />
-                <Ionicons name="checkmark" size={10} color={Colors.white} style={styles.themeCheck} />
+                <Ionicons name="checkmark" size={10} color={C.white} style={styles.themeCheck} />
               </>
             ) : (
-              <Ionicons name="color-wand-outline" size={18} color={Colors.textSecondary} />
+              <Ionicons name="color-wand-outline" size={18} color={C.textSecondary} />
             )}
           </Pressable>
         </ScrollView>
@@ -935,7 +967,7 @@ export function SettingsModal({
                 end={{ x: 1, y: 0 }}
                 style={styles.hueTrack}
               />
-              <View style={[styles.hueThumb, { backgroundColor: customHex, borderColor: Colors.white }]} />
+              <View style={[styles.hueThumb, { backgroundColor: customHex, borderColor: C.white }]} />
             </View>
             <View style={styles.hexRow}>
               <View style={[styles.hexPreview, { backgroundColor: customHex }]} />
@@ -946,7 +978,7 @@ export function SettingsModal({
                 onBlur={handleHexSubmit}
                 onSubmitEditing={handleHexSubmit}
                 placeholder="#FFFFFF"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={C.textTertiary}
                 maxLength={7}
                 autoCapitalize="characters"
               />
@@ -955,14 +987,14 @@ export function SettingsModal({
         )}
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="image-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "hubImages")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "hubImages")}</Text>
         </View>
-        <Text style={styles.offsetHint}>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>
           {t("settings", "hubImagesHint")}
         </Text>
 
@@ -992,11 +1024,11 @@ export function SettingsModal({
                           styles.beatTypeChip,
                           active
                             ? { backgroundColor: C.accentDim, borderColor: C.accent }
-                            : { backgroundColor: Colors.surface, borderColor: Colors.border },
+                            : { backgroundColor: C.surface, borderColor: C.border },
                         ]}
                       >
-                        <Ionicons name={bt.icon} size={12} color={active ? C.accent : Colors.textTertiary} />
-                        <Text style={[styles.beatTypeChipText, { color: active ? C.accent : Colors.textTertiary }]}>
+                        <Ionicons name={bt.icon} size={12} color={active ? C.accent : C.textTertiary} />
+                        <Text style={[styles.beatTypeChipText, { color: active ? C.accent : C.textTertiary }]}>
                           {bt.label}
                         </Text>
                       </Pressable>
@@ -1004,7 +1036,7 @@ export function SettingsModal({
                   })}
                 </View>
                 <Pressable onPress={() => removeHubImage(img.id)} style={styles.hubImageRemove}>
-                  <Ionicons name="close-circle" size={22} color={Colors.danger} />
+                  <Ionicons name="close-circle" size={22} color={C.danger} />
                 </Pressable>
               </View>
             </View>
@@ -1024,14 +1056,14 @@ export function SettingsModal({
         )}
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="swap-horizontal-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "landscapeReversed")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "landscapeReversed")}</Text>
         </View>
-        <Text style={styles.offsetHint}>{t("settings", "landscapeReversedHint")}</Text>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "landscapeReversedHint")}</Text>
         <Pressable
           onPress={() => {
             onLandscapeReversedChange(!landscapeReversed);
@@ -1039,24 +1071,24 @@ export function SettingsModal({
           }}
           style={[
             styles.toggleRow,
-            { borderColor: landscapeReversed ? C.accent : Colors.border, backgroundColor: landscapeReversed ? C.accentDim : Colors.surface },
+            { borderColor: landscapeReversed ? C.accent : C.border, backgroundColor: landscapeReversed ? C.accentDim : C.surface },
           ]}
         >
-          <Ionicons name={landscapeReversed ? "checkmark-circle" : "ellipse-outline"} size={20} color={landscapeReversed ? C.accent : Colors.textTertiary} />
-          <Text style={[styles.toggleLabel, { color: landscapeReversed ? C.accent : Colors.textSecondary }]}>
+          <Ionicons name={landscapeReversed ? "checkmark-circle" : "ellipse-outline"} size={20} color={landscapeReversed ? C.accent : C.textTertiary} />
+          <Text style={[styles.toggleLabel, { color: landscapeReversed ? C.accent : C.textSecondary }]}>
             {landscapeReversed ? "ON" : "OFF"}
           </Text>
         </Pressable>
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="refresh-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "beatDirection")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "beatDirection")}</Text>
         </View>
-        <Text style={styles.offsetHint}>{t("settings", "beatDirectionHint")}</Text>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "beatDirectionHint")}</Text>
         <View style={styles.tripleRow}>
           {([
             { value: "cw" as const, label: t("settings", "clockwise"), icon: "arrow-redo-outline" as const },
@@ -1072,7 +1104,7 @@ export function SettingsModal({
                   if (Platform.OS !== "web") Haptics.selectionAsync();
                 }}
               >
-                <Ionicons name={opt.icon} size={14} color={active ? C.accent : Colors.textTertiary} style={{ marginRight: 4 }} />
+                <Ionicons name={opt.icon} size={14} color={active ? C.accent : C.textTertiary} style={{ marginRight: 4 }} />
                 <Text style={[styles.tripleBtnText, active && [styles.tripleBtnTextActive, { color: C.accent }]]}>
                   {opt.label}
                 </Text>
@@ -1082,34 +1114,34 @@ export function SettingsModal({
         </View>
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="flash-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "screenFlash")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "screenFlash")}</Text>
         </View>
         <TripleSelector value={flashMode} onChange={onFlashModeChange} accentColor={C.accent} accentDimColor={C.accentDim} options={TRIPLE_OPTS} />
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="phone-portrait-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "hapticFeedback")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "hapticFeedback")}</Text>
         </View>
         <TripleSelector value={hapticMode} onChange={onHapticModeChange} accentColor={C.accent} accentDimColor={C.accentDim} options={TRIPLE_OPTS} />
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <MaterialCommunityIcons name="chart-line" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "activityLogging")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "activityLogging")}</Text>
           <Pressable onPress={() => setShowLoggingInfo(true)} hitSlop={8}>
-            <Ionicons name="information-circle-outline" size={18} color={Colors.textTertiary} />
+            <Ionicons name="information-circle-outline" size={18} color={C.textTertiary} />
           </Pressable>
           <Switch
             value={loggingEnabled}
@@ -1119,12 +1151,12 @@ export function SettingsModal({
               }
               onLoggingEnabledChange(val);
             }}
-            trackColor={{ false: Colors.surfaceLight, true: C.accentMuted }}
-            thumbColor={loggingEnabled ? C.accent : Colors.textSecondary}
+            trackColor={{ false: C.surfaceLight, true: C.accentMuted }}
+            thumbColor={loggingEnabled ? C.accent : C.textSecondary}
             style={{ transform: [{ scale: 0.85 }] }}
           />
         </View>
-        <Text style={styles.offsetHint}>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>
           {t("settings", "loggingHint")}
         </Text>
       </View>
@@ -1136,7 +1168,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name={volumeIcon as any} size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "volume")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "volume")}</Text>
           <Text style={[styles.sectionValue, { color: C.accent }]}>{pct}%</Text>
         </View>
         <View
@@ -1163,12 +1195,12 @@ export function SettingsModal({
         </View>
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name={sampleVolumeIcon as any} size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "sampleVolume")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "sampleVolume")}</Text>
           <Text style={[styles.sectionValue, { color: C.accent }]}>{sampleVolPct}%</Text>
         </View>
         <View
@@ -1195,12 +1227,12 @@ export function SettingsModal({
         </View>
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <MaterialCommunityIcons name="music-note-eighth" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "soundSet")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "soundSet")}</Text>
         </View>
         <View style={styles.soundSetGrid}>
           {SOUND_OPTS.map((opt) => {
@@ -1223,7 +1255,7 @@ export function SettingsModal({
                 <MaterialCommunityIcons
                   name={opt.icon as any}
                   size={20}
-                  color={active ? C.accent : Colors.textSecondary}
+                  color={active ? C.accent : C.textSecondary}
                 />
                 <Text
                   style={[
@@ -1258,7 +1290,7 @@ export function SettingsModal({
                 <MaterialCommunityIcons
                   name="tune-variant"
                   size={20}
-                  color={active ? C.accent : Colors.textSecondary}
+                  color={active ? C.accent : C.textSecondary}
                 />
                 <Text
                   style={[
@@ -1281,7 +1313,7 @@ export function SettingsModal({
                 if (slot) openCustomEditor(slot);
               }}
             >
-              <Ionicons name="add" size={20} color={Colors.textSecondary} />
+              <Ionicons name="add" size={20} color={C.textSecondary} />
               <Text style={styles.soundSetLabel}>
                 {t("customSoundSet", "addCustom")}
               </Text>
@@ -1294,7 +1326,7 @@ export function SettingsModal({
             <View style={csStyles.editorHeader}>
               <Text style={csStyles.editorTitle}>{t("customSoundSet", "title")}</Text>
               <Pressable onPress={() => setEditingCustomSlot(null)}>
-                <Ionicons name="close" size={20} color={Colors.textSecondary} />
+                <Ionicons name="close" size={20} color={C.textSecondary} />
               </Pressable>
             </View>
 
@@ -1305,7 +1337,7 @@ export function SettingsModal({
                 value={customName}
                 onChangeText={setCustomName}
                 placeholder={t("customSoundSet", "namePlaceholder")}
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={C.textTertiary}
                 maxLength={12}
               />
             </View>
@@ -1480,7 +1512,7 @@ export function SettingsModal({
                         if (Platform.OS !== "web") Haptics.selectionAsync();
                       }}
                     >
-                      <Ionicons name="remove" size={14} color={Colors.text} />
+                      <Ionicons name="remove" size={14} color={C.text} />
                     </Pressable>
                     <Text style={[csStyles.durationValue, { color: C.accent }]}>
                       {item.state.duration.toFixed(1)}s
@@ -1493,7 +1525,7 @@ export function SettingsModal({
                         if (Platform.OS !== "web") Haptics.selectionAsync();
                       }}
                     >
-                      <Ionicons name="add" size={14} color={Colors.text} />
+                      <Ionicons name="add" size={14} color={C.text} />
                     </Pressable>
                   </View>
                 </View>
@@ -1515,7 +1547,7 @@ export function SettingsModal({
                 style={[csStyles.saveBtn, { backgroundColor: C.accent }]}
                 onPress={saveCustomSet}
               >
-                <Ionicons name="checkmark" size={16} color={Colors.background} />
+                <Ionicons name="checkmark" size={16} color={C.background} />
                 <Text style={csStyles.saveBtnText}>{t("customSoundSet", "save")}</Text>
               </Pressable>
             </View>
@@ -1523,12 +1555,12 @@ export function SettingsModal({
         )}
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="timer-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "audioOffset")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "audioOffset")}</Text>
           <Text style={[styles.sectionValue, { color: C.accent }]}>
             {audioOffsetMs > 0 ? "+" : ""}{audioOffsetMs}ms
           </Text>
@@ -1542,7 +1574,7 @@ export function SettingsModal({
               if (Platform.OS !== "web") Haptics.selectionAsync();
             }}
           >
-            <Ionicons name="remove" size={18} color={Colors.text} />
+            <Ionicons name="remove" size={18} color={C.text} />
           </Pressable>
           <Pressable
             style={styles.offsetBtn}
@@ -1581,20 +1613,20 @@ export function SettingsModal({
               if (Platform.OS !== "web") Haptics.selectionAsync();
             }}
           >
-            <Ionicons name="add" size={18} color={Colors.text} />
+            <Ionicons name="add" size={18} color={C.text} />
           </Pressable>
         </View>
-        <Text style={styles.offsetHint}>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>
           {t("settings", "audioOffsetHint")}
         </Text>
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="stop-circle-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "timerStop")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "timerStop")}</Text>
         </View>
         <View style={styles.tripleRow}>
           {([
@@ -1618,24 +1650,24 @@ export function SettingsModal({
             );
           })}
         </View>
-        <Text style={styles.offsetHint}>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>
           {timerStopMode === "end-of-cycle"
             ? t("settings", "timerStopHintEndCycle")
             : t("settings", "timerStopHintImmediate")}
         </Text>
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="play-circle-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "backgroundPlay")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "backgroundPlay")}</Text>
           <Switch
             value={backgroundPlay}
             onValueChange={onBackgroundPlayChange}
-            trackColor={{ false: Colors.surfaceLight, true: C.accentMuted }}
-            thumbColor={backgroundPlay ? C.accent : Colors.textSecondary}
+            trackColor={{ false: C.surfaceLight, true: C.accentMuted }}
+            thumbColor={backgroundPlay ? C.accent : C.textSecondary}
             style={{ transform: [{ scale: 0.85 }] }}
           />
         </View>
@@ -1643,11 +1675,11 @@ export function SettingsModal({
 
       {Platform.OS === "android" && (
         <>
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: C.border }]} />
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="mic-outline" size={18} color={C.accent} />
-              <Text style={styles.sectionLabel}>{t("settings", "micMethod")}</Text>
+              <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "micMethod")}</Text>
             </View>
             <View style={styles.tripleRow}>
               {([
@@ -1671,7 +1703,7 @@ export function SettingsModal({
                 );
               })}
             </View>
-            <Text style={styles.offsetHint}>
+            <Text style={[styles.offsetHint, { color: C.textTertiary }]}>
               {t("settings", "micMethodHint")}
             </Text>
           </View>
@@ -1685,7 +1717,7 @@ export function SettingsModal({
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="person-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "nickname")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "nickname")}</Text>
         </View>
         <TextInput
           style={[styles.usernameInput, { borderColor: C.accentMuted }]}
@@ -1695,27 +1727,27 @@ export function SettingsModal({
             onUsernameChange(text);
           }}
           placeholder={t("settings", "nicknamePlaceholder")}
-          placeholderTextColor={Colors.textTertiary}
+          placeholderTextColor={C.textTertiary}
           maxLength={30}
           testID="settings-username"
         />
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="location" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "practiceRoom")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "practiceRoom")}</Text>
         </View>
 
         {roomTrackingActive && trackingRoomName && (
-          <View style={[styles.trackingBanner, { borderColor: Colors.success }]}>
+          <View style={[styles.trackingBanner, { borderColor: C.success }]}>
             <View style={styles.trackingDot} />
-            <Text style={[styles.trackingText, { color: Colors.success }]}>
+            <Text style={[styles.trackingText, { color: C.success }]}>
               {trackingRoomName}{t("settings", "trackingAt")}
             </Text>
-            <Pressable style={[styles.trackingStopBtn, { backgroundColor: Colors.danger }]} onPress={onStopRoomTracking}>
+            <Pressable style={[styles.trackingStopBtn, { backgroundColor: C.danger }]} onPress={onStopRoomTracking}>
               <Text style={styles.trackingStopText}>{t("settings", "trackingStop")}</Text>
             </Pressable>
           </View>
@@ -1745,7 +1777,7 @@ export function SettingsModal({
                   </Pressable>
                 )}
                 <Pressable onPress={() => handleDeleteRoom(room.id)} hitSlop={8}>
-                  <Ionicons name="trash-outline" size={14} color={Colors.textTertiary} />
+                  <Ionicons name="trash-outline" size={14} color={C.textTertiary} />
                 </Pressable>
               </View>
             </View>
@@ -1761,14 +1793,14 @@ export function SettingsModal({
                 value={newRoomName}
                 onChangeText={setNewRoomName}
                 placeholder={t("settings", "roomNamePlaceholder")}
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={C.textTertiary}
                 maxLength={30}
               />
               <Pressable style={[styles.addRoomSaveBtn, { backgroundColor: C.accent }]} onPress={handleAddRoom} disabled={addingRoom}>
                 {addingRoom ? (
-                  <ActivityIndicator size="small" color={Colors.surface} />
+                  <ActivityIndicator size="small" color={C.surface} />
                 ) : (
-                  <Ionicons name="checkmark" size={16} color={Colors.surface} />
+                  <Ionicons name="checkmark" size={16} color={C.surface} />
                 )}
               </Pressable>
             </View>
@@ -1784,12 +1816,12 @@ export function SettingsModal({
         )}
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="cloud-download-outline" size={18} color={C.accent} />
-          <Text style={styles.sectionLabel}>{t("settings", "backupData")}</Text>
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "backupData")}</Text>
         </View>
         <View style={{ flexDirection: "row", gap: 10, marginTop: 6 }}>
           <Pressable
@@ -1851,7 +1883,7 @@ export function SettingsModal({
         </View>
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
 
       {onResetApp && !showResetConfirm && (
         <Pressable
@@ -1940,17 +1972,17 @@ export function SettingsModal({
           onStartShouldSetResponder={() => true}
         >
           <Pressable
-            style={styles.sheet}
+            style={[styles.sheet, { backgroundColor: C.surface, borderColor: C.border }]}
             onPress={(e) => e.stopPropagation()}
           >
             <View style={styles.header}>
-              <Text style={styles.title}>{t("settings", "title")}</Text>
+              <Text style={[styles.title, { color: C.text }]}>{t("settings", "title")}</Text>
               <Pressable
                 onPress={onClose}
                 hitSlop={12}
                 testID="settings-close"
               >
-                <Ionicons name="close" size={22} color={Colors.textSecondary} />
+                <Ionicons name="close" size={22} color={C.textSecondary} />
               </Pressable>
             </View>
 
@@ -1964,14 +1996,14 @@ export function SettingsModal({
                   <Ionicons
                     name={tab.icon as any}
                     size={16}
-                    color={activeTab === tab.key ? C.accent : Colors.textSecondary}
+                    color={activeTab === tab.key ? C.accent : C.textSecondary}
                   />
-                  <Text style={[styles.tabBtnText, activeTab === tab.key && { color: C.accent }]}>{tab.label}</Text>
+                  <Text style={[styles.tabBtnText, { color: C.textSecondary }, activeTab === tab.key && { color: C.accent }]}>{tab.label}</Text>
                 </Pressable>
               ))}
             </View>
 
-            <View style={styles.divider} />
+            <View style={[styles.divider, { backgroundColor: C.border }]} />
 
             <Animated.View style={{ opacity: tabFadeAnim, transform: [{ translateX: tabSlideAnim }] }}>
               {renderTabContent()}
@@ -1989,43 +2021,43 @@ export function SettingsModal({
       >
         <Pressable style={styles.overlay} onPress={() => setShowLoggingInfo(false)}>
           <View style={styles.loggingInfoContainer}>
-            <Pressable style={styles.loggingInfoSheet} onPress={(e) => e.stopPropagation()}>
+            <Pressable style={[styles.loggingInfoSheet, { backgroundColor: C.surface, borderColor: C.border }]} onPress={(e) => e.stopPropagation()}>
               <View style={styles.loggingInfoHeader}>
                 <Ionicons name="analytics-outline" size={28} color={C.accent} />
-                <Text style={styles.loggingInfoTitle}>{t("loggingInfo", "title")}</Text>
+                <Text style={[styles.loggingInfoTitle, { color: C.text }]}>{t("loggingInfo", "title")}</Text>
               </View>
-              <Text style={styles.loggingInfoSubtitle}>{t("loggingInfo", "subtitle")}</Text>
+              <Text style={[styles.loggingInfoSubtitle, { color: C.textSecondary }]}>{t("loggingInfo", "subtitle")}</Text>
 
-              <View style={styles.loggingInfoCard}>
+              <View style={[styles.loggingInfoCard, { backgroundColor: C.surfaceLight }]}>
                 <View style={styles.loggingInfoRow}>
                   <Ionicons name="time-outline" size={16} color={C.accent} />
-                  <Text style={styles.loggingInfoText}>{t("loggingInfo", "row1")}</Text>
+                  <Text style={[styles.loggingInfoText, { color: C.textSecondary }]}>{t("loggingInfo", "row1")}</Text>
                 </View>
                 <View style={styles.loggingInfoRow}>
                   <Ionicons name="musical-notes-outline" size={16} color={C.accent} />
-                  <Text style={styles.loggingInfoText}>{t("loggingInfo", "row2")}</Text>
+                  <Text style={[styles.loggingInfoText, { color: C.textSecondary }]}>{t("loggingInfo", "row2")}</Text>
                 </View>
                 <View style={styles.loggingInfoRow}>
                   <Ionicons name="location-outline" size={16} color={C.accent} />
-                  <Text style={styles.loggingInfoText}>{t("loggingInfo", "row3")}</Text>
+                  <Text style={[styles.loggingInfoText, { color: C.textSecondary }]}>{t("loggingInfo", "row3")}</Text>
                 </View>
                 <View style={styles.loggingInfoRow}>
                   <Ionicons name="bar-chart-outline" size={16} color={C.accent} />
-                  <Text style={styles.loggingInfoText}>{t("loggingInfo", "row4")}</Text>
+                  <Text style={[styles.loggingInfoText, { color: C.textSecondary }]}>{t("loggingInfo", "row4")}</Text>
                 </View>
                 <View style={styles.loggingInfoRow}>
                   <Ionicons name="trophy-outline" size={16} color={C.accent} />
-                  <Text style={styles.loggingInfoText}>{t("loggingInfo", "row5")}</Text>
+                  <Text style={[styles.loggingInfoText, { color: C.textSecondary }]}>{t("loggingInfo", "row5")}</Text>
                 </View>
                 <View style={styles.loggingInfoRow}>
                   <Ionicons name="share-social-outline" size={16} color={C.accent} />
-                  <Text style={styles.loggingInfoText}>{t("loggingInfo", "row6")}</Text>
+                  <Text style={[styles.loggingInfoText, { color: C.textSecondary }]}>{t("loggingInfo", "row6")}</Text>
                 </View>
               </View>
 
               <View style={styles.loggingInfoFooter}>
-                <Ionicons name="shield-checkmark-outline" size={14} color={Colors.textTertiary} />
-                <Text style={styles.loggingInfoFooterText}>{t("loggingInfo", "footer")}</Text>
+                <Ionicons name="shield-checkmark-outline" size={14} color={C.textTertiary} />
+                <Text style={[styles.loggingInfoFooterText, { color: C.textTertiary }]}>{t("loggingInfo", "footer")}</Text>
               </View>
 
               <Pressable

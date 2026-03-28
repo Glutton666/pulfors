@@ -46,6 +46,7 @@ const BEAT_COLORS: Record<BeatType, string> = {
 };
 
 function BeatDots({ beatTypes, size = 6 }: { beatTypes: BeatType[]; size?: number }) {
+  const { colors: C } = useTheme();
   return (
     <View style={{ flexDirection: "row", gap: moderateScale(2, 0.3) }}>
       {beatTypes.slice(0, 12).map((bt, i) => (
@@ -55,12 +56,12 @@ function BeatDots({ beatTypes, size = 6 }: { beatTypes: BeatType[]; size?: numbe
             width: size,
             height: size,
             borderRadius: size / 2,
-            backgroundColor: BEAT_COLORS[bt] || Colors.textSecondary,
+            backgroundColor: BEAT_COLORS[bt] || C.textSecondary,
           }}
         />
       ))}
       {beatTypes.length > 12 && (
-        <Text style={{ fontSize: moderateScale(8, 0.3), color: Colors.textTertiary }}>+{beatTypes.length - 12}</Text>
+        <Text style={{ fontSize: moderateScale(8, 0.3), color: C.textTertiary }}>+{beatTypes.length - 12}</Text>
       )}
     </View>
   );
@@ -89,6 +90,7 @@ function QueueItem({
   onMoveDown: () => void;
   onImageChange?: (imageUri: string | undefined) => void;
 }) {
+  const { colors: C } = useTheme();
   const { t } = useLanguage();
 
   const handlePickImage = useCallback(async () => {
@@ -103,13 +105,13 @@ function QueueItem({
   }, [onImageChange]);
 
   return (
-    <View style={[styles.queueItem, isCurrent && { borderColor: accentColor, borderWidth: 1.5, backgroundColor: "rgba(212,168,70,0.08)" }]}>
+    <View style={[styles.queueItem, { borderColor: C.border, backgroundColor: C.surfaceLight }, isCurrent && { borderColor: accentColor, borderWidth: 1.5, backgroundColor: "rgba(212,168,70,0.08)" }]}>
       <View style={styles.reorderBtns}>
         <Pressable onPress={onMoveUp} hitSlop={4} disabled={isFirst} style={{ opacity: isFirst ? 0.25 : 1 }}>
-          <Ionicons name="chevron-up" size={14} color={Colors.textTertiary} />
+          <Ionicons name="chevron-up" size={14} color={C.textTertiary} />
         </Pressable>
         <Pressable onPress={onMoveDown} hitSlop={4} disabled={isLast} style={{ opacity: isLast ? 0.25 : 1 }}>
-          <Ionicons name="chevron-down" size={14} color={Colors.textTertiary} />
+          <Ionicons name="chevron-down" size={14} color={C.textTertiary} />
         </Pressable>
       </View>
       <View style={styles.queueIndex}>
@@ -123,7 +125,7 @@ function QueueItem({
         {entry.imageUri ? (
           <Image source={{ uri: entry.imageUri }} style={styles.queueThumbImg} />
         ) : (
-          <Ionicons name="image-outline" size={16} color={Colors.textTertiary} />
+          <Ionicons name="image-outline" size={16} color={C.textTertiary} />
         )}
       </Pressable>
       <View style={styles.queueItemInfo}>
@@ -141,7 +143,7 @@ function QueueItem({
         </Pressable>
       )}
       <Pressable onPress={onRemove} hitSlop={8} style={styles.removeBtn}>
-        <Ionicons name="close-circle" size={18} color={Colors.textTertiary} />
+        <Ionicons name="close-circle" size={18} color={C.textTertiary} />
       </Pressable>
     </View>
   );
@@ -319,7 +321,7 @@ export function NoteModeView({
               <Image source={{ uri: prevEntry.imageUri }} style={styles.stripThumb} />
             ) : (
               <View style={[styles.stripThumb, styles.stripThumbEmpty]}>
-                <Ionicons name="musical-note" size={10} color={Colors.textTertiary} />
+                <Ionicons name="musical-note" size={10} color={C.textTertiary} />
               </View>
             )}
             <Text style={styles.stripLabel} numberOfLines={1}>{prevEntry.label}</Text>
@@ -343,7 +345,7 @@ export function NoteModeView({
               <Image source={{ uri: nextEntry.imageUri }} style={styles.stripThumb} />
             ) : (
               <View style={[styles.stripThumb, styles.stripThumbEmpty]}>
-                <Ionicons name="musical-note" size={10} color={Colors.textTertiary} />
+                <Ionicons name="musical-note" size={10} color={C.textTertiary} />
               </View>
             )}
             <Text style={styles.stripLabel} numberOfLines={1}>{nextEntry.label}</Text>
@@ -363,7 +365,7 @@ export function NoteModeView({
                 <Image source={{ uri: currentEntry.imageUri }} style={styles.playingImage} resizeMode="contain" />
               ) : (
                 <View style={styles.playingImagePlaceholder}>
-                  <Ionicons name="musical-notes" size={36} color={Colors.textTertiary} />
+                  <Ionicons name="musical-notes" size={36} color={C.textTertiary} />
                   <Text style={[styles.playingImagePlaceholderText, { fontSize: moderateScale(14, 0.3) }]}>{currentEntry?.label}</Text>
                 </View>
               )}
@@ -375,7 +377,7 @@ export function NoteModeView({
                 <Text style={[styles.progressText, { color: C.accent }]}>{currentIndex + 1}/{queue.length}</Text>
               </View>
               <Pressable
-                style={[styles.playButton, { backgroundColor: Colors.danger, width: moderateScale(36, 0.4), height: moderateScale(36, 0.4), borderRadius: moderateScale(18, 0.4) }]}
+                style={[styles.playButton, { backgroundColor: C.danger, width: moderateScale(36, 0.4), height: moderateScale(36, 0.4), borderRadius: moderateScale(18, 0.4) }]}
                 onPress={onTogglePlay}
               >
                 <Ionicons name="stop" size={20} color="#fff" />
@@ -402,7 +404,7 @@ export function NoteModeView({
             <Image source={{ uri: currentEntry.imageUri }} style={styles.playingImage} resizeMode="contain" />
           ) : (
             <View style={styles.playingImagePlaceholder}>
-              <Ionicons name="musical-notes" size={48} color={Colors.textTertiary} />
+              <Ionicons name="musical-notes" size={48} color={C.textTertiary} />
               <Text style={styles.playingImagePlaceholderText}>{currentEntry?.label}</Text>
             </View>
           )}
@@ -411,7 +413,7 @@ export function NoteModeView({
         <View style={styles.playingStripContainer}>
           {renderPlayingStrip()}
           <Pressable
-            style={[styles.playButton, { backgroundColor: Colors.danger }]}
+            style={[styles.playButton, { backgroundColor: C.danger }]}
             onPress={onTogglePlay}
           >
             <Ionicons name="stop" size={28} color="#fff" />
@@ -424,14 +426,14 @@ export function NoteModeView({
   const renderQueueSection = () => (
     <>
       <View style={[styles.sectionHeader, isLandscape && { marginBottom: moderateScale(2, 0.3) }]}>
-        <Text style={[styles.sectionTitle, isLandscape && { fontSize: moderateScale(11, 0.3) }]}>{t("noteMode", "queue")}</Text>
-        <Text style={[styles.sectionCount, isLandscape && { fontSize: moderateScale(10, 0.3) }]}>{queue.length} {t("noteMode", "items")}</Text>
+        <Text style={[styles.sectionTitle, { color: C.text }, isLandscape && { fontSize: moderateScale(11, 0.3) }]}>{t("noteMode", "queue")}</Text>
+        <Text style={[styles.sectionCount, { color: C.textTertiary }, isLandscape && { fontSize: moderateScale(10, 0.3) }]}>{queue.length} {t("noteMode", "items")}</Text>
       </View>
       <View style={[styles.queueContainer, !isLandscape && sourceCollapsed && { flex: 2 }, isLandscape && { marginBottom: 0 }]}>
         {queue.length === 0 ? (
           <View style={styles.emptyQueue}>
-            <Ionicons name="musical-notes-outline" size={isLandscape ? 24 : 32} color={Colors.textTertiary} />
-            <Text style={styles.emptyQueueText}>{t("noteMode", "emptyQueue")}</Text>
+            <Ionicons name="musical-notes-outline" size={isLandscape ? 24 : 32} color={C.textTertiary} />
+            <Text style={[styles.emptyQueueText, { color: C.textTertiary }]}>{t("noteMode", "emptyQueue")}</Text>
           </View>
         ) : (
           <FlatList
@@ -469,11 +471,11 @@ export function NoteModeView({
           <Ionicons
             name={sourceCollapsed ? "chevron-forward" : "chevron-down"}
             size={14}
-            color={Colors.textSecondary}
+            color={C.textSecondary}
           />
-          <Text style={styles.sectionTitle}>{t("noteMode", "source")}</Text>
+          <Text style={[styles.sectionTitle, { color: C.text }]}>{t("noteMode", "source")}</Text>
           {sourceCollapsed && barEntries.length > 0 && (
-            <Text style={styles.sectionCount}>{barEntries.length}</Text>
+            <Text style={[styles.sectionCount, { color: C.textTertiary }]}>{barEntries.length}</Text>
           )}
         </View>
         {!sourceCollapsed && (
@@ -535,7 +537,7 @@ export function NoteModeView({
             <Ionicons
               name={playModeIcons[mode] as any}
               size={isLandscape ? 12 : 14}
-              color={playMode === mode ? C.accent : Colors.textTertiary}
+              color={playMode === mode ? C.accent : C.textTertiary}
             />
             <Text
               style={[
@@ -552,7 +554,7 @@ export function NoteModeView({
       <Pressable
         style={[
           styles.playButton,
-          { backgroundColor: isPlaying ? Colors.danger : C.accent },
+          { backgroundColor: isPlaying ? C.danger : C.accent },
           queue.length === 0 && { opacity: 0.4 },
           isLandscape && { width: moderateScale(60, 0.4), height: moderateScale(30, 0.4), borderRadius: moderateScale(8, 0.3) },
         ]}
@@ -570,15 +572,15 @@ export function NoteModeView({
         <View style={{ flex: 2 }}>
           <View style={[styles.header, { marginBottom: moderateScale(2, 0.3), gap: moderateScale(8, 0.3) }]}>
             <Pressable onPress={onExitNoteMode} hitSlop={8}>
-              <Ionicons name="arrow-back" size={moderateScale(18, 0.3)} color={Colors.textSecondary} />
+              <Ionicons name="arrow-back" size={moderateScale(18, 0.3)} color={C.textSecondary} />
             </Pressable>
             <Text style={[styles.title, { color: C.accent, fontSize: moderateScale(14, 0.3) }]}>{t("noteMode", "title")}</Text>
             <View style={[styles.headerActions, { gap: moderateScale(6, 0.3) }]}>
-              <Pressable onPress={handleSaveWithFeedback} hitSlop={6} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : Colors.surface, width: moderateScale(28, 0.4), height: moderateScale(28, 0.4) }]}>
+              <Pressable onPress={handleSaveWithFeedback} hitSlop={6} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : C.surface, width: moderateScale(28, 0.4), height: moderateScale(28, 0.4) }]}>
                 <Ionicons name={saved ? "checkmark" : "save-outline"} size={moderateScale(13, 0.3)} color={saved ? "#4CAF50" : C.accent} />
               </Pressable>
-              <Pressable onPress={handleReset} hitSlop={6} style={[styles.headerBtn, { borderColor: Colors.danger, width: moderateScale(28, 0.4), height: moderateScale(28, 0.4) }]}>
-                <Ionicons name="refresh" size={moderateScale(13, 0.3)} color={Colors.danger} />
+              <Pressable onPress={handleReset} hitSlop={6} style={[styles.headerBtn, { borderColor: C.danger, width: moderateScale(28, 0.4), height: moderateScale(28, 0.4) }]}>
+                <Ionicons name="refresh" size={moderateScale(13, 0.3)} color={C.danger} />
               </Pressable>
             </View>
           </View>
@@ -595,18 +597,18 @@ export function NoteModeView({
   return (
     <View style={styles.container}>
       <Pressable onPress={onExitNoteMode} hitSlop={12} style={styles.closeButtonCenter}>
-        <Ionicons name="close" size={28} color={Colors.textSecondary} />
+        <Ionicons name="close" size={28} color={C.textSecondary} />
       </Pressable>
 
       <View style={styles.header}>
         <View style={{ width: 22 }} />
         <Text style={[styles.title, { color: C.accent }]}>{t("noteMode", "title")}</Text>
         <View style={styles.headerActions}>
-          <Pressable onPress={handleSaveWithFeedback} hitSlop={6} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : Colors.surface }]}>
+          <Pressable onPress={handleSaveWithFeedback} hitSlop={6} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : C.surface }]}>
             <Ionicons name={saved ? "checkmark" : "save-outline"} size={16} color={saved ? "#4CAF50" : C.accent} />
           </Pressable>
-          <Pressable onPress={handleReset} hitSlop={6} style={[styles.headerBtn, { borderColor: Colors.danger }]}>
-            <Ionicons name="refresh" size={16} color={Colors.danger} />
+          <Pressable onPress={handleReset} hitSlop={6} style={[styles.headerBtn, { borderColor: C.danger }]}>
+            <Ionicons name="refresh" size={16} color={C.danger} />
           </Pressable>
         </View>
       </View>

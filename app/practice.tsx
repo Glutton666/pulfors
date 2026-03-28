@@ -3,11 +3,13 @@ import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { setPendingImport } from "@/lib/pending-import";
 import Colors from "@/constants/colors";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function PracticeDeepLink() {
   const { d } = useLocalSearchParams<{ d: string }>();
   const router = useRouter();
   const processed = useRef(false);
+  const { colors: C } = useTheme();
 
   useEffect(() => {
     if (processed.current) return;
@@ -32,9 +34,9 @@ export default function PracticeDeepLink() {
   }, [d]);
 
   return (
-    <View style={styles.container}>
-      <ActivityIndicator size="large" color={Colors.textSecondary} />
-      <Text style={styles.text}>설정 가져오는 중...</Text>
+    <View style={[styles.container, { backgroundColor: C.background }]}>
+      <ActivityIndicator size="large" color={C.textSecondary} />
+      <Text style={[styles.text, { color: C.textSecondary }]}>설정 가져오는 중...</Text>
     </View>
   );
 }
@@ -42,7 +44,6 @@ export default function PracticeDeepLink() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
     justifyContent: "center",
     alignItems: "center",
     gap: 16,
@@ -50,6 +51,5 @@ const styles = StyleSheet.create({
   text: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 16,
-    color: Colors.textSecondary,
   },
 });

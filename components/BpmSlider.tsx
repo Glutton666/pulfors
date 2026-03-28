@@ -17,7 +17,6 @@ import Animated, {
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { moderateScale } from "@/lib/scale";
 
@@ -209,7 +208,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
         onLayout={() => measureLayout()}
         {...panResponder.panHandlers}
       >
-        <Animated.View style={[styles.card, bodyStyle, halfTime && { borderColor: C.accent + "80" }, isLandscape && { paddingTop: moderateScale(8, 0.3), paddingBottom: moderateScale(6, 0.3) }]} testID="bpm-slider">
+        <Animated.View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }, bodyStyle, halfTime && { borderColor: C.accent + "80" }, isLandscape && { paddingTop: moderateScale(8, 0.3), paddingBottom: moderateScale(6, 0.3) }]} testID="bpm-slider">
           <Animated.View style={[styles.flashOverlay, flashStyle, { backgroundColor: C.accent }]} />
           <Animated.View style={[styles.glowLeft, leftGlowStyle]}>
             <LinearGradient
@@ -229,17 +228,17 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
           </Animated.View>
 
           <View style={styles.zoneRow} pointerEvents="none">
-            <Feather name="activity" size={isLandscape ? 10 : 12} color={Colors.textTertiary} />
-            <Text style={[styles.tapLabel, isLandscape && { fontSize: moderateScale(8, 0.3) }]}>TAP</Text>
+            <Feather name="activity" size={isLandscape ? 10 : 12} color={C.textTertiary} />
+            <Text style={[styles.tapLabel, { color: C.textTertiary }, isLandscape && { fontSize: moderateScale(8, 0.3) }]}>TAP</Text>
           </View>
 
           <View style={styles.bpmRow} pointerEvents="none">
-            <Feather name="minus" size={isLandscape ? 18 : 24} color={Colors.textSecondary} style={styles.bpmIcon} />
+            <Feather name="minus" size={isLandscape ? 18 : 24} color={C.textSecondary} style={styles.bpmIcon} />
             <View style={styles.bpmContent}>
-              <Text style={[styles.bpmValue, isLandscape && { fontSize: moderateScale(40, 0.4), lineHeight: moderateScale(46, 0.4) }]} testID="bpm-display">{bpm}</Text>
-              <Text style={[styles.bpmUnit, halfTime && { color: C.accent }, isLandscape && { fontSize: moderateScale(10, 0.3), marginTop: -2 }]}>{halfTime ? "½× BPM" : "BPM"}</Text>
+              <Text style={[styles.bpmValue, { color: C.text }, isLandscape && { fontSize: moderateScale(40, 0.4), lineHeight: moderateScale(46, 0.4) }]} testID="bpm-display">{bpm}</Text>
+              <Text style={[styles.bpmUnit, { color: C.textTertiary }, halfTime && { color: C.accent }, isLandscape && { fontSize: moderateScale(10, 0.3), marginTop: -2 }]}>{halfTime ? "½× BPM" : "BPM"}</Text>
             </View>
-            <Feather name="plus" size={isLandscape ? 18 : 24} color={Colors.textSecondary} style={styles.bpmIcon} />
+            <Feather name="plus" size={isLandscape ? 18 : 24} color={C.textSecondary} style={styles.bpmIcon} />
           </View>
 
           <View style={styles.ticks} pointerEvents="none">
@@ -248,6 +247,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
                 key={i}
                 style={[
                   styles.tick,
+                  { backgroundColor: C.textTertiary },
                   i % 5 === 0 && styles.tickBig,
                   i === 14 && [styles.tickMid, { backgroundColor: C.accent }],
                 ]}
@@ -257,7 +257,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
         </Animated.View>
       </View>
 
-      {!isLandscape && <Text style={styles.hint}>hold sides ±10 · slide center to adjust</Text>}
+      {!isLandscape && <Text style={[styles.hint, { color: C.textTertiary }]}>hold sides ±10 · slide center to adjust</Text>}
     </View>
   );
 }
@@ -277,14 +277,11 @@ const styles = StyleSheet.create({
     paddingTop: moderateScale(14, 0.3),
     paddingBottom: moderateScale(10, 0.3),
     borderRadius: moderateScale(20, 0.3),
-    backgroundColor: Colors.surface,
     overflow: "hidden",
     borderWidth: 1.5,
-    borderColor: Colors.border,
   },
   flashOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.accent,
     borderRadius: 20,
   },
   glowLeft: {
@@ -310,13 +307,11 @@ const styles = StyleSheet.create({
   bpmValue: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: moderateScale(64, 0.4),
-    color: Colors.text,
     lineHeight: moderateScale(72, 0.4),
   },
   bpmUnit: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(13, 0.3),
-    color: Colors.textTertiary,
     letterSpacing: 4,
     marginTop: -4,
   },
@@ -345,7 +340,6 @@ const styles = StyleSheet.create({
   tapLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: moderateScale(8, 0.3),
-    color: Colors.textTertiary,
     letterSpacing: 1.5,
   },
   ticks: {
@@ -359,7 +353,6 @@ const styles = StyleSheet.create({
   tick: {
     width: 1,
     height: moderateScale(3, 0.3),
-    backgroundColor: Colors.textTertiary,
     opacity: 0.3,
     borderRadius: 0.5,
   },
@@ -368,14 +361,12 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   tickMid: {
-    backgroundColor: Colors.accent,
     opacity: 0.7,
     height: moderateScale(5, 0.3),
   },
   hint: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: moderateScale(11, 0.3),
-    color: Colors.textTertiary,
     letterSpacing: 1,
     opacity: 0.6,
   },

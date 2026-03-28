@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import Colors, { getColors, type ThemeColor } from "@/constants/colors";
+import Colors, { getColors, type ThemeColor, type ThemeMode } from "@/constants/colors";
 
 const THEME_KEY = "metronome_theme_color";
 const CUSTOM_HEX_KEY = "metronome_custom_hex";
 const HUB_IMAGES_KEY = "metronome_hub_images";
+const THEME_MODE_KEY = "metronome_theme_mode";
 
 export type BeatTypeKey = "normal" | "accent" | "strong";
 
@@ -17,8 +18,10 @@ export interface HubImage {
 interface ThemeContextValue {
   themeColor: ThemeColor;
   customHex: string;
+  themeMode: ThemeMode;
   setThemeColor: (color: ThemeColor) => void;
   setCustomHex: (hex: string) => void;
+  setThemeMode: (mode: ThemeMode) => void;
   colors: typeof Colors;
   hubImages: HubImage[];
   addHubImage: (uri: string) => void;
@@ -37,19 +40,22 @@ function genId() {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [themeColor, setThemeColorState] = useState<ThemeColor>("gold");
   const [customHex, setCustomHexState] = useState<string>("#D4A846");
+  const [themeMode, setThemeModeState] = useState<ThemeMode>("night");
   const [hubImages, setHubImagesState] = useState<HubImage[]>([]);
   const beatTypeCycleRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     (async () => {
       try {
-        const [saved, savedHex, savedImages] = await Promise.all([
+        const [saved, savedHex, savedImages, savedMode] = await Promise.all([
           AsyncStorage.getItem(THEME_KEY),
           AsyncStorage.getItem(CUSTOM_HEX_KEY),
           AsyncStorage.getItem(HUB_IMAGES_KEY),
+          AsyncStorage.getItem(THEME_MODE_KEY),
         ]);
         if (saved) setThemeColorState(saved as ThemeColor);
         if (savedHex) setCustomHexState(savedHex);
+        if (savedMode === "day" || savedMode === "night") setThemeModeState(savedMode);
         if (savedImages) {
           try {
             const parsed = JSON.parse(savedImages);
@@ -72,6 +78,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setCustomHex = useCallback((hex: string) => {
     setCustomHexState(hex);
     AsyncStorage.setItem(CUSTOM_HEX_KEY, hex).catch(() => {});
+  }, []);
+
+  const setThemeMode = useCallback((mode: ThemeMode) => {
+    setThemeModeState(mode);
+    AsyncStorage.setItem(THEME_MODE_KEY, mode).catch(() => {});
   }, []);
 
   const addHubImage = useCallback((uri: string) => {
@@ -110,14 +121,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return matches[idx].uri;
   }, [hubImages]);
 
-  const colors = useMemo(() => getColors(themeColor, customHex), [themeColor, customHex]);
+  const colors = useMemo(() => getColors(themeColor, customHex, themeMode), [themeColor, customHex, themeMode]);
 
   const value = useMemo(
     () => ({
-      themeColor, customHex, setThemeColor, setCustomHex, colors,
+      themeColor, customHex, themeMode, setThemeColor, setCustomHex, setThemeMode, colors,
       hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes, getImageForBeatType,
     }),
-    [themeColor, customHex, setThemeColor, setCustomHex, colors,
+    [themeColor, customHex, themeMode, setThemeColor, setCustomHex, setThemeMode, colors,
      hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes, getImageForBeatType]
   );
 

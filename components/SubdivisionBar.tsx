@@ -17,7 +17,6 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { moderateScale } from "@/lib/scale";
 import type { BeatType } from "@/lib/metronome-engine";
@@ -42,16 +41,16 @@ const SWIPE_THRESHOLD = 30;
 const SHAKE_WINDOW_MS = 2000;
 const SHAKE_COUNT_TRIGGER = 4;
 
-function getCellColor(type: BeatType, active: boolean, accentColor: string, accentMutedColor: string): string {
+function getCellColor(type: BeatType, active: boolean, accentColor: string, accentMutedColor: string, textColor: string, textTertiaryColor: string): string {
   if (type === "strong") return accentColor;
   if (type === "accent") return active ? accentColor : accentMutedColor;
-  if (type === "normal") return active ? Colors.text : Colors.textTertiary;
+  if (type === "normal") return active ? textColor : textTertiaryColor;
   return "transparent";
 }
 
-function getCellBorder(type: BeatType): string {
-  if (type === "mute") return Colors.textTertiary;
-  if (type === "strong") return Colors.white;
+function getCellBorder(type: BeatType, textTertiaryColor: string, whiteColor: string): string {
+  if (type === "mute") return textTertiaryColor;
+  if (type === "strong") return whiteColor;
   return "transparent";
 }
 
@@ -394,7 +393,7 @@ export function SubdivisionBar({
     >
       <View style={styles.cellsContainer} testID="subdivision-cells">
         <View style={styles.swipeHint}>
-          <Feather name="chevron-left" size={12} color={Colors.textTertiary} />
+          <Feather name="chevron-left" size={12} color={C.textTertiary} />
         </View>
 
         {displayPattern.map((type, i) => {
@@ -412,13 +411,13 @@ export function SubdivisionBar({
               {type === "strong" ? (
                 <View style={[{ width: clampedCellSize, height: clampedCellSize, borderRadius: dynamicRadius, overflow: "hidden", opacity: isPlaying ? (isActive ? 1 : 0.55) : 1 }]}>
                   <LinearGradient
-                    colors={[Colors.white, C.accent, C.accent]}
+                    colors={[C.white, C.accent, C.accent]}
                     locations={[0, 0.4, 1]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={{ width: clampedCellSize, height: clampedCellSize, alignItems: "center", justifyContent: "center", borderRadius: dynamicRadius }}
                   >
-                    <Text style={{ color: Colors.white, fontSize: dynamicFontSize, fontWeight: "bold" as const, lineHeight: dynamicFontSize + 2, textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
+                    <Text style={{ color: C.white, fontSize: dynamicFontSize, fontWeight: "bold" as const, lineHeight: dynamicFontSize + 2, textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
                   </LinearGradient>
                 </View>
               ) : (
@@ -428,8 +427,8 @@ export function SubdivisionBar({
                       width: clampedCellSize,
                       height: clampedCellSize,
                       borderRadius: dynamicRadius,
-                      backgroundColor: getCellColor(type, true, C.accent, C.accentMuted),
-                      borderColor: getCellBorder(type),
+                      backgroundColor: getCellColor(type, true, C.accent, C.accentMuted, C.text, C.textTertiary),
+                      borderColor: getCellBorder(type, C.textTertiary, C.white),
                       borderWidth: type === "mute" ? 2 : 0,
                       opacity: isPlaying ? (isActive ? 1 : 0.3) : 1,
                     },
@@ -441,7 +440,7 @@ export function SubdivisionBar({
         })}
 
         <View style={styles.swipeHint}>
-          <Feather name="chevron-right" size={12} color={Colors.textTertiary} />
+          <Feather name="chevron-right" size={12} color={C.textTertiary} />
         </View>
       </View>
     </Animated.View>
@@ -474,13 +473,13 @@ export function DragGhost({
         type === "strong" ? (
           <View key={i} style={[styles.ghostCell, { overflow: "hidden" }]}>
             <LinearGradient
-              colors={[Colors.white, GC.accent, GC.accent]}
+              colors={[GC.white, GC.accent, GC.accent]}
               locations={[0, 0.4, 1]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={{ width: 18, height: 18, alignItems: "center", justifyContent: "center", borderRadius: 4 }}
             >
-              <Text style={{ color: Colors.white, fontSize: 8, fontWeight: "bold" as const, lineHeight: 10, textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 }}>S</Text>
+              <Text style={{ color: GC.white, fontSize: 8, fontWeight: "bold" as const, lineHeight: 10, textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 }}>S</Text>
             </LinearGradient>
           </View>
         ) : (
@@ -489,8 +488,8 @@ export function DragGhost({
             style={[
               styles.ghostCell,
               {
-                backgroundColor: getCellColor(type, true, GC.accent, GC.accentMuted),
-                borderColor: getCellBorder(type),
+                backgroundColor: getCellColor(type, true, GC.accent, GC.accentMuted, GC.text, GC.textTertiary),
+                borderColor: getCellBorder(type, GC.textTertiary, GC.white),
                 borderWidth: type === "mute" ? 1.5 : 0,
               },
             ]}
