@@ -43,7 +43,7 @@ const BEAT_COLORS: Record<BeatType, string> = {
   strong: "#F0883E",
 };
 
-const ACTION_WIDTH = 160;
+const ACTION_WIDTH = 220;
 const SWIPE_THRESHOLD = 60;
 
 function formatDate(ts: number) {
@@ -87,7 +87,7 @@ function SwipeableEntry({
   onLoad,
   onDelete,
   onShare,
-  onLongPress,
+  onSetGoal,
   accentColor,
   openItemId,
   setOpenItemId,
@@ -101,7 +101,7 @@ function SwipeableEntry({
   onLoad: (entry: PracticeEntry) => void;
   onDelete: (id: string) => void;
   onShare: (entry: PracticeEntry) => void;
-  onLongPress: () => void;
+  onSetGoal?: (entry: PracticeEntry) => void;
   accentColor: string;
   openItemId: string | null;
   setOpenItemId: (id: string | null) => void;
@@ -209,6 +209,20 @@ function SwipeableEntry({
           <Ionicons name="pencil" size={18} color="#fff" />
           <Text style={styles.swipeActionText}>{t("practiceBook", "edit")}</Text>
         </Pressable>
+        {onSetGoal && (
+          <Pressable
+            style={[styles.swipeAction, { backgroundColor: "#10B981" }]}
+            onPress={() => {
+              Animated.spring(translateX, { toValue: 0, useNativeDriver: true, friction: 8 }).start();
+              isOpenRef.current = false;
+              setOpenItemId(null);
+              onSetGoal(item);
+            }}
+          >
+            <Ionicons name="flag-outline" size={18} color="#fff" />
+            <Text style={styles.swipeActionText}>{t("practiceBook", "goalSet")}</Text>
+          </Pressable>
+        )}
         <Pressable
           style={[styles.swipeAction, { backgroundColor: C.danger }]}
           onPress={() => {
@@ -230,7 +244,6 @@ function SwipeableEntry({
         <Pressable
           style={styles.entryMain}
           onPress={() => onLoad(item)}
-          onLongPress={onLongPress}
           delayLongPress={500}
         >
           <View style={styles.entryHeader}>
@@ -317,14 +330,12 @@ function SwipeableEntry({
 function GridItem({
   item,
   onLoad,
-  onLongPress,
   onDelete,
   onShare,
   accentColor,
 }: {
   item: PracticeEntry;
   onLoad: (entry: PracticeEntry) => void;
-  onLongPress: () => void;
   onDelete: (id: string) => void;
   onShare: (entry: PracticeEntry) => void;
   accentColor: string;
@@ -356,10 +367,6 @@ function GridItem({
   }
 
   const handleLongPressActions = useCallback(() => {
-    if (Platform.OS === "web") {
-      onLongPress();
-      return;
-    }
     Alert.alert(
       item.label,
       undefined,
@@ -369,7 +376,7 @@ function GridItem({
         { text: t("practiceBook", "cancel"), style: "cancel" },
       ]
     );
-  }, [item, onDelete, onShare, onLongPress, t]);
+  }, [item, onDelete, onShare, t]);
 
   return (
     <Pressable
@@ -574,12 +581,10 @@ export function PracticeBookModal({
       onLoad={handleLoad}
       onDelete={handleDelete}
       onShare={handleShare}
-      onLongPress={() => {
-        if (onSetGoal) {
-          setGoalEntry(item);
-          setGoalMinutes("10");
-        }
-      }}
+      onSetGoal={onSetGoal ? (entry) => {
+        setGoalEntry(entry);
+        setGoalMinutes("10");
+      } : undefined}
       accentColor={C.accent}
       openItemId={openItemId}
       setOpenItemId={setOpenItemId}
@@ -740,12 +745,6 @@ export function PracticeBookModal({
               <GridItem
                 item={item}
                 onLoad={handleLoad}
-                onLongPress={() => {
-                  if (onSetGoal) {
-                    setGoalEntry(item);
-                    setGoalMinutes("10");
-                  }
-                }}
                 onDelete={handleDelete}
                 onShare={handleShare}
                 accentColor={C.accent}

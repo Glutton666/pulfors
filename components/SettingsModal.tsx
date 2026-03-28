@@ -1855,15 +1855,6 @@ export function SettingsModal({
                     <Ionicons name="play" size={12} color={C.accent} />
                   </Pressable>
                 )}
-                <Pressable onPress={() => handleShareRoom(room)} hitSlop={8}>
-                  <Ionicons name="share-social-outline" size={14} color={C.textTertiary} />
-                </Pressable>
-                <Pressable onPress={() => handleRenameRoom(room)} hitSlop={8}>
-                  <Ionicons name="create-outline" size={14} color={C.textTertiary} />
-                </Pressable>
-                <Pressable onPress={() => handleAddRoomGoal(room)} hitSlop={8}>
-                  <Ionicons name="flag-outline" size={14} color={C.textTertiary} />
-                </Pressable>
                 <Pressable onPress={() => handleDeleteRoom(room.id)} hitSlop={8}>
                   <Ionicons name="trash-outline" size={14} color={C.textTertiary} />
                 </Pressable>
