@@ -490,6 +490,9 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   );
 
   const renderThemeStep = () => {
+    const gridGap = 8;
+    const availW = isLandscape ? Math.min((winW - 80) * 0.42, winW * 0.4) : winW - 48;
+    const tileSize = Math.floor((availW - gridGap * 2) / 3);
     const themeGrid = (
       <View style={[styles.themeGrid, isLandscape && { marginTop: 0 }]}>
         {THEME_OPTIONS.map((opt) => (
@@ -497,8 +500,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             key={opt.key}
             style={[
               styles.themeOption,
-              styles.themeOptionWidth,
-              isLandscape && { paddingVertical: 8, paddingHorizontal: 10 },
+              { width: tileSize, height: tileSize },
               selectedTheme === opt.key && {
                 borderColor: opt.color,
                 borderWidth: 2,
@@ -524,8 +526,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
         <Pressable
           style={[
             styles.themeOption,
-            styles.themeOptionWidth,
-            isLandscape && { paddingVertical: 8, paddingHorizontal: 10 },
+            { width: tileSize, height: tileSize },
             selectedTheme === "custom" && { borderColor: customHex, borderWidth: 2 },
           ]}
           onPress={() => { setSelectedTheme("custom"); setShowCustomPicker(true); }}
@@ -1006,29 +1007,29 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   stepContent: {
     flexGrow: 1,
     alignItems: "center",
-    paddingHorizontal: 28,
-    paddingTop: 32,
-    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    gap: 8,
   },
   stepTitle: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 24,
+    fontSize: 22,
     color: C.text,
-    marginTop: 8,
+    marginTop: 4,
   },
   stepSubtitle: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 14,
+    fontSize: 13,
     color: C.textSecondary,
     textAlign: "center",
-    marginBottom: 12,
+    marginBottom: 4,
   },
   themeGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
-    gap: 10,
-    marginTop: 8,
+    gap: 8,
+    marginTop: 4,
   },
   themeOption: {
     alignItems: "center",
@@ -1038,12 +1039,6 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
     backgroundColor: C.surface,
-    aspectRatio: 1,
-  },
-  themeOptionWidth: {
-    flexBasis: "29%",
-    flexGrow: 0,
-    flexShrink: 0,
   },
   themeCircle: {
     width: 44,
@@ -1258,8 +1253,8 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     color: C.white,
   },
   bottomBar: {
-    paddingHorizontal: 28,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
   },
   nextButton: {
     flexDirection: "row",

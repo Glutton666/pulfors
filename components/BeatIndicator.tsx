@@ -2645,9 +2645,10 @@ export function BeatIndicator({
 
 const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   touchArea: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
+    gap: 8,
     cursor: "grab" as any,
     userSelect: "none" as any,
   },
