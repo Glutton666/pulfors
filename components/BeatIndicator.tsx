@@ -1467,62 +1467,6 @@ export function BeatIndicator({
               </Pressable>
             </View>
 
-            {loopBlocks.length > 0 && (() => {
-              const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).sort((a, b) => a.block.startBeat - b.block.startBeat);
-              const editBlock = editingBlockIndex !== null ? loopBlocks[editingBlockIndex] : null;
-              const otherBlocks = editBlock ? loopBlocks.map((b, i) => ({ b, i })).filter(({ i }) => i !== editingBlockIndex) : [];
-              const editHasJump = editBlock ? editBlock.jumpToBlock !== undefined && editBlock.jumpToBlock !== null : false;
-              const editJumpCount = editBlock ? (editBlock.jumpCount || 1) : 1;
-              return (
-                <View style={{ flexGrow: 0 }}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 42 }} contentContainerStyle={{ paddingHorizontal: 6, paddingVertical: 3, gap: 4, alignItems: "center" }}>
-                    {sorted.map(({ block, origIndex }, si) => {
-                      const isEditing = editingBlockIndex === origIndex;
-                      const isActive = isPlaying && progressInfo && progressInfo.blockIndex === origIndex;
-                      const hasJump = block.jumpToBlock !== undefined && block.jumpToBlock !== null;
-                      const jumpTarget = hasJump ? loopBlocks[block.jumpToBlock!] : null;
-                      return (
-                        <View key={`flow-${origIndex}`} style={{ flexDirection: "row", alignItems: "center" }}>
-                          <Pressable
-                            onPress={() => { if (!isPlaying) setEditingBlockIndex(isEditing ? null : origIndex); }}
-                            style={{
-                              paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
-                              backgroundColor: isActive ? C.accent + "30" : isEditing ? C.accent + "20" : C.backgroundSecondary,
-                              borderWidth: isActive ? 1 : isEditing ? 1 : 0,
-                              borderColor: isActive ? C.accent : isEditing ? C.accent + "60" : "transparent",
-                              minWidth: 36, alignItems: "center",
-                            }}
-                          >
-                            <Text style={{ color: isActive ? C.accent : C.text, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
-                              {block.startBeat + 1}-{Math.min(block.endBeat + 1, beatsPerMeasure)}
-                            </Text>
-                            <Text style={{ color: isActive ? C.accent : C.textTertiary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium" }}>
-                              ×{block.value}
-                              {isActive && progressInfo!.blockRepeatTotal > 1 && ` ${progressInfo!.blockRepeatCurrent + 1}/${progressInfo!.blockRepeatTotal}`}
-                            </Text>
-                          </Pressable>
-                          {hasJump && jumpTarget && (() => {
-                            const targetSortedIdx = sorted.findIndex(s => s.origIndex === block.jumpToBlock);
-                            const goesBack = targetSortedIdx >= 0 && targetSortedIdx <= si;
-                            return goesBack ? (
-                              <View style={{ alignItems: "center", marginLeft: 3 }}>
-                                <Ionicons name="return-up-back" size={10} color="#f0ad4e" />
-                              </View>
-                            ) : (
-                              <Ionicons name="caret-forward" size={8} color="#f0ad4e" style={{ marginLeft: 1 }} />
-                            );
-                          })()}
-                          {si < sorted.length - 1 && !hasJump && (
-                            <Ionicons name="chevron-forward" size={8} color={C.textTertiary} style={{ marginLeft: 1, opacity: 0.4 }} />
-                          )}
-                        </View>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-              );
-            })()}
-
             {blockSelectStart !== null && !isPlaying && (
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 2, gap: 4 }}>
                 <Ionicons name="locate" size={10} color={C.accent} />
@@ -1606,6 +1550,57 @@ export function BeatIndicator({
           </View>
 
           <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 6, paddingVertical: 6 }}>
+            {loopBlocks.length > 0 && (() => {
+              const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).sort((a, b) => a.block.startBeat - b.block.startBeat);
+              return (
+                <View style={{ flexGrow: 0 }}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 42 }} contentContainerStyle={{ paddingHorizontal: 6, paddingVertical: 3, gap: 4, alignItems: "center" }}>
+                    {sorted.map(({ block, origIndex }, si) => {
+                      const isEditing = editingBlockIndex === origIndex;
+                      const isActive = isPlaying && progressInfo && progressInfo.blockIndex === origIndex;
+                      const hasJump = block.jumpToBlock !== undefined && block.jumpToBlock !== null;
+                      const jumpTarget = hasJump ? loopBlocks[block.jumpToBlock!] : null;
+                      return (
+                        <View key={`flow-${origIndex}`} style={{ flexDirection: "row", alignItems: "center" }}>
+                          <Pressable
+                            onPress={() => { if (!isPlaying) setEditingBlockIndex(isEditing ? null : origIndex); }}
+                            style={{
+                              paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+                              backgroundColor: isActive ? C.accent + "30" : isEditing ? C.accent + "20" : C.backgroundSecondary,
+                              borderWidth: isActive ? 1 : isEditing ? 1 : 0,
+                              borderColor: isActive ? C.accent : isEditing ? C.accent + "60" : "transparent",
+                              minWidth: 36, alignItems: "center",
+                            }}
+                          >
+                            <Text style={{ color: isActive ? C.accent : C.text, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
+                              {block.startBeat + 1}-{Math.min(block.endBeat + 1, beatsPerMeasure)}
+                            </Text>
+                            <Text style={{ color: isActive ? C.accent : C.textTertiary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium" }}>
+                              ×{block.value}
+                              {isActive && progressInfo!.blockRepeatTotal > 1 && ` ${progressInfo!.blockRepeatCurrent + 1}/${progressInfo!.blockRepeatTotal}`}
+                            </Text>
+                          </Pressable>
+                          {hasJump && jumpTarget && (() => {
+                            const targetSortedIdx = sorted.findIndex(s => s.origIndex === block.jumpToBlock);
+                            const goesBack = targetSortedIdx >= 0 && targetSortedIdx <= si;
+                            return goesBack ? (
+                              <View style={{ alignItems: "center", marginLeft: 3 }}>
+                                <Ionicons name="return-up-back" size={10} color="#f0ad4e" />
+                              </View>
+                            ) : (
+                              <Ionicons name="caret-forward" size={8} color="#f0ad4e" style={{ marginLeft: 1 }} />
+                            );
+                          })()}
+                          {si < sorted.length - 1 && !hasJump && (
+                            <Ionicons name="chevron-forward" size={8} color={C.textTertiary} style={{ marginLeft: 1, opacity: 0.4 }} />
+                          )}
+                        </View>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              );
+            })()}
             {subdivisionBarElement && (
               <View style={{ width: "125%", paddingHorizontal: 8 }}>{subdivisionBarElement}</View>
             )}
