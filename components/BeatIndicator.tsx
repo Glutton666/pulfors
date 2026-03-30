@@ -2468,12 +2468,12 @@ export function BeatIndicator({
     );
   }
 
-  return (
+  const dialContent = (
     <View
       ref={containerRef}
-      style={styles.touchArea}
-      testID="beat-indicator-swipe"
-      {...nativePanHandlers}
+      style={isLandscape ? undefined : styles.touchArea}
+      testID={isLandscape ? undefined : "beat-indicator-swipe"}
+      {...(isLandscape ? {} : nativePanHandlers)}
     >
       <Animated.View
         pointerEvents="none"
@@ -2580,9 +2580,14 @@ export function BeatIndicator({
       </View>
 
       {!isLandscape && <Text style={styles.hintText}>{t("main", "beatHint")}</Text>}
+    </View>
+  );
 
-      {isLandscape && (
-        <View style={{ position: "absolute" as const, right: 0, flexDirection: "column" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 8 }}>
+  if (isLandscape) {
+    return (
+      <View style={[styles.touchArea, { flexDirection: "row" as const, gap: 12 }]} testID="beat-indicator-swipe" {...nativePanHandlers}>
+        {dialContent}
+        <View style={{ flexDirection: "column" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 8 }}>
           <Pressable
             onPress={() => onBarModeChange(true)}
             style={styles.landscapeModeBtn}
@@ -2606,9 +2611,11 @@ export function BeatIndicator({
             </Pressable>
           )}
         </View>
-      )}
-    </View>
-  );
+      </View>
+    );
+  }
+
+  return dialContent;
 }
 
 const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
