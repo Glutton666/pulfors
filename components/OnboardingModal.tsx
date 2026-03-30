@@ -1032,13 +1032,13 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   themeOption: {
     alignItems: "center",
-    gap: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
+    justifyContent: "center",
+    gap: 6,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: C.border,
     backgroundColor: C.surface,
+    aspectRatio: 1,
   },
   themeOptionWidth: {
     flexBasis: "29%",
@@ -1218,7 +1218,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     paddingHorizontal: 20,
   },
   landHeaderCol: {
-    width: "35%",
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
     gap: 10,
