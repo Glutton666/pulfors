@@ -1650,22 +1650,36 @@ export function BeatIndicator({
               >
                 <Ionicons name="remove" size={14} color={C.textSecondary} />
               </Pressable>
-              <Pressable
-                onPress={onTogglePlay}
-                style={({ pressed }) => [
-                  styles.barPlayBtn, { width: 40, height: 40, borderRadius: 20 },
-                  pressed && { opacity: 0.7 },
-                  isPreparing && { opacity: 0.5 },
-                ]}
-                testID="bar-play-button"
-                disabled={isPreparing}
-              >
-                {isPreparing ? (
-                  <ActivityIndicator size="small" color={C.accent} />
-                ) : (
-                  <Ionicons name={isPlaying ? "stop" : "play"} size={20} color={isPlaying ? C.danger : C.accent} style={!isPlaying ? { marginLeft: 2 } : undefined} />
+              <View>
+                <Pressable
+                  onPress={onTogglePlay}
+                  onLongPress={() => {
+                    const next = barLoopMode === "loop" ? "once" : "loop";
+                    onBarLoopModeChange(next);
+                    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                  }}
+                  delayLongPress={400}
+                  style={({ pressed }) => [
+                    styles.barPlayBtn, { width: 40, height: 40, borderRadius: 20 },
+                    pressed && { opacity: 0.7 },
+                    isPreparing && { opacity: 0.5 },
+                    barLoopMode === "loop" && { borderWidth: 1.5, borderColor: C.accent },
+                  ]}
+                  testID="bar-play-button"
+                  disabled={isPreparing}
+                >
+                  {isPreparing ? (
+                    <ActivityIndicator size="small" color={C.accent} />
+                  ) : (
+                    <Ionicons name={isPlaying ? "stop" : "play"} size={20} color={isPlaying ? C.danger : C.accent} style={!isPlaying ? { marginLeft: 2 } : undefined} />
+                  )}
+                </Pressable>
+                {barLoopMode === "loop" && (
+                  <View style={{ position: "absolute", top: -6, right: -6, backgroundColor: C.accent, borderRadius: 7, width: 14, height: 14, alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name="repeat" size={9} color={C.bg} />
+                  </View>
                 )}
-              </Pressable>
+              </View>
               <Pressable
                 onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
                 style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
@@ -2144,27 +2158,41 @@ export function BeatIndicator({
                 <Ionicons name="add" size={16} color={C.textSecondary} />
               </Pressable>
             </View>
-            <Pressable
-              onPress={onTogglePlay}
-              style={({ pressed }) => [
-                styles.barPlayBtn,
-                pressed && { opacity: 0.7 },
-                isPreparing && { opacity: 0.5 },
-              ]}
-              testID="bar-play-button"
-              disabled={isPreparing}
-            >
-              {isPreparing ? (
-                <ActivityIndicator size="small" color={C.accent} />
-              ) : (
-                <Ionicons
-                  name={isPlaying ? "stop" : "play"}
-                  size={22}
-                  color={isPlaying ? C.danger : C.accent}
-                  style={!isPlaying ? { marginLeft: 2 } : undefined}
-                />
+            <View>
+              <Pressable
+                onPress={onTogglePlay}
+                onLongPress={() => {
+                  const next = barLoopMode === "loop" ? "once" : "loop";
+                  onBarLoopModeChange(next);
+                  if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                }}
+                delayLongPress={400}
+                style={({ pressed }) => [
+                  styles.barPlayBtn,
+                  pressed && { opacity: 0.7 },
+                  isPreparing && { opacity: 0.5 },
+                  barLoopMode === "loop" && { borderWidth: 1.5, borderColor: C.accent },
+                ]}
+                testID="bar-play-button"
+                disabled={isPreparing}
+              >
+                {isPreparing ? (
+                  <ActivityIndicator size="small" color={C.accent} />
+                ) : (
+                  <Ionicons
+                    name={isPlaying ? "stop" : "play"}
+                    size={22}
+                    color={isPlaying ? C.danger : C.accent}
+                    style={!isPlaying ? { marginLeft: 2 } : undefined}
+                  />
+                )}
+              </Pressable>
+              {barLoopMode === "loop" && (
+                <View style={{ position: "absolute", top: -6, right: -6, backgroundColor: C.accent, borderRadius: 7, width: 14, height: 14, alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="repeat" size={9} color={C.bg} />
+                </View>
               )}
-            </Pressable>
+            </View>
           </View>
         </View>
 

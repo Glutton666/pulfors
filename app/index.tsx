@@ -125,7 +125,7 @@ export default function MetronomeScreen() {
   >({});
   const [barMode, setBarMode] = useState(false);
   const [barStartBeat, setBarStartBeat] = useState<number | null>(null);
-  const [barLoopMode, setBarLoopMode] = useState<"loop" | "once">("loop");
+  const [barLoopMode, setBarLoopMode] = useState<"loop" | "once">("once");
   const [blockPlayMode, setBlockPlayMode] = useState<"sequential" | "loop" | "random">("loop");
   const [barRepeats, setBarRepeats] = useState<Record<number, BarRepeat>>({});
   const [loopBlocks, setLoopBlocks] = useState<LoopBlock[]>([]);
@@ -152,7 +152,7 @@ export default function MetronomeScreen() {
     noteSamples: {} as NoteSampleMap,
     noteSampleNames: {} as NoteSampleNameMap,
     noteSampleSources: {} as NoteSampleSourceMap,
-    barLoopMode: "loop" as "loop" | "once",
+    barLoopMode: "once" as "loop" | "once",
     blockPlayMode: "loop" as "sequential" | "loop" | "random",
     hasBeenConfigured: false,
   });
@@ -1226,7 +1226,7 @@ export default function MetronomeScreen() {
       setBeatSubdivisions({});
       setBarMode(false);
       setBarStartBeat(null);
-      setBarLoopMode("loop");
+      setBarLoopMode("once");
       setBarRepeats({});
       setLoopBlocks([]);
       barModeRef.current = false;
@@ -1249,7 +1249,7 @@ export default function MetronomeScreen() {
         noteSamples: {},
         noteSampleNames: {},
         noteSampleSources: {},
-        barLoopMode: "loop",
+        barLoopMode: "once",
         blockPlayMode: "loop",
         hasBeenConfigured: false,
       };
@@ -1745,7 +1745,7 @@ export default function MetronomeScreen() {
           noteSamples: {},
           noteSampleNames: {},
           noteSampleSources: {},
-          barLoopMode: "loop",
+          barLoopMode: "once",
           blockPlayMode: "loop",
           hasBeenConfigured: true,
         };
@@ -1754,7 +1754,7 @@ export default function MetronomeScreen() {
         setBeatSubdivisions({});
         setBarRepeats({});
         setLoopBlocks([]);
-        setBarLoopMode("loop");
+        setBarLoopMode("once");
         setNoteSamples({});
         noteSamplesRef.current = {};
         setNoteSampleNames({});
@@ -2327,7 +2327,7 @@ export default function MetronomeScreen() {
     setBarRepeats({});
     setLoopBlocks([]);
     setBarStartBeat(null);
-    setBarLoopMode("loop");
+    setBarLoopMode("once");
     setNoteSamples({});
     noteSamplesRef.current = {};
     setNoteSampleNames({});
@@ -2357,7 +2357,7 @@ export default function MetronomeScreen() {
       noteSamples: {},
       noteSampleNames: {},
       noteSampleSources: {},
-      barLoopMode: "loop",
+      barLoopMode: "once",
       blockPlayMode: "loop",
       hasBeenConfigured: true,
     };
@@ -2872,7 +2872,7 @@ export default function MetronomeScreen() {
       beatSubdivisions: { ...dc.beatSubdivisions },
       barRepeats: {} as Record<number, any>,
       loopBlocks: [] as any[],
-      barLoopMode: "loop" as const,
+      barLoopMode: "once" as const,
       blockPlayMode: "loop" as const,
       subdivisionPattern: [...subdivisionPattern],
       noteSamples: { ...dc.noteSamples },
