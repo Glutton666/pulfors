@@ -1621,7 +1621,7 @@ export function BeatIndicator({
                       padding: 6,
                       borderWidth: 1,
                       borderColor: C.accent + "30",
-                      alignSelf: "stretch",
+                      alignSelf: "center",
                     }}>
                       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                         <Text style={{ color: C.accent, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
