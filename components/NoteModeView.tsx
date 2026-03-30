@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -49,7 +49,7 @@ const BEAT_COLORS: Record<BeatType, string> = {
 function BeatDots({ beatTypes, size = 6 }: { beatTypes: BeatType[]; size?: number }) {
   const { colors: C } = useTheme();
   const S = useScale();
-  const styles = make_styles(C, S);
+  const styles = useMemo(() => make_styles(C, S), [C, S]);
   const srcGridStyles = make_srcGridStyles(C, S);
   return (
     <View style={{ flexDirection: "row", gap: S.ms(2, 0.3) }}>
@@ -96,7 +96,7 @@ function QueueItem({
 }) {
   const { colors: C } = useTheme();
   const S = useScale();
-  const styles = make_styles(C, S);
+  const styles = useMemo(() => make_styles(C, S), [C, S]);
   const srcGridStyles = make_srcGridStyles(C, S);
   const { t } = useLanguage();
 
@@ -171,7 +171,7 @@ function SourceItem({
 }) {
   const { colors: C } = useTheme();
   const S = useScale();
-  const styles = make_styles(C, S);
+  const styles = useMemo(() => make_styles(C, S), [C, S]);
   const { t } = useLanguage();
   return (
     <View style={styles.sourceItem}>
@@ -217,7 +217,7 @@ function SourceGridItem({
 }) {
   const { colors: C } = useTheme();
   const S = useScale();
-  const styles = make_styles(C, S);
+  const styles = useMemo(() => make_styles(C, S), [C, S]);
   const srcGridStyles = make_srcGridStyles(C, S);
   const { t } = useLanguage();
   return (
@@ -266,7 +266,7 @@ export function NoteModeView({
 }: NoteModeViewProps) {
   const { colors: C } = useTheme();
   const S = useScale();
-  const styles = make_styles(C, S);
+  const styles = useMemo(() => make_styles(C, S), [C, S]);
   const srcGridStyles = make_srcGridStyles(C, S);
   const { t } = useLanguage();
   const { width: winW, height: winH } = useWindowDimensions();

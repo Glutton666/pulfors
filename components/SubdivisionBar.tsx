@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect, useState } from "react";
+import React, { useRef, useCallback, useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -69,7 +69,7 @@ export function SubdivisionBar({
 }: SubdivisionBarProps) {
   const { colors: C } = useTheme();
   const S = useScale();
-  const styles = make_styles(C, S);
+  const styles = useMemo(() => make_styles(C, S), [C, S]);
   const [containerWidth, setContainerWidth] = useState(0);
   const isDraggingUpRef = useRef(false);
   const horizontalTriggeredRef = useRef(false);
@@ -463,7 +463,7 @@ export function DragGhost({
 }) {
   const { colors: GC } = useTheme();
   const S = useScale();
-  const styles = make_styles(GC, S);
+  const styles = useMemo(() => make_styles(GC, S), [GC, S]);
   return (
     <View
       style={[

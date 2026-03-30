@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, StyleSheet } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -25,7 +25,7 @@ interface PendulumProps {
 export function Pendulum({ isPlaying, bpm }: PendulumProps) {
   const { colors: C } = useTheme();
   const S = useScale();
-  const styles = make_styles(C, S);
+  const styles = useMemo(() => make_styles(C, S), [C, S]);
   const swingDuration = (60000 / bpm) * 1;
   const maxAngle = Math.max(15, Math.min(35, 40 - bpm / 15));
 

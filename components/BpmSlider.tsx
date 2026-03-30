@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from "react";
+import React, { useRef, useEffect, useCallback, useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   View,
@@ -38,7 +38,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
-  const styles = make_styles(C, S);
+  const styles = useMemo(() => make_styles(C, S), [C, S]);
   const bpmRef = useRef(bpm);
   const startBpmRef = useRef(bpm);
   const lastHapticRef = useRef(bpm);

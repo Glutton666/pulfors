@@ -71,7 +71,6 @@ function DialBeatDot({
   dDotRadiusFromCenter,
   dDotSize,
 }: DialBeatDotProps) {
-  "use no memo";
   const { colors: C } = useTheme();
   const isStrong = beatType === "strong";
   const isAccent = beatType === "accent" || isStrong;
@@ -385,11 +384,10 @@ export function BeatIndicator({
   beatDirection = "cw",
   onEnterNoteMode,
 }: BeatIndicatorProps) {
-  "use no memo";
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
-  const styles = make_styles(C, S);
+  const styles = useMemo(() => make_styles(C, S), [C, S]);
 
   const SWIPE_THRESHOLD = S.screenWidth * 0.35;
 

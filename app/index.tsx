@@ -1073,28 +1073,37 @@ export default function MetronomeScreen() {
     } catch (e) {}
   }, [volume, allPlayers]);
 
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistPendingRef = useRef<Record<string, any>>({});
   const persistSettings = useCallback(
     (overrides: Record<string, any> = {}) => {
-      const current = {
-        bpm,
-        beatsPerMeasure,
-        subdivisions: 1,
-        subdivisionPattern,
-        beatSubdivisions,
-        volume,
-        sampleVolume,
-        backgroundPlay,
-        soundSet,
-        flashMode,
-        hapticMode,
-        audioOffsetMs,
-        timerStopMode,
-        landscapeReversed,
-        beatDirection,
-        micMethod,
-        ...overrides,
-      };
-      saveSettings(current);
+      Object.assign(persistPendingRef.current, overrides);
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = setTimeout(() => {
+        const merged = { ...persistPendingRef.current };
+        persistPendingRef.current = {};
+        persistTimerRef.current = null;
+        const current = {
+          bpm,
+          beatsPerMeasure,
+          subdivisions: 1,
+          subdivisionPattern,
+          beatSubdivisions,
+          volume,
+          sampleVolume,
+          backgroundPlay,
+          soundSet,
+          flashMode,
+          hapticMode,
+          audioOffsetMs,
+          timerStopMode,
+          landscapeReversed,
+          beatDirection,
+          micMethod,
+          ...merged,
+        };
+        saveSettings(current);
+      }, 500);
     },
     [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, flashMode, hapticMode, audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, micMethod]
   );
@@ -3272,6 +3281,7 @@ export default function MetronomeScreen() {
         </Modal>
       )}
 
+      {showSignalGen && (
       <SignalGeneratorModal
         visible={showSignalGen}
         onClose={() => {
@@ -3292,6 +3302,7 @@ export default function MetronomeScreen() {
         androidMicNote={androidMicNote}
         micMethod={micMethod}
       />
+      )}
       {androidMicActive && Platform.OS === "android" && (
         <MicWebView
           ref={androidMicRef}
@@ -3302,6 +3313,7 @@ export default function MetronomeScreen() {
         />
       )}
 
+      {recorderTarget !== null && (
       <NoteRecorderModal
         visible={recorderTarget !== null}
         onClose={() => setRecorderTarget(null)}
@@ -3314,7 +3326,9 @@ export default function MetronomeScreen() {
         bpm={bpm}
         soundSet={soundSet.startsWith("custom") ? "classic" : soundSet as any}
       />
+      )}
 
+      {showPracticeBook && (
       <PracticeBookModal
         visible={showPracticeBook}
         onClose={() => {
@@ -3330,11 +3344,14 @@ export default function MetronomeScreen() {
         currentConfig={currentBarConfig}
         username={username}
       />
+      )}
 
+      {showOnboarding && (
       <OnboardingModal
         visible={showOnboarding}
         onComplete={handleOnboardingComplete}
       />
+      )}
 
       <Animated.View
         pointerEvents="none"
@@ -3368,6 +3385,7 @@ export default function MetronomeScreen() {
         </View>
       )}
 
+      {showWorkUp && (
       <WorkUpOverviewModal
         visible={showWorkUp}
         onClose={() => setShowWorkUp(false)}
@@ -3378,7 +3396,9 @@ export default function MetronomeScreen() {
         onStopRoomTracking={stopRoomTracking}
         username={username}
       />
+      )}
 
+      {showSettings && (
       <SettingsModal
         visible={showSettings}
         onClose={() => setShowSettings(false)}
@@ -3434,6 +3454,7 @@ export default function MetronomeScreen() {
         }}
         onEnterNoteMode={handleEnterNoteMode}
       />
+      )}
 
       {completedGoalPopups.length > 0 && !showMenu && !showSignalGen && !showPracticeBook && !showWorkUp && !showSettings && !noteMode && (
         <View style={[styles.goalPopupContainer, { top: (insets.top || webTopInset) + 8, pointerEvents: "box-none" }]}>
