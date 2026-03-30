@@ -3721,10 +3721,12 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     alignSelf: S.isTablet ? "center" as const : undefined,
     width: S.isTablet ? "100%" as any : undefined,
     justifyContent: "flex-end",
+    overflow: "hidden" as const,
   },
   contentLandscape: {
     flex: 1,
     paddingHorizontal: S.ms(16, 0.3),
+    overflow: "hidden" as const,
   },
   topSection: {
     flex: 5,

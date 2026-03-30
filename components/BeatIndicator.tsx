@@ -2632,6 +2632,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     height: S.dialSize,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden" as const,
   },
   dial: {
     width: S.dialSize,
