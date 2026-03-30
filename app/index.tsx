@@ -3605,6 +3605,24 @@ export default function MetronomeScreen() {
 
         {!isLandscape && !barMode && (
           <View style={{ alignItems: "center", gap: S.ms(4, 0.3) }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: S.ms(24, 0.4) }}>
+              <Pressable
+                onPress={handleEnterNoteMode}
+                style={styles.modeHandle}
+                testID="open-note-mode"
+                hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+              >
+                <Ionicons name="musical-notes-outline" size={S.ms(16, 0.4)} color={C.textTertiary} />
+              </Pressable>
+              <Pressable
+                onPress={() => handleBarModeChange(true)}
+                style={styles.modeHandle}
+                testID="open-bar-mode"
+                hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+              >
+                <Ionicons name="reorder-three" size={S.ms(20, 0.4)} color={C.textTertiary} />
+              </Pressable>
+            </View>
             <SubdivisionBar
               pattern={subdivisionPattern}
               onPatternChange={handlePatternChange}
@@ -3736,6 +3754,16 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     color: C.accentMuted,
     letterSpacing: 3,
     textTransform: "uppercase",
+  },
+  modeHandle: {
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    paddingVertical: S.ms(6, 0.4),
+    paddingHorizontal: S.ms(20, 0.4),
+    minWidth: S.ms(60, 0.4),
+    minHeight: S.ms(32, 0.4),
+    backgroundColor: C.overlay05,
+    borderRadius: S.ms(10, 0.3),
   },
   menuButton: {
     position: "absolute",
