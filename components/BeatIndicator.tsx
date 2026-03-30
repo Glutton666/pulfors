@@ -2582,7 +2582,7 @@ export function BeatIndicator({
       {!isLandscape && <Text style={styles.hintText}>{t("main", "beatHint")}</Text>}
 
       {isLandscape && (
-        <View style={styles.landscapeModeButtonsContainer}>
+        <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: S.ms(20, 0.4), marginTop: 4 }}>
           <Pressable
             onPress={() => onBarModeChange(true)}
             style={styles.landscapeModeBtn}
@@ -2607,7 +2607,6 @@ export function BeatIndicator({
           )}
         </View>
       )}
-
     </View>
   );
 }
@@ -2960,13 +2959,6 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     paddingHorizontal: 4,
     backgroundColor: C.overlay07,
     borderRadius: 8,
-  },
-  landscapeModeButtonsContainer: {
-    position: "absolute" as const,
-    right: S.ms(8, 0.3),
-    flexDirection: "column" as const,
-    alignItems: "center" as const,
-    gap: 8,
   },
   landscapeModeBtn: {
     alignItems: "center" as const,
