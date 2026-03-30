@@ -3638,7 +3638,7 @@ export default function MetronomeScreen() {
           </View>
         )}
         {isLandscape && !barMode && (
-          <View style={{ justifyContent: "center" as const, alignItems: "center" as const, gap: S.ms(12, 0.4), paddingHorizontal: S.ms(6, 0.3) }}>
+          <View style={{ justifyContent: "center" as const, alignItems: "center" as const, gap: S.ms(12, 0.4), paddingHorizontal: S.ms(20, 0.3) }}>
             <Pressable
               onPress={() => handleBarModeChange(true)}
               style={styles.modeHandle}
