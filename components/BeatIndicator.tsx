@@ -2581,32 +2581,6 @@ export function BeatIndicator({
 
       {!isLandscape && <Text style={styles.hintText}>{t("main", "beatHint")}</Text>}
 
-      {isLandscape && (
-        <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: S.ms(20, 0.4), marginTop: 4 }}>
-          <Pressable
-            onPress={() => onBarModeChange(true)}
-            style={styles.landscapeModeBtn}
-            testID="open-bar-mode"
-            hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}
-            accessibilityRole="button"
-            accessibilityLabel="Open bar mode"
-          >
-            <Ionicons name="reorder-three" size={S.ms(16, 0.4)} color={C.textTertiary} />
-          </Pressable>
-          {onEnterNoteMode && (
-            <Pressable
-              onPress={onEnterNoteMode}
-              style={styles.landscapeModeBtn}
-              testID="open-note-mode"
-              hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}
-              accessibilityRole="button"
-              accessibilityLabel="Open note mode"
-            >
-              <Ionicons name="musical-notes-outline" size={S.ms(14, 0.4)} color={C.textTertiary} />
-            </Pressable>
-          )}
-        </View>
-      )}
     </View>
   );
 }
