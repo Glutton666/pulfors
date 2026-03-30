@@ -490,7 +490,6 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   );
 
   const renderThemeStep = () => {
-    const themeItemW = isLandscape ? undefined : Math.floor((winW - 56 - 32) / 3);
     const themeGrid = (
       <View style={[styles.themeGrid, isLandscape && { marginTop: 0 }]}>
         {THEME_OPTIONS.map((opt) => (
@@ -498,8 +497,8 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             key={opt.key}
             style={[
               styles.themeOption,
-              themeItemW != null && { width: themeItemW },
-              isLandscape && { width: "auto", minWidth: 70, paddingVertical: 8, paddingHorizontal: 10 },
+              styles.themeOptionWidth,
+              isLandscape && { paddingVertical: 8, paddingHorizontal: 10 },
               selectedTheme === opt.key && {
                 borderColor: opt.color,
                 borderWidth: 2,
@@ -525,8 +524,8 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
         <Pressable
           style={[
             styles.themeOption,
-            themeItemW != null && { width: themeItemW },
-            isLandscape && { width: "auto", minWidth: 70, paddingVertical: 8, paddingHorizontal: 10 },
+            styles.themeOptionWidth,
+            isLandscape && { paddingVertical: 8, paddingHorizontal: 10 },
             selectedTheme === "custom" && { borderColor: customHex, borderWidth: 2 },
           ]}
           onPress={() => { setSelectedTheme("custom"); setShowCustomPicker(true); }}
@@ -1028,7 +1027,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
-    gap: 16,
+    gap: 10,
     marginTop: 8,
   },
   themeOption: {
@@ -1040,6 +1039,11 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
     backgroundColor: C.surface,
+  },
+  themeOptionWidth: {
+    flexBasis: "29%",
+    flexGrow: 0,
+    flexShrink: 0,
   },
   themeCircle: {
     width: 44,
