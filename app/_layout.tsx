@@ -10,6 +10,7 @@ import {
   ReanimatedLogLevel,
 } from "react-native-reanimated";
 
+import * as Font from "expo-font";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { ThemeProvider } from "@/contexts/ThemeContext";
@@ -62,12 +63,11 @@ export default function RootLayout() {
     if (Platform.OS === "web") return;
 
     try {
-      const { setAudioModeAsync } = await import("expo-audio");
-      await setAudioModeAsync({
-        playsInSilentModeIOS: true,
+      const { AudioModule } = await import("expo-audio");
+      await AudioModule.setAudioModeAsync({
+        playsInSilentMode: true,
+        interruptionMode: "mixWithOthers",
         shouldPlayInBackground: true,
-        interruptionModeIOS: "mixWithOthers", // SDK 54 이상 권장 방식
-        interruptionModeAndroid: "mixWithOthers",
       });
     } catch (e) {
       console.warn("Audio configuration failed:", e);
