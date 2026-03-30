@@ -1616,92 +1616,93 @@ export function BeatIndicator({
                   return (
                     <View style={{
                       backgroundColor: C.accent + "10",
-                      borderRadius: 6,
-                      marginBottom: 4,
-                      padding: 6,
+                      borderRadius: 5,
+                      marginBottom: 3,
+                      paddingHorizontal: 5,
+                      paddingVertical: 4,
                       borderWidth: 1,
                       borderColor: C.accent + "30",
                       alignSelf: "stretch",
                     }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                        <Text style={{ color: C.accent, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
+                        <Text style={{ color: C.accent, fontSize: 8, fontFamily: "SpaceGrotesk_700Bold" }}>
                           Block {editBlock.startBeat + 1}-{Math.min(editBlock.endBeat + 1, beatsPerMeasure)}
                         </Text>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                           <Pressable
                             onPress={() => { setEditingBlockIndex(null); removeLoopBlock(editingBlockIndex!); }}
                             hitSlop={8}
                           >
-                            <Ionicons name="trash-outline" size={11} color={C.danger} />
+                            <Ionicons name="trash-outline" size={9} color={C.danger} />
                           </Pressable>
                           <Pressable onPress={() => setEditingBlockIndex(null)} hitSlop={8}>
-                            <Ionicons name="close" size={12} color={C.textTertiary} />
+                            <Ionicons name="close" size={10} color={C.textTertiary} />
                           </Pressable>
                         </View>
                       </View>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                        <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>Repeat</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 3 }}>
+                        <Text style={{ color: C.textSecondary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium", width: 30 }}>Repeat</Text>
                         <Pressable
                           onPress={() => { if (editBlock.value > 1) updateBlock(editingBlockIndex!, { value: editBlock.value - 1 }); }}
-                          style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
+                          style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
                         >
-                          <Ionicons name="remove" size={12} color={C.accent} />
+                          <Ionicons name="remove" size={10} color={C.accent} />
                         </Pressable>
-                        <Text style={{ color: C.text, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold", minWidth: 24, textAlign: "center" }}>
+                        <Text style={{ color: C.text, fontSize: 9, fontFamily: "SpaceGrotesk_700Bold", minWidth: 20, textAlign: "center" }}>
                           ×{editBlock.value}
                         </Text>
                         <Pressable
                           onPress={() => { if (editBlock.value < 16) updateBlock(editingBlockIndex!, { value: editBlock.value + 1 }); }}
-                          style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
+                          style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
                         >
-                          <Ionicons name="add" size={12} color={C.accent} />
+                          <Ionicons name="add" size={10} color={C.accent} />
                         </Pressable>
                       </View>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap", marginBottom: editHasJump ? 4 : 0 }}>
-                        <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>Jump</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3, flexWrap: "wrap", marginBottom: editHasJump ? 3 : 0 }}>
+                        <Text style={{ color: C.textSecondary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium", width: 30 }}>Jump</Text>
                         <Pressable
                           onPress={() => { if (editHasJump) updateBlock(editingBlockIndex!, { jumpToBlock: undefined, jumpCount: undefined }); }}
                           style={{
-                            paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4,
+                            paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3,
                             backgroundColor: !editHasJump ? C.accent + "30" : "transparent",
                             borderWidth: 1, borderColor: C.accent + "30",
                           }}
                         >
-                          <Text style={{ color: !editHasJump ? C.accent : C.textTertiary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium" }}>None</Text>
+                          <Text style={{ color: !editHasJump ? C.accent : C.textTertiary, fontSize: 7, fontFamily: "SpaceGrotesk_500Medium" }}>None</Text>
                         </Pressable>
                         {otherBlocks.map(({ b: ob, i: oi }) => (
                           <Pressable
                             key={oi}
                             onPress={() => updateBlock(editingBlockIndex!, { jumpToBlock: oi, jumpCount: editJumpCount || 1 })}
                             style={{
-                              paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4,
+                              paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3,
                               backgroundColor: editBlock.jumpToBlock === oi ? "#f0ad4e30" : "transparent",
                               borderWidth: 1, borderColor: editBlock.jumpToBlock === oi ? "#f0ad4e50" : C.accent + "30",
                             }}
                           >
-                            <Text style={{ color: editBlock.jumpToBlock === oi ? "#f0ad4e" : C.textSecondary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium" }}>
+                            <Text style={{ color: editBlock.jumpToBlock === oi ? "#f0ad4e" : C.textSecondary, fontSize: 7, fontFamily: "SpaceGrotesk_500Medium" }}>
                               {ob.startBeat + 1}-{Math.min(ob.endBeat + 1, beatsPerMeasure)}
                             </Text>
                           </Pressable>
                         ))}
                       </View>
                       {editHasJump && (
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>Jump ×</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                          <Text style={{ color: C.textSecondary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium", width: 30 }}>Jump ×</Text>
                           <Pressable
                             onPress={() => { if (editJumpCount > 1) updateBlock(editingBlockIndex!, { jumpCount: editJumpCount - 1 }); }}
-                            style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
+                            style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
                           >
-                            <Ionicons name="remove" size={12} color="#f0ad4e" />
+                            <Ionicons name="remove" size={10} color="#f0ad4e" />
                           </Pressable>
-                          <Text style={{ color: C.text, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold", minWidth: 24, textAlign: "center" }}>
+                          <Text style={{ color: C.text, fontSize: 9, fontFamily: "SpaceGrotesk_700Bold", minWidth: 20, textAlign: "center" }}>
                             ×{editJumpCount}
                           </Text>
                           <Pressable
                             onPress={() => { if (editJumpCount < 16) updateBlock(editingBlockIndex!, { jumpCount: editJumpCount + 1 }); }}
-                            style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
+                            style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
                           >
-                            <Ionicons name="add" size={12} color="#f0ad4e" />
+                            <Ionicons name="add" size={10} color="#f0ad4e" />
                           </Pressable>
                         </View>
                       )}
