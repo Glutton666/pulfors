@@ -48,11 +48,12 @@ export function useScale(): ScaleValues {
     const ms = (size: number, factor = 0.5): number =>
       size + (s - 1) * size * factor;
 
+    const extraUI = 50;
     const dialSize = isTablet
       ? Math.min(minDim - 80, 420)
       : isLandscape
-        ? Math.min(height * 0.62, ms(280))
-        : Math.min(width - 48, ms(300));
+        ? Math.min(height * 0.55, ms(280), height - extraUI - 60)
+        : Math.min(width - 48, ms(300), height * 0.45);
 
     const dialRadius = dialSize / 2;
     const dotRadiusFromCenter = dialRadius - ms(30, 0.4);
