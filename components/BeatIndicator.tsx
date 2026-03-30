@@ -2582,7 +2582,7 @@ export function BeatIndicator({
       {!isLandscape && <Text style={styles.hintText}>{t("main", "beatHint")}</Text>}
 
       {isLandscape && (
-        <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: S.ms(20, 0.4), marginTop: 4 }}>
+        <View style={{ position: "absolute" as const, right: 0, flexDirection: "column" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 8 }}>
           <Pressable
             onPress={() => onBarModeChange(true)}
             style={styles.landscapeModeBtn}
