@@ -3522,7 +3522,7 @@ export default function MetronomeScreen() {
           isLandscape
             ? barMode
               ? { flex: 1, justifyContent: "flex-start" as const, alignItems: "stretch" as const }
-              : { flex: 3, justifyContent: "center" as const, alignItems: "center" as const, paddingRight: S.ms(50, 0.3) }
+              : { flex: 1, justifyContent: "center" as const, alignItems: "center" as const }
             : barMode
               ? { flex: 5, justifyContent: "flex-start" as const, alignItems: "center" as const }
               : { flex: 5, justifyContent: "center" as const, alignItems: "center" as const }
@@ -3638,7 +3638,7 @@ export default function MetronomeScreen() {
           </View>
         )}
         {isLandscape && !barMode && (
-          <View style={{ alignItems: "center", gap: 6 }}>
+          <View style={{ flex: 1, justifyContent: "center" as const, alignItems: "center" as const, gap: 6 }}>
             {!noteMode && (
               <StopwatchTimer
                 onTimerExpired={handleTimerExpired}
@@ -3661,21 +3661,25 @@ export default function MetronomeScreen() {
               activeSubNote={activeSubNote}
               activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
             />
+            <BpmSlider
+              bpm={bpm}
+              onBpmChange={updateBpm}
+              onTapTempo={handleTapTempo}
+              halfTime={halfTime}
+              onHalfTimeToggle={toggleHalfTime}
+              isLandscape={true}
+            />
           </View>
         )}
-        {!(isLandscape && barMode) && (
-        <View style={[
-          styles.bpmSection,
-          !isLandscape && { flex: 2 },
-          isLandscape && !barMode && { flex: 2, justifyContent: "center" },
-        ]}>
+        {!isLandscape && (
+        <View style={[styles.bpmSection, { flex: 2 }]}>
           <BpmSlider
             bpm={bpm}
             onBpmChange={updateBpm}
             onTapTempo={handleTapTempo}
             halfTime={halfTime}
             onHalfTimeToggle={toggleHalfTime}
-            isLandscape={isLandscape}
+            isLandscape={false}
           />
         </View>
         )}

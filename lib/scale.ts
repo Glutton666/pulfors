@@ -52,7 +52,7 @@ export function useScale(): ScaleValues {
     const dialSize = isTablet
       ? Math.min(minDim - 80, 420)
       : isLandscape
-        ? Math.min(height * 0.55, ms(280), height - extraUI - 60)
+        ? Math.min(height * 0.7, ms(280), height - extraUI - 60)
         : Math.min(width - 48, ms(300), height * 0.45);
 
     const dialRadius = dialSize / 2;
