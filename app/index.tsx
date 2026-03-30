@@ -3482,8 +3482,12 @@ export default function MetronomeScreen() {
         style={[
           isLandscape ? styles.contentLandscape : styles.content,
           {
-            paddingTop: noteMode && isLandscape ? (insets.top || 12) : (insets.top || webTopInset) + (isLandscape ? 8 : 12),
-            paddingBottom: noteMode && isLandscape ? (insets.bottom || 4) : (insets.bottom || webBottomInset) + (isLandscape ? 8 : 12),
+            paddingTop: noteMode
+              ? (isLandscape ? (insets.top || 8) : (insets.top || webTopInset) + 4)
+              : (insets.top || webTopInset) + (isLandscape ? 8 : 12),
+            paddingBottom: noteMode
+              ? (isLandscape ? (insets.bottom || 4) : (insets.bottom || webBottomInset) + 4)
+              : (insets.bottom || webBottomInset) + (isLandscape ? 8 : 12),
           },
           isLandscape && noteMode && { paddingHorizontal: 8 },
           noteMode && { justifyContent: "flex-start" as const },

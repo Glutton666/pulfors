@@ -647,7 +647,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: S.ms(12, 0.3),
-    marginBottom: S.ms(8, 0.3),
+    marginBottom: S.ms(4, 0.3),
   },
   title: {
     fontFamily: "SpaceGrotesk_700Bold",
@@ -661,9 +661,9 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   },
   closeButtonCenter: {
     alignSelf: "center",
-    marginTop: S.ms(8, 0.3),
-    marginBottom: S.ms(4, 0.3),
-    padding: S.ms(8, 0.3),
+    marginTop: S.ms(2, 0.3),
+    marginBottom: S.ms(2, 0.3),
+    padding: S.ms(6, 0.3),
   },
   headerBtn: {
     width: S.ms(32, 0.4),
