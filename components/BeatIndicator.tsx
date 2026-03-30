@@ -2581,6 +2581,33 @@ export function BeatIndicator({
 
       {!isLandscape && <Text style={styles.hintText}>{t("main", "beatHint")}</Text>}
 
+      {isLandscape && (
+        <View style={styles.landscapeModeButtonsContainer}>
+          <Pressable
+            onPress={() => onBarModeChange(true)}
+            style={styles.landscapeModeBtn}
+            testID="open-bar-mode"
+            hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Open bar mode"
+          >
+            <Ionicons name="reorder-three" size={S.ms(16, 0.4)} color={C.textTertiary} />
+          </Pressable>
+          {onEnterNoteMode && (
+            <Pressable
+              onPress={onEnterNoteMode}
+              style={styles.landscapeModeBtn}
+              testID="open-note-mode"
+              hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Open note mode"
+            >
+              <Ionicons name="musical-notes-outline" size={S.ms(14, 0.4)} color={C.textTertiary} />
+            </Pressable>
+          )}
+        </View>
+      )}
+
     </View>
   );
 }
@@ -2933,6 +2960,13 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     paddingHorizontal: 4,
     backgroundColor: C.overlay07,
     borderRadius: 8,
+  },
+  landscapeModeButtonsContainer: {
+    position: "absolute" as const,
+    right: S.ms(8, 0.3),
+    flexDirection: "column" as const,
+    alignItems: "center" as const,
+    gap: 8,
   },
   landscapeModeBtn: {
     alignItems: "center" as const,
