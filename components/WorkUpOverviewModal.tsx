@@ -776,23 +776,26 @@ export function WorkUpOverviewModal({
                   )}
 
                   <View style={shareStyles.cardContent}>
-                    <View style={shareStyles.brandRow}>
-                      <View style={shareStyles.brandBadge}>
-                        <Text style={[shareStyles.brandTextMain, { color: C.accent }]}>Pul</Text>
-                        <Text style={shareStyles.brandPlus}>+</Text>
-                        <Text style={[shareStyles.brandTextSub, { color: "#fff" }]}>Fors</Text>
-                      </View>
-                      {username ? (
-                        <View style={[shareStyles.userBadge, { borderColor: C.accent + "66" }]}>
-                          <Text style={[shareStyles.usernameText, { color: C.accent }]}>{username}</Text>
+                    <View>
+                      <View style={shareStyles.brandRow}>
+                        <View style={shareStyles.brandBadge}>
+                          <Text style={[shareStyles.brandTextMain, { color: C.accent }]}>Pul</Text>
+                          <Text style={shareStyles.brandPlus}>+</Text>
+                          <Text style={[shareStyles.brandTextSub, { color: "#fff" }]}>Fors</Text>
                         </View>
-                      ) : null}
+                        {username ? (
+                          <View style={[shareStyles.userBadge, { borderColor: C.accent + "66" }]}>
+                            <Text style={[shareStyles.usernameText, { color: C.accent }]}>{username}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+
+                      <Text style={[shareStyles.dateText, { marginTop: 20 }]}>
+                        {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+                      </Text>
                     </View>
 
-                    <Text style={shareStyles.dateText}>
-                      {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
-                    </Text>
-
+                    <View style={{ gap: 20 }}>
                     <View style={shareStyles.comboSection}>
                       <View style={shareStyles.bigTimeWrap}>
                         <Text style={[shareStyles.bigTime, { color: "#fff" }]}>{formatMinutes(todayTotalTime)}</Text>
@@ -877,6 +880,7 @@ export function WorkUpOverviewModal({
                         ))}
                       </View>
                     )}
+                    </View>
                   </View>
                 </View>
               </View>
@@ -1408,7 +1412,9 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.55)",
   },
   cardContent: {
+    flex: 1,
     padding: 28,
+    justifyContent: "space-between" as const,
     gap: 20,
     zIndex: 1,
   },
@@ -1458,8 +1464,8 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
     marginTop: -12,
   },
   comboSection: {
-    flexDirection: "column",
-    alignItems: "stretch",
+    flexDirection: "row",
+    alignItems: "center",
     gap: 16,
   },
   bigTimeWrap: {
