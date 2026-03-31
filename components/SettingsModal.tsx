@@ -100,8 +100,6 @@ interface SettingsModalProps {
   onCustomSoundSetsChange: (configs: Record<string, CustomSoundSetConfig>) => void;
   landscapeReversed: boolean;
   onLandscapeReversedChange: (val: boolean) => void;
-  landscapeImageEnabled: boolean;
-  onLandscapeImageEnabledChange: (val: boolean) => void;
   beatDirection: "cw" | "ccw";
   onBeatDirectionChange: (val: "cw" | "ccw") => void;
   micMethod: "native" | "webview";
@@ -204,8 +202,6 @@ export function SettingsModal({
   onCustomSoundSetsChange,
   landscapeReversed,
   onLandscapeReversedChange,
-  landscapeImageEnabled,
-  onLandscapeImageEnabledChange,
   beatDirection,
   onBeatDirectionChange,
   micMethod,
@@ -1167,31 +1163,6 @@ export function SettingsModal({
           <Ionicons name={landscapeReversed ? "checkmark-circle" : "ellipse-outline"} size={20} color={landscapeReversed ? C.accent : C.textTertiary} />
           <Text style={[styles.toggleLabel, { color: landscapeReversed ? C.accent : C.textSecondary }]}>
             {landscapeReversed ? "ON" : "OFF"}
-          </Text>
-        </Pressable>
-      </View>
-
-      <View style={[styles.divider, { backgroundColor: C.border }]} />
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name="image-outline" size={18} color={C.accent} />
-          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "landscapeImage")}</Text>
-        </View>
-        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "landscapeImageHint")}</Text>
-        <Pressable
-          onPress={() => {
-            onLandscapeImageEnabledChange(!landscapeImageEnabled);
-            if (Platform.OS !== "web") Haptics.selectionAsync();
-          }}
-          style={[
-            styles.toggleRow,
-            { borderColor: landscapeImageEnabled ? C.accent : C.border, backgroundColor: landscapeImageEnabled ? C.accentDim : C.surface },
-          ]}
-        >
-          <Ionicons name={landscapeImageEnabled ? "checkmark-circle" : "ellipse-outline"} size={20} color={landscapeImageEnabled ? C.accent : C.textTertiary} />
-          <Text style={[styles.toggleLabel, { color: landscapeImageEnabled ? C.accent : C.textSecondary }]}>
-            {landscapeImageEnabled ? "ON" : "OFF"}
           </Text>
         </Pressable>
       </View>

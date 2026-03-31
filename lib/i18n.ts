@@ -17,8 +17,6 @@ const translations = {
     removeImage: { ko: "이미지 삭제", en: "Remove Image" },
     landscapeReversed: { ko: "가로모드 배치 반전", en: "Reverse Landscape Layout" },
     landscapeReversedHint: { ko: "가로모드에서 비트 인디케이터와 BPM 컨트롤 위치를 바꿉니다", en: "Swap beat indicator and BPM controls in landscape mode" },
-    landscapeImage: { ko: "가로모드 사진", en: "Landscape Photo" },
-    landscapeImageHint: { ko: "가로모드에서 스톱워치 위에 사진을 표시합니다", en: "Show a photo above the stopwatch in landscape mode" },
     beatDirection: { ko: "비트 진행 방향", en: "Beat Direction" },
     beatDirectionHint: { ko: "비트와 노트가 진행하는 방향을 설정합니다", en: "Set the direction of beat and note progression" },
     clockwise: { ko: "시계방향", en: "Clockwise" },
