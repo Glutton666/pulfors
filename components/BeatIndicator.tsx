@@ -349,8 +349,6 @@ interface BlockPillProps {
   isDropTarget: boolean;
   hasJump: boolean;
   layerCount: number;
-  isLayered: boolean;
-  layerParentLabel?: string;
   beatsPerMeasure: number;
   progressInfo?: any;
   accentColor: string;
@@ -368,7 +366,7 @@ interface BlockPillProps {
 
 const BlockPill = React.memo(function BlockPill({
   origIndex, block, isEditing, isActive, isPlaying, isDragSource, isDropTarget, hasJump,
-  layerCount, isLayered, layerParentLabel, beatsPerMeasure, progressInfo, accentColor, textColor, textTertiaryColor,
+  layerCount, beatsPerMeasure, progressInfo, accentColor, textColor, textTertiaryColor,
   bgSecondary, whiteColor, onPress, onDragStart, onDragMove, onDragEnd, onMeasure, size = "small",
 }: BlockPillProps) {
   const pillRef = useRef<View>(null);
@@ -482,15 +480,14 @@ const BlockPill = React.memo(function BlockPill({
   const badgeSize = isSmall ? { top: -3, right: -3, r: 5, mw: 10, h: 10, px: 1, fs: 6 } : { top: -4, right: -4, r: 6, mw: 12, h: 12, px: 2, fs: 7 };
 
   return (
-    <View ref={pillRef} {...nativePan} style={isLayered ? { borderLeftWidth: 2, borderLeftColor: accentColor + "60", borderRadius: br, paddingLeft: 2 } : undefined}>
+    <View ref={pillRef} {...nativePan}>
       <Pressable
         onPress={onPress}
         style={{
           paddingHorizontal: px, paddingVertical: py, borderRadius: br,
-          backgroundColor: isDropTarget ? accentColor + "50" : isActive ? accentColor + "30" : isEditing ? accentColor + "20" : isLayered ? accentColor + "10" : bgSecondary,
-          borderWidth: isDropTarget ? 2 : isActive ? (isSmall ? 1 : 1.5) : isEditing ? 1 : isLayered ? 1 : 0,
-          borderColor: isDropTarget ? accentColor : isActive ? accentColor : isEditing ? accentColor + "60" : isLayered ? accentColor + "30" : "transparent",
-          borderStyle: isLayered ? "dashed" as any : "solid" as any,
+          backgroundColor: isDropTarget ? accentColor + "50" : isActive ? accentColor + "30" : isEditing ? accentColor + "20" : bgSecondary,
+          borderWidth: isDropTarget ? 2 : isActive ? (isSmall ? 1 : 1.5) : isEditing ? 1 : 0,
+          borderColor: isDropTarget ? accentColor : isActive ? accentColor : isEditing ? accentColor + "60" : "transparent",
           minWidth: mw, alignItems: "center",
           opacity: isDragSource ? 0.3 : 1,
         }}
@@ -502,11 +499,6 @@ const BlockPill = React.memo(function BlockPill({
           ×{block.value}
           {isActive && progressInfo?.blockRepeatTotal > 1 && ` ${progressInfo.blockRepeatCurrent + 1}/${progressInfo.blockRepeatTotal}`}
         </Text>
-        {isLayered && layerParentLabel && (
-          <View style={{ position: "absolute" as any, top: badgeSize.top, left: badgeSize.right, backgroundColor: accentColor + "80", borderRadius: badgeSize.r, minWidth: badgeSize.mw, height: badgeSize.h, alignItems: "center", justifyContent: "center", paddingHorizontal: badgeSize.px }}>
-            <Text style={{ color: whiteColor, fontSize: badgeSize.fs, fontFamily: "SpaceGrotesk_700Bold" }}>⇢{layerParentLabel}</Text>
-          </View>
-        )}
         {layerCount > 0 && (
           <View style={{ position: "absolute" as any, top: badgeSize.top, right: badgeSize.right, backgroundColor: accentColor, borderRadius: badgeSize.r, minWidth: badgeSize.mw, height: badgeSize.h, alignItems: "center", justifyContent: "center", paddingHorizontal: badgeSize.px }}>
             <Ionicons name="layers-outline" size={badgeSize.fs + 1} color={whiteColor} />
@@ -2015,7 +2007,7 @@ export function BeatIndicator({
             {subdivisionBarElement && (
               <View style={{ width: "125%", paddingHorizontal: 8 }}>
                 {loopBlocks.length > 0 && (() => {
-                  const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).filter(({ block }) => block.layerOf === undefined).sort((a, b) => a.block.startBeat - b.block.startBeat);
+                  const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).sort((a, b) => a.block.startBeat - b.block.startBeat);
                   const editBlock = editingBlockIndex !== null ? loopBlocks[editingBlockIndex] : null;
                   const otherBlocks = editBlock ? loopBlocks.map((b, i) => ({ b, i })).filter(({ i }) => i !== editingBlockIndex) : [];
                   const editHasJump = editBlock ? editBlock.jumpToBlock !== undefined && editBlock.jumpToBlock !== null : false;
@@ -2035,8 +2027,6 @@ export function BeatIndicator({
                                 isDragSource={!!pillDrag && pillDrag.origIndex === origIndex}
                                 isDropTarget={pillDropTarget === origIndex}
                                 hasJump={hasJump} layerCount={loopBlocks.filter(b => b.layerOf === origIndex).length}
-                                isLayered={block.layerOf !== undefined}
-                                layerParentLabel={block.layerOf !== undefined ? `${loopBlocks[block.layerOf]?.startBeat !== undefined ? loopBlocks[block.layerOf].startBeat + 1 : "?"}` : undefined}
                                 beatsPerMeasure={beatsPerMeasure} progressInfo={progressInfo}
                                 accentColor={C.accent} textColor={C.text} textTertiaryColor={C.textTertiary} bgSecondary={C.backgroundSecondary} whiteColor={C.white}
                                 onPress={() => { if (!isPlaying) setEditingBlockIndex(isEditing ? null : origIndex); }}
@@ -2226,7 +2216,7 @@ export function BeatIndicator({
               </View>
             )}
             {!subdivisionBarElement && loopBlocks.length > 0 && (() => {
-              const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).filter(({ block }) => block.layerOf === undefined).sort((a, b) => a.block.startBeat - b.block.startBeat);
+              const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).sort((a, b) => a.block.startBeat - b.block.startBeat);
               return (
                 <View style={{ flexGrow: 0 }}>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 42 }} contentContainerStyle={{ paddingHorizontal: 6, paddingVertical: 3, gap: 4, alignItems: "center" }}>
@@ -2242,8 +2232,6 @@ export function BeatIndicator({
                             isDragSource={!!pillDrag && pillDrag.origIndex === origIndex}
                             isDropTarget={pillDropTarget === origIndex}
                             hasJump={hasJump} layerCount={loopBlocks.filter(b => b.layerOf === origIndex).length}
-                            isLayered={block.layerOf !== undefined}
-                            layerParentLabel={block.layerOf !== undefined ? `${loopBlocks[block.layerOf]?.startBeat !== undefined ? loopBlocks[block.layerOf].startBeat + 1 : "?"}` : undefined}
                             beatsPerMeasure={beatsPerMeasure} progressInfo={progressInfo}
                             accentColor={C.accent} textColor={C.text} textTertiaryColor={C.textTertiary} bgSecondary={C.backgroundSecondary} whiteColor={C.white}
                             onPress={() => { if (!isPlaying) setEditingBlockIndex(isEditing ? null : origIndex); }}
@@ -2432,7 +2420,7 @@ export function BeatIndicator({
         </View>
 
         {loopBlocks.length > 0 && (() => {
-          const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).filter(({ block }) => block.layerOf === undefined).sort((a, b) => a.block.startBeat - b.block.startBeat);
+          const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).sort((a, b) => a.block.startBeat - b.block.startBeat);
           const editBlock = editingBlockIndex !== null ? loopBlocks[editingBlockIndex] : null;
           const otherBlocks = editBlock ? loopBlocks.map((b, i) => ({ b, i })).filter(({ i }) => i !== editingBlockIndex) : [];
           const editHasJump = editBlock ? editBlock.jumpToBlock !== undefined && editBlock.jumpToBlock !== null : false;
@@ -2452,8 +2440,6 @@ export function BeatIndicator({
                         isDragSource={!!pillDrag && pillDrag.origIndex === origIndex}
                         isDropTarget={pillDropTarget === origIndex}
                         hasJump={hasJump} layerCount={loopBlocks.filter(b => b.layerOf === origIndex).length}
-                        isLayered={block.layerOf !== undefined}
-                        layerParentLabel={block.layerOf !== undefined ? `${loopBlocks[block.layerOf]?.startBeat !== undefined ? loopBlocks[block.layerOf].startBeat + 1 : "?"}` : undefined}
                         beatsPerMeasure={beatsPerMeasure} progressInfo={progressInfo}
                         accentColor={C.accent} textColor={C.text} textTertiaryColor={C.textTertiary} bgSecondary={C.backgroundSecondary} whiteColor={C.white}
                         onPress={() => { if (!isPlaying) setEditingBlockIndex(isEditing ? null : origIndex); }}
