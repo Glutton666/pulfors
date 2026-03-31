@@ -1069,7 +1069,6 @@ export function BeatIndicator({
 
   const [pillDrag, setPillDrag] = useState<{ origIndex: number; x: number; y: number } | null>(null);
   const [pillDropTarget, setPillDropTarget] = useState<number | null>(null);
-  const [pillChoiceModal, setPillChoiceModal] = useState<{ sourceIdx: number; targetIdx: number } | null>(null);
   const pillLayoutsRef = useRef<Record<number, { x: number; y: number; w: number; h: number }>>({});
 
   const findPillDropTarget = useCallback((pageX: number, pageY: number, sourceIdx: number): number | null => {
@@ -1107,47 +1106,30 @@ export function BeatIndicator({
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      setPillChoiceModal({ sourceIdx: origIndex, targetIdx: target });
-    }
-  }, [findPillDropTarget]);
-
-  const handlePillChoiceJump = useCallback(() => {
-    if (!pillChoiceModal) return;
-    const { sourceIdx, targetIdx } = pillChoiceModal;
-    const updated = loopBlocks.map((b, i) => i === sourceIdx ? { ...b, jumpToBlock: targetIdx, jumpCount: b.jumpCount || 1 } : b);
-    onLoopBlocksChange(updated);
-    setPillChoiceModal(null);
-  }, [pillChoiceModal, loopBlocks, onLoopBlocksChange]);
-
-  const handlePillChoiceLayer = useCallback(() => {
-    if (!pillChoiceModal) return;
-    const { sourceIdx, targetIdx } = pillChoiceModal;
-    const sourceBlock = loopBlocks[sourceIdx];
-    const targetBlock = loopBlocks[targetIdx];
-    if (targetBlock?.layerOf !== undefined) {
-      setPillChoiceModal(null);
-      return;
-    }
-    const ownBT: Record<number, string> = {};
-    for (let b = sourceBlock.startBeat; b <= sourceBlock.endBeat; b++) {
-      ownBT[b] = beatTypes[b] || "normal";
-    }
-    const ownSub: Record<string, string[]> = {};
-    for (let b = sourceBlock.startBeat; b <= sourceBlock.endBeat; b++) {
-      const key = String(b);
-      if (beatSubdivisions[key]) {
-        ownSub[key] = [...beatSubdivisions[key]];
+      const sourceBlock = loopBlocks[origIndex];
+      const targetBlock = loopBlocks[target];
+      if (targetBlock?.layerOf !== undefined) return;
+      const ownBT: Record<number, string> = {};
+      for (let b = sourceBlock.startBeat; b <= sourceBlock.endBeat; b++) {
+        ownBT[b] = beatTypes[b] || "normal";
       }
+      const ownSub: Record<string, string[]> = {};
+      for (let b = sourceBlock.startBeat; b <= sourceBlock.endBeat; b++) {
+        const key = String(b);
+        if (beatSubdivisions[key]) {
+          ownSub[key] = [...beatSubdivisions[key]];
+        }
+      }
+      const sourceHasChildren = loopBlocks.some(b => b.layerOf === origIndex);
+      const updated = loopBlocks.map((b, i) => {
+        if (i === origIndex) return { ...b, layerOf: target, jumpToBlock: undefined, jumpCount: undefined, ownBeatTypes: ownBT, ownSubdivisions: Object.keys(ownSub).length > 0 ? ownSub : undefined };
+        if (sourceHasChildren && b.layerOf === origIndex) return { ...b, layerOf: target };
+        return b;
+      });
+      onLoopBlocksChange(updated);
     }
-    const sourceHasChildren = loopBlocks.some(b => b.layerOf === sourceIdx);
-    let updated = loopBlocks.map((b, i) => {
-      if (i === sourceIdx) return { ...b, layerOf: targetIdx, jumpToBlock: undefined, jumpCount: undefined, ownBeatTypes: ownBT, ownSubdivisions: Object.keys(ownSub).length > 0 ? ownSub : undefined };
-      if (sourceHasChildren && b.layerOf === sourceIdx) return { ...b, layerOf: targetIdx };
-      return b;
-    });
-    onLoopBlocksChange(updated);
-    setPillChoiceModal(null);
-  }, [pillChoiceModal, loopBlocks, onLoopBlocksChange, beatTypes, beatSubdivisions]);
+  }, [findPillDropTarget, loopBlocks, onLoopBlocksChange, beatTypes, beatSubdivisions]);
+
 
   const openRepeatModal = useCallback((beat: number) => {
     const existing = barRepeats[beat];
@@ -1443,9 +1425,9 @@ export function BeatIndicator({
     <View
       pointerEvents="none"
       style={{
-        position: "absolute",
+        position: Platform.OS === "web" ? ("fixed" as any) : "absolute",
         left: pillDrag.x - 24,
-        top: pillDrag.y - 16,
+        top: pillDrag.y - 24,
         paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
         backgroundColor: C.accent + "90",
         alignItems: "center",
@@ -1460,32 +1442,6 @@ export function BeatIndicator({
     </View>
   ) : null;
 
-  const pillChoiceModalElement = (
-    <Modal visible={!!pillChoiceModal} transparent animationType="fade" onRequestClose={() => setPillChoiceModal(null)}>
-      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" }} onPress={() => setPillChoiceModal(null)}>
-        <View style={{ backgroundColor: C.backgroundSecondary, borderRadius: 12, padding: 20, minWidth: 200, gap: 12, borderWidth: 1, borderColor: C.accent + "30" }}>
-          <Text style={{ color: C.text, fontSize: 14, fontFamily: "SpaceGrotesk_700Bold", textAlign: "center" }}>
-            {pillChoiceModal ? `${loopBlocks[pillChoiceModal.sourceIdx]?.startBeat !== undefined ? loopBlocks[pillChoiceModal.sourceIdx].startBeat + 1 : "?"} → ${loopBlocks[pillChoiceModal.targetIdx]?.startBeat !== undefined ? loopBlocks[pillChoiceModal.targetIdx].startBeat + 1 : "?"}` : ""}
-          </Text>
-          <Pressable
-            onPress={handlePillChoiceJump}
-            style={{ backgroundColor: "#f0ad4e" + "30", paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: "#f0ad4e", alignItems: "center" }}
-          >
-            <Text style={{ color: "#f0ad4e", fontSize: 13, fontFamily: "SpaceGrotesk_700Bold" }}>{t("blocks", "jump") || "점프 (Jump)"}</Text>
-          </Pressable>
-          <Pressable
-            onPress={handlePillChoiceLayer}
-            style={{ backgroundColor: C.accent + "30", paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: C.accent, alignItems: "center" }}
-          >
-            <Text style={{ color: C.accent, fontSize: 13, fontFamily: "SpaceGrotesk_700Bold" }}>{t("blocks", "layer") || "레이어 (Layer)"}</Text>
-          </Pressable>
-          <Pressable onPress={() => setPillChoiceModal(null)} style={{ alignItems: "center", paddingTop: 4 }}>
-            <Text style={{ color: C.textTertiary, fontSize: 11, fontFamily: "SpaceGrotesk_500Medium" }}>{t("common", "cancel") || "취소"}</Text>
-          </Pressable>
-        </View>
-      </Pressable>
-    </Modal>
-  );
 
   if (barMode) {
     const isDropping = dropTargetBeat !== null;
@@ -3193,7 +3149,7 @@ export function BeatIndicator({
 
       </View>
       {pillDragGhost}
-      {pillChoiceModalElement}
+
       </>
     );
   }
@@ -3344,7 +3300,7 @@ export function BeatIndicator({
           </View>
         </View>
         {pillDragGhost}
-        {pillChoiceModalElement}
+  
       </>
     );
   }
@@ -3353,7 +3309,7 @@ export function BeatIndicator({
     <>
       {dialContent}
       {pillDragGhost}
-      {pillChoiceModalElement}
+
     </>
   );
 }
