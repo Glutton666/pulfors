@@ -1946,8 +1946,9 @@ export function BeatIndicator({
                       for (let copy = 0; copy < copies; copy++) {
                         const copyOffset = copy * copyHeight;
                         const topPos = centerPad + copyOffset + getBeatTop(startBeat) + (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
-                        const endBeatFullH = getBeatRowHeight(endBeat) - barGap;
-                        const bottomPos = centerPad + copyOffset + getBeatTop(endBeat) + endBeatFullH - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
+                        const endLayerCount = getLayerCountForBeat(endBeat);
+                        const endBeatContentH = endLayerCount > 0 ? BAR_HEIGHT + endLayerCount * Math.floor(BAR_HEIGHT / 2) : BAR_HEIGHT;
+                        const bottomPos = centerPad + copyOffset + getBeatTop(endBeat) + endBeatContentH - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
                         const totalH = bottomPos - topPos;
                         if (totalH <= 0) continue;
                         const isPrimaryCopy = copy === (isPlaying && barLoopMode !== "once" ? CENTER_COPY : 0);
@@ -2721,8 +2722,9 @@ export function BeatIndicator({
                   for (let copy = 0; copy < copies; copy++) {
                     const copyOffset = copy * copyHeight;
                     const topPos = centerPad + copyOffset + getBeatTop(startBeat) + (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
-                    const endBeatFullH = getBeatRowHeight(endBeat) - barGap;
-                    const bottomPos = centerPad + copyOffset + getBeatTop(endBeat) + endBeatFullH - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
+                    const endLayerCount = getLayerCountForBeat(endBeat);
+                    const endBeatContentH = endLayerCount > 0 ? BAR_HEIGHT + endLayerCount * Math.floor(BAR_HEIGHT / 2) : BAR_HEIGHT;
+                    const bottomPos = centerPad + copyOffset + getBeatTop(endBeat) + endBeatContentH - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
                     const totalH = bottomPos - topPos;
                     if (totalH <= 0) continue;
                     const isPrimaryCopy = copy === primaryCopy;
