@@ -1354,7 +1354,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     >
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
-        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border, width: dynamicCardWidth }, isLandscape && { paddingVertical: landscapePadV, paddingHorizontal: landscapePadH, height: dynamicCardHeight, maxHeight: undefined }]}>
+        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border, width: dynamicCardWidth }, isLandscape && { paddingVertical: landscapePadV, paddingHorizontal: landscapePadH, height: dynamicCardHeight, maxHeight: "95%" as const, alignItems: "stretch" as const }]}>
           {isLandscape && (
             <Pressable onPress={handleClose} hitSlop={12} style={{ position: "absolute" as const, top: landscapePadV * 0.6, right: landscapePadH * 0.6, zIndex: 10 }}>
               <Ionicons name="close" size={20} color={C.textSecondary} />
