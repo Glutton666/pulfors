@@ -1770,16 +1770,16 @@ export function BeatIndicator({
       onLoopBlocksChange(updated);
     };
 
-    const getLayersForBeat = (beat: number): { blockIndex: number; stackedBlocks: { block: LoopBlock; origIndex: number }[] } | null => {
+    const getLayersForBeat = (beat: number): { blockIndex: number; parentBeatOffset: number; stackedBlocks: { block: LoopBlock; origIndex: number }[] } | null => {
       for (let i = 0; i < loopBlocks.length; i++) {
         const b = loopBlocks[i];
         if (b.layerOf !== undefined) continue;
-        if (beat === b.startBeat) {
+        if (beat >= b.startBeat && beat <= Math.min(b.endBeat, beatsPerMeasure - 1)) {
           const stacked: { block: LoopBlock; origIndex: number }[] = [];
           for (let j = 0; j < loopBlocks.length; j++) {
             if (loopBlocks[j].layerOf === i) stacked.push({ block: loopBlocks[j], origIndex: j });
           }
-          if (stacked.length > 0) return { blockIndex: i, stackedBlocks: stacked };
+          if (stacked.length > 0) return { blockIndex: i, parentBeatOffset: beat - b.startBeat, stackedBlocks: stacked };
         }
       }
       return null;
