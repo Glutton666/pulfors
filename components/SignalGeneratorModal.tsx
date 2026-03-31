@@ -70,17 +70,73 @@ function decodeWavBase64(base64: string, sampleRate: number): { samples: Float32
   }
 }
 
+function realFFT(samples: Float32Array): Float32Array {
+  const N = samples.length;
+  const re = new Float32Array(N);
+  const im = new Float32Array(N);
+  for (let i = 0; i < N; i++) re[i] = samples[i];
+
+  let j = 0;
+  for (let i = 0; i < N - 1; i++) {
+    if (i < j) {
+      let tmp = re[i]; re[i] = re[j]; re[j] = tmp;
+      tmp = im[i]; im[i] = im[j]; im[j] = tmp;
+    }
+    let k = N >> 1;
+    while (k <= j) { j -= k; k >>= 1; }
+    j += k;
+  }
+
+  for (let len = 2; len <= N; len <<= 1) {
+    const halfLen = len >> 1;
+    const angle = -2 * Math.PI / len;
+    const wRe = Math.cos(angle);
+    const wIm = Math.sin(angle);
+    for (let i = 0; i < N; i += len) {
+      let curRe = 1, curIm = 0;
+      for (let jj = 0; jj < halfLen; jj++) {
+        const tRe = curRe * re[i + jj + halfLen] - curIm * im[i + jj + halfLen];
+        const tIm = curRe * im[i + jj + halfLen] + curIm * re[i + jj + halfLen];
+        re[i + jj + halfLen] = re[i + jj] - tRe;
+        im[i + jj + halfLen] = im[i + jj] - tIm;
+        re[i + jj] += tRe;
+        im[i + jj] += tIm;
+        const nextRe = curRe * wRe - curIm * wIm;
+        curIm = curRe * wIm + curIm * wRe;
+        curRe = nextRe;
+      }
+    }
+  }
+
+  const mag = new Float32Array(N >> 1);
+  for (let i = 0; i < mag.length; i++) {
+    const power = re[i] * re[i] + im[i] * im[i];
+    mag[i] = power > 0 ? 10 * Math.log10(power / N) : -100;
+  }
+  return mag;
+}
+
 function analyzeWavLocally(base64: string, sampleRate: number): { frequency: number | null; note: string | null } {
   const decoded = decodeWavBase64(base64, sampleRate);
   const WINDOW_SIZE = 8192;
-  const MIC_GATE = 0.03;
   if (!decoded || decoded.samples.length <= WINDOW_SIZE) return { frequency: null, note: null };
   const readings: number[] = [];
   const step = Math.floor(WINDOW_SIZE / 2);
   for (let offset = 0; offset + WINDOW_SIZE <= decoded.samples.length; offset += step) {
     const win = decoded.samples.slice(offset, offset + WINDOW_SIZE);
-    const freq = autoCorrelate(win, decoded.rate, MIC_GATE);
-    if (freq > 20 && freq <= 20000) readings.push(freq);
+    let rms = 0;
+    for (let i = 0; i < win.length; i++) rms += win[i] * win[i];
+    rms = Math.sqrt(rms / win.length);
+    if (rms < 0.01) continue;
+
+    for (let i = 0; i < WINDOW_SIZE; i++) {
+      win[i] *= 0.5 * (1 - Math.cos(2 * Math.PI * i / (WINDOW_SIZE - 1)));
+    }
+    const mag = realFFT(win);
+    const result = fftPeakDetect(mag, decoded.rate, WINDOW_SIZE);
+    if (result && result.freq > 20 && result.freq <= 20000) {
+      readings.push(result.freq);
+    }
   }
   const noteMap = new Map<string, number[]>();
   for (const f of readings) {
@@ -127,47 +183,6 @@ function frequencyToNote(freq: number): { name: string; octave: number; cents: n
   const noteIndex = ((rounded % 12) + 12 + 9) % 12;
   const octave = Math.floor((rounded + 9) / 12) + 4;
   return { name: NOTE_NAMES[noteIndex], octave, cents };
-}
-
-function autoCorrelate(buffer: Float32Array, sampleRate: number, rmsThreshold: number = 0.08): number {
-  const SIZE = buffer.length;
-  let rms = 0;
-  for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
-  rms = Math.sqrt(rms / SIZE);
-  if (rms < rmsThreshold) return -1;
-  let r1 = 0;
-  let r2 = SIZE - 1;
-  const thresh = 0.2;
-  for (let i = 0; i < SIZE / 2; i++) {
-    if (Math.abs(buffer[i]) < thresh) { r1 = i; break; }
-  }
-  for (let i = 1; i < SIZE / 2; i++) {
-    if (Math.abs(buffer[SIZE - i]) < thresh) { r2 = SIZE - i; break; }
-  }
-  const buf = buffer.slice(r1, r2);
-  if (buf.length < 2) return -1;
-  const c = new Float32Array(buf.length);
-  for (let i = 0; i < buf.length; i++) {
-    for (let j = 0; j < buf.length - i; j++) c[i] += buf[j] * buf[j + i];
-  }
-  let d = 0;
-  while (d < buf.length - 1 && c[d] > c[d + 1]) d++;
-  let maxval = -1;
-  let maxpos = -1;
-  for (let i = d; i < buf.length; i++) {
-    if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
-  }
-  if (maxpos < 0 || maxval < 0) return -1;
-  const clarity = c[0] > 0 ? maxval / c[0] : 0;
-  if (clarity < 0.5) return -1;
-  let T0 = maxpos;
-  const x1 = c[T0 - 1] ?? 0;
-  const x2 = c[T0];
-  const x3 = c[T0 + 1] ?? 0;
-  const a = (x1 + x3 - 2 * x2) / 2;
-  const b = (x3 - x1) / 2;
-  if (a) T0 = T0 - b / (2 * a);
-  return sampleRate / T0;
 }
 
 function fftPeakDetect(
