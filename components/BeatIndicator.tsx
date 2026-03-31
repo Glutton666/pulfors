@@ -1312,20 +1312,29 @@ export function BeatIndicator({
     return 0;
   };
 
+  const getBeatRowHeight = useCallback((beat: number): number => {
+    const layerCount = getLayerCountForBeat(beat);
+    if (layerCount > 0) {
+      const layerH = Math.floor(BAR_HEIGHT / 2);
+      return BAR_HEIGHT + layerCount * layerH + 1 + barGap;
+    }
+    return rowH;
+  }, [loopBlocks, beatsPerMeasure, BAR_HEIGHT, barGap, rowH]);
+
   const beatYOffsets = useMemo(() => {
     const offsets: number[] = [];
     let cumY = 0;
     for (let b = 0; b < beatsPerMeasure; b++) {
       offsets.push(cumY);
-      cumY += rowH;
+      cumY += getBeatRowHeight(b);
     }
     return offsets;
-  }, [beatsPerMeasure, rowH]);
+  }, [beatsPerMeasure, getBeatRowHeight]);
 
   const copyHeight = useMemo(() => {
     if (beatYOffsets.length === 0) return beatsPerMeasure * rowH;
-    return beatYOffsets[beatsPerMeasure - 1] + rowH;
-  }, [beatYOffsets, beatsPerMeasure, rowH]);
+    return beatYOffsets[beatsPerMeasure - 1] + getBeatRowHeight(beatsPerMeasure - 1);
+  }, [beatYOffsets, beatsPerMeasure, getBeatRowHeight, rowH]);
 
   const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
 
@@ -1937,7 +1946,8 @@ export function BeatIndicator({
                       for (let copy = 0; copy < copies; copy++) {
                         const copyOffset = copy * copyHeight;
                         const topPos = centerPad + copyOffset + getBeatTop(startBeat) + (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
-                        const bottomPos = centerPad + copyOffset + getBeatTop(endBeat) + BAR_HEIGHT - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
+                        const endBeatFullH = getBeatRowHeight(endBeat) - barGap;
+                        const bottomPos = centerPad + copyOffset + getBeatTop(endBeat) + endBeatFullH - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
                         const totalH = bottomPos - topPos;
                         if (totalH <= 0) continue;
                         const isPrimaryCopy = copy === (isPlaying && barLoopMode !== "once" ? CENTER_COPY : 0);
@@ -2711,7 +2721,8 @@ export function BeatIndicator({
                   for (let copy = 0; copy < copies; copy++) {
                     const copyOffset = copy * copyHeight;
                     const topPos = centerPad + copyOffset + getBeatTop(startBeat) + (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
-                    const bottomPos = centerPad + copyOffset + getBeatTop(endBeat) + BAR_HEIGHT - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
+                    const endBeatFullH = getBeatRowHeight(endBeat) - barGap;
+                    const bottomPos = centerPad + copyOffset + getBeatTop(endBeat) + endBeatFullH - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
                     const totalH = bottomPos - topPos;
                     if (totalH <= 0) continue;
                     const isPrimaryCopy = copy === primaryCopy;
