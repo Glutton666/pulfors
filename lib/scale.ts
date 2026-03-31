@@ -56,7 +56,7 @@ export function useScale(): ScaleValues {
 
     let dialSize: number;
     if (isTablet) {
-      dialSize = Math.min(minDim - 80, 420);
+      dialSize = Math.min(minDim - 80, 520);
     } else if (isLandscape) {
       const padH = ms(16, 0.3) * 2;
       const leftColW = (width - padH) * 5 / 8;
@@ -83,7 +83,7 @@ export function useScale(): ScaleValues {
 
     const dialRadius = dialSize / 2;
     const dotRadiusFromCenter = dialRadius - ms(30, 0.4);
-    const dotSize = isTablet ? ms(40, 0.4) : ms(34, 0.4);
+    const dotSize = isTablet ? Math.max(ms(40, 0.4), dialSize * 0.1) : ms(34, 0.4);
     const contentMaxWidth = isTablet ? 560 : undefined;
 
     return {
