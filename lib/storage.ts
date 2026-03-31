@@ -124,6 +124,8 @@ export interface LoopBlockEntry {
   type: "count" | "duration";
   value: number;
   layerOf?: number;
+  ownBeatTypes?: Record<number, BeatType>;
+  ownSubdivisions?: Record<string, BeatType[]>;
 }
 
 export interface PracticeEntry {

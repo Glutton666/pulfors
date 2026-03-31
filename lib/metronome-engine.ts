@@ -85,7 +85,7 @@ export class MetronomeEngine {
   private playCustomSample: ((beat: number, subBeat: number) => boolean) | null = null;
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
-  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; layerOf?: number }[] = [];
+  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; layerOf?: number; ownBeatTypes?: Record<number, string>; ownSubdivisions?: Record<string, string[]> }[] = [];
   private blockPlayMode: "sequential" | "loop" | "random" = "loop";
   private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
   private barBpmOverrides: Map<number, number> = new Map();
@@ -226,7 +226,7 @@ export class MetronomeEngine {
     this.invalidateScheduleCache();
   }
 
-  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; layerOf?: number }[]) {
+  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; layerOf?: number; ownBeatTypes?: Record<number, string>; ownSubdivisions?: Record<string, string[]> }[]) {
     this.loopBlocks = blocks.map(b => ({ ...b }));
     this.invalidateScheduleCache();
     if (this.isRunning) {
