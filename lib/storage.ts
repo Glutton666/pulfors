@@ -118,20 +118,12 @@ export interface BarRepeatEntry {
   value: number;
 }
 
-export interface LoopBlockLayerEntry {
-  id: string;
-  beats: number;
-  beatTypes: BeatType[];
-  subdivisions: Record<number, BeatType[]>;
-  bpm?: number;
-}
-
 export interface LoopBlockEntry {
   startBeat: number;
   endBeat: number;
   type: "count" | "duration";
   value: number;
-  layers?: LoopBlockLayerEntry[];
+  layerOf?: number;
 }
 
 export interface PracticeEntry {

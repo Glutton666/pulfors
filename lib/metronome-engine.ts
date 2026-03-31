@@ -18,13 +18,6 @@ export interface ProgressInfo {
   layerBeat?: number;
 }
 
-export interface BlockLayer {
-  id: string;
-  beats: number;
-  beatTypes: BeatType[];
-  subdivisions: Record<number, BeatType[]>;
-  bpm?: number;
-}
 
 export const soundSets = {
   classic: {
@@ -92,7 +85,7 @@ export class MetronomeEngine {
   private playCustomSample: ((beat: number, subBeat: number) => boolean) | null = null;
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
-  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; layers?: BlockLayer[] }[] = [];
+  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; layerOf?: number }[] = [];
   private blockPlayMode: "sequential" | "loop" | "random" = "loop";
   private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
   private barBpmOverrides: Map<number, number> = new Map();
@@ -233,7 +226,7 @@ export class MetronomeEngine {
     this.invalidateScheduleCache();
   }
 
-  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; layers?: BlockLayer[] }[]) {
+  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; layerOf?: number }[]) {
     this.loopBlocks = blocks.map(b => ({ ...b }));
     this.invalidateScheduleCache();
     if (this.isRunning) {
@@ -526,9 +519,10 @@ export class MetronomeEngine {
           for (let ir = 0; ir < innerRepCount; ir++) {
             const innerStartTime = time;
             emitBeatsInRange(inner.startBeat, innerEnd, innerIdx, ir, innerRepCount, innerBpm);
-            if (inner.layers && inner.layers.length > 0) {
-              const innerDur = time - innerStartTime;
-              emitLayerTicks(inner.layers, innerStartTime, innerDur, innerIdx, ir, innerRepCount);
+            const innerOrigIdx = sortedToOrig.get(innerIdx) ?? innerIdx;
+            const innerDur = time - innerStartTime;
+            if (innerDur > 0) {
+              emitStackedBlockTicks(innerIdx, innerOrigIdx, innerStartTime, innerDur, ir, innerRepCount);
             }
           }
           b = innerEnd + 1;
@@ -541,22 +535,33 @@ export class MetronomeEngine {
 
     const jumpProcessed = new Set<number>();
 
-    const emitLayerTicks = (layers: BlockLayer[], blockStartTime: number, blockDurMs: number, blockIdx: number, repIteration: number, repTotal: number) => {
-      if (!layers || layers.length === 0) return;
-      for (let li = 0; li < layers.length; li++) {
-        const layer = layers[li];
-        const layerBeats = Math.max(1, layer.beats);
-        const layerBpm = layer.bpm;
-        const layerBeatDur = layerBpm
-          ? 60000 / (this.halfTime ? layerBpm / 2 : layerBpm)
-          : blockDurMs / layerBeats;
+    const emitStackedBlockTicks = (parentBlockIdx: number, parentOrigIdx: number, blockStartTime: number, blockDurMs: number, repIteration: number, repTotal: number) => {
+      const stackedBlocks: { block: typeof sortedBlocks[0]; origIdx: number; layerNum: number }[] = [];
+      let layerNum = 1;
+      for (let oi = 0; oi < this.loopBlocks.length; oi++) {
+        if (this.loopBlocks[oi].layerOf === parentOrigIdx) {
+          const si = origToSorted.get(oi);
+          if (si !== undefined) {
+            stackedBlocks.push({ block: sortedBlocks[si], origIdx: oi, layerNum: layerNum++ });
+          }
+        }
+      }
+      if (stackedBlocks.length === 0) return;
 
-        for (let lb = 0; lb < layerBeats; lb++) {
-          const beatStartTime = blockStartTime + lb * layerBeatDur;
+      for (const { block: stackBlock, origIdx: stackOrigIdx, layerNum: ln } of stackedBlocks) {
+        const stackBeats = Math.max(1, stackBlock.endBeat - stackBlock.startBeat + 1);
+        const stackBpm = stackBlock.bpm;
+        const stackBeatDur = stackBpm
+          ? 60000 / (this.halfTime ? stackBpm / 2 : stackBpm)
+          : blockDurMs / stackBeats;
+
+        for (let lb = 0; lb < stackBeats; lb++) {
+          const beatStartTime = blockStartTime + lb * stackBeatDur;
           if (beatStartTime >= blockStartTime + blockDurMs) break;
-          const lbType = layer.beatTypes[lb] || "normal";
-          const subPat = layer.subdivisions[lb] || [lbType];
-          const subDur = layerBeatDur / subPat.length;
+          const lbType = this.beatTypes[stackBlock.startBeat + lb] || "normal";
+          const subKey = String(stackBlock.startBeat + lb);
+          const subPat = this.beatSubdivisions.get(subKey) || [lbType];
+          const subDur = stackBeatDur / subPat.length;
           for (let sub = 0; sub < subPat.length; sub++) {
             const tickTime = beatStartTime + sub * subDur;
             if (tickTime >= blockStartTime + blockDurMs) break;
@@ -569,12 +574,12 @@ export class MetronomeEngine {
               repeatIteration: repIteration,
               barRepeatIteration: 0,
               barRepeatTotal: 1,
-              blockIndex: blockIdx,
+              blockIndex: stackOrigIdx,
               blockRepeatTotal: repTotal,
               jumpIteration: currentJumpIteration,
               jumpTotal: currentJumpTotal,
               jumpSourceBlockIndex: currentJumpSourceBlockIndex,
-              layerIndex: li + 1,
+              layerIndex: ln,
               layerBeat: lb,
             });
           }
@@ -586,6 +591,8 @@ export class MetronomeEngine {
       if (jumpVisited.has(blockIdx) || blockIdx < 0 || blockIdx >= sortedBlocks.length) return;
       jumpVisited.add(blockIdx);
       const block = sortedBlocks[blockIdx];
+      const origIdx = sortedToOrig.get(blockIdx) ?? blockIdx;
+      if (block.layerOf !== undefined && block.layerOf !== null) return;
       const endBeat = Math.min(block.endBeat, this.beatsPerMeasure - 1);
 
       const blockBpm = block.bpm;
@@ -603,8 +610,8 @@ export class MetronomeEngine {
         emitBeatsInRange(block.startBeat, endBeat, blockIdx, r, blockRepeatCount, blockBpm);
         const passEndTime = time;
         const passDur = passEndTime - passStartTime;
-        if (block.layers && block.layers.length > 0 && passDur > 0) {
-          emitLayerTicks(block.layers, passStartTime, passDur, blockIdx, r, blockRepeatCount);
+        if (passDur > 0) {
+          emitStackedBlockTicks(blockIdx, origIdx, passStartTime, passDur, r, blockRepeatCount);
         }
       }
     };
@@ -647,6 +654,7 @@ export class MetronomeEngine {
       const outerBlocks: number[] = [];
       for (let idx = 0; idx < sortedBlocks.length; idx++) {
         const blk = sortedBlocks[idx];
+        if (blk.layerOf !== undefined) continue;
         const isNested = sortedBlocks.some((ob, oi) =>
           oi !== idx && ob.startBeat <= blk.startBeat && ob.endBeat >= blk.endBeat
         );
@@ -667,7 +675,7 @@ export class MetronomeEngine {
         const candidates = startBeatToBlocks.get(beat);
         if (candidates) {
           for (const idx of candidates) {
-            if (!processed.has(idx) && !jumpProcessed.has(idx)) {
+            if (!processed.has(idx) && !jumpProcessed.has(idx) && sortedBlocks[idx].layerOf === undefined) {
               const blk = sortedBlocks[idx];
               const isNested = sortedBlocks.some((ob, oi) =>
                 oi !== idx && ob.startBeat <= blk.startBeat && ob.endBeat >= blk.endBeat && !processed.has(oi) && !jumpProcessed.has(oi)
