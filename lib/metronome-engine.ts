@@ -57,6 +57,7 @@ interface ScheduledTick {
   jumpIteration: number;
   jumpTotal: number;
   jumpSourceBlockIndex: number;
+  isLayerTick?: boolean;
 }
 
 export class MetronomeEngine {
@@ -80,7 +81,7 @@ export class MetronomeEngine {
   private playCustomSample: ((beat: number, subBeat: number) => boolean) | null = null;
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
-  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number }[] = [];
+  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; layers?: { subdivisions: Record<string, BeatType[]> }[] }[] = [];
   private blockPlayMode: "sequential" | "loop" | "random" = "loop";
   private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
   private barBpmOverrides: Map<number, number> = new Map();
@@ -221,8 +222,8 @@ export class MetronomeEngine {
     this.invalidateScheduleCache();
   }
 
-  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number }[]) {
-    this.loopBlocks = blocks.map(b => ({ ...b }));
+  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; layers?: { subdivisions: Record<string, BeatType[]> }[] }[]) {
+    this.loopBlocks = blocks.map(b => ({ ...b, layers: b.layers ? b.layers.map(l => ({ subdivisions: { ...l.subdivisions } })) : undefined }));
     this.invalidateScheduleCache();
     if (this.isRunning) {
       this.rebuildSchedule();
@@ -416,6 +417,7 @@ export class MetronomeEngine {
       const subPattern = this.getSubPattern(beat);
       const beatDur = this.getBeatDur(beat);
       const subDur = beatDur / subPattern.length;
+      const beatStartTime = time;
       for (let sub = 0; sub < subPattern.length; sub++) {
         ticks.push({
           time,
@@ -433,6 +435,38 @@ export class MetronomeEngine {
           jumpSourceBlockIndex: currentJumpSourceBlockIndex,
         });
         time += subDur;
+      }
+      const origIdx = sortedToOrig.get(blkIdx);
+      if (origIdx !== undefined) {
+        const block = this.loopBlocks[origIdx];
+        if (block.layers && block.layers.length > 0) {
+          for (const layer of block.layers) {
+            const layerPattern = layer.subdivisions[String(beat)];
+            if (layerPattern && layerPattern.length > 0) {
+              const layerSubDur = beatDur / layerPattern.length;
+              let layerTime = beatStartTime;
+              for (let sub = 0; sub < layerPattern.length; sub++) {
+                ticks.push({
+                  time: layerTime,
+                  beat,
+                  subBeat: sub,
+                  type: layerPattern[sub],
+                  isMainBeat: false,
+                  repeatIteration: iteration,
+                  barRepeatIteration: barRepIter,
+                  barRepeatTotal: barRepTotal,
+                  blockIndex: blkIdx,
+                  blockRepeatTotal: blkRepTotal,
+                  jumpIteration: currentJumpIteration,
+                  jumpTotal: currentJumpTotal,
+                  jumpSourceBlockIndex: currentJumpSourceBlockIndex,
+                  isLayerTick: true,
+                });
+                layerTime += layerSubDur;
+              }
+            }
+          }
+        }
       }
     };
 
@@ -636,6 +670,7 @@ export class MetronomeEngine {
     }
 
     this.measureDurationMs = time;
+    ticks.sort((a, b) => a.time - b.time);
     return ticks;
   }
 
@@ -703,12 +738,26 @@ export class MetronomeEngine {
   }
 
   private fireTick(tick: ScheduledTick) {
-    this.currentBeat = tick.beat;
-    this.currentSubBeat = tick.subBeat;
-
     const isStrong = tick.type === "strong";
     const isAccent = tick.type === "accent" || isStrong;
     const isMute = tick.type === "mute";
+
+    if (tick.isLayerTick) {
+      if (!isMute) {
+        const offset = this.audioOffsetMs;
+        if (this.preRenderedAudio) {
+          // skip custom sample for layer ticks
+        } else if (offset > 0) {
+          setTimeout(() => this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute), offset);
+        } else {
+          this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute);
+        }
+      }
+      return;
+    }
+
+    this.currentBeat = tick.beat;
+    this.currentSubBeat = tick.subBeat;
 
     this.onSubBeat?.(tick.beat, tick.subBeat);
     if (tick.isMainBeat) {
