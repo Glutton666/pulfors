@@ -40,7 +40,7 @@ const DIAL_RADIUS = DIAL_SIZE / 2;
 const DOT_RADIUS_FROM_CENTER = DIAL_RADIUS - moderateScale(30, 0.4);
 const DOT_SIZE = IS_TABLET ? moderateScale(40, 0.4) : moderateScale(34, 0.4);
 const MIN_BEATS = 1;
-const MAX_BEATS = 32;
+const MAX_BEATS = 16;
 
 export { DIAL_SIZE, DIAL_RADIUS, DOT_RADIUS_FROM_CENTER };
 
