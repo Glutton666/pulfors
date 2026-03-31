@@ -761,13 +761,17 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const { width: winW, height: winH } = useWindowDimensions();
   const isLandscape = winW > winH;
   const S = useScale();
-  const dynamicKnobSize = Math.min(
-    Math.max(120, S.minDim * 0.35),
-    220
-  );
+  const dynamicKnobSize = isLandscape
+    ? Math.min(Math.max(100, winH * 0.38), 200)
+    : Math.min(Math.max(120, S.minDim * 0.35), 220);
   const dynamicCardWidth = isLandscape
-    ? Math.min(winW * 0.92, 820)
+    ? winW * 0.92
     : Math.min(Math.max(300, S.screenWidth * 0.88), 400);
+  const dynamicCardHeight = isLandscape ? winH * 0.88 : undefined;
+  const spectrumWidth = isLandscape ? Math.max(80, winW * 0.1) : 0;
+  const landscapeGap = isLandscape ? Math.max(8, winW * 0.012) : 0;
+  const landscapePadH = isLandscape ? Math.max(12, winW * 0.018) : 0;
+  const landscapePadV = isLandscape ? Math.max(10, winH * 0.025) : 0;
   const [frequency, setFrequency] = useState(440);
   const [waveType, setWaveType] = useState<WaveType>("sine");
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1351,9 +1355,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     >
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
-        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border, width: dynamicCardWidth }, isLandscape && { padding: 14, paddingHorizontal: 18, maxHeight: "92%" as const }]}>
+        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border, width: dynamicCardWidth }, isLandscape && { paddingVertical: landscapePadV, paddingHorizontal: landscapePadH, height: dynamicCardHeight, maxHeight: undefined }]}>
           {isLandscape && (
-            <Pressable onPress={handleClose} hitSlop={12} style={{ position: "absolute" as const, top: 8, right: 10, zIndex: 10 }}>
+            <Pressable onPress={handleClose} hitSlop={12} style={{ position: "absolute" as const, top: landscapePadV * 0.6, right: landscapePadH * 0.6, zIndex: 10 }}>
               <Ionicons name="close" size={20} color={C.textSecondary} />
             </Pressable>
           )}
@@ -1370,9 +1374,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             </>
           )}
 
-          <View style={isLandscape ? { flexDirection: "row" as const, gap: 14, alignItems: "stretch" as const, flex: 1 } : undefined}>
+          <View style={isLandscape ? { flexDirection: "row" as const, gap: landscapeGap, alignItems: "stretch" as const, flex: 1 } : undefined}>
           {isLandscape && (
-            <View style={{ width: 110 }}>
+            <View style={{ width: spectrumWidth }}>
               <SpectrumGraph
                 spectrumData={spectrumDataRef.current}
                 peakBin={spectrumPeakBinRef.current}
