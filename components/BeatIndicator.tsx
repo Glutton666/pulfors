@@ -1522,29 +1522,31 @@ export function BeatIndicator({
       );
     };
 
+    const buildBarRows = (copyIndex: number) => {
+      const rows: React.ReactNode[] = [];
+      for (const beat of beats) {
+        const layerInfo = getLayersForBeatEnd(beat);
+        if (layerInfo) {
+          rows.push(
+            <View key={`grp-${copyIndex}-${beat}`} style={{ gap: 0 }}>
+              {renderBarRow(beat, copyIndex)}
+              {layerInfo.layers.map((layer, li) => renderLayerRow(beat, copyIndex, layer, li, layerInfo.blockIndex))}
+            </View>
+          );
+        } else {
+          rows.push(renderBarRow(beat, copyIndex));
+        }
+      }
+      return rows;
+    };
+
     const allBarRows: React.ReactNode[] = [];
     if (isPlaying && barLoopMode !== "once") {
       for (let copy = 0; copy < NUM_COPIES; copy++) {
-        for (const beat of beats) {
-          allBarRows.push(renderBarRow(beat, copy));
-          const layerInfo = getLayersForBeatEnd(beat);
-          if (layerInfo) {
-            for (let li = 0; li < layerInfo.layers.length; li++) {
-              allBarRows.push(renderLayerRow(beat, copy, layerInfo.layers[li], li, layerInfo.blockIndex));
-            }
-          }
-        }
+        allBarRows.push(...buildBarRows(copy));
       }
     } else {
-      for (const beat of beats) {
-        allBarRows.push(renderBarRow(beat, 0));
-        const layerInfo = getLayersForBeatEnd(beat);
-        if (layerInfo) {
-          for (let li = 0; li < layerInfo.layers.length; li++) {
-            allBarRows.push(renderLayerRow(beat, 0, layerInfo.layers[li], li, layerInfo.blockIndex));
-          }
-        }
-      }
+      allBarRows.push(...buildBarRows(0));
     }
 
     if (isLandscape) {
@@ -1964,6 +1966,36 @@ export function BeatIndicator({
                             >
                               <Ionicons name="trash" size={9} color="#ff4444" />
                             </Pressable>
+                          </View>
+                          <View style={{ flexDirection: "row", gap: 2, marginTop: 2, flexWrap: "wrap" }}>
+                            {Array.from({ length: layer.beats }).map((_, ci) => {
+                              const t = layer.beatTypes[ci] || "normal";
+                              const bgMap: Record<string, string> = { strong: C.white, accent: C.accent, normal: C.text, mute: "transparent" };
+                              const borderMap: Record<string, string> = { strong: C.accent, accent: C.accent, normal: C.textTertiary, mute: C.textTertiary };
+                              return (
+                                <Pressable
+                                  key={ci}
+                                  onPress={() => {
+                                    const newTypes = [...layer.beatTypes];
+                                    while (newTypes.length < layer.beats) newTypes.push("normal");
+                                    const cycle: BeatType[] = ["strong", "accent", "normal", "mute"];
+                                    newTypes[ci] = cycle[(cycle.indexOf(newTypes[ci] || "normal") + 1) % cycle.length];
+                                    const newLayers = [...(editBlock.layers || [])];
+                                    newLayers[li] = { ...layer, beatTypes: newTypes };
+                                    updateBlock(editingBlockIndex!, { layers: newLayers });
+                                  }}
+                                  style={{
+                                    width: 14, height: 14, borderRadius: 2,
+                                    backgroundColor: t === "mute" ? "transparent" : bgMap[t] + (t === "strong" ? "" : "80"),
+                                    borderWidth: 1, borderColor: borderMap[t],
+                                    borderStyle: t === "mute" ? ("dashed" as any) : "solid",
+                                    alignItems: "center", justifyContent: "center",
+                                  }}
+                                >
+                                  {t === "strong" && <Text style={{ fontSize: 5, color: C.accent, fontWeight: "bold" as const }}>S</Text>}
+                                </Pressable>
+                              );
+                            })}
                           </View>
                         </View>
                       ))}
@@ -2553,6 +2585,36 @@ export function BeatIndicator({
                         >
                           <Ionicons name="trash" size={10} color="#ff4444" />
                         </Pressable>
+                      </View>
+                      <View style={{ flexDirection: "row", gap: 2, marginTop: 2, flexWrap: "wrap" }}>
+                        {Array.from({ length: layer.beats }).map((_, ci) => {
+                          const t = layer.beatTypes[ci] || "normal";
+                          const bgMap: Record<string, string> = { strong: C.white, accent: C.accent, normal: C.text, mute: "transparent" };
+                          const borderMap: Record<string, string> = { strong: C.accent, accent: C.accent, normal: C.textTertiary, mute: C.textTertiary };
+                          return (
+                            <Pressable
+                              key={ci}
+                              onPress={() => {
+                                const newTypes = [...layer.beatTypes];
+                                while (newTypes.length < layer.beats) newTypes.push("normal");
+                                const cycle: BeatType[] = ["strong", "accent", "normal", "mute"];
+                                newTypes[ci] = cycle[(cycle.indexOf(newTypes[ci] || "normal") + 1) % cycle.length];
+                                const newLayers = [...(editBlock.layers || [])];
+                                newLayers[li] = { ...layer, beatTypes: newTypes };
+                                updateBlock(editingBlockIndex!, { layers: newLayers });
+                              }}
+                              style={{
+                                width: 16, height: 16, borderRadius: 3,
+                                backgroundColor: t === "mute" ? "transparent" : bgMap[t] + (t === "strong" ? "" : "80"),
+                                borderWidth: 1, borderColor: borderMap[t],
+                                borderStyle: t === "mute" ? ("dashed" as any) : "solid",
+                                alignItems: "center", justifyContent: "center",
+                              }}
+                            >
+                              {t === "strong" && <Text style={{ fontSize: 6, color: C.accent, fontWeight: "bold" as const }}>S</Text>}
+                            </Pressable>
+                          );
+                        })}
                       </View>
                     </View>
                   ))}

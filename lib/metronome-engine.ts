@@ -547,13 +547,16 @@ export class MetronomeEngine {
           : blockDurMs / layerBeats;
 
         for (let lb = 0; lb < layerBeats; lb++) {
+          const beatStartTime = blockStartTime + lb * layerBeatDur;
+          if (beatStartTime >= blockStartTime + blockDurMs) break;
           const lbType = layer.beatTypes[lb] || "normal";
           const subPat = layer.subdivisions[lb] || [lbType];
           const subDur = layerBeatDur / subPat.length;
-          const beatStartTime = blockStartTime + lb * layerBeatDur;
           for (let sub = 0; sub < subPat.length; sub++) {
+            const tickTime = beatStartTime + sub * subDur;
+            if (tickTime >= blockStartTime + blockDurMs) break;
             ticks.push({
-              time: beatStartTime + sub * subDur,
+              time: tickTime,
               beat: -1,
               subBeat: sub,
               type: subPat[sub],
