@@ -71,7 +71,6 @@ export interface MetronomeSettings {
   landscapeReversed?: boolean;
   showLandscapeImage?: boolean;
   beatDirection?: "cw" | "ccw";
-  micMethod?: "native" | "webview";
   layerSoundSets?: Record<number, SoundSet>;
 }
 
@@ -93,7 +92,6 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   landscapeReversed: false,
   showLandscapeImage: true,
   beatDirection: "cw",
-  micMethod: "native",
 };
 
 export async function loadSettings(): Promise<MetronomeSettings> {

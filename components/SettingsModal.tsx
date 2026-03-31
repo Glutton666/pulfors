@@ -104,8 +104,6 @@ interface SettingsModalProps {
   onShowLandscapeImageChange: (val: boolean) => void;
   beatDirection: "cw" | "ccw";
   onBeatDirectionChange: (val: "cw" | "ccw") => void;
-  micMethod: "native" | "webview";
-  onMicMethodChange: (val: "native" | "webview") => void;
 }
 
 function getSoundSetOptions(t: any): { value: SoundSet; label: string; icon: string }[] {
@@ -208,8 +206,6 @@ export function SettingsModal({
   onShowLandscapeImageChange,
   beatDirection,
   onBeatDirectionChange,
-  micMethod,
-  onMicMethodChange,
 }: SettingsModalProps) {
   const { themeColor, customHex, themeMode, setThemeColor, setCustomHex, setThemeMode, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
   const styles = make_styles(C);
@@ -1876,42 +1872,6 @@ export function SettingsModal({
         </View>
       </View>
 
-      {Platform.OS === "android" && (
-        <>
-          <View style={[styles.divider, { backgroundColor: C.border }]} />
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="mic-outline" size={18} color={C.accent} />
-              <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "micMethod")}</Text>
-            </View>
-            <View style={styles.tripleRow}>
-              {([
-                { value: "native" as const, label: t("settings", "micMethodNative") },
-                { value: "webview" as const, label: t("settings", "micMethodWebView") },
-              ]).map((opt) => {
-                const active = micMethod === opt.value;
-                return (
-                  <Pressable
-                    key={opt.value}
-                    style={[styles.tripleBtn, active && [styles.tripleBtnActive, { borderColor: C.accent, backgroundColor: C.accentDim }]]}
-                    onPress={() => {
-                      onMicMethodChange(opt.value);
-                      if (Platform.OS !== "web") Haptics.selectionAsync();
-                    }}
-                  >
-                    <Text style={[styles.tripleBtnText, active && [styles.tripleBtnTextActive, { color: C.accent }]]}>
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <Text style={[styles.offsetHint, { color: C.textTertiary }]}>
-              {t("settings", "micMethodHint")}
-            </Text>
-          </View>
-        </>
-      )}
     </>
   );
 

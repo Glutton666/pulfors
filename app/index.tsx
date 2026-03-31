@@ -214,7 +214,6 @@ export default function MetronomeScreen() {
   const [androidMicFreq, setAndroidMicFreq] = useState<number | null>(null);
   const [androidMicNote, setAndroidMicNote] = useState<string | null>(null);
   const androidMicRef = useRef<MicWebViewHandle | null>(null);
-  const [micMethod, setMicMethod] = useState<"native" | "webview">("native");
   const [showPracticeBook, setShowPracticeBook] = useState(false);
   const [showWorkUp, setShowWorkUp] = useState(false);
   const [loggingEnabled, setLoggingEnabled] = useState(false);
@@ -516,10 +515,6 @@ export default function MetronomeScreen() {
       if (settings.username) {
         setUsername(settings.username);
       }
-      if (settings.micMethod) {
-        setMicMethod(settings.micMethod);
-      }
-
       loadCustomSoundSets().then(setCustomSoundSets);
       setIsLoaded(true);
 
@@ -1169,13 +1164,12 @@ export default function MetronomeScreen() {
           landscapeReversed,
           showLandscapeImage,
           beatDirection,
-          micMethod,
           ...merged,
         };
         saveSettings(current);
       }, 500);
     },
-    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, layerSoundSets, flashMode, hapticMode, audioOffsetMs, timerStopMode, landscapeReversed, showLandscapeImage, beatDirection, micMethod]
+    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, layerSoundSets, flashMode, hapticMode, audioOffsetMs, timerStopMode, landscapeReversed, showLandscapeImage, beatDirection]
   );
 
   const updateVolume = useCallback(
@@ -3409,7 +3403,6 @@ export default function MetronomeScreen() {
         }}
         androidMicFrequency={androidMicFreq}
         androidMicNote={androidMicNote}
-        micMethod={micMethod}
       />
       )}
       {androidMicActive && Platform.OS === "android" && (
@@ -3565,11 +3558,6 @@ export default function MetronomeScreen() {
         onBeatDirectionChange={(val) => {
           setBeatDirection(val);
           persistSettings({ beatDirection: val });
-        }}
-        micMethod={micMethod}
-        onMicMethodChange={(val) => {
-          setMicMethod(val);
-          persistSettings({ micMethod: val });
         }}
         onEnterNoteMode={handleEnterNoteMode}
       />
