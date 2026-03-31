@@ -1770,39 +1770,40 @@ export function BeatIndicator({
       onLoopBlocksChange(updated);
     };
 
-    const getLayersForBeat = (beat: number): { blockIndex: number; stackedBlocks: { block: LoopBlock; origIndex: number }[] } | null => {
+    const getLayersForBeat = (beat: number): { blockIndex: number; parentBeatOffset: number; stackedBlocks: { block: LoopBlock; origIndex: number }[] } | null => {
       for (let i = 0; i < loopBlocks.length; i++) {
         const b = loopBlocks[i];
         if (b.layerOf !== undefined) continue;
-        if (beat === b.startBeat) {
+        if (beat >= b.startBeat && beat <= Math.min(b.endBeat, beatsPerMeasure - 1)) {
           const stacked: { block: LoopBlock; origIndex: number }[] = [];
           for (let j = 0; j < loopBlocks.length; j++) {
             if (loopBlocks[j].layerOf === i) stacked.push({ block: loopBlocks[j], origIndex: j });
           }
-          if (stacked.length > 0) return { blockIndex: i, stackedBlocks: stacked };
+          if (stacked.length > 0) return { blockIndex: i, parentBeatOffset: beat - b.startBeat, stackedBlocks: stacked };
         }
       }
       return null;
     };
 
-    const renderLayerRow = (beat: number, copyIndex: number, stackedBlock: LoopBlock, stackedOrigIdx: number, layerNum: number, parentBlockIndex: number, rowHeight?: number) => {
+    const renderLayerRow = (beat: number, copyIndex: number, stackedBlock: LoopBlock, stackedOrigIdx: number, layerNum: number, parentBlockIndex: number, parentBeatOffset: number, rowHeight?: number) => {
       const ownEntry = loopBlocks[stackedOrigIdx];
+      const layerBeats = stackedBlock.endBeat - stackedBlock.startBeat + 1;
+      if (parentBeatOffset >= layerBeats) return null;
+
+      const layerBeatIdx = stackedBlock.startBeat + parentBeatOffset;
       const layerKey = `${stackedOrigIdx}:${layerNum}`;
       const layerCurrentBeat = layerProgressMap[layerKey];
       const isCurrentBeatRow = progressInfo && progressInfo.beat === beat && progressInfo.blockIndex === parentBlockIndex;
-      const isLayerActive = isPlaying && layerCurrentBeat !== undefined && isCurrentBeatRow;
+      const isLayerActive = isPlaying && layerCurrentBeat !== undefined && isCurrentBeatRow && layerCurrentBeat === parentBeatOffset;
       const h = rowHeight || LAYER_ROW_H;
 
       const displayCells: BeatType[] = [];
-      for (let ci = 0; ci <= stackedBlock.endBeat - stackedBlock.startBeat; ci++) {
-        const beatIdx = stackedBlock.startBeat + ci;
-        const ownSub = ownEntry?.ownSubdivisions?.[String(beatIdx)];
-        if (ownSub && ownSub.length > 0) {
-          for (const st of ownSub) displayCells.push(st as BeatType);
-        } else {
-          const bt = (ownEntry?.ownBeatTypes?.[beatIdx] as BeatType) || beatTypes[beatIdx] || "normal";
-          displayCells.push(bt);
-        }
+      const ownSub = ownEntry?.ownSubdivisions?.[String(layerBeatIdx)];
+      if (ownSub && ownSub.length > 0) {
+        for (const st of ownSub) displayCells.push(st as BeatType);
+      } else {
+        const bt = (ownEntry?.ownBeatTypes?.[layerBeatIdx] as BeatType) || beatTypes[layerBeatIdx] || "normal";
+        displayCells.push(bt);
       }
 
       return (
@@ -1867,14 +1868,22 @@ export function BeatIndicator({
       for (const beat of beats) {
         const layerInfo = getLayersForBeat(beat);
         if (layerInfo) {
-          const totalRows = 1 + layerInfo.stackedBlocks.length;
-          const sharedH = Math.max(10, Math.floor(BAR_HEIGHT / totalRows));
-          rows.push(
-            <View key={`grp-${copyIndex}-${beat}`} style={{ gap: 0, height: BAR_HEIGHT, overflow: "hidden" }}>
-              {renderBarRow(beat, copyIndex, sharedH)}
-              {layerInfo.stackedBlocks.map((sb, li) => renderLayerRow(beat, copyIndex, sb.block, sb.origIndex, li + 1, layerInfo.blockIndex, sharedH))}
-            </View>
-          );
+          const visibleLayers = layerInfo.stackedBlocks.filter(sb => {
+            const layerBeats = sb.block.endBeat - sb.block.startBeat + 1;
+            return layerInfo.parentBeatOffset < layerBeats;
+          });
+          if (visibleLayers.length > 0) {
+            const totalRows = 1 + visibleLayers.length;
+            const sharedH = Math.max(10, Math.floor(BAR_HEIGHT / totalRows));
+            rows.push(
+              <View key={`grp-${copyIndex}-${beat}`} style={{ gap: 0, height: BAR_HEIGHT, overflow: "hidden" }}>
+                {renderBarRow(beat, copyIndex, sharedH)}
+                {visibleLayers.map((sb, li) => renderLayerRow(beat, copyIndex, sb.block, sb.origIndex, li + 1, layerInfo.blockIndex, layerInfo.parentBeatOffset, sharedH))}
+              </View>
+            );
+          } else {
+            rows.push(renderBarRow(beat, copyIndex));
+          }
         } else {
           rows.push(renderBarRow(beat, copyIndex));
         }
