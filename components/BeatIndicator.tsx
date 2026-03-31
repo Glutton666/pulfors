@@ -281,6 +281,7 @@ export interface LoopBlock {
   value: number;
   jumpToBlock?: number;
   jumpCount?: number;
+  bpm?: number;
 }
 
 interface BeatIndicatorProps {
@@ -1657,6 +1658,36 @@ export function BeatIndicator({
                           <Ionicons name="add" size={12} color={C.accent} />
                         </Pressable>
                       </View>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                        <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>BPM</Text>
+                        <Pressable
+                          onPress={() => { if (editBlock.bpm) updateBlock(editingBlockIndex!, { bpm: Math.max(20, editBlock.bpm - 5) }); }}
+                          style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: editBlock.bpm ? "#2196F320" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
+                        >
+                          <Ionicons name="remove" size={12} color={editBlock.bpm ? "#2196F3" : C.textTertiary} />
+                        </Pressable>
+                        <Pressable
+                          onPress={() => {
+                            if (editBlock.bpm) updateBlock(editingBlockIndex!, { bpm: undefined });
+                            else updateBlock(editingBlockIndex!, { bpm: bpm || 120 });
+                          }}
+                          style={{
+                            paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, minWidth: 32, alignItems: "center",
+                            backgroundColor: editBlock.bpm ? "#2196F320" : "transparent",
+                            borderWidth: 1, borderColor: editBlock.bpm ? "#2196F350" : C.accent + "30",
+                          }}
+                        >
+                          <Text style={{ color: editBlock.bpm ? "#2196F3" : C.textTertiary, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
+                            {editBlock.bpm ? editBlock.bpm : "—"}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => { if (editBlock.bpm) updateBlock(editingBlockIndex!, { bpm: Math.min(300, editBlock.bpm + 5) }); }}
+                          style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: editBlock.bpm ? "#2196F320" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
+                        >
+                          <Ionicons name="add" size={12} color={editBlock.bpm ? "#2196F3" : C.textTertiary} />
+                        </Pressable>
+                      </View>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap", marginBottom: editHasJump ? 4 : 0 }}>
                         <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>Jump</Text>
                         <Pressable
@@ -2081,6 +2112,46 @@ export function BeatIndicator({
                       style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
                     >
                       <Ionicons name="add" size={14} color={C.accent} />
+                    </Pressable>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>BPM</Text>
+                    <Pressable
+                      onPress={() => {
+                        if (editBlock.bpm) {
+                          const newBpm = Math.max(20, editBlock.bpm - 5);
+                          updateBlock(editingBlockIndex!, { bpm: newBpm });
+                        }
+                      }}
+                      style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: editBlock.bpm ? "#2196F320" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
+                    >
+                      <Ionicons name="remove" size={14} color={editBlock.bpm ? "#2196F3" : C.textTertiary} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        if (editBlock.bpm) updateBlock(editingBlockIndex!, { bpm: undefined });
+                        else updateBlock(editingBlockIndex!, { bpm: bpm || 120 });
+                      }}
+                      style={{
+                        paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, minWidth: 40, alignItems: "center",
+                        backgroundColor: editBlock.bpm ? "#2196F320" : "transparent",
+                        borderWidth: 1, borderColor: editBlock.bpm ? "#2196F350" : C.accent + "30",
+                      }}
+                    >
+                      <Text style={{ color: editBlock.bpm ? "#2196F3" : C.textTertiary, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" }}>
+                        {editBlock.bpm ? editBlock.bpm : "—"}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        if (editBlock.bpm) {
+                          const newBpm = Math.min(300, editBlock.bpm + 5);
+                          updateBlock(editingBlockIndex!, { bpm: newBpm });
+                        }
+                      }}
+                      style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: editBlock.bpm ? "#2196F320" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
+                    >
+                      <Ionicons name="add" size={14} color={editBlock.bpm ? "#2196F3" : C.textTertiary} />
                     </Pressable>
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: editHasJump ? 6 : 0 }}>

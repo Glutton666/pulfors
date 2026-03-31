@@ -80,7 +80,7 @@ export class MetronomeEngine {
   private playCustomSample: ((beat: number, subBeat: number) => boolean) | null = null;
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
-  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number }[] = [];
+  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number }[] = [];
   private blockPlayMode: "sequential" | "loop" | "random" = "loop";
   private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
   private barBpmOverrides: Map<number, number> = new Map();
@@ -221,7 +221,7 @@ export class MetronomeEngine {
     this.invalidateScheduleCache();
   }
 
-  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number }[]) {
+  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number }[]) {
     this.loopBlocks = blocks.map(b => ({ ...b }));
     this.invalidateScheduleCache();
     if (this.isRunning) {
@@ -377,8 +377,8 @@ export class MetronomeEngine {
     return this.halfTime;
   }
 
-  private getBeatDur(beat: number): number {
-    const bpm = this.barBpmOverrides.get(beat) ?? this.bpm;
+  private getBeatDur(beat: number, blockBpm?: number): number {
+    const bpm = this.barBpmOverrides.get(beat) ?? blockBpm ?? this.bpm;
     const effectiveBpm = this.halfTime ? bpm / 2 : bpm;
     return 60000 / effectiveBpm;
   }
@@ -412,9 +412,9 @@ export class MetronomeEngine {
     let currentJumpTotal = 0;
     let currentJumpSourceBlockIndex = -1;
 
-    const addBeatTicks = (beat: number, iteration: number, barRepIter: number, barRepTotal: number, blkIdx: number, blkRepTotal: number) => {
+    const addBeatTicks = (beat: number, iteration: number, barRepIter: number, barRepTotal: number, blkIdx: number, blkRepTotal: number, blockBpm?: number) => {
       const subPattern = this.getSubPattern(beat);
-      const beatDur = this.getBeatDur(beat);
+      const beatDur = this.getBeatDur(beat, blockBpm);
       const subDur = beatDur / subPattern.length;
       for (let sub = 0; sub < subPattern.length; sub++) {
         ticks.push({
@@ -436,9 +436,9 @@ export class MetronomeEngine {
       }
     };
 
-    const addBarWithRepeat = (beat: number, blockIteration: number, blkIdx: number, blkRepTotal: number) => {
+    const addBarWithRepeat = (beat: number, blockIteration: number, blkIdx: number, blkRepTotal: number, blockBpm?: number) => {
       const barRep = this.barRepeats.get(beat);
-      const beatDur = this.getBeatDur(beat);
+      const beatDur = this.getBeatDur(beat, blockBpm);
       if (barRep) {
         let barRepeatCount = 1;
         if (barRep.type === "count") {
@@ -447,10 +447,10 @@ export class MetronomeEngine {
           barRepeatCount = Math.max(1, Math.round((barRep.value * 1000) / beatDur));
         }
         for (let r = 0; r < barRepeatCount; r++) {
-          addBeatTicks(beat, blockIteration, r, barRepeatCount, blkIdx, blkRepTotal);
+          addBeatTicks(beat, blockIteration, r, barRepeatCount, blkIdx, blkRepTotal, blockBpm);
         }
       } else {
-        addBeatTicks(beat, blockIteration, 0, 1, blkIdx, blkRepTotal);
+        addBeatTicks(beat, blockIteration, 0, 1, blkIdx, blkRepTotal, blockBpm);
       }
     };
 
@@ -466,8 +466,8 @@ export class MetronomeEngine {
       return -1;
     };
 
-    const calcSinglePassDur = (startB: number, endB: number, parentBlockIdx: number): number => {
-      const cacheKey = `${startB}:${endB}:${parentBlockIdx}`;
+    const calcSinglePassDur = (startB: number, endB: number, parentBlockIdx: number, blockBpm?: number): number => {
+      const cacheKey = `${startB}:${endB}:${parentBlockIdx}:${blockBpm ?? ""}`;
       const cached = durCache.get(cacheKey);
       if (cached !== undefined) return cached;
 
@@ -478,14 +478,15 @@ export class MetronomeEngine {
         if (innerIdx >= 0) {
           const inner = sortedBlocks[innerIdx];
           const innerEnd = Math.min(inner.endBeat, endB);
-          const innerPassDur = calcSinglePassDur(inner.startBeat, innerEnd, innerIdx);
+          const innerBpm = inner.bpm ?? blockBpm;
+          const innerPassDur = calcSinglePassDur(inner.startBeat, innerEnd, innerIdx, innerBpm);
           let innerRepCount = 1;
           if (inner.type === "count") innerRepCount = Math.max(1, inner.value);
           else innerRepCount = Math.max(1, Math.round((inner.value * 1000) / (innerPassDur || 1)));
           dur += innerPassDur * innerRepCount;
           b = innerEnd + 1;
         } else {
-          const bd = this.getBeatDur(b);
+          const bd = this.getBeatDur(b, blockBpm);
           const barRep = this.barRepeats.get(b);
           const barRepCount = barRep ? (barRep.type === "count" ? Math.max(1, barRep.value) : Math.max(1, Math.round((barRep.value * 1000) / bd))) : 1;
           dur += bd * barRepCount;
@@ -496,23 +497,24 @@ export class MetronomeEngine {
       return dur;
     };
 
-    const emitBeatsInRange = (startB: number, endB: number, outerBlockIdx: number, outerIter: number, outerRepTotal: number) => {
+    const emitBeatsInRange = (startB: number, endB: number, outerBlockIdx: number, outerIter: number, outerRepTotal: number, blockBpm?: number) => {
       let b = startB;
       while (b <= endB) {
         const innerIdx = findInnerBlock(b, endB, outerBlockIdx);
         if (innerIdx >= 0) {
           const inner = sortedBlocks[innerIdx];
           const innerEnd = Math.min(inner.endBeat, endB);
-          const innerPassDur = calcSinglePassDur(inner.startBeat, innerEnd, innerIdx);
+          const innerBpm = inner.bpm ?? blockBpm;
+          const innerPassDur = calcSinglePassDur(inner.startBeat, innerEnd, innerIdx, innerBpm);
           let innerRepCount = 1;
           if (inner.type === "count") innerRepCount = Math.max(1, inner.value);
           else innerRepCount = Math.max(1, Math.round((inner.value * 1000) / (innerPassDur || 1)));
           for (let ir = 0; ir < innerRepCount; ir++) {
-            emitBeatsInRange(inner.startBeat, innerEnd, innerIdx, ir, innerRepCount);
+            emitBeatsInRange(inner.startBeat, innerEnd, innerIdx, ir, innerRepCount, innerBpm);
           }
           b = innerEnd + 1;
         } else {
-          addBarWithRepeat(b, outerIter, outerBlockIdx, outerRepTotal);
+          addBarWithRepeat(b, outerIter, outerBlockIdx, outerRepTotal, blockBpm);
           b++;
         }
       }
@@ -526,7 +528,8 @@ export class MetronomeEngine {
       const block = sortedBlocks[blockIdx];
       const endBeat = Math.min(block.endBeat, this.beatsPerMeasure - 1);
 
-      const singlePassDurMs = calcSinglePassDur(block.startBeat, endBeat, blockIdx);
+      const blockBpm = block.bpm;
+      const singlePassDurMs = calcSinglePassDur(block.startBeat, endBeat, blockIdx, blockBpm);
 
       let blockRepeatCount = 1;
       if (block.type === "count") {
@@ -536,7 +539,7 @@ export class MetronomeEngine {
       }
 
       for (let r = 0; r < blockRepeatCount; r++) {
-        emitBeatsInRange(block.startBeat, endBeat, blockIdx, r, blockRepeatCount);
+        emitBeatsInRange(block.startBeat, endBeat, blockIdx, r, blockRepeatCount, blockBpm);
       }
     };
 
