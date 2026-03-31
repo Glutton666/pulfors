@@ -1962,26 +1962,25 @@ export function BeatIndicator({
             }, resetFlashStyle]}
           />
 
+          <Pressable
+            onPress={() => onBarModeChange(false)}
+            style={{ position: "absolute" as const, top: 6, right: 8, zIndex: 10 }}
+            testID="close-bar-mode"
+            hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+            accessibilityRole="button"
+            accessibilityLabel="Close bar mode"
+          >
+            <Ionicons name="close" size={22} color={C.textSecondary} />
+          </Pressable>
+
           <View style={{ flex: 2 }}>
-            <View style={[styles.barTopRowCenter, { paddingTop: 6, paddingBottom: 2 }]}>
-              <Pressable
-                onPress={() => onBarModeChange(false)}
-                style={[
-                  styles.barModeHandle,
-                  dropTargetBeat === -1 && { backgroundColor: C.accent },
-                ]}
-                testID="close-bar-mode"
-                hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
-                accessibilityRole="button"
-                accessibilityLabel="Close bar mode"
-              >
-                {dropTargetBeat === -1 ? (
+            {dropTargetBeat === -1 && (
+              <View style={[styles.barTopRowCenter, { paddingTop: 6, paddingBottom: 2 }]}>
+                <View style={[styles.barModeHandle, { backgroundColor: C.accent }]}>
                   <Ionicons name="layers" size={16} color={C.white} />
-                ) : (
-                  <Ionicons name="chevron-down" size={18} color={C.textTertiary} />
-                )}
-              </Pressable>
-            </View>
+                </View>
+              </View>
+            )}
 
             {blockSelectStart !== null && !isPlaying && (
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 2, gap: 4 }}>
@@ -3362,7 +3361,7 @@ export function BeatIndicator({
         </View>
       </View>
 
-      {!isLandscape && <Text style={[styles.hintText, { marginTop: 4, marginBottom: 2 }]}>{t("main", "beatHint")}</Text>}
+      <Text style={[styles.hintText, { marginTop: 4, marginBottom: 2 }]}>{t("main", "beatHint")}</Text>
     </View>
   );
 

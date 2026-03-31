@@ -3725,6 +3725,7 @@ export default function MetronomeScreen() {
               activeSubNote={activeSubNote}
               activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
             />
+            <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
             <BpmSlider
               bpm={bpm}
               onBpmChange={updateBpm}

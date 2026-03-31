@@ -586,11 +586,11 @@ export function NoteModeView({
   if (isLandscape) {
     return (
       <View style={[styles.container, { flexDirection: "row" as const, gap: S.ms(8, 0.3) }]}>
+        <Pressable onPress={onExitNoteMode} hitSlop={8} style={{ position: "absolute" as const, top: S.ms(6, 0.3), right: S.ms(8, 0.3), zIndex: 10 }}>
+          <Ionicons name="close" size={S.ms(22, 0.3)} color={C.textSecondary} />
+        </Pressable>
         <View style={{ flex: 2 }}>
           <View style={[styles.header, { marginBottom: S.ms(2, 0.3), gap: S.ms(8, 0.3) }]}>
-            <Pressable onPress={onExitNoteMode} hitSlop={8}>
-              <Ionicons name="arrow-back" size={S.ms(18, 0.3)} color={C.textSecondary} />
-            </Pressable>
             <Text style={[styles.title, { color: C.accent, fontSize: S.ms(14, 0.3) }]}>{t("noteMode", "title")}</Text>
             <View style={[styles.headerActions, { gap: S.ms(6, 0.3) }]}>
               <Pressable onPress={handleSaveWithFeedback} hitSlop={6} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : C.surface, width: S.ms(28, 0.4), height: S.ms(28, 0.4) }]}>

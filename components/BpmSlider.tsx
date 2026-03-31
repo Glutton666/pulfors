@@ -263,7 +263,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
         </Animated.View>
       </View>
 
-      {!isLandscape && <Text style={[styles.hint, { color: C.text }]}>{t("main", "bpmHint")}</Text>}
+      <Text style={[styles.hint, { color: C.text }]}>{t("main", "bpmHint")}</Text>
     </View>
   );
 }
