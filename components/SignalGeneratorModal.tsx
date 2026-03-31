@@ -725,6 +725,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const [selectedNote, setSelectedNote] = useState("A");
   const [selectedOctave, setSelectedOctave] = useState(4);
   const [tuningGuideOpen, setTuningGuideOpen] = useState(false);
+  const preGuideFreqRef = useRef<number | null>(null);
 
   const pickerDrivenRef = useRef(false);
 
@@ -1440,9 +1441,11 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 setTuningGuideOpen(true);
               }}
               onLongPress={() => {
-                if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                const pickerFreq = noteToFreq(selectedNote, selectedOctave);
-                setFrequency(pickerFreq);
+                if (preGuideFreqRef.current !== null) {
+                  if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                  setFrequency(preGuideFreqRef.current);
+                  preGuideFreqRef.current = null;
+                }
               }}
               delayLongPress={400}
               style={[styles.tuningGuideToggle]}
@@ -1458,6 +1461,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               visible={tuningGuideOpen}
               onClose={() => setTuningGuideOpen(false)}
               onSelectFreq={(freq) => {
+                if (preGuideFreqRef.current === null) preGuideFreqRef.current = frequency;
                 setFrequency(freq);
                 setTuningGuideOpen(false);
               }}
@@ -1551,9 +1555,11 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 setTuningGuideOpen(true);
               }}
               onLongPress={() => {
-                if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                const pickerFreq = noteToFreq(selectedNote, selectedOctave);
-                setFrequency(pickerFreq);
+                if (preGuideFreqRef.current !== null) {
+                  if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                  setFrequency(preGuideFreqRef.current);
+                  preGuideFreqRef.current = null;
+                }
               }}
               delayLongPress={400}
               style={[styles.tuningGuideToggle]}
@@ -1569,6 +1575,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               visible={tuningGuideOpen}
               onClose={() => setTuningGuideOpen(false)}
               onSelectFreq={(freq) => {
+                if (preGuideFreqRef.current === null) preGuideFreqRef.current = frequency;
                 setFrequency(freq);
                 setTuningGuideOpen(false);
               }}
