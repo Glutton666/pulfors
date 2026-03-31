@@ -337,6 +337,176 @@ interface BeatIndicatorProps {
   onEnterNoteMode?: () => void;
 }
 
+interface BlockPillProps {
+  origIndex: number;
+  block: LoopBlock;
+  isEditing: boolean;
+  isActive: boolean;
+  isPlaying: boolean;
+  isDragSource: boolean;
+  isDropTarget: boolean;
+  hasJump: boolean;
+  layerCount: number;
+  beatsPerMeasure: number;
+  progressInfo?: any;
+  accentColor: string;
+  textColor: string;
+  textTertiaryColor: string;
+  bgSecondary: string;
+  whiteColor: string;
+  onPress: () => void;
+  onDragStart: (origIndex: number) => void;
+  onDragMove: (origIndex: number, pageX: number, pageY: number) => void;
+  onDragEnd: (origIndex: number, pageX: number, pageY: number) => void;
+  onMeasure: (origIndex: number, layout: { x: number; y: number; w: number; h: number }) => void;
+  size?: "small" | "normal";
+}
+
+const BlockPill = React.memo(function BlockPill({
+  origIndex, block, isEditing, isActive, isPlaying, isDragSource, isDropTarget, hasJump,
+  layerCount, beatsPerMeasure, progressInfo, accentColor, textColor, textTertiaryColor,
+  bgSecondary, whiteColor, onPress, onDragStart, onDragMove, onDragEnd, onMeasure, size = "small",
+}: BlockPillProps) {
+  const pillRef = useRef<View>(null);
+  const isDraggingRef = useRef(false);
+  const isPlayingRef = useRef(isPlaying);
+  const origIndexRef = useRef(origIndex);
+  const onDragStartRef = useRef(onDragStart);
+  const onDragMoveRef = useRef(onDragMove);
+  const onDragEndRef = useRef(onDragEnd);
+
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { origIndexRef.current = origIndex; }, [origIndex]);
+  useEffect(() => { onDragStartRef.current = onDragStart; }, [onDragStart]);
+  useEffect(() => { onDragMoveRef.current = onDragMove; }, [onDragMove]);
+  useEffect(() => { onDragEndRef.current = onDragEnd; }, [onDragEnd]);
+
+  useEffect(() => {
+    if (!pillRef.current) return;
+    const measure = () => (pillRef.current as any)?.measureInWindow?.((x: number, y: number, w: number, h: number) => {
+      if (w > 0) onMeasure(origIndex, { x, y, w, h });
+    });
+    setTimeout(measure, 50);
+  }, [origIndex, block.startBeat, block.endBeat]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) => {
+        if (isPlayingRef.current) return false;
+        return Math.abs(gs.dy) > 10;
+      },
+      onPanResponderGrant: () => { isDraggingRef.current = false; },
+      onPanResponderMove: (e, gs) => {
+        const idx = origIndexRef.current;
+        if (isDraggingRef.current) {
+          onDragMoveRef.current(idx, e.nativeEvent.pageX, e.nativeEvent.pageY);
+          return;
+        }
+        if (Math.abs(gs.dy) > 10) {
+          isDraggingRef.current = true;
+          onDragStartRef.current(idx);
+          onDragMoveRef.current(idx, e.nativeEvent.pageX, e.nativeEvent.pageY);
+        }
+      },
+      onPanResponderRelease: (e) => {
+        if (isDraggingRef.current) {
+          isDraggingRef.current = false;
+          onDragEndRef.current(origIndexRef.current, e.nativeEvent.pageX, e.nativeEvent.pageY);
+        }
+      },
+      onPanResponderTerminate: (e) => {
+        if (isDraggingRef.current) {
+          isDraggingRef.current = false;
+          onDragEndRef.current(origIndexRef.current, e.nativeEvent.pageX, e.nativeEvent.pageY);
+        }
+      },
+    })
+  ).current;
+
+  const webGestureRef = useRef({ isDown: false, startX: 0, startY: 0, isDragging: false });
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const node = pillRef.current as unknown as HTMLElement;
+    if (!node?.addEventListener) return;
+
+    const handleDown = (e: PointerEvent) => {
+      webGestureRef.current = { isDown: true, startX: e.clientX, startY: e.clientY, isDragging: false };
+    };
+    const handleMove = (e: PointerEvent) => {
+      const g = webGestureRef.current;
+      if (!g.isDown || isPlayingRef.current) return;
+      const idx = origIndexRef.current;
+      if (g.isDragging) {
+        onDragMoveRef.current(idx, e.clientX, e.clientY);
+        return;
+      }
+      const dy = e.clientY - g.startY;
+      if (Math.abs(dy) > 10) {
+        g.isDragging = true;
+        onDragStartRef.current(idx);
+        onDragMoveRef.current(idx, e.clientX, e.clientY);
+      }
+    };
+    const handleUp = (e: PointerEvent) => {
+      const g = webGestureRef.current;
+      if (g.isDragging) {
+        onDragEndRef.current(origIndexRef.current, e.clientX, e.clientY);
+      }
+      webGestureRef.current = { isDown: false, startX: 0, startY: 0, isDragging: false };
+    };
+
+    node.addEventListener("pointerdown", handleDown, true);
+    document.addEventListener("pointermove", handleMove);
+    document.addEventListener("pointerup", handleUp);
+    return () => {
+      node.removeEventListener("pointerdown", handleDown, true);
+      document.removeEventListener("pointermove", handleMove);
+      document.removeEventListener("pointerup", handleUp);
+    };
+  }, []);
+
+  const nativePan = Platform.OS !== "web" ? panResponder.panHandlers : {};
+  const isSmall = size === "small";
+  const px = isSmall ? 6 : 8;
+  const py = isSmall ? 2 : 4;
+  const br = isSmall ? 4 : 6;
+  const mw = isSmall ? 36 : 48;
+  const fs1 = isSmall ? 10 : 12;
+  const fs2 = isSmall ? 8 : 9;
+  const badgeSize = isSmall ? { top: -3, right: -3, r: 5, mw: 10, h: 10, px: 1, fs: 6 } : { top: -4, right: -4, r: 6, mw: 12, h: 12, px: 2, fs: 7 };
+
+  return (
+    <View ref={pillRef} {...nativePan}>
+      <Pressable
+        onPress={onPress}
+        style={{
+          paddingHorizontal: px, paddingVertical: py, borderRadius: br,
+          backgroundColor: isDropTarget ? accentColor + "50" : isActive ? accentColor + "30" : isEditing ? accentColor + "20" : bgSecondary,
+          borderWidth: isDropTarget ? 2 : isActive ? (isSmall ? 1 : 1.5) : isEditing ? 1 : 0,
+          borderColor: isDropTarget ? accentColor : isActive ? accentColor : isEditing ? accentColor + "60" : "transparent",
+          minWidth: mw, alignItems: "center",
+          opacity: isDragSource ? 0.3 : 1,
+        }}
+      >
+        <Text style={{ color: isActive ? accentColor : textColor, fontSize: fs1, fontFamily: "SpaceGrotesk_700Bold" }}>
+          {block.startBeat + 1}-{Math.min(block.endBeat + 1, beatsPerMeasure)}
+        </Text>
+        <Text style={{ color: isActive ? accentColor : textTertiaryColor, fontSize: fs2, fontFamily: "SpaceGrotesk_500Medium" }}>
+          ×{block.value}
+          {isActive && progressInfo?.blockRepeatTotal > 1 && ` ${progressInfo.blockRepeatCurrent + 1}/${progressInfo.blockRepeatTotal}`}
+        </Text>
+        {layerCount > 0 && (
+          <View style={{ position: "absolute" as any, top: badgeSize.top, right: badgeSize.right, backgroundColor: accentColor, borderRadius: badgeSize.r, minWidth: badgeSize.mw, height: badgeSize.h, alignItems: "center", justifyContent: "center", paddingHorizontal: badgeSize.px }}>
+            <Text style={{ color: whiteColor, fontSize: badgeSize.fs, fontFamily: "SpaceGrotesk_700Bold" }}>L{layerCount}</Text>
+          </View>
+        )}
+      </Pressable>
+    </View>
+  );
+});
+
 export function BeatIndicator({
   beatsPerMeasure,
   currentBeat,
@@ -895,48 +1065,49 @@ export function BeatIndicator({
   const [blockSelectStart, setBlockSelectStart] = useState<number | null>(null);
   const [editingBlockIndex, setEditingBlockIndex] = useState<number | null>(null);
 
-  const [pillDrag, setPillDrag] = useState<{ origIndex: number; x: number; y: number; startX: number; startY: number } | null>(null);
+  const [pillDrag, setPillDrag] = useState<{ origIndex: number; x: number; y: number } | null>(null);
+  const [pillDropTarget, setPillDropTarget] = useState<number | null>(null);
   const [pillChoiceModal, setPillChoiceModal] = useState<{ sourceIdx: number; targetIdx: number } | null>(null);
   const pillLayoutsRef = useRef<Record<number, { x: number; y: number; w: number; h: number }>>({});
 
-  const pillDragPanRef = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderMove: (_, gs) => {
-        setPillDrag(prev => prev ? { ...prev, x: prev.startX + gs.dx, y: prev.startY + gs.dy } : null);
-      },
-      onPanResponderRelease: (_, gs) => {
-        setPillDrag(prev => {
-          if (!prev) return null;
-          const dropX = prev.startX + gs.dx;
-          const dropY = prev.startY + gs.dy;
-          const layouts = pillLayoutsRef.current;
-          let targetIdx: number | null = null;
-          for (const key of Object.keys(layouts)) {
-            const idx = parseInt(key, 10);
-            if (idx === prev.origIndex) continue;
-            const l = layouts[idx];
-            if (dropX >= l.x - 8 && dropX <= l.x + l.w + 8 && dropY >= l.y - 8 && dropY <= l.y + l.h + 8) {
-              targetIdx = idx;
-              break;
-            }
-          }
-          if (targetIdx !== null) {
-            setPillChoiceModal({ sourceIdx: prev.origIndex, targetIdx });
-          }
-          return null;
-        });
-      },
-      onPanResponderTerminate: () => { setPillDrag(null); },
-    })
-  );
+  const findPillDropTarget = useCallback((pageX: number, pageY: number, sourceIdx: number): number | null => {
+    const layouts = pillLayoutsRef.current;
+    for (const key of Object.keys(layouts)) {
+      const idx = parseInt(key, 10);
+      if (idx === sourceIdx) continue;
+      const l = layouts[idx];
+      if (pageX >= l.x - 8 && pageX <= l.x + l.w + 8 && pageY >= l.y - 8 && pageY <= l.y + l.h + 8) {
+        return idx;
+      }
+    }
+    return null;
+  }, []);
 
-  const startPillDrag = useCallback((origIndex: number, pageX: number, pageY: number) => {
+  const handlePillDragStart = useCallback((origIndex: number) => {
     if (isPlaying) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setPillDrag({ origIndex, x: pageX, y: pageY, startX: pageX, startY: pageY });
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setPillDrag({ origIndex, x: 0, y: 0 });
   }, [isPlaying]);
+
+  const handlePillDragMove = useCallback((origIndex: number, pageX: number, pageY: number) => {
+    setPillDrag({ origIndex, x: pageX, y: pageY });
+    const target = findPillDropTarget(pageX, pageY, origIndex);
+    setPillDropTarget(target);
+  }, [findPillDropTarget]);
+
+  const handlePillDragEnd = useCallback((origIndex: number, pageX: number, pageY: number) => {
+    const target = findPillDropTarget(pageX, pageY, origIndex);
+    setPillDrag(null);
+    setPillDropTarget(null);
+    if (target !== null) {
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      setPillChoiceModal({ sourceIdx: origIndex, targetIdx: target });
+    }
+  }, [findPillDropTarget]);
 
   const handlePillChoiceJump = useCallback(() => {
     if (!pillChoiceModal) return;
@@ -1255,58 +1426,52 @@ export function BeatIndicator({
       .filter(Boolean) as { fromIndex: number; toIndex: number; fromBeat: number; toBeat: number; jumpCount: number }[];
   }, [loopBlocks]);
 
-  const pillDragOverlay = (
-    <>
-      {pillDrag && (
-        <View
-          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }}
-          {...pillDragPanRef.current.panHandlers}
-        >
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              left: pillDrag.x - 24,
-              top: pillDrag.y - 16,
-              paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
-              backgroundColor: C.accent + "90",
-              alignItems: "center",
-              zIndex: 10000,
-            }}
+  const pillDragGhost = pillDrag && pillDrag.x > 0 ? (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        left: pillDrag.x - 24,
+        top: pillDrag.y - 16,
+        paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
+        backgroundColor: C.accent + "90",
+        alignItems: "center",
+        zIndex: 10000,
+      }}
+    >
+      <Text style={{ color: C.white, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
+        {loopBlocks[pillDrag.origIndex]?.startBeat !== undefined
+          ? `${loopBlocks[pillDrag.origIndex].startBeat + 1}-${Math.min(loopBlocks[pillDrag.origIndex].endBeat + 1, beatsPerMeasure)}`
+          : "?"}
+      </Text>
+    </View>
+  ) : null;
+
+  const pillChoiceModalElement = (
+    <Modal visible={!!pillChoiceModal} transparent animationType="fade" onRequestClose={() => setPillChoiceModal(null)}>
+      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" }} onPress={() => setPillChoiceModal(null)}>
+        <View style={{ backgroundColor: C.backgroundSecondary, borderRadius: 12, padding: 20, minWidth: 200, gap: 12, borderWidth: 1, borderColor: C.accent + "30" }}>
+          <Text style={{ color: C.text, fontSize: 14, fontFamily: "SpaceGrotesk_700Bold", textAlign: "center" }}>
+            {pillChoiceModal ? `${loopBlocks[pillChoiceModal.sourceIdx]?.startBeat !== undefined ? loopBlocks[pillChoiceModal.sourceIdx].startBeat + 1 : "?"} → ${loopBlocks[pillChoiceModal.targetIdx]?.startBeat !== undefined ? loopBlocks[pillChoiceModal.targetIdx].startBeat + 1 : "?"}` : ""}
+          </Text>
+          <Pressable
+            onPress={handlePillChoiceJump}
+            style={{ backgroundColor: "#f0ad4e" + "30", paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: "#f0ad4e", alignItems: "center" }}
           >
-            <Text style={{ color: C.white, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
-              {loopBlocks[pillDrag.origIndex]?.startBeat !== undefined
-                ? `${loopBlocks[pillDrag.origIndex].startBeat + 1}-${Math.min(loopBlocks[pillDrag.origIndex].endBeat + 1, beatsPerMeasure)}`
-                : "?"}
-            </Text>
-          </View>
+            <Text style={{ color: "#f0ad4e", fontSize: 13, fontFamily: "SpaceGrotesk_700Bold" }}>{t("blocks", "jump") || "점프 (Jump)"}</Text>
+          </Pressable>
+          <Pressable
+            onPress={handlePillChoiceLayer}
+            style={{ backgroundColor: C.accent + "30", paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: C.accent, alignItems: "center" }}
+          >
+            <Text style={{ color: C.accent, fontSize: 13, fontFamily: "SpaceGrotesk_700Bold" }}>{t("blocks", "layer") || "레이어 (Layer)"}</Text>
+          </Pressable>
+          <Pressable onPress={() => setPillChoiceModal(null)} style={{ alignItems: "center", paddingTop: 4 }}>
+            <Text style={{ color: C.textTertiary, fontSize: 11, fontFamily: "SpaceGrotesk_500Medium" }}>{t("common", "cancel") || "취소"}</Text>
+          </Pressable>
         </View>
-      )}
-      <Modal visible={!!pillChoiceModal} transparent animationType="fade" onRequestClose={() => setPillChoiceModal(null)}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" }} onPress={() => setPillChoiceModal(null)}>
-          <View style={{ backgroundColor: C.backgroundSecondary, borderRadius: 12, padding: 20, minWidth: 200, gap: 12, borderWidth: 1, borderColor: C.accent + "30" }}>
-            <Text style={{ color: C.text, fontSize: 14, fontFamily: "SpaceGrotesk_700Bold", textAlign: "center" }}>
-              {pillChoiceModal ? `${loopBlocks[pillChoiceModal.sourceIdx]?.startBeat !== undefined ? loopBlocks[pillChoiceModal.sourceIdx].startBeat + 1 : "?"} → ${loopBlocks[pillChoiceModal.targetIdx]?.startBeat !== undefined ? loopBlocks[pillChoiceModal.targetIdx].startBeat + 1 : "?"}` : ""}
-            </Text>
-            <Pressable
-              onPress={handlePillChoiceJump}
-              style={{ backgroundColor: "#f0ad4e" + "30", paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: "#f0ad4e", alignItems: "center" }}
-            >
-              <Text style={{ color: "#f0ad4e", fontSize: 13, fontFamily: "SpaceGrotesk_700Bold" }}>{t("blocks", "jump") || "점프 (Jump)"}</Text>
-            </Pressable>
-            <Pressable
-              onPress={handlePillChoiceLayer}
-              style={{ backgroundColor: C.accent + "30", paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: C.accent, alignItems: "center" }}
-            >
-              <Text style={{ color: C.accent, fontSize: 13, fontFamily: "SpaceGrotesk_700Bold" }}>{t("blocks", "layer") || "레이어 (Layer)"}</Text>
-            </Pressable>
-            <Pressable onPress={() => setPillChoiceModal(null)} style={{ alignItems: "center", paddingTop: 4 }}>
-              <Text style={{ color: C.textTertiary, fontSize: 11, fontFamily: "SpaceGrotesk_500Medium" }}>{t("common", "cancel") || "취소"}</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
-    </>
+      </Pressable>
+    </Modal>
   );
 
   if (barMode) {
@@ -1843,33 +2008,18 @@ export function BeatIndicator({
                           const jumpTarget = hasJump ? loopBlocks[block.jumpToBlock!] : null;
                           return (
                             <View key={`flow-${origIndex}`} style={{ flexDirection: "row", alignItems: "center" }}>
-                              <Pressable
+                              <BlockPill
+                                origIndex={origIndex} block={block} isEditing={isEditing} isActive={!!isActive} isPlaying={isPlaying}
+                                isDragSource={!!pillDrag && pillDrag.origIndex === origIndex}
+                                isDropTarget={pillDropTarget === origIndex}
+                                hasJump={hasJump} layerCount={loopBlocks.filter(b => b.layerOf === origIndex).length}
+                                beatsPerMeasure={beatsPerMeasure} progressInfo={progressInfo}
+                                accentColor={C.accent} textColor={C.text} textTertiaryColor={C.textTertiary} bgSecondary={C.backgroundSecondary} whiteColor={C.white}
                                 onPress={() => { if (!isPlaying) setEditingBlockIndex(isEditing ? null : origIndex); }}
-                                onLongPress={(e) => { startPillDrag(origIndex, e.nativeEvent.pageX, e.nativeEvent.pageY); }}
-                                delayLongPress={250}
-                                ref={(ref: any) => { if (ref) { const measure = () => ref.measureInWindow?.((x: number, y: number, w: number, h: number) => { if (w > 0) pillLayoutsRef.current[origIndex] = { x, y, w, h }; }); setTimeout(measure, 50); } }}
-                                style={{
-                                  paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
-                                  backgroundColor: isActive ? C.accent + "30" : isEditing ? C.accent + "20" : C.backgroundSecondary,
-                                  borderWidth: isActive ? 1 : isEditing ? 1 : 0,
-                                  borderColor: isActive ? C.accent : isEditing ? C.accent + "60" : "transparent",
-                                  minWidth: 36, alignItems: "center",
-                                  opacity: pillDrag && pillDrag.origIndex === origIndex ? 0.3 : 1,
-                                }}
-                              >
-                                <Text style={{ color: isActive ? C.accent : C.text, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
-                                  {block.startBeat + 1}-{Math.min(block.endBeat + 1, beatsPerMeasure)}
-                                </Text>
-                                <Text style={{ color: isActive ? C.accent : C.textTertiary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium" }}>
-                                  ×{block.value}
-                                  {isActive && progressInfo!.blockRepeatTotal > 1 && ` ${progressInfo!.blockRepeatCurrent + 1}/${progressInfo!.blockRepeatTotal}`}
-                                </Text>
-                                {(() => { const sc = loopBlocks.filter(b => b.layerOf === origIndex).length; return sc > 0 ? (
-                                  <View style={{ position: "absolute" as any, top: -3, right: -3, backgroundColor: C.accent, borderRadius: 5, minWidth: 10, height: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 1 }}>
-                                    <Text style={{ color: C.white, fontSize: 6, fontFamily: "SpaceGrotesk_700Bold" }}>L{sc}</Text>
-                                  </View>
-                                ) : null; })()}
-                              </Pressable>
+                                onDragStart={handlePillDragStart} onDragMove={handlePillDragMove} onDragEnd={handlePillDragEnd}
+                                onMeasure={(idx, layout) => { pillLayoutsRef.current[idx] = layout; }}
+                                size="small"
+                              />
                               {hasJump && jumpTarget && (() => {
                                 const targetSortedIdx = sorted.findIndex(s => s.origIndex === block.jumpToBlock);
                                 const goesBack = targetSortedIdx >= 0 && targetSortedIdx <= si;
@@ -2050,33 +2200,18 @@ export function BeatIndicator({
                       const jumpTarget = hasJump ? loopBlocks[block.jumpToBlock!] : null;
                       return (
                         <View key={`flow-${origIndex}`} style={{ flexDirection: "row", alignItems: "center" }}>
-                          <Pressable
+                          <BlockPill
+                            origIndex={origIndex} block={block} isEditing={isEditing} isActive={!!isActive} isPlaying={isPlaying}
+                            isDragSource={!!pillDrag && pillDrag.origIndex === origIndex}
+                            isDropTarget={pillDropTarget === origIndex}
+                            hasJump={hasJump} layerCount={loopBlocks.filter(b => b.layerOf === origIndex).length}
+                            beatsPerMeasure={beatsPerMeasure} progressInfo={progressInfo}
+                            accentColor={C.accent} textColor={C.text} textTertiaryColor={C.textTertiary} bgSecondary={C.backgroundSecondary} whiteColor={C.white}
                             onPress={() => { if (!isPlaying) setEditingBlockIndex(isEditing ? null : origIndex); }}
-                            onLongPress={(e) => { startPillDrag(origIndex, e.nativeEvent.pageX, e.nativeEvent.pageY); }}
-                            delayLongPress={250}
-                            ref={(ref: any) => { if (ref) { const measure = () => ref.measureInWindow?.((x: number, y: number, w: number, h: number) => { if (w > 0) pillLayoutsRef.current[origIndex] = { x, y, w, h }; }); setTimeout(measure, 50); } }}
-                            style={{
-                              paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
-                              backgroundColor: isActive ? C.accent + "30" : isEditing ? C.accent + "20" : C.backgroundSecondary,
-                              borderWidth: isActive ? 1 : isEditing ? 1 : 0,
-                              borderColor: isActive ? C.accent : isEditing ? C.accent + "60" : "transparent",
-                              minWidth: 36, alignItems: "center",
-                              opacity: pillDrag && pillDrag.origIndex === origIndex ? 0.3 : 1,
-                            }}
-                          >
-                            <Text style={{ color: isActive ? C.accent : C.text, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
-                              {block.startBeat + 1}-{Math.min(block.endBeat + 1, beatsPerMeasure)}
-                            </Text>
-                            <Text style={{ color: isActive ? C.accent : C.textTertiary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium" }}>
-                              ×{block.value}
-                              {isActive && progressInfo!.blockRepeatTotal > 1 && ` ${progressInfo!.blockRepeatCurrent + 1}/${progressInfo!.blockRepeatTotal}`}
-                            </Text>
-                            {(() => { const sc = loopBlocks.filter(b => b.layerOf === origIndex).length; return sc > 0 ? (
-                              <View style={{ position: "absolute" as any, top: -3, right: -3, backgroundColor: C.accent, borderRadius: 5, minWidth: 10, height: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 1 }}>
-                                <Text style={{ color: C.white, fontSize: 6, fontFamily: "SpaceGrotesk_700Bold" }}>L{sc}</Text>
-                              </View>
-                            ) : null; })()}
-                          </Pressable>
+                            onDragStart={handlePillDragStart} onDragMove={handlePillDragMove} onDragEnd={handlePillDragEnd}
+                            onMeasure={(idx, layout) => { pillLayoutsRef.current[idx] = layout; }}
+                            size="small"
+                          />
                           {hasJump && jumpTarget && (() => {
                             const targetSortedIdx = sorted.findIndex(s => s.origIndex === block.jumpToBlock);
                             const goesBack = targetSortedIdx >= 0 && targetSortedIdx <= si;
@@ -2273,36 +2408,18 @@ export function BeatIndicator({
                   const jumpTarget = hasJump ? loopBlocks[block.jumpToBlock!] : null;
                   return (
                     <View key={`flow-${origIndex}`} style={{ flexDirection: "row", alignItems: "center" }}>
-                      <Pressable
+                      <BlockPill
+                        origIndex={origIndex} block={block} isEditing={isEditing} isActive={!!isActive} isPlaying={isPlaying}
+                        isDragSource={!!pillDrag && pillDrag.origIndex === origIndex}
+                        isDropTarget={pillDropTarget === origIndex}
+                        hasJump={hasJump} layerCount={loopBlocks.filter(b => b.layerOf === origIndex).length}
+                        beatsPerMeasure={beatsPerMeasure} progressInfo={progressInfo}
+                        accentColor={C.accent} textColor={C.text} textTertiaryColor={C.textTertiary} bgSecondary={C.backgroundSecondary} whiteColor={C.white}
                         onPress={() => { if (!isPlaying) setEditingBlockIndex(isEditing ? null : origIndex); }}
-                        onLongPress={(e) => { startPillDrag(origIndex, e.nativeEvent.pageX, e.nativeEvent.pageY); }}
-                        delayLongPress={250}
-                        ref={(ref: any) => { if (ref) { const measure = () => ref.measureInWindow?.((x: number, y: number, w: number, h: number) => { if (w > 0) pillLayoutsRef.current[origIndex] = { x, y, w, h }; }); setTimeout(measure, 50); } }}
-                        style={{
-                          paddingHorizontal: 8,
-                          paddingVertical: 4,
-                          borderRadius: 6,
-                          backgroundColor: isActive ? C.accent + "30" : isEditing ? C.accent + "20" : C.backgroundSecondary,
-                          borderWidth: isActive ? 1.5 : isEditing ? 1 : 0,
-                          borderColor: isActive ? C.accent : isEditing ? C.accent + "60" : "transparent",
-                          minWidth: 48,
-                          alignItems: "center",
-                          opacity: pillDrag && pillDrag.origIndex === origIndex ? 0.3 : 1,
-                        }}
-                      >
-                        <Text style={{ color: isActive ? C.accent : C.text, fontSize: 12, fontFamily: "SpaceGrotesk_700Bold" }}>
-                          {block.startBeat + 1}-{Math.min(block.endBeat + 1, beatsPerMeasure)}
-                        </Text>
-                        <Text style={{ color: isActive ? C.accent : C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium" }}>
-                          ×{block.value}
-                          {isActive && progressInfo!.blockRepeatTotal > 1 && ` ${progressInfo!.blockRepeatCurrent + 1}/${progressInfo!.blockRepeatTotal}`}
-                        </Text>
-                        {(() => { const sc = loopBlocks.filter(b => b.layerOf === origIndex).length; return sc > 0 ? (
-                          <View style={{ position: "absolute" as any, top: -4, right: -4, backgroundColor: C.accent, borderRadius: 6, minWidth: 12, height: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 2 }}>
-                            <Text style={{ color: C.white, fontSize: 7, fontFamily: "SpaceGrotesk_700Bold" }}>L{sc}</Text>
-                          </View>
-                        ) : null; })()}
-                      </Pressable>
+                        onDragStart={handlePillDragStart} onDragMove={handlePillDragMove} onDragEnd={handlePillDragEnd}
+                        onMeasure={(idx, layout) => { pillLayoutsRef.current[idx] = layout; }}
+                        size="normal"
+                      />
                       {hasJump && jumpTarget && (() => {
                         const targetSortedIdx = sorted.findIndex(s => s.origIndex === block.jumpToBlock);
                         const goesBack = targetSortedIdx >= 0 && targetSortedIdx <= si;
@@ -3022,7 +3139,8 @@ export function BeatIndicator({
         </Modal>
 
       </View>
-      {pillDragOverlay}
+      {pillDragGhost}
+      {pillChoiceModalElement}
       </>
     );
   }
@@ -3172,7 +3290,8 @@ export function BeatIndicator({
             )}
           </View>
         </View>
-        {pillDragOverlay}
+        {pillDragGhost}
+        {pillChoiceModalElement}
       </>
     );
   }
@@ -3180,7 +3299,8 @@ export function BeatIndicator({
   return (
     <>
       {dialContent}
-      {pillDragOverlay}
+      {pillDragGhost}
+      {pillChoiceModalElement}
     </>
   );
 }
