@@ -766,7 +766,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     220
   );
   const dynamicCardWidth = isLandscape
-    ? Math.min(winW * 0.85, 680)
+    ? Math.min(winW * 0.92, 820)
     : Math.min(Math.max(300, S.screenWidth * 0.88), 400);
   const [frequency, setFrequency] = useState(440);
   const [waveType, setWaveType] = useState<WaveType>("sine");
@@ -1351,10 +1351,10 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     >
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
-        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border, width: dynamicCardWidth }, isLandscape && { padding: 16 }]}>
+        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border, width: dynamicCardWidth }, isLandscape && { padding: 14, paddingHorizontal: 18, maxHeight: "92%" as const }]}>
           {isLandscape && (
-            <Pressable onPress={handleClose} hitSlop={12} style={{ position: "absolute" as const, top: 8, right: 8, zIndex: 10 }}>
-              <Ionicons name="close" size={22} color={C.textSecondary} />
+            <Pressable onPress={handleClose} hitSlop={12} style={{ position: "absolute" as const, top: 8, right: 10, zIndex: 10 }}>
+              <Ionicons name="close" size={20} color={C.textSecondary} />
             </Pressable>
           )}
           {!isLandscape && (
@@ -1370,9 +1370,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             </>
           )}
 
-          <View style={isLandscape ? { flexDirection: "row" as const, gap: 10, alignItems: "stretch" as const, flex: 1 } : undefined}>
+          <View style={isLandscape ? { flexDirection: "row" as const, gap: 14, alignItems: "stretch" as const, flex: 1 } : undefined}>
           {isLandscape && (
-            <View style={{ width: 90, justifyContent: "center" as const }}>
+            <View style={{ width: 110 }}>
               <SpectrumGraph
                 spectrumData={spectrumDataRef.current}
                 peakBin={spectrumPeakBinRef.current}
@@ -1386,7 +1386,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               />
             </View>
           )}
-          <View style={[styles.knobWrap, isLandscape && { flex: 1, overflow: "hidden" as const }]}>
+          <View style={[styles.knobWrap, isLandscape && { flex: 1.2, overflow: "hidden" as const }]}>
             <Knob
               value={freqNorm}
               onChange={handleFreqKnob}
@@ -1487,7 +1487,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
           </View>
 
           {isLandscape ? (
-            <View style={{ flex: 1, alignItems: "center" as const, justifyContent: "space-between" as const, gap: 6, paddingVertical: 2 }}>
+            <View style={{ flex: 1.3, alignItems: "center" as const, justifyContent: "space-between" as const, gap: 6, paddingVertical: 2 }}>
             {editingFreq && (
               <View style={[styles.freqEditRow, { paddingHorizontal: 10, paddingVertical: 5 }]}>
                 <TextInput
