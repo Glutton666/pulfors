@@ -1465,6 +1465,7 @@ export function BeatIndicator({
           key={`bar-${copyIndex}-${beat}`}
           style={[
             styles.barBeatWrapper,
+            { height: rowHeight || BAR_HEIGHT },
             isCurrent && styles.barBeatWrapperActive,
             isPrimary && isDropTarget && { backgroundColor: C.overlay06, borderColor: C.accent, borderWidth: 1, borderRadius: 4, marginHorizontal: -1 },
           ]}
