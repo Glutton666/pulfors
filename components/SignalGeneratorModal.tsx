@@ -820,6 +820,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const [micAnalyzed, setMicAnalyzed] = useState(false);
   const micTargetFreqRef = useRef<number>(440);
   const micHasTargetRef = useRef(false);
+  const [micHasTarget, setMicHasTarget] = useState(false);
   const micDetectedFreqRef = useRef<number | null>(null);
   const micActiveRef = useRef(false);
   const micAudioCtxRef = useRef<any>(null);
@@ -1279,6 +1280,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       stopMic();
     } else {
       micHasTargetRef.current = false;
+      setMicHasTarget(false);
       micTargetFreqRef.current = frequency;
       startMic();
     }
@@ -1306,13 +1308,20 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   useEffect(() => {
     if (micListening && prevFreqForMicRef.current !== frequency) {
       micHasTargetRef.current = true;
+      setMicHasTarget(true);
       micTargetFreqRef.current = frequency;
     }
     prevFreqForMicRef.current = frequency;
   }, [frequency, micListening]);
 
+  const clearPitchTarget = useCallback(() => {
+    hapticFeedback();
+    micHasTargetRef.current = false;
+    setMicHasTarget(false);
+  }, [hapticFeedback]);
+
   const pitchComparison = useMemo(() => {
-    if (!micListening || !micDetectedFreq || !micHasTargetRef.current) return null;
+    if (!micListening || !micDetectedFreq || !micHasTarget) return null;
     const target = micTargetFreqRef.current;
     const centsDiff = Math.round(1200 * Math.log2(micDetectedFreq / target));
     const targetNote = frequencyToNote(target);
@@ -1320,7 +1329,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     if (Math.abs(centsDiff) <= 5) return { status: "exact" as const, cents: centsDiff, targetLabel };
     if (centsDiff > 0) return { status: "high" as const, cents: centsDiff, targetLabel };
     return { status: "low" as const, cents: centsDiff, targetLabel };
-  }, [micListening, micDetectedFreq]);
+  }, [micListening, micDetectedFreq, micHasTarget]);
 
   const formatFreqDisplay = (f: number) => {
     if (f >= 1000) return (f / 1000).toFixed(f >= 10000 ? 1 : 2);
@@ -1483,6 +1492,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                         ? `${t("signalGenerator", "pitchHigh")} +${pitchComparison.cents}¢`
                         : `${t("signalGenerator", "pitchLow")} ${pitchComparison.cents}¢`}
                     </Text>
+                    <Pressable onPress={clearPitchTarget} hitSlop={8} style={{ marginLeft: 4 }}>
+                      <Ionicons name="close-circle" size={14} color={C.textTertiary} />
+                    </Pressable>
                   </View>
                 ) : null}
               </View>
