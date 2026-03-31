@@ -1829,12 +1829,11 @@ export function BeatIndicator({
             return layerInfo.parentBeatOffset < layerBeats;
           });
           if (visibleLayers.length > 0) {
-            const totalRows = 1 + visibleLayers.length;
-            const sharedH = Math.max(10, Math.floor(BAR_HEIGHT / totalRows));
+            const layerH = Math.floor(BAR_HEIGHT / 2);
             rows.push(
-              <View key={`grp-${copyIndex}-${beat}`} style={{ gap: 0, height: BAR_HEIGHT, overflow: "hidden" }}>
-                {renderBarRow(beat, copyIndex, sharedH)}
-                {visibleLayers.map((sb, li) => renderLayerRow(beat, copyIndex, sb.block, sb.origIndex, li + 1, layerInfo.blockIndex, layerInfo.parentBeatOffset, sharedH))}
+              <View key={`grp-${copyIndex}-${beat}`} style={{ gap: 0 }}>
+                {renderBarRow(beat, copyIndex)}
+                {visibleLayers.map((sb, li) => renderLayerRow(beat, copyIndex, sb.block, sb.origIndex, li + 1, layerInfo.blockIndex, layerInfo.parentBeatOffset, layerH))}
               </View>
             );
           } else {
