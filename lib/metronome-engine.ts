@@ -524,10 +524,10 @@ export class MetronomeEngine {
           if (inner.type === "count") innerRepCount = Math.max(1, inner.value);
           else innerRepCount = Math.max(1, Math.round((inner.value * 1000) / (innerPassDur || 1)));
           for (let ir = 0; ir < innerRepCount; ir++) {
-            const innerStartTime = t;
+            const innerStartTime = time;
             emitBeatsInRange(inner.startBeat, innerEnd, innerIdx, ir, innerRepCount, innerBpm);
             if (inner.layers && inner.layers.length > 0) {
-              const innerDur = t - innerStartTime;
+              const innerDur = time - innerStartTime;
               emitLayerTicks(inner.layers, innerStartTime, innerDur, innerIdx, ir, innerRepCount);
             }
           }

@@ -1524,7 +1524,7 @@ export function BeatIndicator({
                       updateBlock(blockIndex, { layers: newLayers });
                     }
                   }}
-                  style={[{ flex: 1, alignItems: "stretch", justifyContent: "center" as any }, !isLast && { borderRightWidth: 1, borderRightColor: C.overlay06 }]}
+                  style={[{ flex: 1, alignItems: "stretch", justifyContent: "center" as const }, !isLast && { borderRightWidth: 1, borderRightColor: C.overlay06 }]}
                 >
                   {isStrongType ? (
                     <View style={{ flex: 1, borderRadius: 2, margin: 1, overflow: "hidden", opacity: isActiveCell ? 1 : 0.7 }}>
