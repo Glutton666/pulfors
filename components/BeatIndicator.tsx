@@ -2015,7 +2015,7 @@ export function BeatIndicator({
             {subdivisionBarElement && (
               <View style={{ width: "125%", paddingHorizontal: 8 }}>
                 {loopBlocks.length > 0 && (() => {
-                  const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).sort((a, b) => a.block.startBeat - b.block.startBeat);
+                  const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).filter(({ block }) => block.layerOf === undefined).sort((a, b) => a.block.startBeat - b.block.startBeat);
                   const editBlock = editingBlockIndex !== null ? loopBlocks[editingBlockIndex] : null;
                   const otherBlocks = editBlock ? loopBlocks.map((b, i) => ({ b, i })).filter(({ i }) => i !== editingBlockIndex) : [];
                   const editHasJump = editBlock ? editBlock.jumpToBlock !== undefined && editBlock.jumpToBlock !== null : false;
@@ -2084,12 +2084,14 @@ export function BeatIndicator({
                       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                         <Text style={{ color: C.accent, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
                           Block {editBlock.startBeat + 1}-{Math.min(editBlock.endBeat + 1, beatsPerMeasure)}
-                          {editBlock.layerOf !== undefined && ` (Layer)`}
                         </Text>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                          {editBlock.layerOf !== undefined && (
+                          {loopBlocks.some(b => b.layerOf === editingBlockIndex) && (
                             <Pressable
-                              onPress={() => { updateBlock(editingBlockIndex!, { layerOf: undefined, ownBeatTypes: undefined, ownSubdivisions: undefined }); }}
+                              onPress={() => {
+                                const updated = loopBlocks.map(b => b.layerOf === editingBlockIndex ? { ...b, layerOf: undefined, ownBeatTypes: undefined, ownSubdivisions: undefined } : b);
+                                onLoopBlocksChange(updated);
+                              }}
                               hitSlop={8}
                               style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
                             >
@@ -2224,7 +2226,7 @@ export function BeatIndicator({
               </View>
             )}
             {!subdivisionBarElement && loopBlocks.length > 0 && (() => {
-              const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).sort((a, b) => a.block.startBeat - b.block.startBeat);
+              const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).filter(({ block }) => block.layerOf === undefined).sort((a, b) => a.block.startBeat - b.block.startBeat);
               return (
                 <View style={{ flexGrow: 0 }}>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 42 }} contentContainerStyle={{ paddingHorizontal: 6, paddingVertical: 3, gap: 4, alignItems: "center" }}>
@@ -2430,7 +2432,7 @@ export function BeatIndicator({
         </View>
 
         {loopBlocks.length > 0 && (() => {
-          const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).sort((a, b) => a.block.startBeat - b.block.startBeat);
+          const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).filter(({ block }) => block.layerOf === undefined).sort((a, b) => a.block.startBeat - b.block.startBeat);
           const editBlock = editingBlockIndex !== null ? loopBlocks[editingBlockIndex] : null;
           const otherBlocks = editBlock ? loopBlocks.map((b, i) => ({ b, i })).filter(({ i }) => i !== editingBlockIndex) : [];
           const editHasJump = editBlock ? editBlock.jumpToBlock !== undefined && editBlock.jumpToBlock !== null : false;
@@ -2553,12 +2555,14 @@ export function BeatIndicator({
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                     <Text style={{ color: C.accent, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" }}>
                       Block {editBlock.startBeat + 1}-{Math.min(editBlock.endBeat + 1, beatsPerMeasure)}
-                      {editBlock.layerOf !== undefined && ` (Layer)`}
                     </Text>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                      {editBlock.layerOf !== undefined && (
+                      {loopBlocks.some(b => b.layerOf === editingBlockIndex) && (
                         <Pressable
-                          onPress={() => { updateBlock(editingBlockIndex!, { layerOf: undefined, ownBeatTypes: undefined, ownSubdivisions: undefined }); }}
+                          onPress={() => {
+                            const updated = loopBlocks.map(b => b.layerOf === editingBlockIndex ? { ...b, layerOf: undefined, ownBeatTypes: undefined, ownSubdivisions: undefined } : b);
+                            onLoopBlocksChange(updated);
+                          }}
                           hitSlop={8}
                           style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
                         >
