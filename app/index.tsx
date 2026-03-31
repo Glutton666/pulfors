@@ -3757,31 +3757,35 @@ export default function MetronomeScreen() {
           </View>
         )}
         {isLandscape && !barMode && (
-          <View style={{ flex: 3, justifyContent: landscapeImageEnabled ? "center" as const : "space-evenly" as const, alignItems: "center" as const, gap: landscapeImageEnabled ? 6 : 0 }}>
-            {!noteMode && (
-              <>
-                {landscapeImageEnabled && (
-                  <Pressable
-                    onPress={() => setLandscapeImageModalVisible(true)}
-                    style={{ width: "100%" as any, flex: 0.8, borderRadius: 10, overflow: "hidden" as const, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: landscapeImageUri ? "transparent" : C.surface, borderWidth: landscapeImageUri ? 0 : 1, borderColor: C.overlay10, borderStyle: "dashed" as const, minHeight: 48 }}
-                  >
-                    {landscapeImageUri ? (
-                      <Image source={{ uri: landscapeImageUri }} style={{ width: "100%" as any, height: "100%" as any, borderRadius: 10 }} resizeMode="cover" />
-                    ) : (
-                      <Ionicons name="image-outline" size={24} color={C.textTertiary} />
-                    )}
-                  </Pressable>
+          <View style={{ flex: 3, justifyContent: "center" as const, alignItems: "center" as const, gap: landscapeImageEnabled ? 6 : 12 }}>
+            {!noteMode && landscapeImageEnabled && (
+              <Pressable
+                onPress={() => setLandscapeImageModalVisible(true)}
+                style={{ width: "100%" as any, flex: 0.8, borderRadius: 10, overflow: "hidden" as const, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: landscapeImageUri ? "transparent" : C.surface, borderWidth: landscapeImageUri ? 0 : 1, borderColor: C.overlay10, borderStyle: "dashed" as const, minHeight: 48 }}
+              >
+                {landscapeImageUri ? (
+                  <Image source={{ uri: landscapeImageUri }} style={{ width: "100%" as any, height: "100%" as any, borderRadius: 10 }} resizeMode="cover" />
+                ) : (
+                  <Ionicons name="image-outline" size={24} color={C.textTertiary} />
                 )}
-                <StopwatchTimer
-                  onTimerExpired={handleTimerExpired}
-                  onStopRequested={handleTimerExpired}
-                  onStartMetronome={startMetronome}
-                  isMetronomePlaying={isPlaying}
-                  currentBeat={currentBeat}
-                  topInset={insets.top || webTopInset}
-                  isLandscape={true}
-                />
-              </>
+              </Pressable>
+            )}
+            {!noteMode && !landscapeImageEnabled && (
+              <View style={{ flex: 1 }} />
+            )}
+            {!noteMode && (
+              <StopwatchTimer
+                onTimerExpired={handleTimerExpired}
+                onStopRequested={handleTimerExpired}
+                onStartMetronome={startMetronome}
+                isMetronomePlaying={isPlaying}
+                currentBeat={currentBeat}
+                topInset={insets.top || webTopInset}
+                isLandscape={true}
+              />
+            )}
+            {!landscapeImageEnabled && (
+              <View style={{ flex: 0.5 }} />
             )}
             <SubdivisionBar
               pattern={subdivisionPattern}
@@ -3795,6 +3799,9 @@ export default function MetronomeScreen() {
               activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
             />
             <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
+            {!landscapeImageEnabled && (
+              <View style={{ flex: 0.5 }} />
+            )}
             <BpmSlider
               bpm={bpm}
               onBpmChange={updateBpm}
@@ -3803,6 +3810,9 @@ export default function MetronomeScreen() {
               onHalfTimeToggle={toggleHalfTime}
               isLandscape={true}
             />
+            {!landscapeImageEnabled && (
+              <View style={{ flex: 1 }} />
+            )}
           </View>
         )}
         {!isLandscape && (
