@@ -274,10 +274,6 @@ export interface BarRepeat {
   bpm?: number;
 }
 
-export interface BlockLayer {
-  subdivisions: Record<string, BeatType[]>;
-}
-
 export interface LoopBlock {
   startBeat: number;
   endBeat: number;
@@ -285,7 +281,6 @@ export interface LoopBlock {
   value: number;
   jumpToBlock?: number;
   jumpCount?: number;
-  layers?: BlockLayer[];
 }
 
 interface BeatIndicatorProps {
@@ -895,10 +890,6 @@ export function BeatIndicator({
 
   const [blockSelectStart, setBlockSelectStart] = useState<number | null>(null);
   const [editingBlockIndex, setEditingBlockIndex] = useState<number | null>(null);
-  const [layerDragIndex, setLayerDragIndex] = useState<number | null>(null);
-  const [layerDragPos, setLayerDragPos] = useState<{ x: number; y: number } | null>(null);
-  const blockPillRefs = useRef<Map<number, View | null>>(new Map());
-  const blockPillLayouts = useRef<Map<number, { x: number; y: number; w: number; h: number }>>(new Map());
 
   const openRepeatModal = useCallback((beat: number) => {
     const existing = barRepeats[beat];
@@ -1012,54 +1003,6 @@ export function BeatIndicator({
     if (editingBlockIndex === index) setEditingBlockIndex(null);
     else if (editingBlockIndex !== null && editingBlockIndex > index) setEditingBlockIndex(editingBlockIndex - 1);
   }, [loopBlocks, onLoopBlocksChange, editingBlockIndex]);
-
-  const handleLayerDrop = useCallback((draggedIdx: number, targetIdx: number) => {
-    if (draggedIdx === targetIdx || draggedIdx < 0 || targetIdx < 0) return;
-    if (draggedIdx >= loopBlocks.length || targetIdx >= loopBlocks.length) return;
-    const draggedBlock = loopBlocks[draggedIdx];
-    const layerSubs: Record<string, BeatType[]> = {};
-    for (let b = draggedBlock.startBeat; b <= draggedBlock.endBeat && b < beatsPerMeasure; b++) {
-      const pattern = beatSubdivisions[String(b)];
-      if (pattern) layerSubs[String(b)] = [...pattern];
-      else layerSubs[String(b)] = [beatTypes[b] || "normal"];
-    }
-    const newLayer: BlockLayer = { subdivisions: layerSubs };
-    const updated = loopBlocks.map((block, i) => {
-      if (i === targetIdx) {
-        const existing = block.layers || [];
-        return { ...block, layers: [...existing, newLayer] };
-      }
-      return block;
-    });
-    const afterRemove = updated
-      .filter((_, i) => i !== draggedIdx)
-      .map((block) => {
-        let newBlock = { ...block };
-        if (newBlock.jumpToBlock !== undefined && newBlock.jumpToBlock !== null) {
-          if (newBlock.jumpToBlock === draggedIdx) {
-            newBlock.jumpToBlock = undefined;
-            newBlock.jumpCount = undefined;
-          } else if (newBlock.jumpToBlock > draggedIdx) {
-            newBlock.jumpToBlock = newBlock.jumpToBlock - 1;
-          }
-        }
-        return newBlock;
-      });
-    onLoopBlocksChange(afterRemove);
-    if (editingBlockIndex === draggedIdx) setEditingBlockIndex(null);
-    else if (editingBlockIndex !== null && editingBlockIndex > draggedIdx) setEditingBlockIndex(editingBlockIndex - 1);
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-  }, [loopBlocks, onLoopBlocksChange, editingBlockIndex, beatSubdivisions, beatTypes, beatsPerMeasure]);
-
-  const removeLayer = useCallback((blockIdx: number, layerIdx: number) => {
-    const block = loopBlocks[blockIdx];
-    if (!block?.layers || layerIdx >= block.layers.length) return;
-    const newLayers = block.layers.filter((_, i) => i !== layerIdx);
-    const updated = loopBlocks.map((b, i) =>
-      i === blockIdx ? { ...b, layers: newLayers.length > 0 ? newLayers : undefined } : b
-    );
-    onLoopBlocksChange(updated);
-  }, [loopBlocks, onLoopBlocksChange]);
 
   const blockForBeat = useMemo(() => {
     const map = new Map<number, { block: LoopBlock; index: number; isFirst: boolean; isLast: boolean }[]>();
@@ -1272,199 +1215,172 @@ export function BeatIndicator({
               </>
             );
           })()}
-          {(() => {
-            const layeredBlock = isPrimary ? beatBlocks.find(bb => bb.block.layers && bb.block.layers.length > 0) : undefined;
-            const layers = layeredBlock?.block.layers;
-            const totalRows = layers ? 1 + layers.length : 1;
-            const rowHeight = layers ? BAR_HEIGHT / totalRows : BAR_HEIGHT;
+          <View style={[
+            styles.barBeatContent,
+            { height: BAR_HEIGHT },
+            isCurrent && { backgroundColor: C.overlay08 },
+          ]}>
+            {pattern.map((type, ci) => {
+              const isActiveCell = isCurrent && ci === activeSubNote;
+              const isStrongType = type === "strong";
+              const isAccentType = type === "accent" || isStrongType;
+              const isLast = ci === pattern.length - 1;
+              const sampleKey = `${beat}-${ci}`;
+              const hasSample = !!(noteSamples && noteSamples[sampleKey]);
+              const isCovered = sampleCoveredCells.has(sampleKey);
+              const canRecord = true;
+              return (
+                <Pressable
+                  key={ci}
+                  onPress={() => {
+                    if (!noteHoldFiredRef.current && isPrimary) handleBarCellPress(beat, ci);
+                  }}
+                  onLongPress={() => {
+                    if (!noteHoldFiredRef.current && isPrimary && !isPlaying && canRecord && onNoteRecordRequest) {
+                      noteHoldFiredRef.current = true;
+                      onNoteRecordRequest(beat, ci);
+                    }
+                  }}
+                  onPressIn={() => { noteHoldFiredRef.current = false; }}
+                  delayLongPress={500}
+                  onTouchStart={() => {
+                    noteHoldFiredRef.current = false;
+                    if (isPrimary && !isPlaying && canRecord && onNoteRecordRequest) {
+                      startNoteHold(beat, ci, pattern.length);
+                    }
+                  }}
+                  onTouchEnd={() => { clearNoteHold(); }}
+                  onTouchCancel={() => { clearNoteHold(); }}
+                  style={[styles.barNoteCell, !isLast && { borderRightWidth: 1, borderRightColor: C.overlay08 }]}
+                >
+                  {isStrongType ? (
+                    <View style={[styles.barNoteFill, { margin: 3, overflow: "hidden", opacity: isActiveCell ? 1 : 0.75 }]}>
+                      <LinearGradient
+                        colors={[C.white, C.accent, C.accent]}
+                        locations={[0, 0.4, 1]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 4, alignItems: "center", justifyContent: "center" }}
+                      >
+                        <Text style={{ color: C.white, fontSize: 10, fontWeight: "bold" as const, lineHeight: 12, textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 }}>S</Text>
+                      </LinearGradient>
+                    </View>
+                  ) : type === "mute" ? (
+                    <View style={[styles.barNoteFill, {
+                      margin: 3,
+                      backgroundColor: "transparent",
+                      borderWidth: 1,
+                      borderColor: C.textTertiary,
+                      borderStyle: "dashed" as any,
+                      opacity: isActiveCell ? 0.9 : 0.4,
+                    }]} />
+                  ) : (
+                    <View style={[styles.barNoteFill, {
+                      margin: 3,
+                      backgroundColor: isAccentType
+                        ? (isActiveCell ? C.accent : C.accentMuted)
+                        : (isActiveCell ? C.text : C.textTertiary),
+                      opacity: isActiveCell ? 1 : 0.7,
+                    }]} />
+                  )}
+                  
+                </Pressable>
+              );
+            })}
+            {(() => {
+              const cellHas = (b: number, c: number) => {
+                const sk = `${b}-${c}`;
+                return !!(noteSamples && noteSamples[sk]) || sampleCoveredCells.has(sk);
+              };
+              const anyCovered = pattern.some((_, ci) => cellHas(beat, ci));
+              if (!anyCovered) return null;
 
-            const renderCellRow = (cellPattern: BeatType[], layerIndex: number, h: number) => (
-              <View key={`layer-${layerIndex}`} style={{ flexDirection: "row", height: h }}>
-                {cellPattern.map((type, ci) => {
-                  const isActiveCell = layerIndex === 0 && isCurrent && ci === activeSubNote;
-                  const isStrongType = type === "strong";
-                  const isAccentType = type === "accent" || isStrongType;
-                  const isLast = ci === cellPattern.length - 1;
-                  const sampleKey = `${beat}-${ci}`;
-                  const canRecord = true;
-                  return (
-                    <Pressable
-                      key={ci}
-                      onPress={() => {
-                        if (!noteHoldFiredRef.current && isPrimary && layerIndex === 0) handleBarCellPress(beat, ci);
-                      }}
-                      onLongPress={() => {
-                        if (!noteHoldFiredRef.current && isPrimary && layerIndex === 0 && !isPlaying && canRecord && onNoteRecordRequest) {
-                          noteHoldFiredRef.current = true;
-                          onNoteRecordRequest(beat, ci);
-                        }
-                      }}
-                      onPressIn={() => { noteHoldFiredRef.current = false; }}
-                      delayLongPress={500}
-                      onTouchStart={() => {
-                        noteHoldFiredRef.current = false;
-                        if (isPrimary && layerIndex === 0 && !isPlaying && canRecord && onNoteRecordRequest) {
-                          startNoteHold(beat, ci, cellPattern.length);
-                        }
-                      }}
-                      onTouchEnd={() => { clearNoteHold(); }}
-                      onTouchCancel={() => { clearNoteHold(); }}
-                      style={[styles.barNoteCell, { height: h }, !isLast && { borderRightWidth: 1, borderRightColor: C.overlay08 }]}
-                    >
-                      {isStrongType ? (
-                        <View style={[styles.barNoteFill, { margin: h > 20 ? 3 : 1, overflow: "hidden", opacity: isActiveCell ? 1 : 0.75 }]}>
-                          <LinearGradient
-                            colors={[C.white, C.accent, C.accent]}
-                            locations={[0, 0.4, 1]}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: h > 20 ? 4 : 2, alignItems: "center", justifyContent: "center" }}
-                          >
-                            {h > 16 && <Text style={{ color: C.white, fontSize: h > 20 ? 10 : 7, fontWeight: "bold" as const, lineHeight: h > 20 ? 12 : 9, textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 }}>S</Text>}
-                          </LinearGradient>
-                        </View>
-                      ) : type === "mute" ? (
-                        <View style={[styles.barNoteFill, {
-                          margin: h > 20 ? 3 : 1,
-                          backgroundColor: "transparent",
-                          borderWidth: 1,
-                          borderColor: C.textTertiary,
-                          borderStyle: "dashed" as any,
-                          opacity: isActiveCell ? 0.9 : 0.4,
-                        }]} />
-                      ) : (
-                        <View style={[styles.barNoteFill, {
-                          margin: h > 20 ? 3 : 1,
-                          backgroundColor: isAccentType
-                            ? (isActiveCell ? C.accent : C.accentMuted)
-                            : (isActiveCell ? C.text : C.textTertiary),
-                          opacity: layerIndex > 0 ? (isActiveCell ? 0.9 : 0.5) : (isActiveCell ? 1 : 0.7),
-                        }]} />
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </View>
-            );
+              const segments: { start: number; end: number }[] = [];
+              let segStart = -1;
+              for (let ci = 0; ci <= pattern.length; ci++) {
+                const covered = ci < pattern.length && cellHas(beat, ci);
+                if (covered && segStart < 0) segStart = ci;
+                if (!covered && segStart >= 0) {
+                  segments.push({ start: segStart, end: ci - 1 });
+                  segStart = -1;
+                }
+              }
+              if (segStart >= 0) segments.push({ start: segStart, end: pattern.length - 1 });
 
-            return (
-              <View style={[
-                styles.barBeatContent,
-                { height: BAR_HEIGHT },
-                isCurrent && { backgroundColor: C.overlay08 },
-              ]}>
-                {layers ? (
-                  <View style={{ flex: 1, flexDirection: "column" }}>
-                    {renderCellRow(pattern, 0, rowHeight)}
-                    {layers.map((layer, li) => {
-                      const layerPattern = layer.subdivisions[String(beat)] || [beatTypes[beat] || "normal"];
-                      return (
-                        <React.Fragment key={`sep-${li}`}>
-                          <View style={{ height: 1, backgroundColor: C.accent + "30" }} />
-                          {renderCellRow(layerPattern, li + 1, rowHeight - 1)}
-                        </React.Fragment>
-                      );
-                    })}
+              const getSegmentSource = (seg: { start: number; end: number }): string => {
+                for (let ci = seg.start; ci <= seg.end; ci++) {
+                  const sk = `${beat}-${ci}`;
+                  const directSource = noteSampleSources && noteSamples && noteSamples[sk] && noteSampleSources[sk];
+                  if (directSource === "recording") return "recording";
+                  const coveredSource = sampleCoveredCells.get(sk);
+                  if (coveredSource === "recording") return "recording";
+                }
+                for (let ci = seg.start; ci <= seg.end; ci++) {
+                  const sk = `${beat}-${ci}`;
+                  const directSource = noteSampleSources && noteSamples && noteSamples[sk] && noteSampleSources[sk];
+                  if (directSource) return directSource;
+                  const coveredSource = sampleCoveredCells.get(sk);
+                  if (coveredSource) return coveredSource;
+                }
+                return "recording";
+              };
+
+              const beatNameInfo = (() => {
+                let name: string | null = null;
+                let nameSource: string = "recording";
+                for (let ci = 0; ci < pattern.length; ci++) {
+                  const sk = `${beat}-${ci}`;
+                  if (noteSamples && noteSamples[sk]) {
+                    if (noteSampleNames && noteSampleNames[sk]) name = noteSampleNames[sk];
+                    nameSource = (noteSampleSources && noteSampleSources[sk]) || "recording";
+                    break;
+                  }
+                }
+                return { name, nameSource };
+              })();
+
+              const result: React.ReactNode[] = segments.map((seg, si) => {
+                const leftPct = (seg.start / pattern.length) * 100;
+                const widthPct = ((seg.end - seg.start + 1) / pattern.length) * 100;
+                const segSource = getSegmentSource(seg);
+                const segColor = segSource === "import" ? "#39FF14" : "#FF4444";
+                return (
+                  <View key={`bar-${si}`} style={{
+                    position: "absolute",
+                    left: `${leftPct}%` as any,
+                    width: `${widthPct}%` as any,
+                    bottom: -1,
+                    height: 3,
+                    backgroundColor: segColor,
+                    opacity: 0.85,
+                    zIndex: 10,
+                  }} />
+                );
+              });
+
+              if (beatNameInfo.name) {
+                const nameColor = beatNameInfo.nameSource === "import" ? "#39FF14" : "#FF4444";
+                result.push(
+                  <View key="sample-name" style={{
+                    position: "absolute",
+                    bottom: 3,
+                    left: 2,
+                    right: 2,
+                    zIndex: 11,
+                  }} pointerEvents="none">
+                    <Text numberOfLines={1} style={{
+                      fontSize: 8,
+                      color: nameColor,
+                      fontWeight: "600",
+                      opacity: 0.9,
+                    }}>{beatNameInfo.name}</Text>
                   </View>
-                ) : (
-                  renderCellRow(pattern, 0, BAR_HEIGHT)
-                )}
-                {(() => {
-                  const cellHas = (b: number, c: number) => {
-                    const sk = `${b}-${c}`;
-                    return !!(noteSamples && noteSamples[sk]) || sampleCoveredCells.has(sk);
-                  };
-                  const anyCovered = pattern.some((_, ci) => cellHas(beat, ci));
-                  if (!anyCovered) return null;
+                );
+              }
 
-                  const segments: { start: number; end: number }[] = [];
-                  let segStart = -1;
-                  for (let ci = 0; ci <= pattern.length; ci++) {
-                    const covered = ci < pattern.length && cellHas(beat, ci);
-                    if (covered && segStart < 0) segStart = ci;
-                    if (!covered && segStart >= 0) {
-                      segments.push({ start: segStart, end: ci - 1 });
-                      segStart = -1;
-                    }
-                  }
-                  if (segStart >= 0) segments.push({ start: segStart, end: pattern.length - 1 });
-
-                  const getSegmentSource = (seg: { start: number; end: number }): string => {
-                    for (let ci = seg.start; ci <= seg.end; ci++) {
-                      const sk = `${beat}-${ci}`;
-                      const directSource = noteSampleSources && noteSamples && noteSamples[sk] && noteSampleSources[sk];
-                      if (directSource === "recording") return "recording";
-                      const coveredSource = sampleCoveredCells.get(sk);
-                      if (coveredSource === "recording") return "recording";
-                    }
-                    for (let ci = seg.start; ci <= seg.end; ci++) {
-                      const sk = `${beat}-${ci}`;
-                      const directSource = noteSampleSources && noteSamples && noteSamples[sk] && noteSampleSources[sk];
-                      if (directSource) return directSource;
-                      const coveredSource = sampleCoveredCells.get(sk);
-                      if (coveredSource) return coveredSource;
-                    }
-                    return "recording";
-                  };
-
-                  const beatNameInfo = (() => {
-                    let name: string | null = null;
-                    let nameSource: string = "recording";
-                    for (let ci = 0; ci < pattern.length; ci++) {
-                      const sk = `${beat}-${ci}`;
-                      if (noteSamples && noteSamples[sk]) {
-                        if (noteSampleNames && noteSampleNames[sk]) name = noteSampleNames[sk];
-                        nameSource = (noteSampleSources && noteSampleSources[sk]) || "recording";
-                        break;
-                      }
-                    }
-                    return { name, nameSource };
-                  })();
-
-                  const result: React.ReactNode[] = segments.map((seg, si) => {
-                    const leftPct = (seg.start / pattern.length) * 100;
-                    const widthPct = ((seg.end - seg.start + 1) / pattern.length) * 100;
-                    const segSource = getSegmentSource(seg);
-                    const segColor = segSource === "import" ? "#39FF14" : "#FF4444";
-                    return (
-                      <View key={`bar-${si}`} style={{
-                        position: "absolute",
-                        left: `${leftPct}%` as any,
-                        width: `${widthPct}%` as any,
-                        bottom: -1,
-                        height: 3,
-                        backgroundColor: segColor,
-                        opacity: 0.85,
-                        zIndex: 10,
-                      }} />
-                    );
-                  });
-
-                  if (beatNameInfo.name) {
-                    const nameColor = beatNameInfo.nameSource === "import" ? "#39FF14" : "#FF4444";
-                    result.push(
-                      <View key="sample-name" style={{
-                        position: "absolute",
-                        bottom: 3,
-                        left: 2,
-                        right: 2,
-                        zIndex: 11,
-                      }} pointerEvents="none">
-                        <Text numberOfLines={1} style={{
-                          fontSize: 8,
-                          color: nameColor,
-                          fontWeight: "600",
-                          opacity: 0.9,
-                        }}>{beatNameInfo.name}</Text>
-                      </View>
-                    );
-                  }
-
-                  return result;
-                })()}
-              </View>
-            );
-          })()}
+              return result;
+            })()}
+          </View>
           <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
           {isPrimary && !isPlaying && (
             <Pressable
@@ -1650,36 +1566,16 @@ export function BeatIndicator({
                           const isActive = isPlaying && progressInfo && progressInfo.blockIndex === origIndex;
                           const hasJump = block.jumpToBlock !== undefined && block.jumpToBlock !== null;
                           const jumpTarget = hasJump ? loopBlocks[block.jumpToBlock!] : null;
-                          const hasLayers = block.layers && block.layers.length > 0;
-                          const isLayerDragTarget = layerDragIndex !== null && layerDragIndex !== origIndex;
-                          const isBeingDragged = layerDragIndex === origIndex;
                           return (
                             <View key={`flow-${origIndex}`} style={{ flexDirection: "row", alignItems: "center" }}>
                               <Pressable
-                                onPress={() => {
-                                  if (isPlaying) return;
-                                  if (layerDragIndex !== null) {
-                                    if (layerDragIndex !== origIndex) handleLayerDrop(layerDragIndex, origIndex);
-                                    setLayerDragIndex(null);
-                                    return;
-                                  }
-                                  setEditingBlockIndex(isEditing ? null : origIndex);
-                                }}
-                                onLongPress={() => {
-                                  if (!isPlaying && loopBlocks.length >= 2) {
-                                    setLayerDragIndex(origIndex);
-                                    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                                  }
-                                }}
-                                delayLongPress={400}
+                                onPress={() => { if (!isPlaying) setEditingBlockIndex(isEditing ? null : origIndex); }}
                                 style={{
                                   paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
-                                  backgroundColor: isBeingDragged ? C.accent + "40" : isLayerDragTarget ? C.accent + "15" : isActive ? C.accent + "30" : isEditing ? C.accent + "20" : C.backgroundSecondary,
-                                  borderWidth: isBeingDragged ? 2 : isLayerDragTarget ? 1.5 : isActive ? 1 : isEditing ? 1 : 0,
-                                  borderColor: isBeingDragged ? C.accent : isLayerDragTarget ? C.accent + "80" : isActive ? C.accent : isEditing ? C.accent + "60" : "transparent",
-                                  borderStyle: isLayerDragTarget ? "dashed" as const : "solid" as const,
+                                  backgroundColor: isActive ? C.accent + "30" : isEditing ? C.accent + "20" : C.backgroundSecondary,
+                                  borderWidth: isActive ? 1 : isEditing ? 1 : 0,
+                                  borderColor: isActive ? C.accent : isEditing ? C.accent + "60" : "transparent",
                                   minWidth: 36, alignItems: "center",
-                                  opacity: isBeingDragged ? 0.6 : 1,
                                 }}
                               >
                                 <Text style={{ color: isActive ? C.accent : C.text, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
@@ -1689,12 +1585,6 @@ export function BeatIndicator({
                                   ×{block.value}
                                   {isActive && progressInfo!.blockRepeatTotal > 1 && ` ${progressInfo!.blockRepeatCurrent + 1}/${progressInfo!.blockRepeatTotal}`}
                                 </Text>
-                                {hasLayers && (
-                                  <View style={{ flexDirection: "row", alignItems: "center", gap: 1, marginTop: 1 }}>
-                                    <Ionicons name="layers" size={7} color={C.accent} />
-                                    <Text style={{ color: C.accent, fontSize: 6, fontFamily: "SpaceGrotesk_600SemiBold" }}>{block.layers!.length + 1}</Text>
-                                  </View>
-                                )}
                               </Pressable>
                               {hasJump && jumpTarget && (() => {
                                 const targetSortedIdx = sorted.findIndex(s => s.origIndex === block.jumpToBlock);
@@ -1813,33 +1703,6 @@ export function BeatIndicator({
                           >
                             <Ionicons name="add" size={12} color="#f0ad4e" />
                           </Pressable>
-                        </View>
-                      )}
-                      {editBlock.layers && editBlock.layers.length > 0 && (
-                        <View style={{ marginTop: 4 }}>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginBottom: 3 }}>
-                            <Ionicons name="layers" size={10} color={C.accent} />
-                            <Text style={{ color: C.accent, fontSize: 9, fontFamily: "SpaceGrotesk_600SemiBold" }}>
-                              Layers ({editBlock.layers.length + 1})
-                            </Text>
-                          </View>
-                          <View style={{ gap: 2 }}>
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 1, paddingHorizontal: 3, backgroundColor: C.accent + "10", borderRadius: 3 }}>
-                              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.accent }} />
-                              <Text style={{ color: C.textSecondary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium", flex: 1 }}>Base</Text>
-                            </View>
-                            {editBlock.layers.map((layer, li) => (
-                              <View key={li} style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 1, paddingHorizontal: 3, backgroundColor: C.accent + "08", borderRadius: 3 }}>
-                                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.accent + "60" }} />
-                                <Text style={{ color: C.textSecondary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium", flex: 1 }}>
-                                  L{li + 1}
-                                </Text>
-                                <Pressable onPress={() => removeLayer(editingBlockIndex!, li)} hitSlop={6}>
-                                  <Ionicons name="close-circle" size={12} color={C.danger + "80"} />
-                                </Pressable>
-                              </View>
-                            ))}
-                          </View>
                         </View>
                       )}
                     </View>
@@ -2071,41 +1934,19 @@ export function BeatIndicator({
                   const isActive = isPlaying && progressInfo && progressInfo.blockIndex === origIndex;
                   const hasJump = block.jumpToBlock !== undefined && block.jumpToBlock !== null;
                   const jumpTarget = hasJump ? loopBlocks[block.jumpToBlock!] : null;
-                  const hasLayers = block.layers && block.layers.length > 0;
-                  const isLayerDragTarget = layerDragIndex !== null && layerDragIndex !== origIndex;
-                  const isBeingDragged = layerDragIndex === origIndex;
                   return (
                     <View key={`flow-${origIndex}`} style={{ flexDirection: "row", alignItems: "center" }}>
                       <Pressable
-                        onPress={() => {
-                          if (isPlaying) return;
-                          if (layerDragIndex !== null) {
-                            if (layerDragIndex !== origIndex) {
-                              handleLayerDrop(layerDragIndex, origIndex);
-                            }
-                            setLayerDragIndex(null);
-                            return;
-                          }
-                          setEditingBlockIndex(isEditing ? null : origIndex);
-                        }}
-                        onLongPress={() => {
-                          if (!isPlaying && loopBlocks.length >= 2) {
-                            setLayerDragIndex(origIndex);
-                            if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                          }
-                        }}
-                        delayLongPress={400}
+                        onPress={() => { if (!isPlaying) setEditingBlockIndex(isEditing ? null : origIndex); }}
                         style={{
                           paddingHorizontal: 8,
                           paddingVertical: 4,
                           borderRadius: 6,
-                          backgroundColor: isBeingDragged ? C.accent + "40" : isLayerDragTarget ? C.accent + "15" : isActive ? C.accent + "30" : isEditing ? C.accent + "20" : C.backgroundSecondary,
-                          borderWidth: isBeingDragged ? 2 : isLayerDragTarget ? 1.5 : isActive ? 1.5 : isEditing ? 1 : 0,
-                          borderColor: isBeingDragged ? C.accent : isLayerDragTarget ? C.accent + "80" : isActive ? C.accent : isEditing ? C.accent + "60" : "transparent",
-                          borderStyle: isLayerDragTarget ? "dashed" as const : "solid" as const,
+                          backgroundColor: isActive ? C.accent + "30" : isEditing ? C.accent + "20" : C.backgroundSecondary,
+                          borderWidth: isActive ? 1.5 : isEditing ? 1 : 0,
+                          borderColor: isActive ? C.accent : isEditing ? C.accent + "60" : "transparent",
                           minWidth: 48,
                           alignItems: "center",
-                          opacity: isBeingDragged ? 0.6 : 1,
                         }}
                       >
                         <Text style={{ color: isActive ? C.accent : C.text, fontSize: 12, fontFamily: "SpaceGrotesk_700Bold" }}>
@@ -2115,29 +1956,7 @@ export function BeatIndicator({
                           ×{block.value}
                           {isActive && progressInfo!.blockRepeatTotal > 1 && ` ${progressInfo!.blockRepeatCurrent + 1}/${progressInfo!.blockRepeatTotal}`}
                         </Text>
-                        {hasLayers && (
-                          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 1, gap: 2 }}>
-                            <Ionicons name="layers" size={8} color={C.accent} />
-                            <Text style={{ color: C.accent, fontSize: 7, fontFamily: "SpaceGrotesk_600SemiBold" }}>{block.layers!.length + 1}</Text>
-                          </View>
-                        )}
                       </Pressable>
-                      {hasLayers && (
-                        <View style={{
-                          position: "absolute", top: -2, right: -2,
-                          width: 6, height: 6, borderRadius: 3,
-                          backgroundColor: C.accent,
-                          zIndex: 5,
-                        }} />
-                      )}
-                      {isLayerDragTarget && (
-                        <View style={{
-                          position: "absolute", top: -8, left: "50%" as any,
-                          transform: [{ translateX: -4 }],
-                        }}>
-                          <Ionicons name="add-circle" size={12} color={C.accent} />
-                        </View>
-                      )}
                       {hasJump && jumpTarget && (() => {
                         const targetSortedIdx = sorted.findIndex(s => s.origIndex === block.jumpToBlock);
                         const goesBack = targetSortedIdx >= 0 && targetSortedIdx <= si;
@@ -2312,50 +2131,11 @@ export function BeatIndicator({
                       </Pressable>
                     </View>
                   )}
-                  {editBlock.layers && editBlock.layers.length > 0 && (
-                    <View style={{ marginTop: 6 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 4 }}>
-                        <Ionicons name="layers" size={12} color={C.accent} />
-                        <Text style={{ color: C.accent, fontSize: 10, fontFamily: "SpaceGrotesk_600SemiBold" }}>
-                          Layers ({editBlock.layers.length + 1})
-                        </Text>
-                      </View>
-                      <View style={{ gap: 3 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 2, paddingHorizontal: 4, backgroundColor: C.accent + "10", borderRadius: 4 }}>
-                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.accent }} />
-                          <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", flex: 1 }}>Base layer</Text>
-                        </View>
-                        {editBlock.layers.map((layer, li) => (
-                          <View key={li} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 2, paddingHorizontal: 4, backgroundColor: C.accent + "08", borderRadius: 4 }}>
-                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.accent + "60" }} />
-                            <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", flex: 1 }}>
-                              Layer {li + 1} ({Object.keys(layer.subdivisions).length} bars)
-                            </Text>
-                            <Pressable onPress={() => removeLayer(editingBlockIndex!, li)} hitSlop={6}>
-                              <Ionicons name="close-circle" size={14} color={C.danger + "80"} />
-                            </Pressable>
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  )}
                 </View>
               )}
             </View>
           );
         })()}
-
-        {layerDragIndex !== null && !isPlaying && (
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 4, gap: 6 }}>
-            <Ionicons name="layers" size={12} color={C.accent} />
-            <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: 11, color: C.accent }}>
-              Tap another block to layer — or tap to cancel
-            </Text>
-            <Pressable onPress={() => setLayerDragIndex(null)} hitSlop={8}>
-              <Ionicons name="close-circle" size={14} color={C.textTertiary} />
-            </Pressable>
-          </View>
-        )}
 
         {blockSelectStart !== null && !isPlaying && (
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 4, gap: 6 }}>
