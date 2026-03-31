@@ -14,6 +14,16 @@ export interface ProgressInfo {
   jumpCurrent?: number;
   jumpTotal?: number;
   jumpSourceBlockIndex?: number;
+  layerIndex?: number;
+  layerBeat?: number;
+}
+
+export interface BlockLayer {
+  id: string;
+  beats: number;
+  beatTypes: BeatType[];
+  subdivisions: Record<number, BeatType[]>;
+  bpm?: number;
 }
 
 export const soundSets = {
@@ -57,6 +67,8 @@ interface ScheduledTick {
   jumpIteration: number;
   jumpTotal: number;
   jumpSourceBlockIndex: number;
+  layerIndex: number;
+  layerBeat: number;
 }
 
 export class MetronomeEngine {
@@ -80,7 +92,7 @@ export class MetronomeEngine {
   private playCustomSample: ((beat: number, subBeat: number) => boolean) | null = null;
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
-  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number }[] = [];
+  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; layers?: BlockLayer[] }[] = [];
   private blockPlayMode: "sequential" | "loop" | "random" = "loop";
   private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
   private barBpmOverrides: Map<number, number> = new Map();
@@ -221,7 +233,7 @@ export class MetronomeEngine {
     this.invalidateScheduleCache();
   }
 
-  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number }[]) {
+  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; layers?: BlockLayer[] }[]) {
     this.loopBlocks = blocks.map(b => ({ ...b }));
     this.invalidateScheduleCache();
     if (this.isRunning) {
@@ -431,6 +443,8 @@ export class MetronomeEngine {
           jumpIteration: currentJumpIteration,
           jumpTotal: currentJumpTotal,
           jumpSourceBlockIndex: currentJumpSourceBlockIndex,
+          layerIndex: 0,
+          layerBeat: beat,
         });
         time += subDur;
       }
@@ -522,6 +536,44 @@ export class MetronomeEngine {
 
     const jumpProcessed = new Set<number>();
 
+    const emitLayerTicks = (layers: BlockLayer[], blockStartTime: number, blockDurMs: number, blockIdx: number, repIteration: number, repTotal: number) => {
+      if (!layers || layers.length === 0) return;
+      for (let li = 0; li < layers.length; li++) {
+        const layer = layers[li];
+        const layerBeats = Math.max(1, layer.beats);
+        const layerBpm = layer.bpm;
+        const layerBeatDur = layerBpm
+          ? 60000 / (this.halfTime ? layerBpm / 2 : layerBpm)
+          : blockDurMs / layerBeats;
+
+        for (let lb = 0; lb < layerBeats; lb++) {
+          const lbType = layer.beatTypes[lb] || "normal";
+          const subPat = layer.subdivisions[lb] || [lbType];
+          const subDur = layerBeatDur / subPat.length;
+          const beatStartTime = blockStartTime + lb * layerBeatDur;
+          for (let sub = 0; sub < subPat.length; sub++) {
+            ticks.push({
+              time: beatStartTime + sub * subDur,
+              beat: -1,
+              subBeat: sub,
+              type: subPat[sub],
+              isMainBeat: sub === 0,
+              repeatIteration: repIteration,
+              barRepeatIteration: 0,
+              barRepeatTotal: 1,
+              blockIndex: blockIdx,
+              blockRepeatTotal: repTotal,
+              jumpIteration: currentJumpIteration,
+              jumpTotal: currentJumpTotal,
+              jumpSourceBlockIndex: currentJumpSourceBlockIndex,
+              layerIndex: li + 1,
+              layerBeat: lb,
+            });
+          }
+        }
+      }
+    };
+
     const emitBlock = (blockIdx: number, jumpVisited: Set<number>) => {
       if (jumpVisited.has(blockIdx) || blockIdx < 0 || blockIdx >= sortedBlocks.length) return;
       jumpVisited.add(blockIdx);
@@ -539,7 +591,13 @@ export class MetronomeEngine {
       }
 
       for (let r = 0; r < blockRepeatCount; r++) {
+        const passStartTime = time;
         emitBeatsInRange(block.startBeat, endBeat, blockIdx, r, blockRepeatCount, blockBpm);
+        const passEndTime = time;
+        const passDur = passEndTime - passStartTime;
+        if (block.layers && block.layers.length > 0 && passDur > 0) {
+          emitLayerTicks(block.layers, passStartTime, passDur, blockIdx, r, blockRepeatCount);
+        }
       }
     };
 
@@ -639,6 +697,7 @@ export class MetronomeEngine {
     }
 
     this.measureDurationMs = time;
+    ticks.sort((a, b) => a.time - b.time);
     return ticks;
   }
 
@@ -706,30 +765,52 @@ export class MetronomeEngine {
   }
 
   private fireTick(tick: ScheduledTick) {
-    this.currentBeat = tick.beat;
-    this.currentSubBeat = tick.subBeat;
+    const isLayerTick = tick.layerIndex > 0;
+
+    if (!isLayerTick) {
+      this.currentBeat = tick.beat;
+      this.currentSubBeat = tick.subBeat;
+    }
 
     const isStrong = tick.type === "strong";
     const isAccent = tick.type === "accent" || isStrong;
     const isMute = tick.type === "mute";
 
-    this.onSubBeat?.(tick.beat, tick.subBeat);
-    if (tick.isMainBeat) {
-      this.onBeat?.(tick.beat, isAccent);
+    if (!isLayerTick) {
+      this.onSubBeat?.(tick.beat, tick.subBeat);
+      if (tick.isMainBeat) {
+        this.onBeat?.(tick.beat, isAccent);
+      }
     }
 
     if (tick.isMainBeat && this.onProgress) {
-      this.onProgress({
-        beat: tick.beat,
-        barRepeatCurrent: tick.barRepeatIteration,
-        barRepeatTotal: tick.barRepeatTotal,
-        blockIndex: tick.blockIndex,
-        blockRepeatCurrent: tick.repeatIteration,
-        blockRepeatTotal: tick.blockRepeatTotal,
-        jumpCurrent: tick.jumpIteration,
-        jumpTotal: tick.jumpTotal,
-        jumpSourceBlockIndex: tick.jumpSourceBlockIndex >= 0 ? tick.jumpSourceBlockIndex : undefined,
-      });
+      if (isLayerTick) {
+        this.onProgress({
+          beat: this.currentBeat,
+          barRepeatCurrent: tick.barRepeatIteration,
+          barRepeatTotal: tick.barRepeatTotal,
+          blockIndex: tick.blockIndex,
+          blockRepeatCurrent: tick.repeatIteration,
+          blockRepeatTotal: tick.blockRepeatTotal,
+          jumpCurrent: tick.jumpIteration,
+          jumpTotal: tick.jumpTotal,
+          jumpSourceBlockIndex: tick.jumpSourceBlockIndex >= 0 ? tick.jumpSourceBlockIndex : undefined,
+          layerIndex: tick.layerIndex,
+          layerBeat: tick.layerBeat,
+        });
+      } else {
+        this.onProgress({
+          beat: tick.beat,
+          barRepeatCurrent: tick.barRepeatIteration,
+          barRepeatTotal: tick.barRepeatTotal,
+          blockIndex: tick.blockIndex,
+          blockRepeatCurrent: tick.repeatIteration,
+          blockRepeatTotal: tick.blockRepeatTotal,
+          jumpCurrent: tick.jumpIteration,
+          jumpTotal: tick.jumpTotal,
+          jumpSourceBlockIndex: tick.jumpSourceBlockIndex >= 0 ? tick.jumpSourceBlockIndex : undefined,
+        });
+      }
     }
 
     const offset = this.audioOffsetMs;

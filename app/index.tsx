@@ -157,7 +157,7 @@ export default function MetronomeScreen() {
     hasBeenConfigured: false,
   });
 
-  const [progressInfo, setProgressInfo] = useState<{ beat: number; barRepeatCurrent: number; barRepeatTotal: number; blockIndex: number; blockRepeatCurrent: number; blockRepeatTotal: number; jumpCurrent?: number; jumpTotal?: number; jumpSourceBlockIndex?: number } | null>(null);
+  const [progressInfo, setProgressInfo] = useState<{ beat: number; barRepeatCurrent: number; barRepeatTotal: number; blockIndex: number; blockRepeatCurrent: number; blockRepeatTotal: number; jumpCurrent?: number; jumpTotal?: number; jumpSourceBlockIndex?: number; layerIndex?: number; layerBeat?: number } | null>(null);
 
   const [noteMode, setNoteMode] = useState(false);
   const noteModeRef = useRef(false);
