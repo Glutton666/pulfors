@@ -127,6 +127,7 @@ export default function MetronomeScreen() {
   >({});
   const [landscapeImageUri, setLandscapeImageUri] = useState<string | null>(null);
   const [landscapeImageModalVisible, setLandscapeImageModalVisible] = useState(false);
+  const [showLandscapeImage, setShowLandscapeImage] = useState(true);
 
   const [barMode, setBarMode] = useState(false);
   const [barStartBeat, setBarStartBeat] = useState<number | null>(null);
@@ -505,6 +506,9 @@ export default function MetronomeScreen() {
       }
       if (settings.landscapeReversed !== undefined) {
         setLandscapeReversed(settings.landscapeReversed);
+      }
+      if (settings.showLandscapeImage !== undefined) {
+        setShowLandscapeImage(settings.showLandscapeImage);
       }
       if (settings.beatDirection) {
         setBeatDirection(settings.beatDirection);
@@ -1163,6 +1167,7 @@ export default function MetronomeScreen() {
           audioOffsetMs,
           timerStopMode,
           landscapeReversed,
+          showLandscapeImage,
           beatDirection,
           micMethod,
           ...merged,
@@ -1170,7 +1175,7 @@ export default function MetronomeScreen() {
         saveSettings(current);
       }, 500);
     },
-    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, layerSoundSets, flashMode, hapticMode, audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, micMethod]
+    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, layerSoundSets, flashMode, hapticMode, audioOffsetMs, timerStopMode, landscapeReversed, showLandscapeImage, beatDirection, micMethod]
   );
 
   const updateVolume = useCallback(
@@ -3551,6 +3556,11 @@ export default function MetronomeScreen() {
           setLandscapeReversed(val);
           persistSettings({ landscapeReversed: val });
         }}
+        showLandscapeImage={showLandscapeImage}
+        onShowLandscapeImageChange={(val) => {
+          setShowLandscapeImage(val);
+          persistSettings({ showLandscapeImage: val });
+        }}
         beatDirection={beatDirection}
         onBeatDirectionChange={(val) => {
           setBeatDirection(val);
@@ -3751,16 +3761,18 @@ export default function MetronomeScreen() {
           <View style={{ flex: 3, justifyContent: "center" as const, alignItems: "center" as const, gap: 6 }}>
             {!noteMode && (
               <>
-                <Pressable
-                  onPress={() => setLandscapeImageModalVisible(true)}
-                  style={{ width: "100%" as any, flex: 0.8, borderRadius: 10, overflow: "hidden" as const, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: landscapeImageUri ? "transparent" : C.surface, borderWidth: landscapeImageUri ? 0 : 1, borderColor: C.overlay10, borderStyle: "dashed" as const, minHeight: 48 }}
-                >
-                  {landscapeImageUri ? (
-                    <Image source={{ uri: landscapeImageUri }} style={{ width: "100%" as any, height: "100%" as any, borderRadius: 10 }} resizeMode="cover" />
-                  ) : (
-                    <Ionicons name="image-outline" size={24} color={C.textTertiary} />
-                  )}
-                </Pressable>
+                {showLandscapeImage && (
+                  <Pressable
+                    onPress={() => setLandscapeImageModalVisible(true)}
+                    style={{ width: "100%" as any, flex: 0.8, borderRadius: 10, overflow: "hidden" as const, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: landscapeImageUri ? "transparent" : C.surface, borderWidth: landscapeImageUri ? 0 : 1, borderColor: C.overlay10, borderStyle: "dashed" as const, minHeight: 48 }}
+                  >
+                    {landscapeImageUri ? (
+                      <Image source={{ uri: landscapeImageUri }} style={{ width: "100%" as any, height: "100%" as any, borderRadius: 10 }} resizeMode="cover" />
+                    ) : (
+                      <Ionicons name="image-outline" size={24} color={C.textTertiary} />
+                    )}
+                  </Pressable>
+                )}
                 <StopwatchTimer
                   onTimerExpired={handleTimerExpired}
                   onStopRequested={handleTimerExpired}
