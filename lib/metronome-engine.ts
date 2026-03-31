@@ -658,7 +658,6 @@ export class MetronomeEngine {
           currentJumpTotal = prevJumpTotal;
           currentJumpSourceBlockIndex = prevJumpSource;
 
-          emitBlock(blockIdx, new Set(jumpVisited));
           jumpProcessed.add(jumpSortedIdx);
           return;
         }
