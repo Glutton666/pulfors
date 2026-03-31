@@ -388,7 +388,7 @@ export function SubdivisionBar({
     ? Math.min(baseCellSize, Math.floor((availableWidth - baseCellGap * (cellCount - 1)) / cellCount))
     : baseCellSize;
   const clampedCellSize = Math.max(14, dynamicCellSize);
-  const dynamicRadius = Math.max(4, Math.round(clampedCellSize * 8 / baseCellSize));
+  const dynamicRadius = Math.max(4, Math.round(clampedCellSize * 4 / baseCellSize));
   const dynamicFontSize = Math.max(7, Math.round(clampedCellSize * 11 / baseCellSize));
 
   return (
