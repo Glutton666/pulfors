@@ -327,12 +327,12 @@ export function StopwatchTimer({
 
   const pauseStopwatch = useCallback(() => {
     hapticFeedback();
+    clearTimerInterval();
+    elapsedAtPauseRef.current = Date.now() - startTimeRef.current;
     if (isPlayingRef.current) {
       setState("finishing");
       onStopRequested();
     } else {
-      clearTimerInterval();
-      elapsedAtPauseRef.current = Date.now() - startTimeRef.current;
       setState("paused");
     }
   }, [hapticFeedback, clearTimerInterval, onStopRequested]);
@@ -403,12 +403,12 @@ export function StopwatchTimer({
 
   const pauseTimer = useCallback(() => {
     hapticFeedback();
+    clearTimerInterval();
+    elapsedAtPauseRef.current += Date.now() - startTimeRef.current;
     if (isPlayingRef.current) {
       setState("finishing");
       onStopRequested();
     } else {
-      clearTimerInterval();
-      elapsedAtPauseRef.current += Date.now() - startTimeRef.current;
       setState("paused");
     }
   }, [hapticFeedback, clearTimerInterval, onStopRequested]);
@@ -436,6 +436,7 @@ export function StopwatchTimer({
           elapsedAtPauseRef.current = Date.now() - startTimeRef.current;
           setState("paused");
         } else {
+          clearTimerInterval();
           thermoHeight.value = 1;
           thermoBreakOpacity.value = 0;
           thermoBreakTop.value = 0;
