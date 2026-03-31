@@ -1793,25 +1793,17 @@ export function BeatIndicator({
       const isLayerActive = isPlaying && layerCurrentBeat !== undefined && isCurrentBeatRow;
       const h = rowHeight || LAYER_ROW_H;
 
-      const parentBlock = loopBlocks[parentBlockIndex];
-      let parentTotalCells = 0;
-      for (let pb = parentBlock.startBeat; pb <= parentBlock.endBeat; pb++) {
-        const pSub = beatSubdivisions[String(pb)];
-        parentTotalCells += pSub ? pSub.length : 1;
-      }
-
-      const allCells: BeatType[] = [];
+      const displayCells: BeatType[] = [];
       for (let ci = 0; ci <= stackedBlock.endBeat - stackedBlock.startBeat; ci++) {
         const beatIdx = stackedBlock.startBeat + ci;
         const ownSub = ownEntry?.ownSubdivisions?.[String(beatIdx)];
         if (ownSub && ownSub.length > 0) {
-          for (const st of ownSub) allCells.push(st as BeatType);
+          for (const st of ownSub) displayCells.push(st as BeatType);
         } else {
           const bt = (ownEntry?.ownBeatTypes?.[beatIdx] as BeatType) || beatTypes[beatIdx] || "normal";
-          allCells.push(bt);
+          displayCells.push(bt);
         }
       }
-      const displayCells = allCells.length > parentTotalCells ? allCells.slice(0, parentTotalCells) : allCells;
 
       return (
         <View
