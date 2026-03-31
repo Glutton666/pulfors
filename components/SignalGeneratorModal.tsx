@@ -1049,7 +1049,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 
       const freqBinCount = analyser.frequencyBinCount;
       const fftBuf = new Float32Array(freqBinCount);
+      const timeBuf = new Float32Array(analyser.fftSize);
       const spectrumCopy = new Float32Array(freqBinCount);
+      const MIC_GATE = 0.015;
       const WINDOW_MS = 500;
       let readings: number[] = [];
       let windowStart = Date.now();
@@ -1057,15 +1059,24 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 
       const detect = () => {
         if (!micActiveRef.current) return;
-        analyser.getFloatFrequencyData(fftBuf);
+        analyser.getFloatTimeDomainData(timeBuf);
+        let rms = 0;
+        for (let i = 0; i < timeBuf.length; i++) rms += timeBuf[i] * timeBuf[i];
+        rms = Math.sqrt(rms / timeBuf.length);
 
+        analyser.getFloatFrequencyData(fftBuf);
         spectrumCopy.set(fftBuf);
         spectrumDataRef.current = spectrumCopy;
-        const result = fftPeakDetect(fftBuf, audioCtx.sampleRate, analyser.fftSize);
-        if (result) {
-          spectrumPeakBinRef.current = result.peakBin;
-          if (result.freq > 20 && result.freq <= MAX_FREQ) {
-            readings.push(result.freq);
+
+        if (rms >= MIC_GATE) {
+          const result = fftPeakDetect(fftBuf, audioCtx.sampleRate, analyser.fftSize);
+          if (result) {
+            spectrumPeakBinRef.current = result.peakBin;
+            if (result.freq > 20 && result.freq <= MAX_FREQ) {
+              readings.push(result.freq);
+            }
+          } else {
+            spectrumPeakBinRef.current = -1;
           }
         } else {
           spectrumPeakBinRef.current = -1;
