@@ -558,9 +558,8 @@ export class MetronomeEngine {
         for (let lb = 0; lb < stackBeats; lb++) {
           const beatStartTime = blockStartTime + lb * stackBeatDur;
           if (beatStartTime >= blockStartTime + blockDurMs) break;
-          const lbType = this.beatTypes[stackBlock.startBeat + lb] || "normal";
-          const subKey = String(stackBlock.startBeat + lb);
-          const subPat = this.beatSubdivisions.get(subKey) || [lbType];
+          const lbBeat = stackBlock.startBeat + lb;
+          const subPat = this.getSubPattern(lbBeat);
           const subDur = stackBeatDur / subPat.length;
           for (let sub = 0; sub < subPat.length; sub++) {
             const tickTime = beatStartTime + sub * subDur;

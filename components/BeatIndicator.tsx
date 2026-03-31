@@ -1215,6 +1215,7 @@ export function BeatIndicator({
       const start = Math.min(blockSelectStart, beat);
       const end = Math.max(blockSelectStart, beat);
       const crosses = loopBlocks.some((b) => {
+        if (b.layerOf !== undefined) return false;
         const newContainsOld = start <= b.startBeat && end >= b.endBeat;
         const oldContainsNew = b.startBeat <= start && b.endBeat >= end;
         const fullyNested = newContainsOld || oldContainsNew;
@@ -1266,6 +1267,7 @@ export function BeatIndicator({
   const blockForBeat = useMemo(() => {
     const map = new Map<number, { block: LoopBlock; index: number; isFirst: boolean; isLast: boolean }[]>();
     loopBlocks.forEach((block, idx) => {
+      if (block.layerOf !== undefined) return;
       for (let b = block.startBeat; b <= block.endBeat && b < beatsPerMeasure; b++) {
         const entry = { block, index: idx, isFirst: b === block.startBeat, isLast: b === block.endBeat || b === beatsPerMeasure - 1 };
         const existing = map.get(b) || [];
@@ -1278,14 +1280,14 @@ export function BeatIndicator({
 
   const blockDepths = useMemo(() => {
     const depths = new Map<number, number>();
-    const sorted = loopBlocks.map((b, i) => ({ b, i })).sort((a, b) => {
+    const nonLayered = loopBlocks.map((b, i) => ({ b, i })).filter(({ b }) => b.layerOf === undefined).sort((a, b) => {
       const spanA = a.b.endBeat - a.b.startBeat;
       const spanB = b.b.endBeat - b.b.startBeat;
       return spanB - spanA || a.b.startBeat - b.b.startBeat;
     });
-    for (const { b: block, i: idx } of sorted) {
+    for (const { b: block, i: idx } of nonLayered) {
       let depth = 0;
-      for (const { b: other, i: oi } of sorted) {
+      for (const { b: other, i: oi } of nonLayered) {
         if (oi === idx) continue;
         if (other.startBeat <= block.startBeat && other.endBeat >= block.endBeat && (other.endBeat - other.startBeat) > (block.endBeat - block.startBeat)) {
           depth++;
@@ -2070,8 +2072,19 @@ export function BeatIndicator({
                       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                         <Text style={{ color: C.accent, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
                           Block {editBlock.startBeat + 1}-{Math.min(editBlock.endBeat + 1, beatsPerMeasure)}
+                          {editBlock.layerOf !== undefined && ` (Layer)`}
                         </Text>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          {editBlock.layerOf !== undefined && (
+                            <Pressable
+                              onPress={() => { updateBlock(editingBlockIndex!, { layerOf: undefined }); }}
+                              hitSlop={8}
+                              style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
+                            >
+                              <Ionicons name="layers-outline" size={11} color={C.accent} />
+                              <Text style={{ color: C.accent, fontSize: 8, fontFamily: "SpaceGrotesk_600SemiBold" }}>Unlayer</Text>
+                            </Pressable>
+                          )}
                           <Pressable
                             onPress={() => { setEditingBlockIndex(null); removeLoopBlock(editingBlockIndex!); }}
                             hitSlop={8}
@@ -2528,8 +2541,19 @@ export function BeatIndicator({
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                     <Text style={{ color: C.accent, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" }}>
                       Block {editBlock.startBeat + 1}-{Math.min(editBlock.endBeat + 1, beatsPerMeasure)}
+                      {editBlock.layerOf !== undefined && ` (Layer)`}
                     </Text>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      {editBlock.layerOf !== undefined && (
+                        <Pressable
+                          onPress={() => { updateBlock(editingBlockIndex!, { layerOf: undefined }); }}
+                          hitSlop={8}
+                          style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+                        >
+                          <Ionicons name="layers-outline" size={12} color={C.accent} />
+                          <Text style={{ color: C.accent, fontSize: 9, fontFamily: "SpaceGrotesk_600SemiBold" }}>Unlayer</Text>
+                        </Pressable>
+                      )}
                       <Pressable
                         onPress={() => { setEditingBlockIndex(null); removeLoopBlock(editingBlockIndex!); }}
                         hitSlop={8}
