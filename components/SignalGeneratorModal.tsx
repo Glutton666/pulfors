@@ -1439,6 +1439,12 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 hapticFeedback();
                 setTuningGuideOpen(true);
               }}
+              onLongPress={() => {
+                if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                const pickerFreq = noteToFreq(selectedNote, selectedOctave);
+                setFrequency(pickerFreq);
+              }}
+              delayLongPress={400}
               style={[styles.tuningGuideToggle]}
             >
               <MaterialCommunityIcons name="music-note-outline" size={14} color={C.textTertiary} />
@@ -1544,6 +1550,12 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 hapticFeedback();
                 setTuningGuideOpen(true);
               }}
+              onLongPress={() => {
+                if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                const pickerFreq = noteToFreq(selectedNote, selectedOctave);
+                setFrequency(pickerFreq);
+              }}
+              delayLongPress={400}
               style={[styles.tuningGuideToggle]}
             >
               <MaterialCommunityIcons name="music-note-outline" size={14} color={C.textTertiary} />
