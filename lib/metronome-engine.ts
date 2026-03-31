@@ -559,7 +559,24 @@ export class MetronomeEngine {
           const beatStartTime = blockStartTime + lb * stackBeatDur;
           if (beatStartTime >= blockStartTime + blockDurMs) break;
           const lbBeat = stackBlock.startBeat + lb;
-          const subPat = this.getSubPattern(lbBeat);
+          const rawBlock = this.loopBlocks[stackOrigIdx];
+          let subPat: BeatType[];
+          if (rawBlock?.ownSubdivisions) {
+            const ownSub = rawBlock.ownSubdivisions[String(lbBeat)];
+            if (ownSub) {
+              subPat = ownSub as BeatType[];
+            } else {
+              const ownType = rawBlock.ownBeatTypes?.[lbBeat] as BeatType || "normal";
+              subPat = [ownType];
+            }
+          } else if (rawBlock?.ownBeatTypes) {
+            const ownType = rawBlock.ownBeatTypes[lbBeat] as BeatType || "normal";
+            subPat = this.getSubPattern(lbBeat);
+            if (subPat.length === 1) subPat = [ownType];
+            else subPat = subPat.map((s, si) => si === 0 ? ownType : s);
+          } else {
+            subPat = this.getSubPattern(lbBeat);
+          }
           const subDur = stackBeatDur / subPat.length;
           for (let sub = 0; sub < subPat.length; sub++) {
             const tickTime = beatStartTime + sub * subDur;

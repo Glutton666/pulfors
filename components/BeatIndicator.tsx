@@ -283,6 +283,8 @@ export interface LoopBlock {
   jumpCount?: number;
   bpm?: number;
   layerOf?: number;
+  ownBeatTypes?: Record<number, string>;
+  ownSubdivisions?: Record<string, string[]>;
 }
 
 interface BeatIndicatorProps {
@@ -507,7 +509,7 @@ const BlockPill = React.memo(function BlockPill({
         )}
         {layerCount > 0 && (
           <View style={{ position: "absolute" as any, top: badgeSize.top, right: badgeSize.right, backgroundColor: accentColor, borderRadius: badgeSize.r, minWidth: badgeSize.mw, height: badgeSize.h, alignItems: "center", justifyContent: "center", paddingHorizontal: badgeSize.px }}>
-            <Text style={{ color: whiteColor, fontSize: badgeSize.fs, fontFamily: "SpaceGrotesk_700Bold" }}>L{layerCount}</Text>
+            <Ionicons name="layers-outline" size={badgeSize.fs + 1} color={whiteColor} />
           </View>
         )}
       </Pressable>
@@ -1128,20 +1130,32 @@ export function BeatIndicator({
   const handlePillChoiceLayer = useCallback(() => {
     if (!pillChoiceModal) return;
     const { sourceIdx, targetIdx } = pillChoiceModal;
+    const sourceBlock = loopBlocks[sourceIdx];
     const targetBlock = loopBlocks[targetIdx];
     if (targetBlock?.layerOf !== undefined) {
       setPillChoiceModal(null);
       return;
     }
+    const ownBT: Record<number, string> = {};
+    for (let b = sourceBlock.startBeat; b <= sourceBlock.endBeat; b++) {
+      ownBT[b] = beatTypes[b] || "normal";
+    }
+    const ownSub: Record<string, string[]> = {};
+    for (let b = sourceBlock.startBeat; b <= sourceBlock.endBeat; b++) {
+      const key = String(b);
+      if (beatSubdivisions[key]) {
+        ownSub[key] = [...beatSubdivisions[key]];
+      }
+    }
     const sourceHasChildren = loopBlocks.some(b => b.layerOf === sourceIdx);
     let updated = loopBlocks.map((b, i) => {
-      if (i === sourceIdx) return { ...b, layerOf: targetIdx, jumpToBlock: undefined, jumpCount: undefined };
+      if (i === sourceIdx) return { ...b, layerOf: targetIdx, jumpToBlock: undefined, jumpCount: undefined, ownBeatTypes: ownBT, ownSubdivisions: Object.keys(ownSub).length > 0 ? ownSub : undefined };
       if (sourceHasChildren && b.layerOf === sourceIdx) return { ...b, layerOf: targetIdx };
       return b;
     });
     onLoopBlocksChange(updated);
     setPillChoiceModal(null);
-  }, [pillChoiceModal, loopBlocks, onLoopBlocksChange]);
+  }, [pillChoiceModal, loopBlocks, onLoopBlocksChange, beatTypes, beatSubdivisions]);
 
   const openRepeatModal = useCallback((beat: number) => {
     const existing = barRepeats[beat];
@@ -1801,14 +1815,12 @@ export function BeatIndicator({
             paddingBottom: 0,
           }}
         >
-          <View style={{ width: S.ms(22, 0.4), alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontSize: 7, color: C.textTertiary, fontFamily: "SpaceGrotesk_500Medium", opacity: isPrimary ? 1 : 0 }}>
-              L{layerNum}
-            </Text>
-          </View>
+          <View style={{ width: S.ms(22, 0.4) }} />
           <View style={{ flex: 1, flexDirection: "row", borderBottomWidth: 1, borderBottomColor: C.overlay06 }}>
             {Array.from({ length: layerBeats }).map((_, ci) => {
-              const type = beatTypes[stackedBlock.startBeat + ci] || "normal";
+              const beatIdx = stackedBlock.startBeat + ci;
+              const ownEntry = loopBlocks[stackedOrigIdx];
+              const type = (ownEntry?.ownBeatTypes?.[beatIdx] as BeatType) || beatTypes[beatIdx] || "normal";
               const isActiveCell = isLayerActive && layerCurrentBeat === ci;
               const isLast = ci === layerBeats - 1;
               const isStrongType = type === "strong";
@@ -1862,7 +1874,7 @@ export function BeatIndicator({
           const totalRows = 1 + layerInfo.stackedBlocks.length;
           const sharedH = Math.max(10, Math.floor(BAR_HEIGHT / totalRows));
           rows.push(
-            <View key={`grp-${copyIndex}-${beat}`} style={{ gap: 0 }}>
+            <View key={`grp-${copyIndex}-${beat}`} style={{ gap: 0, height: BAR_HEIGHT, overflow: "hidden" }}>
               {renderBarRow(beat, copyIndex, sharedH)}
               {layerInfo.stackedBlocks.map((sb, li) => renderLayerRow(beat, copyIndex, sb.block, sb.origIndex, li + 1, layerInfo.blockIndex, sharedH))}
             </View>
@@ -2077,7 +2089,7 @@ export function BeatIndicator({
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                           {editBlock.layerOf !== undefined && (
                             <Pressable
-                              onPress={() => { updateBlock(editingBlockIndex!, { layerOf: undefined }); }}
+                              onPress={() => { updateBlock(editingBlockIndex!, { layerOf: undefined, ownBeatTypes: undefined, ownSubdivisions: undefined }); }}
                               hitSlop={8}
                               style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
                             >
@@ -2546,7 +2558,7 @@ export function BeatIndicator({
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                       {editBlock.layerOf !== undefined && (
                         <Pressable
-                          onPress={() => { updateBlock(editingBlockIndex!, { layerOf: undefined }); }}
+                          onPress={() => { updateBlock(editingBlockIndex!, { layerOf: undefined, ownBeatTypes: undefined, ownSubdivisions: undefined }); }}
                           hitSlop={8}
                           style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
                         >
