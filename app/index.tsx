@@ -3720,6 +3720,7 @@ export default function MetronomeScreen() {
               />
             ) : undefined}
             onEnterNoteMode={handleEnterNoteMode}
+            tempoLabel={tempoLabel}
           />
         </View>
 

@@ -337,6 +337,7 @@ interface BeatIndicatorProps {
   isLandscape?: boolean;
   beatDirection?: "cw" | "ccw";
   onEnterNoteMode?: () => void;
+  tempoLabel?: string;
 }
 
 interface BlockPillProps {
@@ -559,6 +560,7 @@ export function BeatIndicator({
   isLandscape = false,
   beatDirection = "cw",
   onEnterNoteMode,
+  tempoLabel,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
   const { t } = useLanguage();
@@ -2278,6 +2280,7 @@ export function BeatIndicator({
                 {subdivisionBarElement}
               </View>
             )}
+            {tempoLabel ? <Text style={{ color: C.accentMuted, fontSize: S.ms(11, 0.3), textAlign: "center", marginTop: 2 }}>{tempoLabel}</Text> : null}
             {!subdivisionBarElement && loopBlocks.length > 0 && (() => {
               const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).sort((a, b) => a.block.startBeat - b.block.startBeat);
               return (
@@ -2878,6 +2881,7 @@ export function BeatIndicator({
           {subdivisionBarElement && (
             <View style={styles.barSubdivisionSlot}>{subdivisionBarElement}</View>
           )}
+          {tempoLabel ? <Text style={{ color: C.accentMuted, fontSize: S.ms(11, 0.3), textAlign: "center", marginBottom: 2 }}>{tempoLabel}</Text> : null}
 
           <View style={styles.barBottomRow}>
             <Pressable
