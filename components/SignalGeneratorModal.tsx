@@ -555,6 +555,7 @@ function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, a
                               if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                               onSelectFreq(s.freq);
                             }}
+                            hitSlop={4}
                             style={({ pressed }) => [
                               tgStyles.stringRow,
                               pressed && { backgroundColor: accentDim },
@@ -668,7 +669,7 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
   stringRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 7,
+    paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 6,
     gap: 8,
@@ -726,6 +727,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const [selectedOctave, setSelectedOctave] = useState(4);
   const [tuningGuideOpen, setTuningGuideOpen] = useState(false);
   const preGuideFreqRef = useRef<number | null>(null);
+  const [pickerLockFlash, setPickerLockFlash] = useState(false);
 
   const pickerDrivenRef = useRef(false);
 
@@ -1486,9 +1488,22 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 accentDim={C.accentDim}
               />
             </View>
-            <Text style={styles.pickerHzHint}>
-              {noteToFreq(selectedNote, selectedOctave)} {t("signalGenerator", "hzUnit")}
-            </Text>
+            <Pressable
+              onLongPress={() => {
+                const f = noteToFreq(selectedNote, selectedOctave);
+                setFrequency(f);
+                preGuideFreqRef.current = null;
+                if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                setPickerLockFlash(true);
+                setTimeout(() => setPickerLockFlash(false), 600);
+              }}
+              delayLongPress={400}
+              hitSlop={8}
+            >
+              <Text style={[styles.pickerHzHint, pickerLockFlash && { color: C.accent }]}>
+                {pickerLockFlash ? "✓ " : ""}{noteToFreq(selectedNote, selectedOctave)} {t("signalGenerator", "hzUnit")}
+              </Text>
+            </Pressable>
 
             <View style={[styles.waveSection, { gap: 0 }]}>
               <View style={styles.waveRow}>
@@ -1545,9 +1560,22 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 accentDim={C.accentDim}
               />
             </View>
-            <Text style={styles.pickerHzHint}>
-              {noteToFreq(selectedNote, selectedOctave)} {t("signalGenerator", "hzUnit")}
-            </Text>
+            <Pressable
+              onLongPress={() => {
+                const f = noteToFreq(selectedNote, selectedOctave);
+                setFrequency(f);
+                preGuideFreqRef.current = null;
+                if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                setPickerLockFlash(true);
+                setTimeout(() => setPickerLockFlash(false), 600);
+              }}
+              delayLongPress={400}
+              hitSlop={8}
+            >
+              <Text style={[styles.pickerHzHint, pickerLockFlash && { color: C.accent }]}>
+                {pickerLockFlash ? "✓ " : ""}{noteToFreq(selectedNote, selectedOctave)} {t("signalGenerator", "hzUnit")}
+              </Text>
+            </Pressable>
 
             <Pressable
               onPress={() => {
