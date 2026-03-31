@@ -127,7 +127,7 @@ function analyzeWavLocally(base64: string, sampleRate: number): { frequency: num
     let rms = 0;
     for (let i = 0; i < win.length; i++) rms += win[i] * win[i];
     rms = Math.sqrt(rms / win.length);
-    if (rms < 0.04) continue;
+    if (rms < 0.03) continue;
 
     for (let i = 0; i < WINDOW_SIZE; i++) {
       win[i] *= 0.5 * (1 - Math.cos(2 * Math.PI * i / (WINDOW_SIZE - 1)));
@@ -1051,7 +1051,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       const fftBuf = new Float32Array(freqBinCount);
       const timeBuf = new Float32Array(analyser.fftSize);
       const spectrumCopy = new Float32Array(freqBinCount);
-      const MIC_GATE = 0.04;
+      const MIC_GATE = 0.03;
       const WINDOW_MS = 500;
       let readings: number[] = [];
       let windowStart = Date.now();
@@ -1351,7 +1351,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     >
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
-        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border, width: dynamicCardWidth }, isLandscape && { flexDirection: "row" as const, padding: 16, gap: 12, alignItems: "flex-start" as const, flexWrap: "wrap" as const }]}>
+        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border, width: dynamicCardWidth }, isLandscape && { padding: 16 }]}>
           {isLandscape && (
             <Pressable onPress={handleClose} hitSlop={12} style={{ position: "absolute" as const, top: 8, right: 8, zIndex: 10 }}>
               <Ionicons name="close" size={22} color={C.textSecondary} />
@@ -1370,6 +1370,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             </>
           )}
 
+          <View style={isLandscape ? { flexDirection: "row" as const, gap: 12, alignItems: "flex-start" as const, flex: 1 } : undefined}>
           <View style={[styles.knobWrap, isLandscape && { flex: 1, overflow: "hidden" as const }]}>
             {isLandscape && (
               <View style={[styles.header, { alignSelf: "stretch" as const, marginBottom: 8 }]}>
@@ -1735,21 +1736,20 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             </Pressable>
             </View>
           )}
+          </View>
 
           {isLandscape && (
-            <View style={{ flexBasis: "100%" as const, marginTop: 4 }}>
-              <SpectrumGraph
-                spectrumData={spectrumDataRef.current}
-                peakBin={spectrumPeakBinRef.current}
-                sampleRate={micAudioCtxRef.current?.sampleRate ?? 48000}
-                fftSize={micAnalyserRef.current?.fftSize ?? 8192}
-                accentColor={C.accent}
-                surfaceColor={C.surfaceLight}
-                textColor={C.textTertiary}
-                tick={spectrumTick}
-                micActive={micListening}
-              />
-            </View>
+            <SpectrumGraph
+              spectrumData={spectrumDataRef.current}
+              peakBin={spectrumPeakBinRef.current}
+              sampleRate={micAudioCtxRef.current?.sampleRate ?? 48000}
+              fftSize={micAnalyserRef.current?.fftSize ?? 8192}
+              accentColor={C.accent}
+              surfaceColor={C.surfaceLight}
+              textColor={C.textTertiary}
+              tick={spectrumTick}
+              micActive={micListening}
+            />
           )}
 
         </View>
