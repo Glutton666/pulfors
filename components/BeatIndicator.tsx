@@ -1774,7 +1774,7 @@ export function BeatIndicator({
       for (let i = 0; i < loopBlocks.length; i++) {
         const b = loopBlocks[i];
         if (b.layerOf !== undefined) continue;
-        if (beat >= b.startBeat && beat <= Math.min(b.endBeat, beatsPerMeasure - 1)) {
+        if (beat === b.startBeat) {
           const stacked: { block: LoopBlock; origIndex: number }[] = [];
           for (let j = 0; j < loopBlocks.length; j++) {
             if (loopBlocks[j].layerOf === i) stacked.push({ block: loopBlocks[j], origIndex: j });
@@ -1787,12 +1787,24 @@ export function BeatIndicator({
 
     const renderLayerRow = (beat: number, copyIndex: number, stackedBlock: LoopBlock, stackedOrigIdx: number, layerNum: number, parentBlockIndex: number, rowHeight?: number) => {
       const isPrimary = isPlaying ? (barLoopMode === "once" ? copyIndex === 0 : copyIndex === CENTER_COPY) : copyIndex === 0;
-      const layerBeats = Math.max(1, stackedBlock.endBeat - stackedBlock.startBeat + 1);
+      const ownEntry = loopBlocks[stackedOrigIdx];
       const layerKey = `${stackedOrigIdx}:${layerNum}`;
       const layerCurrentBeat = layerProgressMap[layerKey];
       const isCurrentBeatRow = progressInfo && progressInfo.beat === beat && progressInfo.blockIndex === parentBlockIndex;
       const isLayerActive = isPlaying && layerCurrentBeat !== undefined && isCurrentBeatRow;
       const h = rowHeight || LAYER_ROW_H;
+
+      const layerCells: { type: BeatType; beatIdx: number }[] = [];
+      for (let ci = 0; ci <= stackedBlock.endBeat - stackedBlock.startBeat; ci++) {
+        const beatIdx = stackedBlock.startBeat + ci;
+        const ownSub = ownEntry?.ownSubdivisions?.[String(beatIdx)];
+        if (ownSub && ownSub.length > 1) {
+          for (const st of ownSub) layerCells.push({ type: st as BeatType, beatIdx });
+        } else {
+          const bt = (ownEntry?.ownBeatTypes?.[beatIdx] as BeatType) || beatTypes[beatIdx] || "normal";
+          layerCells.push({ type: bt, beatIdx });
+        }
+      }
 
       return (
         <View
@@ -1809,14 +1821,11 @@ export function BeatIndicator({
         >
           <View style={{ width: S.ms(22, 0.4) }} />
           <View style={{ flex: 1, flexDirection: "row", borderBottomWidth: 1, borderBottomColor: C.overlay06 }}>
-            {Array.from({ length: layerBeats }).map((_, ci) => {
-              const beatIdx = stackedBlock.startBeat + ci;
-              const ownEntry = loopBlocks[stackedOrigIdx];
-              const type = (ownEntry?.ownBeatTypes?.[beatIdx] as BeatType) || beatTypes[beatIdx] || "normal";
+            {layerCells.map((cell, ci) => {
               const isActiveCell = isLayerActive && layerCurrentBeat === ci;
-              const isLast = ci === layerBeats - 1;
-              const isStrongType = type === "strong";
-              const isAccentType = type === "accent";
+              const isLast = ci === layerCells.length - 1;
+              const isStrongType = cell.type === "strong";
+              const isAccentType = cell.type === "accent";
               return (
                 <View
                   key={ci}
@@ -1834,7 +1843,7 @@ export function BeatIndicator({
                         <Text style={{ color: C.white, fontSize: 6, fontWeight: "bold" as const }}>S</Text>
                       </LinearGradient>
                     </View>
-                  ) : type === "mute" ? (
+                  ) : cell.type === "mute" ? (
                     <View style={{
                       flex: 1, borderRadius: 2, margin: 1,
                       backgroundColor: "transparent", borderWidth: 1, borderColor: C.textTertiary,
