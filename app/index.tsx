@@ -1391,6 +1391,7 @@ export default function MetronomeScreen() {
 
   const updateTimeSignature = useCallback(
     (beats: number) => {
+      beats = Math.max(1, Math.min(16, beats));
       const oldBeats = beatsPerMeasure;
       const oldTypes = beatTypes;
       const isAdding = beats > oldBeats;
