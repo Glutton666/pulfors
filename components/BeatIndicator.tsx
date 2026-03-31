@@ -1315,8 +1315,7 @@ export function BeatIndicator({
   const getBeatRowHeight = useCallback((beat: number): number => {
     const layerCount = getLayerCountForBeat(beat);
     if (layerCount > 0) {
-      const layerH = Math.floor(BAR_HEIGHT / 2);
-      return BAR_HEIGHT + layerCount * layerH + 1 + barGap;
+      return BAR_HEIGHT + layerCount * BAR_HEIGHT + 1 + barGap;
     }
     return rowH;
   }, [loopBlocks, beatsPerMeasure, BAR_HEIGHT, barGap, rowH]);
@@ -1454,7 +1453,7 @@ export function BeatIndicator({
 
   if (barMode) {
     const isDropping = dropTargetBeat !== null;
-    const renderBarRow = (beat: number, copyIndex: number, rowHeight?: number) => {
+    const renderBarRow = (beat: number, copyIndex: number, rowHeight?: number, hideLabel?: boolean) => {
       const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
       const isCurrent = isPlaying && currentBeat === beat && (barLoopMode === "once" ? copyIndex === 0 : copyIndex === activeCopy);
       const bType = beatTypes[beat] || "normal";
@@ -1478,7 +1477,7 @@ export function BeatIndicator({
             const leftPad = inBlock ? 10 + maxDepth * 10 : 0;
             return (
               <>
-                <Pressable
+                {!hideLabel && <Pressable
                   style={[
                     styles.barBeatLabel,
                     barStartBeat === beat && !isPlaying && { backgroundColor: C.accent + "30", borderRadius: 4 },
@@ -1527,7 +1526,7 @@ export function BeatIndicator({
                       {beat + 1}
                     </Text>
                   )}
-                </Pressable>
+                </Pressable>}
               </>
             );
           })()}
@@ -1780,7 +1779,6 @@ export function BeatIndicator({
             height: h,
           }}
         >
-          <View style={{ width: S.ms(22, 0.4) }} />
           <View style={{ flex: 1, flexDirection: "row", borderBottomWidth: 1, borderBottomColor: C.overlay06 }}>
             {displayCells.map((cellType, ci) => {
               const isActiveCell = isLayerActive;
@@ -1838,11 +1836,64 @@ export function BeatIndicator({
             return layerInfo.parentBeatOffset < layerBeats;
           });
           if (visibleLayers.length > 0) {
-            const layerH = Math.floor(BAR_HEIGHT / 2);
+            const bType = beatTypes[beat] || "normal";
+            const isCurrent = isPlaying && currentBeat === beat && (barLoopMode === "once" ? copyIndex === 0 : copyIndex === activeCopy);
+            const beatBlocks = blockForBeat.get(beat) || [];
+            const isPrimary = isPlaying ? (barLoopMode === "once" ? copyIndex === 0 : copyIndex === CENTER_COPY) : copyIndex === 0;
+            const blockStarts = isPrimary ? beatBlocks.filter((bb) => bb.isFirst) : [];
+            const blockMid = isPrimary && beatBlocks.length > 0 && blockStarts.length === 0;
+            const inBlock = isPrimary && beatBlocks.length > 0;
+            const maxDepth = isPrimary ? Math.max(0, ...beatBlocks.map(bb => blockDepths.get(bb.index) || 0)) : 0;
+            const leftPad = inBlock ? 10 + maxDepth * 10 : 0;
             rows.push(
-              <View key={`grp-${copyIndex}-${beat}`} style={{ gap: 0 }}>
-                {renderBarRow(beat, copyIndex)}
-                {visibleLayers.map((sb, li) => renderLayerRow(beat, copyIndex, sb.block, sb.origIndex, li + 1, layerInfo.blockIndex, layerInfo.parentBeatOffset, layerH))}
+              <View key={`grp-${copyIndex}-${beat}`} style={{ flexDirection: "row", alignItems: "stretch" }}>
+                <Pressable
+                  style={[
+                    styles.barBeatLabel,
+                    { justifyContent: "center" },
+                    barStartBeat === beat && !isPlaying && { backgroundColor: C.accent + "30", borderRadius: 4 },
+                    blockSelectStart === beat && !isPlaying && { backgroundColor: C.accent + "50", borderRadius: 4 },
+                    blockSelectStart !== null && blockSelectStart !== beat && !isPlaying && { borderColor: C.accent + "40", borderWidth: 1, borderRadius: 4 },
+                    leftPad > 0 && { paddingLeft: leftPad },
+                  ]}
+                  onPressIn={() => { barLongPressedRef.current = false; }}
+                  onPress={() => {
+                    if (barLongPressedRef.current) return;
+                    if (isPrimary && !isPlaying && onBarStartBeatSelect) {
+                      onBarStartBeatSelect(barStartBeat === beat ? null : beat);
+                      if (Platform.OS !== "web") Haptics.selectionAsync();
+                    } else if (isPrimary) {
+                      cycleBeatType(beat);
+                    }
+                  }}
+                  onLongPress={() => { if (isPrimary) handleBarNumberLongPress(beat); }}
+                  delayLongPress={300}
+                >
+                  {barStartBeat === beat && !isPlaying ? (
+                    <Ionicons name="play" size={12} color={C.accent} style={{ marginLeft: 1 }} />
+                  ) : blockSelectStart === beat && !isPlaying ? (
+                    <Ionicons name="locate" size={12} color={C.accent} />
+                  ) : isPrimary && blockStarts.length > 0 ? (
+                    <Text style={[styles.barBeatLabelText, { color: C.accent, opacity: 0.9, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" }]}>
+                      {beat + 1}
+                    </Text>
+                  ) : isPrimary && blockMid ? (
+                    <Text style={[styles.barBeatLabelText, { color: C.textTertiary, opacity: 0.3, fontSize: 9 }]}>
+                      {beat + 1}
+                    </Text>
+                  ) : (
+                    <Text style={[styles.barBeatLabelText, {
+                      color: bType === "strong" ? C.accent : bType === "accent" ? C.accentMuted : bType === "mute" ? C.textTertiary : C.textSecondary,
+                      opacity: isCurrent ? 1 : 0.6,
+                    }]}>
+                      {beat + 1}
+                    </Text>
+                  )}
+                </Pressable>
+                <View style={{ flex: 1, gap: 0 }}>
+                  {renderBarRow(beat, copyIndex, undefined, true)}
+                  {visibleLayers.map((sb, li) => renderLayerRow(beat, copyIndex, sb.block, sb.origIndex, li + 1, layerInfo.blockIndex, layerInfo.parentBeatOffset, BAR_HEIGHT))}
+                </View>
               </View>
             );
           } else {
@@ -1947,7 +1998,7 @@ export function BeatIndicator({
                         const copyOffset = copy * copyHeight;
                         const topPos = centerPad + copyOffset + getBeatTop(startBeat) + (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
                         const endLayerCount = getLayerCountForBeat(endBeat);
-                        const endBeatContentH = endLayerCount > 0 ? BAR_HEIGHT + endLayerCount * Math.floor(BAR_HEIGHT / 2) : BAR_HEIGHT;
+                        const endBeatContentH = endLayerCount > 0 ? BAR_HEIGHT + endLayerCount * BAR_HEIGHT : BAR_HEIGHT;
                         const bottomPos = centerPad + copyOffset + getBeatTop(endBeat) + endBeatContentH - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
                         const totalH = bottomPos - topPos;
                         if (totalH <= 0) continue;
@@ -2723,7 +2774,7 @@ export function BeatIndicator({
                     const copyOffset = copy * copyHeight;
                     const topPos = centerPad + copyOffset + getBeatTop(startBeat) + (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
                     const endLayerCount = getLayerCountForBeat(endBeat);
-                    const endBeatContentH = endLayerCount > 0 ? BAR_HEIGHT + endLayerCount * Math.floor(BAR_HEIGHT / 2) : BAR_HEIGHT;
+                    const endBeatContentH = endLayerCount > 0 ? BAR_HEIGHT + endLayerCount * BAR_HEIGHT : BAR_HEIGHT;
                     const bottomPos = centerPad + copyOffset + getBeatTop(endBeat) + endBeatContentH - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
                     const totalH = bottomPos - topPos;
                     if (totalH <= 0) continue;
