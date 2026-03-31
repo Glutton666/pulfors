@@ -467,6 +467,7 @@ export class MetronomeEngine {
       for (const iIdx of candidates) {
         if (iIdx !== parentBlockIdx) {
           const ib = sortedBlocks[iIdx];
+          if (ib.layerOf !== undefined) continue;
           if (ib.startBeat >= startB && ib.endBeat <= endB) return iIdx;
         }
       }
@@ -672,7 +673,7 @@ export class MetronomeEngine {
         const blk = sortedBlocks[idx];
         if (blk.layerOf !== undefined) continue;
         const isNested = sortedBlocks.some((ob, oi) =>
-          oi !== idx && ob.startBeat <= blk.startBeat && ob.endBeat >= blk.endBeat
+          oi !== idx && ob.layerOf === undefined && ob.startBeat <= blk.startBeat && ob.endBeat >= blk.endBeat
         );
         if (!isNested) outerBlocks.push(idx);
       }
@@ -694,7 +695,7 @@ export class MetronomeEngine {
             if (!processed.has(idx) && !jumpProcessed.has(idx) && sortedBlocks[idx].layerOf === undefined) {
               const blk = sortedBlocks[idx];
               const isNested = sortedBlocks.some((ob, oi) =>
-                oi !== idx && ob.startBeat <= blk.startBeat && ob.endBeat >= blk.endBeat && !processed.has(oi) && !jumpProcessed.has(oi)
+                oi !== idx && ob.layerOf === undefined && ob.startBeat <= blk.startBeat && ob.endBeat >= blk.endBeat && !processed.has(oi) && !jumpProcessed.has(oi)
               );
               if (!isNested) {
                 const span = blk.endBeat - blk.startBeat;
