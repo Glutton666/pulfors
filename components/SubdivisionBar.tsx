@@ -19,7 +19,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/contexts/ThemeContext";
 import Colors from "@/constants/colors";
-import { moderateScale, useScale } from "@/lib/scale";
+import { moderateScale, IS_TABLET, useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
 import type { BeatType } from "@/lib/metronome-engine";
 
@@ -35,8 +35,8 @@ interface SubdivisionBarProps {
   activeBeatPattern?: BeatType[] | null;
 }
 
-const CELL_SIZE = moderateScale(28, 0.4);
-const CELL_GAP = moderateScale(3, 0.3);
+const CELL_SIZE = IS_TABLET ? moderateScale(42, 0.4) : moderateScale(28, 0.4);
+const CELL_GAP = IS_TABLET ? moderateScale(5, 0.3) : moderateScale(3, 0.3);
 const MAX_CELLS = 8;
 const MIN_CELLS = 1;
 const SWIPE_THRESHOLD = 30;
@@ -379,15 +379,17 @@ export function SubdivisionBar({
   const nativePanHandlers = Platform.OS !== "web" ? panResponder.panHandlers : {};
 
   const displayPattern = isPlaying && activeBeatPattern ? activeBeatPattern : pattern;
+  const baseCellSize = S.isTablet ? S.ms(42, 0.4) : CELL_SIZE;
+  const baseCellGap = S.isTablet ? S.ms(5, 0.3) : CELL_GAP;
   const hintWidth = 16;
   const availableWidth = containerWidth > 0 ? containerWidth - hintWidth * 2 : 0;
   const cellCount = displayPattern.length;
   const dynamicCellSize = availableWidth > 0
-    ? Math.min(CELL_SIZE, Math.floor((availableWidth - CELL_GAP * (cellCount - 1)) / cellCount))
-    : CELL_SIZE;
+    ? Math.min(baseCellSize, Math.floor((availableWidth - baseCellGap * (cellCount - 1)) / cellCount))
+    : baseCellSize;
   const clampedCellSize = Math.max(14, dynamicCellSize);
-  const dynamicRadius = Math.max(3, Math.round(clampedCellSize * 6 / CELL_SIZE));
-  const dynamicFontSize = Math.max(7, Math.round(clampedCellSize * 11 / CELL_SIZE));
+  const dynamicRadius = Math.max(3, Math.round(clampedCellSize * 6 / baseCellSize));
+  const dynamicFontSize = Math.max(7, Math.round(clampedCellSize * 11 / baseCellSize));
 
   return (
     <View ref={webContainerRef} style={styles.gestureWrapper} {...nativePanHandlers}>
