@@ -1697,8 +1697,8 @@ export function BeatIndicator({
               return result;
             })()}
           </View>
-          <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
-          {isPrimary && !isPlaying && (
+          {!hideLabel && <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />}
+          {!hideLabel && isPrimary && !isPlaying && (
             <Pressable
               onPress={() => openRepeatModal(beat)}
               hitSlop={{ top: 6, bottom: 6, left: 4, right: 8 }}
@@ -1720,7 +1720,7 @@ export function BeatIndicator({
               )}
             </Pressable>
           )}
-          {isPrimary && isPlaying && barRepeats[beat] && progressInfo && progressInfo.beat === beat && progressInfo.barRepeatTotal > 1 && (
+          {!hideLabel && isPrimary && isPlaying && barRepeats[beat] && progressInfo && progressInfo.beat === beat && progressInfo.barRepeatTotal > 1 && (
             <View style={[styles.barBeatLabel, { marginLeft: 2, backgroundColor: C.accent + "30", borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }]}>
               <Text style={{ color: C.accent, fontSize: 8, fontWeight: "800", fontFamily: "SpaceGrotesk_700Bold" }}>
                 {progressInfo.barRepeatCurrent + 1}/{progressInfo.barRepeatTotal}
@@ -1891,10 +1891,43 @@ export function BeatIndicator({
                     </Text>
                   )}
                 </Pressable>
-                <View style={{ flex: 1, gap: 0 }}>
+                <View style={{ flex: 1, gap: 0, overflow: "hidden" }}>
                   {renderBarRow(beat, copyIndex, undefined, true)}
                   {visibleLayers.map((sb, li) => renderLayerRow(beat, copyIndex, sb.block, sb.origIndex, li + 1, layerInfo.blockIndex, layerInfo.parentBeatOffset, BAR_HEIGHT))}
                 </View>
+                <View style={{ justifyContent: "center" }}>
+                  <View style={[styles.barBeatEndLine, { backgroundColor: BAR_LINE_COLOR }]} />
+                </View>
+                {isPrimary && !isPlaying && (
+                  <Pressable
+                    onPress={() => openRepeatModal(beat)}
+                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 8 }}
+                    style={[
+                      styles.barBeatLabel,
+                      {
+                        marginLeft: 2,
+                        backgroundColor: barRepeats[beat] ? C.accent + "20" : "transparent",
+                        borderRadius: 4,
+                        justifyContent: "center",
+                      },
+                    ]}
+                  >
+                    {barRepeats[beat] ? (
+                      <Text style={[styles.barBeatLabelText, { color: C.accent, fontSize: 9, fontWeight: "700" }]}>
+                        {formatRepeat(barRepeats[beat])}
+                      </Text>
+                    ) : (
+                      <Ionicons name="repeat-outline" size={11} color={C.textTertiary} style={{ opacity: 0.4 }} />
+                    )}
+                  </Pressable>
+                )}
+                {isPrimary && isPlaying && barRepeats[beat] && progressInfo && progressInfo.beat === beat && progressInfo.barRepeatTotal > 1 && (
+                  <View style={[styles.barBeatLabel, { marginLeft: 2, backgroundColor: C.accent + "30", borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, justifyContent: "center" }]}>
+                    <Text style={{ color: C.accent, fontSize: 8, fontWeight: "800", fontFamily: "SpaceGrotesk_700Bold" }}>
+                      {progressInfo.barRepeatCurrent + 1}/{progressInfo.barRepeatTotal}
+                    </Text>
+                  </View>
+                )}
               </View>
             );
           } else {
