@@ -1370,7 +1370,20 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             </>
           )}
 
-          <View style={isLandscape ? { flexDirection: "row" as const, gap: 12, alignItems: "flex-start" as const, flex: 1 } : undefined}>
+          <View style={isLandscape ? { flexDirection: "row" as const, gap: 8, alignItems: "stretch" as const, flex: 1 } : undefined}>
+          {isLandscape && (
+            <SpectrumGraph
+              spectrumData={spectrumDataRef.current}
+              peakBin={spectrumPeakBinRef.current}
+              sampleRate={micAudioCtxRef.current?.sampleRate ?? 48000}
+              fftSize={micAnalyserRef.current?.fftSize ?? 8192}
+              accentColor={C.accent}
+              surfaceColor={C.surfaceLight}
+              textColor={C.textTertiary}
+              tick={spectrumTick}
+              micActive={micListening}
+            />
+          )}
           <View style={[styles.knobWrap, isLandscape && { flex: 1, overflow: "hidden" as const }]}>
             {isLandscape && (
               <View style={[styles.header, { alignSelf: "stretch" as const, marginBottom: 8 }]}>
@@ -1738,19 +1751,6 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
           )}
           </View>
 
-          {isLandscape && (
-            <SpectrumGraph
-              spectrumData={spectrumDataRef.current}
-              peakBin={spectrumPeakBinRef.current}
-              sampleRate={micAudioCtxRef.current?.sampleRate ?? 48000}
-              fftSize={micAnalyserRef.current?.fftSize ?? 8192}
-              accentColor={C.accent}
-              surfaceColor={C.surfaceLight}
-              textColor={C.textTertiary}
-              tick={spectrumTick}
-              micActive={micListening}
-            />
-          )}
 
         </View>
       </View>
@@ -1758,10 +1758,8 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   );
 }
 
-const SPECTRUM_BAR_COUNT = 64;
-const SPECTRUM_HEIGHT = 80;
-const SPECTRUM_MIN_FREQ = 27.5;
-const SPECTRUM_MAX_FREQ = 4200;
+const TOP_PEAK_COUNT = 5;
+const SPECTRUM_BAR_HEIGHT = 120;
 
 function SpectrumGraph({
   spectrumData,
@@ -1785,73 +1783,70 @@ function SpectrumGraph({
   micActive: boolean;
 }) {
   const binRes = sampleRate / fftSize;
-  const minBin = Math.max(1, Math.ceil(SPECTRUM_MIN_FREQ / binRes));
-  const maxBin = Math.min((spectrumData?.length ?? (fftSize >> 1)) - 1, Math.floor(SPECTRUM_MAX_FREQ / binRes));
-  const totalBins = maxBin - minBin + 1;
-  const binsPerBar = Math.max(1, Math.floor(totalBins / SPECTRUM_BAR_COUNT));
+  const hasData = !!(micActive && spectrumData);
 
-  const hasData = micActive && spectrumData;
-  const bars: { value: number; isPeak: boolean }[] = [];
-  for (let i = 0; i < SPECTRUM_BAR_COUNT; i++) {
-    if (hasData) {
-      const startBin = minBin + i * binsPerBar;
-      const endBin = Math.min(startBin + binsPerBar, maxBin + 1);
-      let max = -Infinity;
-      let hasPeak = false;
-      for (let b = startBin; b < endBin; b++) {
-        if (spectrumData[b] > max) max = spectrumData[b];
-        if (b === peakBin) hasPeak = true;
-      }
-      const normalized = Math.max(0, Math.min(1, (max + 100) / 100));
-      bars.push({ value: normalized, isPeak: hasPeak });
-    } else {
-      bars.push({ value: 0, isPeak: false });
-    }
-  }
+  const peaks: { freq: number; value: number; isPrimary: boolean }[] = [];
 
-  const labels = ["A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7"];
-  const labelPositions: { label: string; x: number }[] = [];
-  for (const l of labels) {
-    const octave = parseInt(l[1]);
-    const freq = 27.5 * Math.pow(2, octave);
-    if (freq >= SPECTRUM_MIN_FREQ && freq <= SPECTRUM_MAX_FREQ) {
-      const bin = Math.round(freq / binRes);
-      const barIdx = Math.floor((bin - minBin) / binsPerBar);
-      if (barIdx >= 0 && barIdx < SPECTRUM_BAR_COUNT) {
-        labelPositions.push({ label: l, x: barIdx / SPECTRUM_BAR_COUNT });
+  if (hasData && spectrumData) {
+    const minBin = Math.max(1, Math.ceil(27.5 / binRes));
+    const maxBin = Math.min(spectrumData.length - 1, Math.floor(4200 / binRes));
+
+    const candidates: { bin: number; mag: number }[] = [];
+    for (let b = minBin + 1; b < maxBin; b++) {
+      if (spectrumData[b] > spectrumData[b - 1] && spectrumData[b] > spectrumData[b + 1] && spectrumData[b] > -60) {
+        candidates.push({ bin: b, mag: spectrumData[b] });
       }
     }
+    candidates.sort((a, b) => b.mag - a.mag);
+
+    const topN = candidates.slice(0, TOP_PEAK_COUNT);
+    const maxMag = topN.length > 0 ? topN[0].mag : -100;
+
+    for (const c of topN) {
+      const normalized = Math.max(0.05, Math.min(1, (c.mag - (-100)) / (maxMag - (-100) + 1)));
+      peaks.push({
+        freq: c.bin * binRes,
+        value: normalized,
+        isPrimary: c.bin === peakBin,
+      });
+    }
+    peaks.sort((a, b) => a.freq - b.freq);
   }
+
+  while (peaks.length < TOP_PEAK_COUNT) {
+    peaks.push({ freq: 0, value: 0, isPrimary: false });
+  }
+
+  const formatFreq = (f: number) => {
+    if (f === 0) return "—";
+    if (f >= 1000) return `${(f / 1000).toFixed(1)}k`;
+    return `${Math.round(f)}`;
+  };
 
   return (
-    <View style={{ width: "100%" as const, marginTop: 8, paddingHorizontal: 4 }}>
-      <View style={{ height: SPECTRUM_HEIGHT, flexDirection: "row" as const, alignItems: "flex-end" as const, gap: 1, backgroundColor: surfaceColor, borderRadius: 6, paddingHorizontal: 2, paddingBottom: 2, paddingTop: 2, opacity: hasData ? 1 : 0.4 }}>
-        {bars.map((bar, i) => (
-          <View
-            key={i}
-            style={{
-              flex: 1,
-              height: Math.max(1, hasData ? bar.value * (SPECTRUM_HEIGHT - 4) : 2),
-              backgroundColor: bar.isPeak ? accentColor : `${accentColor}55`,
-              borderRadius: 1,
-            }}
-          />
+    <View style={{ flex: 1, backgroundColor: surfaceColor, borderRadius: 8, padding: 6, opacity: hasData ? 1 : 0.35, justifyContent: "flex-end" as const }}>
+      <View style={{ flexDirection: "row" as const, alignItems: "flex-end" as const, justifyContent: "space-around" as const, height: SPECTRUM_BAR_HEIGHT, gap: 3, paddingHorizontal: 2 }}>
+        {peaks.map((p, i) => (
+          <View key={i} style={{ flex: 1, alignItems: "center" as const, justifyContent: "flex-end" as const, height: "100%" as const }}>
+            <View
+              style={{
+                width: "100%" as const,
+                height: Math.max(2, p.value * (SPECTRUM_BAR_HEIGHT - 4)),
+                backgroundColor: p.isPrimary ? accentColor : `${accentColor}88`,
+                borderRadius: 3,
+                minHeight: hasData && p.freq > 0 ? 6 : 2,
+              }}
+            />
+          </View>
         ))}
       </View>
-      <View style={{ flexDirection: "row" as const, justifyContent: "space-between" as const, marginTop: 2, paddingHorizontal: 2 }}>
-        {labelPositions.map((lp) => (
-          <Text
-            key={lp.label}
-            style={{
-              position: "absolute" as const,
-              left: `${lp.x * 100}%`,
-              fontSize: 8,
-              color: textColor,
-              fontFamily: "SpaceGrotesk_400Regular",
-            }}
-          >
-            {lp.label}
-          </Text>
+      <View style={{ flexDirection: "row" as const, justifyContent: "space-around" as const, marginTop: 4, gap: 3, paddingHorizontal: 2 }}>
+        {peaks.map((p, i) => (
+          <View key={i} style={{ flex: 1, alignItems: "center" as const }}>
+            <Text style={{ fontSize: 8, color: p.isPrimary ? accentColor : textColor, fontFamily: "SpaceGrotesk_400Regular", textAlign: "center" as const }}>
+              {formatFreq(p.freq)}
+            </Text>
+          </View>
         ))}
       </View>
     </View>
