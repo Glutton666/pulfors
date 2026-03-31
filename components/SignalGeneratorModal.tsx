@@ -11,6 +11,7 @@ import {
   ScrollView,
   FlatList,
   useWindowDimensions,
+  Alert,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -865,17 +866,25 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     onAndroidMicToggle?.(false);
   }, [onAndroidMicToggle]);
 
+  const showMicPermissionAlert = useCallback(() => {
+    Alert.alert(
+      t("signalGenerator", "micPermission"),
+      t("noteRecorder", "micPermission"),
+    );
+  }, [t]);
+
   const startMicAndroid = useCallback(async () => {
     const perm = await Audio.requestPermissionsAsync();
     if (!perm.granted) {
       console.warn("[MicTuner] Mic permission denied");
+      showMicPermissionAlert();
       return;
     }
     micActiveRef.current = true;
     setMicListening(true);
     setMicWebViewActive(true);
     onAndroidMicToggle?.(true);
-  }, [onAndroidMicToggle]);
+  }, [onAndroidMicToggle, showMicPermissionAlert]);
 
   const stopMobileMic = useCallback(async () => {
     if (micMobileTimerRef.current) {
@@ -896,6 +905,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     setMicListening(false);
     if (Platform.OS === "android") {
       stopMicAndroid();
+      stopMobileMic();
       nativeFallenBackRef.current = false;
     } else if (Platform.OS === "web") {
       if (micRafRef.current) {
@@ -1031,19 +1041,27 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     }
   }, [micWebViewActive, androidMicFrequency, androidMicNote, micMethod]);
 
-  const autoFallbackToWebView = useCallback(() => {
+  const autoFallbackToWebView = useCallback(async () => {
     if (Platform.OS !== "android" || nativeFallenBackRef.current) return;
     nativeFallenBackRef.current = true;
     console.warn("[MicTuner] Native decode failed, auto-falling back to WebView");
     stopMobileMic();
+    const perm = await Audio.requestPermissionsAsync();
+    if (!perm.granted) {
+      console.warn("[MicTuner] Mic permission denied during fallback");
+      showMicPermissionAlert();
+      micActiveRef.current = false;
+      setMicListening(false);
+      return;
+    }
     micActiveRef.current = true;
     setMicListening(true);
     setMicWebViewActive(true);
     onAndroidMicToggle?.(true);
-  }, [stopMobileMic, onAndroidMicToggle]);
+  }, [stopMobileMic, onAndroidMicToggle, showMicPermissionAlert]);
 
   const startMicMobile = useCallback(async () => {
-    if (Platform.OS === "android") {
+    if (Platform.OS === "android" && micMethod === "webview") {
       startMicAndroid();
       return;
     }
@@ -1053,6 +1071,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       const perm = await Audio.requestPermissionsAsync();
       if (!perm.granted) {
         console.warn("[MicTuner] Mic permission denied");
+        showMicPermissionAlert();
         return;
       }
 
@@ -1162,7 +1181,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       console.warn("[MicTuner] Mobile start error:", e);
       setMicListening(false);
     }
-  }, [startMicAndroid, micMethod, autoFallbackToWebView]);
+  }, [startMicAndroid, micMethod, autoFallbackToWebView, showMicPermissionAlert]);
 
   const startMic = useCallback(async () => {
     if (Platform.OS === "web") {
