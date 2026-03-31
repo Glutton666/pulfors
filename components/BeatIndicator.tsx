@@ -900,6 +900,7 @@ export function BeatIndicator({
 
   const [blockSelectStart, setBlockSelectStart] = useState<number | null>(null);
   const [editingBlockIndex, setEditingBlockIndex] = useState<number | null>(null);
+  const [editingLayerIndex, setEditingLayerIndex] = useState<number | null>(null);
 
   const openRepeatModal = useCallback((beat: number) => {
     const existing = barRepeats[beat];
@@ -1429,11 +1430,11 @@ export function BeatIndicator({
       onLoopBlocksChange(updated);
     };
 
-    const getLayersForBeatEnd = (beat: number): { blockIndex: number; layers: BlockLayer[] } | null => {
+    const getLayersForBeat = (beat: number): { blockIndex: number; layers: BlockLayer[]; isLastBeat: boolean } | null => {
       for (let i = 0; i < loopBlocks.length; i++) {
         const b = loopBlocks[i];
-        if (beat === Math.min(b.endBeat, beatsPerMeasure - 1) && b.layers && b.layers.length > 0) {
-          return { blockIndex: i, layers: b.layers };
+        if (beat >= b.startBeat && beat <= Math.min(b.endBeat, beatsPerMeasure - 1) && b.layers && b.layers.length > 0) {
+          return { blockIndex: i, layers: b.layers, isLastBeat: beat === Math.min(b.endBeat, beatsPerMeasure - 1) };
         }
       }
       return null;
@@ -1525,7 +1526,7 @@ export function BeatIndicator({
     const buildBarRows = (copyIndex: number) => {
       const rows: React.ReactNode[] = [];
       for (const beat of beats) {
-        const layerInfo = getLayersForBeatEnd(beat);
+        const layerInfo = getLayersForBeat(beat);
         if (layerInfo) {
           rows.push(
             <View key={`grp-${copyIndex}-${beat}`} style={{ gap: 0 }}>
@@ -1869,136 +1870,90 @@ export function BeatIndicator({
                           </Pressable>
                         </View>
                       )}
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
-                        <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>Layers</Text>
-                        <Pressable
-                          onPress={() => {
-                            const newLayer: BlockLayer = {
-                              id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                              beats: editBlock.endBeat - editBlock.startBeat + 1,
-                              beatTypes: Array.from({ length: editBlock.endBeat - editBlock.startBeat + 1 }, () => "normal" as BeatType),
-                              subdivisions: {},
-                            };
-                            const newLayers = [...(editBlock.layers || []), newLayer];
-                            updateBlock(editingBlockIndex!, { layers: newLayers });
-                          }}
-                          style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: C.accent + "20", borderWidth: 1, borderColor: C.accent + "40" }}
-                        >
-                          <Text style={{ color: C.accent, fontSize: 8, fontFamily: "SpaceGrotesk_700Bold" }}>+ Add</Text>
-                        </Pressable>
-                        <Text style={{ color: C.textTertiary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium" }}>
-                          {editBlock.layers?.length || 0} layer{(editBlock.layers?.length || 0) !== 1 ? "s" : ""}
-                        </Text>
-                      </View>
-                      {editBlock.layers && editBlock.layers.length > 0 && editBlock.layers.map((layer, li) => (
-                        <View key={layer.id} style={{ flexDirection: "column", gap: 3, marginTop: 3, paddingLeft: 4, borderLeftWidth: 2, borderLeftColor: C.accent + "40" }}>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                            <Text style={{ color: C.accent, fontSize: 9, fontFamily: "SpaceGrotesk_700Bold" }}>L{li + 1}</Text>
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-                              <Pressable
-                                onPress={() => {
-                                  if (layer.beats > 1) {
-                                    const newLayers = [...(editBlock.layers || [])];
-                                    const nb = layer.beats - 1;
-                                    newLayers[li] = { ...layer, beats: nb, beatTypes: layer.beatTypes.slice(0, nb) };
-                                    updateBlock(editingBlockIndex!, { layers: newLayers });
-                                  }
-                                }}
-                                style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
-                              >
-                                <Ionicons name="remove" size={10} color={C.accent} />
-                              </Pressable>
-                              <Text style={{ color: C.text, fontSize: 9, fontFamily: "SpaceGrotesk_700Bold", minWidth: 20, textAlign: "center" }}>{layer.beats}b</Text>
-                              <Pressable
-                                onPress={() => {
-                                  const newLayers = [...(editBlock.layers || [])];
-                                  const nb = layer.beats + 1;
-                                  const newTypes = [...layer.beatTypes];
-                                  while (newTypes.length < nb) newTypes.push("normal");
-                                  newLayers[li] = { ...layer, beats: nb, beatTypes: newTypes };
-                                  updateBlock(editingBlockIndex!, { layers: newLayers });
-                                }}
-                                style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
-                              >
-                                <Ionicons name="add" size={10} color={C.accent} />
+                      {(() => {
+                        const layers = editBlock.layers || [];
+                        const selLi = editingLayerIndex !== null && editingLayerIndex < layers.length ? editingLayerIndex : null;
+                        const selLayer = selLi !== null ? layers[selLi] : null;
+                        return (
+                          <>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                              <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>Layers</Text>
+                              {layers.map((_, li) => (
+                                <Pressable key={li} onPress={() => setEditingLayerIndex(selLi === li ? null : li)}
+                                  style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: selLi === li ? C.accent + "30" : C.overlay08, borderWidth: 1, borderColor: selLi === li ? C.accent : C.overlay08 }}>
+                                  <Text style={{ color: selLi === li ? C.accent : C.text, fontSize: 8, fontFamily: "SpaceGrotesk_700Bold" }}>L{li + 1}</Text>
+                                </Pressable>
+                              ))}
+                              <Pressable onPress={() => {
+                                const newLayer: BlockLayer = { id: Date.now().toString() + Math.random().toString(36).substr(2, 9), beats: editBlock.endBeat - editBlock.startBeat + 1, beatTypes: Array.from({ length: editBlock.endBeat - editBlock.startBeat + 1 }, () => "normal" as BeatType), subdivisions: {} };
+                                const newLayers = [...layers, newLayer]; updateBlock(editingBlockIndex!, { layers: newLayers }); setEditingLayerIndex(newLayers.length - 1);
+                              }} style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: C.accent + "20", borderWidth: 1, borderColor: C.accent + "40" }}>
+                                <Text style={{ color: C.accent, fontSize: 8, fontFamily: "SpaceGrotesk_700Bold" }}>+ Add</Text>
                               </Pressable>
                             </View>
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginLeft: 4 }}>
-                              <Text style={{ color: C.textTertiary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium" }}>BPM</Text>
-                              {layer.bpm ? (
-                                <TextInput
-                                  style={{
-                                    color: C.accent, fontSize: 9, fontFamily: "SpaceGrotesk_700Bold",
-                                    minWidth: 32, textAlign: "center", paddingHorizontal: 3, paddingVertical: 1,
-                                    borderRadius: 3, backgroundColor: C.accent + "20", borderWidth: 1, borderColor: C.accent + "50",
-                                  }}
-                                  keyboardType="number-pad"
-                                  defaultValue={String(layer.bpm)}
-                                  key={`lbpm-l-${editingBlockIndex}-${li}-${layer.bpm}`}
-                                  onEndEditing={(e) => {
-                                    const v = parseInt(e.nativeEvent.text, 10);
-                                    const newLayers = [...(editBlock.layers || [])];
-                                    if (!isNaN(v) && v >= 20 && v <= 300) newLayers[li] = { ...layer, bpm: v };
-                                    else newLayers[li] = { ...layer, bpm: undefined };
-                                    updateBlock(editingBlockIndex!, { layers: newLayers });
-                                  }}
-                                  selectTextOnFocus
-                                />
-                              ) : (
-                                <Pressable
-                                  onPress={() => {
-                                    const newLayers = [...(editBlock.layers || [])];
-                                    newLayers[li] = { ...layer, bpm: bpm || 120 };
-                                    updateBlock(editingBlockIndex!, { layers: newLayers });
-                                  }}
-                                  style={{ paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3, backgroundColor: "transparent", borderWidth: 1, borderColor: C.accent + "30" }}
-                                >
-                                  <Text style={{ color: C.textTertiary, fontSize: 8, fontFamily: "SpaceGrotesk_700Bold" }}>—</Text>
-                                </Pressable>
-                              )}
-                            </View>
-                            <Pressable
-                              onPress={() => {
-                                const newLayers = (editBlock.layers || []).filter((_, idx) => idx !== li);
-                                updateBlock(editingBlockIndex!, { layers: newLayers.length > 0 ? newLayers : undefined });
-                              }}
-                              style={{ marginLeft: "auto" as any, width: 18, height: 18, borderRadius: 9, backgroundColor: "#ff4444" + "20", alignItems: "center", justifyContent: "center" }}
-                            >
-                              <Ionicons name="trash" size={9} color="#ff4444" />
-                            </Pressable>
-                          </View>
-                          <View style={{ flexDirection: "row", gap: 2, marginTop: 2, flexWrap: "wrap" }}>
-                            {Array.from({ length: layer.beats }).map((_, ci) => {
-                              const t = layer.beatTypes[ci] || "normal";
-                              const bgMap: Record<string, string> = { strong: C.white, accent: C.accent, normal: C.text, mute: "transparent" };
-                              const borderMap: Record<string, string> = { strong: C.accent, accent: C.accent, normal: C.textTertiary, mute: C.textTertiary };
-                              return (
-                                <Pressable
-                                  key={ci}
-                                  onPress={() => {
-                                    const newTypes = [...layer.beatTypes];
-                                    while (newTypes.length < layer.beats) newTypes.push("normal");
-                                    const cycle: BeatType[] = ["strong", "accent", "normal", "mute"];
-                                    newTypes[ci] = cycle[(cycle.indexOf(newTypes[ci] || "normal") + 1) % cycle.length];
-                                    const newLayers = [...(editBlock.layers || [])];
-                                    newLayers[li] = { ...layer, beatTypes: newTypes };
-                                    updateBlock(editingBlockIndex!, { layers: newLayers });
-                                  }}
-                                  style={{
-                                    width: 14, height: 14, borderRadius: 2,
-                                    backgroundColor: t === "mute" ? "transparent" : bgMap[t] + (t === "strong" ? "" : "80"),
-                                    borderWidth: 1, borderColor: borderMap[t],
-                                    borderStyle: t === "mute" ? ("dashed" as any) : "solid",
-                                    alignItems: "center", justifyContent: "center",
-                                  }}
-                                >
-                                  {t === "strong" && <Text style={{ fontSize: 5, color: C.accent, fontWeight: "bold" as const }}>S</Text>}
-                                </Pressable>
-                              );
-                            })}
-                          </View>
-                        </View>
-                      ))}
+                            {selLayer && selLi !== null && (
+                              <View style={{ marginTop: 3, paddingLeft: 4, borderLeftWidth: 2, borderLeftColor: C.accent + "40", gap: 3 }}>
+                                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                                  <Text style={{ color: C.accent, fontSize: 9, fontFamily: "SpaceGrotesk_700Bold" }}>L{selLi + 1}</Text>
+                                  <Pressable onPress={() => { if (selLayer.beats > 1) { const nl = [...layers]; const nb = selLayer.beats - 1; nl[selLi] = { ...selLayer, beats: nb, beatTypes: selLayer.beatTypes.slice(0, nb) }; updateBlock(editingBlockIndex!, { layers: nl }); } }}
+                                    style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}><Ionicons name="remove" size={10} color={C.accent} /></Pressable>
+                                  <Text style={{ color: C.text, fontSize: 9, fontFamily: "SpaceGrotesk_700Bold", minWidth: 20, textAlign: "center" }}>{selLayer.beats}b</Text>
+                                  <Pressable onPress={() => { const nl = [...layers]; const nb = selLayer.beats + 1; const nt = [...selLayer.beatTypes]; while (nt.length < nb) nt.push("normal"); nl[selLi] = { ...selLayer, beats: nb, beatTypes: nt }; updateBlock(editingBlockIndex!, { layers: nl }); }}
+                                    style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}><Ionicons name="add" size={10} color={C.accent} /></Pressable>
+                                  <Text style={{ color: C.textTertiary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium", marginLeft: 3 }}>BPM</Text>
+                                  {selLayer.bpm ? (
+                                    <TextInput style={{ color: C.accent, fontSize: 9, fontFamily: "SpaceGrotesk_700Bold", minWidth: 32, textAlign: "center", paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3, backgroundColor: C.accent + "20", borderWidth: 1, borderColor: C.accent + "50" }}
+                                      keyboardType="number-pad" defaultValue={String(selLayer.bpm)} key={`lbpm-l-${editingBlockIndex}-${selLi}-${selLayer.bpm}`}
+                                      onEndEditing={(e) => { const v = parseInt(e.nativeEvent.text, 10); const nl = [...layers]; if (!isNaN(v) && v >= 20 && v <= 300) nl[selLi] = { ...selLayer, bpm: v }; else nl[selLi] = { ...selLayer, bpm: undefined }; updateBlock(editingBlockIndex!, { layers: nl }); }}
+                                      selectTextOnFocus />
+                                  ) : (
+                                    <Pressable onPress={() => { const nl = [...layers]; nl[selLi] = { ...selLayer, bpm: bpm || 120 }; updateBlock(editingBlockIndex!, { layers: nl }); }}
+                                      style={{ paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3, backgroundColor: "transparent", borderWidth: 1, borderColor: C.accent + "30" }}>
+                                      <Text style={{ color: C.textTertiary, fontSize: 8, fontFamily: "SpaceGrotesk_700Bold" }}>—</Text>
+                                    </Pressable>
+                                  )}
+                                  <Pressable onPress={() => { const nl = layers.filter((_, idx) => idx !== selLi); updateBlock(editingBlockIndex!, { layers: nl.length > 0 ? nl : undefined }); setEditingLayerIndex(null); }}
+                                    style={{ marginLeft: "auto" as any, width: 18, height: 18, borderRadius: 9, backgroundColor: "#ff4444" + "20", alignItems: "center", justifyContent: "center" }}><Ionicons name="trash" size={9} color="#ff4444" /></Pressable>
+                                </View>
+                                <View style={{ flexDirection: "row", gap: 2, flexWrap: "wrap" }}>
+                                  {Array.from({ length: selLayer.beats }).map((_, ci) => {
+                                    const t = selLayer.beatTypes[ci] || "normal";
+                                    const bgMap: Record<string, string> = { strong: C.white, accent: C.accent, normal: C.text, mute: "transparent" };
+                                    const borderMap: Record<string, string> = { strong: C.accent, accent: C.accent, normal: C.textTertiary, mute: C.textTertiary };
+                                    return (
+                                      <Pressable key={ci} onPress={() => {
+                                        const nt = [...selLayer.beatTypes]; while (nt.length < selLayer.beats) nt.push("normal");
+                                        const cycle: BeatType[] = ["strong", "accent", "normal", "mute"]; nt[ci] = cycle[(cycle.indexOf(nt[ci] || "normal") + 1) % cycle.length];
+                                        const nl = [...layers]; nl[selLi] = { ...selLayer, beatTypes: nt }; updateBlock(editingBlockIndex!, { layers: nl });
+                                      }} style={{ width: 14, height: 14, borderRadius: 2, backgroundColor: t === "mute" ? "transparent" : bgMap[t] + (t === "strong" ? "" : "80"), borderWidth: 1, borderColor: borderMap[t], borderStyle: t === "mute" ? ("dashed" as any) : "solid", alignItems: "center", justifyContent: "center" }}>
+                                        {t === "strong" && <Text style={{ fontSize: 5, color: C.accent, fontWeight: "bold" as const }}>S</Text>}
+                                      </Pressable>
+                                    );
+                                  })}
+                                </View>
+                                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                                  <Text style={{ color: C.textTertiary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium" }}>Subdiv</Text>
+                                  {[1, 2, 3, 4].map(sd => {
+                                    const curSubs = selLayer.subdivisions || {};
+                                    const hasCustom = Object.keys(curSubs).length > 0;
+                                    const firstSubLen = hasCustom ? (curSubs[0]?.length || 1) : 1;
+                                    const isActive = sd === firstSubLen;
+                                    return (
+                                      <Pressable key={sd} onPress={() => {
+                                        const nl = [...layers]; const newSubs: Record<number, BeatType[]> = {};
+                                        for (let b = 0; b < selLayer.beats; b++) { if (sd === 1) continue; const bt = selLayer.beatTypes[b] || "normal"; newSubs[b] = Array.from({ length: sd }, (_, si) => si === 0 ? bt : "normal"); }
+                                        nl[selLi] = { ...selLayer, subdivisions: newSubs }; updateBlock(editingBlockIndex!, { layers: nl });
+                                      }} style={{ paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, backgroundColor: isActive ? C.accent + "30" : C.overlay08, borderWidth: 1, borderColor: isActive ? C.accent : "transparent" }}>
+                                        <Text style={{ color: isActive ? C.accent : C.textSecondary, fontSize: 8, fontFamily: "SpaceGrotesk_700Bold" }}>{sd}</Text>
+                                      </Pressable>
+                                    );
+                                  })}
+                                </View>
+                              </View>
+                            )}
+                          </>
+                        );
+                      })()}
                     </View>
                   );
                 })()}
@@ -2488,136 +2443,121 @@ export function BeatIndicator({
                       </Pressable>
                     </View>
                   )}
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 }}>
-                    <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Layers</Text>
-                    <Pressable
-                      onPress={() => {
-                        const newLayer: BlockLayer = {
-                          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                          beats: editBlock.endBeat - editBlock.startBeat + 1,
-                          beatTypes: Array.from({ length: editBlock.endBeat - editBlock.startBeat + 1 }, () => "normal" as BeatType),
-                          subdivisions: {},
-                        };
-                        const newLayers = [...(editBlock.layers || []), newLayer];
-                        updateBlock(editingBlockIndex!, { layers: newLayers });
-                      }}
-                      style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, backgroundColor: C.accent + "20", borderWidth: 1, borderColor: C.accent + "40" }}
-                    >
-                      <Text style={{ color: C.accent, fontSize: 9, fontFamily: "SpaceGrotesk_700Bold" }}>+ Add</Text>
-                    </Pressable>
-                    <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium" }}>
-                      {editBlock.layers?.length || 0} layer{(editBlock.layers?.length || 0) !== 1 ? "s" : ""}
-                    </Text>
-                  </View>
-                  {editBlock.layers && editBlock.layers.length > 0 && editBlock.layers.map((layer, li) => (
-                    <View key={layer.id} style={{ flexDirection: "column", gap: 4, marginTop: 4, paddingLeft: 6, borderLeftWidth: 2, borderLeftColor: C.accent + "40" }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                        <Text style={{ color: C.accent, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>L{li + 1}</Text>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  {(() => {
+                    const layers = editBlock.layers || [];
+                    const selLi = editingLayerIndex !== null && editingLayerIndex < layers.length ? editingLayerIndex : null;
+                    const selLayer = selLi !== null ? layers[selLi] : null;
+                    return (
+                      <>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                          <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Layers</Text>
+                          {layers.map((_, li) => (
+                            <Pressable
+                              key={li}
+                              onPress={() => setEditingLayerIndex(selLi === li ? null : li)}
+                              style={{
+                                paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4,
+                                backgroundColor: selLi === li ? C.accent + "30" : C.overlay08,
+                                borderWidth: 1, borderColor: selLi === li ? C.accent : C.overlay08,
+                              }}
+                            >
+                              <Text style={{ color: selLi === li ? C.accent : C.text, fontSize: 9, fontFamily: "SpaceGrotesk_700Bold" }}>L{li + 1}</Text>
+                            </Pressable>
+                          ))}
                           <Pressable
                             onPress={() => {
-                              if (layer.beats > 1) {
-                                const newLayers = [...(editBlock.layers || [])];
-                                const nb = layer.beats - 1;
-                                newLayers[li] = { ...layer, beats: nb, beatTypes: layer.beatTypes.slice(0, nb) };
-                                updateBlock(editingBlockIndex!, { layers: newLayers });
-                              }
-                            }}
-                            style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
-                          >
-                            <Ionicons name="remove" size={11} color={C.accent} />
-                          </Pressable>
-                          <Text style={{ color: C.text, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold", minWidth: 24, textAlign: "center" }}>{layer.beats}b</Text>
-                          <Pressable
-                            onPress={() => {
-                              const newLayers = [...(editBlock.layers || [])];
-                              const nb = layer.beats + 1;
-                              const newTypes = [...layer.beatTypes];
-                              while (newTypes.length < nb) newTypes.push("normal");
-                              newLayers[li] = { ...layer, beats: nb, beatTypes: newTypes };
+                              const newLayer: BlockLayer = {
+                                id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                                beats: editBlock.endBeat - editBlock.startBeat + 1,
+                                beatTypes: Array.from({ length: editBlock.endBeat - editBlock.startBeat + 1 }, () => "normal" as BeatType),
+                                subdivisions: {},
+                              };
+                              const newLayers = [...layers, newLayer];
                               updateBlock(editingBlockIndex!, { layers: newLayers });
+                              setEditingLayerIndex(newLayers.length - 1);
                             }}
-                            style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
+                            style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, backgroundColor: C.accent + "20", borderWidth: 1, borderColor: C.accent + "40" }}
                           >
-                            <Ionicons name="add" size={11} color={C.accent} />
+                            <Text style={{ color: C.accent, fontSize: 9, fontFamily: "SpaceGrotesk_700Bold" }}>+ Add</Text>
                           </Pressable>
                         </View>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginLeft: 6 }}>
-                          <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium" }}>BPM</Text>
-                          {layer.bpm ? (
-                            <TextInput
-                              style={{
-                                color: C.accent, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold",
-                                minWidth: 38, textAlign: "center", paddingHorizontal: 4, paddingVertical: 2,
-                                borderRadius: 3, backgroundColor: C.accent + "20", borderWidth: 1, borderColor: C.accent + "50",
-                              }}
-                              keyboardType="number-pad"
-                              defaultValue={String(layer.bpm)}
-                              key={`lbpm-p-${editingBlockIndex}-${li}-${layer.bpm}`}
-                              onEndEditing={(e) => {
-                                const v = parseInt(e.nativeEvent.text, 10);
-                                const newLayers = [...(editBlock.layers || [])];
-                                if (!isNaN(v) && v >= 20 && v <= 300) newLayers[li] = { ...layer, bpm: v };
-                                else newLayers[li] = { ...layer, bpm: undefined };
-                                updateBlock(editingBlockIndex!, { layers: newLayers });
-                              }}
-                              selectTextOnFocus
-                            />
-                          ) : (
-                            <Pressable
-                              onPress={() => {
-                                const newLayers = [...(editBlock.layers || [])];
-                                newLayers[li] = { ...layer, bpm: bpm || 120 };
-                                updateBlock(editingBlockIndex!, { layers: newLayers });
-                              }}
-                              style={{ paddingHorizontal: 4, paddingVertical: 2, borderRadius: 3, backgroundColor: "transparent", borderWidth: 1, borderColor: C.accent + "30" }}
-                            >
-                              <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_700Bold" }}>—</Text>
-                            </Pressable>
-                          )}
-                        </View>
-                        <Pressable
-                          onPress={() => {
-                            const newLayers = (editBlock.layers || []).filter((_, idx) => idx !== li);
-                            updateBlock(editingBlockIndex!, { layers: newLayers.length > 0 ? newLayers : undefined });
-                          }}
-                          style={{ marginLeft: "auto" as any, width: 22, height: 22, borderRadius: 11, backgroundColor: "#ff4444" + "20", alignItems: "center", justifyContent: "center" }}
-                        >
-                          <Ionicons name="trash" size={10} color="#ff4444" />
-                        </Pressable>
-                      </View>
-                      <View style={{ flexDirection: "row", gap: 2, marginTop: 2, flexWrap: "wrap" }}>
-                        {Array.from({ length: layer.beats }).map((_, ci) => {
-                          const t = layer.beatTypes[ci] || "normal";
-                          const bgMap: Record<string, string> = { strong: C.white, accent: C.accent, normal: C.text, mute: "transparent" };
-                          const borderMap: Record<string, string> = { strong: C.accent, accent: C.accent, normal: C.textTertiary, mute: C.textTertiary };
-                          return (
-                            <Pressable
-                              key={ci}
-                              onPress={() => {
-                                const newTypes = [...layer.beatTypes];
-                                while (newTypes.length < layer.beats) newTypes.push("normal");
-                                const cycle: BeatType[] = ["strong", "accent", "normal", "mute"];
-                                newTypes[ci] = cycle[(cycle.indexOf(newTypes[ci] || "normal") + 1) % cycle.length];
-                                const newLayers = [...(editBlock.layers || [])];
-                                newLayers[li] = { ...layer, beatTypes: newTypes };
-                                updateBlock(editingBlockIndex!, { layers: newLayers });
-                              }}
-                              style={{
-                                width: 16, height: 16, borderRadius: 3,
-                                backgroundColor: t === "mute" ? "transparent" : bgMap[t] + (t === "strong" ? "" : "80"),
-                                borderWidth: 1, borderColor: borderMap[t],
-                                borderStyle: t === "mute" ? ("dashed" as any) : "solid",
-                                alignItems: "center", justifyContent: "center",
-                              }}
-                            >
-                              {t === "strong" && <Text style={{ fontSize: 6, color: C.accent, fontWeight: "bold" as const }}>S</Text>}
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    </View>
-                  ))}
+                        {selLayer && selLi !== null && (
+                          <View style={{ marginTop: 4, paddingLeft: 6, borderLeftWidth: 2, borderLeftColor: C.accent + "40", gap: 4 }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                              <Text style={{ color: C.accent, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>L{selLi + 1}</Text>
+                              <Pressable
+                                onPress={() => { if (selLayer.beats > 1) { const nl = [...layers]; const nb = selLayer.beats - 1; nl[selLi] = { ...selLayer, beats: nb, beatTypes: selLayer.beatTypes.slice(0, nb) }; updateBlock(editingBlockIndex!, { layers: nl }); } }}
+                                style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
+                              ><Ionicons name="remove" size={11} color={C.accent} /></Pressable>
+                              <Text style={{ color: C.text, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold", minWidth: 24, textAlign: "center" }}>{selLayer.beats}b</Text>
+                              <Pressable
+                                onPress={() => { const nl = [...layers]; const nb = selLayer.beats + 1; const nt = [...selLayer.beatTypes]; while (nt.length < nb) nt.push("normal"); nl[selLi] = { ...selLayer, beats: nb, beatTypes: nt }; updateBlock(editingBlockIndex!, { layers: nl }); }}
+                                style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
+                              ><Ionicons name="add" size={11} color={C.accent} /></Pressable>
+                              <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", marginLeft: 6 }}>BPM</Text>
+                              {selLayer.bpm ? (
+                                <TextInput
+                                  style={{ color: C.accent, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold", minWidth: 38, textAlign: "center", paddingHorizontal: 4, paddingVertical: 2, borderRadius: 3, backgroundColor: C.accent + "20", borderWidth: 1, borderColor: C.accent + "50" }}
+                                  keyboardType="number-pad" defaultValue={String(selLayer.bpm)} key={`lbpm-p-${editingBlockIndex}-${selLi}-${selLayer.bpm}`}
+                                  onEndEditing={(e) => { const v = parseInt(e.nativeEvent.text, 10); const nl = [...layers]; if (!isNaN(v) && v >= 20 && v <= 300) nl[selLi] = { ...selLayer, bpm: v }; else nl[selLi] = { ...selLayer, bpm: undefined }; updateBlock(editingBlockIndex!, { layers: nl }); }}
+                                  selectTextOnFocus
+                                />
+                              ) : (
+                                <Pressable onPress={() => { const nl = [...layers]; nl[selLi] = { ...selLayer, bpm: bpm || 120 }; updateBlock(editingBlockIndex!, { layers: nl }); }}
+                                  style={{ paddingHorizontal: 4, paddingVertical: 2, borderRadius: 3, backgroundColor: "transparent", borderWidth: 1, borderColor: C.accent + "30" }}>
+                                  <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_700Bold" }}>—</Text>
+                                </Pressable>
+                              )}
+                              <Pressable
+                                onPress={() => { const nl = layers.filter((_, idx) => idx !== selLi); updateBlock(editingBlockIndex!, { layers: nl.length > 0 ? nl : undefined }); setEditingLayerIndex(null); }}
+                                style={{ marginLeft: "auto" as any, width: 22, height: 22, borderRadius: 11, backgroundColor: "#ff4444" + "20", alignItems: "center", justifyContent: "center" }}
+                              ><Ionicons name="trash" size={10} color="#ff4444" /></Pressable>
+                            </View>
+                            <View style={{ flexDirection: "row", gap: 2, flexWrap: "wrap" }}>
+                              {Array.from({ length: selLayer.beats }).map((_, ci) => {
+                                const t = selLayer.beatTypes[ci] || "normal";
+                                const bgMap: Record<string, string> = { strong: C.white, accent: C.accent, normal: C.text, mute: "transparent" };
+                                const borderMap: Record<string, string> = { strong: C.accent, accent: C.accent, normal: C.textTertiary, mute: C.textTertiary };
+                                return (
+                                  <Pressable key={ci} onPress={() => {
+                                    const nt = [...selLayer.beatTypes]; while (nt.length < selLayer.beats) nt.push("normal");
+                                    const cycle: BeatType[] = ["strong", "accent", "normal", "mute"]; nt[ci] = cycle[(cycle.indexOf(nt[ci] || "normal") + 1) % cycle.length];
+                                    const nl = [...layers]; nl[selLi] = { ...selLayer, beatTypes: nt }; updateBlock(editingBlockIndex!, { layers: nl });
+                                  }} style={{ width: 16, height: 16, borderRadius: 3, backgroundColor: t === "mute" ? "transparent" : bgMap[t] + (t === "strong" ? "" : "80"), borderWidth: 1, borderColor: borderMap[t], borderStyle: t === "mute" ? ("dashed" as any) : "solid", alignItems: "center", justifyContent: "center" }}>
+                                    {t === "strong" && <Text style={{ fontSize: 6, color: C.accent, fontWeight: "bold" as const }}>S</Text>}
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                              <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium" }}>Subdiv</Text>
+                              {[1, 2, 3, 4].map(sd => {
+                                const curSubs = selLayer.subdivisions || {};
+                                const hasCustom = Object.keys(curSubs).length > 0;
+                                const firstSubLen = hasCustom ? (curSubs[0]?.length || 1) : 1;
+                                const isActive = sd === firstSubLen;
+                                return (
+                                  <Pressable key={sd} onPress={() => {
+                                    const nl = [...layers];
+                                    const newSubs: Record<number, BeatType[]> = {};
+                                    for (let b = 0; b < selLayer.beats; b++) {
+                                      if (sd === 1) continue;
+                                      const bt = selLayer.beatTypes[b] || "normal";
+                                      newSubs[b] = Array.from({ length: sd }, (_, si) => si === 0 ? bt : "normal");
+                                    }
+                                    nl[selLi] = { ...selLayer, subdivisions: newSubs };
+                                    updateBlock(editingBlockIndex!, { layers: nl });
+                                  }} style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: isActive ? C.accent + "30" : C.overlay08, borderWidth: 1, borderColor: isActive ? C.accent : "transparent" }}>
+                                    <Text style={{ color: isActive ? C.accent : C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_700Bold" }}>{sd}</Text>
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        )}
+                      </>
+                    );
+                  })()}
                 </View>
               )}
             </View>
