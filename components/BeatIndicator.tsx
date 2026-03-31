@@ -1666,21 +1666,34 @@ export function BeatIndicator({
                         >
                           <Ionicons name="remove" size={12} color={editBlock.bpm ? "#2196F3" : C.textTertiary} />
                         </Pressable>
-                        <Pressable
-                          onPress={() => {
-                            if (editBlock.bpm) updateBlock(editingBlockIndex!, { bpm: undefined });
-                            else updateBlock(editingBlockIndex!, { bpm: bpm || 120 });
-                          }}
-                          style={{
-                            paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, minWidth: 32, alignItems: "center",
-                            backgroundColor: editBlock.bpm ? "#2196F320" : "transparent",
-                            borderWidth: 1, borderColor: editBlock.bpm ? "#2196F350" : C.accent + "30",
-                          }}
-                        >
-                          <Text style={{ color: editBlock.bpm ? "#2196F3" : C.textTertiary, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
-                            {editBlock.bpm ? editBlock.bpm : "—"}
-                          </Text>
-                        </Pressable>
+                        {editBlock.bpm ? (
+                          <TextInput
+                            style={{
+                              color: "#2196F3", fontSize: 10, fontFamily: "SpaceGrotesk_700Bold",
+                              minWidth: 36, textAlign: "center", paddingHorizontal: 5, paddingVertical: 2,
+                              borderRadius: 4, backgroundColor: "#2196F320", borderWidth: 1, borderColor: "#2196F350",
+                            }}
+                            keyboardType="number-pad"
+                            defaultValue={String(editBlock.bpm)}
+                            key={`bpm-l-${editingBlockIndex}-${editBlock.bpm}`}
+                            onEndEditing={(e) => {
+                              const v = parseInt(e.nativeEvent.text, 10);
+                              if (!isNaN(v) && v >= 20 && v <= 300) updateBlock(editingBlockIndex!, { bpm: v });
+                              else if (e.nativeEvent.text === "" || e.nativeEvent.text === "0") updateBlock(editingBlockIndex!, { bpm: undefined });
+                            }}
+                            selectTextOnFocus
+                          />
+                        ) : (
+                          <Pressable
+                            onPress={() => updateBlock(editingBlockIndex!, { bpm: bpm || 120 })}
+                            style={{
+                              paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, minWidth: 36, alignItems: "center",
+                              backgroundColor: "transparent", borderWidth: 1, borderColor: C.accent + "30",
+                            }}
+                          >
+                            <Text style={{ color: C.textTertiary, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>—</Text>
+                          </Pressable>
+                        )}
                         <Pressable
                           onPress={() => { if (editBlock.bpm) updateBlock(editingBlockIndex!, { bpm: Math.min(300, editBlock.bpm + 5) }); }}
                           style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: editBlock.bpm ? "#2196F320" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
@@ -2127,21 +2140,34 @@ export function BeatIndicator({
                     >
                       <Ionicons name="remove" size={14} color={editBlock.bpm ? "#2196F3" : C.textTertiary} />
                     </Pressable>
-                    <Pressable
-                      onPress={() => {
-                        if (editBlock.bpm) updateBlock(editingBlockIndex!, { bpm: undefined });
-                        else updateBlock(editingBlockIndex!, { bpm: bpm || 120 });
-                      }}
-                      style={{
-                        paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, minWidth: 40, alignItems: "center",
-                        backgroundColor: editBlock.bpm ? "#2196F320" : "transparent",
-                        borderWidth: 1, borderColor: editBlock.bpm ? "#2196F350" : C.accent + "30",
-                      }}
-                    >
-                      <Text style={{ color: editBlock.bpm ? "#2196F3" : C.textTertiary, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" }}>
-                        {editBlock.bpm ? editBlock.bpm : "—"}
-                      </Text>
-                    </Pressable>
+                    {editBlock.bpm ? (
+                      <TextInput
+                        style={{
+                          color: "#2196F3", fontSize: 11, fontFamily: "SpaceGrotesk_700Bold",
+                          minWidth: 44, textAlign: "center", paddingHorizontal: 6, paddingVertical: 2,
+                          borderRadius: 4, backgroundColor: "#2196F320", borderWidth: 1, borderColor: "#2196F350",
+                        }}
+                        keyboardType="number-pad"
+                        defaultValue={String(editBlock.bpm)}
+                        key={`bpm-p-${editingBlockIndex}-${editBlock.bpm}`}
+                        onEndEditing={(e) => {
+                          const v = parseInt(e.nativeEvent.text, 10);
+                          if (!isNaN(v) && v >= 20 && v <= 300) updateBlock(editingBlockIndex!, { bpm: v });
+                          else if (e.nativeEvent.text === "" || e.nativeEvent.text === "0") updateBlock(editingBlockIndex!, { bpm: undefined });
+                        }}
+                        selectTextOnFocus
+                      />
+                    ) : (
+                      <Pressable
+                        onPress={() => updateBlock(editingBlockIndex!, { bpm: bpm || 120 })}
+                        style={{
+                          paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, minWidth: 44, alignItems: "center",
+                          backgroundColor: "transparent", borderWidth: 1, borderColor: C.accent + "30",
+                        }}
+                      >
+                        <Text style={{ color: C.textTertiary, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" }}>—</Text>
+                      </Pressable>
+                    )}
                     <Pressable
                       onPress={() => {
                         if (editBlock.bpm) {
