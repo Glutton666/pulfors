@@ -1370,27 +1370,23 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             </>
           )}
 
-          <View style={isLandscape ? { flexDirection: "row" as const, gap: 8, alignItems: "stretch" as const, flex: 1 } : undefined}>
+          <View style={isLandscape ? { flexDirection: "row" as const, gap: 10, alignItems: "stretch" as const, flex: 1 } : undefined}>
           {isLandscape && (
-            <SpectrumGraph
-              spectrumData={spectrumDataRef.current}
-              peakBin={spectrumPeakBinRef.current}
-              sampleRate={micAudioCtxRef.current?.sampleRate ?? 48000}
-              fftSize={micAnalyserRef.current?.fftSize ?? 8192}
-              accentColor={C.accent}
-              surfaceColor={C.surfaceLight}
-              textColor={C.textTertiary}
-              tick={spectrumTick}
-              micActive={micListening}
-            />
+            <View style={{ width: 90, justifyContent: "center" as const }}>
+              <SpectrumGraph
+                spectrumData={spectrumDataRef.current}
+                peakBin={spectrumPeakBinRef.current}
+                sampleRate={micAudioCtxRef.current?.sampleRate ?? 48000}
+                fftSize={micAnalyserRef.current?.fftSize ?? 8192}
+                accentColor={C.accent}
+                surfaceColor={C.surfaceLight}
+                textColor={C.textTertiary}
+                tick={spectrumTick}
+                micActive={micListening}
+              />
+            </View>
           )}
           <View style={[styles.knobWrap, isLandscape && { flex: 1, overflow: "hidden" as const }]}>
-            {isLandscape && (
-              <View style={[styles.header, { alignSelf: "stretch" as const, marginBottom: 8 }]}>
-                <MaterialCommunityIcons name="waveform" size={16} color={C.accent} />
-                <Text style={[styles.title, { color: C.accent, fontSize: 14 }]}>{t("signalGenerator", "title")}</Text>
-              </View>
-            )}
             <Knob
               value={freqNorm}
               onChange={handleFreqKnob}
@@ -1414,7 +1410,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               style={[
                 styles.micEmoji,
                 micListening && styles.micEmojiActive,
-                isLandscape && { top: 24, right: 42, width: 24, height: 24, borderRadius: 12 },
+                isLandscape && { top: -2, right: -2, width: 26, height: 26, borderRadius: 13 },
               ]}
               hitSlop={8}
               testID="signal-mic-toggle"
@@ -1488,34 +1484,14 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 {micAnalyzed ? t("signalGenerator", "noSignal") : t("signalGenerator", "detecting")}
               </Text>
             ) : null}
-            {isLandscape && (
-              <Pressable
-                onPress={() => {
-                  hapticFeedback();
-                  isPlaying ? stopPlayback() : startPlayback();
-                }}
-                style={({ pressed }) => [
-                  styles.playBtn,
-                  { backgroundColor: isPlaying ? C.danger : C.accent, marginTop: 6, alignSelf: "center" as const, width: "30%" as const, paddingVertical: 5, borderRadius: 8, justifyContent: "center" as const },
-                  pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
-                ]}
-                testID="signal-toggle"
-              >
-                <Ionicons
-                  name={isPlaying ? "stop" : "play"}
-                  size={14}
-                  color={isPlaying ? C.white : C.background}
-                />
-              </Pressable>
-            )}
           </View>
 
           {isLandscape ? (
-            <View style={{ flex: 1, alignItems: "center" as const, justifyContent: "flex-end" as const, gap: 10, paddingBottom: 4, marginTop: 24 }}>
+            <View style={{ flex: 1, alignItems: "center" as const, justifyContent: "space-between" as const, gap: 6, paddingVertical: 2 }}>
             {editingFreq && (
-              <View style={styles.freqEditRow}>
+              <View style={[styles.freqEditRow, { paddingHorizontal: 10, paddingVertical: 5 }]}>
                 <TextInput
-                  style={[styles.freqEditInput, { color: C.accent, borderBottomColor: C.accent }]}
+                  style={[styles.freqEditInput, { color: C.accent, borderBottomColor: C.accent, fontSize: 16, minWidth: 70 }]}
                   value={freqInput}
                   onChangeText={setFreqInput}
                   onSubmitEditing={commitFreqInput}
@@ -1524,44 +1500,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                   autoFocus
                   selectTextOnFocus
                 />
-                <Text style={styles.freqEditUnit}>{t("signalGenerator", "hzUnit")}</Text>
+                <Text style={[styles.freqEditUnit, { fontSize: 13 }]}>{t("signalGenerator", "hzUnit")}</Text>
               </View>
             )}
-
-            <Pressable
-              onPress={() => {
-                hapticFeedback();
-                setTuningGuideOpen(true);
-              }}
-              onLongPress={() => {
-                if (preGuideFreqRef.current !== null) {
-                  if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                  setFrequency(preGuideFreqRef.current);
-                  preGuideFreqRef.current = null;
-                }
-              }}
-              delayLongPress={400}
-              style={[styles.tuningGuideToggle]}
-            >
-              <MaterialCommunityIcons name="music-note-outline" size={14} color={C.textTertiary} />
-              <Text style={styles.tuningGuideToggleText}>
-                {t("signalGenerator", "tuningGuide")}
-              </Text>
-              <Ionicons name="chevron-forward" size={14} color={C.textTertiary} />
-            </Pressable>
-
-            <TuningGuideModal
-              visible={tuningGuideOpen}
-              onClose={() => setTuningGuideOpen(false)}
-              onSelectFreq={(freq) => {
-                if (preGuideFreqRef.current === null) preGuideFreqRef.current = frequency;
-                setFrequency(freq);
-                setTuningGuideOpen(false);
-              }}
-              lang={lang}
-              accentColor={C.accent}
-              accentDim={C.accentDim}
-            />
 
             <View style={styles.notePickerRow}>
               <PickerColumn
@@ -1604,11 +1545,11 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                     <Pressable
                       key={w.type}
                       onPress={() => { hapticFeedback(); setWaveType(w.type); }}
-                      style={[styles.waveBtn, active && { backgroundColor: C.accentDim, borderColor: C.accent }, { paddingHorizontal: 8, paddingVertical: 6 }]}
+                      style={[styles.waveBtn, active && { backgroundColor: C.accentDim, borderColor: C.accent }, { paddingHorizontal: 8, paddingVertical: 5 }]}
                     >
                       <MaterialCommunityIcons
                         name={w.icon as any}
-                        size={16}
+                        size={15}
                         color={active ? C.accent : C.textTertiary}
                       />
                     </Pressable>
@@ -1616,6 +1557,60 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 })}
               </View>
             </View>
+
+            <Pressable
+              onPress={() => {
+                hapticFeedback();
+                setTuningGuideOpen(true);
+              }}
+              onLongPress={() => {
+                if (preGuideFreqRef.current !== null) {
+                  if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                  setFrequency(preGuideFreqRef.current);
+                  preGuideFreqRef.current = null;
+                }
+              }}
+              delayLongPress={400}
+              style={[styles.tuningGuideToggle, { marginTop: 0, marginBottom: 0 }]}
+            >
+              <MaterialCommunityIcons name="music-note-outline" size={12} color={C.textTertiary} />
+              <Text style={[styles.tuningGuideToggleText, { fontSize: 10 }]}>
+                {t("signalGenerator", "tuningGuide")}
+              </Text>
+              <Ionicons name="chevron-forward" size={12} color={C.textTertiary} />
+            </Pressable>
+
+            <TuningGuideModal
+              visible={tuningGuideOpen}
+              onClose={() => setTuningGuideOpen(false)}
+              onSelectFreq={(freq) => {
+                if (preGuideFreqRef.current === null) preGuideFreqRef.current = frequency;
+                setFrequency(freq);
+                setTuningGuideOpen(false);
+              }}
+              lang={lang}
+              accentColor={C.accent}
+              accentDim={C.accentDim}
+            />
+
+            <Pressable
+              onPress={() => {
+                hapticFeedback();
+                isPlaying ? stopPlayback() : startPlayback();
+              }}
+              style={({ pressed }) => [
+                styles.playBtn,
+                { backgroundColor: isPlaying ? C.danger : C.accent, alignSelf: "stretch" as const, paddingVertical: 7, paddingHorizontal: 0, borderRadius: 10, justifyContent: "center" as const },
+                pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] },
+              ]}
+              testID="signal-toggle"
+            >
+              <Ionicons
+                name={isPlaying ? "stop" : "play"}
+                size={16}
+                color={isPlaying ? C.white : C.background}
+              />
+            </Pressable>
             </View>
           ) : (
             <View style={{ alignItems: "center" as const, gap: 18, width: "100%" as const }}>
@@ -1759,7 +1754,6 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 }
 
 const TOP_PEAK_COUNT = 5;
-const SPECTRUM_BAR_HEIGHT = 120;
 
 function SpectrumGraph({
   spectrumData,
@@ -1803,7 +1797,7 @@ function SpectrumGraph({
     const maxMag = topN.length > 0 ? topN[0].mag : -100;
 
     for (const c of topN) {
-      const normalized = Math.max(0.05, Math.min(1, (c.mag - (-100)) / (maxMag - (-100) + 1)));
+      const normalized = Math.max(0.08, Math.min(1, (c.mag - (-100)) / (maxMag - (-100) + 1)));
       peaks.push({
         freq: c.bin * binRes,
         value: normalized,
@@ -1824,26 +1818,25 @@ function SpectrumGraph({
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: surfaceColor, borderRadius: 8, padding: 6, opacity: hasData ? 1 : 0.35, justifyContent: "flex-end" as const }}>
-      <View style={{ flexDirection: "row" as const, alignItems: "flex-end" as const, justifyContent: "space-around" as const, height: SPECTRUM_BAR_HEIGHT, gap: 3, paddingHorizontal: 2 }}>
+    <View style={{ flex: 1, backgroundColor: surfaceColor, borderRadius: 10, paddingHorizontal: 6, paddingTop: 8, paddingBottom: 4, opacity: hasData ? 1 : 0.3 }}>
+      <View style={{ flex: 1, flexDirection: "row" as const, alignItems: "flex-end" as const, gap: 4 }}>
         {peaks.map((p, i) => (
           <View key={i} style={{ flex: 1, alignItems: "center" as const, justifyContent: "flex-end" as const, height: "100%" as const }}>
             <View
               style={{
-                width: "100%" as const,
-                height: Math.max(2, p.value * (SPECTRUM_BAR_HEIGHT - 4)),
-                backgroundColor: p.isPrimary ? accentColor : `${accentColor}88`,
-                borderRadius: 3,
-                minHeight: hasData && p.freq > 0 ? 6 : 2,
+                width: "80%" as const,
+                height: hasData && p.freq > 0 ? `${Math.max(5, p.value * 100)}%` : "3%",
+                backgroundColor: p.isPrimary ? accentColor : `${accentColor}66`,
+                borderRadius: 4,
               }}
             />
           </View>
         ))}
       </View>
-      <View style={{ flexDirection: "row" as const, justifyContent: "space-around" as const, marginTop: 4, gap: 3, paddingHorizontal: 2 }}>
+      <View style={{ flexDirection: "row" as const, marginTop: 3, gap: 4 }}>
         {peaks.map((p, i) => (
           <View key={i} style={{ flex: 1, alignItems: "center" as const }}>
-            <Text style={{ fontSize: 8, color: p.isPrimary ? accentColor : textColor, fontFamily: "SpaceGrotesk_400Regular", textAlign: "center" as const }}>
+            <Text style={{ fontSize: 7, color: p.isPrimary ? accentColor : textColor, fontFamily: "SpaceGrotesk_400Regular", textAlign: "center" as const }}>
               {formatFreq(p.freq)}
             </Text>
           </View>
