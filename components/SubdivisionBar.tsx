@@ -415,8 +415,9 @@ export function SubdivisionBar({
               testID={`subdivision-cell-${i}`}
             >
               {type === "strong" ? (
-                <View style={[{ width: clampedCellSize, height: clampedCellSize, borderRadius: dynamicRadius, overflow: "hidden", opacity: isPlaying ? (isActive ? 1 : 0.55) : 1 }]}>
+                <View style={[{ width: clampedCellSize, height: clampedCellSize, borderRadius: dynamicRadius, overflow: "hidden", backgroundColor: C.accent, opacity: isPlaying ? (isActive ? 1 : 0.55) : 1 }]}>
                   <LinearGradient
+                    key={C.accent}
                     colors={[C.white, C.accent, C.accent]}
                     locations={[0, 0.4, 1]}
                     start={{ x: 0, y: 0 }}
@@ -479,8 +480,9 @@ export function DragGhost({
     >
       {pattern.map((type, i) => (
         type === "strong" ? (
-          <View key={i} style={[styles.ghostCell, { overflow: "hidden" }]}>
+          <View key={i} style={[styles.ghostCell, { overflow: "hidden", backgroundColor: GC.accent }]}>
             <LinearGradient
+              key={GC.accent}
               colors={[GC.white, GC.accent, GC.accent]}
               locations={[0, 0.4, 1]}
               start={{ x: 0, y: 0 }}

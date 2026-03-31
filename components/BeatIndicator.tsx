@@ -108,7 +108,8 @@ function DialBeatDot({
   }, [onPress]);
 
   const beatTypeTag = useSharedValue(0);
-  const currentTag = (isMute ? 1 : isStrong ? 2 : isAccent ? 3 : 0) + accentColor.length * 0.001;
+  const colorHash = accentColor.split('').reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0);
+  const currentTag = (isMute ? 1 : isStrong ? 2 : isAccent ? 3 : 0) + colorHash * 0.0000001;
   useEffect(() => {
     beatTypeTag.value = currentTag;
   }, [currentTag]);
@@ -198,6 +199,7 @@ function DialBeatDot({
           ]}
         >
           <LinearGradient
+            key={C.accent}
             colors={[C.white, C.accent, C.accent]}
             locations={[0, 0.4, 1]}
             start={{ x: 0.5, y: 0 }}
@@ -1572,8 +1574,9 @@ export function BeatIndicator({
                   style={[styles.barNoteCell, !isLast && { borderRightWidth: 1, borderRightColor: C.overlay08 }]}
                 >
                   {isStrongType ? (
-                    <View style={[styles.barNoteFill, { margin: 3, overflow: "hidden", opacity: isActiveCell ? 1 : 0.75 }]}>
+                    <View style={[styles.barNoteFill, { margin: 3, overflow: "hidden", backgroundColor: C.accent, opacity: isActiveCell ? 1 : 0.75 }]}>
                       <LinearGradient
+                        key={C.accent}
                         colors={[C.white, C.accent, C.accent]}
                         locations={[0, 0.4, 1]}
                         start={{ x: 0, y: 0 }}
@@ -1794,8 +1797,9 @@ export function BeatIndicator({
                   style={[{ flex: 1, alignItems: "stretch", justifyContent: "center" as const }, !isLast && { borderRightWidth: 1, borderRightColor: C.overlay06 }]}
                 >
                   {isStrongType ? (
-                    <View style={{ flex: 1, borderRadius: 4, margin: 3, overflow: "hidden", opacity: isActiveCell ? 1 : 0.7 }}>
+                    <View style={{ flex: 1, borderRadius: 4, margin: 3, overflow: "hidden", backgroundColor: C.accent, opacity: isActiveCell ? 1 : 0.7 }}>
                       <LinearGradient
+                        key={C.accent}
                         colors={[C.white, C.accent, C.accent]}
                         locations={[0, 0.4, 1]}
                         start={{ x: 0, y: 0 }}
