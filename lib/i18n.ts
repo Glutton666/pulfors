@@ -26,6 +26,8 @@ const translations = {
     volume: { ko: "볼륨", en: "Volume" },
     sampleVolume: { ko: "샘플 볼륨", en: "Sample Volume" },
     soundSet: { ko: "사운드 세트", en: "Sound Set" },
+    layerSoundSet: { ko: "레이어 사운드", en: "Layer Sound" },
+    layerDefault: { ko: "기본 (메인과 동일)", en: "Default (same as main)" },
     audioOffset: { ko: "오디오 오프셋", en: "Audio Offset" },
     audioOffsetHint: { ko: "- = 소리 빨라짐 / + = 소리 느려짐", en: "- = sound earlier / + = sound later" },
     timerStop: { ko: "타이머 정지", en: "Timer Stop" },

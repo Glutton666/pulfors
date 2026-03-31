@@ -77,6 +77,8 @@ interface SettingsModalProps {
   onBackgroundPlayChange: (value: boolean) => void;
   soundSet: SoundSet;
   onSoundSetChange: (value: SoundSet) => void;
+  layerSoundSets: Record<number, SoundSet>;
+  onLayerSoundSetsChange: (value: Record<number, SoundSet>) => void;
   flashMode: FlashMode;
   onFlashModeChange: (value: FlashMode) => void;
   hapticMode: HapticMode;
@@ -177,6 +179,8 @@ export function SettingsModal({
   onBackgroundPlayChange,
   soundSet,
   onSoundSetChange,
+  layerSoundSets,
+  onLayerSoundSetsChange,
   flashMode,
   onFlashModeChange,
   hapticMode,
@@ -1632,6 +1636,60 @@ export function SettingsModal({
             </View>
           </View>
         )}
+      </View>
+
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <MaterialCommunityIcons name="layers-outline" size={18} color={C.accent} />
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "layerSoundSet")}</Text>
+        </View>
+        {[1, 2, 3].map((layerNum) => {
+          const currentSet = layerSoundSets[layerNum] || "";
+          const allOpts: { value: string; label: string }[] = [
+            { value: "", label: t("settings", "layerDefault") },
+            ...SOUND_OPTS.map(o => ({ value: o.value, label: o.label })),
+          ];
+          return (
+            <View key={`layer-ss-${layerNum}`} style={{ flexDirection: "row", alignItems: "center", marginBottom: 8, gap: 8 }}>
+              <Text style={{ color: C.text, fontSize: 13, fontWeight: "600", width: 60 }}>Layer {layerNum}</Text>
+              <View style={{ flexDirection: "row", flex: 1, gap: 4 }}>
+                {allOpts.map(opt => {
+                  const active = currentSet === opt.value;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                        alignItems: "center",
+                        backgroundColor: active ? C.accentDim : "transparent",
+                        borderWidth: active ? 1 : 0.5,
+                        borderColor: active ? C.accent : C.border,
+                      }}
+                      onPress={() => {
+                        const updated = { ...layerSoundSets };
+                        if (opt.value === "") {
+                          delete updated[layerNum];
+                        } else {
+                          updated[layerNum] = opt.value as SoundSet;
+                        }
+                        onLayerSoundSetsChange(updated);
+                        if (Platform.OS !== "web") Haptics.selectionAsync();
+                      }}
+                    >
+                      <Text style={{ fontSize: 10, color: active ? C.accent : C.textSecondary }} numberOfLines={1}>
+                        {opt.value === "" ? "Default" : opt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })}
       </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />

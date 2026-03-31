@@ -108,6 +108,12 @@ export class MetronomeEngine {
     this.playStrongClick = playStrong || null;
   }
 
+  private playLayerClick: ((layerIndex: number, role: "high" | "low" | "strong") => void) | null = null;
+
+  setLayerAudioCallback(cb: (layerIndex: number, role: "high" | "low" | "strong") => void) {
+    this.playLayerClick = cb;
+  }
+
   setCustomSampleCallback(callback: ((beat: number, subBeat: number) => boolean) | null) {
     this.playCustomSample = callback;
   }
@@ -762,15 +768,20 @@ export class MetronomeEngine {
     }
   }
 
-  private playTickAudio(beat: number, subBeat: number, isStrong: boolean, isAccent: boolean, isMute: boolean) {
+  private playTickAudio(beat: number, subBeat: number, isStrong: boolean, isAccent: boolean, isMute: boolean, layerIndex: number = 0) {
     if (!isMute) {
       try {
-        if (isStrong) {
-          this.playStrongClick?.();
-        } else if (isAccent) {
-          this.playHighClick?.();
+        if (layerIndex > 0 && this.playLayerClick) {
+          const role = isStrong ? "strong" : isAccent ? "high" : "low";
+          this.playLayerClick(layerIndex, role);
         } else {
-          this.playLowClick?.();
+          if (isStrong) {
+            this.playStrongClick?.();
+          } else if (isAccent) {
+            this.playHighClick?.();
+          } else {
+            this.playLowClick?.();
+          }
         }
       } catch (e) {}
     }
@@ -854,12 +865,13 @@ export class MetronomeEngine {
       this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat);
     } else if (offset > 0) {
       this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat);
-      setTimeout(() => this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute), offset);
+      const li = tick.layerIndex;
+      setTimeout(() => this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, li), offset);
     } else if (offset < 0) {
-      this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute);
+      this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, tick.layerIndex);
       setTimeout(() => this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat), Math.abs(offset));
     } else {
-      this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute);
+      this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, tick.layerIndex);
       this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat);
     }
   }

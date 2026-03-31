@@ -192,6 +192,9 @@ export default function MetronomeScreen() {
   const [showSettings, setShowSettings] = useState(false);
   const [backgroundPlay, setBackgroundPlay] = useState(false);
   const [soundSet, setSoundSet] = useState<SoundSet>("classic");
+  const [layerSoundSets, setLayerSoundSets] = useState<Record<number, SoundSet>>({});
+  const layerSoundSetsRef = useRef<Record<number, SoundSet>>({});
+  useEffect(() => { layerSoundSetsRef.current = layerSoundSets; }, [layerSoundSets]);
   const [flashMode, setFlashMode] = useState<FlashMode>("accent");
   const [hapticMode, setHapticMode] = useState<HapticMode>("all");
   const [audioOffsetMs, setAudioOffsetMs] = useState(0);
@@ -394,6 +397,41 @@ export default function MetronomeScreen() {
       }
     );
 
+    const layerToggle: Record<string, boolean> = {};
+    engine.setLayerAudioCallback((layerIndex: number, role: "high" | "low" | "strong") => {
+      const layerSet = layerSoundSetsRef.current[layerIndex] || soundSetRef.current;
+      const toggleKey = `${layerIndex}-${role}`;
+      const toggle = !!layerToggle[toggleKey];
+      layerToggle[toggleKey] = !toggle;
+
+      if (Platform.OS === "web" && webClickReadyRef.current) {
+        playWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low");
+        return;
+      }
+
+      try {
+        const customs = customSoundSetsRef.current;
+        const customCfg = customs[layerSet];
+        let players: any;
+        if (customCfg) {
+          const mapping = role === "strong" ? customCfg.strong : role === "high" ? customCfg.accent : customCfg.normal;
+          if (mapping.type === "builtin") {
+            const srcSet = mapping.sourceSet || "classic";
+            players = allPlayersRef.current[srcSet] || allPlayersRef.current.classic;
+            const r = mapping.sourceRole || "strong";
+            const active = r === "strong" ? (toggle ? players.strongB : players.strongA) : r === "high" ? (toggle ? players.highB : players.highA) : (toggle ? players.lowB : players.lowA);
+            restartPlayer(active);
+            return;
+          }
+          players = allPlayersRef.current.classic;
+        } else {
+          players = allPlayersRef.current[layerSet as keyof typeof allPlayersRef.current] || allPlayersRef.current.classic;
+        }
+        const active = role === "strong" ? (toggle ? players.strongB : players.strongA) : role === "high" ? (toggle ? players.highB : players.highA) : (toggle ? players.lowB : players.lowA);
+        restartPlayer(active);
+      } catch (e) {}
+    });
+
     const preloadSounds = async (samples: NoteSampleMap) => {
       for (const s of Object.values(noteSampleSoundsRef.current)) {
         try { s.release(); } catch {}
@@ -438,6 +476,9 @@ export default function MetronomeScreen() {
       }
       if (settings.soundSet) {
         setSoundSet(settings.soundSet);
+      }
+      if (settings.layerSoundSets) {
+        setLayerSoundSets(settings.layerSoundSets);
       }
       if (settings.flashMode) {
         setFlashMode(settings.flashMode);
@@ -1108,6 +1149,7 @@ export default function MetronomeScreen() {
           sampleVolume,
           backgroundPlay,
           soundSet,
+          layerSoundSets,
           flashMode,
           hapticMode,
           audioOffsetMs,
@@ -1120,7 +1162,7 @@ export default function MetronomeScreen() {
         saveSettings(current);
       }, 500);
     },
-    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, flashMode, hapticMode, audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, micMethod]
+    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, layerSoundSets, flashMode, hapticMode, audioOffsetMs, timerStopMode, landscapeReversed, beatDirection, micMethod]
   );
 
   const updateVolume = useCallback(
@@ -3425,6 +3467,11 @@ export default function MetronomeScreen() {
         onBackgroundPlayChange={updateBackgroundPlay}
         soundSet={soundSet}
         onSoundSetChange={updateSoundSet}
+        layerSoundSets={layerSoundSets}
+        onLayerSoundSetsChange={(val) => {
+          setLayerSoundSets(val);
+          persistSettings({ layerSoundSets: val });
+        }}
         flashMode={flashMode}
         onFlashModeChange={updateFlashMode}
         hapticMode={hapticMode}

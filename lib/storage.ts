@@ -71,6 +71,7 @@ export interface MetronomeSettings {
   landscapeReversed?: boolean;
   beatDirection?: "cw" | "ccw";
   micMethod?: "native" | "webview";
+  layerSoundSets?: Record<number, SoundSet>;
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
