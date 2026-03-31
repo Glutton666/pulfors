@@ -127,7 +127,7 @@ function analyzeWavLocally(base64: string, sampleRate: number): { frequency: num
     let rms = 0;
     for (let i = 0; i < win.length; i++) rms += win[i] * win[i];
     rms = Math.sqrt(rms / win.length);
-    if (rms < 0.01) continue;
+    if (rms < 0.04) continue;
 
     for (let i = 0; i < WINDOW_SIZE; i++) {
       win[i] *= 0.5 * (1 - Math.cos(2 * Math.PI * i / (WINDOW_SIZE - 1)));
@@ -1051,7 +1051,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       const fftBuf = new Float32Array(freqBinCount);
       const timeBuf = new Float32Array(analyser.fftSize);
       const spectrumCopy = new Float32Array(freqBinCount);
-      const MIC_GATE = 0.015;
+      const MIC_GATE = 0.04;
       const WINDOW_MS = 500;
       let readings: number[] = [];
       let windowStart = Date.now();
@@ -1736,17 +1736,20 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             </View>
           )}
 
-          {isLandscape && micListening && spectrumDataRef.current && (
-            <SpectrumGraph
-              spectrumData={spectrumDataRef.current}
-              peakBin={spectrumPeakBinRef.current}
-              sampleRate={micAudioCtxRef.current?.sampleRate ?? 48000}
-              fftSize={micAnalyserRef.current?.fftSize ?? 8192}
-              accentColor={C.accent}
-              surfaceColor={C.surfaceLight}
-              textColor={C.textTertiary}
-              tick={spectrumTick}
-            />
+          {isLandscape && (
+            <View style={{ flexBasis: "100%" as const, marginTop: 4 }}>
+              <SpectrumGraph
+                spectrumData={spectrumDataRef.current}
+                peakBin={spectrumPeakBinRef.current}
+                sampleRate={micAudioCtxRef.current?.sampleRate ?? 48000}
+                fftSize={micAnalyserRef.current?.fftSize ?? 8192}
+                accentColor={C.accent}
+                surfaceColor={C.surfaceLight}
+                textColor={C.textTertiary}
+                tick={spectrumTick}
+                micActive={micListening}
+              />
+            </View>
           )}
 
         </View>
@@ -1769,8 +1772,9 @@ function SpectrumGraph({
   surfaceColor,
   textColor,
   tick: _tick,
+  micActive,
 }: {
-  spectrumData: Float32Array;
+  spectrumData: Float32Array | null;
   peakBin: number;
   sampleRate: number;
   fftSize: number;
@@ -1778,25 +1782,31 @@ function SpectrumGraph({
   surfaceColor: string;
   textColor: string;
   tick: number;
+  micActive: boolean;
 }) {
   const binRes = sampleRate / fftSize;
   const minBin = Math.max(1, Math.ceil(SPECTRUM_MIN_FREQ / binRes));
-  const maxBin = Math.min(spectrumData.length - 1, Math.floor(SPECTRUM_MAX_FREQ / binRes));
+  const maxBin = Math.min((spectrumData?.length ?? (fftSize >> 1)) - 1, Math.floor(SPECTRUM_MAX_FREQ / binRes));
   const totalBins = maxBin - minBin + 1;
   const binsPerBar = Math.max(1, Math.floor(totalBins / SPECTRUM_BAR_COUNT));
 
+  const hasData = micActive && spectrumData;
   const bars: { value: number; isPeak: boolean }[] = [];
   for (let i = 0; i < SPECTRUM_BAR_COUNT; i++) {
-    const startBin = minBin + i * binsPerBar;
-    const endBin = Math.min(startBin + binsPerBar, maxBin + 1);
-    let max = -Infinity;
-    let hasPeak = false;
-    for (let b = startBin; b < endBin; b++) {
-      if (spectrumData[b] > max) max = spectrumData[b];
-      if (b === peakBin) hasPeak = true;
+    if (hasData) {
+      const startBin = minBin + i * binsPerBar;
+      const endBin = Math.min(startBin + binsPerBar, maxBin + 1);
+      let max = -Infinity;
+      let hasPeak = false;
+      for (let b = startBin; b < endBin; b++) {
+        if (spectrumData[b] > max) max = spectrumData[b];
+        if (b === peakBin) hasPeak = true;
+      }
+      const normalized = Math.max(0, Math.min(1, (max + 100) / 100));
+      bars.push({ value: normalized, isPeak: hasPeak });
+    } else {
+      bars.push({ value: 0, isPeak: false });
     }
-    const normalized = Math.max(0, Math.min(1, (max + 100) / 100));
-    bars.push({ value: normalized, isPeak: hasPeak });
   }
 
   const labels = ["A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7"];
@@ -1815,13 +1825,13 @@ function SpectrumGraph({
 
   return (
     <View style={{ width: "100%" as const, marginTop: 8, paddingHorizontal: 4 }}>
-      <View style={{ height: SPECTRUM_HEIGHT, flexDirection: "row" as const, alignItems: "flex-end" as const, gap: 1, backgroundColor: surfaceColor, borderRadius: 6, paddingHorizontal: 2, paddingBottom: 2, paddingTop: 2 }}>
+      <View style={{ height: SPECTRUM_HEIGHT, flexDirection: "row" as const, alignItems: "flex-end" as const, gap: 1, backgroundColor: surfaceColor, borderRadius: 6, paddingHorizontal: 2, paddingBottom: 2, paddingTop: 2, opacity: hasData ? 1 : 0.4 }}>
         {bars.map((bar, i) => (
           <View
             key={i}
             style={{
               flex: 1,
-              height: Math.max(1, bar.value * (SPECTRUM_HEIGHT - 4)),
+              height: Math.max(1, hasData ? bar.value * (SPECTRUM_HEIGHT - 4) : 2),
               backgroundColor: bar.isPeak ? accentColor : `${accentColor}55`,
               borderRadius: 1,
             }}
