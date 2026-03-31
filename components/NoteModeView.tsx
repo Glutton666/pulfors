@@ -50,7 +50,6 @@ function BeatDots({ beatTypes, size = 6 }: { beatTypes: BeatType[]; size?: numbe
   const { colors: C } = useTheme();
   const S = useScale();
   const styles = useMemo(() => make_styles(C, S), [C, S]);
-  const srcGridStyles = make_srcGridStyles(C, S);
   return (
     <View style={{ flexDirection: "row", gap: S.ms(2, 0.3) }}>
       {beatTypes.slice(0, 12).map((bt, i) => (
@@ -97,7 +96,6 @@ function QueueItem({
   const { colors: C } = useTheme();
   const S = useScale();
   const styles = useMemo(() => make_styles(C, S), [C, S]);
-  const srcGridStyles = make_srcGridStyles(C, S);
   const { t } = useLanguage();
 
   const handlePickImage = useCallback(async () => {
@@ -202,50 +200,6 @@ function SourceItem({
   );
 }
 
-function SourceGridItem({
-  entry,
-  accentColor,
-  onAdd,
-  onInsertNext,
-  isPlaying,
-}: {
-  entry: PracticeEntry;
-  accentColor: string;
-  onAdd: () => void;
-  onInsertNext: () => void;
-  isPlaying: boolean;
-}) {
-  const { colors: C } = useTheme();
-  const S = useScale();
-  const styles = useMemo(() => make_styles(C, S), [C, S]);
-  const srcGridStyles = make_srcGridStyles(C, S);
-  const { t } = useLanguage();
-  return (
-    <Pressable
-      style={({ pressed }) => [srcGridStyles.card, pressed && { opacity: 0.6 }]}
-      onPress={onAdd}
-    >
-      <Text style={srcGridStyles.cardLabel} numberOfLines={1}>{entry.label}</Text>
-      <View style={srcGridStyles.cardStats}>
-        <Text style={[srcGridStyles.cardBpm, { color: accentColor }]}>{entry.bpm}</Text>
-        <Text style={srcGridStyles.cardUnit}>BPM</Text>
-      </View>
-      <Text style={srcGridStyles.cardBeats}>{entry.beatsPerMeasure} {t("practiceBook", "beatsUnit")}</Text>
-      {isPlaying && (
-        <Pressable
-          onPress={(e) => { e.stopPropagation?.(); onInsertNext(); }}
-          hitSlop={4}
-          style={[srcGridStyles.insertBtn, { borderColor: accentColor }]}
-        >
-          <Ionicons name="arrow-forward" size={10} color={accentColor} />
-          <Text style={[srcGridStyles.insertText, { color: accentColor }]}>{t("noteMode", "insertNext")}</Text>
-        </Pressable>
-      )}
-    </Pressable>
-  );
-}
-
-const NOTE_SOURCE_VIEW_KEY = "@note_source_view_mode";
 
 export function NoteModeView({
   queue,
@@ -267,7 +221,6 @@ export function NoteModeView({
   const { colors: C } = useTheme();
   const S = useScale();
   const styles = useMemo(() => make_styles(C, S), [C, S]);
-  const srcGridStyles = make_srcGridStyles(C, S);
   const { t } = useLanguage();
   const { width: winW, height: winH } = useWindowDimensions();
   const isLandscape = winW > winH;
@@ -280,22 +233,7 @@ export function NoteModeView({
       setTimeout(() => setSaved(false), 1500);
     }
   }, [onSave]);
-  const [sourceViewMode, setSourceViewMode] = useState<"list" | "grid">("list");
   const [sourceCollapsed, setSourceCollapsed] = useState(false);
-
-  useEffect(() => {
-    AsyncStorage.getItem(NOTE_SOURCE_VIEW_KEY).then(v => {
-      if (v === "grid" || v === "list") setSourceViewMode(v);
-    });
-  }, []);
-
-  const toggleSourceView = useCallback(() => {
-    setSourceViewMode(prev => {
-      const next = prev === "list" ? "grid" : "list";
-      AsyncStorage.setItem(NOTE_SOURCE_VIEW_KEY, next);
-      return next;
-    });
-  }, []);
 
   useEffect(() => {
     if (isPlaying) setSourceCollapsed(true);
@@ -495,19 +433,6 @@ export function NoteModeView({
             <Text style={[styles.sectionCount, { color: C.textTertiary }]}>{barEntries.length}</Text>
           )}
         </View>
-        {!sourceCollapsed && (
-          <Pressable
-            onPress={toggleSourceView}
-            hitSlop={6}
-            style={styles.sourceViewToggle}
-          >
-            <Ionicons
-              name={sourceViewMode === "grid" ? "grid" : "list"}
-              size={14}
-              color={C.accent}
-            />
-          </Pressable>
-        )}
       </Pressable>
       {!sourceCollapsed && (
         <View style={[styles.sourceContainer, isLandscape && { flex: 1 }]}>
@@ -763,16 +688,6 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     fontSize: S.ms(12, 0.3),
     color: C.textTertiary,
   },
-  sourceViewToggle: {
-    width: S.ms(28, 0.4),
-    height: S.ms(28, 0.4),
-    borderRadius: S.ms(6, 0.3),
-    backgroundColor: C.surface,
-    borderWidth: 1,
-    borderColor: C.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   queueContainer: {
     flex: 1,
     minHeight: S.ms(60, 0.3),
@@ -1009,63 +924,6 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   insertNextText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: S.ms(10, 0.3),
-    color: C.text,
-  },
-});
-
-const make_srcGridStyles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
-  row: {
-    gap: S.ms(8, 0.3),
-    marginBottom: S.ms(8, 0.3),
-  },
-  card: {
-    flex: 1,
-    backgroundColor: C.surface,
-    borderRadius: S.ms(10, 0.3),
-    borderWidth: 1,
-    borderColor: C.border,
-    padding: S.ms(10, 0.3),
-    gap: S.ms(4, 0.3),
-  },
-  cardLabel: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: S.ms(12, 0.3),
-    color: C.text,
-  },
-  cardStats: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: S.ms(3, 0.3),
-  },
-  cardBpm: {
-    fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: S.ms(20, 0.3),
-    color: C.text,
-  },
-  cardUnit: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: S.ms(10, 0.3),
-    color: C.textSecondary,
-  },
-  cardBeats: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: S.ms(10, 0.3),
-    color: C.textTertiary,
-  },
-  insertBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: S.ms(2, 0.3),
-    borderWidth: 1,
-    borderRadius: S.ms(5, 0.3),
-    paddingHorizontal: S.ms(6, 0.3),
-    paddingVertical: S.ms(3, 0.3),
-    marginTop: S.ms(2, 0.3),
-  },
-  insertText: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: S.ms(9, 0.3),
     color: C.text,
   },
 });
