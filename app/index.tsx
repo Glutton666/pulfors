@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   Platform,
   Pressable,
@@ -10,6 +11,7 @@ import {
   useWindowDimensions,
   BackHandler,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import * as Linking from "expo-linking";
 import {
   setupNotificationControls,
@@ -123,6 +125,9 @@ export default function MetronomeScreen() {
   const [beatSubdivisions, setBeatSubdivisions] = useState<
     Record<string, BeatType[]>
   >({});
+  const [landscapeImageUri, setLandscapeImageUri] = useState<string | null>(null);
+  const [landscapeImageModalVisible, setLandscapeImageModalVisible] = useState(false);
+
   const [barMode, setBarMode] = useState(false);
   const [barStartBeat, setBarStartBeat] = useState<number | null>(null);
   const [barLoopMode, setBarLoopMode] = useState<"loop" | "once">("once");
@@ -610,6 +615,9 @@ export default function MetronomeScreen() {
     });
 
     loadLoggingEnabled().then((val) => setLoggingEnabled(val));
+    AsyncStorage.getItem("metronome_landscape_image").then((val) => {
+      if (val) setLandscapeImageUri(val);
+    });
     AsyncStorage.getItem("metronome_onboarding_done").then((val) => {
       if (!val) {
         setShowOnboarding(true);
@@ -3210,6 +3218,26 @@ export default function MetronomeScreen() {
 
   const tempoLabel = getTempoLabelI18n(bpm, language);
 
+  const pickLandscapeImage = useCallback(async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const uri = result.assets[0].uri;
+      setLandscapeImageUri(uri);
+      AsyncStorage.setItem("metronome_landscape_image", uri);
+    }
+    setLandscapeImageModalVisible(false);
+  }, []);
+
+  const removeLandscapeImage = useCallback(() => {
+    setLandscapeImageUri(null);
+    AsyncStorage.removeItem("metronome_landscape_image");
+    setLandscapeImageModalVisible(false);
+  }, []);
+
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
@@ -3338,6 +3366,24 @@ export default function MetronomeScreen() {
           </Pressable>
         </Modal>
       )}
+
+      <Modal visible={landscapeImageModalVisible} transparent animationType="fade" onRequestClose={() => setLandscapeImageModalVisible(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center" as const, alignItems: "center" as const }} onPress={() => setLandscapeImageModalVisible(false)}>
+          <View style={{ backgroundColor: C.background, borderRadius: 16, padding: 24, gap: 12, minWidth: 220 }} onStartShouldSetResponder={() => true}>
+            <Text style={{ fontFamily: "SpaceGrotesk_600SemiBold", fontSize: 16, color: C.text, textAlign: "center" as const }}>{t("settings", "hubImages")}</Text>
+            <Pressable onPress={pickLandscapeImage} style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 10, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: C.surface, borderRadius: 10 }}>
+              <Ionicons name="image-outline" size={20} color={C.accent} />
+              <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: 14, color: C.text }}>{landscapeImageUri ? t("settings", "changeImage") : t("settings", "addImage")}</Text>
+            </Pressable>
+            {landscapeImageUri && (
+              <Pressable onPress={removeLandscapeImage} style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 10, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: C.surface, borderRadius: 10 }}>
+                <Ionicons name="trash-outline" size={20} color={C.danger} />
+                <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: 14, color: C.danger }}>{t("settings", "removeImage")}</Text>
+              </Pressable>
+            )}
+          </View>
+        </Pressable>
+      </Modal>
 
       {showSignalGen && (
       <SignalGeneratorModal
@@ -3704,15 +3750,27 @@ export default function MetronomeScreen() {
         {isLandscape && !barMode && (
           <View style={{ flex: 3, justifyContent: "center" as const, alignItems: "center" as const, gap: 6 }}>
             {!noteMode && (
-              <StopwatchTimer
-                onTimerExpired={handleTimerExpired}
-                onStopRequested={handleTimerExpired}
-                onStartMetronome={startMetronome}
-                isMetronomePlaying={isPlaying}
-                currentBeat={currentBeat}
-                topInset={insets.top || webTopInset}
-                isLandscape={true}
-              />
+              <>
+                <Pressable
+                  onPress={() => setLandscapeImageModalVisible(true)}
+                  style={{ width: "80%" as any, maxHeight: 100, borderRadius: 10, overflow: "hidden" as const, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: landscapeImageUri ? "transparent" : C.surface, borderWidth: landscapeImageUri ? 0 : 1, borderColor: C.overlay10, borderStyle: "dashed" as const, minHeight: 48 }}
+                >
+                  {landscapeImageUri ? (
+                    <Image source={{ uri: landscapeImageUri }} style={{ width: "100%" as any, height: 100, borderRadius: 10 }} resizeMode="cover" />
+                  ) : (
+                    <Ionicons name="image-outline" size={24} color={C.textTertiary} />
+                  )}
+                </Pressable>
+                <StopwatchTimer
+                  onTimerExpired={handleTimerExpired}
+                  onStopRequested={handleTimerExpired}
+                  onStartMetronome={startMetronome}
+                  isMetronomePlaying={isPlaying}
+                  currentBeat={currentBeat}
+                  topInset={insets.top || webTopInset}
+                  isLandscape={true}
+                />
+              </>
             )}
             <SubdivisionBar
               pattern={subdivisionPattern}

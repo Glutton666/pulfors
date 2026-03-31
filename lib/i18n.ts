@@ -13,6 +13,8 @@ const translations = {
     hubImages: { ko: "중앙 허브 이미지", en: "Center Hub Images" },
     hubImagesHint: { ko: "사진을 추가하고 비트 타입에 할당하세요", en: "Add photos and assign them to beat types" },
     addImage: { ko: "이미지 추가", en: "Add Image" },
+    changeImage: { ko: "이미지 변경", en: "Change Image" },
+    removeImage: { ko: "이미지 삭제", en: "Remove Image" },
     landscapeReversed: { ko: "가로모드 배치 반전", en: "Reverse Landscape Layout" },
     landscapeReversedHint: { ko: "가로모드에서 비트 인디케이터와 BPM 컨트롤 위치를 바꿉니다", en: "Swap beat indicator and BPM controls in landscape mode" },
     beatDirection: { ko: "비트 진행 방향", en: "Beat Direction" },
