@@ -762,7 +762,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const isLandscape = winW > winH;
   const S = useScale();
   const dynamicKnobSize = isLandscape
-    ? Math.min(Math.max(100, winH * 0.38), 200)
+    ? Math.min(Math.max(120, winH * 0.52), 260)
     : Math.min(Math.max(120, S.minDim * 0.35), 220);
   const dynamicCardWidth = isLandscape
     ? winW * 0.92
@@ -987,8 +987,6 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     } else {
       stopMobileMic();
     }
-    setMicDetectedFreq(null);
-    setMicDetectedNote(null);
     setMicAnalyzed(false);
     spectrumDataRef.current = null;
     spectrumPeakBinRef.current = -1;
@@ -1425,12 +1423,18 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 color={micListening ? C.danger : C.textSecondary}
               />
             </Pressable>
-            {micListening && micDetectedFreq ? (
+            {micDetectedFreq ? (
               <View style={[styles.micDetectedWrap, isLandscape && { marginTop: 4 }]}>
-                <Text style={[styles.micDetectedHint, { color: C.accent }, isLandscape && { fontSize: 10 }]}>
-                  {micDetectedNote} {micDetectedFreq} {t("signalGenerator", "hzUnit")}
-                </Text>
-                {pitchComparison ? (
+                <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 6 }}>
+                  <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary }, isLandscape && { fontSize: 10 }]}>
+                    {micDetectedFreq} {t("signalGenerator", "hzUnit")}
+                  </Text>
+                  <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary, opacity: 0.6 }, isLandscape && { fontSize: 10 }]}>|</Text>
+                  <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary, fontWeight: "700" as const }, isLandscape && { fontSize: 10 }]}>
+                    {micDetectedNote}
+                  </Text>
+                </View>
+                {micListening && pitchComparison ? (
                   <View style={[
                     styles.pitchIndicator,
                     {
