@@ -1615,7 +1615,7 @@ export function BeatIndicator({
                   if (!(!isPlaying && editingBlockIndex !== null && editBlock)) return null;
                   return (
                     <View style={{
-                      backgroundColor: C.accent + "10",
+                      backgroundColor: C.backgroundSecondary,
                       borderRadius: 6,
                       marginBottom: 4,
                       padding: 6,
