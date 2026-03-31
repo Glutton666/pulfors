@@ -1662,16 +1662,16 @@ export function BeatIndicator({
                         <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>BPM</Text>
                         <Pressable
                           onPress={() => { if (editBlock.bpm) updateBlock(editingBlockIndex!, { bpm: Math.max(20, editBlock.bpm - 5) }); }}
-                          style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: editBlock.bpm ? "#2196F320" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
+                          style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: editBlock.bpm ? C.accent + "20" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
                         >
-                          <Ionicons name="remove" size={12} color={editBlock.bpm ? "#2196F3" : C.textTertiary} />
+                          <Ionicons name="remove" size={12} color={editBlock.bpm ? C.accent : C.textTertiary} />
                         </Pressable>
                         {editBlock.bpm ? (
                           <TextInput
                             style={{
-                              color: "#2196F3", fontSize: 10, fontFamily: "SpaceGrotesk_700Bold",
+                              color: C.accent, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold",
                               minWidth: 36, textAlign: "center", paddingHorizontal: 5, paddingVertical: 2,
-                              borderRadius: 4, backgroundColor: "#2196F320", borderWidth: 1, borderColor: "#2196F350",
+                              borderRadius: 4, backgroundColor: C.accent + "20", borderWidth: 1, borderColor: C.accent + "50",
                             }}
                             keyboardType="number-pad"
                             defaultValue={String(editBlock.bpm)}
@@ -1696,9 +1696,9 @@ export function BeatIndicator({
                         )}
                         <Pressable
                           onPress={() => { if (editBlock.bpm) updateBlock(editingBlockIndex!, { bpm: Math.min(300, editBlock.bpm + 5) }); }}
-                          style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: editBlock.bpm ? "#2196F320" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
+                          style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: editBlock.bpm ? C.accent + "20" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
                         >
-                          <Ionicons name="add" size={12} color={editBlock.bpm ? "#2196F3" : C.textTertiary} />
+                          <Ionicons name="add" size={12} color={editBlock.bpm ? C.accent : C.textTertiary} />
                         </Pressable>
                       </View>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap", marginBottom: editHasJump ? 4 : 0 }}>
@@ -2136,16 +2136,16 @@ export function BeatIndicator({
                           updateBlock(editingBlockIndex!, { bpm: newBpm });
                         }
                       }}
-                      style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: editBlock.bpm ? "#2196F320" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
+                      style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: editBlock.bpm ? C.accent + "20" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
                     >
-                      <Ionicons name="remove" size={14} color={editBlock.bpm ? "#2196F3" : C.textTertiary} />
+                      <Ionicons name="remove" size={14} color={editBlock.bpm ? C.accent : C.textTertiary} />
                     </Pressable>
                     {editBlock.bpm ? (
                       <TextInput
                         style={{
-                          color: "#2196F3", fontSize: 11, fontFamily: "SpaceGrotesk_700Bold",
+                          color: C.accent, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold",
                           minWidth: 44, textAlign: "center", paddingHorizontal: 6, paddingVertical: 2,
-                          borderRadius: 4, backgroundColor: "#2196F320", borderWidth: 1, borderColor: "#2196F350",
+                          borderRadius: 4, backgroundColor: C.accent + "20", borderWidth: 1, borderColor: C.accent + "50",
                         }}
                         keyboardType="number-pad"
                         defaultValue={String(editBlock.bpm)}
@@ -2175,9 +2175,9 @@ export function BeatIndicator({
                           updateBlock(editingBlockIndex!, { bpm: newBpm });
                         }
                       }}
-                      style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: editBlock.bpm ? "#2196F320" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
+                      style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: editBlock.bpm ? C.accent + "20" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
                     >
-                      <Ionicons name="add" size={14} color={editBlock.bpm ? "#2196F3" : C.textTertiary} />
+                      <Ionicons name="add" size={14} color={editBlock.bpm ? C.accent : C.textTertiary} />
                     </Pressable>
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: editHasJump ? 6 : 0 }}>
