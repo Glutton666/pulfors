@@ -1279,7 +1279,7 @@ export function BeatIndicator({
             const rowHeight = layers ? BAR_HEIGHT / totalRows : BAR_HEIGHT;
 
             const renderCellRow = (cellPattern: BeatType[], layerIndex: number, h: number) => (
-              <View key={`layer-${layerIndex}`} style={{ flex: 1, flexDirection: "row", height: h }}>
+              <View key={`layer-${layerIndex}`} style={{ flexDirection: "row", height: h }}>
                 {cellPattern.map((type, ci) => {
                   const isActiveCell = layerIndex === 0 && isCurrent && ci === activeSubNote;
                   const isStrongType = type === "strong";
