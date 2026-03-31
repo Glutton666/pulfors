@@ -122,7 +122,7 @@ export interface LoopBlockLayerEntry {
   id: string;
   beats: number;
   beatTypes: BeatType[];
-  subdivisions: number;
+  subdivisions: Record<number, BeatType[]>;
   bpm?: number;
 }
 
