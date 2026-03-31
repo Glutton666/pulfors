@@ -3667,7 +3667,7 @@ export default function MetronomeScreen() {
         </View>
 
         {!isLandscape && !barMode && (
-          <View style={{ alignItems: "center", gap: S.ms(4, 0.3) }}>
+          <View style={{ alignItems: "center", gap: S.ms(10, 0.3) }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: S.ms(24, 0.4) }}>
               <Pressable
                 onPress={handleEnterNoteMode}

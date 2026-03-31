@@ -3265,7 +3265,7 @@ export function BeatIndicator({
         </View>
       </View>
 
-      {!isLandscape && <Text style={styles.hintText}>{t("main", "beatHint")}</Text>}
+      {!isLandscape && <Text style={[styles.hintText, { marginTop: 4, marginBottom: 2 }]}>{t("main", "beatHint")}</Text>}
     </View>
   );
 
