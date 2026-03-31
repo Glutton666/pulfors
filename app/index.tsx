@@ -126,6 +126,7 @@ export default function MetronomeScreen() {
     Record<string, BeatType[]>
   >({});
   const [landscapeImageUri, setLandscapeImageUri] = useState<string | null>(null);
+  const [landscapeImageEnabled, setLandscapeImageEnabled] = useState(true);
   const [landscapeImageModalVisible, setLandscapeImageModalVisible] = useState(false);
 
   const [barMode, setBarMode] = useState(false);
@@ -505,6 +506,9 @@ export default function MetronomeScreen() {
       }
       if (settings.landscapeReversed !== undefined) {
         setLandscapeReversed(settings.landscapeReversed);
+      }
+      if (settings.landscapeImageEnabled !== undefined) {
+        setLandscapeImageEnabled(settings.landscapeImageEnabled);
       }
       if (settings.beatDirection) {
         setBeatDirection(settings.beatDirection);
@@ -3551,6 +3555,11 @@ export default function MetronomeScreen() {
           setLandscapeReversed(val);
           persistSettings({ landscapeReversed: val });
         }}
+        landscapeImageEnabled={landscapeImageEnabled}
+        onLandscapeImageEnabledChange={(val) => {
+          setLandscapeImageEnabled(val);
+          persistSettings({ landscapeImageEnabled: val });
+        }}
         beatDirection={beatDirection}
         onBeatDirectionChange={(val) => {
           setBeatDirection(val);
@@ -3748,19 +3757,21 @@ export default function MetronomeScreen() {
           </View>
         )}
         {isLandscape && !barMode && (
-          <View style={{ flex: 3, justifyContent: "center" as const, alignItems: "center" as const, gap: 6 }}>
+          <View style={{ flex: 3, justifyContent: landscapeImageEnabled ? "center" as const : "space-evenly" as const, alignItems: "center" as const, gap: landscapeImageEnabled ? 6 : 0 }}>
             {!noteMode && (
               <>
-                <Pressable
-                  onPress={() => setLandscapeImageModalVisible(true)}
-                  style={{ width: "100%" as any, flex: 0.8, borderRadius: 10, overflow: "hidden" as const, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: landscapeImageUri ? "transparent" : C.surface, borderWidth: landscapeImageUri ? 0 : 1, borderColor: C.overlay10, borderStyle: "dashed" as const, minHeight: 48 }}
-                >
-                  {landscapeImageUri ? (
-                    <Image source={{ uri: landscapeImageUri }} style={{ width: "100%" as any, height: "100%" as any, borderRadius: 10 }} resizeMode="cover" />
-                  ) : (
-                    <Ionicons name="image-outline" size={24} color={C.textTertiary} />
-                  )}
-                </Pressable>
+                {landscapeImageEnabled && (
+                  <Pressable
+                    onPress={() => setLandscapeImageModalVisible(true)}
+                    style={{ width: "100%" as any, flex: 0.8, borderRadius: 10, overflow: "hidden" as const, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: landscapeImageUri ? "transparent" : C.surface, borderWidth: landscapeImageUri ? 0 : 1, borderColor: C.overlay10, borderStyle: "dashed" as const, minHeight: 48 }}
+                  >
+                    {landscapeImageUri ? (
+                      <Image source={{ uri: landscapeImageUri }} style={{ width: "100%" as any, height: "100%" as any, borderRadius: 10 }} resizeMode="cover" />
+                    ) : (
+                      <Ionicons name="image-outline" size={24} color={C.textTertiary} />
+                    )}
+                  </Pressable>
+                )}
                 <StopwatchTimer
                   onTimerExpired={handleTimerExpired}
                   onStopRequested={handleTimerExpired}

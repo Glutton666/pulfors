@@ -69,6 +69,7 @@ export interface MetronomeSettings {
   timerStopMode?: "immediate" | "end-of-cycle";
   username?: string;
   landscapeReversed?: boolean;
+  landscapeImageEnabled?: boolean;
   beatDirection?: "cw" | "ccw";
   micMethod?: "native" | "webview";
   layerSoundSets?: Record<number, SoundSet>;
@@ -90,6 +91,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   timerStopMode: "end-of-cycle",
   username: "",
   landscapeReversed: false,
+  landscapeImageEnabled: true,
   beatDirection: "cw",
   micMethod: "native",
 };
