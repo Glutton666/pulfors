@@ -3753,10 +3753,10 @@ export default function MetronomeScreen() {
               <>
                 <Pressable
                   onPress={() => setLandscapeImageModalVisible(true)}
-                  style={{ width: "80%" as any, maxHeight: 100, borderRadius: 10, overflow: "hidden" as const, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: landscapeImageUri ? "transparent" : C.surface, borderWidth: landscapeImageUri ? 0 : 1, borderColor: C.overlay10, borderStyle: "dashed" as const, minHeight: 48 }}
+                  style={{ width: "100%" as any, flex: 1, borderRadius: 10, overflow: "hidden" as const, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: landscapeImageUri ? "transparent" : C.surface, borderWidth: landscapeImageUri ? 0 : 1, borderColor: C.overlay10, borderStyle: "dashed" as const, minHeight: 48 }}
                 >
                   {landscapeImageUri ? (
-                    <Image source={{ uri: landscapeImageUri }} style={{ width: "100%" as any, height: 100, borderRadius: 10 }} resizeMode="cover" />
+                    <Image source={{ uri: landscapeImageUri }} style={{ width: "100%" as any, height: "100%" as any, borderRadius: 10 }} resizeMode="cover" />
                   ) : (
                     <Ionicons name="image-outline" size={24} color={C.textTertiary} />
                   )}
