@@ -1458,8 +1458,8 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
     marginTop: -12,
   },
   comboSection: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: "column",
+    alignItems: "stretch",
     gap: 16,
   },
   bigTimeWrap: {
