@@ -231,6 +231,9 @@ export function SettingsModal({
   const [addingRoom, setAddingRoom] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showLoggingInfo, setShowLoggingInfo] = useState(false);
+  const layerKeys = Object.keys(layerSoundSets).map(k => Number(k)).filter(n => !isNaN(n) && n > 0);
+  const initialLayerCount = layerKeys.length > 0 ? Math.max(...layerKeys) : 1;
+  const [layerSoundRowCount, setLayerSoundRowCount] = useState(initialLayerCount);
   const [editingCustomSlot, setEditingCustomSlot] = useState<string | null>(null);
   const [customName, setCustomName] = useState("");
   const defaultSample = (role: SoundRole): CustomSoundSample => ({ type: "builtin", sourceSet: "classic", sourceRole: role, duration: 0.5 });
@@ -1645,7 +1648,7 @@ export function SettingsModal({
           <MaterialCommunityIcons name="layers-outline" size={18} color={C.accent} />
           <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "layerSoundSet")}</Text>
         </View>
-        {[1, 2, 3].map((layerNum) => {
+        {Array.from({ length: layerSoundRowCount }, (_, i) => i + 1).map((layerNum) => {
           const currentSet = layerSoundSets[layerNum] || "";
           const allOpts: { value: string; label: string }[] = [
             { value: "", label: t("settings", "layerDefault") },
@@ -1653,7 +1656,7 @@ export function SettingsModal({
           ];
           return (
             <View key={`layer-ss-${layerNum}`} style={{ flexDirection: "row", alignItems: "center", marginBottom: 8, gap: 8 }}>
-              <Text style={{ color: C.text, fontSize: 13, fontWeight: "600", width: 60 }}>Layer {layerNum}</Text>
+              <Text style={{ color: C.text, fontSize: 13, fontWeight: "600", width: 52 }}>L{layerNum}</Text>
               <View style={{ flexDirection: "row", flex: 1, gap: 4 }}>
                 {allOpts.map(opt => {
                   const active = currentSet === opt.value;
@@ -1687,9 +1690,43 @@ export function SettingsModal({
                   );
                 })}
               </View>
+              {layerNum === layerSoundRowCount && layerNum > 1 && (
+                <Pressable
+                  onPress={() => {
+                    const updated = { ...layerSoundSets };
+                    delete updated[layerNum];
+                    onLayerSoundSetsChange(updated);
+                    setLayerSoundRowCount(prev => prev - 1);
+                    if (Platform.OS !== "web") Haptics.selectionAsync();
+                  }}
+                  style={{ padding: 4 }}
+                >
+                  <Ionicons name="remove-circle-outline" size={18} color="#F85149" />
+                </Pressable>
+              )}
             </View>
           );
         })}
+        <Pressable
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingVertical: 8,
+            gap: 6,
+            borderRadius: 6,
+            borderWidth: 0.5,
+            borderColor: C.border,
+            borderStyle: "dashed",
+          }}
+          onPress={() => {
+            setLayerSoundRowCount(prev => prev + 1);
+            if (Platform.OS !== "web") Haptics.selectionAsync();
+          }}
+        >
+          <Ionicons name="add" size={16} color={C.textSecondary} />
+          <Text style={{ fontSize: 12, color: C.textSecondary }}>Layer {layerSoundRowCount + 1}</Text>
+        </Pressable>
       </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
