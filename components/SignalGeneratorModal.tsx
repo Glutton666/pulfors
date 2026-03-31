@@ -868,7 +868,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 
   const showMicPermissionAlert = useCallback(() => {
     Alert.alert(
-      t("signalGenerator", "micPermission"),
+      t("noteRecorder", "permissionRequired"),
       t("noteRecorder", "micPermission"),
     );
   }, [t]);
