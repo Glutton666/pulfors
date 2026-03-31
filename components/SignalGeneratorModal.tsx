@@ -768,7 +768,6 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     ? winW * 0.92
     : Math.min(Math.max(300, S.screenWidth * 0.88), 400);
   const dynamicCardHeight = isLandscape ? winH * 0.88 : undefined;
-  const spectrumWidth = isLandscape ? Math.max(80, winW * 0.1) : 0;
   const landscapeGap = isLandscape ? Math.max(8, winW * 0.012) : 0;
   const landscapePadH = isLandscape ? Math.max(12, winW * 0.018) : 0;
   const landscapePadV = isLandscape ? Math.max(10, winH * 0.025) : 0;
@@ -1376,7 +1375,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 
           <View style={isLandscape ? { flexDirection: "row" as const, gap: landscapeGap, alignItems: "stretch" as const, flex: 1 } : undefined}>
           {isLandscape && (
-            <View style={{ width: spectrumWidth }}>
+            <View style={{ flex: 1 }}>
               <SpectrumGraph
                 spectrumData={spectrumDataRef.current}
                 peakBin={spectrumPeakBinRef.current}
@@ -1390,7 +1389,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               />
             </View>
           )}
-          <View style={[styles.knobWrap, isLandscape && { flex: 1.2, overflow: "hidden" as const }]}>
+          <View style={[styles.knobWrap, isLandscape && { flex: 1, overflow: "hidden" as const }]}>
             <Knob
               value={freqNorm}
               onChange={handleFreqKnob}
@@ -1491,7 +1490,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
           </View>
 
           {isLandscape ? (
-            <View style={{ flex: 1.3, alignItems: "center" as const, justifyContent: "space-between" as const, gap: 6, paddingVertical: 2 }}>
+            <View style={{ flex: 1, alignItems: "center" as const, justifyContent: "space-between" as const, gap: 6, paddingVertical: 2 }}>
             {editingFreq && (
               <View style={[styles.freqEditRow, { paddingHorizontal: 10, paddingVertical: 5 }]}>
                 <TextInput
