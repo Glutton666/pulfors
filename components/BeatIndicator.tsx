@@ -1058,9 +1058,43 @@ export function BeatIndicator({
   const BAR_LINE_COLOR = C.textSecondary;
   const [barContainerHeight, setBarContainerHeight] = useState(0);
   const barGap = 18;
+  const LAYER_ROW_H = 16;
   const rowH = BAR_HEIGHT + 1 + barGap;
+
+  const getLayerCountForBeat = (beat: number): number => {
+    for (let i = 0; i < loopBlocks.length; i++) {
+      const b = loopBlocks[i];
+      if (beat >= b.startBeat && beat <= Math.min(b.endBeat, beatsPerMeasure - 1) && b.layers && b.layers.length > 0) {
+        return b.layers.length;
+      }
+    }
+    return 0;
+  };
+
+  const beatYOffsets = useMemo(() => {
+    const offsets: number[] = [];
+    let cumY = 0;
+    for (let b = 0; b < beatsPerMeasure; b++) {
+      offsets.push(cumY);
+      const layerCount = getLayerCountForBeat(b);
+      cumY += rowH + layerCount * LAYER_ROW_H;
+    }
+    return offsets;
+  }, [beatsPerMeasure, loopBlocks, rowH]);
+
+  const copyHeight = useMemo(() => {
+    if (beatYOffsets.length === 0) return beatsPerMeasure * rowH;
+    const lastBeat = beatsPerMeasure - 1;
+    const lastLayerCount = getLayerCountForBeat(lastBeat);
+    return beatYOffsets[lastBeat] + rowH + lastLayerCount * LAYER_ROW_H;
+  }, [beatYOffsets, beatsPerMeasure, rowH, loopBlocks]);
+
   const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
-  const copyHeight = beatsPerMeasure * rowH;
+
+  const getBeatTop = (beat: number): number => {
+    if (beat >= 0 && beat < beatYOffsets.length) return beatYOffsets[beat];
+    return beat * rowH;
+  };
   const [activeCopy, setActiveCopy] = useState(1);
   const activeCopyRef = useRef(1);
   const barPrevBeatRef = useRef(-1);
@@ -1082,23 +1116,23 @@ export function BeatIndicator({
     } else if (barMode && barContainerHeight > 0) {
       const startBeat = barStartBeat && barStartBeat > 0 ? barStartBeat : 0;
       if (barLoopMode === "once") {
-        const beatTop = centerPad + startBeat * rowH;
+        const beatTop = centerPad + getBeatTop(startBeat);
         const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
         barScrollRef.current?.scrollTo({ y: scrollTarget, animated: false });
       } else {
-        const beatTop = centerPad + CENTER_COPY * copyHeight + startBeat * rowH;
+        const beatTop = centerPad + CENTER_COPY * copyHeight + getBeatTop(startBeat);
         const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
         barScrollRef.current?.scrollTo({ y: scrollTarget, animated: false });
       }
     }
-  }, [isPlaying, barMode, barContainerHeight, centerPad, copyHeight, barLoopMode, barStartBeat, rowH]);
+  }, [isPlaying, barMode, barContainerHeight, centerPad, copyHeight, barLoopMode, barStartBeat, rowH, beatYOffsets]);
 
   useEffect(() => {
     if (!barMode || !isPlaying || currentBeat < 0) return;
     if (barContainerHeight <= 0 || copyHeight <= 0) return;
 
     if (barLoopMode === "once") {
-      const beatTop = centerPad + currentBeat * rowH;
+      const beatTop = centerPad + getBeatTop(currentBeat);
       const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
       const isFirstTick = barPrevBeatRef.current < 0;
       barPrevBeatRef.current = currentBeat;
@@ -1121,16 +1155,16 @@ export function BeatIndicator({
     if (activeCopyRef.current > CENTER_COPY && isMeasureWrap && currentBeat > 0) {
       activeCopyRef.current = CENTER_COPY;
       setActiveCopy(CENTER_COPY);
-      const snapTop = centerPad + CENTER_COPY * copyHeight + (currentBeat - 1) * rowH;
+      const snapTop = centerPad + CENTER_COPY * copyHeight + getBeatTop(currentBeat - 1);
       const snapTarget = Math.max(0, snapTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
       barScrollRef.current?.scrollTo({ y: snapTarget, animated: false });
     }
 
-    const beatTop = centerPad + activeCopyRef.current * copyHeight + currentBeat * rowH;
+    const beatTop = centerPad + activeCopyRef.current * copyHeight + getBeatTop(currentBeat);
     const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_HEIGHT / 2);
     const isFirstTick = prev < 0;
     barScrollRef.current?.scrollTo({ y: scrollTarget, animated: !isFirstTick });
-  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, copyHeight, barLoopMode, measureCount]);
+  }, [barMode, isPlaying, currentBeat, beatsPerMeasure, barContainerHeight, centerPad, rowH, copyHeight, barLoopMode, measureCount, beatYOffsets]);
 
   const jumpConnections = useMemo(() => {
     return loopBlocks
@@ -1636,8 +1670,8 @@ export function BeatIndicator({
                       const elements: React.ReactNode[] = [];
                       for (let copy = 0; copy < copies; copy++) {
                         const copyOffset = copy * copyHeight;
-                        const topPos = centerPad + copyOffset + startBeat * rowH + (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
-                        const bottomPos = centerPad + copyOffset + endBeat * rowH + BAR_HEIGHT - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
+                        const topPos = centerPad + copyOffset + getBeatTop(startBeat) + (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
+                        const bottomPos = centerPad + copyOffset + getBeatTop(endBeat) + BAR_HEIGHT - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
                         const totalH = bottomPos - topPos;
                         if (totalH <= 0) continue;
                         const isPrimaryCopy = copy === (isPlaying && barLoopMode !== "once" ? CENTER_COPY : 0);
@@ -2618,8 +2652,8 @@ export function BeatIndicator({
                   const elements: React.ReactNode[] = [];
                   for (let copy = 0; copy < copies; copy++) {
                     const copyOffset = copy * copyHeight;
-                    const topPos = centerPad + copyOffset + startBeat * rowH + (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
-                    const bottomPos = centerPad + copyOffset + endBeat * rowH + BAR_HEIGHT - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
+                    const topPos = centerPad + copyOffset + getBeatTop(startBeat) + (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
+                    const bottomPos = centerPad + copyOffset + getBeatTop(endBeat) + BAR_HEIGHT - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
                     const totalH = bottomPos - topPos;
                     if (totalH <= 0) continue;
                     const isPrimaryCopy = copy === primaryCopy;
