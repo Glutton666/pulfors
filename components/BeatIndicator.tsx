@@ -1329,18 +1329,15 @@ export function BeatIndicator({
     let cumY = 0;
     for (let b = 0; b < beatsPerMeasure; b++) {
       offsets.push(cumY);
-      const layerCount = getLayerCountForBeat(b);
-      cumY += rowH + layerCount * LAYER_ROW_H;
+      cumY += rowH;
     }
     return offsets;
-  }, [beatsPerMeasure, loopBlocks, rowH]);
+  }, [beatsPerMeasure, rowH]);
 
   const copyHeight = useMemo(() => {
     if (beatYOffsets.length === 0) return beatsPerMeasure * rowH;
-    const lastBeat = beatsPerMeasure - 1;
-    const lastLayerCount = getLayerCountForBeat(lastBeat);
-    return beatYOffsets[lastBeat] + rowH + lastLayerCount * LAYER_ROW_H;
-  }, [beatYOffsets, beatsPerMeasure, rowH, loopBlocks]);
+    return beatYOffsets[beatsPerMeasure - 1] + rowH;
+  }, [beatYOffsets, beatsPerMeasure, rowH]);
 
   const centerPad = Math.max(0, (barContainerHeight - BAR_HEIGHT) / 2);
 
@@ -1486,7 +1483,7 @@ export function BeatIndicator({
 
   if (barMode) {
     const isDropping = dropTargetBeat !== null;
-    const renderBarRow = (beat: number, copyIndex: number) => {
+    const renderBarRow = (beat: number, copyIndex: number, rowHeight?: number) => {
       const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
       const isCurrent = isPlaying && currentBeat === beat && (barLoopMode === "once" ? copyIndex === 0 : copyIndex === activeCopy);
       const bType = beatTypes[beat] || "normal";
@@ -1565,7 +1562,7 @@ export function BeatIndicator({
           })()}
           <View style={[
             styles.barBeatContent,
-            { height: BAR_HEIGHT },
+            { height: rowHeight || BAR_HEIGHT },
             isCurrent && { backgroundColor: C.overlay08 },
           ]}>
             {pattern.map((type, ci) => {
@@ -1782,13 +1779,14 @@ export function BeatIndicator({
       return null;
     };
 
-    const renderLayerRow = (beat: number, copyIndex: number, stackedBlock: LoopBlock, stackedOrigIdx: number, layerNum: number, parentBlockIndex: number) => {
+    const renderLayerRow = (beat: number, copyIndex: number, stackedBlock: LoopBlock, stackedOrigIdx: number, layerNum: number, parentBlockIndex: number, rowHeight?: number) => {
       const isPrimary = isPlaying ? (barLoopMode === "once" ? copyIndex === 0 : copyIndex === CENTER_COPY) : copyIndex === 0;
       const layerBeats = Math.max(1, stackedBlock.endBeat - stackedBlock.startBeat + 1);
       const layerKey = `${stackedOrigIdx}:${layerNum}`;
       const layerCurrentBeat = layerProgressMap[layerKey];
       const isCurrentBeatRow = progressInfo && progressInfo.beat === beat && progressInfo.blockIndex === parentBlockIndex;
       const isLayerActive = isPlaying && layerCurrentBeat !== undefined && isCurrentBeatRow;
+      const h = rowHeight || LAYER_ROW_H;
 
       return (
         <View
@@ -1796,7 +1794,7 @@ export function BeatIndicator({
           style={{
             flexDirection: "row",
             alignItems: "stretch",
-            height: 16,
+            height: h,
             marginTop: 0,
             marginBottom: 0,
             paddingTop: 0,
@@ -1861,10 +1859,12 @@ export function BeatIndicator({
       for (const beat of beats) {
         const layerInfo = getLayersForBeat(beat);
         if (layerInfo) {
+          const totalRows = 1 + layerInfo.stackedBlocks.length;
+          const sharedH = Math.max(10, Math.floor(BAR_HEIGHT / totalRows));
           rows.push(
             <View key={`grp-${copyIndex}-${beat}`} style={{ gap: 0 }}>
-              {renderBarRow(beat, copyIndex)}
-              {layerInfo.stackedBlocks.map((sb, li) => renderLayerRow(beat, copyIndex, sb.block, sb.origIndex, li + 1, layerInfo.blockIndex))}
+              {renderBarRow(beat, copyIndex, sharedH)}
+              {layerInfo.stackedBlocks.map((sb, li) => renderLayerRow(beat, copyIndex, sb.block, sb.origIndex, li + 1, layerInfo.blockIndex, sharedH))}
             </View>
           );
         } else {
