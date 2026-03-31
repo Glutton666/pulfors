@@ -92,7 +92,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return binary;
 }
 
-export function generateToneDataUri(
+export function generateToneBase64(
   freq: number,
   waveType: WaveType,
   volumeLinear: number
@@ -100,8 +100,15 @@ export function generateToneDataUri(
   const numSamples = SAMPLE_RATE * BUFFER_DURATION;
   const samples = generateWaveSamples(freq, waveType, SAMPLE_RATE, numSamples, volumeLinear);
   const wav = encodeWav(samples, SAMPLE_RATE);
-  const base64 = arrayBufferToBase64(wav);
-  return `data:audio/wav;base64,${base64}`;
+  return arrayBufferToBase64(wav);
+}
+
+export function generateToneDataUri(
+  freq: number,
+  waveType: WaveType,
+  volumeLinear: number
+): string {
+  return `data:audio/wav;base64,${generateToneBase64(freq, waveType, volumeLinear)}`;
 }
 
 export class SignalGeneratorEngine {
@@ -120,6 +127,9 @@ export class SignalGeneratorEngine {
     try {
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       this.audioContext = ctx;
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
       const gain = ctx.createGain();
       gain.gain.value = volumeLinear;
       gain.connect(ctx.destination);
@@ -131,7 +141,8 @@ export class SignalGeneratorEngine {
       osc.start();
       this.oscillator = osc;
       this.isRunning = true;
-    } catch {
+    } catch (e) {
+      console.warn("[SignalGen] startWeb error:", e);
       this.isRunning = false;
     }
   }

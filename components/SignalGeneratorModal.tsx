@@ -15,7 +15,6 @@ import {
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useAudioPlayer } from "expo-audio";
 import { Audio, InterruptionModeIOS } from "expo-av";
 import * as FileSystem from "expo-file-system/legacy";
 import Colors from "@/constants/colors";
@@ -26,6 +25,7 @@ import {
   WaveType,
   SignalGeneratorEngine,
   generateToneDataUri,
+  generateToneBase64,
 } from "@/lib/signal-generator-engine";
 import { TUNING_DATA } from "@/lib/tuning-data";
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -779,17 +779,18 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 
   const engineRef = useRef(new SignalGeneratorEngine());
   const isPlayingRef = useRef(false);
-  const mobileLoopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const toneUri = useMemo(() => {
-    if (Platform.OS === "web") return null;
-    return generateToneDataUri(frequency, waveType, VOLUME_LINEAR);
-  }, [frequency, waveType]);
-
-  const mobilePlayer = useAudioPlayer(toneUri ?? undefined);
+  const nativeSoundRef = useRef<Audio.Sound | null>(null);
 
   const hapticFeedback = useCallback(() => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
+
+  const stopNativeSound = useCallback(async () => {
+    if (nativeSoundRef.current) {
+      try { await nativeSoundRef.current.stopAsync(); } catch {}
+      try { await nativeSoundRef.current.unloadAsync(); } catch {}
+      nativeSoundRef.current = null;
+    }
   }, []);
 
   const stopPlayback = useCallback(() => {
@@ -797,32 +798,32 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     if (Platform.OS === "web") {
       engineRef.current.stopWeb();
     } else {
-      if (mobileLoopRef.current) {
-        clearTimeout(mobileLoopRef.current);
-        mobileLoopRef.current = null;
-      }
-      try { mobilePlayer.pause(); } catch {}
+      stopNativeSound();
     }
     setIsPlaying(false);
-  }, [mobilePlayer]);
+  }, [stopNativeSound]);
 
-  const startPlayback = useCallback(() => {
+  const startPlayback = useCallback(async () => {
     isPlayingRef.current = true;
     if (Platform.OS === "web") {
       engineRef.current.startWeb(frequency, waveType, VOLUME_LINEAR);
     } else {
-      const playLoop = () => {
-        if (!isPlayingRef.current) return;
-        try {
-          mobilePlayer.seekTo(0);
-          mobilePlayer.play();
-        } catch {}
-        mobileLoopRef.current = setTimeout(playLoop, 950);
-      };
-      playLoop();
+      try {
+        await stopNativeSound();
+        const base64 = generateToneBase64(frequency, waveType, VOLUME_LINEAR);
+        const fileUri = (FileSystem.cacheDirectory || FileSystem.documentDirectory || "") + "signal_tone.wav";
+        await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: fileUri },
+          { isLooping: true, shouldPlay: true, volume: 1.0 }
+        );
+        nativeSoundRef.current = sound;
+      } catch (e) {
+        console.warn("[SignalGen] native playback error:", e);
+      }
     }
     setIsPlaying(true);
-  }, [frequency, waveType, mobilePlayer]);
+  }, [frequency, waveType, stopNativeSound]);
 
   useEffect(() => {
     if (isPlaying && Platform.OS === "web") {
@@ -846,7 +847,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   useEffect(() => {
     return () => {
       engineRef.current.stopWeb();
-      if (mobileLoopRef.current) clearTimeout(mobileLoopRef.current);
+      stopNativeSound();
       micActiveRef.current = false;
       setMicWebViewActive(false);
       if (micRafRef.current) cancelAnimationFrame(micRafRef.current);
