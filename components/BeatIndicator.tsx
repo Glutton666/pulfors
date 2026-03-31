@@ -336,6 +336,7 @@ interface BeatIndicatorProps {
   barStartBeat?: number | null;
   onBarStartBeatSelect?: (beat: number | null) => void;
   progressInfo?: { beat: number; barRepeatCurrent: number; barRepeatTotal: number; blockIndex: number; blockRepeatCurrent: number; blockRepeatTotal: number; jumpCurrent?: number; jumpTotal?: number; jumpSourceBlockIndex?: number; layerIndex?: number; layerBeat?: number } | null;
+  layerProgressMap?: Record<string, number>;
   measureCount?: number;
   onBarReset?: () => void;
   halfTime?: boolean;
@@ -387,6 +388,7 @@ export function BeatIndicator({
   barStartBeat,
   onBarStartBeatSelect,
   progressInfo,
+  layerProgressMap = {},
   measureCount = 0,
   onBarReset,
   halfTime,
@@ -1443,7 +1445,10 @@ export function BeatIndicator({
     const renderLayerRow = (beat: number, copyIndex: number, layer: BlockLayer, layerIdx: number, blockIndex: number) => {
       const isPrimary = isPlaying ? (barLoopMode === "once" ? copyIndex === 0 : copyIndex === CENTER_COPY) : copyIndex === 0;
       const layerBeats = Math.max(1, layer.beats);
-      const isLayerActive = isPlaying && progressInfo && progressInfo.layerIndex === layerIdx + 1 && progressInfo.blockIndex === blockIndex;
+      const layerKey = `${blockIndex}:${layerIdx + 1}`;
+      const layerCurrentBeat = layerProgressMap[layerKey];
+      const isCurrentBeatRow = progressInfo && progressInfo.beat === beat && progressInfo.blockIndex === blockIndex;
+      const isLayerActive = isPlaying && layerCurrentBeat !== undefined && isCurrentBeatRow;
 
       return (
         <View
@@ -1466,7 +1471,7 @@ export function BeatIndicator({
           <View style={{ flex: 1, flexDirection: "row", borderBottomWidth: 1, borderBottomColor: C.overlay06 }}>
             {Array.from({ length: layerBeats }).map((_, ci) => {
               const type = layer.beatTypes[ci] || "normal";
-              const isActiveCell = isLayerActive && progressInfo?.layerBeat === ci;
+              const isActiveCell = isLayerActive && layerCurrentBeat === ci;
               const isLast = ci === layerBeats - 1;
               const isStrongType = type === "strong";
               const isAccentType = type === "accent";
