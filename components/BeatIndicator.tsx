@@ -2040,7 +2040,7 @@ export function BeatIndicator({
               </ScrollView>
               {!isPlaying && editingBlockIndex !== null && editBlock && (
                 <View style={{
-                  backgroundColor: C.accent + "10",
+                  backgroundColor: C.backgroundSecondary,
                   borderRadius: 8,
                   marginHorizontal: 8,
                   marginBottom: 4,
