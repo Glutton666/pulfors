@@ -241,13 +241,6 @@ function noteToFreq(name: string, octave: number): number {
   return Math.round(440 * Math.pow(2, semitones / 12) * 100) / 100;
 }
 
-function freqToNoteOctave(freq: number): { name: string; octave: number } {
-  const semitones = 12 * Math.log2(freq / 440);
-  const rounded = Math.round(semitones);
-  const noteIndex = ((rounded % 12) + 12 + 9) % 12;
-  const octave = Math.floor((rounded + 9) / 12) + 4;
-  return { name: NOTE_NAMES[noteIndex], octave: Math.max(0, Math.min(8, octave)) };
-}
 
 const DEFAULT_KNOB_SIZE = 165;
 const KNOB_STROKE = 5;
@@ -294,6 +287,7 @@ function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentD
   const styles = make_styles(C);
   const knobRef = useRef<View>(null);
   const valRef = useRef(value);
+  const startValRef = useRef(value);
   const movedRef = useRef(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressFiredRef = useRef(false);
@@ -312,6 +306,7 @@ function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentD
       onPanResponderGrant: () => {
         movedRef.current = false;
         longPressFiredRef.current = false;
+        startValRef.current = valRef.current;
         haptic();
         if (onLongPress) {
           longPressTimerRef.current = setTimeout(() => {
@@ -332,7 +327,7 @@ function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentD
         }
         const sensitivity = 0.0015;
         const delta = -gs.dy * sensitivity;
-        const next = Math.max(0, Math.min(1, valRef.current + delta));
+        const next = Math.max(0, Math.min(1, startValRef.current + delta));
         if (Math.abs(next - valRef.current) > 0.001) {
           onChange(next);
         }
@@ -902,7 +897,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       stopPlayback();
       setTimeout(() => startPlayback(), 50);
     }
-  }, [frequency, waveType]);
+  }, [frequency, waveType, isPlaying, stopPlayback, startPlayback]);
 
   useEffect(() => {
     return () => {
