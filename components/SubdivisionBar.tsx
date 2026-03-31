@@ -35,7 +35,7 @@ interface SubdivisionBarProps {
   activeBeatPattern?: BeatType[] | null;
 }
 
-const CELL_SIZE = IS_TABLET ? moderateScale(34, 0.4) : moderateScale(28, 0.4);
+const CELL_SIZE = IS_TABLET ? moderateScale(42, 0.4) : moderateScale(28, 0.4);
 const CELL_GAP = IS_TABLET ? moderateScale(4, 0.3) : moderateScale(3, 0.3);
 const MAX_CELLS = 8;
 const MIN_CELLS = 1;
@@ -379,7 +379,7 @@ export function SubdivisionBar({
   const nativePanHandlers = Platform.OS !== "web" ? panResponder.panHandlers : {};
 
   const displayPattern = isPlaying && activeBeatPattern ? activeBeatPattern : pattern;
-  const baseCellSize = S.isTablet ? S.ms(34, 0.4) : CELL_SIZE;
+  const baseCellSize = S.isTablet ? S.ms(42, 0.4) : CELL_SIZE;
   const baseCellGap = S.isTablet ? S.ms(4, 0.3) : CELL_GAP;
   const hintWidth = 16;
   const availableWidth = containerWidth > 0 ? containerWidth - hintWidth * 2 : 0;
