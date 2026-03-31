@@ -1792,26 +1792,26 @@ export function BeatIndicator({
                   style={[{ flex: 1, alignItems: "stretch", justifyContent: "center" as const }, !isLast && { borderRightWidth: 1, borderRightColor: C.overlay06 }]}
                 >
                   {isStrongType ? (
-                    <View style={{ flex: 1, borderRadius: 2, margin: 1, overflow: "hidden", opacity: isActiveCell ? 1 : 0.7 }}>
+                    <View style={{ flex: 1, borderRadius: 4, margin: 3, overflow: "hidden", opacity: isActiveCell ? 1 : 0.7 }}>
                       <LinearGradient
                         colors={[C.white, C.accent, C.accent]}
                         locations={[0, 0.4, 1]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
-                        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 2, alignItems: "center", justifyContent: "center" }}
+                        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 4, alignItems: "center", justifyContent: "center" }}
                       >
                         <Text style={{ color: C.white, fontSize: 6, fontWeight: "bold" as const }}>S</Text>
                       </LinearGradient>
                     </View>
                   ) : cellType === "mute" ? (
                     <View style={{
-                      flex: 1, borderRadius: 2, margin: 1,
+                      flex: 1, borderRadius: 4, margin: 3,
                       backgroundColor: "transparent", borderWidth: 1, borderColor: C.textTertiary,
                       borderStyle: "dashed" as any, opacity: isActiveCell ? 0.9 : 0.3,
                     }} />
                   ) : (
                     <View style={{
-                      flex: 1, borderRadius: 2, margin: 1,
+                      flex: 1, borderRadius: 4, margin: 3,
                       backgroundColor: isAccentType
                         ? (isActiveCell ? C.accent : C.accentMuted)
                         : (isActiveCell ? C.text : C.textTertiary),
