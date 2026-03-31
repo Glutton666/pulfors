@@ -1013,6 +1013,7 @@ export class MetronomeEngine {
 
   stop() {
     this.isRunning = false;
+    this.stopAfterMeasure = false;
     if (this.timerId) {
       clearTimeout(this.timerId);
       this.timerId = null;
