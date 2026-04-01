@@ -1222,7 +1222,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 } else {
                   if (Platform.OS === "android") {
                     nativeFailCountRef.current++;
-                    if (nativeFailCountRef.current >= 3) {
+                    if (nativeFailCountRef.current >= 1) {
                       autoFallbackToWebView();
                       try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
                       return;
@@ -1266,12 +1266,10 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const startMic = useCallback(async () => {
     if (Platform.OS === "web") {
       startMicWeb();
-    } else if (Platform.OS === "android") {
-      startMicAndroid();
     } else {
       startMicMobile();
     }
-  }, [startMicWeb, startMicAndroid, startMicMobile]);
+  }, [startMicWeb, startMicMobile]);
 
   const toggleMic = useCallback(() => {
     hapticFeedback();
