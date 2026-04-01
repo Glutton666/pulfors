@@ -1181,12 +1181,12 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
           linearPCMIsFloat: false,
         },
         android: {
-          extension: ".wav",
-          outputFormat: 0,
-          audioEncoder: 0,
+          extension: ".m4a",
+          outputFormat: 2,
+          audioEncoder: 3,
           sampleRate: SAMPLE_RATE,
           numberOfChannels: 1,
-          bitRate: 768000,
+          bitRate: 128000,
         },
         web: { mimeType: "audio/wav", bitsPerSecond: 768000 },
       };
@@ -1213,7 +1213,13 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 const base64 = await FileSystem.readAsStringAsync(uri, {
                   encoding: "base64" as any,
                 });
-                const analysisResult = analyzeWavLocally(base64, SAMPLE_RATE);
+                let analysisResult: { frequency: number | null; note: string | null };
+                if (Platform.OS === "android") {
+                  const serverResult = await analyzeViaServer(base64, ".m4a");
+                  analysisResult = serverResult ?? { frequency: null, note: null };
+                } else {
+                  analysisResult = analyzeWavLocally(base64, SAMPLE_RATE);
+                }
                 setMicAnalyzed(true);
                 if (analysisResult.frequency) {
                   nativeFailCountRef.current = 0;
@@ -1222,7 +1228,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 } else {
                   if (Platform.OS === "android") {
                     nativeFailCountRef.current++;
-                    if (nativeFailCountRef.current >= 1) {
+                    if (nativeFailCountRef.current >= 3) {
                       autoFallbackToWebView();
                       try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
                       return;
