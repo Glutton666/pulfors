@@ -38,7 +38,10 @@ function decodeWavBase64(base64: string, sampleRate: number): { samples: Float32
     for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
     const view = new DataView(bytes.buffer);
     const riffTag = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
-    if (riffTag !== "RIFF") return null;
+    if (riffTag !== "RIFF") {
+      console.warn("[MicTuner] decodeWav: not a WAV file, header:", riffTag, "size:", bytes.length);
+      return null;
+    }
     const numChannels = view.getUint16(22, true);
     const wavSampleRate = view.getUint32(24, true);
     const bitsPerSample = view.getUint16(34, true);
@@ -1112,7 +1115,6 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 
   useEffect(() => {
     if (!micWebViewActive || Platform.OS !== "android") return;
-    if (!nativeFallenBackRef.current) return;
     setMicAnalyzed(true);
     if (androidMicFrequency) {
       setMicDetectedFreq(androidMicFrequency);
@@ -1264,10 +1266,12 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const startMic = useCallback(async () => {
     if (Platform.OS === "web") {
       startMicWeb();
+    } else if (Platform.OS === "android") {
+      startMicAndroid();
     } else {
       startMicMobile();
     }
-  }, [startMicWeb, startMicMobile]);
+  }, [startMicWeb, startMicAndroid, startMicMobile]);
 
   const toggleMic = useCallback(() => {
     hapticFeedback();
