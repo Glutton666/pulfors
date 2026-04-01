@@ -1391,113 +1391,119 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               />
             </View>
           )}
-          <View style={[styles.knobWrap, isLandscape && { flex: 1, overflow: "hidden" as const }]}>
-            <Knob
-              value={freqNorm}
-              onChange={handleFreqKnob}
-              displayValue={formatFreqDisplay(frequency)}
-              displayUnit={freqDisplayUnit}
-              accentColor={C.accent}
-              accentDim={C.accentDim}
-              onTapCenter={openFreqEdit}
-              onLongPress={micListening && micDetectedFreqRef.current ? () => {
-                const captured = micDetectedFreqRef.current;
-                if (captured) {
-                  hapticFeedback();
-                  setFrequency(captured);
-                }
-              } : undefined}
-              noteLabel={currentNoteLabel}
-              knobSize={dynamicKnobSize}
-            />
-            <Pressable
-              onPress={toggleMic}
-              style={[
-                styles.micEmoji,
-                micListening && styles.micEmojiActive,
-                isLandscape && { top: -2, right: -2, width: 26, height: 26, borderRadius: 13 },
-              ]}
-              hitSlop={8}
-              testID="signal-mic-toggle"
-              accessibilityLabel={t("signalGenerator", "tunerMic")}
-            >
-              <MaterialCommunityIcons
-                name={micListening ? "microphone-off" : "microphone"}
-                size={isLandscape ? 14 : 20}
-                color={micListening ? C.danger : C.textSecondary}
+          <View style={[styles.knobMicContainer, isLandscape && { flex: 1 }]}>
+            <View style={[styles.knobWrap]}>
+              <Knob
+                value={freqNorm}
+                onChange={handleFreqKnob}
+                displayValue={formatFreqDisplay(frequency)}
+                displayUnit={freqDisplayUnit}
+                accentColor={C.accent}
+                accentDim={C.accentDim}
+                onTapCenter={openFreqEdit}
+                onLongPress={micListening && micDetectedFreqRef.current ? () => {
+                  const captured = micDetectedFreqRef.current;
+                  if (captured) {
+                    hapticFeedback();
+                    setFrequency(captured);
+                  }
+                } : undefined}
+                noteLabel={currentNoteLabel}
+                knobSize={dynamicKnobSize}
               />
-            </Pressable>
-            {micDetectedFreq ? (
-              <View style={[styles.micDetectedWrap, isLandscape && { marginTop: 4 }]}>
-                <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 6 }}>
-                  <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary }, isLandscape && { fontSize: 10 }]}>
-                    {micDetectedFreq} {t("signalGenerator", "hzUnit")}
-                  </Text>
-                  <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary, opacity: 0.6 }, isLandscape && { fontSize: 10 }]}>|</Text>
-                  <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary, fontWeight: "700" as const }, isLandscape && { fontSize: 10 }]}>
-                    {micDetectedNote}
-                  </Text>
-                </View>
-                {micListening && pitchComparison ? (
-                  <View style={[
-                    styles.pitchIndicator,
-                    {
-                      backgroundColor: pitchComparison.status === "exact"
-                        ? "rgba(48,209,88,0.15)"
-                        : pitchComparison.status === "high"
-                        ? "rgba(255,159,10,0.15)"
-                        : "rgba(100,149,237,0.15)",
-                      borderColor: pitchComparison.status === "exact"
-                        ? "rgba(48,209,88,0.4)"
-                        : pitchComparison.status === "high"
-                        ? "rgba(255,159,10,0.4)"
-                        : "rgba(100,149,237,0.4)",
-                    }
-                  ]}>
-                    <Ionicons
-                      name={
-                        pitchComparison.status === "exact"
-                          ? "checkmark-circle"
-                          : pitchComparison.status === "high"
-                          ? "arrow-up"
-                          : "arrow-down"
-                      }
-                      size={12}
-                      color={
-                        pitchComparison.status === "exact"
-                          ? "#30D158"
-                          : pitchComparison.status === "high"
-                          ? "#FF9F0A"
-                          : "#6495ED"
-                      }
-                    />
-                    <Text style={[
-                      styles.pitchIndicatorText,
+            </View>
+            <View style={[styles.micSection, isLandscape && { gap: 4 }]}>
+              <Pressable
+                onPress={toggleMic}
+                style={[
+                  styles.micEmoji,
+                  micListening && styles.micEmojiActive,
+                  isLandscape && { width: 28, height: 28, borderRadius: 14 },
+                ]}
+                hitSlop={8}
+                testID="signal-mic-toggle"
+                accessibilityLabel={t("signalGenerator", "tunerMic")}
+              >
+                <MaterialCommunityIcons
+                  name={micListening ? "microphone-off" : "microphone"}
+                  size={isLandscape ? 14 : 18}
+                  color={micListening ? C.danger : C.textSecondary}
+                />
+              </Pressable>
+              {micDetectedFreq ? (
+                <View style={[styles.micDetectedWrap, isLandscape && { marginTop: 2 }]}>
+                  <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 4, flexWrap: "wrap" as const, justifyContent: "center" as const }}>
+                    <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary }, isLandscape && { fontSize: 10 }]}>
+                      {micDetectedFreq} {t("signalGenerator", "hzUnit")}
+                    </Text>
+                    <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary, opacity: 0.6 }, isLandscape && { fontSize: 10 }]}>|</Text>
+                    <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary, fontWeight: "700" as const }, isLandscape && { fontSize: 10 }]}>
+                      {micDetectedNote}
+                    </Text>
+                  </View>
+                  {micListening && pitchComparison ? (
+                    <View style={[
+                      styles.pitchIndicator,
+                      isLandscape && { paddingHorizontal: 6, paddingVertical: 2 },
                       {
-                        color: pitchComparison.status === "exact"
-                          ? "#30D158"
+                        backgroundColor: pitchComparison.status === "exact"
+                          ? "rgba(48,209,88,0.15)"
                           : pitchComparison.status === "high"
-                          ? "#FF9F0A"
-                          : "#6495ED",
+                          ? "rgba(255,159,10,0.15)"
+                          : "rgba(100,149,237,0.15)",
+                        borderColor: pitchComparison.status === "exact"
+                          ? "rgba(48,209,88,0.4)"
+                          : pitchComparison.status === "high"
+                          ? "rgba(255,159,10,0.4)"
+                          : "rgba(100,149,237,0.4)",
                       }
                     ]}>
-                      {pitchComparison.status === "exact"
-                        ? `${t("signalGenerator", "pitchExact")} (${pitchComparison.targetLabel})`
-                        : pitchComparison.status === "high"
-                        ? `${t("signalGenerator", "pitchHigh")} +${pitchComparison.cents}¢`
-                        : `${t("signalGenerator", "pitchLow")} ${pitchComparison.cents}¢`}
-                    </Text>
-                    <Pressable onPress={clearPitchTarget} hitSlop={8} style={{ marginLeft: 4 }}>
-                      <Ionicons name="close-circle" size={14} color={C.textTertiary} />
-                    </Pressable>
-                  </View>
-                ) : null}
-              </View>
-            ) : micListening ? (
-              <Text style={[styles.micDetectedHint, isLandscape && { fontSize: 10 }]}>
-                {micAnalyzed ? t("signalGenerator", "noSignal") : t("signalGenerator", "detecting")}
-              </Text>
-            ) : null}
+                      <Ionicons
+                        name={
+                          pitchComparison.status === "exact"
+                            ? "checkmark-circle"
+                            : pitchComparison.status === "high"
+                            ? "arrow-up"
+                            : "arrow-down"
+                        }
+                        size={isLandscape ? 10 : 12}
+                        color={
+                          pitchComparison.status === "exact"
+                            ? "#30D158"
+                            : pitchComparison.status === "high"
+                            ? "#FF9F0A"
+                            : "#6495ED"
+                        }
+                      />
+                      <Text style={[
+                        styles.pitchIndicatorText,
+                        isLandscape && { fontSize: 9 },
+                        {
+                          color: pitchComparison.status === "exact"
+                            ? "#30D158"
+                            : pitchComparison.status === "high"
+                            ? "#FF9F0A"
+                            : "#6495ED",
+                        }
+                      ]}>
+                        {pitchComparison.status === "exact"
+                          ? `${t("signalGenerator", "pitchExact")} (${pitchComparison.targetLabel})`
+                          : pitchComparison.status === "high"
+                          ? `${t("signalGenerator", "pitchHigh")} +${pitchComparison.cents}¢`
+                          : `${t("signalGenerator", "pitchLow")} ${pitchComparison.cents}¢`}
+                      </Text>
+                      <Pressable onPress={clearPitchTarget} hitSlop={8} style={{ marginLeft: 2 }}>
+                        <Ionicons name="close-circle" size={isLandscape ? 12 : 14} color={C.textTertiary} />
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+              ) : micListening ? (
+                <Text style={[styles.micDetectedHint, isLandscape && { fontSize: 10 }]}>
+                  {micAnalyzed ? t("signalGenerator", "noSignal") : t("signalGenerator", "detecting")}
+                </Text>
+              ) : null}
+            </View>
           </View>
 
           {isLandscape ? (
@@ -2038,17 +2044,24 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     color: C.textTertiary,
     letterSpacing: 0.5,
   },
+  knobMicContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
   knobWrap: {
     alignItems: "center",
     justifyContent: "center",
   },
+  micSection: {
+    alignItems: "center",
+    gap: 6,
+    width: "100%",
+  },
   micEmoji: {
-    position: "absolute",
-    top: 0,
-    right: -46,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: C.surfaceLight,
     alignItems: "center",
     justifyContent: "center",
@@ -2062,7 +2075,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   micDetectedWrap: {
     alignItems: "center",
     gap: 4,
-    marginTop: 2,
+    maxWidth: "100%",
   },
   micDetectedHint: {
     fontFamily: "SpaceGrotesk_500Medium",
@@ -2078,11 +2091,14 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 8,
     borderWidth: 1,
+    flexWrap: "wrap",
+    justifyContent: "center",
   },
   pitchIndicatorText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 10,
     color: C.text,
+    flexShrink: 1,
   },
   playBtn: {
     flexDirection: "row",
