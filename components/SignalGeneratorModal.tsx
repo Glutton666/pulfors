@@ -761,14 +761,18 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const S = useScale();
   const dynamicKnobSize = isLandscape
     ? Math.min(Math.max(120, winH * 0.52), 260)
-    : Math.min(Math.max(120, S.minDim * 0.35), 220);
+    : Math.min(Math.max(100, S.minDim * 0.38), 240);
   const dynamicCardWidth = isLandscape
     ? winW * 0.92
-    : Math.min(Math.max(300, S.screenWidth * 0.88), 400);
+    : Math.min(Math.max(280, S.screenWidth * 0.9), 420);
   const dynamicCardHeight = isLandscape ? winH * 0.88 : undefined;
   const landscapeGap = isLandscape ? Math.max(8, winW * 0.012) : 0;
   const landscapePadH = isLandscape ? Math.max(12, winW * 0.018) : 0;
   const landscapePadV = isLandscape ? Math.max(10, winH * 0.025) : 0;
+  const cardPad = isLandscape ? undefined : Math.max(14, S.ms(16, 0.4));
+  const cardGap = isLandscape ? undefined : Math.max(10, S.ms(12, 0.4));
+  const micBtnSize = isLandscape ? 28 : Math.max(28, S.ms(30, 0.3));
+  const micIconSize = isLandscape ? 14 : Math.max(14, S.ms(15, 0.3));
   const [frequency, setFrequency] = useState(440);
   const [waveType, setWaveType] = useState<WaveType>("sine");
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1364,7 +1368,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     >
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
-        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border, width: dynamicCardWidth }, isLandscape && { paddingVertical: landscapePadV, paddingHorizontal: landscapePadH, height: dynamicCardHeight, maxHeight: "95%" as const, alignItems: "stretch" as const }]}>
+        <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border, width: dynamicCardWidth }, !isLandscape && { padding: cardPad, gap: cardGap }, isLandscape && { paddingVertical: landscapePadV, paddingHorizontal: landscapePadH, height: dynamicCardHeight, maxHeight: "95%" as const, alignItems: "stretch" as const }]}>
           {isLandscape && (
             <Pressable onPress={handleClose} hitSlop={12} style={{ position: "absolute" as const, top: landscapePadV * 0.6, right: landscapePadH * 0.6, zIndex: 10 }}>
               <Ionicons name="close" size={20} color={C.textSecondary} />
@@ -1400,7 +1404,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             </View>
           )}
           <View style={[styles.knobMicContainer, isLandscape && { flex: 1 }]}>
-            <View style={[styles.knobWrap]}>
+            <View style={styles.knobWrap}>
               <Knob
                 value={freqNorm}
                 onChange={handleFreqKnob}
@@ -1419,14 +1423,20 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 noteLabel={currentNoteLabel}
                 knobSize={dynamicKnobSize}
               />
-            </View>
-            <View style={[styles.micSection, isLandscape && { gap: 4 }]}>
               <Pressable
                 onPress={toggleMic}
                 style={[
                   styles.micEmoji,
                   micListening && styles.micEmojiActive,
-                  isLandscape && { width: 28, height: 28, borderRadius: 14 },
+                  {
+                    position: "absolute" as const,
+                    bottom: isLandscape ? 0 : 2,
+                    right: isLandscape ? -4 : -6,
+                    width: micBtnSize,
+                    height: micBtnSize,
+                    borderRadius: micBtnSize / 2,
+                    zIndex: 10,
+                  },
                 ]}
                 hitSlop={8}
                 testID="signal-mic-toggle"
@@ -1434,10 +1444,13 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               >
                 <MaterialCommunityIcons
                   name={micListening ? "microphone-off" : "microphone"}
-                  size={isLandscape ? 14 : 18}
+                  size={micIconSize}
                   color={micListening ? C.danger : C.textSecondary}
                 />
               </Pressable>
+            </View>
+            {(micDetectedFreq || micListening) && (
+            <View style={[styles.micSection, isLandscape && { gap: 4 }]}>
               {micDetectedFreq ? (
                 <View style={[styles.micDetectedWrap, isLandscape && { marginTop: 2 }]}>
                   <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 4, flexWrap: "wrap" as const, justifyContent: "center" as const }}>
@@ -1512,6 +1525,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 </Text>
               ) : null}
             </View>
+            )}
           </View>
 
           {isLandscape ? (
@@ -1641,7 +1655,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             </Pressable>
             </View>
           ) : (
-            <View style={{ alignItems: "center" as const, gap: 18, width: "100%" as const }}>
+            <View style={{ alignItems: "center" as const, gap: Math.max(12, S.ms(14, 0.4)), width: "100%" as const }}>
             {editingFreq && (
               <View style={styles.freqEditRow}>
                 <TextInput
@@ -2060,6 +2074,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   knobWrap: {
     alignItems: "center",
     justifyContent: "center",
+    overflow: "visible",
   },
   micSection: {
     alignItems: "center",
