@@ -2245,7 +2245,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingBottom: 80,
-    ...(Platform.OS === "web" ? { maxWidth: 540, alignSelf: "center" as const, width: "100%" as any } : {}),
+    ...(Platform.OS === "web" ? { maxWidth: 540, alignSelf: "center" as const, width: "100%" as const } : {}),
   },
   sheet: {
     backgroundColor: C.surface,
