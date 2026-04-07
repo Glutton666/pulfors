@@ -3632,7 +3632,7 @@ export default function MetronomeScreen() {
               : { flex: 5, justifyContent: "center" as const, alignItems: "center" as const }
             : barMode
               ? { flex: 5, justifyContent: "flex-start" as const, alignItems: "center" as const }
-              : { flex: 5, justifyContent: "center" as const, alignItems: "center" as const }
+              : { flex: 1, justifyContent: "flex-end" as const, alignItems: "center" as const }
         }>
           <BeatIndicator
             beatsPerMeasure={beatsPerMeasure}
@@ -3800,7 +3800,7 @@ export default function MetronomeScreen() {
           </View>
         )}
         {!isLandscape && (
-        <View style={[styles.bpmSection, { flex: 0 }]}>
+        <View style={[styles.bpmSection, { flex: 2 }]}>
           <BpmSlider
             bpm={bpm}
             onBpmChange={updateBpm}
