@@ -3308,7 +3308,7 @@ export default function MetronomeScreen() {
         hitSlop={8}
         testID="menu-button"
       >
-        <Ionicons name="menu" size={22} color={C.textSecondary} />
+        <Ionicons name="menu" size={S.ms(22, 0.5)} color={C.textSecondary} />
       </Pressable>
       )}
 
@@ -3909,9 +3909,9 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     position: "absolute",
     right: S.ms(20, 0.3),
     zIndex: 20,
-    width: S.ms(36, 0.3),
-    height: S.ms(36, 0.3),
-    borderRadius: S.ms(18, 0.3),
+    width: S.ms(40, 0.5),
+    height: S.ms(40, 0.5),
+    borderRadius: S.ms(20, 0.5),
     backgroundColor: C.surface,
     borderWidth: 1,
     borderColor: C.border,
@@ -3929,8 +3929,8 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     borderRadius: S.ms(12, 0.3),
     borderWidth: 1,
     borderColor: C.border,
-    paddingVertical: S.ms(4, 0.3),
-    minWidth: S.ms(160, 0.4),
+    paddingVertical: S.ms(6, 0.4),
+    minWidth: S.ms(180, 0.5),
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -3940,16 +3940,16 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: S.ms(10, 0.3),
-    paddingHorizontal: S.ms(16, 0.3),
-    paddingVertical: S.ms(12, 0.3),
+    gap: S.ms(12, 0.4),
+    paddingHorizontal: S.ms(18, 0.4),
+    paddingVertical: S.ms(14, 0.4),
   },
   menuItemPressed: {
     backgroundColor: C.surfaceLight,
   },
   menuItemText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: S.ms(14, 0.3),
+    fontSize: S.ms(15, 0.4),
     color: C.text,
   },
   menuItemLandscape: {

@@ -3356,7 +3356,7 @@ export function BeatIndicator({
             ) : (
               <Ionicons
                 name={isPlaying ? "stop" : "play"}
-                size={56}
+                size={S.ms(56, 0.4)}
                 color={isPlaying ? C.danger : C.accent}
                 style={!isPlaying ? { marginLeft: 5 } : undefined}
               />

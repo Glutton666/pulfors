@@ -234,17 +234,17 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
           </Animated.View>
 
           <View style={styles.zoneRow} pointerEvents="none">
-            <Feather name="activity" size={isLandscape ? 10 : 12} color={C.textTertiary} />
+            <Feather name="activity" size={isLandscape ? S.ms(10, 0.3) : S.ms(12, 0.3)} color={C.textTertiary} />
             <Text style={[styles.tapLabel, { color: C.textTertiary }, isLandscape && { fontSize: S.ms(8, 0.3) }]}>TAP</Text>
           </View>
 
           <View style={styles.bpmRow} pointerEvents="none">
-            <Feather name="minus" size={isLandscape ? 18 : 24} color={C.textSecondary} style={styles.bpmIcon} />
+            <Feather name="minus" size={isLandscape ? S.ms(18, 0.4) : S.ms(24, 0.4)} color={C.textSecondary} style={styles.bpmIcon} />
             <View style={styles.bpmContent}>
               <Text style={[styles.bpmValue, { color: C.text }, isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) }]} testID="bpm-display">{bpm}</Text>
               <Text style={[styles.bpmUnit, { color: C.textTertiary }, halfTime && { color: C.accent }, isLandscape && { fontSize: S.ms(10, 0.3), marginTop: -2 }]}>{halfTime ? "½× BPM" : "BPM"}</Text>
             </View>
-            <Feather name="plus" size={isLandscape ? 18 : 24} color={C.textSecondary} style={styles.bpmIcon} />
+            <Feather name="plus" size={isLandscape ? S.ms(18, 0.4) : S.ms(24, 0.4)} color={C.textSecondary} style={styles.bpmIcon} />
           </View>
 
           <View style={styles.ticks} pointerEvents="none">
