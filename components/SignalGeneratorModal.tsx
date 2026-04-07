@@ -870,7 +870,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const startPlayback = useCallback(async () => {
     isPlayingRef.current = true;
     if (Platform.OS === "web") {
-      engineRef.current.startWeb(frequency, waveType, VOLUME_LINEAR);
+      await engineRef.current.startWeb(frequency, waveType, VOLUME_LINEAR);
     } else {
       try {
         await stopNativeSound();

@@ -1649,6 +1649,8 @@ export default function MetronomeScreen() {
   const beatsPerMeasureRef = useRef(beatsPerMeasure);
   useEffect(() => { beatsPerMeasureRef.current = beatsPerMeasure; }, [beatsPerMeasure]);
   const handleNoteTogglePlayRef = useRef<(() => void) | null>(null);
+  const anyModalOpenRef = useRef(false);
+  useEffect(() => { anyModalOpenRef.current = showSignalGen || showSettings || showPracticeBook || showWorkUp || showMenu || showOnboarding; }, [showSignalGen, showSettings, showPracticeBook, showWorkUp, showMenu, showOnboarding]);
 
   const bpmTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bpmTapCountRef = useRef<{ direction: string; count: number }>({ direction: "", count: 0 });
@@ -1675,6 +1677,7 @@ export default function MetronomeScreen() {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (anyModalOpenRef.current) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
 

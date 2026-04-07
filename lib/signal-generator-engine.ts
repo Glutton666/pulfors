@@ -121,14 +121,18 @@ export class SignalGeneratorEngine {
     return this.isRunning;
   }
 
-  startWeb(freq: number, waveType: WaveType, volumeLinear: number) {
+  async startWeb(freq: number, waveType: WaveType, volumeLinear: number) {
     if (Platform.OS !== "web") return;
     this.stopWeb();
     try {
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       this.audioContext = ctx;
       if (ctx.state === "suspended") {
-        ctx.resume().catch(() => {});
+        try {
+          await ctx.resume();
+        } catch (resumeErr) {
+          console.warn("[SignalGen] AudioContext resume failed:", resumeErr);
+        }
       }
       const gain = ctx.createGain();
       gain.gain.value = volumeLinear;
