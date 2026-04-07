@@ -761,19 +761,19 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const isLandscape = winW > winH;
   const S = useScale();
   const isWeb = Platform.OS === "web";
-  const webMaxCard = isWeb && S.isTablet ? Math.min(480, winW * 0.4) : 420;
+  const webMaxCard = isWeb && S.isTablet ? Math.min(520, winW * 0.45) : 460;
   const dynamicKnobSize = isLandscape
     ? Math.min(Math.max(120, winH * 0.52), 280)
     : Math.min(Math.max(100, Math.min(S.minDim, webMaxCard) * 0.42), S.isTablet ? 280 : 240);
   const dynamicCardWidth = isLandscape
     ? Math.min(winW * 0.92, 1100)
-    : Math.min(Math.max(280, S.screenWidth * 0.9), webMaxCard);
+    : Math.min(Math.max(300, S.screenWidth * 0.92), webMaxCard);
   const dynamicCardHeight = isLandscape ? winH * 0.88 : undefined;
   const landscapeGap = isLandscape ? Math.max(8, winW * 0.012) : 0;
   const landscapePadH = isLandscape ? Math.max(12, winW * 0.018) : 0;
   const landscapePadV = isLandscape ? Math.max(10, winH * 0.025) : 0;
-  const cardPad = isLandscape ? undefined : Math.max(14, S.ms(16, 0.4));
-  const cardGap = isLandscape ? undefined : Math.max(10, S.ms(12, 0.4));
+  const cardPad = isLandscape ? undefined : Math.max(16, S.ms(20, 0.4));
+  const cardGap = isLandscape ? undefined : Math.max(16, S.ms(18, 0.4));
   const micBtnSize = isLandscape ? 28 : Math.max(28, S.ms(30, 0.3));
   const micIconSize = isLandscape ? 14 : Math.max(14, S.ms(15, 0.3));
   const [frequency, setFrequency] = useState(440);
@@ -1658,7 +1658,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             </Pressable>
             </View>
           ) : (
-            <View style={{ alignItems: "center" as const, gap: Math.max(12, S.ms(14, 0.4)), width: "100%" as const }}>
+            <View style={{ alignItems: "center" as const, gap: Math.max(18, S.ms(20, 0.4)), width: "100%" as const }}>
             {editingFreq && (
               <View style={styles.freqEditRow}>
                 <TextInput
