@@ -35,7 +35,7 @@ interface SubdivisionBarProps {
   activeBeatPattern?: BeatType[] | null;
 }
 
-const CELL_SIZE = IS_TABLET ? moderateScale(28, 0.4) : moderateScale(20, 0.4);
+const CELL_SIZE = IS_TABLET ? moderateScale(28, 0.4) : moderateScale(28, 0.4);
 const CELL_GAP = IS_TABLET ? moderateScale(4, 0.3) : moderateScale(3, 0.3);
 const MAX_CELLS = 8;
 const MIN_CELLS = 1;
