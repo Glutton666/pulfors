@@ -3717,8 +3717,8 @@ export default function MetronomeScreen() {
         )}
 
         {!isLandscape && !barMode && (
-          <View style={{ alignItems: "center", gap: S.ms(6, 0.3) }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: S.ms(24, 0.4) }}>
+          <View style={{ alignItems: "center", gap: S.ms(4, 0.2) }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: S.ms(16, 0.3) }}>
               <Pressable
                 onPress={handleEnterNoteMode}
                 style={styles.modeHandle}
@@ -3844,7 +3844,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: S.isTablet ? 40 : 24,
+    paddingHorizontal: S.isTablet ? 24 : 24,
     maxWidth: S.contentMaxWidth,
     alignSelf: S.isTablet ? "center" as const : undefined,
     width: S.isTablet ? "100%" as any : undefined,
@@ -3898,10 +3898,10 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   modeHandle: {
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: S.ms(8, 0.5),
-    paddingHorizontal: S.ms(24, 0.5),
-    minWidth: S.ms(64, 0.5),
-    minHeight: S.ms(36, 0.5),
+    paddingVertical: S.ms(8, 0.3),
+    paddingHorizontal: S.ms(24, 0.3),
+    minWidth: S.ms(64, 0.3),
+    minHeight: S.ms(36, 0.3),
     backgroundColor: C.overlay05,
     borderRadius: S.ms(12, 0.3),
   },
@@ -3909,9 +3909,9 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     position: "absolute",
     right: S.ms(20, 0.3),
     zIndex: 20,
-    width: S.ms(40, 0.5),
-    height: S.ms(40, 0.5),
-    borderRadius: S.ms(20, 0.5),
+    width: S.ms(40, 0.3),
+    height: S.ms(40, 0.3),
+    borderRadius: S.ms(20, 0.3),
     backgroundColor: C.surface,
     borderWidth: 1,
     borderColor: C.border,
@@ -3929,8 +3929,8 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     borderRadius: S.ms(12, 0.3),
     borderWidth: 1,
     borderColor: C.border,
-    paddingVertical: S.ms(6, 0.4),
-    minWidth: S.ms(180, 0.5),
+    paddingVertical: S.ms(6, 0.3),
+    minWidth: S.ms(180, 0.3),
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -3940,9 +3940,9 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: S.ms(12, 0.4),
-    paddingHorizontal: S.ms(18, 0.4),
-    paddingVertical: S.ms(14, 0.4),
+    gap: S.ms(12, 0.3),
+    paddingHorizontal: S.ms(18, 0.3),
+    paddingVertical: S.ms(14, 0.3),
   },
   menuItemPressed: {
     backgroundColor: C.surfaceLight,
