@@ -44,7 +44,7 @@ export function useScale(): ScaleValues {
     const isWeb = Platform.OS === "web";
 
     const scaleBase = isLandscape ? minDim : width;
-    const maxScale = isTablet ? (isWeb ? 3.2 : 2.4) : 1.6;
+    const maxScale = isTablet ? (isWeb ? 4.5 : 2.4) : 1.6;
     const s = Math.min(scaleBase / BASE_WIDTH, maxScale);
 
     const ms = (size: number, factor = 0.5): number =>
@@ -56,7 +56,7 @@ export function useScale(): ScaleValues {
 
     let dialSize: number;
     if (isTablet) {
-      const maxDial = isWeb ? Math.min(minDim * 0.65, 900) : 520;
+      const maxDial = isWeb ? Math.min(minDim * 0.65, 1200) : 520;
       dialSize = Math.min(minDim - 80, maxDial, availH * 0.55);
     } else if (isLandscape) {
       const padH = ms(16, 0.3) * 2;
@@ -89,7 +89,7 @@ export function useScale(): ScaleValues {
     let contentMaxWidth: number | undefined;
     if (isTablet) {
       if (isWeb) {
-        contentMaxWidth = Math.min(Math.max(560, width * 0.5), 1000);
+        contentMaxWidth = Math.min(Math.max(560, width * 0.55), 1400);
       } else {
         contentMaxWidth = 560;
       }
