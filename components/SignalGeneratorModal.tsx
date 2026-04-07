@@ -524,6 +524,7 @@ interface TuningGuideModalProps {
 
 function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, accentDim }: TuningGuideModalProps) {
   const { colors: C } = useTheme();
+  const S = useScale();
   const tgStyles = make_tgStyles(C);
   const styles = make_styles(C);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
