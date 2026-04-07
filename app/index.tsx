@@ -3623,7 +3623,9 @@ export default function MetronomeScreen() {
         <View style={
           isLandscape && !barMode
             ? { flexDirection: landscapeReversed ? "row-reverse" as const : "row" as const, flex: 1 }
-            : { flex: 1 }
+            : !barMode
+              ? { flex: 1, justifyContent: "center" as const }
+              : { flex: 1 }
         }>
         <View style={
           isLandscape
@@ -3632,7 +3634,7 @@ export default function MetronomeScreen() {
               : { flex: 5, justifyContent: "center" as const, alignItems: "center" as const }
             : barMode
               ? { flex: 5, justifyContent: "flex-start" as const, alignItems: "center" as const }
-              : { flex: 1, justifyContent: "flex-end" as const, alignItems: "center" as const }
+              : { alignItems: "center" as const }
         }>
           <BeatIndicator
             beatsPerMeasure={beatsPerMeasure}
