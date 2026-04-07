@@ -26,6 +26,7 @@ import {
 } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useScale } from "@/lib/scale";
 
 interface PracticeBookModalProps {
   visible: boolean;
@@ -97,6 +98,7 @@ function SwipeableEntry({
   editLabel: string;
   setEditLabel: (v: string) => void;
   editInputRef: React.RefObject<TextInput | null>;
+
   onRename: (id: string) => void;
   onLoad: (entry: PracticeEntry) => void;
   onDelete: (id: string) => void;
@@ -107,6 +109,7 @@ function SwipeableEntry({
   setOpenItemId: (id: string | null) => void;
 }) {
   const { colors: C } = useTheme();
+  const S = useScale();
   const styles = make_styles(C);
   const gridStyles = make_gridStyles(C);
   const { t } = useLanguage();
@@ -194,7 +197,7 @@ function SwipeableEntry({
             onShare(item);
           }}
         >
-          <Ionicons name="share-outline" size={18} color="#fff" />
+          <Ionicons name="share-outline" size={S.ms(18, 0.4)} color="#fff" />
           <Text style={styles.swipeActionText}>{t("practiceBook", "share")}</Text>
         </Pressable>
         <Pressable
@@ -206,7 +209,7 @@ function SwipeableEntry({
             onRename(item.id);
           }}
         >
-          <Ionicons name="pencil" size={18} color="#fff" />
+          <Ionicons name="pencil" size={S.ms(18, 0.4)} color="#fff" />
           <Text style={styles.swipeActionText}>{t("practiceBook", "edit")}</Text>
         </Pressable>
         {onSetGoal && (
@@ -219,7 +222,7 @@ function SwipeableEntry({
               onSetGoal(item);
             }}
           >
-            <Ionicons name="flag-outline" size={18} color="#fff" />
+            <Ionicons name="flag-outline" size={S.ms(18, 0.4)} color="#fff" />
             <Text style={styles.swipeActionText}>{t("practiceBook", "goalSet")}</Text>
           </Pressable>
         )}
@@ -232,7 +235,7 @@ function SwipeableEntry({
             onDelete(item.id);
           }}
         >
-          <Ionicons name="trash-outline" size={18} color="#fff" />
+          <Ionicons name="trash-outline" size={S.ms(18, 0.4)} color="#fff" />
           <Text style={styles.swipeActionText}>{t("practiceBook", "delete")}</Text>
         </Pressable>
       </View>
@@ -277,7 +280,7 @@ function SwipeableEntry({
             {isNoteMode ? (
               <>
                 <View style={styles.detailChip}>
-                  <MaterialCommunityIcons name="playlist-music" size={12} color={C.textSecondary} />
+                  <MaterialCommunityIcons name="playlist-music" size={S.ms(12, 0.4)} color={C.textSecondary} />
                   <Text style={[styles.detailValue, { color: accentColor }]}>
                     {(item.noteQueueEntries || item.noteQueueEntryIds || []).length}
                   </Text>
@@ -286,7 +289,7 @@ function SwipeableEntry({
                 <View style={styles.detailChip}>
                   <Ionicons
                     name={item.notePlayMode === "loop" ? "infinite" : item.notePlayMode === "random" ? "shuffle" : "play"}
-                    size={12}
+                    size={S.ms(12, 0.4)}
                     color={C.textSecondary}
                   />
                   <Text style={styles.detailUnit}>{playModeText}</Text>
@@ -309,13 +312,13 @@ function SwipeableEntry({
                 <View style={styles.detailChip}>
                   <Ionicons
                     name={clockMode === "timer" ? "timer-outline" : "infinite"}
-                    size={12}
+                    size={S.ms(12, 0.4)}
                     color={C.textSecondary}
                   />
                   <Text style={styles.detailUnit}>{playModeText}</Text>
                 </View>
                 <View style={styles.detailChip}>
-                  <Ionicons name="time-outline" size={12} color={C.textSecondary} />
+                  <Ionicons name="time-outline" size={S.ms(12, 0.4)} color={C.textSecondary} />
                   <Text style={styles.detailUnit}>{formatTime(onePlaySeconds)}</Text>
                 </View>
               </>
@@ -341,6 +344,7 @@ function GridItem({
   accentColor: string;
 }) {
   const { colors: C } = useTheme();
+  const S = useScale();
   const styles = make_styles(C);
   const gridStyles = make_gridStyles(C);
   const { t } = useLanguage();
@@ -433,6 +437,7 @@ export function PracticeBookModal({
 }: PracticeBookModalProps) {
   const insets = useSafeAreaInsets();
   const { colors: C } = useTheme();
+  const S = useScale();
   const styles = make_styles(C);
   const gridStyles = make_gridStyles(C);
   const { t } = useLanguage();
@@ -612,7 +617,7 @@ export function PracticeBookModal({
           <View style={styles.headerLeft}>
             <MaterialCommunityIcons
               name="notebook-outline"
-              size={22}
+              size={S.ms(22, 0.4)}
               color={C.accent}
             />
             <Text style={[styles.title, { color: C.text }]}>{t("practiceBook", "title")}</Text>
@@ -625,12 +630,12 @@ export function PracticeBookModal({
             >
               <Ionicons
                 name={viewMode === "grid" ? "grid" : "list"}
-                size={18}
+                size={S.ms(18, 0.4)}
                 color={C.accent}
               />
             </Pressable>
             <Pressable onPress={onClose} hitSlop={10}>
-              <Ionicons name="close" size={24} color={C.textSecondary} />
+              <Ionicons name="close" size={S.ms(24, 0.4)} color={C.textSecondary} />
             </Pressable>
           </View>
         </View>
@@ -676,7 +681,7 @@ export function PracticeBookModal({
                   style={[styles.saveButton, { borderColor: C.accent, flex: 1 }]}
                   onPress={() => setShowSaveInput(true)}
                 >
-                  <Ionicons name="add-circle-outline" size={18} color={C.accent} />
+                  <Ionicons name="add-circle-outline" size={S.ms(18, 0.4)} color={C.accent} />
                   <Text style={[styles.saveButtonText, { color: C.accent }]}>
                     {currentConfig?.mode === "note" ? t("practiceBook", "saveNoteConfig") : currentConfig?.mode === "beat" ? t("practiceBook", "saveBeatConfig") : t("practiceBook", "saveBarConfig")}
                   </Text>
@@ -685,7 +690,7 @@ export function PracticeBookModal({
                   style={[styles.saveButton, { borderColor: C.accentDim, paddingHorizontal: 12 }]}
                   onPress={handleImportEntry}
                 >
-                  <Ionicons name="download-outline" size={18} color={C.accent} />
+                  <Ionicons name="download-outline" size={S.ms(18, 0.4)} color={C.accent} />
                 </Pressable>
               </View>
             )}
@@ -726,7 +731,7 @@ export function PracticeBookModal({
           <View style={styles.emptyState}>
             <MaterialCommunityIcons
               name="notebook-outline"
-              size={48}
+              size={S.ms(48, 0.4)}
               color={C.textTertiary}
             />
             <Text style={styles.emptyText}>{t("practiceBook", "emptyTitle")}</Text>

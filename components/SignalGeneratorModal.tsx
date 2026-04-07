@@ -542,10 +542,10 @@ function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, a
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
         <View style={tgStyles.card}>
           <View style={tgStyles.header}>
-            <MaterialCommunityIcons name="music-note-outline" size={18} color={accentColor} />
+            <MaterialCommunityIcons name="music-note-outline" size={S.ms(18, 0.4)} color={accentColor} />
             <Text style={[tgStyles.title, { color: accentColor }]}>{t("signalGenerator", "tuningGuide")}</Text>
             <Pressable onPress={handleClose} hitSlop={12} style={tgStyles.closeBtn}>
-              <Ionicons name="close" size={18} color={C.textSecondary} />
+              <Ionicons name="close" size={S.ms(18, 0.4)} color={C.textSecondary} />
             </Pressable>
           </View>
           <Text style={tgStyles.hint}>{t("signalGenerator", "tapToSet")}</Text>
@@ -563,7 +563,7 @@ function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, a
                 >
                   <MaterialCommunityIcons
                     name={cat.icon}
-                    size={16}
+                    size={S.ms(16, 0.4)}
                     color={expandedCategory === cat.id ? accentColor : C.textSecondary}
                   />
                   <Text style={[tgStyles.categoryText, expandedCategory === cat.id && { color: accentColor }]}>
@@ -571,7 +571,7 @@ function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, a
                   </Text>
                   <Ionicons
                     name={expandedCategory === cat.id ? "chevron-up" : "chevron-forward"}
-                    size={14}
+                    size={S.ms(14, 0.4)}
                     color={C.textTertiary}
                   />
                 </Pressable>
@@ -590,7 +590,7 @@ function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, a
                       </Text>
                       <Ionicons
                         name={expandedInstrument === inst.id ? "chevron-down" : "chevron-forward"}
-                        size={12}
+                        size={S.ms(12, 0.4)}
                         color={C.textTertiary}
                       />
                     </Pressable>
@@ -1373,16 +1373,16 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
         <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border, width: dynamicCardWidth }, !isLandscape && { padding: cardPad, gap: cardGap }, isLandscape && { paddingVertical: landscapePadV, paddingHorizontal: landscapePadH, height: dynamicCardHeight, maxHeight: "95%" as const, alignItems: "stretch" as const }]}>
           {isLandscape && (
             <Pressable onPress={handleClose} hitSlop={12} style={{ position: "absolute" as const, top: landscapePadV * 0.6, right: landscapePadH * 0.6, zIndex: 10 }}>
-              <Ionicons name="close" size={20} color={C.textSecondary} />
+              <Ionicons name="close" size={S.ms(20, 0.4)} color={C.textSecondary} />
             </Pressable>
           )}
           {!isLandscape && (
             <>
               <View style={styles.header}>
-                <MaterialCommunityIcons name="waveform" size={20} color={C.accent} />
+                <MaterialCommunityIcons name="waveform" size={S.ms(20, 0.4)} color={C.accent} />
                 <Text style={[styles.title, { color: C.accent }]}>{t("signalGenerator", "title")}</Text>
                 <Pressable onPress={handleClose} hitSlop={12} style={styles.closeBtn}>
-                  <Ionicons name="close" size={20} color={C.textSecondary} />
+                  <Ionicons name="close" size={S.ms(20, 0.4)} color={C.textSecondary} />
                 </Pressable>
               </View>
               <View style={[styles.divider, { backgroundColor: C.border }]} />
@@ -1593,7 +1593,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                     >
                       <MaterialCommunityIcons
                         name={w.icon as any}
-                        size={15}
+                        size={S.ms(15, 0.4)}
                         color={active ? C.accent : C.textTertiary}
                       />
                     </Pressable>
@@ -1617,11 +1617,11 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               delayLongPress={400}
               style={[styles.tuningGuideToggle, { marginTop: 0, marginBottom: 0 }]}
             >
-              <MaterialCommunityIcons name="music-note-outline" size={12} color={C.textTertiary} />
+              <MaterialCommunityIcons name="music-note-outline" size={S.ms(12, 0.4)} color={C.textTertiary} />
               <Text style={[styles.tuningGuideToggleText, { fontSize: 10 }]}>
                 {t("signalGenerator", "tuningGuide")}
               </Text>
-              <Ionicons name="chevron-forward" size={12} color={C.textTertiary} />
+              <Ionicons name="chevron-forward" size={S.ms(12, 0.4)} color={C.textTertiary} />
             </Pressable>
 
             <TuningGuideModal
@@ -1651,7 +1651,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             >
               <Ionicons
                 name={isPlaying ? "stop" : "play"}
-                size={16}
+                size={S.ms(16, 0.4)}
                 color={isPlaying ? C.white : C.background}
               />
             </Pressable>
@@ -1722,11 +1722,11 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               delayLongPress={400}
               style={[styles.tuningGuideToggle]}
             >
-              <MaterialCommunityIcons name="music-note-outline" size={14} color={C.textTertiary} />
+              <MaterialCommunityIcons name="music-note-outline" size={S.ms(14, 0.4)} color={C.textTertiary} />
               <Text style={styles.tuningGuideToggleText}>
                 {t("signalGenerator", "tuningGuide")}
               </Text>
-              <Ionicons name="chevron-forward" size={14} color={C.textTertiary} />
+              <Ionicons name="chevron-forward" size={S.ms(14, 0.4)} color={C.textTertiary} />
             </Pressable>
 
             <TuningGuideModal
@@ -1755,7 +1755,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                     >
                       <MaterialCommunityIcons
                         name={w.icon as any}
-                        size={20}
+                        size={S.ms(20, 0.4)}
                         color={active ? C.accent : C.textTertiary}
                       />
                       <Text style={[styles.waveBtnText, active && { color: C.accent }]}>{t("signalGenerator", w.key)}</Text>
@@ -1779,7 +1779,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             >
               <Ionicons
                 name={isPlaying ? "stop" : "play"}
-                size={20}
+                size={S.ms(20, 0.4)}
                 color={isPlaying ? C.white : C.background}
               />
               <Text style={[styles.playBtnText, { color: isPlaying ? C.white : C.background }]}>

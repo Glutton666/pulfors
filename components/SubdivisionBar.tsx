@@ -399,7 +399,7 @@ export function SubdivisionBar({
     >
       <View style={styles.cellsContainer} testID="subdivision-cells">
         <View style={styles.swipeHint}>
-          <Feather name="chevron-left" size={12} color={C.textTertiary} />
+          <Feather name="chevron-left" size={S.ms(12, 0.4)} color={C.textTertiary} />
         </View>
 
         {displayPattern.map((type, i) => {
@@ -447,7 +447,7 @@ export function SubdivisionBar({
         })}
 
         <View style={styles.swipeHint}>
-          <Feather name="chevron-right" size={12} color={C.textTertiary} />
+          <Feather name="chevron-right" size={S.ms(12, 0.4)} color={C.textTertiary} />
         </View>
       </View>
     </Animated.View>

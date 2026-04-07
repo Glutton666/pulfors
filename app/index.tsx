@@ -3371,12 +3371,12 @@ export default function MetronomeScreen() {
           <View style={{ backgroundColor: C.background, borderRadius: 16, padding: 24, gap: 12, minWidth: 220 }} onStartShouldSetResponder={() => true}>
             <Text style={{ fontFamily: "SpaceGrotesk_600SemiBold", fontSize: 16, color: C.text, textAlign: "center" as const }}>{t("settings", "hubImages")}</Text>
             <Pressable onPress={pickLandscapeImage} style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 10, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: C.surface, borderRadius: 10 }}>
-              <Ionicons name="image-outline" size={20} color={C.accent} />
+              <Ionicons name="image-outline" size={S.ms(20, 0.4)} color={C.accent} />
               <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: 14, color: C.text }}>{landscapeImageUri ? t("settings", "changeImage") : t("settings", "addImage")}</Text>
             </Pressable>
             {landscapeImageUri && (
               <Pressable onPress={removeLandscapeImage} style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 10, paddingVertical: 10, paddingHorizontal: 16, backgroundColor: C.surface, borderRadius: 10 }}>
-                <Ionicons name="trash-outline" size={20} color={C.danger} />
+                <Ionicons name="trash-outline" size={S.ms(20, 0.4)} color={C.danger} />
                 <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: 14, color: C.danger }}>{t("settings", "removeImage")}</Text>
               </Pressable>
             )}
@@ -3477,7 +3477,7 @@ export default function MetronomeScreen() {
           alignItems: "center",
           zIndex: 9999,
         }}>
-          <Ionicons name="refresh" size={36} color="#D4A846" />
+          <Ionicons name="refresh" size={S.ms(36, 0.4)} color="#D4A846" />
           <Text style={{
             color: "#8B949E",
             fontSize: 14,
@@ -3573,12 +3573,12 @@ export default function MetronomeScreen() {
                 style={[styles.goalPopup, { borderColor: goalColor, backgroundColor: C.surface }]}
                 onPress={() => dismissGoalPopup(goal.id)}
               >
-                <Ionicons name="checkmark-circle" size={22} color={goalColor} />
+                <Ionicons name="checkmark-circle" size={S.ms(22, 0.4)} color={goalColor} />
                 <View style={styles.goalPopupInfo}>
                   <Text style={[styles.goalPopupTitle, { color: goalColor }]}>{goal.label} {t("main", "goalComplete")}</Text>
                   <Text style={styles.goalPopupSub}>{t("main", "tapToDismiss")}</Text>
                 </View>
-                <Ionicons name="close" size={16} color={C.textTertiary} />
+                <Ionicons name="close" size={S.ms(16, 0.4)} color={C.textTertiary} />
               </Pressable>
             );
           })}
@@ -3762,7 +3762,7 @@ export default function MetronomeScreen() {
                     {landscapeImageUri ? (
                       <Image source={{ uri: landscapeImageUri }} style={{ width: "100%" as any, height: "100%" as any, borderRadius: 10 }} resizeMode="cover" />
                     ) : (
-                      <Ionicons name="image-outline" size={24} color={C.textTertiary} />
+                      <Ionicons name="image-outline" size={S.ms(24, 0.4)} color={C.textTertiary} />
                     )}
                   </Pressable>
                 )}
