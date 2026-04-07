@@ -89,7 +89,7 @@ export function useScale(): ScaleValues {
     let contentMaxWidth: number | undefined;
     if (isTablet) {
       if (isWeb) {
-        contentMaxWidth = Math.min(Math.max(560, width * 0.55), 1400);
+        contentMaxWidth = Math.min(Math.max(560, width * 0.85), 1400);
       } else {
         contentMaxWidth = 560;
       }
