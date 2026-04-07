@@ -1432,8 +1432,8 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                   micListening && styles.micEmojiActive,
                   {
                     position: "absolute" as const,
-                    bottom: isLandscape ? 0 : 2,
-                    right: isLandscape ? -4 : -6,
+                    bottom: isLandscape ? -6 : -8,
+                    right: isLandscape ? -10 : -14,
                     width: micBtnSize,
                     height: micBtnSize,
                     borderRadius: micBtnSize / 2,
