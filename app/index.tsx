@@ -3732,9 +3732,6 @@ export default function MetronomeScreen() {
                 <Ionicons name="reorder-three" size={S.ms(20, 0.4)} color={C.textTertiary} />
               </Pressable>
             </View>
-            {windowHeight > 700 && (
-              <Text style={[styles.beatHintText, { color: C.textTertiary }]}>{t("main", "beatHint")}</Text>
-            )}
             <SubdivisionBar
               pattern={subdivisionPattern}
               onPatternChange={handlePatternChange}
@@ -3746,6 +3743,9 @@ export default function MetronomeScreen() {
               activeSubNote={activeSubNote}
               activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
             />
+            {windowHeight > 700 && (
+              <Text style={[styles.beatHintText, { color: C.textTertiary }]}>{t("main", "beatHint")}</Text>
+            )}
             <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
           </View>
         )}
