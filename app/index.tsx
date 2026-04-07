@@ -1644,8 +1644,98 @@ export default function MetronomeScreen() {
   const bpmRef = useRef(bpm);
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
 
+  const updateTimeSignatureRef = useRef(updateTimeSignature);
+  useEffect(() => { updateTimeSignatureRef.current = updateTimeSignature; }, [updateTimeSignature]);
+  const beatsPerMeasureRef = useRef(beatsPerMeasure);
+  useEffect(() => { beatsPerMeasureRef.current = beatsPerMeasure; }, [beatsPerMeasure]);
+  const handleNoteTogglePlayRef = useRef<(() => void) | null>(null);
+
   const bpmTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bpmTapCountRef = useRef<{ direction: string; count: number }>({ direction: "", count: 0 });
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const repeatTimerRef = { current: null as ReturnType<typeof setInterval> | null };
+    const heldKeyRef = { current: "" };
+    const repeatCountRef = { current: 0 };
+
+    const clearRepeat = () => {
+      if (repeatTimerRef.current) { clearInterval(repeatTimerRef.current); repeatTimerRef.current = null; }
+      heldKeyRef.current = "";
+      repeatCountRef.current = 0;
+    };
+
+    const applyBpmDelta = (delta: number) => {
+      const cur = bpmRef.current;
+      updateBpmRef.current(cur + delta);
+    };
+
+    const applyBeatDelta = (delta: number) => {
+      updateTimeSignatureRef.current(beatsPerMeasureRef.current + delta);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+
+      if (e.code === "Space") {
+        e.preventDefault();
+        if (noteModeRef.current && handleNoteTogglePlayRef.current) {
+          handleNoteTogglePlayRef.current();
+        } else {
+          togglePlayPauseRef.current();
+        }
+        return;
+      }
+
+      if (e.code === "ArrowUp" || e.code === "ArrowDown") {
+        e.preventDefault();
+        const delta = e.code === "ArrowUp" ? 1 : -1;
+        applyBeatDelta(delta);
+        if (heldKeyRef.current !== e.code) {
+          clearRepeat();
+          heldKeyRef.current = e.code;
+          repeatCountRef.current = 0;
+          repeatTimerRef.current = setInterval(() => {
+            repeatCountRef.current++;
+            const d = repeatCountRef.current > 10 ? delta * 2 : delta;
+            applyBeatDelta(d);
+          }, 150);
+        }
+        return;
+      }
+
+      if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
+        e.preventDefault();
+        const delta = e.code === "ArrowRight" ? 5 : -5;
+        applyBpmDelta(delta);
+        if (heldKeyRef.current !== e.code) {
+          clearRepeat();
+          heldKeyRef.current = e.code;
+          repeatCountRef.current = 0;
+          repeatTimerRef.current = setInterval(() => {
+            repeatCountRef.current++;
+            const step = repeatCountRef.current > 10 ? 20 : repeatCountRef.current > 5 ? 10 : 5;
+            const d = e.code === "ArrowRight" ? step : -step;
+            applyBpmDelta(d);
+          }, 120);
+        }
+        return;
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === heldKeyRef.current) clearRepeat();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      clearRepeat();
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, []);
 
   useEffect(() => {
     const sub = addNotificationActionListener((actionId) => {
@@ -2827,6 +2917,8 @@ export default function MetronomeScreen() {
       noteStartPlayingEntry(startIndex);
     }
   }, [noteStartPlayingEntry, createShuffledIndices]);
+
+  useEffect(() => { handleNoteTogglePlayRef.current = handleNoteTogglePlay; }, [handleNoteTogglePlay]);
 
   const handleNoteSave = useCallback(async (): Promise<boolean> => {
     const q = noteQueueRef.current;
