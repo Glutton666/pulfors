@@ -1676,10 +1676,36 @@ export default function MetronomeScreen() {
       updateTimeSignatureRef.current(beatsPerMeasureRef.current + delta);
     };
 
+    const tapTimestamps: number[] = [];
+    const TAP_RESET_MS = 2000;
+    const TAP_MIN_TAPS = 2;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (anyModalOpenRef.current) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+
+      if (e.code === "Enter") {
+        e.preventDefault();
+        const now = performance.now();
+        if (tapTimestamps.length > 0 && now - tapTimestamps[tapTimestamps.length - 1] > TAP_RESET_MS) {
+          tapTimestamps.length = 0;
+        }
+        tapTimestamps.push(now);
+        if (tapTimestamps.length >= TAP_MIN_TAPS) {
+          const intervals: number[] = [];
+          for (let i = 1; i < tapTimestamps.length; i++) {
+            intervals.push(tapTimestamps[i] - tapTimestamps[i - 1]);
+          }
+          const avgMs = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+          const tapBpm = Math.round(60000 / avgMs);
+          if (tapBpm >= 20 && tapBpm <= 300) {
+            updateBpmRef.current(tapBpm);
+          }
+        }
+        if (tapTimestamps.length > 8) tapTimestamps.splice(0, tapTimestamps.length - 8);
+        return;
+      }
 
       if (e.code === "Space") {
         e.preventDefault();
