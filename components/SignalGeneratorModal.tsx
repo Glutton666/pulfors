@@ -1531,6 +1531,8 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             )}
           </View>
 
+          {!isLandscape && <View style={{ height: Math.max(14, S.ms(16, 0.4)) }} />}
+
           {isLandscape ? (
             <View style={{ flex: 1, alignItems: "center" as const, justifyContent: "space-between" as const, gap: 6, paddingVertical: 2 }}>
             {editingFreq && (
