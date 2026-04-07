@@ -3712,8 +3712,12 @@ export default function MetronomeScreen() {
           />
         </View>
 
+        {!isLandscape && !barMode && windowHeight > 700 && (
+          <Text style={[styles.beatHintText, { color: C.textTertiary, textAlign: "center" }]}>{t("main", "beatHint")}</Text>
+        )}
+
         {!isLandscape && !barMode && (
-          <View style={{ alignItems: "center", gap: S.ms(6, 0.3), marginTop: S.ms(6, 0.4) }}>
+          <View style={{ alignItems: "center", gap: S.ms(6, 0.3) }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: S.ms(24, 0.4) }}>
               <Pressable
                 onPress={handleEnterNoteMode}
@@ -3743,9 +3747,6 @@ export default function MetronomeScreen() {
               activeSubNote={activeSubNote}
               activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
             />
-            {windowHeight > 700 && (
-              <Text style={[styles.beatHintText, { color: C.textTertiary }]}>{t("main", "beatHint")}</Text>
-            )}
             <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
           </View>
         )}
