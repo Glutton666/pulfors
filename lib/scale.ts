@@ -41,11 +41,11 @@ export function useScale(): ScaleValues {
     const maxDim = Math.max(width, height);
     const isTablet = minDim >= 600;
     const isLandscape = width > height;
+    const isWeb = Platform.OS === "web";
 
     const scaleBase = isLandscape ? minDim : width;
-    const s = isTablet
-      ? Math.min(scaleBase / BASE_WIDTH, 2.2)
-      : Math.min(scaleBase / BASE_WIDTH, 1.6);
+    const maxScale = isTablet ? 2.4 : 1.6;
+    const s = Math.min(scaleBase / BASE_WIDTH, maxScale);
 
     const ms = (size: number, factor = 0.5): number =>
       size + (s - 1) * size * factor;
@@ -56,7 +56,8 @@ export function useScale(): ScaleValues {
 
     let dialSize: number;
     if (isTablet) {
-      dialSize = Math.min(minDim - 80, 520);
+      const maxDial = isWeb ? Math.min(minDim * 0.65, 600) : 520;
+      dialSize = Math.min(minDim - 80, maxDial, availH * 0.55);
     } else if (isLandscape) {
       const padH = ms(16, 0.3) * 2;
       const leftColW = (width - padH) * 5 / 8;
@@ -84,7 +85,15 @@ export function useScale(): ScaleValues {
     const dialRadius = dialSize / 2;
     const dotRadiusFromCenter = dialRadius - ms(30, 0.4);
     const dotSize = isTablet ? Math.max(ms(40, 0.4), dialSize * 0.1) : ms(34, 0.4);
-    const contentMaxWidth = isTablet ? 560 : undefined;
+
+    let contentMaxWidth: number | undefined;
+    if (isTablet) {
+      if (isWeb) {
+        contentMaxWidth = Math.min(Math.max(560, width * 0.5), 720);
+      } else {
+        contentMaxWidth = 560;
+      }
+    }
 
     return {
       ms,

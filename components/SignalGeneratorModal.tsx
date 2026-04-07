@@ -759,12 +759,14 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const { width: winW, height: winH } = useWindowDimensions();
   const isLandscape = winW > winH;
   const S = useScale();
+  const isWeb = Platform.OS === "web";
+  const webMaxCard = isWeb && S.isTablet ? Math.min(480, winW * 0.4) : 420;
   const dynamicKnobSize = isLandscape
-    ? Math.min(Math.max(120, winH * 0.52), 260)
-    : Math.min(Math.max(100, S.minDim * 0.38), 240);
+    ? Math.min(Math.max(120, winH * 0.52), 280)
+    : Math.min(Math.max(100, Math.min(S.minDim, webMaxCard) * 0.42), S.isTablet ? 280 : 240);
   const dynamicCardWidth = isLandscape
-    ? winW * 0.92
-    : Math.min(Math.max(280, S.screenWidth * 0.9), 420);
+    ? Math.min(winW * 0.92, 1100)
+    : Math.min(Math.max(280, S.screenWidth * 0.9), webMaxCard);
   const dynamicCardHeight = isLandscape ? winH * 0.88 : undefined;
   const landscapeGap = isLandscape ? Math.max(8, winW * 0.012) : 0;
   const landscapePadH = isLandscape ? Math.max(12, winW * 0.018) : 0;
