@@ -3713,7 +3713,7 @@ export default function MetronomeScreen() {
         </View>
 
         {!isLandscape && !barMode && (
-          <View style={{ alignItems: "center", gap: S.ms(10, 0.3), marginTop: S.ms(6, 0.4) }}>
+          <View style={{ alignItems: "center", gap: S.ms(6, 0.3), marginTop: S.ms(6, 0.4) }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: S.ms(24, 0.4) }}>
               <Pressable
                 onPress={handleEnterNoteMode}
@@ -3732,6 +3732,9 @@ export default function MetronomeScreen() {
                 <Ionicons name="reorder-three" size={S.ms(20, 0.4)} color={C.textTertiary} />
               </Pressable>
             </View>
+            {windowHeight > 700 && (
+              <Text style={[styles.beatHintText, { color: C.textTertiary }]}>{t("main", "beatHint")}</Text>
+            )}
             <SubdivisionBar
               pattern={subdivisionPattern}
               onPatternChange={handlePatternChange}
@@ -3884,6 +3887,12 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     color: C.accentMuted,
     letterSpacing: 3,
     textTransform: "uppercase",
+  },
+  beatHintText: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 11,
+    letterSpacing: 1,
+    opacity: 0.5,
   },
   modeHandle: {
     alignItems: "center" as const,
