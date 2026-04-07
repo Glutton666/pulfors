@@ -379,8 +379,8 @@ export function SubdivisionBar({
   const nativePanHandlers = Platform.OS !== "web" ? panResponder.panHandlers : {};
 
   const displayPattern = isPlaying && activeBeatPattern ? activeBeatPattern : pattern;
-  const baseCellSize = S.isTablet ? S.ms(42, 0.4) : CELL_SIZE;
-  const baseCellGap = S.isTablet ? S.ms(4, 0.3) : CELL_GAP;
+  const baseCellSize = S.isTablet ? S.ms(42, 0.5) : CELL_SIZE;
+  const baseCellGap = S.isTablet ? S.ms(5, 0.4) : CELL_GAP;
   const hintWidth = 16;
   const availableWidth = containerWidth > 0 ? containerWidth - hintWidth * 2 : 0;
   const cellCount = displayPattern.length;

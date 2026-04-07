@@ -3725,7 +3725,7 @@ export default function MetronomeScreen() {
                 testID="open-note-mode"
                 hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
               >
-                <Ionicons name="musical-notes-outline" size={S.ms(16, 0.4)} color={C.textTertiary} />
+                <Ionicons name="musical-notes-outline" size={S.ms(18, 0.5)} color={C.textTertiary} />
               </Pressable>
               <Pressable
                 onPress={() => handleBarModeChange(true)}
@@ -3733,7 +3733,7 @@ export default function MetronomeScreen() {
                 testID="open-bar-mode"
                 hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
               >
-                <Ionicons name="reorder-three" size={S.ms(20, 0.4)} color={C.textTertiary} />
+                <Ionicons name="reorder-three" size={S.ms(22, 0.5)} color={C.textTertiary} />
               </Pressable>
             </View>
             <SubdivisionBar
@@ -3898,12 +3898,12 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   modeHandle: {
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: S.ms(6, 0.4),
-    paddingHorizontal: S.ms(20, 0.4),
-    minWidth: S.ms(60, 0.4),
-    minHeight: S.ms(32, 0.4),
+    paddingVertical: S.ms(8, 0.5),
+    paddingHorizontal: S.ms(24, 0.5),
+    minWidth: S.ms(64, 0.5),
+    minHeight: S.ms(36, 0.5),
     backgroundColor: C.overlay05,
-    borderRadius: S.ms(10, 0.3),
+    borderRadius: S.ms(12, 0.3),
   },
   menuButton: {
     position: "absolute",
