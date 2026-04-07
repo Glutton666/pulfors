@@ -2173,7 +2173,7 @@ export function BeatIndicator({
                         <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>Repeat</Text>
                         <Pressable
                           onPress={() => { if (editBlock.value > 1) updateBlock(editingBlockIndex!, { value: editBlock.value - 1 }); }}
-                          style={{ width: S.ms(22, 0.3), height: S.ms(22, 0.3), borderRadius: S.ms(11, 0.3), backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
+                          style={{ width: S.ms(22, 0.5), height: S.ms(22, 0.5), borderRadius: S.ms(11, 0.5), backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
                         >
                           <Ionicons name="remove" size={S.ms(12, 0.4)} color={C.accent} />
                         </Pressable>
@@ -2182,7 +2182,7 @@ export function BeatIndicator({
                         </Text>
                         <Pressable
                           onPress={() => { if (editBlock.value < 16) updateBlock(editingBlockIndex!, { value: editBlock.value + 1 }); }}
-                          style={{ width: S.ms(22, 0.3), height: S.ms(22, 0.3), borderRadius: S.ms(11, 0.3), backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
+                          style={{ width: S.ms(22, 0.5), height: S.ms(22, 0.5), borderRadius: S.ms(11, 0.5), backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
                         >
                           <Ionicons name="add" size={S.ms(12, 0.4)} color={C.accent} />
                         </Pressable>
@@ -2191,7 +2191,7 @@ export function BeatIndicator({
                         <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>BPM</Text>
                         <Pressable
                           onPress={() => { if (editBlock.bpm) updateBlock(editingBlockIndex!, { bpm: Math.max(20, editBlock.bpm - 5) }); }}
-                          style={{ width: S.ms(22, 0.3), height: S.ms(22, 0.3), borderRadius: S.ms(11, 0.3), backgroundColor: editBlock.bpm ? C.accent + "20" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
+                          style={{ width: S.ms(22, 0.5), height: S.ms(22, 0.5), borderRadius: S.ms(11, 0.5), backgroundColor: editBlock.bpm ? C.accent + "20" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
                         >
                           <Ionicons name="remove" size={S.ms(12, 0.4)} color={editBlock.bpm ? C.accent : C.textTertiary} />
                         </Pressable>
@@ -2225,7 +2225,7 @@ export function BeatIndicator({
                         )}
                         <Pressable
                           onPress={() => { if (editBlock.bpm) updateBlock(editingBlockIndex!, { bpm: Math.min(300, editBlock.bpm + 5) }); }}
-                          style={{ width: S.ms(22, 0.3), height: S.ms(22, 0.3), borderRadius: S.ms(11, 0.3), backgroundColor: editBlock.bpm ? C.accent + "20" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
+                          style={{ width: S.ms(22, 0.5), height: S.ms(22, 0.5), borderRadius: S.ms(11, 0.5), backgroundColor: editBlock.bpm ? C.accent + "20" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
                         >
                           <Ionicons name="add" size={S.ms(12, 0.4)} color={editBlock.bpm ? C.accent : C.textTertiary} />
                         </Pressable>
@@ -2263,7 +2263,7 @@ export function BeatIndicator({
                           <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>Jump ×</Text>
                           <Pressable
                             onPress={() => { if (editJumpCount > 1) updateBlock(editingBlockIndex!, { jumpCount: editJumpCount - 1 }); }}
-                            style={{ width: S.ms(22, 0.3), height: S.ms(22, 0.3), borderRadius: S.ms(11, 0.3), backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
+                            style={{ width: S.ms(22, 0.5), height: S.ms(22, 0.5), borderRadius: S.ms(11, 0.5), backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
                           >
                             <Ionicons name="remove" size={S.ms(12, 0.4)} color="#f0ad4e" />
                           </Pressable>
@@ -2272,7 +2272,7 @@ export function BeatIndicator({
                           </Text>
                           <Pressable
                             onPress={() => { if (editJumpCount < 16) updateBlock(editingBlockIndex!, { jumpCount: editJumpCount + 1 }); }}
-                            style={{ width: S.ms(22, 0.3), height: S.ms(22, 0.3), borderRadius: S.ms(11, 0.3), backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
+                            style={{ width: S.ms(22, 0.5), height: S.ms(22, 0.5), borderRadius: S.ms(11, 0.5), backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
                           >
                             <Ionicons name="add" size={S.ms(12, 0.4)} color="#f0ad4e" />
                           </Pressable>
@@ -2642,7 +2642,7 @@ export function BeatIndicator({
                     <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Repeat</Text>
                     <Pressable
                       onPress={() => { if (editBlock.value > 1) updateBlock(editingBlockIndex!, { value: editBlock.value - 1 }); }}
-                      style={{ width: S.ms(26, 0.3), height: S.ms(26, 0.3), borderRadius: S.ms(13, 0.3), backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
+                      style={{ width: S.ms(26, 0.5), height: S.ms(26, 0.5), borderRadius: S.ms(13, 0.5), backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
                     >
                       <Ionicons name="remove" size={S.ms(14, 0.4)} color={C.accent} />
                     </Pressable>
@@ -2651,7 +2651,7 @@ export function BeatIndicator({
                     </Text>
                     <Pressable
                       onPress={() => { if (editBlock.value < 16) updateBlock(editingBlockIndex!, { value: editBlock.value + 1 }); }}
-                      style={{ width: S.ms(26, 0.3), height: S.ms(26, 0.3), borderRadius: S.ms(13, 0.3), backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
+                      style={{ width: S.ms(26, 0.5), height: S.ms(26, 0.5), borderRadius: S.ms(13, 0.5), backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
                     >
                       <Ionicons name="add" size={S.ms(14, 0.4)} color={C.accent} />
                     </Pressable>
@@ -2665,7 +2665,7 @@ export function BeatIndicator({
                           updateBlock(editingBlockIndex!, { bpm: newBpm });
                         }
                       }}
-                      style={{ width: S.ms(26, 0.3), height: S.ms(26, 0.3), borderRadius: S.ms(13, 0.3), backgroundColor: editBlock.bpm ? C.accent + "20" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
+                      style={{ width: S.ms(26, 0.5), height: S.ms(26, 0.5), borderRadius: S.ms(13, 0.5), backgroundColor: editBlock.bpm ? C.accent + "20" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
                     >
                       <Ionicons name="remove" size={S.ms(14, 0.4)} color={editBlock.bpm ? C.accent : C.textTertiary} />
                     </Pressable>
@@ -2704,7 +2704,7 @@ export function BeatIndicator({
                           updateBlock(editingBlockIndex!, { bpm: newBpm });
                         }
                       }}
-                      style={{ width: S.ms(26, 0.3), height: S.ms(26, 0.3), borderRadius: S.ms(13, 0.3), backgroundColor: editBlock.bpm ? C.accent + "20" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
+                      style={{ width: S.ms(26, 0.5), height: S.ms(26, 0.5), borderRadius: S.ms(13, 0.5), backgroundColor: editBlock.bpm ? C.accent + "20" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
                     >
                       <Ionicons name="add" size={S.ms(14, 0.4)} color={editBlock.bpm ? C.accent : C.textTertiary} />
                     </Pressable>
@@ -2742,7 +2742,7 @@ export function BeatIndicator({
                       <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Jump ×</Text>
                       <Pressable
                         onPress={() => { if (editJumpCount > 1) updateBlock(editingBlockIndex!, { jumpCount: editJumpCount - 1 }); }}
-                        style={{ width: S.ms(26, 0.3), height: S.ms(26, 0.3), borderRadius: S.ms(13, 0.3), backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
+                        style={{ width: S.ms(26, 0.5), height: S.ms(26, 0.5), borderRadius: S.ms(13, 0.5), backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
                       >
                         <Ionicons name="remove" size={S.ms(14, 0.4)} color="#f0ad4e" />
                       </Pressable>
@@ -2751,7 +2751,7 @@ export function BeatIndicator({
                       </Text>
                       <Pressable
                         onPress={() => { if (editJumpCount < 16) updateBlock(editingBlockIndex!, { jumpCount: editJumpCount + 1 }); }}
-                        style={{ width: S.ms(26, 0.3), height: S.ms(26, 0.3), borderRadius: S.ms(13, 0.3), backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
+                        style={{ width: S.ms(26, 0.5), height: S.ms(26, 0.5), borderRadius: S.ms(13, 0.5), backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
                       >
                         <Ionicons name="add" size={S.ms(14, 0.4)} color="#f0ad4e" />
                       </Pressable>
@@ -3620,36 +3620,36 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   barTopRowCenter: {
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: S.ms(30, 0.2),
+    paddingTop: 40,
     paddingBottom: 4,
   },
   barBottomRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 6,
-    gap: 12,
+    paddingVertical: 8,
+    gap: 16,
   },
   barModeCloseBtn: {
-    width: S.ms(32, 0.3),
-    height: S.ms(32, 0.3),
-    borderRadius: S.ms(16, 0.3),
+    width: S.ms(32, 0.4),
+    height: S.ms(32, 0.4),
+    borderRadius: S.ms(16, 0.4),
     backgroundColor: C.overlay06,
     alignItems: "center",
     justifyContent: "center",
   },
   barPlayBtn: {
-    width: S.ms(36, 0.3),
-    height: S.ms(36, 0.3),
-    borderRadius: S.ms(18, 0.3),
+    width: S.ms(36, 0.5),
+    height: S.ms(36, 0.5),
+    borderRadius: S.ms(18, 0.5),
     backgroundColor: C.overlay06,
     alignItems: "center",
     justifyContent: "center",
   },
   barLoopBtn: {
-    width: S.ms(36, 0.3),
-    height: S.ms(36, 0.3),
-    borderRadius: S.ms(18, 0.3),
+    width: S.ms(36, 0.5),
+    height: S.ms(36, 0.5),
+    borderRadius: S.ms(18, 0.5),
     backgroundColor: C.overlay06,
     alignItems: "center",
     justifyContent: "center",
@@ -3657,12 +3657,12 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   barTimeSigRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
   },
   barTimeSigBtn: {
-    width: S.ms(30, 0.3),
-    height: S.ms(30, 0.3),
-    borderRadius: S.ms(15, 0.3),
+    width: S.ms(32, 0.5),
+    height: S.ms(32, 0.5),
+    borderRadius: S.ms(16, 0.5),
     backgroundColor: C.overlay08,
     alignItems: "center",
     justifyContent: "center",

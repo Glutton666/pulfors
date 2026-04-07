@@ -4,7 +4,7 @@ import { useMemo } from "react";
 const BASE_WIDTH = 375;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-const IS_TABLET = Math.min(SCREEN_WIDTH, SCREEN_HEIGHT) >= 900;
+const IS_TABLET = Math.min(SCREEN_WIDTH, SCREEN_HEIGHT) >= 600;
 
 const scale = IS_TABLET
   ? Math.min(SCREEN_WIDTH / BASE_WIDTH, 2.2)
@@ -39,8 +39,7 @@ export function useScale(): ScaleValues {
   return useMemo(() => {
     const minDim = Math.min(width, height);
     const maxDim = Math.max(width, height);
-    const aspectRatio = minDim / maxDim;
-    const isTablet = minDim >= 900;
+    const isTablet = minDim >= 600;
     const isLandscape = width > height;
     const isWeb = Platform.OS === "web";
 
