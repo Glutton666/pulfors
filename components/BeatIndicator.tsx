@@ -3369,7 +3369,7 @@ export function BeatIndicator({
         </View>
       </View>
 
-      <Text style={[styles.hintText, { marginTop: 4, marginBottom: 2 }]}>{t("main", "beatHint")}</Text>
+      <Text style={[styles.hintText, { marginTop: 4, marginBottom: S.ms(8, 0.4) }]}>{t("main", "beatHint")}</Text>
     </View>
   );
 
