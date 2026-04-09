@@ -1800,7 +1800,24 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   );
 }
 
-const TOP_PEAK_COUNT = 5;
+const BUBBLE_COUNT = 3;
+const LERP_SPEED = 0.18;
+
+function noteNameFromFreq(freq: number): string {
+  if (freq <= 0) return "";
+  const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const midi = 69 + 12 * Math.log2(freq / 440);
+  const rounded = Math.round(midi);
+  const octave = Math.floor(rounded / 12) - 1;
+  const noteIdx = ((rounded % 12) + 12) % 12;
+  return `${noteNames[noteIdx]}${octave}`;
+}
+
+interface BubbleState {
+  freq: number;
+  size: number;
+  isPrimary: boolean;
+}
 
 function SpectrumGraph({
   spectrumData,
@@ -1826,7 +1843,16 @@ function SpectrumGraph({
   const binRes = sampleRate / fftSize;
   const hasData = !!(micActive && spectrumData);
 
-  const peaks: { freq: number; value: number; isPrimary: boolean }[] = [];
+  const targetRef = useRef<BubbleState[]>(Array.from({ length: BUBBLE_COUNT }, () => ({ freq: 0, size: 0, isPrimary: false })));
+  const animRef = useRef<BubbleState[]>(Array.from({ length: BUBBLE_COUNT }, () => ({ freq: 0, size: 0, isPrimary: false })));
+  const [display, setDisplay] = useState<BubbleState[]>(Array.from({ length: BUBBLE_COUNT }, () => ({ freq: 0, size: 0, isPrimary: false })));
+  const rafRef = useRef<number | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   if (hasData && spectrumData) {
     const minBin = Math.max(1, Math.ceil(27.5 / binRes));
@@ -1840,54 +1866,140 @@ function SpectrumGraph({
     }
     candidates.sort((a, b) => b.mag - a.mag);
 
-    const topN = candidates.slice(0, TOP_PEAK_COUNT);
+    const topN = candidates.slice(0, BUBBLE_COUNT);
     const maxMag = topN.length > 0 ? topN[0].mag : -100;
 
+    const newTargets: BubbleState[] = [];
     for (const c of topN) {
-      const normalized = Math.max(0.08, Math.min(1, (c.mag - (-100)) / (maxMag - (-100) + 1)));
-      peaks.push({
+      const normalized = Math.max(0.1, Math.min(1, (c.mag - (-100)) / (maxMag - (-100) + 1)));
+      newTargets.push({
         freq: c.bin * binRes,
-        value: normalized,
+        size: normalized,
         isPrimary: c.bin === peakBin,
       });
     }
-    peaks.sort((a, b) => a.freq - b.freq);
+    newTargets.sort((a, b) => b.size - a.size);
+    while (newTargets.length < BUBBLE_COUNT) {
+      newTargets.push({ freq: 0, size: 0, isPrimary: false });
+    }
+    targetRef.current = newTargets;
+  } else {
+    targetRef.current = Array.from({ length: BUBBLE_COUNT }, () => ({ freq: 0, size: 0, isPrimary: false }));
   }
 
-  while (peaks.length < TOP_PEAK_COUNT) {
-    peaks.push({ freq: 0, value: 0, isPrimary: false });
-  }
+  useEffect(() => {
+    let lastTime = performance.now();
+    const animate = (now: number) => {
+      if (!mountedRef.current) return;
+      const dt = Math.min(now - lastTime, 50);
+      lastTime = now;
+      const factor = 1 - Math.pow(1 - LERP_SPEED, dt / 16.67);
+
+      const targets = targetRef.current;
+      const anims = animRef.current;
+      let changed = false;
+
+      for (let i = 0; i < BUBBLE_COUNT; i++) {
+        const t = targets[i];
+        const a = anims[i];
+
+        const newFreq = a.freq + (t.freq - a.freq) * factor;
+        const newSize = a.size + (t.size - a.size) * factor;
+
+        if (Math.abs(newFreq - a.freq) > 0.1 || Math.abs(newSize - a.size) > 0.001) {
+          changed = true;
+        }
+
+        anims[i] = {
+          freq: Math.abs(t.freq - newFreq) < 0.5 ? t.freq : newFreq,
+          size: Math.abs(t.size - newSize) < 0.002 ? t.size : newSize,
+          isPrimary: t.isPrimary,
+        };
+      }
+
+      if (changed) {
+        setDisplay(anims.map(a => ({ ...a })));
+      }
+
+      rafRef.current = requestAnimationFrame(animate);
+    };
+    rafRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
   const formatFreq = (f: number) => {
-    if (f === 0) return "—";
+    if (f <= 0) return "";
     if (f >= 1000) return `${(f / 1000).toFixed(1)}k`;
     return `${Math.round(f)}`;
   };
 
+  const containerRef = useRef<View>(null);
+  const [containerSize, setContainerSize] = useState({ w: 120, h: 120 });
+
   return (
-    <View style={{ flex: 1, backgroundColor: surfaceColor, borderRadius: 10, paddingHorizontal: 6, paddingTop: 8, paddingBottom: 4, opacity: hasData ? 1 : 0.3 }}>
-      <View style={{ flex: 1, flexDirection: "row" as const, alignItems: "flex-end" as const, gap: 4 }}>
-        {peaks.map((p, i) => (
-          <View key={i} style={{ flex: 1, alignItems: "center" as const, justifyContent: "flex-end" as const, height: "100%" as const }}>
+    <View
+      ref={containerRef}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        if (width > 0 && height > 0) setContainerSize({ w: width, h: height });
+      }}
+      style={{ flex: 1, backgroundColor: surfaceColor, borderRadius: 12, overflow: "hidden" as const, opacity: hasData ? 1 : 0.3 }}
+    >
+      <View style={{ flex: 1, position: "relative" as const }}>
+        {display.map((b, i) => {
+          if (b.freq <= 0 && b.size <= 0) return null;
+
+          const maxBubbleR = Math.min(containerSize.w, containerSize.h) * 0.38;
+          const minBubbleR = 8;
+          const radius = minBubbleR + b.size * (maxBubbleR - minBubbleR);
+          const diameter = radius * 2;
+
+          const cx = containerSize.w * (i === 0 ? 0.5 : i === 1 ? 0.25 : 0.75);
+          const cy = containerSize.h * (i === 0 ? 0.42 : 0.55);
+
+          const freqLabel = formatFreq(b.freq);
+          const noteLabel = noteNameFromFreq(b.freq);
+          const opacity = Math.max(0.3, b.size);
+          const isLarge = diameter > 40;
+
+          return (
             <View
+              key={i}
               style={{
-                width: "80%" as const,
-                height: hasData && p.freq > 0 ? `${Math.max(5, p.value * 100)}%` : "3%",
-                backgroundColor: p.isPrimary ? accentColor : `${accentColor}66`,
-                borderRadius: 4,
+                position: "absolute" as const,
+                left: cx - radius,
+                top: cy - radius,
+                width: diameter,
+                height: diameter,
+                borderRadius: radius,
+                backgroundColor: b.isPrimary ? accentColor : `${accentColor}88`,
+                opacity,
+                alignItems: "center" as const,
+                justifyContent: "center" as const,
               }}
-            />
+            >
+              {isLarge && freqLabel ? (
+                <View style={{ alignItems: "center" as const }}>
+                  <Text style={{ fontSize: Math.min(12, diameter * 0.2), color: "#fff", fontFamily: "SpaceGrotesk_700Bold", textAlign: "center" as const }} numberOfLines={1}>
+                    {freqLabel} Hz
+                  </Text>
+                  {noteLabel ? (
+                    <Text style={{ fontSize: Math.min(9, diameter * 0.14), color: "rgba(255,255,255,0.75)", fontFamily: "SpaceGrotesk_500Medium", marginTop: 1 }} numberOfLines={1}>
+                      {noteLabel}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
+        {!hasData && (
+          <View style={{ flex: 1, alignItems: "center" as const, justifyContent: "center" as const }}>
+            <Text style={{ fontSize: 10, color: textColor, fontFamily: "SpaceGrotesk_400Regular", opacity: 0.5 }}>Mic off</Text>
           </View>
-        ))}
-      </View>
-      <View style={{ flexDirection: "row" as const, marginTop: 3, gap: 4 }}>
-        {peaks.map((p, i) => (
-          <View key={i} style={{ flex: 1, alignItems: "center" as const }}>
-            <Text style={{ fontSize: 7, color: p.isPrimary ? accentColor : textColor, fontFamily: "SpaceGrotesk_400Regular", textAlign: "center" as const }}>
-              {formatFreq(p.freq)}
-            </Text>
-          </View>
-        ))}
+        )}
       </View>
     </View>
   );
