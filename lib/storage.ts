@@ -124,6 +124,7 @@ export interface LoopBlockEntry {
   endBeat: number;
   type: "count" | "duration";
   value: number;
+  soundSet?: SoundSet;
   layerOf?: number;
   ownBeatTypes?: Record<number, BeatType>;
   ownSubdivisions?: Record<string, BeatType[]>;

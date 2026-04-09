@@ -284,6 +284,7 @@ export interface LoopBlock {
   jumpToBlock?: number;
   jumpCount?: number;
   bpm?: number;
+  soundSet?: string;
   layerOf?: number;
   ownBeatTypes?: Record<number, string>;
   ownSubdivisions?: Record<string, string[]>;
@@ -500,6 +501,7 @@ const BlockPill = React.memo(function BlockPill({
         </Text>
         <Text style={{ color: isActive ? accentColor : textTertiaryColor, fontSize: fs2, fontFamily: "SpaceGrotesk_500Medium" }}>
           ×{block.value}
+          {block.soundSet ? ` ♪` : ""}
           {isActive && progressInfo?.blockRepeatTotal > 1 && ` ${progressInfo.blockRepeatCurrent + 1}/${progressInfo.blockRepeatTotal}`}
         </Text>
         {layerCount > 0 && (
@@ -2230,6 +2232,34 @@ export function BeatIndicator({
                           <Ionicons name="add" size={S.ms(12, 0.4)} color={editBlock.bpm ? C.accent : C.textTertiary} />
                         </Pressable>
                       </View>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap", marginBottom: 4 }}>
+                        <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>Sound</Text>
+                        <Pressable
+                          onPress={() => updateBlock(editingBlockIndex!, { soundSet: undefined })}
+                          style={{
+                            paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4,
+                            backgroundColor: !editBlock.soundSet ? C.accent + "30" : "transparent",
+                            borderWidth: 1, borderColor: C.accent + "30",
+                          }}
+                        >
+                          <Text style={{ color: !editBlock.soundSet ? C.accent : C.textTertiary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium" }}>—</Text>
+                        </Pressable>
+                        {(["classic", "woodblock", "digital", "rimshot"] as const).map((s) => (
+                          <Pressable
+                            key={s}
+                            onPress={() => updateBlock(editingBlockIndex!, { soundSet: s })}
+                            style={{
+                              paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4,
+                              backgroundColor: editBlock.soundSet === s ? C.accent + "30" : "transparent",
+                              borderWidth: 1, borderColor: editBlock.soundSet === s ? C.accent + "50" : C.accent + "30",
+                            }}
+                          >
+                            <Text style={{ color: editBlock.soundSet === s ? C.accent : C.textSecondary, fontSize: 8, fontFamily: "SpaceGrotesk_500Medium" }}>
+                              {s.charAt(0).toUpperCase() + s.slice(1)}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap", marginBottom: editHasJump ? 4 : 0 }}>
                         <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>Jump</Text>
                         <Pressable
@@ -2708,6 +2738,34 @@ export function BeatIndicator({
                     >
                       <Ionicons name="add" size={S.ms(14, 0.4)} color={editBlock.bpm ? C.accent : C.textTertiary} />
                     </Pressable>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                    <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Sound</Text>
+                    <Pressable
+                      onPress={() => updateBlock(editingBlockIndex!, { soundSet: undefined })}
+                      style={{
+                        paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4,
+                        backgroundColor: !editBlock.soundSet ? C.accent + "30" : "transparent",
+                        borderWidth: 1, borderColor: C.accent + "30",
+                      }}
+                    >
+                      <Text style={{ color: !editBlock.soundSet ? C.accent : C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium" }}>—</Text>
+                    </Pressable>
+                    {(["classic", "woodblock", "digital", "rimshot"] as const).map((s) => (
+                      <Pressable
+                        key={s}
+                        onPress={() => updateBlock(editingBlockIndex!, { soundSet: s })}
+                        style={{
+                          paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4,
+                          backgroundColor: editBlock.soundSet === s ? C.accent + "30" : "transparent",
+                          borderWidth: 1, borderColor: editBlock.soundSet === s ? C.accent + "50" : C.accent + "30",
+                        }}
+                      >
+                        <Text style={{ color: editBlock.soundSet === s ? C.accent : C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium" }}>
+                          {s.charAt(0).toUpperCase() + s.slice(1)}
+                        </Text>
+                      </Pressable>
+                    ))}
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: editHasJump ? 6 : 0 }}>
                     <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Jump</Text>

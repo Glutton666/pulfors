@@ -437,6 +437,42 @@ export default function MetronomeScreen() {
       } catch (e) {}
     });
 
+    const blockToggle: Record<string, boolean> = {};
+    engine.setBlockAudioCallback((blockIndex: number, role: "high" | "low" | "strong") => {
+      const block = barConfigRef.current.loopBlocks[blockIndex];
+      const blockSet = block?.soundSet || soundSetRef.current;
+      const toggleKey = `blk-${blockIndex}-${role}`;
+      const toggle = !!blockToggle[toggleKey];
+      blockToggle[toggleKey] = !toggle;
+
+      if (Platform.OS === "web" && webClickReadyRef.current) {
+        playWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low");
+        return;
+      }
+
+      try {
+        const customs = customSoundSetsRef.current;
+        const customCfg = customs[blockSet];
+        let players: any;
+        if (customCfg) {
+          const mapping = role === "strong" ? customCfg.strong : role === "high" ? customCfg.accent : customCfg.normal;
+          if (mapping.type === "builtin") {
+            const srcSet = mapping.sourceSet || "classic";
+            players = allPlayersRef.current[srcSet] || allPlayersRef.current.classic;
+            const r = mapping.sourceRole || "strong";
+            const active = r === "strong" ? (toggle ? players.strongB : players.strongA) : r === "high" ? (toggle ? players.highB : players.highA) : (toggle ? players.lowB : players.lowA);
+            restartPlayer(active);
+            return;
+          }
+          players = allPlayersRef.current.classic;
+        } else {
+          players = allPlayersRef.current[blockSet as keyof typeof allPlayersRef.current] || allPlayersRef.current.classic;
+        }
+        const active = role === "strong" ? (toggle ? players.strongB : players.strongA) : role === "high" ? (toggle ? players.highB : players.highA) : (toggle ? players.lowB : players.lowA);
+        restartPlayer(active);
+      } catch (e) {}
+    });
+
     const preloadSounds = async (samples: NoteSampleMap) => {
       for (const s of Object.values(noteSampleSoundsRef.current)) {
         try { s.release(); } catch {}

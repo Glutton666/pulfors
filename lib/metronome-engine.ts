@@ -85,7 +85,7 @@ export class MetronomeEngine {
   private playCustomSample: ((beat: number, subBeat: number) => boolean) | null = null;
   private hapticMode: HapticMode = "all";
   private audioOffsetMs: number = 0;
-  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; layerOf?: number; ownBeatTypes?: Record<number, string>; ownSubdivisions?: Record<string, string[]> }[] = [];
+  private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; soundSet?: string; layerOf?: number; ownBeatTypes?: Record<number, string>; ownSubdivisions?: Record<string, string[]> }[] = [];
   private blockPlayMode: "sequential" | "loop" | "random" = "loop";
   private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
   private barBpmOverrides: Map<number, number> = new Map();
@@ -109,9 +109,14 @@ export class MetronomeEngine {
   }
 
   private playLayerClick: ((layerIndex: number, role: "high" | "low" | "strong") => void) | null = null;
+  private playBlockClick: ((blockIndex: number, role: "high" | "low" | "strong") => void) | null = null;
 
   setLayerAudioCallback(cb: (layerIndex: number, role: "high" | "low" | "strong") => void) {
     this.playLayerClick = cb;
+  }
+
+  setBlockAudioCallback(cb: (blockIndex: number, role: "high" | "low" | "strong") => void) {
+    this.playBlockClick = cb;
   }
 
   setCustomSampleCallback(callback: ((beat: number, subBeat: number) => boolean) | null) {
@@ -232,7 +237,7 @@ export class MetronomeEngine {
     this.invalidateScheduleCache();
   }
 
-  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; layerOf?: number; ownBeatTypes?: Record<number, string>; ownSubdivisions?: Record<string, string[]> }[]) {
+  setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; soundSet?: string; layerOf?: number; ownBeatTypes?: Record<number, string>; ownSubdivisions?: Record<string, string[]> }[]) {
     this.loopBlocks = blocks.map(b => ({ ...b }));
     this.invalidateScheduleCache();
     if (this.isRunning) {
@@ -768,12 +773,15 @@ export class MetronomeEngine {
     }
   }
 
-  private playTickAudio(beat: number, subBeat: number, isStrong: boolean, isAccent: boolean, isMute: boolean, layerIndex: number = 0) {
+  private playTickAudio(beat: number, subBeat: number, isStrong: boolean, isAccent: boolean, isMute: boolean, layerIndex: number = 0, blockIndex: number = -1) {
     if (!isMute) {
       try {
         if (layerIndex > 0 && this.playLayerClick) {
           const role = isStrong ? "strong" : isAccent ? "high" : "low";
           this.playLayerClick(layerIndex, role);
+        } else if (blockIndex >= 0 && this.loopBlocks[blockIndex]?.soundSet && this.playBlockClick) {
+          const role = isStrong ? "strong" : isAccent ? "high" : "low";
+          this.playBlockClick(blockIndex, role);
         } else {
           if (isStrong) {
             this.playStrongClick?.();
@@ -866,12 +874,13 @@ export class MetronomeEngine {
     } else if (offset > 0) {
       this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat);
       const li = tick.layerIndex;
-      setTimeout(() => this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, li), offset);
+      const bi = tick.blockIndex;
+      setTimeout(() => this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, li, bi), offset);
     } else if (offset < 0) {
-      this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, tick.layerIndex);
+      this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, tick.layerIndex, tick.blockIndex);
       setTimeout(() => this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat), Math.abs(offset));
     } else {
-      this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, tick.layerIndex);
+      this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, tick.layerIndex, tick.blockIndex);
       this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat);
     }
   }
