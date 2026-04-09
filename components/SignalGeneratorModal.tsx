@@ -1804,6 +1804,7 @@ const BUBBLE_COUNT = 3;
 const LERP_GROW = 0.22;
 const LERP_SHRINK = 0.03;
 const HOLD_MS = 1200;
+const AVG_WINDOW_MS = 2000;
 
 function noteNameFromFreq(freq: number): string {
   if (freq <= 0) return "";
@@ -1853,6 +1854,9 @@ function SpectrumGraph({
   const rafRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
 
+  interface PeakSample { freq: number; mag: number; isPrimary: boolean; time: number }
+  const historyRef = useRef<PeakSample[]>([]);
+
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
@@ -1870,16 +1874,51 @@ function SpectrumGraph({
     }
     candidates.sort((a, b) => b.mag - a.mag);
 
-    const topN = candidates.slice(0, BUBBLE_COUNT);
-    const maxMag = topN.length > 0 ? topN[0].mag : -100;
+    const now = performance.now();
+    const topRaw = candidates.slice(0, BUBBLE_COUNT);
+    for (const c of topRaw) {
+      historyRef.current.push({ freq: c.bin * binRes, mag: c.mag, isPrimary: c.bin === peakBin, time: now });
+    }
+
+    const cutoff = now - AVG_WINDOW_MS;
+    historyRef.current = historyRef.current.filter(s => s.time > cutoff);
+
+    const groups: { freqs: number[]; mags: number[]; primaryCount: number }[] = [];
+    for (const s of historyRef.current) {
+      let found = false;
+      for (const g of groups) {
+        const gAvg = g.freqs.reduce((a, b) => a + b, 0) / g.freqs.length;
+        if (Math.abs(s.freq - gAvg) / gAvg < 0.06) {
+          g.freqs.push(s.freq);
+          g.mags.push(s.mag);
+          if (s.isPrimary) g.primaryCount++;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        groups.push({ freqs: [s.freq], mags: [s.mag], primaryCount: s.isPrimary ? 1 : 0 });
+      }
+    }
+
+    groups.sort((a, b) => {
+      const aMax = Math.max(...a.mags);
+      const bMax = Math.max(...b.mags);
+      return bMax - aMax;
+    });
+
+    const topGroups = groups.slice(0, BUBBLE_COUNT);
+    const globalMax = topGroups.length > 0 ? Math.max(...topGroups[0].mags) : -100;
 
     const newTargets: BubbleState[] = [];
-    for (const c of topN) {
-      const normalized = Math.max(0.1, Math.min(1, (c.mag - (-100)) / (maxMag - (-100) + 1)));
+    for (const g of topGroups) {
+      const avgFreq = g.freqs.reduce((a, b) => a + b, 0) / g.freqs.length;
+      const avgMag = g.mags.reduce((a, b) => a + b, 0) / g.mags.length;
+      const normalized = Math.max(0.1, Math.min(1, (avgMag - (-100)) / (globalMax - (-100) + 1)));
       newTargets.push({
-        freq: c.bin * binRes,
+        freq: avgFreq,
         size: normalized,
-        isPrimary: c.bin === peakBin,
+        isPrimary: g.primaryCount > g.freqs.length * 0.3,
       });
     }
     newTargets.sort((a, b) => b.size - a.size);
@@ -1887,7 +1926,6 @@ function SpectrumGraph({
       newTargets.push({ freq: 0, size: 0, isPrimary: false });
     }
 
-    const now = performance.now();
     for (let i = 0; i < BUBBLE_COUNT; i++) {
       const prev = targetRef.current[i];
       const next = newTargets[i];
@@ -1901,6 +1939,7 @@ function SpectrumGraph({
     targetRef.current = newTargets;
   } else {
     const now = performance.now();
+    historyRef.current = [];
     for (let i = 0; i < BUBBLE_COUNT; i++) {
       if (targetRef.current[i].freq > 0 && holdTimeRef.current[i] === 0) {
         holdTimeRef.current[i] = now;
