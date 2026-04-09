@@ -1970,6 +1970,67 @@ function SpectrumGraph({
   const containerRef = useRef<View>(null);
   const [containerSize, setContainerSize] = useState({ w: 120, h: 120 });
 
+  const anyVisible = display.some(b => b.freq > 0 || b.size > 0.01);
+
+  const bubbles = useMemo(() => {
+    const cw = containerSize.w;
+    const ch = containerSize.h;
+    const maxR = Math.min(cw, ch) * 0.36;
+    const minR = 6;
+    const pad = 4;
+
+    const items: { cx: number; cy: number; r: number; freq: number; size: number; isPrimary: boolean }[] = [];
+
+    for (let i = 0; i < BUBBLE_COUNT; i++) {
+      const b = display[i];
+      if (b.freq <= 0 && b.size <= 0.01) continue;
+
+      const r = minR + b.size * (maxR - minR);
+
+      let cx: number;
+      let cy: number;
+      if (i === 0) {
+        cx = cw * 0.5;
+        cy = ch * 0.45;
+      } else if (i === 1) {
+        cx = cw * 0.24;
+        cy = ch * 0.52;
+      } else {
+        cx = cw * 0.76;
+        cy = ch * 0.52;
+      }
+
+      for (const placed of items) {
+        const dx = cx - placed.cx;
+        const dy = cy - placed.cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const minDist = r + placed.r + pad;
+        if (dist < minDist && dist > 0) {
+          const push = (minDist - dist);
+          cx += (dx / dist) * push;
+          cy += (dy / dist) * push;
+        }
+      }
+
+      cx = Math.max(r + 2, Math.min(cw - r - 2, cx));
+      cy = Math.max(r + 2, Math.min(ch - r - 2, cy));
+
+      items.push({ cx, cy, r, freq: b.freq, size: b.size, isPrimary: b.isPrimary });
+    }
+    return items;
+  }, [display, containerSize]);
+
+  const bgRings = useMemo(() => {
+    const cw = containerSize.w;
+    const ch = containerSize.h;
+    const maxR = Math.min(cw, ch) * 0.42;
+    return [
+      { r: maxR * 0.33, cx: cw * 0.5, cy: ch * 0.5 },
+      { r: maxR * 0.66, cx: cw * 0.5, cy: ch * 0.5 },
+      { r: maxR * 1.0, cx: cw * 0.5, cy: ch * 0.5 },
+    ];
+  }, [containerSize]);
+
   return (
     <View
       ref={containerRef}
@@ -1977,61 +2038,94 @@ function SpectrumGraph({
         const { width, height } = e.nativeEvent.layout;
         if (width > 0 && height > 0) setContainerSize({ w: width, h: height });
       }}
-      style={{ flex: 1, backgroundColor: surfaceColor, borderRadius: 12, overflow: "hidden" as const, opacity: hasData ? 1 : 0.3 }}
+      style={{ flex: 1, backgroundColor: surfaceColor, borderRadius: 12, overflow: "hidden" as const }}
     >
       <View style={{ flex: 1, position: "relative" as const }}>
-        {display.map((b, i) => {
-          if (b.freq <= 0 && b.size <= 0) return null;
-
-          const maxBubbleR = Math.min(containerSize.w, containerSize.h) * 0.38;
-          const minBubbleR = 8;
-          const radius = minBubbleR + b.size * (maxBubbleR - minBubbleR);
-          const diameter = radius * 2;
-
-          const cx = containerSize.w * (i === 0 ? 0.5 : i === 1 ? 0.25 : 0.75);
-          const cy = containerSize.h * (i === 0 ? 0.42 : 0.55);
-
-          const freqLabel = formatFreq(b.freq);
-          const noteLabel = noteNameFromFreq(b.freq);
-          const opacity = Math.max(0.3, b.size);
-          const isLarge = diameter > 40;
+        {bgRings.map((ring, i) => (
+          <View
+            key={`ring-${i}`}
+            style={{
+              position: "absolute" as const,
+              left: ring.cx - ring.r,
+              top: ring.cy - ring.r,
+              width: ring.r * 2,
+              height: ring.r * 2,
+              borderRadius: ring.r,
+              borderWidth: 1,
+              borderColor: `${accentColor}12`,
+            }}
+          />
+        ))}
+        {!anyVisible && (
+          <>
+            <View style={{
+              position: "absolute" as const,
+              left: containerSize.w * 0.5 - 3,
+              top: 6,
+              bottom: 6,
+              width: 1,
+              backgroundColor: `${accentColor}10`,
+            }} />
+            <View style={{
+              position: "absolute" as const,
+              top: containerSize.h * 0.5 - 3,
+              left: 6,
+              right: 6,
+              height: 1,
+              backgroundColor: `${accentColor}10`,
+            }} />
+            <View style={{ flex: 1, alignItems: "center" as const, justifyContent: "center" as const }}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: `${accentColor}15`, alignItems: "center" as const, justifyContent: "center" as const, marginBottom: 6 }}>
+                <Ionicons name="mic-outline" size={18} color={`${accentColor}50`} />
+              </View>
+              <Text style={{ fontSize: 9, color: textColor, fontFamily: "SpaceGrotesk_500Medium", opacity: 0.35 }}>
+                {micActive ? "Listening..." : "Mic off"}
+              </Text>
+            </View>
+          </>
+        )}
+        {bubbles.map((item, i) => {
+          const diameter = item.r * 2;
+          const opacity = Math.max(0.35, item.size);
+          const isLarge = diameter > 36;
 
           return (
             <View
               key={i}
               style={{
                 position: "absolute" as const,
-                left: cx - radius,
-                top: cy - radius,
+                left: item.cx - item.r,
+                top: item.cy - item.r,
                 width: diameter,
                 height: diameter,
-                borderRadius: radius,
-                backgroundColor: b.isPrimary ? accentColor : `${accentColor}88`,
+                borderRadius: item.r,
+                backgroundColor: item.isPrimary ? accentColor : `${accentColor}80`,
                 opacity,
                 alignItems: "center" as const,
                 justifyContent: "center" as const,
+                borderWidth: item.isPrimary ? 2 : 1,
+                borderColor: item.isPrimary ? `${accentColor}` : `${accentColor}40`,
               }}
             >
-              {isLarge && freqLabel ? (
-                <View style={{ alignItems: "center" as const }}>
-                  <Text style={{ fontSize: Math.min(12, diameter * 0.2), color: "#fff", fontFamily: "SpaceGrotesk_700Bold", textAlign: "center" as const }} numberOfLines={1}>
-                    {freqLabel} Hz
+              {isLarge ? (
+                <View style={{ alignItems: "center" as const, paddingHorizontal: 4 }}>
+                  <Text
+                    style={{ fontSize: Math.min(12, diameter * 0.18), color: "#fff", fontFamily: "SpaceGrotesk_700Bold", textAlign: "center" as const }}
+                    numberOfLines={1}
+                  >
+                    {formatFreq(item.freq)} Hz
                   </Text>
-                  {noteLabel ? (
-                    <Text style={{ fontSize: Math.min(9, diameter * 0.14), color: "rgba(255,255,255,0.75)", fontFamily: "SpaceGrotesk_500Medium", marginTop: 1 }} numberOfLines={1}>
-                      {noteLabel}
-                    </Text>
-                  ) : null}
+                  <Text
+                    style={{ fontSize: Math.min(9, diameter * 0.13), color: "rgba(255,255,255,0.7)", fontFamily: "SpaceGrotesk_500Medium", marginTop: 1 }}
+                    numberOfLines={1}
+                  >
+                    {noteNameFromFreq(item.freq)}
+                  </Text>
                 </View>
               ) : null}
             </View>
           );
         })}
-        {!hasData && (
-          <View style={{ flex: 1, alignItems: "center" as const, justifyContent: "center" as const }}>
-            <Text style={{ fontSize: 10, color: textColor, fontFamily: "SpaceGrotesk_400Regular", opacity: 0.5 }}>Mic off</Text>
-          </View>
-        )}
       </View>
     </View>
   );
