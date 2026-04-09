@@ -1801,7 +1801,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 }
 
 const BUBBLE_COUNT = 3;
-const LERP_SPEED = 0.18;
+const LERP_GROW = 0.22;
+const LERP_SHRINK = 0.03;
+const HOLD_MS = 1200;
 
 function noteNameFromFreq(freq: number): string {
   if (freq <= 0) return "";
@@ -1845,6 +1847,8 @@ function SpectrumGraph({
 
   const targetRef = useRef<BubbleState[]>(Array.from({ length: BUBBLE_COUNT }, () => ({ freq: 0, size: 0, isPrimary: false })));
   const animRef = useRef<BubbleState[]>(Array.from({ length: BUBBLE_COUNT }, () => ({ freq: 0, size: 0, isPrimary: false })));
+  const holdRef = useRef<BubbleState[]>(Array.from({ length: BUBBLE_COUNT }, () => ({ freq: 0, size: 0, isPrimary: false })));
+  const holdTimeRef = useRef<number[]>(Array.from({ length: BUBBLE_COUNT }, () => 0));
   const [display, setDisplay] = useState<BubbleState[]>(Array.from({ length: BUBBLE_COUNT }, () => ({ freq: 0, size: 0, isPrimary: false })));
   const rafRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
@@ -1882,8 +1886,26 @@ function SpectrumGraph({
     while (newTargets.length < BUBBLE_COUNT) {
       newTargets.push({ freq: 0, size: 0, isPrimary: false });
     }
+
+    const now = performance.now();
+    for (let i = 0; i < BUBBLE_COUNT; i++) {
+      const prev = targetRef.current[i];
+      const next = newTargets[i];
+      if (next.freq > 0 && next.size > 0) {
+        holdRef.current[i] = { ...next };
+        holdTimeRef.current[i] = now;
+      } else if (prev.freq > 0 && next.freq <= 0) {
+        holdTimeRef.current[i] = holdTimeRef.current[i] || now;
+      }
+    }
     targetRef.current = newTargets;
   } else {
+    const now = performance.now();
+    for (let i = 0; i < BUBBLE_COUNT; i++) {
+      if (targetRef.current[i].freq > 0 && holdTimeRef.current[i] === 0) {
+        holdTimeRef.current[i] = now;
+      }
+    }
     targetRef.current = Array.from({ length: BUBBLE_COUNT }, () => ({ freq: 0, size: 0, isPrimary: false }));
   }
 
@@ -1893,15 +1915,25 @@ function SpectrumGraph({
       if (!mountedRef.current) return;
       const dt = Math.min(now - lastTime, 50);
       lastTime = now;
-      const factor = 1 - Math.pow(1 - LERP_SPEED, dt / 16.67);
 
       const targets = targetRef.current;
       const anims = animRef.current;
       let changed = false;
 
       for (let i = 0; i < BUBBLE_COUNT; i++) {
-        const t = targets[i];
+        let t = targets[i];
         const a = anims[i];
+
+        const shrinking = t.size < a.size || (t.freq <= 0 && a.freq > 0);
+        if (shrinking) {
+          const elapsed = now - holdTimeRef.current[i];
+          if (elapsed < HOLD_MS && holdRef.current[i].freq > 0) {
+            t = holdRef.current[i];
+          }
+        }
+
+        const speed = shrinking ? LERP_SHRINK : LERP_GROW;
+        const factor = 1 - Math.pow(1 - speed, dt / 16.67);
 
         const newFreq = a.freq + (t.freq - a.freq) * factor;
         const newSize = a.size + (t.size - a.size) * factor;
