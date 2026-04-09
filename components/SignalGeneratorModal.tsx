@@ -1975,9 +1975,13 @@ function SpectrumGraph({
   const bubbles = useMemo(() => {
     const cw = containerSize.w;
     const ch = containerSize.h;
-    const maxR = Math.min(cw, ch) * 0.36;
+    const minDim = Math.min(cw, ch);
+    const pad = 6;
+
+    const active = display.filter(b => b.freq > 0 || b.size > 0.01);
+    const count = active.length;
+    const maxR = count <= 1 ? minDim * 0.32 : count === 2 ? minDim * 0.26 : minDim * 0.22;
     const minR = 6;
-    const pad = 4;
 
     const items: { cx: number; cy: number; r: number; freq: number; size: number; isPrimary: boolean }[] = [];
 
@@ -1989,34 +1993,52 @@ function SpectrumGraph({
 
       let cx: number;
       let cy: number;
-      if (i === 0) {
+      if (count === 1) {
         cx = cw * 0.5;
-        cy = ch * 0.45;
-      } else if (i === 1) {
-        cx = cw * 0.24;
-        cy = ch * 0.52;
+        cy = ch * 0.48;
+      } else if (count === 2) {
+        const slot = items.length;
+        cx = cw * (slot === 0 ? 0.33 : 0.67);
+        cy = ch * 0.48;
       } else {
-        cx = cw * 0.76;
-        cy = ch * 0.52;
+        const slot = items.length;
+        cx = cw * (slot === 0 ? 0.5 : slot === 1 ? 0.2 : 0.8);
+        cy = ch * (slot === 0 ? 0.38 : 0.6);
       }
-
-      for (const placed of items) {
-        const dx = cx - placed.cx;
-        const dy = cy - placed.cy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const minDist = r + placed.r + pad;
-        if (dist < minDist && dist > 0) {
-          const push = (minDist - dist);
-          cx += (dx / dist) * push;
-          cy += (dy / dist) * push;
-        }
-      }
-
-      cx = Math.max(r + 2, Math.min(cw - r - 2, cx));
-      cy = Math.max(r + 2, Math.min(ch - r - 2, cy));
 
       items.push({ cx, cy, r, freq: b.freq, size: b.size, isPrimary: b.isPrimary });
     }
+
+    for (let iter = 0; iter < 10; iter++) {
+      let anyOverlap = false;
+      for (let a = 0; a < items.length; a++) {
+        for (let b = a + 1; b < items.length; b++) {
+          const ia = items[a];
+          const ib = items[b];
+          const dx = ib.cx - ia.cx;
+          const dy = ib.cy - ia.cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const needed = ia.r + ib.r + pad;
+          if (dist < needed) {
+            anyOverlap = true;
+            const overlap = needed - dist;
+            const nx = dist > 0.1 ? dx / dist : 1;
+            const ny = dist > 0.1 ? dy / dist : 0;
+            const half = overlap * 0.55;
+            ia.cx -= nx * half;
+            ia.cy -= ny * half;
+            ib.cx += nx * half;
+            ib.cy += ny * half;
+          }
+        }
+      }
+      for (const it of items) {
+        it.cx = Math.max(it.r + 2, Math.min(cw - it.r - 2, it.cx));
+        it.cy = Math.max(it.r + 2, Math.min(ch - it.r - 2, it.cy));
+      }
+      if (!anyOverlap) break;
+    }
+
     return items;
   }, [display, containerSize]);
 
