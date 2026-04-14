@@ -1070,7 +1070,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       const IMPACT_RATIO = 2.0;
       const IMPACT_MIN_RMS = 0.04;
       const IMPACT_COOLDOWN_MS = 200;
-      const SMOOTH_ALPHA = 0.05;
+      const SMOOTH_ALPHA = 0.01;
 
       const detect = () => {
         if (!micActiveRef.current) return;
@@ -1824,7 +1824,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 }
 
 const BUBBLE_COUNT = 3;
-const LERP_GROW = 0.22;
+const LERP_GROW = 0.6;
 const LERP_SHRINK = 0.03;
 const HOLD_MS = 1800;
 const AVG_WINDOW_MS = 200;
