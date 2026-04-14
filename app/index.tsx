@@ -484,7 +484,7 @@ export default function MetronomeScreen() {
           const rawUri = uri.split("#")[0];
           const isFileUri = rawUri.startsWith("file://");
           const player = createAudioPlayer(rawUri, { downloadFirst: isFileUri });
-          player.volume = sampleVolumeRef.current * 5.0;
+          player.volume = sampleVolumeRef.current * 10.0;
           noteSampleSoundsRef.current[key] = player;
         } catch (e) {
           console.warn("[SamplePreload] Failed to preload:", key, e);
@@ -689,7 +689,7 @@ export default function MetronomeScreen() {
         try {
           const isFileUri = rawUri.startsWith("file://");
           const player = createAudioPlayer(rawUri, { downloadFirst: isFileUri });
-          player.volume = sampleVolumeRef.current * 5.0;
+          player.volume = sampleVolumeRef.current * 10.0;
           newPlayers[key] = player;
         } catch (e) {
           console.warn("[SamplePreload] Failed:", key, e);
@@ -826,7 +826,7 @@ export default function MetronomeScreen() {
         clickPCMs,
         samplePCMs,
         clickVolume: 1.0,
-        sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current * 5.0 : 0,
+        sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current * 10.0 : 0,
       });
 
       const wavUri = await saveRenderedWav(pcm);
@@ -1159,7 +1159,7 @@ export default function MetronomeScreen() {
 
   useEffect(() => {
     try {
-      const MAX_VOLUME = 5.0;
+      const MAX_VOLUME = 12.0;
       Object.values(allPlayers).forEach((set) => {
         const v = volume * MAX_VOLUME;
         set.highA.volume = v;
@@ -1220,7 +1220,7 @@ export default function MetronomeScreen() {
     (newVol: number) => {
       setSampleVolume(newVol);
       sampleVolumeRef.current = newVol;
-      const MAX_SAMPLE_VOL = 5.0;
+      const MAX_SAMPLE_VOL = 10.0;
       for (const player of Object.values(noteSampleSoundsRef.current)) {
         try { player.volume = newVol * MAX_SAMPLE_VOL; } catch {}
       }
@@ -1231,7 +1231,7 @@ export default function MetronomeScreen() {
   );
 
   useEffect(() => {
-    const MAX_SAMPLE_VOL = 5.0;
+    const MAX_SAMPLE_VOL = 10.0;
     for (const player of Object.values(noteSampleSoundsRef.current)) {
       try { player.volume = sampleVolume * MAX_SAMPLE_VOL; } catch {}
     }
@@ -1803,7 +1803,7 @@ export default function MetronomeScreen() {
   }, []);
 
   useEffect(() => {
-    const sub = addNotificationActionListener((actionId) => {
+    const sub = addNotificationActionListener(async (actionId) => {
       if (actionId === "TOGGLE_PLAY") {
         const engine = engineRef.current;
         if (!engine) return;
@@ -1851,6 +1851,15 @@ export default function MetronomeScreen() {
           setProgressInfo(null); setLayerProgressMap({});
 
           setIsPlaying(true);
+          if (Platform.OS !== "web") {
+            try {
+              await AudioModule.setAudioModeAsync({
+                playsInSilentMode: true,
+                interruptionMode: "mixWithOthers",
+                shouldPlayInBackground: true,
+              });
+            } catch {}
+          }
           engine.start(barModeRef.current ? (barStartBeatRef.current ?? undefined) : undefined);
           showPlayingNotification(bpmRef.current, modeLabel, languageRef.current);
 

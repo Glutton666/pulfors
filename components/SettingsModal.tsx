@@ -1295,17 +1295,20 @@ export function SettingsModal({
             <View
               style={[
                 styles.sliderFill,
-                { width: `${volume * 100}%` as any, backgroundColor: C.accent },
+                { width: `${volume * 100}%` as any, backgroundColor: volume >= 0.8 ? "#FF6B35" : C.accent },
               ]}
             />
           </View>
           <View
             style={[
               styles.sliderThumb,
-              { left: `${volume * 100}%` as any, backgroundColor: C.accent },
+              { left: `${volume * 100}%` as any, backgroundColor: volume >= 0.8 ? "#FF6B35" : C.accent },
             ]}
           />
         </View>
+        {volume >= 0.8 && (
+          <Text style={[styles.volumeWarning]}>{t("settings", "volumeWarning")}</Text>
+        )}
       </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
@@ -1327,17 +1330,20 @@ export function SettingsModal({
             <View
               style={[
                 styles.sliderFill,
-                { width: `${sampleVolume * 100}%` as any, backgroundColor: C.accent },
+                { width: `${sampleVolume * 100}%` as any, backgroundColor: sampleVolume >= 0.8 ? "#FF6B35" : C.accent },
               ]}
             />
           </View>
           <View
             style={[
               styles.sliderThumb,
-              { left: `${sampleVolume * 100}%` as any, backgroundColor: C.accent },
+              { left: `${sampleVolume * 100}%` as any, backgroundColor: sampleVolume >= 0.8 ? "#FF6B35" : C.accent },
             ]}
           />
         </View>
+        {sampleVolume >= 0.8 && (
+          <Text style={[styles.volumeWarning]}>{t("settings", "sampleVolumeWarning")}</Text>
+        )}
       </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
@@ -2372,6 +2378,14 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
         boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
       },
     }),
+  },
+  volumeWarning: {
+    fontSize: 11,
+    color: "#FF6B35",
+    paddingHorizontal: 8,
+    paddingTop: 4,
+    paddingBottom: 2,
+    fontFamily: "Inter_400Regular",
   },
   sliderLabels: {
     flexDirection: "row",
