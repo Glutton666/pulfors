@@ -1059,10 +1059,18 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       const timeBuf = new Float32Array(analyser.fftSize);
       const spectrumCopy = new Float32Array(freqBinCount);
       const MIC_GATE = 0.03;
-      const WINDOW_MS = 500;
+      const WINDOW_MS = 400;
       let readings: number[] = [];
       let windowStart = Date.now();
       let spectrumFrameCount = 0;
+
+      // Impact detection state
+      let smoothedRms = 0.0;
+      let lastImpactTime = 0;
+      const IMPACT_RATIO = 2.0;
+      const IMPACT_MIN_RMS = 0.04;
+      const IMPACT_COOLDOWN_MS = 600;
+      const SMOOTH_ALPHA = 0.05;
 
       const detect = () => {
         if (!micActiveRef.current) return;
@@ -1071,31 +1079,46 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
         for (let i = 0; i < timeBuf.length; i++) rms += timeBuf[i] * timeBuf[i];
         rms = Math.sqrt(rms / timeBuf.length);
 
-        analyser.getFloatFrequencyData(fftBuf);
-        spectrumCopy.set(fftBuf);
-        spectrumDataRef.current = spectrumCopy;
+        // Slow-following envelope for impact baseline
+        smoothedRms = smoothedRms + SMOOTH_ALPHA * (rms - smoothedRms);
 
-        if (rms >= MIC_GATE) {
+        const nowMs = Date.now();
+        const isImpact =
+          rms >= IMPACT_MIN_RMS &&
+          rms >= smoothedRms * IMPACT_RATIO &&
+          nowMs - lastImpactTime > IMPACT_COOLDOWN_MS;
+
+        if (isImpact) {
+          lastImpactTime = nowMs;
+          // Capture spectrum only at impact moment
+          analyser.getFloatFrequencyData(fftBuf);
+          spectrumCopy.set(fftBuf);
+          spectrumDataRef.current = spectrumCopy;
+
           const result = fftPeakDetect(fftBuf, audioCtx.sampleRate, analyser.fftSize);
           if (result) {
             spectrumPeakBinRef.current = result.peakBin;
             if (result.freq > 20 && result.freq <= MAX_FREQ) {
-              readings.push(result.freq);
+              readings = [result.freq];
             }
           } else {
             spectrumPeakBinRef.current = -1;
           }
-        } else {
-          spectrumPeakBinRef.current = -1;
-        }
 
-        spectrumFrameCount++;
-        if (spectrumFrameCount % 3 === 0) {
+          spectrumFrameCount++;
           setSpectrumTick(spectrumFrameCount);
+          windowStart = nowMs;
+        } else if (rms >= MIC_GATE && nowMs - lastImpactTime < WINDOW_MS) {
+          // Collect pitch readings in the window just after an impact
+          analyser.getFloatFrequencyData(fftBuf);
+          const result = fftPeakDetect(fftBuf, audioCtx.sampleRate, analyser.fftSize);
+          if (result && result.freq > 20 && result.freq <= MAX_FREQ) {
+            readings.push(result.freq);
+          }
         }
 
-        const elapsed = Date.now() - windowStart;
-        if (elapsed >= WINDOW_MS) {
+        const elapsed = nowMs - windowStart;
+        if (elapsed >= WINDOW_MS && readings.length > 0) {
           const dominant = pickDominantFreq(readings);
           setMicAnalyzed(true);
           if (dominant) {
@@ -1108,7 +1131,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             setMicDetectedNote(null);
           }
           readings = [];
-          windowStart = Date.now();
+          windowStart = nowMs;
         }
 
         micRafRef.current = requestAnimationFrame(detect);
@@ -1803,8 +1826,8 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 const BUBBLE_COUNT = 3;
 const LERP_GROW = 0.22;
 const LERP_SHRINK = 0.03;
-const HOLD_MS = 1200;
-const AVG_WINDOW_MS = 2000;
+const HOLD_MS = 1800;
+const AVG_WINDOW_MS = 200;
 
 function noteNameFromFreq(freq: number): string {
   if (freq <= 0) return "";
