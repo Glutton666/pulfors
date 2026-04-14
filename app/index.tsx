@@ -2432,7 +2432,7 @@ export default function MetronomeScreen() {
     (pattern: BeatType[]) => {
       const newSubs: Record<string, BeatType[]> = {};
       for (let i = 0; i < beatsPerMeasure; i++) {
-        if (pattern.length > 1) {
+        if (pattern.length >= 1) {
           newSubs[String(i)] = [...pattern];
           engineRef.current?.setBeatSubdivision(i, pattern);
         } else {
@@ -2461,7 +2461,7 @@ export default function MetronomeScreen() {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
         applyToAllBeats(subdivisionPattern);
-      } else if (target !== null && subdivisionPattern.length > 1) {
+      } else if (target !== null && subdivisionPattern.length >= 1) {
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
@@ -2475,7 +2475,7 @@ export default function MetronomeScreen() {
           dialConfigRef.current.beatSubdivisions = { ...newSubs };
         }
         persistSettings({ beatSubdivisions: newSubs });
-      } else if (target !== null && subdivisionPattern.length <= 1) {
+      } else if (target !== null && subdivisionPattern.length < 1) {
         if (Platform.OS !== "web") {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
