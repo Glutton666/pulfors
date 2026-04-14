@@ -254,10 +254,10 @@ export const TUNING_DATA: InstrumentCategory[] = [
         id: "pipa",
         name: { ko: "비파", en: "Pipa" },
         strings: [
-          { note: "A", octave: 3, freq: 220.00, label: { ko: "1현", en: "1st" } },
-          { note: "D", octave: 4, freq: 293.66, label: { ko: "2현", en: "2nd" } },
-          { note: "E", octave: 4, freq: 329.63, label: { ko: "3현", en: "3rd" } },
-          { note: "A", octave: 4, freq: 440.00, label: { ko: "4현", en: "4th" } },
+          { note: "A", octave: 2, freq: 110.00, label: { ko: "1현 A", en: "1st A" } },
+          { note: "D", octave: 3, freq: 146.83, label: { ko: "2현 D", en: "2nd D" } },
+          { note: "E", octave: 3, freq: 164.81, label: { ko: "3현 E", en: "3rd E" } },
+          { note: "A", octave: 3, freq: 220.00, label: { ko: "4현 A", en: "4th A" } },
         ],
       },
       {
