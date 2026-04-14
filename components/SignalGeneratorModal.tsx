@@ -1069,7 +1069,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       let lastImpactTime = 0;
       const IMPACT_RATIO = 2.0;
       const IMPACT_MIN_RMS = 0.04;
-      const IMPACT_COOLDOWN_MS = 600;
+      const IMPACT_COOLDOWN_MS = 200;
       const SMOOTH_ALPHA = 0.05;
 
       const detect = () => {
