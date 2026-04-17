@@ -1460,7 +1460,8 @@ export function BeatIndicator({
   if (barMode) {
     const isDropping = dropTargetBeat !== null;
     const renderBarRow = (beat: number, copyIndex: number, rowHeight?: number, hideLabel?: boolean) => {
-      const pattern = beatSubdivisions[String(beat)] || [beatTypes[beat] || "normal"];
+      const rawPattern = beatSubdivisions[String(beat)];
+      const pattern = (rawPattern && rawPattern.length > 1) ? rawPattern : [beatTypes[beat] || "normal"];
       const isCurrent = isPlaying && currentBeat === beat && (barLoopMode === "once" ? copyIndex === 0 : copyIndex === activeCopy);
       const bType = beatTypes[beat] || "normal";
       const isDropTarget = isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
@@ -3360,7 +3361,7 @@ export function BeatIndicator({
 
         <View style={styles.centerArea} pointerEvents="box-none">
           {hubImages.length > 0 && (() => {
-            const currentBeatType = isPlaying && currentBeat >= 0 ? (beatTypes[currentBeat] || "normal") : "normal";
+            const currentBeatType = isPlaying && currentBeat >= 0 ? (beatTypes[currentBeat] || "normal") : (beatTypes[0] || "normal");
             const activeUri = getImageForBeatType(currentBeatType);
             return (
               <View style={styles.centerImageContainer} pointerEvents="none">

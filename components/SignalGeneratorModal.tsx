@@ -963,7 +963,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       } catch {}
       micRecordingRef.current = null;
     }
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: false, interruptionModeIOS: InterruptionModeIOS.MixWithOthers });
+    await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, interruptionModeIOS: InterruptionModeIOS.MixWithOthers, shouldDuckAndroid: false });
   }, []);
 
   const stopMic = useCallback(() => {
@@ -1189,6 +1189,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
         interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
+        shouldDuckAndroid: false,
       });
 
       micActiveRef.current = true;

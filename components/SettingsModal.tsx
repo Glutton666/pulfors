@@ -830,6 +830,7 @@ export function SettingsModal({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
         interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
+        shouldDuckAndroid: false,
       });
       const recording = new Audio.Recording();
       await recording.prepareToRecordAsync({
@@ -862,7 +863,7 @@ export function SettingsModal({
       await recordingRef.current.stopAndUnloadAsync();
       const uri = recordingRef.current.getURI();
       recordingRef.current = null;
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, interruptionModeIOS: InterruptionModeIOS.MixWithOthers });
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, interruptionModeIOS: InterruptionModeIOS.MixWithOthers, shouldDuckAndroid: false });
       if (uri) {
         const sound = new Audio.Sound();
         await sound.loadAsync({ uri });

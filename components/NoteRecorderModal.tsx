@@ -118,7 +118,7 @@ export function NoteRecorderModal({
       clickSoundRef.current = null;
     }
     try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, interruptionModeIOS: InterruptionModeIOS.MixWithOthers });
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, interruptionModeIOS: InterruptionModeIOS.MixWithOthers, shouldDuckAndroid: false });
     } catch {}
   }, []);
 
@@ -177,6 +177,7 @@ export function NoteRecorderModal({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
         interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
+        shouldDuckAndroid: false,
       });
 
       const recording = new Audio.Recording();
@@ -305,7 +306,7 @@ export function NoteRecorderModal({
       await recordingRef.current.stopAndUnloadAsync();
       const uri = recordingRef.current.getURI();
       recordingRef.current = null;
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, interruptionModeIOS: InterruptionModeIOS.MixWithOthers });
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, interruptionModeIOS: InterruptionModeIOS.MixWithOthers, shouldDuckAndroid: false });
 
       if (uri) {
         setRecordedUri(uri);
