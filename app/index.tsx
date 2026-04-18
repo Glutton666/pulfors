@@ -1495,11 +1495,11 @@ export default function MetronomeScreen() {
         }
         return next;
       });
-      // 바 모드에서 서브디비전이 2개 이상이면 첫 번째 셀을 비트 타입과 동기화
+      // 바 모드에서 서브디비전이 있으면 첫 번째 셀을 비트 타입과 동기화
       if (barModeRef.current) {
         setBeatSubdivisions((prev) => {
           const subs = prev[String(index)];
-          if (!subs || subs.length <= 1) return prev;
+          if (!subs || subs.length === 0) return prev;
           const newSubs = { ...prev, [String(index)]: [type, ...subs.slice(1)] as BeatType[] };
           barConfigRef.current.beatSubdivisions = newSubs;
           engineRef.current?.setAllBeatSubdivisions(newSubs);
