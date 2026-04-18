@@ -192,21 +192,34 @@ export async function dismissNotification() {
 export function addNotificationActionListener(
   callback: (actionId: string) => void
 ) {
-  if (Platform.OS === "web" || !Notifications) {
+  if (Platform.OS === "web") {
     return { remove: () => {} };
   }
   if (isExpoGo) {
     return { remove: () => {} };
   }
 
-  return Notifications.addNotificationResponseReceivedListener((response) => {
-    const actionId = response.actionIdentifier;
-    if (
-      actionId === "TOGGLE_PLAY" ||
-      actionId === "BPM_DOWN" ||
-      actionId === "BPM_UP"
-    ) {
-      callback(actionId);
-    }
+  let sub: { remove: () => void } | null = null;
+  let removed = false;
+
+  getNotifications().then((N) => {
+    if (!N || removed) return;
+    sub = N.addNotificationResponseReceivedListener((response) => {
+      const actionId = response.actionIdentifier;
+      if (
+        actionId === "TOGGLE_PLAY" ||
+        actionId === "BPM_DOWN" ||
+        actionId === "BPM_UP"
+      ) {
+        callback(actionId);
+      }
+    });
   });
+
+  return {
+    remove: () => {
+      removed = true;
+      sub?.remove();
+    },
+  };
 }
