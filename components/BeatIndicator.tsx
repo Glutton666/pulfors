@@ -875,7 +875,8 @@ export function BeatIndicator({
       return;
     }
     if (cellIndex === 0) {
-      // 첫 셀: 엔진과 동일한 로직으로 현재 표시 타입 계산
+      // 첫 셀: 엔진과 동일한 로직으로 현재 표시 타입을 계산하고 사이클
+      // onBeatTypeChange (handleBeatTypeChange)가 rawPattern[0]도 자동 동기화함
       const bType = beatTypes[beatIndex] || "normal";
       let currentDisplay: BeatType;
       if (bType === "mute") {
@@ -892,10 +893,6 @@ export function BeatIndicator({
         : currentDisplay === "accent" ? "normal"
         : currentDisplay === "normal" ? "mute"
         : "strong";
-      // rawPattern[0]과 beatTypes 모두 동기화
-      const newPattern = [...pattern] as BeatType[];
-      newPattern[0] = next;
-      onBeatSubdivisionChange(beatIndex, newPattern);
       onBeatTypeChange(beatIndex, next);
       if (Platform.OS !== "web") {
         Haptics.impactAsync(
