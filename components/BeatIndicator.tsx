@@ -3576,6 +3576,8 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     width: S.ms(220, 0.5),
     alignItems: "center",
     borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.surface,
   },
   barTimerHeader: {
     flexDirection: "row",
