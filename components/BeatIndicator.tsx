@@ -869,11 +869,46 @@ export function BeatIndicator({
   const handleBarCellPress = useCallback((beatIndex: number, cellIndex: number) => {
     if (isPlaying) return;
     const pattern = beatSubdivisions[String(beatIndex)];
-    if (!pattern || pattern.length <= 1 || cellIndex === 0) {
+    if (!pattern || pattern.length <= 1) {
+      // 서브디비전 없음: 비트 타입 사이클
       cycleBeatType(beatIndex);
       return;
     }
-    const newPattern = [...pattern];
+    if (cellIndex === 0) {
+      // 첫 셀: 엔진과 동일한 로직으로 현재 표시 타입 계산
+      const bType = beatTypes[beatIndex] || "normal";
+      let currentDisplay: BeatType;
+      if (bType === "mute") {
+        currentDisplay = "mute";
+      } else if (bType === "strong") {
+        currentDisplay = (pattern[0] === "normal" || pattern[0] === "accent") ? "strong" : (pattern[0] as BeatType);
+      } else if (bType === "accent") {
+        currentDisplay = pattern[0] === "normal" ? "accent" : (pattern[0] as BeatType);
+      } else {
+        currentDisplay = pattern[0] as BeatType;
+      }
+      const next: BeatType =
+        currentDisplay === "strong" ? "accent"
+        : currentDisplay === "accent" ? "normal"
+        : currentDisplay === "normal" ? "mute"
+        : "strong";
+      // rawPattern[0]과 beatTypes 모두 동기화
+      const newPattern = [...pattern] as BeatType[];
+      newPattern[0] = next;
+      onBeatSubdivisionChange(beatIndex, newPattern);
+      onBeatTypeChange(beatIndex, next);
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(
+          next === "strong" || next === "accent"
+            ? Haptics.ImpactFeedbackStyle.Heavy
+            : next === "mute"
+            ? Haptics.ImpactFeedbackStyle.Light
+            : Haptics.ImpactFeedbackStyle.Medium
+        );
+      }
+      return;
+    }
+    const newPattern = [...pattern] as BeatType[];
     const current = newPattern[cellIndex];
     const next: BeatType =
       current === "strong" ? "accent"
@@ -891,7 +926,7 @@ export function BeatIndicator({
           : Haptics.ImpactFeedbackStyle.Medium
       );
     }
-  }, [isPlaying, beatSubdivisions, onBeatSubdivisionChange, cycleBeatType]);
+  }, [isPlaying, beatSubdivisions, beatTypes, onBeatSubdivisionChange, onBeatTypeChange, cycleBeatType]);
 
   const barScrollRef = useRef<ScrollView>(null);
   const barScrollYRef = useRef(0);
@@ -1462,11 +1497,22 @@ export function BeatIndicator({
     const renderBarRow = (beat: number, copyIndex: number, rowHeight?: number, hideLabel?: boolean) => {
       const rawPattern = beatSubdivisions[String(beat)];
       const bType = beatTypes[beat] || "normal";
-      const pattern: BeatType[] = (rawPattern && rawPattern.length > 1)
-        ? (bType === "mute"
-            ? rawPattern.map(() => "mute" as BeatType)
-            : [bType, ...rawPattern.slice(1)] as BeatType[])
-        : [bType];
+      // 엔진의 getSubPattern 로직과 동일하게 미러링
+      const pattern: BeatType[] = (() => {
+        if (!rawPattern || rawPattern.length <= 1) return [bType];
+        if (bType === "mute") return rawPattern.map(() => "mute" as BeatType);
+        if (bType === "strong") {
+          const result = [...rawPattern] as BeatType[];
+          if (result[0] === "normal" || result[0] === "accent") result[0] = "strong";
+          return result;
+        }
+        if (bType === "accent") {
+          const result = [...rawPattern] as BeatType[];
+          if (result[0] === "normal") result[0] = "accent";
+          return result;
+        }
+        return [...rawPattern] as BeatType[];
+      })();
       const isCurrent = isPlaying && currentBeat === beat && (barLoopMode === "once" ? copyIndex === 0 : copyIndex === activeCopy);
       const isDropTarget = isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
       const beatBlocks = blockForBeat.get(beat) || [];
