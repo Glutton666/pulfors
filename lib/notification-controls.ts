@@ -8,7 +8,10 @@ const NOTIFICATION_ID = "metronome_playback";
 let isSetup = false;
 let Notifications: typeof import("expo-notifications") | null = null;
 
-const isExpoGo = Constants.appOwnership === "expo";
+// Expo SDK 54에서 appOwnership이 deprecated — executionEnvironment도 함께 확인
+const isExpoGo =
+  Constants.appOwnership === "expo" ||
+  (Constants as any).executionEnvironment === "storeClient";
 
 async function getNotifications() {
   if (Notifications) return Notifications;
@@ -46,22 +49,29 @@ function buildActions(isPlaying: boolean, lang: Language = "ko") {
     {
       identifier: "BPM_DOWN",
       buttonTitle: "− BPM",
-      options: { opensAppToForeground: false },
+      options: { opensAppToForeground: true },
     },
     {
       identifier: "TOGGLE_PLAY",
-      buttonTitle: isPlaying ? `⏸ ${t("notification", "pause")}` : `▶ ${t("notification", "play")}`,
-      options: { opensAppToForeground: false },
+      buttonTitle: isPlaying
+        ? `⏸ ${t("notification", "pause")}`
+        : `▶ ${t("notification", "play")}`,
+      options: { opensAppToForeground: true },
     },
     {
       identifier: "BPM_UP",
       buttonTitle: "+ BPM",
-      options: { opensAppToForeground: false },
+      options: { opensAppToForeground: true },
     },
   ];
 }
 
-function buildContent(bpm: number, _mode: string, isPlaying: boolean, lang: Language = "ko") {
+function buildContent(
+  bpm: number,
+  _mode: string,
+  isPlaying: boolean,
+  lang: Language = "ko"
+) {
   const t = createT(lang);
   return {
     title: `${isPlaying ? "▶" : "⏸"} ${bpm} BPM`,
@@ -89,17 +99,14 @@ export async function setupNotificationControls(lang: Language = "ko") {
     if (Platform.OS === "android") {
       await N.setNotificationChannelAsync("metronome", {
         name: t("notification", "channelName"),
-        importance: N.AndroidImportance.LOW,
+        importance: N.AndroidImportance.DEFAULT,
         sound: undefined,
         vibrationPattern: [],
         enableVibrate: false,
       });
     }
 
-    await N.setNotificationCategoryAsync(
-      CATEGORY_ID,
-      buildActions(false, lang)
-    );
+    await N.setNotificationCategoryAsync(CATEGORY_ID, buildActions(false, lang));
 
     isSetup = true;
   } catch (e) {
@@ -107,7 +114,11 @@ export async function setupNotificationControls(lang: Language = "ko") {
   }
 }
 
-export async function showPlayingNotification(bpm: number, mode: string, lang: Language = "ko") {
+export async function showPlayingNotification(
+  bpm: number,
+  mode: string,
+  lang: Language = "ko"
+) {
   if (Platform.OS === "web") return;
   if (isExpoGo) return;
   if (!isSetup) {
@@ -134,7 +145,12 @@ export async function showPlayingNotification(bpm: number, mode: string, lang: L
   }
 }
 
-export async function updateNotificationBpm(bpm: number, mode: string, isPlaying: boolean = true, lang: Language = "ko") {
+export async function updateNotificationBpm(
+  bpm: number,
+  mode: string,
+  isPlaying: boolean = true,
+  lang: Language = "ko"
+) {
   if (Platform.OS === "web" || !isSetup) return;
   if (isExpoGo) return;
 
@@ -152,7 +168,11 @@ export async function updateNotificationBpm(bpm: number, mode: string, isPlaying
   }
 }
 
-export async function showPausedNotification(bpm: number, mode: string, lang: Language = "ko") {
+export async function showPausedNotification(
+  bpm: number,
+  mode: string,
+  lang: Language = "ko"
+) {
   if (Platform.OS === "web" || !isSetup) return;
   if (isExpoGo) return;
 
@@ -202,8 +222,30 @@ export function addNotificationActionListener(
   let sub: { remove: () => void } | null = null;
   let removed = false;
 
-  getNotifications().then((N) => {
+  // 앱이 종료 상태에서 알림 버튼으로 실행된 경우를 처리
+  getNotifications().then(async (N) => {
     if (!N || removed) return;
+
+    // 앱 실행 시 이미 대기 중인 알림 응답 처리
+    try {
+      const lastResponse = await N.getLastNotificationResponseAsync();
+      if (lastResponse && !removed) {
+        const actionId = lastResponse.actionIdentifier;
+        if (
+          actionId === "TOGGLE_PLAY" ||
+          actionId === "BPM_DOWN" ||
+          actionId === "BPM_UP"
+        ) {
+          // 앱이 완전히 마운트된 후 처리
+          setTimeout(() => {
+            if (!removed) callback(actionId);
+          }, 500);
+        }
+      }
+    } catch {}
+
+    if (removed) return;
+
     sub = N.addNotificationResponseReceivedListener((response) => {
       const actionId = response.actionIdentifier;
       if (

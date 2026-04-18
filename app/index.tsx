@@ -1855,7 +1855,8 @@ export default function MetronomeScreen() {
   }, []);
 
   useEffect(() => {
-    const sub = addNotificationActionListener(async (actionId) => {
+    const sub = addNotificationActionListener((actionId) => {
+      const handleAsync = async () => {
       if (actionId === "TOGGLE_PLAY") {
         const engine = engineRef.current;
         if (!engine) return;
@@ -1977,6 +1978,8 @@ export default function MetronomeScreen() {
           }, 300);
         }
       }
+      };
+      handleAsync().catch((e) => console.warn("[NotifAction] 알림 버튼 핸들러 에러:", e));
     });
     return () => {
       sub.remove();
