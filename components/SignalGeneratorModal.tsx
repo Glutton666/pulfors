@@ -31,21 +31,48 @@ import { TUNING_DATA } from "@/lib/tuning-data";
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
 
+function base64ToBytes(base64: string): Uint8Array {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const lookup = new Uint8Array(256);
+  for (let i = 0; i < chars.length; i++) lookup[chars.charCodeAt(i)] = i;
+  const clean = base64.replace(/[^A-Za-z0-9+/]/g, "");
+  const len = clean.length;
+  let outLen = Math.floor(len * 3 / 4);
+  if (clean[len - 1] === "=") outLen--;
+  if (clean[len - 2] === "=") outLen--;
+  const bytes = new Uint8Array(outLen);
+  let idx = 0;
+  for (let i = 0; i < len; i += 4) {
+    const a = lookup[clean.charCodeAt(i)] ?? 0;
+    const b = lookup[clean.charCodeAt(i + 1)] ?? 0;
+    const c = lookup[clean.charCodeAt(i + 2)] ?? 0;
+    const d = lookup[clean.charCodeAt(i + 3)] ?? 0;
+    if (idx < outLen) bytes[idx++] = (a << 2) | (b >> 4);
+    if (idx < outLen) bytes[idx++] = ((b & 0xf) << 4) | (c >> 2);
+    if (idx < outLen) bytes[idx++] = ((c & 0x03) << 6) | d;
+  }
+  return bytes;
+}
+
 function decodeWavBase64(base64: string, sampleRate: number): { samples: Float32Array; rate: number } | null {
   try {
-    const binaryStr = atob(base64);
-    const bytes = new Uint8Array(binaryStr.length);
-    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+    const bytes = base64ToBytes(base64);
+    if (bytes.length < 44) {
+      console.warn("[MicTuner] decodeWav: file too small:", bytes.length);
+      return null;
+    }
     const view = new DataView(bytes.buffer);
     const riffTag = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
     if (riffTag !== "RIFF") {
       console.warn("[MicTuner] decodeWav: not a WAV file, header:", riffTag, "size:", bytes.length);
       return null;
     }
+    const audioFormat = view.getUint16(20, true); // 1=PCM int, 3=IEEE float
     const numChannels = view.getUint16(22, true);
     const wavSampleRate = view.getUint32(24, true);
     const bitsPerSample = view.getUint16(34, true);
-    let dataOffset = 36;
+    console.log("[MicTuner] WAV: fmt=", audioFormat, "ch=", numChannels, "rate=", wavSampleRate, "bits=", bitsPerSample, "size=", bytes.length);
+    let dataOffset = 12; // skip RIFF header
     while (dataOffset < bytes.length - 8) {
       const tag = String.fromCharCode(bytes[dataOffset], bytes[dataOffset + 1], bytes[dataOffset + 2], bytes[dataOffset + 3]);
       const chunkSize = view.getUint32(dataOffset + 4, true);
@@ -57,18 +84,27 @@ function decodeWavBase64(base64: string, sampleRate: number): { samples: Float32
         for (let i = 0; i < numSamples; i++) {
           const offset = dataOffset + i * bytesPerSample * numChannels;
           if (offset + bytesPerSample > bytes.length) break;
-          if (bitsPerSample === 16) {
+          if (audioFormat === 3 && bitsPerSample === 32) {
+            samples[i] = view.getFloat32(offset, true);
+          } else if (bitsPerSample === 16) {
             samples[i] = view.getInt16(offset, true) / 32768;
+          } else if (bitsPerSample === 24) {
+            const lo = bytes[offset] | (bytes[offset + 1] << 8);
+            const hi = bytes[offset + 2];
+            const val = (hi & 0x80) ? (lo | (hi << 16) | 0xff000000) : (lo | (hi << 16));
+            samples[i] = val / 8388608;
           } else if (bitsPerSample === 8) {
             samples[i] = (bytes[offset] - 128) / 128;
           }
         }
         return { samples, rate: wavSampleRate || sampleRate };
       }
-      dataOffset += 8 + chunkSize;
+      dataOffset += 8 + (chunkSize % 2 === 1 ? chunkSize + 1 : chunkSize);
     }
+    console.warn("[MicTuner] decodeWav: no data chunk found");
     return null;
-  } catch {
+  } catch (e) {
+    console.warn("[MicTuner] decodeWav exception:", e);
     return null;
   }
 }
@@ -166,15 +202,17 @@ async function analyzeViaServer(base64: string, ext: string): Promise<{ frequenc
   try {
     const domain = process.env.EXPO_PUBLIC_DOMAIN;
     if (!domain) return null;
-    const apiUrl = `https://${domain}`;
+    const apiUrl = domain.startsWith("http") ? domain : `https://${domain}`;
     const resp = await fetch(new URL("/api/analyze-audio", apiUrl).href, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ audio: base64, format: ext }),
     });
     if (resp.ok) return await resp.json();
+    console.warn("[MicTuner] server analyze HTTP error:", resp.status);
     return null;
-  } catch {
+  } catch (e) {
+    console.warn("[MicTuner] server analyze error:", e);
     return null;
   }
 }
@@ -1249,7 +1287,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                   const serverResult = await analyzeViaServer(base64, ".m4a");
                   analysisResult = serverResult ?? { frequency: null, note: null };
                 } else {
-                  analysisResult = analyzeWavLocally(base64, SAMPLE_RATE);
+                  // iOS: 서버 분석 우선 시도, 실패 시 로컬 분석 폴백
+                  const serverResult = await analyzeViaServer(base64, ".wav");
+                  analysisResult = serverResult ?? analyzeWavLocally(base64, SAMPLE_RATE);
                 }
                 setMicAnalyzed(true);
                 if (analysisResult.frequency) {
@@ -1257,13 +1297,11 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                   setMicDetectedFreq(analysisResult.frequency);
                   setMicDetectedNote(analysisResult.note);
                 } else {
-                  if (Platform.OS === "android") {
-                    nativeFailCountRef.current++;
-                    if (nativeFailCountRef.current >= 3) {
-                      autoFallbackToWebView();
-                      try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
-                      return;
-                    }
+                  nativeFailCountRef.current++;
+                  if (Platform.OS === "android" && nativeFailCountRef.current >= 3) {
+                    autoFallbackToWebView();
+                    try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
+                    return;
                   }
                   setMicDetectedFreq(null);
                   setMicDetectedNote(null);

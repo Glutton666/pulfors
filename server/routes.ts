@@ -96,6 +96,72 @@ function ffmpegConvertToPcm(inputPath: string, outputPath: string): Promise<void
   });
 }
 
+// WAV 파일을 ffmpeg 없이 직접 디코딩 (PCM 16/24/32비트 지원)
+function decodeWavBuffer(buf: Buffer): { samples: Float32Array; rate: number } | null {
+  try {
+    if (buf.length < 44) return null;
+    const riff = buf.toString("ascii", 0, 4);
+    if (riff !== "RIFF") return null;
+    const audioFormat = buf.readUInt16LE(20); // 1=PCM, 3=IEEE float
+    const numChannels = buf.readUInt16LE(22);
+    const sampleRate = buf.readUInt32LE(24);
+    const bitsPerSample = buf.readUInt16LE(34);
+    let offset = 12;
+    while (offset < buf.length - 8) {
+      const tag = buf.toString("ascii", offset, offset + 4);
+      const chunkSize = buf.readUInt32LE(offset + 4);
+      if (tag === "data") {
+        offset += 8;
+        const bytesPerSample = bitsPerSample / 8;
+        const numSamples = Math.floor(chunkSize / (bytesPerSample * numChannels));
+        const samples = new Float32Array(numSamples);
+        for (let i = 0; i < numSamples; i++) {
+          const off = offset + i * bytesPerSample * numChannels;
+          if (off + bytesPerSample > buf.length) break;
+          if (audioFormat === 3 && bitsPerSample === 32) {
+            samples[i] = buf.readFloatLE(off);
+          } else if (bitsPerSample === 16) {
+            samples[i] = buf.readInt16LE(off) / 32768;
+          } else if (bitsPerSample === 24) {
+            const lo = buf[off] | (buf[off + 1] << 8);
+            const hi = buf[off + 2];
+            const val = (hi & 0x80) ? (lo | (hi << 16) | 0xff000000) : (lo | (hi << 16));
+            samples[i] = val / 8388608;
+          } else if (bitsPerSample === 8) {
+            samples[i] = (buf[off] - 128) / 128;
+          }
+        }
+        return { samples, rate: sampleRate };
+      }
+      offset += 8 + (chunkSize % 2 === 1 ? chunkSize + 1 : chunkSize);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function analyzeWavDirect(audioBuffer: Buffer): { frequency: number | null; note: string | null } {
+  const decoded = decodeWavBuffer(audioBuffer);
+  if (!decoded) return { frequency: null, note: null };
+  const { samples, rate } = decoded;
+  const WINDOW_SIZE = 8192;
+  const MIC_GATE = 0.02;
+  if (samples.length < WINDOW_SIZE) return { frequency: null, note: null };
+  const readings: number[] = [];
+  const step = Math.floor(WINDOW_SIZE / 2);
+  for (let offset = 0; offset + WINDOW_SIZE <= samples.length; offset += step) {
+    const win = samples.slice(offset, offset + WINDOW_SIZE);
+    const freq = autoCorrelate(win, rate, MIC_GATE);
+    if (freq > 20 && freq <= 20000) readings.push(freq);
+  }
+  const dominant = pickDominantFreq(readings);
+  if (!dominant) return { frequency: null, note: null };
+  const rounded = Math.round(dominant * 10) / 10;
+  const noteInfo = frequencyToNote(dominant);
+  return { frequency: rounded, note: `${noteInfo.name}${noteInfo.octave}` };
+}
+
 async function analyzeAudioHandler(req: Request, res: Response) {
   const { audio, format } = req.body;
   if (!audio || typeof audio !== "string") {
@@ -103,17 +169,29 @@ async function analyzeAudioHandler(req: Request, res: Response) {
   }
 
   const ALLOWED_EXTS = [".wav", ".m4a", ".3gp", ".mp4", ".aac", ".webm"];
+  const rawExt = typeof format === "string" ? format.replace(/[^a-zA-Z0-9.]/g, "") : ".wav";
+  const ext = ALLOWED_EXTS.includes(rawExt) ? rawExt : ".wav";
+  const audioBuffer = Buffer.from(audio, "base64");
+
+  // WAV는 ffmpeg 없이 직접 디코딩 (Cloud Run 등 ffmpeg 미설치 환경 호환)
+  if (ext === ".wav") {
+    try {
+      const result = analyzeWavDirect(audioBuffer);
+      return res.json(result);
+    } catch (e: any) {
+      console.error("[analyze-audio] WAV direct decode error:", e.message);
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // 다른 포맷은 ffmpeg 사용
   let tmpDir: string | null = null;
   try {
     tmpDir = await mkdtemp(join(tmpdir(), "mic-"));
-    const rawExt = typeof format === "string" ? format.replace(/[^a-zA-Z0-9.]/g, "") : ".wav";
-    const ext = ALLOWED_EXTS.includes(rawExt) ? rawExt : ".wav";
     const inputPath = join(tmpDir, `input${ext}`);
     const pcmPath = join(tmpDir, "output.pcm");
 
-    const audioBuffer = Buffer.from(audio, "base64");
     await writeFile(inputPath, audioBuffer);
-
     await ffmpegConvertToPcm(inputPath, pcmPath);
 
     const { readFile } = await import("node:fs/promises");
