@@ -1863,7 +1863,6 @@ export default function MetronomeScreen() {
           activeSubNoteRef.current = -1;
           setProgressInfo(null); setLayerProgressMap({});
 
-          setIsPlaying(true);
           if (Platform.OS !== "web") {
             try {
               await AudioModule.setAudioModeAsync({
@@ -1873,7 +1872,23 @@ export default function MetronomeScreen() {
               });
             } catch {}
           }
+
+          // 오디오 플레이어 생성 후 재생 (일반 재생 버튼과 동일한 경로)
+          const renderedPlayer = await buildRenderedPlayer();
+          if (renderedPlayer) {
+            stopRenderedAudio();
+            renderedPlayerRef.current = renderedPlayer;
+            renderedPlayer.volume = 1.0;
+            engine.setPreRenderedAudio(true);
+          }
+
+          setIsPlaying(true);
           engine.start(barModeRef.current ? (barStartBeatRef.current ?? undefined) : undefined);
+
+          if (renderedPlayer) {
+            renderedPlayer.play();
+          }
+
           showPlayingNotification(bpmRef.current, modeLabel, languageRef.current);
 
           if (barModeRef.current && barLoopModeRef.current === "once") {
