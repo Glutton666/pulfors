@@ -869,7 +869,7 @@ export function BeatIndicator({
   const handleBarCellPress = useCallback((beatIndex: number, cellIndex: number) => {
     if (isPlaying) return;
     const pattern = beatSubdivisions[String(beatIndex)];
-    if (!pattern || pattern.length <= 1) {
+    if (!pattern || pattern.length <= 1 || cellIndex === 0) {
       cycleBeatType(beatIndex);
       return;
     }
@@ -1461,9 +1461,11 @@ export function BeatIndicator({
     const isDropping = dropTargetBeat !== null;
     const renderBarRow = (beat: number, copyIndex: number, rowHeight?: number, hideLabel?: boolean) => {
       const rawPattern = beatSubdivisions[String(beat)];
-      const pattern = (rawPattern && rawPattern.length > 1) ? rawPattern : [beatTypes[beat] || "normal"];
-      const isCurrent = isPlaying && currentBeat === beat && (barLoopMode === "once" ? copyIndex === 0 : copyIndex === activeCopy);
       const bType = beatTypes[beat] || "normal";
+      const pattern: BeatType[] = (rawPattern && rawPattern.length > 1)
+        ? ([bType, ...rawPattern.slice(1)] as BeatType[])
+        : [bType];
+      const isCurrent = isPlaying && currentBeat === beat && (barLoopMode === "once" ? copyIndex === 0 : copyIndex === activeCopy);
       const isDropTarget = isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
       const beatBlocks = blockForBeat.get(beat) || [];
       const isPrimary = isPlaying ? (barLoopMode === "once" ? copyIndex === 0 : copyIndex === CENTER_COPY) : copyIndex === 0;
