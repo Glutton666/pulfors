@@ -888,12 +888,51 @@ export default function MetronomeScreen() {
   const reRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleReRender = useCallback(() => {
     if (reRenderTimerRef.current) clearTimeout(reRenderTimerRef.current);
-    reRenderTimerRef.current = setTimeout(() => {
-      if (engineRef.current?.getIsRunning()) {
-        stopRenderedAudio();
+    reRenderTimerRef.current = setTimeout(async () => {
+      const engine = engineRef.current;
+      if (!engine?.getIsRunning()) return;
+
+      stopRenderedAudio();
+
+      if (Platform.OS === "web") {
+        try {
+          const scheduleInfo = engine.getScheduleInfo();
+          const clickPCMs = await getClickPCMs(soundSetRef.current);
+          if (!engine.getIsRunning()) return;
+          const pcm = renderMeasure({
+            schedule: scheduleInfo.ticks as TickInfo[],
+            measureDurationMs: scheduleInfo.durationMs,
+            clickPCMs,
+            samplePCMs: new Map(),
+            clickVolume: 1.0,
+            sampleVolume: 0,
+          });
+          if (webRenderedLoopRef.current) {
+            webRenderedLoopRef.current.stop();
+            webRenderedLoopRef.current = null;
+          }
+          const loop = playWebRenderedLoop(pcm);
+          webRenderedLoopRef.current = loop;
+          engine.setPreRenderedAudio(true);
+        } catch {
+        }
+      } else {
+        try {
+          const player = await buildRenderedPlayer();
+          if (player && engine.getIsRunning()) {
+            stopRenderedAudio();
+            renderedPlayerRef.current = player;
+            player.volume = 1.0;
+            engine.setPreRenderedAudio(true);
+            player.play();
+          } else if (player) {
+            try { player.release(); } catch {}
+          }
+        } catch {
+        }
       }
     }, 300);
-  }, [stopRenderedAudio]);
+  }, [stopRenderedAudio, buildRenderedPlayer, getClickPCMs]);
 
   const invalidateSamplePCMCache = useCallback((key?: string) => {
     if (key) {
@@ -2468,20 +2507,22 @@ export default function MetronomeScreen() {
         }
       }
       setBeatSubdivisions(newSubs);
-      // 패턴 첫 노트의 강세를 모든 비트 타입에 동기화
+      // 패턴 첫 노트의 강세를 모든 비트 타입에 동기화 (뮤트는 전파하지 않음)
       if (pattern.length >= 1) {
         const firstType = pattern[0];
-        setBeatTypes((prev) => {
-          const next = prev.map(() => firstType);
-          if (barModeRef.current) {
-            barConfigRef.current.beatTypes = next;
-          } else {
-            dialConfigRef.current.beatTypes = next;
-          }
-          const engine = engineRef.current;
-          if (engine) engine.setBeatTypes(next);
-          return next;
-        });
+        if (firstType !== "mute") {
+          setBeatTypes((prev) => {
+            const next = prev.map(() => firstType);
+            if (barModeRef.current) {
+              barConfigRef.current.beatTypes = next;
+            } else {
+              dialConfigRef.current.beatTypes = next;
+            }
+            const engine = engineRef.current;
+            if (engine) engine.setBeatTypes(next);
+            return next;
+          });
+        }
       }
       if (barModeRef.current) {
         barConfigRef.current.beatSubdivisions = newSubs;
@@ -2512,24 +2553,26 @@ export default function MetronomeScreen() {
         newSubs[String(target)] = [...subdivisionPattern];
         setBeatSubdivisions(newSubs);
         engineRef.current?.setBeatSubdivision(target, subdivisionPattern);
-        // 패턴 첫 노트의 강세를 해당 비트 타입에 동기화
+        // 패턴 첫 노트의 강세를 해당 비트 타입에 동기화 (뮤트는 전파하지 않음)
         const firstType = subdivisionPattern[0];
-        setBeatTypes((prev) => {
-          const next = [...prev];
-          next[target] = firstType;
-          if (barModeRef.current) {
-            barConfigRef.current.beatTypes = next;
-          } else {
-            dialConfigRef.current.beatTypes = next;
-          }
-          const engine = engineRef.current;
-          if (engine) {
-            const engineTypes = [...engine.getBeatTypes()];
-            engineTypes[target] = firstType;
-            engine.setBeatTypes(engineTypes);
-          }
-          return next;
-        });
+        if (firstType !== "mute") {
+          setBeatTypes((prev) => {
+            const next = [...prev];
+            next[target] = firstType;
+            if (barModeRef.current) {
+              barConfigRef.current.beatTypes = next;
+            } else {
+              dialConfigRef.current.beatTypes = next;
+            }
+            const engine = engineRef.current;
+            if (engine) {
+              const engineTypes = [...engine.getBeatTypes()];
+              engineTypes[target] = firstType;
+              engine.setBeatTypes(engineTypes);
+            }
+            return next;
+          });
+        }
         if (barModeRef.current) {
           barConfigRef.current.beatSubdivisions = { ...newSubs };
         } else {
