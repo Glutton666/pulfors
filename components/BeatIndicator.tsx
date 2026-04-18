@@ -1463,7 +1463,9 @@ export function BeatIndicator({
       const rawPattern = beatSubdivisions[String(beat)];
       const bType = beatTypes[beat] || "normal";
       const pattern: BeatType[] = (rawPattern && rawPattern.length > 1)
-        ? ([bType, ...rawPattern.slice(1)] as BeatType[])
+        ? (bType === "mute"
+            ? rawPattern.map(() => "mute" as BeatType)
+            : [bType, ...rawPattern.slice(1)] as BeatType[])
         : [bType];
       const isCurrent = isPlaying && currentBeat === beat && (barLoopMode === "once" ? copyIndex === 0 : copyIndex === activeCopy);
       const isDropTarget = isDropping && (dropTargetBeat === beat || dropTargetBeat === -1);
@@ -1594,12 +1596,15 @@ export function BeatIndicator({
                   ) : type === "mute" ? (
                     <View style={[styles.barNoteFill, {
                       margin: 3,
-                      backgroundColor: "transparent",
+                      backgroundColor: C.textTertiary + "22",
                       borderWidth: 1,
                       borderColor: C.textTertiary,
-                      borderStyle: "dashed" as any,
-                      opacity: isActiveCell ? 0.9 : 0.4,
-                    }]} />
+                      opacity: isActiveCell ? 1 : 0.65,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }]}>
+                      <Text style={{ color: C.textTertiary, fontSize: 9, lineHeight: 10, fontFamily: "SpaceGrotesk_700Bold" }}>×</Text>
+                    </View>
                   ) : (
                     <View style={[styles.barNoteFill, {
                       margin: 3,
@@ -1817,9 +1822,12 @@ export function BeatIndicator({
                   ) : cellType === "mute" ? (
                     <View style={{
                       flex: 1, borderRadius: 4, margin: 3,
-                      backgroundColor: "transparent", borderWidth: 1, borderColor: C.textTertiary,
-                      borderStyle: "dashed" as any, opacity: isActiveCell ? 0.9 : 0.3,
-                    }} />
+                      backgroundColor: C.textTertiary + "22", borderWidth: 1, borderColor: C.textTertiary,
+                      opacity: isActiveCell ? 1 : 0.6,
+                      alignItems: "center", justifyContent: "center",
+                    }}>
+                      <Text style={{ color: C.textTertiary, fontSize: 7, lineHeight: 8, fontFamily: "SpaceGrotesk_700Bold" }}>×</Text>
+                    </View>
                   ) : (
                     <View style={{
                       flex: 1, borderRadius: 4, margin: 3,
