@@ -1460,7 +1460,7 @@ export default function MetronomeScreen() {
       for (const [k, v] of Object.entries(beatSubdivisions)) {
         if (Number(k) < beats) cleaned[k] = v;
       }
-      if (isAdding) {
+      if (isAdding && barModeRef.current) {
         const currentPattern = subdivisionPattern;
         for (let i = oldBeats; i < beats; i++) {
           if (currentPattern.length > 1 || (currentPattern.length === 1 && currentPattern[0] !== "normal")) {
