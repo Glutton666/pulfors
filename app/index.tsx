@@ -2451,6 +2451,21 @@ export default function MetronomeScreen() {
         }
       }
       setBeatSubdivisions(newSubs);
+      // 패턴 첫 노트의 강세를 모든 비트 타입에 동기화
+      if (pattern.length >= 1) {
+        const firstType = pattern[0];
+        setBeatTypes((prev) => {
+          const next = prev.map(() => firstType);
+          if (barModeRef.current) {
+            barConfigRef.current.beatTypes = next;
+          } else {
+            dialConfigRef.current.beatTypes = next;
+          }
+          const engine = engineRef.current;
+          if (engine) engine.setBeatTypes(next);
+          return next;
+        });
+      }
       if (barModeRef.current) {
         barConfigRef.current.beatSubdivisions = newSubs;
       } else {
@@ -2480,6 +2495,24 @@ export default function MetronomeScreen() {
         newSubs[String(target)] = [...subdivisionPattern];
         setBeatSubdivisions(newSubs);
         engineRef.current?.setBeatSubdivision(target, subdivisionPattern);
+        // 패턴 첫 노트의 강세를 해당 비트 타입에 동기화
+        const firstType = subdivisionPattern[0];
+        setBeatTypes((prev) => {
+          const next = [...prev];
+          next[target] = firstType;
+          if (barModeRef.current) {
+            barConfigRef.current.beatTypes = next;
+          } else {
+            dialConfigRef.current.beatTypes = next;
+          }
+          const engine = engineRef.current;
+          if (engine) {
+            const engineTypes = [...engine.getBeatTypes()];
+            engineTypes[target] = firstType;
+            engine.setBeatTypes(engineTypes);
+          }
+          return next;
+        });
         if (barModeRef.current) {
           barConfigRef.current.beatSubdivisions = { ...newSubs };
         } else {
