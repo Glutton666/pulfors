@@ -883,6 +883,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const engineRef = useRef(new SignalGeneratorEngine());
   const isPlayingRef = useRef(false);
   const nativeSoundRef = useRef<Audio.Sound | null>(null);
+  const nativeRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hapticFeedback = useCallback(() => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -897,6 +898,10 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   }, []);
 
   const stopPlayback = useCallback(() => {
+    if (nativeRestartTimerRef.current) {
+      clearTimeout(nativeRestartTimerRef.current);
+      nativeRestartTimerRef.current = null;
+    }
     isPlayingRef.current = false;
     if (Platform.OS === "web") {
       engineRef.current.stopWeb();
@@ -928,6 +933,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     setIsPlaying(true);
   }, [frequency, waveType, stopNativeSound]);
 
+  const startPlaybackRef = useRef(startPlayback);
+  useEffect(() => { startPlaybackRef.current = startPlayback; }, [startPlayback]);
+
   useEffect(() => {
     if (isPlaying && Platform.OS === "web") {
       engineRef.current.updateFrequency(frequency);
@@ -941,11 +949,20 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   }, [waveType, isPlaying]);
 
   useEffect(() => {
-    if (isPlaying && Platform.OS !== "web") {
-      stopPlayback();
-      setTimeout(() => startPlayback(), 50);
-    }
-  }, [frequency, waveType, isPlaying, stopPlayback, startPlayback]);
+    if (!isPlayingRef.current || Platform.OS === "web") return;
+    stopNativeSound();
+    if (nativeRestartTimerRef.current) clearTimeout(nativeRestartTimerRef.current);
+    nativeRestartTimerRef.current = setTimeout(() => {
+      nativeRestartTimerRef.current = null;
+      if (isPlayingRef.current) startPlaybackRef.current();
+    }, 50);
+    return () => {
+      if (nativeRestartTimerRef.current) {
+        clearTimeout(nativeRestartTimerRef.current);
+        nativeRestartTimerRef.current = null;
+      }
+    };
+  }, [frequency, waveType, stopNativeSound]);
 
   useEffect(() => {
     return () => {
