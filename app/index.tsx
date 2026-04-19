@@ -2363,6 +2363,7 @@ export default function MetronomeScreen() {
     setSubdivisionPattern(["accent"]);
     const emptySubs: Record<string, BeatType[]> = {};
     setBeatSubdivisions(emptySubs);
+    dialConfigRef.current.beatSubdivisions = {};
     for (let i = 0; i < beatsPerMeasure; i++) {
       engineRef.current?.setBeatSubdivision(i, null);
     }
