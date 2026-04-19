@@ -1496,7 +1496,7 @@ export function BeatIndicator({
       const bType = beatTypes[beat] || "normal";
       // 엔진의 getSubPattern 로직과 동일하게 미러링
       const pattern: BeatType[] = (() => {
-        if (!rawPattern || rawPattern.length <= 1) return [bType];
+        if (!rawPattern || rawPattern.length === 0) return [bType];
         if (bType === "mute") return rawPattern.map(() => "mute" as BeatType);
         if (bType === "strong") {
           const result = [...rawPattern] as BeatType[];

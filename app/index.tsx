@@ -1504,6 +1504,7 @@ export default function MetronomeScreen() {
         for (let i = oldBeats; i < beats; i++) {
           if (currentPattern.length > 1 || (currentPattern.length === 1 && currentPattern[0] !== "normal")) {
             cleaned[String(i)] = [...currentPattern];
+            engineRef.current?.setBeatSubdivision(i, [...currentPattern]);
           }
         }
       }
