@@ -192,7 +192,7 @@ export default function MetronomeScreen() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
   const preparingCancelledRef = useRef(false);
-  const [volume, setVolume] = useState(0.5);
+  const [volume, setVolume] = useState(0.75);
   const [sampleVolume, setSampleVolume] = useState(0.8);
   const sampleVolumeRef = useRef(0.8);
   const [showSettings, setShowSettings] = useState(false);
