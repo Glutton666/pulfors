@@ -1035,6 +1035,15 @@ export class MetronomeEngine {
     this.scheduleIndex = 0;
   }
 
+  resyncTiming() {
+    if (!this.isRunning || this.schedule.length === 0) return;
+    const currentTickTime =
+      this.scheduleIndex < this.schedule.length
+        ? this.schedule[this.scheduleIndex].time
+        : 0;
+    this.measureStartTime = performance.now() - currentTickTime;
+  }
+
   cleanup() {
     this.stop();
   }

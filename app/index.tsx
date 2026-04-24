@@ -10,6 +10,7 @@ import {
   Alert,
   useWindowDimensions,
   BackHandler,
+  AppState,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as Linking from "expo-linking";
@@ -251,6 +252,16 @@ export default function MetronomeScreen() {
     const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
     return () => sub.remove();
   }, [showSettings, showSignalGen, showPracticeBook, showWorkUp, showMenu, showOnboarding, showReboot]);
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        engineRef.current?.resyncTiming();
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   const [noteSamples, setNoteSamples] = useState<NoteSampleMap>({});
   const noteSamplesRef = useRef<NoteSampleMap>({});
