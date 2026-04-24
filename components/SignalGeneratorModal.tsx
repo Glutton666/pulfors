@@ -950,19 +950,21 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 
   useEffect(() => {
     if (!isPlayingRef.current || Platform.OS === "web") return;
-    stopNativeSound();
-    if (nativeRestartTimerRef.current) clearTimeout(nativeRestartTimerRef.current);
+    if (nativeRestartTimerRef.current) {
+      clearTimeout(nativeRestartTimerRef.current);
+      nativeRestartTimerRef.current = null;
+    }
     nativeRestartTimerRef.current = setTimeout(() => {
       nativeRestartTimerRef.current = null;
       if (isPlayingRef.current) startPlaybackRef.current();
-    }, 50);
+    }, 80);
     return () => {
       if (nativeRestartTimerRef.current) {
         clearTimeout(nativeRestartTimerRef.current);
         nativeRestartTimerRef.current = null;
       }
     };
-  }, [frequency, waveType, stopNativeSound]);
+  }, [frequency, waveType]);
 
   useEffect(() => {
     return () => {
