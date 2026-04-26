@@ -78,3 +78,7 @@ outputType = "webview"
 task = "shell.exec"
 args = "expo start --web --port 8081"
 waitForPort = 8081
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 120000
