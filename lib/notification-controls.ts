@@ -79,7 +79,12 @@ function buildContent(
     categoryIdentifier: CATEGORY_ID,
     sticky: true,
     autoDismiss: false,
-    ...(Platform.OS === "android" ? { channelId: "metronome" } : {}),
+    ...(Platform.OS === "android"
+      ? {
+          channelId: "metronome",
+          priority: "max" as const,
+        }
+      : {}),
   };
 }
 
@@ -97,12 +102,16 @@ export async function setupNotificationControls(lang: Language = "ko") {
 
     const t = createT(lang);
     if (Platform.OS === "android") {
+      // Delete and recreate channel so importance change takes effect
+      try { await N.deleteNotificationChannelAsync("metronome"); } catch {}
       await N.setNotificationChannelAsync("metronome", {
         name: t("notification", "channelName"),
-        importance: N.AndroidImportance.DEFAULT,
+        importance: N.AndroidImportance.HIGH,
         sound: undefined,
         vibrationPattern: [],
         enableVibrate: false,
+        lockscreenVisibility: N.AndroidNotificationVisibility.PUBLIC,
+        showBadge: false,
       });
     }
 
