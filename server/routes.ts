@@ -79,14 +79,29 @@ function pickDominantFreq(readings: number[]): number | null {
   return freqs[Math.floor(freqs.length / 2)];
 }
 
+const MAX_ANALYSIS_SECONDS = 3;
+const FFMPEG_SAMPLE_RATE = 48000;
+const MAX_PCM_BYTES = MAX_ANALYSIS_SECONDS * FFMPEG_SAMPLE_RATE * 2;
+const MAX_AUDIO_SAMPLES = MAX_ANALYSIS_SECONDS * FFMPEG_SAMPLE_RATE;
+const MAX_ANALYSIS_WINDOWS = 5;
+
+let activeFfmpegCount = 0;
+const MAX_CONCURRENT_FFMPEG = 2;
+
 function ffmpegConvertToPcm(inputPath: string, outputPath: string): Promise<void> {
+  if (activeFfmpegCount >= MAX_CONCURRENT_FFMPEG) {
+    return Promise.reject(new Error("Server busy: too many concurrent audio conversions"));
+  }
+  activeFfmpegCount++;
   return new Promise((resolve, reject) => {
     execFile("ffmpeg", [
       "-y", "-i", inputPath,
+      "-t", String(MAX_ANALYSIS_SECONDS),
       "-f", "s16le", "-acodec", "pcm_s16le",
-      "-ar", "48000", "-ac", "1",
+      "-ar", String(FFMPEG_SAMPLE_RATE), "-ac", "1",
       outputPath
     ], { timeout: 10000 }, (err, _stdout, stderr) => {
+      activeFfmpegCount--;
       if (err) {
         reject(new Error(`FFmpeg error: ${stderr || err.message}`));
       } else {
@@ -113,7 +128,11 @@ function decodeWavBuffer(buf: Buffer): { samples: Float32Array; rate: number } |
       if (tag === "data") {
         offset += 8;
         const bytesPerSample = bitsPerSample / 8;
-        const numSamples = Math.floor(chunkSize / (bytesPerSample * numChannels));
+        const availableBytes = buf.length - offset;
+        const samplesFromHeader = Math.floor(chunkSize / (bytesPerSample * numChannels));
+        const samplesFromBuffer = Math.floor(availableBytes / (bytesPerSample * numChannels));
+        const numSamples = Math.min(samplesFromHeader, samplesFromBuffer, MAX_AUDIO_SAMPLES);
+        if (numSamples <= 0) return null;
         const samples = new Float32Array(numSamples);
         for (let i = 0; i < numSamples; i++) {
           const off = offset + i * bytesPerSample * numChannels;
@@ -141,19 +160,27 @@ function decodeWavBuffer(buf: Buffer): { samples: Float32Array; rate: number } |
   }
 }
 
+const WAV_MAX_ANALYSIS_SAMPLES = MAX_AUDIO_SAMPLES;
+
 function analyzeWavDirect(audioBuffer: Buffer): { frequency: number | null; note: string | null } {
   const decoded = decodeWavBuffer(audioBuffer);
   if (!decoded) return { frequency: null, note: null };
-  const { samples, rate } = decoded;
+  const { rate } = decoded;
+  const samples = decoded.samples.length > WAV_MAX_ANALYSIS_SAMPLES
+    ? decoded.samples.slice(0, WAV_MAX_ANALYSIS_SAMPLES)
+    : decoded.samples;
   const WINDOW_SIZE = 8192;
   const MIC_GATE = 0.02;
   if (samples.length < WINDOW_SIZE) return { frequency: null, note: null };
   const readings: number[] = [];
   const step = Math.floor(WINDOW_SIZE / 2);
+  let windowCount = 0;
   for (let offset = 0; offset + WINDOW_SIZE <= samples.length; offset += step) {
+    if (windowCount >= MAX_ANALYSIS_WINDOWS) break;
     const win = samples.slice(offset, offset + WINDOW_SIZE);
     const freq = autoCorrelate(win, rate, MIC_GATE);
     if (freq > 20 && freq <= 20000) readings.push(freq);
+    windowCount++;
   }
   const dominant = pickDominantFreq(readings);
   if (!dominant) return { frequency: null, note: null };
@@ -194,13 +221,17 @@ async function analyzeAudioHandler(req: Request, res: Response) {
     await writeFile(inputPath, audioBuffer);
     await ffmpegConvertToPcm(inputPath, pcmPath);
 
-    const { readFile } = await import("node:fs/promises");
+    const { readFile, stat } = await import("node:fs/promises");
+    const pcmStat = await stat(pcmPath);
+    if (pcmStat.size > MAX_PCM_BYTES) {
+      return res.status(413).json({ error: "Decoded audio exceeds maximum allowed size" });
+    }
     const pcmData = await readFile(pcmPath);
 
     const SAMPLE_RATE = 48000;
     const MIC_GATE = 0.03;
     const WINDOW_SIZE = 8192;
-    const numSamples = Math.floor(pcmData.length / 2);
+    const numSamples = Math.min(Math.floor(pcmData.length / 2), MAX_AUDIO_SAMPLES);
 
     if (numSamples < WINDOW_SIZE) {
       return res.json({ frequency: null, note: null });
@@ -213,12 +244,15 @@ async function analyzeAudioHandler(req: Request, res: Response) {
 
     const readings: number[] = [];
     const step = Math.floor(WINDOW_SIZE / 2);
+    let windowCount = 0;
     for (let offset = 0; offset + WINDOW_SIZE <= numSamples; offset += step) {
+      if (windowCount >= MAX_ANALYSIS_WINDOWS) break;
       const win = samples.slice(offset, offset + WINDOW_SIZE);
       const freq = autoCorrelate(win, SAMPLE_RATE, MIC_GATE);
       if (freq > 20 && freq <= 20000) {
         readings.push(freq);
       }
+      windowCount++;
     }
 
     const dominant = pickDominantFreq(readings);
@@ -233,7 +267,8 @@ async function analyzeAudioHandler(req: Request, res: Response) {
     return res.json({ frequency: null, note: null });
   } catch (e: any) {
     console.error("[analyze-audio] Error:", e.message);
-    return res.status(500).json({ error: e.message });
+    const status = typeof e.message === "string" && e.message.startsWith("Server busy") ? 503 : 500;
+    return res.status(status).json({ error: e.message });
   } finally {
     if (tmpDir) {
       try {
