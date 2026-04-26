@@ -90,6 +90,12 @@ function pickFileWeb<T>(
         resolve(fallback);
         return;
       }
+      // Reject oversized files BEFORE reading into memory
+      if (file.size > MAX_IMPORT_JSON_CHARS) {
+        console.warn("[Backup] Web import file too large:", file.size);
+        resolve(fallback);
+        return;
+      }
       try {
         const text = await file.text();
         resolve(await handler(text));
@@ -167,6 +173,63 @@ function sanitizeAudioFilename(raw: string): string {
   // Unique suffix prevents same-directory collisions with existing files
   const suffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   return `${safeStem}_${suffix}${ext}`;
+}
+
+// Strip any noteSamples URIs that are not local resources so attacker-controlled
+// external URLs cannot be persisted or later trigger outbound network requests.
+// Called at import time so protection applies before data reaches AsyncStorage.
+function sanitizeNoteSampleUris(
+  samples: Record<string, string> | undefined
+): Record<string, string> | undefined {
+  if (!samples) return samples;
+  const safe: Record<string, string> = {};
+  for (const [k, v] of Object.entries(samples)) {
+    if (typeof v !== "string") continue;
+    const raw = v.split("#")[0];
+    const isLocal =
+      raw.startsWith("file://") ||
+      raw.startsWith("asset://") ||
+      raw.startsWith("blob:") ||
+      raw.startsWith("data:");
+    if (isLocal) {
+      safe[k] = v;
+    } else {
+      console.warn("[Backup] Unsafe noteSample URI stripped at import:", k, raw.slice(0, 80));
+    }
+  }
+  return safe;
+}
+
+// Walk the AsyncStorage data record and strip unsafe URIs from @note_samples and
+// practice_book entries before they are written to storage.
+function sanitizeBackupData(
+  data: Record<string, string | null>
+): Record<string, string | null> {
+  const result = { ...data };
+
+  if (result["@note_samples"]) {
+    try {
+      const samples: Record<string, string> = JSON.parse(result["@note_samples"]!);
+      result["@note_samples"] = JSON.stringify(sanitizeNoteSampleUris(samples) ?? {});
+    } catch {}
+  }
+
+  if (result["practice_book"]) {
+    try {
+      const entries: PracticeEntry[] = JSON.parse(result["practice_book"]!);
+      const sanitized = entries.map((e) => ({
+        ...e,
+        noteSamples: sanitizeNoteSampleUris(e.noteSamples),
+        noteQueueEntries: e.noteQueueEntries?.map((qe) => ({
+          ...qe,
+          noteSamples: sanitizeNoteSampleUris(qe.noteSamples),
+        })),
+      }));
+      result["practice_book"] = JSON.stringify(sanitized);
+    } catch {}
+  }
+
+  return result;
 }
 
 async function writeAudioFromBase64(filename: string, base64: string): Promise<string> {
@@ -390,8 +453,13 @@ export async function importBackup(): Promise<{ success: boolean; keyCount: numb
       return { success: false, keyCount: 0 };
     }
 
-    const uri = result.assets[0].uri;
-    const json = await readStringFromFile(uri);
+    const asset = result.assets[0];
+    // Reject oversized files BEFORE reading into memory (size is in bytes)
+    if (typeof asset.size === "number" && asset.size > MAX_IMPORT_JSON_CHARS) {
+      console.warn("[Backup] Native import file too large:", asset.size);
+      return { success: false, keyCount: 0 };
+    }
+    const json = await readStringFromFile(asset.uri);
     return await restoreFromJson(json);
   } catch (e) {
     console.warn("[Backup] Import error:", e);
@@ -418,6 +486,9 @@ async function restoreFromJson(json: string): Promise<{ success: boolean; keyCou
         data = remapDataUris(data, uriMapping);
       }
     }
+
+    // Sanitize any remaining remote URIs in sample maps before persisting to AsyncStorage
+    data = sanitizeBackupData(data);
 
     await AsyncStorage.multiRemove(ALL_KEYS);
 
@@ -516,8 +587,13 @@ export async function importPracticeEntry(): Promise<{ success: boolean; entry?:
       return { success: false };
     }
 
-    const uri = result.assets[0].uri;
-    const json = await readStringFromFile(uri);
+    const asset = result.assets[0];
+    // Reject oversized files BEFORE reading into memory
+    if (typeof asset.size === "number" && asset.size > MAX_IMPORT_JSON_CHARS) {
+      console.warn("[Backup] Native practice import too large:", asset.size);
+      return { success: false };
+    }
+    const json = await readStringFromFile(asset.uri);
     return await parsePracticeJson(json);
   } catch (e) {
     console.warn("[Backup] Import practice entry error:", e);
@@ -553,6 +629,18 @@ async function parsePracticeJson(json: string): Promise<{ success: boolean; entr
           noteSamples: qe.noteSamples ? remapSampleMap(qe.noteSamples, uriMapping) : qe.noteSamples,
         }));
       }
+    }
+
+    // Sanitize noteSamples URIs BEFORE persisting — removes any attacker-supplied
+    // remote URLs that were not present in audioFiles (prevents SSRF at persistence).
+    if (entry.noteSamples) {
+      entry.noteSamples = sanitizeNoteSampleUris(entry.noteSamples) ?? {};
+    }
+    if (entry.noteQueueEntries) {
+      entry.noteQueueEntries = entry.noteQueueEntries.map(qe => ({
+        ...qe,
+        noteSamples: sanitizeNoteSampleUris(qe.noteSamples),
+      }));
     }
 
     const newId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
