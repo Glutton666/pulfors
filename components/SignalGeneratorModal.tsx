@@ -157,26 +157,37 @@ function realFFT(samples: Float32Array): Float32Array {
 
 function analyzeWavLocally(base64: string, sampleRate: number): { frequency: number | null; note: string | null } {
   const decoded = decodeWavBase64(base64, sampleRate);
+  // 8192 샘플 창: 48kHz에서 약 170ms, bin 해상도 ≈ 5.86 Hz
+  // HPS를 적용하므로 낮은 주파수도 배음 구조를 통해 정확히 탐지 가능
   const WINDOW_SIZE = 8192;
   if (!decoded || decoded.samples.length <= WINDOW_SIZE) return { frequency: null, note: null };
   const readings: number[] = [];
+  // 50% 오버랩으로 최대한 많은 창 분석
   const step = Math.floor(WINDOW_SIZE / 2);
-  for (let offset = 0; offset + WINDOW_SIZE <= decoded.samples.length; offset += step) {
+  // 처음 50ms(2400샘플)는 어택 과도기로 건너뜀
+  const startOffset = Math.min(Math.floor(decoded.rate * 0.05), decoded.samples.length - WINDOW_SIZE);
+  for (let offset = Math.max(0, startOffset); offset + WINDOW_SIZE <= decoded.samples.length; offset += step) {
     const win = decoded.samples.slice(offset, offset + WINDOW_SIZE);
     let rms = 0;
     for (let i = 0; i < win.length; i++) rms += win[i] * win[i];
     rms = Math.sqrt(rms / win.length);
-    if (rms < 0.03) continue;
+    // 낮은 임계값으로 조용한 연주도 감지
+    if (rms < 0.015) continue;
 
+    // Hann 창 적용으로 스펙트럼 누설 감소
     for (let i = 0; i < WINDOW_SIZE; i++) {
       win[i] *= 0.5 * (1 - Math.cos(2 * Math.PI * i / (WINDOW_SIZE - 1)));
     }
     const mag = realFFT(win);
-    const result = fftPeakDetect(mag, decoded.rate, WINDOW_SIZE);
-    if (result && result.freq > 20 && result.freq <= 20000) {
+    // HPS 기반 기음 탐지. realFFT 출력은 AnalyserNode와 dB 스케일이 다르므로
+    // noiseFloor를 -120으로 낮춰 유효한 배음 bin이 0으로 처리되지 않도록 함
+    const result = fftPeakDetect(mag, decoded.rate, WINDOW_SIZE, 27.5, 4200, -120);
+    if (result && result.freq > 20 && result.freq <= 4200) {
       readings.push(result.freq);
     }
   }
+  if (readings.length === 0) return { frequency: null, note: null };
+  // 노트별로 그룹화해 가장 빈도 높은 음 선택
   const noteMap = new Map<string, number[]>();
   for (const f of readings) {
     const info = frequencyToNote(f);
@@ -226,38 +237,59 @@ function frequencyToNote(freq: number): { name: string; octave: number; cents: n
   return { name: NOTE_NAMES[noteIndex], octave, cents };
 }
 
+// HPS(Harmonic Product Spectrum) 기반 기음 탐지
+// 단순 FFT 최대값 탐색은 배음이 기음보다 클 때 옥타브 오류를 발생시킴
+// HPS는 기음 주파수에서 여러 배음의 스펙트럼을 곱해 기음을 강화함
 function fftPeakDetect(
   freqData: Float32Array,
   sampleRate: number,
   fftSize: number,
   minFreq: number = 27.5,
   maxFreq: number = 4200,
-  noiseFloor: number = -60,
+  noiseFloor: number = -80,
 ): { freq: number; peakBin: number } | null {
   const binRes = sampleRate / fftSize;
-  const minBin = Math.max(1, Math.ceil(minFreq / binRes));
-  const maxBin = Math.min(freqData.length - 2, Math.floor(maxFreq / binRes));
+  const minBin = Math.max(2, Math.ceil(minFreq / binRes));
+  // 5배음까지 계산하므로 maxBin을 배열 길이의 1/5로 제한
+  const maxBin = Math.min(
+    Math.floor(freqData.length / 5),
+    Math.floor(maxFreq / binRes),
+  );
   if (minBin >= maxBin) return null;
 
-  let peakVal = -Infinity;
-  let peakIdx = -1;
-  for (let i = minBin; i <= maxBin; i++) {
-    if (freqData[i] > peakVal) {
-      peakVal = freqData[i];
-      peakIdx = i;
+  // dB → 선형 크기로 변환 (HPS 계산을 위해)
+  const linMag = new Float32Array(freqData.length);
+  let hasSignal = false;
+  for (let i = 0; i < freqData.length; i++) {
+    if (freqData[i] > noiseFloor) {
+      linMag[i] = Math.pow(10, freqData[i] / 20);
+      hasSignal = true;
     }
   }
-  if (peakIdx < 1 || peakVal < noiseFloor) return null;
+  if (!hasSignal) return null;
 
-  const alpha = freqData[peakIdx - 1];
-  const beta = freqData[peakIdx];
-  const gamma = freqData[peakIdx + 1];
-  const denom = alpha - 2 * beta + gamma;
-  let refinedBin = peakIdx;
-  if (denom !== 0) {
-    refinedBin = peakIdx + 0.5 * (alpha - gamma) / denom;
+  // HPS: 각 후보 기음 bin에서 2~5배음 스펙트럼 값을 곱함
+  // 기음 위치에서 곱이 최대가 됨 (배음 구조 일치)
+  let peakHps = -Infinity;
+  let peakIdx = -1;
+  for (let i = minBin; i <= maxBin; i++) {
+    if (linMag[i] === 0) continue;
+    let hps = linMag[i];
+    for (let h = 2; h <= 5; h++) {
+      const hBin = Math.min(Math.round(i * h), linMag.length - 1);
+      hps *= linMag[hBin] > 0 ? linMag[hBin] : 1e-10;
+    }
+    if (hps > peakHps) { peakHps = hps; peakIdx = i; }
   }
-  const freq = refinedBin * binRes;
+  if (peakIdx < 1) return null;
+
+  // 포물선 보간으로 서브-bin 정밀도 향상 (선형 크기 기준)
+  const al = linMag[peakIdx - 1] || 0;
+  const bl = linMag[peakIdx];
+  const cl = peakIdx < linMag.length - 1 ? linMag[peakIdx + 1] : 0;
+  const denom = al - 2 * bl + cl;
+  const refined = denom !== 0 ? peakIdx + 0.5 * (al - cl) / denom : peakIdx;
+  const freq = refined * binRes;
   if (freq < minFreq || freq > maxFreq) return null;
   return { freq, peakBin: peakIdx };
 }
@@ -1115,19 +1147,18 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       const fftBuf = new Float32Array(freqBinCount);
       const timeBuf = new Float32Array(analyser.fftSize);
       const spectrumCopy = new Float32Array(freqBinCount);
-      const MIC_GATE = 0.03;
-      const WINDOW_MS = 400;
+
+      // 연속 감지: 임팩트 전용이 아닌 RMS 게이트 기반 지속 분석
+      // 임팩트 전용 모드는 지속음/약한 연주를 놓치는 문제가 있었음
+      const MIC_GATE = 0.018;       // 낮은 임계값으로 조용한 악기도 감지
+      const SILENCE_RESET_MS = 600; // 침묵 지속시 readings 초기화
+      const UPDATE_MS = 250;        // UI 업데이트 주기
+      const MAX_READINGS = 60;      // 최대 보관 readings 수 (메모리 제한)
       let readings: number[] = [];
       let windowStart = Date.now();
+      let lastSignalTime = Date.now();
       let spectrumFrameCount = 0;
-
-      // Impact detection state
-      let smoothedRms = 0.0;
-      let lastImpactTime = 0;
-      const IMPACT_RATIO = 2.0;
-      const IMPACT_MIN_RMS = 0.04;
-      const IMPACT_COOLDOWN_MS = 200;
-      const SMOOTH_ALPHA = 0.01;
+      let frameCount = 0;
 
       const detect = () => {
         if (!micActiveRef.current) return;
@@ -1135,60 +1166,53 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
         let rms = 0;
         for (let i = 0; i < timeBuf.length; i++) rms += timeBuf[i] * timeBuf[i];
         rms = Math.sqrt(rms / timeBuf.length);
-
-        // Slow-following envelope for impact baseline
-        smoothedRms = smoothedRms + SMOOTH_ALPHA * (rms - smoothedRms);
-
         const nowMs = Date.now();
-        const isImpact =
-          rms >= IMPACT_MIN_RMS &&
-          rms >= smoothedRms * IMPACT_RATIO &&
-          nowMs - lastImpactTime > IMPACT_COOLDOWN_MS;
 
-        if (isImpact) {
-          lastImpactTime = nowMs;
-          // Capture spectrum only at impact moment
+        if (rms >= MIC_GATE) {
+          // 신호가 있을 때마다 스펙트럼 분석 (연속 감지)
+          lastSignalTime = nowMs;
           analyser.getFloatFrequencyData(fftBuf);
-          spectrumCopy.set(fftBuf);
-          spectrumDataRef.current = spectrumCopy;
 
-          const result = fftPeakDetect(fftBuf, audioCtx.sampleRate, analyser.fftSize);
-          if (result) {
-            spectrumPeakBinRef.current = result.peakBin;
-            if (result.freq > 20 && result.freq <= MAX_FREQ) {
-              readings = [result.freq];
-            }
-          } else {
-            spectrumPeakBinRef.current = -1;
+          // 스펙트럼 디스플레이용 데이터 캡처 (매 4프레임마다 UI 업데이트)
+          frameCount++;
+          if (frameCount % 4 === 0) {
+            spectrumCopy.set(fftBuf);
+            spectrumDataRef.current = spectrumCopy;
+            spectrumFrameCount++;
+            setSpectrumTick(spectrumFrameCount);
           }
 
-          spectrumFrameCount++;
-          setSpectrumTick(spectrumFrameCount);
-          windowStart = nowMs;
-        } else if (rms >= MIC_GATE && nowMs - lastImpactTime < WINDOW_MS) {
-          // Collect pitch readings in the window just after an impact
-          analyser.getFloatFrequencyData(fftBuf);
+          // HPS 기반 기음 탐지
           const result = fftPeakDetect(fftBuf, audioCtx.sampleRate, analyser.fftSize);
           if (result && result.freq > 20 && result.freq <= MAX_FREQ) {
+            spectrumPeakBinRef.current = result.peakBin;
             readings.push(result.freq);
+            // 최대 readings 수 초과시 오래된 것 제거
+            if (readings.length > MAX_READINGS) readings.shift();
           }
+        } else if (nowMs - lastSignalTime > SILENCE_RESET_MS) {
+          // 침묵이 일정 시간 지속되면 readings 초기화
+          readings = [];
+          windowStart = nowMs;
         }
 
-        const elapsed = nowMs - windowStart;
-        if (elapsed >= WINDOW_MS && readings.length > 0) {
-          const dominant = pickDominantFreq(readings);
-          setMicAnalyzed(true);
-          if (dominant) {
-            const rounded = Math.round(dominant * 10) / 10;
-            setMicDetectedFreq(rounded);
-            const noteInfo = frequencyToNote(dominant);
-            setMicDetectedNote(`${noteInfo.name}${noteInfo.octave}`);
-          } else {
+        // UPDATE_MS마다 readings에서 지배적 주파수 계산 후 UI 갱신
+        if (nowMs - windowStart >= UPDATE_MS) {
+          windowStart = nowMs;
+          if (readings.length >= 3) {
+            const dominant = pickDominantFreq(readings);
+            setMicAnalyzed(true);
+            if (dominant) {
+              setMicDetectedFreq(Math.round(dominant * 10) / 10);
+              const noteInfo = frequencyToNote(dominant);
+              setMicDetectedNote(`${noteInfo.name}${noteInfo.octave}`);
+            }
+            // readings의 후반부만 유지해 연속 음 변화에 대응
+            readings = readings.slice(-Math.floor(MAX_READINGS / 2));
+          } else if (nowMs - lastSignalTime > SILENCE_RESET_MS) {
             setMicDetectedFreq(null);
             setMicDetectedNote(null);
           }
-          readings = [];
-          windowStart = nowMs;
         }
 
         micRafRef.current = requestAnimationFrame(detect);
