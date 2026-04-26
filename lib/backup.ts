@@ -26,6 +26,11 @@ const ALL_KEYS = [
 
 const SAMPLES_DIR = "note_samples/";
 
+// Import-boundary limits
+const MAX_IMPORT_JSON_CHARS = 100 * 1024 * 1024; // 100 MB raw text
+const MAX_AUDIO_FILE_COUNT = 500;
+const MAX_AUDIO_FILE_B64_CHARS = 70 * 1024 * 1024; // ~50 MB decoded
+
 interface BackupFile {
   _meta: {
     app: string;
@@ -149,9 +154,25 @@ async function readAudioAsBase64(uri: string): Promise<string | null> {
   }
 }
 
+// Strip path components and dangerous chars from an attacker-supplied filename,
+// then append a random suffix so imports can never overwrite existing samples.
+function sanitizeAudioFilename(raw: string): string {
+  // Take only the final path component (defuse traversal strings like ../../)
+  const base = raw.replace(/\\/g, "/").split("/").pop() ?? "sample";
+  // Keep only safe chars; collapse runs of underscores
+  const clean = base.replace(/[^a-zA-Z0-9가-힣._-]/g, "_").replace(/_+/g, "_").replace(/^[._-]+/, "");
+  const ext = clean.includes(".") ? clean.slice(clean.lastIndexOf(".")).toLowerCase() : ".bin";
+  const stem = ext.length < clean.length ? clean.slice(0, clean.lastIndexOf(".")) : clean;
+  const safeStem = (stem || "sample").slice(0, 60);
+  // Unique suffix prevents same-directory collisions with existing files
+  const suffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  return `${safeStem}_${suffix}${ext}`;
+}
+
 async function writeAudioFromBase64(filename: string, base64: string): Promise<string> {
   const dir = await ensureSamplesDir();
-  const fileUri = dir + filename;
+  const safe = sanitizeAudioFilename(filename);
+  const fileUri = dir + safe;
   await FileSystem.writeAsStringAsync(fileUri, base64, {
     encoding: FileSystem.EncodingType.Base64,
   });
@@ -250,7 +271,18 @@ async function restoreAudioFiles(
   audioFiles: Record<string, string>
 ): Promise<Map<string, string>> {
   const uriMapping = new Map<string, string>();
-  for (const [fname, base64] of Object.entries(audioFiles)) {
+  const entries = Object.entries(audioFiles);
+  // Enforce file-count limit to prevent storage exhaustion
+  if (entries.length > MAX_AUDIO_FILE_COUNT) {
+    console.warn("[Backup] Audio file count exceeds limit:", entries.length);
+    return uriMapping;
+  }
+  for (const [fname, base64] of entries) {
+    // Enforce per-file size limit (consistent with NoteRecorderModal's 50 MB cap)
+    if (typeof base64 !== "string" || base64.length > MAX_AUDIO_FILE_B64_CHARS) {
+      console.warn("[Backup] Audio file too large, skipping:", fname, base64?.length);
+      continue;
+    }
     try {
       const newUri = await writeAudioFromBase64(fname, base64);
       uriMapping.set(fname, newUri);
@@ -369,6 +401,10 @@ export async function importBackup(): Promise<{ success: boolean; keyCount: numb
 
 async function restoreFromJson(json: string): Promise<{ success: boolean; keyCount: number }> {
   try {
+    if (typeof json !== "string" || json.length > MAX_IMPORT_JSON_CHARS) {
+      console.warn("[Backup] Import JSON too large:", json?.length);
+      return { success: false, keyCount: 0 };
+    }
     const backup: BackupFile = JSON.parse(json);
     if (!backup._meta || backup._meta.app !== "metronome" || !backup.data) {
       return { success: false, keyCount: 0 };
@@ -491,6 +527,10 @@ export async function importPracticeEntry(): Promise<{ success: boolean; entry?:
 
 async function parsePracticeJson(json: string): Promise<{ success: boolean; entry?: PracticeEntry }> {
   try {
+    if (typeof json !== "string" || json.length > MAX_IMPORT_JSON_CHARS) {
+      console.warn("[Backup] Practice JSON too large:", json?.length);
+      return { success: false };
+    }
     const data: PracticeShareFile = JSON.parse(json);
     if (!data._meta || data._meta.app !== "metronome" || data._meta.type !== "practice_entry" || !data.entry) {
       return { success: false };

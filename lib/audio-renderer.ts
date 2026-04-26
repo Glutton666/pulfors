@@ -207,6 +207,11 @@ export async function decodeSampleFile(
     const rawUri = uri.split("#")[0];
 
     if (Platform.OS === "web") {
+      // Only fetch local URIs; reject external http/https to prevent SSRF
+      if (rawUri.startsWith("http://") || rawUri.startsWith("https://")) {
+        console.warn("[AudioRenderer] External URI blocked:", rawUri.slice(0, 80));
+        return null;
+      }
       const resp = await fetch(rawUri);
       const ab = await resp.arrayBuffer();
       try {

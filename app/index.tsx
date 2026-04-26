@@ -100,6 +100,19 @@ function defaultBeatTypes(beats: number): BeatType[] {
   );
 }
 
+// Validate that a noteSample URI is a local resource.
+// Blocks attacker-supplied http/https URIs that would cause outbound network
+// requests from the victim device (SSRF / privacy beacon via deep-link import).
+function isSafeNoteSampleUri(uri: string): boolean {
+  const raw = uri.split("#")[0];
+  if (raw.startsWith("http://") || raw.startsWith("https://")) return false;
+  if (Platform.OS !== "web") {
+    return raw.startsWith("file://") || raw.startsWith("asset://");
+  }
+  // Web: only allow blob/data/file URIs created by the recorder
+  return raw.startsWith("blob:") || raw.startsWith("data:") || raw.startsWith("file://");
+}
+
 export default function MetronomeScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -491,6 +504,10 @@ export default function MetronomeScreen() {
       noteSampleSoundsRef.current = {};
 
       for (const [key, uri] of Object.entries(samples)) {
+        if (!isSafeNoteSampleUri(uri)) {
+          console.warn("[SamplePreload] Unsafe URI blocked on startup:", key, uri.slice(0, 80));
+          continue;
+        }
         try {
           const rawUri = uri.split("#")[0];
           const isFileUri = rawUri.startsWith("file://");
@@ -692,6 +709,10 @@ export default function MetronomeScreen() {
     const keysToKeep = new Set<string>();
 
     for (const [key, uri] of Object.entries(samples)) {
+      if (!isSafeNoteSampleUri(uri)) {
+        console.warn("[SamplePreload] Unsafe URI blocked:", key, uri.slice(0, 80));
+        continue;
+      }
       const rawUri = uri.split("#")[0];
       if (keepExisting && existing[key] && existingUris[key]?.split("#")[0] === rawUri) {
         newPlayers[key] = existing[key];
