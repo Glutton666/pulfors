@@ -63,6 +63,7 @@ import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import type { OnboardingResult } from "@/components/OnboardingModal";
+import { GoalCompletePopup } from "@/components/GoalCompletePopup";
 import type { PracticeEntry } from "@/lib/storage";
 import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
 import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource } from "@/lib/note-samples";
@@ -3867,29 +3868,19 @@ export default function MetronomeScreen() {
           persistSettings({ beatDirection: val });
         }}
         onEnterNoteMode={handleEnterNoteMode}
+        onShowOnboarding={() => {
+          setShowSettings(false);
+          setShowOnboarding(true);
+        }}
       />
       )}
 
-      {completedGoalPopups.length > 0 && !showMenu && !showSignalGen && !showPracticeBook && !showWorkUp && !showSettings && !noteMode && (
-        <View style={[styles.goalPopupContainer, { top: (insets.top || webTopInset) + 8, pointerEvents: "box-none" }]}>
-          {completedGoalPopups.map((goal) => {
-            const goalColor = goal.type === "beat_mode_time" ? "#58A6FF" : goal.type === "bar_mode_time" ? "#F0883E" : goal.type === "room_time" ? "#A371F7" : C.accent;
-            return (
-              <Pressable
-                key={`popup-${goal.id}`}
-                style={[styles.goalPopup, { borderColor: goalColor, backgroundColor: C.surface }]}
-                onPress={() => dismissGoalPopup(goal.id)}
-              >
-                <Ionicons name="checkmark-circle" size={S.ms(22, 0.4)} color={goalColor} />
-                <View style={styles.goalPopupInfo}>
-                  <Text style={[styles.goalPopupTitle, { color: goalColor }]}>{goal.label} {t("main", "goalComplete")}</Text>
-                  <Text style={styles.goalPopupSub}>{t("main", "tapToDismiss")}</Text>
-                </View>
-                <Ionicons name="close" size={S.ms(16, 0.4)} color={C.textTertiary} />
-              </Pressable>
-            );
-          })}
-        </View>
+      {!showMenu && !showSignalGen && !showPracticeBook && !showWorkUp && !showSettings && !noteMode && (
+        <GoalCompletePopup
+          popups={completedGoalPopups}
+          topOffset={(insets.top || webTopInset) + 8}
+          onDismiss={dismissGoalPopup}
+        />
       )}
 
       <View
@@ -4272,40 +4263,5 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     backgroundColor: C.border,
     marginHorizontal: S.ms(12, 0.3),
     opacity: 0.5,
-  },
-  goalPopupContainer: {
-    position: "absolute",
-    left: S.ms(16, 0.3),
-    right: S.ms(16, 0.3),
-    zIndex: 100,
-    gap: S.ms(8, 0.3),
-  },
-  goalPopup: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: S.ms(10, 0.3),
-    borderWidth: 1,
-    borderRadius: S.ms(14, 0.3),
-    padding: S.ms(14, 0.3),
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  goalPopupInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  goalPopupTitle: {
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: S.ms(14, 0.3),
-    letterSpacing: 0.2,
-    color: C.text,
-  },
-  goalPopupSub: {
-    fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: S.ms(11, 0.3),
-    color: C.textTertiary,
   },
 });

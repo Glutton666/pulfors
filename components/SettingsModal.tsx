@@ -42,6 +42,7 @@ import {
 } from "@/lib/practice-room";
 import { Share } from "react-native";
 import { loadGoals, saveGoals, type Goal } from "@/lib/activity-log";
+import { HelpIcon } from "@/components/HelpIcon";
 
 const PRESET_COLORS: { value: Exclude<ThemeColor, "custom">; labelKey: "colorGold" | "colorBlue" | "colorGreen" | "colorRed" | "colorPurple" | "colorCyan" | "colorOrange" | "colorPink" | "colorRose" | "colorNeon" | "colorSaints" | "colorDeepRed" | "colorBeige"; color: string }[] = [
   { value: "gold", labelKey: "colorGold", color: ACCENT_PRESETS.gold.accent },
@@ -105,6 +106,7 @@ interface SettingsModalProps {
   onShowLandscapeImageChange: (val: boolean) => void;
   beatDirection: "cw" | "ccw";
   onBeatDirectionChange: (val: "cw" | "ccw") => void;
+  onShowOnboarding?: () => void;
 }
 
 function getSoundSetOptions(t: any): { value: SoundSet; label: string; icon: string }[] {
@@ -207,6 +209,7 @@ export function SettingsModal({
   onShowLandscapeImageChange,
   beatDirection,
   onBeatDirectionChange,
+  onShowOnboarding,
 }: SettingsModalProps) {
   const { themeColor, customHex, themeMode, setThemeColor, setCustomHex, setThemeMode, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
   const S = useScale();
@@ -1234,6 +1237,10 @@ export function SettingsModal({
         <View style={styles.sectionHeader}>
           <Ionicons name="flash-outline" size={S.ms(18, 0.4)} color={C.accent} />
           <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "screenFlash")}</Text>
+          <HelpIcon
+            title={t("settings", "screenFlash")}
+            message={t("settings", "screenFlashHelp")}
+          />
         </View>
         <TripleSelector value={flashMode} onChange={onFlashModeChange} accentColor={C.accent} accentDimColor={C.accentDim} options={TRIPLE_OPTS} />
       </View>
@@ -1244,6 +1251,10 @@ export function SettingsModal({
         <View style={styles.sectionHeader}>
           <Ionicons name="phone-portrait-outline" size={S.ms(18, 0.4)} color={C.accent} />
           <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "hapticFeedback")}</Text>
+          <HelpIcon
+            title={t("settings", "hapticFeedback")}
+            message={t("settings", "hapticFeedbackHelp")}
+          />
         </View>
         <TripleSelector value={hapticMode} onChange={onHapticModeChange} accentColor={C.accent} accentDimColor={C.accentDim} options={TRIPLE_OPTS} />
       </View>
@@ -1681,6 +1692,10 @@ export function SettingsModal({
         <View style={styles.sectionHeader}>
           <MaterialCommunityIcons name="layers-outline" size={S.ms(18, 0.4)} color={C.accent} />
           <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "layerSoundSet")}</Text>
+          <HelpIcon
+            title={t("settings", "layerSoundSet")}
+            message={t("settings", "layerSoundSetHelp")}
+          />
         </View>
         {Array.from({ length: layerSoundRowCount }, (_, i) => i + 1).map((layerNum) => {
           const currentSet = layerSoundSets[layerNum] || "";
@@ -1769,6 +1784,10 @@ export function SettingsModal({
         <View style={styles.sectionHeader}>
           <Ionicons name="timer-outline" size={S.ms(18, 0.4)} color={C.accent} />
           <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "audioOffset")}</Text>
+          <HelpIcon
+            title={t("settings", "audioOffset")}
+            message={t("settings", "audioOffsetHelp")}
+          />
           <Text style={[styles.sectionValue, { color: C.accent }]}>
             {audioOffsetMs > 0 ? "+" : ""}{audioOffsetMs}ms
           </Text>
@@ -2056,6 +2075,25 @@ export function SettingsModal({
       </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
+
+      {onShowOnboarding && (
+        <Pressable
+          style={styles.addRoomBtn}
+          onPress={() => {
+            onShowOnboarding();
+          }}
+        >
+          <Ionicons name="play-circle-outline" size={S.ms(15, 0.4)} color={C.accent} />
+          <Text style={[styles.addRoomBtnText, { color: C.accent }]}>
+            {t("settings", "showOnboardingAgain")}
+          </Text>
+        </Pressable>
+      )}
+      {onShowOnboarding && (
+        <Text style={[styles.offsetHint, { color: C.textTertiary, marginBottom: 12 }]}>
+          {t("settings", "showOnboardingAgainHint")}
+        </Text>
+      )}
 
       {onResetApp && !showResetConfirm && (
         <Pressable

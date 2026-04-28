@@ -36,6 +36,24 @@ const translations = {
     layerDefault: { ko: "기본 (메인과 동일)", en: "Default (same as main)" },
     audioOffset: { ko: "오디오 오프셋", en: "Audio Offset" },
     audioOffsetHint: { ko: "- = 소리 빨라짐 / + = 소리 느려짐", en: "- = sound earlier / + = sound later" },
+    audioOffsetHelp: {
+      ko: "기기마다 오디오 출력 지연 시간이 달라 박자가 어긋날 수 있습니다. 들리는 소리가 박자보다 늦으면 음수(-)로, 빠르면 양수(+)로 조정해 정확히 맞춰주세요.",
+      en: "Each device has different audio output latency, which can cause beats to drift. If the sound feels late, use a negative (-) value; if early, use a positive (+) value to align perfectly.",
+    },
+    screenFlashHelp: {
+      ko: "박자에 맞춰 화면이 깜빡입니다. '강세만'은 첫 박자에서만, '전체'는 모든 박자에서 깜빡이며, '끄기'는 시각 효과를 끕니다.",
+      en: "Screen flashes in time with beats. 'Accent' flashes only on the downbeat, 'All' flashes every beat, and 'Off' disables visual flashes.",
+    },
+    hapticFeedbackHelp: {
+      ko: "박자에 맞춰 기기가 진동합니다. 무대나 시끄러운 환경에서 소리 없이 박자를 느낄 수 있습니다.",
+      en: "Device vibrates in time with beats. Useful when you need to feel the beat silently — for example on stage or in noisy environments.",
+    },
+    layerSoundSetHelp: {
+      ko: "각 레이어(서브디비전 단계)에 다른 사운드를 지정할 수 있습니다. '기본'은 메인 사운드와 동일하게, 다른 옵션은 해당 사운드 세트로 재생됩니다.",
+      en: "Assign a different sound to each subdivision layer. 'Default' uses the main sound, while other options play the selected sound set for that layer.",
+    },
+    showOnboardingAgain: { ko: "온보딩 다시 보기", en: "Show Onboarding Again" },
+    showOnboardingAgainHint: { ko: "처음 실행 시 보았던 안내를 다시 봅니다", en: "Replay the introductory walkthrough" },
     timerStop: { ko: "타이머 정지", en: "Timer Stop" },
     timerStopEndCycle: { ko: "사이클 끝", en: "End of Cycle" },
     timerStopImmediate: { ko: "즉시", en: "Immediate" },
