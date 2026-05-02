@@ -79,3 +79,57 @@ export function safeSeekAndPlay(
     });
   }
 }
+
+/**
+ * AudioRecorder 인스턴스를 안전하게 정리합니다.
+ * stop은 Promise를 반환할 수 있으므로 await하고, 그 후 SharedObject의 remove()를 호출합니다.
+ * expo-audio의 공개 타입에는 remove()가 노출되지 않으므로 SharedObject 캐스트가 필요합니다.
+ *
+ * @param rec 정리할 AudioRecorder. null이면 무시.
+ * @param label 디버깅 컨텍스트 (예: "mic.tuner.cleanup")
+ */
+export async function releaseRecorder(
+  rec: { stop: () => unknown } | null | undefined,
+  label: string,
+): Promise<void> {
+  if (!rec) return;
+  try {
+    const r = rec.stop();
+    if (r && typeof (r as any).then === "function") {
+      await (r as Promise<unknown>).catch(() => {});
+    }
+  } catch (e) {
+    captureBreadcrumb({
+      category: "audio.recorder",
+      message: `stop threw: ${label}`,
+      level: "warning",
+      data: { error: String(e) },
+    });
+  }
+  try {
+    (rec as any).remove?.();
+  } catch (e) {
+    captureBreadcrumb({
+      category: "audio.recorder",
+      message: `remove threw: ${label}`,
+      level: "warning",
+      data: { error: String(e) },
+    });
+  }
+}
+
+/**
+ * 오디오 풀 워치독: 사운드셋 폴백이 일어나거나 풀에서 플레이어를 찾지 못했을 때 호출합니다.
+ * 빈도/디바이스 패턴을 추적하기 위한 breadcrumb을 남깁니다.
+ */
+export function notifyAudioPoolFallback(
+  reason: string,
+  data?: Record<string, unknown>,
+): void {
+  captureBreadcrumb({
+    category: "audio.pool",
+    message: `pool fallback: ${reason}`,
+    level: "warning",
+    data,
+  });
+}

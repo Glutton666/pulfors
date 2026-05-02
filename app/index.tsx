@@ -32,7 +32,8 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import { useAudioPlayer } from "expo-audio";
-import { safePlay } from "@/lib/audio-utils";
+import { safePlay, notifyAudioPoolFallback } from "@/lib/audio-utils";
+import { captureBreadcrumb } from "@/lib/error-tracking";
 import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
 import { LinearGradient } from "expo-linear-gradient";
@@ -517,7 +518,7 @@ export default function MetronomeScreen() {
 
       for (const [key, uri] of Object.entries(samples)) {
         if (!isSafeNoteSampleUri(uri)) {
-          console.warn("[SamplePreload] Unsafe URI blocked on startup:", key, uri.slice(0, 80));
+          captureBreadcrumb({ category: "sample.preload", message: "Unsafe URI blocked on startup", level: "warning", data: { key, uriPrefix: uri.slice(0, 80) } });
           continue;
         }
         try {
@@ -527,7 +528,7 @@ export default function MetronomeScreen() {
           player.volume = sampleVolumeRef.current * 10.0;
           noteSampleSoundsRef.current[key] = player;
         } catch (e) {
-          console.warn("[SamplePreload] Failed to preload:", key, e);
+          captureBreadcrumb({ category: "sample.preload", message: "Failed to preload", level: "warning", data: { key, error: String(e) } });
         }
       }
     };
@@ -723,7 +724,7 @@ export default function MetronomeScreen() {
 
     for (const [key, uri] of Object.entries(samples)) {
       if (!isSafeNoteSampleUri(uri)) {
-        console.warn("[SamplePreload] Unsafe URI blocked:", key, uri.slice(0, 80));
+        captureBreadcrumb({ category: "sample.preload", message: "Unsafe URI blocked", level: "warning", data: { key, uriPrefix: uri.slice(0, 80) } });
         continue;
       }
       const rawUri = uri.split("#")[0];
@@ -737,7 +738,7 @@ export default function MetronomeScreen() {
           player.volume = sampleVolumeRef.current * 10.0;
           newPlayers[key] = player;
         } catch (e) {
-          console.warn("[SamplePreload] Failed:", key, e);
+          captureBreadcrumb({ category: "sample.preload", message: "Failed", level: "warning", data: { key, error: String(e) } });
         }
       }
     }
@@ -792,9 +793,9 @@ export default function MetronomeScreen() {
               const trimmed = trimPCM({ pcm, trimStartSamples: 0, trimLenSamples: pcm.length }, cfg.duration);
               return trimmed.pcm;
             }
-            console.warn("[CustomSound] Decode returned null for:", cfg.sampleUri);
+            captureBreadcrumb({ category: "custom-sound", message: "Decode returned null", level: "warning", data: { sampleUri: cfg.sampleUri } });
           } catch (e) {
-            console.warn("[CustomSound] Failed to decode custom sample:", e);
+            captureBreadcrumb({ category: "custom-sound", message: "Failed to decode custom sample", level: "warning", data: { error: String(e) } });
           }
         }
         const srcSet = cfg.sourceSet || "classic";
@@ -846,7 +847,7 @@ export default function MetronomeScreen() {
           samplePCMCacheRef.current.set(key, entry);
         }
       } catch (e) {
-        console.warn("[PreRender] Failed to decode sample:", key, e);
+        captureBreadcrumb({ category: "pre-render", message: "Failed to decode sample", level: "warning", data: { key, error: String(e) } });
       }
     }));
     return map;
@@ -886,7 +887,7 @@ export default function MetronomeScreen() {
       player.volume = 1.0;
       return player;
     } catch (e) {
-      console.warn("[PreRender] Failed, falling back to per-tick audio:", e);
+      captureBreadcrumb({ category: "pre-render", message: "Failed, falling back to per-tick audio", level: "warning", data: { error: String(e) } });
       return null;
     }
   }, [getClickPCMs, getSamplePCMs]);
@@ -896,7 +897,11 @@ export default function MetronomeScreen() {
       const set = soundSetRef.current;
       const customCfg = customSoundSetsRef.current[set];
       const builtinSet = customCfg ? customCfg.strong.sourceSet : (set as keyof typeof soundSets);
-      const players = allPlayersRef.current[builtinSet] || allPlayersRef.current.classic;
+      const pool = allPlayersRef.current[builtinSet];
+      if (!pool) {
+        notifyAudioPoolFallback("warmup-missing-set", { requestedSet: String(builtinSet) });
+      }
+      const players = pool || allPlayersRef.current.classic;
       const toWarm = [players.highA, players.highB, players.lowA, players.lowB, players.strongA, players.strongB];
       const savedVolumes = toWarm.map(p => p.volume);
       toWarm.forEach(p => { p.volume = 0; });
@@ -1094,7 +1099,7 @@ export default function MetronomeScreen() {
         });
       }
     } catch (e) {
-      console.warn("Failed to check goals:", e);
+      captureBreadcrumb({ category: "goals", message: "Failed to check goals", level: "warning", data: { error: String(e) } });
     }
   }, []);
 
@@ -1419,7 +1424,7 @@ export default function MetronomeScreen() {
           await addPracticeRoom(result.practiceRoomName);
         }
       } catch (e) {
-        console.warn("Failed to register practice room:", e);
+        captureBreadcrumb({ category: "practice-room", message: "Failed to register practice room", level: "warning", data: { error: String(e) } });
       }
     }
   }, [setThemeColor, setCustomHex, persistSettings]);
@@ -1427,7 +1432,7 @@ export default function MetronomeScreen() {
   const handleResetApp = useCallback(async () => {
     try {
       const engine = engineRef.current;
-      if (engine?.isRunning) {
+      if (engine?.getIsRunning()) {
         engine.stop();
       }
       await AsyncStorage.clear();
@@ -1515,7 +1520,7 @@ export default function MetronomeScreen() {
         setShowOnboarding(true);
       }, 800);
     } catch (e) {
-      console.warn("Reset failed:", e);
+      captureBreadcrumb({ category: "reset", message: "Reset failed", level: "error", data: { error: String(e) } });
     }
   }, [setThemeColor]);
 
@@ -1756,7 +1761,7 @@ export default function MetronomeScreen() {
             webRenderedLoopRef.current = loop;
             engine.setPreRenderedAudio(true);
           } catch (renderErr) {
-            console.warn("[togglePlayPause] Web pre-render failed, using per-tick:", renderErr);
+            captureBreadcrumb({ category: "metronome", message: "togglePlayPause: Web pre-render failed, using per-tick", level: "warning", data: { error: String(renderErr) } });
             engine.setPreRenderedAudio(false);
           }
 
@@ -2051,7 +2056,7 @@ export default function MetronomeScreen() {
         }
       }
       };
-      handleAsync().catch((e) => console.warn("[NotifAction] 알림 버튼 핸들러 에러:", e));
+      handleAsync().catch((e) => captureBreadcrumb({ category: "notification", message: "알림 버튼 핸들러 에러", level: "warning", data: { error: String(e) } }));
     });
     return () => {
       sub.remove();
@@ -2256,7 +2261,7 @@ export default function MetronomeScreen() {
           webRenderedLoopRef.current = loop;
           engine.setPreRenderedAudio(true);
         } catch (renderErr) {
-          console.warn("[startMetronome] Web pre-render failed, using per-tick:", renderErr);
+          captureBreadcrumb({ category: "metronome", message: "startMetronome: Web pre-render failed, using per-tick", level: "warning", data: { error: String(renderErr) } });
           engine.setPreRenderedAudio(false);
         }
 
@@ -2288,7 +2293,7 @@ export default function MetronomeScreen() {
         }
       }
     } catch (e) {
-      console.warn("[startMetronome] Error:", e);
+      captureBreadcrumb({ category: "metronome", message: "startMetronome error", level: "error", data: { error: String(e) } });
       setIsPreparing(false);
     }
   }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio, getClickPCMs]);
@@ -2724,7 +2729,7 @@ export default function MetronomeScreen() {
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return true;
     } catch (e) {
-      console.warn("Quick save error:", e);
+      captureBreadcrumb({ category: "practice-book", message: "Quick save error", level: "warning", data: { error: String(e) } });
       return false;
     }
   }, [bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, blockPlayMode, subdivisionPattern, username, t]);
@@ -3217,7 +3222,7 @@ export default function MetronomeScreen() {
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       return true;
     } catch (e) {
-      console.warn("Note save error:", e);
+      captureBreadcrumb({ category: "practice-book", message: "Note save error", level: "warning", data: { error: String(e) } });
       return false;
     }
   }, [username, t]);
@@ -3503,7 +3508,7 @@ export default function MetronomeScreen() {
         }
       }
     } catch (e) {
-      console.warn("Deep link parse error:", e);
+      captureBreadcrumb({ category: "deep-link", message: "Parse error", level: "warning", data: { error: String(e) } });
     }
   }, [handleLoadPracticeEntry]);
 

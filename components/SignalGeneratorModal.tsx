@@ -27,7 +27,7 @@ import {
   type RecordingOptions,
 } from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
-import { safePlay } from "@/lib/audio-utils";
+import { safePlay, releaseRecorder } from "@/lib/audio-utils";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useScale } from "@/lib/scale";
@@ -1021,9 +1021,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       if (micStreamRef.current) micStreamRef.current.getTracks().forEach((t: any) => t.stop());
       if (micMobileTimerRef.current) clearTimeout(micMobileTimerRef.current);
       if (micRecordingRef.current) {
-        try { micRecordingRef.current.stop(); } catch {}
-        try { (micRecordingRef.current as any).remove?.(); } catch {}
+        const rec = micRecordingRef.current;
         micRecordingRef.current = null;
+        void releaseRecorder(rec, "mic.unmount");
       }
     };
   }, []);
@@ -1060,9 +1060,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       micMobileTimerRef.current = null;
     }
     if (micRecordingRef.current) {
-      try { await micRecordingRef.current.stop(); } catch {}
-      try { (micRecordingRef.current as any).remove?.(); } catch {}
+      const rec = micRecordingRef.current;
       micRecordingRef.current = null;
+      await releaseRecorder(rec, "mic.stop");
     }
     try {
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true, interruptionMode: "mixWithOthers" });
@@ -1327,16 +1327,15 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
           const startedRec = rec;
           micMobileTimerRef.current = setTimeout(async () => {
             if (!micActiveRef.current) {
-              try { await startedRec.stop(); } catch {}
-              try { (startedRec as any).remove?.(); } catch {}
               micRecordingRef.current = null;
+              await releaseRecorder(startedRec, "mic.tick.cancelled");
               return;
             }
             try {
               await startedRec.stop();
               const uri = startedRec.uri;
-              try { (startedRec as any).remove?.(); } catch {}
               micRecordingRef.current = null;
+              try { (startedRec as any).remove?.(); } catch {}
               if (uri) {
                 const base64 = await FileSystem.readAsStringAsync(uri, {
                   encoding: "base64" as any,
@@ -1376,11 +1375,8 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
           }, RECORD_MS);
         } catch (e) {
           console.warn("[MicTuner] native record error:", e);
-          if (rec) {
-            try { await rec.stop(); } catch {}
-            try { (rec as any).remove?.(); } catch {}
-          }
           micRecordingRef.current = null;
+          if (rec) await releaseRecorder(rec, "mic.tick.error");
           if (Platform.OS === "android") {
             autoFallbackToWebView();
             return;
