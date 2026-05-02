@@ -143,6 +143,8 @@ export default function MetronomeScreen() {
   const [landscapeImageUri, setLandscapeImageUri] = useState<string | null>(null);
   const [landscapeImageModalVisible, setLandscapeImageModalVisible] = useState(false);
   const [showLandscapeImage, setShowLandscapeImage] = useState(true);
+  const [landscapeContentType, setLandscapeContentType] = useState<"photo" | "stats">("photo");
+  const [landscapeStatsLogs, setLandscapeStatsLogs] = useState<ActivityLog[]>([]);
 
   const [barMode, setBarMode] = useState(false);
   const [barStartBeat, setBarStartBeat] = useState<number | null>(null);
@@ -581,6 +583,9 @@ export default function MetronomeScreen() {
       }
       if (settings.showLandscapeImage !== undefined) {
         setShowLandscapeImage(settings.showLandscapeImage);
+      }
+      if (settings.landscapeContentType) {
+        setLandscapeContentType(settings.landscapeContentType);
       }
       if (settings.beatDirection) {
         setBeatDirection(settings.beatDirection);
@@ -1301,13 +1306,14 @@ export default function MetronomeScreen() {
           timerStopMode,
           landscapeReversed,
           showLandscapeImage,
+          landscapeContentType,
           beatDirection,
           ...merged,
         };
         saveSettings(current);
       }, 500);
     },
-    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, layerSoundSets, flashMode, hapticMode, audioOffsetMs, timerStopMode, landscapeReversed, showLandscapeImage, beatDirection]
+    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, layerSoundSets, flashMode, hapticMode, audioOffsetMs, timerStopMode, landscapeReversed, showLandscapeImage, landscapeContentType, beatDirection]
   );
 
   const updateVolume = useCallback(
@@ -3575,6 +3581,50 @@ export default function MetronomeScreen() {
     setLandscapeImageModalVisible(false);
   }, []);
 
+  // Load activity logs whenever the landscape stats panel is visible / playback toggles
+  useEffect(() => {
+    if (!isLandscape || !showLandscapeImage || landscapeContentType !== "stats") return;
+    let cancelled = false;
+    const refresh = () => {
+      loadActivityLogs().then((logs) => { if (!cancelled) setLandscapeStatsLogs(logs); });
+    };
+    refresh();
+    const id = setInterval(refresh, 30000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [isLandscape, showLandscapeImage, landscapeContentType, isPlaying]);
+
+  const landscapeStats = useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+    const weekStart = new Date(now);
+    const day = weekStart.getDay();
+    const diff = weekStart.getDate() - day + (day === 0 ? -6 : 1);
+    weekStart.setDate(diff); weekStart.setHours(0, 0, 0, 0);
+    const todayMs = todayStart.getTime();
+    const weekMs = weekStart.getTime();
+    let todayTotal = 0, todayBeat = 0, todayBar = 0, weekTotal = 0;
+    for (const l of landscapeStatsLogs) {
+      if (l.type !== "practice_session") continue;
+      const d = l.data as PracticeSessionData;
+      const dur = d.duration || 0;
+      if (l.timestamp >= weekMs) weekTotal += dur;
+      if (l.timestamp >= todayMs) {
+        todayTotal += dur;
+        if (d.mode === "dial") todayBeat += dur;
+        else if (d.mode === "bar") todayBar += dur;
+      }
+    }
+    return { todayTotal, todayBeat, todayBar, weekTotal };
+  }, [landscapeStatsLogs]);
+
+  const formatStatMinutes = useCallback((seconds: number): string => {
+    const mins = Math.round(seconds / 60);
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    const rem = mins % 60;
+    return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
+  }, []);
+
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
@@ -4083,16 +4133,117 @@ export default function MetronomeScreen() {
             {!noteMode && (
               <>
                 {showLandscapeImage && (
-                  <Pressable
-                    onPress={() => setLandscapeImageModalVisible(true)}
-                    style={{ width: "100%" as any, flex: 0.8, borderRadius: 10, overflow: "hidden" as const, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: landscapeImageUri ? "transparent" : C.surface, borderWidth: landscapeImageUri ? 0 : 1, borderColor: C.overlay10, borderStyle: "dashed" as const, minHeight: 48 }}
-                  >
-                    {landscapeImageUri ? (
-                      <Image source={{ uri: landscapeImageUri }} style={{ width: "100%" as any, height: "100%" as any, borderRadius: 10 }} resizeMode="cover" />
+                  <View style={{ width: "100%" as any, flex: 0.8, minHeight: 48 }}>
+                    <View
+                      style={{
+                        position: "absolute" as const,
+                        top: 4,
+                        right: 4,
+                        zIndex: 10,
+                        flexDirection: "row" as const,
+                        backgroundColor: C.overlay30,
+                        borderRadius: 999,
+                        padding: 2,
+                        gap: 2,
+                      }}
+                    >
+                      <Pressable
+                        onPress={() => {
+                          setLandscapeContentType("photo");
+                          persistSettings({ landscapeContentType: "photo" });
+                        }}
+                        hitSlop={6}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 999,
+                          backgroundColor: landscapeContentType === "photo" ? C.accent : "transparent",
+                          alignItems: "center" as const,
+                          justifyContent: "center" as const,
+                        }}
+                      >
+                        <Ionicons
+                          name="image-outline"
+                          size={S.ms(14, 0.3)}
+                          color={landscapeContentType === "photo" ? C.background : C.textSecondary}
+                        />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => {
+                          setLandscapeContentType("stats");
+                          persistSettings({ landscapeContentType: "stats" });
+                        }}
+                        hitSlop={6}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 999,
+                          backgroundColor: landscapeContentType === "stats" ? C.accent : "transparent",
+                          alignItems: "center" as const,
+                          justifyContent: "center" as const,
+                        }}
+                      >
+                        <Ionicons
+                          name="stats-chart"
+                          size={S.ms(14, 0.3)}
+                          color={landscapeContentType === "stats" ? C.background : C.textSecondary}
+                        />
+                      </Pressable>
+                    </View>
+                    {landscapeContentType === "photo" ? (
+                      <Pressable
+                        onPress={() => setLandscapeImageModalVisible(true)}
+                        style={{ flex: 1, borderRadius: 10, overflow: "hidden" as const, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: landscapeImageUri ? "transparent" : C.surface, borderWidth: landscapeImageUri ? 0 : 1, borderColor: C.overlay10, borderStyle: "dashed" as const }}
+                      >
+                        {landscapeImageUri ? (
+                          <Image source={{ uri: landscapeImageUri }} style={{ width: "100%" as any, height: "100%" as any, borderRadius: 10 }} resizeMode="cover" />
+                        ) : (
+                          <Ionicons name="image-outline" size={S.ms(24, 0.4)} color={C.textTertiary} />
+                        )}
+                      </Pressable>
                     ) : (
-                      <Ionicons name="image-outline" size={S.ms(24, 0.4)} color={C.textTertiary} />
+                      <View style={{ flex: 1, borderRadius: 10, overflow: "hidden" as const, backgroundColor: C.surface, borderWidth: 1, borderColor: C.overlay10, padding: 10, justifyContent: "center" as const }}>
+                        {!loggingEnabled ? (
+                          <Text style={{ color: C.textTertiary, fontSize: S.ms(11, 0.3), textAlign: "center" as const, fontFamily: "Inter_500Medium" }}>
+                            {t("settings", "statsNoLogs")}
+                          </Text>
+                        ) : landscapeStats.todayTotal === 0 && landscapeStats.weekTotal === 0 ? (
+                          <Text style={{ color: C.textTertiary, fontSize: S.ms(11, 0.3), textAlign: "center" as const, fontFamily: "Inter_500Medium" }}>
+                            {t("settings", "statsEmpty")}
+                          </Text>
+                        ) : (
+                          <View style={{ gap: 6 }}>
+                            <View style={{ flexDirection: "row" as const, justifyContent: "space-between" as const, alignItems: "baseline" as const }}>
+                              <Text style={{ color: C.textSecondary, fontSize: S.ms(10, 0.25), fontFamily: "Inter_500Medium", textTransform: "uppercase" as const, letterSpacing: 0.5 }}>
+                                {t("settings", "statsTodayPractice")}
+                              </Text>
+                              <Text style={{ color: C.accent, fontSize: S.ms(20, 0.4), fontFamily: "SpaceGrotesk_700Bold" }}>
+                                {formatStatMinutes(landscapeStats.todayTotal)}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: "row" as const, gap: 8 }}>
+                              <View style={{ flex: 1, flexDirection: "row" as const, justifyContent: "space-between" as const, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: C.overlay10, borderRadius: 6 }}>
+                                <Text style={{ color: C.textSecondary, fontSize: S.ms(10, 0.25), fontFamily: "Inter_500Medium" }}>{t("settings", "statsBeat")}</Text>
+                                <Text style={{ color: C.text, fontSize: S.ms(11, 0.3), fontFamily: "SpaceGrotesk_500Medium" }}>{formatStatMinutes(landscapeStats.todayBeat)}</Text>
+                              </View>
+                              <View style={{ flex: 1, flexDirection: "row" as const, justifyContent: "space-between" as const, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: C.overlay10, borderRadius: 6 }}>
+                                <Text style={{ color: C.textSecondary, fontSize: S.ms(10, 0.25), fontFamily: "Inter_500Medium" }}>{t("settings", "statsBar")}</Text>
+                                <Text style={{ color: C.text, fontSize: S.ms(11, 0.3), fontFamily: "SpaceGrotesk_500Medium" }}>{formatStatMinutes(landscapeStats.todayBar)}</Text>
+                              </View>
+                            </View>
+                            <View style={{ flexDirection: "row" as const, justifyContent: "space-between" as const, alignItems: "center" as const, paddingTop: 4, borderTopWidth: 1, borderTopColor: C.overlay10 }}>
+                              <Text style={{ color: C.textSecondary, fontSize: S.ms(10, 0.25), fontFamily: "Inter_500Medium", textTransform: "uppercase" as const, letterSpacing: 0.5 }}>
+                                {t("settings", "statsWeekPractice")}
+                              </Text>
+                              <Text style={{ color: C.text, fontSize: S.ms(13, 0.3), fontFamily: "SpaceGrotesk_600SemiBold" }}>
+                                {formatStatMinutes(landscapeStats.weekTotal)}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+                      </View>
                     )}
-                  </Pressable>
+                  </View>
                 )}
                 <StopwatchTimer
                   onTimerExpired={handleTimerExpired}

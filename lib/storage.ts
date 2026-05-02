@@ -70,6 +70,7 @@ export interface MetronomeSettings {
   username?: string;
   landscapeReversed?: boolean;
   showLandscapeImage?: boolean;
+  landscapeContentType?: "photo" | "stats";
   beatDirection?: "cw" | "ccw";
   layerSoundSets?: Record<number, SoundSet>;
 }
@@ -91,6 +92,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   username: "",
   landscapeReversed: false,
   showLandscapeImage: true,
+  landscapeContentType: "photo",
   beatDirection: "cw",
 };
 
