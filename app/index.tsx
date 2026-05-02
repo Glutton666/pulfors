@@ -4141,7 +4141,7 @@ export default function MetronomeScreen() {
                         right: 4,
                         zIndex: 10,
                         flexDirection: "row" as const,
-                        backgroundColor: C.overlay30,
+                        backgroundColor: "rgba(0,0,0,0.55)",
                         borderRadius: 999,
                         padding: 2,
                         gap: 2,
