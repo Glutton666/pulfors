@@ -2483,7 +2483,7 @@ export function BeatIndicator({
                 </Pressable>
                 {barLoopMode === "loop" && (
                   <View style={{ position: "absolute", top: -6, right: -6, backgroundColor: C.accent, borderRadius: 7, width: 14, height: 14, alignItems: "center", justifyContent: "center" }}>
-                    <Ionicons name="repeat" size={S.ms(9, 0.4)} color={C.bg} />
+                    <Ionicons name="repeat" size={S.ms(9, 0.4)} color={C.background} />
                   </View>
                 )}
               </View>
@@ -2668,7 +2668,7 @@ export function BeatIndicator({
                         alignItems: "center",
                         gap: 3,
                       }}
-                      hitSlop={4}
+                      hitSlop={8}
                     >
                       <Ionicons
                         name={icon}
@@ -3085,7 +3085,7 @@ export function BeatIndicator({
               </Pressable>
               {barLoopMode === "loop" && (
                 <View style={{ position: "absolute", top: -6, right: -6, backgroundColor: C.accent, borderRadius: 7, width: 14, height: 14, alignItems: "center", justifyContent: "center" }}>
-                  <Ionicons name="repeat" size={S.ms(9, 0.4)} color={C.bg} />
+                  <Ionicons name="repeat" size={S.ms(9, 0.4)} color={C.background} />
                 </View>
               )}
             </View>

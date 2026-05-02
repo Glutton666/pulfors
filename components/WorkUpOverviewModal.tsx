@@ -463,6 +463,7 @@ export function WorkUpOverviewModal({
       beat_mode_time: t("workUp", "beatModeTime"),
       bar_mode_time: t("workUp", "barModeTime"),
       room_time: t("workUp", "roomTime"),
+      session_goal: t("workUp", "sessionGoal"),
     };
     const label = goalLabelMap[newGoalType] || "";
     const newGoal: Goal = { id: Crypto.randomUUID(), type: newGoalType, target, label };
@@ -522,6 +523,7 @@ export function WorkUpOverviewModal({
                 beat_mode_time: t("workUp", "beatShort"),
                 bar_mode_time: t("workUp", "barShort"),
                 room_time: t("workUp", "roomShort"),
+                session_goal: t("workUp", "sessionShort"),
               };
               return (
                 <Pressable key={val} style={[s.goalTypeChip, newGoalType === val && { borderColor: C.accent, backgroundColor: C.accentDim }]} onPress={() => setNewGoalType(val)}>

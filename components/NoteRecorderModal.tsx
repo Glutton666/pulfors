@@ -10,6 +10,7 @@ import {
   PanResponder,
   ActivityIndicator,
   TextInput,
+  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -35,6 +36,7 @@ import type { SampleSource } from "@/lib/note-samples";
 import { soundSets } from "@/lib/metronome-engine";
 import type { BuiltinSoundSet } from "@/lib/storage";
 import { safePlay } from "@/lib/audio-utils";
+import { captureBreadcrumb } from "@/lib/error-tracking";
 
 type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
 
@@ -178,14 +180,25 @@ export function NoteRecorderModal({
       });
       await recorderRef.current.prepareToRecordAsync();
     } catch (e) {
-      console.error("Failed to prepare recording:", e);
+      captureBreadcrumb({ category: "noteRecorder", message: "prepareToRecord failed", level: "error", data: { error: String(e) } });
     }
   }, []);
 
   const startCountdown = useCallback(async () => {
-    const { status } = await requestRecordingPermissionsAsync();
+    const { status, canAskAgain } = await requestRecordingPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert(t("noteRecorder", "permissionRequired"), t("noteRecorder", "micPermission"));
+      if (!canAskAgain && Platform.OS !== "web") {
+        Alert.alert(
+          t("noteRecorder", "permissionRequired"),
+          t("noteRecorder", "micPermissionOpenSettings"),
+          [
+            { text: t("noteRecorder", "cancel"), style: "cancel" },
+            { text: t("noteRecorder", "openSettings"), onPress: () => Linking.openSettings() },
+          ],
+        );
+      } else {
+        Alert.alert(t("noteRecorder", "permissionRequired"), t("noteRecorder", "micPermission"));
+      }
       return;
     }
 
@@ -250,7 +263,7 @@ export function NoteRecorderModal({
         }
       }, 100);
     } catch (e) {
-      console.error("Failed to start recording:", e);
+      captureBreadcrumb({ category: "noteRecorder", message: "startRecording failed", level: "error", data: { error: String(e) } });
       setPhase("idle");
     }
   }, [bpm, startMetronomeClicks]);
@@ -307,7 +320,7 @@ export function NoteRecorderModal({
         setPhase("idle");
       }
     } catch (e) {
-      console.error("Failed to stop recording:", e);
+      captureBreadcrumb({ category: "noteRecorder", message: "stopRecording failed", level: "error", data: { error: String(e) } });
       setPhase("idle");
     }
   }, [probeDurationSec, stopMetronomeClicks]);
@@ -367,7 +380,7 @@ export function NoteRecorderModal({
         }
       }, 50);
     } catch (e) {
-      console.error("Failed to play preview:", e);
+      captureBreadcrumb({ category: "noteRecorder", message: "playPreview failed", level: "warning", data: { error: String(e) } });
       setIsPlayingPreview(false);
     }
   }, [recordedUri, trimStart, trimEnd, audioDuration]);
@@ -460,7 +473,7 @@ export function NoteRecorderModal({
         setLoadingProgress(0);
       }
     } catch (e) {
-      console.error("Failed to import audio:", e);
+      captureBreadcrumb({ category: "noteRecorder", message: "importAudio failed", level: "error", data: { error: String(e) } });
       Alert.alert(t("noteRecorder", "error"), t("noteRecorder", "importError"));
       setPhase("idle");
       setLoadingMessage("");

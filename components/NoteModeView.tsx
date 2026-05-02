@@ -112,10 +112,10 @@ function QueueItem({
   return (
     <View style={[styles.queueItem, { borderColor: C.border, backgroundColor: C.surfaceLight }, isCurrent && { borderColor: accentColor, borderWidth: 1.5, backgroundColor: "rgba(212,168,70,0.08)" }]}>
       <View style={styles.reorderBtns}>
-        <Pressable onPress={onMoveUp} hitSlop={4} disabled={isFirst} style={{ opacity: isFirst ? 0.25 : 1 }}>
+        <Pressable onPress={onMoveUp} hitSlop={8} disabled={isFirst} style={{ opacity: isFirst ? 0.25 : 1 }}>
           <Ionicons name="chevron-up" size={S.ms(14, 0.4)} color={C.textTertiary} />
         </Pressable>
-        <Pressable onPress={onMoveDown} hitSlop={4} disabled={isLast} style={{ opacity: isLast ? 0.25 : 1 }}>
+        <Pressable onPress={onMoveDown} hitSlop={8} disabled={isLast} style={{ opacity: isLast ? 0.25 : 1 }}>
           <Ionicons name="chevron-down" size={S.ms(14, 0.4)} color={C.textTertiary} />
         </Pressable>
       </View>
@@ -143,7 +143,7 @@ function QueueItem({
         </View>
       </View>
       {entry.imageUri && (
-        <Pressable onPress={() => onImageChange?.(undefined)} hitSlop={6} style={{ padding: 2 }}>
+        <Pressable onPress={() => onImageChange?.(undefined)} hitSlop={8} style={{ padding: 2 }}>
           <Ionicons name="image" size={S.ms(14, 0.4)} color={accentColor} />
         </Pressable>
       )}
@@ -189,7 +189,7 @@ function SourceItem({
       {isPlaying && (
         <Pressable
           onPress={onInsertNext}
-          hitSlop={6}
+          hitSlop={8}
           style={[styles.insertNextBtn, { borderColor: accentColor }]}
         >
           <Ionicons name="arrow-forward" size={S.ms(12, 0.4)} color={accentColor} />
@@ -518,10 +518,10 @@ export function NoteModeView({
           <View style={[styles.header, { marginBottom: S.ms(2, 0.3), gap: S.ms(8, 0.3) }]}>
             <Text style={[styles.title, { color: C.accent, fontSize: S.ms(14, 0.3) }]}>{t("noteMode", "title")}</Text>
             <View style={[styles.headerActions, { gap: S.ms(6, 0.3) }]}>
-              <Pressable onPress={handleSaveWithFeedback} hitSlop={6} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : C.surface, width: S.ms(28, 0.4), height: S.ms(28, 0.4) }]}>
+              <Pressable onPress={handleSaveWithFeedback} hitSlop={8} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : C.surface, width: S.ms(28, 0.4), height: S.ms(28, 0.4) }]}>
                 <Ionicons name={saved ? "checkmark" : "save-outline"} size={S.ms(13, 0.3)} color={saved ? "#4CAF50" : C.accent} />
               </Pressable>
-              <Pressable onPress={handleReset} hitSlop={6} style={[styles.headerBtn, { borderColor: C.danger, width: S.ms(28, 0.4), height: S.ms(28, 0.4) }]}>
+              <Pressable onPress={handleReset} hitSlop={8} style={[styles.headerBtn, { borderColor: C.danger, width: S.ms(28, 0.4), height: S.ms(28, 0.4) }]}>
                 <Ionicons name="refresh" size={S.ms(13, 0.3)} color={C.danger} />
               </Pressable>
             </View>
@@ -546,10 +546,10 @@ export function NoteModeView({
         <View style={{ width: 22 }} />
         <Text style={[styles.title, { color: C.accent }]}>{t("noteMode", "title")}</Text>
         <View style={styles.headerActions}>
-          <Pressable onPress={handleSaveWithFeedback} hitSlop={6} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : C.surface }]}>
+          <Pressable onPress={handleSaveWithFeedback} hitSlop={8} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : C.surface }]}>
             <Ionicons name={saved ? "checkmark" : "save-outline"} size={S.ms(16, 0.4)} color={saved ? "#4CAF50" : C.accent} />
           </Pressable>
-          <Pressable onPress={handleReset} hitSlop={6} style={[styles.headerBtn, { borderColor: C.danger }]}>
+          <Pressable onPress={handleReset} hitSlop={8} style={[styles.headerBtn, { borderColor: C.danger }]}>
             <Ionicons name="refresh" size={S.ms(16, 0.4)} color={C.danger} />
           </Pressable>
         </View>

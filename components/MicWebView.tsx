@@ -2,6 +2,7 @@
 import React, { useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { Platform } from "react-native";
 import { WebView } from "react-native-webview";
+import { captureBreadcrumb } from "@/lib/error-tracking";
 
 const MIC_HTML = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><script>
 var running=false,audioCtx,analyser,source,stream,raf,retryCount=0,MAX_RETRIES=3;
@@ -41,7 +42,12 @@ export const MicWebView = forwardRef<MicWebViewHandle, MicWebViewProps>(
         if (data.type === "freq") {
           onFrequency(data.frequency, data.note);
         } else if (data.type === "error") {
-          console.warn("[MicWebView] WebView mic error:", data.message);
+          captureBreadcrumb({
+            category: "micWebView",
+            message: "WebView mic error",
+            level: "warning",
+            data: { error: String(data.message ?? "unknown") },
+          });
         }
       } catch {}
     }, [onFrequency]);

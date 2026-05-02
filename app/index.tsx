@@ -719,7 +719,7 @@ export default function MetronomeScreen() {
   const preloadNoteSampleSounds = useCallback(async (samples: NoteSampleMap, keepExisting?: boolean) => {
     const existing = noteSampleSoundsRef.current;
     const existingUris = noteSamplesRef.current;
-    const newPlayers: Record<string, AudioPlayer> = {};
+    const newPlayers: Record<string, ExpoAudioPlayer> = {};
     const keysToKeep = new Set<string>();
 
     for (const [key, uri] of Object.entries(samples)) {
@@ -896,7 +896,7 @@ export default function MetronomeScreen() {
     try {
       const set = soundSetRef.current;
       const customCfg = customSoundSetsRef.current[set];
-      const builtinSet = customCfg ? customCfg.strong.sourceSet : (set as keyof typeof soundSets);
+      const builtinSet: BuiltinSoundSet = (customCfg ? customCfg.strong.sourceSet : (set as BuiltinSoundSet)) || "classic";
       const pool = allPlayersRef.current[builtinSet];
       if (!pool) {
         notifyAudioPoolFallback("warmup-missing-set", { requestedSet: String(builtinSet) });
@@ -3569,18 +3569,38 @@ export default function MetronomeScreen() {
   const tempoLabel = getTempoLabelI18n(bpm, language);
 
   const pickLandscapeImage = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets[0]) {
-      const uri = result.assets[0].uri;
-      setLandscapeImageUri(uri);
-      AsyncStorage.setItem("metronome_landscape_image", uri);
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (perm.status !== "granted") {
+        if (!perm.canAskAgain && Platform.OS !== "web") {
+          Alert.alert(
+            t("settings", "permissionRequired"),
+            t("settings", "photoPermissionOpenSettings"),
+            [
+              { text: t("settings", "cancel"), style: "cancel" },
+              { text: t("settings", "openSettings"), onPress: () => Linking.openSettings() },
+            ],
+          );
+        }
+        setLandscapeImageModalVisible(false);
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        const uri = result.assets[0].uri;
+        setLandscapeImageUri(uri);
+        AsyncStorage.setItem("metronome_landscape_image", uri);
+      }
+    } catch (e) {
+      captureBreadcrumb({ category: "imagePicker", message: "pickLandscapeImage failed", level: "warning", data: { error: String(e) } });
+    } finally {
+      setLandscapeImageModalVisible(false);
     }
-    setLandscapeImageModalVisible(false);
-  }, []);
+  }, [t]);
 
   const removeLandscapeImage = useCallback(() => {
     setLandscapeImageUri(null);

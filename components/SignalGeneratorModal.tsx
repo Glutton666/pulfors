@@ -686,7 +686,7 @@ function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentColor, a
                               if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                               onSelectFreq(s.freq);
                             }}
-                            hitSlop={4}
+                            hitSlop={8}
                             style={({ pressed }) => [
                               tgStyles.stringRow,
                               pressed && { backgroundColor: accentDim },
@@ -1338,7 +1338,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               try { (startedRec as any).remove?.(); } catch {}
               if (uri) {
                 const base64 = await FileSystem.readAsStringAsync(uri, {
-                  encoding: "base64" as any,
+                  encoding: FileSystem.EncodingType.Base64,
                 });
                 let analysisResult: { frequency: number | null; note: string | null };
                 if (Platform.OS === "android") {

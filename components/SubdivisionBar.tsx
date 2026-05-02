@@ -411,7 +411,7 @@ export function SubdivisionBar({
                 if (!activeBeatPattern) cycleType(i);
               }}
               style={({ pressed }) => [pressed && !activeBeatPattern && { opacity: 0.6 }]}
-              hitSlop={2}
+              hitSlop={8}
               testID={`subdivision-cell-${i}`}
             >
               {type === "strong" ? (

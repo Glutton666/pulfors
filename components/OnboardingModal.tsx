@@ -419,7 +419,13 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
   const renderStepIndicator = () => (
-    <View style={styles.stepIndicator}>
+    <View
+      style={styles.stepIndicator}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={t("onboarding", "stepProgress")}
+      accessibilityValue={{ min: 1, max: TOTAL_STEPS, now: step + 1 }}
+    >
       {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
         <View
           key={i}

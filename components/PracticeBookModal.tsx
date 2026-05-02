@@ -625,7 +625,7 @@ export function PracticeBookModal({
           <View style={styles.headerRight}>
             <Pressable
               onPress={toggleViewMode}
-              hitSlop={6}
+              hitSlop={8}
               style={styles.viewToggleBtn}
             >
               <Ionicons

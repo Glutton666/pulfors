@@ -1,15 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-// expo-haptics와 react-native는 Node 환경에서 import 시 실패하므로 stub.
-const Module = require("module");
-const originalResolve = Module._resolveFilename;
-Module._resolveFilename = function (request: string, ...rest: any[]) {
-  if (request === "expo-haptics") return require.resolve("./_stubs/expo-haptics.js");
-  if (request === "react-native") return require.resolve("./_stubs/react-native.js");
-  return originalResolve.call(this, request, ...rest);
-};
-
+// 모듈 stub은 tests/_stubs/setup.cjs에서 처리 (--require로 사전 로드).
+// 실행 명령: npx tsx --require ./tests/_stubs/setup.cjs --test tests/*.test.ts
 import { MetronomeEngine } from "../lib/metronome-engine";
 
 test("MetronomeEngine 생성자가 throw하지 않는다", () => {
