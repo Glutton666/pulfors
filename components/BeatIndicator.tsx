@@ -2470,6 +2470,10 @@ export function BeatIndicator({
                   ]}
                   testID="bar-play-button"
                   disabled={isPreparing}
+                  accessibilityRole="button"
+                  accessibilityLabel={isPlaying ? "정지 / Stop" : "재생 / Play"}
+                  accessibilityState={{ busy: isPreparing, disabled: isPreparing }}
+                  accessibilityHint={barLoopMode === "loop" ? "길게 누르면 한 번만 재생 모드로 변경 / Long press to switch to once mode" : "길게 누르면 반복 재생 모드로 변경 / Long press to switch to loop mode"}
                 >
                   {isPreparing ? (
                     <ActivityIndicator size="small" color={C.accent} />

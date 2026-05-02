@@ -137,6 +137,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Provider 외부에서도 안전하게 호출 가능한 테마 훅.
+ * Provider가 없거나 에러로 마운트 안 된 경우 null을 반환합니다.
+ * (ErrorFallback 같은 fallback UI에서 사용)
+ */
+export function useThemeSafe(): ThemeContextValue | null {
+  return useContext(ThemeContext);
+}
+
 export function useTheme() {
   const context = useContext(ThemeContext);
   if (!context) {

@@ -15,8 +15,19 @@ import {
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { Audio, InterruptionModeIOS } from "expo-av";
+import {
+  AudioModule,
+  setAudioModeAsync,
+  requestRecordingPermissionsAsync,
+  createAudioPlayer,
+  IOSOutputFormat,
+  AudioQuality,
+  type AudioPlayer,
+  type AudioRecorder,
+  type RecordingOptions,
+} from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
+import { safePlay } from "@/lib/audio-utils";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useScale } from "@/lib/scale";
@@ -906,7 +917,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const spectrumDataRef = useRef<Float32Array | null>(null);
   const spectrumPeakBinRef = useRef<number>(-1);
   const [spectrumTick, setSpectrumTick] = useState(0);
-  const micRecordingRef = useRef<Audio.Recording | null>(null);
+  const micRecordingRef = useRef<AudioRecorder | null>(null);
   const micMobileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nativeFailCountRef = useRef(0);
   const nativeFallenBackRef = useRef(false);
@@ -914,7 +925,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 
   const engineRef = useRef(new SignalGeneratorEngine());
   const isPlayingRef = useRef(false);
-  const nativeSoundRef = useRef<Audio.Sound | null>(null);
+  const nativeSoundRef = useRef<AudioPlayer | null>(null);
   const nativeRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hapticFeedback = useCallback(() => {
@@ -923,8 +934,8 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 
   const stopNativeSound = useCallback(async () => {
     if (nativeSoundRef.current) {
-      try { await nativeSoundRef.current.stopAsync(); } catch {}
-      try { await nativeSoundRef.current.unloadAsync(); } catch {}
+      try { nativeSoundRef.current.pause(); } catch {}
+      try { nativeSoundRef.current.remove(); } catch {}
       nativeSoundRef.current = null;
     }
   }, []);
@@ -953,11 +964,11 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
         const base64 = generateToneBase64(frequency, waveType, VOLUME_LINEAR);
         const fileUri = (FileSystem.cacheDirectory || FileSystem.documentDirectory || "") + "signal_tone.wav";
         await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: fileUri },
-          { isLooping: true, shouldPlay: true, volume: 1.0 }
-        );
-        nativeSoundRef.current = sound;
+        const player = createAudioPlayer({ uri: fileUri });
+        player.loop = true;
+        player.volume = 1.0;
+        safePlay(player, "signalGen.tone");
+        nativeSoundRef.current = player;
       } catch (e) {
         console.warn("[SignalGen] native playback error:", e);
       }
@@ -1010,7 +1021,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       if (micStreamRef.current) micStreamRef.current.getTracks().forEach((t: any) => t.stop());
       if (micMobileTimerRef.current) clearTimeout(micMobileTimerRef.current);
       if (micRecordingRef.current) {
-        try { micRecordingRef.current.stopAndUnloadAsync(); } catch {}
+        try { micRecordingRef.current.stop(); } catch {}
+        try { (micRecordingRef.current as any).remove?.(); } catch {}
+        micRecordingRef.current = null;
       }
     };
   }, []);
@@ -1029,7 +1042,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   }, [t]);
 
   const startMicAndroid = useCallback(async () => {
-    const perm = await Audio.requestPermissionsAsync();
+    const perm = await requestRecordingPermissionsAsync();
     if (!perm.granted) {
       console.warn("[MicTuner] Mic permission denied");
       showMicPermissionAlert();
@@ -1047,12 +1060,13 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       micMobileTimerRef.current = null;
     }
     if (micRecordingRef.current) {
-      try {
-        await micRecordingRef.current.stopAndUnloadAsync();
-      } catch {}
+      try { await micRecordingRef.current.stop(); } catch {}
+      try { (micRecordingRef.current as any).remove?.(); } catch {}
       micRecordingRef.current = null;
     }
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, interruptionModeIOS: InterruptionModeIOS.MixWithOthers, shouldDuckAndroid: false });
+    try {
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true, interruptionMode: "mixWithOthers" });
+    } catch {}
   }, []);
 
   const stopMic = useCallback(() => {
@@ -1241,7 +1255,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     nativeFallenBackRef.current = true;
     console.warn("[MicTuner] Native decode failed, auto-falling back to WebView");
     stopMobileMic();
-    const perm = await Audio.requestPermissionsAsync();
+    const perm = await requestRecordingPermissionsAsync();
     if (!perm.granted) {
       console.warn("[MicTuner] Mic permission denied during fallback");
       showMicPermissionAlert();
@@ -1259,18 +1273,17 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     nativeFailCountRef.current = 0;
     nativeFallenBackRef.current = false;
     try {
-      const perm = await Audio.requestPermissionsAsync();
+      const perm = await requestRecordingPermissionsAsync();
       if (!perm.granted) {
         console.warn("[MicTuner] Mic permission denied");
         showMicPermissionAlert();
         return;
       }
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
-        shouldDuckAndroid: false,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+        interruptionMode: "mixWithOthers",
       });
 
       micActiveRef.current = true;
@@ -1279,47 +1292,50 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       const RECORD_MS = 600;
       const SAMPLE_RATE = 48000;
 
-      const recordingOptions = {
-        isMeteringEnabled: false,
+      const recordingOptions: RecordingOptions = {
+        extension: ".wav",
+        sampleRate: SAMPLE_RATE,
+        numberOfChannels: 1,
+        bitRate: 768000,
         ios: {
           extension: ".wav",
-          outputFormat: (Audio as any).IOSOutputFormat?.LINEARPCM ?? 1819304813,
-          audioQuality: (Audio as any).IOSAudioQuality?.MAX ?? 127,
+          outputFormat: IOSOutputFormat.LINEARPCM,
+          audioQuality: AudioQuality.MAX,
           sampleRate: SAMPLE_RATE,
-          numberOfChannels: 1,
-          bitRate: 768000,
           linearPCMBitDepth: 16,
           linearPCMIsBigEndian: false,
           linearPCMIsFloat: false,
         },
         android: {
           extension: ".m4a",
-          outputFormat: 2,
-          audioEncoder: 3,
+          outputFormat: "mpeg4",
+          audioEncoder: "aac",
           sampleRate: SAMPLE_RATE,
-          numberOfChannels: 1,
-          bitRate: 128000,
         },
         web: { mimeType: "audio/wav", bitsPerSecond: 768000 },
       };
 
       const recordAndAnalyze = async () => {
         if (!micActiveRef.current) return;
-        let rec: Audio.Recording | null = null;
+        let rec: AudioRecorder | null = null;
         try {
-          const result = await Audio.Recording.createAsync(recordingOptions);
-          rec = result.recording;
+          rec = new AudioModule.AudioRecorder(recordingOptions);
+          await rec.prepareToRecordAsync();
+          rec.record();
           micRecordingRef.current = rec;
 
+          const startedRec = rec;
           micMobileTimerRef.current = setTimeout(async () => {
             if (!micActiveRef.current) {
-              if (rec) { try { await rec.stopAndUnloadAsync(); } catch {} }
+              try { await startedRec.stop(); } catch {}
+              try { (startedRec as any).remove?.(); } catch {}
               micRecordingRef.current = null;
               return;
             }
             try {
-              await rec!.stopAndUnloadAsync();
-              const uri = rec!.getURI();
+              await startedRec.stop();
+              const uri = startedRec.uri;
+              try { (startedRec as any).remove?.(); } catch {}
               micRecordingRef.current = null;
               if (uri) {
                 const base64 = await FileSystem.readAsStringAsync(uri, {
@@ -1361,7 +1377,8 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
         } catch (e) {
           console.warn("[MicTuner] native record error:", e);
           if (rec) {
-            try { await rec.stopAndUnloadAsync(); } catch {}
+            try { await rec.stop(); } catch {}
+            try { (rec as any).remove?.(); } catch {}
           }
           micRecordingRef.current = null;
           if (Platform.OS === "android") {

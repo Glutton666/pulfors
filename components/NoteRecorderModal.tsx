@@ -34,6 +34,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import type { SampleSource } from "@/lib/note-samples";
 import { soundSets } from "@/lib/metronome-engine";
 import type { BuiltinSoundSet } from "@/lib/storage";
+import { safePlay } from "@/lib/audio-utils";
 
 type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
 
@@ -130,10 +131,8 @@ export function NoteRecorderModal({
   }, []);
 
   const playClick = useCallback(() => {
-    try {
-      clickPlayer.seekTo(0);
-      clickPlayer.play();
-    } catch {}
+    try { clickPlayer.seekTo(0); } catch {}
+    safePlay(clickPlayer, "noteRecorder.click");
   }, [clickPlayer]);
 
   const startMetronomeClicks = useCallback((currentBpm: number) => {
@@ -343,7 +342,7 @@ export function NoteRecorderModal({
 
       try { await player.seekTo(startSec); } catch {}
       setIsPlayingPreview(true);
-      try { player.play(); } catch {}
+      safePlay(player, "noteRecorder.preview");
 
       const startedAt = Date.now();
       const expectedDurMs = Math.max(50, (endSec - startSec) * 1000);

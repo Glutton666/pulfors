@@ -32,6 +32,7 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import { useAudioPlayer } from "expo-audio";
+import { safePlay } from "@/lib/audio-utils";
 import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
 import { LinearGradient } from "expo-linear-gradient";
@@ -371,7 +372,7 @@ export default function MetronomeScreen() {
       if (Platform.OS === "web") return;
       try {
         Promise.resolve(active.seekTo(0)).then(() => {
-          try { active.play(); } catch {}
+          safePlay(active, "metronome.restartPlayer");
         });
       } catch (e) {}
     };
@@ -649,14 +650,12 @@ export default function MetronomeScreen() {
 
       const startSec = startMs / 1000;
       if (Platform.OS === "web") {
-        try {
-          player.seekTo(startSec);
-          setTimeout(() => { try { player.play(); } catch {} }, 10);
-        } catch {}
+        try { player.seekTo(startSec); } catch {}
+        setTimeout(() => safePlay(player, "preview.web.startMs"), 10);
       } else {
         try { player.pause(); } catch {}
         Promise.resolve(player.seekTo(startSec)).then(() => {
-          try { player.play(); } catch {}
+          safePlay(player, "preview.native.startMs");
         }).catch(() => {});
       }
 
@@ -902,7 +901,8 @@ export default function MetronomeScreen() {
       const savedVolumes = toWarm.map(p => p.volume);
       toWarm.forEach(p => { p.volume = 0; });
       await Promise.all(toWarm.map(async (p) => {
-        try { await p.seekTo(0); p.play(); } catch {}
+        try { await p.seekTo(0); } catch {}
+        safePlay(p, "warmup");
       }));
       await new Promise(r => setTimeout(r, 50));
       await Promise.all(toWarm.map(async (p, i) => {
@@ -989,7 +989,7 @@ export default function MetronomeScreen() {
             renderedPlayerRef.current = player;
             player.volume = 1.0;
             engine.setPreRenderedAudio(true);
-            player.play();
+            safePlay(player, "preRender.initial");
           });
         } catch {
         }
@@ -1310,7 +1310,9 @@ export default function MetronomeScreen() {
           beatDirection,
           ...merged,
         };
-        saveSettings(current);
+        void saveSettings(current).catch(() => {
+          // 사용자 알림은 storage-notifier 구독자(StorageErrorAlert)가 처리.
+        });
       }, 500);
     },
     [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, layerSoundSets, flashMode, hapticMode, audioOffsetMs, timerStopMode, landscapeReversed, showLandscapeImage, landscapeContentType, beatDirection]
@@ -1782,7 +1784,7 @@ export default function MetronomeScreen() {
           engine.start(startBeat ?? undefined);
 
           if (renderedPlayer) {
-            renderedPlayer.play();
+            safePlay(renderedPlayer, "metronome.start.web");
           }
         }
 
@@ -1996,7 +1998,7 @@ export default function MetronomeScreen() {
           engine.start(barModeRef.current ? (barStartBeatRef.current ?? undefined) : undefined);
 
           if (renderedPlayer) {
-            renderedPlayer.play();
+            safePlay(renderedPlayer, "metronome.start.barMode");
           }
 
           showPlayingNotification(bpmRef.current, modeLabel, languageRef.current);
@@ -2282,7 +2284,7 @@ export default function MetronomeScreen() {
         engine.start();
 
         if (renderedPlayer) {
-          renderedPlayer.play();
+          safePlay(renderedPlayer, "metronome.start.fallback");
         }
       }
     } catch (e) {
@@ -3695,6 +3697,9 @@ export default function MetronomeScreen() {
         onPress={() => setShowMenu(!showMenu)}
         hitSlop={8}
         testID="menu-button"
+        accessibilityRole="button"
+        accessibilityLabel={t("a11y", "menuButton")}
+        accessibilityState={{ expanded: showMenu }}
       >
         <Ionicons name="menu" size={S.ms(22, 0.5)} color={C.textSecondary} />
       </Pressable>
@@ -3710,6 +3715,8 @@ export default function MetronomeScreen() {
                   setShowMenu(false);
                   setShowSettings(true);
                 }}
+                accessibilityRole="menuitem"
+                accessibilityLabel={t("a11y", "menuSettings")}
               >
                 <Ionicons name="settings-outline" size={S.ms(18, 0.3)} color={C.textSecondary} />
                 <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuSettings")}</Text>
@@ -3722,6 +3729,8 @@ export default function MetronomeScreen() {
                   setShowSignalGen(true);
                   if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
                 }}
+                accessibilityRole="menuitem"
+                accessibilityLabel={t("a11y", "menuSignalGenerator")}
               >
                 <MaterialCommunityIcons name="waveform" size={S.ms(18, 0.3)} color={C.accent} />
                 <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuSignalGenerator")}</Text>
@@ -3733,6 +3742,8 @@ export default function MetronomeScreen() {
                   setShowMenu(false);
                   setShowWorkUp(true);
                 }}
+                accessibilityRole="menuitem"
+                accessibilityLabel={t("a11y", "menuWorkUp")}
               >
                 <MaterialCommunityIcons name="chart-line" size={S.ms(18, 0.3)} color={C.accent} />
                 <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuWorkUp")}</Text>
@@ -3745,6 +3756,8 @@ export default function MetronomeScreen() {
                   setShowPracticeBook(true);
                   if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
                 }}
+                accessibilityRole="menuitem"
+                accessibilityLabel={t("a11y", "menuPracticeBook")}
               >
                 <MaterialCommunityIcons name="notebook-outline" size={S.ms(18, 0.3)} color={C.accent} />
                 <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuPracticeNote")}</Text>
@@ -4161,6 +4174,9 @@ export default function MetronomeScreen() {
                           alignItems: "center" as const,
                           justifyContent: "center" as const,
                         }}
+                        accessibilityRole="button"
+                        accessibilityLabel={t("a11y", "landscapePhotoMode")}
+                        accessibilityState={{ selected: landscapeContentType === "photo" }}
                       >
                         <Ionicons
                           name="image-outline"
@@ -4182,6 +4198,9 @@ export default function MetronomeScreen() {
                           alignItems: "center" as const,
                           justifyContent: "center" as const,
                         }}
+                        accessibilityRole="button"
+                        accessibilityLabel={t("a11y", "landscapeStatsMode")}
+                        accessibilityState={{ selected: landscapeContentType === "stats" }}
                       >
                         <Ionicons
                           name="stats-chart"
@@ -4194,6 +4213,8 @@ export default function MetronomeScreen() {
                       <Pressable
                         onPress={() => setLandscapeImageModalVisible(true)}
                         style={{ flex: 1, borderRadius: 10, overflow: "hidden" as const, alignItems: "center" as const, justifyContent: "center" as const, backgroundColor: landscapeImageUri ? "transparent" : C.surface, borderWidth: landscapeImageUri ? 0 : 1, borderColor: C.overlay10, borderStyle: "dashed" as const }}
+                        accessibilityRole="button"
+                        accessibilityLabel={t("a11y", "landscapeImagePicker")}
                       >
                         {landscapeImageUri ? (
                           <Image source={{ uri: landscapeImageUri }} style={{ width: "100%" as any, height: "100%" as any, borderRadius: 10 }} resizeMode="cover" />

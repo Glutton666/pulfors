@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
 import type { BeatType } from "./metronome-engine";
 import type { ThemeColor } from "@/constants/colors";
+import { notifyStorageError } from "./storage-notifier";
 
 const SETTINGS_KEY = "metronome_settings";
 const PRACTICE_BOOK_KEY = "practice_book";
@@ -36,7 +37,7 @@ export async function loadCustomSoundSets(): Promise<Record<string, CustomSoundS
     const data = await AsyncStorage.getItem(CUSTOM_SOUND_SETS_KEY);
     if (data) return JSON.parse(data);
   } catch (e) {
-    console.warn("Failed to load custom sound sets:", e);
+    notifyStorageError({ key: CUSTOM_SOUND_SETS_KEY, operation: "load", error: e });
   }
   return {};
 }
@@ -45,7 +46,7 @@ export async function saveCustomSoundSets(configs: Record<string, CustomSoundSet
   try {
     await AsyncStorage.setItem(CUSTOM_SOUND_SETS_KEY, JSON.stringify(configs));
   } catch (e) {
-    console.warn("Failed to save custom sound sets:", e);
+    notifyStorageError({ key: CUSTOM_SOUND_SETS_KEY, operation: "save", error: e });
   }
 }
 
@@ -103,7 +104,7 @@ export async function loadSettings(): Promise<MetronomeSettings> {
       return { ...DEFAULT_SETTINGS, ...JSON.parse(data) };
     }
   } catch (e) {
-    console.warn("Failed to load settings:", e);
+    notifyStorageError({ key: SETTINGS_KEY, operation: "load", error: e });
   }
   return DEFAULT_SETTINGS;
 }
@@ -112,7 +113,8 @@ export async function saveSettings(settings: MetronomeSettings): Promise<void> {
   try {
     await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   } catch (e) {
-    console.warn("Failed to save settings:", e);
+    notifyStorageError({ key: SETTINGS_KEY, operation: "save", error: e });
+    throw e;
   }
 }
 

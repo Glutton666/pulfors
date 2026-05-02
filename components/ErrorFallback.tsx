@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { useThemeSafe } from "@/contexts/ThemeContext";
 
 export type ErrorFallbackProps = {
   error: Error;
@@ -19,8 +20,14 @@ export type ErrorFallbackProps = {
 };
 
 export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
+  const appTheme = useThemeSafe();
+  const systemColorScheme = useColorScheme();
+  // 앱 테마가 마운트되어 있으면 그것을 우선 사용. 그렇지 않으면 시스템 테마.
+  // (ErrorBoundary가 ThemeProvider 바깥에 위치하거나, ThemeProvider 자체에서
+  // 에러가 났을 때 fallback)
+  const isDark = appTheme
+    ? appTheme.themeMode === "night"
+    : systemColorScheme === "dark";
   const insets = useSafeAreaInsets();
 
   const theme = {

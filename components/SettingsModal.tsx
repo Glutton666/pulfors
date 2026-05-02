@@ -39,6 +39,7 @@ import { loadCustomSoundSets, saveCustomSoundSets, BUILTIN_SOUND_SETS } from "@/
 import { soundSets } from "@/lib/metronome-engine";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { Language } from "@/lib/i18n";
+import { safePlay } from "@/lib/audio-utils";
 import {
   loadPracticeRooms,
   addPracticeRoom,
@@ -416,7 +417,7 @@ export function SettingsModal({
         await new Promise((r) => setTimeout(r, 30));
       }
       try { if (startMs > 0) await player.seekTo(startMs / 1000); } catch {}
-      try { player.play(); } catch {}
+      safePlay(player, "settings.previewProbe");
       previewStopTimerRef.current = setTimeout(() => {
         try { player.pause(); } catch {}
         try { player.remove(); } catch {}
@@ -446,10 +447,8 @@ export function SettingsModal({
         players = previewPlayers[srcSet];
         if (players) {
           const roleIdx = srcRole === "strong" ? 0 : srcRole === "high" ? 1 : 2;
-          try {
-            players[roleIdx].seekTo(0);
-            players[roleIdx].play();
-          } catch {}
+          try { players[roleIdx].seekTo(0); } catch {}
+          safePlay(players[roleIdx], "settings.previewSample.custom");
           previewIndexRef.current[set] = (idx + 1) % 3;
           return;
         }
@@ -457,10 +456,8 @@ export function SettingsModal({
       players = previewPlayers.classic;
     }
     const player = players[idx];
-    try {
-      player.seekTo(0);
-      player.play();
-    } catch {}
+    try { player.seekTo(0); } catch {}
+    safePlay(player, "settings.previewSample.builtin");
     previewIndexRef.current[set] = (idx + 1) % 3;
   }, [customSoundSets, playCustomSampleUri]);
 
@@ -832,10 +829,8 @@ export function SettingsModal({
   const previewCustomSample = useCallback((sourceSet: BuiltinSoundSet, sourceRole: SoundRole) => {
     const players = previewPlayers[sourceSet];
     const idx = sourceRole === "strong" ? 0 : sourceRole === "high" ? 1 : 2;
-    try {
-      players[idx].seekTo(0);
-      players[idx].play();
-    } catch {}
+    try { players[idx].seekTo(0); } catch {}
+    safePlay(players[idx], "settings.previewCustomSource");
   }, [previewPlayers]);
 
   const ROLE_OPTIONS: { value: SoundRole; labelKey: string }[] = [

@@ -15,6 +15,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { initErrorTracking } from "@/lib/error-tracking";
+import { StorageErrorAlert } from "@/components/StorageErrorAlert";
 
 import {
   useFonts,
@@ -74,6 +76,11 @@ export default function RootLayout() {
     }
   }, []);
 
+  // 앱 시작 시 에러 트래킹 초기화 (DSN이 없으면 console-only 모드로 동작)
+  useEffect(() => {
+    initErrorTracking();
+  }, []);
+
   // 앱 준비 완료 체크
   useEffect(() => {
     const prepareApp = async () => {
@@ -107,6 +114,7 @@ export default function RootLayout() {
           <LanguageProvider>
             <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
+                <StorageErrorAlert />
                 <Stack screenOptions={{ headerShown: false }}>
                   <Stack.Screen name="index" />
                   <Stack.Screen name="practice" />

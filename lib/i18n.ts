@@ -441,6 +441,30 @@ const translations = {
     m: { ko: "분", en: "m" },
     h: { ko: "시간", en: "h" },
   },
+  storage: {
+    saveFailedTitle: { ko: "저장 실패", en: "Save failed" },
+    saveFailedBody: {
+      ko: "기기 저장소에 설정을 저장하지 못했습니다. 저장 공간이 부족하거나 권한이 제한되었을 수 있습니다.",
+      en: "Could not save settings to device storage. The device may be out of space or permissions are restricted.",
+    },
+    loadFailedTitle: { ko: "불러오기 실패", en: "Load failed" },
+    loadFailedBody: {
+      ko: "기기 저장소에서 설정을 불러오지 못해 기본값으로 복귀했습니다.",
+      en: "Could not load settings from device storage. Defaults are being used.",
+    },
+  },
+  a11y: {
+    menuButton: { ko: "메뉴 열기", en: "Open menu" },
+    menuSettings: { ko: "설정 열기", en: "Open settings" },
+    menuSignalGenerator: { ko: "시그널 제너레이터 열기", en: "Open signal generator" },
+    menuWorkUp: { ko: "워크업 열기", en: "Open work-up" },
+    menuPracticeBook: { ko: "연습 노트 열기", en: "Open practice book" },
+    landscapePhotoMode: { ko: "사진 모드 선택", en: "Select photo mode" },
+    landscapeStatsMode: { ko: "통계 모드 선택", en: "Select stats mode" },
+    landscapeImagePicker: { ko: "이미지 선택", en: "Pick image" },
+    bpmSlider: { ko: "BPM 조절: 좌우 드래그로 변경, 두 번 탭으로 템포 입력", en: "BPM control: drag horizontally to change, double tap for tap tempo" },
+    playButton: { ko: "재생 또는 일시정지", en: "Play or pause" },
+  },
 } as const;
 
 type TranslationKeys = typeof translations;
