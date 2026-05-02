@@ -926,6 +926,7 @@ export default function MetronomeScreen() {
       if (!engine?.getIsRunning()) return;
 
       stopRenderedAudio();
+      engine.setPendingMeasureStartAction(null);
 
       if (Platform.OS === "web") {
         try {
@@ -940,27 +941,43 @@ export default function MetronomeScreen() {
             clickVolume: 1.0,
             sampleVolume: 0,
           });
-          if (webRenderedLoopRef.current) {
-            webRenderedLoopRef.current.stop();
-            webRenderedLoopRef.current = null;
-          }
-          const loop = playWebRenderedLoop(pcm);
-          webRenderedLoopRef.current = loop;
-          engine.setPreRenderedAudio(true);
+          engine.setPendingMeasureStartAction(() => {
+            if (!engine.getIsRunning()) return;
+            if (webRenderedLoopRef.current) {
+              try { webRenderedLoopRef.current.stop(); } catch {}
+              webRenderedLoopRef.current = null;
+            }
+            const loop = playWebRenderedLoop(pcm);
+            webRenderedLoopRef.current = loop;
+            engine.setPreRenderedAudio(true);
+          });
         } catch {
         }
       } else {
         try {
           const player = await buildRenderedPlayer();
-          if (player && engine.getIsRunning()) {
-            stopRenderedAudio();
+          if (!player) return;
+          if (!engine.getIsRunning()) {
+            try { player.release(); } catch {}
+            return;
+          }
+          engine.setPendingMeasureStartAction(() => {
+            if (!engine.getIsRunning()) {
+              try { player.release(); } catch {}
+              return;
+            }
+            if (renderedPlayerRef.current) {
+              try {
+                renderedPlayerRef.current.pause();
+                renderedPlayerRef.current.release();
+              } catch {}
+              renderedPlayerRef.current = null;
+            }
             renderedPlayerRef.current = player;
             player.volume = 1.0;
             engine.setPreRenderedAudio(true);
             player.play();
-          } else if (player) {
-            try { player.release(); } catch {}
-          }
+          });
         } catch {
         }
       }
@@ -1226,6 +1243,11 @@ export default function MetronomeScreen() {
         } catch {}
         renderedPlayerRef.current = null;
       }
+      if (webRenderedLoopRef.current) {
+        try { webRenderedLoopRef.current.stop(); } catch {}
+        webRenderedLoopRef.current = null;
+      }
+      engine.setPendingMeasureStartAction(null);
     });
   }, [flashOpacity]);
 

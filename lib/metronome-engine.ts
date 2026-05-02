@@ -747,24 +747,42 @@ export class MetronomeEngine {
   private rebuildSchedule() {
     const oldSchedule = this.schedule;
     const oldIndex = this.scheduleIndex;
+    const oldMeasureStartTime = this.measureStartTime;
+    const oldMeasureDurationMs = this.measureDurationMs;
 
     this.schedule = this.buildSchedule();
     this.cachedSchedule = this.schedule;
     this.cachedMeasureDurationMs = this.measureDurationMs;
     this.scheduleDirty = false;
 
-    if (oldSchedule.length > 0 && oldIndex < oldSchedule.length) {
-      const currentTick = oldSchedule[oldIndex];
-      let bestIdx = 0;
-      for (let i = 0; i < this.schedule.length; i++) {
-        if (this.schedule[i].beat === currentTick.beat && this.schedule[i].subBeat === currentTick.subBeat) {
-          bestIdx = i;
-          break;
+    if (oldSchedule.length > 0 && this.schedule.length > 0) {
+      const lastFiredOldIdx = oldIndex - 1;
+      if (lastFiredOldIdx >= 0 && lastFiredOldIdx < oldSchedule.length) {
+        const lastFiredTick = oldSchedule[lastFiredOldIdx];
+        const lastFiredAbsTime = oldMeasureStartTime + lastFiredTick.time;
+        let newLastIdx = -1;
+        for (let i = 0; i < this.schedule.length; i++) {
+          if (this.schedule[i].beat === lastFiredTick.beat && this.schedule[i].subBeat === lastFiredTick.subBeat) {
+            newLastIdx = i;
+            break;
+          }
         }
+        if (newLastIdx >= 0) {
+          this.measureStartTime = lastFiredAbsTime - this.schedule[newLastIdx].time;
+          this.scheduleIndex = newLastIdx + 1;
+          if (this.scheduleIndex >= this.schedule.length) {
+            this.scheduleIndex = 0;
+            this.measureStartTime += this.measureDurationMs;
+          }
+        } else {
+          this.scheduleIndex = Math.min(oldIndex, this.schedule.length - 1);
+        }
+      } else if (oldIndex === 0) {
+        this.scheduleIndex = 0;
+      } else {
+        this.scheduleIndex = 0;
+        this.measureStartTime = oldMeasureStartTime + (oldMeasureDurationMs || this.measureDurationMs);
       }
-      const elapsed = performance.now() - this.measureStartTime;
-      this.measureStartTime = performance.now() - this.schedule[bestIdx].time;
-      this.scheduleIndex = bestIdx;
     }
 
     if (this.preRenderedAudio) {
