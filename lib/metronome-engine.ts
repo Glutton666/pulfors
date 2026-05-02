@@ -30,6 +30,11 @@ export const soundSets = {
     low: require("@/assets/sounds/woodblock-low.wav"),
     strong: require("@/assets/sounds/woodblock-strong.wav"),
   },
+  cowbell: {
+    high: require("@/assets/sounds/cowbell-high.wav"),
+    low: require("@/assets/sounds/cowbell-low.wav"),
+    strong: require("@/assets/sounds/cowbell-strong.wav"),
+  },
   digital: {
     high: require("@/assets/sounds/digital-high.wav"),
     low: require("@/assets/sounds/digital-low.wav"),

@@ -118,6 +118,7 @@ const translations = {
   soundSets: {
     classic: { ko: "클래식", en: "Classic" },
     woodblock: { ko: "우드블럭", en: "Woodblock" },
+    cowbell: { ko: "카우벨", en: "Cowbell" },
     digital: { ko: "디지털", en: "Digital" },
     rimshot: { ko: "림샷", en: "Rimshot" },
     custom: { ko: "커스텀", en: "Custom" },

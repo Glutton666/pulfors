@@ -12,7 +12,14 @@ import {
   TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Audio, InterruptionModeIOS } from "expo-av";
+import {
+  useAudioRecorder,
+  useAudioPlayer,
+  createAudioPlayer,
+  setAudioModeAsync,
+  requestRecordingPermissionsAsync,
+  RecordingPresets,
+} from "expo-audio";
 import * as Haptics from "expo-haptics";
 import * as DocumentPicker from "expo-document-picker";
 import Animated, {
@@ -76,12 +83,21 @@ export function NoteRecorderModal({
   const [loadingMessage, setLoadingMessage] = useState("");
   const [loadingProgress, setLoadingProgress] = useState(0);
 
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderRef = useRef(recorder);
+  useEffect(() => { recorderRef.current = recorder; }, [recorder]);
+
+  const clickSource = soundSets[soundSet]?.low ?? soundSets.classic.low;
+  const clickPlayer = useAudioPlayer(clickSource);
+  const previewPlayer = useAudioPlayer(null);
+  const previewPlayerRef = useRef(previewPlayer);
+  useEffect(() => { previewPlayerRef.current = previewPlayer; }, [previewPlayer]);
+
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previewSoundRef = useRef<Audio.Sound | null>(null);
-  const clickSoundRef = useRef<Audio.Sound | null>(null);
   const metronomeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const previewWatchRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingActiveRef = useRef(false);
 
   const countScale = useSharedValue(1);
   const countOpacity = useSharedValue(1);
@@ -99,44 +115,26 @@ export function NoteRecorderModal({
       clearInterval(metronomeTimerRef.current);
       metronomeTimerRef.current = null;
     }
-    if (recordingRef.current) {
-      try {
-        await recordingRef.current.stopAndUnloadAsync();
-      } catch {}
-      recordingRef.current = null;
+    if (previewWatchRef.current) {
+      clearInterval(previewWatchRef.current);
+      previewWatchRef.current = null;
     }
-    if (previewSoundRef.current) {
-      try {
-        await previewSoundRef.current.unloadAsync();
-      } catch {}
-      previewSoundRef.current = null;
+    if (recordingActiveRef.current) {
+      try { await recorderRef.current.stop(); } catch {}
+      recordingActiveRef.current = false;
     }
-    if (clickSoundRef.current) {
-      try {
-        await clickSoundRef.current.unloadAsync();
-      } catch {}
-      clickSoundRef.current = null;
-    }
+    try { previewPlayerRef.current.pause(); } catch {}
     try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, interruptionModeIOS: InterruptionModeIOS.MixWithOthers, shouldDuckAndroid: false });
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true, interruptionMode: "mixWithOthers", shouldPlayInBackground: false });
     } catch {}
   }, []);
 
-  const clickSourceRef = useRef(soundSets[soundSet]?.low ?? soundSets.classic.low);
-  useEffect(() => {
-    clickSourceRef.current = soundSets[soundSet]?.low ?? soundSets.classic.low;
-  }, [soundSet]);
-
-  const playClick = useCallback(async () => {
+  const playClick = useCallback(() => {
     try {
-      if (clickSoundRef.current) {
-        await clickSoundRef.current.replayAsync();
-      } else {
-        const { sound } = await Audio.Sound.createAsync(clickSourceRef.current, { shouldPlay: true });
-        clickSoundRef.current = sound;
-      }
+      clickPlayer.seekTo(0);
+      clickPlayer.play();
     } catch {}
-  }, []);
+  }, [clickPlayer]);
 
   const startMetronomeClicks = useCallback((currentBpm: number) => {
     if (metronomeTimerRef.current) clearInterval(metronomeTimerRef.current);
@@ -173,49 +171,20 @@ export function NoteRecorderModal({
 
   const prepareRecording = useCallback(async () => {
     try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
-        shouldDuckAndroid: false,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+        interruptionMode: "mixWithOthers",
+        shouldPlayInBackground: false,
       });
-
-      const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync({
-        isMeteringEnabled: false,
-        android: {
-          extension: ".m4a",
-          outputFormat: 2,
-          audioEncoder: 3,
-          sampleRate: 44100,
-          numberOfChannels: 1,
-          bitRate: 128000,
-        },
-        ios: {
-          extension: ".wav",
-          outputFormat: "lpcm",
-          audioQuality: 127,
-          sampleRate: 44100,
-          numberOfChannels: 1,
-          bitRate: 705600,
-          linearPCMBitDepth: 16,
-          linearPCMIsBigEndian: false,
-          linearPCMIsFloat: false,
-        },
-        web: {
-          mimeType: "audio/webm",
-          bitsPerSecond: 128000,
-        },
-      } as any);
-
-      recordingRef.current = recording;
+      await recorderRef.current.prepareToRecordAsync();
     } catch (e) {
       console.error("Failed to prepare recording:", e);
     }
   }, []);
 
   const startCountdown = useCallback(async () => {
-    const { status } = await Audio.requestPermissionsAsync();
+    const { status } = await requestRecordingPermissionsAsync();
     if (status !== "granted") {
       Alert.alert(t("noteRecorder", "permissionRequired"), t("noteRecorder", "micPermission"));
       return;
@@ -258,15 +227,12 @@ export function NoteRecorderModal({
 
   const startRecording = useCallback(async () => {
     try {
-      if (!recordingRef.current) {
-        await prepareRecording();
-      }
-      if (!recordingRef.current) {
-        setPhase("idle");
-        return;
-      }
+      try {
+        await recorderRef.current.prepareToRecordAsync();
+      } catch {}
 
-      await recordingRef.current.startAsync();
+      recorderRef.current.record();
+      recordingActiveRef.current = true;
       setPhase("recording");
       setRecordDuration(0);
 
@@ -288,7 +254,31 @@ export function NoteRecorderModal({
       console.error("Failed to start recording:", e);
       setPhase("idle");
     }
-  }, [bpm, startMetronomeClicks, prepareRecording]);
+  }, [bpm, startMetronomeClicks]);
+
+  const probeDurationSec = useCallback(async (uri: string): Promise<number> => {
+    return new Promise((resolve) => {
+      let resolved = false;
+      const probe = createAudioPlayer({ uri });
+      const finish = (sec: number) => {
+        if (resolved) return;
+        resolved = true;
+        try { probe.remove(); } catch {}
+        resolve(sec);
+      };
+      const startedAt = Date.now();
+      const tick = setInterval(() => {
+        const d = probe.duration;
+        if (typeof d === "number" && d > 0 && isFinite(d)) {
+          clearInterval(tick);
+          finish(d);
+        } else if (Date.now() - startedAt > 4000) {
+          clearInterval(tick);
+          finish(0);
+        }
+      }, 80);
+    });
+  }, []);
 
   const stopRecording = useCallback(async () => {
     stopMetronomeClicks();
@@ -297,29 +287,19 @@ export function NoteRecorderModal({
       recordTimerRef.current = null;
     }
 
-    if (!recordingRef.current) {
-      setPhase("idle");
-      return;
-    }
-
     try {
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
-      recordingRef.current = null;
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, interruptionModeIOS: InterruptionModeIOS.MixWithOthers, shouldDuckAndroid: false });
+      await recorderRef.current.stop();
+      recordingActiveRef.current = false;
+      const uri = recorderRef.current.uri;
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true, interruptionMode: "mixWithOthers", shouldPlayInBackground: false });
 
       if (uri) {
         setRecordedUri(uri);
-
-        const sound = new Audio.Sound();
-        await sound.loadAsync({ uri });
-        const status = await sound.getStatusAsync();
-        if (status.isLoaded && status.durationMillis) {
-          setAudioDuration(status.durationMillis / 1000);
+        const dur = await probeDurationSec(uri);
+        if (dur > 0) {
+          setAudioDuration(dur);
           setTrimEnd(1);
         }
-        await sound.unloadAsync();
-
         setPhase("trimming");
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -331,45 +311,59 @@ export function NoteRecorderModal({
       console.error("Failed to stop recording:", e);
       setPhase("idle");
     }
-  }, []);
+  }, [probeDurationSec, stopMetronomeClicks]);
 
   const playPreview = useCallback(async () => {
     if (!recordedUri || audioDuration === 0) return;
 
-    if (previewSoundRef.current) {
-      try {
-        await previewSoundRef.current.unloadAsync();
-      } catch {}
-      previewSoundRef.current = null;
+    if (previewWatchRef.current) {
+      clearInterval(previewWatchRef.current);
+      previewWatchRef.current = null;
     }
 
     try {
-      const sound = new Audio.Sound();
-      await sound.loadAsync({ uri: recordedUri });
-      previewSoundRef.current = sound;
+      const player = previewPlayerRef.current;
+      try { player.pause(); } catch {}
+      try { player.replace({ uri: recordedUri }); } catch {}
 
-      const startMs = Math.floor(trimStart * audioDuration * 1000);
-      const endMs = Math.floor(trimEnd * audioDuration * 1000);
+      const startSec = trimStart * audioDuration;
+      const endSec = trimEnd * audioDuration;
 
-      await sound.setPositionAsync(startMs);
+      // Wait briefly for the player to load the new source before seeking.
+      const waitLoad = async () => {
+        const start = Date.now();
+        while (Date.now() - start < 1500) {
+          const d = player.duration;
+          if (typeof d === "number" && d > 0 && isFinite(d)) return true;
+          await new Promise((r) => setTimeout(r, 40));
+        }
+        return false;
+      };
+      await waitLoad();
+
+      try { await player.seekTo(startSec); } catch {}
       setIsPlayingPreview(true);
-      await sound.playAsync();
+      try { player.play(); } catch {}
 
-      const checkInterval = setInterval(async () => {
+      const startedAt = Date.now();
+      const expectedDurMs = Math.max(50, (endSec - startSec) * 1000);
+      previewWatchRef.current = setInterval(() => {
         try {
-          const status = await sound.getStatusAsync();
-          if (status.isLoaded) {
-            if (!status.isPlaying || (status.positionMillis >= endMs)) {
-              await sound.stopAsync();
-              clearInterval(checkInterval);
-              setIsPlayingPreview(false);
+          const ct = player.currentTime;
+          const elapsed = Date.now() - startedAt;
+          if ((typeof ct === "number" && ct >= endSec) || elapsed > expectedDurMs + 600) {
+            try { player.pause(); } catch {}
+            if (previewWatchRef.current) {
+              clearInterval(previewWatchRef.current);
+              previewWatchRef.current = null;
             }
-          } else {
-            clearInterval(checkInterval);
             setIsPlayingPreview(false);
           }
         } catch {
-          clearInterval(checkInterval);
+          if (previewWatchRef.current) {
+            clearInterval(previewWatchRef.current);
+            previewWatchRef.current = null;
+          }
           setIsPlayingPreview(false);
         }
       }, 50);
@@ -430,22 +424,17 @@ export function NoteRecorderModal({
         setLoadingProgress((prev) => Math.min(prev + 0.05, 0.85));
       }, 500);
 
-      const sound = new Audio.Sound();
-      await sound.loadAsync({ uri: fileUri });
-      const status = await sound.getStatusAsync();
+      const durationSec = await probeDurationSec(fileUri);
 
       clearInterval(progressInterval);
       setLoadingProgress(0.95);
 
-      if (status.isLoaded && status.durationMillis) {
-        const durationSec = status.durationMillis / 1000;
-
+      if (durationSec > 0) {
         if (durationSec > MAX_DURATION_SEC) {
           Alert.alert(
             t("noteRecorder", "tooLongTitle"),
             t("noteRecorder", "tooLongMsg").replace("{0}", String(Math.floor(durationSec / 60))).replace("{1}", String(Math.round(durationSec % 60)))
           );
-          await sound.unloadAsync();
           setPhase("idle");
           setLoadingMessage("");
           setLoadingProgress(0);
@@ -471,7 +460,6 @@ export function NoteRecorderModal({
         setLoadingMessage("");
         setLoadingProgress(0);
       }
-      await sound.unloadAsync();
     } catch (e) {
       console.error("Failed to import audio:", e);
       Alert.alert(t("noteRecorder", "error"), t("noteRecorder", "importError"));

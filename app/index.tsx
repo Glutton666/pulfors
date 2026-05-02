@@ -314,6 +314,13 @@ export default function MetronomeScreen() {
   const woodblockStrongA = useAudioPlayer(soundSets.woodblock.strong);
   const woodblockStrongB = useAudioPlayer(soundSets.woodblock.strong);
 
+  const cowbellHighA = useAudioPlayer(soundSets.cowbell.high);
+  const cowbellHighB = useAudioPlayer(soundSets.cowbell.high);
+  const cowbellLowA = useAudioPlayer(soundSets.cowbell.low);
+  const cowbellLowB = useAudioPlayer(soundSets.cowbell.low);
+  const cowbellStrongA = useAudioPlayer(soundSets.cowbell.strong);
+  const cowbellStrongB = useAudioPlayer(soundSets.cowbell.strong);
+
   const digitalHighA = useAudioPlayer(soundSets.digital.high);
   const digitalHighB = useAudioPlayer(soundSets.digital.high);
   const digitalLowA = useAudioPlayer(soundSets.digital.low);
@@ -331,9 +338,10 @@ export default function MetronomeScreen() {
   const allPlayers = useMemo(() => ({
     classic: { highA: classicHighA, highB: classicHighB, lowA: classicLowA, lowB: classicLowB, strongA: classicStrongA, strongB: classicStrongB },
     woodblock: { highA: woodblockHighA, highB: woodblockHighB, lowA: woodblockLowA, lowB: woodblockLowB, strongA: woodblockStrongA, strongB: woodblockStrongB },
+    cowbell: { highA: cowbellHighA, highB: cowbellHighB, lowA: cowbellLowA, lowB: cowbellLowB, strongA: cowbellStrongA, strongB: cowbellStrongB },
     digital: { highA: digitalHighA, highB: digitalHighB, lowA: digitalLowA, lowB: digitalLowB, strongA: digitalStrongA, strongB: digitalStrongB },
     rimshot: { highA: rimshotHighA, highB: rimshotHighB, lowA: rimshotLowA, lowB: rimshotLowB, strongA: rimshotStrongA, strongB: rimshotStrongB },
-  }), [classicHighA, classicHighB, classicLowA, classicLowB, classicStrongA, classicStrongB, woodblockHighA, woodblockHighB, woodblockLowA, woodblockLowB, woodblockStrongA, woodblockStrongB, digitalHighA, digitalHighB, digitalLowA, digitalLowB, digitalStrongA, digitalStrongB, rimshotHighA, rimshotHighB, rimshotLowA, rimshotLowB, rimshotStrongA, rimshotStrongB]);
+  }), [classicHighA, classicHighB, classicLowA, classicLowB, classicStrongA, classicStrongB, woodblockHighA, woodblockHighB, woodblockLowA, woodblockLowB, woodblockStrongA, woodblockStrongB, cowbellHighA, cowbellHighB, cowbellLowA, cowbellLowB, cowbellStrongA, cowbellStrongB, digitalHighA, digitalHighB, digitalLowA, digitalLowB, digitalStrongA, digitalStrongB, rimshotHighA, rimshotHighB, rimshotLowA, rimshotLowB, rimshotStrongA, rimshotStrongB]);
 
   const highToggle = useRef(false);
   const lowToggle = useRef(false);

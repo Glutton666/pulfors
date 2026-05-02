@@ -21,8 +21,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
-import { useAudioPlayer } from "expo-audio";
-import { Audio, InterruptionModeIOS } from "expo-av";
+import {
+  useAudioPlayer,
+  useAudioRecorder,
+  createAudioPlayer,
+  setAudioModeAsync,
+  requestRecordingPermissionsAsync,
+  RecordingPresets,
+  type AudioPlayer as ExpoAudioPlayer,
+} from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
 import { useScale } from "@/lib/scale";
 import Colors, { ACCENT_PRESETS, accentFromHex, type ThemeColor } from "@/constants/colors";
@@ -248,9 +255,9 @@ export function SettingsModal({
   const [recordingSlot, setRecordingSlot] = useState<"strong" | "accent" | "normal" | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
-  const recordingRef = useRef<Audio.Recording | null>(null);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const previewSoundRef = useRef<Audio.Sound | null>(null);
+  const previewProbePlayerRef = useRef<ExpoAudioPlayer | null>(null);
+  const previewStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (visible) {
@@ -363,6 +370,9 @@ export function SettingsModal({
   const woodblockStrong = useAudioPlayer(soundSets.woodblock.strong);
   const woodblockHigh = useAudioPlayer(soundSets.woodblock.high);
   const woodblockLow = useAudioPlayer(soundSets.woodblock.low);
+  const cowbellStrong = useAudioPlayer(soundSets.cowbell.strong);
+  const cowbellHigh = useAudioPlayer(soundSets.cowbell.high);
+  const cowbellLow = useAudioPlayer(soundSets.cowbell.low);
   const digitalStrong = useAudioPlayer(soundSets.digital.strong);
   const digitalHigh = useAudioPlayer(soundSets.digital.high);
   const digitalLow = useAudioPlayer(soundSets.digital.low);
@@ -373,32 +383,46 @@ export function SettingsModal({
   const previewPlayers: Record<SoundSet, typeof classicStrong[]> = {
     classic: [classicStrong, classicHigh, classicLow],
     woodblock: [woodblockStrong, woodblockHigh, woodblockLow],
+    cowbell: [cowbellStrong, cowbellHigh, cowbellLow],
     digital: [digitalStrong, digitalHigh, digitalLow],
     rimshot: [rimshotStrong, rimshotHigh, rimshotLow],
   };
 
   const playCustomSampleUri = useCallback(async (uri: string, duration: number) => {
-    if (previewSoundRef.current) {
-      try { await previewSoundRef.current.unloadAsync(); } catch {}
-      previewSoundRef.current = null;
+    if (previewStopTimerRef.current) {
+      clearTimeout(previewStopTimerRef.current);
+      previewStopTimerRef.current = null;
+    }
+    if (previewProbePlayerRef.current) {
+      try { previewProbePlayerRef.current.pause(); } catch {}
+      try { previewProbePlayerRef.current.remove(); } catch {}
+      previewProbePlayerRef.current = null;
     }
     try {
-      const sound = new Audio.Sound();
       const rawUri = uri.split("#")[0];
-      await sound.loadAsync({ uri: rawUri });
-      previewSoundRef.current = sound;
+      const player = createAudioPlayer({ uri: rawUri });
+      previewProbePlayerRef.current = player;
       const hashParts = uri.split("#t=")[1];
       let startMs = 0;
       if (hashParts) {
         const parts = hashParts.split(",").map(Number);
         if (!isNaN(parts[0])) startMs = parts[0];
       }
-      await sound.setPositionAsync(startMs);
-      await sound.playAsync();
-      setTimeout(async () => {
-        try { await sound.stopAsync(); await sound.unloadAsync(); } catch {}
-        if (previewSoundRef.current === sound) previewSoundRef.current = null;
-      }, duration * 1000);
+      // Wait briefly for the player to load before seeking
+      const start = Date.now();
+      while (Date.now() - start < 800) {
+        const d = player.duration;
+        if (typeof d === "number" && d > 0 && isFinite(d)) break;
+        await new Promise((r) => setTimeout(r, 30));
+      }
+      try { if (startMs > 0) await player.seekTo(startMs / 1000); } catch {}
+      try { player.play(); } catch {}
+      previewStopTimerRef.current = setTimeout(() => {
+        try { player.pause(); } catch {}
+        try { player.remove(); } catch {}
+        if (previewProbePlayerRef.current === player) previewProbePlayerRef.current = null;
+        previewStopTimerRef.current = null;
+      }, Math.max(150, duration * 1000));
     } catch (e) {
       console.warn("Preview failed:", e);
     }
@@ -821,29 +845,52 @@ export function SettingsModal({
   ];
 
 
+  const sampleRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const sampleRecorderRef = useRef(sampleRecorder);
+  useEffect(() => { sampleRecorderRef.current = sampleRecorder; }, [sampleRecorder]);
+  const sampleRecordingActiveRef = useRef(false);
+
+  const probeUriDuration = useCallback(async (uri: string): Promise<number> => {
+    return new Promise((resolve) => {
+      let resolved = false;
+      const probe = createAudioPlayer({ uri });
+      const finish = (sec: number) => {
+        if (resolved) return;
+        resolved = true;
+        try { probe.remove(); } catch {}
+        resolve(sec);
+      };
+      const startedAt = Date.now();
+      const tick = setInterval(() => {
+        const d = probe.duration;
+        if (typeof d === "number" && d > 0 && isFinite(d)) {
+          clearInterval(tick);
+          finish(d);
+        } else if (Date.now() - startedAt > 4000) {
+          clearInterval(tick);
+          finish(0);
+        }
+      }, 80);
+    });
+  }, []);
+
   const startSampleRecording = useCallback(async (slot: "strong" | "accent" | "normal") => {
-    const { status } = await Audio.requestPermissionsAsync();
+    const { status } = await requestRecordingPermissionsAsync();
     if (status !== "granted") {
       Alert.alert(t("customSoundSet", "micPermission"));
       return;
     }
     setRecordingSlot(slot);
     try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
-        shouldDuckAndroid: false,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+        interruptionMode: "mixWithOthers",
+        shouldPlayInBackground: false,
       });
-      const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync({
-        isMeteringEnabled: false,
-        android: { extension: ".wav", outputFormat: 6, audioEncoder: 1, sampleRate: 44100, numberOfChannels: 1, bitRate: 705600 },
-        ios: { extension: ".wav", outputFormat: "lpcm" as any, audioQuality: 127, sampleRate: 44100, numberOfChannels: 1, bitRate: 705600, linearPCMBitDepth: 16, linearPCMIsBigEndian: false, linearPCMIsFloat: false },
-        web: { mimeType: "audio/webm", bitsPerSecond: 128000 },
-      } as any);
-      recordingRef.current = recording;
-      await recording.startAsync();
+      await sampleRecorderRef.current.prepareToRecordAsync();
+      sampleRecorderRef.current.record();
+      sampleRecordingActiveRef.current = true;
       setIsRecording(true);
       setRecordDuration(0);
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -861,19 +908,15 @@ export function SettingsModal({
 
   const stopSampleRecording = useCallback(async (slot: "strong" | "accent" | "normal") => {
     if (recordTimerRef.current) { clearInterval(recordTimerRef.current); recordTimerRef.current = null; }
-    if (!recordingRef.current) { setIsRecording(false); setRecordingSlot(null); return; }
+    if (!sampleRecordingActiveRef.current) { setIsRecording(false); setRecordingSlot(null); return; }
     try {
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
-      recordingRef.current = null;
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, interruptionModeIOS: InterruptionModeIOS.MixWithOthers, shouldDuckAndroid: false });
+      await sampleRecorderRef.current.stop();
+      sampleRecordingActiveRef.current = false;
+      const uri = sampleRecorderRef.current.uri;
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true, interruptionMode: "mixWithOthers", shouldPlayInBackground: false });
       if (uri) {
-        const sound = new Audio.Sound();
-        await sound.loadAsync({ uri });
-        const status = await sound.getStatusAsync();
-        let dur = 0.5;
-        if (status.isLoaded && status.durationMillis) dur = Math.min(3.0, Math.round(status.durationMillis / 100) / 10);
-        await sound.unloadAsync();
+        const rawDur = await probeUriDuration(uri);
+        const dur = rawDur > 0 ? Math.min(3.0, Math.round(rawDur * 10) / 10) : 0.5;
         const sample: CustomSoundSample = { type: "custom", sampleUri: uri, sampleName: t("customSoundSet", "record"), duration: dur };
         if (slot === "strong") setCustomStrong(sample);
         else if (slot === "accent") setCustomAccent(sample);
@@ -883,7 +926,7 @@ export function SettingsModal({
     } catch (e) { console.error("Failed to stop recording:", e); }
     setIsRecording(false);
     setRecordingSlot(null);
-  }, [t]);
+  }, [t, probeUriDuration]);
 
   const importSampleFile = useCallback(async (slot: "strong" | "accent" | "normal") => {
     try {
@@ -896,12 +939,8 @@ export function SettingsModal({
         Alert.alert(t("customSoundSet", "importError"));
         return;
       }
-      const sound = new Audio.Sound();
-      await sound.loadAsync({ uri: fileUri });
-      const status = await sound.getStatusAsync();
-      let dur = 0.5;
-      if (status.isLoaded && status.durationMillis) dur = Math.min(3.0, Math.round(status.durationMillis / 100) / 10);
-      await sound.unloadAsync();
+      const rawDur = await probeUriDuration(fileUri);
+      const dur = rawDur > 0 ? Math.min(3.0, Math.round(rawDur * 10) / 10) : 0.5;
       const name = asset.name ? asset.name.replace(/\.[^.]+$/, "").substring(0, 12) : t("customSoundSet", "import");
       const sample: CustomSoundSample = { type: "custom", sampleUri: fileUri, sampleName: name, duration: dur };
       if (slot === "strong") setCustomStrong(sample);
@@ -912,7 +951,7 @@ export function SettingsModal({
       console.error("Failed to import audio:", e);
       Alert.alert(t("customSoundSet", "importError"));
     }
-  }, [t]);
+  }, [t, probeUriDuration]);
 
   const renderThemeTab = () => (
     <>

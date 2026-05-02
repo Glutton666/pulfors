@@ -8,7 +8,7 @@ const PRACTICE_BOOK_KEY = "practice_book";
 
 export type FlashMode = "all" | "accent" | "off";
 export type HapticMode = "all" | "accent" | "off";
-export type BuiltinSoundSet = "classic" | "woodblock" | "digital" | "rimshot";
+export type BuiltinSoundSet = "classic" | "woodblock" | "cowbell" | "digital" | "rimshot";
 export type SoundSet = BuiltinSoundSet | "custom1" | "custom2" | "custom3";
 
 export type SoundRole = "strong" | "high" | "low";
@@ -49,7 +49,7 @@ export async function saveCustomSoundSets(configs: Record<string, CustomSoundSet
   }
 }
 
-export const BUILTIN_SOUND_SETS: BuiltinSoundSet[] = ["classic", "woodblock", "digital", "rimshot"];
+export const BUILTIN_SOUND_SETS: BuiltinSoundSet[] = ["classic", "woodblock", "cowbell", "digital", "rimshot"];
 export const CUSTOM_SOUND_SET_SLOTS: SoundSet[] = ["custom1", "custom2", "custom3"];
 
 export interface MetronomeSettings {
