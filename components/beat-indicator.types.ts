@@ -7,6 +7,8 @@ import type { BeatType } from "@/lib/metronome-engine";
 
 export type { BeatType } from "@/lib/metronome-engine";
 
+export type BlockPlayMode = "sequential" | "loop" | "random";
+
 export interface BarRepeat {
   type: "count" | "duration";
   value: number;
