@@ -9,7 +9,9 @@ import {
   _getCacheEntry,
   _resetCacheForTests,
   _getCacheKeysInOrder,
+  _defaultDeleteArtifactForTests,
 } from "../lib/sample-cache";
+import { Platform } from "react-native";
 
 function makeDeps(opts: {
   saveCounter?: { n: number };
@@ -156,6 +158,22 @@ test("동일 key 동시 호출은 직렬화되어 orphan artifact가 남지 않�
   assert.equal(final?.effectiveUri.includes("right"), true);
   // 첫 호출의 artifact가 deletes에 포함돼야 함
   assert.ok(deletes.includes(a.uri), "직렬화된 두 번째 호출이 첫 artifact를 삭제해야 함");
+});
+
+test("web 환경에서 blob: URL은 URL.revokeObjectURL로 해제된다", async () => {
+  const originalOS = Platform.OS;
+  const originalURL = (globalThis as { URL?: unknown }).URL;
+  const revoked: string[] = [];
+  (Platform as { OS: string }).OS = "web";
+  (globalThis as { URL?: unknown }).URL = { revokeObjectURL: (u: string) => { revoked.push(u); } };
+  try {
+    await _defaultDeleteArtifactForTests("blob:http://x/abc");
+    await _defaultDeleteArtifactForTests("not-a-blob://y");
+    assert.deepEqual(revoked, ["blob:http://x/abc"], "blob: 만 revokeObjectURL 호출");
+  } finally {
+    (Platform as { OS: string }).OS = originalOS;
+    (globalThis as { URL?: unknown }).URL = originalURL;
+  }
 });
 
 test("decode가 빈 PCM 반환하면 폴백, save 호출 없음", async () => {

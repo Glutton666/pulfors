@@ -50,6 +50,10 @@ interface FileSystemModule extends LegacyFileSystemModule {
   File?: FileCtor;
 }
 
+export async function _defaultDeleteArtifactForTests(path: string): Promise<void> {
+  return defaultDeleteArtifact(path);
+}
+
 async function defaultDeleteArtifact(path: string): Promise<void> {
   if (!path) return;
   if (Platform.OS === "web") {
