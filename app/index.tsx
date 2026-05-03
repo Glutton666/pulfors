@@ -71,6 +71,8 @@ import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { make_styles } from "./index.styles";
 import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, adjustShuffledIndicesOnInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats } from "./index.helpers";
 import { OnboardingModal } from "@/components/OnboardingModal";
+import { MoreMenuModal } from "@/components/MoreMenuModal";
+import { ScheduledStartModal } from "@/components/ScheduledStartModal";
 import type { OnboardingResult } from "@/components/OnboardingModal";
 import { GoalCompletePopup } from "@/components/GoalCompletePopup";
 import type { PracticeEntry } from "@/lib/storage";
@@ -222,6 +224,8 @@ export default function MetronomeScreen() {
   const dismissedGoalIdsRef = useRef<Set<string>>(new Set());
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showReboot, setShowReboot] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showScheduledStart, setShowScheduledStart] = useState(false);
   const [customSoundSets, setCustomSoundSets] = useState<Record<string, CustomSoundSetConfig>>({});
   const customSoundSetsRef = useRef<Record<string, CustomSoundSetConfig>>({});
   useEffect(() => { customSoundSetsRef.current = customSoundSets; }, [customSoundSets]);
@@ -233,6 +237,8 @@ export default function MetronomeScreen() {
       if (showSignalGen) { setShowSignalGen(false); return true; }
       if (showPracticeBook) { setShowPracticeBook(false); return true; }
       if (showWorkUp) { setShowWorkUp(false); return true; }
+      if (showScheduledStart) { setShowScheduledStart(false); return true; }
+      if (showMoreMenu) { setShowMoreMenu(false); return true; }
       if (showMenu) { setShowMenu(false); return true; }
       if (showOnboarding) { setShowOnboarding(false); return true; }
       if (showReboot) { setShowReboot(false); return true; }
@@ -244,7 +250,7 @@ export default function MetronomeScreen() {
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
     return () => sub.remove();
-  }, [showSettings, showSignalGen, showPracticeBook, showWorkUp, showMenu, showOnboarding, showReboot]);
+  }, [showSettings, showSignalGen, showPracticeBook, showWorkUp, showMenu, showOnboarding, showReboot, showMoreMenu, showScheduledStart]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -3736,9 +3742,56 @@ export default function MetronomeScreen() {
                 <MaterialCommunityIcons name="notebook-outline" size={S.ms(18, 0.3)} color={C.accent} />
                 <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuPracticeNote")}</Text>
               </Pressable>
+              <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                onPress={() => {
+                  setShowMenu(false);
+                  setShowMoreMenu(true);
+                }}
+                accessibilityRole="menuitem"
+                accessibilityLabel={t("main", "menuMore")}
+                testID="menu-more"
+              >
+                <Ionicons name="ellipsis-horizontal" size={S.ms(18, 0.3)} color={C.accent} />
+                <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuMore")}</Text>
+              </Pressable>
             </View>
           </Pressable>
         </Modal>
+      )}
+
+      <MoreMenuModal
+        visible={showMoreMenu}
+        onClose={() => setShowMoreMenu(false)}
+        onScheduledStart={() => {
+          setShowMoreMenu(false);
+          setShowScheduledStart(true);
+        }}
+      />
+
+      {showScheduledStart && (
+        <ScheduledStartModal
+          visible={showScheduledStart}
+          onClose={() => setShowScheduledStart(false)}
+          bpm={bpm}
+          beatsPerMeasure={beatsPerMeasure}
+          onScheduled={({ payload, startAtPerformanceTime }) => {
+            const engine = engineRef.current;
+            if (!engine) return;
+            engine.stop();
+            resetPlaybackVisuals();
+            const newBeatTypes = defaultBeatTypes(payload.beatsPerMeasure);
+            setBpm(payload.bpm);
+            setBeatsPerMeasure(payload.beatsPerMeasure);
+            setBeatTypes(newBeatTypes);
+            engine.setBpm(payload.bpm);
+            engine.setBeatsPerMeasure(payload.beatsPerMeasure);
+            engine.setBeatTypes(newBeatTypes);
+            setIsPlaying(true);
+            engine.start({ startAtPerformanceTime });
+          }}
+        />
       )}
 
       <Modal visible={landscapeImageModalVisible} transparent animationType="fade" onRequestClose={() => setLandscapeImageModalVisible(false)}>

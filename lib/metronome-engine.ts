@@ -1011,8 +1011,39 @@ export class MetronomeEngine {
     }
   }
 
-  start(startFromBeat?: number) {
+  start(arg?: number | { startFromBeat?: number; startAtPerformanceTime?: number }) {
     if (this.isRunning) return;
+    let startFromBeat: number | undefined;
+    let startAtPerformanceTime: number | undefined;
+    if (typeof arg === "number") {
+      startFromBeat = arg;
+    } else if (arg && typeof arg === "object") {
+      startFromBeat = arg.startFromBeat;
+      startAtPerformanceTime = arg.startAtPerformanceTime;
+    }
+
+    if (
+      typeof startAtPerformanceTime === "number" &&
+      Number.isFinite(startAtPerformanceTime)
+    ) {
+      const now =
+        typeof performance !== "undefined" && typeof performance.now === "function"
+          ? performance.now()
+          : Date.now();
+      const delay = startAtPerformanceTime - now;
+      if (delay > 0) {
+        if (this.timerId) {
+          clearTimeout(this.timerId);
+          this.timerId = null;
+        }
+        this.timerId = setTimeout(() => {
+          this.timerId = null;
+          this.start({ startFromBeat });
+        }, delay);
+        return;
+      }
+    }
+
     if (this.timerId) { clearTimeout(this.timerId); this.timerId = null; }
     this.cancelRAF();
     this.isRunning = true;

@@ -281,6 +281,10 @@ async function analyzeAudioHandler(req: Request, res: Response) {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/analyze-audio", analyzeAudioHandler);
+  app.get("/api/time", (_req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json({ now: Date.now() });
+  });
 
   const httpServer = createServer(app);
   return httpServer;
