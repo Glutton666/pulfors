@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { createT, getTempoLabel, formatDurationLocalized } from "../lib/i18n";
+import { createT, getTempoLabel, formatDurationLocalized, SUPPORTED_LANGUAGES } from "../lib/i18n";
 
 test("createT('ko') returns Korean strings for known keys", () => {
   const t = createT("ko");
@@ -15,16 +15,7 @@ test("createT('en') returns English strings for known keys", () => {
   assert.equal(t("settings", "themeTab"), "Theme");
 });
 
-test("every translation key has both ko and en values", async () => {
-  const mod = await import("../lib/i18n");
-  // Access the internal translations map via re-import as JSON-like.
-  // We rely on createT round-trip: pick any t() to assert non-empty for both langs.
-  // Iterate by re-importing the source module raw text would be brittle; instead,
-  // use a representative sample of namespaces and require both langs return strings.
-  void mod;
-
-  const tKo = createT("ko");
-  const tEn = createT("en");
+test("대표 키들이 SUPPORTED_LANGUAGES의 모든 언어에서 비어있지 않은 문자열을 반환한다", () => {
   const samples: [string, string][] = [
     ["settings", "title"],
     ["settings", "themeTab"],
@@ -34,11 +25,12 @@ test("every translation key has both ko and en values", async () => {
     ["settings", "landscapeStats"],
     ["settings", "statsTodayPractice"],
   ];
-  for (const [ns, key] of samples) {
-    const ko = tKo(ns as any, key as any);
-    const en = tEn(ns as any, key as any);
-    assert.ok(typeof ko === "string" && ko.length > 0, `ko missing for ${ns}.${key}`);
-    assert.ok(typeof en === "string" && en.length > 0, `en missing for ${ns}.${key}`);
+  for (const lang of SUPPORTED_LANGUAGES) {
+    const t = createT(lang);
+    for (const [ns, key] of samples) {
+      const v = (t as unknown as (s: string, k: string) => string)(ns, key);
+      assert.ok(typeof v === "string" && v.length > 0, `${lang} missing for ${ns}.${key}`);
+    }
   }
 });
 
@@ -48,7 +40,9 @@ test("getTempoLabel returns reasonable label for typical BPMs", () => {
   assert.ok(label.length > 0);
 });
 
-test("formatDurationLocalized handles 0 and large values", () => {
-  assert.equal(typeof formatDurationLocalized(0, "ko"), "string");
-  assert.equal(typeof formatDurationLocalized(3700, "en"), "string");
+test("formatDurationLocalized는 모든 지원 언어에서 0/큰 값을 안전하게 처리한다", () => {
+  for (const lang of SUPPORTED_LANGUAGES) {
+    assert.equal(typeof formatDurationLocalized(0, lang), "string");
+    assert.equal(typeof formatDurationLocalized(3700, lang), "string");
+  }
 });
