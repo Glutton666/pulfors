@@ -51,7 +51,7 @@ export const highClickSource = soundSets.classic.high;
 export const lowClickSource = soundSets.classic.low;
 export const strongClickSource = soundSets.classic.strong;
 
-interface ScheduledTick {
+export interface ScheduledTick {
   time: number;
   beat: number;
   subBeat: number;
@@ -67,6 +67,280 @@ interface ScheduledTick {
   jumpSourceBlockIndex: number;
   layerIndex: number;
   layerBeat: number;
+}
+
+export interface LoopBlockData {
+  startBeat: number;
+  endBeat: number;
+  type: "count" | "duration";
+  value: number;
+  jumpToBlock?: number;
+  jumpCount?: number;
+  bpm?: number;
+  soundSet?: string;
+  layerOf?: number;
+  ownBeatTypes?: Record<number, string>;
+  ownSubdivisions?: Record<string, string[]>;
+}
+
+export type BarRepeatSpec = { type: "count" | "duration"; value: number };
+
+export interface ScheduleInputs {
+  bpm: number;
+  halfTime: boolean;
+  beatsPerMeasure: number;
+  beatTypes: BeatType[];
+  beatSubdivisions: Map<number, BeatType[]>;
+  barRepeats: Map<number, BarRepeatSpec>;
+  barBpmOverrides: Map<number, number>;
+  sortedBlocks: LoopBlockData[];
+  origToSorted: Map<number, number>;
+  sortedToOrig: Map<number, number>;
+  startBeatToBlocks: Map<number, number[]>;
+  loopBlocks: LoopBlockData[];
+}
+
+export interface JumpState {
+  iteration: number;
+  total: number;
+  sourceBlockIndex: number;
+}
+
+export interface EmitState {
+  ticks: ScheduledTick[];
+  time: number;
+  jump: JumpState;
+}
+
+/** 순수 함수: 한 비트의 실제 길이(ms)를 반환. */
+export function pureGetBeatDur(
+  inputs: Pick<ScheduleInputs, "bpm" | "halfTime" | "barBpmOverrides">,
+  beat: number,
+  blockBpm?: number,
+): number {
+  const bpm = inputs.barBpmOverrides.get(beat) ?? blockBpm ?? inputs.bpm;
+  const effectiveBpm = inputs.halfTime ? bpm / 2 : bpm;
+  return 60000 / effectiveBpm;
+}
+
+/** 순수 함수: 한 비트에 적용될 서브디비전 패턴을 반환. */
+export function pureGetSubPattern(
+  beatTypes: BeatType[],
+  beatSubdivisions: Map<number, BeatType[]>,
+  beat: number,
+): BeatType[] {
+  const beatType = beatTypes[beat] || "normal";
+  const custom = beatSubdivisions.get(beat);
+  if (!custom || custom.length === 0) return [beatType];
+  if (beatType === "mute") return custom.map(() => "mute" as BeatType);
+  if (beatType === "strong") {
+    const result = [...custom];
+    if (result[0] === "normal" || result[0] === "accent") result[0] = "strong";
+    return result;
+  }
+  if (beatType === "accent") {
+    const result = [...custom];
+    if (result[0] === "normal") result[0] = "accent";
+    return result;
+  }
+  return custom;
+}
+
+/** 순수 함수: 주어진 범위의 첫 비트에서 시작하는 가장 가까운 자식(non-layer) 블록 인덱스. 없으면 -1. */
+export function pureFindInnerBlock(
+  sortedBlocks: LoopBlockData[],
+  startBeatToBlocks: Map<number, number[]>,
+  startB: number,
+  endB: number,
+  parentBlockIdx: number,
+): number {
+  const candidates = startBeatToBlocks.get(startB);
+  if (!candidates) return -1;
+  for (const iIdx of candidates) {
+    if (iIdx === parentBlockIdx) continue;
+    const ib = sortedBlocks[iIdx];
+    if (ib.layerOf !== undefined) continue;
+    if (ib.startBeat >= startB && ib.endBeat <= endB) return iIdx;
+  }
+  return -1;
+}
+
+/** 순수 함수: 블록 한 번 통과하는 길이(ms)를 재귀적으로 계산. durCache로 메모이즈. */
+export function pureCalcSinglePassDur(
+  inputs: ScheduleInputs,
+  durCache: Map<string, number>,
+  startB: number,
+  endB: number,
+  parentBlockIdx: number,
+  blockBpm?: number,
+): number {
+  const cacheKey = `${startB}:${endB}:${parentBlockIdx}:${blockBpm ?? ""}`;
+  const cached = durCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+  let dur = 0;
+  let b = startB;
+  while (b <= endB) {
+    const innerIdx = pureFindInnerBlock(inputs.sortedBlocks, inputs.startBeatToBlocks, b, endB, parentBlockIdx);
+    if (innerIdx >= 0) {
+      const inner = inputs.sortedBlocks[innerIdx];
+      const innerEnd = Math.min(inner.endBeat, endB);
+      const innerBpm = inner.bpm ?? blockBpm;
+      const innerPassDur = pureCalcSinglePassDur(inputs, durCache, inner.startBeat, innerEnd, innerIdx, innerBpm);
+      let innerRepCount = 1;
+      if (inner.type === "count") innerRepCount = Math.max(1, inner.value);
+      else innerRepCount = Math.max(1, Math.round((inner.value * 1000) / (innerPassDur || 1)));
+      dur += innerPassDur * innerRepCount;
+      b = innerEnd + 1;
+    } else {
+      const bd = pureGetBeatDur(inputs, b, blockBpm);
+      const barRep = inputs.barRepeats.get(b);
+      const barRepCount = barRep
+        ? (barRep.type === "count" ? Math.max(1, barRep.value) : Math.max(1, Math.round((barRep.value * 1000) / bd)))
+        : 1;
+      dur += bd * barRepCount;
+      b++;
+    }
+  }
+  durCache.set(cacheKey, dur);
+  return dur;
+}
+
+/** 순수 함수(state mutate): 한 비트(서브디비전 포함)의 ticks를 state에 추가하고 state.time을 전진시킨다. */
+export function pureAddBeatTicks(
+  inputs: ScheduleInputs,
+  state: EmitState,
+  beat: number,
+  iteration: number,
+  barRepIter: number,
+  barRepTotal: number,
+  blkIdx: number,
+  blkRepTotal: number,
+  blockBpm?: number,
+): void {
+  const subPattern = pureGetSubPattern(inputs.beatTypes, inputs.beatSubdivisions, beat);
+  const beatDur = pureGetBeatDur(inputs, beat, blockBpm);
+  const subDur = beatDur / subPattern.length;
+  for (let sub = 0; sub < subPattern.length; sub++) {
+    state.ticks.push({
+      time: state.time,
+      beat,
+      subBeat: sub,
+      type: subPattern[sub],
+      isMainBeat: sub === 0,
+      repeatIteration: iteration,
+      barRepeatIteration: barRepIter,
+      barRepeatTotal: barRepTotal,
+      blockIndex: blkIdx,
+      blockRepeatTotal: blkRepTotal,
+      jumpIteration: state.jump.iteration,
+      jumpTotal: state.jump.total,
+      jumpSourceBlockIndex: state.jump.sourceBlockIndex,
+      layerIndex: 0,
+      layerBeat: beat,
+    });
+    state.time += subDur;
+  }
+}
+
+/** 순수 함수(state mutate): 바 반복(barRepeats)을 고려하여 한 비트의 ticks를 state에 추가. */
+export function pureAddBarWithRepeat(
+  inputs: ScheduleInputs,
+  state: EmitState,
+  beat: number,
+  blockIteration: number,
+  blkIdx: number,
+  blkRepTotal: number,
+  blockBpm?: number,
+): void {
+  const barRep = inputs.barRepeats.get(beat);
+  const beatDur = pureGetBeatDur(inputs, beat, blockBpm);
+  if (barRep) {
+    let barRepeatCount = 1;
+    if (barRep.type === "count") barRepeatCount = Math.max(1, barRep.value);
+    else barRepeatCount = Math.max(1, Math.round((barRep.value * 1000) / beatDur));
+    for (let r = 0; r < barRepeatCount; r++) {
+      pureAddBeatTicks(inputs, state, beat, blockIteration, r, barRepeatCount, blkIdx, blkRepTotal, blockBpm);
+    }
+  } else {
+    pureAddBeatTicks(inputs, state, beat, blockIteration, 0, 1, blkIdx, blkRepTotal, blockBpm);
+  }
+}
+
+/** 순수 함수(state mutate): 부모 블록 위에 stacked layer 블록의 ticks를 state에 추가. state.time은 변경 없음. */
+export function pureEmitStackedBlockTicks(
+  inputs: ScheduleInputs,
+  state: EmitState,
+  parentOrigIdx: number,
+  blockStartTime: number,
+  blockDurMs: number,
+  repIteration: number,
+  repTotal: number,
+): void {
+  const stackedBlocks: { block: LoopBlockData; origIdx: number; layerNum: number }[] = [];
+  let layerNum = 1;
+  for (let oi = 0; oi < inputs.loopBlocks.length; oi++) {
+    if (inputs.loopBlocks[oi].layerOf === parentOrigIdx) {
+      const si = inputs.origToSorted.get(oi);
+      if (si !== undefined) {
+        stackedBlocks.push({ block: inputs.sortedBlocks[si], origIdx: oi, layerNum: layerNum++ });
+      }
+    }
+  }
+  if (stackedBlocks.length === 0) return;
+
+  for (const { block: stackBlock, origIdx: stackOrigIdx, layerNum: ln } of stackedBlocks) {
+    const stackBeats = Math.max(1, stackBlock.endBeat - stackBlock.startBeat + 1);
+    const stackBpm = stackBlock.bpm;
+    const stackBeatDur = stackBpm
+      ? 60000 / (inputs.halfTime ? stackBpm / 2 : stackBpm)
+      : blockDurMs / stackBeats;
+
+    for (let lb = 0; lb < stackBeats; lb++) {
+      const beatStartTime = blockStartTime + lb * stackBeatDur;
+      if (beatStartTime >= blockStartTime + blockDurMs) break;
+      const lbBeat = stackBlock.startBeat + lb;
+      const rawBlock = inputs.loopBlocks[stackOrigIdx];
+      let subPat: BeatType[];
+      if (rawBlock?.ownSubdivisions) {
+        const ownSub = rawBlock.ownSubdivisions[String(lbBeat)];
+        if (ownSub) {
+          subPat = ownSub as BeatType[];
+        } else {
+          const ownType = (rawBlock.ownBeatTypes?.[lbBeat] as BeatType) || "normal";
+          subPat = [ownType];
+        }
+      } else if (rawBlock?.ownBeatTypes) {
+        const ownType = (rawBlock.ownBeatTypes[lbBeat] as BeatType) || "normal";
+        subPat = pureGetSubPattern(inputs.beatTypes, inputs.beatSubdivisions, lbBeat);
+        if (subPat.length === 1) subPat = [ownType];
+        else subPat = subPat.map((s, si) => (si === 0 ? ownType : s));
+      } else {
+        subPat = pureGetSubPattern(inputs.beatTypes, inputs.beatSubdivisions, lbBeat);
+      }
+      const subDur = stackBeatDur / subPat.length;
+      for (let sub = 0; sub < subPat.length; sub++) {
+        const tickTime = beatStartTime + sub * subDur;
+        if (tickTime >= blockStartTime + blockDurMs) break;
+        state.ticks.push({
+          time: tickTime,
+          beat: -1,
+          subBeat: sub,
+          type: subPat[sub],
+          isMainBeat: sub === 0,
+          repeatIteration: repIteration,
+          barRepeatIteration: 0,
+          barRepeatTotal: 1,
+          blockIndex: stackOrigIdx,
+          blockRepeatTotal: repTotal,
+          jumpIteration: state.jump.iteration,
+          jumpTotal: state.jump.total,
+          jumpSourceBlockIndex: state.jump.sourceBlockIndex,
+          layerIndex: ln,
+          layerBeat: lb,
+        });
+      }
+    }
+  }
 }
 
 export class MetronomeEngine {
@@ -380,37 +654,6 @@ export class MetronomeEngine {
     return this.isRunning;
   }
 
-  private getSubPattern(beat: number): BeatType[] {
-    const beatType = this.beatTypes[beat] || "normal";
-    const custom = this.beatSubdivisions.get(beat);
-
-    if (!custom || custom.length === 0) {
-      return [beatType];
-    }
-
-    if (beatType === "mute") {
-      return custom.map(() => "mute" as BeatType);
-    }
-
-    if (beatType === "strong") {
-      const result = [...custom];
-      if (result[0] === "normal" || result[0] === "accent") {
-        result[0] = "strong";
-      }
-      return result;
-    }
-
-    if (beatType === "accent") {
-      const result = [...custom];
-      if (result[0] === "normal") {
-        result[0] = "accent";
-      }
-      return result;
-    }
-
-    return custom;
-  }
-
   setHalfTime(enabled: boolean) {
     this.halfTime = enabled;
     this.invalidateScheduleCache();
@@ -421,12 +664,6 @@ export class MetronomeEngine {
 
   getHalfTime() {
     return this.halfTime;
-  }
-
-  private getBeatDur(beat: number, blockBpm?: number): number {
-    const bpm = this.barBpmOverrides.get(beat) ?? blockBpm ?? this.bpm;
-    const effectiveBpm = this.halfTime ? bpm / 2 : bpm;
-    return 60000 / effectiveBpm;
   }
 
   private computeOuterBlockFingerprint(
@@ -506,13 +743,11 @@ export class MetronomeEngine {
   }
 
   private buildSchedule(): ScheduledTick[] {
-    const ticks: ScheduledTick[] = [];
-    let time = 0;
     this.lastBlockCacheReused = 0;
     this.lastBlockCacheBuilt = 0;
 
     const filteredWithOrigIdx = this.loopBlocks
-      .map((b, i) => ({ block: b, origIdx: i }))
+      .map((b, i) => ({ block: b as LoopBlockData, origIdx: i }))
       .filter(({ block: b }) => b.startBeat < this.beatsPerMeasure && b.endBeat >= b.startBeat)
       .sort((a, b) => a.block.startBeat - b.block.startBeat);
     const sortedBlocks = filteredWithOrigIdx.map(e => e.block);
@@ -530,104 +765,42 @@ export class MetronomeEngine {
       else startBeatToBlocks.set(blk.startBeat, [idx]);
     });
 
+    const inputs: ScheduleInputs = {
+      bpm: this.bpm,
+      halfTime: this.halfTime,
+      beatsPerMeasure: this.beatsPerMeasure,
+      beatTypes: this.beatTypes,
+      beatSubdivisions: this.beatSubdivisions,
+      barRepeats: this.barRepeats,
+      barBpmOverrides: this.barBpmOverrides,
+      sortedBlocks,
+      origToSorted,
+      sortedToOrig,
+      startBeatToBlocks,
+      loopBlocks: this.loopBlocks as LoopBlockData[],
+    };
+
+    const state: EmitState = {
+      ticks: [],
+      time: 0,
+      jump: { iteration: 0, total: 0, sourceBlockIndex: -1 },
+    };
+    const ticks = state.ticks;
+
     const durCache = new Map<string, number>();
 
-    let currentJumpIteration = 0;
-    let currentJumpTotal = 0;
-    let currentJumpSourceBlockIndex = -1;
-
-    const addBeatTicks = (beat: number, iteration: number, barRepIter: number, barRepTotal: number, blkIdx: number, blkRepTotal: number, blockBpm?: number) => {
-      const subPattern = this.getSubPattern(beat);
-      const beatDur = this.getBeatDur(beat, blockBpm);
-      const subDur = beatDur / subPattern.length;
-      for (let sub = 0; sub < subPattern.length; sub++) {
-        ticks.push({
-          time,
-          beat,
-          subBeat: sub,
-          type: subPattern[sub],
-          isMainBeat: sub === 0,
-          repeatIteration: iteration,
-          barRepeatIteration: barRepIter,
-          barRepeatTotal: barRepTotal,
-          blockIndex: blkIdx,
-          blockRepeatTotal: blkRepTotal,
-          jumpIteration: currentJumpIteration,
-          jumpTotal: currentJumpTotal,
-          jumpSourceBlockIndex: currentJumpSourceBlockIndex,
-          layerIndex: 0,
-          layerBeat: beat,
-        });
-        time += subDur;
-      }
-    };
-
     const addBarWithRepeat = (beat: number, blockIteration: number, blkIdx: number, blkRepTotal: number, blockBpm?: number) => {
-      const barRep = this.barRepeats.get(beat);
-      const beatDur = this.getBeatDur(beat, blockBpm);
-      if (barRep) {
-        let barRepeatCount = 1;
-        if (barRep.type === "count") {
-          barRepeatCount = Math.max(1, barRep.value);
-        } else {
-          barRepeatCount = Math.max(1, Math.round((barRep.value * 1000) / beatDur));
-        }
-        for (let r = 0; r < barRepeatCount; r++) {
-          addBeatTicks(beat, blockIteration, r, barRepeatCount, blkIdx, blkRepTotal, blockBpm);
-        }
-      } else {
-        addBeatTicks(beat, blockIteration, 0, 1, blkIdx, blkRepTotal, blockBpm);
-      }
-    };
-
-    const findInnerBlock = (startB: number, endB: number, parentBlockIdx: number): number => {
-      const candidates = startBeatToBlocks.get(startB);
-      if (!candidates) return -1;
-      for (const iIdx of candidates) {
-        if (iIdx !== parentBlockIdx) {
-          const ib = sortedBlocks[iIdx];
-          if (ib.layerOf !== undefined) continue;
-          if (ib.startBeat >= startB && ib.endBeat <= endB) return iIdx;
-        }
-      }
-      return -1;
+      pureAddBarWithRepeat(inputs, state, beat, blockIteration, blkIdx, blkRepTotal, blockBpm);
     };
 
     const calcSinglePassDur = (startB: number, endB: number, parentBlockIdx: number, blockBpm?: number): number => {
-      const cacheKey = `${startB}:${endB}:${parentBlockIdx}:${blockBpm ?? ""}`;
-      const cached = durCache.get(cacheKey);
-      if (cached !== undefined) return cached;
-
-      let dur = 0;
-      let b = startB;
-      while (b <= endB) {
-        const innerIdx = findInnerBlock(b, endB, parentBlockIdx);
-        if (innerIdx >= 0) {
-          const inner = sortedBlocks[innerIdx];
-          const innerEnd = Math.min(inner.endBeat, endB);
-          const innerBpm = inner.bpm ?? blockBpm;
-          const innerPassDur = calcSinglePassDur(inner.startBeat, innerEnd, innerIdx, innerBpm);
-          let innerRepCount = 1;
-          if (inner.type === "count") innerRepCount = Math.max(1, inner.value);
-          else innerRepCount = Math.max(1, Math.round((inner.value * 1000) / (innerPassDur || 1)));
-          dur += innerPassDur * innerRepCount;
-          b = innerEnd + 1;
-        } else {
-          const bd = this.getBeatDur(b, blockBpm);
-          const barRep = this.barRepeats.get(b);
-          const barRepCount = barRep ? (barRep.type === "count" ? Math.max(1, barRep.value) : Math.max(1, Math.round((barRep.value * 1000) / bd))) : 1;
-          dur += bd * barRepCount;
-          b++;
-        }
-      }
-      durCache.set(cacheKey, dur);
-      return dur;
+      return pureCalcSinglePassDur(inputs, durCache, startB, endB, parentBlockIdx, blockBpm);
     };
 
     const emitBeatsInRange = (startB: number, endB: number, outerBlockIdx: number, outerIter: number, outerRepTotal: number, blockBpm?: number) => {
       let b = startB;
       while (b <= endB) {
-        const innerIdx = findInnerBlock(b, endB, outerBlockIdx);
+        const innerIdx = pureFindInnerBlock(sortedBlocks, startBeatToBlocks, b, endB, outerBlockIdx);
         if (innerIdx >= 0) {
           const inner = sortedBlocks[innerIdx];
           const innerEnd = Math.min(inner.endBeat, endB);
@@ -637,12 +810,12 @@ export class MetronomeEngine {
           if (inner.type === "count") innerRepCount = Math.max(1, inner.value);
           else innerRepCount = Math.max(1, Math.round((inner.value * 1000) / (innerPassDur || 1)));
           for (let ir = 0; ir < innerRepCount; ir++) {
-            const innerStartTime = time;
+            const innerStartTime = state.time;
             emitBeatsInRange(inner.startBeat, innerEnd, innerIdx, ir, innerRepCount, innerBpm);
             const innerOrigIdx = sortedToOrig.get(innerIdx) ?? innerIdx;
-            const innerDur = time - innerStartTime;
+            const innerDur = state.time - innerStartTime;
             if (innerDur > 0) {
-              emitStackedBlockTicks(innerIdx, innerOrigIdx, innerStartTime, innerDur, ir, innerRepCount);
+              pureEmitStackedBlockTicks(inputs, state, innerOrigIdx, innerStartTime, innerDur, ir, innerRepCount);
             }
           }
           b = innerEnd + 1;
@@ -654,74 +827,6 @@ export class MetronomeEngine {
     };
 
     const jumpProcessed = new Set<number>();
-
-    const emitStackedBlockTicks = (parentBlockIdx: number, parentOrigIdx: number, blockStartTime: number, blockDurMs: number, repIteration: number, repTotal: number) => {
-      const stackedBlocks: { block: typeof sortedBlocks[0]; origIdx: number; layerNum: number }[] = [];
-      let layerNum = 1;
-      for (let oi = 0; oi < this.loopBlocks.length; oi++) {
-        if (this.loopBlocks[oi].layerOf === parentOrigIdx) {
-          const si = origToSorted.get(oi);
-          if (si !== undefined) {
-            stackedBlocks.push({ block: sortedBlocks[si], origIdx: oi, layerNum: layerNum++ });
-          }
-        }
-      }
-      if (stackedBlocks.length === 0) return;
-
-      for (const { block: stackBlock, origIdx: stackOrigIdx, layerNum: ln } of stackedBlocks) {
-        const stackBeats = Math.max(1, stackBlock.endBeat - stackBlock.startBeat + 1);
-        const stackBpm = stackBlock.bpm;
-        const stackBeatDur = stackBpm
-          ? 60000 / (this.halfTime ? stackBpm / 2 : stackBpm)
-          : blockDurMs / stackBeats;
-
-        for (let lb = 0; lb < stackBeats; lb++) {
-          const beatStartTime = blockStartTime + lb * stackBeatDur;
-          if (beatStartTime >= blockStartTime + blockDurMs) break;
-          const lbBeat = stackBlock.startBeat + lb;
-          const rawBlock = this.loopBlocks[stackOrigIdx];
-          let subPat: BeatType[];
-          if (rawBlock?.ownSubdivisions) {
-            const ownSub = rawBlock.ownSubdivisions[String(lbBeat)];
-            if (ownSub) {
-              subPat = ownSub as BeatType[];
-            } else {
-              const ownType = rawBlock.ownBeatTypes?.[lbBeat] as BeatType || "normal";
-              subPat = [ownType];
-            }
-          } else if (rawBlock?.ownBeatTypes) {
-            const ownType = rawBlock.ownBeatTypes[lbBeat] as BeatType || "normal";
-            subPat = this.getSubPattern(lbBeat);
-            if (subPat.length === 1) subPat = [ownType];
-            else subPat = subPat.map((s, si) => si === 0 ? ownType : s);
-          } else {
-            subPat = this.getSubPattern(lbBeat);
-          }
-          const subDur = stackBeatDur / subPat.length;
-          for (let sub = 0; sub < subPat.length; sub++) {
-            const tickTime = beatStartTime + sub * subDur;
-            if (tickTime >= blockStartTime + blockDurMs) break;
-            ticks.push({
-              time: tickTime,
-              beat: -1,
-              subBeat: sub,
-              type: subPat[sub],
-              isMainBeat: sub === 0,
-              repeatIteration: repIteration,
-              barRepeatIteration: 0,
-              barRepeatTotal: 1,
-              blockIndex: stackOrigIdx,
-              blockRepeatTotal: repTotal,
-              jumpIteration: currentJumpIteration,
-              jumpTotal: currentJumpTotal,
-              jumpSourceBlockIndex: currentJumpSourceBlockIndex,
-              layerIndex: ln,
-              layerBeat: lb,
-            });
-          }
-        }
-      }
-    };
 
     const emitBlock = (blockIdx: number, jumpVisited: Set<number>) => {
       if (jumpVisited.has(blockIdx) || blockIdx < 0 || blockIdx >= sortedBlocks.length) return;
@@ -742,12 +847,12 @@ export class MetronomeEngine {
       }
 
       for (let r = 0; r < blockRepeatCount; r++) {
-        const passStartTime = time;
+        const passStartTime = state.time;
         emitBeatsInRange(block.startBeat, endBeat, blockIdx, r, blockRepeatCount, blockBpm);
-        const passEndTime = time;
+        const passEndTime = state.time;
         const passDur = passEndTime - passStartTime;
         if (passDur > 0) {
-          emitStackedBlockTicks(blockIdx, origIdx, passStartTime, passDur, r, blockRepeatCount);
+          pureEmitStackedBlockTicks(inputs, state, origIdx, passStartTime, passDur, r, blockRepeatCount);
         }
       }
     };
@@ -760,22 +865,22 @@ export class MetronomeEngine {
         const jumpSortedIdx = origToSorted.get(block.jumpToBlock);
         if (jumpSortedIdx !== undefined) {
           const jumpCount = Math.max(1, block.jumpCount || 1);
-          const prevJumpTotal = currentJumpTotal;
-          const prevJumpIteration = currentJumpIteration;
-          const prevJumpSource = currentJumpSourceBlockIndex;
-          currentJumpTotal = jumpCount;
-          currentJumpSourceBlockIndex = sortedToOrig.get(blockIdx) ?? blockIdx;
+          const prevJumpTotal = state.jump.total;
+          const prevJumpIteration = state.jump.iteration;
+          const prevJumpSource = state.jump.sourceBlockIndex;
+          state.jump.total = jumpCount;
+          state.jump.sourceBlockIndex = sortedToOrig.get(blockIdx) ?? blockIdx;
 
           for (let ji = 0; ji < jumpCount; ji++) {
-            currentJumpIteration = ji;
+            state.jump.iteration = ji;
             emitBlock(blockIdx, new Set(jumpVisited));
             const jumpVisitedCopy = new Set(jumpVisited);
             emitBlock(jumpSortedIdx, jumpVisitedCopy);
           }
 
-          currentJumpIteration = prevJumpIteration;
-          currentJumpTotal = prevJumpTotal;
-          currentJumpSourceBlockIndex = prevJumpSource;
+          state.jump.iteration = prevJumpIteration;
+          state.jump.total = prevJumpTotal;
+          state.jump.sourceBlockIndex = prevJumpSource;
 
           jumpProcessed.add(jumpSortedIdx);
           return;
@@ -791,19 +896,19 @@ export class MetronomeEngine {
         return;
       }
       const inJump =
-        currentJumpIteration !== 0 ||
-        currentJumpTotal !== 0 ||
-        currentJumpSourceBlockIndex !== -1;
+        state.jump.iteration !== 0 ||
+        state.jump.total !== 0 ||
+        state.jump.sourceBlockIndex !== -1;
       const fp = inJump
         ? null
         : this.computeOuterBlockFingerprint(outerIdx, sortedBlocks, origToSorted, sortedToOrig);
       const cached = fp ? this.blockEmitCache.get(fp) : undefined;
       if (cached) {
-        const startTime = time;
+        const startTime = state.time;
         for (const t of cached.ticks) {
           ticks.push({ ...t, time: t.time + startTime });
         }
-        time = startTime + cached.durMs;
+        state.time = startTime + cached.durMs;
         const block = sortedBlocks[outerIdx];
         if (block.jumpToBlock !== undefined && block.jumpToBlock !== null) {
           const jSorted = origToSorted.get(block.jumpToBlock);
@@ -814,7 +919,7 @@ export class MetronomeEngine {
         this.lastBlockCacheReused++;
         return;
       }
-      const startTime = time;
+      const startTime = state.time;
       const startTickIdx = ticks.length;
       processBlock(outerIdx, new Set());
       if (fp) {
@@ -824,7 +929,7 @@ export class MetronomeEngine {
           return copy;
         });
         Object.freeze(slice);
-        this.blockEmitCache.set(fp, { ticks: slice, durMs: time - startTime });
+        this.blockEmitCache.set(fp, { ticks: slice, durMs: state.time - startTime });
         this.lastBlockCacheBuilt++;
         while (this.blockEmitCache.size > MetronomeEngine.BLOCK_CACHE_MAX) {
           const firstKey = this.blockEmitCache.keys().next().value;
@@ -896,7 +1001,7 @@ export class MetronomeEngine {
       }
     }
 
-    this.measureDurationMs = time;
+    this.measureDurationMs = state.time;
     ticks.sort((a, b) => a.time - b.time);
     return ticks;
   }
