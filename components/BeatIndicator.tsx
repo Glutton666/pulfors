@@ -2451,9 +2451,10 @@ export function BeatIndicator({
                 <Ionicons name={saveFlashVisible ? "checkmark-circle" : "bookmark-outline"} size={S.ms(16, 0.4)} color={saveFlashVisible ? "#4CAF50" : C.accent} />
               </Pressable>
               <Pressable
-                onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
-                style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure <= MIN_BEATS) && { opacity: 0.3 }]}
+                onPress={() => { if (beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+                style={[styles.barTimeSigBtn, beatsPerMeasure <= MIN_BEATS && { opacity: 0.3 }]}
                 hitSlop={8}
+                testID="bar-beats-minus"
               >
                 <Ionicons name="remove" size={S.ms(14, 0.4)} color={C.textSecondary} />
               </Pressable>
@@ -2492,9 +2493,10 @@ export function BeatIndicator({
                 )}
               </View>
               <Pressable
-                onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
-                style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
+                onPress={() => { if (beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+                style={[styles.barTimeSigBtn, beatsPerMeasure >= MAX_BEATS && { opacity: 0.3 }]}
                 hitSlop={8}
+                testID="bar-beats-plus"
               >
                 <Ionicons name="add" size={S.ms(14, 0.4)} color={C.textSecondary} />
               </Pressable>
