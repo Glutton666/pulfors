@@ -17,6 +17,9 @@ const TOKENIZED_FILES = [
   "components/SubdivisionBar.tsx",
   "components/ErrorFallback.tsx",
   "components/BpmSlider.tsx",
+  "components/NoteRecorderModal.tsx",
+  "components/OnboardingModal.tsx",
+  "components/SignalGeneratorModal.tsx",
 ];
 
 const BANNED_PATTERNS: { pattern: RegExp; label: string }[] = [
@@ -25,9 +28,12 @@ const BANNED_PATTERNS: { pattern: RegExp; label: string }[] = [
   { pattern: /borderRadius:\s*8(?!\d)/, label: "borderRadius: 8 (use Radius.md)" },
   { pattern: /fontSize:\s*10(?!\d)/, label: "fontSize: 10 (use FontSize.micro)" },
   { pattern: /fontSize:\s*11(?!\d)/, label: "fontSize: 11 (use FontSize.caption)" },
+  { pattern: /fontSize:\s*12(?!\d)/, label: "fontSize: 12 (use FontSize.small)" },
   { pattern: /(?:padding|margin)(?:Horizontal|Vertical|Top|Bottom|Left|Right)?:\s*2(?!\d)/, label: "padding/margin 2 (use Spacing.xxs)" },
   { pattern: /(?:padding|margin)(?:Horizontal|Vertical|Top|Bottom|Left|Right)?:\s*4(?!\d)/, label: "padding/margin 4 (use Spacing.xs)" },
   { pattern: /(?:padding|margin)(?:Horizontal|Vertical|Top|Bottom|Left|Right)?:\s*8(?!\d)/, label: "padding/margin 8 (use Spacing.sm)" },
+  { pattern: /\bgap:\s*2(?!\d)/, label: "gap: 2 (use Spacing.xxs)" },
+  { pattern: /\bgap:\s*4(?!\d)/, label: "gap: 4 (use Spacing.xs)" },
   { pattern: /\bgap:\s*8(?!\d)/, label: "gap: 8 (use Spacing.sm)" },
 ];
 

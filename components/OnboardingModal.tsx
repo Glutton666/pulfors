@@ -18,6 +18,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
+import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
 import { ACCENT_PRESETS } from "@/constants/colors";
 import type { ThemeColor } from "@/constants/colors";
@@ -589,7 +590,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   const renderLoggingStep = () => {
     const loggingContent = (
       <>
-        <View style={[styles.infoCard, isLandscape && { padding: 10, gap: 8 }]}>
+        <View style={[styles.infoCard, isLandscape && { padding: 10, gap: Spacing.sm }]}>
           <Text style={styles.infoCardTitle}>{t("onboarding", "loggingWhy")}</Text>
           <View style={styles.infoRow}>
             <Ionicons name="time-outline" size={isLandscape ? 14 : 18} color={accentColor} />
@@ -605,7 +606,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           </View>
         </View>
 
-        <View style={[styles.infoCard, isLandscape && { padding: 10, gap: 8 }]}>
+        <View style={[styles.infoCard, isLandscape && { padding: 10, gap: Spacing.sm }]}>
           <Text style={styles.infoCardTitle}>{t("onboarding", "loggingHow")}</Text>
           <View style={styles.infoRow}>
             <Ionicons name="bar-chart-outline" size={isLandscape ? 14 : 18} color={accentColor} />
@@ -628,7 +629,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
         <Pressable
           style={[
             styles.bigToggle,
-            isLandscape && { height: 38, marginTop: 4, marginBottom: 8 },
+            isLandscape && { height: 38, marginTop: Spacing.xs, marginBottom: Spacing.sm },
             loggingEnabled
               ? { backgroundColor: accentColor }
               : { backgroundColor: C.surfaceLight, borderWidth: 1, borderColor: C.border },
@@ -733,7 +734,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           <ModeOption label={t("onboarding", "hapticOff")} description={t("onboarding", "hapticOffDesc")} value="off" current={hapticMode} onSelect={() => setHapticMode("off")} />
         </View>
 
-        <View style={[styles.demoSection, isLandscape && { marginTop: 8, paddingVertical: 10 }]}>
+        <View style={[styles.demoSection, isLandscape && { marginTop: Spacing.sm, paddingVertical: 10 }]}>
           <DemoBar activeBeat={hapticDemo.activeBeat} accentColor={accentColor} beatLabels={[t("beatTypes", "strong"), t("beatTypes", "accent"), t("beatTypes", "normal"), t("beatTypes", "mute")]} />
           <Pressable
             style={[
@@ -787,7 +788,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           <ModeOption label={t("onboarding", "flashOff")} description={t("onboarding", "flashOffDesc")} value="off" current={flashMode} onSelect={() => setFlashMode("off")} />
         </View>
 
-        <View style={[styles.demoSection, isLandscape && { marginTop: 8, paddingVertical: 10 }]}>
+        <View style={[styles.demoSection, isLandscape && { marginTop: Spacing.sm, paddingVertical: 10 }]}>
           <DemoBar activeBeat={flashDemo.activeBeat} accentColor={accentColor} beatLabels={[t("beatTypes", "strong"), t("beatTypes", "accent"), t("beatTypes", "normal"), t("beatTypes", "mute")]} />
           <Pressable
             style={[
@@ -900,7 +901,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       { value: "en", label: "English" },
     ];
     const content = (
-      <View style={{ width: "100%", gap: 12, marginTop: 8 }}>
+      <View style={{ width: "100%", gap: 12, marginTop: Spacing.sm }}>
         {options.map((opt) => {
           const active = language === opt.value;
           return (
@@ -957,13 +958,13 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
     const content = (
       <>
         <View style={{
-          width: "100%", marginTop: 8, padding: 16, borderRadius: 12,
+          width: "100%", marginTop: Spacing.sm, padding: 16, borderRadius: 12,
           backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
         }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <View style={{ flex: 1, paddingRight: 12 }}>
               <Text style={{ color: C.text, fontSize: 15, fontWeight: "600" }}>{t("onboarding", "voiceEnable")}</Text>
-              <Text style={{ color: C.textSecondary, fontSize: 12, marginTop: 4 }}>
+              <Text style={{ color: C.textSecondary, fontSize: FontSize.small, marginTop: Spacing.xs }}>
                 {voice.isSupported ? t("voice", "enableHint") : t("onboarding", "voiceNotSupportedShort")}
               </Text>
             </View>
@@ -979,10 +980,10 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
 
         {voice.enabled && voice.isSupported && (
           <View style={{ width: "100%", marginTop: 12 }}>
-            <Text style={{ color: C.text, fontSize: 13, fontWeight: "600", marginBottom: 4 }}>
+            <Text style={{ color: C.text, fontSize: 13, fontWeight: "600", marginBottom: Spacing.xs }}>
               {t("onboarding", "voiceNicknameLabel")}
             </Text>
-            <Text style={{ color: C.textSecondary, fontSize: 11, marginBottom: 8 }}>
+            <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, marginBottom: Spacing.sm }}>
               {t("onboarding", "voiceNicknameHint")}
             </Text>
             <TextInput
@@ -1055,7 +1056,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           isLandscape && { paddingLeft: insets.left || 0, paddingRight: insets.right || 0 },
         ]}
       >
-        <View style={[styles.topBar, isLandscape && { paddingVertical: 4 }]}>
+        <View style={[styles.topBar, isLandscape && { paddingVertical: Spacing.xs }]}>
           {step > 0 ? (
             <Pressable onPress={handleBack} hitSlop={10} style={styles.backBtn}>
               <Ionicons name="chevron-back" size={22} color={C.textSecondary} />
@@ -1113,7 +1114,7 @@ const make_demoStyles = (C: typeof Colors) => StyleSheet.create({
   },
   beatLabel: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 10,
+    fontSize: FontSize.micro,
     color: C.textSecondary,
   },
 });
@@ -1128,7 +1129,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingVertical: Spacing.sm,
   },
   backBtn: {
     width: 60,
@@ -1158,27 +1159,27 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 20,
     paddingTop: 16,
-    gap: 8,
+    gap: Spacing.sm,
   },
   stepTitle: {
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: 22,
     color: C.text,
-    marginTop: 4,
+    marginTop: Spacing.xs,
   },
   stepSubtitle: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 13,
     color: C.textSecondary,
     textAlign: "center",
-    marginBottom: 4,
+    marginBottom: Spacing.xs,
   },
   themeGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
-    gap: 8,
-    marginTop: 4,
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
   },
   themeOption: {
     alignItems: "center",
@@ -1198,7 +1199,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   themeLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: C.textSecondary,
   },
   infoCard: {
@@ -1214,7 +1215,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
     color: C.text,
-    marginBottom: 2,
+    marginBottom: Spacing.xxs,
   },
   infoRow: {
     flexDirection: "row",
@@ -1232,11 +1233,11 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: Spacing.sm,
     width: "100%",
     height: 48,
     borderRadius: 12,
-    marginTop: 8,
+    marginTop: Spacing.sm,
     marginBottom: 20,
   },
   bigToggleText: {
@@ -1246,7 +1247,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   modeList: {
     width: "100%",
-    gap: 8,
+    gap: Spacing.sm,
   },
   modeOption: {
     flexDirection: "row",
@@ -1277,7 +1278,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   radioInner: {
     width: 12,
     height: 12,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
   },
   modeOptionLabel: {
     fontFamily: "SpaceGrotesk_600SemiBold",
@@ -1286,9 +1287,9 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   modeOptionDesc: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textSecondary,
-    marginTop: 2,
+    marginTop: Spacing.xxs,
   },
   demoSection: {
     width: "100%",
@@ -1324,7 +1325,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   inputSection: {
     width: "100%",
-    gap: 8,
+    gap: Spacing.sm,
   },
   inputLabel: {
     fontFamily: "SpaceGrotesk_600SemiBold",
@@ -1346,11 +1347,11 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 4,
+    paddingHorizontal: Spacing.xs,
   },
   locationHintText: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: C.textSecondary,
     flex: 1,
     lineHeight: 17,
@@ -1374,7 +1375,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   landContentInner: {
     gap: 10,
     paddingVertical: 6,
-    paddingRight: 8,
+    paddingRight: Spacing.sm,
   },
   landStepTitle: {
     fontSize: 20,
@@ -1409,7 +1410,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: Spacing.sm,
     height: 52,
     borderRadius: 14,
   },
@@ -1424,8 +1425,8 @@ const make_cpStyles = (C: typeof Colors) => StyleSheet.create({
   container: {
     width: "100%",
     gap: 12,
-    marginTop: 8,
-    paddingHorizontal: 4,
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
   },
   trackWrapper: {
     height: 32,
@@ -1455,7 +1456,7 @@ const make_cpStyles = (C: typeof Colors) => StyleSheet.create({
   preview: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: C.border,
   },
@@ -1463,7 +1464,7 @@ const make_cpStyles = (C: typeof Colors) => StyleSheet.create({
     flex: 1,
     height: 36,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingHorizontal: 12,
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 14,

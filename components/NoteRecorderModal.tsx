@@ -29,6 +29,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import Colors from "@/constants/colors";
+import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { SampleSource } from "@/lib/note-samples";
@@ -590,7 +591,7 @@ export function NoteRecorderModal({
                 </View>
               )}
               {loadingProgress > 0 && (
-                <Text style={[styles.hintText, { fontSize: 11, marginTop: 6 }]}>{Math.round(loadingProgress * 100)}%</Text>
+                <Text style={[styles.hintText, { fontSize: FontSize.caption, marginTop: 6 }]}>{Math.round(loadingProgress * 100)}%</Text>
               )}
             </View>
           )}
@@ -855,7 +856,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   recordButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 30,
@@ -869,7 +870,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingVertical: 8,
+    paddingVertical: Spacing.sm,
   },
   deleteText: {
     color: "#FF6B6B",
@@ -895,7 +896,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   recordingIndicator: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
   },
   recordDot: {
     width: 10,
@@ -935,23 +936,23 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   trimInfo: {
     color: C.textSecondary,
-    fontSize: 12,
+    fontSize: FontSize.small,
     fontVariant: ["tabular-nums"],
     alignSelf: "flex-start",
   },
   trimTimeInputRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
     width: "100%",
   },
   trimTimeInputGroup: {
     flex: 1,
-    gap: 4,
+    gap: Spacing.xs,
   },
   trimTimeLabel: {
     color: C.textSecondary,
-    fontSize: 11,
+    fontSize: FontSize.caption,
     fontWeight: "600",
   },
   trimTimeInput: {
@@ -960,9 +961,9 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     fontSize: 14,
     fontVariant: ["tabular-nums"],
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: Spacing.sm,
     textAlign: "center",
   },
   trimTimeSeparator: {
@@ -979,7 +980,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     width: "100%",
     height: 40,
     backgroundColor: C.surfaceLight,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
     overflow: "visible",
     position: "relative",
   },
@@ -988,14 +989,14 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     top: 0,
     bottom: 0,
     borderWidth: 1,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
   },
   trimHandle: {
     position: "absolute",
     top: -4,
     width: 20,
     height: 48,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1026,17 +1027,17 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   nameInputRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
     width: "100%",
-    marginTop: 8,
-    marginBottom: 4,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
   nameInput: {
     flex: 1,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: Spacing.sm,
     color: C.text,
     fontSize: 13,
   },
@@ -1044,7 +1045,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     gap: 12,
     width: "100%",
-    marginTop: 4,
+    marginTop: Spacing.xs,
   },
   cancelBtn: {
     flex: 1,

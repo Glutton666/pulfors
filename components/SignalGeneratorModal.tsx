@@ -31,6 +31,7 @@ import { safePlay, releaseRecorder } from "@/lib/audio-utils";
 import { ensurePermission } from "@/lib/permissions";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import Colors from "@/constants/colors";
+import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
@@ -579,7 +580,7 @@ const make_pickerStyles = (C: typeof Colors) => StyleSheet.create({
     left: 0,
     right: 0,
     height: PICKER_ITEM_H,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     borderWidth: 1,
     zIndex: 1,
     pointerEvents: "none",
@@ -737,7 +738,7 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
   },
   title: {
     fontFamily: "SpaceGrotesk_700Bold",
@@ -755,15 +756,15 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
   },
   hint: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textTertiary,
-    marginTop: 4,
-    marginBottom: 8,
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.sm,
   },
   divider: {
     height: 1,
     backgroundColor: C.border,
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   scrollBody: {
     flexGrow: 0,
@@ -771,10 +772,10 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
   categoryRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
     paddingVertical: 9,
     paddingHorizontal: 10,
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   categoryText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
@@ -787,25 +788,25 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
     alignItems: "center",
     paddingVertical: 7,
     paddingHorizontal: 24,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
   },
   instrumentText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: C.textSecondary,
     flex: 1,
   },
   stringList: {
     paddingLeft: 20,
-    paddingBottom: 4,
+    paddingBottom: Spacing.xs,
   },
   stringRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderRadius: 6,
-    gap: 8,
+    borderRadius: Radius.sm,
+    gap: Spacing.sm,
   },
   stringNote: {
     fontFamily: "SpaceGrotesk_700Bold",
@@ -815,13 +816,13 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
   },
   stringLabel: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: C.textSecondary,
     flex: 1,
   },
   stringFreq: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textTertiary,
   },
 });
@@ -1563,22 +1564,22 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               </Pressable>
             </View>
             {(micDetectedFreq || micListening) && (
-            <View style={[styles.micSection, isLandscape && { gap: 4 }]}>
+            <View style={[styles.micSection, isLandscape && { gap: Spacing.xs }]}>
               {micDetectedFreq ? (
-                <View style={[styles.micDetectedWrap, isLandscape && { marginTop: 2 }]}>
-                  <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: 4, flexWrap: "wrap" as const, justifyContent: "center" as const }}>
-                    <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary }, isLandscape && { fontSize: 10 }]}>
+                <View style={[styles.micDetectedWrap, isLandscape && { marginTop: Spacing.xxs }]}>
+                  <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: Spacing.xs, flexWrap: "wrap" as const, justifyContent: "center" as const }}>
+                    <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary }, isLandscape && { fontSize: FontSize.micro }]}>
                       {micDetectedFreq} {t("signalGenerator", "hzUnit")}
                     </Text>
-                    <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary, opacity: 0.6 }, isLandscape && { fontSize: 10 }]}>|</Text>
-                    <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary, fontWeight: "700" as const }, isLandscape && { fontSize: 10 }]}>
+                    <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary, opacity: 0.6 }, isLandscape && { fontSize: FontSize.micro }]}>|</Text>
+                    <Text style={[styles.micDetectedHint, { color: micListening ? C.accent : C.textTertiary, fontWeight: "700" as const }, isLandscape && { fontSize: FontSize.micro }]}>
                       {micDetectedNote}
                     </Text>
                   </View>
                   {micListening && pitchComparison ? (
                     <View style={[
                       styles.pitchIndicator,
-                      isLandscape && { paddingHorizontal: 6, paddingVertical: 2 },
+                      isLandscape && { paddingHorizontal: 6, paddingVertical: Spacing.xxs },
                       {
                         backgroundColor: pitchComparison.status === "exact"
                           ? "rgba(48,209,88,0.15)"
@@ -1626,14 +1627,14 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                           ? `${t("signalGenerator", "pitchHigh")} +${pitchComparison.cents}¢`
                           : `${t("signalGenerator", "pitchLow")} ${pitchComparison.cents}¢`}
                       </Text>
-                      <Pressable onPress={clearPitchTarget} hitSlop={8} style={{ marginLeft: 2 }}>
+                      <Pressable onPress={clearPitchTarget} hitSlop={8} style={{ marginLeft: Spacing.xxs }}>
                         <Ionicons name="close-circle" size={isLandscape ? 12 : 14} color={C.textTertiary} />
                       </Pressable>
                     </View>
                   ) : null}
                 </View>
               ) : micListening ? (
-                <Text style={[styles.micDetectedHint, isLandscape && { fontSize: 10 }]}>
+                <Text style={[styles.micDetectedHint, isLandscape && { fontSize: FontSize.micro }]}>
                   {micAnalyzed ? t("signalGenerator", "noSignal") : t("signalGenerator", "detecting")}
                 </Text>
               ) : null}
@@ -1644,7 +1645,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
           {!isLandscape && <View style={{ height: Math.max(14, S.ms(16, 0.4)) }} />}
 
           {isLandscape ? (
-            <View style={{ flex: 1, alignItems: "center" as const, justifyContent: "space-between" as const, gap: 6, paddingVertical: 2 }}>
+            <View style={{ flex: 1, alignItems: "center" as const, justifyContent: "space-between" as const, gap: 6, paddingVertical: Spacing.xxs }}>
             {editingFreq && (
               <View style={[styles.freqEditRow, { paddingHorizontal: 10, paddingVertical: 5 }]}>
                 <TextInput
@@ -1702,7 +1703,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                     <Pressable
                       key={w.type}
                       onPress={() => { hapticFeedback(); setWaveType(w.type); }}
-                      style={[styles.waveBtn, active && { backgroundColor: C.accentDim, borderColor: C.accent }, { paddingHorizontal: 8, paddingVertical: 5 }]}
+                      style={[styles.waveBtn, active && { backgroundColor: C.accentDim, borderColor: C.accent }, { paddingHorizontal: Spacing.sm, paddingVertical: 5 }]}
                     >
                       <MaterialCommunityIcons
                         name={w.icon as any}
@@ -1731,7 +1732,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               style={[styles.tuningGuideToggle, { marginTop: 0, marginBottom: 0 }]}
             >
               <MaterialCommunityIcons name="music-note-outline" size={S.ms(12, 0.4)} color={C.textTertiary} />
-              <Text style={[styles.tuningGuideToggleText, { fontSize: 10 }]}>
+              <Text style={[styles.tuningGuideToggleText, { fontSize: FontSize.micro }]}>
                 {t("signalGenerator", "tuningGuide")}
               </Text>
               <Ionicons name="chevron-forward" size={S.ms(12, 0.4)} color={C.textTertiary} />
@@ -2279,7 +2280,7 @@ function SpectrumGraph({
               }}
             >
               {isLarge ? (
-                <View style={{ alignItems: "center" as const, paddingHorizontal: 4 }}>
+                <View style={{ alignItems: "center" as const, paddingHorizontal: Spacing.xs }}>
                   <Text
                     style={{ fontSize: Math.min(12, diameter * 0.18), color: "#fff", fontFamily: "SpaceGrotesk_700Bold", textAlign: "center" as const }}
                     numberOfLines={1}
@@ -2322,7 +2323,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
     width: "100%",
   },
   title: {
@@ -2388,10 +2389,10 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   knobNoteLabel: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.text,
     opacity: 0.7,
-    marginTop: 2,
+    marginTop: Spacing.xxs,
     lineHeight: 14,
   },
   freqEditRow: {
@@ -2401,14 +2402,14 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     backgroundColor: C.surfaceLight,
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: Spacing.sm,
   },
   freqEditInput: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 20,
     color: C.text,
     borderBottomWidth: 2,
-    paddingVertical: 4,
+    paddingVertical: Spacing.xs,
     minWidth: 100,
     textAlign: "center",
   },
@@ -2442,16 +2443,16 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 2,
+    gap: Spacing.xxs,
     backgroundColor: C.surfaceLight,
     borderRadius: 12,
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 6,
     alignSelf: "center",
   },
   pickerHzHint: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 10,
+    fontSize: FontSize.micro,
     color: C.textTertiary,
     opacity: 0.6,
     marginLeft: 6,
@@ -2469,7 +2470,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 3,
-    paddingVertical: 8,
+    paddingVertical: Spacing.sm,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: C.border,
@@ -2483,7 +2484,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   knobMicContainer: {
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: Spacing.sm,
   },
   knobWrap: {
     alignItems: "center",
@@ -2511,36 +2512,36 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   micDetectedWrap: {
     alignItems: "center",
-    gap: 4,
+    gap: Spacing.xs,
     maxWidth: "100%",
   },
   micDetectedHint: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textTertiary,
     textAlign: "center",
   },
   pitchIndicator: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     borderWidth: 1,
     flexWrap: "wrap",
     justifyContent: "center",
   },
   pitchIndicatorText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 10,
+    fontSize: FontSize.micro,
     color: C.text,
     flexShrink: 1,
   },
   playBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
     paddingHorizontal: 24,
     paddingVertical: 10,
     borderRadius: 12,
@@ -2557,7 +2558,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: C.border,
     marginTop: -8,
@@ -2565,7 +2566,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   tuningGuideToggleText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textTertiary,
   },
 });

@@ -542,7 +542,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   ghost: {
     position: "absolute",
     flexDirection: "row",
-    gap: 2,
+    gap: Spacing.xxs,
     zIndex: 1000,
     opacity: 0.85,
   },
