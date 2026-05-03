@@ -16,6 +16,11 @@ for (const ext of ASSET_EXTS) {
 const STUB_MAP = {
   "react-native": path.join(__dirname, "react-native.js"),
   "expo-haptics": path.join(__dirname, "expo-haptics.js"),
+  "expo-file-system": path.join(__dirname, "expo-file-system.js"),
+  "expo-file-system/legacy": path.join(__dirname, "expo-file-system.js"),
+  "@react-native-async-storage/async-storage": path.join(__dirname, "async-storage.js"),
+  "expo-crypto": path.join(__dirname, "expo-crypto.js"),
+  "expo-location": path.join(__dirname, "expo-location.js"),
 };
 const originalResolve = Module._resolveFilename;
 Module._resolveFilename = function (request, ...rest) {

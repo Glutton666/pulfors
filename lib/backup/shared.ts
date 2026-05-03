@@ -161,8 +161,9 @@ export function sanitizeAudioFilename(raw: string): string {
     .replace(/[^a-zA-Z0-9가-힣._-]/g, "_")
     .replace(/_+/g, "_")
     .replace(/^[._-]+/, "");
-  const ext = clean.includes(".") ? clean.slice(clean.lastIndexOf(".")).toLowerCase() : ".bin";
-  const stem = ext.length < clean.length ? clean.slice(0, clean.lastIndexOf(".")) : clean;
+  const hasDot = clean.includes(".");
+  const ext = hasDot ? clean.slice(clean.lastIndexOf(".")).toLowerCase() : ".bin";
+  const stem = hasDot ? clean.slice(0, clean.lastIndexOf(".")) : clean;
   const safeStem = (stem || "sample").slice(0, 60);
   const suffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   return `${safeStem}_${suffix}${ext}`;

@@ -214,8 +214,8 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
         onLayout={() => measureLayout()}
         accessible
         accessibilityRole="adjustable"
-        accessibilityLabel={`BPM ${bpm}${halfTime ? ", 절반 템포 / half-time" : ""}`}
-        accessibilityHint="좌우로 드래그해 BPM을 조절하세요. 두 번 탭하면 탭 템포가 활성화됩니다. / Drag horizontally to change BPM. Double-tap to use tap tempo."
+        accessibilityLabel={`BPM ${bpm}${halfTime ? `, ${t("a11y", "bpmHalfTime")}` : ""}`}
+        accessibilityHint={t("a11y", "bpmSliderHint")}
         accessibilityValue={{ min: 20, max: 300, now: bpm }}
         {...panResponder.panHandlers}
       >

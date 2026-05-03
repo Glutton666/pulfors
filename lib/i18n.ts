@@ -488,6 +488,8 @@ const translations = {
     landscapeStatsMode: { ko: "통계 모드 선택", en: "Select stats mode" },
     landscapeImagePicker: { ko: "이미지 선택", en: "Pick image" },
     bpmSlider: { ko: "BPM 조절: 좌우 드래그로 변경, 두 번 탭으로 템포 입력", en: "BPM control: drag horizontally to change, double tap for tap tempo" },
+    bpmSliderHint: { ko: "좌우로 드래그해 BPM을 조절하세요. 두 번 탭하면 탭 템포가 활성화됩니다.", en: "Drag horizontally to change BPM. Double-tap to use tap tempo." },
+    bpmHalfTime: { ko: "절반 템포", en: "half-time" },
     playButton: { ko: "재생 또는 일시정지", en: "Play or pause" },
   },
   voice: {

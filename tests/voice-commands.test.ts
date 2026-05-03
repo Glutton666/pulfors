@@ -1,114 +1,112 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-
 import { parseVoiceCommand } from "../lib/voice-commands";
 
-test("재생/정지 한국어 변형", () => {
-  assert.equal(parseVoiceCommand("재생").type, "play");
-  assert.equal(parseVoiceCommand("시작해").type, "play");
-  assert.equal(parseVoiceCommand("플레이").type, "play");
-  assert.equal(parseVoiceCommand("정지").type, "stop");
-  assert.equal(parseVoiceCommand("멈춰").type, "stop");
-  assert.equal(parseVoiceCommand("토글").type, "toggle");
+test("빈 입력 → unknown empty", () => {
+  assert.deepEqual(parseVoiceCommand(""), { type: "unknown", reason: "empty" });
+  assert.deepEqual(parseVoiceCommand("   "), { type: "unknown", reason: "empty" });
 });
 
-test("재생/정지 영어 변형", () => {
-  assert.equal(parseVoiceCommand("play").type, "play");
-  assert.equal(parseVoiceCommand("start").type, "play");
-  assert.equal(parseVoiceCommand("stop").type, "stop");
-  assert.equal(parseVoiceCommand("pause").type, "stop");
-  assert.equal(parseVoiceCommand("toggle").type, "toggle");
+test("strictNickname: 애칭 없으면 noNickname", () => {
+  const r = parseVoiceCommand("재생", { nickname: "메트", strictNickname: true });
+  assert.deepEqual(r, { type: "unknown", reason: "noNickname" });
 });
 
-test("BPM 명시 (한국어/영어)", () => {
-  const a = parseVoiceCommand("120 BPM");
-  assert.equal(a.type, "setBpm");
-  if (a.type === "setBpm") assert.equal(a.bpm, 120);
-
-  const b = parseVoiceCommand("120으로");
-  if (b.type === "setBpm") assert.equal(b.bpm, 120);
-
-  const c = parseVoiceCommand("set 90");
-  if (c.type === "setBpm") assert.equal(c.bpm, 90);
-
-  const d = parseVoiceCommand("tempo 200");
-  if (d.type === "setBpm") assert.equal(d.bpm, 200);
+test("strictNickname: 애칭 포함 시 동작", () => {
+  const r = parseVoiceCommand("메트야 재생", { nickname: "메트", strictNickname: true });
+  assert.deepEqual(r, { type: "play" });
 });
 
-test("BPM 한국어 숫자 (백이십 등)", () => {
-  const a = parseVoiceCommand("백이십");
-  assert.equal(a.type, "setBpm");
-  if (a.type === "setBpm") assert.equal(a.bpm, 120);
-
-  const b = parseVoiceCommand("백");
-  if (b.type === "setBpm") assert.equal(b.bpm, 100);
+test("non-strict: 애칭 없어도 동작", () => {
+  assert.deepEqual(parseVoiceCommand("재생"), { type: "play" });
 });
 
-test("BPM 델타 / 배수", () => {
-  const a = parseVoiceCommand("빠르게");
-  assert.equal(a.type, "bpmDelta");
-  if (a.type === "bpmDelta") assert.equal(a.delta, 5);
-
-  const b = parseVoiceCommand("많이 느리게");
-  if (b.type === "bpmDelta") assert.equal(b.delta, -10);
-
-  const c = parseVoiceCommand("두 배 빠르게");
-  assert.equal(c.type, "bpmMultiplier");
-  if (c.type === "bpmMultiplier") assert.equal(c.factor, 2);
-
-  const d = parseVoiceCommand("half");
-  if (d.type === "bpmMultiplier") assert.equal(d.factor, 0.5);
+test("재생/정지/토글", () => {
+  assert.deepEqual(parseVoiceCommand("시작"), { type: "play" });
+  assert.deepEqual(parseVoiceCommand("플레이"), { type: "play" });
+  assert.deepEqual(parseVoiceCommand("play"), { type: "play" });
+  assert.deepEqual(parseVoiceCommand("정지"), { type: "stop" });
+  assert.deepEqual(parseVoiceCommand("멈춰"), { type: "stop" });
+  assert.deepEqual(parseVoiceCommand("stop"), { type: "stop" });
+  assert.deepEqual(parseVoiceCommand("토글"), { type: "toggle" });
 });
 
-test("박자 설정", () => {
-  const a = parseVoiceCommand("4박자");
-  assert.equal(a.type, "setBeats");
-  if (a.type === "setBeats") assert.equal(a.beats, 4);
-
-  const b = parseVoiceCommand("6 beats");
-  if (b.type === "setBeats") assert.equal(b.beats, 6);
-
-  const c = parseVoiceCommand("4분의 3");
-  if (c.type === "setBeats") assert.equal(c.beats, 3);
+test("초기화 / 도움말", () => {
+  assert.deepEqual(parseVoiceCommand("초기화"), { type: "reset" });
+  assert.deepEqual(parseVoiceCommand("reset"), { type: "reset" });
+  assert.deepEqual(parseVoiceCommand("도움말"), { type: "help" });
+  assert.deepEqual(parseVoiceCommand("help"), { type: "help" });
 });
 
-test("리셋 / 도움말", () => {
-  assert.equal(parseVoiceCommand("초기화").type, "reset");
-  assert.equal(parseVoiceCommand("reset").type, "reset");
-  assert.equal(parseVoiceCommand("도움말").type, "help");
-  assert.equal(parseVoiceCommand("help").type, "help");
+test("박자 한국어: '3박자', '6박', '4분의 3'", () => {
+  assert.deepEqual(parseVoiceCommand("3박자"), { type: "setBeats", beats: 3 });
+  assert.deepEqual(parseVoiceCommand("6박"), { type: "setBeats", beats: 6 });
+  assert.deepEqual(parseVoiceCommand("4분의 3"), { type: "setBeats", beats: 3 });
 });
 
-test("애칭 엄격 모드 — 애칭 미발화 시 unknown", () => {
-  const r1 = parseVoiceCommand("재생", { nickname: "풀포", strictNickname: true });
-  assert.equal(r1.type, "unknown");
-
-  const r2 = parseVoiceCommand("풀포 재생", { nickname: "풀포", strictNickname: true });
-  assert.equal(r2.type, "play");
-
-  const r3 = parseVoiceCommand("풀포야 정지", { nickname: "풀포", strictNickname: true });
-  assert.equal(r3.type, "stop");
-
-  // 비엄격 모드: 애칭 없어도 매칭
-  const r4 = parseVoiceCommand("재생", { nickname: "풀포", strictNickname: false });
-  assert.equal(r4.type, "play");
+test("박자 영어: '6 beats'", () => {
+  assert.deepEqual(parseVoiceCommand("6 beats"), { type: "setBeats", beats: 6 });
 });
 
-test("애칭 + BPM 명령", () => {
-  const r = parseVoiceCommand("Pulpor set 100", { nickname: "pulpor", strictNickname: true });
-  assert.equal(r.type, "setBpm");
-  if (r.type === "setBpm") assert.equal(r.bpm, 100);
+test("박자 범위 밖(0, 17+) → 박자로 매치 안됨", () => {
+  // 17 beats는 setBeats 범위 밖이지만 setBpm 범위(20~300)도 밖이라 결국 unknown 또는 다른 매치
+  const r = parseVoiceCommand("17박자");
+  assert.notEqual(r.type, "setBeats");
 });
 
-test("알 수 없는 발화", () => {
-  assert.equal(parseVoiceCommand("").type, "unknown");
-  assert.equal(parseVoiceCommand("오늘 날씨가 좋다").type, "unknown");
+test("BPM 배수: 두 배 / 절반", () => {
+  assert.deepEqual(parseVoiceCommand("두 배"), { type: "bpmMultiplier", factor: 2 });
+  assert.deepEqual(parseVoiceCommand("double"), { type: "bpmMultiplier", factor: 2 });
+  assert.deepEqual(parseVoiceCommand("절반"), { type: "bpmMultiplier", factor: 0.5 });
+  assert.deepEqual(parseVoiceCommand("half"), { type: "bpmMultiplier", factor: 0.5 });
 });
 
-test("BPM 범위 클램프 (파서 단계에서는 무시)", () => {
-  // 20 미만, 300 초과는 매칭 안 됨 → unknown 또는 다른 매칭
-  const a = parseVoiceCommand("set 5");
-  assert.notEqual(a.type, "setBpm");
-  const b = parseVoiceCommand("set 500");
-  assert.notEqual(b.type, "setBpm");
+test("BPM 델타: 큰 변화 먼저 매치", () => {
+  assert.deepEqual(parseVoiceCommand("훨씬 빠르게"), { type: "bpmDelta", delta: 10 });
+  assert.deepEqual(parseVoiceCommand("much faster"), { type: "bpmDelta", delta: 10 });
+  assert.deepEqual(parseVoiceCommand("훨씬 느리게"), { type: "bpmDelta", delta: -10 });
+  assert.deepEqual(parseVoiceCommand("빠르게"), { type: "bpmDelta", delta: 5 });
+  assert.deepEqual(parseVoiceCommand("느리게"), { type: "bpmDelta", delta: -5 });
+  assert.deepEqual(parseVoiceCommand("speed up"), { type: "bpmDelta", delta: 5 });
+});
+
+test("명시 BPM: 'bpm 120', '120 bpm', '템포 90'", () => {
+  assert.deepEqual(parseVoiceCommand("bpm 120"), { type: "setBpm", bpm: 120 });
+  assert.deepEqual(parseVoiceCommand("120 bpm"), { type: "setBpm", bpm: 120 });
+  assert.deepEqual(parseVoiceCommand("템포 90"), { type: "setBpm", bpm: 90 });
+});
+
+test("명시 BPM: '120으로', 'set to 100'", () => {
+  assert.deepEqual(parseVoiceCommand("120으로"), { type: "setBpm", bpm: 120 });
+  assert.deepEqual(parseVoiceCommand("set to 100"), { type: "setBpm", bpm: 100 });
+});
+
+test("BPM 범위 검증: 20~300만 허용", () => {
+  // 19는 매치 안됨, 0초기화 우선이므로 unknown으로 떨어짐
+  const r1 = parseVoiceCommand("bpm 19");
+  assert.notEqual(r1.type, "setBpm");
+  // 301은 정규식이 \d{2,3}이라 301은 매치되지만 범위 체크에서 탈락
+  const r2 = parseVoiceCommand("bpm 301");
+  assert.notEqual(r2.type, "setBpm");
+  // 20과 300은 허용
+  assert.deepEqual(parseVoiceCommand("bpm 20"), { type: "setBpm", bpm: 20 });
+  assert.deepEqual(parseVoiceCommand("bpm 300"), { type: "setBpm", bpm: 300 });
+});
+
+test("한국어 숫자 발화: '백이십' → 120", () => {
+  assert.deepEqual(parseVoiceCommand("백이십"), { type: "setBpm", bpm: 120 });
+  assert.deepEqual(parseVoiceCommand("이백"), { type: "setBpm", bpm: 200 });
+});
+
+test("영어 워드 숫자: 'one hundred twenty' → 120", () => {
+  assert.deepEqual(parseVoiceCommand("one hundred twenty"), { type: "setBpm", bpm: 120 });
+});
+
+test("벗어난 입력 → unknown noMatch", () => {
+  assert.deepEqual(parseVoiceCommand("바나나 우유"), { type: "unknown", reason: "noMatch" });
+});
+
+test("애칭 + 호격조사 제거 후 매치", () => {
+  assert.deepEqual(parseVoiceCommand("메트야 정지"), { type: "stop" }, );
+  assert.deepEqual(parseVoiceCommand("메트 정지", { nickname: "메트" }), { type: "stop" });
 });
