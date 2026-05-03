@@ -96,15 +96,16 @@ export function StopwatchTimer({
   const [state, setState] = useState<TimerState>("idle");
   const [, setTick] = useState(0);
   const [timerDuration, setTimerDuration] = useState(180);
-  const [remaining, setRemaining] = useState(180);
   const [editingTimer, setEditingTimer] = useState(false);
   const [timerMinInput, setTimerMinInput] = useState("");
   const [timerSecInput, setTimerSecInput] = useState("");
   const [countdownLeft, setCountdownLeft] = useState(0);
+  const [remaining, setRemaining] = useState(180);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(0);
   const elapsedAtPauseRef = useRef(0);
   const startRemainingRef = useRef(180);
+  const countdownEndAtRef = useRef(0);
   const isPlayingRef = useRef(isMetronomePlaying);
   const stateRef = useRef<TimerState>(state);
   const modeRef = useRef<Mode>(mode);
@@ -323,28 +324,36 @@ export function StopwatchTimer({
     }, 33);
   }, [bumpTick]);
 
+  const runCountdown = useCallback(
+    (onComplete: () => void) => {
+      clearCountdownInterval();
+      countdownEndAtRef.current = Date.now() + 3000;
+      setCountdownLeft(3);
+      countdownIntervalRef.current = setInterval(() => {
+        const remainingMs = countdownEndAtRef.current - Date.now();
+        if (remainingMs <= 0) {
+          clearInterval(countdownIntervalRef.current!);
+          countdownIntervalRef.current = null;
+          setCountdownLeft(0);
+          if (!isPlayingRef.current) {
+            onStartMetronome();
+          }
+          onComplete();
+        } else {
+          const left = Math.max(1, Math.ceil(remainingMs / 1000));
+          setCountdownLeft(left);
+        }
+      }, 100);
+    },
+    [clearCountdownInterval, onStartMetronome]
+  );
+
   const startStopwatch = useCallback(() => {
     hapticFeedback();
-    setCountdownLeft(3);
     setState("countdown");
     setOpen(false);
-    clearCountdownInterval();
-    let count = 3;
-    countdownIntervalRef.current = setInterval(() => {
-      count--;
-      if (count <= 0) {
-        clearInterval(countdownIntervalRef.current!);
-        countdownIntervalRef.current = null;
-        setCountdownLeft(0);
-        if (!isPlayingRef.current) {
-          onStartMetronome();
-        }
-        actualStartStopwatch();
-      } else {
-        setCountdownLeft(count);
-      }
-    }, 1000);
-  }, [hapticFeedback, onStartMetronome, clearCountdownInterval, actualStartStopwatch]);
+    runCountdown(actualStartStopwatch);
+  }, [hapticFeedback, runCountdown, actualStartStopwatch]);
 
   const pauseStopwatch = useCallback(() => {
     hapticFeedback();
@@ -409,26 +418,10 @@ export function StopwatchTimer({
 
   const startTimer = useCallback(() => {
     hapticFeedback();
-    setCountdownLeft(3);
     setState("countdown");
     setOpen(false);
-    clearCountdownInterval();
-    let count = 3;
-    countdownIntervalRef.current = setInterval(() => {
-      count--;
-      if (count <= 0) {
-        clearInterval(countdownIntervalRef.current!);
-        countdownIntervalRef.current = null;
-        setCountdownLeft(0);
-        if (!isPlayingRef.current) {
-          onStartMetronome();
-        }
-        actualStartTimer();
-      } else {
-        setCountdownLeft(count);
-      }
-    }, 1000);
-  }, [hapticFeedback, onStartMetronome, clearCountdownInterval, actualStartTimer]);
+    runCountdown(actualStartTimer);
+  }, [hapticFeedback, runCountdown, actualStartTimer]);
 
   const pauseTimer = useCallback(() => {
     hapticFeedback();
@@ -480,8 +473,8 @@ export function StopwatchTimer({
           thermoBreakTop.value = 0;
           thermoBreakBottom.value = 0;
           startRemainingRef.current = timerDuration;
-          setState("idle");
           setRemaining(timerDuration);
+          setState("idle");
         }
       }, animDuration);
       return () => clearTimeout(timeout);
