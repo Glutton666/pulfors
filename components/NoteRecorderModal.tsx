@@ -17,9 +17,9 @@ import {
   useAudioRecorder,
   useAudioPlayer,
   createAudioPlayer,
-  setAudioModeAsync,
   RecordingPresets,
 } from "expo-audio";
+import { acquireAudioSession, releaseAudioSession } from "@/lib/audio-session";
 import * as Haptics from "expo-haptics";
 import * as DocumentPicker from "expo-document-picker";
 import Animated, {
@@ -143,7 +143,7 @@ export function NoteRecorderModal({
     }
     try { previewPlayerRef.current.pause(); } catch {}
     try {
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true, interruptionMode: "mixWithOthers", shouldPlayInBackground: false });
+      await releaseAudioSession("noteRecorderModal");
     } catch {}
   }, []);
 
@@ -194,12 +194,7 @@ export function NoteRecorderModal({
 
   const prepareRecording = useCallback(async () => {
     try {
-      await setAudioModeAsync({
-        allowsRecording: true,
-        playsInSilentMode: true,
-        interruptionMode: "mixWithOthers",
-        shouldPlayInBackground: false,
-      });
+      await acquireAudioSession("noteRecorderModal", "recording");
       await recorderRef.current.prepareToRecordAsync();
     } catch (e) {
       captureBreadcrumb({ category: "noteRecorder", message: "prepareToRecord failed", level: "error", data: { error: String(e) } });
@@ -315,7 +310,7 @@ export function NoteRecorderModal({
       await recorderRef.current.stop();
       recordingActiveRef.current = false;
       const uri = recorderRef.current.uri;
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true, interruptionMode: "mixWithOthers", shouldPlayInBackground: false });
+      await releaseAudioSession("noteRecorderModal");
 
       if (uri) {
         setRecordedUri(uri);

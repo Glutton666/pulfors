@@ -33,6 +33,7 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import { safePlay, notifyAudioPoolFallback, detectPoolCutoffRisk } from "@/lib/audio-utils";
+import { registerMetronomeBridge } from "@/lib/audio-session";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
@@ -2001,6 +2002,18 @@ export default function MetronomeScreen() {
 
   const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
+  useEffect(() => {
+    registerMetronomeBridge({
+      isRunning: () => engineRef.current?.getIsRunning() ?? false,
+      pause: () => {
+        if (engineRef.current?.getIsRunning()) togglePlayPauseRef.current?.();
+      },
+      resume: () => {
+        if (!engineRef.current?.getIsRunning()) togglePlayPauseRef.current?.();
+      },
+    });
+    return () => { registerMetronomeBridge(null); };
+  }, []);
   const updateBpmRef = useRef(updateBpm);
   useEffect(() => { updateBpmRef.current = updateBpm; }, [updateBpm]);
   const bpmRef = useRef(bpm);

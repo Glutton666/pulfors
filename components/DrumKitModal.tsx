@@ -18,11 +18,11 @@ import * as Haptics from "expo-haptics";
 import {
   useAudioPlayer,
   useAudioRecorder,
-  setAudioModeAsync,
   RecordingPresets,
   type AudioPlayer,
   type AudioSource,
 } from "expo-audio";
+import { acquireAudioSession, releaseAudioSession } from "@/lib/audio-session";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
@@ -354,13 +354,13 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
       return;
     }
     try {
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, interruptionMode: "mixWithOthers", shouldPlayInBackground: false });
+      await acquireAudioSession("drumKitRec", "recording");
       await recorderRef.current.prepareToRecordAsync();
       recorderRef.current.record();
       setIsRecordingMic(true);
       setTimeout(async () => {
         try { await recorderRef.current.stop(); } catch {}
-        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true, interruptionMode: "mixWithOthers", shouldPlayInBackground: false });
+        await releaseAudioSession("drumKitRec");
         const uri = recorderRef.current.uri;
         setIsRecordingMic(false);
         if (uri) {

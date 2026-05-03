@@ -29,10 +29,10 @@ import {
   useAudioPlayer,
   useAudioRecorder,
   createAudioPlayer,
-  setAudioModeAsync,
   RecordingPresets,
   type AudioPlayer as ExpoAudioPlayer,
 } from "expo-audio";
+import { acquireAudioSession, releaseAudioSession } from "@/lib/audio-session";
 import * as DocumentPicker from "expo-document-picker";
 import { useScale } from "@/lib/scale";
 import Colors, { accentFromHex, type ThemeColor } from "@/constants/colors";
@@ -779,8 +779,18 @@ export function SettingsModal({
 
   const sampleRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const sampleRecorderRef = useRef(sampleRecorder);
-  useEffect(() => { sampleRecorderRef.current = sampleRecorder; }, [sampleRecorder]);
   const sampleRecordingActiveRef = useRef(false);
+  useEffect(() => { sampleRecorderRef.current = sampleRecorder; }, [sampleRecorder]);
+  useEffect(() => {
+    return () => {
+      // 녹음 중에 모달이 닫히거나 언마운트돼도 오디오 세션과 메트로놈이 회복되도록.
+      if (sampleRecordingActiveRef.current) {
+        sampleRecordingActiveRef.current = false;
+        try { void sampleRecorderRef.current.stop(); } catch {}
+      }
+      void releaseAudioSession("settingsSampleRec");
+    };
+  }, []);
 
   const probeUriDuration = useCallback(async (uri: string): Promise<number> => {
     return new Promise((resolve) => {
@@ -811,12 +821,7 @@ export function SettingsModal({
     if (!ok) return;
     setRecordingSlot(slot);
     try {
-      await setAudioModeAsync({
-        allowsRecording: true,
-        playsInSilentMode: true,
-        interruptionMode: "mixWithOthers",
-        shouldPlayInBackground: false,
-      });
+      await acquireAudioSession("settingsSampleRec", "recording");
       await sampleRecorderRef.current.prepareToRecordAsync();
       sampleRecorderRef.current.record();
       sampleRecordingActiveRef.current = true;
@@ -842,7 +847,7 @@ export function SettingsModal({
       await sampleRecorderRef.current.stop();
       sampleRecordingActiveRef.current = false;
       const uri = sampleRecorderRef.current.uri;
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true, interruptionMode: "mixWithOthers", shouldPlayInBackground: false });
+      await releaseAudioSession("settingsSampleRec");
       if (uri) {
         const rawDur = await probeUriDuration(uri);
         const dur = rawDur > 0 ? Math.min(3.0, Math.round(rawDur * 10) / 10) : 0.5;

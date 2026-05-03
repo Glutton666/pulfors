@@ -18,7 +18,6 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import {
   AudioModule,
-  setAudioModeAsync,
   createAudioPlayer,
   IOSOutputFormat,
   AudioQuality,
@@ -28,6 +27,7 @@ import {
 } from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
 import { safePlay, releaseRecorder } from "@/lib/audio-utils";
+import { acquireAudioSession, releaseAudioSession } from "@/lib/audio-session";
 import { ensurePermission } from "@/lib/permissions";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import Colors from "@/constants/colors";
@@ -787,6 +787,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
         micRecordingRef.current = null;
         void releaseRecorder(rec, "mic.unmount");
       }
+      // 모달이 강제로 닫히거나 언마운트되어도 오디오 세션이 회복되도록 보장.
+      void releaseAudioSession("signalGenMicMobile");
+      void releaseAudioSession("signalGenMicAndroid");
     };
   }, []);
 
@@ -794,6 +797,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const stopMicAndroid = useCallback(() => {
     setMicWebViewActive(false);
     onAndroidMicToggle?.(false);
+    releaseAudioSession("signalGenMicAndroid").catch(() => {});
   }, [onAndroidMicToggle]);
 
   const showMicPermissionAlert = useCallback(() => {
@@ -806,6 +810,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const startMicAndroid = useCallback(async () => {
     const ok = await ensurePermission("mic", t);
     if (!ok) return;
+    await acquireAudioSession("signalGenMicAndroid", "mic");
     micActiveRef.current = true;
     setMicListening(true);
     setMicWebViewActive(true);
@@ -823,7 +828,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       await releaseRecorder(rec, "mic.stop");
     }
     try {
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true, interruptionMode: "mixWithOthers" });
+      await releaseAudioSession("signalGenMicMobile");
     } catch {}
   }, []);
 
@@ -1019,6 +1024,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       setMicListening(false);
       return;
     }
+    await acquireAudioSession("signalGenMicAndroid", "mic");
     micActiveRef.current = true;
     setMicListening(true);
     setMicWebViewActive(true);
@@ -1032,11 +1038,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       const ok = await ensurePermission("mic", t);
       if (!ok) return;
 
-      await setAudioModeAsync({
-        allowsRecording: true,
-        playsInSilentMode: true,
-        interruptionMode: "mixWithOthers",
-      });
+      await acquireAudioSession("signalGenMicMobile", "mic");
 
       micActiveRef.current = true;
       setMicListening(true);
