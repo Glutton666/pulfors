@@ -29,6 +29,7 @@ import Animated, {
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
+import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { moderateScale, SCREEN_WIDTH, IS_TABLET, useScale } from "@/lib/scale";
@@ -1143,13 +1144,13 @@ export function BeatIndicator({
         position: Platform.OS === "web" ? ("fixed" as any) : "absolute",
         left: pillDrag.x - 24,
         top: pillDrag.y - 24,
-        paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
+        paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs, borderRadius: Radius.sm,
         backgroundColor: C.accent + "90",
         alignItems: "center",
         zIndex: 10000,
       }}
     >
-      <Text style={{ color: C.white, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
+      <Text style={{ color: C.white, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_700Bold" }}>
         {loopBlocks[pillDrag.origIndex]?.startBeat !== undefined
           ? `${loopBlocks[pillDrag.origIndex].startBeat + 1}-${Math.min(loopBlocks[pillDrag.origIndex].endBeat + 1, beatsPerMeasure)}`
           : "?"}
@@ -1190,7 +1191,7 @@ export function BeatIndicator({
             styles.barBeatWrapper,
             { height: rowHeight || BAR_HEIGHT },
             isCurrent && styles.barBeatWrapperActive,
-            isPrimary && isDropTarget && { backgroundColor: C.overlay06, borderColor: C.accent, borderWidth: 1, borderRadius: 4, marginHorizontal: -1 },
+            isPrimary && isDropTarget && { backgroundColor: C.overlay06, borderColor: C.accent, borderWidth: 1, borderRadius: Radius.xs, marginHorizontal: -1 },
           ]}
         >
           {(() => {
@@ -1204,9 +1205,9 @@ export function BeatIndicator({
                 {!hideLabel && <Pressable
                   style={[
                     styles.barBeatLabel,
-                    barStartBeat === beat && !isPlaying && { backgroundColor: C.accent + "30", borderRadius: 4 },
-                    blockSelectStart === beat && !isPlaying && { backgroundColor: C.accent + "50", borderRadius: 4 },
-                    blockSelectStart !== null && blockSelectStart !== beat && !isPlaying && { borderColor: C.accent + "40", borderWidth: 1, borderRadius: 4 },
+                    barStartBeat === beat && !isPlaying && { backgroundColor: C.accent + "30", borderRadius: Radius.xs },
+                    blockSelectStart === beat && !isPlaying && { backgroundColor: C.accent + "50", borderRadius: Radius.xs },
+                    blockSelectStart !== null && blockSelectStart !== beat && !isPlaying && { borderColor: C.accent + "40", borderWidth: 1, borderRadius: Radius.xs },
                     leftPad > 0 && { paddingLeft: leftPad },
                   ]}
                   onPressIn={() => { barLongPressedRef.current = false; }}
@@ -1229,7 +1230,7 @@ export function BeatIndicator({
                   ) : blockSelectStart === beat && !isPlaying ? (
                     <Ionicons name="locate" size={S.ms(12, 0.4)} color={C.accent} />
                   ) : isPrimary && blockStarts.length > 0 ? (
-                    <Text style={[styles.barBeatLabelText, { color: C.accent, opacity: 0.9, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" }]}>
+                    <Text style={[styles.barBeatLabelText, { color: C.accent, opacity: 0.9, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_700Bold" }]}>
                       {beat + 1}
                     </Text>
                   ) : isPrimary && blockMid ? (
@@ -1300,9 +1301,9 @@ export function BeatIndicator({
                         locations={[0, 0.4, 1]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
-                        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 4, alignItems: "center", justifyContent: "center" }}
+                        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: Radius.xs, alignItems: "center", justifyContent: "center" }}
                       >
-                        <Text style={{ color: C.white, fontSize: 10, fontWeight: "bold" as const, lineHeight: 12, textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 }}>S</Text>
+                        <Text style={{ color: C.white, fontSize: FontSize.micro, fontWeight: "bold" as const, lineHeight: 12, textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 }}>S</Text>
                       </LinearGradient>
                     </View>
                   ) : type === "mute" ? (
@@ -1432,9 +1433,9 @@ export function BeatIndicator({
               style={[
                 styles.barBeatLabel,
                 {
-                  marginLeft: 2,
+                  marginLeft: Spacing.xxs,
                   backgroundColor: barRepeats[beat] ? C.accent + "20" : "transparent",
-                  borderRadius: 4,
+                  borderRadius: Radius.xs,
                 },
               ]}
             >
@@ -1448,7 +1449,7 @@ export function BeatIndicator({
             </Pressable>
           )}
           {!hideLabel && isPrimary && isPlaying && barRepeats[beat] && progressInfo && progressInfo.beat === beat && progressInfo.barRepeatTotal > 1 && (
-            <View style={[styles.barBeatLabel, { marginLeft: 2, backgroundColor: C.accent + "30", borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }]}>
+            <View style={[styles.barBeatLabel, { marginLeft: Spacing.xxs, backgroundColor: C.accent + "30", borderRadius: Radius.xs, paddingHorizontal: Spacing.xs, paddingVertical: 1 }]}>
               <Text style={{ color: C.accent, fontSize: 8, fontWeight: "800", fontFamily: "SpaceGrotesk_700Bold" }}>
                 {progressInfo.barRepeatCurrent + 1}/{progressInfo.barRepeatTotal}
               </Text>
@@ -1519,21 +1520,21 @@ export function BeatIndicator({
                   style={[{ flex: 1, alignItems: "stretch", justifyContent: "center" as const }, !isLast && { borderRightWidth: 1, borderRightColor: C.overlay06 }]}
                 >
                   {isStrongType ? (
-                    <View style={{ flex: 1, borderRadius: 4, margin: 3, overflow: "hidden", backgroundColor: C.accent, opacity: isActiveCell ? 1 : 0.7 }}>
+                    <View style={{ flex: 1, borderRadius: Radius.xs, margin: 3, overflow: "hidden", backgroundColor: C.accent, opacity: isActiveCell ? 1 : 0.7 }}>
                       <LinearGradient
                         key={C.accent}
                         colors={[C.white, C.accent, C.accent]}
                         locations={[0, 0.4, 1]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
-                        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 4, alignItems: "center", justifyContent: "center" }}
+                        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: Radius.xs, alignItems: "center", justifyContent: "center" }}
                       >
                         <Text style={{ color: C.white, fontSize: 6, fontWeight: "bold" as const }}>S</Text>
                       </LinearGradient>
                     </View>
                   ) : cellType === "mute" ? (
                     <View style={{
-                      flex: 1, borderRadius: 4, margin: 3,
+                      flex: 1, borderRadius: Radius.xs, margin: 3,
                       backgroundColor: C.textTertiary + "22", borderWidth: 1, borderColor: C.textTertiary,
                       opacity: isActiveCell ? 1 : 0.6,
                       alignItems: "center", justifyContent: "center",
@@ -1542,7 +1543,7 @@ export function BeatIndicator({
                     </View>
                   ) : (
                     <View style={{
-                      flex: 1, borderRadius: 4, margin: 3,
+                      flex: 1, borderRadius: Radius.xs, margin: 3,
                       backgroundColor: isAccentType
                         ? (isActiveCell ? C.accent : C.accentMuted)
                         : (isActiveCell ? C.text : C.textTertiary),
@@ -1583,9 +1584,9 @@ export function BeatIndicator({
                   style={[
                     styles.barBeatLabel,
                     { justifyContent: "center" },
-                    barStartBeat === beat && !isPlaying && { backgroundColor: C.accent + "30", borderRadius: 4 },
-                    blockSelectStart === beat && !isPlaying && { backgroundColor: C.accent + "50", borderRadius: 4 },
-                    blockSelectStart !== null && blockSelectStart !== beat && !isPlaying && { borderColor: C.accent + "40", borderWidth: 1, borderRadius: 4 },
+                    barStartBeat === beat && !isPlaying && { backgroundColor: C.accent + "30", borderRadius: Radius.xs },
+                    blockSelectStart === beat && !isPlaying && { backgroundColor: C.accent + "50", borderRadius: Radius.xs },
+                    blockSelectStart !== null && blockSelectStart !== beat && !isPlaying && { borderColor: C.accent + "40", borderWidth: 1, borderRadius: Radius.xs },
                     leftPad > 0 && { paddingLeft: leftPad },
                   ]}
                   onPressIn={() => { barLongPressedRef.current = false; }}
@@ -1606,7 +1607,7 @@ export function BeatIndicator({
                   ) : blockSelectStart === beat && !isPlaying ? (
                     <Ionicons name="locate" size={S.ms(12, 0.4)} color={C.accent} />
                   ) : isPrimary && blockStarts.length > 0 ? (
-                    <Text style={[styles.barBeatLabelText, { color: C.accent, opacity: 0.9, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" }]}>
+                    <Text style={[styles.barBeatLabelText, { color: C.accent, opacity: 0.9, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_700Bold" }]}>
                       {beat + 1}
                     </Text>
                   ) : isPrimary && blockMid ? (
@@ -1636,9 +1637,9 @@ export function BeatIndicator({
                     style={[
                       styles.barBeatLabel,
                       {
-                        marginLeft: 2,
+                        marginLeft: Spacing.xxs,
                         backgroundColor: barRepeats[beat] ? C.accent + "20" : "transparent",
-                        borderRadius: 4,
+                        borderRadius: Radius.xs,
                         justifyContent: "center",
                       },
                     ]}
@@ -1653,7 +1654,7 @@ export function BeatIndicator({
                   </Pressable>
                 )}
                 {isPrimary && isPlaying && barRepeats[beat] && progressInfo && progressInfo.beat === beat && progressInfo.barRepeatTotal > 1 && (
-                  <View style={[styles.barBeatLabel, { marginLeft: 2, backgroundColor: C.accent + "30", borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, justifyContent: "center" }]}>
+                  <View style={[styles.barBeatLabel, { marginLeft: Spacing.xxs, backgroundColor: C.accent + "30", borderRadius: Radius.xs, paddingHorizontal: Spacing.xs, paddingVertical: 1, justifyContent: "center" }]}>
                     <Text style={{ color: C.accent, fontSize: 8, fontWeight: "800", fontFamily: "SpaceGrotesk_700Bold" }}>
                       {progressInfo.barRepeatCurrent + 1}/{progressInfo.barRepeatTotal}
                     </Text>
@@ -1706,7 +1707,7 @@ export function BeatIndicator({
 
           <View style={{ flex: 2 }}>
             {dropTargetBeat === -1 && (
-              <View style={[styles.barTopRowCenter, { paddingTop: 6, paddingBottom: 2 }]}>
+              <View style={[styles.barTopRowCenter, { paddingTop: 6, paddingBottom: Spacing.xxs }]}>
                 <View style={[styles.barModeHandle, { backgroundColor: C.accent }]}>
                   <Ionicons name="layers" size={S.ms(16, 0.4)} color={C.white} />
                 </View>
@@ -1714,7 +1715,7 @@ export function BeatIndicator({
             )}
 
             {blockSelectStart !== null && !isPlaying && (
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 2, gap: 4 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.xxs, gap: Spacing.xs }}>
                 <Ionicons name="locate" size={S.ms(10, 0.4)} color={C.accent} />
                 <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: 9, color: C.accent }}>
                   Bar {blockSelectStart + 1} selected
@@ -1799,7 +1800,7 @@ export function BeatIndicator({
 
           <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 6, paddingVertical: 6 }}>
             {subdivisionBarElement && (
-              <View style={{ width: "125%", paddingHorizontal: 8 }}>
+              <View style={{ width: "125%", paddingHorizontal: Spacing.sm }}>
                 <LoopBlockStripCompact
                   loopBlocks={loopBlocks}
                   editingBlockIndex={editingBlockIndex}
@@ -1831,18 +1832,18 @@ export function BeatIndicator({
                   return (
                     <View style={{
                       backgroundColor: C.backgroundSecondary,
-                      borderRadius: 6,
-                      marginBottom: 4,
+                      borderRadius: Radius.sm,
+                      marginBottom: Spacing.xs,
                       padding: 6,
                       borderWidth: 1,
                       borderColor: C.accent + "30",
                       alignSelf: "center",
                     }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                        <Text style={{ color: C.accent, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.xs }}>
+                        <Text style={{ color: C.accent, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_700Bold" }}>
                           Block {editBlock.startBeat + 1}-{Math.min(editBlock.endBeat + 1, beatsPerMeasure)}
                         </Text>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
                           {loopBlocks.some(b => b.layerOf === editingBlockIndex) && (
                             <Pressable
                               onPress={() => {
@@ -1850,7 +1851,7 @@ export function BeatIndicator({
                                 onLoopBlocksChange(updated);
                               }}
                               hitSlop={8}
-                              style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
+                              style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xxs }}
                             >
                               <Ionicons name="layers-outline" size={S.ms(11, 0.4)} color={C.accent} />
                               <Text style={{ color: C.accent, fontSize: 8, fontFamily: "SpaceGrotesk_600SemiBold" }}>Unlayer</Text>
@@ -1867,7 +1868,7 @@ export function BeatIndicator({
                           </Pressable>
                         </View>
                       </View>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: Spacing.xs }}>
                         <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>Repeat</Text>
                         <Pressable
                           onPress={() => { if (editBlock.value > 1) updateBlock(editingBlockIndex!, { value: editBlock.value - 1 }); }}
@@ -1875,7 +1876,7 @@ export function BeatIndicator({
                         >
                           <Ionicons name="remove" size={S.ms(12, 0.4)} color={C.accent} />
                         </Pressable>
-                        <Text style={{ color: C.text, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold", minWidth: 24, textAlign: "center" }}>
+                        <Text style={{ color: C.text, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_700Bold", minWidth: 24, textAlign: "center" }}>
                           ×{editBlock.value}
                         </Text>
                         <Pressable
@@ -1885,7 +1886,7 @@ export function BeatIndicator({
                           <Ionicons name="add" size={S.ms(12, 0.4)} color={C.accent} />
                         </Pressable>
                       </View>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs, marginBottom: Spacing.xs }}>
                         <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>BPM</Text>
                         <Pressable
                           onPress={() => { if (editBlock.bpm) updateBlock(editingBlockIndex!, { bpm: Math.max(20, editBlock.bpm - 5) }); }}
@@ -1896,9 +1897,9 @@ export function BeatIndicator({
                         {editBlock.bpm ? (
                           <TextInput
                             style={{
-                              color: C.accent, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold",
-                              minWidth: 36, textAlign: "center", paddingHorizontal: 5, paddingVertical: 2,
-                              borderRadius: 4, backgroundColor: C.accent + "20", borderWidth: 1, borderColor: C.accent + "50",
+                              color: C.accent, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_700Bold",
+                              minWidth: 36, textAlign: "center", paddingHorizontal: 5, paddingVertical: Spacing.xxs,
+                              borderRadius: Radius.xs, backgroundColor: C.accent + "20", borderWidth: 1, borderColor: C.accent + "50",
                             }}
                             keyboardType="number-pad"
                             defaultValue={String(editBlock.bpm)}
@@ -1914,11 +1915,11 @@ export function BeatIndicator({
                           <Pressable
                             onPress={() => updateBlock(editingBlockIndex!, { bpm: bpm || 120 })}
                             style={{
-                              paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, minWidth: 36, alignItems: "center",
+                              paddingHorizontal: 5, paddingVertical: Spacing.xxs, borderRadius: Radius.xs, minWidth: 36, alignItems: "center",
                               backgroundColor: "transparent", borderWidth: 1, borderColor: C.accent + "30",
                             }}
                           >
-                            <Text style={{ color: C.textTertiary, fontSize: 10, fontFamily: "SpaceGrotesk_700Bold" }}>—</Text>
+                            <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_700Bold" }}>—</Text>
                           </Pressable>
                         )}
                         <Pressable
@@ -1928,12 +1929,12 @@ export function BeatIndicator({
                           <Ionicons name="add" size={S.ms(12, 0.4)} color={editBlock.bpm ? C.accent : C.textTertiary} />
                         </Pressable>
                       </View>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap", marginBottom: 4 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs, flexWrap: "wrap", marginBottom: Spacing.xs }}>
                         <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>Sound</Text>
                         <Pressable
                           onPress={() => updateBlock(editingBlockIndex!, { soundSet: undefined })}
                           style={{
-                            paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4,
+                            paddingHorizontal: 5, paddingVertical: Spacing.xxs, borderRadius: Radius.xs,
                             backgroundColor: !editBlock.soundSet ? C.accent + "30" : "transparent",
                             borderWidth: 1, borderColor: C.accent + "30",
                           }}
@@ -1945,7 +1946,7 @@ export function BeatIndicator({
                             key={s}
                             onPress={() => updateBlock(editingBlockIndex!, { soundSet: s })}
                             style={{
-                              paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4,
+                              paddingHorizontal: 5, paddingVertical: Spacing.xxs, borderRadius: Radius.xs,
                               backgroundColor: editBlock.soundSet === s ? C.accent + "30" : "transparent",
                               borderWidth: 1, borderColor: editBlock.soundSet === s ? C.accent + "50" : C.accent + "30",
                             }}
@@ -1956,12 +1957,12 @@ export function BeatIndicator({
                           </Pressable>
                         ))}
                       </View>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexWrap: "wrap", marginBottom: editHasJump ? 4 : 0 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs, flexWrap: "wrap", marginBottom: editHasJump ? 4 : 0 }}>
                         <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>Jump</Text>
                         <Pressable
                           onPress={() => { if (editHasJump) updateBlock(editingBlockIndex!, { jumpToBlock: undefined, jumpCount: undefined }); }}
                           style={{
-                            paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4,
+                            paddingHorizontal: 5, paddingVertical: Spacing.xxs, borderRadius: Radius.xs,
                             backgroundColor: !editHasJump ? C.accent + "30" : "transparent",
                             borderWidth: 1, borderColor: C.accent + "30",
                           }}
@@ -1973,7 +1974,7 @@ export function BeatIndicator({
                             key={oi}
                             onPress={() => updateBlock(editingBlockIndex!, { jumpToBlock: oi, jumpCount: editJumpCount || 1 })}
                             style={{
-                              paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4,
+                              paddingHorizontal: 5, paddingVertical: Spacing.xxs, borderRadius: Radius.xs,
                               backgroundColor: editBlock.jumpToBlock === oi ? "#f0ad4e30" : "transparent",
                               borderWidth: 1, borderColor: editBlock.jumpToBlock === oi ? "#f0ad4e50" : C.accent + "30",
                             }}
@@ -1993,7 +1994,7 @@ export function BeatIndicator({
                           >
                             <Ionicons name="remove" size={S.ms(12, 0.4)} color="#f0ad4e" />
                           </Pressable>
-                          <Text style={{ color: C.text, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold", minWidth: 24, textAlign: "center" }}>
+                          <Text style={{ color: C.text, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_700Bold", minWidth: 24, textAlign: "center" }}>
                             ×{editJumpCount}
                           </Text>
                           <Pressable
@@ -2010,7 +2011,7 @@ export function BeatIndicator({
                 {subdivisionBarElement}
               </View>
             )}
-            {tempoLabel ? <Text style={{ color: C.accentMuted, fontSize: S.ms(11, 0.3), textAlign: "center", marginTop: 2 }}>{tempoLabel}</Text> : null}
+            {tempoLabel ? <Text style={{ color: C.accentMuted, fontSize: S.ms(11, 0.3), textAlign: "center", marginTop: Spacing.xxs }}>{tempoLabel}</Text> : null}
             {!subdivisionBarElement && (
               <LoopBlockStripCompact
                 loopBlocks={loopBlocks}
@@ -2035,7 +2036,7 @@ export function BeatIndicator({
               />
             )}
 
-            <View style={{ alignItems: "center", gap: 4 }}>
+            <View style={{ alignItems: "center", gap: Spacing.xs }}>
               <Pressable onPress={handleBarClockTap}>
                 <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? C.danger : C.accent, fontSize: 16 }]}>
                   {barTimeDisplay}
@@ -2100,7 +2101,7 @@ export function BeatIndicator({
               />
             </View>
             {bpmSliderElement && (
-              <View style={{ width: "100%", paddingHorizontal: 4 }}>{bpmSliderElement}</View>
+              <View style={{ width: "100%", paddingHorizontal: Spacing.xs }}>{bpmSliderElement}</View>
             )}
           </View>
 
@@ -2109,16 +2110,16 @@ export function BeatIndicator({
               <Pressable style={StyleSheet.absoluteFill} onPress={() => setBarTimerEditing(false)} />
               <View style={{ alignItems: "center", gap: 10 }}>
                 <View style={{ backgroundColor: C.backgroundSecondary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, gap: 6, minWidth: 200 }}>
-                  <Text style={{ color: C.textSecondary, fontSize: 11, fontWeight: "600" as const, textAlign: "center", marginBottom: 2 }}>Clock Mode</Text>
+                  <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontWeight: "600" as const, textAlign: "center", marginBottom: Spacing.xxs }}>Clock Mode</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.accent }} />
-                    <Text style={{ color: C.text, fontSize: 12 }}>Stopwatch — tap to start/reset</Text>
+                    <View style={{ width: 8, height: 8, borderRadius: Radius.xs, backgroundColor: C.accent }} />
+                    <Text style={{ color: C.text, fontSize: FontSize.small }}>Stopwatch — tap to start/reset</Text>
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.danger }} />
-                    <Text style={{ color: C.text, fontSize: 12 }}>Timer — set time, auto-stop</Text>
+                    <View style={{ width: 8, height: 8, borderRadius: Radius.xs, backgroundColor: C.danger }} />
+                    <Text style={{ color: C.text, fontSize: FontSize.small }}>Timer — set time, auto-stop</Text>
                   </View>
-                  <Text style={{ color: C.textTertiary, fontSize: 10, textAlign: "center", marginTop: 2 }}>Swipe left/right to switch mode</Text>
+                  <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, textAlign: "center", marginTop: Spacing.xxs }}>Swipe left/right to switch mode</Text>
                 </View>
                 <View style={styles.barTimerCard}>
                   <View style={styles.barTimerHeader}>
@@ -2242,9 +2243,9 @@ export function BeatIndicator({
         })()}
 
         {blockSelectStart !== null && !isPlaying && (
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 4, gap: 6 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.xs, gap: 6 }}>
             <Ionicons name="locate" size={S.ms(12, 0.4)} color={C.accent} />
-            <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: 11, color: C.accent }}>
+            <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: FontSize.caption, color: C.accent }}>
               Bar {blockSelectStart + 1} selected — long press same or another bar to create block
             </Text>
             <Pressable onPress={() => setBlockSelectStart(null)} hitSlop={8}>
@@ -2363,7 +2364,7 @@ export function BeatIndicator({
           {subdivisionBarElement && (
             <View style={styles.barSubdivisionSlot}>{subdivisionBarElement}</View>
           )}
-          {tempoLabel ? <Text style={{ color: C.accentMuted, fontSize: S.ms(11, 0.3), textAlign: "center", marginBottom: 2 }}>{tempoLabel}</Text> : null}
+          {tempoLabel ? <Text style={{ color: C.accentMuted, fontSize: S.ms(11, 0.3), textAlign: "center", marginBottom: Spacing.xxs }}>{tempoLabel}</Text> : null}
 
           <View style={styles.barBottomRow}>
             <Pressable
@@ -2402,7 +2403,7 @@ export function BeatIndicator({
                     {barClockMode === "timer" && !isPlaying && <Text style={{ fontSize: 9, color: C.textTertiary }}> &#9202;</Text>}
                   </Text>
                 </Pressable>
-                <Text style={[styles.barInfoText, { color: C.textTertiary, fontSize: 10 }]}>
+                <Text style={[styles.barInfoText, { color: C.textTertiary, fontSize: FontSize.micro }]}>
                   {beatsPerMeasure} bars
                 </Text>
                 <View style={styles.barClockDots}>
@@ -2446,16 +2447,16 @@ export function BeatIndicator({
             <Pressable style={StyleSheet.absoluteFill} onPress={() => setBarTimerEditing(false)} />
             <View style={{ alignItems: "center", gap: 10 }}>
               <View style={{ backgroundColor: C.backgroundSecondary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, gap: 6, minWidth: 200 }}>
-                <Text style={{ color: C.textSecondary, fontSize: 11, fontWeight: "600" as const, textAlign: "center", marginBottom: 2 }}>Clock Mode</Text>
+                <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontWeight: "600" as const, textAlign: "center", marginBottom: Spacing.xxs }}>Clock Mode</Text>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.accent }} />
-                  <Text style={{ color: C.text, fontSize: 12 }}>Stopwatch — tap to start/reset</Text>
+                  <View style={{ width: 8, height: 8, borderRadius: Radius.xs, backgroundColor: C.accent }} />
+                  <Text style={{ color: C.text, fontSize: FontSize.small }}>Stopwatch — tap to start/reset</Text>
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.danger }} />
-                  <Text style={{ color: C.text, fontSize: 12 }}>Timer — set time, auto-stop</Text>
+                  <View style={{ width: 8, height: 8, borderRadius: Radius.xs, backgroundColor: C.danger }} />
+                  <Text style={{ color: C.text, fontSize: FontSize.small }}>Timer — set time, auto-stop</Text>
                 </View>
-                <Text style={{ color: C.textTertiary, fontSize: 10, textAlign: "center", marginTop: 2 }}>Swipe left/right to switch mode</Text>
+                <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, textAlign: "center", marginTop: Spacing.xxs }}>Swipe left/right to switch mode</Text>
               </View>
               <View style={styles.barTimerCard}>
                 <View style={styles.barTimerHeader}>
@@ -2501,7 +2502,7 @@ export function BeatIndicator({
                 </Text>
               </View>
 
-              <View style={{ flexDirection: "row", justifyContent: "center", gap: 8, marginBottom: 14 }}>
+              <View style={{ flexDirection: "row", justifyContent: "center", gap: Spacing.sm, marginBottom: 14 }}>
                 <Pressable
                   onPress={() => setRepeatType("count")}
                   style={{
@@ -2566,7 +2567,7 @@ export function BeatIndicator({
                   </Pressable>
                 </View>
               ) : (
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 16 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm, marginBottom: 16 }}>
                   <Pressable
                     onPress={() => {
                       const total = Math.max(0, repeatMinVal * 60 + repeatSecVal - 10);
@@ -2593,7 +2594,7 @@ export function BeatIndicator({
                       <Text style={{ color: C.text, fontSize: 20, fontWeight: "700" }}>{repeatMinVal}</Text>
                     </Pressable>
                   )}
-                  <Text style={{ color: C.textTertiary, fontSize: 12 }}>m</Text>
+                  <Text style={{ color: C.textTertiary, fontSize: FontSize.small }}>m</Text>
                   {repeatSecEditing ? (
                     <TextInput
                       style={{ color: C.text, fontSize: 20, fontWeight: "700", textAlign: "center", width: 30, borderBottomWidth: 1, borderBottomColor: C.accent, padding: 0 }}
@@ -2610,7 +2611,7 @@ export function BeatIndicator({
                       <Text style={{ color: C.text, fontSize: 20, fontWeight: "700" }}>{String(repeatSecVal).padStart(2, "0")}</Text>
                     </Pressable>
                   )}
-                  <Text style={{ color: C.textTertiary, fontSize: 12 }}>s</Text>
+                  <Text style={{ color: C.textTertiary, fontSize: FontSize.small }}>s</Text>
                   <Pressable
                     onPress={() => {
                       const total = repeatMinVal * 60 + repeatSecVal + 10;
@@ -2625,9 +2626,9 @@ export function BeatIndicator({
               )}
 
               <View style={{ marginBottom: 14 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 4 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm, marginBottom: Spacing.xs }}>
                   <Ionicons name="speedometer-outline" size={S.ms(14, 0.4)} color={C.textSecondary} />
-                  <Text style={{ color: C.textSecondary, fontSize: 12, fontWeight: "600" }}>BPM Override</Text>
+                  <Text style={{ color: C.textSecondary, fontSize: FontSize.small, fontWeight: "600" }}>BPM Override</Text>
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}>
                   <Pressable
@@ -2685,9 +2686,9 @@ export function BeatIndicator({
                   {repeatBpmOverride !== null && (
                     <Pressable
                       onPress={() => setRepeatBpmOverride(null)}
-                      style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, backgroundColor: C.overlay08 }}
+                      style={{ paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs, borderRadius: 10, backgroundColor: C.overlay08 }}
                     >
-                      <Text style={{ color: C.textTertiary, fontSize: 11 }}>Reset</Text>
+                      <Text style={{ color: C.textTertiary, fontSize: FontSize.caption }}>Reset</Text>
                     </Pressable>
                   )}
                 </View>
@@ -2696,13 +2697,13 @@ export function BeatIndicator({
               <View style={{ flexDirection: "row", gap: 10, justifyContent: "center" }}>
                 <Pressable
                   onPress={clearRepeat}
-                  style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, backgroundColor: C.overlay08 }}
+                  style={{ paddingHorizontal: 16, paddingVertical: Spacing.sm, borderRadius: 16, backgroundColor: C.overlay08 }}
                 >
                   <Text style={{ color: C.textSecondary, fontSize: 13, fontWeight: "600" }}>Clear</Text>
                 </Pressable>
                 <Pressable
                   onPress={saveRepeat}
-                  style={{ paddingHorizontal: 20, paddingVertical: 8, borderRadius: 16, backgroundColor: C.accent }}
+                  style={{ paddingHorizontal: 20, paddingVertical: Spacing.sm, borderRadius: 16, backgroundColor: C.accent }}
                 >
                   <Text style={{ color: C.white, fontSize: 13, fontWeight: "700" }}>Save</Text>
                 </Pressable>
@@ -2837,7 +2838,7 @@ export function BeatIndicator({
       <>
         <View style={[styles.touchArea, { flexDirection: "row" as const, gap: 12 }]} testID="beat-indicator-swipe" {...nativePanHandlers}>
           {dialContent}
-          <View style={{ flexDirection: "column" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: 8 }}>
+          <View style={{ flexDirection: "column" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: Spacing.sm }}>
             <Pressable
               onPress={() => onBarModeChange(true)}
               style={styles.landscapeModeBtn}
