@@ -380,6 +380,11 @@ export class MetronomeEngine {
   private scheduleIndex = 0;
   private measureStartTime = 0;
   private measureDurationMs = 0;
+  private measureCount = 0;
+  private anchorWallTime = 0;
+  private anchorMeasureCount = 0;
+  private anchorMeasureDurationMs = 0;
+  private pendingOffsetTimers: Set<ReturnType<typeof setTimeout>> = new Set();
 
   private static readonly SCHEDULE_CACHE_MAX = 16;
   private scheduleCache: Map<string, { ticks: ScheduledTick[]; durationMs: number }> = new Map();
@@ -1138,9 +1143,23 @@ export class MetronomeEngine {
       }
     }
 
+    // 마디 중간에 schedule이 재구성됐으니 anchor를 현재 measureStartTime/durationMs에
+    // 다시 고정한다. 새 길이가 바뀌었어도 이후 마디 진행은 안정적인 절대 기준으로 누적된다.
+    this.anchorWallTime = this.measureStartTime;
+    this.anchorMeasureCount = this.measureCount;
+    this.anchorMeasureDurationMs = this.measureDurationMs;
+
     if (this.preRenderedAudio) {
-      this.preRenderedAudio = false;
-      this.onScheduleRebuild?.();
+      // takeover 핸드셰이크: 외부 콜백이 등록되어 있다면 콜백이 책임지고 player를
+      // 정리하고 명시적으로 setPreRenderedAudio(false)를 호출해야 한다. 그 사이에는
+      // preRenderedAudio가 true로 유지되어 fireTick의 실시간 발화가 short-circuit된다.
+      // (동기 콜백이라 보통은 즉시 false로 떨어지지만, 비동기 정리 중에도 이중 발화가
+      //  나지 않도록 자동 false 전환을 제거했다.)
+      if (this.onScheduleRebuild) {
+        this.onScheduleRebuild();
+      } else {
+        this.preRenderedAudio = false;
+      }
     }
   }
 
@@ -1246,14 +1265,63 @@ export class MetronomeEngine {
       this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat);
       const li = tick.layerIndex;
       const bi = tick.blockIndex;
-      setTimeout(() => this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, li, bi), offset);
+      this.scheduleOffsetCallback(
+        () => this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, li, bi),
+        offset,
+      );
     } else if (offset < 0) {
       this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, tick.layerIndex, tick.blockIndex);
-      setTimeout(() => this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat), Math.abs(offset));
+      this.scheduleOffsetCallback(
+        () => this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat),
+        Math.abs(offset),
+      );
     } else {
       this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, tick.layerIndex, tick.blockIndex);
       this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat);
     }
+  }
+
+  private scheduleOffsetCallback(fn: () => void, delay: number) {
+    let id: ReturnType<typeof setTimeout>;
+    id = setTimeout(() => {
+      this.pendingOffsetTimers.delete(id);
+      if (!this.isRunning) return;
+      fn();
+    }, delay);
+    this.pendingOffsetTimers.add(id);
+  }
+
+  private clearPendingOffsetTimers() {
+    for (const id of this.pendingOffsetTimers) {
+      clearTimeout(id);
+    }
+    this.pendingOffsetTimers.clear();
+  }
+
+  private rolloverToNextMeasure() {
+    this.onMeasureComplete?.();
+    this.measureCount += 1;
+    this.measureStartTime =
+      this.anchorWallTime +
+      (this.measureCount - this.anchorMeasureCount) * this.anchorMeasureDurationMs;
+    if (this.scheduleDirty || !this.cachedSchedule || this.blockPlayMode === "random") {
+      this.schedule = this.buildScheduleMemoized();
+      if (this.blockPlayMode !== "random") {
+        this.cachedSchedule = this.schedule;
+        this.cachedMeasureDurationMs = this.measureDurationMs;
+      }
+      this.scheduleDirty = false;
+    } else {
+      this.schedule = this.cachedSchedule;
+      this.measureDurationMs = this.cachedMeasureDurationMs;
+    }
+    // 마디 길이가 바뀌면 anchor를 새 길이의 시작점으로 다시 고정한다.
+    if (this.measureDurationMs !== this.anchorMeasureDurationMs) {
+      this.anchorWallTime = this.measureStartTime;
+      this.anchorMeasureCount = this.measureCount;
+      this.anchorMeasureDurationMs = this.measureDurationMs;
+    }
+    this.scheduleIndex = 0;
   }
 
   private getElapsed(): number {
@@ -1295,20 +1363,7 @@ export class MetronomeEngine {
           this.onMeasureComplete?.();
           return;
         }
-        this.onMeasureComplete?.();
-        this.measureStartTime += this.measureDurationMs;
-        if (this.scheduleDirty || !this.cachedSchedule || this.blockPlayMode === "random") {
-          this.schedule = this.buildScheduleMemoized();
-          if (this.blockPlayMode !== "random") {
-            this.cachedSchedule = this.schedule;
-            this.cachedMeasureDurationMs = this.measureDurationMs;
-          }
-          this.scheduleDirty = false;
-        } else {
-          this.schedule = this.cachedSchedule;
-          this.measureDurationMs = this.cachedMeasureDurationMs;
-        }
-        this.scheduleIndex = 0;
+        this.rolloverToNextMeasure();
         break;
       }
     }
@@ -1419,6 +1474,13 @@ export class MetronomeEngine {
       this.scheduleIndex = 0;
       this.measureStartTime = performance.now();
     }
+    // 절대 기준선 anchor 초기화. 이후 매 마디 시작 시각은
+    // anchorWallTime + (measureCount - anchorMeasureCount) * anchorMeasureDurationMs
+    // 로 재계산되어 누적 부동소수점 drift가 발생하지 않는다.
+    this.measureCount = 0;
+    this.anchorWallTime = this.measureStartTime;
+    this.anchorMeasureCount = 0;
+    this.anchorMeasureDurationMs = this.measureDurationMs;
     this.loop();
   }
 
@@ -1430,6 +1492,7 @@ export class MetronomeEngine {
       this.timerId = null;
     }
     this.cancelRAF();
+    this.clearPendingOffsetTimers();
     this.pendingMeasureStartAction = null;
     this.currentBeat = 0;
     this.currentSubBeat = 0;
@@ -1444,6 +1507,10 @@ export class MetronomeEngine {
         ? this.schedule[this.scheduleIndex].time
         : 0;
     this.measureStartTime = performance.now() - currentTickTime;
+    // resync 후에는 anchor를 현재 마디 시작 시각으로 다시 고정한다.
+    this.anchorWallTime = this.measureStartTime;
+    this.anchorMeasureCount = this.measureCount;
+    this.anchorMeasureDurationMs = this.measureDurationMs;
   }
 
   cleanup() {

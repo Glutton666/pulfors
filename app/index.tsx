@@ -1435,6 +1435,8 @@ export default function MetronomeScreen() {
         webRenderedLoopRef.current = null;
       }
       engine.setPendingMeasureStartAction(null);
+      // takeover 핸드셰이크: 사전 렌더 audio가 정리됐으니 실시간 발화 short-circuit을 해제한다.
+      engine.setPreRenderedAudio(false);
     });
 
     // unmount 시 보류 중인 frame을 취소하고 엔진 콜백을 분리한다.
