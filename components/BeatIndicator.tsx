@@ -37,6 +37,7 @@ import { make_styles } from "./BeatIndicator.styles";
 import { DialBeatDot } from "./DialBeatDot";
 import { BlockPill } from "./BlockPill";
 import { BarPlayButton } from "./BarPlayButton";
+import { BeatStepperButton } from "./BeatStepperButton";
 
 export type { BeatType, BarRepeat, LoopBlock } from "./beat-indicator.types";
 import type { BeatType } from "./beat-indicator.types";
@@ -2111,14 +2112,15 @@ export function BeatIndicator({
               >
                 <Ionicons name={saveFlashVisible ? "checkmark-circle" : "bookmark-outline"} size={S.ms(16, 0.4)} color={saveFlashVisible ? "#4CAF50" : C.accent} />
               </Pressable>
-              <Pressable
+              <BeatStepperButton
+                direction="minus"
                 onPress={handleBeatsDecrement}
-                style={[styles.barTimeSigBtn, beatsPerMeasure <= MIN_BEATS && { opacity: 0.3 }]}
-                hitSlop={8}
+                disabled={beatsPerMeasure <= MIN_BEATS}
+                iconSize={S.ms(14, 0.4)}
+                iconColor={C.textSecondary}
+                baseStyle={styles.barTimeSigBtn}
                 testID="bar-beats-minus"
-              >
-                <Ionicons name="remove" size={S.ms(14, 0.4)} color={C.textSecondary} />
-              </Pressable>
+              />
               <BarPlayButton
                 isPlaying={isPlaying}
                 isPreparing={isPreparing}
@@ -2133,14 +2135,15 @@ export function BeatIndicator({
                 badgeIconSize={S.ms(9, 0.4)}
                 sizeOverride={{ width: S.ms(40, 0.5), height: S.ms(40, 0.5), borderRadius: S.ms(20, 0.5) }}
               />
-              <Pressable
+              <BeatStepperButton
+                direction="plus"
                 onPress={handleBeatsIncrement}
-                style={[styles.barTimeSigBtn, beatsPerMeasure >= MAX_BEATS && { opacity: 0.3 }]}
-                hitSlop={8}
+                disabled={beatsPerMeasure >= MAX_BEATS}
+                iconSize={S.ms(14, 0.4)}
+                iconColor={C.textSecondary}
+                baseStyle={styles.barTimeSigBtn}
                 testID="bar-beats-plus"
-              >
-                <Ionicons name="add" size={S.ms(14, 0.4)} color={C.textSecondary} />
-              </Pressable>
+              />
             </View>
             {bpmSliderElement && (
               <View style={{ width: "100%", paddingHorizontal: 4 }}>{bpmSliderElement}</View>
@@ -2671,14 +2674,15 @@ export function BeatIndicator({
               />
             </Pressable>
             <View style={styles.barTimeSigRow}>
-              <Pressable
+              <BeatStepperButton
+                direction="minus"
                 onPress={handleBeatsDecrement}
-                style={[styles.barTimeSigBtn, beatsPerMeasure <= MIN_BEATS && { opacity: 0.3 }]}
-                hitSlop={8}
+                disabled={beatsPerMeasure <= MIN_BEATS}
+                iconSize={S.ms(16, 0.4)}
+                iconColor={C.textSecondary}
+                baseStyle={styles.barTimeSigBtn}
                 testID="bar-beats-minus-landscape"
-              >
-                <Ionicons name="remove" size={S.ms(16, 0.4)} color={C.textSecondary} />
-              </Pressable>
+              />
               <View style={styles.barInfoCol} {...barClockSwipePan.panHandlers}>
                 <Pressable onPress={handleBarClockTap}>
                   <Text style={[styles.barInfoText, { color: barClockMode === "timer" ? C.danger : C.accent }]}>
@@ -2694,14 +2698,15 @@ export function BeatIndicator({
                   <View style={[styles.barClockDot, barClockMode === "timer" && { backgroundColor: C.danger }]} />
                 </View>
               </View>
-              <Pressable
+              <BeatStepperButton
+                direction="plus"
                 onPress={handleBeatsIncrement}
-                style={[styles.barTimeSigBtn, beatsPerMeasure >= MAX_BEATS && { opacity: 0.3 }]}
-                hitSlop={8}
+                disabled={beatsPerMeasure >= MAX_BEATS}
+                iconSize={S.ms(16, 0.4)}
+                iconColor={C.textSecondary}
+                baseStyle={styles.barTimeSigBtn}
                 testID="bar-beats-plus-landscape"
-              >
-                <Ionicons name="add" size={S.ms(16, 0.4)} color={C.textSecondary} />
-              </Pressable>
+              />
             </View>
             <BarPlayButton
               isPlaying={isPlaying}
