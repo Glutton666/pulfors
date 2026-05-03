@@ -68,7 +68,7 @@ import PracticeStatsGraph from "@/components/PracticeStatsGraph";
 import { VoiceAssistantButton } from "@/components/VoiceAssistantButton";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { make_styles } from "./index.styles";
-import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, adjustShuffledIndicesOnInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig } from "./index.helpers";
+import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, adjustShuffledIndicesOnInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore } from "./index.helpers";
 import { useAudioPlayers } from "@/hooks/useAudioPlayers";
 import { useNoteSamples } from "@/hooks/useNoteSamples";
 import { useBarConfig, useDialConfig } from "@/hooks/useBarDialConfig";
@@ -3091,18 +3091,7 @@ export default function MetronomeScreen() {
       preloadNoteSampleSounds(entrySamples);
     }
 
-    engine.setBpm(entry.bpm);
-    engine.setBeatsPerMeasure(entry.beatsPerMeasure);
-    engine.setBeatTypes([...entry.beatTypes]);
-    engine.setAllBeatSubdivisions(entry.beatSubdivisions);
-    engine.setLoopBlocks(entryBlocks);
-    engine.setBlockPlayMode((entry as any).blockPlayMode || "loop");
-    engine.setAllBarRepeats(entry.barRepeats || {});
-    const bpmOverrides: Record<number, number> = {};
-    for (const [k, v] of Object.entries(entry.barRepeats || {})) {
-      if ((v as any).bpm) bpmOverrides[Number(k)] = (v as any).bpm;
-    }
-    engine.setAllBarBpmOverrides(bpmOverrides);
+    applyEntryToEngineCore(engine, entry);
 
     barConfigRef.current = entryToBarConfig(entry);
 
@@ -3169,18 +3158,7 @@ export default function MetronomeScreen() {
     setNoteSampleChannels({ ...(entry.noteSampleChannels || {}) });
     noteSampleChannelsRef.current = { ...(entry.noteSampleChannels || {}) };
 
-    engine.setBpm(entry.bpm);
-    engine.setBeatsPerMeasure(entry.beatsPerMeasure);
-    engine.setBeatTypes([...entry.beatTypes]);
-    engine.setAllBeatSubdivisions(entry.beatSubdivisions);
-    engine.setLoopBlocks(entryBlocks);
-    engine.setBlockPlayMode((entry as any).blockPlayMode || "loop");
-    engine.setAllBarRepeats(entry.barRepeats || {});
-    const bpmOverrides: Record<number, number> = {};
-    for (const [k, v] of Object.entries(entry.barRepeats || {})) {
-      if ((v as any).bpm) bpmOverrides[Number(k)] = (v as any).bpm;
-    }
-    engine.setAllBarBpmOverrides(bpmOverrides);
+    applyEntryToEngineCore(engine, entry);
     engine.buildScheduleOnly();
 
     resetPlaybackVisuals();

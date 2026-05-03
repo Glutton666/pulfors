@@ -314,6 +314,46 @@ export function entryToBarConfig(entry: PracticeEntry): BarConfig {
   };
 }
 
+/**
+ * 엔진 setter 시퀀스 추출. 라이브 컴포넌트(`applyEntryToEngine`,
+ * `noteStartPlayingEntry`)에서 똑같이 호출되던 8단 setter 호출을 한 곳에 모아
+ * - 호출 순서가 바뀔 일이 없게 단일 source로 만들고
+ * - fake 엔진 spy로 단위 테스트가 가능하도록 한다.
+ *
+ * 인자 `engine`은 `MetronomeEngine`의 사용 메서드만 추린 부분 인터페이스라
+ * 테스트에서 spy 객체로 그대로 주입할 수 있다.
+ *
+ * 호출 순서·인자가 바뀌면 사용자가 연습 항목을 불러올 때 마지막에 적용된 값이
+ * 이전 값을 덮어써서 화면과 실제 재생이 어긋나는 사고가 가능하므로, 이 헬퍼를
+ * 단일 진입점으로 유지한다.
+ */
+export interface EntryEngineSetters {
+  setBpm(bpm: number): void;
+  setBeatsPerMeasure(beats: number): void;
+  setBeatTypes(types: BeatType[]): void;
+  setAllBeatSubdivisions(subs: Record<string, BeatType[]>): void;
+  setLoopBlocks(blocks: LoopBlock[]): void;
+  setBlockPlayMode(mode: BlockPlayMode): void;
+  setAllBarRepeats(repeats: Record<number, BarRepeat>): void;
+  setAllBarBpmOverrides(overrides: Record<number, number>): void;
+}
+
+export function applyEntryToEngine(engine: EntryEngineSetters, entry: PracticeEntry): void {
+  const blocks = entry.loopBlocks ?? [];
+  engine.setBpm(entry.bpm);
+  engine.setBeatsPerMeasure(entry.beatsPerMeasure);
+  engine.setBeatTypes([...entry.beatTypes]);
+  engine.setAllBeatSubdivisions({ ...entry.beatSubdivisions });
+  engine.setLoopBlocks([...blocks] as LoopBlock[]);
+  engine.setBlockPlayMode(entry.blockPlayMode || "loop");
+  engine.setAllBarRepeats({ ...(entry.barRepeats || {}) } as Record<number, BarRepeat>);
+  const bpmOverrides: Record<number, number> = {};
+  for (const [k, v] of Object.entries(entry.barRepeats || {})) {
+    if (typeof v.bpm === "number") bpmOverrides[Number(k)] = v.bpm;
+  }
+  engine.setAllBarBpmOverrides(bpmOverrides);
+}
+
 export function createInitialBarConfig(beats = 4): BarConfig {
   return {
     beatsPerMeasure: beats,
