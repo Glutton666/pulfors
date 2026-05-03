@@ -13,7 +13,7 @@ import {
   AppState,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { ensurePermission } from "@/lib/permissions";
+import { ensurePermission, tryRecoverPermissionActions, hasAnyPendingPermissionAction } from "@/lib/permissions";
 import * as Linking from "expo-linking";
 import {
   setupNotificationControls,
@@ -336,6 +336,48 @@ export default function MetronomeScreen() {
       }
     });
     return () => sub.remove();
+  }, []);
+
+  const [permissionRecoveryToast, setPermissionRecoveryToast] = useState<string | null>(null);
+  const recoveryToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showRecoveryToast = useCallback((msg: string) => {
+    if (recoveryToastTimerRef.current) clearTimeout(recoveryToastTimerRef.current);
+    setPermissionRecoveryToast(msg);
+    recoveryToastTimerRef.current = setTimeout(() => setPermissionRecoveryToast(null), 2500);
+  }, []);
+
+  useEffect(() => {
+    const runRecovery = async () => {
+      if (!hasAnyPendingPermissionAction()) return;
+      const events = await tryRecoverPermissionActions();
+      for (const ev of events) {
+        if (ev.status !== "recovered") continue;
+        const key = ev.kind === "mic" ? "recoveredMic" : "recoveredPhoto";
+        showRecoveryToast(t("permissions", key));
+      }
+    };
+    if (Platform.OS === "web") {
+      const onVis = () => {
+        if (typeof document !== "undefined" && document.visibilityState === "visible") {
+          void runRecovery();
+        }
+      };
+      if (typeof document !== "undefined") {
+        document.addEventListener("visibilitychange", onVis);
+        return () => document.removeEventListener("visibilitychange", onVis);
+      }
+      return;
+    }
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") void runRecovery();
+    });
+    return () => sub.remove();
+  }, [t, showRecoveryToast]);
+
+  useEffect(() => {
+    return () => {
+      if (recoveryToastTimerRef.current) clearTimeout(recoveryToastTimerRef.current);
+    };
   }, []);
 
   const [noteSamples, setNoteSamples] = useState<NoteSampleMap>({});
@@ -3789,9 +3831,12 @@ export default function MetronomeScreen() {
 
   const tempoLabel = getTempoLabelI18n(bpm, language);
 
+  const pickLandscapeImageRef = useRef<() => Promise<void>>(async () => {});
   const pickLandscapeImage = useCallback(async () => {
     try {
-      const ok = await ensurePermission("photo", t);
+      const ok = await ensurePermission("photo", t, {
+        pendingAction: () => { void pickLandscapeImageRef.current(); },
+      });
       if (!ok) {
         setLandscapeImageModalVisible(false);
         return;
@@ -3812,6 +3857,8 @@ export default function MetronomeScreen() {
       setLandscapeImageModalVisible(false);
     }
   }, [t]);
+
+  useEffect(() => { pickLandscapeImageRef.current = pickLandscapeImage; }, [pickLandscapeImage]);
 
   const removeLandscapeImage = useCallback(() => {
     setLandscapeImageUri(null);
@@ -3856,6 +3903,29 @@ export default function MetronomeScreen() {
   return (
     <View style={styles.screen}>
       <StatusBar style={themeMode === "day" ? "dark" : "light"} />
+      {permissionRecoveryToast ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: insets.top + 12,
+            left: 16,
+            right: 16,
+            zIndex: 9999,
+            backgroundColor: C.surface,
+            borderRadius: 12,
+            paddingVertical: 10,
+            paddingHorizontal: 14,
+            borderWidth: 1,
+            borderColor: C.border,
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ color: C.text, fontSize: 14, fontWeight: "500" as const }}>
+            {permissionRecoveryToast}
+          </Text>
+        </View>
+      ) : null}
       <LinearGradient
         colors={themeMode === "day" ? [C.background, C.background] : [C.background, "#0A0E14", C.background]}
         style={StyleSheet.absoluteFill}

@@ -194,8 +194,11 @@ export function NoteRecorderModal({
     }
   }, []);
 
+  const startCountdownRef = useRef<() => Promise<void>>(async () => {});
   const startCountdown = useCallback(async () => {
-    const ok = await ensurePermission("mic", t);
+    const ok = await ensurePermission("mic", t, {
+      pendingAction: () => { void startCountdownRef.current(); },
+    });
     if (!ok) return;
 
     sourceTypeRef.current = "recording";
@@ -231,7 +234,8 @@ export function NoteRecorderModal({
     };
 
     countdownTimerRef.current = setTimeout(doTick, interval);
-  }, [bpm, playClick, prepareRecording]);
+  }, [bpm, playClick, prepareRecording, t]);
+  useEffect(() => { startCountdownRef.current = startCountdown; }, [startCountdown]);
 
   const startRecording = useCallback(async () => {
     try {

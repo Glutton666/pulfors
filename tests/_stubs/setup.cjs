@@ -4,6 +4,9 @@
 const Module = require("module");
 const path = require("path");
 
+// React Native 글로벌 __DEV__ 폴리필 (expo-modules-core 등이 참조)
+if (typeof globalThis.__DEV__ === "undefined") globalThis.__DEV__ = true;
+
 const ASSET_EXTS = [".wav", ".mp3", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ttf", ".otf"];
 for (const ext of ASSET_EXTS) {
   Module._extensions[ext] = function (module) {
@@ -21,6 +24,8 @@ const STUB_MAP = {
   "@react-native-async-storage/async-storage": path.join(__dirname, "async-storage.js"),
   "expo-crypto": path.join(__dirname, "expo-crypto.js"),
   "expo-location": path.join(__dirname, "expo-location.js"),
+  "expo-image-picker": path.join(__dirname, "expo-image-picker.js"),
+  "expo-audio": path.join(__dirname, "expo-audio.js"),
 };
 const originalResolve = Module._resolveFilename;
 Module._resolveFilename = function (request, ...rest) {

@@ -34,6 +34,7 @@ Preferred communication style: Simple, everyday language.
 - **Internationalization**: Full Korean/English i18n support via `LanguageContext` and `lib/i18n.ts`. All UI strings across menus, modals, and components use `t("section", "key")` translation calls.
   - **i18n 검증 (3단계)**: (1) `translations` 객체에 `satisfies Record<string, Record<string, { ko: string; en: string }>>`가 적용되어 한 언어만 추가하면 컴파일 에러. (2) `tests/i18n-completeness.test.ts`가 모든 leaf의 ko/en 비어있지 않음을 확인. (3) `npx tsx scripts/check-i18n-keys.ts`가 코드에서 호출하는 정적 `t("ns","key")`가 모두 정의돼 있는지 검사하고, 누락 시 exit 1. 런타임에는 `createT`가 dev 모드에서 누락 키를 `console.warn` + Sentry breadcrumb으로 보고한다.
 - **Note Recorder**: Recording countdown uses BPM-synced 4-beat count-in with metronome click sounds. Click sounds continue during recording so users can record in time with the beat.
+- **권한 거부 자동 회복**: `lib/permissions.ts`의 `ensurePermission`은 `pendingAction` 옵션을 받아 사용자가 OS 설정에서 권한을 켜고 앱으로 복귀했을 때 직전 시도(녹음 시작·사진 선택 등)를 자동으로 이어서 실행한다. 회복 트리거는 `app/index.tsx`의 AppState `active`(또는 web `visibilitychange`) 리스너에서 `tryRecoverPermissionActions()`를 호출하며, 짧은 토스트로 결과를 알린다. 두 번 연속 거부 또는 5분 TTL 초과 시 pending이 자동 정리된다.
 - **Mode Switching**: Preserves distinct configurations for "Beat Mode" and "Bar Mode" using separate configuration refs, ensuring seamless transitions while maintaining user settings.
 - **Gesture Handling**: `SubdivisionBar` uses platform-specific gestures (PanResponder for native, pointer events for web) for cell manipulation, reordering, and shake-to-reset.
 

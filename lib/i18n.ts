@@ -413,6 +413,8 @@ export const translations = {
     micDeniedOpenSettings: { ko: "마이크 권한이 거부되어 있습니다. 설정에서 권한을 활성화해 주세요.", en: "Microphone permission is denied. Enable it in Settings to continue." },
     photoDenied: { ko: "사진을 선택하려면 사진 권한이 필요합니다.", en: "Photo access is needed to pick an image." },
     photoDeniedOpenSettings: { ko: "사진 권한이 거부되어 있습니다. 설정에서 권한을 활성화해 주세요.", en: "Photo permission is denied. Enable it in Settings to continue." },
+    recoveredMic: { ko: "마이크 권한이 활성화되어 다시 시도합니다", en: "Microphone permission granted — retrying" },
+    recoveredPhoto: { ko: "사진 권한이 활성화되어 다시 시도합니다", en: "Photo permission granted — retrying" },
   },
   notification: {
     playing: { ko: "재생 중", en: "Playing" },
