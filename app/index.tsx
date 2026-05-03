@@ -3932,6 +3932,19 @@ export default function MetronomeScreen() {
         }}
         onTempoQuiz={() => {
           setShowMoreMenu(false);
+          const engine = engineRef.current;
+          if (engine?.getIsRunning()) engine.stop();
+          stopRenderedAudio();
+          clearSamplePlayStates();
+          resetPlaybackVisuals();
+          setIsPreparing(false);
+          setIsPlaying(false);
+          tempoQuizSessionRef.current = {
+            measures: 0,
+            elapsed: 0,
+            restore: { bpm: bpmRef.current, beatsPerMeasure, beatTypes: [...beatTypes] },
+          };
+          setTempoQuizMeasureProgress(0);
           setTempoQuizPhase("ready");
           setShowTempoQuiz(true);
         }}
@@ -3949,19 +3962,16 @@ export default function MetronomeScreen() {
           stopRenderedAudio();
           clearSamplePlayStates();
           resetPlaybackVisuals();
-          if (!tempoQuizSessionRef.current?.restore) {
-            tempoQuizSessionRef.current = {
-              measures,
-              elapsed: 0,
-              restore: { bpm: bpmRef.current, beatsPerMeasure, beatTypes: [...beatTypes] },
-            };
-          } else {
-            tempoQuizSessionRef.current = {
-              ...tempoQuizSessionRef.current,
-              measures,
-              elapsed: 0,
-            };
-          }
+          const prev = tempoQuizSessionRef.current;
+          tempoQuizSessionRef.current = {
+            measures,
+            elapsed: 0,
+            restore: prev?.restore ?? {
+              bpm: bpmRef.current,
+              beatsPerMeasure,
+              beatTypes: [...beatTypes],
+            },
+          };
           setTempoQuizMeasureProgress(0);
           const quizBeatTypes = defaultBeatTypes(4);
           engine.setBpm(targetBpm);
