@@ -77,6 +77,7 @@ import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist
 import { createRafBatcher } from "@/lib/raf-batcher";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { MoreMenuModal } from "@/components/MoreMenuModal";
+import { DrumKitModal } from "@/components/DrumKitModal";
 import { ScheduledStartModal } from "@/components/ScheduledStartModal";
 import { FadeOutModal } from "@/components/FadeOutModal";
 import type { FadeOutSettings } from "@/lib/storage";
@@ -253,6 +254,7 @@ export default function MetronomeScreen() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showReboot, setShowReboot] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showDrumKit, setShowDrumKit] = useState(false);
   const [showScheduledStart, setShowScheduledStart] = useState(false);
   const [showFadeOut, setShowFadeOut] = useState(false);
   const fadeOutSessionRef = useRef<{ N: number; M: number; K: number } | null>(null);
@@ -322,6 +324,7 @@ export default function MetronomeScreen() {
       if (showTempoQuiz) { closeTempoQuiz(); return true; }
       if (showFadeOut) { setShowFadeOut(false); return true; }
       if (showScheduledStart) { setShowScheduledStart(false); return true; }
+      if (showDrumKit) { setShowDrumKit(false); return true; }
       if (showMoreMenu) { setShowMoreMenu(false); return true; }
       if (showMenu) { setShowMenu(false); return true; }
       if (showOnboarding) { setShowOnboarding(false); return true; }
@@ -334,7 +337,7 @@ export default function MetronomeScreen() {
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
     return () => sub.remove();
-  }, [showSettings, showSignalGen, showPracticeBook, showWorkUp, showMenu, showOnboarding, showReboot, showMoreMenu, showScheduledStart, showFadeOut, showTempoQuiz, closeTempoQuiz]);
+  }, [showSettings, showSignalGen, showPracticeBook, showWorkUp, showMenu, showOnboarding, showReboot, showMoreMenu, showDrumKit, showScheduledStart, showFadeOut, showTempoQuiz, closeTempoQuiz]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -4056,6 +4059,17 @@ export default function MetronomeScreen() {
           setShowMoreMenu(false);
           setShowFadeOut(true);
         }}
+        onDrumKit={() => {
+          setShowMoreMenu(false);
+          const engine = engineRef.current;
+          if (engine?.getIsRunning()) engine.stop();
+          stopRenderedAudio();
+          clearSamplePlayStates();
+          resetPlaybackVisuals();
+          setIsPreparing(false);
+          setIsPlaying(false);
+          setShowDrumKit(true);
+        }}
         onTempoQuiz={() => {
           setShowMoreMenu(false);
           const engine = engineRef.current;
@@ -4086,6 +4100,11 @@ export default function MetronomeScreen() {
           setTempoQuizPhase("ready");
           setShowTempoQuiz(true);
         }}
+      />
+
+      <DrumKitModal
+        visible={showDrumKit}
+        onClose={() => setShowDrumKit(false)}
       />
 
       <TempoQuizModal

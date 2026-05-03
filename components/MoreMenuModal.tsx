@@ -13,9 +13,10 @@ export interface MoreMenuModalProps {
   onScheduledStart: () => void;
   onFadeOut: () => void;
   onTempoQuiz: () => void;
+  onDrumKit: () => void;
 }
 
-export function MoreMenuModal({ visible, onClose, onScheduledStart, onFadeOut, onTempoQuiz }: MoreMenuModalProps) {
+export function MoreMenuModal({ visible, onClose, onScheduledStart, onFadeOut, onTempoQuiz, onDrumKit }: MoreMenuModalProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -62,6 +63,21 @@ export function MoreMenuModal({ visible, onClose, onScheduledStart, onFadeOut, o
             <View style={{ flex: 1 }}>
               <Text style={[styles.itemTitle, { color: C.text }]}>{t("fadeOut", "title")}</Text>
               <Text style={[styles.itemHint, { color: C.textSecondary }]}>{t("fadeOut", "menuHint")}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={S.ms(18, 0.3)} color={C.textSecondary} />
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.item, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
+            onPress={onDrumKit}
+            accessibilityRole="button"
+            accessibilityLabel={t("drumKit", "title")}
+            testID="more-menu-drum-kit"
+          >
+            <MaterialCommunityIcons name="grid" size={S.ms(22, 0.4)} color={C.accent} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.itemTitle, { color: C.text }]}>{t("drumKit", "title")}</Text>
+              <Text style={[styles.itemHint, { color: C.textSecondary }]}>{t("drumKit", "menuHint")}</Text>
             </View>
             <Ionicons name="chevron-forward" size={S.ms(18, 0.3)} color={C.textSecondary} />
           </Pressable>
