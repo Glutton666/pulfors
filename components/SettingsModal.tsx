@@ -1220,7 +1220,7 @@ export function SettingsModal({
                 }}
               >
                 <Text style={[styles.tripleBtnText, active && [styles.tripleBtnTextActive, { color: C.accent }]]}>
-                  {t("noteRecorder", `channel_${opt}` as any)}
+                  {opt === "left" ? t("noteRecorder", "channel_left") : opt === "right" ? t("noteRecorder", "channel_right") : t("noteRecorder", "channel_both")}
                 </Text>
               </Pressable>
             );

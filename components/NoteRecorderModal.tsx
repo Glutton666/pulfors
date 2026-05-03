@@ -728,7 +728,7 @@ export function NoteRecorderModal({
               <View style={{ flexDirection: "row", justifyContent: "center", gap: Spacing.xs, marginTop: Spacing.sm }}>
                 {(["both", "left", "right"] as const).map((opt) => {
                   const active = channel === opt;
-                  const label = t("noteRecorder", `channel_${opt}` as any);
+                  const label = opt === "left" ? t("noteRecorder", "channel_left") : opt === "right" ? t("noteRecorder", "channel_right") : t("noteRecorder", "channel_both");
                   return (
                     <Pressable
                       key={opt}

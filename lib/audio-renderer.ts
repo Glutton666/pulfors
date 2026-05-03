@@ -405,14 +405,27 @@ export function renderMeasure(params: {
   return { left: finalize(leftBuf), right: finalize(rightBuf) };
 }
 
+type StereoPCM = { left: Float32Array; right: Float32Array };
+
+function isStereoPCM(pcm: Float32Array | StereoPCM): pcm is StereoPCM {
+  return !(pcm instanceof Float32Array) && pcm.left instanceof Float32Array;
+}
+
+interface StereoPannerCapableContext extends AudioContext {
+  createStereoPanner(): StereoPannerNode;
+}
+
+function hasStereoPanner(ctx: AudioContext): ctx is StereoPannerCapableContext {
+  return typeof (ctx as Partial<StereoPannerCapableContext>).createStereoPanner === "function";
+}
+
 export async function saveRenderedWav(
-  pcm: Float32Array | { left: Float32Array; right: Float32Array },
+  pcm: Float32Array | StereoPCM,
 ): Promise<string> {
-  if (typeof (pcm as any).left !== "undefined") {
-    const stereo = pcm as { left: Float32Array; right: Float32Array };
-    return saveRenderedWavStereo(stereo.left, stereo.right);
+  if (isStereoPCM(pcm)) {
+    return saveRenderedWavStereo(pcm.left, pcm.right);
   }
-  const wav = encodeWav(pcm as Float32Array, RENDER_SR, true);
+  const wav = encodeWav(pcm, RENDER_SR, true);
 
   if (Platform.OS === "web") {
     const blob = new Blob([wav], { type: "audio/wav" });
@@ -541,8 +554,8 @@ export function playWebClick(
   const buffer = webClickBuffers[role];
   const source = ctx.createBufferSource();
   source.buffer = buffer;
-  if (channel !== "both" && typeof (ctx as any).createStereoPanner === "function") {
-    const panner = (ctx as any).createStereoPanner();
+  if (channel !== "both" && hasStereoPanner(ctx)) {
+    const panner = ctx.createStereoPanner();
     panner.pan.value = channel === "left" ? -1 : 1;
     source.connect(panner);
     panner.connect(ctx.destination);
@@ -557,7 +570,7 @@ export function clearWebClickBuffers(): void {
 }
 
 export function playWebRenderedLoop(
-  pcm: Float32Array | { left: Float32Array; right: Float32Array },
+  pcm: Float32Array | StereoPCM,
   onEnded?: () => void,
   channel: SampleChannel = "both",
 ): { stop: () => void } {
@@ -568,25 +581,23 @@ export function playWebRenderedLoop(
     ctx.resume().catch(() => {});
   }
 
-  const isStereo = typeof (pcm as any).left !== "undefined";
+  const stereo = isStereoPCM(pcm);
   let audioBuffer: AudioBuffer;
-  if (isStereo) {
-    const stereo = pcm as { left: Float32Array; right: Float32Array };
-    const n = Math.min(stereo.left.length, stereo.right.length);
+  if (stereo) {
+    const n = Math.min(pcm.left.length, pcm.right.length);
     audioBuffer = ctx.createBuffer(2, n, RENDER_SR);
-    audioBuffer.getChannelData(0).set(stereo.left.subarray(0, n));
-    audioBuffer.getChannelData(1).set(stereo.right.subarray(0, n));
+    audioBuffer.getChannelData(0).set(pcm.left.subarray(0, n));
+    audioBuffer.getChannelData(1).set(pcm.right.subarray(0, n));
   } else {
-    const mono = pcm as Float32Array;
-    audioBuffer = ctx.createBuffer(1, mono.length, RENDER_SR);
-    audioBuffer.getChannelData(0).set(mono);
+    audioBuffer = ctx.createBuffer(1, pcm.length, RENDER_SR);
+    audioBuffer.getChannelData(0).set(pcm);
   }
 
   const source = ctx.createBufferSource();
   source.buffer = audioBuffer;
   source.loop = true;
-  if (!isStereo && channel !== "both" && typeof (ctx as any).createStereoPanner === "function") {
-    const panner = (ctx as any).createStereoPanner();
+  if (!stereo && channel !== "both" && hasStereoPanner(ctx)) {
+    const panner = ctx.createStereoPanner();
     panner.pan.value = channel === "left" ? -1 : 1;
     source.connect(panner);
     panner.connect(ctx.destination);
