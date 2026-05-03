@@ -35,7 +35,13 @@ test("모든 정의 키는 createT로 양 언어 모두 조회된다", () => {
 });
 
 test("정의되지 않은 키는 키 문자열로 fallback (회귀 가드)", () => {
-  const t = createT("ko");
-  const out = (t as unknown as (s: string, k: string) => string)("settings", "__definitely_missing__");
-  assert.equal(out, "__definitely_missing__");
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const t = createT("ko");
+    const out = (t as unknown as (s: string, k: string) => string)("settings", "__definitely_missing__");
+    assert.equal(out, "__definitely_missing__");
+  } finally {
+    console.warn = originalWarn;
+  }
 });
