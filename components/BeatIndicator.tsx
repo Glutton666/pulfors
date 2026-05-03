@@ -30,7 +30,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
-import { getLayerCountForBeat, formatRepeat, findPillDropTarget as findPillDropTargetPure, type PillLayout } from "./beat-indicator-helpers";
+import { getLayerCountForBeat, formatRepeat, findPillDropTarget as findPillDropTargetPure, mergePillToLayer, type PillLayout } from "./beat-indicator-helpers";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { moderateScale, SCREEN_WIDTH, IS_TABLET, useScale } from "@/lib/scale";
@@ -802,29 +802,11 @@ export function BeatIndicator({
     setPillDrag(null);
     setPillDropTarget(null);
     if (target !== null) {
+      const updated = mergePillToLayer(loopBlocks, origIndex, target, beatTypes, beatSubdivisions);
+      if (updated === null) return;
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      const sourceBlock = loopBlocks[origIndex];
-      const targetBlock = loopBlocks[target];
-      if (targetBlock?.layerOf !== undefined) return;
-      const ownBT: Record<number, BeatType> = {};
-      for (let b = sourceBlock.startBeat; b <= sourceBlock.endBeat; b++) {
-        ownBT[b] = beatTypes[b] || "normal";
-      }
-      const ownSub: Record<string, BeatType[]> = {};
-      for (let b = sourceBlock.startBeat; b <= sourceBlock.endBeat; b++) {
-        const key = String(b);
-        if (beatSubdivisions[key]) {
-          ownSub[key] = [...beatSubdivisions[key]] as BeatType[];
-        }
-      }
-      const sourceHasChildren = loopBlocks.some(b => b.layerOf === origIndex);
-      const updated = loopBlocks.map((b, i) => {
-        if (i === origIndex) return { ...b, layerOf: target, jumpToBlock: undefined, jumpCount: undefined, ownBeatTypes: ownBT, ownSubdivisions: Object.keys(ownSub).length > 0 ? ownSub : undefined };
-        if (sourceHasChildren && b.layerOf === origIndex) return { ...b, layerOf: target };
-        return b;
-      });
       onLoopBlocksChange(updated);
     }
   }, [findPillDropTarget, loopBlocks, onLoopBlocksChange, beatTypes, beatSubdivisions]);

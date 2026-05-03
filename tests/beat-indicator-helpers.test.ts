@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { getLayerCountForBeat, formatRepeat, findPillDropTarget } from "../components/beat-indicator-helpers";
-import type { LoopBlock } from "../components/beat-indicator.types";
+import { getLayerCountForBeat, formatRepeat, findPillDropTarget, mergePillToLayer } from "../components/beat-indicator-helpers";
+import type { LoopBlock, BeatType } from "../components/beat-indicator.types";
 
 test("getLayerCountForBeat: empty blocks returns 0", () => {
   assert.equal(getLayerCountForBeat(0, [], 4), 0);
@@ -100,4 +100,76 @@ test("findPillDropTarget: custom hitSlop", () => {
   const layouts = { 1: { x: 100, y: 0, w: 50, h: 30 } };
   assert.equal(findPillDropTarget(85, 5, 0, layouts, 16), 1);
   assert.equal(findPillDropTarget(85, 5, 0, layouts, 0), null);
+});
+
+test("mergePillToLayer: target has layerOf returns null", () => {
+  const blocks: LoopBlock[] = [
+    { startBeat: 0, endBeat: 1, type: "count", value: 1 },
+    { startBeat: 2, endBeat: 3, type: "count", value: 1, layerOf: 99 },
+  ];
+  assert.equal(mergePillToLayer(blocks, 0, 1, {}, {}), null);
+});
+
+test("mergePillToLayer: out of bounds returns null", () => {
+  const blocks: LoopBlock[] = [{ startBeat: 0, endBeat: 1, type: "count", value: 1 }];
+  assert.equal(mergePillToLayer(blocks, 0, 5, {}, {}), null);
+  assert.equal(mergePillToLayer(blocks, 5, 0, {}, {}), null);
+});
+
+test("mergePillToLayer: source becomes layer of target with ownBeatTypes", () => {
+  const blocks: LoopBlock[] = [
+    { startBeat: 0, endBeat: 1, type: "count", value: 1, jumpToBlock: 5, jumpCount: 2 },
+    { startBeat: 2, endBeat: 3, type: "count", value: 1 },
+  ];
+  const beatTypes: Record<number, BeatType> = { 0: "strong", 1: "accent" };
+  const result = mergePillToLayer(blocks, 0, 1, beatTypes, {});
+  assert.ok(result);
+  assert.equal(result![0].layerOf, 1);
+  assert.equal(result![0].jumpToBlock, undefined);
+  assert.equal(result![0].jumpCount, undefined);
+  assert.deepEqual(result![0].ownBeatTypes, { 0: "strong", 1: "accent" });
+  assert.equal(result![0].ownSubdivisions, undefined);
+});
+
+test("mergePillToLayer: missing beatType defaults to normal", () => {
+  const blocks: LoopBlock[] = [
+    { startBeat: 0, endBeat: 1, type: "count", value: 1 },
+    { startBeat: 2, endBeat: 3, type: "count", value: 1 },
+  ];
+  const result = mergePillToLayer(blocks, 0, 1, {}, {});
+  assert.deepEqual(result![0].ownBeatTypes, { 0: "normal", 1: "normal" });
+});
+
+test("mergePillToLayer: captures subdivisions for source range", () => {
+  const blocks: LoopBlock[] = [
+    { startBeat: 0, endBeat: 1, type: "count", value: 1 },
+    { startBeat: 2, endBeat: 3, type: "count", value: 1 },
+  ];
+  const subs: Record<string, BeatType[]> = {
+    "0": ["strong", "normal"],
+    "5": ["accent"],
+  };
+  const result = mergePillToLayer(blocks, 0, 1, {}, subs);
+  assert.deepEqual(result![0].ownSubdivisions, { "0": ["strong", "normal"] });
+});
+
+test("mergePillToLayer: children of source re-attach to target", () => {
+  const blocks: LoopBlock[] = [
+    { startBeat: 0, endBeat: 1, type: "count", value: 1 },
+    { startBeat: 2, endBeat: 3, type: "count", value: 1 },
+    { startBeat: 0, endBeat: 1, type: "count", value: 1, layerOf: 0 },
+  ];
+  const result = mergePillToLayer(blocks, 0, 1, {}, {});
+  assert.equal(result![0].layerOf, 1);
+  assert.equal(result![2].layerOf, 1);
+});
+
+test("mergePillToLayer: source without children does not affect siblings", () => {
+  const blocks: LoopBlock[] = [
+    { startBeat: 0, endBeat: 1, type: "count", value: 1 },
+    { startBeat: 2, endBeat: 3, type: "count", value: 1 },
+    { startBeat: 4, endBeat: 5, type: "count", value: 1, layerOf: 1 },
+  ];
+  const result = mergePillToLayer(blocks, 0, 1, {}, {});
+  assert.equal(result![2].layerOf, 1); // unchanged
 });

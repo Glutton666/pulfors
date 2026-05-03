@@ -1,4 +1,4 @@
-import type { LoopBlock, BarRepeat } from "./beat-indicator.types";
+import type { LoopBlock, BarRepeat, BeatType } from "./beat-indicator.types";
 
 export interface PillLayout {
   x: number;
@@ -48,6 +48,51 @@ export function getLayerCountForBeat(
     }
   }
   return 0;
+}
+
+/**
+ * 드래그된 source block을 target block의 레이어로 병합.
+ * - target이 이미 다른 블록의 layer면 null 반환(병합 거부).
+ * - source의 startBeat~endBeat 범위 beatTypes/beatSubdivisions를 ownBeatTypes/ownSubdivisions로 캡처.
+ * - source가 자식을 가지면 자식들도 새 target으로 재부착.
+ */
+export function mergePillToLayer(
+  loopBlocks: LoopBlock[],
+  sourceIdx: number,
+  targetIdx: number,
+  beatTypes: Record<number, BeatType>,
+  beatSubdivisions: Record<string, BeatType[]>,
+): LoopBlock[] | null {
+  const sourceBlock = loopBlocks[sourceIdx];
+  const targetBlock = loopBlocks[targetIdx];
+  if (!sourceBlock || !targetBlock) return null;
+  if (targetBlock.layerOf !== undefined) return null;
+
+  const ownBT: Record<number, BeatType> = {};
+  for (let b = sourceBlock.startBeat; b <= sourceBlock.endBeat; b++) {
+    ownBT[b] = beatTypes[b] || "normal";
+  }
+  const ownSub: Record<string, BeatType[]> = {};
+  for (let b = sourceBlock.startBeat; b <= sourceBlock.endBeat; b++) {
+    const key = String(b);
+    if (beatSubdivisions[key]) {
+      ownSub[key] = [...beatSubdivisions[key]] as BeatType[];
+    }
+  }
+  const sourceHasChildren = loopBlocks.some(b => b.layerOf === sourceIdx);
+  return loopBlocks.map((b, i) => {
+    if (i === sourceIdx)
+      return {
+        ...b,
+        layerOf: targetIdx,
+        jumpToBlock: undefined,
+        jumpCount: undefined,
+        ownBeatTypes: ownBT,
+        ownSubdivisions: Object.keys(ownSub).length > 0 ? ownSub : undefined,
+      };
+    if (sourceHasChildren && b.layerOf === sourceIdx) return { ...b, layerOf: targetIdx };
+    return b;
+  });
 }
 
 export function formatRepeat(r: BarRepeat): string {
