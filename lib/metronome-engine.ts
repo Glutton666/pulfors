@@ -111,6 +111,11 @@ export class MetronomeEngine {
   private scheduleCache: Map<string, { ticks: ScheduledTick[]; durationMs: number }> = new Map();
   private lastScheduleCacheHit = false;
 
+  private static readonly BLOCK_CACHE_MAX = 64;
+  private blockEmitCache: Map<string, { ticks: ScheduledTick[]; durMs: number }> = new Map();
+  private lastBlockCacheReused = 0;
+  private lastBlockCacheBuilt = 0;
+
   setAudioCallbacks(playHigh: () => void, playLow: () => void, playStrong?: () => void) {
     this.playHighClick = playHigh;
     this.playLowClick = playLow;
@@ -424,9 +429,87 @@ export class MetronomeEngine {
     return 60000 / effectiveBpm;
   }
 
+  private computeOuterBlockFingerprint(
+    outerSortedIdx: number,
+    sortedBlocks: typeof this.loopBlocks,
+    origToSorted: Map<number, number>,
+    sortedToOrig: Map<number, number>,
+  ): string | null {
+    const block = sortedBlocks[outerSortedIdx];
+    if (!block || block.layerOf !== undefined) return null;
+
+    const involvedSorted = new Set<number>();
+    const stack = [outerSortedIdx];
+    while (stack.length) {
+      const sIdx = stack.pop()!;
+      if (involvedSorted.has(sIdx)) continue;
+      involvedSorted.add(sIdx);
+      const blk = sortedBlocks[sIdx];
+      const origIdx = sortedToOrig.get(sIdx) ?? sIdx;
+      const startB = blk.startBeat;
+      const endB = blk.endBeat;
+      for (let s = 0; s < sortedBlocks.length; s++) {
+        if (s === sIdx) continue;
+        const ob = sortedBlocks[s];
+        if (ob.layerOf === undefined && ob.startBeat >= startB && ob.endBeat <= endB) {
+          if (!involvedSorted.has(s)) stack.push(s);
+        }
+      }
+      for (let s = 0; s < sortedBlocks.length; s++) {
+        const ob = sortedBlocks[s];
+        if (ob.layerOf === origIdx && !involvedSorted.has(s)) stack.push(s);
+      }
+      if (blk.jumpToBlock !== undefined && blk.jumpToBlock !== null) {
+        const jSorted = origToSorted.get(blk.jumpToBlock);
+        if (jSorted !== undefined && !involvedSorted.has(jSorted)) stack.push(jSorted);
+      }
+    }
+
+    const involvedList = [...involvedSorted].sort((a, b) => a - b);
+    const blocksData = involvedList.map(s => [sortedToOrig.get(s) ?? s, sortedBlocks[s]] as const);
+
+    let minBeat = block.startBeat;
+    let maxBeat = Math.min(block.endBeat, this.beatsPerMeasure - 1);
+    for (const s of involvedList) {
+      const b = sortedBlocks[s];
+      minBeat = Math.min(minBeat, b.startBeat);
+      maxBeat = Math.max(maxBeat, Math.min(b.endBeat, this.beatsPerMeasure - 1));
+    }
+    if (minBeat < 0) minBeat = 0;
+    if (maxBeat < minBeat) maxBeat = minBeat;
+
+    const btSlice = this.beatTypes.slice(minBeat, maxBeat + 1);
+    const subs: Array<[number, BeatType[]]> = [];
+    const reps: Array<[number, { type: string; value: number }]> = [];
+    const ovs: Array<[number, number]> = [];
+    for (let b = minBeat; b <= maxBeat; b++) {
+      const s = this.beatSubdivisions.get(b);
+      if (s) subs.push([b, s]);
+      const r = this.barRepeats.get(b);
+      if (r) reps.push([b, r]);
+      const o = this.barBpmOverrides.get(b);
+      if (o !== undefined) ovs.push([b, o]);
+    }
+
+    return JSON.stringify({
+      bpm: this.bpm,
+      ht: this.halfTime,
+      bpm_: this.beatsPerMeasure,
+      btStart: minBeat,
+      bt: btSlice,
+      sub: subs,
+      rep: reps,
+      ov: ovs,
+      blks: blocksData,
+      entry: sortedToOrig.get(outerSortedIdx) ?? outerSortedIdx,
+    });
+  }
+
   private buildSchedule(): ScheduledTick[] {
     const ticks: ScheduledTick[] = [];
     let time = 0;
+    this.lastBlockCacheReused = 0;
+    this.lastBlockCacheBuilt = 0;
 
     const filteredWithOrigIdx = this.loopBlocks
       .map((b, i) => ({ block: b, origIdx: i }))
@@ -702,6 +785,55 @@ export class MetronomeEngine {
       emitBlock(blockIdx, jumpVisited);
     };
 
+    const processOuterCached = (outerIdx: number) => {
+      if (outerIdx < 0 || outerIdx >= sortedBlocks.length) {
+        processBlock(outerIdx, new Set());
+        return;
+      }
+      const inJump =
+        currentJumpIteration !== 0 ||
+        currentJumpTotal !== 0 ||
+        currentJumpSourceBlockIndex !== -1;
+      const fp = inJump
+        ? null
+        : this.computeOuterBlockFingerprint(outerIdx, sortedBlocks, origToSorted, sortedToOrig);
+      const cached = fp ? this.blockEmitCache.get(fp) : undefined;
+      if (cached) {
+        const startTime = time;
+        for (const t of cached.ticks) {
+          ticks.push({ ...t, time: t.time + startTime });
+        }
+        time = startTime + cached.durMs;
+        const block = sortedBlocks[outerIdx];
+        if (block.jumpToBlock !== undefined && block.jumpToBlock !== null) {
+          const jSorted = origToSorted.get(block.jumpToBlock);
+          if (jSorted !== undefined) jumpProcessed.add(jSorted);
+        }
+        this.blockEmitCache.delete(fp!);
+        this.blockEmitCache.set(fp!, cached);
+        this.lastBlockCacheReused++;
+        return;
+      }
+      const startTime = time;
+      const startTickIdx = ticks.length;
+      processBlock(outerIdx, new Set());
+      if (fp) {
+        const slice = ticks.slice(startTickIdx).map(t => {
+          const copy: ScheduledTick = { ...t, time: t.time - startTime };
+          Object.freeze(copy);
+          return copy;
+        });
+        Object.freeze(slice);
+        this.blockEmitCache.set(fp, { ticks: slice, durMs: time - startTime });
+        this.lastBlockCacheBuilt++;
+        while (this.blockEmitCache.size > MetronomeEngine.BLOCK_CACHE_MAX) {
+          const firstKey = this.blockEmitCache.keys().next().value;
+          if (firstKey === undefined) break;
+          this.blockEmitCache.delete(firstKey);
+        }
+      }
+    };
+
     if (this.blockPlayMode === "random" && sortedBlocks.length >= 2) {
       const outerBlocks: number[] = [];
       for (let idx = 0; idx < sortedBlocks.length; idx++) {
@@ -714,9 +846,9 @@ export class MetronomeEngine {
       }
       if (outerBlocks.length >= 2) {
         const randomIdx = outerBlocks[Math.floor(Math.random() * outerBlocks.length)];
-        processBlock(randomIdx, new Set());
+        processOuterCached(randomIdx);
       } else {
-        processBlock(outerBlocks[0] ?? 0, new Set());
+        processOuterCached(outerBlocks[0] ?? 0);
       }
     } else {
       const processed = new Set<number>();
@@ -745,7 +877,7 @@ export class MetronomeEngine {
         if (outerIdx >= 0) {
           const block = sortedBlocks[outerIdx];
           const endBeat = Math.min(block.endBeat, this.beatsPerMeasure - 1);
-          processBlock(outerIdx, new Set());
+          processOuterCached(outerIdx);
           for (let bi = 0; bi < sortedBlocks.length; bi++) {
             if (sortedBlocks[bi].startBeat >= block.startBeat && sortedBlocks[bi].endBeat <= endBeat) {
               processed.add(bi);
@@ -843,6 +975,21 @@ export class MetronomeEngine {
   /** @internal 테스트용. 현재 캐시 항목 수 */
   _getScheduleCacheSize(): number {
     return this.scheduleCache.size;
+  }
+
+  /** @internal 테스트용. 블록 단위 캐시 항목 수 */
+  _getBlockCacheSize(): number {
+    return this.blockEmitCache.size;
+  }
+
+  /** @internal 테스트용. 마지막 buildSchedule에서 블록 캐시 적중으로 재사용된 outer block 수 */
+  _getLastBlockCacheReused(): number {
+    return this.lastBlockCacheReused;
+  }
+
+  /** @internal 테스트용. 마지막 buildSchedule에서 블록 캐시에 새로 저장된 outer block 수 */
+  _getLastBlockCacheBuilt(): number {
+    return this.lastBlockCacheBuilt;
   }
 
   private rebuildSchedule() {

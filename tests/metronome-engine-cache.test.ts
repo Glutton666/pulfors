@@ -112,6 +112,135 @@ test("random 모드 + 외곽 블록 1개는 결정론적이라 캐시 적중", (
   assert.equal(engine._wasLastBuildCacheHit(), true);
 });
 
+test("블록 한 개만 편집해도 미변경 outer 블록의 ticks는 재사용된다", () => {
+  const engine = new MetronomeEngine();
+  engine.setBeatsPerMeasure(8);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal", "accent", "normal", "normal", "normal"]);
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 1, type: "count", value: 2 },
+    { startBeat: 2, endBeat: 3, type: "count", value: 2 },
+    { startBeat: 4, endBeat: 5, type: "count", value: 2 },
+    { startBeat: 6, endBeat: 7, type: "count", value: 2 },
+  ]);
+
+  // 첫 빌드: 4개 outer 블록 모두 새로 캐시
+  engine.buildScheduleOnly();
+  assert.equal(engine._getLastBlockCacheReused(), 0, "첫 빌드는 재사용 0");
+  assert.equal(engine._getLastBlockCacheBuilt(), 4, "첫 빌드는 4개 outer 블록 캐시 저장");
+  assert.equal(engine._getBlockCacheSize(), 4);
+
+  // 단 한 블록(idx=2)만 편집 → 풀 스케줄 캐시는 미스, 그러나 미변경 3개 블록은 블록 캐시 재사용
+  const blocks = engine.getLoopBlocks();
+  blocks[2] = { ...blocks[2], type: "count", value: 3 };
+  engine.setLoopBlocks(blocks);
+  engine.buildScheduleOnly();
+
+  assert.equal(engine._wasLastBuildCacheHit(), false, "풀 스케줄 캐시는 미스");
+  assert.equal(engine._getLastBlockCacheReused(), 3, "변경되지 않은 3개 outer 블록은 재사용");
+  assert.equal(engine._getLastBlockCacheBuilt(), 1, "변경된 1개 블록만 새로 빌드");
+});
+
+test("블록 캐시 사용 여부와 상관없이 ticks 출력이 동일하다 (단일 블록 편집)", () => {
+  const make = () => {
+    const e = new MetronomeEngine();
+    e.setBeatsPerMeasure(8);
+    e.setBeatTypes(["accent", "normal", "normal", "normal", "accent", "normal", "normal", "normal"]);
+    e.setLoopBlocks([
+      { startBeat: 0, endBeat: 1, type: "count", value: 2 },
+      { startBeat: 2, endBeat: 3, type: "count", value: 2 },
+      { startBeat: 4, endBeat: 5, type: "count", value: 2 },
+      { startBeat: 6, endBeat: 7, type: "count", value: 2 },
+    ]);
+    return e;
+  };
+
+  // engine A: 두 번 연속 빌드 (블록 캐시 채움) 후 블록 한 개 편집
+  const a = make();
+  a.buildScheduleOnly();
+  const aBlocks = a.getLoopBlocks();
+  aBlocks[1] = { ...aBlocks[1], bpm: 90 };
+  a.setLoopBlocks(aBlocks);
+  a.buildScheduleOnly();
+  const aOut = a.getScheduleInfo();
+
+  // engine B: 새 엔진에서 최종 입력으로 cold 빌드 (블록 캐시 비어있음)
+  const b = make();
+  const bBlocks = b.getLoopBlocks();
+  bBlocks[1] = { ...bBlocks[1], bpm: 90 };
+  b.setLoopBlocks(bBlocks);
+  b.buildScheduleOnly();
+  const bOut = b.getScheduleInfo();
+
+  assert.equal(aOut.durationMs, bOut.durationMs);
+  assert.equal(aOut.ticks.length, bOut.ticks.length);
+  for (let i = 0; i < aOut.ticks.length; i++) {
+    assert.deepEqual(aOut.ticks[i], bOut.ticks[i], `tick ${i} 일치`);
+  }
+});
+
+test("중첩 블록 + 레이어 + 점프 입력에서도 ticks 출력이 동일하다", () => {
+  const make = () => {
+    const e = new MetronomeEngine();
+    e.setBeatsPerMeasure(8);
+    e.setBeatTypes(["strong", "normal", "accent", "normal", "accent", "normal", "normal", "normal"]);
+    e.setBeatSubdivision(1, ["normal", "normal", "normal"]);
+    e.setBarRepeat(4, { type: "count", value: 2 });
+    e.setLoopBlocks([
+      // 0..3 outer with inner 1..2
+      { startBeat: 0, endBeat: 3, type: "count", value: 2 },
+      { startBeat: 1, endBeat: 2, type: "count", value: 2 },
+      // 4..7 outer w/ jump back to 0..3
+      { startBeat: 4, endBeat: 7, type: "count", value: 1, jumpToBlock: 0, jumpCount: 2 },
+      // layer of block 0
+      { startBeat: 0, endBeat: 3, type: "count", value: 1, layerOf: 0, bpm: 100 },
+    ]);
+    return e;
+  };
+
+  const a = make();
+  a.buildScheduleOnly();
+  // 편집 (outer 4..7의 jumpCount만 변경)
+  const aBlocks = a.getLoopBlocks();
+  aBlocks[2] = { ...aBlocks[2], jumpCount: 3 };
+  a.setLoopBlocks(aBlocks);
+  a.buildScheduleOnly();
+  const aOut = a.getScheduleInfo();
+
+  const b = make();
+  const bBlocks = b.getLoopBlocks();
+  bBlocks[2] = { ...bBlocks[2], jumpCount: 3 };
+  b.setLoopBlocks(bBlocks);
+  b.buildScheduleOnly();
+  const bOut = b.getScheduleInfo();
+
+  assert.equal(aOut.durationMs, bOut.durationMs);
+  assert.equal(aOut.ticks.length, bOut.ticks.length);
+  for (let i = 0; i < aOut.ticks.length; i++) {
+    assert.deepEqual(aOut.ticks[i], bOut.ticks[i], `tick ${i} 일치`);
+  }
+});
+
+test("BPM 같은 글로벌 상태가 바뀌면 블록 캐시도 재사용되지 않는다", () => {
+  const engine = new MetronomeEngine();
+  engine.setBeatsPerMeasure(8);
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 3, type: "count", value: 1 },
+    { startBeat: 4, endBeat: 7, type: "count", value: 1 },
+  ]);
+
+  engine.buildScheduleOnly();
+  assert.equal(engine._getLastBlockCacheBuilt(), 2);
+
+  engine.setBpm(140);
+  engine.buildScheduleOnly();
+  assert.equal(
+    engine._getLastBlockCacheReused(),
+    0,
+    "BPM 변경은 모든 블록의 fingerprint를 바꾸므로 재사용 0",
+  );
+  assert.equal(engine._getLastBlockCacheBuilt(), 2);
+});
+
 test("캐시 적중 시에도 measureDurationMs는 정확히 복원된다", () => {
   const engine = new MetronomeEngine();
   engine.setBeatsPerMeasure(4);
