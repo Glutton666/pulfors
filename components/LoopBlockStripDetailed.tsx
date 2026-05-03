@@ -4,6 +4,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { BlockPill } from "./BlockPill";
 import type { LoopBlock, BlockPlayMode } from "./beat-indicator.types";
 import type { ProgressInfo } from "@/lib/metronome-engine";
+import {
+  sortBlocksByStart,
+  detectJumpDirection,
+  formatJumpLabel,
+  formatJumpRange,
+  nextBlockPlayMode,
+  blockPlayModeIcon,
+  blockPlayModeLabel,
+  isBlockPlayModeHighlighted,
+} from "./loop-block-strip-utils";
 
 export type { BlockPlayMode };
 
@@ -52,18 +62,13 @@ export function LoopBlockStripDetailed({
   onPillMeasure,
   onBlockPlayModeChange,
 }: LoopBlockStripDetailedProps) {
-  const sorted = loopBlocks
-    .map((b, i) => ({ block: b, origIndex: i }))
-    .sort((a, b) => a.block.startBeat - b.block.startBeat);
+  const sorted = sortBlocksByStart(loopBlocks);
 
   const showModeToggle = !isPlaying && loopBlocks.length >= 2;
-  const nextMode: BlockPlayMode =
-    blockPlayMode === "sequential" ? "loop" : blockPlayMode === "loop" ? "random" : "sequential";
-  const modeIcon =
-    blockPlayMode === "sequential" ? "arrow-forward" : blockPlayMode === "loop" ? "repeat" : "shuffle";
-  const modeLabel =
-    blockPlayMode === "sequential" ? "Once" : blockPlayMode === "loop" ? "Loop" : "Random";
-  const modeHighlight = blockPlayMode !== "loop";
+  const nextMode = nextBlockPlayMode(blockPlayMode);
+  const modeIcon = blockPlayModeIcon(blockPlayMode);
+  const modeLabel = blockPlayModeLabel(blockPlayMode);
+  const modeHighlight = isBlockPlayModeHighlighted(blockPlayMode);
 
   return (
     <ScrollView
@@ -77,21 +82,17 @@ export function LoopBlockStripDetailed({
         const isActive = isPlaying && progressInfo && progressInfo.blockIndex === origIndex;
         const hasJump = block.jumpToBlock !== undefined && block.jumpToBlock !== null;
         const jumpTarget = hasJump ? loopBlocks[block.jumpToBlock!] : null;
-        const targetSortedIdx = hasJump ? sorted.findIndex(s => s.origIndex === block.jumpToBlock) : -1;
-        const goesBack = hasJump && targetSortedIdx >= 0 && targetSortedIdx <= si;
-        const isActiveJump =
-          !!isPlaying &&
-          !!progressInfo &&
-          progressInfo.jumpSourceBlockIndex === origIndex &&
-          (progressInfo.jumpTotal ?? 0) > 0;
-        const jumpLabel =
-          isActiveJump && progressInfo
-            ? `${(progressInfo.jumpCurrent ?? 0) + 1}/${progressInfo.jumpTotal}`
-            : `×${block.jumpCount || 1}`;
-        const jumpRangeText =
-          jumpTarget
-            ? `${jumpTarget.startBeat + 1}-${Math.min(jumpTarget.endBeat + 1, beatsPerMeasure)} ${jumpLabel}`
-            : "";
+        const jumpDir = detectJumpDirection(sorted, si, block.jumpToBlock);
+        const goesBack = jumpDir === "back";
+        const { label: jumpLabel, isActive: isActiveJump } = formatJumpLabel(
+          progressInfo,
+          isPlaying,
+          origIndex,
+          block.jumpCount,
+        );
+        const jumpRangeText = jumpTarget
+          ? `${formatJumpRange(jumpTarget, beatsPerMeasure)} ${jumpLabel}`
+          : "";
         return (
           <View key={`flow-${origIndex}`} style={{ flexDirection: "row", alignItems: "center" }}>
             <BlockPill

@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { BlockPill } from "./BlockPill";
 import type { LoopBlock } from "./beat-indicator.types";
 import type { ProgressInfo } from "@/lib/metronome-engine";
+import { sortBlocksByStart, detectJumpDirection } from "./loop-block-strip-utils";
 
 export interface LoopBlockStripCompactProps {
   loopBlocks: LoopBlock[];
@@ -52,9 +53,7 @@ export function LoopBlockStripCompact({
 }: LoopBlockStripCompactProps) {
   if (loopBlocks.length === 0) return null;
 
-  const sorted = loopBlocks
-    .map((b, i) => ({ block: b, origIndex: i }))
-    .sort((a, b) => a.block.startBeat - b.block.startBeat);
+  const sorted = sortBlocksByStart(loopBlocks);
 
   return (
     <View style={{ flexGrow: 0, marginBottom }}>
@@ -69,8 +68,8 @@ export function LoopBlockStripCompact({
           const isActive = isPlaying && progressInfo && progressInfo.blockIndex === origIndex;
           const hasJump = block.jumpToBlock !== undefined && block.jumpToBlock !== null;
           const jumpTarget = hasJump ? loopBlocks[block.jumpToBlock!] : null;
-          const targetSortedIdx = hasJump ? sorted.findIndex(s => s.origIndex === block.jumpToBlock) : -1;
-          const goesBack = hasJump && targetSortedIdx >= 0 && targetSortedIdx <= si;
+          const jumpDir = detectJumpDirection(sorted, si, block.jumpToBlock);
+          const goesBack = jumpDir === "back";
           return (
             <View key={`flow-${origIndex}`} style={{ flexDirection: "row", alignItems: "center" }}>
               <BlockPill
