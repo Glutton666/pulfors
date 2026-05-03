@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { createT, translations, type TranslationLeaf } from "../lib/i18n";
+import { createT, translations, SUPPORTED_LANGUAGES, type TranslationLeaf } from "../lib/i18n";
 
-test("모든 i18n leaf는 ko/en 두 언어가 모두 비어있지 않다", () => {
+test("모든 i18n leaf는 SUPPORTED_LANGUAGES의 모든 언어가 비어있지 않다", () => {
   const failures: string[] = [];
   for (const section of Object.keys(translations) as (keyof typeof translations)[]) {
     const ns = translations[section] as Record<string, TranslationLeaf>;
@@ -13,23 +13,26 @@ test("모든 i18n leaf는 ko/en 두 언어가 모두 비어있지 않다", () =>
         failures.push(`${String(section)}.${key} (not an object)`);
         continue;
       }
-      if (typeof leaf.ko !== "string" || leaf.ko.length === 0) failures.push(`${String(section)}.${key} (ko empty)`);
-      if (typeof leaf.en !== "string" || leaf.en.length === 0) failures.push(`${String(section)}.${key} (en empty)`);
+      for (const lang of SUPPORTED_LANGUAGES) {
+        const v = (leaf as Record<string, unknown>)[lang];
+        if (typeof v !== "string" || v.length === 0) {
+          failures.push(`${String(section)}.${key} (${lang} empty)`);
+        }
+      }
     }
   }
   assert.equal(failures.length, 0, `누락된 번역:\n${failures.join("\n")}`);
 });
 
-test("모든 정의 키는 createT로 양 언어 모두 조회된다", () => {
-  const tKo = createT("ko");
-  const tEn = createT("en");
-  for (const section of Object.keys(translations) as (keyof typeof translations)[]) {
-    const ns = translations[section] as Record<string, TranslationLeaf>;
-    for (const key of Object.keys(ns)) {
-      const ko = (tKo as unknown as (s: string, k: string) => string)(String(section), key);
-      const en = (tEn as unknown as (s: string, k: string) => string)(String(section), key);
-      assert.ok(ko.length > 0, `ko empty for ${String(section)}.${key}`);
-      assert.ok(en.length > 0, `en empty for ${String(section)}.${key}`);
+test("모든 정의 키는 createT로 모든 지원 언어에서 조회된다", () => {
+  for (const lang of SUPPORTED_LANGUAGES) {
+    const t = createT(lang);
+    for (const section of Object.keys(translations) as (keyof typeof translations)[]) {
+      const ns = translations[section] as Record<string, TranslationLeaf>;
+      for (const key of Object.keys(ns)) {
+        const v = (t as unknown as (s: string, k: string) => string)(String(section), key);
+        assert.ok(v.length > 0, `${lang} empty for ${String(section)}.${key}`);
+      }
     }
   }
 });
