@@ -16,6 +16,7 @@ import {
   readStringFromFile,
   remapSampleMap,
   restoreAudioFiles,
+  sanitizeNoteSampleChannelMap,
   sanitizeNoteSampleUris,
   writeStringToFile,
 } from "./shared";
@@ -147,10 +148,14 @@ async function parsePracticeJson(
     if (entry.noteSamples) {
       entry.noteSamples = sanitizeNoteSampleUris(entry.noteSamples) ?? {};
     }
+    if (entry.noteSampleChannels) {
+      entry.noteSampleChannels = sanitizeNoteSampleChannelMap(entry.noteSampleChannels) ?? {};
+    }
     if (entry.noteQueueEntries) {
       entry.noteQueueEntries = entry.noteQueueEntries.map((qe) => ({
         ...qe,
         noteSamples: sanitizeNoteSampleUris(qe.noteSamples),
+        noteSampleChannels: sanitizeNoteSampleChannelMap(qe.noteSampleChannels),
       }));
     }
 

@@ -6,6 +6,7 @@ import {
   filenameFromUri,
   sanitizeAudioFilename,
   sanitizeNoteSampleUris,
+  sanitizeNoteSampleChannelMap,
   sanitizeBackupData,
   collectUrisFromSampleMap,
   collectAllAudioUris,
@@ -13,6 +14,7 @@ import {
   remapSampleMap,
   remapDataUris,
   formatDateForFilename,
+  ALL_KEYS,
 } from "../lib/backup/shared";
 
 test("extractBaseUri: # fragment 제거", () => {
@@ -219,4 +221,86 @@ test("remapDataUris: @note_samples + practice_book 모두 remap", () => {
 test("formatDateForFilename: YYYYMMDD_HHmm 형식", () => {
   const r = formatDateForFilename();
   assert.match(r, /^\d{8}_\d{4}$/);
+});
+
+test("ALL_KEYS: @note_sample_channels 포함", () => {
+  assert.ok(ALL_KEYS.includes("@note_sample_channels"));
+});
+
+test("sanitizeNoteSampleChannelMap: 유효 값 유지, 잘못된 값은 'both'", () => {
+  const out = sanitizeNoteSampleChannelMap({
+    a: "left",
+    b: "right",
+    c: "both",
+    d: "stereo",
+    e: 42 as unknown,
+    f: null as unknown,
+  });
+  assert.deepEqual(out, {
+    a: "left",
+    b: "right",
+    c: "both",
+    d: "both",
+    e: "both",
+    f: "both",
+  });
+});
+
+test("sanitizeNoteSampleChannelMap: undefined 그대로 반환", () => {
+  assert.equal(sanitizeNoteSampleChannelMap(undefined), undefined);
+});
+
+test("sanitizeBackupData: @note_sample_channels 정화", () => {
+  const data = {
+    "@note_sample_channels": JSON.stringify({
+      "0-0": "left",
+      "1-0": "bogus",
+      "2-0": "right",
+    }),
+  };
+  const out = sanitizeBackupData(data);
+  const parsed = JSON.parse(out["@note_sample_channels"]!);
+  assert.deepEqual(parsed, {
+    "0-0": "left",
+    "1-0": "both",
+    "2-0": "right",
+  });
+});
+
+test("sanitizeBackupData: 잘못된 channels JSON 통과", () => {
+  const data = { "@note_sample_channels": "{ broken" };
+  const out = sanitizeBackupData(data);
+  assert.equal(out["@note_sample_channels"], "{ broken");
+});
+
+test("sanitizeBackupData: practice_book의 noteSampleChannels (entry+queue) 정화", () => {
+  const data = {
+    practice_book: JSON.stringify([
+      {
+        id: "x",
+        label: "t",
+        bpm: 120,
+        beatsPerMeasure: 4,
+        beatTypes: [],
+        createdAt: 1,
+        noteSampleChannels: { "0-0": "left", "1-0": "weird" },
+        noteQueueEntries: [
+          {
+            id: "y",
+            noteSampleChannels: { "0-0": "right", "1-0": 5 },
+          },
+        ],
+      },
+    ]),
+  };
+  const out = sanitizeBackupData(data);
+  const entries = JSON.parse(out.practice_book!);
+  assert.deepEqual(entries[0].noteSampleChannels, {
+    "0-0": "left",
+    "1-0": "both",
+  });
+  assert.deepEqual(entries[0].noteQueueEntries[0].noteSampleChannels, {
+    "0-0": "right",
+    "1-0": "both",
+  });
 });

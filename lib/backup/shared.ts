@@ -2,6 +2,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
 import type { PracticeEntry } from "../storage";
 import { logger } from "../logger";
+import { normalizeSampleChannel, type SampleChannel } from "../stereo-channel";
 
 export const ALL_KEYS = [
   "metronome_settings",
@@ -192,6 +193,18 @@ export function sanitizeNoteSampleUris(
   return safe;
 }
 
+export function sanitizeNoteSampleChannelMap(
+  channels: Record<string, unknown> | undefined,
+): Record<string, SampleChannel> | undefined {
+  if (!channels) return channels;
+  const out: Record<string, SampleChannel> = {};
+  for (const [k, v] of Object.entries(channels)) {
+    if (typeof k !== "string") continue;
+    out[k] = normalizeSampleChannel(v);
+  }
+  return out;
+}
+
 export function sanitizeBackupData(
   data: Record<string, string | null>,
 ): Record<string, string | null> {
@@ -204,15 +217,26 @@ export function sanitizeBackupData(
     } catch {}
   }
 
+  if (result["@note_sample_channels"]) {
+    try {
+      const channels: Record<string, unknown> = JSON.parse(result["@note_sample_channels"]!);
+      result["@note_sample_channels"] = JSON.stringify(
+        sanitizeNoteSampleChannelMap(channels) ?? {},
+      );
+    } catch {}
+  }
+
   if (result["practice_book"]) {
     try {
       const entries: PracticeEntry[] = JSON.parse(result["practice_book"]!);
       const sanitized = entries.map((e) => ({
         ...e,
         noteSamples: sanitizeNoteSampleUris(e.noteSamples),
+        noteSampleChannels: sanitizeNoteSampleChannelMap(e.noteSampleChannels),
         noteQueueEntries: e.noteQueueEntries?.map((qe) => ({
           ...qe,
           noteSamples: sanitizeNoteSampleUris(qe.noteSamples),
+          noteSampleChannels: sanitizeNoteSampleChannelMap(qe.noteSampleChannels),
         })),
       }));
       result["practice_book"] = JSON.stringify(sanitized);
