@@ -28,6 +28,7 @@ import {
 import type { BeatType } from "@/lib/metronome-engine";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
+import { ExportEntryModal } from "@/components/ExportEntryModal";
 
 interface PracticeBookModalProps {
   visible: boolean;
@@ -45,7 +46,7 @@ const BEAT_COLORS: Record<BeatType, string> = {
   strong: "#F0883E",
 };
 
-const ACTION_WIDTH = 220;
+const ACTION_WIDTH = 280;
 const SWIPE_THRESHOLD = 60;
 
 function formatDate(ts: number) {
@@ -89,6 +90,7 @@ function SwipeableEntry({
   onLoad,
   onDelete,
   onShare,
+  onExport,
   onSetGoal,
   accentColor,
   openItemId,
@@ -104,6 +106,7 @@ function SwipeableEntry({
   onLoad: (entry: PracticeEntry) => void;
   onDelete: (id: string) => void;
   onShare: (entry: PracticeEntry) => void;
+  onExport: (entry: PracticeEntry) => void;
   onSetGoal?: (entry: PracticeEntry) => void;
   accentColor: string;
   openItemId: string | null;
@@ -200,6 +203,18 @@ function SwipeableEntry({
         >
           <Ionicons name="share-outline" size={S.ms(18, 0.4)} color="#fff" />
           <Text style={styles.swipeActionText}>{t("practiceBook", "share")}</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.swipeAction, { backgroundColor: "#8B5CF6" }]}
+          onPress={() => {
+            Animated.spring(translateX, { toValue: 0, useNativeDriver: true, friction: 8 }).start();
+            isOpenRef.current = false;
+            setOpenItemId(null);
+            onExport(item);
+          }}
+        >
+          <Ionicons name="download-outline" size={S.ms(18, 0.4)} color="#fff" />
+          <Text style={styles.swipeActionText}>{t("practiceBook", "exportAudio")}</Text>
         </Pressable>
         <Pressable
           style={[styles.swipeAction, { backgroundColor: "#F59E0B" }]}
@@ -336,12 +351,14 @@ function GridItem({
   onLoad,
   onDelete,
   onShare,
+  onExport,
   accentColor,
 }: {
   item: PracticeEntry;
   onLoad: (entry: PracticeEntry) => void;
   onDelete: (id: string) => void;
   onShare: (entry: PracticeEntry) => void;
+  onExport: (entry: PracticeEntry) => void;
   accentColor: string;
 }) {
   const { colors: C } = useTheme();
@@ -377,11 +394,12 @@ function GridItem({
       undefined,
       [
         { text: t("practiceBook", "share"), onPress: () => onShare(item) },
+        { text: t("practiceBook", "exportAudio"), onPress: () => onExport(item) },
         { text: t("practiceBook", "delete"), style: "destructive", onPress: () => onDelete(item.id) },
         { text: t("practiceBook", "cancel"), style: "cancel" },
       ]
     );
-  }, [item, onDelete, onShare, t]);
+  }, [item, onDelete, onShare, onExport, t]);
 
   return (
     <Pressable
@@ -546,6 +564,11 @@ export function PracticeBookModal({
     } catch (_) {}
   }, []);
 
+  const [exportEntry, setExportEntry] = useState<PracticeEntry | null>(null);
+  const handleExport = useCallback((entry: PracticeEntry) => {
+    setExportEntry(entry);
+  }, []);
+
   const handleImportEntry = useCallback(async () => {
     try {
       const { importPracticeEntry } = await import("@/lib/backup");
@@ -587,6 +610,7 @@ export function PracticeBookModal({
       onLoad={handleLoad}
       onDelete={handleDelete}
       onShare={handleShare}
+      onExport={handleExport}
       onSetGoal={onSetGoal ? (entry) => {
         setGoalEntry(entry);
         setGoalMinutes("10");
@@ -753,6 +777,7 @@ export function PracticeBookModal({
                 onLoad={handleLoad}
                 onDelete={handleDelete}
                 onShare={handleShare}
+                onExport={handleExport}
                 accentColor={C.accent}
               />
             )}
@@ -770,6 +795,12 @@ export function PracticeBookModal({
             scrollEnabled={!!filteredEntries.length}
           />
         )}
+
+        <ExportEntryModal
+          visible={!!exportEntry}
+          entry={exportEntry}
+          onClose={() => setExportEntry(null)}
+        />
 
         {goalEntry && (
           <View style={styles.goalOverlay}>
