@@ -14,7 +14,7 @@ import Colors from "@/constants/colors";
 import { moderateScale, SCREEN_WIDTH, IS_TABLET, useScale } from "@/lib/scale";
 import { Radius, Spacing } from "@/constants/tokens";
 import type { ScaleValues } from "@/lib/scale";
-import { computePendulumAnim } from "@/lib/animation-lifecycle";
+import { computePendulumAnim, pendulumPlan } from "@/lib/animation-lifecycle";
 
 const PENDULUM_LENGTH = IS_TABLET
   ? Math.min(SCREEN_WIDTH * 0.35, 280)
@@ -35,28 +35,35 @@ export function Pendulum({ isPlaying, bpm }: PendulumProps) {
   const rotation = useSharedValue(0);
 
   useEffect(() => {
-    // BPM이 바뀌면 진행 중 사이클을 즉시 중단하고 0으로 부드럽게 복귀한 뒤
-    // 새 속도로 재시작한다. cancel 없이 deps만 바꾸면 이전 사이클이 끝까지
-    // 유지되어 점프/지터가 발생한다.
-    cancelAnimation(rotation);
-    if (!isPlaying) {
-      rotation.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) });
-      return;
+    // pendulumPlan이 "cancel → (returnHome | swing)" 시퀀스를 결정론적으로
+    // 만들어준다. 컴포넌트는 그 명령을 reanimated 워클릿으로 매핑만 한다.
+    // cancel 없이 deps만 바꾸면 이전 사이클이 끝까지 유지되어 점프/지터가
+    // 발생하므로, 항상 cancel이 먼저 나오는 plan에 의존하는 게 핵심이다.
+    const ops = pendulumPlan({ isPlaying, maxAngle, swingDuration });
+    for (const op of ops) {
+      if (op.type === "cancel") {
+        cancelAnimation(rotation);
+      } else if (op.type === "returnHome") {
+        rotation.value = withTiming(0, { duration: op.duration, easing: Easing.out(Easing.quad) });
+      } else {
+        // 한 변(side-to-side)이 1박자 = swingDuration. 현재 위치에서 한 변
+        // 끝까지 부드럽게 도달한 뒤 반복 시퀀스로 진입.
+        const dur = op.duration;
+        const angle = op.maxAngle;
+        rotation.value = withTiming(op.targetAngle, { duration: dur, easing: Easing.inOut(Easing.sin) }, (finished) => {
+          "worklet";
+          if (!finished) return;
+          rotation.value = withRepeat(
+            withSequence(
+              withTiming(-angle, { duration: dur, easing: Easing.inOut(Easing.sin) }),
+              withTiming(angle, { duration: dur, easing: Easing.inOut(Easing.sin) }),
+            ),
+            -1,
+            false,
+          );
+        });
+      }
     }
-    // 현재 위치에서 한 변의 끝까지 부드럽게 도달한 뒤 반복 시퀀스를 시작한다.
-    // 한 변(side-to-side)이 1박자 = swingDuration. 원본 cadence를 유지한다.
-    rotation.value = withTiming(maxAngle, { duration: swingDuration, easing: Easing.inOut(Easing.sin) }, (finished) => {
-      "worklet";
-      if (!finished) return;
-      rotation.value = withRepeat(
-        withSequence(
-          withTiming(-maxAngle, { duration: swingDuration, easing: Easing.inOut(Easing.sin) }),
-          withTiming(maxAngle, { duration: swingDuration, easing: Easing.inOut(Easing.sin) }),
-        ),
-        -1,
-        false,
-      );
-    });
     return () => {
       cancelAnimation(rotation);
     };

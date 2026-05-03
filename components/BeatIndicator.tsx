@@ -27,7 +27,7 @@ import Animated, {
   cancelAnimation,
   Easing,
 } from "react-native-reanimated";
-import { computeGlowParams } from "@/lib/animation-lifecycle";
+import { glowPlan } from "@/lib/animation-lifecycle";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
@@ -274,20 +274,33 @@ export function BeatIndicator({
   const prevBeatRef = useRef(-1);
 
   useEffect(() => {
-    if (isPlaying && currentBeat >= 0 && currentBeat !== prevBeatRef.current) {
-      prevBeatRef.current = currentBeat;
-      // 고 BPM에서 release가 비트 간격보다 길면 글로우가 중첩돼 깜빡임이 누적된다.
-      // 진행 중 애니메이션을 cancel하고, BPM에 따라 release를 단축한다.
-      const { attackMs, releaseMs } = computeGlowParams(bpm ?? 120);
-      cancelAnimation(centerGlow);
-      centerGlow.value = withSequence(
-        withTiming(1, { duration: attackMs, easing: Easing.out(Easing.quad) }),
-        withTiming(0, { duration: releaseMs, easing: Easing.out(Easing.cubic) })
-      );
-    } else if (!isPlaying) {
+    // glowPlan이 cancel/pulse/reset 명령을 결정론적으로 산출한다. 고 BPM에서
+    // release가 비트 간격보다 길면 글로우가 중첩돼 깜빡임이 누적되므로,
+    // 진행 중 애니메이션을 cancel하고 BPM에 맞춰 release를 단축한 단일
+    // sequence로 재트리거한다.
+    const ops = glowPlan({
+      isPlaying,
+      currentBeat,
+      prevBeat: prevBeatRef.current,
+      bpm: bpm ?? 120,
+    });
+    if (ops.length === 0) return;
+    if (!isPlaying) {
       prevBeatRef.current = -1;
-      cancelAnimation(centerGlow);
-      centerGlow.value = withTiming(0, { duration: 200 });
+    } else if (currentBeat >= 0 && currentBeat !== prevBeatRef.current) {
+      prevBeatRef.current = currentBeat;
+    }
+    for (const op of ops) {
+      if (op.type === "cancel") {
+        cancelAnimation(centerGlow);
+      } else if (op.type === "reset") {
+        centerGlow.value = withTiming(0, { duration: op.duration });
+      } else {
+        centerGlow.value = withSequence(
+          withTiming(1, { duration: op.attackMs, easing: Easing.out(Easing.quad) }),
+          withTiming(0, { duration: op.releaseMs, easing: Easing.out(Easing.cubic) })
+        );
+      }
     }
   }, [isPlaying, currentBeat, bpm]);
 
