@@ -40,6 +40,7 @@ import { BarPlayButton } from "./BarPlayButton";
 import { BeatStepperButton } from "./BeatStepperButton";
 import { LoopBlockStripCompact } from "./LoopBlockStripCompact";
 import { LoopBlockStripDetailed } from "./LoopBlockStripDetailed";
+import { BlockEditPanel } from "./BlockEditPanel";
 
 export type { BeatType, BarRepeat, LoopBlock } from "./beat-indicator.types";
 import type { BeatType } from "./beat-indicator.types";
@@ -2211,193 +2212,30 @@ export function BeatIndicator({
                 onBlockPlayModeChange={onBlockPlayModeChange}
               />
               {!isPlaying && editingBlockIndex !== null && editBlock && (
-                <View style={{
-                  backgroundColor: C.backgroundSecondary,
-                  borderRadius: 8,
-                  marginHorizontal: 8,
-                  marginBottom: 4,
-                  padding: 8,
-                  borderWidth: 1,
-                  borderColor: C.accent + "30",
-                }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                    <Text style={{ color: C.accent, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" }}>
-                      Block {editBlock.startBeat + 1}-{Math.min(editBlock.endBeat + 1, beatsPerMeasure)}
-                    </Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                      {loopBlocks.some(b => b.layerOf === editingBlockIndex) && (
-                        <Pressable
-                          onPress={() => {
-                            const updated = loopBlocks.map(b => b.layerOf === editingBlockIndex ? { ...b, layerOf: undefined, ownBeatTypes: undefined, ownSubdivisions: undefined } : b);
-                            onLoopBlocksChange(updated);
-                          }}
-                          hitSlop={8}
-                          style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
-                        >
-                          <Ionicons name="layers-outline" size={S.ms(12, 0.4)} color={C.accent} />
-                          <Text style={{ color: C.accent, fontSize: 9, fontFamily: "SpaceGrotesk_600SemiBold" }}>Unlayer</Text>
-                        </Pressable>
-                      )}
-                      <Pressable
-                        onPress={() => { setEditingBlockIndex(null); removeLoopBlock(editingBlockIndex!); }}
-                        hitSlop={8}
-                        style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
-                      >
-                        <Ionicons name="trash-outline" size={S.ms(12, 0.4)} color={C.danger} />
-                      </Pressable>
-                      <Pressable onPress={() => setEditingBlockIndex(null)} hitSlop={8}>
-                        <Ionicons name="close" size={S.ms(14, 0.4)} color={C.textTertiary} />
-                      </Pressable>
-                    </View>
-                  </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Repeat</Text>
-                    <Pressable
-                      onPress={() => { if (editBlock.value > 1) updateBlock(editingBlockIndex!, { value: editBlock.value - 1 }); }}
-                      style={{ width: S.ms(26, 0.5), height: S.ms(26, 0.5), borderRadius: S.ms(13, 0.5), backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
-                    >
-                      <Ionicons name="remove" size={S.ms(14, 0.4)} color={C.accent} />
-                    </Pressable>
-                    <Text style={{ color: C.text, fontSize: 13, fontFamily: "SpaceGrotesk_700Bold", minWidth: 28, textAlign: "center" }}>
-                      ×{editBlock.value}
-                    </Text>
-                    <Pressable
-                      onPress={() => { if (editBlock.value < 16) updateBlock(editingBlockIndex!, { value: editBlock.value + 1 }); }}
-                      style={{ width: S.ms(26, 0.5), height: S.ms(26, 0.5), borderRadius: S.ms(13, 0.5), backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
-                    >
-                      <Ionicons name="add" size={S.ms(14, 0.4)} color={C.accent} />
-                    </Pressable>
-                  </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>BPM</Text>
-                    <Pressable
-                      onPress={() => {
-                        if (editBlock.bpm) {
-                          const newBpm = Math.max(20, editBlock.bpm - 5);
-                          updateBlock(editingBlockIndex!, { bpm: newBpm });
-                        }
-                      }}
-                      style={{ width: S.ms(26, 0.5), height: S.ms(26, 0.5), borderRadius: S.ms(13, 0.5), backgroundColor: editBlock.bpm ? C.accent + "20" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
-                    >
-                      <Ionicons name="remove" size={S.ms(14, 0.4)} color={editBlock.bpm ? C.accent : C.textTertiary} />
-                    </Pressable>
-                    {editBlock.bpm ? (
-                      <TextInput
-                        style={{
-                          color: C.accent, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold",
-                          minWidth: 44, textAlign: "center", paddingHorizontal: 6, paddingVertical: 2,
-                          borderRadius: 4, backgroundColor: C.accent + "20", borderWidth: 1, borderColor: C.accent + "50",
-                        }}
-                        keyboardType="number-pad"
-                        defaultValue={String(editBlock.bpm)}
-                        key={`bpm-p-${editingBlockIndex}-${editBlock.bpm}`}
-                        onEndEditing={(e) => {
-                          const v = parseInt(e.nativeEvent.text, 10);
-                          if (!isNaN(v) && v >= 20 && v <= 300) updateBlock(editingBlockIndex!, { bpm: v });
-                          else if (e.nativeEvent.text === "" || e.nativeEvent.text === "0") updateBlock(editingBlockIndex!, { bpm: undefined });
-                        }}
-                        selectTextOnFocus
-                      />
-                    ) : (
-                      <Pressable
-                        onPress={() => updateBlock(editingBlockIndex!, { bpm: bpm || 120 })}
-                        style={{
-                          paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, minWidth: 44, alignItems: "center",
-                          backgroundColor: "transparent", borderWidth: 1, borderColor: C.accent + "30",
-                        }}
-                      >
-                        <Text style={{ color: C.textTertiary, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" }}>—</Text>
-                      </Pressable>
-                    )}
-                    <Pressable
-                      onPress={() => {
-                        if (editBlock.bpm) {
-                          const newBpm = Math.min(300, editBlock.bpm + 5);
-                          updateBlock(editingBlockIndex!, { bpm: newBpm });
-                        }
-                      }}
-                      style={{ width: S.ms(26, 0.5), height: S.ms(26, 0.5), borderRadius: S.ms(13, 0.5), backgroundColor: editBlock.bpm ? C.accent + "20" : C.overlay08, alignItems: "center", justifyContent: "center", opacity: editBlock.bpm ? 1 : 0.4 }}
-                    >
-                      <Ionicons name="add" size={S.ms(14, 0.4)} color={editBlock.bpm ? C.accent : C.textTertiary} />
-                    </Pressable>
-                  </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
-                    <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Sound</Text>
-                    <Pressable
-                      onPress={() => updateBlock(editingBlockIndex!, { soundSet: undefined })}
-                      style={{
-                        paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4,
-                        backgroundColor: !editBlock.soundSet ? C.accent + "30" : "transparent",
-                        borderWidth: 1, borderColor: C.accent + "30",
-                      }}
-                    >
-                      <Text style={{ color: !editBlock.soundSet ? C.accent : C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium" }}>—</Text>
-                    </Pressable>
-                    {(["classic", "woodblock", "digital", "rimshot"] as const).map((s) => (
-                      <Pressable
-                        key={s}
-                        onPress={() => updateBlock(editingBlockIndex!, { soundSet: s })}
-                        style={{
-                          paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4,
-                          backgroundColor: editBlock.soundSet === s ? C.accent + "30" : "transparent",
-                          borderWidth: 1, borderColor: editBlock.soundSet === s ? C.accent + "50" : C.accent + "30",
-                        }}
-                      >
-                        <Text style={{ color: editBlock.soundSet === s ? C.accent : C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium" }}>
-                          {s.charAt(0).toUpperCase() + s.slice(1)}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: editHasJump ? 6 : 0 }}>
-                    <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Jump</Text>
-                    <Pressable
-                      onPress={() => { if (editHasJump) updateBlock(editingBlockIndex!, { jumpToBlock: undefined, jumpCount: undefined }); }}
-                      style={{
-                        paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4,
-                        backgroundColor: !editHasJump ? C.accent + "30" : "transparent",
-                        borderWidth: 1, borderColor: C.accent + "30",
-                      }}
-                    >
-                      <Text style={{ color: !editHasJump ? C.accent : C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium" }}>None</Text>
-                    </Pressable>
-                    {otherBlocks.map(({ b: ob, i: oi }) => (
-                      <Pressable
-                        key={oi}
-                        onPress={() => updateBlock(editingBlockIndex!, { jumpToBlock: oi, jumpCount: editJumpCount || 1 })}
-                        style={{
-                          paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4,
-                          backgroundColor: editBlock.jumpToBlock === oi ? "#f0ad4e30" : "transparent",
-                          borderWidth: 1, borderColor: editBlock.jumpToBlock === oi ? "#f0ad4e50" : C.accent + "30",
-                        }}
-                      >
-                        <Text style={{ color: editBlock.jumpToBlock === oi ? "#f0ad4e" : C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium" }}>
-                          {ob.startBeat + 1}-{Math.min(ob.endBeat + 1, beatsPerMeasure)}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                  {editHasJump && (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Jump ×</Text>
-                      <Pressable
-                        onPress={() => { if (editJumpCount > 1) updateBlock(editingBlockIndex!, { jumpCount: editJumpCount - 1 }); }}
-                        style={{ width: S.ms(26, 0.5), height: S.ms(26, 0.5), borderRadius: S.ms(13, 0.5), backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
-                      >
-                        <Ionicons name="remove" size={S.ms(14, 0.4)} color="#f0ad4e" />
-                      </Pressable>
-                      <Text style={{ color: C.text, fontSize: 13, fontFamily: "SpaceGrotesk_700Bold", minWidth: 28, textAlign: "center" }}>
-                        ×{editJumpCount}
-                      </Text>
-                      <Pressable
-                        onPress={() => { if (editJumpCount < 16) updateBlock(editingBlockIndex!, { jumpCount: editJumpCount + 1 }); }}
-                        style={{ width: S.ms(26, 0.5), height: S.ms(26, 0.5), borderRadius: S.ms(13, 0.5), backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}
-                      >
-                        <Ionicons name="add" size={S.ms(14, 0.4)} color="#f0ad4e" />
-                      </Pressable>
-                    </View>
-                  )}
-                </View>
+                <BlockEditPanel
+                  editingBlockIndex={editingBlockIndex!}
+                  editBlock={editBlock}
+                  loopBlocks={loopBlocks}
+                  otherBlocks={otherBlocks}
+                  editHasJump={editHasJump}
+                  editJumpCount={editJumpCount}
+                  beatsPerMeasure={beatsPerMeasure}
+                  globalBpm={bpm}
+                  colors={{
+                    accent: C.accent,
+                    accentDanger: C.danger,
+                    text: C.text,
+                    textSecondary: C.textSecondary,
+                    textTertiary: C.textTertiary,
+                    backgroundSecondary: C.backgroundSecondary,
+                    overlay08: C.overlay08,
+                  }}
+                  ms={S.ms}
+                  updateBlock={updateBlock}
+                  removeLoopBlock={removeLoopBlock}
+                  setEditingBlockIndex={setEditingBlockIndex}
+                  onLoopBlocksChange={onLoopBlocksChange}
+                />
               )}
             </View>
           );
