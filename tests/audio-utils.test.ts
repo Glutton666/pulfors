@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { safePlay, safeSeekAndPlay, releaseRecorder, notifyAudioPoolFallback, computeRecommendedPoolSize } from "../lib/audio-utils";
+import { safePlay, safeSeekAndPlay, releaseRecorder, notifyAudioPoolFallback, computeRecommendedPoolSize, detectPoolCutoffRisk } from "../lib/audio-utils";
 
 test("computeRecommendedPoolSize: 저속(60BPM 1분할) → 2", () => {
   assert.equal(computeRecommendedPoolSize(60, 1), 2);
@@ -10,12 +10,19 @@ test("computeRecommendedPoolSize: 표준(120BPM 1분할) → 2", () => {
   assert.equal(computeRecommendedPoolSize(120, 1), 2);
 });
 
-test("computeRecommendedPoolSize: 중속(120BPM 4분할=8 hits/sec) → 3", () => {
-  assert.equal(computeRecommendedPoolSize(120, 4), 3);
+test("computeRecommendedPoolSize: 중속(120BPM 4분할, 125ms 간격, 120ms 샘플) → 2", () => {
+  // ceil(120/125)=1, +1 마진 = 2
+  assert.equal(computeRecommendedPoolSize(120, 4), 2);
 });
 
-test("computeRecommendedPoolSize: 고속(200BPM 4분할≈13.3 hits/sec) → 4", () => {
-  assert.equal(computeRecommendedPoolSize(200, 4), 4);
+test("computeRecommendedPoolSize: 고속(200BPM 4분할, 75ms 간격, 120ms 샘플) → 3", () => {
+  // ceil(120/75)=2, +1 마진 = 3
+  assert.equal(computeRecommendedPoolSize(200, 4), 3);
+});
+
+test("computeRecommendedPoolSize: 초고속(300BPM 4분할, 50ms 간격) → 4 캡", () => {
+  // ceil(120/50)=3, +1 = 4 (기본 maxPool)
+  assert.equal(computeRecommendedPoolSize(300, 4), 4);
 });
 
 test("computeRecommendedPoolSize: 경계 hitsPerSec=5 → 2 (≤5)", () => {
@@ -35,7 +42,51 @@ test("computeRecommendedPoolSize: 비정상 입력 클램프", () => {
 });
 
 test("computeRecommendedPoolSize: subdivision 소수점은 floor", () => {
-  assert.equal(computeRecommendedPoolSize(120, 4.9), 3);
+  // 4.9 → 4, 120BPM × 4 = 위 케이스와 동일 → 2
+  assert.equal(computeRecommendedPoolSize(120, 4.9), 2);
+});
+
+test("computeRecommendedPoolSize: 짧은 샘플(50ms) → 풀 작아짐", () => {
+  // 200BPM × 4 = 800/min = 75ms 간격, 50ms 샘플 → overlap=1 + 1 = 2
+  assert.equal(computeRecommendedPoolSize(200, 4, { averageSampleMs: 50 }), 2);
+});
+
+test("computeRecommendedPoolSize: 긴 샘플(300ms) → 풀 커짐, maxPool 상한", () => {
+  // 120BPM × 4 = 8 hit/sec = 125ms 간격, 300ms → overlap=3 + 1 = 4
+  assert.equal(computeRecommendedPoolSize(120, 4, { averageSampleMs: 300 }), 4);
+  // maxPool=3 캡
+  assert.equal(computeRecommendedPoolSize(120, 4, { averageSampleMs: 300, maxPool: 3 }), 3);
+});
+
+test("computeRecommendedPoolSize: maxPool 클램프 (8 상한)", () => {
+  // 600BPM × 16 = 160 hit/sec = 6.25ms 간격, 1000ms 샘플 → overlap=160 + 1 = 161 → 8 캡
+  assert.equal(computeRecommendedPoolSize(600, 16, { averageSampleMs: 1000, maxPool: 99 }), 8);
+});
+
+test("computeRecommendedPoolSize: averageSampleMs 비정상치 클램프", () => {
+  // NaN/0/-1 → 기본 120ms, 음수 maxPool → 2로 클램프
+  assert.equal(computeRecommendedPoolSize(120, 1, { averageSampleMs: NaN }), 2);
+  assert.equal(computeRecommendedPoolSize(120, 1, { averageSampleMs: -50 }), 2);
+});
+
+test("detectPoolCutoffRisk: 권장 > 현재 → atRisk=true", () => {
+  // 200BPM × 4, 120ms 샘플 → 권장 3
+  const r = detectPoolCutoffRisk(200, 4, 2);
+  assert.equal(r.atRisk, true);
+  assert.equal(r.recommended, 3);
+  assert.equal(r.current, 2);
+});
+
+test("detectPoolCutoffRisk: 권장 ≤ 현재 → atRisk=false", () => {
+  // 60BPM × 1 → 권장 2
+  const r = detectPoolCutoffRisk(60, 1, 2);
+  assert.equal(r.atRisk, false);
+  assert.equal(r.recommended, 2);
+});
+
+test("detectPoolCutoffRisk: currentPoolSize 비정상치 → 1로 클램프", () => {
+  const r = detectPoolCutoffRisk(60, 1, NaN);
+  assert.equal(r.current, 2);
 });
 
 

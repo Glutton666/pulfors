@@ -33,7 +33,7 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import { useAudioPlayer } from "expo-audio";
-import { safePlay, notifyAudioPoolFallback } from "@/lib/audio-utils";
+import { safePlay, notifyAudioPoolFallback, detectPoolCutoffRisk } from "@/lib/audio-utils";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
@@ -367,6 +367,35 @@ export default function MetronomeScreen() {
   useEffect(() => { soundSetRef.current = soundSet; }, [soundSet]);
   const allPlayersRef = useRef(allPlayers);
   useEffect(() => { allPlayersRef.current = allPlayers; }, [allPlayers]);
+
+  // 재생 시작 1회만 풀 cut-off 위험 측정 (관측 전용).
+  // prev 게이트로 false→true edge에서만 통과. 재생 중 bpm/분할 변경 시 effect는
+  // 재실행되지만 wasPlaying=true이므로 즉시 반환 → notify 스팸 없음.
+  // 추가로 동일 risk 키 중복 억제(세션 내 dedupe).
+  const prevIsPlayingRef = useRef(false);
+  const lastCutoffRiskKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const wasPlaying = prevIsPlayingRef.current;
+    prevIsPlayingRef.current = isPlaying;
+    // 재생 정지 시 dedupe 키 리셋 → "재생 세션당 1회" 의미로 명확화
+    if (!isPlaying) {
+      if (wasPlaying) lastCutoffRiskKeyRef.current = null;
+      return;
+    }
+    if (wasPlaying) return;
+    const sub = Math.max(1, subdivisionPattern?.length ?? 1);
+    const risk = detectPoolCutoffRisk(bpm, sub, 2);
+    if (!risk.atRisk) return;
+    const key = `${risk.recommended}|${sub}|${Math.round(bpm / 10)}`;
+    if (lastCutoffRiskKeyRef.current === key) return;
+    lastCutoffRiskKeyRef.current = key;
+    notifyAudioPoolFallback("cutoff-risk-detected", {
+      bpm,
+      subdivisions: sub,
+      recommended: risk.recommended,
+      current: risk.current,
+    });
+  }, [isPlaying, bpm, subdivisionPattern]);
 
   const flashOpacity = useSharedValue(0);
   const halfTimeFlash = useSharedValue(0);

@@ -135,36 +135,66 @@ export function notifyAudioPoolFallback(
   });
 }
 
+export interface PoolSizeOptions {
+  /** 빌트인 샘플 평균 재생 길이(ms). 기본 120. */
+  averageSampleMs?: number;
+  /** 풀 최대 크기 상한. 기본 4 — 메모리/hook 부하 보호. */
+  maxPool?: number;
+}
+
 /**
  * BPM과 분할(subdivisions) 기준으로 적정 오디오 풀 크기를 권장합니다.
  *
  * 빠른 템포 + 잦은 분할 환경에서는 같은 role/사운드의 호출 간격이 짧아져
  * 단순 A/B 더블버퍼만으로는 이전 재생이 끝나기 전에 같은 슬롯이 재호출되어
- * cut-off가 발생합니다. 풀 크기를 round-robin으로 늘리면 cut-off를 줄일 수 있습니다.
+ * cut-off가 발생합니다. 풀 크기를 round-robin으로 늘리면 cut-off를 줄입니다.
  *
- * 휴리스틱: 1초당 같은 사운드 호출 횟수(hitsPerSec) 기반.
- * 빌트인 메트로놈 샘플 평균 길이가 ~120ms 내외라는 가정 하에:
- *   - hitsPerSec ≤ 5  (≈ 60BPM × 8분 또는 120BPM × 4분): 2 (현 기본값)
- *   - hitsPerSec ≤ 9  (≈ 200BPM × 16분 미만):           3
- *   - hitsPerSec >  9                                     : 4
- *
- * 같은 role이 매 비트 호출되는 것이 아니라, 보통 한 마디에서 강박/약박/일반박이
- * 분리되므로 실제 인스턴스당 호출은 더 드뭅니다. 따라서 적당히 보수적으로 둡니다.
+ * 정확화된 휴리스틱: hit 간격(ms) vs 샘플 길이.
+ *   필요 풀 ≈ ceil(averageSampleMs / hitIntervalMs) + 안전마진(1)
+ *   같은 role이 매 비트 호출되는 것이 아니라 강박/약박/일반박으로 분산되므로
+ *   round-up + 1 마진은 보수적으로 충분합니다.
  *
  * @param bpm 분당 박수 (clamp: 1~600)
  * @param subdivisions 비트당 분할 수 (clamp: 1~16)
- * @returns 권장 풀 크기 (2~4)
+ * @param opts 선택 옵션 (샘플 길이/풀 상한)
+ * @returns 권장 풀 크기 (2 ~ maxPool, 기본 4)
  */
 export function computeRecommendedPoolSize(
   bpm: number,
   subdivisions: number,
+  opts: PoolSizeOptions = {},
 ): number {
   const safeBpm = Number.isFinite(bpm) ? Math.max(1, Math.min(600, bpm)) : 120;
   const safeSub = Number.isFinite(subdivisions)
     ? Math.max(1, Math.min(16, Math.floor(subdivisions)))
     : 1;
-  const hitsPerSec = (safeBpm * safeSub) / 60;
-  if (hitsPerSec > 9) return 4;
-  if (hitsPerSec > 5) return 3;
-  return 2;
+  const sampleMs = Number.isFinite(opts.averageSampleMs)
+    ? Math.max(10, Math.min(2000, opts.averageSampleMs!))
+    : 120;
+  const maxPool = Number.isFinite(opts.maxPool)
+    ? Math.max(2, Math.min(8, Math.floor(opts.maxPool!)))
+    : 4;
+
+  const hitIntervalMs = 60_000 / (safeBpm * safeSub);
+  const overlap = Math.ceil(sampleMs / hitIntervalMs);
+  const recommended = Math.max(2, overlap + 1);
+  return Math.min(maxPool, recommended);
+}
+
+/**
+ * 현재 풀 크기로 cut-off 위험이 있는지 평가합니다. 권장 크기가 현재 크기보다
+ * 크면 위험으로 판단합니다. 호출 사이트에서 1회 측정 후 breadcrumb 기록 등
+ * 관측 용도로 사용합니다.
+ */
+export function detectPoolCutoffRisk(
+  bpm: number,
+  subdivisions: number,
+  currentPoolSize: number,
+  opts: PoolSizeOptions = {},
+): { atRisk: boolean; recommended: number; current: number } {
+  const recommended = computeRecommendedPoolSize(bpm, subdivisions, opts);
+  const current = Number.isFinite(currentPoolSize)
+    ? Math.max(1, Math.floor(currentPoolSize))
+    : 2;
+  return { atRisk: recommended > current, recommended, current };
 }
