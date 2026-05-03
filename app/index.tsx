@@ -93,13 +93,13 @@ import {
   parseTrimInfo,
   renderMeasure,
   saveRenderedWav,
-  saveStereoSampleWav,
   ensureWebClickBuffers,
   playWebClick,
   clearWebClickBuffers,
   playWebRenderedLoop,
   getWebAudioContext,
 } from "@/lib/audio-renderer";
+import { syncStereoArtifact, releaseStereoArtifact, releaseAll as releaseAllStereoArtifacts } from "@/lib/sample-cache";
 import type { ClickPCMs, SamplePCMEntry, TickInfo, DecodedSample } from "@/lib/audio-renderer";
 import type { ActivityLog, Goal, PracticeSessionData, PracticeRoomVisitData } from "@/lib/activity-log";
 import {
@@ -110,21 +110,6 @@ import {
   type PracticeRoom,
 } from "@/lib/practice-room";
 
-
-async function buildEffectivePlayerUri(key: string, uri: string, channel: SampleChannel): Promise<string> {
-  if (channel === "both") return uri;
-  try {
-    const rawUri = uri.split("#")[0];
-    const fragment = uri.includes("#") ? uri.slice(uri.indexOf("#")) : "";
-    const mono = await decodeSampleFile(rawUri);
-    if (!mono) return uri;
-    const filename = `note_stereo_${key.replace(/[^0-9a-zA-Z-]/g, "_")}_${channel}_${Date.now()}.wav`;
-    const stereoUri = await saveStereoSampleWav(mono, channel, filename);
-    return stereoUri + fragment;
-  } catch {
-    return uri;
-  }
-}
 
 export default function MetronomeScreen() {
   const insets = useSafeAreaInsets();
@@ -391,7 +376,6 @@ export default function MetronomeScreen() {
   const [barMetronomeChannel, setBarMetronomeChannel] = useState<SampleChannel>("both");
   const barMetronomeChannelRef = useRef<SampleChannel>("both");
   const noteSampleSoundsRef = useRef<Record<string, ExpoAudioPlayer>>({});
-  const previousChannelsRef = useRef<NoteSampleChannelMap>({});
   const samplePlayStateRef = useRef<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>({});
   const [recorderTarget, setRecorderTarget] = useState<{ beat: number; sub: number } | null>(null);
 
@@ -664,9 +648,9 @@ export default function MetronomeScreen() {
         }
         try {
           const channel = noteSampleChannelsRef.current[key] ?? "both";
-          const effectiveRaw = await buildEffectivePlayerUri(key, uri, channel);
-          const isFileUri = effectiveRaw.startsWith("file://");
-          const player = createAudioPlayer(effectiveRaw, { downloadFirst: isFileUri });
+          const result = await syncStereoArtifact(key, uri, channel);
+          const isFileUri = result.uri.startsWith("file://");
+          const player = createAudioPlayer(result.uri, { downloadFirst: isFileUri });
           player.volume = sampleVolumeRef.current * 10.0;
           noteSampleSoundsRef.current[key] = player;
         } catch (e) {
@@ -867,8 +851,6 @@ export default function MetronomeScreen() {
 
   const preloadNoteSampleSounds = useCallback(async (samples: NoteSampleMap, keepExisting?: boolean) => {
     const existing = noteSampleSoundsRef.current;
-    const existingUris = noteSamplesRef.current;
-    const existingChannels = previousChannelsRef.current;
     const newPlayers: Record<string, ExpoAudioPlayer> = {};
     const keysToKeep = new Set<string>();
 
@@ -877,22 +859,21 @@ export default function MetronomeScreen() {
         captureBreadcrumb({ category: "sample.preload", message: "Unsafe URI blocked", level: "warning", data: { key, uriPrefix: uri.slice(0, 80) } });
         continue;
       }
-      const rawUri = uri.split("#")[0];
       const channel = noteSampleChannelsRef.current[key] ?? "both";
-      const prevChannel = existingChannels[key] ?? "both";
-      if (
-        keepExisting &&
-        existing[key] &&
-        existingUris[key]?.split("#")[0] === rawUri &&
-        prevChannel === channel
-      ) {
+      let result;
+      try {
+        result = await syncStereoArtifact(key, uri, channel);
+      } catch (e) {
+        captureBreadcrumb({ category: "sample.preload", message: "syncStereoArtifact failed", level: "warning", data: { key, error: String(e) } });
+        continue;
+      }
+      if (keepExisting && existing[key] && !result.changed) {
         newPlayers[key] = existing[key];
         keysToKeep.add(key);
       } else {
         try {
-          const effectiveRaw = await buildEffectivePlayerUri(key, uri, channel);
-          const isFileUri = effectiveRaw.startsWith("file://");
-          const player = createAudioPlayer(effectiveRaw, { downloadFirst: isFileUri });
+          const isFileUri = result.uri.startsWith("file://");
+          const player = createAudioPlayer(result.uri, { downloadFirst: isFileUri });
           player.volume = sampleVolumeRef.current * 10.0;
           newPlayers[key] = player;
         } catch (e) {
@@ -900,11 +881,13 @@ export default function MetronomeScreen() {
         }
       }
     }
-    previousChannelsRef.current = { ...noteSampleChannelsRef.current };
 
     for (const [key, s] of Object.entries(existing)) {
       if (!keysToKeep.has(key)) {
         try { s.release(); } catch {}
+        if (!samples[key]) {
+          await releaseStereoArtifact(key);
+        }
       }
     }
     noteSampleSoundsRef.current = newPlayers;
@@ -1251,6 +1234,7 @@ export default function MetronomeScreen() {
       try { noteSampleSoundsRef.current[key].release(); } catch {}
       delete noteSampleSoundsRef.current[key];
     }
+    await releaseStereoArtifact(key);
     scheduleReRender();
     setRecorderTarget(null);
   }, [recorderTarget, invalidateSamplePCMCache, scheduleReRender]);
@@ -2435,6 +2419,7 @@ export default function MetronomeScreen() {
       engine.clearBarRepeats();
     }
 
+    void releaseAllStereoArtifacts();
     setBarMode(toBarMode);
   }, [isPlaying, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels]);
 
@@ -3063,6 +3048,7 @@ export default function MetronomeScreen() {
       try { player.release(); } catch {}
     }
     noteSampleSoundsRef.current = {};
+    void releaseAllStereoArtifacts();
     saveNoteSamples({});
     saveNoteSampleNames({});
     saveNoteSampleSources({});
@@ -3195,6 +3181,7 @@ export default function MetronomeScreen() {
         try { s.release(); } catch {}
       }
       noteSampleSoundsRef.current = {};
+      void releaseAllStereoArtifacts();
     }
     noteSamplesRef.current = { ...entrySamples };
     noteSampleNamesRef.current = { ...entryNames };
