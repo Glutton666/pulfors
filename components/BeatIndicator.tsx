@@ -30,6 +30,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
+import { getLayerCountForBeat, formatRepeat } from "./beat-indicator-helpers";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { moderateScale, SCREEN_WIDTH, IS_TABLET, useScale } from "@/lib/scale";
@@ -391,8 +392,7 @@ export function BeatIndicator({
     let cancelled = false;
     const attach = () => {
       if (cancelled) return;
-      const node = containerRef.current as any;
-      const el = node as unknown as HTMLElement | null;
+      const el = containerRef.current as unknown as HTMLElement | null;
       if (!el || !el.addEventListener) {
         // 다음 프레임에 재시도 (최대 ~5회)
         return false;
@@ -885,20 +885,6 @@ export function BeatIndicator({
     setRepeatModalBeat(null);
   }, [repeatModalBeat, onBarRepeatChange]);
 
-  const formatRepeat = (r: BarRepeat): string => {
-    let label = "";
-    if (r.type === "count") label = `\u00D7${r.value}`;
-    else {
-      const totalSec = r.value;
-      const m = Math.floor(totalSec / 60);
-      const s = totalSec % 60;
-      if (m > 0) label = s > 0 ? `${m}'${s.toString().padStart(2, "0")}"` : `${m}'`;
-      else label = `${s}"`;
-    }
-    if (r.bpm) label += ` ${r.bpm}`;
-    return label;
-  };
-
   const barLongPressedRef = useRef(false);
 
   const handleBarNumberLongPress = useCallback((beat: number) => {
@@ -1005,23 +991,8 @@ export function BeatIndicator({
   const LAYER_ROW_H = 16;
   const rowH = BAR_HEIGHT + 1 + barGap;
 
-  const getLayerCountForBeat = (beat: number): number => {
-    for (let i = 0; i < loopBlocks.length; i++) {
-      const b = loopBlocks[i];
-      if (b.layerOf !== undefined) continue;
-      if (beat >= b.startBeat && beat <= Math.min(b.endBeat, beatsPerMeasure - 1)) {
-        let count = 0;
-        for (let j = 0; j < loopBlocks.length; j++) {
-          if (loopBlocks[j].layerOf === i) count++;
-        }
-        return count;
-      }
-    }
-    return 0;
-  };
-
   const getBeatRowHeight = useCallback((beat: number): number => {
-    const layerCount = getLayerCountForBeat(beat);
+    const layerCount = getLayerCountForBeat(beat, loopBlocks, beatsPerMeasure);
     if (layerCount > 0) {
       return BAR_HEIGHT + layerCount * BAR_HEIGHT + 1 + barGap;
     }
@@ -1141,7 +1112,8 @@ export function BeatIndicator({
     <View
       pointerEvents="none"
       style={{
-        position: Platform.OS === "web" ? ("fixed" as any) : "absolute",
+        // RN ViewStyle.position 타입은 "absolute"|"relative"만 허용하지만 RN-web에서 "fixed" 동작 — 의도적 cast(타입 시스템 한계)
+        position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
         left: pillDrag.x - 24,
         top: pillDrag.y - 24,
         paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs, borderRadius: Radius.sm,
@@ -1762,7 +1734,7 @@ export function BeatIndicator({
                       for (let copy = 0; copy < copies; copy++) {
                         const copyOffset = copy * copyHeight;
                         const topPos = centerPad + copyOffset + getBeatTop(startBeat) + (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
-                        const endLayerCount = getLayerCountForBeat(endBeat);
+                        const endLayerCount = getLayerCountForBeat(endBeat, loopBlocks, beatsPerMeasure);
                         const endBeatContentH = endLayerCount > 0 ? BAR_HEIGHT + endLayerCount * BAR_HEIGHT : BAR_HEIGHT;
                         const bottomPos = centerPad + copyOffset + getBeatTop(endBeat) + endBeatContentH - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
                         const totalH = bottomPos - topPos;
@@ -2292,7 +2264,7 @@ export function BeatIndicator({
                   for (let copy = 0; copy < copies; copy++) {
                     const copyOffset = copy * copyHeight;
                     const topPos = centerPad + copyOffset + getBeatTop(startBeat) + (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
-                    const endLayerCount = getLayerCountForBeat(endBeat);
+                    const endLayerCount = getLayerCountForBeat(endBeat, loopBlocks, beatsPerMeasure);
                     const endBeatContentH = endLayerCount > 0 ? BAR_HEIGHT + endLayerCount * BAR_HEIGHT : BAR_HEIGHT;
                     const bottomPos = centerPad + copyOffset + getBeatTop(endBeat) + endBeatContentH - (isSingleBeat ? BAR_HEIGHT / 2 - 6 : 2);
                     const totalH = bottomPos - topPos;
