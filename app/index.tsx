@@ -238,6 +238,10 @@ export default function MetronomeScreen() {
   const [showSignalGen, setShowSignalGen] = useState(false);
   const [showTuningGuide, setShowTuningGuide] = useState(false);
   const tuningGuideOnSelectRef = useRef<((freq: number) => void) | null>(null);
+  // SignalGenerator → TuningGuide 전환 시 SignalGen을 닫고, TuningGuide
+  // 종료 직후 자동으로 SignalGen을 재오픈하기 위한 플래그.
+  // 단일 활성 모달 보장(태스크 #70)을 위해 두 모달의 동시 visible=true를 금지한다.
+  const reopenSignalGenAfterTuningGuideRef = useRef(false);
   const [androidMicActive, setAndroidMicActive] = useState(false);
   const [androidMicFreq, setAndroidMicFreq] = useState<number | null>(null);
   const [androidMicNote, setAndroidMicNote] = useState<string | null>(null);
@@ -301,6 +305,52 @@ export default function MetronomeScreen() {
     teardownTempoQuizRef.current();
     setShowTempoQuiz(false);
   }, []);
+  // closeAllModals 내에서 TempoQuiz가 실제로 활성화되어 있을 때만 teardown을
+  // 실행하기 위한 ref. setState 클로저 대신 ref로 최신 값을 읽는다.
+  const showTempoQuizRef = useRef(false);
+  useEffect(() => { showTempoQuizRef.current = showTempoQuiz; }, [showTempoQuiz]);
+
+  /**
+   * 단일 활성 모달 보장: 새 모달을 열기 전에 알려진 모든 모달을 닫는다.
+   * 어떤 모달도 예외 없이 닫는다 — SignalGenerator ↔ TuningGuide의 sibling
+   * 오버레이 케이스도 두 모달의 동시 visible=true를 허용하지 않으며,
+   * `reopenSignalGenAfterTuningGuideRef`로 TuningGuide 종료 후 SignalGen
+   * 재오픈을 별도로 처리한다.
+   * 닫기 부수효과(Engine teardown 등)가 있는 모달은 정규 close 함수를 사용한다.
+   */
+  const closeAllModals = useCallback(() => {
+    setShowSettings(false);
+    setShowMenu(false);
+    setShowSignalGen(false);
+    tuningGuideOnSelectRef.current = null;
+    setShowTuningGuide(false);
+    setShowPracticeBook(false);
+    setShowWorkUp(false);
+    setShowOnboarding(false);
+    setShowReboot(false);
+    setShowMoreMenu(false);
+    setShowDrumKit(false);
+    setShowScheduledStart(false);
+    setShowFadeOut(false);
+    // TempoQuiz는 teardown 부수효과(엔진 정지/시각 리셋)가 있으므로
+    // 실제로 활성화된 경우에만 정규 close 함수를 호출한다. 그렇지 않으면
+    // openExclusive가 메트로놈 재생을 의도치 않게 중단시킨다.
+    if (showTempoQuizRef.current) {
+      closeTempoQuiz();
+    }
+    setLandscapeImageModalVisible(false);
+    setRecorderTarget(null);
+  }, [closeTempoQuiz]);
+
+  /**
+   * 모달 진입을 단일 게이트로 강제하는 공용 헬퍼. 다른 모달을 먼저 닫은 뒤
+   * 짧은 지연(50ms)을 두고 새 모달을 연다 — RN 네이티브 Modal의 fade 전환
+   * 동안 두 모달이 겹쳐 입력이 'ghost' 상태가 되는 것을 방지한다.
+   */
+  const openExclusive = useCallback((open: () => void, opts?: { delay?: number }) => {
+    closeAllModals();
+    setTimeout(open, opts?.delay ?? 50);
+  }, [closeAllModals]);
   const fadeOutStatusText = useMemo(() => {
     const sess = fadeOutSessionRef.current;
     if (!sess || !fadeOutPhase) return null;
@@ -321,8 +371,23 @@ export default function MetronomeScreen() {
     if (Platform.OS !== "android") return;
     const onBack = () => {
       if (showSettings) { setShowSettings(false); return true; }
-      if (showTuningGuide) { tuningGuideOnSelectRef.current = null; setShowTuningGuide(false); return true; }
-      if (showSignalGen) { tuningGuideOnSelectRef.current = null; setShowTuningGuide(false); setShowSignalGen(false); return true; }
+      if (showTuningGuide) {
+        tuningGuideOnSelectRef.current = null;
+        setShowTuningGuide(false);
+        // SignalGen에서 진입했었다면 back으로 닫을 때도 재오픈한다.
+        if (reopenSignalGenAfterTuningGuideRef.current) {
+          reopenSignalGenAfterTuningGuideRef.current = false;
+          setTimeout(() => setShowSignalGen(true), 50);
+        }
+        return true;
+      }
+      if (showSignalGen) {
+        tuningGuideOnSelectRef.current = null;
+        reopenSignalGenAfterTuningGuideRef.current = false;
+        setShowTuningGuide(false);
+        setShowSignalGen(false);
+        return true;
+      }
       if (showPracticeBook) { setShowPracticeBook(false); return true; }
       if (showWorkUp) { setShowWorkUp(false); return true; }
       if (showTempoQuiz) { closeTempoQuiz(); return true; }
@@ -4039,10 +4104,7 @@ export default function MetronomeScreen() {
             <View style={[styles.menuDropdown, { backgroundColor: C.surface, borderColor: C.border }, isLandscape ? { left: S.ms(20, 0.3), right: "auto" as any, top: (insets.top || webTopInset) + S.ms(40, 0.3) } : { top: (insets.top || webTopInset) + 52 }]}>
               <Pressable
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-                onPress={() => {
-                  setShowMenu(false);
-                  setTimeout(() => setShowSettings(true), 50);
-                }}
+                onPress={() => openExclusive(() => setShowSettings(true))}
                 accessibilityRole="menuitem"
                 accessibilityLabel={t("a11y", "menuSettings")}
               >
@@ -4053,9 +4115,8 @@ export default function MetronomeScreen() {
               <Pressable
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
-                  setShowMenu(false);
                   if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
-                  setTimeout(() => setShowSignalGen(true), 50);
+                  openExclusive(() => setShowSignalGen(true));
                 }}
                 accessibilityRole="menuitem"
                 accessibilityLabel={t("a11y", "menuSignalGenerator")}
@@ -4066,10 +4127,7 @@ export default function MetronomeScreen() {
               <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
               <Pressable
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-                onPress={() => {
-                  setShowMenu(false);
-                  setTimeout(() => setShowWorkUp(true), 50);
-                }}
+                onPress={() => openExclusive(() => setShowWorkUp(true))}
                 accessibilityRole="menuitem"
                 accessibilityLabel={t("a11y", "menuWorkUp")}
               >
@@ -4080,9 +4138,8 @@ export default function MetronomeScreen() {
               <Pressable
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
-                  setShowMenu(false);
                   if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
-                  setTimeout(() => setShowPracticeBook(true), 50);
+                  openExclusive(() => setShowPracticeBook(true));
                 }}
                 accessibilityRole="menuitem"
                 accessibilityLabel={t("a11y", "menuPracticeBook")}
@@ -4093,10 +4150,7 @@ export default function MetronomeScreen() {
               <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
               <Pressable
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-                onPress={() => {
-                  setShowMenu(false);
-                  setTimeout(() => setShowMoreMenu(true), 50);
-                }}
+                onPress={() => openExclusive(() => setShowMoreMenu(true))}
                 accessibilityRole="menuitem"
                 accessibilityLabel={t("main", "menuMore")}
                 testID="menu-more"
@@ -4112,16 +4166,9 @@ export default function MetronomeScreen() {
       <MoreMenuModal
         visible={showMoreMenu}
         onClose={() => setShowMoreMenu(false)}
-        onScheduledStart={() => {
-          setShowMoreMenu(false);
-          setShowScheduledStart(true);
-        }}
-        onFadeOut={() => {
-          setShowMoreMenu(false);
-          setShowFadeOut(true);
-        }}
+        onScheduledStart={() => openExclusive(() => setShowScheduledStart(true))}
+        onFadeOut={() => openExclusive(() => setShowFadeOut(true))}
         onDrumKit={() => {
-          setShowMoreMenu(false);
           const engine = engineRef.current;
           if (engine?.getIsRunning()) engine.stop();
           stopRenderedAudio();
@@ -4129,10 +4176,9 @@ export default function MetronomeScreen() {
           resetPlaybackVisuals();
           setIsPreparing(false);
           setIsPlaying(false);
-          setShowDrumKit(true);
+          openExclusive(() => setShowDrumKit(true));
         }}
         onTempoQuiz={() => {
-          setShowMoreMenu(false);
           const engine = engineRef.current;
           if (engine?.getIsRunning()) engine.stop();
           stopRenderedAudio();
@@ -4159,7 +4205,7 @@ export default function MetronomeScreen() {
           }
           setTempoQuizMeasureProgress(0);
           setTempoQuizPhase("ready");
-          setShowTempoQuiz(true);
+          openExclusive(() => setShowTempoQuiz(true));
         }}
       />
 
@@ -4280,13 +4326,16 @@ export default function MetronomeScreen() {
         </Pressable>
       </Modal>
 
-      {showSignalGen && (
+      {/* SignalGeneratorModal은 항상 마운트 상태로 유지한다.
+          TuningGuide로 전환 시 SignalGen을 visible=false로 잠시 숨긴 뒤
+          TuningGuide 종료 후 재오픈할 때 내부 상태(주파수/파형/옥타브 등)를
+          보존하기 위함이다. */}
       <SignalGeneratorModal
         visible={showSignalGen}
         onClose={() => {
           setShowSignalGen(false);
-          // TuningGuideModal이 열려 있으면 함께 닫고 콜백 ref를 무효화한다.
-          // SignalGen이 언마운트되어도 선택 콜백이 stale하게 실행되는 ghost 상태 방지.
+          // 사용자가 명시적으로 SignalGen을 닫으면 TG 재오픈 플래그도 클리어.
+          reopenSignalGenAfterTuningGuideRef.current = false;
           setShowTuningGuide(false);
           tuningGuideOnSelectRef.current = null;
           setAndroidMicActive(false);
@@ -4304,11 +4353,14 @@ export default function MetronomeScreen() {
         androidMicFrequency={androidMicFreq}
         androidMicNote={androidMicNote}
         onOpenTuningGuide={(currentFreq, onSelectFreq) => {
+          // 단일 활성 모달 원칙(태스크 #70): SignalGen을 닫고 TG를 연다.
+          // TG 종료 시 자동 재오픈하기 위해 플래그를 세팅.
           tuningGuideOnSelectRef.current = onSelectFreq;
-          setShowTuningGuide(true);
+          reopenSignalGenAfterTuningGuideRef.current = true;
+          setShowSignalGen(false);
+          setTimeout(() => setShowTuningGuide(true), 50);
         }}
       />
-      )}
       {androidMicActive && Platform.OS === "android" && (
         <MicWebView
           ref={androidMicRef}
@@ -4342,14 +4394,23 @@ export default function MetronomeScreen() {
         onClose={() => {
           tuningGuideOnSelectRef.current = null;
           setShowTuningGuide(false);
+          // SignalGen에서 진입한 흐름이면 TG 종료 후 SignalGen을 재오픈한다.
+          if (reopenSignalGenAfterTuningGuideRef.current) {
+            reopenSignalGenAfterTuningGuideRef.current = false;
+            setTimeout(() => setShowSignalGen(true), 50);
+          }
         }}
         onSelectFreq={(freq) => {
-          // showSignalGen이 이미 닫혀 있으면 stale callback 실행을 방지한다.
+          // SignalGen이 닫혀 있어도 setState는 안전(no-op)하지만 콜백 자체는 호출한다.
           if (tuningGuideOnSelectRef.current) {
             tuningGuideOnSelectRef.current(freq);
           }
           tuningGuideOnSelectRef.current = null;
           setShowTuningGuide(false);
+          if (reopenSignalGenAfterTuningGuideRef.current) {
+            reopenSignalGenAfterTuningGuideRef.current = false;
+            setTimeout(() => setShowSignalGen(true), 50);
+          }
         }}
         lang={language as "ko" | "en"}
         accentColor={C.accent}
@@ -4493,10 +4554,7 @@ export default function MetronomeScreen() {
           scheduleReRender();
         }}
         onEnterNoteMode={handleEnterNoteMode}
-        onShowOnboarding={() => {
-          setShowSettings(false);
-          setShowOnboarding(true);
-        }}
+        onShowOnboarding={() => openExclusive(() => setShowOnboarding(true))}
       />
       )}
 

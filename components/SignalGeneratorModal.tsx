@@ -592,8 +592,14 @@ interface SignalGeneratorModalProps {
   onAndroidMicToggle?: (active: boolean) => void;
   androidMicFrequency?: number | null;
   androidMicNote?: string | null;
-  /** 앱 레벨에서 TuningGuideModal을 렌더링하도록 위임할 때 사용. 제공 시 내부 중첩 Modal 불사용. */
-  onOpenTuningGuide?: (currentFreq: number, onSelectFreq: (freq: number) => void) => void;
+  /**
+   * 앱 레벨에서 TuningGuideModal을 렌더링하도록 위임. 두 모달이 동시에
+   * 활성화되어 입력이 한쪽에 묶이는 'ghost' 상태를 막기 위해 SignalGenerator
+   * 내부에서는 TuningGuideModal을 중첩 렌더링하지 않는다. 이 prop은 필수이며,
+   * 누락 시 튜닝 가이드 트리거가 무동작이 되는 것을 막기 위해 타입 레벨에서
+   * 강제한다.
+   */
+  onOpenTuningGuide: (currentFreq: number, onSelectFreq: (freq: number) => void) => void;
 }
 
 export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, androidMicFrequency, androidMicNote, onOpenTuningGuide }: SignalGeneratorModalProps) {
@@ -628,7 +634,6 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const [freqInput, setFreqInput] = useState("440");
   const [selectedNote, setSelectedNote] = useState("A");
   const [selectedOctave, setSelectedOctave] = useState(4);
-  const [tuningGuideOpen, setTuningGuideOpen] = useState(false);
   const preGuideFreqRef = useRef<number | null>(null);
   const [pickerLockFlash, setPickerLockFlash] = useState(false);
 
@@ -1497,15 +1502,11 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             <Pressable
               onPress={() => {
                 hapticFeedback();
-                if (onOpenTuningGuide) {
-                  const capturedFreq = frequency;
-                  onOpenTuningGuide(capturedFreq, (selectedFreq) => {
-                    if (preGuideFreqRef.current === null) preGuideFreqRef.current = capturedFreq;
-                    setFrequency(selectedFreq);
-                  });
-                } else {
-                  setTuningGuideOpen(true);
-                }
+                const capturedFreq = frequency;
+                onOpenTuningGuide(capturedFreq, (selectedFreq) => {
+                  if (preGuideFreqRef.current === null) preGuideFreqRef.current = capturedFreq;
+                  setFrequency(selectedFreq);
+                });
               }}
               onLongPress={() => {
                 if (preGuideFreqRef.current !== null) {
@@ -1523,21 +1524,6 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               </Text>
               <Ionicons name="chevron-forward" size={S.ms(12, 0.4)} color={C.textTertiary} />
             </Pressable>
-
-            {!onOpenTuningGuide && (
-            <TuningGuideModal
-              visible={tuningGuideOpen}
-              onClose={() => setTuningGuideOpen(false)}
-              onSelectFreq={(freq) => {
-                if (preGuideFreqRef.current === null) preGuideFreqRef.current = frequency;
-                setFrequency(freq);
-                setTuningGuideOpen(false);
-              }}
-              lang={lang}
-              accentColor={C.accent}
-              accentDim={C.accentDim}
-            />
-            )}
 
             <Pressable
               onPress={() => {
@@ -1612,15 +1598,11 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             <Pressable
               onPress={() => {
                 hapticFeedback();
-                if (onOpenTuningGuide) {
-                  const capturedFreq = frequency;
-                  onOpenTuningGuide(capturedFreq, (selectedFreq) => {
-                    if (preGuideFreqRef.current === null) preGuideFreqRef.current = capturedFreq;
-                    setFrequency(selectedFreq);
-                  });
-                } else {
-                  setTuningGuideOpen(true);
-                }
+                const capturedFreq = frequency;
+                onOpenTuningGuide(capturedFreq, (selectedFreq) => {
+                  if (preGuideFreqRef.current === null) preGuideFreqRef.current = capturedFreq;
+                  setFrequency(selectedFreq);
+                });
               }}
               onLongPress={() => {
                 if (preGuideFreqRef.current !== null) {
@@ -1638,21 +1620,6 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               </Text>
               <Ionicons name="chevron-forward" size={S.ms(14, 0.4)} color={C.textTertiary} />
             </Pressable>
-
-            {!onOpenTuningGuide && (
-            <TuningGuideModal
-              visible={tuningGuideOpen}
-              onClose={() => setTuningGuideOpen(false)}
-              onSelectFreq={(freq) => {
-                if (preGuideFreqRef.current === null) preGuideFreqRef.current = frequency;
-                setFrequency(freq);
-                setTuningGuideOpen(false);
-              }}
-              lang={lang}
-              accentColor={C.accent}
-              accentDim={C.accentDim}
-            />
-            )}
 
             <View style={styles.waveSection}>
               <Text style={styles.sectionLabel}>{t("signalGenerator", "waveform")}</Text>
