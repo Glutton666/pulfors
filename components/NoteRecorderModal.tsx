@@ -278,6 +278,10 @@ export function NoteRecorderModal({
     } catch (e) {
       captureBreadcrumb({ category: "noteRecorder", message: "startRecording failed", level: "error", data: { error: String(e) } });
       setPhase("idle");
+      recordingActiveRef.current = false;
+      // record() 자체가 실패하면 prepareRecording에서 잡고 있던 세션이 남으므로
+      // 여기서 명시적으로 회복한다.
+      try { await releaseAudioSession("noteRecorderModal"); } catch {}
     }
   }, [bpm, startMetronomeClicks]);
 

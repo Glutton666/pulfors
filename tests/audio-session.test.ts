@@ -163,6 +163,21 @@ test("integration: bridge pause/resume via app-style toggle does not mark user t
   assert.equal(state.resumeCount, 1);
 });
 
+test("note recorder: start failure after prepare releases session", async () => {
+  // prepareRecording이 acquire 후 startRecording의 record()가 실패하는 시나리오:
+  // catch에서 releaseAudioSession을 호출해 active caller가 남지 않아야 한다.
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  // prepare 단계에서 acquire 성공.
+  await acquireAudioSession("noteRecorderModal", "recording");
+  assert.equal(state.pauseCount, 1);
+  // record() 실패 → catch에서 release 호출 (NoteRecorderModal.startRecording 패턴).
+  await releaseAudioSession("noteRecorderModal");
+  assert.equal(_audioSessionDebugState().activeCallers.length, 0);
+  assert.equal(state.resumeCount, 1, "metronome must resume after start failure");
+});
+
 test("signal generator: native mic → android webview fallback transition", async () => {
   // iOS 네이티브 마이크가 실패하여 Android WebView 폴백으로 전환되는 시나리오:
   // signalGenMicMobile release → signalGenMicAndroid acquire가 연속해서 일어날 때
