@@ -8,8 +8,10 @@ import {
   _resetPendingPermissionsForTest,
   _setPermissionRequestImplForTest,
   ensurePermission,
+  runPermissionRecoveryLoop,
   type PermissionResult,
   type PermissionKind,
+  type PermissionRecoveryEvent,
 } from "../lib/permissions";
 import { createT } from "../lib/i18n";
 
@@ -213,6 +215,83 @@ test("entry.run() 두 번 연속 실패 시 abandoned로 정리", async () => {
   assert.equal(runCount, 2);
   assert.equal(hasAnyPendingPermissionAction(), false);
   _setPermissionRequestImplForTest(null);
+});
+
+test("runPermissionRecoveryLoop: recover 도중 cancelled 되면 onRecovered 호출 안 됨", async () => {
+  let resolveRecover: ((v: PermissionRecoveryEvent[]) => void) | null = null;
+  const recoverPromise = new Promise<PermissionRecoveryEvent[]>((res) => { resolveRecover = res; });
+  let recovered = 0;
+  let cancelled = false;
+  const loop = runPermissionRecoveryLoop({
+    hasPending: () => true,
+    recover: () => recoverPromise,
+    isCancelled: () => cancelled,
+    onRecovered: () => { recovered += 1; },
+  });
+  // recover() pending 중에 언마운트
+  cancelled = true;
+  resolveRecover!([{ kind: "mic", status: "recovered" }]);
+  await loop;
+  assert.equal(recovered, 0, "언마운트 후에는 onRecovered 호출되지 않아야 함");
+});
+
+test("runPermissionRecoveryLoop: hasPending=false면 recover 호출 안 함", async () => {
+  let recoverCalls = 0;
+  let recovered = 0;
+  await runPermissionRecoveryLoop({
+    hasPending: () => false,
+    recover: async () => { recoverCalls += 1; return []; },
+    isCancelled: () => false,
+    onRecovered: () => { recovered += 1; },
+  });
+  assert.equal(recoverCalls, 0);
+  assert.equal(recovered, 0);
+});
+
+test("runPermissionRecoveryLoop: 시작 전부터 cancelled면 hasPending도 호출 안 함", async () => {
+  let hasPendingCalls = 0;
+  let recoverCalls = 0;
+  await runPermissionRecoveryLoop({
+    hasPending: () => { hasPendingCalls += 1; return true; },
+    recover: async () => { recoverCalls += 1; return []; },
+    isCancelled: () => true,
+    onRecovered: () => {},
+  });
+  assert.equal(hasPendingCalls, 0);
+  assert.equal(recoverCalls, 0);
+});
+
+test("runPermissionRecoveryLoop: 이벤트 순회 도중 cancelled되면 이후 onRecovered 중단", async () => {
+  let cancelled = false;
+  const recoveredKinds: PermissionKind[] = [];
+  await runPermissionRecoveryLoop({
+    hasPending: () => true,
+    recover: async () => [
+      { kind: "mic", status: "recovered" },
+      { kind: "photo", status: "recovered" },
+    ],
+    isCancelled: () => cancelled,
+    onRecovered: (kind) => {
+      recoveredKinds.push(kind);
+      // 첫 번째 콜백 후 언마운트 시뮬레이션
+      cancelled = true;
+    },
+  });
+  assert.deepEqual(recoveredKinds, ["mic"], "cancelled 이후의 이벤트는 무시되어야 함");
+});
+
+test("runPermissionRecoveryLoop: recovered 외 status는 onRecovered 호출 안 함", async () => {
+  const calls: PermissionKind[] = [];
+  await runPermissionRecoveryLoop({
+    hasPending: () => true,
+    recover: async () => [
+      { kind: "mic", status: "still-denied" },
+      { kind: "photo", status: "abandoned" },
+    ],
+    isCancelled: () => false,
+    onRecovered: (kind) => { calls.push(kind); },
+  });
+  assert.deepEqual(calls, []);
 });
 
 test("TTL 초과한 pending은 probe 시 abandoned 처리", async () => {

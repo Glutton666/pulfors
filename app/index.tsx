@@ -13,7 +13,7 @@ import {
   AppState,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { ensurePermission, tryRecoverPermissionActions, hasAnyPendingPermissionAction } from "@/lib/permissions";
+import { ensurePermission, tryRecoverPermissionActions, hasAnyPendingPermissionAction, runPermissionRecoveryLoop } from "@/lib/permissions";
 import * as Linking from "expo-linking";
 import {
   setupNotificationControls,
@@ -363,18 +363,15 @@ export default function MetronomeScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    const runRecovery = async () => {
-      if (cancelled) return;
-      if (!hasAnyPendingPermissionAction()) return;
-      const events = await tryRecoverPermissionActions();
-      if (cancelled) return;
-      for (const ev of events) {
-        if (cancelled) return;
-        if (ev.status !== "recovered") continue;
-        const key = ev.kind === "mic" ? "recoveredMic" : "recoveredPhoto";
+    const runRecovery = () => runPermissionRecoveryLoop({
+      hasPending: hasAnyPendingPermissionAction,
+      recover: tryRecoverPermissionActions,
+      isCancelled: () => cancelled,
+      onRecovered: (kind) => {
+        const key = kind === "mic" ? "recoveredMic" : "recoveredPhoto";
         showRecoveryToast(t("permissions", key));
-      }
-    };
+      },
+    });
     if (Platform.OS === "web") {
       const onVis = () => {
         if (typeof document !== "undefined" && document.visibilityState === "visible") {

@@ -64,6 +64,27 @@ export interface PermissionRecoveryEvent {
   status: PermissionRecoveryStatus;
 }
 
+/**
+ * runRecovery 루프의 컴포넌트 의존성 없는 헬퍼. await 사이마다 isCancelled를
+ * 확인해 언마운트된 컴포넌트의 setState 콜이 일어나지 않도록 보장한다.
+ * recovered 이벤트마다 onRecovered 콜백을 호출한다.
+ */
+export async function runPermissionRecoveryLoop(opts: {
+  hasPending: () => boolean;
+  recover: () => Promise<PermissionRecoveryEvent[]>;
+  isCancelled: () => boolean;
+  onRecovered: (kind: PermissionKind) => void;
+}): Promise<void> {
+  if (opts.isCancelled()) return;
+  if (!opts.hasPending()) return;
+  const events = await opts.recover();
+  if (opts.isCancelled()) return;
+  for (const ev of events) {
+    if (opts.isCancelled()) return;
+    if (ev.status === "recovered") opts.onRecovered(ev.kind);
+  }
+}
+
 // AppState 'active'/visibilitychange가 여러 번 연속으로 발생할 수 있어
 // 동일 pending 액션이 중복 실행되는 것을 방지한다. probe 자체는 idempotent
 // 하지만 entry.run() 사이드이펙트(녹음 시작 등)는 1회만 일어나야 한다.
