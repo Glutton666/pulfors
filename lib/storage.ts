@@ -30,16 +30,27 @@ export function clampFadeOutMeasures(v: number): number {
   return Math.max(1, Math.min(64, Math.floor(v)));
 }
 
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
 export async function loadFadeOutSettings(): Promise<FadeOutSettings> {
   try {
     const data = await AsyncStorage.getItem(FADE_OUT_KEY);
     if (data) {
-      const parsed = JSON.parse(data);
+      const parsed: unknown = JSON.parse(data);
+      if (!isPlainObject(parsed)) return DEFAULT_FADE_OUT;
       return {
         enabled: !!parsed.enabled,
-        audibleN: clampFadeOutMeasures(parsed.audibleN ?? DEFAULT_FADE_OUT.audibleN),
-        mutedM: clampFadeOutMeasures(parsed.mutedM ?? DEFAULT_FADE_OUT.mutedM),
-        audibleK: clampFadeOutMeasures(parsed.audibleK ?? DEFAULT_FADE_OUT.audibleK),
+        audibleN: clampFadeOutMeasures(
+          typeof parsed.audibleN === "number" ? parsed.audibleN : DEFAULT_FADE_OUT.audibleN,
+        ),
+        mutedM: clampFadeOutMeasures(
+          typeof parsed.mutedM === "number" ? parsed.mutedM : DEFAULT_FADE_OUT.mutedM,
+        ),
+        audibleK: clampFadeOutMeasures(
+          typeof parsed.audibleK === "number" ? parsed.audibleK : DEFAULT_FADE_OUT.audibleK,
+        ),
       };
     }
   } catch (e) {
@@ -90,7 +101,12 @@ const CUSTOM_SOUND_SETS_KEY = "metronome_custom_sound_sets";
 export async function loadCustomSoundSets(): Promise<Record<string, CustomSoundSetConfig>> {
   try {
     const data = await AsyncStorage.getItem(CUSTOM_SOUND_SETS_KEY);
-    if (data) return JSON.parse(data);
+    if (data) {
+      const parsed: unknown = JSON.parse(data);
+      if (isPlainObject(parsed)) {
+        return parsed as Record<string, CustomSoundSetConfig>;
+      }
+    }
   } catch (e) {
     notifyStorageError({ key: CUSTOM_SOUND_SETS_KEY, operation: "load", error: e });
   }
@@ -158,8 +174,9 @@ export async function loadSettings(): Promise<MetronomeSettings> {
   try {
     const data = await AsyncStorage.getItem(SETTINGS_KEY);
     if (data) {
-      const parsed = JSON.parse(data);
-      const merged: MetronomeSettings = { ...DEFAULT_SETTINGS, ...parsed };
+      const parsed: unknown = JSON.parse(data);
+      if (!isPlainObject(parsed)) return DEFAULT_SETTINGS;
+      const merged: MetronomeSettings = { ...DEFAULT_SETTINGS, ...parsed } as MetronomeSettings;
       merged.barMetronomeChannel = normalizeSampleChannel(merged.barMetronomeChannel);
       return merged;
     }
@@ -298,7 +315,12 @@ export async function saveControlPadMapping(mapping: ControlPadMapping): Promise
 export async function loadPracticeBook(): Promise<PracticeEntry[]> {
   try {
     const data = await AsyncStorage.getItem(PRACTICE_BOOK_KEY);
-    if (data) return JSON.parse(data);
+    if (data) {
+      const parsed: unknown = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((e) => isPlainObject(e)) as unknown as PracticeEntry[];
+      }
+    }
   } catch (e) {
     logger.warn("Failed to load practice book:", e);
   }

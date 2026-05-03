@@ -45,6 +45,41 @@ test("loadSettings: 손상된 JSON → 기본값", async () => {
   assert.equal(s.bpm, 120);
 });
 
+test("loadSettings: 잘못된 형태(배열/숫자/null) → 기본값", async () => {
+  await AsyncStorage.setItem("metronome_settings", "[1,2,3]");
+  assert.equal((await loadSettings()).bpm, 120);
+  await AsyncStorage.setItem("metronome_settings", "42");
+  assert.equal((await loadSettings()).bpm, 120);
+  await AsyncStorage.setItem("metronome_settings", "null");
+  assert.equal((await loadSettings()).bpm, 120);
+});
+
+test("loadCustomSoundSets: 잘못된 형태 → {}", async () => {
+  await AsyncStorage.setItem("metronome_custom_sound_sets", "[1,2]");
+  assert.deepEqual(await loadCustomSoundSets(), {});
+  await AsyncStorage.setItem("metronome_custom_sound_sets", "\"abc\"");
+  assert.deepEqual(await loadCustomSoundSets(), {});
+});
+
+test("loadPracticeBook: 손상/비배열 → []", async () => {
+  await AsyncStorage.setItem("practice_book", "}}}");
+  assert.deepEqual(await loadPracticeBook(), []);
+  await AsyncStorage.setItem("practice_book", "{\"oops\":1}");
+  assert.deepEqual(await loadPracticeBook(), []);
+});
+
+test("loadPracticeBook: 배열 안 비객체 항목은 필터링", async () => {
+  await AsyncStorage.setItem("practice_book", JSON.stringify([
+    { id: "ok", label: "x" },
+    "junk",
+    null,
+    42,
+  ]));
+  const out = await loadPracticeBook();
+  assert.equal(out.length, 1);
+  assert.equal(out[0].id, "ok");
+});
+
 test("saveSettingsDebounced: 디바운스 후 1회만 저장", async () => {
   saveSettingsDebounced({ bpm: 100 } as MetronomeSettings);
   saveSettingsDebounced({ bpm: 110 } as MetronomeSettings);

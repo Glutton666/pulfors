@@ -19,6 +19,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { VoiceAssistantProvider } from "@/contexts/VoiceAssistantContext";
 import { initErrorTracking } from "@/lib/error-tracking";
 import { StorageErrorAlert } from "@/components/StorageErrorAlert";
+import { rollbackPendingRestoreIfAny } from "@/lib/backup/full";
 
 import {
   useFonts,
@@ -81,6 +82,11 @@ export default function RootLayout() {
   // 앱 시작 시 에러 트래킹 초기화 (DSN이 없으면 console-only 모드로 동작)
   useEffect(() => {
     initErrorTracking();
+    // 이전 백업 복원이 강제 종료/오류로 끊긴 경우 자동 롤백.
+    // 폰트 로딩과 병렬로 돌아 사용자에게 보이지 않게 동작한다.
+    rollbackPendingRestoreIfAny().catch((e) => {
+      logger.warn("Pending restore rollback failed:", e);
+    });
   }, []);
 
   // 앱 준비 완료 체크

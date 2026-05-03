@@ -23,6 +23,11 @@ export const ALL_KEYS = [
   "metronome_onboarding_done",
 ];
 
+// 복원 트랜잭션용 임시 스냅샷 키. restoreFromJson 시작 시 ALL_KEYS의 현재
+// 값을 직렬화해 이 키에 저장하고, 정상 종료 시 삭제한다. 앱이 강제 종료되거나
+// multiSet이 실패하면 이 키가 남아 부팅 시 자동 롤백된다.
+export const RESTORE_SNAPSHOT_KEY = "metronome_restore_snapshot_v1";
+
 export const SAMPLES_DIR = "note_samples/";
 
 export const MAX_IMPORT_JSON_CHARS = 100 * 1024 * 1024;
