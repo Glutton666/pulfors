@@ -3076,6 +3076,8 @@ export default function MetronomeScreen() {
       setIsPlaying(false);
       setCurrentBeat(-1);
       setMeasureCount(0);
+      setActiveSubNote(-1);
+      activeSubNoteRef.current = -1;
       setProgressInfo(null); setLayerProgressMap({});
       showPausedNotification(bpmRef.current, "Note", languageRef.current);
     }
@@ -3116,6 +3118,8 @@ export default function MetronomeScreen() {
       setMeasureCount(0);
       setProgressInfo(null); setLayerProgressMap({});
     }
+    setActiveSubNote(-1);
+    activeSubNoteRef.current = -1;
     setNoteMode(false);
     noteModeRef.current = false;
     setNoteIsPlaying(false);
@@ -3152,6 +3156,11 @@ export default function MetronomeScreen() {
         noteIsPlayingRef.current = false;
         setIsPlaying(false);
         setNoteCurrentIndex(-1);
+        setCurrentBeat(-1);
+        setMeasureCount(0);
+        setActiveSubNote(-1);
+        activeSubNoteRef.current = -1;
+        setProgressInfo(null); setLayerProgressMap({});
       }
     } else if (curIdx > index) {
       setNoteCurrentIndex(curIdx - 1);
@@ -3219,6 +3228,8 @@ export default function MetronomeScreen() {
       setNoteIsPlaying(false);
       setCurrentBeat(-1);
       setMeasureCount(0);
+      setActiveSubNote(-1);
+      activeSubNoteRef.current = -1;
       setProgressInfo(null); setLayerProgressMap({});
       showPausedNotification(bpmRef.current, "Note", languageRef.current);
     } else {

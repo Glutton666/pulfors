@@ -735,40 +735,88 @@ export function BeatIndicator({
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
+    // barMode 에서는 dial 컨테이너가 언마운트되어 containerRef 가 null 이므로 스킵
+    if (barMode) return;
 
     const handleMouseDown = (e: MouseEvent) => {
       startXRef.current = e.clientX;
       isDraggingRef.current = true;
       triggeredRef.current = false;
     };
-
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDraggingRef.current) return;
       processMoveByDx(e.clientX - startXRef.current);
     };
-
     const handleMouseUp = () => {
       if (!isDraggingRef.current) return;
       isDraggingRef.current = false;
       resetVisuals();
     };
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 0) return;
+      startXRef.current = e.touches[0].clientX;
+      isDraggingRef.current = true;
+      triggeredRef.current = false;
+    };
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isDraggingRef.current || e.touches.length === 0) return;
+      processMoveByDx(e.touches[0].clientX - startXRef.current);
+    };
+    const handleTouchEnd = () => {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
+      resetVisuals();
+    };
 
-    const node = containerRef.current as any;
-    if (!node) return;
+    // dial 컨테이너가 다음 페인트에 마운트되었을 수 있으므로 짧게 폴링
+    let attached: HTMLElement | null = null;
+    let cancelled = false;
+    const attach = () => {
+      if (cancelled) return;
+      const node = containerRef.current as any;
+      const el = node as unknown as HTMLElement | null;
+      if (!el || !el.addEventListener) {
+        // 다음 프레임에 재시도 (최대 ~5회)
+        return false;
+      }
+      el.addEventListener("mousedown", handleMouseDown);
+      el.addEventListener("touchstart", handleTouchStart, { passive: true });
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.addEventListener("touchmove", handleTouchMove, { passive: true });
+      document.addEventListener("touchend", handleTouchEnd);
+      document.addEventListener("touchcancel", handleTouchEnd);
+      attached = el;
+      return true;
+    };
 
-    const el = node as unknown as HTMLElement;
-    if (!el || !el.addEventListener) return;
-
-    el.addEventListener("mousedown", handleMouseDown);
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
+    let tries = 0;
+    const tryAttach = () => {
+      if (attach()) return;
+      tries += 1;
+      if (tries < 6) requestAnimationFrame(tryAttach);
+    };
+    tryAttach();
 
     return () => {
-      el.removeEventListener("mousedown", handleMouseDown);
+      cancelled = true;
+      if (attached) {
+        attached.removeEventListener("mousedown", handleMouseDown);
+        attached.removeEventListener("touchstart", handleTouchStart);
+      }
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("touchend", handleTouchEnd);
+      document.removeEventListener("touchcancel", handleTouchEnd);
+      // 모드 전환 시 드래그 상태 잔류 방지
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        triggeredRef.current = false;
+        resetVisuals();
+      }
     };
-  }, [processMoveByDx, resetVisuals]);
+  }, [processMoveByDx, resetVisuals, barMode, isLandscape]);
 
   const panResponder = useRef(
     Platform.OS !== "web"
@@ -3031,9 +3079,10 @@ export function BeatIndicator({
             </Pressable>
             <View style={styles.barTimeSigRow}>
               <Pressable
-                onPress={() => { if (!isPlaying && beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
-                style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure <= MIN_BEATS) && { opacity: 0.3 }]}
+                onPress={() => { if (beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+                style={[styles.barTimeSigBtn, beatsPerMeasure <= MIN_BEATS && { opacity: 0.3 }]}
                 hitSlop={8}
+                testID="bar-beats-minus-landscape"
               >
                 <Ionicons name="remove" size={S.ms(16, 0.4)} color={C.textSecondary} />
               </Pressable>
@@ -3053,9 +3102,10 @@ export function BeatIndicator({
                 </View>
               </View>
               <Pressable
-                onPress={() => { if (!isPlaying && beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
-                style={[styles.barTimeSigBtn, (isPlaying || beatsPerMeasure >= MAX_BEATS) && { opacity: 0.3 }]}
+                onPress={() => { if (beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+                style={[styles.barTimeSigBtn, beatsPerMeasure >= MAX_BEATS && { opacity: 0.3 }]}
                 hitSlop={8}
+                testID="bar-beats-plus-landscape"
               >
                 <Ionicons name="add" size={S.ms(16, 0.4)} color={C.textSecondary} />
               </Pressable>
