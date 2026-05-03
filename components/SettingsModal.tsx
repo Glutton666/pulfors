@@ -820,8 +820,10 @@ export function SettingsModal({
     const ok = await ensurePermission("mic", t);
     if (!ok) return;
     setRecordingSlot(slot);
+    let acquired = false;
     try {
       await acquireAudioSession("settingsSampleRec", "recording");
+      acquired = true;
       await sampleRecorderRef.current.prepareToRecordAsync();
       sampleRecorderRef.current.record();
       sampleRecordingActiveRef.current = true;
@@ -837,6 +839,10 @@ export function SettingsModal({
     } catch (e) {
       logger.error("Failed to start recording:", e);
       setRecordingSlot(null);
+      // 시작 실패 시 세션 회복 보장.
+      if (acquired) {
+        try { await releaseAudioSession("settingsSampleRec"); } catch {}
+      }
     }
   }, []);
 
@@ -844,10 +850,13 @@ export function SettingsModal({
     if (recordTimerRef.current) { clearInterval(recordTimerRef.current); recordTimerRef.current = null; }
     if (!sampleRecordingActiveRef.current) { setIsRecording(false); setRecordingSlot(null); return; }
     try {
-      await sampleRecorderRef.current.stop();
-      sampleRecordingActiveRef.current = false;
+      try {
+        await sampleRecorderRef.current.stop();
+      } finally {
+        sampleRecordingActiveRef.current = false;
+        await releaseAudioSession("settingsSampleRec");
+      }
       const uri = sampleRecorderRef.current.uri;
-      await releaseAudioSession("settingsSampleRec");
       if (uri) {
         const rawDur = await probeUriDuration(uri);
         const dur = rawDur > 0 ? Math.min(3.0, Math.round(rawDur * 10) / 10) : 0.5;

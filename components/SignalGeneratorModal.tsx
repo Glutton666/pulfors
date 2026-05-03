@@ -811,10 +811,16 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     const ok = await ensurePermission("mic", t);
     if (!ok) return;
     await acquireAudioSession("signalGenMicAndroid", "mic");
-    micActiveRef.current = true;
-    setMicListening(true);
-    setMicWebViewActive(true);
-    onAndroidMicToggle?.(true);
+    try {
+      micActiveRef.current = true;
+      setMicListening(true);
+      setMicWebViewActive(true);
+      onAndroidMicToggle?.(true);
+    } catch (e) {
+      // 토글/상태 갱신 실패 시 세션 회복.
+      try { await releaseAudioSession("signalGenMicAndroid"); } catch {}
+      throw e;
+    }
   }, [onAndroidMicToggle, t]);
 
   const stopMobileMic = useCallback(async () => {
@@ -1145,6 +1151,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     } catch (e) {
       logger.warn("[MicTuner] Mobile start error:", e);
       setMicListening(false);
+      micActiveRef.current = false;
+      // 시작 실패 시에도 acquire한 세션은 반드시 회복.
+      try { await releaseAudioSession("signalGenMicMobile"); } catch {}
     }
   }, [startMicAndroid, autoFallbackToWebView, showMicPermissionAlert]);
 

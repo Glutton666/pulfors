@@ -353,14 +353,16 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
       Alert.alert(t("drumKit", "micPermissionDenied"));
       return;
     }
+    let acquired = false;
     try {
       await acquireAudioSession("drumKitRec", "recording");
+      acquired = true;
       await recorderRef.current.prepareToRecordAsync();
       recorderRef.current.record();
       setIsRecordingMic(true);
       setTimeout(async () => {
         try { await recorderRef.current.stop(); } catch {}
-        await releaseAudioSession("drumKitRec");
+        try { await releaseAudioSession("drumKitRec"); } catch {}
         const uri = recorderRef.current.uri;
         setIsRecordingMic(false);
         if (uri) {
@@ -373,6 +375,10 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
     } catch {
       setIsRecordingMic(false);
       setAssignSlot(null);
+      // prepare/record 시작이 실패하면 세션 회복.
+      if (acquired) {
+        try { await releaseAudioSession("drumKitRec"); } catch {}
+      }
     }
   }, [assignSlot, mapping, persistMapping, t]);
 

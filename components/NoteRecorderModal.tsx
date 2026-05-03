@@ -193,11 +193,17 @@ export function NoteRecorderModal({
   }, [recordedUri]);
 
   const prepareRecording = useCallback(async () => {
+    let acquired = false;
     try {
       await acquireAudioSession("noteRecorderModal", "recording");
+      acquired = true;
       await recorderRef.current.prepareToRecordAsync();
     } catch (e) {
       captureBreadcrumb({ category: "noteRecorder", message: "prepareToRecord failed", level: "error", data: { error: String(e) } });
+      // prepare가 실패하면 녹음은 시작되지 않으므로 세션을 즉시 회복한다.
+      if (acquired) {
+        try { await releaseAudioSession("noteRecorderModal"); } catch {}
+      }
     }
   }, []);
 
@@ -329,6 +335,8 @@ export function NoteRecorderModal({
     } catch (e) {
       captureBreadcrumb({ category: "noteRecorder", message: "stopRecording failed", level: "error", data: { error: String(e) } });
       setPhase("idle");
+      // 에러로 stop이 실패해도 세션은 반드시 회복.
+      try { await releaseAudioSession("noteRecorderModal"); } catch {}
     }
   }, [probeDurationSec, stopMetronomeClicks]);
 

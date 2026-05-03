@@ -103,6 +103,32 @@ test("does not auto-resume if user manually started metronome inside modal", asy
   assert.equal(state.running, true);
 });
 
+test("withAudioSession with sync throw still releases", async () => {
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  await assert.rejects(async () => {
+    await withAudioSession("syncErr", "mic", async () => {
+      throw new TypeError("sync fail");
+    });
+  }, /sync fail/);
+  const dbg = _audioSessionDebugState();
+  assert.equal(dbg.activeCallers.length, 0);
+  assert.equal(state.resumeCount, 1);
+});
+
+test("manual acquire/release pairs in modal failure path", async () => {
+  // 모달이 acquire 후 prepareToRecord에서 실패하고 catch에서 release하는 시나리오.
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  await acquireAudioSession("recFail", "recording");
+  // prepareToRecord 실패 시뮬레이션 (catch 경로에서 release 호출).
+  await releaseAudioSession("recFail");
+  assert.equal(state.resumeCount, 1, "auto-resume after failure recovery");
+  assert.equal(_audioSessionDebugState().activeCallers.length, 0);
+});
+
 test("double release does not double-resume", async () => {
   _resetAudioSessionForTests();
   const { state, bridge } = makeBridge(true);

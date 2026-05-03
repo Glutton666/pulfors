@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { setAudioModeAsync } from "expo-audio";
 import { logger } from "@/lib/logger";
 
 export type SessionMode = "playback" | "recording" | "mic";
@@ -27,10 +28,7 @@ function needsRecordingCategory(): boolean {
 async function applyMode(allowsRecording: boolean, isBaseline: boolean): Promise<void> {
   if (Platform.OS === "web") return;
   try {
-    const mod = await import("expo-audio");
-    const fn = (mod as any).setAudioModeAsync;
-    if (typeof fn !== "function") return;
-    await fn({
+    await setAudioModeAsync({
       allowsRecording,
       playsInSilentMode: true,
       interruptionMode: "mixWithOthers",
