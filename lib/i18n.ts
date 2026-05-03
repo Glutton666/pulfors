@@ -101,7 +101,6 @@ const translations = {
     complete: { ko: "완료", en: "Done" },
     resetApp: { ko: "앱 초기화 및 재시작", en: "Reset App & Restart" },
     resetConfirm: { ko: "모든 설정과 데이터가 삭제됩니다.\n계속하시겠습니까?", en: "All settings and data will be deleted.\nDo you want to continue?" },
-    cancel: { ko: "취소", en: "Cancel" },
     reset: { ko: "초기화", en: "Reset" },
     language: { ko: "언어", en: "Language" },
     colorGold: { ko: "골드", en: "Gold" },
@@ -388,6 +387,15 @@ const translations = {
     save: { ko: "저장", en: "Save" },
     tooLongTitle: { ko: "너무 깁니다", en: "Too Long" },
     tooLongMsg: { ko: "최대 오디오 길이는 10분입니다. 이 파일은 {0}분 {1}초입니다.", en: "Maximum audio length is 10 minutes. This file is {0}m {1}s." },
+  },
+  permissions: {
+    title: { ko: "권한 필요", en: "Permission Required" },
+    cancel: { ko: "취소", en: "Cancel" },
+    openSettings: { ko: "설정 열기", en: "Open Settings" },
+    micDenied: { ko: "오디오 입력을 사용하려면 마이크 권한이 필요합니다.", en: "Microphone access is needed to use audio input." },
+    micDeniedOpenSettings: { ko: "마이크 권한이 거부되어 있습니다. 설정에서 권한을 활성화해 주세요.", en: "Microphone permission is denied. Enable it in Settings to continue." },
+    photoDenied: { ko: "사진을 선택하려면 사진 권한이 필요합니다.", en: "Photo access is needed to pick an image." },
+    photoDeniedOpenSettings: { ko: "사진 권한이 거부되어 있습니다. 설정에서 권한을 활성화해 주세요.", en: "Photo permission is denied. Enable it in Settings to continue." },
   },
   notification: {
     playing: { ko: "재생 중", en: "Playing" },

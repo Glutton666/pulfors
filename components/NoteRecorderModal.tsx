@@ -10,15 +10,14 @@ import {
   PanResponder,
   ActivityIndicator,
   TextInput,
-  Linking,
 } from "react-native";
+import { ensurePermission } from "@/lib/permissions";
 import { Ionicons } from "@expo/vector-icons";
 import {
   useAudioRecorder,
   useAudioPlayer,
   createAudioPlayer,
   setAudioModeAsync,
-  requestRecordingPermissionsAsync,
   RecordingPresets,
 } from "expo-audio";
 import * as Haptics from "expo-haptics";
@@ -185,22 +184,8 @@ export function NoteRecorderModal({
   }, []);
 
   const startCountdown = useCallback(async () => {
-    const { status, canAskAgain } = await requestRecordingPermissionsAsync();
-    if (status !== "granted") {
-      if (!canAskAgain && Platform.OS !== "web") {
-        Alert.alert(
-          t("noteRecorder", "permissionRequired"),
-          t("noteRecorder", "micPermissionOpenSettings"),
-          [
-            { text: t("noteRecorder", "cancel"), style: "cancel" },
-            { text: t("noteRecorder", "openSettings"), onPress: () => Linking.openSettings() },
-          ],
-        );
-      } else {
-        Alert.alert(t("noteRecorder", "permissionRequired"), t("noteRecorder", "micPermission"));
-      }
-      return;
-    }
+    const ok = await ensurePermission("mic", t);
+    if (!ok) return;
 
     sourceTypeRef.current = "recording";
     setPhase("countdown");

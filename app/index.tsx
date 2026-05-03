@@ -13,6 +13,7 @@ import {
   AppState,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { ensurePermission } from "@/lib/permissions";
 import * as Linking from "expo-linking";
 import {
   setupNotificationControls,
@@ -3570,18 +3571,8 @@ export default function MetronomeScreen() {
 
   const pickLandscapeImage = useCallback(async () => {
     try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (perm.status !== "granted") {
-        if (!perm.canAskAgain && Platform.OS !== "web") {
-          Alert.alert(
-            t("settings", "permissionRequired"),
-            t("settings", "photoPermissionOpenSettings"),
-            [
-              { text: t("settings", "cancel"), style: "cancel" },
-              { text: t("settings", "openSettings"), onPress: () => Linking.openSettings() },
-            ],
-          );
-        }
+      const ok = await ensurePermission("photo", t);
+      if (!ok) {
         setLandscapeImageModalVisible(false);
         return;
       }

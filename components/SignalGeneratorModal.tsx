@@ -18,7 +18,6 @@ import * as Haptics from "expo-haptics";
 import {
   AudioModule,
   setAudioModeAsync,
-  requestRecordingPermissionsAsync,
   createAudioPlayer,
   IOSOutputFormat,
   AudioQuality,
@@ -28,6 +27,8 @@ import {
 } from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
 import { safePlay, releaseRecorder } from "@/lib/audio-utils";
+import { ensurePermission } from "@/lib/permissions";
+import { captureBreadcrumb } from "@/lib/error-tracking";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useScale } from "@/lib/scale";
@@ -1042,17 +1043,13 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   }, [t]);
 
   const startMicAndroid = useCallback(async () => {
-    const perm = await requestRecordingPermissionsAsync();
-    if (!perm.granted) {
-      console.warn("[MicTuner] Mic permission denied");
-      showMicPermissionAlert();
-      return;
-    }
+    const ok = await ensurePermission("mic", t);
+    if (!ok) return;
     micActiveRef.current = true;
     setMicListening(true);
     setMicWebViewActive(true);
     onAndroidMicToggle?.(true);
-  }, [onAndroidMicToggle, showMicPermissionAlert]);
+  }, [onAndroidMicToggle, t]);
 
   const stopMobileMic = useCallback(async () => {
     if (micMobileTimerRef.current) {
@@ -1253,12 +1250,10 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const autoFallbackToWebView = useCallback(async () => {
     if (Platform.OS !== "android" || nativeFallenBackRef.current) return;
     nativeFallenBackRef.current = true;
-    console.warn("[MicTuner] Native decode failed, auto-falling back to WebView");
+    captureBreadcrumb({ category: "micTuner", message: "Native decode failed, auto-falling back to WebView", level: "warning" });
     stopMobileMic();
-    const perm = await requestRecordingPermissionsAsync();
-    if (!perm.granted) {
-      console.warn("[MicTuner] Mic permission denied during fallback");
-      showMicPermissionAlert();
+    const ok = await ensurePermission("mic", t);
+    if (!ok) {
       micActiveRef.current = false;
       setMicListening(false);
       return;
@@ -1267,18 +1262,14 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     setMicListening(true);
     setMicWebViewActive(true);
     onAndroidMicToggle?.(true);
-  }, [stopMobileMic, onAndroidMicToggle, showMicPermissionAlert]);
+  }, [stopMobileMic, onAndroidMicToggle, t]);
 
   const startMicMobile = useCallback(async () => {
     nativeFailCountRef.current = 0;
     nativeFallenBackRef.current = false;
     try {
-      const perm = await requestRecordingPermissionsAsync();
-      if (!perm.granted) {
-        console.warn("[MicTuner] Mic permission denied");
-        showMicPermissionAlert();
-        return;
-      }
+      const ok = await ensurePermission("mic", t);
+      if (!ok) return;
 
       await setAudioModeAsync({
         allowsRecording: true,

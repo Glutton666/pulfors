@@ -284,10 +284,10 @@ export interface LoopBlock {
   jumpToBlock?: number;
   jumpCount?: number;
   bpm?: number;
-  soundSet?: string;
+  soundSet?: import("@/lib/storage").SoundSet;
   layerOf?: number;
-  ownBeatTypes?: Record<number, string>;
-  ownSubdivisions?: Record<string, string[]>;
+  ownBeatTypes?: Record<number, import("@/lib/metronome-engine").BeatType>;
+  ownSubdivisions?: Record<string, import("@/lib/metronome-engine").BeatType[]>;
 }
 
 interface BeatIndicatorProps {
@@ -1147,15 +1147,15 @@ export function BeatIndicator({
       const sourceBlock = loopBlocks[origIndex];
       const targetBlock = loopBlocks[target];
       if (targetBlock?.layerOf !== undefined) return;
-      const ownBT: Record<number, string> = {};
+      const ownBT: Record<number, BeatType> = {};
       for (let b = sourceBlock.startBeat; b <= sourceBlock.endBeat; b++) {
         ownBT[b] = beatTypes[b] || "normal";
       }
-      const ownSub: Record<string, string[]> = {};
+      const ownSub: Record<string, BeatType[]> = {};
       for (let b = sourceBlock.startBeat; b <= sourceBlock.endBeat; b++) {
         const key = String(b);
         if (beatSubdivisions[key]) {
-          ownSub[key] = [...beatSubdivisions[key]];
+          ownSub[key] = [...beatSubdivisions[key]] as BeatType[];
         }
       }
       const sourceHasChildren = loopBlocks.some(b => b.layerOf === origIndex);

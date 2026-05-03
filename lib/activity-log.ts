@@ -65,22 +65,27 @@ export async function saveLoggingEnabled(val: boolean): Promise<void> {
   }
 }
 
+let activityWriteChain: Promise<void> = Promise.resolve();
+
 export async function addActivityLog(
   entry: Omit<ActivityLog, "id" | "timestamp">
 ): Promise<void> {
-  try {
-    const logs = await loadActivityLogs();
-    const newEntry: ActivityLog = {
-      id: Crypto.randomUUID(),
-      timestamp: Date.now(),
-      ...entry,
-    };
-    logs.push(newEntry);
-    await AsyncStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(logs));
-    console.log("[ActivityLog] Saved entry:", entry.type, JSON.stringify(entry.data), "total logs:", logs.length);
-  } catch (e) {
-    console.warn("Failed to add activity log:", e);
-  }
+  const next = activityWriteChain.then(async () => {
+    try {
+      const logs = await loadActivityLogs();
+      const newEntry: ActivityLog = {
+        id: Crypto.randomUUID(),
+        timestamp: Date.now(),
+        ...entry,
+      };
+      logs.push(newEntry);
+      await AsyncStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(logs));
+    } catch (e) {
+      console.warn("Failed to add activity log:", e);
+    }
+  });
+  activityWriteChain = next.catch(() => {});
+  return next;
 }
 
 export async function loadActivityLogs(): Promise<ActivityLog[]> {

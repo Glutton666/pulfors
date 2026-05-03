@@ -26,7 +26,6 @@ import {
   useAudioRecorder,
   createAudioPlayer,
   setAudioModeAsync,
-  requestRecordingPermissionsAsync,
   RecordingPresets,
   type AudioPlayer as ExpoAudioPlayer,
 } from "expo-audio";
@@ -41,6 +40,7 @@ import { soundSets } from "@/lib/metronome-engine";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { Language } from "@/lib/i18n";
 import { safePlay } from "@/lib/audio-utils";
+import { ensurePermission } from "@/lib/permissions";
 import {
   loadPracticeRooms,
   addPracticeRoom,
@@ -94,6 +94,7 @@ interface SettingsModalProps {
   beatDirection: "cw" | "ccw";
   onBeatDirectionChange: (val: "cw" | "ccw") => void;
   onShowOnboarding?: () => void;
+  onEnterNoteMode?: () => void;
 }
 
 function getSoundSetOptions(t: any): { value: SoundSet; label: string; icon: string }[] {
@@ -273,23 +274,25 @@ export function SettingsModal({
   }, []);
 
   const handleRenameRoom = useCallback((room: PracticeRoom) => {
-    Alert.prompt?.(
-      t("settings", "renameRoom"),
-      undefined,
-      async (newName: string) => {
-        if (!newName?.trim()) return;
-        await renamePracticeRoom(room.id, newName.trim());
-        setPracticeRooms((prev) => prev.map((r) => r.id === room.id ? { ...r, name: newName.trim() } : r));
-      },
-      "plain-text",
-      room.name
-    ) || (() => {
-      const newName = Platform.OS === "web" ? window.prompt(t("settings", "renameRoom"), room.name) : null;
-      if (newName?.trim()) {
-        renamePracticeRoom(room.id, newName.trim());
-        setPracticeRooms((prev) => prev.map((r) => r.id === room.id ? { ...r, name: newName.trim() } : r));
-      }
-    })();
+    if (Platform.OS === "ios" && typeof Alert.prompt === "function") {
+      Alert.prompt(
+        t("settings", "renameRoom"),
+        undefined,
+        async (newName: string) => {
+          if (!newName?.trim()) return;
+          await renamePracticeRoom(room.id, newName.trim());
+          setPracticeRooms((prev) => prev.map((r) => r.id === room.id ? { ...r, name: newName.trim() } : r));
+        },
+        "plain-text",
+        room.name,
+      );
+      return;
+    }
+    const newName = Platform.OS === "web" ? window.prompt(t("settings", "renameRoom"), room.name) : null;
+    if (newName?.trim()) {
+      renamePracticeRoom(room.id, newName.trim());
+      setPracticeRooms((prev) => prev.map((r) => r.id === room.id ? { ...r, name: newName.trim() } : r));
+    }
   }, [t]);
 
   const handleShareRoom = useCallback(async (room: PracticeRoom) => {
@@ -360,7 +363,7 @@ export function SettingsModal({
   const rimshotHigh = useAudioPlayer(soundSets.rimshot.high);
   const rimshotLow = useAudioPlayer(soundSets.rimshot.low);
 
-  const previewPlayers: Record<SoundSet, typeof classicStrong[]> = {
+  const previewPlayers: Partial<Record<SoundSet, typeof classicStrong[]>> = {
     classic: [classicStrong, classicHigh, classicLow],
     woodblock: [woodblockStrong, woodblockHigh, woodblockLow],
     cowbell: [cowbellStrong, cowbellHigh, cowbellLow],
@@ -434,6 +437,7 @@ export function SettingsModal({
       }
       players = previewPlayers.classic;
     }
+    if (!players) return;
     const player = players[idx];
     try { player.seekTo(0); } catch {}
     safePlay(player, "settings.previewSample.builtin");
@@ -807,12 +811,13 @@ export function SettingsModal({
 
   const previewCustomSample = useCallback((sourceSet: BuiltinSoundSet, sourceRole: SoundRole) => {
     const players = previewPlayers[sourceSet];
+    if (!players) return;
     const idx = sourceRole === "strong" ? 0 : sourceRole === "high" ? 1 : 2;
     try { players[idx].seekTo(0); } catch {}
     safePlay(players[idx], "settings.previewCustomSource");
   }, [previewPlayers]);
 
-  const ROLE_OPTIONS: { value: SoundRole; labelKey: string }[] = [
+  const ROLE_OPTIONS: { value: SoundRole; labelKey: "roleStrong" | "roleAccent" | "roleNormal" }[] = [
     { value: "strong", labelKey: "roleStrong" },
     { value: "high", labelKey: "roleAccent" },
     { value: "low", labelKey: "roleNormal" },
@@ -849,11 +854,8 @@ export function SettingsModal({
   }, []);
 
   const startSampleRecording = useCallback(async (slot: "strong" | "accent" | "normal") => {
-    const { status } = await requestRecordingPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert(t("customSoundSet", "micPermission"));
-      return;
-    }
+    const ok = await ensurePermission("mic", t);
+    if (!ok) return;
     setRecordingSlot(slot);
     try {
       await setAudioModeAsync({

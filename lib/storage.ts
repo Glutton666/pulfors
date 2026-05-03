@@ -118,6 +118,37 @@ export async function saveSettings(settings: MetronomeSettings): Promise<void> {
   }
 }
 
+let pendingSettings: MetronomeSettings | null = null;
+let settingsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const SETTINGS_DEBOUNCE_MS = 400;
+
+export function saveSettingsDebounced(settings: MetronomeSettings): void {
+  pendingSettings = settings;
+  if (settingsDebounceTimer) clearTimeout(settingsDebounceTimer);
+  settingsDebounceTimer = setTimeout(() => {
+    const toWrite = pendingSettings;
+    pendingSettings = null;
+    settingsDebounceTimer = null;
+    if (toWrite) {
+      saveSettings(toWrite).catch(() => {});
+    }
+  }, SETTINGS_DEBOUNCE_MS);
+}
+
+export async function flushPendingSettings(): Promise<void> {
+  if (settingsDebounceTimer) {
+    clearTimeout(settingsDebounceTimer);
+    settingsDebounceTimer = null;
+  }
+  if (pendingSettings) {
+    const toWrite = pendingSettings;
+    pendingSettings = null;
+    try {
+      await saveSettings(toWrite);
+    } catch {}
+  }
+}
+
 export interface BarRepeatEntry {
   type: "count" | "duration";
   value: number;
