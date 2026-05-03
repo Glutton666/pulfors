@@ -20,6 +20,15 @@ import {
   sanitizeBackupData,
   writeStringToFile,
 } from "./shared";
+import { CURRENT_SCHEMA_VERSION, migrateBackup, UnsupportedBackupVersionError } from "./migrations";
+
+export type ImportBackupErrorCode = "unsupported_version" | "invalid" | "io";
+
+export interface ImportBackupResult {
+  success: boolean;
+  keyCount: number;
+  errorCode?: ImportBackupErrorCode;
+}
 
 export async function exportBackup(): Promise<boolean> {
   try {
@@ -39,6 +48,7 @@ export async function exportBackup(): Promise<boolean> {
         createdAt: new Date().toISOString(),
         keyCount: Object.keys(data).filter((k) => data[k] !== null).length,
       },
+      schemaVersion: CURRENT_SCHEMA_VERSION,
       data,
       ...(Object.keys(audioFiles).length > 0 ? { audioFiles } : {}),
     };
@@ -72,10 +82,10 @@ export async function exportBackup(): Promise<boolean> {
   }
 }
 
-export async function importBackup(): Promise<{ success: boolean; keyCount: number }> {
+export async function importBackup(): Promise<ImportBackupResult> {
   try {
     if (Platform.OS === "web") {
-      return pickFileWeb(
+      return pickFileWeb<ImportBackupResult>(
         ".json,.metronome.json",
         restoreFromJson,
         { success: false, keyCount: 0 },
@@ -94,31 +104,52 @@ export async function importBackup(): Promise<{ success: boolean; keyCount: numb
     const asset = result.assets[0];
     if (typeof asset.size === "number" && asset.size > MAX_IMPORT_JSON_CHARS) {
       logger.warn("[Backup] Native import file too large:", asset.size);
-      return { success: false, keyCount: 0 };
+      return { success: false, keyCount: 0, errorCode: "io" };
     }
     const json = await readStringFromFile(asset.uri);
     return await restoreFromJson(json);
   } catch (e) {
     logger.warn("[Backup] Import error:", e);
     captureBreadcrumb({ category: "backup.import", message: "Import error", level: "error", data: { error: String(e) } });
-    return { success: false, keyCount: 0 };
+    return { success: false, keyCount: 0, errorCode: "io" };
   }
 }
 
 async function restoreFromJson(
   json: string,
-): Promise<{ success: boolean; keyCount: number }> {
+): Promise<ImportBackupResult> {
   try {
     if (typeof json !== "string" || json.length > MAX_IMPORT_JSON_CHARS) {
       logger.warn("[Backup] Import JSON too large:", json?.length);
-      return { success: false, keyCount: 0 };
+      return { success: false, keyCount: 0, errorCode: "invalid" };
     }
-    const backup: BackupFile = JSON.parse(json);
+    let backup: BackupFile;
+    try {
+      backup = JSON.parse(json);
+    } catch (e) {
+      logger.warn("[Backup] JSON parse failed:", e);
+      return { success: false, keyCount: 0, errorCode: "invalid" };
+    }
     if (!backup._meta || backup._meta.app !== "metronome" || !backup.data) {
-      return { success: false, keyCount: 0 };
+      return { success: false, keyCount: 0, errorCode: "invalid" };
     }
 
-    let data = backup.data;
+    let data: Record<string, string | null>;
+    try {
+      data = migrateBackup(backup).data;
+    } catch (e) {
+      if (e instanceof UnsupportedBackupVersionError) {
+        logger.warn("[Backup] Unsupported schemaVersion:", e.fileVersion, "current:", e.currentVersion);
+        captureBreadcrumb({
+          category: "backup.restore",
+          message: "Unsupported schemaVersion",
+          level: "warning",
+          data: { fileVersion: e.fileVersion, currentVersion: e.currentVersion },
+        });
+        return { success: false, keyCount: 0, errorCode: "unsupported_version" };
+      }
+      throw e;
+    }
 
     if (backup.audioFiles && Object.keys(backup.audioFiles).length > 0 && Platform.OS !== "web") {
       const uriMapping = await restoreAudioFiles(backup.audioFiles);
@@ -146,6 +177,6 @@ async function restoreFromJson(
   } catch (e) {
     logger.warn("[Backup] Restore error:", e);
     captureBreadcrumb({ category: "backup.restore", message: "Restore error", level: "error", data: { error: String(e) } });
-    return { success: false, keyCount: 0 };
+    return { success: false, keyCount: 0, errorCode: "io" };
   }
 }

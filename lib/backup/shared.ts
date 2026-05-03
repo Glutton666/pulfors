@@ -36,6 +36,10 @@ export interface BackupFile {
     createdAt: string;
     keyCount: number;
   };
+  // 데이터 모양 버전.  `_meta.version`(파일 포맷)과 독립적으로 진화한다.
+  // 누락 시 v0으로 간주해 마이그레이션을 거친다. 자세한 내용은
+  // `./migrations.ts` 참고.
+  schemaVersion?: number;
   data: Record<string, string | null>;
   audioFiles?: Record<string, string>;
 }

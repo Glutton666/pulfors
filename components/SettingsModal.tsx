@@ -2057,7 +2057,10 @@ export function SettingsModal({
                           }]
                         );
                       } else {
-                        Alert.alert(t("settings", "error"), t("settings", "restoreFail"));
+                        const msgKey = result.errorCode === "unsupported_version"
+                          ? "restoreUnsupportedVersion"
+                          : "restoreFail";
+                        Alert.alert(t("settings", "error"), t("settings", msgKey));
                       }
                     },
                   },
