@@ -254,12 +254,20 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
         setCountInValue(0);
         recordStartRef.current = Date.now();
         playClick();
+        let lastBeat = 0;
+        let lastCell = -1;
         cellTickerRef.current = setInterval(() => {
           const elapsed = Date.now() - recordStartRef.current;
           const idx = Math.floor(elapsed / cellMs);
-          if (idx >= 0 && idx < CELLS) {
+          if (idx < 0 || idx >= CELLS) return;
+          if (idx !== lastCell) {
+            lastCell = idx;
             setActiveCell(idx);
-            if (idx % SUBS === 0) playClick();
+          }
+          const beat = Math.floor(idx / SUBS);
+          if (beat > lastBeat) {
+            lastBeat = beat;
+            playClick();
           }
         }, Math.max(15, Math.floor(cellMs / 4)));
         recordEndTimerRef.current = setTimeout(() => {
