@@ -96,7 +96,7 @@ export function NoteRecorderModal({
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const [autoPreview, setAutoPreview] = useState(true);
   // 채널별로 미리듣기용 stereo wav uri를 캐시. recordedUri 변경 시 무효화.
-  const previewStereoCacheRef = useRef<{ srcUri: string; left?: string; right?: string }>({ srcUri: "" });
+  const previewStereoCacheRef = useRef<{ left?: string; right?: string }>({});
   const previewTokenRef = useRef(0);
   const [loadingMessage, setLoadingMessage] = useState("");
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -180,7 +180,7 @@ export function NoteRecorderModal({
       setAudioDuration(0);
       setIsPlayingPreview(false);
       setSampleName("");
-      previewStereoCacheRef.current = { srcUri: "" };
+      previewStereoCacheRef.current = {};
       previewTokenRef.current += 1;
     } else {
       setSampleName(existingName || "");
@@ -189,7 +189,7 @@ export function NoteRecorderModal({
 
   useEffect(() => {
     // recordedUri 변경 시 채널별 stereo 캐시 무효화.
-    previewStereoCacheRef.current = { srcUri: recordedUri ?? "" };
+    previewStereoCacheRef.current = {};
   }, [recordedUri]);
 
   const prepareRecording = useCallback(async () => {
