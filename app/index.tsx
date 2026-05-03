@@ -501,7 +501,7 @@ export default function MetronomeScreen() {
       () => {
         if (fadeOutMutedRef.current) return;
         if (Platform.OS === "web" && webClickReadyRef.current) {
-          playWebClick("high");
+          playWebClick("high", barModeRef.current ? barMetronomeChannelRef.current : "both");
           return;
         }
         try {
@@ -513,7 +513,7 @@ export default function MetronomeScreen() {
       () => {
         if (fadeOutMutedRef.current) return;
         if (Platform.OS === "web" && webClickReadyRef.current) {
-          playWebClick("low");
+          playWebClick("low", barModeRef.current ? barMetronomeChannelRef.current : "both");
           return;
         }
         try {
@@ -525,7 +525,7 @@ export default function MetronomeScreen() {
       () => {
         if (fadeOutMutedRef.current) return;
         if (Platform.OS === "web" && webClickReadyRef.current) {
-          playWebClick("strong");
+          playWebClick("strong", barModeRef.current ? barMetronomeChannelRef.current : "both");
           return;
         }
         try {
@@ -545,7 +545,7 @@ export default function MetronomeScreen() {
       layerToggle[toggleKey] = !toggle;
 
       if (Platform.OS === "web" && webClickReadyRef.current) {
-        playWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low");
+        playWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low", barModeRef.current ? barMetronomeChannelRef.current : "both");
         return;
       }
 
@@ -582,7 +582,7 @@ export default function MetronomeScreen() {
       blockToggle[toggleKey] = !toggle;
 
       if (Platform.OS === "web" && webClickReadyRef.current) {
-        playWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low");
+        playWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low", barModeRef.current ? barMetronomeChannelRef.current : "both");
         return;
       }
 
@@ -3454,6 +3454,7 @@ export default function MetronomeScreen() {
           noteSamples: e.noteSamples,
           noteSampleNames: e.noteSampleNames,
           noteSampleSources: e.noteSampleSources,
+          noteSampleChannels: e.noteSampleChannels,
           loopBlocks: (e as any).loopBlocks,
           blockPlayMode: (e as any).blockPlayMode,
           imageUri: e.imageUri,
