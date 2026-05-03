@@ -61,7 +61,7 @@ import { BpmSlider } from "@/components/BpmSlider";
 import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
 import { SettingsModal } from "@/components/SettingsModal";
-import { SignalGeneratorModal } from "@/components/SignalGeneratorModal";
+import { SignalGeneratorModal, TuningGuideModal } from "@/components/SignalGeneratorModal";
 import { MicWebView, MicWebViewHandle } from "@/components/MicWebView";
 import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
@@ -236,6 +236,8 @@ export default function MetronomeScreen() {
   const [username, setUsername] = useState("");
   const [showMenu, setShowMenu] = useState(false);
   const [showSignalGen, setShowSignalGen] = useState(false);
+  const [showTuningGuide, setShowTuningGuide] = useState(false);
+  const tuningGuideOnSelectRef = useRef<((freq: number) => void) | null>(null);
   const [androidMicActive, setAndroidMicActive] = useState(false);
   const [androidMicFreq, setAndroidMicFreq] = useState<number | null>(null);
   const [androidMicNote, setAndroidMicNote] = useState<string | null>(null);
@@ -319,7 +321,8 @@ export default function MetronomeScreen() {
     if (Platform.OS !== "android") return;
     const onBack = () => {
       if (showSettings) { setShowSettings(false); return true; }
-      if (showSignalGen) { setShowSignalGen(false); return true; }
+      if (showTuningGuide) { tuningGuideOnSelectRef.current = null; setShowTuningGuide(false); return true; }
+      if (showSignalGen) { tuningGuideOnSelectRef.current = null; setShowTuningGuide(false); setShowSignalGen(false); return true; }
       if (showPracticeBook) { setShowPracticeBook(false); return true; }
       if (showWorkUp) { setShowWorkUp(false); return true; }
       if (showTempoQuiz) { closeTempoQuiz(); return true; }
@@ -338,7 +341,7 @@ export default function MetronomeScreen() {
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
     return () => sub.remove();
-  }, [showSettings, showSignalGen, showPracticeBook, showWorkUp, showMenu, showOnboarding, showReboot, showMoreMenu, showDrumKit, showScheduledStart, showFadeOut, showTempoQuiz, closeTempoQuiz]);
+  }, [showSettings, showSignalGen, showTuningGuide, showPracticeBook, showWorkUp, showMenu, showOnboarding, showReboot, showMoreMenu, showDrumKit, showScheduledStart, showFadeOut, showTempoQuiz, closeTempoQuiz]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -1657,6 +1660,8 @@ export default function MetronomeScreen() {
       setShowSettings(false);
       setShowMenu(false);
       setShowSignalGen(false);
+      setShowTuningGuide(false);
+      tuningGuideOnSelectRef.current = null;
       setShowPracticeBook(false);
       setShowWorkUp(false);
 
@@ -2098,7 +2103,7 @@ export default function MetronomeScreen() {
   }, [setCommandHandler]);
   const handleNoteTogglePlayRef = useRef<(() => void) | null>(null);
   const anyModalOpenRef = useRef(false);
-  useEffect(() => { anyModalOpenRef.current = showSignalGen || showSettings || showPracticeBook || showWorkUp || showMenu || showOnboarding; }, [showSignalGen, showSettings, showPracticeBook, showWorkUp, showMenu, showOnboarding]);
+  useEffect(() => { anyModalOpenRef.current = showSignalGen || showSettings || showPracticeBook || showWorkUp || showMenu || showOnboarding || showMoreMenu || showDrumKit || showScheduledStart || showFadeOut || showTempoQuiz || showTuningGuide || landscapeImageModalVisible || recorderTarget !== null; }, [showSignalGen, showSettings, showPracticeBook, showWorkUp, showMenu, showOnboarding, showMoreMenu, showDrumKit, showScheduledStart, showFadeOut, showTempoQuiz, showTuningGuide, landscapeImageModalVisible, recorderTarget]);
 
   const bpmTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bpmTapCountRef = useRef<{ direction: string; count: number }>({ direction: "", count: 0 });
@@ -4026,7 +4031,7 @@ export default function MetronomeScreen() {
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
-                  setShowSettings(true);
+                  setTimeout(() => setShowSettings(true), 50);
                 }}
                 accessibilityRole="menuitem"
                 accessibilityLabel={t("a11y", "menuSettings")}
@@ -4039,8 +4044,8 @@ export default function MetronomeScreen() {
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
-                  setShowSignalGen(true);
                   if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
+                  setTimeout(() => setShowSignalGen(true), 50);
                 }}
                 accessibilityRole="menuitem"
                 accessibilityLabel={t("a11y", "menuSignalGenerator")}
@@ -4053,7 +4058,7 @@ export default function MetronomeScreen() {
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
-                  setShowWorkUp(true);
+                  setTimeout(() => setShowWorkUp(true), 50);
                 }}
                 accessibilityRole="menuitem"
                 accessibilityLabel={t("a11y", "menuWorkUp")}
@@ -4066,8 +4071,8 @@ export default function MetronomeScreen() {
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
-                  setShowPracticeBook(true);
                   if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
+                  setTimeout(() => setShowPracticeBook(true), 50);
                 }}
                 accessibilityRole="menuitem"
                 accessibilityLabel={t("a11y", "menuPracticeBook")}
@@ -4080,7 +4085,7 @@ export default function MetronomeScreen() {
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => {
                   setShowMenu(false);
-                  setShowMoreMenu(true);
+                  setTimeout(() => setShowMoreMenu(true), 50);
                 }}
                 accessibilityRole="menuitem"
                 accessibilityLabel={t("main", "menuMore")}
@@ -4270,6 +4275,10 @@ export default function MetronomeScreen() {
         visible={showSignalGen}
         onClose={() => {
           setShowSignalGen(false);
+          // TuningGuideModal이 열려 있으면 함께 닫고 콜백 ref를 무효화한다.
+          // SignalGen이 언마운트되어도 선택 콜백이 stale하게 실행되는 ghost 상태 방지.
+          setShowTuningGuide(false);
+          tuningGuideOnSelectRef.current = null;
           setAndroidMicActive(false);
           if (androidMicRef.current) androidMicRef.current.stop();
           if (loggingEnabled && featureStartRef.current?.name === "signal_generator") {
@@ -4284,6 +4293,10 @@ export default function MetronomeScreen() {
         }}
         androidMicFrequency={androidMicFreq}
         androidMicNote={androidMicNote}
+        onOpenTuningGuide={(currentFreq, onSelectFreq) => {
+          tuningGuideOnSelectRef.current = onSelectFreq;
+          setShowTuningGuide(true);
+        }}
       />
       )}
       {androidMicActive && Platform.OS === "android" && (
@@ -4311,6 +4324,27 @@ export default function MetronomeScreen() {
         soundSet={soundSet.startsWith("custom") ? "classic" : soundSet as any}
       />
       )}
+
+      {/* TuningGuideModal — SignalGeneratorModal 외부(앱 루트 레벨)에서 단독 렌더링하여
+          네이티브 Modal 중첩(ghost 입력 차단) 문제를 방지한다. */}
+      <TuningGuideModal
+        visible={showTuningGuide}
+        onClose={() => {
+          tuningGuideOnSelectRef.current = null;
+          setShowTuningGuide(false);
+        }}
+        onSelectFreq={(freq) => {
+          // showSignalGen이 이미 닫혀 있으면 stale callback 실행을 방지한다.
+          if (tuningGuideOnSelectRef.current) {
+            tuningGuideOnSelectRef.current(freq);
+          }
+          tuningGuideOnSelectRef.current = null;
+          setShowTuningGuide(false);
+        }}
+        lang={language as "ko" | "en"}
+        accentColor={C.accent}
+        accentDim={C.accentDim}
+      />
 
       {showPracticeBook && (
       <PracticeBookModal
