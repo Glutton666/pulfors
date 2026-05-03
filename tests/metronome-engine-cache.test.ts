@@ -1,6 +1,49 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MetronomeEngine } from "../lib/metronome-engine";
+import {
+  MetronomeEngine,
+  pureEmitBlock,
+  pureProcessBlock,
+  pureProcessOuterCached,
+  type BlockEmitCacheHandle,
+  type ScheduleInputs,
+  type EmitState,
+  type LoopBlockData,
+  type ScheduledTick,
+} from "../lib/metronome-engine";
+
+function makeInputsFromBlocks(blocks: LoopBlockData[], beatsPerMeasure = 8): ScheduleInputs {
+  const sortedBlocks = blocks.slice();
+  const origToSorted = new Map<number, number>();
+  const sortedToOrig = new Map<number, number>();
+  sortedBlocks.forEach((_, i) => {
+    origToSorted.set(i, i);
+    sortedToOrig.set(i, i);
+  });
+  const startBeatToBlocks = new Map<number, number[]>();
+  sortedBlocks.forEach((b, i) => {
+    const arr = startBeatToBlocks.get(b.startBeat);
+    if (arr) arr.push(i); else startBeatToBlocks.set(b.startBeat, [i]);
+  });
+  return {
+    bpm: 120,
+    halfTime: false,
+    beatsPerMeasure,
+    beatTypes: Array.from({ length: beatsPerMeasure }, (_, i) => (i === 0 ? "accent" : "normal")),
+    beatSubdivisions: new Map(),
+    barRepeats: new Map(),
+    barBpmOverrides: new Map(),
+    sortedBlocks,
+    origToSorted,
+    sortedToOrig,
+    startBeatToBlocks,
+    loopBlocks: sortedBlocks,
+  };
+}
+
+function makeState(): EmitState {
+  return { ticks: [], time: 0, jump: { iteration: 0, total: 0, sourceBlockIndex: -1 } };
+}
 
 test("동일 입력 두 번째 빌드는 캐시 적중이며 동일 ticks 참조 반환", () => {
   const engine = new MetronomeEngine();
@@ -258,4 +301,227 @@ test("캐시 적중 시에도 measureDurationMs는 정확히 복원된다", () =
   assert.equal(engine._wasLastBuildCacheHit(), true);
   const second = engine.getScheduleInfo().durationMs;
   assert.equal(second, first, "캐시 적중 시 measureDurationMs 동일");
+});
+
+test("pureEmitBlock: count 블록은 value번 반복하며 ticks를 누적한다", () => {
+  const blocks: LoopBlockData[] = [
+    { startBeat: 0, endBeat: 3, type: "count", value: 2 },
+  ];
+  const inputs = makeInputsFromBlocks(blocks, 4);
+  const state = makeState();
+  const durCache = new Map<string, number>();
+
+  pureEmitBlock(inputs, state, durCache, 0, new Set());
+
+  // 4 beats * 2 repeats = 8 ticks
+  assert.equal(state.ticks.length, 8);
+  // 120bpm, 4 beats = 2000ms per pass, x2 = 4000ms total
+  assert.equal(state.time, 4000);
+  assert.equal(state.ticks[0].blockIndex, 0);
+  assert.equal(state.ticks[0].blockRepeatTotal, 2);
+  // 두 번째 반복의 첫 tick은 repeatIteration=1
+  assert.equal(state.ticks[4].repeatIteration, 1);
+});
+
+test("pureEmitBlock: layer 블록은 스킵된다 (state 변경 없음)", () => {
+  const blocks: LoopBlockData[] = [
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, layerOf: 99 },
+  ];
+  const inputs = makeInputsFromBlocks(blocks, 4);
+  const state = makeState();
+  const durCache = new Map<string, number>();
+
+  pureEmitBlock(inputs, state, durCache, 0, new Set());
+
+  assert.equal(state.ticks.length, 0);
+  assert.equal(state.time, 0);
+});
+
+test("pureProcessBlock: jumpToBlock 처리 시 jumpProcessed에 대상 추가 + jumpIteration 부여", () => {
+  const blocks: LoopBlockData[] = [
+    { startBeat: 0, endBeat: 1, type: "count", value: 1, jumpToBlock: 1, jumpCount: 2 },
+    { startBeat: 2, endBeat: 3, type: "count", value: 1 },
+  ];
+  const inputs = makeInputsFromBlocks(blocks, 4);
+  const state = makeState();
+  const durCache = new Map<string, number>();
+  const jumpProcessed = new Set<number>();
+
+  pureProcessBlock(inputs, state, durCache, jumpProcessed, 0, new Set());
+
+  // 점프 대상이 jumpProcessed에 포함되어야 함
+  assert.ok(jumpProcessed.has(1), "점프 대상 sortedIdx=1이 jumpProcessed에 포함");
+
+  // jumpCount=2 → 자기 자신 + 대상 블록을 2회 교대 (총 4 outer 블록 emit)
+  // 각 블록 2 beats × 4 = 8 ticks
+  assert.equal(state.ticks.length, 8);
+
+  // jumpIteration 0과 1이 모두 등장해야 함
+  const iterations = new Set(state.ticks.map(t => t.jumpIteration));
+  assert.ok(iterations.has(0) && iterations.has(1), "jumpIteration 0,1 모두 등장");
+
+  // sourceBlockIndex는 source 블록의 origIdx(=0)
+  assert.ok(state.ticks.every(t => t.jumpSourceBlockIndex === 0));
+
+  // 점프 종료 후 state.jump 복원 확인
+  assert.deepEqual(state.jump, { iteration: 0, total: 0, sourceBlockIndex: -1 });
+});
+
+test("pureProcessBlock: jumpToBlock이 없으면 emitBlock과 동일하게 동작 + jumpProcessed 변경 없음", () => {
+  const blocks: LoopBlockData[] = [
+    { startBeat: 0, endBeat: 1, type: "count", value: 1 },
+  ];
+  const inputs = makeInputsFromBlocks(blocks, 4);
+  const state = makeState();
+  const durCache = new Map<string, number>();
+  const jumpProcessed = new Set<number>();
+
+  pureProcessBlock(inputs, state, durCache, jumpProcessed, 0, new Set());
+
+  assert.equal(jumpProcessed.size, 0);
+  assert.equal(state.ticks.length, 2);
+});
+
+test("pureProcessOuterCached: 캐시 미스 → 빌드 후 다음 호출은 적중하며 ticks 동일", () => {
+  const blocks: LoopBlockData[] = [
+    { startBeat: 0, endBeat: 3, type: "count", value: 1 },
+  ];
+  const inputs = makeInputsFromBlocks(blocks, 4);
+  const cache = new Map<string, { ticks: ScheduledTick[]; durMs: number }>();
+  const fp = "FIXED-FP";
+  let reuse = 0;
+  let build = 0;
+  const handle: BlockEmitCacheHandle = {
+    cache,
+    cacheMax: 16,
+    computeFingerprint: () => fp,
+    onReuse: () => { reuse++; },
+    onBuild: () => { build++; },
+  };
+
+  // 첫 호출: 미스 → 빌드
+  const s1 = makeState();
+  pureProcessOuterCached(inputs, s1, new Map(), new Set(), handle, 0);
+  assert.equal(build, 1);
+  assert.equal(reuse, 0);
+  assert.equal(cache.size, 1);
+  assert.equal(s1.ticks.length, 4);
+
+  // 두 번째 호출: 적중 → ticks가 cached로부터 복원되며 동일
+  const s2 = makeState();
+  pureProcessOuterCached(inputs, s2, new Map(), new Set(), handle, 0);
+  assert.equal(build, 1);
+  assert.equal(reuse, 1);
+  assert.equal(s2.ticks.length, s1.ticks.length);
+  assert.equal(s2.time, s1.time);
+  for (let i = 0; i < s1.ticks.length; i++) {
+    assert.deepEqual(s2.ticks[i], s1.ticks[i]);
+  }
+});
+
+test("pureProcessOuterCached: 캐시 적중 시 startTime offset이 더해져 state.ticks에 추가", () => {
+  const blocks: LoopBlockData[] = [
+    { startBeat: 0, endBeat: 1, type: "count", value: 1 },
+  ];
+  const inputs = makeInputsFromBlocks(blocks, 4);
+  const cache = new Map<string, { ticks: ScheduledTick[]; durMs: number }>();
+  const handle: BlockEmitCacheHandle = {
+    cache,
+    cacheMax: 16,
+    computeFingerprint: () => "FP",
+    onReuse: () => {},
+    onBuild: () => {},
+  };
+
+  // 첫 호출(time=0)로 캐시 채움
+  pureProcessOuterCached(inputs, makeState(), new Map(), new Set(), handle, 0);
+
+  // 두 번째 호출에서 state.time을 미리 1000으로 세팅
+  const s = makeState();
+  s.time = 1000;
+  pureProcessOuterCached(inputs, s, new Map(), new Set(), handle, 0);
+
+  // 첫 tick은 t=1000에서 시작
+  assert.equal(s.ticks[0].time, 1000);
+  // 한 비트 = 500ms이므로 두 번째 tick은 1500
+  assert.equal(s.ticks[1].time, 1500);
+  // state.time은 1000 + durMs = 1000 + 1000 = 2000
+  assert.equal(s.time, 2000);
+});
+
+test("pureProcessOuterCached: cacheMax 초과 시 가장 오래된 항목 LRU 축출", () => {
+  const blocks: LoopBlockData[] = [
+    { startBeat: 0, endBeat: 1, type: "count", value: 1 },
+  ];
+  const inputs = makeInputsFromBlocks(blocks, 4);
+  const cache = new Map<string, { ticks: ScheduledTick[]; durMs: number }>();
+  let counter = 0;
+  const handle: BlockEmitCacheHandle = {
+    cache,
+    cacheMax: 3,
+    computeFingerprint: () => `fp-${counter}`,
+    onReuse: () => {},
+    onBuild: () => {},
+  };
+
+  for (counter = 0; counter < 5; counter++) {
+    pureProcessOuterCached(inputs, makeState(), new Map(), new Set(), handle, 0);
+  }
+
+  assert.equal(cache.size, 3);
+  // fp-0, fp-1은 축출, fp-2,3,4 남아있음
+  assert.ok(!cache.has("fp-0"));
+  assert.ok(!cache.has("fp-1"));
+  assert.ok(cache.has("fp-2"));
+  assert.ok(cache.has("fp-4"));
+});
+
+test("pureProcessOuterCached: 점프 진행 중(state.jump.total>0)에는 fingerprint를 계산하지 않고 캐시 비활성", () => {
+  const blocks: LoopBlockData[] = [
+    { startBeat: 0, endBeat: 1, type: "count", value: 1 },
+  ];
+  const inputs = makeInputsFromBlocks(blocks, 4);
+  const cache = new Map<string, { ticks: ScheduledTick[]; durMs: number }>();
+  let fpCalls = 0;
+  const handle: BlockEmitCacheHandle = {
+    cache,
+    cacheMax: 16,
+    computeFingerprint: () => { fpCalls++; return "FP"; },
+    onReuse: () => {},
+    onBuild: () => {},
+  };
+
+  const s = makeState();
+  s.jump = { iteration: 0, total: 2, sourceBlockIndex: 5 };
+
+  pureProcessOuterCached(inputs, s, new Map(), new Set(), handle, 0);
+
+  assert.equal(fpCalls, 0, "점프 진행 중에는 fingerprint 미계산");
+  assert.equal(cache.size, 0, "점프 진행 중에는 캐시에 저장되지 않음");
+  assert.equal(s.ticks.length, 2, "그래도 처리는 정상 수행");
+});
+
+test("pureProcessOuterCached: jumpToBlock 블록 캐시 적중 시 jumpProcessed에 대상 추가", () => {
+  const blocks: LoopBlockData[] = [
+    { startBeat: 0, endBeat: 1, type: "count", value: 1, jumpToBlock: 1, jumpCount: 1 },
+    { startBeat: 2, endBeat: 3, type: "count", value: 1 },
+  ];
+  const inputs = makeInputsFromBlocks(blocks, 4);
+  const cache = new Map<string, { ticks: ScheduledTick[]; durMs: number }>();
+  const handle: BlockEmitCacheHandle = {
+    cache,
+    cacheMax: 16,
+    computeFingerprint: () => "FP",
+    onReuse: () => {},
+    onBuild: () => {},
+  };
+
+  // 첫 호출에서 캐시 채움
+  pureProcessOuterCached(inputs, makeState(), new Map(), new Set(), handle, 0);
+
+  // 두 번째 호출(캐시 적중)에서도 jumpProcessed에 대상이 추가되어야 함
+  const jumpProcessed = new Set<number>();
+  pureProcessOuterCached(inputs, makeState(), new Map(), jumpProcessed, handle, 0);
+
+  assert.ok(jumpProcessed.has(1), "캐시 적중 경로에서도 점프 대상 추적");
 });

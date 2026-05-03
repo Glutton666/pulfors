@@ -266,6 +266,190 @@ export function pureAddBarWithRepeat(
   }
 }
 
+/** 순수 함수(state mutate): [startB, endB] 범위의 비트들을 차례로 emit. inner 블록을 만나면 재귀로 처리. */
+export function pureEmitBeatsInRange(
+  inputs: ScheduleInputs,
+  state: EmitState,
+  durCache: Map<string, number>,
+  startB: number,
+  endB: number,
+  outerBlockIdx: number,
+  outerIter: number,
+  outerRepTotal: number,
+  blockBpm: number | undefined,
+): void {
+  const { sortedBlocks, sortedToOrig, startBeatToBlocks } = inputs;
+  let b = startB;
+  while (b <= endB) {
+    const innerIdx = pureFindInnerBlock(sortedBlocks, startBeatToBlocks, b, endB, outerBlockIdx);
+    if (innerIdx >= 0) {
+      const inner = sortedBlocks[innerIdx];
+      const innerEnd = Math.min(inner.endBeat, endB);
+      const innerBpm = inner.bpm ?? blockBpm;
+      const innerPassDur = pureCalcSinglePassDur(inputs, durCache, inner.startBeat, innerEnd, innerIdx, innerBpm);
+      let innerRepCount = 1;
+      if (inner.type === "count") innerRepCount = Math.max(1, inner.value);
+      else innerRepCount = Math.max(1, Math.round((inner.value * 1000) / (innerPassDur || 1)));
+      for (let ir = 0; ir < innerRepCount; ir++) {
+        const innerStartTime = state.time;
+        pureEmitBeatsInRange(inputs, state, durCache, inner.startBeat, innerEnd, innerIdx, ir, innerRepCount, innerBpm);
+        const innerOrigIdx = sortedToOrig.get(innerIdx) ?? innerIdx;
+        const innerDur = state.time - innerStartTime;
+        if (innerDur > 0) {
+          pureEmitStackedBlockTicks(inputs, state, innerOrigIdx, innerStartTime, innerDur, ir, innerRepCount);
+        }
+      }
+      b = innerEnd + 1;
+    } else {
+      pureAddBarWithRepeat(inputs, state, b, outerIter, outerBlockIdx, outerRepTotal, blockBpm);
+      b++;
+    }
+  }
+}
+
+/** 순수 함수(state mutate): 한 블록의 모든 반복(count/duration)을 emit. layer 블록은 스킵. */
+export function pureEmitBlock(
+  inputs: ScheduleInputs,
+  state: EmitState,
+  durCache: Map<string, number>,
+  blockIdx: number,
+  jumpVisited: Set<number>,
+): void {
+  const { sortedBlocks, sortedToOrig, beatsPerMeasure } = inputs;
+  if (jumpVisited.has(blockIdx) || blockIdx < 0 || blockIdx >= sortedBlocks.length) return;
+  jumpVisited.add(blockIdx);
+  const block = sortedBlocks[blockIdx];
+  const origIdx = sortedToOrig.get(blockIdx) ?? blockIdx;
+  if (block.layerOf !== undefined && block.layerOf !== null) return;
+  const endBeat = Math.min(block.endBeat, beatsPerMeasure - 1);
+
+  const blockBpm = block.bpm;
+  const singlePassDurMs = pureCalcSinglePassDur(inputs, durCache, block.startBeat, endBeat, blockIdx, blockBpm);
+
+  let blockRepeatCount = 1;
+  if (block.type === "count") {
+    blockRepeatCount = Math.max(1, block.value);
+  } else {
+    blockRepeatCount = Math.max(1, Math.round((block.value * 1000) / (singlePassDurMs || 1)));
+  }
+
+  for (let r = 0; r < blockRepeatCount; r++) {
+    const passStartTime = state.time;
+    pureEmitBeatsInRange(inputs, state, durCache, block.startBeat, endBeat, blockIdx, r, blockRepeatCount, blockBpm);
+    const passDur = state.time - passStartTime;
+    if (passDur > 0) {
+      pureEmitStackedBlockTicks(inputs, state, origIdx, passStartTime, passDur, r, blockRepeatCount);
+    }
+  }
+}
+
+/** 순수 함수(state mutate): 한 블록을 처리. jumpToBlock이 있으면 jumpCount만큼 자기 자신과 점프 대상 블록을 교대 emit. */
+export function pureProcessBlock(
+  inputs: ScheduleInputs,
+  state: EmitState,
+  durCache: Map<string, number>,
+  jumpProcessed: Set<number>,
+  blockIdx: number,
+  jumpVisited: Set<number>,
+): void {
+  const { sortedBlocks, origToSorted, sortedToOrig } = inputs;
+  if (blockIdx < 0 || blockIdx >= sortedBlocks.length) return;
+  const block = sortedBlocks[blockIdx];
+
+  if (block.jumpToBlock !== undefined && block.jumpToBlock !== null) {
+    const jumpSortedIdx = origToSorted.get(block.jumpToBlock);
+    if (jumpSortedIdx !== undefined) {
+      const jumpCount = Math.max(1, block.jumpCount || 1);
+      const prevJumpTotal = state.jump.total;
+      const prevJumpIteration = state.jump.iteration;
+      const prevJumpSource = state.jump.sourceBlockIndex;
+      state.jump.total = jumpCount;
+      state.jump.sourceBlockIndex = sortedToOrig.get(blockIdx) ?? blockIdx;
+
+      for (let ji = 0; ji < jumpCount; ji++) {
+        state.jump.iteration = ji;
+        pureEmitBlock(inputs, state, durCache, blockIdx, new Set(jumpVisited));
+        const jumpVisitedCopy = new Set(jumpVisited);
+        pureEmitBlock(inputs, state, durCache, jumpSortedIdx, jumpVisitedCopy);
+      }
+
+      state.jump.iteration = prevJumpIteration;
+      state.jump.total = prevJumpTotal;
+      state.jump.sourceBlockIndex = prevJumpSource;
+
+      jumpProcessed.add(jumpSortedIdx);
+      return;
+    }
+  }
+
+  pureEmitBlock(inputs, state, durCache, blockIdx, jumpVisited);
+}
+
+/** 외부에서 주입되는 블록 emit 캐시 핸들. */
+export interface BlockEmitCacheHandle {
+  cache: Map<string, { ticks: ScheduledTick[]; durMs: number }>;
+  cacheMax: number;
+  computeFingerprint: (outerSortedIdx: number) => string | null;
+  onReuse: () => void;
+  onBuild: () => void;
+}
+
+/** 순수 함수(state+cache mutate): outer 블록을 처리하되 fingerprint 적중 시 캐시된 ticks를 재사용. */
+export function pureProcessOuterCached(
+  inputs: ScheduleInputs,
+  state: EmitState,
+  durCache: Map<string, number>,
+  jumpProcessed: Set<number>,
+  cacheHandle: BlockEmitCacheHandle,
+  outerIdx: number,
+): void {
+  const { sortedBlocks, origToSorted } = inputs;
+  if (outerIdx < 0 || outerIdx >= sortedBlocks.length) {
+    pureProcessBlock(inputs, state, durCache, jumpProcessed, outerIdx, new Set());
+    return;
+  }
+  const inJump =
+    state.jump.iteration !== 0 ||
+    state.jump.total !== 0 ||
+    state.jump.sourceBlockIndex !== -1;
+  const fp = inJump ? null : cacheHandle.computeFingerprint(outerIdx);
+  const cached = fp ? cacheHandle.cache.get(fp) : undefined;
+  if (cached) {
+    const startTime = state.time;
+    for (const t of cached.ticks) {
+      state.ticks.push({ ...t, time: t.time + startTime });
+    }
+    state.time = startTime + cached.durMs;
+    const block = sortedBlocks[outerIdx];
+    if (block.jumpToBlock !== undefined && block.jumpToBlock !== null) {
+      const jSorted = origToSorted.get(block.jumpToBlock);
+      if (jSorted !== undefined) jumpProcessed.add(jSorted);
+    }
+    cacheHandle.cache.delete(fp!);
+    cacheHandle.cache.set(fp!, cached);
+    cacheHandle.onReuse();
+    return;
+  }
+  const startTime = state.time;
+  const startTickIdx = state.ticks.length;
+  pureProcessBlock(inputs, state, durCache, jumpProcessed, outerIdx, new Set());
+  if (fp) {
+    const slice = state.ticks.slice(startTickIdx).map(t => {
+      const copy: ScheduledTick = { ...t, time: t.time - startTime };
+      Object.freeze(copy);
+      return copy;
+    });
+    Object.freeze(slice);
+    cacheHandle.cache.set(fp, { ticks: slice, durMs: state.time - startTime });
+    cacheHandle.onBuild();
+    while (cacheHandle.cache.size > cacheHandle.cacheMax) {
+      const firstKey = cacheHandle.cache.keys().next().value;
+      if (firstKey === undefined) break;
+      cacheHandle.cache.delete(firstKey);
+    }
+  }
+}
+
 /** 순수 함수(state mutate): 부모 블록 위에 stacked layer 블록의 ticks를 state에 추가. state.time은 변경 없음. */
 export function pureEmitStackedBlockTicks(
   inputs: ScheduleInputs,
@@ -747,10 +931,7 @@ export class MetronomeEngine {
     });
   }
 
-  private buildSchedule(): ScheduledTick[] {
-    this.lastBlockCacheReused = 0;
-    this.lastBlockCacheBuilt = 0;
-
+  private prepareScheduleInputs(): ScheduleInputs {
     const filteredWithOrigIdx = this.loopBlocks
       .map((b, i) => ({ block: b as LoopBlockData, origIdx: i }))
       .filter(({ block: b }) => b.startBeat < this.beatsPerMeasure && b.endBeat >= b.startBeat)
@@ -762,15 +943,13 @@ export class MetronomeEngine {
       origToSorted.set(e.origIdx, sortedIdx);
       sortedToOrig.set(sortedIdx, e.origIdx);
     });
-
     const startBeatToBlocks = new Map<number, number[]>();
     sortedBlocks.forEach((blk, idx) => {
       const arr = startBeatToBlocks.get(blk.startBeat);
       if (arr) arr.push(idx);
       else startBeatToBlocks.set(blk.startBeat, [idx]);
     });
-
-    const inputs: ScheduleInputs = {
+    return {
       bpm: this.bpm,
       halfTime: this.halfTime,
       beatsPerMeasure: this.beatsPerMeasure,
@@ -784,6 +963,14 @@ export class MetronomeEngine {
       startBeatToBlocks,
       loopBlocks: this.loopBlocks as LoopBlockData[],
     };
+  }
+
+  private buildSchedule(): ScheduledTick[] {
+    this.lastBlockCacheReused = 0;
+    this.lastBlockCacheBuilt = 0;
+
+    const inputs = this.prepareScheduleInputs();
+    const { sortedBlocks, origToSorted, sortedToOrig, startBeatToBlocks } = inputs;
 
     const state: EmitState = {
       ticks: [],
@@ -791,158 +978,19 @@ export class MetronomeEngine {
       jump: { iteration: 0, total: 0, sourceBlockIndex: -1 },
     };
     const ticks = state.ticks;
-
     const durCache = new Map<string, number>();
-
-    const addBarWithRepeat = (beat: number, blockIteration: number, blkIdx: number, blkRepTotal: number, blockBpm?: number) => {
-      pureAddBarWithRepeat(inputs, state, beat, blockIteration, blkIdx, blkRepTotal, blockBpm);
-    };
-
-    const calcSinglePassDur = (startB: number, endB: number, parentBlockIdx: number, blockBpm?: number): number => {
-      return pureCalcSinglePassDur(inputs, durCache, startB, endB, parentBlockIdx, blockBpm);
-    };
-
-    const emitBeatsInRange = (startB: number, endB: number, outerBlockIdx: number, outerIter: number, outerRepTotal: number, blockBpm?: number) => {
-      let b = startB;
-      while (b <= endB) {
-        const innerIdx = pureFindInnerBlock(sortedBlocks, startBeatToBlocks, b, endB, outerBlockIdx);
-        if (innerIdx >= 0) {
-          const inner = sortedBlocks[innerIdx];
-          const innerEnd = Math.min(inner.endBeat, endB);
-          const innerBpm = inner.bpm ?? blockBpm;
-          const innerPassDur = calcSinglePassDur(inner.startBeat, innerEnd, innerIdx, innerBpm);
-          let innerRepCount = 1;
-          if (inner.type === "count") innerRepCount = Math.max(1, inner.value);
-          else innerRepCount = Math.max(1, Math.round((inner.value * 1000) / (innerPassDur || 1)));
-          for (let ir = 0; ir < innerRepCount; ir++) {
-            const innerStartTime = state.time;
-            emitBeatsInRange(inner.startBeat, innerEnd, innerIdx, ir, innerRepCount, innerBpm);
-            const innerOrigIdx = sortedToOrig.get(innerIdx) ?? innerIdx;
-            const innerDur = state.time - innerStartTime;
-            if (innerDur > 0) {
-              pureEmitStackedBlockTicks(inputs, state, innerOrigIdx, innerStartTime, innerDur, ir, innerRepCount);
-            }
-          }
-          b = innerEnd + 1;
-        } else {
-          addBarWithRepeat(b, outerIter, outerBlockIdx, outerRepTotal, blockBpm);
-          b++;
-        }
-      }
-    };
-
     const jumpProcessed = new Set<number>();
 
-    const emitBlock = (blockIdx: number, jumpVisited: Set<number>) => {
-      if (jumpVisited.has(blockIdx) || blockIdx < 0 || blockIdx >= sortedBlocks.length) return;
-      jumpVisited.add(blockIdx);
-      const block = sortedBlocks[blockIdx];
-      const origIdx = sortedToOrig.get(blockIdx) ?? blockIdx;
-      if (block.layerOf !== undefined && block.layerOf !== null) return;
-      const endBeat = Math.min(block.endBeat, this.beatsPerMeasure - 1);
-
-      const blockBpm = block.bpm;
-      const singlePassDurMs = calcSinglePassDur(block.startBeat, endBeat, blockIdx, blockBpm);
-
-      let blockRepeatCount = 1;
-      if (block.type === "count") {
-        blockRepeatCount = Math.max(1, block.value);
-      } else {
-        blockRepeatCount = Math.max(1, Math.round((block.value * 1000) / (singlePassDurMs || 1)));
-      }
-
-      for (let r = 0; r < blockRepeatCount; r++) {
-        const passStartTime = state.time;
-        emitBeatsInRange(block.startBeat, endBeat, blockIdx, r, blockRepeatCount, blockBpm);
-        const passEndTime = state.time;
-        const passDur = passEndTime - passStartTime;
-        if (passDur > 0) {
-          pureEmitStackedBlockTicks(inputs, state, origIdx, passStartTime, passDur, r, blockRepeatCount);
-        }
-      }
+    const cacheHandle: BlockEmitCacheHandle = {
+      cache: this.blockEmitCache,
+      cacheMax: MetronomeEngine.BLOCK_CACHE_MAX,
+      computeFingerprint: (outerSortedIdx: number) =>
+        this.computeOuterBlockFingerprint(outerSortedIdx, sortedBlocks, origToSorted, sortedToOrig),
+      onReuse: () => { this.lastBlockCacheReused++; },
+      onBuild: () => { this.lastBlockCacheBuilt++; },
     };
-
-    const processBlock = (blockIdx: number, jumpVisited: Set<number>) => {
-      if (blockIdx < 0 || blockIdx >= sortedBlocks.length) return;
-      const block = sortedBlocks[blockIdx];
-
-      if (block.jumpToBlock !== undefined && block.jumpToBlock !== null) {
-        const jumpSortedIdx = origToSorted.get(block.jumpToBlock);
-        if (jumpSortedIdx !== undefined) {
-          const jumpCount = Math.max(1, block.jumpCount || 1);
-          const prevJumpTotal = state.jump.total;
-          const prevJumpIteration = state.jump.iteration;
-          const prevJumpSource = state.jump.sourceBlockIndex;
-          state.jump.total = jumpCount;
-          state.jump.sourceBlockIndex = sortedToOrig.get(blockIdx) ?? blockIdx;
-
-          for (let ji = 0; ji < jumpCount; ji++) {
-            state.jump.iteration = ji;
-            emitBlock(blockIdx, new Set(jumpVisited));
-            const jumpVisitedCopy = new Set(jumpVisited);
-            emitBlock(jumpSortedIdx, jumpVisitedCopy);
-          }
-
-          state.jump.iteration = prevJumpIteration;
-          state.jump.total = prevJumpTotal;
-          state.jump.sourceBlockIndex = prevJumpSource;
-
-          jumpProcessed.add(jumpSortedIdx);
-          return;
-        }
-      }
-
-      emitBlock(blockIdx, jumpVisited);
-    };
-
-    const processOuterCached = (outerIdx: number) => {
-      if (outerIdx < 0 || outerIdx >= sortedBlocks.length) {
-        processBlock(outerIdx, new Set());
-        return;
-      }
-      const inJump =
-        state.jump.iteration !== 0 ||
-        state.jump.total !== 0 ||
-        state.jump.sourceBlockIndex !== -1;
-      const fp = inJump
-        ? null
-        : this.computeOuterBlockFingerprint(outerIdx, sortedBlocks, origToSorted, sortedToOrig);
-      const cached = fp ? this.blockEmitCache.get(fp) : undefined;
-      if (cached) {
-        const startTime = state.time;
-        for (const t of cached.ticks) {
-          ticks.push({ ...t, time: t.time + startTime });
-        }
-        state.time = startTime + cached.durMs;
-        const block = sortedBlocks[outerIdx];
-        if (block.jumpToBlock !== undefined && block.jumpToBlock !== null) {
-          const jSorted = origToSorted.get(block.jumpToBlock);
-          if (jSorted !== undefined) jumpProcessed.add(jSorted);
-        }
-        this.blockEmitCache.delete(fp!);
-        this.blockEmitCache.set(fp!, cached);
-        this.lastBlockCacheReused++;
-        return;
-      }
-      const startTime = state.time;
-      const startTickIdx = ticks.length;
-      processBlock(outerIdx, new Set());
-      if (fp) {
-        const slice = ticks.slice(startTickIdx).map(t => {
-          const copy: ScheduledTick = { ...t, time: t.time - startTime };
-          Object.freeze(copy);
-          return copy;
-        });
-        Object.freeze(slice);
-        this.blockEmitCache.set(fp, { ticks: slice, durMs: state.time - startTime });
-        this.lastBlockCacheBuilt++;
-        while (this.blockEmitCache.size > MetronomeEngine.BLOCK_CACHE_MAX) {
-          const firstKey = this.blockEmitCache.keys().next().value;
-          if (firstKey === undefined) break;
-          this.blockEmitCache.delete(firstKey);
-        }
-      }
-    };
+    const processOuterCached = (outerIdx: number) =>
+      pureProcessOuterCached(inputs, state, durCache, jumpProcessed, cacheHandle, outerIdx);
 
     if (this.blockPlayMode === "random" && sortedBlocks.length >= 2) {
       const outerBlocks: number[] = [];
@@ -999,7 +1047,7 @@ export class MetronomeEngine {
             const jumpedBlock = sortedBlocks[candidates.find(idx => jumpProcessed.has(idx))!];
             beat = Math.min(jumpedBlock.endBeat + 1, this.beatsPerMeasure);
           } else {
-            addBarWithRepeat(beat, 0, -1, 1);
+            pureAddBarWithRepeat(inputs, state, beat, 0, -1, 1);
             beat++;
           }
         }
