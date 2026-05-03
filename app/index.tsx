@@ -1481,12 +1481,11 @@ export default function MetronomeScreen() {
   if (!persistSettingsRef.current) {
     persistSettingsRef.current = createDebouncedPersister<MetronomeSettings>(
       () => persistSnapshotRef.current,
-      (merged) => {
-        void saveSettings(merged).catch(() => {
-          // 사용자 알림은 storage-notifier 구독자(StorageErrorAlert)가 처리.
-        });
-      },
-      500
+      // saveSettings는 실패 시 reject한다. 디바운서가 자동으로 백오프 재시도하고
+      // 최종 실패 시 storage-notifier 구독자(StorageErrorAlert)에게 알린다.
+      (merged) => saveSettings(merged),
+      500,
+      { maxAttempts: 3, baseDelayMs: 500 },
     );
   }
   const persistSettings = persistSettingsRef.current;
