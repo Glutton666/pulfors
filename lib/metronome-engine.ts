@@ -266,6 +266,22 @@ export class MetronomeEngine {
     }
   }
 
+  getLoopBlocks() {
+    return this.loopBlocks.map(b => ({ ...b }));
+  }
+
+  getBlockPlayMode() {
+    return this.blockPlayMode;
+  }
+
+  getAllBarRepeats(): Record<number, { type: "count" | "duration"; value: number }> {
+    const result: Record<number, { type: "count" | "duration"; value: number }> = {};
+    for (const [k, v] of this.barRepeats.entries()) {
+      result[k] = { ...v };
+    }
+    return result;
+  }
+
   setBarBpmOverride(beat: number, bpm: number | null) {
     if (bpm !== null) {
       this.barBpmOverrides.set(beat, Math.max(20, Math.min(300, bpm)));

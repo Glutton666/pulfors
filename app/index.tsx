@@ -254,7 +254,17 @@ export default function MetronomeScreen() {
   const tempoQuizSessionRef = useRef<{
     measures: number;
     elapsed: number;
-    restore: { bpm: number; beatsPerMeasure: number; beatTypes: BeatType[] } | null;
+    restore: {
+      bpm: number;
+      beatsPerMeasure: number;
+      beatTypes: BeatType[];
+      beatSubdivisions: Record<string, BeatType[]>;
+      loopBlocks: ReturnType<NonNullable<typeof engineRef.current>["getLoopBlocks"]>;
+      blockPlayMode: "sequential" | "loop" | "random";
+      barRepeats: Record<number, { type: "count" | "duration"; value: number }>;
+      barBpmOverrides: Record<number, number>;
+      halfTime: boolean;
+    } | null;
   } | null>(null);
   const teardownTempoQuizRef = useRef<() => void>(() => {});
   const closeTempoQuiz = useCallback(() => {
@@ -1013,9 +1023,16 @@ export default function MetronomeScreen() {
         stopRenderedAudio();
         clearSamplePlayStates();
         if (sess?.restore) {
-          engine.setBpm(sess.restore.bpm);
-          engine.setBeatsPerMeasure(sess.restore.beatsPerMeasure);
-          engine.setBeatTypes(sess.restore.beatTypes);
+          const r = sess.restore;
+          engine.setBpm(r.bpm);
+          engine.setBeatsPerMeasure(r.beatsPerMeasure);
+          engine.setBeatTypes(r.beatTypes);
+          engine.setAllBeatSubdivisions(r.beatSubdivisions);
+          engine.setLoopBlocks(r.loopBlocks);
+          engine.setBlockPlayMode(r.blockPlayMode);
+          engine.setAllBarRepeats(r.barRepeats);
+          engine.setAllBarBpmOverrides(r.barBpmOverrides);
+          engine.setHalfTime(r.halfTime);
         }
       }
       tempoQuizSessionRef.current = null;
@@ -3939,11 +3956,23 @@ export default function MetronomeScreen() {
           resetPlaybackVisuals();
           setIsPreparing(false);
           setIsPlaying(false);
-          tempoQuizSessionRef.current = {
-            measures: 0,
-            elapsed: 0,
-            restore: { bpm: bpmRef.current, beatsPerMeasure, beatTypes: [...beatTypes] },
-          };
+          if (engine) {
+            tempoQuizSessionRef.current = {
+              measures: 0,
+              elapsed: 0,
+              restore: {
+                bpm: bpmRef.current,
+                beatsPerMeasure,
+                beatTypes: [...beatTypes],
+                beatSubdivisions: engine.getAllBeatSubdivisions(),
+                loopBlocks: engine.getLoopBlocks(),
+                blockPlayMode: engine.getBlockPlayMode(),
+                barRepeats: engine.getAllBarRepeats(),
+                barBpmOverrides: engine.getBarBpmOverrides(),
+                halfTime: engine.getHalfTime(),
+              },
+            };
+          }
           setTempoQuizMeasureProgress(0);
           setTempoQuizPhase("ready");
           setShowTempoQuiz(true);
@@ -3963,17 +3992,26 @@ export default function MetronomeScreen() {
           clearSamplePlayStates();
           resetPlaybackVisuals();
           const prev = tempoQuizSessionRef.current;
-          tempoQuizSessionRef.current = {
-            measures,
-            elapsed: 0,
-            restore: prev?.restore ?? {
-              bpm: bpmRef.current,
-              beatsPerMeasure,
-              beatTypes: [...beatTypes],
-            },
+          const restore = prev?.restore ?? {
+            bpm: bpmRef.current,
+            beatsPerMeasure,
+            beatTypes: [...beatTypes],
+            beatSubdivisions: engine.getAllBeatSubdivisions(),
+            loopBlocks: engine.getLoopBlocks(),
+            blockPlayMode: engine.getBlockPlayMode(),
+            barRepeats: engine.getAllBarRepeats(),
+            barBpmOverrides: engine.getBarBpmOverrides(),
+            halfTime: engine.getHalfTime(),
           };
+          tempoQuizSessionRef.current = { measures, elapsed: 0, restore };
           setTempoQuizMeasureProgress(0);
           const quizBeatTypes = defaultBeatTypes(4);
+          engine.setHalfTime(false);
+          engine.clearLoopBlocks();
+          engine.setBlockPlayMode("loop");
+          engine.setAllBarRepeats({});
+          engine.setAllBarBpmOverrides({});
+          engine.setAllBeatSubdivisions({});
           engine.setBpm(targetBpm);
           engine.setBeatsPerMeasure(4);
           engine.setBeatTypes(quizBeatTypes);
