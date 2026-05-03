@@ -12,6 +12,9 @@ import {
   Image,
   ActivityIndicator,
   useWindowDimensions,
+  type ViewStyle,
+  type TextStyle,
+  type ImageStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
@@ -3533,7 +3536,11 @@ export function BeatIndicator({
   );
 }
 
-const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
+const make_styles = (C: typeof Colors, S: ScaleValues) => _make_styles_inner(C, S) as unknown as {
+  [K in keyof ReturnType<typeof _make_styles_inner>]: ViewStyle & TextStyle & ImageStyle;
+};
+
+const _make_styles_inner = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   touchArea: {
     flex: 1,
     alignItems: "center",
@@ -3814,7 +3821,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   barNoteCell: {
     flex: 1,
     alignItems: "stretch",
-    justifyContent: "stretch",
+    justifyContent: "center",
   },
   barNoteFill: {
     flex: 1,

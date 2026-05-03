@@ -3,6 +3,7 @@ import * as Crypto from "expo-crypto";
 import type { BeatType } from "./metronome-engine";
 import type { ThemeColor } from "@/constants/colors";
 import { notifyStorageError } from "./storage-notifier";
+import { logger } from "./logger";
 
 const SETTINGS_KEY = "metronome_settings";
 const PRACTICE_BOOK_KEY = "practice_book";
@@ -195,7 +196,7 @@ export async function loadPracticeBook(): Promise<PracticeEntry[]> {
     const data = await AsyncStorage.getItem(PRACTICE_BOOK_KEY);
     if (data) return JSON.parse(data);
   } catch (e) {
-    console.warn("Failed to load practice book:", e);
+    logger.warn("Failed to load practice book:", e);
   }
   return [];
 }
@@ -204,7 +205,7 @@ export async function savePracticeBook(entries: PracticeEntry[]): Promise<void> 
   try {
     await AsyncStorage.setItem(PRACTICE_BOOK_KEY, JSON.stringify(entries));
   } catch (e) {
-    console.warn("Failed to save practice book:", e);
+    logger.warn("Failed to save practice book:", e);
   }
 }
 

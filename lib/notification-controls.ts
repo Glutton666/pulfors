@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { createT, type Language } from "@/lib/i18n";
+import { logger } from "./logger";
 
 const CATEGORY_ID = "metronome_controls";
 const NOTIFICATION_ID = "metronome_playback";
@@ -119,7 +120,7 @@ export async function setupNotificationControls(lang: Language = "ko") {
 
     isSetup = true;
   } catch (e) {
-    console.warn("Notification setup error:", e);
+    logger.warn("Notification setup error:", e);
   }
 }
 
@@ -150,7 +151,7 @@ export async function showPlayingNotification(
       trigger: null,
     });
   } catch (e) {
-    console.warn("Show notification error:", e);
+    logger.warn("Show notification error:", e);
   }
 }
 
@@ -173,7 +174,7 @@ export async function updateNotificationBpm(
       trigger: null,
     });
   } catch (e) {
-    console.warn("Update notification BPM error:", e);
+    logger.warn("Update notification BPM error:", e);
   }
 }
 
@@ -200,7 +201,7 @@ export async function showPausedNotification(
       trigger: null,
     });
   } catch (e) {
-    console.warn("Show paused notification error:", e);
+    logger.warn("Show paused notification error:", e);
   }
 }
 
@@ -214,7 +215,7 @@ export async function dismissNotification() {
   try {
     await N.dismissNotificationAsync(NOTIFICATION_ID);
   } catch (e) {
-    console.warn("Dismiss notification error:", e);
+    logger.warn("Dismiss notification error:", e);
   }
 }
 

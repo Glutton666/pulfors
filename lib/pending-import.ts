@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { logger } from "./logger";
 
 const STORAGE_KEY = "@practice_pending_import";
 
@@ -8,7 +9,7 @@ export function setPendingImport(data: any) {
       window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     }
   } catch (e) {
-    console.warn("setPendingImport error:", e);
+    logger.warn("setPendingImport error:", e);
   }
 }
 
@@ -22,7 +23,7 @@ export function consumePendingImport(): any {
       }
     }
   } catch (e) {
-    console.warn("consumePendingImport error:", e);
+    logger.warn("consumePendingImport error:", e);
   }
   return null;
 }

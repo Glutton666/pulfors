@@ -3,6 +3,7 @@ import { Alert, Platform } from "react-native";
 import { onStorageError, type StorageErrorInfo } from "@/lib/storage-notifier";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { createT } from "@/lib/i18n";
+import { logger } from "@/lib/logger";
 
 /**
  * AsyncStorage 실패가 발생하면 사용자에게 한 번 알림(Alert)을 띄웁니다.
@@ -50,7 +51,7 @@ export function StorageErrorAlert(): null {
 
       if (Platform.OS === "web") {
         // 웹에서는 Alert가 차단될 수 있으니 console만 보장.
-        console.warn(`[storage-alert] ${safeTitle}: ${safeBody}`);
+        logger.warn(`[storage-alert] ${safeTitle}: ${safeBody}`);
         return;
       }
       Alert.alert(safeTitle, safeBody);

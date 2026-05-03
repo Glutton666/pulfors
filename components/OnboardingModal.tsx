@@ -440,11 +440,18 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
     </View>
   );
 
-  const renderStepHeader = (icon: React.ReactNode, titleKey: string, subtitleKey: string) => (
+  // i18n key 검증: scripts/check-i18n-keys.ts 가 정적 호출의 키 존재 여부를 점검합니다.
+  // t() 의 오버로드 시그니처가 두 번째 인자를 첫 번째 인자에 따라 좁혀 두므로,
+  // 헬퍼처럼 키를 변수로 받는 경우 `as never` 가 필요합니다.
+  const renderStepHeader = (
+    icon: React.ReactNode,
+    titleKey: string,
+    subtitleKey: string,
+  ) => (
     <View style={isLandscape ? styles.landHeaderCol : undefined}>
       {icon}
-      <Text style={[styles.stepTitle, isLandscape && styles.landStepTitle]}>{t("onboarding", titleKey)}</Text>
-      <Text style={[styles.stepSubtitle, isLandscape && styles.landStepSubtitle]}>{t("onboarding", subtitleKey)}</Text>
+      <Text style={[styles.stepTitle, isLandscape && styles.landStepTitle]}>{t("onboarding", titleKey as never)}</Text>
+      <Text style={[styles.stepSubtitle, isLandscape && styles.landStepSubtitle]}>{t("onboarding", subtitleKey as never)}</Text>
       {isLandscape && (
         <Pressable
           style={[styles.landNextButton, { backgroundColor: accentColor }]}

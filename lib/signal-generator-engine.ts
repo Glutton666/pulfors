@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { logger } from "./logger";
 
 export type WaveType = "sine" | "square" | "triangle" | "sawtooth";
 
@@ -131,7 +132,7 @@ export class SignalGeneratorEngine {
         try {
           await ctx.resume();
         } catch (resumeErr) {
-          console.warn("[SignalGen] AudioContext resume failed:", resumeErr);
+          logger.warn("[SignalGen] AudioContext resume failed:", resumeErr);
         }
       }
       const gain = ctx.createGain();
@@ -146,7 +147,7 @@ export class SignalGeneratorEngine {
       this.oscillator = osc;
       this.isRunning = true;
     } catch (e) {
-      console.warn("[SignalGen] startWeb error:", e);
+      logger.warn("[SignalGen] startWeb error:", e);
       this.isRunning = false;
     }
   }

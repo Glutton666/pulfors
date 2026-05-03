@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   Animated,
 } from "react-native";
+import { logger } from "@/lib/logger";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -407,7 +408,7 @@ export function SettingsModal({
         previewStopTimerRef.current = null;
       }, Math.max(150, duration * 1000));
     } catch (e) {
-      console.warn("Preview failed:", e);
+      logger.warn("Preview failed:", e);
     }
   }, []);
 
@@ -877,7 +878,7 @@ export function SettingsModal({
         if (elapsed >= 3) stopSampleRecording(slot);
       }, 100);
     } catch (e) {
-      console.error("Failed to start recording:", e);
+      logger.error("Failed to start recording:", e);
       setRecordingSlot(null);
     }
   }, []);
@@ -899,7 +900,7 @@ export function SettingsModal({
         else setCustomNormal(sample);
         if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-    } catch (e) { console.error("Failed to stop recording:", e); }
+    } catch (e) { logger.error("Failed to stop recording:", e); }
     setIsRecording(false);
     setRecordingSlot(null);
   }, [t, probeUriDuration]);
@@ -924,7 +925,7 @@ export function SettingsModal({
       else setCustomNormal(sample);
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
-      console.error("Failed to import audio:", e);
+      logger.error("Failed to import audio:", e);
       Alert.alert(t("customSoundSet", "importError"));
     }
   }, [t, probeUriDuration]);
@@ -938,8 +939,8 @@ export function SettingsModal({
         </View>
         <View style={styles.tripleRow}>
           {([
-            { value: "night" as const, icon: "moon" as const, labelKey: "nightMode" },
-            { value: "day" as const, icon: "sunny" as const, labelKey: "dayMode" },
+            { value: "night" as const, icon: "moon" as const, labelKey: "nightMode" as const },
+            { value: "day" as const, icon: "sunny" as const, labelKey: "dayMode" as const },
           ]).map((opt) => {
             const active = themeMode === opt.value;
             return (

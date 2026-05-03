@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
+import { logger } from "./logger";
 
 const ACTIVITY_LOG_KEY = "metronome_activity_log";
 const ACTIVITY_SETTINGS_KEY = "metronome_activity_settings";
@@ -49,7 +50,7 @@ export async function loadLoggingEnabled(): Promise<boolean> {
       return parsed.loggingEnabled ?? false;
     }
   } catch (e) {
-    console.warn("Failed to load logging settings:", e);
+    logger.warn("Failed to load logging settings:", e);
   }
   return false;
 }
@@ -61,7 +62,7 @@ export async function saveLoggingEnabled(val: boolean): Promise<void> {
       JSON.stringify({ loggingEnabled: val })
     );
   } catch (e) {
-    console.warn("Failed to save logging settings:", e);
+    logger.warn("Failed to save logging settings:", e);
   }
 }
 
@@ -81,7 +82,7 @@ export async function addActivityLog(
       logs.push(newEntry);
       await AsyncStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(logs));
     } catch (e) {
-      console.warn("Failed to add activity log:", e);
+      logger.warn("Failed to add activity log:", e);
     }
   });
   activityWriteChain = next.catch(() => {});
@@ -93,7 +94,7 @@ export async function loadActivityLogs(): Promise<ActivityLog[]> {
     const data = await AsyncStorage.getItem(ACTIVITY_LOG_KEY);
     if (data) return JSON.parse(data);
   } catch (e) {
-    console.warn("Failed to load activity logs:", e);
+    logger.warn("Failed to load activity logs:", e);
   }
   return [];
 }
@@ -102,7 +103,7 @@ export async function clearActivityLogs(): Promise<void> {
   try {
     await AsyncStorage.removeItem(ACTIVITY_LOG_KEY);
   } catch (e) {
-    console.warn("Failed to clear activity logs:", e);
+    logger.warn("Failed to clear activity logs:", e);
   }
 }
 
@@ -111,7 +112,7 @@ export async function loadGoals(): Promise<Goal[]> {
     const data = await AsyncStorage.getItem(GOALS_KEY);
     if (data) return JSON.parse(data);
   } catch (e) {
-    console.warn("Failed to load goals:", e);
+    logger.warn("Failed to load goals:", e);
   }
   return [];
 }
@@ -120,6 +121,6 @@ export async function saveGoals(goals: Goal[]): Promise<void> {
   try {
     await AsyncStorage.setItem(GOALS_KEY, JSON.stringify(goals));
   } catch (e) {
-    console.warn("Failed to save goals:", e);
+    logger.warn("Failed to save goals:", e);
   }
 }

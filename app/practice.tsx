@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { setPendingImport } from "@/lib/pending-import";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
+import { logger } from "@/lib/logger";
 
 export default function PracticeDeepLink() {
   const { d } = useLocalSearchParams<{ d: string }>();
@@ -28,7 +29,7 @@ export default function PracticeDeepLink() {
         setPendingImport(decoded);
       }
     } catch (e) {
-      console.warn("Deep link parse error:", e);
+      logger.warn("Deep link parse error:", e);
     }
 
     router.replace("/");

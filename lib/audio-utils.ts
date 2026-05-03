@@ -1,4 +1,5 @@
 import { captureBreadcrumb } from "./error-tracking";
+import { logger } from "./logger";
 
 interface PlayerLike {
   play: () => unknown;
@@ -20,7 +21,7 @@ export function safePlay(player: PlayerLike | null | undefined, label: string): 
   try {
     result = player.play();
   } catch (e) {
-    console.warn(`[audio] play threw (${label}):`, e);
+    logger.warn(`[audio] play threw (${label}):`, e);
     captureBreadcrumb({
       category: "audio.play",
       message: `play threw: ${label}`,
@@ -31,7 +32,7 @@ export function safePlay(player: PlayerLike | null | undefined, label: string): 
   }
   if (result && typeof (result as any).then === "function") {
     (result as Promise<unknown>).catch((e: unknown) => {
-      console.warn(`[audio] play rejected (${label}):`, e);
+      logger.warn(`[audio] play rejected (${label}):`, e);
       captureBreadcrumb({
         category: "audio.play",
         message: `play rejected: ${label}`,
@@ -58,7 +59,7 @@ export function safeSeekAndPlay(
       (seekResult as Promise<unknown>)
         .then(() => safePlay(player, label))
         .catch((e: unknown) => {
-          console.warn(`[audio] seek rejected (${label}):`, e);
+          logger.warn(`[audio] seek rejected (${label}):`, e);
           captureBreadcrumb({
             category: "audio.seek",
             message: `seek rejected: ${label}`,
@@ -70,7 +71,7 @@ export function safeSeekAndPlay(
       safePlay(player, label);
     }
   } catch (e) {
-    console.warn(`[audio] seek threw (${label}):`, e);
+    logger.warn(`[audio] seek threw (${label}):`, e);
     captureBreadcrumb({
       category: "audio.seek",
       message: `seek threw: ${label}`,

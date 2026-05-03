@@ -9,6 +9,7 @@ import {
   configureReanimatedLogger,
   ReanimatedLogLevel,
 } from "react-native-reanimated";
+import { logger } from "@/lib/logger";
 
 import * as Font from "expo-font";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -56,7 +57,7 @@ export default function RootLayout() {
       };
       await Font.loadAsync(iconFonts); // ← Font import 추가 필요
     } catch (e) {
-      console.warn("Icon font loading error:", e);
+      logger.warn("Icon font loading error:", e);
     }
   }, []);
 
@@ -72,7 +73,7 @@ export default function RootLayout() {
         shouldPlayInBackground: true,
       });
     } catch (e) {
-      console.warn("Audio configuration failed:", e);
+      logger.warn("Audio configuration failed:", e);
     }
   }, []);
 
@@ -91,7 +92,7 @@ export default function RootLayout() {
           configureAudio(),
         ]);
       } catch (e) {
-        console.warn("App preparation error:", e);
+        logger.warn("App preparation error:", e);
       } finally {
         setAppIsReady(true);
         await SplashScreen.hideAsync();

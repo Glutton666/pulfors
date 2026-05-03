@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 import { File, Paths } from "expo-file-system";
 import { Asset } from "expo-asset";
 import type { BeatType } from "./metronome-engine";
+import { logger } from "./logger";
 
 const RENDER_SR = 44100;
 
@@ -214,7 +215,7 @@ export async function decodeSampleFile(
         rawUri.startsWith("data:") ||
         rawUri.startsWith("file://");
       if (!isLocalWebUri) {
-        console.warn("[AudioRenderer] Non-local URI blocked:", rawUri.slice(0, 80));
+        logger.warn("[AudioRenderer] Non-local URI blocked:", rawUri.slice(0, 80));
         return null;
       }
       const resp = await fetch(rawUri);
@@ -237,12 +238,12 @@ export async function decodeSampleFile(
         const { pcm, sampleRate } = parseWav(ab);
         return resample(pcm, sampleRate, RENDER_SR);
       } catch {
-        console.warn("[AudioRenderer] Non-WAV on native, trying raw decode");
+        logger.warn("[AudioRenderer] Non-WAV on native, trying raw decode");
         return null;
       }
     }
   } catch (e) {
-    console.warn("[AudioRenderer] decode failed:", uri, e);
+    logger.warn("[AudioRenderer] decode failed:", uri, e);
     return null;
   }
 }
@@ -407,7 +408,7 @@ export async function ensureWebClickBuffers(
     webClickBuffers = { strong, high, low };
     return true;
   } catch (e) {
-    console.warn("[WebAudio] Failed to load click buffers:", e);
+    logger.warn("[WebAudio] Failed to load click buffers:", e);
     return false;
   }
 }

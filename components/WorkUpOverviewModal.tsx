@@ -14,6 +14,7 @@ import {
   Image,
   useWindowDimensions,
 } from "react-native";
+import { logger } from "@/lib/logger";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Svg, { Circle } from "react-native-svg";
@@ -268,7 +269,7 @@ export function WorkUpOverviewModal({
         }
       }
     } catch (e) {
-      console.warn("Share error:", e);
+      logger.warn("Share error:", e);
       Alert.alert(t("workUp", "error"), t("workUp", "shareError"));
     } finally {
       setShareCapturing(false);

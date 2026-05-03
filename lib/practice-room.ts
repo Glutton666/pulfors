@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import * as Crypto from "expo-crypto";
 import { Platform } from "react-native";
+import { logger } from "./logger";
 
 const PRACTICE_ROOMS_KEY = "metronome_practice_rooms";
 const PROXIMITY_RADIUS_METERS = 20;
@@ -19,7 +20,7 @@ export async function loadPracticeRooms(): Promise<PracticeRoom[]> {
     const data = await AsyncStorage.getItem(PRACTICE_ROOMS_KEY);
     if (data) return JSON.parse(data);
   } catch (e) {
-    console.warn("Failed to load practice rooms:", e);
+    logger.warn("Failed to load practice rooms:", e);
   }
   return [];
 }
@@ -28,7 +29,7 @@ export async function savePracticeRooms(rooms: PracticeRoom[]): Promise<void> {
   try {
     await AsyncStorage.setItem(PRACTICE_ROOMS_KEY, JSON.stringify(rooms));
   } catch (e) {
-    console.warn("Failed to save practice rooms:", e);
+    logger.warn("Failed to save practice rooms:", e);
   }
 }
 
@@ -50,7 +51,7 @@ export async function addPracticeRoom(name: string): Promise<PracticeRoom | null
     await savePracticeRooms(rooms);
     return room;
   } catch (e) {
-    console.warn("Failed to add practice room:", e);
+    logger.warn("Failed to add practice room:", e);
     return null;
   }
 }
@@ -117,7 +118,7 @@ export async function getCurrentLocation(): Promise<Location.LocationObject | nu
       accuracy: Location.Accuracy.Balanced,
     });
   } catch (e) {
-    console.warn("Failed to get current location:", e);
+    logger.warn("Failed to get current location:", e);
     return null;
   }
 }

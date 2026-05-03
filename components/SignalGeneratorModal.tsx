@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
   Alert,
 } from "react-native";
+import { logger } from "@/lib/logger";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import {
@@ -70,20 +71,20 @@ function decodeWavBase64(base64: string, sampleRate: number): { samples: Float32
   try {
     const bytes = base64ToBytes(base64);
     if (bytes.length < 44) {
-      console.warn("[MicTuner] decodeWav: file too small:", bytes.length);
+      logger.warn("[MicTuner] decodeWav: file too small:", bytes.length);
       return null;
     }
     const view = new DataView(bytes.buffer);
     const riffTag = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
     if (riffTag !== "RIFF") {
-      console.warn("[MicTuner] decodeWav: not a WAV file, header:", riffTag, "size:", bytes.length);
+      logger.warn("[MicTuner] decodeWav: not a WAV file, header:", riffTag, "size:", bytes.length);
       return null;
     }
     const audioFormat = view.getUint16(20, true); // 1=PCM int, 3=IEEE float
     const numChannels = view.getUint16(22, true);
     const wavSampleRate = view.getUint32(24, true);
     const bitsPerSample = view.getUint16(34, true);
-    console.log("[MicTuner] WAV: fmt=", audioFormat, "ch=", numChannels, "rate=", wavSampleRate, "bits=", bitsPerSample, "size=", bytes.length);
+    logger.log("[MicTuner] WAV: fmt=", audioFormat, "ch=", numChannels, "rate=", wavSampleRate, "bits=", bitsPerSample, "size=", bytes.length);
     let dataOffset = 12; // skip RIFF header
     while (dataOffset < bytes.length - 8) {
       const tag = String.fromCharCode(bytes[dataOffset], bytes[dataOffset + 1], bytes[dataOffset + 2], bytes[dataOffset + 3]);
@@ -113,10 +114,10 @@ function decodeWavBase64(base64: string, sampleRate: number): { samples: Float32
       }
       dataOffset += 8 + (chunkSize % 2 === 1 ? chunkSize + 1 : chunkSize);
     }
-    console.warn("[MicTuner] decodeWav: no data chunk found");
+    logger.warn("[MicTuner] decodeWav: no data chunk found");
     return null;
   } catch (e) {
-    console.warn("[MicTuner] decodeWav exception:", e);
+    logger.warn("[MicTuner] decodeWav exception:", e);
     return null;
   }
 }
@@ -232,10 +233,10 @@ async function analyzeViaServer(base64: string, ext: string): Promise<{ frequenc
       body: JSON.stringify({ audio: base64, format: ext }),
     });
     if (resp.ok) return await resp.json();
-    console.warn("[MicTuner] server analyze HTTP error:", resp.status);
+    logger.warn("[MicTuner] server analyze HTTP error:", resp.status);
     return null;
   } catch (e) {
-    console.warn("[MicTuner] server analyze error:", e);
+    logger.warn("[MicTuner] server analyze error:", e);
     return null;
   }
 }
@@ -971,7 +972,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
         safePlay(player, "signalGen.tone");
         nativeSoundRef.current = player;
       } catch (e) {
-        console.warn("[SignalGen] native playback error:", e);
+        logger.warn("[SignalGen] native playback error:", e);
       }
     }
     setIsPlaying(true);
@@ -1124,7 +1125,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const startMicWeb = useCallback(async () => {
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        console.warn("[MicTuner] getUserMedia not available");
+        logger.warn("[MicTuner] getUserMedia not available");
         setMicListening(false);
         return;
       }
@@ -1230,7 +1231,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       };
       detect();
     } catch (e) {
-      console.warn("[MicTuner] Web mic error:", e);
+      logger.warn("[MicTuner] Web mic error:", e);
       setMicListening(false);
     }
   }, [pickDominantFreq]);
@@ -1358,14 +1359,14 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
               }
             } catch (e) {
-              console.warn("[MicTuner] native analyze error:", e);
+              logger.warn("[MicTuner] native analyze error:", e);
             }
             if (micActiveRef.current) {
               recordAndAnalyze();
             }
           }, RECORD_MS);
         } catch (e) {
-          console.warn("[MicTuner] native record error:", e);
+          logger.warn("[MicTuner] native record error:", e);
           micRecordingRef.current = null;
           if (rec) await releaseRecorder(rec, "mic.tick.error");
           if (Platform.OS === "android") {
@@ -1380,7 +1381,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 
       recordAndAnalyze();
     } catch (e) {
-      console.warn("[MicTuner] Mobile start error:", e);
+      logger.warn("[MicTuner] Mobile start error:", e);
       setMicListening(false);
     }
   }, [startMicAndroid, autoFallbackToWebView, showMicPermissionAlert]);
