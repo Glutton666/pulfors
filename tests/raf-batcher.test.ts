@@ -149,13 +149,15 @@ test("[raf-batcher] schedule 비율이 raf보다 낮으면 flush == schedule 횟
 
 test("[raf-batcher] requestAnimationFrame 미지원 환경 폴백(setTimeout 16ms)", async () => {
   // raf 옵션을 명시적으로 빼고, globalThis.requestAnimationFrame을 잠시 제거.
-  const orig = (globalThis as any).requestAnimationFrame;
-  (globalThis as any).requestAnimationFrame = undefined;
+  type RafHolder = { requestAnimationFrame?: (cb: () => void) => number };
+  const g: RafHolder = globalThis;
+  const orig = g.requestAnimationFrame;
+  delete g.requestAnimationFrame;
   let flushes = 0;
   const b = createRafBatcher(() => { flushes += 1; });
   b.schedule();
   assert.equal(flushes, 0);
   await new Promise(r => setTimeout(r, 30));
   assert.equal(flushes, 1, "setTimeout 폴백이 한 프레임 뒤에 flush");
-  (globalThis as any).requestAnimationFrame = orig;
+  g.requestAnimationFrame = orig;
 });
