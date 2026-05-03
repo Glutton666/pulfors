@@ -37,6 +37,19 @@ async function getDefaultDeps(): Promise<{
   return { decode: m.decodeSampleFile, save: m.saveStereoSampleWav };
 }
 
+interface FileLike {
+  delete(): void;
+}
+interface FileCtor {
+  new (uri: string): FileLike;
+}
+interface LegacyFileSystemModule {
+  deleteAsync?: (uri: string, options?: { idempotent?: boolean }) => Promise<void>;
+}
+interface FileSystemModule extends LegacyFileSystemModule {
+  File?: FileCtor;
+}
+
 async function defaultDeleteArtifact(path: string): Promise<void> {
   if (!path) return;
   if (Platform.OS === "web") {
@@ -46,19 +59,17 @@ async function defaultDeleteArtifact(path: string): Promise<void> {
     return;
   }
   try {
-    const m = await import("expo-file-system");
+    const m = (await import("expo-file-system")) as unknown as FileSystemModule;
     const fileUri = path.split("#")[0];
-    const FileCtor = (m as any).File;
-    if (FileCtor) {
+    if (m.File) {
       try {
-        const f = new FileCtor(fileUri);
+        const f = new m.File(fileUri);
         f.delete();
         return;
       } catch {}
     }
-    const legacyDelete = (m as any).deleteAsync;
-    if (typeof legacyDelete === "function") {
-      try { await legacyDelete(fileUri, { idempotent: true }); } catch {}
+    if (typeof m.deleteAsync === "function") {
+      try { await m.deleteAsync(fileUri, { idempotent: true }); } catch {}
     }
   } catch {}
 }
