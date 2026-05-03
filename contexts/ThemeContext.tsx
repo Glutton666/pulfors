@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef, ReactNode } from "react";
+import { StyleSheet, View } from "react-native";
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing, runOnJS } from "react-native-reanimated";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Colors, { getColors, type ThemeColor, type ThemeMode } from "@/constants/colors";
+import { Duration } from "@/constants/tokens";
 
 const THEME_KEY = "metronome_theme_color";
 const CUSTOM_HEX_KEY = "metronome_custom_hex";
@@ -123,6 +126,27 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const colors = useMemo(() => getColors(themeColor, customHex, themeMode), [themeColor, customHex, themeMode]);
 
+  // 테마 전환 페이드 오버레이: themeMode 가 바뀔 때 짧게 화면을 덮어 색상 점프를 부드럽게.
+  const transitionOpacity = useSharedValue(0);
+  const transitionColor = useRef<string>(colors.background);
+  const prevThemeModeRef = useRef<ThemeMode>(themeMode);
+  const [transitionTick, setTransitionTick] = useState(0);
+
+  useEffect(() => {
+    if (prevThemeModeRef.current === themeMode) return;
+    // 새 테마의 배경색을 페이드 오버레이로 사용해 자연스럽게 전환.
+    transitionColor.current = colors.background;
+    setTransitionTick((n) => n + 1);
+    prevThemeModeRef.current = themeMode;
+    transitionOpacity.value = 0.85;
+    transitionOpacity.value = withTiming(0, {
+      duration: Duration.themeTransition,
+      easing: Easing.out(Easing.quad),
+    });
+  }, [themeMode, colors.background, transitionOpacity]);
+
+  const overlayStyle = useAnimatedStyle(() => ({ opacity: transitionOpacity.value }));
+
   const value = useMemo(
     () => ({
       themeColor, customHex, themeMode, setThemeColor, setCustomHex, setThemeMode, colors,
@@ -133,7 +157,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+    <ThemeContext.Provider value={value}>
+      {children}
+      <Animated.View
+        key={transitionTick}
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: transitionColor.current, zIndex: 99999 },
+          overlayStyle,
+        ]}
+      />
+    </ThemeContext.Provider>
   );
 }
 

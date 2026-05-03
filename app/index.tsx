@@ -64,6 +64,7 @@ import { SignalGeneratorModal } from "@/components/SignalGeneratorModal";
 import { MicWebView, MicWebViewHandle } from "@/components/MicWebView";
 import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
+import PracticeStatsGraph from "@/components/PracticeStatsGraph";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import type { OnboardingResult } from "@/components/OnboardingModal";
 import { GoalCompletePopup } from "@/components/GoalCompletePopup";
@@ -393,6 +394,9 @@ export default function MetronomeScreen() {
         }
         const srcSet = mapping.sourceSet || "classic";
         const srcPlayers = allPlayersRef.current[srcSet] || allPlayersRef.current.classic;
+        if (!allPlayersRef.current[srcSet]) {
+          notifyAudioPoolFallback("custom-mapping-missing-source", { role, soundSet: set, requestedSourceSet: srcSet });
+        }
         const r = mapping.sourceRole || "strong";
         if (r === "strong") return toggle ? srcPlayers.strongB : srcPlayers.strongA;
         if (r === "high") return toggle ? srcPlayers.highB : srcPlayers.highA;
@@ -4275,6 +4279,18 @@ export default function MetronomeScreen() {
                               <Text style={{ color: C.text, fontSize: S.ms(13, 0.3), fontFamily: "SpaceGrotesk_600SemiBold" }}>
                                 {formatStatMinutes(landscapeStats.weekTotal)}
                               </Text>
+                            </View>
+                            <View style={{ marginTop: 4 }}>
+                              <PracticeStatsGraph
+                                logs={landscapeStatsLogs}
+                                accentColor={C.accent}
+                                borderColor={C.overlay10}
+                                textColor={C.text}
+                                textSecondary={C.textSecondary}
+                                width={S.ms(240, 0.4)}
+                                height={S.ms(60, 0.3)}
+                                days={7}
+                              />
                             </View>
                           </View>
                         )}
