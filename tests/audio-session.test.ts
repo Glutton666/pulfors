@@ -5,6 +5,7 @@ import {
   releaseAudioSession,
   registerMetronomeBridge,
   withAudioSession,
+  notifyUserMetronomeToggle,
   _resetAudioSessionForTests,
   _audioSessionDebugState,
 } from "../lib/audio-session";
@@ -115,6 +116,37 @@ test("withAudioSession with sync throw still releases", async () => {
   const dbg = _audioSessionDebugState();
   assert.equal(dbg.activeCallers.length, 0);
   assert.equal(state.resumeCount, 1);
+});
+
+test("user restarts metronome inside modal then stops manually before release", async () => {
+  // 모달 열림 → acquire(=pause) → 사용자가 모달 안에서 메트로놈을 다시 켰다가
+  // 직접 끔. notifyUserMetronomeToggle로 사용자 의도를 신호하면 release 시점에
+  // 자동 resume을 건너뛴다.
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  await acquireAudioSession("rec", "recording");
+  assert.equal(state.running, false, "paused by acquire");
+  // 사용자가 모달 안에서 직접 메트로놈을 켰다가 다시 끈 시나리오.
+  notifyUserMetronomeToggle();
+  state.running = true; state.resumeCount++;
+  notifyUserMetronomeToggle();
+  state.running = false; state.pauseCount++;
+  const resumeBefore = state.resumeCount;
+  await releaseAudioSession("rec");
+  assert.equal(state.resumeCount, resumeBefore, "should not auto-resume because user stopped manually");
+  assert.equal(state.running, false);
+});
+
+test("notifyUserMetronomeToggle outside session is a no-op", async () => {
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  // 활성 caller 없을 때 사용자 토글 신호는 무시되어야 한다.
+  notifyUserMetronomeToggle();
+  await acquireAudioSession("rec", "recording");
+  await releaseAudioSession("rec");
+  assert.equal(state.resumeCount, 1, "auto-resume normally when no user toggle inside session");
 });
 
 test("manual acquire/release pairs in modal failure path", async () => {

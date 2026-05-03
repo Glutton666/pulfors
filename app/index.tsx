@@ -33,7 +33,7 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import { safePlay, notifyAudioPoolFallback, detectPoolCutoffRisk } from "@/lib/audio-utils";
-import { registerMetronomeBridge } from "@/lib/audio-session";
+import { registerMetronomeBridge, notifyUserMetronomeToggle } from "@/lib/audio-session";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
@@ -1850,6 +1850,10 @@ export default function MetronomeScreen() {
   const togglePlayPause = useCallback(async () => {
     const engine = engineRef.current;
     if (!engine) return;
+
+    // 모달이 열려있는 동안 사용자가 직접 토글했음을 audio-session에 알려서
+    // 모달 닫힐 때 우리가 무심코 자동 resume하지 않도록 한다.
+    notifyUserMetronomeToggle();
 
     if (isPreparing && !isPlaying) {
       preparingCancelledRef.current = true;
