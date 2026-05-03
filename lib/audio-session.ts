@@ -2,6 +2,19 @@ import { Platform } from "react-native";
 import { setAudioModeAsync } from "expo-audio";
 import { logger } from "@/lib/logger";
 
+/**
+ * Caller ID 컨벤션 (충돌 방지용 레지스트리)
+ *
+ * 각 모달/기능은 고유한 callerId 문자열을 사용해야 한다. 같은 ID로 중복 acquire
+ * 하면 Map이 덮어써져 release 카운팅이 어긋날 수 있다. 새 caller를 추가할 때
+ * 아래 표에 기재할 것.
+ *
+ * - "noteRecorderModal"     : NoteRecorderModal 녹음
+ * - "signalGenMicMobile"    : SignalGeneratorModal iOS 네이티브 마이크 분석
+ * - "signalGenMicAndroid"   : SignalGeneratorModal Android WebView 마이크
+ * - "settingsSampleRec"     : SettingsModal 사용자 샘플 녹음
+ * - "drumKitRec"            : DrumKitModal 패드 녹음
+ */
 export type SessionMode = "playback" | "recording" | "mic";
 
 export interface MetronomeBridge {

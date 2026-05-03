@@ -163,6 +163,25 @@ test("integration: bridge pause/resume via app-style toggle does not mark user t
   assert.equal(state.resumeCount, 1);
 });
 
+test("signal generator: native mic → android webview fallback transition", async () => {
+  // iOS 네이티브 마이크가 실패하여 Android WebView 폴백으로 전환되는 시나리오:
+  // signalGenMicMobile release → signalGenMicAndroid acquire가 연속해서 일어날 때
+  // pause/resume이 중복 발생하지 않고 메트로놈 상태가 일관되어야 한다.
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  await acquireAudioSession("signalGenMicMobile", "mic");
+  assert.equal(state.pauseCount, 1, "first acquire pauses metronome once");
+  // 폴백: 새 caller acquire가 release보다 먼저 일어난다 (overlap).
+  await acquireAudioSession("signalGenMicAndroid", "mic");
+  assert.equal(state.pauseCount, 1, "no extra pause while still active");
+  await releaseAudioSession("signalGenMicMobile");
+  assert.equal(state.resumeCount, 0, "must not resume while android caller still active");
+  await releaseAudioSession("signalGenMicAndroid");
+  assert.equal(state.resumeCount, 1, "resume only after final caller releases");
+  assert.equal(_audioSessionDebugState().activeCallers.length, 0);
+});
+
 test("notifyUserMetronomeToggle outside session is a no-op", async () => {
   _resetAudioSessionForTests();
   const { state, bridge } = makeBridge(true);
