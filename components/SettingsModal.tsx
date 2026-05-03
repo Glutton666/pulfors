@@ -98,6 +98,8 @@ interface SettingsModalProps {
   onShowLandscapeImageChange: (val: boolean) => void;
   beatDirection: "cw" | "ccw";
   onBeatDirectionChange: (val: "cw" | "ccw") => void;
+  barMetronomeChannel: import("@/lib/stereo-channel").SampleChannel;
+  onBarMetronomeChannelChange: (val: import("@/lib/stereo-channel").SampleChannel) => void;
   onShowOnboarding?: () => void;
   onEnterNoteMode?: () => void;
 }
@@ -142,6 +144,8 @@ export function SettingsModal({
   onShowLandscapeImageChange,
   beatDirection,
   onBeatDirectionChange,
+  barMetronomeChannel,
+  onBarMetronomeChannelChange,
   onShowOnboarding,
 }: SettingsModalProps) {
   const { themeColor, customHex, themeMode, setThemeColor, setCustomHex, setThemeMode, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
@@ -1188,6 +1192,35 @@ export function SettingsModal({
                 <Ionicons name={opt.icon} size={S.ms(14, 0.4)} color={active ? C.accent : C.textTertiary} style={{ marginRight: Spacing.xs }} />
                 <Text style={[styles.tripleBtnText, active && [styles.tripleBtnTextActive, { color: C.accent }]]}>
                   {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="headset-outline" size={S.ms(18, 0.4)} color={C.accent} />
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "barMetronomeChannel")}</Text>
+        </View>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "barMetronomeChannelHint")}</Text>
+        <View style={styles.tripleRow}>
+          {(["both", "left", "right"] as const).map((opt) => {
+            const active = barMetronomeChannel === opt;
+            return (
+              <Pressable
+                key={opt}
+                style={[styles.tripleBtn, active && [styles.tripleBtnActive, { borderColor: C.accent, backgroundColor: C.accentDim }]]}
+                onPress={() => {
+                  onBarMetronomeChannelChange(opt);
+                  if (Platform.OS !== "web") Haptics.selectionAsync();
+                }}
+              >
+                <Text style={[styles.tripleBtnText, active && [styles.tripleBtnTextActive, { color: C.accent }]]}>
+                  {t("noteRecorder", `channel_${opt}` as any)}
                 </Text>
               </Pressable>
             );

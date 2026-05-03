@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 import type { BeatType } from "@/lib/metronome-engine";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
-import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap } from "@/lib/note-samples";
+import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap } from "@/lib/note-samples";
 import type { ActivityLog, PracticeSessionData } from "@/lib/activity-log";
 
 export interface LandscapeStatsTotals {
@@ -70,6 +70,7 @@ export interface DialConfig {
   noteSamples: NoteSampleMap;
   noteSampleNames: NoteSampleNameMap;
   noteSampleSources: NoteSampleSourceMap;
+  noteSampleChannels: NoteSampleChannelMap;
 }
 
 export interface BarConfig {
@@ -83,6 +84,7 @@ export interface BarConfig {
   noteSamples: NoteSampleMap;
   noteSampleNames: NoteSampleNameMap;
   noteSampleSources: NoteSampleSourceMap;
+  noteSampleChannels: NoteSampleChannelMap;
   barLoopMode: "loop" | "once";
   blockPlayMode: "sequential" | "loop" | "random";
   hasBeenConfigured: boolean;
@@ -96,6 +98,7 @@ export function createInitialDialConfig(beats = 4): DialConfig {
     noteSamples: {},
     noteSampleNames: {},
     noteSampleSources: {},
+    noteSampleChannels: {},
   };
 }
 
@@ -148,6 +151,7 @@ export interface CurrentBarConfigInput {
   noteSamples: NoteSampleMap;
   noteSampleNames: NoteSampleNameMap;
   noteSampleSources: NoteSampleSourceMap;
+  noteSampleChannels: NoteSampleChannelMap;
   dialConfig: DialConfig;
   barClockMode: "stopwatch" | "timer";
   barTimerDuration: number;
@@ -169,6 +173,7 @@ export interface CurrentBarConfigOutput {
   noteSamples: NoteSampleMap;
   noteSampleNames: NoteSampleNameMap;
   noteSampleSources: NoteSampleSourceMap;
+  noteSampleChannels: NoteSampleChannelMap;
 }
 
 /**
@@ -194,6 +199,7 @@ export function selectCurrentBarConfig(input: CurrentBarConfigInput): CurrentBar
       noteSamples: { ...input.noteSamples },
       noteSampleNames: { ...input.noteSampleNames },
       noteSampleSources: { ...input.noteSampleSources },
+      noteSampleChannels: { ...input.noteSampleChannels },
     };
   }
   const dc = input.dialConfig;
@@ -211,6 +217,7 @@ export function selectCurrentBarConfig(input: CurrentBarConfigInput): CurrentBar
     noteSamples: { ...dc.noteSamples },
     noteSampleNames: { ...dc.noteSampleNames },
     noteSampleSources: { ...dc.noteSampleSources },
+    noteSampleChannels: { ...dc.noteSampleChannels },
   };
 }
 
@@ -239,6 +246,7 @@ export function createInitialBarConfig(beats = 4): BarConfig {
     noteSamples: {},
     noteSampleNames: {},
     noteSampleSources: {},
+    noteSampleChannels: {},
     barLoopMode: "once",
     blockPlayMode: "loop",
     hasBeenConfigured: false,

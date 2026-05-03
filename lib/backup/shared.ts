@@ -18,6 +18,7 @@ export const ALL_KEYS = [
   "@note_samples",
   "@note_sample_names",
   "@note_sample_sources",
+  "@note_sample_channels",
   "metronome_onboarding_done",
 ];
 

@@ -1,13 +1,16 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { normalizeSampleChannel, type SampleChannel } from "./stereo-channel";
 
 const STORAGE_KEY = "@note_samples";
 const NAMES_STORAGE_KEY = "@note_sample_names";
 const SOURCES_STORAGE_KEY = "@note_sample_sources";
+const CHANNELS_STORAGE_KEY = "@note_sample_channels";
 
 export type NoteSampleMap = Record<string, string>;
 export type NoteSampleNameMap = Record<string, string>;
 export type SampleSource = "recording" | "import";
 export type NoteSampleSourceMap = Record<string, SampleSource>;
+export type NoteSampleChannelMap = Record<string, SampleChannel>;
 
 function sampleKey(beatIndex: number, subIndex: number): string {
   return `${beatIndex}-${subIndex}`;
@@ -133,6 +136,67 @@ export async function removeNoteSampleName(
   delete updated[key];
   await saveNoteSampleNames(updated);
   return updated;
+}
+
+export async function loadNoteSampleChannels(): Promise<NoteSampleChannelMap> {
+  try {
+    const raw = await AsyncStorage.getItem(CHANNELS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const out: NoteSampleChannelMap = {};
+      if (parsed && typeof parsed === "object") {
+        for (const [k, v] of Object.entries(parsed)) {
+          out[k] = normalizeSampleChannel(v);
+        }
+      }
+      return out;
+    }
+  } catch {}
+  return {};
+}
+
+export async function saveNoteSampleChannels(channels: NoteSampleChannelMap): Promise<void> {
+  try {
+    await AsyncStorage.setItem(CHANNELS_STORAGE_KEY, JSON.stringify(channels));
+  } catch {}
+}
+
+export async function setNoteSampleChannel(
+  beatIndex: number,
+  subIndex: number,
+  channel: SampleChannel,
+  existing: NoteSampleChannelMap,
+): Promise<NoteSampleChannelMap> {
+  const key = sampleKey(beatIndex, subIndex);
+  const updated: NoteSampleChannelMap = { ...existing };
+  if (channel === "both") {
+    delete updated[key];
+  } else {
+    updated[key] = channel;
+  }
+  await saveNoteSampleChannels(updated);
+  return updated;
+}
+
+export async function removeNoteSampleChannel(
+  beatIndex: number,
+  subIndex: number,
+  existing: NoteSampleChannelMap,
+): Promise<NoteSampleChannelMap> {
+  const key = sampleKey(beatIndex, subIndex);
+  if (!(key in existing)) return existing;
+  const updated = { ...existing };
+  delete updated[key];
+  await saveNoteSampleChannels(updated);
+  return updated;
+}
+
+export function getNoteSampleChannel(
+  beatIndex: number,
+  subIndex: number,
+  channels: NoteSampleChannelMap,
+): SampleChannel {
+  return channels[sampleKey(beatIndex, subIndex)] ?? "both";
 }
 
 export function hasNoteSample(

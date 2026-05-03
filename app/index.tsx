@@ -80,8 +80,9 @@ import type { OnboardingResult } from "@/components/OnboardingModal";
 import { GoalCompletePopup } from "@/components/GoalCompletePopup";
 import type { PracticeEntry } from "@/lib/storage";
 import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
-import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource } from "@/lib/note-samples";
-import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, SampleSource } from "@/lib/note-samples";
+import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource, loadNoteSampleChannels, saveNoteSampleChannels, setNoteSampleChannel, removeNoteSampleChannel } from "@/lib/note-samples";
+import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap, SampleSource } from "@/lib/note-samples";
+import type { SampleChannel } from "@/lib/stereo-channel";
 import { NoteRecorderModal } from "@/components/NoteRecorderModal";
 import { NoteModeView } from "@/components/NoteModeView";
 import { AudioModule, createAudioPlayer } from "expo-audio";
@@ -92,6 +93,7 @@ import {
   parseTrimInfo,
   renderMeasure,
   saveRenderedWav,
+  saveStereoSampleWav,
   ensureWebClickBuffers,
   playWebClick,
   clearWebClickBuffers,
@@ -108,6 +110,21 @@ import {
   type PracticeRoom,
 } from "@/lib/practice-room";
 
+
+async function buildEffectivePlayerUri(key: string, uri: string, channel: SampleChannel): Promise<string> {
+  if (channel === "both") return uri;
+  try {
+    const rawUri = uri.split("#")[0];
+    const fragment = uri.includes("#") ? uri.slice(uri.indexOf("#")) : "";
+    const mono = await decodeSampleFile(rawUri);
+    if (!mono) return uri;
+    const filename = `note_stereo_${key.replace(/[^0-9a-zA-Z-]/g, "_")}_${channel}_${Date.now()}.wav`;
+    const stereoUri = await saveStereoSampleWav(mono, channel, filename);
+    return stereoUri + fragment;
+  } catch {
+    return uri;
+  }
+}
 
 export default function MetronomeScreen() {
   const insets = useSafeAreaInsets();
@@ -327,7 +344,12 @@ export default function MetronomeScreen() {
   const noteSampleNamesRef = useRef<NoteSampleNameMap>({});
   const [noteSampleSources, setNoteSampleSources] = useState<NoteSampleSourceMap>({});
   const noteSampleSourcesRef = useRef<NoteSampleSourceMap>({});
+  const [noteSampleChannels, setNoteSampleChannels] = useState<NoteSampleChannelMap>({});
+  const noteSampleChannelsRef = useRef<NoteSampleChannelMap>({});
+  const [barMetronomeChannel, setBarMetronomeChannel] = useState<SampleChannel>("both");
+  const barMetronomeChannelRef = useRef<SampleChannel>("both");
   const noteSampleSoundsRef = useRef<Record<string, ExpoAudioPlayer>>({});
+  const previousChannelsRef = useRef<NoteSampleChannelMap>({});
   const samplePlayStateRef = useRef<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>({});
   const [recorderTarget, setRecorderTarget] = useState<{ beat: number; sub: number } | null>(null);
 
@@ -599,9 +621,10 @@ export default function MetronomeScreen() {
           continue;
         }
         try {
-          const rawUri = uri.split("#")[0];
-          const isFileUri = rawUri.startsWith("file://");
-          const player = createAudioPlayer(rawUri, { downloadFirst: isFileUri });
+          const channel = noteSampleChannelsRef.current[key] ?? "both";
+          const effectiveRaw = await buildEffectivePlayerUri(key, uri, channel);
+          const isFileUri = effectiveRaw.startsWith("file://");
+          const player = createAudioPlayer(effectiveRaw, { downloadFirst: isFileUri });
           player.volume = sampleVolumeRef.current * 10.0;
           noteSampleSoundsRef.current[key] = player;
         } catch (e) {
@@ -669,6 +692,10 @@ export default function MetronomeScreen() {
       if (settings.beatDirection) {
         setBeatDirection(settings.beatDirection);
       }
+      if (settings.barMetronomeChannel) {
+        setBarMetronomeChannel(settings.barMetronomeChannel);
+        barMetronomeChannelRef.current = settings.barMetronomeChannel;
+      }
       if (settings.username) {
         setUsername(settings.username);
       }
@@ -686,13 +713,15 @@ export default function MetronomeScreen() {
       }).catch(() => {});
     });
 
-    Promise.all([loadNoteSamples(), loadNoteSampleNames(), loadNoteSampleSources()]).then(async ([samples, names, sources]) => {
+    Promise.all([loadNoteSamples(), loadNoteSampleNames(), loadNoteSampleSources(), loadNoteSampleChannels()]).then(async ([samples, names, sources, channels]) => {
       setNoteSamples(samples);
       noteSamplesRef.current = samples;
       setNoteSampleNames(names);
       noteSampleNamesRef.current = names;
       setNoteSampleSources(sources);
       noteSampleSourcesRef.current = sources;
+      setNoteSampleChannels(channels);
+      noteSampleChannelsRef.current = channels;
       if (Object.keys(samples).length > 0) {
         await preloadSounds(samples);
       }
@@ -797,6 +826,7 @@ export default function MetronomeScreen() {
   const preloadNoteSampleSounds = useCallback(async (samples: NoteSampleMap, keepExisting?: boolean) => {
     const existing = noteSampleSoundsRef.current;
     const existingUris = noteSamplesRef.current;
+    const existingChannels = previousChannelsRef.current;
     const newPlayers: Record<string, ExpoAudioPlayer> = {};
     const keysToKeep = new Set<string>();
 
@@ -806,13 +836,21 @@ export default function MetronomeScreen() {
         continue;
       }
       const rawUri = uri.split("#")[0];
-      if (keepExisting && existing[key] && existingUris[key]?.split("#")[0] === rawUri) {
+      const channel = noteSampleChannelsRef.current[key] ?? "both";
+      const prevChannel = existingChannels[key] ?? "both";
+      if (
+        keepExisting &&
+        existing[key] &&
+        existingUris[key]?.split("#")[0] === rawUri &&
+        prevChannel === channel
+      ) {
         newPlayers[key] = existing[key];
         keysToKeep.add(key);
       } else {
         try {
-          const isFileUri = rawUri.startsWith("file://");
-          const player = createAudioPlayer(rawUri, { downloadFirst: isFileUri });
+          const effectiveRaw = await buildEffectivePlayerUri(key, uri, channel);
+          const isFileUri = effectiveRaw.startsWith("file://");
+          const player = createAudioPlayer(effectiveRaw, { downloadFirst: isFileUri });
           player.volume = sampleVolumeRef.current * 10.0;
           newPlayers[key] = player;
         } catch (e) {
@@ -820,6 +858,7 @@ export default function MetronomeScreen() {
         }
       }
     }
+    previousChannelsRef.current = { ...noteSampleChannelsRef.current };
 
     for (const [key, s] of Object.entries(existing)) {
       if (!keysToKeep.has(key)) {
@@ -951,6 +990,7 @@ export default function MetronomeScreen() {
         samplePCMs,
         clickVolume: 1.0,
         sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current * 10.0 : 0,
+        metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
       });
 
       const wavUri = await saveRenderedWav(pcm);
@@ -1071,6 +1111,7 @@ export default function MetronomeScreen() {
             samplePCMs: new Map(),
             clickVolume: 1.0,
             sampleVolume: 0,
+            metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
           });
           engine.setPendingMeasureStartAction(() => {
             if (!engine.getIsRunning()) return;
@@ -1127,7 +1168,7 @@ export default function MetronomeScreen() {
     setRecorderTarget({ beat: beatIndex, sub: subIndex });
   }, []);
 
-  const handleNoteRecordSave = useCallback(async (uri: string, name: string, source: SampleSource) => {
+  const handleNoteRecordSave = useCallback(async (uri: string, name: string, source: SampleSource, channel: SampleChannel) => {
     if (!recorderTarget) return;
     const key = `${recorderTarget.beat}-${recorderTarget.sub}`;
     invalidateSamplePCMCache(key);
@@ -1140,6 +1181,9 @@ export default function MetronomeScreen() {
     const updatedSources = await setNoteSampleSource(recorderTarget.beat, recorderTarget.sub, source, noteSampleSourcesRef.current);
     setNoteSampleSources(updatedSources);
     noteSampleSourcesRef.current = updatedSources;
+    const updatedChannels = await setNoteSampleChannel(recorderTarget.beat, recorderTarget.sub, channel, noteSampleChannelsRef.current);
+    setNoteSampleChannels(updatedChannels);
+    noteSampleChannelsRef.current = updatedChannels;
     await preloadNoteSampleSounds(updated);
     scheduleReRender();
     setRecorderTarget(null);
@@ -1158,6 +1202,9 @@ export default function MetronomeScreen() {
     const updatedSources = await removeNoteSampleSource(recorderTarget.beat, recorderTarget.sub, noteSampleSourcesRef.current);
     setNoteSampleSources(updatedSources);
     noteSampleSourcesRef.current = updatedSources;
+    const updatedChannels = await removeNoteSampleChannel(recorderTarget.beat, recorderTarget.sub, noteSampleChannelsRef.current);
+    setNoteSampleChannels(updatedChannels);
+    noteSampleChannelsRef.current = updatedChannels;
     if (noteSampleSoundsRef.current[key]) {
       try { noteSampleSoundsRef.current[key].release(); } catch {}
       delete noteSampleSoundsRef.current[key];
@@ -1426,6 +1473,7 @@ export default function MetronomeScreen() {
           showLandscapeImage,
           landscapeContentType,
           beatDirection,
+          barMetronomeChannel,
           ...merged,
         };
         void saveSettings(current).catch(() => {
@@ -1433,7 +1481,7 @@ export default function MetronomeScreen() {
         });
       }, 500);
     },
-    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, layerSoundSets, flashMode, hapticMode, audioOffsetMs, timerStopMode, landscapeReversed, showLandscapeImage, landscapeContentType, beatDirection]
+    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, layerSoundSets, flashMode, hapticMode, audioOffsetMs, timerStopMode, landscapeReversed, showLandscapeImage, landscapeContentType, beatDirection, barMetronomeChannel]
   );
 
   const updateVolume = useCallback(
@@ -1574,6 +1622,7 @@ export default function MetronomeScreen() {
         noteSamples: {},
         noteSampleNames: {},
         noteSampleSources: {},
+        noteSampleChannels: {},
       };
       barConfigRef.current = {
         beatsPerMeasure: 4,
@@ -1586,6 +1635,7 @@ export default function MetronomeScreen() {
         noteSamples: {},
         noteSampleNames: {},
         noteSampleSources: {},
+        noteSampleChannels: {},
         barLoopMode: "once",
         blockPlayMode: "loop",
         hasBeenConfigured: false,
@@ -1611,9 +1661,11 @@ export default function MetronomeScreen() {
       setNoteSamples({});
       setNoteSampleNames({});
       setNoteSampleSources({});
+      setNoteSampleChannels({});
       noteSamplesRef.current = {};
       noteSampleNamesRef.current = {};
       noteSampleSourcesRef.current = {};
+      noteSampleChannelsRef.current = {};
       loadedPracticeNoteRef.current = null;
 
       if (engine) {
@@ -1862,6 +1914,7 @@ export default function MetronomeScreen() {
               samplePCMs: new Map(),
               clickVolume: 1.0,
               sampleVolume: 0,
+              metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
             });
             const loop = playWebRenderedLoop(pcm);
             webRenderedLoopRef.current = loop;
@@ -2234,6 +2287,7 @@ export default function MetronomeScreen() {
         noteSamples: { ...noteSamples },
         noteSampleNames: { ...noteSampleNames },
         noteSampleSources: { ...noteSampleSources },
+        noteSampleChannels: { ...noteSampleChannels },
       };
 
       const bc = barConfigRef.current;
@@ -2251,6 +2305,8 @@ export default function MetronomeScreen() {
         noteSampleNamesRef.current = { ...bc.noteSampleNames };
         setNoteSampleSources({ ...bc.noteSampleSources });
         noteSampleSourcesRef.current = { ...bc.noteSampleSources };
+        setNoteSampleChannels({ ...(bc.noteSampleChannels || {}) });
+        noteSampleChannelsRef.current = { ...(bc.noteSampleChannels || {}) };
         engine.setBeatsPerMeasure(bc.beatsPerMeasure);
         engine.setBeatTypes([...bc.beatTypes]);
         engine.setAllBeatSubdivisions(bc.beatSubdivisions);
@@ -2275,6 +2331,7 @@ export default function MetronomeScreen() {
           noteSamples: {},
           noteSampleNames: {},
           noteSampleSources: {},
+          noteSampleChannels: {},
           barLoopMode: "once",
           blockPlayMode: "loop",
           hasBeenConfigured: true,
@@ -2291,6 +2348,8 @@ export default function MetronomeScreen() {
         noteSampleNamesRef.current = {};
         setNoteSampleSources({});
         noteSampleSourcesRef.current = {};
+        setNoteSampleChannels({});
+        noteSampleChannelsRef.current = {};
         engine.setBeatsPerMeasure(defaultBeats);
         engine.setBeatTypes([...defaultTypes]);
         engine.setAllBeatSubdivisions({});
@@ -2308,6 +2367,7 @@ export default function MetronomeScreen() {
         noteSamples: { ...noteSamples },
         noteSampleNames: { ...noteSampleNames },
         noteSampleSources: { ...noteSampleSources },
+        noteSampleChannels: { ...noteSampleChannels },
         barLoopMode,
         blockPlayMode,
         hasBeenConfigured: true,
@@ -2324,6 +2384,8 @@ export default function MetronomeScreen() {
       noteSampleNamesRef.current = { ...dc.noteSampleNames };
       setNoteSampleSources({ ...dc.noteSampleSources });
       noteSampleSourcesRef.current = { ...dc.noteSampleSources };
+      setNoteSampleChannels({ ...(dc.noteSampleChannels || {}) });
+      noteSampleChannelsRef.current = { ...(dc.noteSampleChannels || {}) };
       engine.setBeatsPerMeasure(dc.beatsPerMeasure);
       engine.setBeatTypes([...dc.beatTypes]);
       engine.setAllBeatSubdivisions(dc.beatSubdivisions);
@@ -2332,7 +2394,7 @@ export default function MetronomeScreen() {
     }
 
     setBarMode(toBarMode);
-  }, [isPlaying, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, noteSamples, noteSampleNames, noteSampleSources]);
+  }, [isPlaying, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels]);
 
   const startMetronome = useCallback(async () => {
     const engine = engineRef.current;
@@ -2397,6 +2459,7 @@ export default function MetronomeScreen() {
             samplePCMs: new Map(),
             clickVolume: 1.0,
             sampleVolume: 0,
+            metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
           });
           const loop = playWebRenderedLoop(pcm);
           webRenderedLoopRef.current = loop;
@@ -2947,6 +3010,8 @@ export default function MetronomeScreen() {
     noteSampleNamesRef.current = {};
     setNoteSampleSources({});
     noteSampleSourcesRef.current = {};
+    setNoteSampleChannels({});
+    noteSampleChannelsRef.current = {};
     for (const [k, st] of Object.entries(samplePlayStateRef.current)) {
       if (st.endTimer) clearTimeout(st.endTimer);
     }
@@ -2959,6 +3024,7 @@ export default function MetronomeScreen() {
     saveNoteSamples({});
     saveNoteSampleNames({});
     saveNoteSampleSources({});
+    saveNoteSampleChannels({});
     barConfigRef.current = {
       beatsPerMeasure: beats,
       beatTypes: [...newTypes],
@@ -2970,6 +3036,7 @@ export default function MetronomeScreen() {
       noteSamples: {},
       noteSampleNames: {},
       noteSampleSources: {},
+      noteSampleChannels: {},
       barLoopMode: "once",
       blockPlayMode: "loop",
       hasBeenConfigured: true,
@@ -3001,12 +3068,15 @@ export default function MetronomeScreen() {
     const entrySamples = entry.noteSamples || {};
     const entryNames = entry.noteSampleNames || {};
     const entrySources = entry.noteSampleSources || {};
+    const entryChannels = entry.noteSampleChannels || {};
     setNoteSamples({ ...entrySamples });
     noteSamplesRef.current = { ...entrySamples };
     setNoteSampleNames({ ...entryNames });
     noteSampleNamesRef.current = { ...entryNames };
     setNoteSampleSources({ ...entrySources });
     noteSampleSourcesRef.current = { ...entrySources };
+    setNoteSampleChannels({ ...entryChannels });
+    noteSampleChannelsRef.current = { ...entryChannels };
 
     if (Object.keys(entrySamples).length > 0) {
       preloadNoteSampleSounds(entrySamples);
@@ -3037,6 +3107,7 @@ export default function MetronomeScreen() {
       noteSamples: { ...entrySamples },
       noteSampleNames: { ...entryNames },
       noteSampleSources: { ...entrySources },
+      noteSampleChannels: { ...entryChannels },
       barLoopMode: "once",
       blockPlayMode: (entry as any).blockPlayMode || "loop",
       hasBeenConfigured: true,
@@ -3050,10 +3121,11 @@ export default function MetronomeScreen() {
         noteSamples: { ...noteSamples },
         noteSampleNames: { ...noteSampleNames },
         noteSampleSources: { ...noteSampleSources },
+        noteSampleChannels: { ...noteSampleChannels },
       };
       setBarMode(true);
     }
-  }, [barMode, beatsPerMeasure, beatTypes, beatSubdivisions, noteSamples, noteSampleNames, noteSampleSources, preloadNoteSampleSounds]);
+  }, [barMode, beatsPerMeasure, beatTypes, beatSubdivisions, noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, preloadNoteSampleSounds]);
 
   const noteStartPlayingEntry = useCallback(async (index: number) => {
     const q = noteQueueRef.current;
@@ -3100,6 +3172,8 @@ export default function MetronomeScreen() {
     setNoteSamples({ ...entrySamples });
     setNoteSampleNames({ ...entryNames });
     setNoteSampleSources({ ...entrySources });
+    setNoteSampleChannels({ ...(entry.noteSampleChannels || {}) });
+    noteSampleChannelsRef.current = { ...(entry.noteSampleChannels || {}) };
 
     engine.setBpm(entry.bpm);
     engine.setBeatsPerMeasure(entry.beatsPerMeasure);
@@ -3442,10 +3516,11 @@ export default function MetronomeScreen() {
     noteSamples,
     noteSampleNames,
     noteSampleSources,
+    noteSampleChannels,
     dialConfig: dialConfigRef.current,
     barClockMode: barConfigRef.current.barClockMode,
     barTimerDuration: barConfigRef.current.barTimerDuration,
-  }), [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, blockPlayMode, subdivisionPattern, noteSamples, noteSampleNames, noteSampleSources]);
+  }), [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, blockPlayMode, subdivisionPattern, noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels]);
 
   const handleLoadPracticeEntry = useCallback((entry: PracticeEntry) => {
     const engine = engineRef.current;
@@ -3530,9 +3605,12 @@ export default function MetronomeScreen() {
       noteSampleNamesRef.current = { ...entryNames };
       setNoteSampleSources({ ...entrySources });
       noteSampleSourcesRef.current = { ...entrySources };
+      setNoteSampleChannels({ ...(entry.noteSampleChannels || {}) });
+      noteSampleChannelsRef.current = { ...(entry.noteSampleChannels || {}) };
       saveNoteSamples(entrySamples);
       saveNoteSampleNames(entryNames);
       saveNoteSampleSources(entrySources);
+      saveNoteSampleChannels(entry.noteSampleChannels || {});
       if (Object.keys(entrySamples).length > 0) {
         preloadNoteSampleSounds(entrySamples);
       }
@@ -3558,6 +3636,7 @@ export default function MetronomeScreen() {
       const barSamples = entry.noteSamples || {};
       const barNames = entry.noteSampleNames || {};
       const barSources = entry.noteSampleSources || {};
+      const barChannels = entry.noteSampleChannels || {};
 
       setBpm(entry.bpm);
       setBeatsPerMeasure(entry.beatsPerMeasure);
@@ -3575,9 +3654,12 @@ export default function MetronomeScreen() {
       noteSampleNamesRef.current = { ...barNames };
       setNoteSampleSources({ ...barSources });
       noteSampleSourcesRef.current = { ...barSources };
+      setNoteSampleChannels({ ...barChannels });
+      noteSampleChannelsRef.current = { ...barChannels };
       saveNoteSamples(barSamples);
       saveNoteSampleNames(barNames);
       saveNoteSampleSources(barSources);
+      saveNoteSampleChannels(barChannels);
       if (Object.keys(barSamples).length > 0) {
         preloadNoteSampleSounds(barSamples);
       }
@@ -4132,6 +4214,7 @@ export default function MetronomeScreen() {
         subIndex={recorderTarget?.sub ?? 0}
         hasExisting={recorderTarget ? hasNoteSample(recorderTarget.beat, recorderTarget.sub, noteSamples) : false}
         existingName={recorderTarget ? (noteSampleNames[`${recorderTarget.beat}-${recorderTarget.sub}`] || "") : ""}
+        existingChannel={recorderTarget ? (noteSampleChannels[`${recorderTarget.beat}-${recorderTarget.sub}`] ?? "both") : "both"}
         bpm={bpm}
         soundSet={soundSet.startsWith("custom") ? "classic" : soundSet as any}
       />
@@ -4265,6 +4348,13 @@ export default function MetronomeScreen() {
         onBeatDirectionChange={(val) => {
           setBeatDirection(val);
           persistSettings({ beatDirection: val });
+        }}
+        barMetronomeChannel={barMetronomeChannel}
+        onBarMetronomeChannelChange={(val) => {
+          setBarMetronomeChannel(val);
+          barMetronomeChannelRef.current = val;
+          persistSettings({ barMetronomeChannel: val });
+          scheduleReRender();
         }}
         onEnterNoteMode={handleEnterNoteMode}
         onShowOnboarding={() => {

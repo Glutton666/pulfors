@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
 import type { BeatType } from "./metronome-engine";
 import type { ThemeColor } from "@/constants/colors";
+import type { SampleChannel } from "./stereo-channel";
+import { normalizeSampleChannel } from "./stereo-channel";
 import { notifyStorageError } from "./storage-notifier";
 import { logger } from "./logger";
 
@@ -127,6 +129,7 @@ export interface MetronomeSettings {
   landscapeContentType?: "photo" | "stats";
   beatDirection?: "cw" | "ccw";
   layerSoundSets?: Record<number, SoundSet>;
+  barMetronomeChannel?: SampleChannel;
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
@@ -148,13 +151,17 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   showLandscapeImage: true,
   landscapeContentType: "photo",
   beatDirection: "cw",
+  barMetronomeChannel: "both",
 };
 
 export async function loadSettings(): Promise<MetronomeSettings> {
   try {
     const data = await AsyncStorage.getItem(SETTINGS_KEY);
     if (data) {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(data) };
+      const parsed = JSON.parse(data);
+      const merged: MetronomeSettings = { ...DEFAULT_SETTINGS, ...parsed };
+      merged.barMetronomeChannel = normalizeSampleChannel(merged.barMetronomeChannel);
+      return merged;
     }
   } catch (e) {
     notifyStorageError({ key: SETTINGS_KEY, operation: "load", error: e });
@@ -237,6 +244,7 @@ export interface PracticeEntry {
   noteSamples?: Record<string, string>;
   noteSampleNames?: Record<string, string>;
   noteSampleSources?: Record<string, "recording" | "import">;
+  noteSampleChannels?: Record<string, "both" | "left" | "right">;
   noteQueueEntryIds?: string[];
   notePlayMode?: "once" | "loop" | "random";
   noteQueueEntries?: PracticeEntry[];

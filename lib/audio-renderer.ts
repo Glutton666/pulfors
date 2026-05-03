@@ -3,6 +3,7 @@ import { File, Paths } from "expo-file-system";
 import { Asset } from "expo-asset";
 import type { BeatType } from "./metronome-engine";
 import { logger } from "./logger";
+import type { SampleChannel } from "./stereo-channel";
 
 const RENDER_SR = 44100;
 
@@ -295,7 +296,9 @@ export function renderMeasure(params: {
   samplePCMs: Map<string, SamplePCMEntry>;
   clickVolume: number;
   sampleVolume: number;
-}): Float32Array {
+  metronomeChannel?: SampleChannel;
+  sampleChannels?: Record<string, SampleChannel>;
+}): Float32Array | { left: Float32Array; right: Float32Array } {
   const {
     schedule,
     measureDurationMs,
@@ -303,7 +306,12 @@ export function renderMeasure(params: {
     samplePCMs,
     clickVolume,
     sampleVolume,
+    metronomeChannel = "both",
+    sampleChannels = {},
   } = params;
+  const stereoMode =
+    metronomeChannel !== "both" ||
+    Object.values(sampleChannels).some((c) => c !== "both");
 
   const COPIES = 2;
   const measureSamples = Math.ceil((measureDurationMs / 1000) * RENDER_SR);
@@ -315,52 +323,96 @@ export function renderMeasure(params: {
     Math.ceil(RENDER_SR * 0.15),
   );
   const totalSamples = loopSamples + maxClickLen;
-  const buffer = new Float32Array(totalSamples);
 
-  for (let copy = 0; copy < COPIES; copy++) {
-    const copyOffset = copy * measureSamples;
-    for (const tick of schedule) {
-      if (tick.type === "mute") continue;
-      const offsetSamples = copyOffset + Math.round((tick.time / 1000) * RENDER_SR);
-      const key = `${tick.beat}-${tick.subBeat}`;
+  const mixToChannel = (
+    bufL: Float32Array,
+    bufR: Float32Array,
+    src: Float32Array,
+    offset: number,
+    vol: number,
+    channel: SampleChannel,
+  ) => {
+    if (channel === "both") {
+      mixInto(bufL, src, offset, vol);
+      mixInto(bufR, src, offset, vol);
+    } else if (channel === "left") {
+      mixInto(bufL, src, offset, vol);
+    } else {
+      mixInto(bufR, src, offset, vol);
+    }
+  };
 
-      let clickPCM: Float32Array;
-      if (tick.type === "strong") clickPCM = clickPCMs.strong;
-      else if (tick.type === "accent") clickPCM = clickPCMs.high;
-      else clickPCM = clickPCMs.low;
-      mixInto(buffer, clickPCM, offsetSamples, clickVolume);
+  const renderInto = (left: Float32Array, right: Float32Array | null) => {
+    for (let copy = 0; copy < COPIES; copy++) {
+      const copyOffset = copy * measureSamples;
+      for (const tick of schedule) {
+        if (tick.type === "mute") continue;
+        const offsetSamples = copyOffset + Math.round((tick.time / 1000) * RENDER_SR);
+        const key = `${tick.beat}-${tick.subBeat}`;
 
-      if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0 && samplePCMs.has(key)) {
-        const sample = samplePCMs.get(key)!;
-        const trimStart = Math.round(
-          (sample.trimStartMs / 1000) * RENDER_SR
-        );
-        const trimLen =
-          sample.trimDurationMs > 0
-            ? Math.round((sample.trimDurationMs / 1000) * RENDER_SR)
-            : sample.pcm.length - trimStart;
-        const trimmed = sample.pcm.subarray(
-          trimStart,
-          Math.min(trimStart + trimLen, sample.pcm.length)
-        );
-        mixInto(buffer, trimmed, offsetSamples, sampleVolume);
+        let clickPCM: Float32Array;
+        if (tick.type === "strong") clickPCM = clickPCMs.strong;
+        else if (tick.type === "accent") clickPCM = clickPCMs.high;
+        else clickPCM = clickPCMs.low;
+        if (right) {
+          mixToChannel(left, right, clickPCM, offsetSamples, clickVolume, metronomeChannel);
+        } else {
+          mixInto(left, clickPCM, offsetSamples, clickVolume);
+        }
+
+        if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0 && samplePCMs.has(key)) {
+          const sample = samplePCMs.get(key)!;
+          const trimStart = Math.round((sample.trimStartMs / 1000) * RENDER_SR);
+          const trimLen =
+            sample.trimDurationMs > 0
+              ? Math.round((sample.trimDurationMs / 1000) * RENDER_SR)
+              : sample.pcm.length - trimStart;
+          const trimmed = sample.pcm.subarray(
+            trimStart,
+            Math.min(trimStart + trimLen, sample.pcm.length),
+          );
+          if (right) {
+            const ch = sampleChannels[key] ?? "both";
+            mixToChannel(left, right, trimmed, offsetSamples, sampleVolume, ch);
+          } else {
+            mixInto(left, trimmed, offsetSamples, sampleVolume);
+          }
+        }
       }
     }
+  };
+
+  const finalize = (buf: Float32Array): Float32Array => {
+    for (let i = loopSamples; i < totalSamples; i++) {
+      buf[i - loopSamples] += buf[i];
+    }
+    const out = buf.subarray(0, loopSamples);
+    for (let i = 0; i < out.length; i++) {
+      out[i] = Math.max(-1, Math.min(1, out[i]));
+    }
+    return out;
+  };
+
+  if (!stereoMode) {
+    const buffer = new Float32Array(totalSamples);
+    renderInto(buffer, null);
+    return finalize(buffer);
   }
 
-  for (let i = loopSamples; i < totalSamples; i++) {
-    buffer[i - loopSamples] += buffer[i];
-  }
-
-  const out = buffer.subarray(0, loopSamples);
-  for (let i = 0; i < out.length; i++) {
-    out[i] = Math.max(-1, Math.min(1, out[i]));
-  }
-  return out;
+  const leftBuf = new Float32Array(totalSamples);
+  const rightBuf = new Float32Array(totalSamples);
+  renderInto(leftBuf, rightBuf);
+  return { left: finalize(leftBuf), right: finalize(rightBuf) };
 }
 
-export async function saveRenderedWav(pcm: Float32Array): Promise<string> {
-  const wav = encodeWav(pcm, RENDER_SR, true);
+export async function saveRenderedWav(
+  pcm: Float32Array | { left: Float32Array; right: Float32Array },
+): Promise<string> {
+  if (typeof (pcm as any).left !== "undefined") {
+    const stereo = pcm as { left: Float32Array; right: Float32Array };
+    return saveRenderedWavStereo(stereo.left, stereo.right);
+  }
+  const wav = encodeWav(pcm as Float32Array, RENDER_SR, true);
 
   if (Platform.OS === "web") {
     const blob = new Blob([wav], { type: "audio/wav" });
@@ -376,6 +428,69 @@ export async function saveRenderedWav(pcm: Float32Array): Promise<string> {
 
 export function getRenderSampleRate(): number {
   return RENDER_SR;
+}
+
+function writeStereoWavBytes(left: Float32Array, right: Float32Array, sr: number): Uint8Array {
+  const n = Math.min(left.length, right.length);
+  const dataSize = n * 4;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const v = new DataView(buf);
+  writeStr(v, 0, "RIFF");
+  v.setUint32(4, 36 + dataSize, true);
+  writeStr(v, 8, "WAVE");
+  writeStr(v, 12, "fmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 2, true);
+  v.setUint32(24, sr, true);
+  v.setUint32(28, sr * 4, true);
+  v.setUint16(32, 4, true);
+  v.setUint16(34, 16, true);
+  writeStr(v, 36, "data");
+  v.setUint32(40, dataSize, true);
+  for (let i = 0; i < n; i++) {
+    const l = Math.max(-1, Math.min(1, left[i]));
+    const r = Math.max(-1, Math.min(1, right[i]));
+    v.setInt16(44 + i * 4, l < 0 ? l * 32768 : l * 32767, true);
+    v.setInt16(44 + i * 4 + 2, r < 0 ? r * 32768 : r * 32767, true);
+  }
+  return new Uint8Array(buf);
+}
+
+export function pcmToStereoBuffers(
+  pcm: Float32Array,
+  channel: SampleChannel,
+): { left: Float32Array; right: Float32Array } {
+  const zeros = new Float32Array(pcm.length);
+  if (channel === "left") return { left: pcm, right: zeros };
+  if (channel === "right") return { left: zeros, right: pcm };
+  return { left: pcm, right: pcm };
+}
+
+export async function saveRenderedWavStereo(
+  left: Float32Array,
+  right: Float32Array,
+  filename: string = "rendered_measure_stereo.wav",
+): Promise<string> {
+  const bytes = writeStereoWavBytes(left, right, RENDER_SR);
+  if (Platform.OS === "web") {
+    const blob = new Blob([bytes as BlobPart], { type: "audio/wav" });
+    return URL.createObjectURL(blob);
+  } else {
+    const cacheDir = Paths.cache;
+    const file = new File(cacheDir, filename);
+    file.write(bytes);
+    return file.uri;
+  }
+}
+
+export async function saveStereoSampleWav(
+  monoPcm: Float32Array,
+  channel: "left" | "right",
+  filename: string,
+): Promise<string> {
+  const { left, right } = pcmToStereoBuffers(monoPcm, channel);
+  return saveRenderedWavStereo(left, right, filename);
 }
 
 let webClickBuffers: { strong: AudioBuffer; high: AudioBuffer; low: AudioBuffer } | null = null;
@@ -413,7 +528,10 @@ export async function ensureWebClickBuffers(
   }
 }
 
-export function playWebClick(role: "strong" | "high" | "low"): void {
+export function playWebClick(
+  role: "strong" | "high" | "low",
+  channel: SampleChannel = "both",
+): void {
   if (Platform.OS !== "web" || !webClickBuffers) return;
   const ctx = getSharedAudioContext();
   if (!ctx) return;
@@ -423,7 +541,14 @@ export function playWebClick(role: "strong" | "high" | "low"): void {
   const buffer = webClickBuffers[role];
   const source = ctx.createBufferSource();
   source.buffer = buffer;
-  source.connect(ctx.destination);
+  if (channel !== "both" && typeof (ctx as any).createStereoPanner === "function") {
+    const panner = (ctx as any).createStereoPanner();
+    panner.pan.value = channel === "left" ? -1 : 1;
+    source.connect(panner);
+    panner.connect(ctx.destination);
+  } else {
+    source.connect(ctx.destination);
+  }
   source.start(0);
 }
 
@@ -431,7 +556,11 @@ export function clearWebClickBuffers(): void {
   webClickBuffers = null;
 }
 
-export function playWebRenderedLoop(pcm: Float32Array, onEnded?: () => void): { stop: () => void } {
+export function playWebRenderedLoop(
+  pcm: Float32Array | { left: Float32Array; right: Float32Array },
+  onEnded?: () => void,
+  channel: SampleChannel = "both",
+): { stop: () => void } {
   if (Platform.OS !== "web") return { stop: () => {} };
   const ctx = getSharedAudioContext();
   if (!ctx) return { stop: () => {} };
@@ -439,13 +568,31 @@ export function playWebRenderedLoop(pcm: Float32Array, onEnded?: () => void): { 
     ctx.resume().catch(() => {});
   }
 
-  const audioBuffer = ctx.createBuffer(1, pcm.length, RENDER_SR);
-  audioBuffer.getChannelData(0).set(pcm);
+  const isStereo = typeof (pcm as any).left !== "undefined";
+  let audioBuffer: AudioBuffer;
+  if (isStereo) {
+    const stereo = pcm as { left: Float32Array; right: Float32Array };
+    const n = Math.min(stereo.left.length, stereo.right.length);
+    audioBuffer = ctx.createBuffer(2, n, RENDER_SR);
+    audioBuffer.getChannelData(0).set(stereo.left.subarray(0, n));
+    audioBuffer.getChannelData(1).set(stereo.right.subarray(0, n));
+  } else {
+    const mono = pcm as Float32Array;
+    audioBuffer = ctx.createBuffer(1, mono.length, RENDER_SR);
+    audioBuffer.getChannelData(0).set(mono);
+  }
 
   const source = ctx.createBufferSource();
   source.buffer = audioBuffer;
   source.loop = true;
-  source.connect(ctx.destination);
+  if (!isStereo && channel !== "both" && typeof (ctx as any).createStereoPanner === "function") {
+    const panner = (ctx as any).createStereoPanner();
+    panner.pan.value = channel === "left" ? -1 : 1;
+    source.connect(panner);
+    panner.connect(ctx.destination);
+  } else {
+    source.connect(ctx.destination);
+  }
   source.start(0);
 
   let stopped = false;

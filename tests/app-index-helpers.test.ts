@@ -233,6 +233,7 @@ function baseInput(barMode: boolean): CurrentBarConfigInput {
     noteSamples: { C4: "file:///c4.wav" },
     noteSampleNames: { C4: "C4 sample" },
     noteSampleSources: { C4: "recording" },
+    noteSampleChannels: { C4: "both" },
     dialConfig: createInitialDialConfig(3),
     barClockMode: "stopwatch",
     barTimerDuration: 180,

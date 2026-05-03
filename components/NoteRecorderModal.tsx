@@ -33,6 +33,7 @@ import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { SampleSource } from "@/lib/note-samples";
+import type { SampleChannel } from "@/lib/stereo-channel";
 import { soundSets } from "@/lib/metronome-engine";
 import type { BuiltinSoundSet } from "@/lib/storage";
 import { safePlay } from "@/lib/audio-utils";
@@ -43,12 +44,13 @@ type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
 interface NoteRecorderModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (uri: string, name: string, source: SampleSource) => void;
+  onSave: (uri: string, name: string, source: SampleSource, channel: SampleChannel) => void;
   onDelete: () => void;
   beatIndex: number;
   subIndex: number;
   hasExisting: boolean;
   existingName?: string;
+  existingChannel?: SampleChannel;
   bpm: number;
   soundSet?: BuiltinSoundSet;
 }
@@ -65,6 +67,7 @@ export function NoteRecorderModal({
   subIndex,
   hasExisting,
   existingName,
+  existingChannel = "both",
   bpm,
   soundSet = "classic",
 }: NoteRecorderModalProps) {
@@ -78,6 +81,13 @@ export function NoteRecorderModal({
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
   const [sampleName, setSampleName] = useState("");
   const sourceTypeRef = useRef<SampleSource>("recording");
+  const [channel, setChannel] = useState<SampleChannel>(existingChannel);
+
+  useEffect(() => {
+    if (visible) {
+      setChannel(existingChannel);
+    }
+  }, [visible, existingChannel]);
 
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(1);
@@ -377,11 +387,11 @@ export function NoteRecorderModal({
     if (audioDuration > 0) {
       const startMs = Math.floor(trimStart * audioDuration * 1000);
       const endMs = Math.floor(trimEnd * audioDuration * 1000);
-      onSave(`${recordedUri}#t=${startMs},${endMs}`, sampleName, sourceTypeRef.current);
+      onSave(`${recordedUri}#t=${startMs},${endMs}`, sampleName, sourceTypeRef.current, channel);
     } else {
-      onSave(recordedUri, sampleName, sourceTypeRef.current);
+      onSave(recordedUri, sampleName, sourceTypeRef.current, channel);
     }
-  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave, sampleName]);
+  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave, sampleName, channel]);
 
   const MAX_DURATION_SEC = 600;
   const MAX_FILE_SIZE_MB = 50;
@@ -713,6 +723,30 @@ export function NoteRecorderModal({
                     {isPlayingPreview ? t("noteRecorder", "playing") : t("noteRecorder", "previewBtn")}
                   </Text>
                 </Pressable>
+              </View>
+
+              <View style={{ flexDirection: "row", justifyContent: "center", gap: Spacing.xs, marginTop: Spacing.sm }}>
+                {(["both", "left", "right"] as const).map((opt) => {
+                  const active = channel === opt;
+                  const label = t("noteRecorder", `channel_${opt}` as any);
+                  return (
+                    <Pressable
+                      key={opt}
+                      onPress={() => setChannel(opt)}
+                      style={{
+                        flex: 1,
+                        paddingVertical: Spacing.sm,
+                        borderRadius: Radius.md,
+                        borderWidth: 1,
+                        borderColor: active ? C.accent : C.border,
+                        backgroundColor: active ? C.accentDim : C.surface,
+                        alignItems: "center",
+                      }}
+                    >
+                      <Text style={{ color: active ? C.accent : C.textSecondary, fontSize: FontSize.small }}>{label}</Text>
+                    </Pressable>
+                  );
+                })}
               </View>
 
               <View style={styles.nameInputRow}>
