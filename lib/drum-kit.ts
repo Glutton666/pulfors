@@ -88,10 +88,9 @@ export function normalizeDrumKitMapping(input: unknown): DrumKitMapping {
 export async function loadDrumKitMapping(): Promise<DrumKitMapping> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (raw) {
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
-      const norm = normalizeDrumKitMapping(parsed);
-      if (norm.some((p) => p !== null)) return norm;
+      return normalizeDrumKitMapping(parsed);
     }
   } catch (e) {
     notifyStorageError({ key: STORAGE_KEY, operation: "load", error: e });
