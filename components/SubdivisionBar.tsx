@@ -20,6 +20,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/contexts/ThemeContext";
 import Colors from "@/constants/colors";
 import { moderateScale, IS_TABLET, useScale } from "@/lib/scale";
+import { Radius, Spacing } from "@/constants/tokens";
 import type { ScaleValues } from "@/lib/scale";
 import type { BeatType } from "@/lib/metronome-engine";
 
@@ -487,7 +488,7 @@ export function DragGhost({
               locations={[0, 0.4, 1]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={{ width: 18, height: 18, alignItems: "center", justifyContent: "center", borderRadius: 4 }}
+              style={{ width: 18, height: 18, alignItems: "center", justifyContent: "center", borderRadius: Radius.xs }}
             >
               <Text style={{ color: GC.white, fontSize: 8, fontWeight: "bold" as const, lineHeight: 10, textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 }}>S</Text>
             </LinearGradient>
@@ -525,7 +526,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   },
   swipeHint: {
     opacity: 0.4,
-    paddingHorizontal: 2,
+    paddingHorizontal: Spacing.xxs,
   },
   cellsContainer: {
     flex: 1,

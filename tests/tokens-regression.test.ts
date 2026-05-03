@@ -13,6 +13,10 @@ const TOKENIZED_FILES = [
   "components/BlockEditPanel.tsx",
   "components/LoopBlockStripDetailed.tsx",
   "components/DialBeatDot.tsx",
+  "components/Pendulum.tsx",
+  "components/SubdivisionBar.tsx",
+  "components/ErrorFallback.tsx",
+  "components/BpmSlider.tsx",
 ];
 
 const BANNED_PATTERNS: { pattern: RegExp; label: string }[] = [
@@ -21,6 +25,10 @@ const BANNED_PATTERNS: { pattern: RegExp; label: string }[] = [
   { pattern: /borderRadius:\s*8(?!\d)/, label: "borderRadius: 8 (use Radius.md)" },
   { pattern: /fontSize:\s*10(?!\d)/, label: "fontSize: 10 (use FontSize.micro)" },
   { pattern: /fontSize:\s*11(?!\d)/, label: "fontSize: 11 (use FontSize.caption)" },
+  { pattern: /(?:padding|margin)(?:Horizontal|Vertical|Top|Bottom|Left|Right)?:\s*2(?!\d)/, label: "padding/margin 2 (use Spacing.xxs)" },
+  { pattern: /(?:padding|margin)(?:Horizontal|Vertical|Top|Bottom|Left|Right)?:\s*4(?!\d)/, label: "padding/margin 4 (use Spacing.xs)" },
+  { pattern: /(?:padding|margin)(?:Horizontal|Vertical|Top|Bottom|Left|Right)?:\s*8(?!\d)/, label: "padding/margin 8 (use Spacing.sm)" },
+  { pattern: /\bgap:\s*8(?!\d)/, label: "gap: 8 (use Spacing.sm)" },
 ];
 
 for (const file of TOKENIZED_FILES) {

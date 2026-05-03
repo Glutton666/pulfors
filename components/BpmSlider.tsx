@@ -22,6 +22,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import Colors from "@/constants/colors";
 import { useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
+import { FontSize, Spacing } from "@/constants/tokens";
 
 interface BpmSliderProps {
   bpm: number;
@@ -345,7 +346,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: S.ms(4, 0.3),
-    marginBottom: 2,
+    marginBottom: Spacing.xxs,
     opacity: 0.4,
   },
   tapLabel: {
@@ -377,7 +378,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   },
   hint: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     letterSpacing: 1,
     opacity: 0.5,
   },

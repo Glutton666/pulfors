@@ -10,6 +10,7 @@ import Animated, {
 import { useTheme } from "@/contexts/ThemeContext";
 import Colors from "@/constants/colors";
 import { moderateScale, SCREEN_WIDTH, IS_TABLET, useScale } from "@/lib/scale";
+import { Radius, Spacing } from "@/constants/tokens";
 import type { ScaleValues } from "@/lib/scale";
 
 const PENDULUM_LENGTH = IS_TABLET
@@ -80,12 +81,12 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-end",
     height: PENDULUM_LENGTH + 60,
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   pivotPoint: {
     width: 12,
     height: 12,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
     position: "absolute",
     top: 0,
     zIndex: 10,

@@ -14,6 +14,7 @@ import { logger } from "@/lib/logger";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useThemeSafe } from "@/contexts/ThemeContext";
+import { Radius, FontSize } from "@/constants/tokens";
 
 export type ErrorFallbackProps = {
   error: Error;
@@ -219,7 +220,7 @@ const styles = StyleSheet.create({
     right: 16,
     width: 44,
     height: 44,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -227,7 +228,7 @@ const styles = StyleSheet.create({
   },
   button: {
     paddingVertical: 16,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingHorizontal: 24,
     minWidth: 200,
     shadowColor: "#000",
@@ -282,12 +283,12 @@ const styles = StyleSheet.create({
   },
   errorContainer: {
     width: "100%",
-    borderRadius: 8,
+    borderRadius: Radius.md,
     overflow: "hidden",
     padding: 16,
   },
   errorText: {
-    fontSize: 12,
+    fontSize: FontSize.small,
     lineHeight: 18,
     width: "100%",
   },

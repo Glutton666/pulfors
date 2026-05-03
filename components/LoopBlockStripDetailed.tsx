@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { BlockPill } from "./BlockPill";
 import type { LoopBlock, BlockPlayMode } from "./beat-indicator.types";
 import type { ProgressInfo } from "@/lib/metronome-engine";
-import { Radius } from "@/constants/tokens";
+import { Radius, Spacing } from "@/constants/tokens";
 import {
   sortBlocksByStart,
   detectJumpDirection,
@@ -76,7 +76,7 @@ export function LoopBlockStripDetailed({
       horizontal
       showsHorizontalScrollIndicator={false}
       style={{ maxHeight: 72 }}
-      contentContainerStyle={{ paddingHorizontal: 8, paddingVertical: 6, gap: 6, alignItems: "center" }}
+      contentContainerStyle={{ paddingHorizontal: Spacing.sm, paddingVertical: 6, gap: 6, alignItems: "center" }}
     >
       {sorted.map(({ block, origIndex }, si) => {
         const isEditing = editingBlockIndex === origIndex;
@@ -122,13 +122,13 @@ export function LoopBlockStripDetailed({
             />
             {hasJump && jumpTarget && (
               goesBack ? (
-                <View style={{ alignItems: "center", marginLeft: 4, marginRight: 2 }}>
+                <View style={{ alignItems: "center", marginLeft: Spacing.xs, marginRight: Spacing.xxs }}>
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
                     <Ionicons name="return-up-back" size={ms(14, 0.4)} color="#f0ad4e" />
                     <View style={{
-                      paddingHorizontal: 4, paddingVertical: 1, borderRadius: Radius.xs,
+                      paddingHorizontal: Spacing.xs, paddingVertical: 1, borderRadius: Radius.xs,
                       backgroundColor: isActiveJump ? "#f0ad4e30" : "#f0ad4e15",
-                      marginLeft: 2,
+                      marginLeft: Spacing.xxs,
                     }}>
                       <Text style={{ color: "#f0ad4e", fontSize: 8, fontFamily: "SpaceGrotesk_700Bold" }}>
                         → {jumpRangeText}
@@ -137,13 +137,13 @@ export function LoopBlockStripDetailed({
                   </View>
                 </View>
               ) : (
-                <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 2 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", marginLeft: Spacing.xxs }}>
                   <View style={{ width: 10, height: 1.5, backgroundColor: "#f0ad4e" }} />
                   <Ionicons name="caret-forward" size={ms(10, 0.4)} color="#f0ad4e" style={{ marginLeft: -2 }} />
                   <View style={{
-                    paddingHorizontal: 4, paddingVertical: 1, borderRadius: Radius.xs,
+                    paddingHorizontal: Spacing.xs, paddingVertical: 1, borderRadius: Radius.xs,
                     backgroundColor: isActiveJump ? "#f0ad4e30" : "#f0ad4e15",
-                    marginLeft: 2,
+                    marginLeft: Spacing.xxs,
                   }}>
                     <Text style={{ color: "#f0ad4e", fontSize: 8, fontFamily: "SpaceGrotesk_700Bold" }}>
                       {jumpRangeText}
@@ -153,7 +153,7 @@ export function LoopBlockStripDetailed({
               )
             )}
             {si < sorted.length - 1 && !hasJump && (
-              <Ionicons name="chevron-forward" size={ms(10, 0.4)} color={textTertiaryColor} style={{ marginLeft: 2, opacity: 0.4 }} />
+              <Ionicons name="chevron-forward" size={ms(10, 0.4)} color={textTertiaryColor} style={{ marginLeft: Spacing.xxs, opacity: 0.4 }} />
             )}
           </View>
         );
@@ -163,7 +163,7 @@ export function LoopBlockStripDetailed({
           onPress={() => onBlockPlayModeChange(nextMode)}
           style={{
             paddingHorizontal: 6,
-            paddingVertical: 4,
+            paddingVertical: Spacing.xs,
             borderRadius: Radius.sm,
             backgroundColor: modeHighlight ? "#f0ad4e20" : bgSecondary,
             borderWidth: modeHighlight ? 1 : 0,
