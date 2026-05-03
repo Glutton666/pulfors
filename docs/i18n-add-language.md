@@ -30,7 +30,7 @@
 
 ## 자동으로 처리되는 부분 (별도 코드 변경 불필요)
 
-- **디바이스 로케일 자동 감지**: `LanguageContext`는 첫 실행 시 `detectDeviceLanguage()`로 시작합니다. `navigator.language` / `navigator.languages` / `Intl.DateTimeFormat().resolvedOptions().locale`을 순회하며 1차 서브태그(`ko-KR` → `ko`)를 SUPPORTED_LANGUAGES에 매칭하고, 일치하는 코드가 없으면 `FALLBACK_LANGUAGE`로 떨어집니다.
+- **디바이스 로케일 자동 감지**: `LanguageContext`는 첫 실행 시 `detectDeviceLanguage()`로 시작합니다. 우선순위는 `navigator.languages` → `navigator.language` → `Intl.DateTimeFormat().resolvedOptions().locale` 순이며, 1차 서브태그(`ko-KR` → `ko`)를 SUPPORTED_LANGUAGES에 매칭하고 일치하는 코드가 없으면 `FALLBACK_LANGUAGE`로 떨어집니다.
 - **수동 선택 유지**: 사용자가 Settings/Onboarding에서 선택한 값은 AsyncStorage에 저장되며, `isLanguageCode`로 검증되어 새 코드도 추가 분기 없이 자동 인정됩니다.
 - **UI 옵션**: `SettingsModal`/`OnboardingModal`은 하드코딩된 ko/en 배열 대신 `LANGUAGE_OPTIONS`를 직접 렌더링합니다.
 - **폴백 체인**: 선택 언어 값이 비어 있으면 `FALLBACK_LANGUAGE`(현재 `en`) → 키 문자열 순으로 폴백합니다. 폴백 발생 시 dev 모드에서 `console.warn` + Sentry breadcrumb로 한 번만 보고합니다.

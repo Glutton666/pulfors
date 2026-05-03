@@ -93,7 +93,7 @@ test("[meta] detectDeviceLanguage는 항상 SUPPORTED_LANGUAGES 중 하나를 �
   assert.ok((SUPPORTED_LANGUAGES as readonly string[]).includes(got), `예상 외 코드: ${got}`);
 });
 
-test("[meta] detectDeviceLanguage는 navigator.language를 우선하고 1차 서브태그로 매칭한다", () => {
+test("[meta] detectDeviceLanguage는 navigator.languages → language → Intl 순으로 1차 서브태그를 매칭한다", () => {
   const desc = Object.getOwnPropertyDescriptor(globalThis, "navigator");
   const setNav = (v: unknown) => {
     Object.defineProperty(globalThis, "navigator", { value: v, configurable: true, writable: true });
