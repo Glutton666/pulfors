@@ -270,6 +270,120 @@ test("pureEmitStackedBlockTicks: ownBeatTypes가 첫 서브의 타입을 결정"
   assert.equal(state.ticks[0].layerIndex, 1);
 });
 
+test("pureEmitStackedBlockTicks: 다중 layer(2개) 동시 emit 시 layerIndex 1,2 부여 + 서브디비전 적용", () => {
+  // 부모(0..1) 위에 layer1(0..1), layer2(0..1) 두 개. layer2는 서브디비전 [normal, normal] 적용.
+  const sorted: LoopBlockData[] = [
+    { startBeat: 0, endBeat: 1, type: "count", value: 1 },
+    { startBeat: 0, endBeat: 1, type: "count", value: 1, layerOf: 0, bpm: 120 },
+    {
+      startBeat: 0,
+      endBeat: 1,
+      type: "count",
+      value: 1,
+      layerOf: 0,
+      bpm: 120,
+      ownSubdivisions: { "0": ["normal", "normal"], "1": ["normal", "normal"] },
+    },
+  ];
+  const inputs = makeInputs({ sortedBlocks: sorted, loopBlocks: sorted, beatsPerMeasure: 2 });
+  const state = makeState();
+  // 부모 길이 = 2박 × 500ms = 1000ms
+  pureEmitStackedBlockTicks(inputs, state, 0, 0, 1000, 0, 1);
+
+  const layer1 = state.ticks.filter(t => t.layerIndex === 1);
+  const layer2 = state.ticks.filter(t => t.layerIndex === 2);
+  // layer1: 2박 (서브 없음) → 2틱
+  assert.equal(layer1.length, 2, "layer1은 비트당 1틱 = 2틱");
+  // layer2: 2박 × 2서브 = 4틱
+  assert.equal(layer2.length, 4, "layer2는 ownSubdivisions 적용으로 4틱");
+  // 각 layer의 blockIndex가 다르며 layer 블록 origIdx와 일치
+  assert.equal(layer1[0].blockIndex, 1);
+  assert.equal(layer2[0].blockIndex, 2);
+  // layer1 시간: 0, 500
+  assert.equal(layer1[0].time, 0);
+  assert.equal(layer1[1].time, 500);
+  // layer2 시간: 0, 250, 500, 750 (서브 분할)
+  assert.deepEqual(
+    layer2.map(t => t.time),
+    [0, 250, 500, 750],
+  );
+  // layer2의 첫 서브는 isMainBeat=true, 두번째는 false
+  assert.equal(layer2[0].isMainBeat, true);
+  assert.equal(layer2[1].isMainBeat, false);
+  // type도 검증: 부모의 beatTypes를 기본 사용 (beat 0=accent, beat 1=normal)
+  assert.equal(layer1[0].type, "accent");
+  assert.equal(layer1[1].type, "normal");
+  assert.equal(layer2[0].type, "normal");
+  assert.equal(layer2[2].type, "normal");
+});
+
+test("pureEmitStackedBlockTicks: 3개 layer가 같은 부모에 layerIndex 1..3 순서로 부여", () => {
+  const sorted: LoopBlockData[] = [
+    { startBeat: 0, endBeat: 0, type: "count", value: 1 },
+    { startBeat: 0, endBeat: 0, type: "count", value: 1, layerOf: 0, bpm: 120 },
+    { startBeat: 0, endBeat: 0, type: "count", value: 1, layerOf: 0, bpm: 120 },
+    { startBeat: 0, endBeat: 0, type: "count", value: 1, layerOf: 0, bpm: 120 },
+  ];
+  const inputs = makeInputs({ sortedBlocks: sorted, loopBlocks: sorted, beatsPerMeasure: 1 });
+  const state = makeState();
+  pureEmitStackedBlockTicks(inputs, state, 0, 0, 500, 0, 1);
+
+  // 각 layer 1틱씩 = 3틱
+  assert.equal(state.ticks.length, 3);
+  // layerOf=0인 블록 등장 순서대로 layerIndex 1,2,3
+  const byLayer = [...state.ticks].sort((a, b) => a.layerIndex - b.layerIndex);
+  assert.equal(byLayer[0].layerIndex, 1);
+  assert.equal(byLayer[0].blockIndex, 1);
+  assert.equal(byLayer[1].layerIndex, 2);
+  assert.equal(byLayer[1].blockIndex, 2);
+  assert.equal(byLayer[2].layerIndex, 3);
+  assert.equal(byLayer[2].blockIndex, 3);
+});
+
+test("pureAddBarWithRepeat: barRepeat duration 타입에서 부동소수점 누적 오차가 박 길이 합에 비례한 범위 내", () => {
+  // bpm=180 → 1박 = 60000/180 = 333.333... ms
+  // duration 2초 → round(2000/333.333) = 6회
+  const inputs = makeInputs({
+    bpm: 180,
+    barRepeats: new Map([[0, { type: "duration", value: 2 }]]),
+  });
+  const state = makeState();
+  pureAddBarWithRepeat(inputs, state, 0, 0, -1, 1);
+
+  const beatDur = 60000 / 180;
+  assert.equal(state.ticks.length, 6, "6회 반복");
+  // 각 tick의 time이 i*beatDur과 정확히 일치(누적 + 가 아닌 i*subDur로 계산되는지)
+  for (let i = 0; i < 6; i++) {
+    const expected = i * beatDur;
+    const actual = state.ticks[i].time;
+    assert.ok(
+      Math.abs(actual - expected) < 1e-9,
+      `tick[${i}].time=${actual} ~ ${expected} (drift ${actual - expected})`,
+    );
+  }
+  // state.time = 6 박 길이. 누적 오차가 1e-9 이내.
+  const expectedTotal = 6 * beatDur;
+  assert.ok(
+    Math.abs(state.time - expectedTotal) < 1e-9,
+    `state.time=${state.time} ~ ${expectedTotal}`,
+  );
+});
+
+test("pureCalcSinglePassDur: barRepeat duration의 시간 누적도 round 기반이라 안정적", () => {
+  // bpm=130 → 1박 = 60000/130 = 461.538... ms
+  // 4박, 비트0에 duration 1초 barRepeat: round(1000/461.538) = 2회
+  // 총 길이 = 비트0 ×2 + 비트1..3 = 2*461.538 + 3*461.538 = 5*461.538
+  const inputs = makeInputs({
+    bpm: 130,
+    barRepeats: new Map([[0, { type: "duration", value: 1 }]]),
+  });
+  const cache = new Map<string, number>();
+  const dur = pureCalcSinglePassDur(inputs, cache, 0, 3, -1);
+  const beatDur = 60000 / 130;
+  const expected = 5 * beatDur;
+  assert.ok(Math.abs(dur - expected) < 1e-9, `dur=${dur} ~ ${expected}`);
+});
+
 test("pureEmitStackedBlockTicks: blockDurMs 경계를 벗어난 tick은 잘려나감", () => {
   // stackBpm=120 → 500ms/beat, 4박 layer지만 부모 dur=600ms면 2번째 비트(@500ms)는 들어가고 3번째(@1000ms)는 잘림
   const sorted: LoopBlockData[] = [
