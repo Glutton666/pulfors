@@ -42,7 +42,6 @@ export function TempoQuizModal({
   const styles = makeStyles(C);
 
   const [difficulty, setDifficulty] = useState<TempoQuizDifficulty>("easy");
-  const [target, setTarget] = useState(0);
   const [guessText, setGuessText] = useState("100");
   const [result, setResult] = useState<TempoQuizResult | null>(null);
   const targetRef = useRef(0);
@@ -56,7 +55,6 @@ export function TempoQuizModal({
 
   const startNew = useCallback(() => {
     const bpm = pickRandomBpm(difficulty);
-    setTarget(bpm);
     targetRef.current = bpm;
     setResult(null);
     setGuessText(String(Math.round((TEMPO_QUIZ_RANGES[difficulty].min + TEMPO_QUIZ_RANGES[difficulty].max) / 2)));

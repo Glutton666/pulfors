@@ -4019,7 +4019,7 @@ export default function MetronomeScreen() {
           setIsPlaying(true);
           engine.start();
         }}
-        onStop={() => { teardownTempoQuizRef.current(); }}
+        onStop={() => {}}
         onClose={closeTempoQuiz}
       />
 

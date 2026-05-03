@@ -39,28 +39,6 @@ export function gradeGuess(target: number, guess: number): TempoQuizResult {
   return { guess, target, diff, grade };
 }
 
-export interface TempoQuizSession<T> {
-  measures: number;
-  elapsed: number;
-  restore: T | null;
-}
-
-export function createQuizEntrySession<T>(snapshot: T): TempoQuizSession<T> {
-  return { measures: 0, elapsed: 0, restore: snapshot };
-}
-
-export function advanceQuizSession<T>(
-  prev: TempoQuizSession<T> | null,
-  snapshot: T,
-  measures: number,
-): TempoQuizSession<T> {
-  return {
-    measures,
-    elapsed: 0,
-    restore: prev?.restore ?? snapshot,
-  };
-}
-
 export function clampBpmGuess(value: number): number {
   if (!Number.isFinite(value)) return 60;
   return Math.max(20, Math.min(300, Math.round(value)));
