@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { type Language, createT, type TranslationFn } from "@/lib/i18n";
+import { type Language, createT, type TranslationFn, isLanguageCode } from "@/lib/i18n";
 
 const LANGUAGE_KEY = "metronome_language";
 
@@ -19,7 +19,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     (async () => {
       try {
         const saved = await AsyncStorage.getItem(LANGUAGE_KEY);
-        if (saved === "en" || saved === "ko") {
+        if (isLanguageCode(saved)) {
           setLanguageState(saved);
         }
       } catch {}

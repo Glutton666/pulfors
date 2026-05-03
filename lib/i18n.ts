@@ -1,7 +1,24 @@
-export type Language = "ko" | "en";
+// === 언어 추가 가이드 ============================================
+// 새 언어를 추가하려면:
+//   1) 아래 SUPPORTED_LANGUAGES 배열에 새 코드를 추가 (예: "ja", "zh", "es").
+//   2) tsc 가 모든 translations leaf에서 누락 키를 즉시 보고한다.
+//   3) 누락 키를 채운 뒤 LanguageContext의 저장값 검증 분기에서
+//      자동으로 새 코드도 인정된다(SUPPORTED_LANGUAGES.includes 사용).
+// FALLBACK_LANGUAGE는 키 누락/언어 미정의 시 최종 폴백으로 사용된다.
+// ================================================================
+export const SUPPORTED_LANGUAGES = ["ko", "en"] as const;
+export type LanguageCode = (typeof SUPPORTED_LANGUAGES)[number];
+export const FALLBACK_LANGUAGE: LanguageCode = "en";
 
-export type TranslationLeaf = { ko: string; en: string };
+// Language는 LanguageCode의 별칭으로 유지 (기존 import 호환).
+export type Language = LanguageCode;
+
+export type TranslationLeaf = Record<LanguageCode, string>;
 type TranslationsShape = Record<string, Record<string, TranslationLeaf>>;
+
+export function isLanguageCode(v: unknown): v is LanguageCode {
+  return typeof v === "string" && (SUPPORTED_LANGUAGES as readonly string[]).includes(v);
+}
 
 export const translations = {
   settings: {
@@ -653,7 +670,17 @@ export function createT(lang: Language): TranslationFn {
       reportMissing(section, key);
       return key;
     }
-    return entry[lang] || entry.en || key;
+    // 폴백 체인: 선택 언어 → FALLBACK_LANGUAGE → 키 자체.
+    // 선택 언어 값이 비어있으면 dev 모드에서 한 번 경고한다.
+    const selected = entry[lang];
+    if (selected) return selected;
+    const fallback = entry[FALLBACK_LANGUAGE];
+    if (fallback) {
+      reportMissing(`${section}.${key}@${lang}`, "fallback->" + FALLBACK_LANGUAGE);
+      return fallback;
+    }
+    reportMissing(section, key);
+    return key;
   }) as TranslationFn;
 }
 
