@@ -239,11 +239,12 @@ test("[entry-roundtrip] applyEntryToState는 entry의 모든 React-state 변경�
     beatTypes: ["accent", "normal", "normal", "accent", "normal"],
     beatSubdivisions: { "1": ["accent"] },
     barRepeats: {
-      0: { type: "count", value: 2, bpm: 90 } as any,
-      2: { type: "duration", value: 8 } as any,
+      0: { type: "count", value: 2, bpm: 90 },
+      2: { type: "duration", value: 8 },
     },
     loopBlocks: [{ startBeat: 0, endBeat: 4, type: "count", value: 1 }],
     barLoopMode: "loop",
+    blockPlayMode: "loop",
     subdivisionPattern: ["accent", "normal"],
     barClockMode: "stopwatch",
     barTimerDuration: 180,
@@ -252,7 +253,6 @@ test("[entry-roundtrip] applyEntryToState는 entry의 모든 React-state 변경�
     noteSampleSources: { "0": "import" },
     noteSampleChannels: { "0": "left", "3": "right" },
   };
-  (entry as any).blockPlayMode = "loop";
   const state = applyEntryToState(entry);
   // 1차 효과: 라이브 setX 호출과 1:1 대응
   assert.equal(state.bpm, 144);
@@ -275,7 +275,7 @@ test("[entry-roundtrip] applyEntryToState는 entry의 모든 React-state 변경�
   state.beatTypes.push("accent");
   state.noteSamples["99"] = "file:///mut.wav";
   assert.equal(entry.beatTypes.length, 5);
-  assert.equal((entry.noteSamples as any)["99"], undefined);
+  assert.equal(entry.noteSamples?.["99"], undefined);
 });
 
 test("[entry-roundtrip] applyEntryToState defaults: 빈 barRepeats/누락 필드 fallback", () => {

@@ -212,6 +212,8 @@ export async function flushPendingSettings(): Promise<void> {
 export interface BarRepeatEntry {
   type: "count" | "duration";
   value: number;
+  /** Optional per-bar BPM override picked up by engine.setAllBarBpmOverrides. */
+  bpm?: number;
 }
 
 export interface LoopBlockEntry {
@@ -237,6 +239,8 @@ export interface PracticeEntry {
   beatSubdivisions: Record<string, BeatType[]>;
   barRepeats: Record<number, BarRepeatEntry>;
   loopBlocks?: LoopBlockEntry[];
+  /** Block playback mode used in bar mode practice. */
+  blockPlayMode?: "sequential" | "loop" | "random";
   barLoopMode: "loop" | "once";
   subdivisionPattern: BeatType[];
   barClockMode?: "stopwatch" | "timer";

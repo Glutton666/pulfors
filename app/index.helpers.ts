@@ -260,15 +260,10 @@ export interface AppliedEntryState {
  * real engine instance.
  */
 export function applyEntryToState(entry: PracticeEntry): AppliedEntryState {
-  const e = entry as PracticeEntry & {
-    loopBlocks?: LoopBlock[];
-    blockPlayMode?: BlockPlayMode;
-  };
-  const blocks = e.loopBlocks ?? [];
+  const blocks = entry.loopBlocks ?? [];
   const bpmOverrides: Record<number, number> = {};
   for (const [k, v] of Object.entries(entry.barRepeats || {})) {
-    const maybe = (v as { bpm?: number }).bpm;
-    if (typeof maybe === "number") bpmOverrides[Number(k)] = maybe;
+    if (typeof v.bpm === "number") bpmOverrides[Number(k)] = v.bpm;
   }
   return {
     bpm: entry.bpm,
@@ -278,7 +273,7 @@ export function applyEntryToState(entry: PracticeEntry): AppliedEntryState {
     barRepeats: { ...(entry.barRepeats || {}) } as Record<number, BarRepeat>,
     loopBlocks: [...blocks],
     barLoopMode: entry.barLoopMode || "once",
-    blockPlayMode: e.blockPlayMode || "loop",
+    blockPlayMode: entry.blockPlayMode || "loop",
     subdivisionPattern: entry.subdivisionPattern ? [...entry.subdivisionPattern] : null,
     noteSamples: { ...(entry.noteSamples || {}) } as NoteSampleMap,
     noteSampleNames: { ...(entry.noteSampleNames || {}) } as NoteSampleNameMap,
@@ -300,11 +295,7 @@ export function applyEntryToState(entry: PracticeEntry): AppliedEntryState {
  * - Maps are shallow-cloned so callers can mutate without affecting the entry.
  */
 export function entryToBarConfig(entry: PracticeEntry): BarConfig {
-  const e = entry as PracticeEntry & {
-    loopBlocks?: LoopBlock[];
-    blockPlayMode?: BlockPlayMode;
-  };
-  const blocks = e.loopBlocks ?? [];
+  const blocks = entry.loopBlocks ?? [];
   return {
     beatsPerMeasure: entry.beatsPerMeasure,
     beatTypes: [...entry.beatTypes],
@@ -318,7 +309,7 @@ export function entryToBarConfig(entry: PracticeEntry): BarConfig {
     noteSampleSources: { ...(entry.noteSampleSources || {}) } as NoteSampleSourceMap,
     noteSampleChannels: { ...(entry.noteSampleChannels || {}) } as NoteSampleChannelMap,
     barLoopMode: "once",
-    blockPlayMode: e.blockPlayMode || "loop",
+    blockPlayMode: entry.blockPlayMode || "loop",
     hasBeenConfigured: true,
   };
 }

@@ -52,7 +52,7 @@ import {
   soundSets,
 } from "@/lib/metronome-engine";
 import type { BeatType, ProgressInfo } from "@/lib/metronome-engine";
-import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry } from "@/lib/storage";
+import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, type MetronomeSettings } from "@/lib/storage";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample } from "@/lib/storage";
 import { BeatIndicator } from "@/components/BeatIndicator";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
@@ -71,6 +71,9 @@ import { make_styles } from "./index.styles";
 import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, adjustShuffledIndicesOnInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig } from "./index.helpers";
 import { useAudioPlayers } from "@/hooks/useAudioPlayers";
 import { useNoteSamples } from "@/hooks/useNoteSamples";
+import { useBarConfig, useDialConfig } from "@/hooks/useBarDialConfig";
+import { useMetronomeEngine } from "@/hooks/useMetronomeEngine";
+import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { MoreMenuModal } from "@/components/MoreMenuModal";
 import { ScheduledStartModal } from "@/components/ScheduledStartModal";
@@ -162,8 +165,8 @@ export default function MetronomeScreen() {
   const barAreaLayoutRef = useRef({ y: 0, height: 0 });
   const barScrollOffsetRef = useRef(0);
 
-  const dialConfigRef = useRef(createInitialDialConfig());
-  const barConfigRef = useRef(createInitialBarConfig());
+  const { dialConfigRef } = useDialConfig();
+  const { barConfigRef } = useBarConfig();
 
   const [progressInfo, setProgressInfo] = useState<ProgressInfo | null>(null);
   const [layerProgressMap, setLayerProgressMap] = useState<Record<string, number>>({});
@@ -395,7 +398,7 @@ export default function MetronomeScreen() {
   const webRenderedLoopRef = useRef<{ stop: () => void } | null>(null);
   const webClickReadyRef = useRef(false);
 
-  const engineRef = useRef<MetronomeEngine | null>(null);
+  const { engineRef } = useMetronomeEngine();
   const tapTimesRef = useRef<number[]>([]);
   const dialRef = useRef<View>(null);
   const dialCenterRef = useRef({ x: 0, y: 0 });
@@ -1430,45 +1433,63 @@ export default function MetronomeScreen() {
     } catch (e) {}
   }, [volume, allPlayers]);
 
-  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const persistPendingRef = useRef<Record<string, any>>({});
-  const persistSettings = useCallback(
-    (overrides: Record<string, any> = {}) => {
-      Object.assign(persistPendingRef.current, overrides);
-      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
-      persistTimerRef.current = setTimeout(() => {
-        const merged = { ...persistPendingRef.current };
-        persistPendingRef.current = {};
-        persistTimerRef.current = null;
-        const current = {
-          bpm,
-          beatsPerMeasure,
-          subdivisions: 1,
-          subdivisionPattern,
-          beatSubdivisions,
-          volume,
-          sampleVolume,
-          backgroundPlay,
-          soundSet,
-          layerSoundSets,
-          flashMode,
-          hapticMode,
-          audioOffsetMs,
-          timerStopMode,
-          landscapeReversed,
-          showLandscapeImage,
-          landscapeContentType,
-          beatDirection,
-          barMetronomeChannel,
-          ...merged,
-        };
-        void saveSettings(current).catch(() => {
+  // 설정 영속화 스냅샷 ref. 매 렌더에서 최신 React state를 복사해 둔다 →
+  // createDebouncedPersister가 flush 시점에 항상 최신값을 읽는다.
+  const persistSnapshotRef = useRef<MetronomeSettings>({
+    bpm,
+    beatsPerMeasure,
+    subdivisions: 1,
+    subdivisionPattern,
+    beatSubdivisions,
+    volume,
+    sampleVolume,
+    backgroundPlay,
+    soundSet,
+    layerSoundSets,
+    flashMode,
+    hapticMode,
+    audioOffsetMs,
+    timerStopMode,
+    landscapeReversed,
+    showLandscapeImage,
+    landscapeContentType,
+    beatDirection,
+    barMetronomeChannel,
+  });
+  persistSnapshotRef.current = {
+    bpm,
+    beatsPerMeasure,
+    subdivisions: 1,
+    subdivisionPattern,
+    beatSubdivisions,
+    volume,
+    sampleVolume,
+    backgroundPlay,
+    soundSet,
+    layerSoundSets,
+    flashMode,
+    hapticMode,
+    audioOffsetMs,
+    timerStopMode,
+    landscapeReversed,
+    showLandscapeImage,
+    landscapeContentType,
+    beatDirection,
+    barMetronomeChannel,
+  };
+  const persistSettingsRef = useRef<DebouncedPersister<MetronomeSettings> | null>(null);
+  if (!persistSettingsRef.current) {
+    persistSettingsRef.current = createDebouncedPersister<MetronomeSettings>(
+      () => persistSnapshotRef.current,
+      (merged) => {
+        void saveSettings(merged).catch(() => {
           // 사용자 알림은 storage-notifier 구독자(StorageErrorAlert)가 처리.
         });
-      }, 500);
-    },
-    [bpm, beatsPerMeasure, subdivisionPattern, beatSubdivisions, volume, sampleVolume, backgroundPlay, soundSet, layerSoundSets, flashMode, hapticMode, audioOffsetMs, timerStopMode, landscapeReversed, showLandscapeImage, landscapeContentType, beatDirection, barMetronomeChannel]
-  );
+      },
+      500
+    );
+  }
+  const persistSettings = persistSettingsRef.current;
 
   const updateVolume = useCallback(
     (newVolume: number) => {
