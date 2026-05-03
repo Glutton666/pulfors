@@ -17,6 +17,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
+import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
 import type { PracticeEntry } from "@/lib/storage";
 import {
@@ -676,7 +677,7 @@ export function PracticeBookModal({
                 </Pressable>
               </View>
             ) : (
-              <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={{ flexDirection: "row", gap: Spacing.sm }}>
                 <Pressable
                   style={[styles.saveButton, { borderColor: C.accent, flex: 1 }]}
                   onPress={() => setShowSaveInput(true)}
@@ -832,7 +833,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
   },
   headerRight: {
     flexDirection: "row",
@@ -842,7 +843,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   viewToggleBtn: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     backgroundColor: C.surfaceLight,
     alignItems: "center",
     justifyContent: "center",
@@ -867,7 +868,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   tabText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: C.textSecondary,
   },
   saveSection: {
@@ -880,7 +881,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: Spacing.sm,
     paddingVertical: 12,
     borderRadius: 10,
     borderWidth: 1,
@@ -894,13 +895,13 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   saveInputRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
   },
   saveInput: {
     flex: 1,
     height: 40,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingHorizontal: 12,
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: 14,
@@ -910,7 +911,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   saveConfirmBtn: {
     height: 40,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -960,7 +961,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   swipeActionText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 10,
+    fontSize: FontSize.micro,
     color: "#fff",
   },
   entryCard: {
@@ -984,16 +985,16 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     fontSize: 15,
     color: C.text,
     flex: 1,
-    marginRight: 8,
+    marginRight: Spacing.sm,
   },
   entryDate: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textTertiary,
   },
   createdBy: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textTertiary,
     marginTop: -2,
   },
@@ -1001,28 +1002,28 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     flex: 1,
     height: 30,
     borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 8,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.sm,
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 14,
     color: C.text,
     backgroundColor: C.surfaceLight,
-    marginRight: 8,
+    marginRight: Spacing.sm,
   },
   entryDetails: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
     flexWrap: "wrap",
   },
   modeBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
   },
   modeBadgeText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 10,
+    fontSize: FontSize.micro,
     color: "#fff",
     textTransform: "uppercase",
     letterSpacing: 0.5,
@@ -1032,32 +1033,32 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     alignItems: "center",
     gap: 3,
     backgroundColor: C.surfaceLight,
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
   },
   detailValue: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: C.text,
   },
   detailUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textSecondary,
   },
   emptyState: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
     paddingHorizontal: 40,
   },
   emptyText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 15,
     color: C.textSecondary,
-    marginTop: 8,
+    marginTop: Spacing.sm,
   },
   emptySubtext: {
     fontFamily: "SpaceGrotesk_400Regular",
@@ -1096,13 +1097,13 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: Spacing.sm,
   },
   goalInput: {
     width: 80,
     height: 42,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     backgroundColor: C.surfaceLight,
     color: C.text,
     fontFamily: "SpaceGrotesk_600SemiBold",
@@ -1118,12 +1119,12 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     gap: 12,
-    marginTop: 4,
+    marginTop: Spacing.xs,
   },
   goalCancelBtn: {
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     backgroundColor: C.surfaceLight,
   },
   goalCancelText: {
@@ -1134,7 +1135,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   goalConfirmBtn: {
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   goalConfirmText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
@@ -1166,7 +1167,7 @@ const make_gridStyles = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 4,
+    gap: Spacing.xs,
   },
   cardLabel: {
     fontFamily: "SpaceGrotesk_600SemiBold",
@@ -1177,12 +1178,12 @@ const make_gridStyles = (C: typeof Colors) => StyleSheet.create({
   modeDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
   },
   cardStats: {
     flexDirection: "row",
     alignItems: "baseline",
-    gap: 4,
+    gap: Spacing.xs,
   },
   cardBpm: {
     fontFamily: "SpaceGrotesk_700Bold",
@@ -1191,26 +1192,26 @@ const make_gridStyles = (C: typeof Colors) => StyleSheet.create({
   },
   cardUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textSecondary,
   },
   cardFooter: {
-    gap: 2,
+    gap: Spacing.xxs,
   },
   cardMeta: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textSecondary,
   },
   cardPlayMode: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 10,
+    fontSize: FontSize.micro,
     color: C.textTertiary,
   },
   cardBy: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 10,
+    fontSize: FontSize.micro,
     color: C.textTertiary,
-    marginTop: 2,
+    marginTop: Spacing.xxs,
   },
 });

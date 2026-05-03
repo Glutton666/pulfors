@@ -36,6 +36,7 @@ import {
 import * as DocumentPicker from "expo-document-picker";
 import { useScale } from "@/lib/scale";
 import Colors, { accentFromHex, type ThemeColor } from "@/constants/colors";
+import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { PRESET_COLORS, HUE_COLORS } from "@/constants/color-presets";
 import { useTheme, type BeatTypeKey } from "@/contexts/ThemeContext";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, SoundRole, CustomSoundSetConfig, CustomSoundSample } from "@/lib/storage";
@@ -959,7 +960,7 @@ export function SettingsModal({
                   if (Platform.OS !== "web") Haptics.selectionAsync();
                 }}
               >
-                <Ionicons name={opt.icon} size={S.ms(14, 0.4)} color={active ? C.accent : C.textSecondary} style={{ marginRight: 4 }} />
+                <Ionicons name={opt.icon} size={S.ms(14, 0.4)} color={active ? C.accent : C.textSecondary} style={{ marginRight: Spacing.xs }} />
                 <Text style={[styles.tripleBtnText, { color: C.textSecondary }, active && [styles.tripleBtnTextActive, { color: C.accent }]]}>
                   {t("settings", opt.labelKey)}
                 </Text>
@@ -1244,7 +1245,7 @@ export function SettingsModal({
                   if (Platform.OS !== "web") Haptics.selectionAsync();
                 }}
               >
-                <Ionicons name={opt.icon} size={S.ms(14, 0.4)} color={active ? C.accent : C.textTertiary} style={{ marginRight: 4 }} />
+                <Ionicons name={opt.icon} size={S.ms(14, 0.4)} color={active ? C.accent : C.textTertiary} style={{ marginRight: Spacing.xs }} />
                 <Text style={[styles.tripleBtnText, active && [styles.tripleBtnTextActive, { color: C.accent }]]}>
                   {opt.label}
                 </Text>
@@ -1727,9 +1728,9 @@ export function SettingsModal({
             ...SOUND_OPTS.map(o => ({ value: o.value, label: o.label })),
           ];
           return (
-            <View key={`layer-ss-${layerNum}`} style={{ flexDirection: "row", alignItems: "center", marginBottom: 8, gap: 8 }}>
+            <View key={`layer-ss-${layerNum}`} style={{ flexDirection: "row", alignItems: "center", marginBottom: Spacing.sm, gap: Spacing.sm }}>
               <Text style={{ color: C.text, fontSize: 13, fontWeight: "600", width: 52 }}>L{layerNum}</Text>
-              <View style={{ flexDirection: "row", flex: 1, gap: 4 }}>
+              <View style={{ flexDirection: "row", flex: 1, gap: Spacing.xs }}>
                 {allOpts.map(opt => {
                   const active = currentSet === opt.value;
                   return (
@@ -1738,7 +1739,7 @@ export function SettingsModal({
                       style={{
                         flex: 1,
                         paddingVertical: 6,
-                        borderRadius: 6,
+                        borderRadius: Radius.sm,
                         alignItems: "center",
                         backgroundColor: active ? C.accentDim : "transparent",
                         borderWidth: active ? 1 : 0.5,
@@ -1755,7 +1756,7 @@ export function SettingsModal({
                         if (Platform.OS !== "web") Haptics.selectionAsync();
                       }}
                     >
-                      <Text style={{ fontSize: 10, color: active ? C.accent : C.textSecondary }} numberOfLines={1}>
+                      <Text style={{ fontSize: FontSize.micro, color: active ? C.accent : C.textSecondary }} numberOfLines={1}>
                         {opt.value === "" ? "Default" : opt.label}
                       </Text>
                     </Pressable>
@@ -1771,7 +1772,7 @@ export function SettingsModal({
                     setLayerSoundRowCount(prev => prev - 1);
                     if (Platform.OS !== "web") Haptics.selectionAsync();
                   }}
-                  style={{ padding: 4 }}
+                  style={{ padding: Spacing.xs }}
                 >
                   <Ionicons name="remove-circle-outline" size={S.ms(18, 0.4)} color="#F85149" />
                 </Pressable>
@@ -1784,9 +1785,9 @@ export function SettingsModal({
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "center",
-            paddingVertical: 8,
+            paddingVertical: Spacing.sm,
             gap: 6,
-            borderRadius: 6,
+            borderRadius: Radius.sm,
             borderWidth: 0.5,
             borderColor: C.border,
             borderStyle: "dashed",
@@ -1797,7 +1798,7 @@ export function SettingsModal({
           }}
         >
           <Ionicons name="add" size={S.ms(16, 0.4)} color={C.textSecondary} />
-          <Text style={{ fontSize: 12, color: C.textSecondary }}>Layer {layerSoundRowCount + 1}</Text>
+          <Text style={{ fontSize: FontSize.small, color: C.textSecondary }}>Layer {layerSoundRowCount + 1}</Text>
         </Pressable>
       </View>
 
@@ -2159,10 +2160,10 @@ export function SettingsModal({
           <Ionicons name="mic-outline" size={S.ms(18, 0.4)} color={C.accent} />
           <Text style={[styles.sectionLabel, { color: C.text }]}>{t("voice", "title")}</Text>
         </View>
-        <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingVertical: 8 }}>
+        <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingVertical: Spacing.sm }}>
           <View style={{ flex: 1, paddingRight: 12 }}>
             <Text style={{ color: C.text, fontSize: 14, fontFamily: "Inter_500Medium" }}>{t("voice", "enable")}</Text>
-            <Text style={{ color: C.textSecondary, fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 }}>
+            <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "Inter_400Regular", marginTop: Spacing.xxs }}>
               {voice.isSupported ? t("voice", "enableHint") : t("voice", "notSupported")}
             </Text>
           </View>
@@ -2178,7 +2179,7 @@ export function SettingsModal({
           <>
             <View style={{ marginTop: 12 }}>
               <Text style={{ color: C.text, fontSize: 13, fontFamily: "Inter_500Medium" }}>{t("voice", "nickname")}</Text>
-              <Text style={{ color: C.textSecondary, fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2, marginBottom: 6 }}>
+              <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "Inter_400Regular", marginTop: Spacing.xxs, marginBottom: 6 }}>
                 {t("voice", "nicknameHint")}
               </Text>
               <TextInput
@@ -2195,10 +2196,10 @@ export function SettingsModal({
               />
             </View>
 
-            <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingVertical: 8, marginTop: 4 }}>
+            <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingVertical: Spacing.sm, marginTop: Spacing.xs }}>
               <View style={{ flex: 1, paddingRight: 12 }}>
                 <Text style={{ color: C.text, fontSize: 14, fontFamily: "Inter_500Medium" }}>{t("voice", "strict")}</Text>
-                <Text style={{ color: C.textSecondary, fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 }}>
+                <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "Inter_400Regular", marginTop: Spacing.xxs }}>
                   {t("voice", "strictHint")}
                 </Text>
               </View>
@@ -2211,7 +2212,7 @@ export function SettingsModal({
 
             <Pressable
               onPress={() => setShowVoiceCommands(true)}
-              style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.overlay10, marginTop: 4 }}
+              style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.overlay10, marginTop: Spacing.xs }}
               testID="voice-show-commands"
             >
               <Text style={{ color: C.text, fontSize: 14, fontFamily: "Inter_500Medium" }}>{t("voice", "showCommands")}</Text>

@@ -24,6 +24,7 @@ import Animated, {
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { moderateScale, useScale } from "@/lib/scale";
@@ -1024,7 +1025,7 @@ export function StopwatchTimer({
         )}
 
         {state === "countdown" && (
-          <View style={{ alignItems: "center", gap: 4 }}>
+          <View style={{ alignItems: "center", gap: Spacing.xs }}>
             <Animated.Text style={[{ fontFamily: "SpaceGrotesk_700Bold", fontSize: S.ms(36, 0.4), color: C.accent, letterSpacing: 2 }, runningDotStyle]}>
               {countdownLeft}
             </Animated.Text>
@@ -1388,7 +1389,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   },
   timerEditField: {
     alignItems: "center" as const,
-    gap: 2,
+    gap: Spacing.xxs,
   },
   timerEditInput: {
     fontFamily: "SpaceGrotesk_700Bold",
@@ -1397,7 +1398,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     textAlign: "center" as const,
     width: S.ms(52, 0.3),
     borderBottomWidth: 2,
-    paddingVertical: 2,
+    paddingVertical: Spacing.xxs,
   },
   timerEditUnit: {
     fontFamily: "SpaceGrotesk_400Regular",

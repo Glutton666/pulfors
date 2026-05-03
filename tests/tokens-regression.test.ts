@@ -20,6 +20,15 @@ const TOKENIZED_FILES = [
   "components/NoteRecorderModal.tsx",
   "components/OnboardingModal.tsx",
   "components/SignalGeneratorModal.tsx",
+  "components/PracticeBookModal.tsx",
+  "components/SettingsModal.tsx",
+  "components/WorkUpOverviewModal.tsx",
+  "components/VoiceCommandsModal.tsx",
+  "components/NoteModeView.tsx",
+  "components/StopwatchTimer.tsx",
+  "components/VoiceAssistantButton.tsx",
+  "components/LoopBlockStripCompact.tsx",
+  "components/GoalCompletePopup.tsx",
 ];
 
 const BANNED_PATTERNS: { pattern: RegExp; label: string }[] = [

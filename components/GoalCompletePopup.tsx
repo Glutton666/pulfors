@@ -5,6 +5,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useScale } from "@/lib/scale";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { Goal } from "@/lib/activity-log";
+import { Spacing } from "@/constants/tokens";
 
 interface GoalCompletePopupProps {
   popups: Goal[];
@@ -90,7 +91,7 @@ function makeStyles(C: any, S: any) {
     },
     info: {
       flex: 1,
-      gap: 2,
+      gap: Spacing.xxs,
     },
     title: {
       fontFamily: "SpaceGrotesk_600SemiBold",

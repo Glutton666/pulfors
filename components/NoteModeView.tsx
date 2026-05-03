@@ -14,6 +14,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import { Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { PracticeEntry } from "@/lib/storage";
@@ -143,7 +144,7 @@ function QueueItem({
         </View>
       </View>
       {entry.imageUri && (
-        <Pressable onPress={() => onImageChange?.(undefined)} hitSlop={8} style={{ padding: 2 }}>
+        <Pressable onPress={() => onImageChange?.(undefined)} hitSlop={8} style={{ padding: Spacing.xxs }}>
           <Ionicons name="image" size={S.ms(14, 0.4)} color={accentColor} />
         </Pressable>
       )}
@@ -419,7 +420,7 @@ export function NoteModeView({
   const renderSourceSection = () => (
     <>
       <Pressable
-        style={[styles.sectionHeader, isLandscape && { marginBottom: 2 }]}
+        style={[styles.sectionHeader, isLandscape && { marginBottom: Spacing.xxs }]}
         onPress={() => setSourceCollapsed(prev => !prev)}
       >
         <View style={styles.sectionHeaderLeft}>
@@ -743,7 +744,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   queueItemMeta: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
   },
   queueItemBpm: {
     fontFamily: "SpaceGrotesk_400Regular",
@@ -770,7 +771,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    marginVertical: 8,
+    marginVertical: Spacing.sm,
     borderRadius: 12,
     backgroundColor: C.surface,
     borderWidth: 1,
@@ -855,7 +856,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     flex: 1,
   },
   removeBtn: {
-    padding: 2,
+    padding: Spacing.xxs,
   },
   sourceContainer: {
     flex: 1,
@@ -891,7 +892,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   },
   sourceItemInfo: {
     flex: 1,
-    gap: 2,
+    gap: Spacing.xxs,
   },
   sourceItemLabel: {
     fontFamily: "SpaceGrotesk_500Medium",

@@ -3,6 +3,7 @@ import { Modal, View, Text, ScrollView, Pressable, StyleSheet } from "react-nati
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { Radius, FontSize, Spacing } from "@/constants/tokens";
 
 interface Props {
   visible: boolean;
@@ -52,7 +53,7 @@ export function VoiceCommandsModal({ visible, onClose, nickname, strictNickname 
               </Text>
             </View>
           )}
-          <ScrollView style={{ maxHeight: 420, marginTop: 4 }}>
+          <ScrollView style={{ maxHeight: 420, marginTop: Spacing.xs }}>
             {items.map(({ cat, rows }) => (
               <View key={cat} style={{ marginTop: 12 }}>
                 <Text style={[s.cat, { color: C.textSecondary }]}>{cat}</Text>
@@ -77,9 +78,9 @@ const s = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   title: { fontSize: 18, fontFamily: "SpaceGrotesk_700Bold" },
   hintBox: { marginTop: 10, padding: 10, borderRadius: 10, borderWidth: 1 },
-  hintText: { fontSize: 12, fontFamily: "Inter_500Medium" },
-  cat: { fontSize: 11, fontFamily: "Inter_600SemiBold", textTransform: "uppercase" as const, letterSpacing: 0.5, marginBottom: 4 },
-  row: { paddingVertical: 8, borderBottomWidth: 1 },
+  hintText: { fontSize: FontSize.small, fontFamily: "Inter_500Medium" },
+  cat: { fontSize: FontSize.caption, fontFamily: "Inter_600SemiBold", textTransform: "uppercase" as const, letterSpacing: 0.5, marginBottom: Spacing.xs },
+  row: { paddingVertical: Spacing.sm, borderBottomWidth: 1 },
   cmd: { fontSize: 14, fontFamily: "SpaceGrotesk_600SemiBold" },
-  desc: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  desc: { fontSize: FontSize.small, fontFamily: "Inter_400Regular", marginTop: Spacing.xxs },
 });

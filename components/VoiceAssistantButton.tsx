@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { FontSize } from "@/constants/tokens";
 
 export function VoiceAssistantButton() {
   const { enabled, isSupported, isListening, startListening, stopListening, lastTranscript } = useVoiceAssistant();
@@ -61,7 +62,7 @@ const s = StyleSheet.create({
     maxWidth: 260,
   },
   bubbleText: {
-    fontSize: 12,
+    fontSize: FontSize.small,
     fontFamily: "Inter_500Medium",
   },
   btn: {

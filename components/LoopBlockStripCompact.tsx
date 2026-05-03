@@ -5,6 +5,7 @@ import { BlockPill } from "./BlockPill";
 import type { LoopBlock } from "./beat-indicator.types";
 import type { ProgressInfo } from "@/lib/metronome-engine";
 import { sortBlocksByStart, detectJumpDirection } from "./loop-block-strip-utils";
+import { Spacing } from "@/constants/tokens";
 
 export interface LoopBlockStripCompactProps {
   loopBlocks: LoopBlock[];
@@ -61,7 +62,7 @@ export function LoopBlockStripCompact({
         horizontal
         showsHorizontalScrollIndicator={false}
         style={{ maxHeight: 42 }}
-        contentContainerStyle={{ paddingHorizontal, paddingVertical: 3, gap: 4, alignItems: "center" }}
+        contentContainerStyle={{ paddingHorizontal, paddingVertical: 3, gap: Spacing.xs, alignItems: "center" }}
       >
         {sorted.map(({ block, origIndex }, si) => {
           const isEditing = editingBlockIndex === origIndex;

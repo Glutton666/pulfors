@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Svg, { Circle } from "react-native-svg";
 import Colors from "@/constants/colors";
+import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
 import * as Crypto from "expo-crypto";
 import { captureRef } from "react-native-view-shot";
@@ -511,7 +512,7 @@ export function WorkUpOverviewModal({
           <Ionicons name="flag" size={16} color={C.accent} />
           <Text style={[s.cardTitle, { color: C.accent }]}>{t("workUp", "goals")}</Text>
         </View>
-        <Pressable testID="add-goal-btn" onPress={() => setShowAddGoal(!showAddGoal)} hitSlop={12} style={{ padding: 4 }}>
+        <Pressable testID="add-goal-btn" onPress={() => setShowAddGoal(!showAddGoal)} hitSlop={12} style={{ padding: Spacing.xs }}>
           <Ionicons name={showAddGoal ? "close-circle" : "add-circle"} size={20} color={C.accent} />
         </Pressable>
       </View>
@@ -979,7 +980,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: Spacing.xs,
   },
   title: {
     fontFamily: "SpaceGrotesk_700Bold",
@@ -1025,7 +1026,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   },
   emptyHint: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: C.textTertiary,
     textAlign: "center",
     paddingVertical: 6,
@@ -1036,16 +1037,16 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingVertical: 4,
+    paddingVertical: Spacing.xs,
   },
   goalPct: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: 10,
+    fontSize: FontSize.micro,
     color: C.text,
   },
   goalInfo: {
     flex: 1,
-    gap: 2,
+    gap: Spacing.xxs,
   },
   goalLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
@@ -1054,7 +1055,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   },
   goalProgress: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textSecondary,
   },
   completedIcon: {
@@ -1068,13 +1069,13 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginTop: 2,
+    marginTop: Spacing.xxs,
   },
   goalEditInput: {
     width: 56,
     height: 28,
     borderWidth: 1,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
     backgroundColor: C.surfaceLight,
     color: C.text,
     fontFamily: "SpaceGrotesk_600SemiBold",
@@ -1084,7 +1085,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   },
   goalEditUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textSecondary,
   },
   goalEditSave: {
@@ -1109,14 +1110,14 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   goalTypeChip: {
     flex: 1,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: C.border,
     alignItems: "center",
   },
   goalTypeChipText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: C.textSecondary,
   },
 
@@ -1126,11 +1127,11 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     padding: 10,
-    gap: 8,
+    gap: Spacing.sm,
   },
   addFormRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: Spacing.sm,
     alignItems: "center",
   },
   formInput: {
@@ -1138,7 +1139,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
     fontSize: 13,
     color: C.text,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     paddingHorizontal: 10,
     paddingVertical: 7,
     flex: 1,
@@ -1152,7 +1153,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   },
   formHint: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textSecondary,
   },
 
@@ -1162,7 +1163,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 20,
-    paddingVertical: 4,
+    paddingVertical: Spacing.xs,
   },
   donutCenter: {
     fontFamily: "SpaceGrotesk_700Bold",
@@ -1171,7 +1172,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   },
   donutUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 10,
+    fontSize: FontSize.micro,
     color: C.textSecondary,
     marginTop: -2,
   },
@@ -1181,16 +1182,16 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   legendItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
   },
   legendDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
   },
   legendLabel: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textSecondary,
   },
   legendValue: {
@@ -1204,11 +1205,11 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
-    paddingVertical: 4,
+    paddingVertical: Spacing.xs,
   },
   weekStat: {
     alignItems: "center",
-    gap: 2,
+    gap: Spacing.xxs,
     flex: 1,
   },
   weekValue: {
@@ -1218,7 +1219,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   },
   weekLabel: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textSecondary,
   },
   weekDivider: {
@@ -1237,11 +1238,11 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginBottom: 2,
+    marginBottom: Spacing.xxs,
   },
   detailSectionTitle: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: C.text,
   },
   detailRow: {
@@ -1257,22 +1258,22 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   },
   detailMain: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: C.text,
   },
   detailSub: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 10,
+    fontSize: FontSize.micro,
     color: C.textTertiary,
   },
   detailTime: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: C.text,
   },
   detailTimeSec: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: C.textSecondary,
   },
 
@@ -1280,39 +1281,39 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   trackingBanner: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
     borderWidth: 1,
-    borderRadius: 8,
-    padding: 8,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
     backgroundColor: "rgba(63, 185, 80, 0.08)",
   },
   trackingDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
     backgroundColor: C.success,
   },
   trackingText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: C.text,
     flex: 1,
   },
   trackingStopBtn: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.sm,
   },
   trackingStopText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.white,
   },
   roomRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 4,
+    paddingVertical: Spacing.xs,
   },
   roomInfo: {
     flexDirection: "row",
@@ -1329,11 +1330,11 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
   roomActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
   },
   roomStat: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textSecondary,
   },
   roomStartBtn: {
@@ -1348,7 +1349,7 @@ const make_s = (C: typeof Colors) => StyleSheet.create({
     justifyContent: "center",
     gap: 6,
     marginTop: -4,
-    marginBottom: 4,
+    marginBottom: Spacing.xs,
   },
   periodDot: {
     width: 6,
@@ -1379,7 +1380,7 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
   },
   shareBtn: {
     paddingHorizontal: 18,
-    paddingVertical: 8,
+    paddingVertical: Spacing.sm,
     borderRadius: 20,
     minWidth: 70,
     alignItems: "center",
@@ -1424,7 +1425,7 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
   brandRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
   },
   brandBadge: {
     flexDirection: "row",
@@ -1456,13 +1457,13 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
   },
   usernameText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 12,
+    fontSize: FontSize.small,
     letterSpacing: 0.5,
     color: C.text,
   },
   dateText: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: "#ffffffaa",
     marginTop: -12,
   },
@@ -1482,9 +1483,9 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
   },
   bigTimeUnit: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: "#ffffff88",
-    marginTop: 2,
+    marginTop: Spacing.xxs,
   },
   barChart: {
     flex: 1,
@@ -1497,7 +1498,7 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
   },
   barLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: "#ffffffbb",
     width: 36,
   },
@@ -1514,13 +1515,13 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
   },
   barValue: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 12,
+    fontSize: FontSize.small,
     width: 50,
     textAlign: "right",
     color: C.text,
   },
   goalsSection: {
-    gap: 8,
+    gap: Spacing.sm,
   },
   sectionTitle: {
     fontFamily: "SpaceGrotesk_600SemiBold",
@@ -1537,7 +1538,7 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
   goalLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
     flex: 1,
   },
   goalText: {
@@ -1547,13 +1548,13 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
   },
   goalProg: {
     fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: C.text,
   },
   shareDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
   },
   weekSection: {
     gap: 10,
@@ -1577,9 +1578,9 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
   },
   weekLbl: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: "#ffffff88",
-    marginTop: 2,
+    marginTop: Spacing.xxs,
   },
   weekDivider: {
     width: 1,
@@ -1612,13 +1613,13 @@ const make_shareStyles = (C: typeof Colors) => StyleSheet.create({
   bgPreview: {
     width: 50,
     height: 30,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     alignItems: "center",
     justifyContent: "center",
   },
   bgChipText: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 11,
+    fontSize: FontSize.caption,
     color: C.textSecondary,
   },
 });
@@ -1654,7 +1655,7 @@ const make_yearStyles = (C: typeof Colors) => StyleSheet.create({
   },
   bigStat: {
     alignItems: "center",
-    gap: 4,
+    gap: Spacing.xs,
   },
   bigNum: {
     fontFamily: "SpaceGrotesk_700Bold",
@@ -1677,7 +1678,7 @@ const make_yearStyles = (C: typeof Colors) => StyleSheet.create({
   },
   statItem: {
     alignItems: "center",
-    gap: 4,
+    gap: Spacing.xs,
   },
   statVal: {
     fontFamily: "SpaceGrotesk_700Bold",
@@ -1686,7 +1687,7 @@ const make_yearStyles = (C: typeof Colors) => StyleSheet.create({
   },
   statLabel: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: C.textSecondary,
   },
   footerText: {
