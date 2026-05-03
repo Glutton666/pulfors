@@ -69,7 +69,7 @@ import PracticeStatsGraph from "@/components/PracticeStatsGraph";
 import { VoiceAssistantButton } from "@/components/VoiceAssistantButton";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { make_styles } from "./index.styles";
-import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, adjustShuffledIndicesOnInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats } from "./index.helpers";
+import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, adjustShuffledIndicesOnInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig } from "./index.helpers";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { MoreMenuModal } from "@/components/MoreMenuModal";
 import { ScheduledStartModal } from "@/components/ScheduledStartModal";
@@ -3123,23 +3123,7 @@ export default function MetronomeScreen() {
     }
     engine.setAllBarBpmOverrides(bpmOverrides);
 
-    barConfigRef.current = {
-      ...barConfigRef.current,
-      beatsPerMeasure: entry.beatsPerMeasure,
-      beatTypes: [...entry.beatTypes],
-      beatSubdivisions: { ...entry.beatSubdivisions },
-      barRepeats: { ...entry.barRepeats },
-      loopBlocks: [...entryBlocks],
-      barClockMode: entry.barClockMode || "stopwatch",
-      barTimerDuration: entry.barTimerDuration ?? 180,
-      noteSamples: { ...entrySamples },
-      noteSampleNames: { ...entryNames },
-      noteSampleSources: { ...entrySources },
-      noteSampleChannels: { ...entryChannels },
-      barLoopMode: "once",
-      blockPlayMode: (entry as any).blockPlayMode || "loop",
-      hasBeenConfigured: true,
-    };
+    barConfigRef.current = entryToBarConfig(entry);
 
     if (!barMode) {
       dialConfigRef.current = {

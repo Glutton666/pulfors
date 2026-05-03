@@ -3,6 +3,7 @@ import type { BeatType } from "@/lib/metronome-engine";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
 import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap } from "@/lib/note-samples";
 import type { ActivityLog, PracticeSessionData } from "@/lib/activity-log";
+import type { PracticeEntry } from "@/lib/storage";
 
 export interface LandscapeStatsTotals {
   todayTotal: number;
@@ -232,6 +233,41 @@ export function beatSubdivisionCounts(
     counts[Number(k)] = v.length;
   }
   return counts;
+}
+
+/**
+ * Pure projection of a PracticeEntry into the BarConfig shape held in barConfigRef.
+ * Centralizes default values for blockPlayMode/barClockMode/barTimerDuration so
+ * apply (write) and selectCurrentBarConfig (read) stay in lockstep and can be
+ * verified via roundtrip tests.
+ *
+ * Notes:
+ * - barLoopMode is forced to "once" to match legacy applyEntryToEngine behavior;
+ *   the entry's own barLoopMode is dropped intentionally (kept for parity).
+ * - Maps are shallow-cloned so callers can mutate without affecting the entry.
+ */
+export function entryToBarConfig(entry: PracticeEntry): BarConfig {
+  const e = entry as PracticeEntry & {
+    loopBlocks?: LoopBlock[];
+    blockPlayMode?: BlockPlayMode;
+  };
+  const blocks = e.loopBlocks ?? [];
+  return {
+    beatsPerMeasure: entry.beatsPerMeasure,
+    beatTypes: [...entry.beatTypes],
+    beatSubdivisions: { ...entry.beatSubdivisions },
+    barRepeats: { ...(entry.barRepeats || {}) } as Record<number, BarRepeat>,
+    loopBlocks: [...blocks],
+    barClockMode: entry.barClockMode || "stopwatch",
+    barTimerDuration: entry.barTimerDuration ?? 180,
+    noteSamples: { ...(entry.noteSamples || {}) } as NoteSampleMap,
+    noteSampleNames: { ...(entry.noteSampleNames || {}) } as NoteSampleNameMap,
+    noteSampleSources: { ...(entry.noteSampleSources || {}) } as NoteSampleSourceMap,
+    noteSampleChannels: { ...(entry.noteSampleChannels || {}) } as NoteSampleChannelMap,
+    barLoopMode: "once",
+    blockPlayMode: e.blockPlayMode || "loop",
+    hasBeenConfigured: true,
+  };
 }
 
 export function createInitialBarConfig(beats = 4): BarConfig {
