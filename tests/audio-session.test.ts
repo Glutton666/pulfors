@@ -138,6 +138,31 @@ test("user restarts metronome inside modal then stops manually before release", 
   assert.equal(state.running, false);
 });
 
+test("integration: bridge pause/resume via app-style toggle does not mark user toggle", async () => {
+  // app/index.tsx의 togglePlayPause 경로를 모사: bridge.pause/resume가
+  // togglePlayPauseRef를 호출하고 그 핸들러는 notifyUserMetronomeToggle을 부른다.
+  // audio-session이 자체적으로 bridge.pause를 호출했을 때 사용자 토글로 오인하지
+  // 않아야 release 시점에 자동 resume이 일어난다.
+  _resetAudioSessionForTests();
+  const state = { running: true, pauseCount: 0, resumeCount: 0 };
+  const userToggle = () => {
+    notifyUserMetronomeToggle();
+    if (state.running) { state.running = false; state.pauseCount++; }
+    else { state.running = true; state.resumeCount++; }
+  };
+  registerMetronomeBridge({
+    isRunning: () => state.running,
+    pause: () => { if (state.running) userToggle(); },
+    resume: () => { if (!state.running) userToggle(); },
+  });
+  await acquireAudioSession("rec", "recording");
+  assert.equal(state.running, false, "bridge pause invoked through user-toggle path");
+  assert.equal(state.pauseCount, 1);
+  await releaseAudioSession("rec");
+  assert.equal(state.running, true, "auto-resume must fire even though bridge path ran user toggle");
+  assert.equal(state.resumeCount, 1);
+});
+
 test("notifyUserMetronomeToggle outside session is a no-op", async () => {
   _resetAudioSessionForTests();
   const { state, bridge } = makeBridge(true);

@@ -16,6 +16,9 @@ let pausedByUs = false;
 // 사용자가 모달을 연 동안 메트로놈을 직접 토글했는지 추적. true이면 release
 // 시점에 자동 resume을 건너뛰어 사용자의 의도(끄거나 켠 채 두기)를 존중한다.
 let userToggledDuringSession = false;
+// audio-session이 bridge.pause/resume를 호출하는 동안에는 그 호출 경로에서
+// notifyUserMetronomeToggle이 들어와도 무시한다 (사용자 액션이 아니므로).
+let suppressUserToggle = 0;
 
 export function registerMetronomeBridge(b: MetronomeBridge | null) {
   bridge = b;
@@ -52,7 +55,8 @@ export async function acquireAudioSession(callerId: string, mode: SessionMode): 
   if (needsPause && !pausedByUs && bridge) {
     try {
       if (bridge.isRunning()) {
-        bridge.pause();
+        suppressUserToggle++;
+        try { bridge.pause(); } finally { suppressUserToggle--; }
         pausedByUs = true;
       }
     } catch (e) {
@@ -83,7 +87,8 @@ export async function releaseAudioSession(callerId: string): Promise<void> {
     // 않았고 우리가 멈춘 그대로일 때만 baseline으로 복귀한다.
     try {
       if (!wasUserToggled && bridge && !bridge.isRunning()) {
-        bridge.resume();
+        suppressUserToggle++;
+        try { bridge.resume(); } finally { suppressUserToggle--; }
       }
     } catch (e) {
       logger.warn("[audioSession] metronome resume failed:", e);
@@ -93,6 +98,7 @@ export async function releaseAudioSession(callerId: string): Promise<void> {
 
 /** 사용자가 직접 메트로놈을 토글했음을 알린다 (Play/Pause 버튼, 음성 명령 등). */
 export function notifyUserMetronomeToggle(): void {
+  if (suppressUserToggle > 0) return;
   if (activeCallers.size > 0) {
     userToggledDuringSession = true;
   }
@@ -117,6 +123,7 @@ export function _resetAudioSessionForTests() {
   bridge = null;
   pausedByUs = false;
   userToggledDuringSession = false;
+  suppressUserToggle = 0;
 }
 
 export function _audioSessionDebugState() {
