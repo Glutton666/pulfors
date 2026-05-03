@@ -1,6 +1,9 @@
 export type Language = "ko" | "en";
 
-const translations = {
+export type TranslationLeaf = { ko: string; en: string };
+type TranslationsShape = Record<string, Record<string, TranslationLeaf>>;
+
+export const translations = {
   settings: {
     title: { ko: "설정", en: "Settings" },
     themeTab: { ko: "테마", en: "Theme" },
@@ -597,7 +600,7 @@ const translations = {
     cmdExecuted: { ko: "명령 실행됨", en: "Command executed" },
     cmdUnknown: { ko: "명령을 인식하지 못했습니다", en: "Could not recognize command" },
   },
-} as const;
+} as const satisfies TranslationsShape;
 
 type TranslationKeys = typeof translations;
 
@@ -608,12 +611,43 @@ export type TranslationFn = {
   ): string;
 };
 
+const warnedMissing = new Set<string>();
+
+function isDevEnv(): boolean {
+  try {
+    return typeof (globalThis as { __DEV__?: unknown }).__DEV__ !== "undefined"
+      ? Boolean((globalThis as { __DEV__?: unknown }).__DEV__)
+      : process.env.NODE_ENV !== "production";
+  } catch {
+    return false;
+  }
+}
+
+function reportMissing(section: string, key: string): void {
+  if (!isDevEnv()) return;
+  const id = `${section}.${key}`;
+  if (warnedMissing.has(id)) return;
+  warnedMissing.add(id);
+  console.warn(`[i18n] missing translation: ${id}`);
+  void import("./error-tracking").then((m) => {
+    try {
+      m.captureBreadcrumb({ category: "i18n", message: `missing ${id}`, level: "warning" });
+    } catch {}
+  }).catch(() => {});
+}
+
 export function createT(lang: Language): TranslationFn {
   return ((section: string, key: string) => {
-    const s = (translations as any)[section];
-    if (!s) return key;
+    const s = (translations as Record<string, Record<string, TranslationLeaf> | undefined>)[section];
+    if (!s) {
+      reportMissing(section, key);
+      return key;
+    }
     const entry = s[key];
-    if (!entry) return key;
+    if (!entry) {
+      reportMissing(section, key);
+      return key;
+    }
     return entry[lang] || entry.en || key;
   }) as TranslationFn;
 }
