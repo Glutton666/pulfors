@@ -38,6 +38,7 @@ import { DialBeatDot } from "./DialBeatDot";
 import { BlockPill } from "./BlockPill";
 import { BarPlayButton } from "./BarPlayButton";
 import { BeatStepperButton } from "./BeatStepperButton";
+import { LoopBlockStripCompact } from "./LoopBlockStripCompact";
 
 export type { BeatType, BarRepeat, LoopBlock } from "./beat-indicator.types";
 import type { BeatType } from "./beat-indicator.types";
@@ -1797,55 +1798,28 @@ export function BeatIndicator({
           <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 6, paddingVertical: 6 }}>
             {subdivisionBarElement && (
               <View style={{ width: "125%", paddingHorizontal: 8 }}>
-                {loopBlocks.length > 0 && (() => {
-                  const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).sort((a, b) => a.block.startBeat - b.block.startBeat);
-                  const editBlock = editingBlockIndex !== null ? loopBlocks[editingBlockIndex] : null;
-                  const otherBlocks = editBlock ? loopBlocks.map((b, i) => ({ b, i })).filter(({ i }) => i !== editingBlockIndex) : [];
-                  const editHasJump = editBlock ? editBlock.jumpToBlock !== undefined && editBlock.jumpToBlock !== null : false;
-                  const editJumpCount = editBlock ? (editBlock.jumpCount || 1) : 1;
-                  return (
-                    <View style={{ flexGrow: 0, marginBottom: 4 }}>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 42 }} contentContainerStyle={{ paddingHorizontal: 2, paddingVertical: 3, gap: 4, alignItems: "center" }}>
-                        {sorted.map(({ block, origIndex }, si) => {
-                          const isEditing = editingBlockIndex === origIndex;
-                          const isActive = isPlaying && progressInfo && progressInfo.blockIndex === origIndex;
-                          const hasJump = block.jumpToBlock !== undefined && block.jumpToBlock !== null;
-                          const jumpTarget = hasJump ? loopBlocks[block.jumpToBlock!] : null;
-                          return (
-                            <View key={`flow-${origIndex}`} style={{ flexDirection: "row", alignItems: "center" }}>
-                              <BlockPill
-                                origIndex={origIndex} block={block} isEditing={isEditing} isActive={!!isActive} isPlaying={isPlaying}
-                                isDragSource={!!pillDrag && pillDrag.origIndex === origIndex}
-                                isDropTarget={pillDropTarget === origIndex}
-                                hasJump={hasJump} layerCount={loopBlocks.filter(b => b.layerOf === origIndex).length}
-                                beatsPerMeasure={beatsPerMeasure} progressInfo={progressInfo}
-                                accentColor={C.accent} textColor={C.text} textTertiaryColor={C.textTertiary} bgSecondary={C.backgroundSecondary} whiteColor={C.white}
-                                onPress={() => { if (!isPlaying) setEditingBlockIndex(isEditing ? null : origIndex); }}
-                                onDragStart={handlePillDragStart} onDragMove={handlePillDragMove} onDragEnd={handlePillDragEnd}
-                                onMeasure={(idx, layout) => { pillLayoutsRef.current[idx] = layout; }}
-                                size="small"
-                              />
-                              {hasJump && jumpTarget && (() => {
-                                const targetSortedIdx = sorted.findIndex(s => s.origIndex === block.jumpToBlock);
-                                const goesBack = targetSortedIdx >= 0 && targetSortedIdx <= si;
-                                return goesBack ? (
-                                  <View style={{ alignItems: "center", marginLeft: 3 }}>
-                                    <Ionicons name="return-up-back" size={S.ms(10, 0.4)} color="#f0ad4e" />
-                                  </View>
-                                ) : (
-                                  <Ionicons name="caret-forward" size={S.ms(8, 0.4)} color="#f0ad4e" style={{ marginLeft: 1 }} />
-                                );
-                              })()}
-                              {si < sorted.length - 1 && !hasJump && (
-                                <Ionicons name="chevron-forward" size={S.ms(8, 0.4)} color={C.textTertiary} style={{ marginLeft: 1, opacity: 0.4 }} />
-                              )}
-                            </View>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-                  );
-                })()}
+                <LoopBlockStripCompact
+                  loopBlocks={loopBlocks}
+                  editingBlockIndex={editingBlockIndex}
+                  isPlaying={isPlaying}
+                  progressInfo={progressInfo}
+                  pillDrag={pillDrag}
+                  pillDropTarget={pillDropTarget}
+                  beatsPerMeasure={beatsPerMeasure}
+                  accentColor={C.accent}
+                  textColor={C.text}
+                  textTertiaryColor={C.textTertiary}
+                  bgSecondary={C.backgroundSecondary}
+                  whiteColor={C.white}
+                  ms={S.ms}
+                  paddingHorizontal={2}
+                  marginBottom={4}
+                  onPillPress={(origIndex, isEditing) => { if (!isPlaying) setEditingBlockIndex(isEditing ? null : origIndex); }}
+                  onPillDragStart={handlePillDragStart}
+                  onPillDragMove={handlePillDragMove}
+                  onPillDragEnd={handlePillDragEnd}
+                  onPillMeasure={(idx, layout) => { pillLayoutsRef.current[idx] = layout; }}
+                />
                 {(() => {
                   const editBlock = editingBlockIndex !== null ? loopBlocks[editingBlockIndex] : null;
                   const otherBlocks = editBlock ? loopBlocks.map((b, i) => ({ b, i })).filter(({ i }) => i !== editingBlockIndex) : [];
@@ -2035,51 +2009,29 @@ export function BeatIndicator({
               </View>
             )}
             {tempoLabel ? <Text style={{ color: C.accentMuted, fontSize: S.ms(11, 0.3), textAlign: "center", marginTop: 2 }}>{tempoLabel}</Text> : null}
-            {!subdivisionBarElement && loopBlocks.length > 0 && (() => {
-              const sorted = loopBlocks.map((b, i) => ({ block: b, origIndex: i })).sort((a, b) => a.block.startBeat - b.block.startBeat);
-              return (
-                <View style={{ flexGrow: 0 }}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 42 }} contentContainerStyle={{ paddingHorizontal: 6, paddingVertical: 3, gap: 4, alignItems: "center" }}>
-                    {sorted.map(({ block, origIndex }, si) => {
-                      const isEditing = editingBlockIndex === origIndex;
-                      const isActive = isPlaying && progressInfo && progressInfo.blockIndex === origIndex;
-                      const hasJump = block.jumpToBlock !== undefined && block.jumpToBlock !== null;
-                      const jumpTarget = hasJump ? loopBlocks[block.jumpToBlock!] : null;
-                      return (
-                        <View key={`flow-${origIndex}`} style={{ flexDirection: "row", alignItems: "center" }}>
-                          <BlockPill
-                            origIndex={origIndex} block={block} isEditing={isEditing} isActive={!!isActive} isPlaying={isPlaying}
-                            isDragSource={!!pillDrag && pillDrag.origIndex === origIndex}
-                            isDropTarget={pillDropTarget === origIndex}
-                            hasJump={hasJump} layerCount={loopBlocks.filter(b => b.layerOf === origIndex).length}
-                            beatsPerMeasure={beatsPerMeasure} progressInfo={progressInfo}
-                            accentColor={C.accent} textColor={C.text} textTertiaryColor={C.textTertiary} bgSecondary={C.backgroundSecondary} whiteColor={C.white}
-                            onPress={() => { if (!isPlaying) setEditingBlockIndex(isEditing ? null : origIndex); }}
-                            onDragStart={handlePillDragStart} onDragMove={handlePillDragMove} onDragEnd={handlePillDragEnd}
-                            onMeasure={(idx, layout) => { pillLayoutsRef.current[idx] = layout; }}
-                            size="small"
-                          />
-                          {hasJump && jumpTarget && (() => {
-                            const targetSortedIdx = sorted.findIndex(s => s.origIndex === block.jumpToBlock);
-                            const goesBack = targetSortedIdx >= 0 && targetSortedIdx <= si;
-                            return goesBack ? (
-                              <View style={{ alignItems: "center", marginLeft: 3 }}>
-                                <Ionicons name="return-up-back" size={S.ms(10, 0.4)} color="#f0ad4e" />
-                              </View>
-                            ) : (
-                              <Ionicons name="caret-forward" size={S.ms(8, 0.4)} color="#f0ad4e" style={{ marginLeft: 1 }} />
-                            );
-                          })()}
-                          {si < sorted.length - 1 && !hasJump && (
-                            <Ionicons name="chevron-forward" size={S.ms(8, 0.4)} color={C.textTertiary} style={{ marginLeft: 1, opacity: 0.4 }} />
-                          )}
-                        </View>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-              );
-            })()}
+            {!subdivisionBarElement && (
+              <LoopBlockStripCompact
+                loopBlocks={loopBlocks}
+                editingBlockIndex={editingBlockIndex}
+                isPlaying={isPlaying}
+                progressInfo={progressInfo}
+                pillDrag={pillDrag}
+                pillDropTarget={pillDropTarget}
+                beatsPerMeasure={beatsPerMeasure}
+                accentColor={C.accent}
+                textColor={C.text}
+                textTertiaryColor={C.textTertiary}
+                bgSecondary={C.backgroundSecondary}
+                whiteColor={C.white}
+                ms={S.ms}
+                paddingHorizontal={6}
+                onPillPress={(origIndex, isEditing) => { if (!isPlaying) setEditingBlockIndex(isEditing ? null : origIndex); }}
+                onPillDragStart={handlePillDragStart}
+                onPillDragMove={handlePillDragMove}
+                onPillDragEnd={handlePillDragEnd}
+                onPillMeasure={(idx, layout) => { pillLayoutsRef.current[idx] = layout; }}
+              />
+            )}
 
             <View style={{ alignItems: "center", gap: 4 }}>
               <Pressable onPress={handleBarClockTap}>
