@@ -189,7 +189,6 @@ export default function MetronomeScreen() {
   useEffect(() => { noteIsPlayingRef.current = noteIsPlaying; }, [noteIsPlaying]);
   const [noteBarEntries, setNoteBarEntries] = useState<PracticeEntry[]>([]);
   const [controlPadMapping, setControlPadMapping] = useState<ControlPadMapping>(createEmptyControlPadMapping);
-  const controlPadLoadedRef = useRef(false);
   const controlPadDirtyRef = useRef(false);
   useEffect(() => {
     let cancelled = false;
@@ -199,7 +198,6 @@ export default function MetronomeScreen() {
       if (!controlPadDirtyRef.current) {
         setControlPadMapping(m);
       }
-      controlPadLoadedRef.current = true;
     })();
     return () => { cancelled = true; };
   }, []);

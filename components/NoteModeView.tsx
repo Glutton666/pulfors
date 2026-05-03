@@ -300,6 +300,8 @@ export function NoteModeView({
         const missing = !!id && !entry;
         const triggerable = isPlaying && padEnabled && !!entry;
         const dimmed = isPlaying && !padEnabled;
+        const disabledWhilePlaying = isPlaying && (!padEnabled || !entry);
+        const inactiveDuringPlay = isPlaying && padEnabled && !entry;
         return (
           <Pressable
             key={`pad-${slot}`}
@@ -312,9 +314,10 @@ export function NoteModeView({
               triggerable && { borderColor: C.accent, backgroundColor: "rgba(212,168,70,0.08)" },
               triggerable && lastTriggeredSlot === slot && { borderColor: C.accent, backgroundColor: "rgba(212,168,70,0.28)" },
               dimmed && { opacity: 0.4 },
+              inactiveDuringPlay && { opacity: 0.35 },
             ]}
             onPress={() => handlePadPress(slot)}
-            disabled={isPlaying && !padEnabled}
+            disabled={disabledWhilePlaying}
           >
             {!id ? (
               <Ionicons name="add" size={compact ? 16 : 22} color={C.textTertiary} />
