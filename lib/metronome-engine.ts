@@ -107,6 +107,10 @@ export class MetronomeEngine {
   private measureStartTime = 0;
   private measureDurationMs = 0;
 
+  private static readonly SCHEDULE_CACHE_MAX = 16;
+  private scheduleCache: Map<string, { ticks: ScheduledTick[]; durationMs: number }> = new Map();
+  private lastScheduleCacheHit = false;
+
   setAudioCallbacks(playHigh: () => void, playLow: () => void, playStrong?: () => void) {
     this.playHighClick = playHigh;
     this.playLowClick = playLow;
@@ -350,7 +354,7 @@ export class MetronomeEngine {
   }
 
   buildScheduleOnly() {
-    this.schedule = this.buildSchedule();
+    this.schedule = this.buildScheduleMemoized();
     this.cachedSchedule = this.schedule;
     this.cachedMeasureDurationMs = this.measureDurationMs;
     this.scheduleDirty = false;
@@ -765,13 +769,89 @@ export class MetronomeEngine {
     return ticks;
   }
 
+  private isRandomNonDeterministic(): boolean {
+    if (this.blockPlayMode !== "random") return false;
+    let outerCount = 0;
+    for (const blk of this.loopBlocks) {
+      if (blk.layerOf !== undefined) continue;
+      if (blk.startBeat >= this.beatsPerMeasure || blk.endBeat < blk.startBeat) continue;
+      const isNested = this.loopBlocks.some(ob =>
+        ob !== blk && ob.layerOf === undefined &&
+        ob.startBeat <= blk.startBeat && ob.endBeat >= blk.endBeat
+      );
+      if (!isNested) {
+        outerCount++;
+        if (outerCount >= 2) return true;
+      }
+    }
+    return false;
+  }
+
+  private computeScheduleCacheKey(): string {
+    const subKeys = [...this.beatSubdivisions.keys()].sort((a, b) => a - b);
+    const subs: Array<[number, BeatType[]]> = subKeys.map(k => [k, this.beatSubdivisions.get(k)!]);
+    const repKeys = [...this.barRepeats.keys()].sort((a, b) => a - b);
+    const reps: Array<[number, { type: string; value: number }]> = repKeys.map(k => [k, this.barRepeats.get(k)!]);
+    const ovKeys = [...this.barBpmOverrides.keys()].sort((a, b) => a - b);
+    const ovs: Array<[number, number]> = ovKeys.map(k => [k, this.barBpmOverrides.get(k)!]);
+    return JSON.stringify({
+      bpm: this.bpm,
+      ht: this.halfTime,
+      bpm_: this.beatsPerMeasure,
+      bt: this.beatTypes,
+      sub: subs,
+      rep: reps,
+      ov: ovs,
+      lb: this.loopBlocks,
+      mode: this.blockPlayMode,
+    });
+  }
+
+  private buildScheduleMemoized(): ScheduledTick[] {
+    if (this.isRandomNonDeterministic()) {
+      this.lastScheduleCacheHit = false;
+      return this.buildSchedule();
+    }
+    const key = this.computeScheduleCacheKey();
+    const cached = this.scheduleCache.get(key);
+    if (cached) {
+      this.scheduleCache.delete(key);
+      this.scheduleCache.set(key, cached);
+      this.measureDurationMs = cached.durationMs;
+      this.lastScheduleCacheHit = true;
+      return cached.ticks;
+    }
+    const ticks = this.buildSchedule();
+    const durationMs = this.measureDurationMs;
+    for (const t of ticks) Object.freeze(t);
+    Object.freeze(ticks);
+    this.scheduleCache.set(key, { ticks, durationMs });
+    while (this.scheduleCache.size > MetronomeEngine.SCHEDULE_CACHE_MAX) {
+      const firstKey = this.scheduleCache.keys().next().value;
+      if (firstKey === undefined) break;
+      this.scheduleCache.delete(firstKey);
+    }
+    this.lastScheduleCacheHit = false;
+    return ticks;
+  }
+
+  /** @internal 테스트용. 마지막 buildScheduleMemoized 호출이 캐시 적중이었는지 */
+  _wasLastBuildCacheHit(): boolean {
+    return this.lastScheduleCacheHit;
+  }
+
+  /** @internal 테스트용. 현재 캐시 항목 수 */
+  _getScheduleCacheSize(): number {
+    return this.scheduleCache.size;
+  }
+
   private rebuildSchedule() {
     const oldSchedule = this.schedule;
     const oldIndex = this.scheduleIndex;
     const oldMeasureStartTime = this.measureStartTime;
     const oldMeasureDurationMs = this.measureDurationMs;
 
-    this.schedule = this.buildSchedule();
+    this.schedule = this.buildScheduleMemoized();
     this.cachedSchedule = this.schedule;
     this.cachedMeasureDurationMs = this.measureDurationMs;
     this.scheduleDirty = false;
@@ -966,7 +1046,7 @@ export class MetronomeEngine {
         this.onMeasureComplete?.();
         this.measureStartTime += this.measureDurationMs;
         if (this.scheduleDirty || !this.cachedSchedule || this.blockPlayMode === "random") {
-          this.schedule = this.buildSchedule();
+          this.schedule = this.buildScheduleMemoized();
           if (this.blockPlayMode !== "random") {
             this.cachedSchedule = this.schedule;
             this.cachedMeasureDurationMs = this.measureDurationMs;
