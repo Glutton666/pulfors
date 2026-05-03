@@ -141,6 +141,14 @@ export default function MetronomeScreen() {
   const [measureCount, setMeasureCount] = useState(0);
   const [activeSubNote, setActiveSubNote] = useState(-1);
   const activeSubNoteRef = useRef(-1);
+  const resetPlaybackVisuals = useCallback(() => {
+    setCurrentBeat(-1);
+    setMeasureCount(0);
+    setActiveSubNote(-1);
+    activeSubNoteRef.current = -1;
+    setProgressInfo(null);
+    setLayerProgressMap({});
+  }, []);
   const [subdivisionPattern, setSubdivisionPattern] = useState<BeatType[]>([
     "accent",
   ]);
@@ -1672,10 +1680,7 @@ export default function MetronomeScreen() {
       clearSamplePlayStates();
       setIsPreparing(false);
       setIsPlaying(false);
-      setCurrentBeat(-1);
-      setMeasureCount(0);
-      setActiveSubNote(-1);
-      setProgressInfo(null); setLayerProgressMap({});
+      resetPlaybackVisuals();
       showPausedNotification(bpm, modeLabel, languageRef.current);
       if (loggingEnabled && practiceStartRef.current) {
         const dur = Math.round((Date.now() - practiceStartRef.current) / 1000);
@@ -1695,11 +1700,7 @@ export default function MetronomeScreen() {
         practiceStartRef.current = null;
       }
     } else {
-      setCurrentBeat(-1);
-      setMeasureCount(0);
-      setActiveSubNote(-1);
-      activeSubNoteRef.current = -1;
-      setProgressInfo(null); setLayerProgressMap({});
+      resetPlaybackVisuals();
       clearSamplePlayStates();
 
       const startBeat = barModeRef.current ? barStartBeatRef.current : undefined;
@@ -2004,11 +2005,7 @@ export default function MetronomeScreen() {
           clearSamplePlayStates();
           setIsPreparing(false);
           setIsPlaying(false);
-          setCurrentBeat(-1);
-          setMeasureCount(0);
-          setActiveSubNote(-1);
-          activeSubNoteRef.current = -1;
-          setProgressInfo(null); setLayerProgressMap({});
+          resetPlaybackVisuals();
           showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
         } else {
           stopRenderedAudio();
@@ -2032,11 +2029,7 @@ export default function MetronomeScreen() {
           }
           engine.buildScheduleOnly();
 
-          setCurrentBeat(-1);
-          setMeasureCount(0);
-          setActiveSubNote(-1);
-          activeSubNoteRef.current = -1;
-          setProgressInfo(null); setLayerProgressMap({});
+          resetPlaybackVisuals();
 
           if (Platform.OS !== "web") {
             try {
@@ -2132,10 +2125,7 @@ export default function MetronomeScreen() {
       clearSamplePlayStates();
       setIsPreparing(false);
       setIsPlaying(false);
-      setCurrentBeat(-1);
-      setMeasureCount(0);
-      setActiveSubNote(-1);
-      setProgressInfo(null); setLayerProgressMap({});
+      resetPlaybackVisuals();
     }
     setBarStartBeat(null);
 
@@ -2251,11 +2241,7 @@ export default function MetronomeScreen() {
     const engine = engineRef.current;
     if (!engine || isPlaying || isPreparing) return;
 
-    setCurrentBeat(-1);
-    setMeasureCount(0);
-    setActiveSubNote(-1);
-    activeSubNoteRef.current = -1;
-    setProgressInfo(null); setLayerProgressMap({});
+    resetPlaybackVisuals();
     clearSamplePlayStates();
 
     if (barModeRef.current) {
@@ -2386,10 +2372,7 @@ export default function MetronomeScreen() {
         }
         setIsPreparing(false);
         setIsPlaying(false);
-        setCurrentBeat(-1);
-        setMeasureCount(0);
-        setActiveSubNote(-1);
-        setProgressInfo(null); setLayerProgressMap({});
+        resetPlaybackVisuals();
         const modeLabel = barModeRef.current ? "Bar" : "Dial";
         showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
       }
@@ -2983,11 +2966,7 @@ export default function MetronomeScreen() {
     engine.setAllBarBpmOverrides(bpmOverrides);
     engine.buildScheduleOnly();
 
-    setCurrentBeat(-1);
-    setMeasureCount(0);
-    setActiveSubNote(-1);
-    activeSubNoteRef.current = -1;
-    setProgressInfo(null); setLayerProgressMap({});
+    resetPlaybackVisuals();
 
     barConfigRef.current = {
       ...barConfigRef.current,
@@ -3074,11 +3053,7 @@ export default function MetronomeScreen() {
     } else {
       setNoteIsPlaying(false);
       setIsPlaying(false);
-      setCurrentBeat(-1);
-      setMeasureCount(0);
-      setActiveSubNote(-1);
-      activeSubNoteRef.current = -1;
-      setProgressInfo(null); setLayerProgressMap({});
+      resetPlaybackVisuals();
       showPausedNotification(bpmRef.current, "Note", languageRef.current);
     }
   }, [noteStartPlayingEntry, createShuffledIndices]);
@@ -3093,10 +3068,7 @@ export default function MetronomeScreen() {
       clearSamplePlayStates();
       setIsPreparing(false);
       setIsPlaying(false);
-      setCurrentBeat(-1);
-      setMeasureCount(0);
-      setActiveSubNote(-1);
-      setProgressInfo(null); setLayerProgressMap({});
+      resetPlaybackVisuals();
     }
     const book = await loadPracticeBook();
     const barItems = book.filter(e => (e.mode || "bar") === "bar");
@@ -3114,12 +3086,8 @@ export default function MetronomeScreen() {
       stopRenderedAudio();
       clearSamplePlayStates();
       setIsPlaying(false);
-      setCurrentBeat(-1);
-      setMeasureCount(0);
-      setProgressInfo(null); setLayerProgressMap({});
     }
-    setActiveSubNote(-1);
-    activeSubNoteRef.current = -1;
+    resetPlaybackVisuals();
     setNoteMode(false);
     noteModeRef.current = false;
     setNoteIsPlaying(false);
@@ -3156,11 +3124,7 @@ export default function MetronomeScreen() {
         noteIsPlayingRef.current = false;
         setIsPlaying(false);
         setNoteCurrentIndex(-1);
-        setCurrentBeat(-1);
-        setMeasureCount(0);
-        setActiveSubNote(-1);
-        activeSubNoteRef.current = -1;
-        setProgressInfo(null); setLayerProgressMap({});
+        resetPlaybackVisuals();
       }
     } else if (curIdx > index) {
       setNoteCurrentIndex(curIdx - 1);
@@ -3226,11 +3190,7 @@ export default function MetronomeScreen() {
       }
       setIsPlaying(false);
       setNoteIsPlaying(false);
-      setCurrentBeat(-1);
-      setMeasureCount(0);
-      setActiveSubNote(-1);
-      activeSubNoteRef.current = -1;
-      setProgressInfo(null); setLayerProgressMap({});
+      resetPlaybackVisuals();
       showPausedNotification(bpmRef.current, "Note", languageRef.current);
     } else {
       const q = noteQueueRef.current;
@@ -3385,10 +3345,7 @@ export default function MetronomeScreen() {
       clearSamplePlayStates();
       setIsPreparing(false);
       setIsPlaying(false);
-      setCurrentBeat(-1);
-      setMeasureCount(0);
-      setActiveSubNote(-1);
-      setProgressInfo(null); setLayerProgressMap({});
+      resetPlaybackVisuals();
     }
 
     const entryMode = entry.mode || "bar";
