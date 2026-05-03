@@ -65,6 +65,8 @@ import { MicWebView, MicWebViewHandle } from "@/components/MicWebView";
 import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import PracticeStatsGraph from "@/components/PracticeStatsGraph";
+import { VoiceAssistantButton } from "@/components/VoiceAssistantButton";
+import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { make_styles } from "./index.styles";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import type { OnboardingResult } from "@/components/OnboardingModal";
@@ -1814,11 +1816,61 @@ export default function MetronomeScreen() {
   useEffect(() => { updateBpmRef.current = updateBpm; }, [updateBpm]);
   const bpmRef = useRef(bpm);
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
-
   const updateTimeSignatureRef = useRef(updateTimeSignature);
   useEffect(() => { updateTimeSignatureRef.current = updateTimeSignature; }, [updateTimeSignature]);
   const beatsPerMeasureRef = useRef(beatsPerMeasure);
   useEffect(() => { beatsPerMeasureRef.current = beatsPerMeasure; }, [beatsPerMeasure]);
+
+  // 음성 어시스턴트 명령 핸들러 등록
+  const { setCommandHandler } = useVoiceAssistant();
+  useEffect(() => {
+    const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+    setCommandHandler((cmd) => {
+      const engine = engineRef.current;
+      const isRunning = engine?.getIsRunning?.() ?? false;
+      switch (cmd.type) {
+        case "play":
+          if (!isRunning) togglePlayPauseRef.current?.();
+          break;
+        case "stop":
+          if (isRunning) togglePlayPauseRef.current?.();
+          break;
+        case "toggle":
+          togglePlayPauseRef.current?.();
+          break;
+        case "setBpm": {
+          const next = clamp(Math.round(cmd.bpm), 20, 300);
+          updateBpmRef.current?.(next);
+          break;
+        }
+        case "bpmDelta": {
+          const next = clamp(Math.round(bpmRef.current + cmd.delta), 20, 300);
+          updateBpmRef.current?.(next);
+          break;
+        }
+        case "bpmMultiplier": {
+          const next = clamp(Math.round(bpmRef.current * cmd.factor), 20, 300);
+          updateBpmRef.current?.(next);
+          break;
+        }
+        case "setBeats": {
+          const next = clamp(Math.round(cmd.beats), 1, 16);
+          updateTimeSignatureRef.current?.(next);
+          break;
+        }
+        case "reset":
+          if (isRunning) togglePlayPauseRef.current?.();
+          updateBpmRef.current?.(120);
+          updateTimeSignatureRef.current?.(4);
+          break;
+        case "help":
+        case "unknown":
+        default:
+          break;
+      }
+    });
+    return () => setCommandHandler(null);
+  }, [setCommandHandler]);
   const handleNoteTogglePlayRef = useRef<(() => void) | null>(null);
   const anyModalOpenRef = useRef(false);
   useEffect(() => { anyModalOpenRef.current = showSignalGen || showSettings || showPracticeBook || showWorkUp || showMenu || showOnboarding; }, [showSignalGen, showSettings, showPracticeBook, showWorkUp, showMenu, showOnboarding]);
@@ -4367,6 +4419,7 @@ export default function MetronomeScreen() {
           y={dragPos.y}
         />
       )}
+      <VoiceAssistantButton />
     </View>
   );
 }

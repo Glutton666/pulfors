@@ -16,6 +16,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { VoiceAssistantProvider } from "@/contexts/VoiceAssistantContext";
 import { initErrorTracking } from "@/lib/error-tracking";
 import { StorageErrorAlert } from "@/components/StorageErrorAlert";
 
@@ -113,15 +114,17 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <LanguageProvider>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <KeyboardProvider>
-                <StorageErrorAlert />
-                <Stack screenOptions={{ headerShown: false }}>
-                  <Stack.Screen name="index" />
-                  <Stack.Screen name="practice" />
-                </Stack>
-              </KeyboardProvider>
-            </GestureHandlerRootView>
+            <VoiceAssistantProvider>
+              <GestureHandlerRootView style={{ flex: 1 }}>
+                <KeyboardProvider>
+                  <StorageErrorAlert />
+                  <Stack screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="index" />
+                    <Stack.Screen name="practice" />
+                  </Stack>
+                </KeyboardProvider>
+              </GestureHandlerRootView>
+            </VoiceAssistantProvider>
           </LanguageProvider>
         </ThemeProvider>
       </QueryClientProvider>

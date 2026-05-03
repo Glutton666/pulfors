@@ -482,6 +482,24 @@ const translations = {
     bpmSlider: { ko: "BPM 조절: 좌우 드래그로 변경, 두 번 탭으로 템포 입력", en: "BPM control: drag horizontally to change, double tap for tap tempo" },
     playButton: { ko: "재생 또는 일시정지", en: "Play or pause" },
   },
+  voice: {
+    title: { ko: "음성 어시스턴트", en: "Voice Assistant" },
+    enable: { ko: "활성화", en: "Enable" },
+    enableHint: { ko: "마이크 버튼을 누르고 명령을 말하세요", en: "Tap the mic button and speak a command" },
+    nickname: { ko: "애칭", en: "Wake Phrase" },
+    nicknameHint: { ko: "예: 풀포 — 명령 앞에 붙여서 말하세요", en: "e.g., Pulpor — say it before your command" },
+    nicknamePlaceholder: { ko: "애칭 입력", en: "Enter wake phrase" },
+    strict: { ko: "엄격 모드", en: "Strict Mode" },
+    strictHint: { ko: "애칭이 있어야만 명령을 실행합니다", en: "Require the wake phrase to trigger commands" },
+    showCommands: { ko: "명령어 보기", en: "View Commands" },
+    notSupported: { ko: "이 기기/브라우저는 음성 인식을 지원하지 않습니다 (현재 웹 전용)", en: "Voice recognition is not supported on this device (web only for now)" },
+    ptt: { ko: "음성 명령 (탭하여 말하기)", en: "Voice command (tap to speak)" },
+    commandsTitle: { ko: "사용 가능한 명령어", en: "Available Commands" },
+    prefixHint: { ko: "엄격 모드에서는 다음 형태로 말하세요", en: "In strict mode, speak like" },
+    listening: { ko: "듣는 중…", en: "Listening…" },
+    cmdExecuted: { ko: "명령 실행됨", en: "Command executed" },
+    cmdUnknown: { ko: "명령을 인식하지 못했습니다", en: "Could not recognize command" },
+  },
 } as const;
 
 type TranslationKeys = typeof translations;
