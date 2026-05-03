@@ -75,6 +75,7 @@ import { MoreMenuModal } from "@/components/MoreMenuModal";
 import { ScheduledStartModal } from "@/components/ScheduledStartModal";
 import { FadeOutModal } from "@/components/FadeOutModal";
 import type { FadeOutSettings } from "@/lib/storage";
+import { TempoQuizModal, type TempoQuizPhase } from "@/components/TempoQuizModal";
 import type { OnboardingResult } from "@/components/OnboardingModal";
 import { GoalCompletePopup } from "@/components/GoalCompletePopup";
 import type { PracticeEntry } from "@/lib/storage";
@@ -246,6 +247,20 @@ export default function MetronomeScreen() {
       clearFadeOutSession();
     }
   }, [isPlaying, clearFadeOutSession]);
+
+  const [showTempoQuiz, setShowTempoQuiz] = useState(false);
+  const [tempoQuizPhase, setTempoQuizPhase] = useState<TempoQuizPhase>("ready");
+  const [tempoQuizMeasureProgress, setTempoQuizMeasureProgress] = useState(0);
+  const tempoQuizSessionRef = useRef<{
+    measures: number;
+    elapsed: number;
+    restore: { bpm: number; beatsPerMeasure: number; beatTypes: BeatType[] } | null;
+  } | null>(null);
+  const teardownTempoQuizRef = useRef<() => void>(() => {});
+  const closeTempoQuiz = useCallback(() => {
+    teardownTempoQuizRef.current();
+    setShowTempoQuiz(false);
+  }, []);
   const fadeOutStatusText = useMemo(() => {
     const sess = fadeOutSessionRef.current;
     if (!sess || !fadeOutPhase) return null;
@@ -269,6 +284,7 @@ export default function MetronomeScreen() {
       if (showSignalGen) { setShowSignalGen(false); return true; }
       if (showPracticeBook) { setShowPracticeBook(false); return true; }
       if (showWorkUp) { setShowWorkUp(false); return true; }
+      if (showTempoQuiz) { closeTempoQuiz(); return true; }
       if (showFadeOut) { setShowFadeOut(false); return true; }
       if (showScheduledStart) { setShowScheduledStart(false); return true; }
       if (showMoreMenu) { setShowMoreMenu(false); return true; }
@@ -283,7 +299,7 @@ export default function MetronomeScreen() {
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
     return () => sub.remove();
-  }, [showSettings, showSignalGen, showPracticeBook, showWorkUp, showMenu, showOnboarding, showReboot, showMoreMenu, showScheduledStart, showFadeOut]);
+  }, [showSettings, showSignalGen, showPracticeBook, showWorkUp, showMenu, showOnboarding, showReboot, showMoreMenu, showScheduledStart, showFadeOut, showTempoQuiz, closeTempoQuiz]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -987,6 +1003,34 @@ export default function MetronomeScreen() {
     const engine = engineRef.current;
     if (engine) engine.setPreRenderedAudio(false);
   }, []);
+
+  useEffect(() => {
+    teardownTempoQuizRef.current = () => {
+      const engine = engineRef.current;
+      const sess = tempoQuizSessionRef.current;
+      if (engine) {
+        if (engine.getIsRunning()) engine.stop();
+        stopRenderedAudio();
+        clearSamplePlayStates();
+        if (sess?.restore) {
+          engine.setBpm(sess.restore.bpm);
+          engine.setBeatsPerMeasure(sess.restore.beatsPerMeasure);
+          engine.setBeatTypes(sess.restore.beatTypes);
+        }
+      }
+      tempoQuizSessionRef.current = null;
+      setTempoQuizMeasureProgress(0);
+      setTempoQuizPhase("ready");
+      setIsPreparing(false);
+      setIsPlaying(false);
+      resetPlaybackVisuals();
+    };
+  }, [stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals]);
+  useEffect(() => {
+    if (!showTempoQuiz && tempoQuizSessionRef.current) {
+      teardownTempoQuizRef.current();
+    }
+  }, [showTempoQuiz]);
 
   const reRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleReRender = useCallback(() => {
@@ -2383,6 +2427,24 @@ export default function MetronomeScreen() {
     if (!engine) return;
     engine.setOnMeasureComplete(() => {
       setMeasureCount(c => c + 1);
+      const qSess = tempoQuizSessionRef.current;
+      if (qSess) {
+        qSess.elapsed += 1;
+        setTempoQuizMeasureProgress(qSess.elapsed);
+        if (qSess.elapsed >= qSess.measures) {
+          setTimeout(() => {
+            const eng = engineRef.current;
+            if (eng) eng.stop();
+            setIsPreparing(false);
+            setIsPlaying(false);
+            resetPlaybackVisuals();
+          }, 0);
+          tempoQuizSessionRef.current = { ...qSess, elapsed: 0 };
+          setTempoQuizPhase("answer");
+          return;
+        }
+        return;
+      }
       const sess = fadeOutSessionRef.current;
       if (sess) {
         const elapsed = fadeOutMeasureCountRef.current + 1;
@@ -3868,6 +3930,49 @@ export default function MetronomeScreen() {
           setShowMoreMenu(false);
           setShowFadeOut(true);
         }}
+        onTempoQuiz={() => {
+          setShowMoreMenu(false);
+          setTempoQuizPhase("ready");
+          setShowTempoQuiz(true);
+        }}
+      />
+
+      <TempoQuizModal
+        visible={showTempoQuiz}
+        phase={tempoQuizPhase}
+        setPhase={setTempoQuizPhase}
+        measureProgress={tempoQuizMeasureProgress}
+        onPlayBpm={(targetBpm: number, measures: number) => {
+          const engine = engineRef.current;
+          if (!engine) return;
+          if (engine.getIsRunning()) engine.stop();
+          stopRenderedAudio();
+          clearSamplePlayStates();
+          resetPlaybackVisuals();
+          if (!tempoQuizSessionRef.current?.restore) {
+            tempoQuizSessionRef.current = {
+              measures,
+              elapsed: 0,
+              restore: { bpm: bpmRef.current, beatsPerMeasure, beatTypes: [...beatTypes] },
+            };
+          } else {
+            tempoQuizSessionRef.current = {
+              ...tempoQuizSessionRef.current,
+              measures,
+              elapsed: 0,
+            };
+          }
+          setTempoQuizMeasureProgress(0);
+          const quizBeatTypes = defaultBeatTypes(4);
+          engine.setBpm(targetBpm);
+          engine.setBeatsPerMeasure(4);
+          engine.setBeatTypes(quizBeatTypes);
+          practiceStartRef.current = null;
+          setIsPlaying(true);
+          engine.start();
+        }}
+        onStop={() => { teardownTempoQuizRef.current(); }}
+        onClose={closeTempoQuiz}
       />
 
       <FadeOutModal
