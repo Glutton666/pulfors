@@ -16,8 +16,46 @@ export type Language = LanguageCode;
 export type TranslationLeaf = Record<LanguageCode, string>;
 type TranslationsShape = Record<string, Record<string, TranslationLeaf>>;
 
+// 단일 SoT: UI 표시 라벨도 여기서 관리한다. 새 언어 추가 시 LANGUAGE_LABELS에
+// 항목을 채우지 않으면 컴파일 에러 (Record<LanguageCode, string> 강제).
+export const LANGUAGE_LABELS: Record<LanguageCode, string> = {
+  ko: "한국어",
+  en: "English",
+};
+
+export const LANGUAGE_OPTIONS: ReadonlyArray<{ value: LanguageCode; label: string }> =
+  SUPPORTED_LANGUAGES.map((code) => ({ value: code, label: LANGUAGE_LABELS[code] }));
+
 export function isLanguageCode(v: unknown): v is LanguageCode {
   return typeof v === "string" && (SUPPORTED_LANGUAGES as readonly string[]).includes(v);
+}
+
+// 디바이스 로케일을 SUPPORTED_LANGUAGES에 매핑한다. 일치하는 코드가 없으면
+// FALLBACK_LANGUAGE를 반환한다. RN/web/노드 모두에서 안전하게 동작하도록
+// 여러 소스를 순차 확인한다.
+export function detectDeviceLanguage(): LanguageCode {
+  const candidates: string[] = [];
+  try {
+    const g = globalThis as {
+      navigator?: { language?: string; languages?: readonly string[] };
+      Intl?: { DateTimeFormat?: () => { resolvedOptions: () => { locale?: string } } };
+    };
+    if (g.navigator?.languages) candidates.push(...g.navigator.languages);
+    if (g.navigator?.language) candidates.push(g.navigator.language);
+    const intl = g.Intl?.DateTimeFormat?.();
+    const intlLocale = intl?.resolvedOptions?.().locale;
+    if (intlLocale) candidates.push(intlLocale);
+  } catch {
+    // 환경 의존 — 무시하고 폴백
+  }
+  for (const raw of candidates) {
+    if (typeof raw !== "string") continue;
+    const primary = raw.toLowerCase().split(/[-_]/)[0];
+    if ((SUPPORTED_LANGUAGES as readonly string[]).includes(primary)) {
+      return primary as LanguageCode;
+    }
+  }
+  return FALLBACK_LANGUAGE;
 }
 
 export const translations = {

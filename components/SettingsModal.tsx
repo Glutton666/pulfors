@@ -43,7 +43,7 @@ import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, SoundRole, Custo
 import { loadCustomSoundSets, saveCustomSoundSets, BUILTIN_SOUND_SETS } from "@/lib/storage";
 import { soundSets } from "@/lib/metronome-engine";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { Language } from "@/lib/i18n";
+import { LANGUAGE_OPTIONS, type Language } from "@/lib/i18n";
 import { safePlay } from "@/lib/audio-utils";
 import { ensurePermission } from "@/lib/permissions";
 import {
@@ -922,10 +922,7 @@ export function SettingsModal({
           <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "language")}</Text>
         </View>
         <View style={styles.tripleRow}>
-          {([
-            { value: "ko" as Language, label: "한국어" },
-            { value: "en" as Language, label: "English" },
-          ]).map((opt) => {
+          {LANGUAGE_OPTIONS.map((opt) => {
             const active = language === opt.value;
             return (
               <Pressable

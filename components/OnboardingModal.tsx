@@ -25,7 +25,7 @@ import type { ThemeColor } from "@/constants/colors";
 import type { FlashMode, HapticMode } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { Language } from "@/lib/i18n";
+import { LANGUAGE_OPTIONS, type Language } from "@/lib/i18n";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { Switch } from "react-native";
 
@@ -896,10 +896,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   };
 
   const renderLanguageStep = () => {
-    const options: { value: Language; label: string }[] = [
-      { value: "ko", label: "한국어" },
-      { value: "en", label: "English" },
-    ];
+    const options = LANGUAGE_OPTIONS;
     const content = (
       <View style={{ width: "100%", gap: 12, marginTop: Spacing.sm }}>
         {options.map((opt) => {

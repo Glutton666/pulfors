@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { type Language, createT, type TranslationFn, isLanguageCode } from "@/lib/i18n";
+import { type Language, createT, type TranslationFn, isLanguageCode, detectDeviceLanguage } from "@/lib/i18n";
 
 const LANGUAGE_KEY = "metronome_language";
 
@@ -13,7 +13,8 @@ interface LanguageContextValue {
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>("ko");
+  // 초기값은 디바이스 로케일에서 추정한다. 저장된 사용자 선택이 있으면 useEffect에서 덮어쓴다.
+  const [language, setLanguageState] = useState<Language>(() => detectDeviceLanguage());
 
   useEffect(() => {
     (async () => {

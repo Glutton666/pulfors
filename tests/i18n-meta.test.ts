@@ -7,6 +7,9 @@ import {
   isLanguageCode,
   translations,
   createT,
+  detectDeviceLanguage,
+  LANGUAGE_OPTIONS,
+  LANGUAGE_LABELS,
   type TranslationLeaf,
 } from "../lib/i18n";
 
@@ -71,4 +74,40 @@ test("[meta] 새 언어 추가 시뮬레이션: 빈 leaf는 키 셋 검사로 �
   assert.deepEqual(missingForJa, ["ja"]);
   // 즉, 코드 한 줄(상수에 'ja' 추가)만 바꾸면 모든 leaf에서 'ja' 키 누락이 감지되며,
   // 컴파일 시점에는 TranslationLeaf = Record<LanguageCode, string> 강제로 tsc가 동일한 누락을 보고한다.
+});
+
+test("[meta] LANGUAGE_OPTIONS와 LANGUAGE_LABELS는 SUPPORTED_LANGUAGES와 정확히 정렬된다", () => {
+  assert.deepEqual(
+    LANGUAGE_OPTIONS.map((o) => o.value),
+    [...SUPPORTED_LANGUAGES],
+    "LANGUAGE_OPTIONS는 SUPPORTED_LANGUAGES를 그대로 반영해야 함",
+  );
+  for (const code of SUPPORTED_LANGUAGES) {
+    const label = LANGUAGE_LABELS[code];
+    assert.ok(typeof label === "string" && label.length > 0, `${code} label 누락`);
+  }
+});
+
+test("[meta] detectDeviceLanguage는 항상 SUPPORTED_LANGUAGES 중 하나를 반환한다", () => {
+  const got = detectDeviceLanguage();
+  assert.ok((SUPPORTED_LANGUAGES as readonly string[]).includes(got), `예상 외 코드: ${got}`);
+});
+
+test("[meta] detectDeviceLanguage는 navigator.language를 우선하고 1차 서브태그로 매칭한다", () => {
+  const desc = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const setNav = (v: unknown) => {
+    Object.defineProperty(globalThis, "navigator", { value: v, configurable: true, writable: true });
+  };
+  try {
+    setNav({ language: "ko-KR", languages: ["ko-KR", "en-US"] });
+    assert.equal(detectDeviceLanguage(), "ko");
+    setNav({ language: "en-GB", languages: ["en-GB"] });
+    assert.equal(detectDeviceLanguage(), "en");
+    setNav({ language: "fr-FR", languages: ["fr-FR"] });
+    // 미지원 로케일은 FALLBACK_LANGUAGE로 매핑.
+    assert.equal(detectDeviceLanguage(), FALLBACK_LANGUAGE);
+  } finally {
+    if (desc) Object.defineProperty(globalThis, "navigator", desc);
+    else delete (globalThis as { navigator?: unknown }).navigator;
+  }
 });
