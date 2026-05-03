@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { normalizeSampleChannel, type SampleChannel } from "./stereo-channel";
+import { createDebouncedPersister } from "./persist";
 
 const STORAGE_KEY = "@note_samples";
 const NAMES_STORAGE_KEY = "@note_sample_names";
@@ -7,55 +8,58 @@ const SOURCES_STORAGE_KEY = "@note_sample_sources";
 const CHANNELS_STORAGE_KEY = "@note_sample_channels";
 
 /**
- * Per-storage-key serialized writer.
+ * Per-storage-key serialized writer built on top of `createDebouncedPersister`.
  *
- * 빠른 연속 호출이 일어나도 마지막에 들어온 값이 결정적으로 디스크에 남도록
- * AsyncStorage.setItem 호출을 직렬화한다. 진행 중인 write 동안 들어온 호출은
- * 마지막 값으로 합쳐져(last-write-wins) 한 번만 추가 write가 발생한다.
+ * 빠른 연속 호출은 디바운스 윈도우 안에서 하나의 write로 합쳐지고(IO 절감),
+ * 진행 중 write 도중 들어온 호출은 다시 last-write-wins로 합쳐져 한 번만 추가
+ * write가 발생한다. 동일 키에 대한 동시 쓰기가 직렬로 처리되므로 마지막 호출의
+ * 값이 결정적으로 디스크에 남는다.
  *
- * 호출자가 await한 Promise는 자기 값 또는 자기 이후의 값이 디스크에 기록된
+ * 호출자가 await한 Promise는 자기 값(또는 자기 이후 값)이 디스크에 기록된
  * 시점에 resolve된다.
  */
+const NOTE_SAMPLES_DEBOUNCE_MS = 50;
+
 function createSerializedWriter<T>(
   key: string,
+  debounceMs: number = NOTE_SAMPLES_DEBOUNCE_MS,
 ): (value: T) => Promise<void> {
-  let pendingValue: T | undefined;
-  let hasPending = false;
-  let pendingResolvers: Array<() => void> = [];
-  let pendingRejecters: Array<(e: unknown) => void> = [];
-  let running = false;
+  // getSnapshot은 항상 마지막으로 들어온 값을 반환하고, 호출자별 resolver는
+  // 다음 write 사이클이 끝날 때 한꺼번에 resolve된다.
+  let snapshot: T | null = null;
+  let waiters: Array<{ resolve: () => void; reject: (e: unknown) => void }> = [];
 
-  async function drain(): Promise<void> {
-    if (running) return;
-    running = true;
-    try {
-      while (hasPending) {
-        const value = pendingValue as T;
-        const resolvers = pendingResolvers;
-        const rejecters = pendingRejecters;
-        hasPending = false;
-        pendingValue = undefined;
-        pendingResolvers = [];
-        pendingRejecters = [];
-        try {
-          await AsyncStorage.setItem(key, JSON.stringify(value));
-          for (const r of resolvers) r();
-        } catch (e) {
-          for (const r of rejecters) r(e);
-        }
+  const persister = createDebouncedPersister<{ value: T }>(
+    () => ({ value: snapshot as T }),
+    async (merged) => {
+      // write 진입 시점에 대기 중이던 호출자들을 캡처. write 동안 들어온
+      // 새 호출자는 다음 사이클에서 settle 된다.
+      const current = waiters;
+      waiters = [];
+      try {
+        await AsyncStorage.setItem(key, JSON.stringify(merged.value));
+        for (const w of current) w.resolve();
+      } catch (e) {
+        // 현재 사이클의 호출자는 즉시 reject. 단, write 콜백 자체에서는
+        // throw하지 않는다 — persister의 onSuccess가 호출되어 writing=false
+        // 로 풀리고, 도중에 들어와 pending에 쌓인 값이 있으면 자동으로
+        // 다음 cycle을 시작해 그 호출자들이 hang 없이 이어서 settle된다.
+        // (만약 throw하면 maxAttempts:1 + cycleFailed=true 경로로 빠져,
+        //  in-flight 동안 들어온 호출자의 debounceTimer가 writing=true로
+        //  소진된 케이스에서 영구 hang이 발생함.)
+        for (const w of current) w.reject(e);
       }
-    } finally {
-      running = false;
-    }
-  }
+    },
+    debounceMs,
+    // 재시도는 본 writer 책임 밖 (호출자/상위 레이어에서 처리). 단일 시도.
+    { maxAttempts: 1 },
+  );
 
-  return (value: T) =>
+  return (value: T): Promise<void> =>
     new Promise<void>((resolve, reject) => {
-      pendingValue = value;
-      hasPending = true;
-      pendingResolvers.push(resolve);
-      pendingRejecters.push(reject);
-      void drain();
+      snapshot = value;
+      waiters.push({ resolve, reject });
+      persister({ value });
     });
 }
 

@@ -168,6 +168,99 @@ test("saveNoteSamples: 진행 중 write가 후속 호출을 1회 쓰기로 합�
   }
 });
 
+test("saveNoteSamples: 디바운스 윈도우 내 빠른 연속 호출은 1회 write로 합쳐진다", async () => {
+  const original = AsyncStorage.setItem;
+  let writeCount = 0;
+  AsyncStorage.setItem = async (k: string, v: string) => {
+    if (k === "@note_samples") writeCount++;
+    return original(k, v);
+  };
+  try {
+    // 동기적으로 50회 호출 → 모두 디바운스 윈도우(50ms) 안에 들어와야 함.
+    const promises: Promise<void>[] = [];
+    for (let i = 0; i < 50; i++) {
+      promises.push(saveNoteSamples({ "0-0": `d${i}` }));
+    }
+    await Promise.all(promises);
+    assert.equal(writeCount, 1, `debounced writes == 1, actual=${writeCount}`);
+    const loaded = await loadNoteSamples();
+    assert.deepEqual(loaded, { "0-0": "d49" });
+  } finally {
+    AsyncStorage.setItem = original;
+  }
+});
+
+test("saveNoteSamples: in-flight write 실패 + 동시 호출 모두 settle (hang 없음)", async () => {
+  const original = AsyncStorage.setItem;
+  let callCount = 0;
+  let release: ((ok: boolean) => void) | null = null;
+  AsyncStorage.setItem = async (k: string, v: string) => {
+    if (k !== "@note_samples") return original(k, v);
+    callCount++;
+    if (callCount === 1) {
+      // 첫 write는 외부에서 명시적으로 실패시킴.
+      await new Promise<void>((resolve, reject) => {
+        release = (ok) => (ok ? resolve() : reject(new Error("disk full")));
+      });
+      return;
+    }
+    return original(k, v);
+  };
+  try {
+    // 1) 첫 호출 → 50ms 후 첫 write가 시작되고 await에 갇힘.
+    const p1 = saveNoteSamples({ "0-0": "a" });
+    await new Promise((r) => setTimeout(r, 60));
+    // 2) in-flight 동안 추가 호출 5건 — 다음 사이클에서 settle 되어야 함.
+    const others = [1, 2, 3, 4, 5].map((i) => saveNoteSamples({ "0-0": `b${i}` }));
+    // 3) 첫 write 실패. 모든 호출자(p1 + 5건)가 hang 없이 settle 되어야 한다.
+    //    saveNoteSamples는 에러를 try/catch로 삼키므로 외부에서 본 Promise는
+    //    항상 resolve 되지만, 핵심은 "절대 hang 하지 않음" + "마지막 값 저장".
+    release!(false);
+    const settled = await Promise.allSettled([p1, ...others]);
+    assert.equal(settled.length, 6);
+    const fulfilled = settled.filter((s) => s.status === "fulfilled").length;
+    assert.equal(fulfilled, 6, "모든 호출이 hang 없이 settle 되어야 함");
+    // in-flight 동안 도착한 호출들의 마지막 값이 다음 사이클에서 디스크에 안착.
+    const loaded = await loadNoteSamples();
+    assert.deepEqual(loaded, { "0-0": "b5" });
+  } finally {
+    AsyncStorage.setItem = original;
+  }
+});
+
+test("saveNoteSamples: 늦게 실패하는 in-flight write 도중 도착한 호출도 모두 settle (race regression)", async () => {
+  const original = AsyncStorage.setItem;
+  let callCount = 0;
+  AsyncStorage.setItem = async (k: string, v: string) => {
+    if (k !== "@note_samples") return original(k, v);
+    callCount++;
+    if (callCount === 1) {
+      // 첫 write는 200ms 후 실패 → 그동안 B의 디바운스 타이머가 writing=true
+      // 시점에서 소진되도록 만든다.
+      await new Promise((r) => setTimeout(r, 200));
+      throw new Error("disk full");
+    }
+    return original(k, v);
+  };
+  try {
+    const p1 = saveNoteSamples({ "0-0": "a" });
+    // ~60ms 시점에 B 호출: 첫 write가 이미 in-flight, B의 50ms debounce
+    // 타이머는 ~110ms에 fire → flushNow는 writing=true라 early return → B의
+    // pending 값이 디바운스 큐에 묶임. 첫 write 실패 후 자동 후속 cycle이
+    // 돌아야 hang 없이 settle된다.
+    await new Promise((r) => setTimeout(r, 60));
+    const p2 = saveNoteSamples({ "0-0": "b" });
+    // 모두 hang 없이 settle 되어야 함 (saveNoteSamples는 에러 삼킴).
+    const settled = await Promise.allSettled([p1, p2]);
+    assert.equal(settled.length, 2);
+    for (const s of settled) assert.equal(s.status, "fulfilled");
+    const loaded = await loadNoteSamples();
+    assert.deepEqual(loaded, { "0-0": "b" });
+  } finally {
+    AsyncStorage.setItem = original;
+  }
+});
+
 test("saveNoteSamples: 서로 다른 호출자 모두 resolve된다", async () => {
   let resolved = 0;
   const promises = Array.from({ length: 30 }, (_, i) =>
