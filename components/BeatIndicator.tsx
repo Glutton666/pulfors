@@ -294,6 +294,9 @@ export interface LoopBlock {
   ownSubdivisions?: Record<string, import("@/lib/metronome-engine").BeatType[]>;
 }
 
+export type { ProgressInfo } from "@/lib/metronome-engine";
+type ProgressInfo = import("@/lib/metronome-engine").ProgressInfo;
+
 interface BeatIndicatorProps {
   beatsPerMeasure: number;
   currentBeat: number;
@@ -336,7 +339,7 @@ interface BeatIndicatorProps {
   bpm?: number;
   barStartBeat?: number | null;
   onBarStartBeatSelect?: (beat: number | null) => void;
-  progressInfo?: { beat: number; barRepeatCurrent: number; barRepeatTotal: number; blockIndex: number; blockRepeatCurrent: number; blockRepeatTotal: number; jumpCurrent?: number; jumpTotal?: number; jumpSourceBlockIndex?: number; layerIndex?: number; layerBeat?: number } | null;
+  progressInfo?: ProgressInfo | null;
   layerProgressMap?: Record<string, number>;
   measureCount?: number;
   onBarReset?: () => void;
@@ -358,7 +361,7 @@ interface BlockPillProps {
   hasJump: boolean;
   layerCount: number;
   beatsPerMeasure: number;
-  progressInfo?: any;
+  progressInfo?: ProgressInfo | null;
   accentColor: string;
   textColor: string;
   textTertiaryColor: string;
@@ -506,10 +509,10 @@ const BlockPill = React.memo(function BlockPill({
         <Text style={{ color: isActive ? accentColor : textTertiaryColor, fontSize: fs2, fontFamily: "SpaceGrotesk_500Medium" }}>
           ×{block.value}
           {block.soundSet ? ` ♪` : ""}
-          {isActive && progressInfo?.blockRepeatTotal > 1 && ` ${progressInfo.blockRepeatCurrent + 1}/${progressInfo.blockRepeatTotal}`}
+          {isActive && progressInfo && progressInfo.blockRepeatTotal > 1 && ` ${progressInfo.blockRepeatCurrent + 1}/${progressInfo.blockRepeatTotal}`}
         </Text>
         {layerCount > 0 && (
-          <View style={{ position: "absolute" as any, top: badgeSize.top, right: badgeSize.right, backgroundColor: accentColor, borderRadius: badgeSize.r, minWidth: badgeSize.mw, height: badgeSize.h, alignItems: "center", justifyContent: "center", paddingHorizontal: badgeSize.px }}>
+          <View style={{ position: "absolute", top: badgeSize.top, right: badgeSize.right, backgroundColor: accentColor, borderRadius: badgeSize.r, minWidth: badgeSize.mw, height: badgeSize.h, alignItems: "center", justifyContent: "center", paddingHorizontal: badgeSize.px }}>
             <Ionicons name="layers-outline" size={badgeSize.fs + 1} color={whiteColor} />
           </View>
         )}
@@ -1099,7 +1102,7 @@ export function BeatIndicator({
   const handleSaveResetTap = useCallback(async () => {
     const result = onBarQuickSave?.();
     let ok = true;
-    if (result && typeof (result as any).then === "function") {
+    if (result && typeof (result as { then?: unknown }).then === "function") {
       ok = await (result as Promise<boolean>);
     }
     if (ok) {
@@ -1773,8 +1776,8 @@ export function BeatIndicator({
                 return (
                   <View key={`bar-${si}`} style={{
                     position: "absolute",
-                    left: `${leftPct}%` as any,
-                    width: `${widthPct}%` as any,
+                    left: `${leftPct}%` as `${number}%`,
+                    width: `${widthPct}%` as `${number}%`,
                     bottom: -1,
                     height: 3,
                     backgroundColor: segColor,

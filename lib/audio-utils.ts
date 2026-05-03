@@ -134,3 +134,37 @@ export function notifyAudioPoolFallback(
     data,
   });
 }
+
+/**
+ * BPM과 분할(subdivisions) 기준으로 적정 오디오 풀 크기를 권장합니다.
+ *
+ * 빠른 템포 + 잦은 분할 환경에서는 같은 role/사운드의 호출 간격이 짧아져
+ * 단순 A/B 더블버퍼만으로는 이전 재생이 끝나기 전에 같은 슬롯이 재호출되어
+ * cut-off가 발생합니다. 풀 크기를 round-robin으로 늘리면 cut-off를 줄일 수 있습니다.
+ *
+ * 휴리스틱: 1초당 같은 사운드 호출 횟수(hitsPerSec) 기반.
+ * 빌트인 메트로놈 샘플 평균 길이가 ~120ms 내외라는 가정 하에:
+ *   - hitsPerSec ≤ 5  (≈ 60BPM × 8분 또는 120BPM × 4분): 2 (현 기본값)
+ *   - hitsPerSec ≤ 9  (≈ 200BPM × 16분 미만):           3
+ *   - hitsPerSec >  9                                     : 4
+ *
+ * 같은 role이 매 비트 호출되는 것이 아니라, 보통 한 마디에서 강박/약박/일반박이
+ * 분리되므로 실제 인스턴스당 호출은 더 드뭅니다. 따라서 적당히 보수적으로 둡니다.
+ *
+ * @param bpm 분당 박수 (clamp: 1~600)
+ * @param subdivisions 비트당 분할 수 (clamp: 1~16)
+ * @returns 권장 풀 크기 (2~4)
+ */
+export function computeRecommendedPoolSize(
+  bpm: number,
+  subdivisions: number,
+): number {
+  const safeBpm = Number.isFinite(bpm) ? Math.max(1, Math.min(600, bpm)) : 120;
+  const safeSub = Number.isFinite(subdivisions)
+    ? Math.max(1, Math.min(16, Math.floor(subdivisions)))
+    : 1;
+  const hitsPerSec = (safeBpm * safeSub) / 60;
+  if (hitsPerSec > 9) return 4;
+  if (hitsPerSec > 5) return 3;
+  return 2;
+}

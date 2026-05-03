@@ -51,7 +51,7 @@ import {
   MetronomeEngine,
   soundSets,
 } from "@/lib/metronome-engine";
-import type { BeatType } from "@/lib/metronome-engine";
+import type { BeatType, ProgressInfo } from "@/lib/metronome-engine";
 import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry } from "@/lib/storage";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample } from "@/lib/storage";
 import { BeatIndicator } from "@/components/BeatIndicator";
@@ -195,7 +195,7 @@ export default function MetronomeScreen() {
     hasBeenConfigured: false,
   });
 
-  const [progressInfo, setProgressInfo] = useState<{ beat: number; barRepeatCurrent: number; barRepeatTotal: number; blockIndex: number; blockRepeatCurrent: number; blockRepeatTotal: number; jumpCurrent?: number; jumpTotal?: number; jumpSourceBlockIndex?: number; layerIndex?: number; layerBeat?: number } | null>(null);
+  const [progressInfo, setProgressInfo] = useState<ProgressInfo | null>(null);
   const [layerProgressMap, setLayerProgressMap] = useState<Record<string, number>>({});
 
   const [noteMode, setNoteMode] = useState(false);

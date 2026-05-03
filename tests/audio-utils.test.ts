@@ -1,6 +1,43 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { safePlay, safeSeekAndPlay, releaseRecorder, notifyAudioPoolFallback } from "../lib/audio-utils";
+import { safePlay, safeSeekAndPlay, releaseRecorder, notifyAudioPoolFallback, computeRecommendedPoolSize } from "../lib/audio-utils";
+
+test("computeRecommendedPoolSize: 저속(60BPM 1분할) → 2", () => {
+  assert.equal(computeRecommendedPoolSize(60, 1), 2);
+});
+
+test("computeRecommendedPoolSize: 표준(120BPM 1분할) → 2", () => {
+  assert.equal(computeRecommendedPoolSize(120, 1), 2);
+});
+
+test("computeRecommendedPoolSize: 중속(120BPM 4분할=8 hits/sec) → 3", () => {
+  assert.equal(computeRecommendedPoolSize(120, 4), 3);
+});
+
+test("computeRecommendedPoolSize: 고속(200BPM 4분할≈13.3 hits/sec) → 4", () => {
+  assert.equal(computeRecommendedPoolSize(200, 4), 4);
+});
+
+test("computeRecommendedPoolSize: 경계 hitsPerSec=5 → 2 (≤5)", () => {
+  // 75BPM × 4 = 5 hits/sec
+  assert.equal(computeRecommendedPoolSize(75, 4), 2);
+});
+
+test("computeRecommendedPoolSize: 경계 hitsPerSec=9 → 3 (≤9)", () => {
+  // 135BPM × 4 = 9 hits/sec
+  assert.equal(computeRecommendedPoolSize(135, 4), 3);
+});
+
+test("computeRecommendedPoolSize: 비정상 입력 클램프", () => {
+  assert.equal(computeRecommendedPoolSize(NaN, NaN), 2);
+  assert.equal(computeRecommendedPoolSize(-50, 0), 2);
+  assert.equal(computeRecommendedPoolSize(99999, 99), 4);
+});
+
+test("computeRecommendedPoolSize: subdivision 소수점은 floor", () => {
+  assert.equal(computeRecommendedPoolSize(120, 4.9), 3);
+});
+
 
 test("safePlay: null/undefined 안전 무시", () => {
   assert.doesNotThrow(() => safePlay(null, "t1"));
