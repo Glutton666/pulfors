@@ -132,10 +132,18 @@ export async function ensurePermission(
       pendingByKind.delete(kind);
       return true;
     }
-    if (options.pendingAction && !res.canAskAgain) {
-      pendingByKind.set(kind, { run: options.pendingAction, attempts: 0, registeredAt: Date.now() });
+    // 취소 시 pending이 stale하게 남아 다음 foreground에서 의도치 않게 실행되는
+    // 것을 막기 위해, 알림 없는 경로에서만 즉시 등록한다. 알림이 표시되는 경우
+    // "설정 열기"를 누른 시점에만 pending을 등록한다.
+    const registerPending = () => {
+      if (options.pendingAction) {
+        pendingByKind.set(kind, { run: options.pendingAction, attempts: 0, registeredAt: Date.now() });
+      }
+    };
+    if (!showAlert) {
+      if (!res.canAskAgain) registerPending();
+      return false;
     }
-    if (!showAlert) return false;
 
     const keys = deniedKeys(kind);
     const title = t("permissions", "title");
@@ -145,7 +153,13 @@ export async function ensurePermission(
     if (!res.canAskAgain && Platform.OS !== "web") {
       Alert.alert(title, t("permissions", keys.deepLink), [
         { text: cancel, style: "cancel" },
-        { text: openSettings, onPress: () => Linking.openSettings() },
+        {
+          text: openSettings,
+          onPress: () => {
+            registerPending();
+            Linking.openSettings();
+          },
+        },
       ]);
     } else {
       Alert.alert(title, t("permissions", keys.denied));

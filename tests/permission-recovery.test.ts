@@ -108,6 +108,20 @@ test("권한 허용 시 기존 pending이 정리됨", async () => {
   _setPermissionRequestImplForTest(null);
 });
 
+test("showAlertOnDeny=true + canAskAgain=false: 알림 표시 단계에서는 pending 미등록", async () => {
+  // ko 번역 + react-native 스텁의 Alert 미존재로 인해, 알림 분기는 try/catch에 잡혀
+  // pending 등록 없이 종료된다. 즉, 사용자가 명시적으로 "설정 열기"를 누르지 않는
+  // 한 pending이 남지 않는다(취소 시 stale 방지).
+  _resetPendingPermissionsForTest();
+  _setPermissionRequestImplForTest(makeRequest([{ granted: false, canAskAgain: false }]));
+  const t = createT("ko");
+  await ensurePermission("mic", t, {
+    pendingAction: () => {},
+  });
+  assert.equal(hasAnyPendingPermissionAction(), false);
+  _setPermissionRequestImplForTest(null);
+});
+
 test("clearPendingPermissionAction은 즉시 pending 해제", async () => {
   _resetPendingPermissionsForTest();
   _setPermissionRequestImplForTest(makeRequest([{ granted: false, canAskAgain: false }]));
