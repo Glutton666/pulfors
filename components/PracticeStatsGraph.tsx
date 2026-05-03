@@ -1,14 +1,13 @@
 import React, { useMemo } from "react";
 import { View, Text } from "react-native";
 import Svg, { Rect, Line } from "react-native-svg";
-import type { ActivityLog, PracticeSessionData } from "@/lib/activity-log";
+import type { ActivityLog } from "@/lib/activity-log";
+import { buildDailyStats, isStatsEmpty, type DailyStat } from "./practice-stats-utils";
+import { FontSize } from "@/constants/tokens";
+import { createT, type Language } from "@/lib/i18n";
 
-export interface DailyStat {
-  label: string;
-  totalSec: number;
-  beatSec: number;
-  barSec: number;
-}
+export type { DailyStat };
+export { buildDailyStats, isStatsEmpty };
 
 interface Props {
   logs: ActivityLog[];
@@ -20,45 +19,15 @@ interface Props {
   height?: number;
   /** 표시 일수: 7 = 주간, 30 = 월간 */
   days?: number;
+  /** 언어 (i18n empty state 텍스트). 미지정시 "ko" */
+  lang?: Language;
 }
 
 /**
  * 7일/30일치 일별 연습시간 막대그래프.
  * 활성도가 0인 날에도 회색 빈 막대로 표시해 시각적 흐름이 유지되게 합니다.
+ * 데이터 전체가 0이면 안내 텍스트를 추가로 표시합니다(empty state).
  */
-export function buildDailyStats(logs: ActivityLog[], days: number = 7): DailyStat[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dayMs = 24 * 60 * 60 * 1000;
-
-  const buckets: DailyStat[] = [];
-  const labels = ["일", "월", "화", "수", "목", "금", "토"];
-
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today.getTime() - i * dayMs);
-    const label = days <= 7 ? labels[d.getDay()] : `${d.getMonth() + 1}/${d.getDate()}`;
-    buckets.push({ label, totalSec: 0, beatSec: 0, barSec: 0 });
-  }
-
-  for (const log of logs) {
-    if (log.type !== "practice_session") continue;
-    const data = log.data as PracticeSessionData;
-    const dur = data.duration || 0;
-    const ts = log.timestamp;
-    const tsMs = new Date(ts).setHours(0, 0, 0, 0);
-    if (!Number.isFinite(tsMs)) continue;
-    const dayDelta = Math.floor((today.getTime() - tsMs) / dayMs);
-    if (dayDelta < 0 || dayDelta >= days) continue;
-    const idx = days - 1 - dayDelta;
-    if (idx < 0 || idx >= buckets.length) continue;
-    buckets[idx].totalSec += dur;
-    if (data.mode === "dial") buckets[idx].beatSec += dur;
-    else if (data.mode === "bar") buckets[idx].barSec += dur;
-  }
-
-  return buckets;
-}
-
 export default function PracticeStatsGraph({
   logs,
   accentColor,
@@ -68,12 +37,15 @@ export default function PracticeStatsGraph({
   width = 280,
   height = 80,
   days = 7,
+  lang = "ko",
 }: Props) {
+  const t = useMemo(() => createT(lang), [lang]);
   const stats = useMemo(() => buildDailyStats(logs, days), [logs, days]);
   const maxSec = useMemo(() => {
     const m = Math.max(...stats.map((s) => s.totalSec), 1);
     return m;
   }, [stats]);
+  const empty = useMemo(() => isStatsEmpty(stats), [stats]);
 
   const padX = 8;
   const padBottom = 14;
@@ -154,6 +126,31 @@ export default function PracticeStatsGraph({
           </View>
         ))}
       </View>
+      {empty && (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          pointerEvents="none"
+        >
+          <Text
+            style={{
+              color: textSecondary,
+              fontSize: FontSize.small,
+              fontFamily: "Inter_500Medium",
+              opacity: 0.7,
+            }}
+          >
+            {t("settings", "statsEmpty")}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }

@@ -4336,6 +4336,7 @@ export default function MetronomeScreen() {
                                 width={S.ms(240, 0.4)}
                                 height={S.ms(60, 0.3)}
                                 days={7}
+                                lang={language}
                               />
                             </View>
                           </View>
