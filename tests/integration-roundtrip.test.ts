@@ -12,6 +12,7 @@ import {
   createInitialDialConfig,
   createInitialBarConfig,
   entryToBarConfig,
+  applyEntryToState,
   selectCurrentBarConfig,
   type DialConfig,
   type BarConfig,
@@ -226,6 +227,77 @@ test("[entry-roundtrip] PracticeEntry -> entryToBarConfig -> selectCurrentBarCon
   assert.deepEqual(live.loopBlocks, entry.loopBlocks);
   assert.deepEqual(live.noteSamples, entry.noteSamples);
   assert.deepEqual(live.noteSampleChannels, entry.noteSampleChannels);
+});
+
+test("[entry-roundtrip] applyEntryToState는 entry의 모든 React-state 변경을 결정론적으로 반환", () => {
+  const entry: PracticeEntry = {
+    id: "e3",
+    label: "Apply",
+    createdAt: 2,
+    bpm: 144,
+    beatsPerMeasure: 5,
+    beatTypes: ["accent", "normal", "normal", "accent", "normal"],
+    beatSubdivisions: { "1": ["accent"] },
+    barRepeats: {
+      0: { type: "count", value: 2, bpm: 90 } as any,
+      2: { type: "duration", value: 8 } as any,
+    },
+    loopBlocks: [{ startBeat: 0, endBeat: 4, type: "count", value: 1 }],
+    barLoopMode: "loop",
+    subdivisionPattern: ["accent", "normal"],
+    barClockMode: "stopwatch",
+    barTimerDuration: 180,
+    noteSamples: { "0": "file:///a0.wav", "3": "file:///a3.wav" },
+    noteSampleNames: { "0": "A0" },
+    noteSampleSources: { "0": "import" },
+    noteSampleChannels: { "0": "left", "3": "right" },
+  };
+  (entry as any).blockPlayMode = "loop";
+  const state = applyEntryToState(entry);
+  // 1차 효과: 라이브 setX 호출과 1:1 대응
+  assert.equal(state.bpm, 144);
+  assert.equal(state.beatsPerMeasure, 5);
+  assert.deepEqual(state.beatTypes, entry.beatTypes);
+  assert.deepEqual(state.beatSubdivisions, entry.beatSubdivisions);
+  assert.deepEqual(state.barRepeats, entry.barRepeats);
+  assert.deepEqual(state.loopBlocks, entry.loopBlocks);
+  assert.equal(state.barLoopMode, "loop");
+  assert.equal(state.blockPlayMode, "loop");
+  assert.deepEqual(state.subdivisionPattern, ["accent", "normal"]);
+  // 2차 효과: 4개 노트맵이 모두 채워짐(setNoteSamples + ref dual update의 입력)
+  assert.deepEqual(state.noteSamples, entry.noteSamples);
+  assert.deepEqual(state.noteSampleNames, entry.noteSampleNames);
+  assert.deepEqual(state.noteSampleSources, entry.noteSampleSources);
+  assert.deepEqual(state.noteSampleChannels, entry.noteSampleChannels);
+  // 3차 효과: barRepeats에서 bpm 오버라이드 추출(engine.setAllBarBpmOverrides)
+  assert.deepEqual(state.bpmOverrides, { 0: 90 });
+  // 입력 entry는 격리(얕은 복사)
+  state.beatTypes.push("accent");
+  state.noteSamples["99"] = "file:///mut.wav";
+  assert.equal(entry.beatTypes.length, 5);
+  assert.equal((entry.noteSamples as any)["99"], undefined);
+});
+
+test("[entry-roundtrip] applyEntryToState defaults: 빈 barRepeats/누락 필드 fallback", () => {
+  const entry: PracticeEntry = {
+    id: "e4",
+    label: "Default",
+    createdAt: 3,
+    bpm: 80,
+    beatsPerMeasure: 4,
+    beatTypes: ["accent", "normal", "normal", "normal"],
+    beatSubdivisions: {},
+    barRepeats: {},
+    barLoopMode: "once",
+    subdivisionPattern: ["accent"],
+  };
+  const state = applyEntryToState(entry);
+  assert.deepEqual(state.bpmOverrides, {});
+  assert.deepEqual(state.loopBlocks, []);
+  assert.equal(state.blockPlayMode, "loop");
+  assert.equal(state.barLoopMode, "once");
+  assert.deepEqual(state.noteSamples, {});
+  assert.deepEqual(state.noteSampleChannels, {});
 });
 
 test("[entry-roundtrip] entryToBarConfig는 결과가 입력 entry와 격리됨(얕은 복사)", () => {

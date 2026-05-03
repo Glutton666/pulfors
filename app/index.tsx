@@ -32,7 +32,6 @@ import Animated, {
   Easing,
   useSharedValue,
 } from "react-native-reanimated";
-import { useAudioPlayer } from "expo-audio";
 import { safePlay, notifyAudioPoolFallback, detectPoolCutoffRisk } from "@/lib/audio-utils";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import * as Haptics from "expo-haptics";
@@ -70,6 +69,8 @@ import { VoiceAssistantButton } from "@/components/VoiceAssistantButton";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { make_styles } from "./index.styles";
 import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, adjustShuffledIndicesOnInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig } from "./index.helpers";
+import { useAudioPlayers } from "@/hooks/useAudioPlayers";
+import { useNoteSamples } from "@/hooks/useNoteSamples";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { MoreMenuModal } from "@/components/MoreMenuModal";
 import { ScheduledStartModal } from "@/components/ScheduledStartModal";
@@ -365,14 +366,21 @@ export default function MetronomeScreen() {
     };
   }, []);
 
-  const [noteSamples, setNoteSamples] = useState<NoteSampleMap>({});
-  const noteSamplesRef = useRef<NoteSampleMap>({});
-  const [noteSampleNames, setNoteSampleNames] = useState<NoteSampleNameMap>({});
-  const noteSampleNamesRef = useRef<NoteSampleNameMap>({});
-  const [noteSampleSources, setNoteSampleSources] = useState<NoteSampleSourceMap>({});
-  const noteSampleSourcesRef = useRef<NoteSampleSourceMap>({});
-  const [noteSampleChannels, setNoteSampleChannels] = useState<NoteSampleChannelMap>({});
-  const noteSampleChannelsRef = useRef<NoteSampleChannelMap>({});
+  const noteSamplesHook = useNoteSamples();
+  const {
+    samples: noteSamples,
+    samplesRef: noteSamplesRef,
+    setSamples: setNoteSamples,
+    names: noteSampleNames,
+    namesRef: noteSampleNamesRef,
+    setNames: setNoteSampleNames,
+    sources: noteSampleSources,
+    sourcesRef: noteSampleSourcesRef,
+    setSources: setNoteSampleSources,
+    channels: noteSampleChannels,
+    channelsRef: noteSampleChannelsRef,
+    setChannels: setNoteSampleChannels,
+  } = noteSamplesHook;
   const [barMetronomeChannel, setBarMetronomeChannel] = useState<SampleChannel>("both");
   const barMetronomeChannelRef = useRef<SampleChannel>("both");
   const noteSampleSoundsRef = useRef<Record<string, ExpoAudioPlayer>>({});
@@ -392,56 +400,8 @@ export default function MetronomeScreen() {
   const dialRef = useRef<View>(null);
   const dialCenterRef = useRef({ x: 0, y: 0 });
 
-  const classicHighA = useAudioPlayer(soundSets.classic.high);
-  const classicHighB = useAudioPlayer(soundSets.classic.high);
-  const classicLowA = useAudioPlayer(soundSets.classic.low);
-  const classicLowB = useAudioPlayer(soundSets.classic.low);
-  const classicStrongA = useAudioPlayer(soundSets.classic.strong);
-  const classicStrongB = useAudioPlayer(soundSets.classic.strong);
-
-  const woodblockHighA = useAudioPlayer(soundSets.woodblock.high);
-  const woodblockHighB = useAudioPlayer(soundSets.woodblock.high);
-  const woodblockLowA = useAudioPlayer(soundSets.woodblock.low);
-  const woodblockLowB = useAudioPlayer(soundSets.woodblock.low);
-  const woodblockStrongA = useAudioPlayer(soundSets.woodblock.strong);
-  const woodblockStrongB = useAudioPlayer(soundSets.woodblock.strong);
-
-  const cowbellHighA = useAudioPlayer(soundSets.cowbell.high);
-  const cowbellHighB = useAudioPlayer(soundSets.cowbell.high);
-  const cowbellLowA = useAudioPlayer(soundSets.cowbell.low);
-  const cowbellLowB = useAudioPlayer(soundSets.cowbell.low);
-  const cowbellStrongA = useAudioPlayer(soundSets.cowbell.strong);
-  const cowbellStrongB = useAudioPlayer(soundSets.cowbell.strong);
-
-  const digitalHighA = useAudioPlayer(soundSets.digital.high);
-  const digitalHighB = useAudioPlayer(soundSets.digital.high);
-  const digitalLowA = useAudioPlayer(soundSets.digital.low);
-  const digitalLowB = useAudioPlayer(soundSets.digital.low);
-  const digitalStrongA = useAudioPlayer(soundSets.digital.strong);
-  const digitalStrongB = useAudioPlayer(soundSets.digital.strong);
-
-  const rimshotHighA = useAudioPlayer(soundSets.rimshot.high);
-  const rimshotHighB = useAudioPlayer(soundSets.rimshot.high);
-  const rimshotLowA = useAudioPlayer(soundSets.rimshot.low);
-  const rimshotLowB = useAudioPlayer(soundSets.rimshot.low);
-  const rimshotStrongA = useAudioPlayer(soundSets.rimshot.strong);
-  const rimshotStrongB = useAudioPlayer(soundSets.rimshot.strong);
-
-  const allPlayers = useMemo(() => ({
-    classic: { highA: classicHighA, highB: classicHighB, lowA: classicLowA, lowB: classicLowB, strongA: classicStrongA, strongB: classicStrongB },
-    woodblock: { highA: woodblockHighA, highB: woodblockHighB, lowA: woodblockLowA, lowB: woodblockLowB, strongA: woodblockStrongA, strongB: woodblockStrongB },
-    cowbell: { highA: cowbellHighA, highB: cowbellHighB, lowA: cowbellLowA, lowB: cowbellLowB, strongA: cowbellStrongA, strongB: cowbellStrongB },
-    digital: { highA: digitalHighA, highB: digitalHighB, lowA: digitalLowA, lowB: digitalLowB, strongA: digitalStrongA, strongB: digitalStrongB },
-    rimshot: { highA: rimshotHighA, highB: rimshotHighB, lowA: rimshotLowA, lowB: rimshotLowB, strongA: rimshotStrongA, strongB: rimshotStrongB },
-  }), [classicHighA, classicHighB, classicLowA, classicLowB, classicStrongA, classicStrongB, woodblockHighA, woodblockHighB, woodblockLowA, woodblockLowB, woodblockStrongA, woodblockStrongB, cowbellHighA, cowbellHighB, cowbellLowA, cowbellLowB, cowbellStrongA, cowbellStrongB, digitalHighA, digitalHighB, digitalLowA, digitalLowB, digitalStrongA, digitalStrongB, rimshotHighA, rimshotHighB, rimshotLowA, rimshotLowB, rimshotStrongA, rimshotStrongB]);
-
-  const highToggle = useRef(false);
-  const lowToggle = useRef(false);
-  const strongToggle = useRef(false);
-  const soundSetRef = useRef(soundSet);
-  useEffect(() => { soundSetRef.current = soundSet; }, [soundSet]);
-  const allPlayersRef = useRef(allPlayers);
-  useEffect(() => { allPlayersRef.current = allPlayers; }, [allPlayers]);
+  const audioPlayersHook = useAudioPlayers(soundSet);
+  const { allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle } = audioPlayersHook;
 
   // 재생 시작 1회만 풀 cut-off 위험 측정 (관측 전용).
   // prev 게이트로 false→true edge에서만 통과. 재생 중 bpm/분할 변경 시 effect는

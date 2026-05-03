@@ -235,6 +235,59 @@ export function beatSubdivisionCounts(
   return counts;
 }
 
+export interface AppliedEntryState {
+  bpm: number;
+  beatsPerMeasure: number;
+  beatTypes: BeatType[];
+  beatSubdivisions: Record<string, BeatType[]>;
+  barRepeats: Record<number, BarRepeat>;
+  loopBlocks: LoopBlock[];
+  barLoopMode: BarLoopMode;
+  blockPlayMode: BlockPlayMode;
+  subdivisionPattern: BeatType[] | null;
+  noteSamples: NoteSampleMap;
+  noteSampleNames: NoteSampleNameMap;
+  noteSampleSources: NoteSampleSourceMap;
+  noteSampleChannels: NoteSampleChannelMap;
+  bpmOverrides: Record<number, number>;
+}
+
+/**
+ * Pure reducer mirroring the React-state side effects of applyEntryToEngine.
+ * Returns the values that the live component would set on bpm/beatsPerMeasure/
+ * note-sample maps/etc when loading the entry. Engine-level calls are
+ * deliberately not modeled here; tests can verify state-roundtrip without a
+ * real engine instance.
+ */
+export function applyEntryToState(entry: PracticeEntry): AppliedEntryState {
+  const e = entry as PracticeEntry & {
+    loopBlocks?: LoopBlock[];
+    blockPlayMode?: BlockPlayMode;
+  };
+  const blocks = e.loopBlocks ?? [];
+  const bpmOverrides: Record<number, number> = {};
+  for (const [k, v] of Object.entries(entry.barRepeats || {})) {
+    const maybe = (v as { bpm?: number }).bpm;
+    if (typeof maybe === "number") bpmOverrides[Number(k)] = maybe;
+  }
+  return {
+    bpm: entry.bpm,
+    beatsPerMeasure: entry.beatsPerMeasure,
+    beatTypes: [...entry.beatTypes],
+    beatSubdivisions: { ...entry.beatSubdivisions },
+    barRepeats: { ...(entry.barRepeats || {}) } as Record<number, BarRepeat>,
+    loopBlocks: [...blocks],
+    barLoopMode: entry.barLoopMode || "once",
+    blockPlayMode: e.blockPlayMode || "loop",
+    subdivisionPattern: entry.subdivisionPattern ? [...entry.subdivisionPattern] : null,
+    noteSamples: { ...(entry.noteSamples || {}) } as NoteSampleMap,
+    noteSampleNames: { ...(entry.noteSampleNames || {}) } as NoteSampleNameMap,
+    noteSampleSources: { ...(entry.noteSampleSources || {}) } as NoteSampleSourceMap,
+    noteSampleChannels: { ...(entry.noteSampleChannels || {}) } as NoteSampleChannelMap,
+    bpmOverrides,
+  };
+}
+
 /**
  * Pure projection of a PracticeEntry into the BarConfig shape held in barConfigRef.
  * Centralizes default values for blockPlayMode/barClockMode/barTimerDuration so
