@@ -244,6 +244,23 @@ test("[apply-engine] 입력 entry는 setter 인자 변형으로부터 격리(얕
   assert.equal(blockEntry.loopBlocks!.length, 2);
 });
 
+test("[apply-engine] BPM 오버라이드 정책: 0/음수/누락은 무시, 양수만 통과", () => {
+  // 사용자가 BPM 입력란을 비웠을 때 0이 흘러올 수 있다. 엔진은 20~300으로
+  // 클램프하므로 0을 그대로 넘기면 20으로 잘못 강제된다. 헬퍼에서 막아야 한다.
+  const entry: PracticeEntry = {
+    ...emptyEntry,
+    barRepeats: {
+      0: { type: "count", value: 2, bpm: 0 },
+      1: { type: "count", value: 2, bpm: -10 },
+      2: { type: "count", value: 2 },
+      3: { type: "count", value: 2, bpm: 140 },
+    } as Record<number, BarRepeat>,
+  };
+  const fake = createFakeEngine();
+  applyEntryToEngine(fake, entry);
+  assert.deepEqual(fake.state.bpmOverrides, { 3: 140 });
+});
+
 test("[apply-engine] blockPlayMode 누락 시 'loop' 폴백, barRepeats 누락 시 빈 객체", () => {
   const noBlocksEntry: PracticeEntry = {
     ...emptyEntry,

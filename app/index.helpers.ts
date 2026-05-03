@@ -347,9 +347,12 @@ export function applyEntryToEngine(engine: EntryEngineSetters, entry: PracticeEn
   engine.setLoopBlocks([...blocks] as LoopBlock[]);
   engine.setBlockPlayMode(entry.blockPlayMode || "loop");
   engine.setAllBarRepeats({ ...(entry.barRepeats || {}) } as Record<number, BarRepeat>);
+  // BPM 오버라이드는 양수만 추출. 0/음수/누락은 "오버라이드 없음"으로 간주
+  // (이전 인라인 코드의 truthy 체크와 동일 의도). 엔진은 20~300으로 클램프하므로
+  // 0을 흘려보내면 20으로 잘못 강제될 수 있어, 이 경계는 헬퍼에서 막는다.
   const bpmOverrides: Record<number, number> = {};
   for (const [k, v] of Object.entries(entry.barRepeats || {})) {
-    if (typeof v.bpm === "number") bpmOverrides[Number(k)] = v.bpm;
+    if (typeof v.bpm === "number" && v.bpm > 0) bpmOverrides[Number(k)] = v.bpm;
   }
   engine.setAllBarBpmOverrides(bpmOverrides);
 }
