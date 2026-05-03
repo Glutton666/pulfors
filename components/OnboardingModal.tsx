@@ -24,6 +24,9 @@ import type { ThemeColor } from "@/constants/colors";
 import type { FlashMode, HapticMode } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
 import { useLanguage } from "@/contexts/LanguageContext";
+import type { Language } from "@/lib/i18n";
+import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
+import { Switch } from "react-native";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -62,7 +65,7 @@ const THEME_OPTIONS: { key: ThemeColor; color: string; label: string }[] = [
   { key: "neon", color: ACCENT_PRESETS.neon.accent, label: "Neon" },
 ];
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 7;
 
 const DEMO_BEAT_TYPES: BeatType[] = ["strong", "accent", "normal", "mute"];
 
@@ -211,7 +214,8 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   const { colors: C } = useTheme();
   const styles = make_styles(C);
   const cpStyles = make_cpStyles(C);
-  const { t } = useLanguage();
+  const { t, language, setLanguage } = useLanguage();
+  const voice = useVoiceAssistant();
   const insets = useSafeAreaInsets();
   const { width: winW, height: winH } = useWindowDimensions();
   const isLandscape = winW > winH;
@@ -334,8 +338,8 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
     }
   }, [hexInput, customHex]);
 
-  const hapticDemo = useDemo(step === 2, visible, "haptic", hapticMode, flashMode, hapticFlashAnim);
-  const flashDemo = useDemo(step === 3, visible, "flash", hapticMode, flashMode, flashFlashAnim);
+  const hapticDemo = useDemo(step === 4, visible, "haptic", hapticMode, flashMode, hapticFlashAnim);
+  const flashDemo = useDemo(step === 5, visible, "flash", hapticMode, flashMode, flashFlashAnim);
 
   const animateToStep = useCallback(
     (nextStep: number) => {
@@ -890,17 +894,149 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
     );
   };
 
+  const renderLanguageStep = () => {
+    const options: { value: Language; label: string }[] = [
+      { value: "ko", label: "한국어" },
+      { value: "en", label: "English" },
+    ];
+    const content = (
+      <View style={{ width: "100%", gap: 12, marginTop: 8 }}>
+        {options.map((opt) => {
+          const active = language === opt.value;
+          return (
+            <Pressable
+              key={opt.value}
+              onPress={() => setLanguage(opt.value)}
+              style={{
+                paddingVertical: 16,
+                paddingHorizontal: 20,
+                borderRadius: 12,
+                borderWidth: 2,
+                borderColor: active ? accentColor : C.border,
+                backgroundColor: active ? C.accentDim : C.surface,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+              testID={`onboarding-lang-${opt.value}`}
+            >
+              <Text style={{ color: active ? accentColor : C.text, fontSize: 16, fontWeight: "600" }}>
+                {opt.label}
+              </Text>
+              {active && <Ionicons name="checkmark-circle" size={22} color={accentColor} />}
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+
+    if (isLandscape) {
+      return (
+        <View style={styles.landRow}>
+          {renderStepHeader(
+            <Ionicons name="language-outline" size={36} color={accentColor} />,
+            "languageTitle", "languageSubtitle"
+          )}
+          <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} showsVerticalScrollIndicator={false}>
+            {content}
+          </ScrollView>
+        </View>
+      );
+    }
+    return (
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.stepContent} showsVerticalScrollIndicator={false}>
+        <Ionicons name="language-outline" size={40} color={accentColor} />
+        <Text style={styles.stepTitle}>{t("onboarding", "languageTitle")}</Text>
+        <Text style={styles.stepSubtitle}>{t("onboarding", "languageSubtitle")}</Text>
+        {content}
+      </ScrollView>
+    );
+  };
+
+  const renderVoiceStep = () => {
+    const content = (
+      <>
+        <View style={{
+          width: "100%", marginTop: 8, padding: 16, borderRadius: 12,
+          backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+        }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={{ color: C.text, fontSize: 15, fontWeight: "600" }}>{t("onboarding", "voiceEnable")}</Text>
+              <Text style={{ color: C.textSecondary, fontSize: 12, marginTop: 4 }}>
+                {voice.isSupported ? t("voice", "enableHint") : t("onboarding", "voiceNotSupportedShort")}
+              </Text>
+            </View>
+            <Switch
+              value={voice.enabled}
+              onValueChange={voice.setEnabled}
+              disabled={!voice.isSupported}
+              trackColor={{ false: C.border, true: accentColor }}
+              testID="onboarding-voice-toggle"
+            />
+          </View>
+        </View>
+
+        {voice.enabled && voice.isSupported && (
+          <View style={{ width: "100%", marginTop: 12 }}>
+            <Text style={{ color: C.text, fontSize: 13, fontWeight: "600", marginBottom: 4 }}>
+              {t("onboarding", "voiceNicknameLabel")}
+            </Text>
+            <Text style={{ color: C.textSecondary, fontSize: 11, marginBottom: 8 }}>
+              {t("onboarding", "voiceNicknameHint")}
+            </Text>
+            <TextInput
+              style={[styles.textInput, isLandscape && { height: 40 }, { borderColor: accentColor }]}
+              value={voice.nickname}
+              onChangeText={voice.setNickname}
+              placeholder={t("voice", "nicknamePlaceholder")}
+              placeholderTextColor={C.textTertiary}
+              maxLength={20}
+              testID="onboarding-voice-nickname"
+            />
+          </View>
+        )}
+      </>
+    );
+
+    if (isLandscape) {
+      return (
+        <View style={styles.landRow}>
+          {renderStepHeader(
+            <Ionicons name="mic-outline" size={36} color={accentColor} />,
+            "voiceTitle", "voiceSubtitle"
+          )}
+          <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            {content}
+          </ScrollView>
+        </View>
+      );
+    }
+    return (
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.stepContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <Ionicons name="mic-outline" size={40} color={accentColor} />
+        <Text style={styles.stepTitle}>{t("onboarding", "voiceTitle")}</Text>
+        <Text style={styles.stepSubtitle}>{t("onboarding", "voiceSubtitle")}</Text>
+        {content}
+      </ScrollView>
+    );
+  };
+
   const renderCurrentStep = () => {
     switch (step) {
       case 0:
-        return renderThemeStep();
+        return renderLanguageStep();
       case 1:
-        return renderLoggingStep();
+        return renderVoiceStep();
       case 2:
-        return renderHapticStep();
+        return renderThemeStep();
       case 3:
-        return renderFlashStep();
+        return renderLoggingStep();
       case 4:
+        return renderHapticStep();
+      case 5:
+        return renderFlashStep();
+      case 6:
         return renderProfileStep();
       default:
         return null;
