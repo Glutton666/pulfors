@@ -163,6 +163,20 @@ test("integration: bridge pause/resume via app-style toggle does not mark user t
   assert.equal(state.resumeCount, 1);
 });
 
+test("close modal immediately after acquire leaves no leaked caller", async () => {
+  // 모달이 열리자마자 사용자가 닫는 race: acquire 직후 release가 거의 동시에
+  // 호출되어도 active caller가 남지 않고 메트로놈 상태가 정확히 복귀해야 한다.
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  const acq = acquireAudioSession("raceModal", "mic");
+  const rel = releaseAudioSession("raceModal");
+  await Promise.all([acq, rel]);
+  assert.equal(_audioSessionDebugState().activeCallers.length, 0);
+  // 한 번이라도 pause/resume이 일어난 경우 짝이 맞아야 한다.
+  assert.equal(state.pauseCount, state.resumeCount, "pause/resume counts balanced");
+});
+
 test("note recorder: start failure after prepare releases session", async () => {
   // prepareRecording이 acquire 후 startRecording의 record()가 실패하는 시나리오:
   // catch에서 releaseAudioSession을 호출해 active caller가 남지 않아야 한다.
