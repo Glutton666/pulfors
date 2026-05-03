@@ -37,11 +37,15 @@ const BUILTIN_ORDER: Array<{ setName: BuiltinSoundSet; role: SoundRole }> = [
   { setName: "rimshot", role: "strong" },
   { setName: "rimshot", role: "high" },
   { setName: "rimshot", role: "low" },
-  { setName: "classic", role: "strong" },
 ];
 
 export function createDefaultDrumKitMapping(): DrumKitMapping {
-  return BUILTIN_ORDER.map((b) => ({ source: { type: "builtin", setName: b.setName, role: b.role } }));
+  const mapping: DrumKitMapping = Array(DRUM_PAD_COUNT).fill(null);
+  for (let i = 0; i < BUILTIN_ORDER.length && i < DRUM_PAD_COUNT; i++) {
+    const b = BUILTIN_ORDER[i];
+    mapping[i] = { source: { type: "builtin", setName: b.setName, role: b.role } };
+  }
+  return mapping;
 }
 
 export function listBuiltinPadOptions(): Array<{ setName: BuiltinSoundSet; role: SoundRole }> {

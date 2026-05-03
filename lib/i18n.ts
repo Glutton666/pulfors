@@ -651,7 +651,7 @@ export const translations = {
   },
   drumKit: {
     title: { ko: "드럼 패드", en: "Drum Pad" },
-    menuHint: { ko: "4x4 런치패드로 비트를 만들고 녹음합니다", en: "Build and record beats on a 4x4 launchpad" },
+    menuHint: { ko: "4x4 런치패드로 비트를 만들고 녹음하면 노트 모드로 저장됩니다", en: "Build and record beats on a 4x4 launchpad — saved loops play back from Note mode" },
     tapToPlay: { ko: "탭하여 재생, 길게 눌러 매핑", en: "Tap to play, long-press to assign" },
     assignTitle: { ko: "패드 매핑", en: "Assign Pad" },
     sourceBuiltin: { ko: "내장 사운드", en: "Built-in" },
