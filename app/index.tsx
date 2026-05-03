@@ -69,6 +69,7 @@ import PracticeStatsGraph from "@/components/PracticeStatsGraph";
 import { VoiceAssistantButton } from "@/components/VoiceAssistantButton";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { make_styles } from "./index.styles";
+import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, adjustShuffledIndicesOnInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig } from "./index.helpers";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import type { OnboardingResult } from "@/components/OnboardingModal";
 import { GoalCompletePopup } from "@/components/GoalCompletePopup";
@@ -102,25 +103,6 @@ import {
   type PracticeRoom,
 } from "@/lib/practice-room";
 
-
-function defaultBeatTypes(beats: number): BeatType[] {
-  return Array.from({ length: beats }, (_, i) =>
-    i === 0 ? "accent" : "normal"
-  );
-}
-
-// Validate that a noteSample URI is a local resource.
-// Blocks attacker-supplied http/https URIs that would cause outbound network
-// requests from the victim device (SSRF / privacy beacon via deep-link import).
-function isSafeNoteSampleUri(uri: string): boolean {
-  const raw = uri.split("#")[0];
-  if (raw.startsWith("http://") || raw.startsWith("https://")) return false;
-  if (Platform.OS !== "web") {
-    return raw.startsWith("file://") || raw.startsWith("asset://");
-  }
-  // Web: only allow blob/data/file URIs created by the recorder
-  return raw.startsWith("blob:") || raw.startsWith("data:") || raw.startsWith("file://");
-}
 
 export default function MetronomeScreen() {
   const insets = useSafeAreaInsets();
@@ -172,29 +154,8 @@ export default function MetronomeScreen() {
   const barAreaLayoutRef = useRef({ y: 0, height: 0 });
   const barScrollOffsetRef = useRef(0);
 
-  const dialConfigRef = useRef({
-    beatsPerMeasure: 4,
-    beatTypes: defaultBeatTypes(4),
-    beatSubdivisions: {} as Record<string, BeatType[]>,
-    noteSamples: {} as NoteSampleMap,
-    noteSampleNames: {} as NoteSampleNameMap,
-    noteSampleSources: {} as NoteSampleSourceMap,
-  });
-  const barConfigRef = useRef({
-    beatsPerMeasure: 4,
-    beatTypes: defaultBeatTypes(4),
-    beatSubdivisions: {} as Record<string, BeatType[]>,
-    barRepeats: {} as Record<number, BarRepeat>,
-    loopBlocks: [] as LoopBlock[],
-    barClockMode: "stopwatch" as "stopwatch" | "timer",
-    barTimerDuration: 180,
-    noteSamples: {} as NoteSampleMap,
-    noteSampleNames: {} as NoteSampleNameMap,
-    noteSampleSources: {} as NoteSampleSourceMap,
-    barLoopMode: "once" as "loop" | "once",
-    blockPlayMode: "loop" as "sequential" | "loop" | "random",
-    hasBeenConfigured: false,
-  });
+  const dialConfigRef = useRef(createInitialDialConfig());
+  const barConfigRef = useRef(createInitialBarConfig());
 
   const [progressInfo, setProgressInfo] = useState<ProgressInfo | null>(null);
   const [layerProgressMap, setLayerProgressMap] = useState<Record<string, number>>({});
@@ -3035,14 +2996,7 @@ export default function MetronomeScreen() {
     showPlayingNotification(entry.bpm, "Note", languageRef.current);
   }, [preloadNoteSampleSounds]);
 
-  const createShuffledIndices = useCallback((length: number) => {
-    const indices = Array.from({ length }, (_, i) => i);
-    for (let i = indices.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [indices[i], indices[j]] = [indices[j], indices[i]];
-    }
-    return indices;
-  }, []);
+  const createShuffledIndices = useCallback((length: number) => createShuffledIndicesPure(length), []);
 
   const noteAdvanceQueue = useCallback(() => {
     const q = noteQueueRef.current;
@@ -3196,14 +3150,11 @@ export default function MetronomeScreen() {
       return updated;
     });
     if (notePlayModeRef.current === "random") {
-      const pos = noteShuffledPosRef.current;
-      const indices = [...noteShuffledIndicesRef.current];
-      const insertedQueueIdx = ci + 1;
-      for (let i = 0; i < indices.length; i++) {
-        if (indices[i] >= insertedQueueIdx) indices[i]++;
-      }
-      indices.splice(pos + 1, 0, insertedQueueIdx);
-      noteShuffledIndicesRef.current = indices;
+      noteShuffledIndicesRef.current = adjustShuffledIndicesOnInsert(
+        noteShuffledIndicesRef.current,
+        noteShuffledPosRef.current,
+        ci + 1,
+      );
     }
   }, []);
 
@@ -3315,51 +3266,26 @@ export default function MetronomeScreen() {
     }
   }, [beatsPerMeasure]);
 
-  const beatSubdivisionCounts = useMemo(() => {
-    const counts: Record<number, number> = {};
-    for (const [k, v] of Object.entries(beatSubdivisions)) {
-      counts[Number(k)] = v.length;
-    }
-    return counts;
-  }, [beatSubdivisions]);
+  const beatSubdivisionCounts = useMemo(() => beatSubdivisionCountsPure(beatSubdivisions), [beatSubdivisions]);
 
-  const currentBarConfig = useMemo(() => {
-    if (barMode) {
-      return {
-        mode: "bar" as const,
-        bpm,
-        beatsPerMeasure,
-        beatTypes: [...beatTypes],
-        beatSubdivisions: { ...beatSubdivisions },
-        barRepeats: { ...barRepeats },
-        loopBlocks: [...loopBlocks],
-        barLoopMode: barLoopMode as "loop" | "once",
-        blockPlayMode: blockPlayMode as "sequential" | "loop" | "random",
-        subdivisionPattern: [...subdivisionPattern],
-        barClockMode: barConfigRef.current.barClockMode,
-        barTimerDuration: barConfigRef.current.barTimerDuration,
-        noteSamples: { ...noteSamples },
-        noteSampleNames: { ...noteSampleNames },
-        noteSampleSources: { ...noteSampleSources },
-      };
-    }
-    const dc = dialConfigRef.current;
-    return {
-      mode: "beat" as const,
-      bpm,
-      beatsPerMeasure: dc.beatsPerMeasure,
-      beatTypes: [...dc.beatTypes],
-      beatSubdivisions: { ...dc.beatSubdivisions },
-      barRepeats: {} as Record<number, any>,
-      loopBlocks: [] as any[],
-      barLoopMode: "once" as const,
-      blockPlayMode: "loop" as const,
-      subdivisionPattern: [...subdivisionPattern],
-      noteSamples: { ...dc.noteSamples },
-      noteSampleNames: { ...dc.noteSampleNames },
-      noteSampleSources: { ...dc.noteSampleSources },
-    };
-  }, [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, blockPlayMode, subdivisionPattern, noteSamples, noteSampleNames, noteSampleSources]);
+  const currentBarConfig = useMemo(() => selectCurrentBarConfig({
+    barMode,
+    bpm,
+    beatsPerMeasure,
+    beatTypes,
+    beatSubdivisions,
+    barRepeats,
+    loopBlocks,
+    barLoopMode,
+    blockPlayMode,
+    subdivisionPattern,
+    noteSamples,
+    noteSampleNames,
+    noteSampleSources,
+    dialConfig: dialConfigRef.current,
+    barClockMode: barConfigRef.current.barClockMode,
+    barTimerDuration: barConfigRef.current.barTimerDuration,
+  }), [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, blockPlayMode, subdivisionPattern, noteSamples, noteSampleNames, noteSampleSources]);
 
   const handleLoadPracticeEntry = useCallback((entry: PracticeEntry) => {
     const engine = engineRef.current;
