@@ -1184,7 +1184,7 @@ export default function MetronomeScreen() {
     const updatedChannels = await setNoteSampleChannel(recorderTarget.beat, recorderTarget.sub, channel, noteSampleChannelsRef.current);
     setNoteSampleChannels(updatedChannels);
     noteSampleChannelsRef.current = updatedChannels;
-    await preloadNoteSampleSounds(updated);
+    await preloadNoteSampleSounds(updated, true);
     scheduleReRender();
     setRecorderTarget(null);
   }, [recorderTarget, preloadNoteSampleSounds, invalidateSamplePCMCache, scheduleReRender]);
