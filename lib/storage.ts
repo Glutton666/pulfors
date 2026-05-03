@@ -255,6 +255,46 @@ export interface PracticeEntry {
   imageUri?: string;
 }
 
+// === 컨트롤 패드 매핑 ============================================
+// 노트 모드의 3x3 컨트롤 패드 슬롯 → PracticeEntry.id 매핑.
+// 빈 칸은 null. 매핑된 ID가 더 이상 존재하지 않으면 UI에서 "missing"으로 표시한다.
+const CONTROL_PAD_MAPPING_KEY = "metronome_control_pad_mapping_v1";
+export const CONTROL_PAD_SLOT_COUNT = 9;
+export type ControlPadMapping = (string | null)[];
+
+export function createEmptyControlPadMapping(): ControlPadMapping {
+  return Array(CONTROL_PAD_SLOT_COUNT).fill(null);
+}
+
+function normalizeControlPadMapping(input: unknown): ControlPadMapping {
+  const out = createEmptyControlPadMapping();
+  if (Array.isArray(input)) {
+    for (let i = 0; i < CONTROL_PAD_SLOT_COUNT; i++) {
+      const v = input[i];
+      out[i] = typeof v === "string" && v.length > 0 ? v : null;
+    }
+  }
+  return out;
+}
+
+export async function loadControlPadMapping(): Promise<ControlPadMapping> {
+  try {
+    const data = await AsyncStorage.getItem(CONTROL_PAD_MAPPING_KEY);
+    if (data) return normalizeControlPadMapping(JSON.parse(data));
+  } catch (e) {
+    notifyStorageError({ key: CONTROL_PAD_MAPPING_KEY, operation: "load", error: e });
+  }
+  return createEmptyControlPadMapping();
+}
+
+export async function saveControlPadMapping(mapping: ControlPadMapping): Promise<void> {
+  try {
+    await AsyncStorage.setItem(CONTROL_PAD_MAPPING_KEY, JSON.stringify(normalizeControlPadMapping(mapping)));
+  } catch (e) {
+    notifyStorageError({ key: CONTROL_PAD_MAPPING_KEY, operation: "save", error: e });
+  }
+}
+
 export async function loadPracticeBook(): Promise<PracticeEntry[]> {
   try {
     const data = await AsyncStorage.getItem(PRACTICE_BOOK_KEY);

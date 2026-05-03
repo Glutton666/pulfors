@@ -52,7 +52,7 @@ import {
   soundSets,
 } from "@/lib/metronome-engine";
 import type { BeatType, ProgressInfo } from "@/lib/metronome-engine";
-import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, type MetronomeSettings } from "@/lib/storage";
+import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, loadControlPadMapping, saveControlPadMapping, createEmptyControlPadMapping, type ControlPadMapping, type MetronomeSettings } from "@/lib/storage";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample } from "@/lib/storage";
 import { BeatIndicator } from "@/components/BeatIndicator";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
@@ -188,6 +188,26 @@ export default function MetronomeScreen() {
   const noteIsPlayingRef = useRef(false);
   useEffect(() => { noteIsPlayingRef.current = noteIsPlaying; }, [noteIsPlaying]);
   const [noteBarEntries, setNoteBarEntries] = useState<PracticeEntry[]>([]);
+  const [controlPadMapping, setControlPadMapping] = useState<ControlPadMapping>(createEmptyControlPadMapping);
+  const controlPadLoadedRef = useRef(false);
+  const controlPadDirtyRef = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const m = await loadControlPadMapping();
+      if (cancelled) return;
+      if (!controlPadDirtyRef.current) {
+        setControlPadMapping(m);
+      }
+      controlPadLoadedRef.current = true;
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  const handleControlPadMappingChange = useCallback((m: ControlPadMapping) => {
+    controlPadDirtyRef.current = true;
+    setControlPadMapping(m);
+    saveControlPadMapping(m).catch(() => {});
+  }, []);
   const noteAdvanceQueueRef = useRef<() => void>(() => {});
   const noteShuffledIndicesRef = useRef<number[]>([]);
   const noteShuffledPosRef = useRef(0);
@@ -4413,6 +4433,8 @@ export default function MetronomeScreen() {
             onReset={handleNoteReset}
             onExitNoteMode={handleExitNoteMode}
             onQueueItemImageChange={handleNoteQueueItemImageChange}
+            padMapping={controlPadMapping}
+            onPadMappingChange={handleControlPadMappingChange}
           />
         ) : (
         <>

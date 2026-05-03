@@ -8,16 +8,19 @@ import {
   Alert,
   Platform,
   Image,
+  Modal,
   useWindowDimensions,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
+import * as Haptics from "expo-haptics";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
-import { Spacing } from "@/constants/tokens";
+import { Spacing, Radius } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { PracticeEntry } from "@/lib/storage";
+import type { PracticeEntry, ControlPadMapping } from "@/lib/storage";
+import { CONTROL_PAD_SLOT_COUNT, createEmptyControlPadMapping } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
 import { useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
@@ -38,6 +41,8 @@ interface NoteModeViewProps {
   onReset: () => void;
   onExitNoteMode: () => void;
   onQueueItemImageChange?: (index: number, imageUri: string | undefined) => void;
+  padMapping?: ControlPadMapping;
+  onPadMappingChange?: (mapping: ControlPadMapping) => void;
 }
 
 const BEAT_COLORS: Record<BeatType, string> = {
@@ -218,6 +223,8 @@ export function NoteModeView({
   onReset,
   onExitNoteMode,
   onQueueItemImageChange,
+  padMapping: padMappingProp,
+  onPadMappingChange,
 }: NoteModeViewProps) {
   const { colors: C } = useTheme();
   const S = useScale();
@@ -235,11 +242,232 @@ export function NoteModeView({
     }
   }, [onSave]);
   const [sourceCollapsed, setSourceCollapsed] = useState(false);
+  const [padEnabled, setPadEnabled] = useState(false);
+  const [assignSlot, setAssignSlot] = useState<number | null>(null);
+  const [lastTriggeredSlot, setLastTriggeredSlot] = useState<number | null>(null);
 
   useEffect(() => {
     if (isPlaying) setSourceCollapsed(true);
     else setSourceCollapsed(false);
   }, [isPlaying]);
+
+  const padMapping = useMemo<ControlPadMapping>(
+    () => (padMappingProp && padMappingProp.length === CONTROL_PAD_SLOT_COUNT ? padMappingProp : createEmptyControlPadMapping()),
+    [padMappingProp],
+  );
+  const padIdLookup = useMemo(() => {
+    const map: Record<string, PracticeEntry> = {};
+    for (const e of barEntries) map[e.id] = e;
+    return map;
+  }, [barEntries]);
+
+  const updatePadSlot = useCallback((slot: number, entryId: string | null) => {
+    if (!onPadMappingChange) return;
+    if (slot < 0 || slot >= CONTROL_PAD_SLOT_COUNT) return;
+    const next = [...padMapping];
+    next[slot] = entryId;
+    onPadMappingChange(next);
+  }, [padMapping, onPadMappingChange]);
+
+  const handlePadPress = useCallback((slot: number) => {
+    const id = padMapping[slot];
+    if (!isPlaying) {
+      setAssignSlot(slot);
+      return;
+    }
+    if (!padEnabled) return;
+    if (!id) return;
+    const entry = padIdLookup[id];
+    if (!entry) return;
+    onAddToQueue(entry);
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+    setLastTriggeredSlot(slot);
+  }, [padMapping, isPlaying, padEnabled, padIdLookup, onAddToQueue]);
+
+  useEffect(() => {
+    if (lastTriggeredSlot === null) return;
+    const t = setTimeout(() => setLastTriggeredSlot(null), 350);
+    return () => clearTimeout(t);
+  }, [lastTriggeredSlot]);
+
+  const renderPadGrid = (compact: boolean) => (
+    <View style={styles.padGrid}>
+      {Array.from({ length: CONTROL_PAD_SLOT_COUNT }).map((_, slot) => {
+        const id = padMapping[slot];
+        const entry = id ? padIdLookup[id] : null;
+        const missing = !!id && !entry;
+        const triggerable = isPlaying && padEnabled && !!entry;
+        const dimmed = isPlaying && !padEnabled;
+        return (
+          <Pressable
+            key={`pad-${slot}`}
+            style={[
+              styles.padCell,
+              compact && styles.padCellCompact,
+              { borderColor: C.border, backgroundColor: C.surface },
+              !id && { borderStyle: "dashed" as const },
+              missing && { borderColor: C.danger },
+              triggerable && { borderColor: C.accent, backgroundColor: "rgba(212,168,70,0.08)" },
+              triggerable && lastTriggeredSlot === slot && { borderColor: C.accent, backgroundColor: "rgba(212,168,70,0.28)" },
+              dimmed && { opacity: 0.4 },
+            ]}
+            onPress={() => handlePadPress(slot)}
+            disabled={isPlaying && !padEnabled}
+          >
+            {!id ? (
+              <Ionicons name="add" size={compact ? 16 : 22} color={C.textTertiary} />
+            ) : missing ? (
+              <>
+                <Ionicons name="help-circle-outline" size={compact ? 14 : 18} color={C.danger} />
+                {!compact && (
+                  <Text style={[styles.padCellMeta, { color: C.danger }]} numberOfLines={1}>
+                    {t("noteMode", "padMissing")}
+                  </Text>
+                )}
+              </>
+            ) : (
+              <>
+                <Text style={[styles.padCellLabel, compact && { fontSize: S.ms(10, 0.3) }, { color: C.text }]} numberOfLines={1}>
+                  {entry!.label}
+                </Text>
+                {!compact && (
+                  <Text style={[styles.padCellMeta, { color: C.textTertiary }]} numberOfLines={1}>
+                    {entry!.bpm} BPM
+                  </Text>
+                )}
+              </>
+            )}
+            {!isPlaying && id && (
+              <Pressable
+                onPress={() => updatePadSlot(slot, null)}
+                hitSlop={6}
+                style={styles.padClearBtn}
+              >
+                <Ionicons name="close-circle" size={14} color={C.textTertiary} />
+              </Pressable>
+            )}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+
+  const renderControlPadHeader = (showToggle: boolean) => (
+    <View style={[styles.sectionHeader, isLandscape && { marginBottom: S.ms(2, 0.3) }]}>
+      <View style={styles.sectionHeaderLeft}>
+        <Text style={[styles.sectionTitle, { color: C.text }, isLandscape && { fontSize: S.ms(11, 0.3) }]}>
+          {t("noteMode", "controlPad")}
+        </Text>
+      </View>
+      {showToggle ? (
+        <Pressable
+          onPress={() => setPadEnabled(p => !p)}
+          style={[
+            styles.padToggle,
+            {
+              borderColor: padEnabled ? C.accent : C.border,
+              backgroundColor: padEnabled ? C.accent + "22" : C.surface,
+            },
+          ]}
+          hitSlop={6}
+        >
+          <Ionicons
+            name={padEnabled ? "radio-button-on" : "radio-button-off"}
+            size={S.ms(12, 0.3)}
+            color={padEnabled ? C.accent : C.textTertiary}
+          />
+          <Text style={[styles.padToggleText, { color: padEnabled ? C.accent : C.textTertiary }]}>
+            {t("noteMode", "controlPadEnable")}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+
+  const renderControlPadSection = (compact: boolean) => (
+    <View style={isLandscape ? { marginTop: S.ms(4, 0.3) } : { marginTop: S.ms(6, 0.3) }}>
+      {renderControlPadHeader(isPlaying)}
+      {isPlaying && padEnabled && (
+        <Text style={[styles.padHint, { color: C.textTertiary }]}>
+          {t("noteMode", "padPlayingHint")}
+        </Text>
+      )}
+      {renderPadGrid(compact)}
+    </View>
+  );
+
+  const renderAssignModal = () => (
+    <Modal
+      visible={assignSlot !== null}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setAssignSlot(null)}
+    >
+      <Pressable style={styles.modalBackdrop} onPress={() => setAssignSlot(null)}>
+        <Pressable
+          style={[styles.modalSheet, { backgroundColor: C.surface, borderColor: C.border }]}
+          onPress={() => {}}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { color: C.text }]}>
+              {assignSlot !== null && padMapping[assignSlot]
+                ? t("noteMode", "padReassign")
+                : t("noteMode", "padAssign")}
+            </Text>
+            {assignSlot !== null && padMapping[assignSlot] ? (
+              <Pressable
+                onPress={() => {
+                  if (assignSlot !== null) updatePadSlot(assignSlot, null);
+                  setAssignSlot(null);
+                }}
+                style={[styles.modalClearBtn, { borderColor: C.danger }]}
+              >
+                <Text style={[styles.modalClearText, { color: C.danger }]}>
+                  {t("noteMode", "padClear")}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {barEntries.length === 0 ? (
+            <Text style={[styles.padHint, { color: C.textTertiary, paddingVertical: 16 }]}>
+              {t("noteMode", "padNoBarEntries")}
+            </Text>
+          ) : (
+            <FlatList
+              data={barEntries}
+              keyExtractor={(item) => `assign-${item.id}`}
+              style={{ maxHeight: 360 }}
+              renderItem={({ item }) => {
+                const selected = assignSlot !== null && padMapping[assignSlot] === item.id;
+                return (
+                  <Pressable
+                    onPress={() => {
+                      if (assignSlot !== null) updatePadSlot(assignSlot, item.id);
+                      setAssignSlot(null);
+                    }}
+                    style={[
+                      styles.modalItem,
+                      { borderColor: C.border },
+                      selected && { borderColor: C.accent, backgroundColor: C.accent + "22" },
+                    ]}
+                  >
+                    <Text style={[styles.modalItemLabel, { color: C.text }]} numberOfLines={1}>
+                      {item.label}
+                    </Text>
+                    <Text style={[styles.modalItemMeta, { color: C.textSecondary }]}>
+                      {item.bpm} BPM · {item.beatsPerMeasure}
+                    </Text>
+                  </Pressable>
+                );
+              }}
+            />
+          )}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
 
   const playModes: Array<"once" | "loop" | "random"> = ["once", "loop", "random"];
   const playModeLabels = {
@@ -340,7 +568,9 @@ export function NoteModeView({
               </Pressable>
             </View>
             {renderPlayingStrip()}
+            {renderControlPadSection(true)}
           </View>
+          {renderAssignModal()}
         </View>
       );
     }
@@ -366,6 +596,8 @@ export function NoteModeView({
           )}
         </View>
 
+        {renderControlPadSection(true)}
+
         <View style={styles.playingStripContainer}>
           {renderPlayingStrip()}
           <Pressable
@@ -375,6 +607,7 @@ export function NoteModeView({
             <Ionicons name="stop" size={S.ms(28, 0.4)} color="#fff" />
           </Pressable>
         </View>
+        {renderAssignModal()}
       </View>
     );
   }
@@ -531,8 +764,10 @@ export function NoteModeView({
         </View>
         <View style={[styles.landscapeRightPanel, { justifyContent: "space-between" as const }]}>
           {renderSourceSection()}
+          {renderControlPadSection(true)}
           {renderPlayControls()}
         </View>
+        {renderAssignModal()}
       </View>
     );
   }
@@ -561,6 +796,10 @@ export function NoteModeView({
       {renderQueueSection()}
 
       {renderSourceSection()}
+
+      {renderControlPadSection(false)}
+
+      {renderAssignModal()}
     </View>
   );
 }
@@ -926,5 +1165,110 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: S.ms(10, 0.3),
     color: C.text,
+  },
+  padGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: S.ms(6, 0.3),
+  },
+  padCell: {
+    width: "31.5%",
+    aspectRatio: 1.6,
+    borderWidth: 1,
+    borderRadius: S.ms(8, 0.3),
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: S.ms(6, 0.3),
+    gap: S.ms(2, 0.3),
+    position: "relative",
+  },
+  padCellCompact: {
+    aspectRatio: 1.9,
+    paddingHorizontal: S.ms(4, 0.3),
+  },
+  padCellLabel: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: S.ms(12, 0.3),
+    textAlign: "center",
+  },
+  padCellMeta: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: S.ms(10, 0.3),
+    textAlign: "center",
+  },
+  padClearBtn: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    padding: Spacing.xxs,
+  },
+  padToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: S.ms(4, 0.3),
+    paddingHorizontal: S.ms(8, 0.3),
+    paddingVertical: S.ms(3, 0.3),
+    borderRadius: S.ms(6, 0.3),
+    borderWidth: 1,
+  },
+  padToggleText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: S.ms(10, 0.3),
+  },
+  padHint: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: S.ms(10, 0.3),
+    marginBottom: S.ms(4, 0.3),
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: Spacing.lg,
+  },
+  modalSheet: {
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: Spacing.md,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.sm,
+  },
+  modalTitle: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: S.ms(14, 0.3),
+    flex: 1,
+  },
+  modalClearBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+  },
+  modalClearText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: S.ms(11, 0.3),
+  },
+  modalItem: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    marginBottom: 6,
+    gap: Spacing.xxs,
+  },
+  modalItemLabel: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: S.ms(13, 0.3),
+  },
+  modalItemMeta: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: S.ms(11, 0.3),
   },
 });
