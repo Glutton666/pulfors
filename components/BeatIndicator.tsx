@@ -30,7 +30,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
-import { getLayerCountForBeat, formatRepeat } from "./beat-indicator-helpers";
+import { getLayerCountForBeat, formatRepeat, findPillDropTarget as findPillDropTargetPure, type PillLayout } from "./beat-indicator-helpers";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { moderateScale, SCREEN_WIDTH, IS_TABLET, useScale } from "@/lib/scale";
@@ -777,19 +777,10 @@ export function BeatIndicator({
 
   const [pillDrag, setPillDrag] = useState<{ origIndex: number; x: number; y: number } | null>(null);
   const [pillDropTarget, setPillDropTarget] = useState<number | null>(null);
-  const pillLayoutsRef = useRef<Record<number, { x: number; y: number; w: number; h: number }>>({});
+  const pillLayoutsRef = useRef<Record<number, PillLayout>>({});
 
   const findPillDropTarget = useCallback((pageX: number, pageY: number, sourceIdx: number): number | null => {
-    const layouts = pillLayoutsRef.current;
-    for (const key of Object.keys(layouts)) {
-      const idx = parseInt(key, 10);
-      if (idx === sourceIdx) continue;
-      const l = layouts[idx];
-      if (pageX >= l.x - 8 && pageX <= l.x + l.w + 8 && pageY >= l.y - 8 && pageY <= l.y + l.h + 8) {
-        return idx;
-      }
-    }
-    return null;
+    return findPillDropTargetPure(pageX, pageY, sourceIdx, pillLayoutsRef.current);
   }, []);
 
   const handlePillDragStart = useCallback((origIndex: number) => {

@@ -1,5 +1,36 @@
 import type { LoopBlock, BarRepeat } from "./beat-indicator.types";
 
+export interface PillLayout {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export function findPillDropTarget(
+  pageX: number,
+  pageY: number,
+  sourceIdx: number,
+  layouts: Record<number, PillLayout>,
+  hitSlop = 8,
+): number | null {
+  for (const key of Object.keys(layouts)) {
+    const idx = parseInt(key, 10);
+    if (idx === sourceIdx) continue;
+    const l = layouts[idx];
+    if (
+      pageX >= l.x - hitSlop &&
+      pageX <= l.x + l.w + hitSlop &&
+      pageY >= l.y - hitSlop &&
+      pageY <= l.y + l.h + hitSlop
+    ) {
+      return idx;
+    }
+  }
+  return null;
+}
+
+
 export function getLayerCountForBeat(
   beat: number,
   loopBlocks: LoopBlock[],

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { getLayerCountForBeat, formatRepeat } from "../components/beat-indicator-helpers";
+import { getLayerCountForBeat, formatRepeat, findPillDropTarget } from "../components/beat-indicator-helpers";
 import type { LoopBlock } from "../components/beat-indicator.types";
 
 test("getLayerCountForBeat: empty blocks returns 0", () => {
@@ -57,4 +57,47 @@ test("formatRepeat: with bpm override", () => {
 
 test("formatRepeat: duration with bpm", () => {
   assert.equal(formatRepeat({ type: "duration", value: 60, bpm: 90 }), "1' 90");
+});
+
+test("findPillDropTarget: returns null when empty", () => {
+  assert.equal(findPillDropTarget(10, 10, 0, {}), null);
+});
+
+test("findPillDropTarget: skips source index", () => {
+  const layouts = { 0: { x: 0, y: 0, w: 50, h: 30 } };
+  assert.equal(findPillDropTarget(20, 10, 0, layouts), null);
+});
+
+test("findPillDropTarget: hit inside box", () => {
+  const layouts = { 0: { x: 0, y: 0, w: 50, h: 30 }, 1: { x: 100, y: 0, w: 50, h: 30 } };
+  assert.equal(findPillDropTarget(120, 10, 0, layouts), 1);
+});
+
+test("findPillDropTarget: hitSlop expands hitbox", () => {
+  const layouts = { 1: { x: 100, y: 0, w: 50, h: 30 } };
+  assert.equal(findPillDropTarget(95, 5, 0, layouts), 1); // -5 within default 8 slop
+  assert.equal(findPillDropTarget(92, 5, 0, layouts), 1); // exactly at slop boundary
+});
+
+test("findPillDropTarget: outside hitSlop returns null", () => {
+  const layouts = { 1: { x: 100, y: 0, w: 50, h: 30 } };
+  assert.equal(findPillDropTarget(90, 5, 0, layouts), null); // -10 beyond 8 slop
+});
+
+test("findPillDropTarget: right edge boundary", () => {
+  const layouts = { 1: { x: 100, y: 0, w: 50, h: 30 } };
+  assert.equal(findPillDropTarget(158, 5, 0, layouts), 1); // x+w+slop = 158
+  assert.equal(findPillDropTarget(159, 5, 0, layouts), null);
+});
+
+test("findPillDropTarget: bottom edge boundary", () => {
+  const layouts = { 1: { x: 100, y: 0, w: 50, h: 30 } };
+  assert.equal(findPillDropTarget(120, 38, 0, layouts), 1); // y+h+slop = 38
+  assert.equal(findPillDropTarget(120, 39, 0, layouts), null);
+});
+
+test("findPillDropTarget: custom hitSlop", () => {
+  const layouts = { 1: { x: 100, y: 0, w: 50, h: 30 } };
+  assert.equal(findPillDropTarget(85, 5, 0, layouts, 16), 1);
+  assert.equal(findPillDropTarget(85, 5, 0, layouts, 0), null);
 });
