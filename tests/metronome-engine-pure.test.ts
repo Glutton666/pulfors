@@ -207,6 +207,26 @@ test("pureAddBarWithRepeat: count 타입은 횟수만큼 반복", () => {
   assert.equal(state.time, 1500);
 });
 
+test("pureAddBarWithRepeat: duration 타입은 시간 기반으로 횟수 계산", () => {
+  // bpm=120 → 1박=500ms. duration value=1.5(초)면 round(1500/500)=3회
+  const inputs = makeInputs({ barRepeats: new Map([[0, { type: "duration", value: 1.5 }]]) });
+  const state = makeState();
+  pureAddBarWithRepeat(inputs, state, 0, 0, -1, 1);
+  assert.equal(state.ticks.length, 3);
+  assert.equal(state.ticks[0].barRepeatTotal, 3);
+  assert.ok(Math.abs(state.time - 1500) < 1e-6);
+});
+
+test("pureAddBarWithRepeat: blockBpm이 적용되어 비트 길이 변경", () => {
+  const inputs = makeInputs();
+  const state = makeState();
+  pureAddBarWithRepeat(inputs, state, 0, 0, 5, 2, 60); // 60bpm → 1000ms/beat
+  assert.equal(state.ticks.length, 1);
+  assert.equal(state.ticks[0].blockIndex, 5);
+  assert.equal(state.ticks[0].blockRepeatTotal, 2);
+  assert.equal(state.time, 1000);
+});
+
 test("pureEmitStackedBlockTicks: 부모에 layer 블록 없으면 no-op", () => {
   const inputs = makeInputs();
   const state = makeState();
@@ -235,4 +255,32 @@ test("pureEmitStackedBlockTicks: layer 블록은 layerIndex>=1 ticks 생성", ()
   assert.ok(state.ticks.length >= 1, `생성된 layer ticks가 있어야 함 (실제 ${state.ticks.length})`);
   assert.equal(state.ticks[0].layerIndex, 1);
   assert.equal(state.ticks[0].blockIndex, 1);
+});
+
+test("pureEmitStackedBlockTicks: ownBeatTypes가 첫 서브의 타입을 결정", () => {
+  const sorted: LoopBlockData[] = [
+    { startBeat: 0, endBeat: 1, type: "count", value: 1 },
+    { startBeat: 0, endBeat: 0, type: "count", value: 1, layerOf: 0, ownBeatTypes: { 0: "strong" } },
+  ];
+  const inputs = makeInputs({ sortedBlocks: sorted, loopBlocks: sorted });
+  const state = makeState();
+  pureEmitStackedBlockTicks(inputs, state, 0, 0, 500, 0, 1);
+  assert.ok(state.ticks.length >= 1);
+  assert.equal(state.ticks[0].type, "strong");
+  assert.equal(state.ticks[0].layerIndex, 1);
+});
+
+test("pureEmitStackedBlockTicks: blockDurMs 경계를 벗어난 tick은 잘려나감", () => {
+  // stackBpm=120 → 500ms/beat, 4박 layer지만 부모 dur=600ms면 2번째 비트(@500ms)는 들어가고 3번째(@1000ms)는 잘림
+  const sorted: LoopBlockData[] = [
+    { startBeat: 0, endBeat: 3, type: "count", value: 1 },
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, layerOf: 0, bpm: 120 },
+  ];
+  const inputs = makeInputs({ sortedBlocks: sorted, loopBlocks: sorted, beatsPerMeasure: 4 });
+  const state = makeState();
+  pureEmitStackedBlockTicks(inputs, state, 0, 1000, 600, 0, 1);
+  // 비트 0(@1000ms) + 비트 1(@1500ms)만 들어감, 비트 2(@2000>=1600) 차단
+  assert.equal(state.ticks.length, 2);
+  assert.equal(state.ticks[0].time, 1000);
+  assert.equal(state.ticks[1].time, 1500);
 });
