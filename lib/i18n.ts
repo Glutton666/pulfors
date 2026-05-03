@@ -404,6 +404,8 @@ export const translations = {
     channel_both: { ko: "양쪽", en: "Both" },
     channel_left: { ko: "왼쪽", en: "Left" },
     channel_right: { ko: "오른쪽", en: "Right" },
+    autoPreview: { ko: "드래그 후 자동 재생", en: "Auto-play after drag" },
+    headphonesHint: { ko: "채널 차이는 헤드폰에서 또렷하게 들립니다", en: "Use headphones to clearly hear channel separation" },
   },
   permissions: {
     title: { ko: "권한 필요", en: "Permission Required" },

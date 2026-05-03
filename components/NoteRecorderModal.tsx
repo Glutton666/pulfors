@@ -34,6 +34,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { SampleSource } from "@/lib/note-samples";
 import type { SampleChannel } from "@/lib/stereo-channel";
+import { buildPreviewUri } from "@/lib/note-preview";
 import { soundSets } from "@/lib/metronome-engine";
 import type { BuiltinSoundSet } from "@/lib/storage";
 import { safePlay } from "@/lib/audio-utils";
@@ -93,6 +94,10 @@ export function NoteRecorderModal({
   const [trimEnd, setTrimEnd] = useState(1);
   const [audioDuration, setAudioDuration] = useState(0);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [autoPreview, setAutoPreview] = useState(true);
+  // 채널별로 미리듣기용 stereo wav uri를 캐시. recordedUri 변경 시 무효화.
+  const previewStereoCacheRef = useRef<{ srcUri: string; left?: string; right?: string }>({ srcUri: "" });
+  const previewTokenRef = useRef(0);
   const [loadingMessage, setLoadingMessage] = useState("");
   const [loadingProgress, setLoadingProgress] = useState(0);
 
@@ -175,10 +180,17 @@ export function NoteRecorderModal({
       setAudioDuration(0);
       setIsPlayingPreview(false);
       setSampleName("");
+      previewStereoCacheRef.current = { srcUri: "" };
+      previewTokenRef.current += 1;
     } else {
       setSampleName(existingName || "");
     }
   }, [visible, cleanup, existingName]);
+
+  useEffect(() => {
+    // recordedUri 변경 시 채널별 stereo 캐시 무효화.
+    previewStereoCacheRef.current = { srcUri: recordedUri ?? "" };
+  }, [recordedUri]);
 
   const prepareRecording = useCallback(async () => {
     try {
@@ -333,10 +345,32 @@ export function NoteRecorderModal({
       previewWatchRef.current = null;
     }
 
+    const token = ++previewTokenRef.current;
+
     try {
+      // 채널 적용: left/right인 경우 mono → stereo wav를 만들어 그 uri를 재생.
+      // 같은 채널을 반복 재생할 때는 캐시된 stereo uri를 재사용한다.
+      let effectiveUri = recordedUri;
+      if (channel !== "both") {
+        const cache = previewStereoCacheRef.current;
+        const cached = channel === "left" ? cache.left : cache.right;
+        if (cached) {
+          effectiveUri = cached;
+        } else {
+          const built = await buildPreviewUri(recordedUri, channel);
+          if (token !== previewTokenRef.current) return;
+          effectiveUri = built;
+          if (built !== recordedUri) {
+            if (channel === "left") cache.left = built;
+            else cache.right = built;
+          }
+        }
+      }
+
+      if (token !== previewTokenRef.current) return;
       const player = previewPlayerRef.current;
       try { player.pause(); } catch {}
-      try { player.replace({ uri: recordedUri }); } catch {}
+      try { player.replace({ uri: effectiveUri }); } catch {}
 
       const startSec = trimStart * audioDuration;
       const endSec = trimEnd * audioDuration;
@@ -352,6 +386,7 @@ export function NoteRecorderModal({
         return false;
       };
       await waitLoad();
+      if (token !== previewTokenRef.current) return;
 
       try { await player.seekTo(startSec); } catch {}
       setIsPlayingPreview(true);
@@ -383,7 +418,16 @@ export function NoteRecorderModal({
       captureBreadcrumb({ category: "noteRecorder", message: "playPreview failed", level: "warning", data: { error: String(e) } });
       setIsPlayingPreview(false);
     }
-  }, [recordedUri, trimStart, trimEnd, audioDuration]);
+  }, [recordedUri, trimStart, trimEnd, audioDuration, channel]);
+
+  const playPreviewRef = useRef(playPreview);
+  useEffect(() => { playPreviewRef.current = playPreview; }, [playPreview]);
+
+  const handleSlideEnd = useCallback(() => {
+    if (autoPreview) {
+      void playPreviewRef.current();
+    }
+  }, [autoPreview]);
 
   const handleSave = useCallback(async () => {
     if (!recordedUri) return;
@@ -698,15 +742,31 @@ export function NoteRecorderModal({
                       },
                     ]}
                   />
+                  {channel !== "both" && (
+                    <View
+                      pointerEvents="none"
+                      style={[
+                        styles.channelOverlay,
+                        {
+                          left: `${trimStart * 100}%`,
+                          width: `${(trimEnd - trimStart) * 100}%`,
+                        },
+                        channel === "left" ? { top: 0, bottom: "50%" } : { top: "50%", bottom: 0 },
+                        { backgroundColor: C.accent + "55" },
+                      ]}
+                    />
+                  )}
                   <TrimHandle
                     value={trimStart}
                     onChange={(v) => { setTrimStart(Math.min(v, trimEnd - 0.05)); setEditingStart(false); }}
+                    onSlideEnd={handleSlideEnd}
                     color={C.accent}
                     side="left"
                   />
                   <TrimHandle
                     value={trimEnd}
                     onChange={(v) => { setTrimEnd(Math.max(v, trimStart + 0.05)); setEditingEnd(false); }}
+                    onSlideEnd={handleSlideEnd}
                     color={C.accent}
                     side="right"
                   />
@@ -729,7 +789,24 @@ export function NoteRecorderModal({
                 </Pressable>
               </View>
 
-              <View style={{ flexDirection: "row", justifyContent: "center", gap: Spacing.xs, marginTop: Spacing.sm }}>
+              <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", gap: Spacing.sm, marginTop: Spacing.xs, alignSelf: "stretch" }}>
+                <Pressable
+                  onPress={() => setAutoPreview((v) => !v)}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                  hitSlop={8}
+                >
+                  <Ionicons
+                    name={autoPreview ? "checkbox" : "square-outline"}
+                    size={18}
+                    color={autoPreview ? C.accent : C.textSecondary}
+                  />
+                  <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>
+                    {t("noteRecorder", "autoPreview")}
+                  </Text>
+                </Pressable>
+              </View>
+
+              <View style={{ flexDirection: "row", justifyContent: "center", gap: Spacing.xs, marginTop: Spacing.sm, alignSelf: "stretch" }}>
                 {(["both", "left", "right"] as const).map((opt) => {
                   const active = channel === opt;
                   const label = opt === "left" ? t("noteRecorder", "channel_left") : opt === "right" ? t("noteRecorder", "channel_right") : t("noteRecorder", "channel_both");
@@ -751,6 +828,13 @@ export function NoteRecorderModal({
                     </Pressable>
                   );
                 })}
+              </View>
+
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: Spacing.xs }}>
+                <Ionicons name="headset-outline" size={14} color={C.textTertiary} />
+                <Text style={{ color: C.textTertiary, fontSize: FontSize.caption }}>
+                  {t("noteRecorder", "headphonesHint")}
+                </Text>
               </View>
 
               <View style={styles.nameInputRow}>
@@ -789,14 +873,18 @@ export function NoteRecorderModal({
 function TrimHandle({
   value,
   onChange,
+  onSlideEnd,
   color,
   side,
 }: {
   value: number;
   onChange: (v: number) => void;
+  onSlideEnd?: () => void;
   color: string;
   side: "left" | "right";
 }) {
+  const onSlideEndRef = useRef(onSlideEnd);
+  useEffect(() => { onSlideEndRef.current = onSlideEnd; }, [onSlideEnd]);
   const { colors: C } = useTheme();
   const styles = make_styles(C);
   const containerRef = useRef<View>(null);
@@ -817,6 +905,12 @@ function TrimHandle({
         const pageX = e.nativeEvent.pageX;
         const ratio = Math.max(0, Math.min(1, (pageX - x) / width));
         onChange(ratio);
+      },
+      onPanResponderRelease: () => {
+        try { onSlideEndRef.current?.(); } catch {}
+      },
+      onPanResponderTerminate: () => {
+        try { onSlideEndRef.current?.(); } catch {}
       },
     })
   ).current;
@@ -1027,6 +1121,10 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     top: 0,
     bottom: 0,
     borderWidth: 1,
+    borderRadius: Radius.xs,
+  },
+  channelOverlay: {
+    position: "absolute",
     borderRadius: Radius.xs,
   },
   trimHandle: {
