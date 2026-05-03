@@ -283,6 +283,18 @@ function SwipeableEntry({
               </Text>
             )}
             <Text style={styles.entryDate}>{formatDate(item.createdAt)}</Text>
+            <Pressable
+              testID={`export-row-${item.id}`}
+              accessibilityLabel={t("practiceBook", "exportAudio")}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onExport(item);
+              }}
+              hitSlop={8}
+              style={({ pressed }) => [styles.exportIconBtn, pressed && { opacity: 0.6 }]}
+            >
+              <Ionicons name="download-outline" size={S.ms(18, 0.4)} color={accentColor} />
+            </Pressable>
           </View>
 
           {item.createdBy ? (
@@ -414,6 +426,18 @@ function GridItem({
       <View style={gridStyles.cardHeader}>
         <Text style={gridStyles.cardLabel} numberOfLines={1}>{item.label}</Text>
         <View style={[gridStyles.modeDot, { backgroundColor: isNoteMode ? "#22c55e" : isBeatMode ? "#3B82F6" : accentColor }]} />
+        <Pressable
+          testID={`export-grid-${item.id}`}
+          accessibilityLabel={t("practiceBook", "exportAudio")}
+          onPress={(e) => {
+            e.stopPropagation?.();
+            onExport(item);
+          }}
+          hitSlop={8}
+          style={({ pressed }) => [gridStyles.exportIconBtn, pressed && { opacity: 0.6 }]}
+        >
+          <Ionicons name="download-outline" size={S.ms(16, 0.4)} color={accentColor} />
+        </Pressable>
       </View>
       {isNoteMode ? (
         <View style={gridStyles.cardStats}>
@@ -1023,6 +1047,10 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     fontSize: FontSize.caption,
     color: C.textTertiary,
   },
+  exportIconBtn: {
+    marginLeft: Spacing.sm,
+    padding: Spacing.xs,
+  },
   createdBy: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: FontSize.caption,
@@ -1210,6 +1238,9 @@ const make_gridStyles = (C: typeof Colors) => StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: Radius.xs,
+  },
+  exportIconBtn: {
+    padding: Spacing.xs,
   },
   cardStats: {
     flexDirection: "row",

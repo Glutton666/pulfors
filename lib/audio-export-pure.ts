@@ -8,17 +8,21 @@ interface LameModule {
   Mp3Encoder: new (channels: number, sampleRate: number, kbps: number) => LameMp3Encoder;
 }
 
+function isLameModule(v: unknown): v is LameModule {
+  return typeof v === "object" && v !== null
+    && typeof (v as { Mp3Encoder?: unknown }).Mp3Encoder === "function";
+}
+
 let lameCache: LameModule | null = null;
 async function loadLame(): Promise<LameModule> {
   if (lameCache) return lameCache;
-  const mod = await import("@breezystack/lamejs");
-  const root: any = mod as any;
-  const lib: LameModule = root?.Mp3Encoder
-    ? root
-    : root?.default?.Mp3Encoder
-      ? root.default
-      : root;
-  if (typeof lib?.Mp3Encoder !== "function") {
+  const mod: unknown = await import("@breezystack/lamejs");
+  let lib: unknown = mod;
+  if (!isLameModule(lib)) {
+    const inner = (mod as { default?: unknown } | null)?.default;
+    if (isLameModule(inner)) lib = inner;
+  }
+  if (!isLameModule(lib)) {
     throw new Error("LAME_MODULE_INVALID");
   }
   lameCache = lib;
