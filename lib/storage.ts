@@ -7,6 +7,58 @@ import { logger } from "./logger";
 
 const SETTINGS_KEY = "metronome_settings";
 const PRACTICE_BOOK_KEY = "practice_book";
+const FADE_OUT_KEY = "metronome_fade_out";
+
+export interface FadeOutSettings {
+  enabled: boolean;
+  audibleN: number;
+  mutedM: number;
+  audibleK: number;
+}
+
+const DEFAULT_FADE_OUT: FadeOutSettings = {
+  enabled: false,
+  audibleN: 8,
+  mutedM: 4,
+  audibleK: 4,
+};
+
+export function clampFadeOutMeasures(v: number): number {
+  if (!Number.isFinite(v)) return 1;
+  return Math.max(1, Math.min(64, Math.floor(v)));
+}
+
+export async function loadFadeOutSettings(): Promise<FadeOutSettings> {
+  try {
+    const data = await AsyncStorage.getItem(FADE_OUT_KEY);
+    if (data) {
+      const parsed = JSON.parse(data);
+      return {
+        enabled: !!parsed.enabled,
+        audibleN: clampFadeOutMeasures(parsed.audibleN ?? DEFAULT_FADE_OUT.audibleN),
+        mutedM: clampFadeOutMeasures(parsed.mutedM ?? DEFAULT_FADE_OUT.mutedM),
+        audibleK: clampFadeOutMeasures(parsed.audibleK ?? DEFAULT_FADE_OUT.audibleK),
+      };
+    }
+  } catch (e) {
+    notifyStorageError({ key: FADE_OUT_KEY, operation: "load", error: e });
+  }
+  return DEFAULT_FADE_OUT;
+}
+
+export async function saveFadeOutSettings(s: FadeOutSettings): Promise<void> {
+  try {
+    const safe: FadeOutSettings = {
+      enabled: !!s.enabled,
+      audibleN: clampFadeOutMeasures(s.audibleN),
+      mutedM: clampFadeOutMeasures(s.mutedM),
+      audibleK: clampFadeOutMeasures(s.audibleK),
+    };
+    await AsyncStorage.setItem(FADE_OUT_KEY, JSON.stringify(safe));
+  } catch (e) {
+    notifyStorageError({ key: FADE_OUT_KEY, operation: "save", error: e });
+  }
+}
 
 export type FlashMode = "all" | "accent" | "off";
 export type HapticMode = "all" | "accent" | "off";

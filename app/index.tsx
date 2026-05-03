@@ -41,7 +41,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Colors from "@/constants/colors";
-import { Radius, Spacing } from "@/constants/tokens";
+import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import type { ThemeColor } from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -73,6 +73,8 @@ import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createI
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { MoreMenuModal } from "@/components/MoreMenuModal";
 import { ScheduledStartModal } from "@/components/ScheduledStartModal";
+import { FadeOutModal } from "@/components/FadeOutModal";
+import type { FadeOutSettings } from "@/lib/storage";
 import type { OnboardingResult } from "@/components/OnboardingModal";
 import { GoalCompletePopup } from "@/components/GoalCompletePopup";
 import type { PracticeEntry } from "@/lib/storage";
@@ -226,6 +228,38 @@ export default function MetronomeScreen() {
   const [showReboot, setShowReboot] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showScheduledStart, setShowScheduledStart] = useState(false);
+  const [showFadeOut, setShowFadeOut] = useState(false);
+  const isPlayingRef = useRef(false);
+  const fadeOutSessionRef = useRef<{ N: number; M: number; K: number; startMeasure: number } | null>(null);
+  const fadeOutMutedRef = useRef(false);
+  const [fadeOutPhase, setFadeOutPhase] = useState<"audible1" | "muted" | "audible2" | null>(null);
+  const [fadeOutMeasureInPhase, setFadeOutMeasureInPhase] = useState(0);
+  const fadeOutMeasureCountRef = useRef(0);
+  const clearFadeOutSession = useCallback(() => {
+    fadeOutSessionRef.current = null;
+    fadeOutMutedRef.current = false;
+    fadeOutMeasureCountRef.current = 0;
+    setFadeOutPhase(null);
+    setFadeOutMeasureInPhase(0);
+  }, []);
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+    if (!isPlaying && fadeOutSessionRef.current) {
+      clearFadeOutSession();
+    }
+  }, [isPlaying, clearFadeOutSession]);
+  const fadeOutStatusText = useMemo(() => {
+    const sess = fadeOutSessionRef.current;
+    if (!sess || !fadeOutPhase) return null;
+    const cur = fadeOutMeasureInPhase + 1;
+    if (fadeOutPhase === "audible1") {
+      return t("fadeOut", "statusAudible1").replace("%cur", String(cur)).replace("%n", String(sess.N));
+    }
+    if (fadeOutPhase === "muted") {
+      return t("fadeOut", "statusMuted").replace("%cur", String(cur)).replace("%m", String(sess.M));
+    }
+    return t("fadeOut", "statusAudible2").replace("%cur", String(cur)).replace("%k", String(sess.K));
+  }, [fadeOutPhase, fadeOutMeasureInPhase, t]);
   const [customSoundSets, setCustomSoundSets] = useState<Record<string, CustomSoundSetConfig>>({});
   const customSoundSetsRef = useRef<Record<string, CustomSoundSetConfig>>({});
   useEffect(() => { customSoundSetsRef.current = customSoundSets; }, [customSoundSets]);
@@ -237,6 +271,7 @@ export default function MetronomeScreen() {
       if (showSignalGen) { setShowSignalGen(false); return true; }
       if (showPracticeBook) { setShowPracticeBook(false); return true; }
       if (showWorkUp) { setShowWorkUp(false); return true; }
+      if (showFadeOut) { setShowFadeOut(false); return true; }
       if (showScheduledStart) { setShowScheduledStart(false); return true; }
       if (showMoreMenu) { setShowMoreMenu(false); return true; }
       if (showMenu) { setShowMenu(false); return true; }
@@ -250,7 +285,7 @@ export default function MetronomeScreen() {
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
     return () => sub.remove();
-  }, [showSettings, showSignalGen, showPracticeBook, showWorkUp, showMenu, showOnboarding, showReboot, showMoreMenu, showScheduledStart]);
+  }, [showSettings, showSignalGen, showPracticeBook, showWorkUp, showMenu, showOnboarding, showReboot, showMoreMenu, showScheduledStart, showFadeOut]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -418,6 +453,7 @@ export default function MetronomeScreen() {
 
     engine.setAudioCallbacks(
       () => {
+        if (fadeOutMutedRef.current) return;
         if (Platform.OS === "web" && webClickReadyRef.current) {
           playWebClick("high");
           return;
@@ -429,6 +465,7 @@ export default function MetronomeScreen() {
         } catch (e) {}
       },
       () => {
+        if (fadeOutMutedRef.current) return;
         if (Platform.OS === "web" && webClickReadyRef.current) {
           playWebClick("low");
           return;
@@ -440,6 +477,7 @@ export default function MetronomeScreen() {
         } catch (e) {}
       },
       () => {
+        if (fadeOutMutedRef.current) return;
         if (Platform.OS === "web" && webClickReadyRef.current) {
           playWebClick("strong");
           return;
@@ -454,6 +492,7 @@ export default function MetronomeScreen() {
 
     const layerToggle: Record<string, boolean> = {};
     engine.setLayerAudioCallback((layerIndex: number, role: "high" | "low" | "strong") => {
+      if (fadeOutMutedRef.current) return;
       const layerSet = layerSoundSetsRef.current[layerIndex] || soundSetRef.current;
       const toggleKey = `${layerIndex}-${role}`;
       const toggle = !!layerToggle[toggleKey];
@@ -489,6 +528,7 @@ export default function MetronomeScreen() {
 
     const blockToggle: Record<string, boolean> = {};
     engine.setBlockAudioCallback((blockIndex: number, role: "high" | "low" | "strong") => {
+      if (fadeOutMutedRef.current) return;
       const block = barConfigRef.current.loopBlocks[blockIndex];
       const blockSet = block?.soundSet || soundSetRef.current;
       const toggleKey = `blk-${blockIndex}-${role}`;
@@ -693,6 +733,7 @@ export default function MetronomeScreen() {
     };
 
     engine.setCustomSampleCallback((beat: number, subBeat: number) => {
+      if (fadeOutMutedRef.current) return false;
       if (!barModeRef.current) return false;
       const key = `${beat}-${subBeat}`;
       const player = noteSampleSoundsRef.current[key];
@@ -2344,6 +2385,42 @@ export default function MetronomeScreen() {
     if (!engine) return;
     engine.setOnMeasureComplete(() => {
       setMeasureCount(c => c + 1);
+      const sess = fadeOutSessionRef.current;
+      if (sess) {
+        const elapsed = fadeOutMeasureCountRef.current + 1;
+        fadeOutMeasureCountRef.current = elapsed;
+        const total = sess.N + sess.M + sess.K;
+        if (elapsed >= total) {
+          fadeOutMutedRef.current = false;
+          fadeOutSessionRef.current = null;
+          fadeOutMeasureCountRef.current = 0;
+          setFadeOutPhase(null);
+          setFadeOutMeasureInPhase(0);
+          setTimeout(() => {
+            const eng = engineRef.current;
+            if (eng) eng.stop();
+            stopRenderedAudio();
+            clearSamplePlayStates();
+            setIsPreparing(false);
+            setIsPlaying(false);
+            resetPlaybackVisuals();
+            const modeLabel = barModeRef.current ? "Bar" : "Dial";
+            showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
+          }, 0);
+          return;
+        }
+        if (elapsed === sess.N) {
+          fadeOutMutedRef.current = true;
+          setFadeOutPhase("muted");
+          setFadeOutMeasureInPhase(0);
+        } else if (elapsed === sess.N + sess.M) {
+          fadeOutMutedRef.current = false;
+          setFadeOutPhase("audible2");
+          setFadeOutMeasureInPhase(0);
+        } else {
+          setFadeOutMeasureInPhase((p) => p + 1);
+        }
+      }
       if (!engine.getIsRunning()) {
         if (noteModeRef.current && noteIsPlayingRef.current) {
           const lastBeatMs = Math.round(60000 / (bpmRef.current || 120));
@@ -3642,6 +3719,27 @@ export default function MetronomeScreen() {
         ]}
       />
 
+      {isPlaying && fadeOutStatusText && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute" as const,
+            top: insets.top + (Platform.OS === "web" ? 67 : 8),
+            alignSelf: "center" as const,
+            backgroundColor: fadeOutPhase === "muted" ? "rgba(0,0,0,0.7)" : C.accent,
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 12,
+            zIndex: 20,
+          }}
+          testID="fade-out-status"
+        >
+          <Text style={{ color: "#fff", fontFamily: "SpaceGrotesk_600SemiBold", fontSize: FontSize.small }}>
+            {fadeOutStatusText}
+          </Text>
+        </View>
+      )}
+
       <Animated.View
         style={[
           StyleSheet.absoluteFill,
@@ -3767,6 +3865,36 @@ export default function MetronomeScreen() {
         onScheduledStart={() => {
           setShowMoreMenu(false);
           setShowScheduledStart(true);
+        }}
+        onFadeOut={() => {
+          setShowMoreMenu(false);
+          setShowFadeOut(true);
+        }}
+      />
+
+      <FadeOutModal
+        visible={showFadeOut}
+        onClose={() => setShowFadeOut(false)}
+        onStart={(s: FadeOutSettings) => {
+          const engine = engineRef.current;
+          if (!engine) return;
+          setShowFadeOut(false);
+          if (engine.getIsRunning()) {
+            engine.stop();
+          }
+          stopRenderedAudio();
+          clearSamplePlayStates();
+          resetPlaybackVisuals();
+          fadeOutSessionRef.current = { N: s.audibleN, M: s.mutedM, K: s.audibleK, startMeasure: 0 };
+          fadeOutMutedRef.current = false;
+          fadeOutMeasureCountRef.current = 0;
+          setFadeOutPhase("audible1");
+          setFadeOutMeasureInPhase(0);
+          practiceStartRef.current = null;
+          setIsPlaying(true);
+          const modeLabel = barModeRef.current ? "Bar" : "Dial";
+          showPlayingNotification(bpm, modeLabel, languageRef.current);
+          engine.start();
         }}
       />
 

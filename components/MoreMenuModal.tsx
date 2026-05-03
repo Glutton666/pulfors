@@ -11,9 +11,10 @@ export interface MoreMenuModalProps {
   visible: boolean;
   onClose: () => void;
   onScheduledStart: () => void;
+  onFadeOut: () => void;
 }
 
-export function MoreMenuModal({ visible, onClose, onScheduledStart }: MoreMenuModalProps) {
+export function MoreMenuModal({ visible, onClose, onScheduledStart, onFadeOut }: MoreMenuModalProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -45,6 +46,21 @@ export function MoreMenuModal({ visible, onClose, onScheduledStart }: MoreMenuMo
             <View style={{ flex: 1 }}>
               <Text style={[styles.itemTitle, { color: C.text }]}>{t("scheduledStart", "title")}</Text>
               <Text style={[styles.itemHint, { color: C.textSecondary }]}>{t("scheduledStart", "menuHint")}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={S.ms(18, 0.3)} color={C.textSecondary} />
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.item, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
+            onPress={onFadeOut}
+            accessibilityRole="button"
+            accessibilityLabel={t("fadeOut", "title")}
+            testID="more-menu-fade-out"
+          >
+            <MaterialCommunityIcons name="volume-mute" size={S.ms(22, 0.4)} color={C.accent} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.itemTitle, { color: C.text }]}>{t("fadeOut", "title")}</Text>
+              <Text style={[styles.itemHint, { color: C.textSecondary }]}>{t("fadeOut", "menuHint")}</Text>
             </View>
             <Ionicons name="chevron-forward" size={S.ms(18, 0.3)} color={C.textSecondary} />
           </Pressable>
