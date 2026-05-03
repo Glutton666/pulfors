@@ -11,6 +11,8 @@ import {
   UnsupportedBackupVersionError,
 } from "../lib/backup/migrations";
 import type { BackupFile } from "../lib/backup/shared";
+import { restoreFromJson } from "../lib/backup/full";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 function makeBackup(overrides: Partial<BackupFile> = {}): BackupFile {
   return {
@@ -103,6 +105,54 @@ test("[migrate] CURRENT_SCHEMA_VERSION + 1만 큰 경우에도 거부한다", ()
     () => migrateBackup(backup),
     (err) => err instanceof UnsupportedBackupVersionError,
   );
+});
+
+test("[import] 손상된 JSON은 errorCode='invalid'로 거부된다", async () => {
+  const cases = [
+    "this is not json",
+    "{ broken",
+    "",
+    "null",
+    "[]",
+    JSON.stringify({ data: {} }), // _meta 누락
+    JSON.stringify({ _meta: { app: "other" }, data: {} }), // 잘못된 app 식별자
+  ];
+  for (const json of cases) {
+    const r = await restoreFromJson(json);
+    assert.equal(r.success, false, `손상 케이스 거부: ${json.slice(0, 30)}`);
+    assert.equal(r.errorCode, "invalid");
+    assert.equal(r.keyCount, 0);
+  }
+});
+
+test("[import] 미래 schemaVersion 백업은 errorCode='unsupported_version'으로 거부된다", async () => {
+  const future: BackupFile = {
+    _meta: { app: "metronome", version: 2, createdAt: "2099-01-01", keyCount: 0 },
+    schemaVersion: CURRENT_SCHEMA_VERSION + 10,
+    data: {},
+  };
+  const r = await restoreFromJson(JSON.stringify(future));
+  assert.equal(r.success, false);
+  assert.equal(r.errorCode, "unsupported_version");
+  assert.equal(r.keyCount, 0);
+});
+
+test("[import] 정상 v1 백업은 라운드트립으로 데이터를 복원하고 schemaVersion을 통과한다", async () => {
+  // 깨끗한 상태에서 시작
+  await (AsyncStorage as unknown as { __reset: () => void }).__reset();
+  const settings = JSON.stringify({ bpm: 137, beatsPerMeasure: 5 });
+  const valid: BackupFile = {
+    _meta: { app: "metronome", version: 2, createdAt: "2026-05-03", keyCount: 1 },
+    schemaVersion: 1,
+    data: { metronome_settings: settings },
+  };
+  const r = await restoreFromJson(JSON.stringify(valid));
+  assert.equal(r.success, true);
+  assert.equal(r.errorCode, undefined);
+  assert.equal(r.keyCount, 1);
+  // AsyncStorage에 실제로 저장된 값 확인
+  const stored = await AsyncStorage.getItem("metronome_settings");
+  assert.equal(stored, settings);
 });
 
 test("[migrate] 빈 data 객체도 마이그레이션 체인을 통과한다", () => {

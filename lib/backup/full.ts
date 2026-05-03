@@ -115,7 +115,9 @@ export async function importBackup(): Promise<ImportBackupResult> {
   }
 }
 
-async function restoreFromJson(
+// Exported for tests so that import-level error paths(손상 JSON, 미래 버전,
+// 정상 v1 라운드트립)을 DocumentPicker/Sharing 우회 없이 직접 검증할 수 있다.
+export async function restoreFromJson(
   json: string,
 ): Promise<ImportBackupResult> {
   try {
@@ -130,7 +132,14 @@ async function restoreFromJson(
       logger.warn("[Backup] JSON parse failed:", e);
       return { success: false, keyCount: 0, errorCode: "invalid" };
     }
-    if (!backup._meta || backup._meta.app !== "metronome" || !backup.data) {
+    if (
+      !backup ||
+      typeof backup !== "object" ||
+      Array.isArray(backup) ||
+      !backup._meta ||
+      backup._meta.app !== "metronome" ||
+      !backup.data
+    ) {
       return { success: false, keyCount: 0, errorCode: "invalid" };
     }
 

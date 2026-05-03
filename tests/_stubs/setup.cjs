@@ -26,6 +26,8 @@ const STUB_MAP = {
   "expo-location": path.join(__dirname, "expo-location.js"),
   "expo-image-picker": path.join(__dirname, "expo-image-picker.js"),
   "expo-audio": path.join(__dirname, "expo-audio.js"),
+  "expo-document-picker": path.join(__dirname, "expo-document-picker.js"),
+  "expo-sharing": path.join(__dirname, "expo-sharing.js"),
 };
 const originalResolve = Module._resolveFilename;
 Module._resolveFilename = function (request, ...rest) {
