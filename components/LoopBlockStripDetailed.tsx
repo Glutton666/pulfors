@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { BlockPill } from "./BlockPill";
 import type { LoopBlock, BlockPlayMode } from "./beat-indicator.types";
 import type { ProgressInfo } from "@/lib/metronome-engine";
+import { Radius } from "@/constants/tokens";
 import {
   sortBlocksByStart,
   detectJumpDirection,
@@ -125,7 +126,7 @@ export function LoopBlockStripDetailed({
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
                     <Ionicons name="return-up-back" size={ms(14, 0.4)} color="#f0ad4e" />
                     <View style={{
-                      paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4,
+                      paddingHorizontal: 4, paddingVertical: 1, borderRadius: Radius.xs,
                       backgroundColor: isActiveJump ? "#f0ad4e30" : "#f0ad4e15",
                       marginLeft: 2,
                     }}>
@@ -140,7 +141,7 @@ export function LoopBlockStripDetailed({
                   <View style={{ width: 10, height: 1.5, backgroundColor: "#f0ad4e" }} />
                   <Ionicons name="caret-forward" size={ms(10, 0.4)} color="#f0ad4e" style={{ marginLeft: -2 }} />
                   <View style={{
-                    paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4,
+                    paddingHorizontal: 4, paddingVertical: 1, borderRadius: Radius.xs,
                     backgroundColor: isActiveJump ? "#f0ad4e30" : "#f0ad4e15",
                     marginLeft: 2,
                   }}>
@@ -163,7 +164,7 @@ export function LoopBlockStripDetailed({
           style={{
             paddingHorizontal: 6,
             paddingVertical: 4,
-            borderRadius: 6,
+            borderRadius: Radius.sm,
             backgroundColor: modeHighlight ? "#f0ad4e20" : bgSecondary,
             borderWidth: modeHighlight ? 1 : 0,
             borderColor: "#f0ad4e60",

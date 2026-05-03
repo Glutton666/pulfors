@@ -11,6 +11,7 @@ import Animated, {
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/contexts/ThemeContext";
 import type { BeatType } from "@/lib/metronome-engine";
+import { Radius, FontSize } from "@/constants/tokens";
 
 export interface DialBeatDotProps {
   index: number;
@@ -175,7 +176,7 @@ export function DialBeatDot({
             style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}
           >
             <View style={{ width: size - 10, height: size - 10, borderRadius: (size - 10) / 2, backgroundColor: C.accent, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: C.white, fontSize: 11, fontWeight: "bold" as const, lineHeight: 13, textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
+              <Text style={{ color: C.white, fontSize: FontSize.caption, fontWeight: "bold" as const, lineHeight: 13, textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
             </View>
           </LinearGradient>
         </Animated.View>
@@ -221,7 +222,7 @@ export function DialBeatDot({
           right: -4,
           width: 16,
           height: 16,
-          borderRadius: 8,
+          borderRadius: Radius.md,
           borderWidth: 1,
           alignItems: "center" as const,
           justifyContent: "center" as const,

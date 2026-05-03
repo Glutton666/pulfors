@@ -3,6 +3,7 @@ import { View, Text, Pressable, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { LoopBlock } from "./beat-indicator.types";
 import type { SoundSet } from "@/lib/storage";
+import { Radius, FontSize } from "@/constants/tokens";
 
 export interface BlockEditPanelColors {
   accent: string;
@@ -54,7 +55,7 @@ export function BlockEditPanel({
   return (
     <View style={{
       backgroundColor: C.backgroundSecondary,
-      borderRadius: 8,
+      borderRadius: Radius.md,
       marginHorizontal: 8,
       marginBottom: 4,
       padding: 8,
@@ -62,7 +63,7 @@ export function BlockEditPanel({
       borderColor: C.accent + "30",
     }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <Text style={{ color: C.accent, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" }}>
+        <Text style={{ color: C.accent, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_700Bold" }}>
           Block {editBlock.startBeat + 1}-{Math.min(editBlock.endBeat + 1, beatsPerMeasure)}
         </Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -97,7 +98,7 @@ export function BlockEditPanel({
       </View>
 
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-        <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Repeat</Text>
+        <Text style={{ color: C.textSecondary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Repeat</Text>
         <Pressable
           onPress={() => { if (editBlock.value > 1) updateBlock(editingBlockIndex, { value: editBlock.value - 1 }); }}
           style={{ width: ms(26, 0.5), height: ms(26, 0.5), borderRadius: ms(13, 0.5), backgroundColor: C.accent + "20", alignItems: "center", justifyContent: "center" }}
@@ -116,7 +117,7 @@ export function BlockEditPanel({
       </View>
 
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-        <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>BPM</Text>
+        <Text style={{ color: C.textSecondary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>BPM</Text>
         <Pressable
           onPress={() => {
             if (editBlock.bpm) {
@@ -130,9 +131,9 @@ export function BlockEditPanel({
         {editBlock.bpm ? (
           <TextInput
             style={{
-              color: C.accent, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold",
+              color: C.accent, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_700Bold",
               minWidth: 44, textAlign: "center", paddingHorizontal: 6, paddingVertical: 2,
-              borderRadius: 4, backgroundColor: C.accent + "20", borderWidth: 1, borderColor: C.accent + "50",
+              borderRadius: Radius.xs, backgroundColor: C.accent + "20", borderWidth: 1, borderColor: C.accent + "50",
             }}
             keyboardType="number-pad"
             defaultValue={String(editBlock.bpm)}
@@ -148,11 +149,11 @@ export function BlockEditPanel({
           <Pressable
             onPress={() => updateBlock(editingBlockIndex, { bpm: globalBpm || 120 })}
             style={{
-              paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, minWidth: 44, alignItems: "center",
+              paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.xs, minWidth: 44, alignItems: "center",
               backgroundColor: "transparent", borderWidth: 1, borderColor: C.accent + "30",
             }}
           >
-            <Text style={{ color: C.textTertiary, fontSize: 11, fontFamily: "SpaceGrotesk_700Bold" }}>—</Text>
+            <Text style={{ color: C.textTertiary, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_700Bold" }}>—</Text>
           </Pressable>
         )}
         <Pressable
@@ -168,11 +169,11 @@ export function BlockEditPanel({
       </View>
 
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
-        <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Sound</Text>
+        <Text style={{ color: C.textSecondary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Sound</Text>
         <Pressable
           onPress={() => updateBlock(editingBlockIndex, { soundSet: undefined })}
           style={{
-            paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4,
+            paddingHorizontal: 6, paddingVertical: 3, borderRadius: Radius.xs,
             backgroundColor: !editBlock.soundSet ? C.accent + "30" : "transparent",
             borderWidth: 1, borderColor: C.accent + "30",
           }}
@@ -184,7 +185,7 @@ export function BlockEditPanel({
             key={s}
             onPress={() => updateBlock(editingBlockIndex, { soundSet: s })}
             style={{
-              paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4,
+              paddingHorizontal: 6, paddingVertical: 3, borderRadius: Radius.xs,
               backgroundColor: editBlock.soundSet === s ? C.accent + "30" : "transparent",
               borderWidth: 1, borderColor: editBlock.soundSet === s ? C.accent + "50" : C.accent + "30",
             }}
@@ -197,11 +198,11 @@ export function BlockEditPanel({
       </View>
 
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: editHasJump ? 6 : 0 }}>
-        <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Jump</Text>
+        <Text style={{ color: C.textSecondary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Jump</Text>
         <Pressable
           onPress={() => { if (editHasJump) updateBlock(editingBlockIndex, { jumpToBlock: undefined, jumpCount: undefined }); }}
           style={{
-            paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4,
+            paddingHorizontal: 6, paddingVertical: 3, borderRadius: Radius.xs,
             backgroundColor: !editHasJump ? C.accent + "30" : "transparent",
             borderWidth: 1, borderColor: C.accent + "30",
           }}
@@ -213,7 +214,7 @@ export function BlockEditPanel({
             key={oi}
             onPress={() => updateBlock(editingBlockIndex, { jumpToBlock: oi, jumpCount: editJumpCount || 1 })}
             style={{
-              paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4,
+              paddingHorizontal: 6, paddingVertical: 3, borderRadius: Radius.xs,
               backgroundColor: editBlock.jumpToBlock === oi ? "#f0ad4e30" : "transparent",
               borderWidth: 1, borderColor: editBlock.jumpToBlock === oi ? "#f0ad4e50" : C.accent + "30",
             }}
@@ -227,7 +228,7 @@ export function BlockEditPanel({
 
       {editHasJump && (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text style={{ color: C.textSecondary, fontSize: 10, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Jump ×</Text>
+          <Text style={{ color: C.textSecondary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium", width: 48 }}>Jump ×</Text>
           <Pressable
             onPress={() => { if (editJumpCount > 1) updateBlock(editingBlockIndex, { jumpCount: editJumpCount - 1 }); }}
             style={{ width: ms(26, 0.5), height: ms(26, 0.5), borderRadius: ms(13, 0.5), backgroundColor: "#f0ad4e20", alignItems: "center", justifyContent: "center" }}

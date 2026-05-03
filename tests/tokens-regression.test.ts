@@ -1,0 +1,41 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+/**
+ * 토큰화 완료 파일에 하드코딩된 정확매칭값(borderRadius: 4/6/8, fontSize: 10/11)이
+ * 재유입되지 않는지 검증합니다. 신규 PR에서 토큰을 우회한 직접 숫자 사용을 차단.
+ *
+ * 새로 토큰화한 파일은 이 목록에 추가하세요.
+ */
+const TOKENIZED_FILES = [
+  "components/BlockEditPanel.tsx",
+  "components/LoopBlockStripDetailed.tsx",
+  "components/DialBeatDot.tsx",
+];
+
+const BANNED_PATTERNS: { pattern: RegExp; label: string }[] = [
+  { pattern: /borderRadius:\s*4(?!\d)/, label: "borderRadius: 4 (use Radius.xs)" },
+  { pattern: /borderRadius:\s*6(?!\d)/, label: "borderRadius: 6 (use Radius.sm)" },
+  { pattern: /borderRadius:\s*8(?!\d)/, label: "borderRadius: 8 (use Radius.md)" },
+  { pattern: /fontSize:\s*10(?!\d)/, label: "fontSize: 10 (use FontSize.micro)" },
+  { pattern: /fontSize:\s*11(?!\d)/, label: "fontSize: 11 (use FontSize.caption)" },
+];
+
+for (const file of TOKENIZED_FILES) {
+  test(`tokens regression: ${file} has no hardcoded mapped values`, () => {
+    const abs = join(process.cwd(), file);
+    const src = readFileSync(abs, "utf8");
+    const lines = src.split("\n");
+    const hits: string[] = [];
+    lines.forEach((line, i) => {
+      for (const { pattern, label } of BANNED_PATTERNS) {
+        if (pattern.test(line)) {
+          hits.push(`L${i + 1}: ${label} → ${line.trim()}`);
+        }
+      }
+    });
+    assert.equal(hits.length, 0, `토큰 우회 발견:\n${hits.join("\n")}`);
+  });
+}
