@@ -2,6 +2,46 @@ import { Platform } from "react-native";
 import type { BeatType } from "@/lib/metronome-engine";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
 import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap } from "@/lib/note-samples";
+import type { ActivityLog, PracticeSessionData } from "@/lib/activity-log";
+
+export interface LandscapeStatsTotals {
+  todayTotal: number;
+  todayBeat: number;
+  todayBar: number;
+  weekTotal: number;
+}
+
+/**
+ * 가로화면 통계 위젯 집계.
+ * 오늘/이번 주(월요일 기준) 합계와 모드별(dial/bar) 분리.
+ * @param logs activity log 배열
+ * @param now 기준 시각 (테스트 주입용, 기본값 new Date())
+ */
+export function computeLandscapeStats(
+  logs: ActivityLog[],
+  now: Date = new Date(),
+): LandscapeStatsTotals {
+  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+  const weekStart = new Date(now);
+  const day = weekStart.getDay();
+  const diff = weekStart.getDate() - day + (day === 0 ? -6 : 1);
+  weekStart.setDate(diff); weekStart.setHours(0, 0, 0, 0);
+  const todayMs = todayStart.getTime();
+  const weekMs = weekStart.getTime();
+  let todayTotal = 0, todayBeat = 0, todayBar = 0, weekTotal = 0;
+  for (const l of logs) {
+    if (l.type !== "practice_session") continue;
+    const d = l.data as PracticeSessionData;
+    const dur = d.duration || 0;
+    if (l.timestamp >= weekMs) weekTotal += dur;
+    if (l.timestamp >= todayMs) {
+      todayTotal += dur;
+      if (d.mode === "dial") todayBeat += dur;
+      else if (d.mode === "bar") todayBar += dur;
+    }
+  }
+  return { todayTotal, todayBeat, todayBar, weekTotal };
+}
 
 export function defaultBeatTypes(beats: number): BeatType[] {
   return Array.from({ length: beats }, (_, i) =>

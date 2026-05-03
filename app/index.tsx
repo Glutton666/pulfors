@@ -69,7 +69,7 @@ import PracticeStatsGraph from "@/components/PracticeStatsGraph";
 import { VoiceAssistantButton } from "@/components/VoiceAssistantButton";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { make_styles } from "./index.styles";
-import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, adjustShuffledIndicesOnInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig } from "./index.helpers";
+import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, adjustShuffledIndicesOnInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats } from "./index.helpers";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import type { OnboardingResult } from "@/components/OnboardingModal";
 import { GoalCompletePopup } from "@/components/GoalCompletePopup";
@@ -3588,29 +3588,10 @@ export default function MetronomeScreen() {
     return () => { cancelled = true; clearInterval(id); };
   }, [isLandscape, showLandscapeImage, landscapeContentType, isPlaying]);
 
-  const landscapeStats = useMemo(() => {
-    const now = new Date();
-    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
-    const weekStart = new Date(now);
-    const day = weekStart.getDay();
-    const diff = weekStart.getDate() - day + (day === 0 ? -6 : 1);
-    weekStart.setDate(diff); weekStart.setHours(0, 0, 0, 0);
-    const todayMs = todayStart.getTime();
-    const weekMs = weekStart.getTime();
-    let todayTotal = 0, todayBeat = 0, todayBar = 0, weekTotal = 0;
-    for (const l of landscapeStatsLogs) {
-      if (l.type !== "practice_session") continue;
-      const d = l.data as PracticeSessionData;
-      const dur = d.duration || 0;
-      if (l.timestamp >= weekMs) weekTotal += dur;
-      if (l.timestamp >= todayMs) {
-        todayTotal += dur;
-        if (d.mode === "dial") todayBeat += dur;
-        else if (d.mode === "bar") todayBar += dur;
-      }
-    }
-    return { todayTotal, todayBeat, todayBar, weekTotal };
-  }, [landscapeStatsLogs]);
+  const landscapeStats = useMemo(
+    () => computeLandscapeStats(landscapeStatsLogs),
+    [landscapeStatsLogs],
+  );
 
   const formatStatMinutes = useCallback((seconds: number): string => {
     const mins = Math.round(seconds / 60);

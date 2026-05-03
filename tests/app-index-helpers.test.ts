@@ -9,8 +9,79 @@ import {
   adjustShuffledIndicesOnInsert,
   beatSubdivisionCounts,
   selectCurrentBarConfig,
+  computeLandscapeStats,
   type CurrentBarConfigInput,
 } from "../app/index.helpers";
+
+const mkPracticeLog = (timestamp: number, mode: "dial" | "bar", duration: number) => ({
+  id: String(timestamp),
+  timestamp,
+  type: "practice_session" as const,
+  data: { mode, duration, bpm: 120 },
+});
+
+test("computeLandscapeStats: 빈 로그는 0 반환", () => {
+  const r = computeLandscapeStats([], new Date("2026-05-03T12:00:00Z"));
+  assert.deepEqual(r, { todayTotal: 0, todayBeat: 0, todayBar: 0, weekTotal: 0 });
+});
+
+test("computeLandscapeStats: practice_session 외 타입 무시", () => {
+  const now = new Date("2026-05-03T12:00:00Z");
+  const logs = [
+    { id: "1", timestamp: now.getTime() - 1000, type: "feature_usage" as const, data: { feature: "x" as any } },
+  ];
+  const r = computeLandscapeStats(logs as any, now);
+  assert.equal(r.todayTotal, 0);
+});
+
+test("computeLandscapeStats: dial/bar 모드별 분리 + 합계", () => {
+  const now = new Date("2026-05-03T12:00:00Z");
+  const todayMs = now.getTime();
+  const logs = [
+    mkPracticeLog(todayMs - 60_000, "dial", 100),
+    mkPracticeLog(todayMs - 30_000, "bar", 200),
+    mkPracticeLog(todayMs - 10_000, "dial", 50),
+  ];
+  const r = computeLandscapeStats(logs as any, now);
+  assert.equal(r.todayBeat, 150);
+  assert.equal(r.todayBar, 200);
+  assert.equal(r.todayTotal, 350);
+  assert.equal(r.weekTotal, 350);
+});
+
+test("computeLandscapeStats: 어제 로그는 todayTotal 제외, weekTotal 포함", () => {
+  const now = new Date("2026-05-03T12:00:00Z"); // 일요일
+  const yesterday = new Date("2026-05-02T12:00:00Z").getTime();
+  const logs = [mkPracticeLog(yesterday, "dial", 500)];
+  const r = computeLandscapeStats(logs as any, now);
+  assert.equal(r.todayTotal, 0);
+  assert.equal(r.weekTotal, 500);
+});
+
+test("computeLandscapeStats: 월요일 시작 — 일요일은 이전 주", () => {
+  // 2026-05-03 = 일요일. 이번 주 시작 = 2026-04-27 (월). 그래서 04-26(일)은 제외
+  const now = new Date("2026-05-03T12:00:00Z");
+  const lastSunday = new Date("2026-04-26T12:00:00Z").getTime();
+  const thisWeekMon = new Date("2026-04-27T12:00:00Z").getTime();
+  const logs = [
+    mkPracticeLog(lastSunday, "dial", 100),
+    mkPracticeLog(thisWeekMon, "bar", 200),
+  ];
+  const r = computeLandscapeStats(logs as any, now);
+  assert.equal(r.weekTotal, 200);
+});
+
+test("computeLandscapeStats: duration 누락 시 0으로 처리", () => {
+  const now = new Date("2026-05-03T12:00:00Z");
+  const logs = [{
+    id: "1",
+    timestamp: now.getTime() - 1000,
+    type: "practice_session" as const,
+    data: { mode: "dial", bpm: 120 } as any,
+  }];
+  const r = computeLandscapeStats(logs as any, now);
+  assert.equal(r.todayTotal, 0);
+});
 
 test("defaultBeatTypes: first beat is accent, rest normal", () => {
   assert.deepEqual(defaultBeatTypes(4), ["accent", "normal", "normal", "normal"]);
