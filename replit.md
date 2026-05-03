@@ -64,3 +64,7 @@ Preferred communication style: Simple, everyday language.
 - **expo-sharing**: For sharing backup files and practice entries on native platforms.
 - **expo-document-picker**: For importing audio files and backup files.
 - **react-native-webview**: Used for Android offline microphone analysis via Web Audio API in a hidden WebView (components/MicWebView.tsx). iOS uses native WAV recording + local analysis; web uses Web Audio API directly.
+
+## Behavior Notes
+
+- **Per-bar BPM override (`PracticeEntry.barRepeats[*].bpm`)**: Only positive numbers are honored. `0`, negative values, and missing fields are treated as "no override" by both `applyEntryToEngine` and `applyEntryToState` (app/index.helpers.ts). This prevents the engine's 20–300 clamp from silently rewriting `0` into `20`. Pre–Task #37 inline code used a JS truthy check, which had the same effect for falsy values; the helper formalizes that policy.
