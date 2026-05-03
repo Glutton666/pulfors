@@ -2,6 +2,7 @@ import React from "react";
 import { View, Pressable, Platform, ActivityIndicator, type ViewStyle, type StyleProp } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { Spacing } from "@/constants/tokens";
 
 export interface BarPlayButtonProps {
   isPlaying: boolean;
@@ -71,7 +72,7 @@ export function BarPlayButton({
             name={isPlaying ? "stop" : "play"}
             size={iconSize}
             color={isPlaying ? dangerColor : accentColor}
-            style={!isPlaying ? { marginLeft: 2 } : undefined}
+            style={!isPlaying ? { marginLeft: Spacing.xxs } : undefined}
           />
         )}
       </Pressable>

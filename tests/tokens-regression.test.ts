@@ -30,6 +30,8 @@ const TOKENIZED_FILES = [
   "components/LoopBlockStripCompact.tsx",
   "components/GoalCompletePopup.tsx",
   "components/BeatIndicator.tsx",
+  "components/BarPlayButton.tsx",
+  "app/index.tsx",
 ];
 
 const BANNED_PATTERNS: { pattern: RegExp; label: string }[] = [

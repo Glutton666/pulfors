@@ -41,6 +41,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Colors from "@/constants/colors";
+import { Radius, Spacing } from "@/constants/tokens";
 import type { ThemeColor } from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -4053,7 +4054,7 @@ export default function MetronomeScreen() {
               ? (isLandscape ? (insets.bottom || 4) : (insets.bottom || webBottomInset) + 4)
               : (insets.bottom || webBottomInset) + (isLandscape ? 8 : 12),
           },
-          isLandscape && noteMode && { paddingHorizontal: 8 },
+          isLandscape && noteMode && { paddingHorizontal: Spacing.sm },
           noteMode && { justifyContent: "flex-start" as const },
         ]}
       >
@@ -4222,8 +4223,8 @@ export default function MetronomeScreen() {
                         flexDirection: "row" as const,
                         backgroundColor: "rgba(0,0,0,0.55)",
                         borderRadius: 999,
-                        padding: 2,
-                        gap: 2,
+                        padding: Spacing.xxs,
+                        gap: Spacing.xxs,
                       }}
                     >
                       <Pressable
@@ -4233,8 +4234,8 @@ export default function MetronomeScreen() {
                         }}
                         hitSlop={6}
                         style={{
-                          paddingHorizontal: 8,
-                          paddingVertical: 4,
+                          paddingHorizontal: Spacing.sm,
+                          paddingVertical: Spacing.xs,
                           borderRadius: 999,
                           backgroundColor: landscapeContentType === "photo" ? C.accent : "transparent",
                           alignItems: "center" as const,
@@ -4257,8 +4258,8 @@ export default function MetronomeScreen() {
                         }}
                         hitSlop={6}
                         style={{
-                          paddingHorizontal: 8,
-                          paddingVertical: 4,
+                          paddingHorizontal: Spacing.sm,
+                          paddingVertical: Spacing.xs,
                           borderRadius: 999,
                           backgroundColor: landscapeContentType === "stats" ? C.accent : "transparent",
                           alignItems: "center" as const,
@@ -4308,17 +4309,17 @@ export default function MetronomeScreen() {
                                 {formatStatMinutes(landscapeStats.todayTotal)}
                               </Text>
                             </View>
-                            <View style={{ flexDirection: "row" as const, gap: 8 }}>
-                              <View style={{ flex: 1, flexDirection: "row" as const, justifyContent: "space-between" as const, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: C.overlay10, borderRadius: 6 }}>
+                            <View style={{ flexDirection: "row" as const, gap: Spacing.sm }}>
+                              <View style={{ flex: 1, flexDirection: "row" as const, justifyContent: "space-between" as const, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs, backgroundColor: C.overlay10, borderRadius: Radius.sm }}>
                                 <Text style={{ color: C.textSecondary, fontSize: S.ms(10, 0.25), fontFamily: "Inter_500Medium" }}>{t("settings", "statsBeat")}</Text>
                                 <Text style={{ color: C.text, fontSize: S.ms(11, 0.3), fontFamily: "SpaceGrotesk_500Medium" }}>{formatStatMinutes(landscapeStats.todayBeat)}</Text>
                               </View>
-                              <View style={{ flex: 1, flexDirection: "row" as const, justifyContent: "space-between" as const, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: C.overlay10, borderRadius: 6 }}>
+                              <View style={{ flex: 1, flexDirection: "row" as const, justifyContent: "space-between" as const, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs, backgroundColor: C.overlay10, borderRadius: Radius.sm }}>
                                 <Text style={{ color: C.textSecondary, fontSize: S.ms(10, 0.25), fontFamily: "Inter_500Medium" }}>{t("settings", "statsBar")}</Text>
                                 <Text style={{ color: C.text, fontSize: S.ms(11, 0.3), fontFamily: "SpaceGrotesk_500Medium" }}>{formatStatMinutes(landscapeStats.todayBar)}</Text>
                               </View>
                             </View>
-                            <View style={{ flexDirection: "row" as const, justifyContent: "space-between" as const, alignItems: "center" as const, paddingTop: 4, borderTopWidth: 1, borderTopColor: C.overlay10 }}>
+                            <View style={{ flexDirection: "row" as const, justifyContent: "space-between" as const, alignItems: "center" as const, paddingTop: Spacing.xs, borderTopWidth: 1, borderTopColor: C.overlay10 }}>
                               <Text style={{ color: C.textSecondary, fontSize: S.ms(10, 0.25), fontFamily: "Inter_500Medium", textTransform: "uppercase" as const, letterSpacing: 0.5 }}>
                                 {t("settings", "statsWeekPractice")}
                               </Text>
@@ -4326,7 +4327,7 @@ export default function MetronomeScreen() {
                                 {formatStatMinutes(landscapeStats.weekTotal)}
                               </Text>
                             </View>
-                            <View style={{ marginTop: 4 }}>
+                            <View style={{ marginTop: Spacing.xs }}>
                               <PracticeStatsGraph
                                 logs={landscapeStatsLogs}
                                 accentColor={C.accent}
