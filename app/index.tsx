@@ -74,6 +74,7 @@ import { useNoteSamples } from "@/hooks/useNoteSamples";
 import { useBarConfig, useDialConfig } from "@/hooks/useBarDialConfig";
 import { useMetronomeEngine } from "@/hooks/useMetronomeEngine";
 import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist";
+import { createRafBatcher } from "@/lib/raf-batcher";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { MoreMenuModal } from "@/components/MoreMenuModal";
 import { ScheduledStartModal } from "@/components/ScheduledStartModal";
@@ -1328,7 +1329,8 @@ export default function MetronomeScreen() {
     const engine = engineRef.current;
     if (!engine) return;
 
-    let rafPending = false;
+    // 모든 시각용 콜백(onBeat/onSubBeat/onProgress)은 rAF 배처로 합쳐
+    // 프레임당 한 번만 setState 한다. BPM 200 · 16서브비트에서도 60Hz 이하 보장.
     let pendingBeat = -1;
     let pendingAccent = false;
     let pendingSubBeat = -1;
@@ -1336,9 +1338,10 @@ export default function MetronomeScreen() {
     let hasBeatUpdate = false;
     let hasSubBeatUpdate = false;
     let hasProgressUpdate = false;
+    let pendingLayerMap: Record<string, number> = {};
+    let hasLayerUpdate = false;
 
-    const flushUpdates = () => {
-      rafPending = false;
+    const batcher = createRafBatcher(() => {
       if (hasBeatUpdate) {
         hasBeatUpdate = false;
         setCurrentBeat(pendingBeat);
@@ -1364,31 +1367,21 @@ export default function MetronomeScreen() {
         setLayerProgressMap(prev => ({ ...prev, ...pendingLayerMap }));
         pendingLayerMap = {};
       }
-    };
-
-    const scheduleFlush = () => {
-      if (!rafPending) {
-        rafPending = true;
-        requestAnimationFrame(flushUpdates);
-      }
-    };
+    });
 
     engine.setOnBeat((beat: number, isAccent: boolean) => {
       pendingBeat = beat;
       pendingAccent = isAccent;
       hasBeatUpdate = true;
-      scheduleFlush();
+      batcher.schedule();
     });
 
     engine.setOnSubBeat((_beat: number, subBeat: number) => {
       activeSubNoteRef.current = subBeat;
       pendingSubBeat = subBeat;
       hasSubBeatUpdate = true;
-      scheduleFlush();
+      batcher.schedule();
     });
-
-    let pendingLayerMap: Record<string, number> = {};
-    let hasLayerUpdate = false;
 
     engine.setOnProgress((info) => {
       if (info.layerIndex !== undefined && info.layerIndex > 0 && info.layerBeat !== undefined) {
@@ -1399,7 +1392,7 @@ export default function MetronomeScreen() {
         pendingProgress = info;
         hasProgressUpdate = true;
       }
-      scheduleFlush();
+      batcher.schedule();
     });
 
     engine.setOnScheduleRebuild(() => {
@@ -1416,6 +1409,16 @@ export default function MetronomeScreen() {
       }
       engine.setPendingMeasureStartAction(null);
     });
+
+    // unmount 시 보류 중인 frame을 취소하고 엔진 콜백을 분리한다.
+    // (setOnBeat은 null을 받지 않으므로 no-op으로 교체)
+    return () => {
+      batcher.cancel();
+      try { engine.setOnBeat(() => {}); } catch {}
+      try { engine.setOnSubBeat(null); } catch {}
+      try { engine.setOnProgress(null); } catch {}
+      try { engine.setOnScheduleRebuild(null); } catch {}
+    };
   }, [flashOpacity]);
 
   useEffect(() => {
