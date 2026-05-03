@@ -229,8 +229,7 @@ export default function MetronomeScreen() {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showScheduledStart, setShowScheduledStart] = useState(false);
   const [showFadeOut, setShowFadeOut] = useState(false);
-  const isPlayingRef = useRef(false);
-  const fadeOutSessionRef = useRef<{ N: number; M: number; K: number; startMeasure: number } | null>(null);
+  const fadeOutSessionRef = useRef<{ N: number; M: number; K: number } | null>(null);
   const fadeOutMutedRef = useRef(false);
   const [fadeOutPhase, setFadeOutPhase] = useState<"audible1" | "muted" | "audible2" | null>(null);
   const [fadeOutMeasureInPhase, setFadeOutMeasureInPhase] = useState(0);
@@ -243,7 +242,6 @@ export default function MetronomeScreen() {
     setFadeOutMeasureInPhase(0);
   }, []);
   useEffect(() => {
-    isPlayingRef.current = isPlaying;
     if (!isPlaying && fadeOutSessionRef.current) {
       clearFadeOutSession();
     }
@@ -3885,7 +3883,7 @@ export default function MetronomeScreen() {
           stopRenderedAudio();
           clearSamplePlayStates();
           resetPlaybackVisuals();
-          fadeOutSessionRef.current = { N: s.audibleN, M: s.mutedM, K: s.audibleK, startMeasure: 0 };
+          fadeOutSessionRef.current = { N: s.audibleN, M: s.mutedM, K: s.audibleK };
           fadeOutMutedRef.current = false;
           fadeOutMeasureCountRef.current = 0;
           setFadeOutPhase("audible1");
