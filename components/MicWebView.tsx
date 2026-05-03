@@ -36,7 +36,7 @@ export const MicWebView = forwardRef<MicWebViewHandle, MicWebViewProps>(
       },
     }));
 
-    const handleMessage = useCallback((event: any) => {
+    const handleMessage = useCallback((event: { nativeEvent: { data: string } }) => {
       try {
         const data = JSON.parse(event.nativeEvent.data);
         if (data.type === "freq") {

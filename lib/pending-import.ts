@@ -3,7 +3,7 @@ import { logger } from "./logger";
 
 const STORAGE_KEY = "@practice_pending_import";
 
-export function setPendingImport(data: any) {
+export function setPendingImport(data: unknown) {
   try {
     if (Platform.OS === "web" && typeof window !== "undefined") {
       window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -13,7 +13,7 @@ export function setPendingImport(data: any) {
   }
 }
 
-export function consumePendingImport(): any {
+export function consumePendingImport(): unknown {
   try {
     if (Platform.OS === "web" && typeof window !== "undefined") {
       const raw = window.sessionStorage.getItem(STORAGE_KEY);

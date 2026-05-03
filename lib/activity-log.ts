@@ -10,7 +10,7 @@ export interface PracticeSessionData {
   bpm: number;
   mode: "dial" | "bar";
   duration: number;
-  barConfig?: any;
+  barConfig?: unknown;
   practiceNoteId?: string;
   practiceNoteLabel?: string;
 }

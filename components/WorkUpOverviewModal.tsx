@@ -403,23 +403,24 @@ export function WorkUpOverviewModal({
         const d = l.data as PracticeSessionData;
         const noteId = d.practiceNoteId;
         const noteLabel = d.practiceNoteLabel;
+        const bc = d.barConfig as { beatsPerMeasure?: number; subdivisions?: number } | undefined;
         const key = noteId
           ? `note-${noteId}`
-          : `${d.bpm}-${d.barConfig?.beatsPerMeasure || "?"}/${d.barConfig?.subdivisions || "?"}`;
+          : `${d.bpm}-${bc?.beatsPerMeasure || "?"}/${bc?.subdivisions || "?"}`;
         if (configMap[key] === undefined) {
           configMap[key] = configs.length;
           configs.push({
             label: noteLabel
               ? `\u266B ${noteLabel}`
-              : `${d.bpm} BPM \u00B7 ${d.barConfig?.beatsPerMeasure || "?"}/${d.barConfig?.subdivisions || "?"}`,
+              : `${d.bpm} BPM \u00B7 ${bc?.beatsPerMeasure || "?"}/${bc?.subdivisions || "?"}`,
             sublabel: noteLabel
-              ? `${d.bpm} BPM \u00B7 ${d.barConfig?.beatsPerMeasure || "?"}/${d.barConfig?.subdivisions || "?"}`
+              ? `${d.bpm} BPM \u00B7 ${bc?.beatsPerMeasure || "?"}/${bc?.subdivisions || "?"}`
               : undefined,
             duration: 0,
             count: 0,
             bpm: d.bpm,
-            beats: d.barConfig?.beatsPerMeasure || 4,
-            subdivisions: d.barConfig?.subdivisions || 1,
+            beats: bc?.beatsPerMeasure || 4,
+            subdivisions: bc?.subdivisions || 1,
             practiceNoteId: noteId,
             practiceNoteLabel: noteLabel,
           });
