@@ -261,6 +261,25 @@ test("[apply-engine] BPM 오버라이드 정책: 0/음수/누락은 무시, 양�
   assert.deepEqual(fake.state.bpmOverrides, { 3: 140 });
 });
 
+test("[apply-engine] BPM 오버라이드 정책 패리티: applyEntryToState와 동일한 필터링", () => {
+  // 두 헬퍼가 같은 의미를 가져야 한다. 한 쪽만 0/음수를 거르면
+  // 화면(state)과 엔진이 서로 다른 BPM 맵으로 동작하는 사고가 가능.
+  const entry: PracticeEntry = {
+    ...emptyEntry,
+    barRepeats: {
+      0: { type: "count", value: 2, bpm: 0 },
+      1: { type: "count", value: 2, bpm: -10 },
+      2: { type: "count", value: 2 },
+      3: { type: "count", value: 2, bpm: 140 },
+    } as Record<number, BarRepeat>,
+  };
+  const fake = createFakeEngine();
+  applyEntryToEngine(fake, entry);
+  const state = applyEntryToState(entry);
+  assert.deepEqual(fake.state.bpmOverrides, state.bpmOverrides);
+  assert.deepEqual(state.bpmOverrides, { 3: 140 });
+});
+
 test("[apply-engine] blockPlayMode 누락 시 'loop' 폴백, barRepeats 누락 시 빈 객체", () => {
   const noBlocksEntry: PracticeEntry = {
     ...emptyEntry,

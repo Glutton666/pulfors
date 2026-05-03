@@ -261,9 +261,11 @@ export interface AppliedEntryState {
  */
 export function applyEntryToState(entry: PracticeEntry): AppliedEntryState {
   const blocks = entry.loopBlocks ?? [];
+  // BPM 오버라이드 정책: 양수만 통과. applyEntryToEngine과 동일하게 0/음수/누락은
+  // "오버라이드 없음"으로 간주해 두 헬퍼가 같은 의미를 갖도록 잠근다.
   const bpmOverrides: Record<number, number> = {};
   for (const [k, v] of Object.entries(entry.barRepeats || {})) {
-    if (typeof v.bpm === "number") bpmOverrides[Number(k)] = v.bpm;
+    if (typeof v.bpm === "number" && v.bpm > 0) bpmOverrides[Number(k)] = v.bpm;
   }
   return {
     bpm: entry.bpm,
