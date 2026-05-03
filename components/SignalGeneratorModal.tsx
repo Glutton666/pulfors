@@ -1031,10 +1031,16 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       return;
     }
     await acquireAudioSession("signalGenMicAndroid", "mic");
-    micActiveRef.current = true;
-    setMicListening(true);
-    setMicWebViewActive(true);
-    onAndroidMicToggle?.(true);
+    try {
+      micActiveRef.current = true;
+      setMicListening(true);
+      setMicWebViewActive(true);
+      onAndroidMicToggle?.(true);
+    } catch (e) {
+      // 상태 토글 실패 시 acquire한 세션 롤백.
+      try { await releaseAudioSession("signalGenMicAndroid"); } catch {}
+      throw e;
+    }
   }, [stopMobileMic, onAndroidMicToggle, t]);
 
   const startMicMobile = useCallback(async () => {
