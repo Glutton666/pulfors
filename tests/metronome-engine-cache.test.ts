@@ -90,6 +90,29 @@ test("flushSchedule: 활성 schedule을 비워 다음 호출이 재구성하도�
   assert.equal(engine._wasLastBuildCacheHit(), true, "동일 입력은 LRU 적중 유지(의도)");
 });
 
+test("flushSchedule + 모드 전환 시뮬레이션: 다음 schedule이 새 박자수/비트타입을 즉시 반영 (Task #65)", () => {
+  // Beat ↔ Bar 모드 전환 시 잔여 ticks가 이전 모드 사운드로 재생되는 회귀 방지.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.buildScheduleOnly();
+
+  const before = engine.getScheduleInfo();
+  const beforeMain = before.ticks.filter(t => t.subBeat === 0);
+  assert.equal(beforeMain.length, 4, "전환 전: 4박");
+
+  // 모드 전환을 모사: 새 설정 적용 후 flushSchedule 호출.
+  engine.setBeatsPerMeasure(7);
+  engine.setBeatTypes(["strong", "normal", "normal", "normal", "accent", "normal", "normal"]);
+  engine.flushSchedule();
+
+  const after = engine.getScheduleInfo();
+  const afterMain = after.ticks.filter(t => t.subBeat === 0);
+  assert.equal(afterMain.length, 7, "flush 후: 새 박자수(7)가 즉시 반영");
+  assert.equal(afterMain[0].type, "strong", "flush 후: 새 비트 타입(strong)이 첫 비트에 반영");
+});
+
 test("입력 16종 초과 시 LRU로 가장 오래된 항목이 축출된다", () => {
   const engine = new MetronomeEngine();
   engine.setBeatsPerMeasure(4);

@@ -69,7 +69,7 @@ import PracticeStatsGraph from "@/components/PracticeStatsGraph";
 import { VoiceAssistantButton } from "@/components/VoiceAssistantButton";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { make_styles } from "./index.styles";
-import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, adjustShuffledIndicesOnInsert, appendShuffledIndexOnAdd, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore } from "./index.helpers";
+import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore } from "./index.helpers";
 import { useAudioPlayers } from "@/hooks/useAudioPlayers";
 import { useNoteSamples } from "@/hooks/useNoteSamples";
 import { useBarConfig, useDialConfig } from "@/hooks/useBarDialConfig";
@@ -3359,18 +3359,25 @@ export default function MetronomeScreen() {
     setNoteBarEntries([]);
   }, [isPlaying]);
 
-  const handleNoteAddToQueue = useCallback((entry: PracticeEntry) => {
+  const handleNoteAddToQueue = useCallback((entry: PracticeEntry, insertAt?: number) => {
     setNoteQueue(prev => {
-      const updated = [...prev, entry];
-      noteQueueRef.current = updated;
-      if (notePlayModeRef.current === "random") {
-        const newIdx = updated.length - 1;
-        noteShuffledIndicesRef.current = appendShuffledIndexOnAdd(
-          noteShuffledIndicesRef.current,
-          newIdx,
-        );
+      const pos = (typeof insertAt === "number") ? insertAt : prev.length;
+      const result = applyQueueInsert(
+        prev,
+        noteCurrentIndexRef.current,
+        noteShuffledIndicesRef.current,
+        noteShuffledPosRef.current,
+        notePlayModeRef.current,
+        pos,
+        entry,
+      );
+      noteQueueRef.current = result.queue;
+      noteShuffledIndicesRef.current = result.shuffledIndices;
+      if (result.currentIndex !== noteCurrentIndexRef.current) {
+        noteCurrentIndexRef.current = result.currentIndex;
+        setNoteCurrentIndex(result.currentIndex);
       }
-      return updated;
+      return result.queue;
     });
   }, []);
 
@@ -3428,20 +3435,26 @@ export default function MetronomeScreen() {
   }, []);
 
   const handleNoteInsertNext = useCallback((entry: PracticeEntry) => {
-    const ci = noteCurrentIndexRef.current;
     setNoteQueue(prev => {
-      const updated = [...prev];
-      updated.splice(ci + 1, 0, entry);
-      noteQueueRef.current = updated;
-      return updated;
-    });
-    if (notePlayModeRef.current === "random") {
-      noteShuffledIndicesRef.current = adjustShuffledIndicesOnInsert(
+      const ci = noteCurrentIndexRef.current;
+      const pos = Math.max(0, ci + 1);
+      const result = applyQueueInsert(
+        prev,
+        ci,
         noteShuffledIndicesRef.current,
         noteShuffledPosRef.current,
-        ci + 1,
+        notePlayModeRef.current,
+        pos,
+        entry,
       );
-    }
+      noteQueueRef.current = result.queue;
+      noteShuffledIndicesRef.current = result.shuffledIndices;
+      if (result.currentIndex !== noteCurrentIndexRef.current) {
+        noteCurrentIndexRef.current = result.currentIndex;
+        setNoteCurrentIndex(result.currentIndex);
+      }
+      return result.queue;
+    });
   }, []);
 
   const handleNoteTogglePlay = useCallback(() => {

@@ -8,6 +8,7 @@ import {
   createShuffledIndices,
   adjustShuffledIndicesOnInsert,
   appendShuffledIndexOnAdd,
+  applyQueueInsert,
   beatSubdivisionCounts,
   selectCurrentBarConfig,
   computeLandscapeStats,
@@ -227,6 +228,85 @@ test("appendShuffledIndexOnAdd: does not mutate input", () => {
   const input = [2, 0, 1];
   appendShuffledIndexOnAdd(input, 3);
   assert.deepEqual(input, [2, 0, 1]);
+});
+
+// applyQueueInsert: Note 모드 큐 삽입 + currentIndex 보정 (Task #65)
+
+test("applyQueueInsert: append (insertAt = queue.length) — currentIndex 변하지 않음", () => {
+  const r = applyQueueInsert(["a", "b", "c"], 1, [], 0, "once", 3, "d");
+  assert.deepEqual(r.queue, ["a", "b", "c", "d"]);
+  assert.equal(r.currentIndex, 1);
+});
+
+test("applyQueueInsert: 삽입 위치 < currentIndex — currentIndex가 +1 보정되어 같은 항목을 가리킨다", () => {
+  // 현재 'c' (index 2)를 재생 중. 'a' 앞(index 0)에 'X' 삽입.
+  const r = applyQueueInsert(["a", "b", "c"], 2, [], 0, "once", 0, "X");
+  assert.deepEqual(r.queue, ["X", "a", "b", "c"]);
+  assert.equal(r.currentIndex, 3, "현재 인덱스가 +1 보정되어 여전히 'c'를 가리켜야 함");
+  assert.equal(r.queue[r.currentIndex], "c");
+});
+
+test("applyQueueInsert: 삽입 위치 == currentIndex — currentIndex가 +1 보정", () => {
+  const r = applyQueueInsert(["a", "b", "c"], 1, [], 0, "once", 1, "X");
+  assert.deepEqual(r.queue, ["a", "X", "b", "c"]);
+  assert.equal(r.currentIndex, 2);
+  assert.equal(r.queue[r.currentIndex], "b");
+});
+
+test("applyQueueInsert: 삽입 위치 > currentIndex — currentIndex 그대로", () => {
+  const r = applyQueueInsert(["a", "b", "c"], 1, [], 0, "once", 2, "X");
+  assert.deepEqual(r.queue, ["a", "b", "X", "c"]);
+  assert.equal(r.currentIndex, 1);
+  assert.equal(r.queue[r.currentIndex], "b");
+});
+
+test("applyQueueInsert: currentIndex = -1 (재생 중 아님) — 보정 없음", () => {
+  const r = applyQueueInsert(["a", "b"], -1, [], 0, "once", 0, "X");
+  assert.deepEqual(r.queue, ["X", "a", "b"]);
+  assert.equal(r.currentIndex, -1);
+});
+
+test("applyQueueInsert: random + append — shuffled에 새 인덱스만 추가", () => {
+  const r = applyQueueInsert(["a", "b", "c"], 0, [0, 2, 1], 0, "random", 3, "d");
+  assert.deepEqual(r.shuffledIndices, [0, 2, 1, 3]);
+  assert.equal(r.currentIndex, 0);
+});
+
+test("applyQueueInsert: random + 중간 삽입 — shuffled 인덱스 시프트 + 현재 인덱스 보정", () => {
+  // 큐 [a,b,c], shuffled=[2,0,1], pos=0 (현재 c=index 2 재생 중, ci=2).
+  // index 1에 X 삽입. 큐 [a,X,b,c]. 현재 c는 이제 index 3.
+  const r = applyQueueInsert(["a", "b", "c"], 2, [2, 0, 1], 0, "random", 1, "X");
+  assert.deepEqual(r.queue, ["a", "X", "b", "c"]);
+  assert.equal(r.currentIndex, 3);
+  assert.equal(r.queue[r.currentIndex], "c");
+  // shuffled: 기존 인덱스 >= 1 은 +1로 시프트되어 [3,0,2], 그리고 pos+1=1 자리에 새 인덱스 1이 삽입
+  assert.deepEqual(r.shuffledIndices, [3, 1, 0, 2]);
+});
+
+test("applyQueueInsert: 빈 큐 + insert at 0", () => {
+  const r = applyQueueInsert<string>([], -1, [], 0, "once", 0, "first");
+  assert.deepEqual(r.queue, ["first"]);
+  assert.equal(r.currentIndex, -1);
+});
+
+test("applyQueueInsert: insertAt 음수는 0으로 클램프", () => {
+  const r = applyQueueInsert(["a", "b"], 1, [], 0, "once", -5, "X");
+  assert.deepEqual(r.queue, ["X", "a", "b"]);
+  assert.equal(r.currentIndex, 2);
+});
+
+test("applyQueueInsert: insertAt > queue.length는 append로 처리", () => {
+  const r = applyQueueInsert(["a", "b"], 0, [], 0, "once", 99, "X");
+  assert.deepEqual(r.queue, ["a", "b", "X"]);
+  assert.equal(r.currentIndex, 0);
+});
+
+test("applyQueueInsert: 입력 배열을 변형하지 않는다", () => {
+  const queue = ["a", "b", "c"];
+  const shuffled = [2, 0, 1];
+  applyQueueInsert(queue, 1, shuffled, 0, "random", 1, "X");
+  assert.deepEqual(queue, ["a", "b", "c"]);
+  assert.deepEqual(shuffled, [2, 0, 1]);
 });
 
 test("beatSubdivisionCounts: empty map", () => {

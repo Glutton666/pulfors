@@ -150,6 +150,62 @@ export function appendShuffledIndexOnAdd(
   return [...indices, appendedQueueIdx];
 }
 
+export interface QueueInsertResult<T> {
+  queue: T[];
+  currentIndex: number;
+  shuffledIndices: number[];
+}
+
+/**
+ * Insert a new entry into the Note-mode queue at `insertAt` and return the
+ * adjusted queue / current-index / shuffled-indices triple.
+ *
+ * Index correction rules (the bug fix targeted by Task #65):
+ * - If `insertAt <= currentIndex`, currentIndex must be bumped by +1 so that
+ *   it keeps pointing to the same playing entry after the splice.
+ * - If `insertAt > currentIndex` or no entry is playing (currentIndex < 0),
+ *   currentIndex is unchanged.
+ *
+ * Shuffled indices are kept consistent for "random" mode:
+ * - Append (insertAt === queue.length) → append the new queue index to the
+ *   shuffled cycle (only if not already present).
+ * - Mid-insert → shift all shuffled entries >= insertAt by +1 and place the
+ *   new index right after the current shuffled position.
+ */
+export function applyQueueInsert<T>(
+  queue: T[],
+  currentIndex: number,
+  shuffledIndices: number[],
+  shuffledPos: number,
+  mode: "once" | "loop" | "random",
+  insertAt: number,
+  entry: T,
+): QueueInsertResult<T> {
+  const pos = Math.max(0, Math.min(insertAt, queue.length));
+  const newQueue = [...queue];
+  newQueue.splice(pos, 0, entry);
+
+  let newCurrent = currentIndex;
+  if (currentIndex >= 0 && pos <= currentIndex) {
+    newCurrent = currentIndex + 1;
+  }
+
+  let newShuffled = shuffledIndices;
+  if (mode === "random") {
+    if (pos >= queue.length) {
+      newShuffled = appendShuffledIndexOnAdd(shuffledIndices, pos);
+    } else {
+      newShuffled = adjustShuffledIndicesOnInsert(
+        shuffledIndices,
+        shuffledPos,
+        pos,
+      );
+    }
+  }
+
+  return { queue: newQueue, currentIndex: newCurrent, shuffledIndices: newShuffled };
+}
+
 export type BlockPlayMode = "sequential" | "loop" | "random";
 export type BarLoopMode = "loop" | "once";
 
