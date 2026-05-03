@@ -98,3 +98,61 @@ test("buildSchedule: jumpToBlock + jumpCount=2에서 jumpIteration이 0,1 부여
     assert.ok(t.time > lastJumpTime, "C는 점프 영역 이후에 emit");
   }
 });
+
+test("setOnClickEmitted: mute 틱은 통지 X, 일반/accent/strong은 통지 O, preRender 모드도 동일", () => {
+  const engine = new MetronomeEngine();
+  const calls: number[] = [];
+  engine.setOnClickEmitted((at) => calls.push(at));
+
+  type T = import("../lib/metronome-engine").ScheduledTick;
+  const mk = (type: T["type"]): T => ({
+    time: 0,
+    beat: 0,
+    subBeat: 0,
+    type,
+    isMainBeat: true,
+    layerIndex: 0,
+    layerBeat: 0,
+    blockIndex: -1,
+    blockRepeatTotal: 0,
+    repeatIteration: 0,
+    barRepeatIteration: 0,
+    barRepeatTotal: 0,
+    jumpIteration: 0,
+    jumpTotal: 0,
+    jumpSourceBlockIndex: -1,
+  } as T);
+
+  const fire = (engine as unknown as { fireTick: (t: T) => void }).fireTick.bind(engine);
+
+  fire(mk("normal"));
+  fire(mk("accent"));
+  fire(mk("strong"));
+  assert.equal(calls.length, 3, "non-mute는 모두 통지");
+
+  fire(mk("mute"));
+  assert.equal(calls.length, 3, "mute는 통지하지 않음");
+
+  // preRender 모드에서도 onClickEmitted는 호출된다
+  engine.setPreRenderedAudio(true);
+  fire(mk("normal"));
+  assert.equal(calls.length, 4, "preRender 모드에서도 통지");
+});
+
+test("setOnClickEmitted(null)로 해제 가능", () => {
+  const engine = new MetronomeEngine();
+  let count = 0;
+  engine.setOnClickEmitted(() => { count += 1; });
+  engine.setOnClickEmitted(null);
+
+  type T = import("../lib/metronome-engine").ScheduledTick;
+  const tick: T = {
+    time: 0, beat: 0, subBeat: 0, type: "normal", isMainBeat: true,
+    layerIndex: 0, layerBeat: 0, blockIndex: -1,
+    blockRepeatTotal: 0, repeatIteration: 0,
+    barRepeatIteration: 0, barRepeatTotal: 0,
+    jumpIteration: 0, jumpTotal: 0, jumpSourceBlockIndex: -1,
+  } as T;
+  (engine as unknown as { fireTick: (t: T) => void }).fireTick(tick);
+  assert.equal(count, 0);
+});

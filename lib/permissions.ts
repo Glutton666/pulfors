@@ -35,8 +35,12 @@ async function requestRaw(kind: PermissionKind): Promise<PermissionResult> {
 interface PendingEntry {
   run: () => void | Promise<void>;
   attempts: number;
+  /** entry.run() 일시 실패 시 다음 active 한 번 더 재시도할 카운터. 0이 되면 cleanup. */
+  runRetriesLeft: number;
   registeredAt: number;
 }
+
+const DEFAULT_RUN_RETRIES = 1;
 
 const MAX_RECOVERY_ATTEMPTS = 2;
 const PENDING_TTL_MS = 5 * 60 * 1000;
@@ -91,13 +95,25 @@ async function runRecoveryOnce(now: number): Promise<PermissionRecoveryEvent[]> 
       res = { granted: false, canAskAgain: true };
     }
     if (res.granted) {
-      pendingByKind.delete(kind);
+      let runOk = true;
       try {
         await entry.run();
       } catch (e) {
+        runOk = false;
         captureBreadcrumb({ category: "permissions", message: "recovery action threw", level: "warning", data: { kind, error: String(e) } });
       }
-      events.push({ kind, status: "recovered" });
+      if (runOk) {
+        pendingByKind.delete(kind);
+        events.push({ kind, status: "recovered" });
+      } else if (entry.runRetriesLeft > 0) {
+        // 권한은 받았지만 entry.run()이 일시 실패 → pending 유지하고 다음 active에 재시도.
+        entry.runRetriesLeft -= 1;
+        events.push({ kind, status: "still-denied" });
+      } else {
+        // 재시도까지 실패 → 정리.
+        pendingByKind.delete(kind);
+        events.push({ kind, status: "abandoned" });
+      }
     } else {
       entry.attempts += 1;
       if (entry.attempts >= MAX_RECOVERY_ATTEMPTS) {
@@ -137,7 +153,12 @@ export async function ensurePermission(
     // "설정 열기"를 누른 시점에만 pending을 등록한다.
     const registerPending = () => {
       if (options.pendingAction) {
-        pendingByKind.set(kind, { run: options.pendingAction, attempts: 0, registeredAt: Date.now() });
+        pendingByKind.set(kind, {
+          run: options.pendingAction,
+          attempts: 0,
+          runRetriesLeft: DEFAULT_RUN_RETRIES,
+          registeredAt: Date.now(),
+        });
       }
     };
     if (!showAlert) {

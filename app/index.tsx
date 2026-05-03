@@ -69,7 +69,7 @@ import PracticeStatsGraph from "@/components/PracticeStatsGraph";
 import { VoiceAssistantButton } from "@/components/VoiceAssistantButton";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { make_styles } from "./index.styles";
-import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, adjustShuffledIndicesOnInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore } from "./index.helpers";
+import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, adjustShuffledIndicesOnInsert, appendShuffledIndexOnAdd, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore } from "./index.helpers";
 import { useAudioPlayers } from "@/hooks/useAudioPlayers";
 import { useNoteSamples } from "@/hooks/useNoteSamples";
 import { useBarConfig, useDialConfig } from "@/hooks/useBarDialConfig";
@@ -359,10 +359,14 @@ export default function MetronomeScreen() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const runRecovery = async () => {
+      if (cancelled) return;
       if (!hasAnyPendingPermissionAction()) return;
       const events = await tryRecoverPermissionActions();
+      if (cancelled) return;
       for (const ev of events) {
+        if (cancelled) return;
         if (ev.status !== "recovered") continue;
         const key = ev.kind === "mic" ? "recoveredMic" : "recoveredPhoto";
         showRecoveryToast(t("permissions", key));
@@ -376,14 +380,20 @@ export default function MetronomeScreen() {
       };
       if (typeof document !== "undefined") {
         document.addEventListener("visibilitychange", onVis);
-        return () => document.removeEventListener("visibilitychange", onVis);
+        return () => {
+          cancelled = true;
+          document.removeEventListener("visibilitychange", onVis);
+        };
       }
-      return;
+      return () => { cancelled = true; };
     }
     const sub = AppState.addEventListener("change", (next) => {
       if (next === "active") void runRecovery();
     });
-    return () => sub.remove();
+    return () => {
+      cancelled = true;
+      sub.remove();
+    };
   }, [t, showRecoveryToast]);
 
   useEffect(() => {
@@ -509,6 +519,13 @@ export default function MetronomeScreen() {
       return toggle ? players.lowB : players.lowA;
     };
 
+    // 음성 인식 blackout 통지: 엔진 내부 fireTick에서 mute가 아닌 모든 경로
+    // (일반/레이어/블록/프리렌더)에 대해 동기적으로 한 번씩 호출된다. 개별 오디오
+    // 콜백 안에서 마킹하면 프리렌더 모드(웹 toggleStart 시) 등에서 누락되므로
+    // 단일 진입점인 setOnClickEmitted로 통합한다.
+    engine.setOnClickEmitted((at) => {
+      try { noteMetronomeClickRef.current?.(at); } catch {}
+    });
     engine.setAudioCallbacks(
       () => {
         if (fadeOutMutedRef.current) return;
@@ -2028,7 +2045,9 @@ export default function MetronomeScreen() {
   useEffect(() => { beatsPerMeasureRef.current = beatsPerMeasure; }, [beatsPerMeasure]);
 
   // 음성 어시스턴트 명령 핸들러 등록
-  const { setCommandHandler } = useVoiceAssistant();
+  const { setCommandHandler, noteMetronomeClick } = useVoiceAssistant();
+  const noteMetronomeClickRef = useRef(noteMetronomeClick);
+  useEffect(() => { noteMetronomeClickRef.current = noteMetronomeClick; }, [noteMetronomeClick]);
   useEffect(() => {
     const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
     setCommandHandler((cmd) => {
@@ -2449,6 +2468,7 @@ export default function MetronomeScreen() {
     }
 
     void releaseAllStereoArtifacts();
+    engine.flushSchedule();
     setBarMode(toBarMode);
   }, [isPlaying, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels]);
 
@@ -3338,6 +3358,13 @@ export default function MetronomeScreen() {
     setNoteQueue(prev => {
       const updated = [...prev, entry];
       noteQueueRef.current = updated;
+      if (notePlayModeRef.current === "random") {
+        const newIdx = updated.length - 1;
+        noteShuffledIndicesRef.current = appendShuffledIndexOnAdd(
+          noteShuffledIndicesRef.current,
+          newIdx,
+        );
+      }
       return updated;
     });
   }, []);

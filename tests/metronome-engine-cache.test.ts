@@ -74,6 +74,22 @@ test("캐시된 ticks 배열은 frozen이라 외부 변형 불가", () => {
   assert.equal(engine._getScheduleCacheSize(), 1);
 });
 
+test("flushSchedule: 활성 schedule을 비워 다음 호출이 재구성하도록 한다", () => {
+  const engine = new MetronomeEngine();
+  engine.setBeatsPerMeasure(4);
+  engine.buildScheduleOnly();
+  engine.buildScheduleOnly();
+  assert.equal(engine._wasLastBuildCacheHit(), true);
+
+  engine.flushSchedule();
+
+  // schedule이 비워졌는지: getScheduleInfo는 빈 schedule을 보고 buildScheduleOnly를 다시 호출한다.
+  // 동일 입력이 LRU 메모 캐시에 남아있으므로 적중하지만, 핵심은 schedule 배열이 새로 채워지는 것.
+  const info = engine.getScheduleInfo();
+  assert.ok(info.ticks.length > 0, "flush 후 getScheduleInfo가 schedule을 재구성");
+  assert.equal(engine._wasLastBuildCacheHit(), true, "동일 입력은 LRU 적중 유지(의도)");
+});
+
 test("입력 16종 초과 시 LRU로 가장 오래된 항목이 축출된다", () => {
   const engine = new MetronomeEngine();
   engine.setBeatsPerMeasure(4);

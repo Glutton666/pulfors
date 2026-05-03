@@ -6,6 +6,64 @@ const NAMES_STORAGE_KEY = "@note_sample_names";
 const SOURCES_STORAGE_KEY = "@note_sample_sources";
 const CHANNELS_STORAGE_KEY = "@note_sample_channels";
 
+/**
+ * Per-storage-key serialized writer.
+ *
+ * 빠른 연속 호출이 일어나도 마지막에 들어온 값이 결정적으로 디스크에 남도록
+ * AsyncStorage.setItem 호출을 직렬화한다. 진행 중인 write 동안 들어온 호출은
+ * 마지막 값으로 합쳐져(last-write-wins) 한 번만 추가 write가 발생한다.
+ *
+ * 호출자가 await한 Promise는 자기 값 또는 자기 이후의 값이 디스크에 기록된
+ * 시점에 resolve된다.
+ */
+function createSerializedWriter<T>(
+  key: string,
+): (value: T) => Promise<void> {
+  let pendingValue: T | undefined;
+  let hasPending = false;
+  let pendingResolvers: Array<() => void> = [];
+  let pendingRejecters: Array<(e: unknown) => void> = [];
+  let running = false;
+
+  async function drain(): Promise<void> {
+    if (running) return;
+    running = true;
+    try {
+      while (hasPending) {
+        const value = pendingValue as T;
+        const resolvers = pendingResolvers;
+        const rejecters = pendingRejecters;
+        hasPending = false;
+        pendingValue = undefined;
+        pendingResolvers = [];
+        pendingRejecters = [];
+        try {
+          await AsyncStorage.setItem(key, JSON.stringify(value));
+          for (const r of resolvers) r();
+        } catch (e) {
+          for (const r of rejecters) r(e);
+        }
+      }
+    } finally {
+      running = false;
+    }
+  }
+
+  return (value: T) =>
+    new Promise<void>((resolve, reject) => {
+      pendingValue = value;
+      hasPending = true;
+      pendingResolvers.push(resolve);
+      pendingRejecters.push(reject);
+      void drain();
+    });
+}
+
+const samplesWriter = createSerializedWriter<NoteSampleMap>(STORAGE_KEY);
+const namesWriter = createSerializedWriter<NoteSampleNameMap>(NAMES_STORAGE_KEY);
+const sourcesWriter = createSerializedWriter<NoteSampleSourceMap>(SOURCES_STORAGE_KEY);
+const channelsWriter = createSerializedWriter<NoteSampleChannelMap>(CHANNELS_STORAGE_KEY);
+
 export type NoteSampleMap = Record<string, string>;
 export type NoteSampleNameMap = Record<string, string>;
 export type SampleSource = "recording" | "import";
@@ -26,7 +84,7 @@ export async function loadNoteSamples(): Promise<NoteSampleMap> {
 
 export async function saveNoteSamples(samples: NoteSampleMap): Promise<void> {
   try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(samples));
+    await samplesWriter(samples);
   } catch {}
 }
 
@@ -40,7 +98,7 @@ export async function loadNoteSampleNames(): Promise<NoteSampleNameMap> {
 
 export async function saveNoteSampleNames(names: NoteSampleNameMap): Promise<void> {
   try {
-    await AsyncStorage.setItem(NAMES_STORAGE_KEY, JSON.stringify(names));
+    await namesWriter(names);
   } catch {}
 }
 
@@ -54,7 +112,7 @@ export async function loadNoteSampleSources(): Promise<NoteSampleSourceMap> {
 
 export async function saveNoteSampleSources(sources: NoteSampleSourceMap): Promise<void> {
   try {
-    await AsyncStorage.setItem(SOURCES_STORAGE_KEY, JSON.stringify(sources));
+    await sourcesWriter(sources);
   } catch {}
 }
 
@@ -157,7 +215,7 @@ export async function loadNoteSampleChannels(): Promise<NoteSampleChannelMap> {
 
 export async function saveNoteSampleChannels(channels: NoteSampleChannelMap): Promise<void> {
   try {
-    await AsyncStorage.setItem(CHANNELS_STORAGE_KEY, JSON.stringify(channels));
+    await channelsWriter(channels);
   } catch {}
 }
 

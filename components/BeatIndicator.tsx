@@ -24,8 +24,10 @@ import Animated, {
   withSequence,
   withSpring,
   useSharedValue,
+  cancelAnimation,
   Easing,
 } from "react-native-reanimated";
+import { computeGlowParams } from "@/lib/animation-lifecycle";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import Colors from "@/constants/colors";
@@ -274,15 +276,20 @@ export function BeatIndicator({
   useEffect(() => {
     if (isPlaying && currentBeat >= 0 && currentBeat !== prevBeatRef.current) {
       prevBeatRef.current = currentBeat;
+      // 고 BPM에서 release가 비트 간격보다 길면 글로우가 중첩돼 깜빡임이 누적된다.
+      // 진행 중 애니메이션을 cancel하고, BPM에 따라 release를 단축한다.
+      const { attackMs, releaseMs } = computeGlowParams(bpm ?? 120);
+      cancelAnimation(centerGlow);
       centerGlow.value = withSequence(
-        withTiming(1, { duration: 60, easing: Easing.out(Easing.quad) }),
-        withTiming(0, { duration: 500, easing: Easing.out(Easing.cubic) })
+        withTiming(1, { duration: attackMs, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: releaseMs, easing: Easing.out(Easing.cubic) })
       );
     } else if (!isPlaying) {
       prevBeatRef.current = -1;
+      cancelAnimation(centerGlow);
       centerGlow.value = withTiming(0, { duration: 200 });
     }
-  }, [isPlaying, currentBeat]);
+  }, [isPlaying, currentBeat, bpm]);
 
   const startXRef = useRef(0);
   const isDraggingRef = useRef(false);

@@ -103,6 +103,80 @@ test("loadNoteSamples: 손상된 JSON → {}", async () => {
   assert.deepEqual(await loadNoteSamples(), {});
 });
 
+test("saveNoteSamples: 50회 빠른 연속 호출 후 마지막 값이 결정적으로 저장", async () => {
+  const promises: Promise<void>[] = [];
+  for (let i = 0; i < 50; i++) {
+    promises.push(saveNoteSamples({ "0-0": `v${i}` }));
+  }
+  await Promise.all(promises);
+  const loaded = await loadNoteSamples();
+  assert.deepEqual(loaded, { "0-0": "v49" });
+});
+
+test("saveNoteSampleNames: 50회 빠른 연속 호출 직렬화", async () => {
+  const promises: Promise<void>[] = [];
+  for (let i = 0; i < 50; i++) {
+    promises.push(saveNoteSampleNames({ "1-0": `n${i}` }));
+  }
+  await Promise.all(promises);
+  const loaded = await loadNoteSampleNames();
+  assert.deepEqual(loaded, { "1-0": "n49" });
+});
+
+test("saveNoteSampleSources: 50회 빠른 연속 호출 직렬화", async () => {
+  const promises: Promise<void>[] = [];
+  for (let i = 0; i < 50; i++) {
+    const v: "recording" | "import" = i % 2 === 0 ? "recording" : "import";
+    promises.push(saveNoteSampleSources({ "0-0": v }));
+  }
+  await Promise.all(promises);
+  const loaded = await loadNoteSampleSources();
+  assert.deepEqual(loaded, { "0-0": "import" });
+});
+
+test("saveNoteSampleChannels: 50회 빠른 연속 호출 직렬화", async () => {
+  const { saveNoteSampleChannels, loadNoteSampleChannels } = require("../lib/note-samples");
+  const promises: Promise<void>[] = [];
+  for (let i = 0; i < 50; i++) {
+    const v = i % 2 === 0 ? "left" : "right";
+    promises.push(saveNoteSampleChannels({ "0-0": v }));
+  }
+  await Promise.all(promises);
+  const loaded = await loadNoteSampleChannels();
+  assert.deepEqual(loaded, { "0-0": "right" });
+});
+
+test("saveNoteSamples: 진행 중 write가 후속 호출을 1회 쓰기로 합친다", async () => {
+  const original = AsyncStorage.setItem;
+  let writeCount = 0;
+  AsyncStorage.setItem = async (k: string, v: string) => {
+    if (k === "@note_samples") writeCount++;
+    return original(k, v);
+  };
+  try {
+    // 첫 호출이 in-flight 중일 때 49건이 들어와 1회로 합쳐져야 한다 → 총 2회
+    const promises: Promise<void>[] = [];
+    for (let i = 0; i < 50; i++) {
+      promises.push(saveNoteSamples({ "0-0": `c${i}` }));
+    }
+    await Promise.all(promises);
+    assert.ok(writeCount <= 2, `coalesced writes ≤ 2, actual=${writeCount}`);
+    const loaded = await loadNoteSamples();
+    assert.deepEqual(loaded, { "0-0": "c49" });
+  } finally {
+    AsyncStorage.setItem = original;
+  }
+});
+
+test("saveNoteSamples: 서로 다른 호출자 모두 resolve된다", async () => {
+  let resolved = 0;
+  const promises = Array.from({ length: 30 }, (_, i) =>
+    saveNoteSamples({ "0-0": `x${i}` }).then(() => { resolved++; }),
+  );
+  await Promise.all(promises);
+  assert.equal(resolved, 30);
+});
+
 test("loadNoteSampleNames/saveNoteSampleNames: 라운드트립", async () => {
   await saveNoteSampleNames({ "1-0": "kick" });
   assert.deepEqual(await loadNoteSampleNames(), { "1-0": "kick" });

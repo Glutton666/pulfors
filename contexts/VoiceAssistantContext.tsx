@@ -26,6 +26,8 @@ interface Ctx {
   stopListening: () => void;
   setCommandHandler: (h: VoiceCommandHandler | null) => void;
   isSupported: boolean;
+  /** 메트로놈이 클릭을 재생할 때마다 호출 — 직후 짧은 윈도우 동안 음성 결과를 무시한다. */
+  noteMetronomeClick: (at?: number) => void;
 }
 
 const VoiceAssistantContext = createContext<Ctx | null>(null);
@@ -123,6 +125,11 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
     }
   }, [isSupported, isListening, language, nickname, strictNickname]);
 
+  const noteMetronomeClick = useCallback((at?: number) => {
+    // 인식기가 활성화되어 있을 때만 의미 있다(미활성 시 핸들 없음).
+    recHandleRef.current?.noteClick?.(at);
+  }, []);
+
   const value = useMemo(
     () => ({
       enabled,
@@ -139,8 +146,9 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
       stopListening,
       setCommandHandler,
       isSupported,
+      noteMetronomeClick,
     }),
-    [enabled, setEnabled, nickname, setNickname, strictNickname, setStrictNickname, isListening, lastTranscript, lastCommand, lastError, startListening, stopListening, setCommandHandler, isSupported]
+    [enabled, setEnabled, nickname, setNickname, strictNickname, setStrictNickname, isListening, lastTranscript, lastCommand, lastError, startListening, stopListening, setCommandHandler, isSupported, noteMetronomeClick]
   );
 
   return <VoiceAssistantContext.Provider value={value}>{children}</VoiceAssistantContext.Provider>;

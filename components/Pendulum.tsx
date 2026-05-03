@@ -1,10 +1,12 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { View, StyleSheet } from "react-native";
 import Animated, {
   useAnimatedStyle,
+  useSharedValue,
   withTiming,
   withRepeat,
   withSequence,
+  cancelAnimation,
   Easing,
 } from "react-native-reanimated";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -12,6 +14,7 @@ import Colors from "@/constants/colors";
 import { moderateScale, SCREEN_WIDTH, IS_TABLET, useScale } from "@/lib/scale";
 import { Radius, Spacing } from "@/constants/tokens";
 import type { ScaleValues } from "@/lib/scale";
+import { computePendulumAnim } from "@/lib/animation-lifecycle";
 
 const PENDULUM_LENGTH = IS_TABLET
   ? Math.min(SCREEN_WIDTH * 0.35, 280)
@@ -27,37 +30,41 @@ export function Pendulum({ isPlaying, bpm }: PendulumProps) {
   const { colors: C } = useTheme();
   const S = useScale();
   const styles = useMemo(() => make_styles(C, S), [C, S]);
-  const swingDuration = (60000 / bpm) * 1;
-  const maxAngle = Math.max(15, Math.min(35, 40 - bpm / 15));
+  const { swingDuration, maxAngle } = computePendulumAnim(bpm);
 
-  const animatedStyle = useAnimatedStyle(() => {
+  const rotation = useSharedValue(0);
+
+  useEffect(() => {
+    // BPM이 바뀌면 진행 중 사이클을 즉시 중단하고 0으로 부드럽게 복귀한 뒤
+    // 새 속도로 재시작한다. cancel 없이 deps만 바꾸면 이전 사이클이 끝까지
+    // 유지되어 점프/지터가 발생한다.
+    cancelAnimation(rotation);
     if (!isPlaying) {
-      return {
-        transform: [{ rotate: "0deg" }],
-      };
+      rotation.value = withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) });
+      return;
     }
-
-    return {
-      transform: [
-        {
-          rotate: withRepeat(
-            withSequence(
-              withTiming(`${maxAngle}deg`, {
-                duration: swingDuration,
-                easing: Easing.inOut(Easing.sin),
-              }),
-              withTiming(`${-maxAngle}deg`, {
-                duration: swingDuration,
-                easing: Easing.inOut(Easing.sin),
-              })
-            ),
-            -1,
-            false
-          ),
-        },
-      ],
+    // 현재 위치에서 한 변의 끝까지 부드럽게 도달한 뒤 반복 시퀀스를 시작한다.
+    // 한 변(side-to-side)이 1박자 = swingDuration. 원본 cadence를 유지한다.
+    rotation.value = withTiming(maxAngle, { duration: swingDuration, easing: Easing.inOut(Easing.sin) }, (finished) => {
+      "worklet";
+      if (!finished) return;
+      rotation.value = withRepeat(
+        withSequence(
+          withTiming(-maxAngle, { duration: swingDuration, easing: Easing.inOut(Easing.sin) }),
+          withTiming(maxAngle, { duration: swingDuration, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        false,
+      );
+    });
+    return () => {
+      cancelAnimation(rotation);
     };
-  }, [isPlaying, bpm, swingDuration, maxAngle]);
+  }, [isPlaying, bpm, swingDuration, maxAngle, rotation]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
 
   return (
     <View style={styles.container}>

@@ -10,7 +10,14 @@ import {
   PanResponder,
   GestureResponderEvent,
   PanResponderGestureState,
+  AppState,
 } from "react-native";
+import {
+  computeStopwatchElapsedMs,
+  computeTimerRemaining,
+  computeTimerThermoFraction,
+  isTimerExpired,
+} from "@/lib/timer-derivation";
 import Animated, {
   useAnimatedStyle,
   withTiming,
@@ -87,7 +94,7 @@ export function StopwatchTimer({
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("stopwatch");
   const [state, setState] = useState<TimerState>("idle");
-  const [elapsed, setElapsed] = useState(0);
+  const [, setTick] = useState(0);
   const [timerDuration, setTimerDuration] = useState(180);
   const [remaining, setRemaining] = useState(180);
   const [editingTimer, setEditingTimer] = useState(false);
@@ -97,9 +104,11 @@ export function StopwatchTimer({
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(0);
   const elapsedAtPauseRef = useRef(0);
+  const startRemainingRef = useRef(180);
   const isPlayingRef = useRef(isMetronomePlaying);
   const stateRef = useRef<TimerState>(state);
   const modeRef = useRef<Mode>(mode);
+  const bumpTick = useCallback(() => setTick((t) => (t + 1) | 0), []);
 
   const { colors: C } = useTheme();
   const S = useScale();
@@ -127,14 +136,25 @@ export function StopwatchTimer({
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      if (modeRef.current === "stopwatch") {
-        elapsedAtPauseRef.current = Date.now() - startTimeRef.current;
-      } else {
-        elapsedAtPauseRef.current += Date.now() - startTimeRef.current;
+      const now = Date.now();
+      const elapsedMs = Math.max(0, now - startTimeRef.current);
+      elapsedAtPauseRef.current = elapsedMs;
+      if (modeRef.current === "timer") {
+        const elapsedSec = Math.floor(elapsedMs / 1000);
+        setRemaining(Math.max(0, startRemainingRef.current - elapsedSec));
       }
       setState("paused");
     }
   }, [isMetronomePlaying]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active" && stateRef.current === "running") {
+        bumpTick();
+      }
+    });
+    return () => sub.remove();
+  }, [bumpTick]);
 
   const slideX = useSharedValue(-PANEL_WIDTH);
   const pulseOpacity = useSharedValue(1);
@@ -299,9 +319,9 @@ export function StopwatchTimer({
     startTimeRef.current = Date.now() - elapsedAtPauseRef.current;
     setState("running");
     intervalRef.current = setInterval(() => {
-      setElapsed(Date.now() - startTimeRef.current);
+      bumpTick();
     }, 33);
-  }, []);
+  }, [bumpTick]);
 
   const startStopwatch = useCallback(() => {
     hapticFeedback();
@@ -345,14 +365,15 @@ export function StopwatchTimer({
     if (isPlayingRef.current) {
       onStopRequested();
     }
-    setElapsed(0);
     setCountdownLeft(0);
     elapsedAtPauseRef.current = 0;
+    startTimeRef.current = 0;
     setState("idle");
   }, [hapticFeedback, clearTimerInterval, clearCountdownInterval, onStopRequested]);
 
   const actualStartTimer = useCallback(() => {
     const startRemaining = stateRef.current === "paused" ? remaining : timerDuration;
+    startRemainingRef.current = startRemaining;
     setRemaining(startRemaining);
     startTimeRef.current = Date.now();
     elapsedAtPauseRef.current = 0;
@@ -360,24 +381,31 @@ export function StopwatchTimer({
     thermoBreakOpacity.value = 0;
     thermoBreakTop.value = 0;
     thermoBreakBottom.value = 0;
-    thermoHeight.value = startRemaining / timerDuration;
+    thermoHeight.value = timerDuration > 0 ? startRemaining / timerDuration : 0;
     intervalRef.current = setInterval(() => {
-      const el = Date.now() - startTimeRef.current + elapsedAtPauseRef.current;
-      const leftSec = Math.max(0, startRemaining - Math.floor(el / 1000));
-      const leftSmooth = Math.max(0, startRemaining - el / 1000);
-      setRemaining(leftSec);
-      thermoHeight.value = timerDuration > 0 ? leftSmooth / timerDuration : 0;
-      if (leftSec <= 0) {
+      const now = Date.now();
+      const expired = isTimerExpired(startTimeRef.current, startRemainingRef.current, now);
+      const fraction = computeTimerThermoFraction(
+        "running",
+        startTimeRef.current,
+        startRemainingRef.current,
+        timerDuration,
+        now
+      );
+      thermoHeight.value = fraction;
+      bumpTick();
+      if (expired) {
         clearInterval(intervalRef.current!);
         intervalRef.current = null;
         thermoHeight.value = withTiming(0, { duration: 300 });
+        setRemaining(0);
         setState("finishing");
         if (isPlayingRef.current) {
           onTimerExpired();
         }
       }
     }, 50);
-  }, [timerDuration, remaining, onTimerExpired]);
+  }, [timerDuration, remaining, onTimerExpired, bumpTick]);
 
   const startTimer = useCallback(() => {
     hapticFeedback();
@@ -405,7 +433,14 @@ export function StopwatchTimer({
   const pauseTimer = useCallback(() => {
     hapticFeedback();
     clearTimerInterval();
-    elapsedAtPauseRef.current += Date.now() - startTimeRef.current;
+    const now = Date.now();
+    const elapsedMs = Math.max(0, now - startTimeRef.current);
+    elapsedAtPauseRef.current = elapsedMs;
+    const pausedSec = Math.max(
+      0,
+      startRemainingRef.current - Math.floor(elapsedMs / 1000)
+    );
+    setRemaining(pausedSec);
     if (isPlayingRef.current) {
       setState("finishing");
       onStopRequested();
@@ -424,6 +459,8 @@ export function StopwatchTimer({
     setRemaining(timerDuration);
     setCountdownLeft(0);
     elapsedAtPauseRef.current = 0;
+    startTimeRef.current = 0;
+    startRemainingRef.current = timerDuration;
     thermoHeight.value = 1;
     setState("idle");
   }, [hapticFeedback, clearTimerInterval, clearCountdownInterval, timerDuration, onStopRequested]);
@@ -434,7 +471,7 @@ export function StopwatchTimer({
       const timeout = setTimeout(() => {
         if (mode === "stopwatch") {
           clearTimerInterval();
-          elapsedAtPauseRef.current = Date.now() - startTimeRef.current;
+          elapsedAtPauseRef.current = Math.max(0, Date.now() - startTimeRef.current);
           setState("paused");
         } else {
           clearTimerInterval();
@@ -442,6 +479,7 @@ export function StopwatchTimer({
           thermoBreakOpacity.value = 0;
           thermoBreakTop.value = 0;
           thermoBreakBottom.value = 0;
+          startRemainingRef.current = timerDuration;
           setState("idle");
           setRemaining(timerDuration);
         }
@@ -602,8 +640,23 @@ export function StopwatchTimer({
   };
 
   if (isLandscape) {
-    const swTime = formatTime(elapsed);
-    const timerDisplay = formatCountdown(remaining);
+    const now = Date.now();
+    const elapsedDisplay = computeStopwatchElapsedMs(
+      state,
+      startTimeRef.current,
+      elapsedAtPauseRef.current,
+      now
+    );
+    const remainingDisplay = computeTimerRemaining(
+      state,
+      startTimeRef.current,
+      startRemainingRef.current,
+      remaining,
+      timerDuration,
+      now
+    );
+    const swTime = formatTime(elapsedDisplay);
+    const timerDisplay = formatCountdown(remainingDisplay.sec);
     return (
       <View style={[styles.landscapeContainer, { flexDirection: "column" as const, alignItems: "stretch" as const, overflow: "hidden" as const, gap: S.ms(4, 0.3) }]}>
         <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const, gap: S.ms(4, 0.3) }}>
@@ -862,7 +915,13 @@ export function StopwatchTimer({
   );
 
   function renderStopwatchContent() {
-    const { main, fraction } = formatTime(elapsed);
+    const elapsedDisplay = computeStopwatchElapsedMs(
+      state,
+      startTimeRef.current,
+      elapsedAtPauseRef.current,
+      Date.now()
+    );
+    const { main, fraction } = formatTime(elapsedDisplay);
     return (
       <View style={styles.displaySection}>
         {state === "countdown" && (
@@ -935,8 +994,16 @@ export function StopwatchTimer({
   }
 
   function renderTimerContent() {
-    const display = formatCountdown(remaining);
-    const progress = timerDuration > 0 ? remaining / timerDuration : 1;
+    const remainingDisplay = computeTimerRemaining(
+      state,
+      startTimeRef.current,
+      startRemainingRef.current,
+      remaining,
+      timerDuration,
+      Date.now()
+    );
+    const display = formatCountdown(remainingDisplay.sec);
+    const progress = timerDuration > 0 ? remainingDisplay.smooth / timerDuration : 1;
     return (
       <View style={styles.displaySection}>
         {state === "idle" && !editingTimer && (

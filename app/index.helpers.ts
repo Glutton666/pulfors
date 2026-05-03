@@ -135,6 +135,21 @@ export function adjustShuffledIndicesOnInsert(
   return next;
 }
 
+/**
+ * Append a newly added queue item's index to the shuffled-indices array
+ * so that random-mode iteration includes it in the current cycle.
+ * - If the index already exists (e.g. shuffled array already covered it),
+ *   returns the input unchanged.
+ * - The new index is placed at the end of the array (after current pos).
+ */
+export function appendShuffledIndexOnAdd(
+  indices: number[],
+  appendedQueueIdx: number,
+): number[] {
+  if (indices.includes(appendedQueueIdx)) return indices;
+  return [...indices, appendedQueueIdx];
+}
+
 export type BlockPlayMode = "sequential" | "loop" | "random";
 export type BarLoopMode = "loop" | "once";
 

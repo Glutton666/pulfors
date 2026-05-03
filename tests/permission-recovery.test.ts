@@ -161,6 +161,60 @@ test("동시 호출되어도 액션은 1회만 실행 (재진입 락)", async ()
   _setPermissionRequestImplForTest(null);
 });
 
+test("entry.run() 일시 실패 시 다음 probe에서 한 번 더 재시도된다", async () => {
+  _resetPendingPermissionsForTest();
+  let runCount = 0;
+  let shouldFail = true;
+  // 등록: 거부 + 더 묻지 않음
+  _setPermissionRequestImplForTest(makeRequest([{ granted: false, canAskAgain: false }]));
+  const t = createT("ko");
+  await ensurePermission("mic", t, {
+    showAlertOnDeny: false,
+    pendingAction: () => {
+      runCount += 1;
+      if (shouldFail) throw new Error("transient");
+    },
+  });
+  assert.equal(hasAnyPendingPermissionAction(), true);
+
+  // 첫 복귀: 권한 허용됐지만 run()이 throw → still-denied, pending 유지
+  _setPermissionRequestImplForTest(makeRequest([{ granted: true, canAskAgain: true }]));
+  let events = await tryRecoverPermissionActions();
+  assert.deepEqual(events, [{ kind: "mic", status: "still-denied" }]);
+  assert.equal(runCount, 1);
+  assert.equal(hasAnyPendingPermissionAction(), true);
+
+  // 두 번째 복귀: run() 성공 → recovered
+  shouldFail = false;
+  events = await tryRecoverPermissionActions();
+  assert.deepEqual(events, [{ kind: "mic", status: "recovered" }]);
+  assert.equal(runCount, 2);
+  assert.equal(hasAnyPendingPermissionAction(), false);
+  _setPermissionRequestImplForTest(null);
+});
+
+test("entry.run() 두 번 연속 실패 시 abandoned로 정리", async () => {
+  _resetPendingPermissionsForTest();
+  let runCount = 0;
+  _setPermissionRequestImplForTest(makeRequest([{ granted: false, canAskAgain: false }]));
+  const t = createT("ko");
+  await ensurePermission("photo", t, {
+    showAlertOnDeny: false,
+    pendingAction: () => { runCount += 1; throw new Error("always fails"); },
+  });
+
+  _setPermissionRequestImplForTest(makeRequest([{ granted: true, canAskAgain: true }]));
+  let events = await tryRecoverPermissionActions();
+  assert.deepEqual(events, [{ kind: "photo", status: "still-denied" }]);
+  assert.equal(hasAnyPendingPermissionAction(), true);
+
+  events = await tryRecoverPermissionActions();
+  assert.deepEqual(events, [{ kind: "photo", status: "abandoned" }]);
+  assert.equal(runCount, 2);
+  assert.equal(hasAnyPendingPermissionAction(), false);
+  _setPermissionRequestImplForTest(null);
+});
+
 test("TTL 초과한 pending은 probe 시 abandoned 처리", async () => {
   _resetPendingPermissionsForTest();
   _setPermissionRequestImplForTest(makeRequest([{ granted: false, canAskAgain: false }]));

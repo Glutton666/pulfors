@@ -7,6 +7,7 @@ import {
   createInitialBarConfig,
   createShuffledIndices,
   adjustShuffledIndicesOnInsert,
+  appendShuffledIndexOnAdd,
   beatSubdivisionCounts,
   selectCurrentBarConfig,
   computeLandscapeStats,
@@ -205,6 +206,27 @@ test("adjustShuffledIndicesOnInsert: empty indices", () => {
 test("adjustShuffledIndicesOnInsert: insert at end (pos = last)", () => {
   const r = adjustShuffledIndicesOnInsert([0, 1, 2], 2, 3);
   assert.deepEqual(r, [0, 1, 2, 3]);
+});
+
+test("appendShuffledIndexOnAdd: appends new index at end", () => {
+  const r = appendShuffledIndexOnAdd([2, 0, 1], 3);
+  assert.deepEqual(r, [2, 0, 1, 3]);
+});
+
+test("appendShuffledIndexOnAdd: returns input when index already present", () => {
+  const input = [2, 0, 1];
+  const r = appendShuffledIndexOnAdd(input, 1);
+  assert.equal(r, input);
+});
+
+test("appendShuffledIndexOnAdd: empty indices → single element", () => {
+  assert.deepEqual(appendShuffledIndexOnAdd([], 0), [0]);
+});
+
+test("appendShuffledIndexOnAdd: does not mutate input", () => {
+  const input = [2, 0, 1];
+  appendShuffledIndexOnAdd(input, 3);
+  assert.deepEqual(input, [2, 0, 1]);
 });
 
 test("beatSubdivisionCounts: empty map", () => {

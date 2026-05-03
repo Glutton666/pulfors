@@ -587,6 +587,11 @@ export class MetronomeEngine {
 
   private playLayerClick: ((layerIndex: number, role: "high" | "low" | "strong") => void) | null = null;
   private playBlockClick: ((blockIndex: number, role: "high" | "low" | "strong") => void) | null = null;
+  private onClickEmitted: ((at: number) => void) | null = null;
+
+  setOnClickEmitted(cb: ((at: number) => void) | null) {
+    this.onClickEmitted = cb;
+  }
 
   setLayerAudioCallback(cb: (layerIndex: number, role: "high" | "low" | "strong") => void) {
     this.playLayerClick = cb;
@@ -826,6 +831,18 @@ export class MetronomeEngine {
     this.cachedSchedule = this.schedule;
     this.cachedMeasureDurationMs = this.measureDurationMs;
     this.scheduleDirty = false;
+    this.scheduleIndex = 0;
+  }
+
+  /**
+   * Drop any pre-built schedule and cache so that the next start (or
+   * getScheduleInfo) rebuilds from the current configuration. Use after
+   * mode switches or config changes that should not carry over leftover
+   * ticks. Does NOT stop a running engine.
+   */
+  flushSchedule() {
+    this.invalidateScheduleCache();
+    this.schedule = [];
     this.scheduleIndex = 0;
   }
 
@@ -1303,6 +1320,12 @@ export class MetronomeEngine {
     }
 
     const offset = this.audioOffsetMs;
+
+    // 가청 클릭 발화 통지 — mute가 아닌 모든 경로(일반/레이어/블록/프리렌더)에 대해
+    // 동기적으로 한 번씩 호출된다. audioOffsetMs는 시각/햅틱 타이밍 보정용이므로 무시한다.
+    if (!isMute && this.onClickEmitted) {
+      try { this.onClickEmitted(Date.now()); } catch {}
+    }
 
     if (this.preRenderedAudio) {
       if (this.playCustomSample) {
