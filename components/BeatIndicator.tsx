@@ -36,6 +36,7 @@ import type { ScaleValues } from "@/lib/scale";
 import { make_styles } from "./BeatIndicator.styles";
 import { DialBeatDot } from "./DialBeatDot";
 import { BlockPill } from "./BlockPill";
+import { BarPlayButton } from "./BarPlayButton";
 
 export type { BeatType, BarRepeat, LoopBlock } from "./beat-indicator.types";
 import type { BeatType } from "./beat-indicator.types";
@@ -290,6 +291,20 @@ export function BeatIndicator({
   useEffect(() => {
     onBeatsChangeRef.current = onBeatsChange;
   }, [onBeatsChange]);
+
+  const handleBeatsDecrement = useCallback(() => {
+    if (beatsPerMeasure > MIN_BEATS) {
+      onBeatsChange(beatsPerMeasure - 1);
+      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  }, [beatsPerMeasure, onBeatsChange]);
+
+  const handleBeatsIncrement = useCallback(() => {
+    if (beatsPerMeasure < MAX_BEATS) {
+      onBeatsChange(beatsPerMeasure + 1);
+      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  }, [beatsPerMeasure, onBeatsChange]);
 
   const resetVisuals = useCallback(() => {
     swipeProgress.value = withTiming(0, { duration: 200 });
@@ -2097,49 +2112,29 @@ export function BeatIndicator({
                 <Ionicons name={saveFlashVisible ? "checkmark-circle" : "bookmark-outline"} size={S.ms(16, 0.4)} color={saveFlashVisible ? "#4CAF50" : C.accent} />
               </Pressable>
               <Pressable
-                onPress={() => { if (beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+                onPress={handleBeatsDecrement}
                 style={[styles.barTimeSigBtn, beatsPerMeasure <= MIN_BEATS && { opacity: 0.3 }]}
                 hitSlop={8}
                 testID="bar-beats-minus"
               >
                 <Ionicons name="remove" size={S.ms(14, 0.4)} color={C.textSecondary} />
               </Pressable>
-              <View>
-                <Pressable
-                  onPress={onTogglePlay}
-                  onLongPress={() => {
-                    const next = barLoopMode === "loop" ? "once" : "loop";
-                    onBarLoopModeChange(next);
-                    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                  }}
-                  delayLongPress={400}
-                  style={({ pressed }) => [
-                    styles.barPlayBtn, { width: S.ms(40, 0.5), height: S.ms(40, 0.5), borderRadius: S.ms(20, 0.5) },
-                    pressed && { opacity: 0.7 },
-                    isPreparing && { opacity: 0.5 },
-                    barLoopMode === "loop" && { borderWidth: 1.5, borderColor: C.accent },
-                  ]}
-                  testID="bar-play-button"
-                  disabled={isPreparing}
-                  accessibilityRole="button"
-                  accessibilityLabel={isPlaying ? "정지 / Stop" : "재생 / Play"}
-                  accessibilityState={{ busy: isPreparing, disabled: isPreparing }}
-                  accessibilityHint={barLoopMode === "loop" ? "길게 누르면 한 번만 재생 모드로 변경 / Long press to switch to once mode" : "길게 누르면 반복 재생 모드로 변경 / Long press to switch to loop mode"}
-                >
-                  {isPreparing ? (
-                    <ActivityIndicator size="small" color={C.accent} />
-                  ) : (
-                    <Ionicons name={isPlaying ? "stop" : "play"} size={S.ms(20, 0.4)} color={isPlaying ? C.danger : C.accent} style={!isPlaying ? { marginLeft: 2 } : undefined} />
-                  )}
-                </Pressable>
-                {barLoopMode === "loop" && (
-                  <View style={{ position: "absolute", top: -6, right: -6, backgroundColor: C.accent, borderRadius: 7, width: 14, height: 14, alignItems: "center", justifyContent: "center" }}>
-                    <Ionicons name="repeat" size={S.ms(9, 0.4)} color={C.background} />
-                  </View>
-                )}
-              </View>
+              <BarPlayButton
+                isPlaying={isPlaying}
+                isPreparing={isPreparing}
+                barLoopMode={barLoopMode}
+                onTogglePlay={onTogglePlay}
+                onBarLoopModeChange={onBarLoopModeChange}
+                baseStyle={styles.barPlayBtn}
+                accentColor={C.accent}
+                dangerColor={C.danger}
+                backgroundColor={C.background}
+                iconSize={S.ms(20, 0.4)}
+                badgeIconSize={S.ms(9, 0.4)}
+                sizeOverride={{ width: S.ms(40, 0.5), height: S.ms(40, 0.5), borderRadius: S.ms(20, 0.5) }}
+              />
               <Pressable
-                onPress={() => { if (beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+                onPress={handleBeatsIncrement}
                 style={[styles.barTimeSigBtn, beatsPerMeasure >= MAX_BEATS && { opacity: 0.3 }]}
                 hitSlop={8}
                 testID="bar-beats-plus"
@@ -2677,7 +2672,7 @@ export function BeatIndicator({
             </Pressable>
             <View style={styles.barTimeSigRow}>
               <Pressable
-                onPress={() => { if (beatsPerMeasure > MIN_BEATS) { onBeatsChange(beatsPerMeasure - 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+                onPress={handleBeatsDecrement}
                 style={[styles.barTimeSigBtn, beatsPerMeasure <= MIN_BEATS && { opacity: 0.3 }]}
                 hitSlop={8}
                 testID="bar-beats-minus-landscape"
@@ -2700,7 +2695,7 @@ export function BeatIndicator({
                 </View>
               </View>
               <Pressable
-                onPress={() => { if (beatsPerMeasure < MAX_BEATS) { onBeatsChange(beatsPerMeasure + 1); if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } }}
+                onPress={handleBeatsIncrement}
                 style={[styles.barTimeSigBtn, beatsPerMeasure >= MAX_BEATS && { opacity: 0.3 }]}
                 hitSlop={8}
                 testID="bar-beats-plus-landscape"
@@ -2708,41 +2703,19 @@ export function BeatIndicator({
                 <Ionicons name="add" size={S.ms(16, 0.4)} color={C.textSecondary} />
               </Pressable>
             </View>
-            <View>
-              <Pressable
-                onPress={onTogglePlay}
-                onLongPress={() => {
-                  const next = barLoopMode === "loop" ? "once" : "loop";
-                  onBarLoopModeChange(next);
-                  if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                }}
-                delayLongPress={400}
-                style={({ pressed }) => [
-                  styles.barPlayBtn,
-                  pressed && { opacity: 0.7 },
-                  isPreparing && { opacity: 0.5 },
-                  barLoopMode === "loop" && { borderWidth: 1.5, borderColor: C.accent },
-                ]}
-                testID="bar-play-button"
-                disabled={isPreparing}
-              >
-                {isPreparing ? (
-                  <ActivityIndicator size="small" color={C.accent} />
-                ) : (
-                  <Ionicons
-                    name={isPlaying ? "stop" : "play"}
-                    size={S.ms(22, 0.4)}
-                    color={isPlaying ? C.danger : C.accent}
-                    style={!isPlaying ? { marginLeft: 2 } : undefined}
-                  />
-                )}
-              </Pressable>
-              {barLoopMode === "loop" && (
-                <View style={{ position: "absolute", top: -6, right: -6, backgroundColor: C.accent, borderRadius: 7, width: 14, height: 14, alignItems: "center", justifyContent: "center" }}>
-                  <Ionicons name="repeat" size={S.ms(9, 0.4)} color={C.background} />
-                </View>
-              )}
-            </View>
+            <BarPlayButton
+              isPlaying={isPlaying}
+              isPreparing={isPreparing}
+              barLoopMode={barLoopMode}
+              onTogglePlay={onTogglePlay}
+              onBarLoopModeChange={onBarLoopModeChange}
+              baseStyle={styles.barPlayBtn}
+              accentColor={C.accent}
+              dangerColor={C.danger}
+              backgroundColor={C.background}
+              iconSize={S.ms(22, 0.4)}
+              badgeIconSize={S.ms(9, 0.4)}
+            />
           </View>
         </View>
 
