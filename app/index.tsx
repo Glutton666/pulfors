@@ -2391,9 +2391,7 @@ export default function MetronomeScreen() {
       clearSamplePlayStates();
       setIsPreparing(false);
       setIsPlaying(false);
-      setCurrentBeat(-1);
-      setMeasureCount(0);
-      setProgressInfo(null); setLayerProgressMap({});
+      resetPlaybackVisuals();
       const modeLabel = barModeRef.current ? "Bar" : "Dial";
       showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
     } else {
@@ -3269,10 +3267,8 @@ export default function MetronomeScreen() {
     setNoteCurrentIndex(-1);
     setNoteIsPlaying(false);
     setIsPlaying(false);
-    setCurrentBeat(-1);
-    setMeasureCount(0);
-    setProgressInfo(null); setLayerProgressMap({});
-  }, []);
+    resetPlaybackVisuals();
+  }, [resetPlaybackVisuals]);
 
   useEffect(() => {
     if (loopBlocks.length === 0) return;
