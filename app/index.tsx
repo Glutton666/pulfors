@@ -1329,8 +1329,14 @@ export default function MetronomeScreen() {
     const engine = engineRef.current;
     if (!engine) return;
 
-    // 모든 시각용 콜백(onBeat/onSubBeat/onProgress)은 rAF 배처로 합쳐
-    // 프레임당 한 번만 setState 한다. BPM 200 · 16서브비트에서도 60Hz 이하 보장.
+    // 책임 경계: 이 화면에서 onBeat/onSubBeat/onProgress는 모두 "시각용"
+    // 콜백으로만 사용된다(currentBeat/activeSubNote/progressInfo/layerProgressMap
+    // setState). 오디오 재생·스케줄링은 엔진 내부 fireTick → playTickAudio가
+    // 동기적으로 처리하므로 rAF 배칭의 영향을 받지 않는다. 향후 이 콜백에
+    // 오디오/타이밍 의존 로직을 추가하려는 경우 배처를 우회하는 별도 경로가
+    // 필요하다.
+    // 모든 시각용 콜백은 rAF 배처로 합쳐 프레임당 한 번만 setState 한다.
+    // BPM 200 · 16서브비트에서도 60Hz 이하 보장.
     let pendingBeat = -1;
     let pendingAccent = false;
     let pendingSubBeat = -1;
