@@ -186,3 +186,203 @@ test("modal-routing: SignalGen → TG → 닫기 전체 흐름 — 각 단계에
   sgTg = { activeModal: null, reopenSignalGenAfterTuningGuide: false };
   assert.equal(countVisibleModals(deriveModalFlags(null)), 0);
 });
+
+// ────────────────────────────────────────────────────────────────
+// 4. 빠른 연속 탭(rapid double-tap) 스트레스 테스트
+//
+//    openExclusive 는 setActiveModal(next) 를 원자적으로 호출하므로
+//    빠른 연속 탭도 activeModal 값의 순차 전환으로 모델링된다.
+//    각 전환 단계에서 visible 모달이 정확히 0 또는 1개임을 검증한다.
+//
+//    커버 시나리오 (task #85 Done 기준):
+//      A. menu → settings  (같은 메뉴를 빠르게 열고-닫고-다시 열기)
+//      B. menu → moreMenu → drumKit
+//      C. menu → signalGen → tuningGuide
+// ────────────────────────────────────────────────────────────────
+
+test("rapid-tap: menu → settings — 빠른 연속 탭에서 visible 모달은 항상 ≤ 1", () => {
+  // 사용자가 메뉴 버튼을 빠르게 여러 번 누르는 시나리오:
+  // null → menu → settings → null → menu → settings → null
+  const sequence: ActiveModal[] = [
+    null,
+    "menu",
+    "settings",
+    null,
+    "menu",
+    "settings",
+    null,
+  ];
+
+  for (const activeModal of sequence) {
+    const flags = deriveModalFlags(activeModal);
+    const count = countVisibleModals(flags);
+    assert.ok(
+      count <= 1,
+      `activeModal="${activeModal}" 전환 중 visible 모달 수 ${count}개 — 최대 1개여야 한다`,
+    );
+  }
+});
+
+test("rapid-tap: menu → settings 빠른 토글 — 동일 모달이 open-close-open 반복해도 동시에 두 개 visible 안 됨", () => {
+  // 같은 모달을 빠르게 열고 닫을 때: 연속된 두 상태에서 동시에 true 인 플래그가 없어야 한다
+  const transitions: Array<[ActiveModal, ActiveModal]> = [
+    [null,       "menu"],
+    ["menu",     "settings"],
+    ["settings", null],
+    [null,       "menu"],      // 같은 메뉴를 다시 빠르게 탭
+    ["menu",     "settings"],  // 같은 설정을 다시 빠르게 탭
+    ["settings", null],
+  ];
+
+  for (const [from, to] of transitions) {
+    const beforeFlags = deriveModalFlags(from);
+    const afterFlags  = deriveModalFlags(to);
+    const keys = Object.keys(beforeFlags) as Array<keyof typeof beforeFlags>;
+    const simultaneous = keys.filter((k) => beforeFlags[k] && afterFlags[k]);
+    assert.deepEqual(
+      simultaneous,
+      [],
+      `${from} → ${to} 전환 중 두 모달이 동시에 visible 이면 안 된다`,
+    );
+  }
+});
+
+test("rapid-tap: menu → moreMenu → drumKit — 빠른 연속 탭에서 visible 모달은 항상 ≤ 1", () => {
+  // 사용자가 빠르게: 메뉴 열기 → 더보기 메뉴 → 드럼 킷 → 닫기 → 다시 반복
+  const sequence: ActiveModal[] = [
+    null,
+    "menu",
+    "moreMenu",
+    "drumKit",
+    null,
+    "menu",     // 빠른 재탭
+    "moreMenu",
+    "drumKit",
+    null,
+  ];
+
+  for (const activeModal of sequence) {
+    const flags = deriveModalFlags(activeModal);
+    const count = countVisibleModals(flags);
+    assert.ok(
+      count <= 1,
+      `activeModal="${activeModal}" 전환 중 visible 모달 수 ${count}개 — 최대 1개여야 한다`,
+    );
+  }
+});
+
+test("rapid-tap: menu → moreMenu → drumKit — 연속 전환에서 동시에 두 모달 visible 없음", () => {
+  const transitions: Array<[ActiveModal, ActiveModal]> = [
+    [null,       "menu"],
+    ["menu",     "moreMenu"],
+    ["moreMenu", "drumKit"],
+    ["drumKit",  null],
+    [null,       "menu"],      // 빠른 재탭
+    ["menu",     "moreMenu"],
+    ["moreMenu", "drumKit"],
+    ["drumKit",  null],
+  ];
+
+  for (const [from, to] of transitions) {
+    const beforeFlags = deriveModalFlags(from);
+    const afterFlags  = deriveModalFlags(to);
+    const keys = Object.keys(beforeFlags) as Array<keyof typeof beforeFlags>;
+    const simultaneous = keys.filter((k) => beforeFlags[k] && afterFlags[k]);
+    assert.deepEqual(
+      simultaneous,
+      [],
+      `${from} → ${to} 전환 중 두 모달이 동시에 visible 이면 안 된다`,
+    );
+  }
+});
+
+test("rapid-tap: menu → signalGen → tuningGuide — 빠른 연속 탭에서 visible 모달은 항상 ≤ 1", () => {
+  // 사용자가 빠르게: 메뉴 열기 → 신호 발생기 → 튜닝 가이드 → 닫기 → 다시 반복
+  // signalGen → tuningGuide 전환은 openTuningGuideFromSignalGen 을 사용한다.
+  let sgTg: SgTgState = { activeModal: null, reopenSignalGenAfterTuningGuide: false };
+
+  // 1차 시퀀스
+  const step1: ActiveModal[] = [null, "menu", "signalGen"];
+  for (const modal of step1) {
+    sgTg = { ...sgTg, activeModal: modal };
+    assert.ok(
+      countVisibleModals(deriveModalFlags(sgTg.activeModal)) <= 1,
+      `1차: activeModal="${modal}" 일 때 visible 모달이 1개를 초과하면 안 된다`,
+    );
+  }
+
+  // signalGen → tuningGuide (openTuningGuideFromSignalGen 경로)
+  sgTg = openTuningGuideFromSignalGen(sgTg);
+  assert.ok(
+    countVisibleModals(deriveModalFlags(sgTg.activeModal)) <= 1,
+    `signalGen → tuningGuide 전환 후 visible 모달이 1개를 초과하면 안 된다`,
+  );
+
+  // tuningGuide 닫기 → signalGen 재오픈
+  sgTg = closeTuningGuide(sgTg);
+  assert.equal(sgTg.activeModal, "signalGen");
+  assert.ok(
+    countVisibleModals(deriveModalFlags(sgTg.activeModal)) <= 1,
+    `tuningGuide 닫기 후 signalGen 재오픈 시 visible 모달이 1개를 초과하면 안 된다`,
+  );
+
+  // 빠른 재탭: signalGen → tuningGuide 다시
+  sgTg = openTuningGuideFromSignalGen(sgTg);
+  assert.ok(
+    countVisibleModals(deriveModalFlags(sgTg.activeModal)) <= 1,
+    `빠른 재탭: 두 번째 signalGen → tuningGuide 전환 후 visible 모달이 1개를 초과하면 안 된다`,
+  );
+
+  // 최종 닫기
+  sgTg = closeTuningGuide(sgTg);
+  sgTg = { activeModal: null, reopenSignalGenAfterTuningGuide: false };
+  assert.equal(countVisibleModals(deriveModalFlags(null)), 0);
+});
+
+test("rapid-tap: menu → signalGen → tuningGuide — 연속 전환에서 동시에 두 모달 visible 없음", () => {
+  // signalGen → tuningGuide 전환을 포함한 연속 탭 시나리오
+  const plainTransitions: Array<[ActiveModal, ActiveModal]> = [
+    [null,      "menu"],
+    ["menu",    "signalGen"],
+  ];
+  for (const [from, to] of plainTransitions) {
+    const beforeFlags = deriveModalFlags(from);
+    const afterFlags  = deriveModalFlags(to);
+    const keys = Object.keys(beforeFlags) as Array<keyof typeof beforeFlags>;
+    const simultaneous = keys.filter((k) => beforeFlags[k] && afterFlags[k]);
+    assert.deepEqual(
+      simultaneous,
+      [],
+      `${from} → ${to} 전환 중 두 모달이 동시에 visible 이면 안 된다`,
+    );
+  }
+
+  // signalGen → tuningGuide (openTuningGuideFromSignalGen 경로)
+  const sgStart: SgTgState = { activeModal: "signalGen", reopenSignalGenAfterTuningGuide: false };
+  const afterOpen = openTuningGuideFromSignalGen(sgStart);
+  {
+    const bf = deriveModalFlags(sgStart.activeModal);
+    const af = deriveModalFlags(afterOpen.activeModal);
+    const keys = Object.keys(bf) as Array<keyof typeof bf>;
+    const simultaneous = keys.filter((k) => bf[k] && af[k]);
+    assert.deepEqual(
+      simultaneous,
+      [],
+      "signalGen → tuningGuide 전환 중 두 모달이 동시에 visible 이면 안 된다",
+    );
+  }
+
+  // tuningGuide → signalGen (closeTuningGuide 경로)
+  const afterClose = closeTuningGuide(afterOpen);
+  {
+    const bf = deriveModalFlags(afterOpen.activeModal);
+    const af = deriveModalFlags(afterClose.activeModal);
+    const keys = Object.keys(bf) as Array<keyof typeof bf>;
+    const simultaneous = keys.filter((k) => bf[k] && af[k]);
+    assert.deepEqual(
+      simultaneous,
+      [],
+      "tuningGuide → signalGen 재오픈 전환 중 두 모달이 동시에 visible 이면 안 된다",
+    );
+  }
+});
