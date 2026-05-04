@@ -14,6 +14,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   type ActiveModal,
   deriveModalFlags,
@@ -385,4 +387,140 @@ test("rapid-tap: menu → signalGen → tuningGuide — 연속 전환에서 동�
       "tuningGuide → signalGen 재오픈 전환 중 두 모달이 동시에 visible 이면 안 된다",
     );
   }
+});
+
+// ────────────────────────────────────────────────────────────────
+// 5. 소스 구조 테스트 — MoreMenuModal testID 및 props 동기화 검증
+//
+//    정답(canonical) 소스: app/index.tsx 의 <MoreMenuModal … /> JSX 블록
+//    해당 블록의 openExclusive("key") 호출이 "어떤 항목이 있어야 하는가"를 결정한다.
+//
+//    새 모달 항목 추가 시 다음이 모두 갖춰지지 않으면 자동으로 실패한다:
+//      a) components/MoreMenuModal.tsx 의 각 항목 Pressable 에 testID 가 있어야 한다
+//      b) MoreMenuModalProps 의 onXxx 핸들러 목록이 app/index.tsx 의 openExclusive 키 목록과 일치해야 한다
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * lib/modal-routing.ts 의 ActiveModal 유니온 타입에 선언된
+ * 모든 비-null 리터럴 값을 추출한다.
+ */
+function extractActiveModalLiterals(): Set<string> {
+  const src = readFileSync(join(process.cwd(), "lib/modal-routing.ts"), "utf-8");
+
+  // "foo" | "bar" | null; 형태의 유니온에서 문자열 리터럴만 추출
+  const typeMatch = src.match(/export type ActiveModal\s*=\s*([\s\S]*?);/);
+  assert.ok(typeMatch, "lib/modal-routing.ts 에서 ActiveModal 타입 선언을 찾을 수 없다");
+
+  const literals = new Set<string>();
+  const literalRe = /["']([a-zA-Z]+)["']/g;
+  let m: RegExpExecArray | null;
+  while ((m = literalRe.exec(typeMatch[1])) !== null) {
+    literals.add(m[1]);
+  }
+  return literals;
+}
+
+/**
+ * app/index.tsx 의 <MoreMenuModal … /> JSX 블록에서
+ * openExclusive("key") 호출 키를 추출한다.
+ * 이것이 "moreMenu 하위 모달 목록"의 유일한 정답(canonical) 소스다.
+ *
+ * 각 키가 ActiveModal 타입에 선언된 유효한 리터럴인지도 검증한다.
+ */
+function extractMoreMenuOpenExclusiveKeys(): string[] {
+  const src = readFileSync(join(process.cwd(), "app/index.tsx"), "utf-8");
+
+  // <MoreMenuModal 시작 위치 탐색
+  const startIdx = src.indexOf("<MoreMenuModal");
+  assert.ok(startIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
+
+  // 닫는 /> 탐색 — MoreMenuModal prop 콜백 내부에는 JSX가 없으므로
+  // 첫 번째 /> 가 MoreMenuModal 의 닫는 태그다
+  const endIdx = src.indexOf("/>", startIdx);
+  assert.ok(endIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 의 닫는 /> 를 찾을 수 없다");
+
+  const block = src.slice(startIdx, endIdx + 2);
+
+  // openExclusive("key") 패턴에서 key 추출
+  const re = /openExclusive\(["']([a-zA-Z]+)["']\)/g;
+  const keys: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(block)) !== null) {
+    keys.push(m[1]);
+  }
+
+  assert.ok(
+    keys.length > 0,
+    "app/index.tsx <MoreMenuModal 블록에서 openExclusive 호출을 찾을 수 없다 — MoreMenuModal 의 항목 핸들러는 openExclusive(\"key\") 형태로 작성되어야 한다",
+  );
+
+  // 각 키가 ActiveModal 타입에 선언된 유효한 리터럴인지 검증
+  const validLiterals = extractActiveModalLiterals();
+  for (const key of keys) {
+    assert.ok(
+      validLiterals.has(key),
+      `openExclusive("${key}") 의 키 "${key}" 가 lib/modal-routing.ts 의 ActiveModal 타입에 선언되어 있지 않다 — ActiveModal 타입에 먼저 추가해야 한다`,
+    );
+  }
+
+  return keys;
+}
+
+test("source: MoreMenuModal — 각 항목 Pressable에 testID 속성이 존재한다", () => {
+  // 정답 소스: app/index.tsx <MoreMenuModal> 블록의 openExclusive 호출 키
+  const canonicalKeys = extractMoreMenuOpenExclusiveKeys();
+
+  const modalSrc = readFileSync(join(process.cwd(), "components/MoreMenuModal.tsx"), "utf-8");
+
+  // <Pressable 태그 기준으로 소스를 분할해 각 블록을 독립 검사
+  const pressableBlocks = modalSrc.split("<Pressable");
+
+  for (const key of canonicalKeys) {
+    // 키 → 핸들러 이름 변환: "scheduledStart" → "onScheduledStart"
+    const handler = "on" + key.charAt(0).toUpperCase() + key.slice(1);
+
+    const block = pressableBlocks.find((b) => b.includes(`onPress={${handler}}`));
+
+    assert.ok(
+      block !== undefined,
+      `onPress={${handler}} 가 있는 <Pressable 블록을 찾을 수 없다 (modal key: "${key}") — MoreMenuModal 에 항목을 추가할 때 <Pressable onPress={${handler}} …> 형태로 작성해야 한다`,
+    );
+
+    assert.ok(
+      block!.includes("testID="),
+      `onPress={${handler}} 가 있는 <Pressable 에 testID 속성이 없다 (modal key: "${key}") — 새 항목 추가 시 testID="more-menu-${key}" 형태로 포함해야 한다`,
+    );
+  }
+});
+
+test("source: MoreMenuModal onXxx 핸들러 목록과 app/index.tsx openExclusive 키 목록이 동기화되어 있다", () => {
+  // 정답 소스: app/index.tsx <MoreMenuModal> 블록의 openExclusive 호출 키
+  const canonicalKeys = [...extractMoreMenuOpenExclusiveKeys()].sort();
+
+  const modalSrc = readFileSync(join(process.cwd(), "components/MoreMenuModal.tsx"), "utf-8");
+
+  // MoreMenuModalProps 인터페이스 본문 추출
+  const interfaceMatch = modalSrc.match(/export interface MoreMenuModalProps \{([\s\S]*?)\}/);
+  assert.ok(
+    interfaceMatch,
+    "MoreMenuModalProps 인터페이스를 찾을 수 없다 — components/MoreMenuModal.tsx 에 export interface MoreMenuModalProps { … } 가 있어야 한다",
+  );
+
+  // onXxx: () => void 형태의 핸들러 prop 이름 추출 (onClose 제외)
+  const handlerRe = /\bon([A-Z][a-zA-Z]+)\s*:\s*\(\)\s*=>/g;
+  const handlerKeys: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = handlerRe.exec(interfaceMatch[1])) !== null) {
+    const pascal = m[1]; // e.g. "ScheduledStart"
+    if (pascal === "Close") continue; // onClose 는 항목 핸들러가 아님
+    handlerKeys.push(pascal.charAt(0).toLowerCase() + pascal.slice(1));
+  }
+  handlerKeys.sort();
+
+  assert.deepEqual(
+    handlerKeys,
+    canonicalKeys,
+    `MoreMenuModal 인터페이스 onXxx 파생 키(${handlerKeys.join(", ")})와 app/index.tsx openExclusive 키(${canonicalKeys.join(", ")})가 일치하지 않는다\n` +
+    "새 항목 추가 시: MoreMenuModalProps 인터페이스, Pressable(testID 포함), app/index.tsx <MoreMenuModal 블록을 함께 업데이트하세요.",
+  );
 });
