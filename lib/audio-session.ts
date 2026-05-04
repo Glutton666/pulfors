@@ -148,6 +148,7 @@ export function notifyInterruptionBegin(): void {
       try { bridge.pause(); } finally { suppressUserToggle--; }
       pausedByInterruption = true;
       userToggledDuringInterruption = false;
+      logger.info("[audioSession] interruption begin → metronome paused");
     } else if (activeCallers.size > 0) {
       // 메트로놈은 이미 모달 acquire로 멈춰있는 상태에서 인터럽션이 들어옴.
       // 모달이 release될 때 인터럽션이 끝났는지 확인할 수 있도록 플래그를
@@ -155,8 +156,11 @@ export function notifyInterruptionBegin(): void {
       // 재개를 미루는 데 사용)
       pausedByInterruption = true;
       userToggledDuringInterruption = false;
+      logger.info("[audioSession] interruption begin → already paused by modal, flagged");
+    } else {
+      // 메트로놈이 꺼져 있고 모달도 없는 상태 → 추적할 게 없다.
+      logger.info("[audioSession] interruption begin → metronome already off, no-op");
     }
-    // 그 외에는 메트로놈이 그냥 꺼져 있는 상태이므로 추적할 게 없다.
   } catch (e) {
     logger.warn("[audioSession] interruption pause failed:", e);
   }
@@ -172,12 +176,16 @@ export function notifyInterruptionEnd(): void {
   const wasUserToggled = userToggledDuringInterruption;
   pausedByInterruption = false;
   userToggledDuringInterruption = false;
-  if (wasUserToggled) return;
+  if (wasUserToggled) {
+    logger.info("[audioSession] interruption end → user toggled during interruption, skipping auto-resume");
+    return;
+  }
   // 모달이 아직 열려 있으면 모달 release 시점이 재개를 담당하도록 owner를
   // 이전한다 (인터럽션 동안 모달이 새로 열린 경우에도 release에서 정상
   // 재개되도록 pausedByUs를 켠다).
   if (activeCallers.size > 0) {
     pausedByUs = true;
+    logger.info("[audioSession] interruption end → modal still open, ownership transferred to modal release");
     return;
   }
   if (!bridge) return;
@@ -185,6 +193,9 @@ export function notifyInterruptionEnd(): void {
     if (!bridge.isRunning()) {
       suppressUserToggle++;
       try { bridge.resume(); } finally { suppressUserToggle--; }
+      logger.info("[audioSession] interruption end → metronome resumed");
+    } else {
+      logger.info("[audioSession] interruption end → metronome already running, no-op");
     }
   } catch (e) {
     logger.warn("[audioSession] interruption resume failed:", e);

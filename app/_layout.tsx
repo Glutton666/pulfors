@@ -115,6 +115,7 @@ export default function RootLayout() {
     const interruptStates: ReadonlyArray<string> =
       Platform.OS === "android" ? ["background", "inactive"] : ["inactive"];
     const sub = AppState.addEventListener("change", (next) => {
+      logger.info(`[appState] → ${next} (interruption states: ${interruptStates.join(",")})`);
       if (interruptStates.includes(next)) {
         notifyInterruptionBegin();
       } else if (next === "active") {
