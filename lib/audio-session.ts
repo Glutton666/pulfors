@@ -33,6 +33,14 @@ let userToggledDuringSession = false;
 // notifyUserMetronomeToggle이 들어와도 무시한다 (사용자 액션이 아니므로).
 let suppressUserToggle = 0;
 
+// 외부 OS 인터럽션 (전화/Siri/알람/다른 앱의 미디어 재생 등) 동안 메트로놈을
+// 우리가 일시정지했는지 추적. 모달 caller 경로(`pausedByUs`)와 독립적으로
+// 동작하므로, 인터럽션과 모달이 겹쳐도 양쪽이 모두 종료된 뒤에만 자동 재개한다.
+let pausedByInterruption = false;
+// 인터럽션 도중 사용자가 직접 메트로놈을 토글했는지. 인터럽션이 끝났을 때
+// 사용자의 의도를 존중해 자동 재개를 건너뛰는 데 사용한다.
+let userToggledDuringInterruption = false;
+
 export function registerMetronomeBridge(b: MetronomeBridge | null) {
   bridge = b;
 }
@@ -98,8 +106,11 @@ export async function releaseAudioSession(callerId: string): Promise<void> {
     // 모달 안에서 사용자가 직접 메트로놈을 토글했다면 (켰다가 다시 끔, 또는
     // 켠 채 둠) 그 의도를 존중하여 자동 resume을 건너뛴다. 사용자가 손대지
     // 않았고 우리가 멈춘 그대로일 때만 baseline으로 복귀한다.
+    // 외부 인터럽션이 아직 진행 중이면(전화 통화 중에 모달을 닫는 경우 등)
+    // 재개하지 않는다 — 인터럽션이 끝나는 시점에 notifyInterruptionEnd가
+    // 일관되게 처리한다.
     try {
-      if (!wasUserToggled && bridge && !bridge.isRunning()) {
+      if (!wasUserToggled && !pausedByInterruption && bridge && !bridge.isRunning()) {
         suppressUserToggle++;
         try { bridge.resume(); } finally { suppressUserToggle--; }
       }
@@ -114,6 +125,69 @@ export function notifyUserMetronomeToggle(): void {
   if (suppressUserToggle > 0) return;
   if (activeCallers.size > 0) {
     userToggledDuringSession = true;
+  }
+  if (pausedByInterruption) {
+    userToggledDuringInterruption = true;
+  }
+}
+
+/**
+ * OS 레벨 오디오 인터럽션이 시작됐을 때 호출. 전화 수신, Siri, 알람,
+ * 다른 앱의 미디어 재생 시작 등으로 AVAudioSession이 우리 오디오를 강제
+ * 정지시키는 시점이다. 메트로놈 엔진(JS 스케줄러)도 함께 멈춰서, 인터럽션이
+ * 끝난 뒤 일관된 상태에서 재개할 수 있게 한다. 멱등하게 동작한다.
+ */
+export function notifyInterruptionBegin(): void {
+  if (pausedByInterruption) return;
+  // bridge가 아직 등록되지 않았으면 우리가 멈출 수 있는 게 없으므로 추적도
+  // 하지 않는다. (앱 부팅 직후 상태)
+  if (!bridge) return;
+  try {
+    if (bridge.isRunning()) {
+      suppressUserToggle++;
+      try { bridge.pause(); } finally { suppressUserToggle--; }
+      pausedByInterruption = true;
+      userToggledDuringInterruption = false;
+    } else if (activeCallers.size > 0) {
+      // 메트로놈은 이미 모달 acquire로 멈춰있는 상태에서 인터럽션이 들어옴.
+      // 모달이 release될 때 인터럽션이 끝났는지 확인할 수 있도록 플래그를
+      // 세운다. (인터럽션 진행 중에 모달이 닫혀도 통화가 끝날 때까지 자동
+      // 재개를 미루는 데 사용)
+      pausedByInterruption = true;
+      userToggledDuringInterruption = false;
+    }
+    // 그 외에는 메트로놈이 그냥 꺼져 있는 상태이므로 추적할 게 없다.
+  } catch (e) {
+    logger.warn("[audioSession] interruption pause failed:", e);
+  }
+}
+
+/**
+ * OS 레벨 오디오 인터럽션이 종료됐을 때 호출. 우리가 begin에서 멈췄고,
+ * 사용자가 인터럽션 도중 직접 토글하지 않았으며, 다른 모달 caller도 활성
+ * 상태가 아닐 때만 자동 재개한다.
+ */
+export function notifyInterruptionEnd(): void {
+  if (!pausedByInterruption) return;
+  const wasUserToggled = userToggledDuringInterruption;
+  pausedByInterruption = false;
+  userToggledDuringInterruption = false;
+  if (wasUserToggled) return;
+  // 모달이 아직 열려 있으면 모달 release 시점이 재개를 담당하도록 owner를
+  // 이전한다 (인터럽션 동안 모달이 새로 열린 경우에도 release에서 정상
+  // 재개되도록 pausedByUs를 켠다).
+  if (activeCallers.size > 0) {
+    pausedByUs = true;
+    return;
+  }
+  if (!bridge) return;
+  try {
+    if (!bridge.isRunning()) {
+      suppressUserToggle++;
+      try { bridge.resume(); } finally { suppressUserToggle--; }
+    }
+  } catch (e) {
+    logger.warn("[audioSession] interruption resume failed:", e);
   }
 }
 
@@ -137,12 +211,15 @@ export function _resetAudioSessionForTests() {
   pausedByUs = false;
   userToggledDuringSession = false;
   suppressUserToggle = 0;
+  pausedByInterruption = false;
+  userToggledDuringInterruption = false;
 }
 
 export function _audioSessionDebugState() {
   return {
     activeCallers: Array.from(activeCallers.entries()),
     pausedByUs,
+    pausedByInterruption,
     hasBridge: bridge !== null,
   };
 }

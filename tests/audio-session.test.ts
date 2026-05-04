@@ -6,6 +6,8 @@ import {
   registerMetronomeBridge,
   withAudioSession,
   notifyUserMetronomeToggle,
+  notifyInterruptionBegin,
+  notifyInterruptionEnd,
   _resetAudioSessionForTests,
   _audioSessionDebugState,
 } from "../lib/audio-session";
@@ -242,4 +244,127 @@ test("double release does not double-resume", async () => {
   await releaseAudioSession("x");
   await releaseAudioSession("x");
   assert.equal(state.resumeCount, 1);
+});
+
+test("interruption begin pauses metronome and end resumes it", async () => {
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  notifyInterruptionBegin();
+  assert.equal(state.pauseCount, 1, "interruption begin pauses running metronome");
+  assert.equal(state.running, false);
+  notifyInterruptionEnd();
+  assert.equal(state.resumeCount, 1, "interruption end resumes when no user toggle");
+  assert.equal(state.running, true);
+});
+
+test("interruption begin is idempotent", async () => {
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  notifyInterruptionBegin();
+  notifyInterruptionBegin();
+  notifyInterruptionBegin();
+  assert.equal(state.pauseCount, 1, "only one pause across repeated begins");
+  notifyInterruptionEnd();
+  assert.equal(state.resumeCount, 1);
+});
+
+test("interruption end without begin is a no-op", async () => {
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  notifyInterruptionEnd();
+  assert.equal(state.pauseCount, 0);
+  assert.equal(state.resumeCount, 0);
+  assert.equal(state.running, true);
+});
+
+test("interruption does nothing when metronome already stopped", async () => {
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(false);
+  registerMetronomeBridge(bridge);
+  notifyInterruptionBegin();
+  assert.equal(state.pauseCount, 0, "nothing to pause");
+  notifyInterruptionEnd();
+  assert.equal(state.resumeCount, 0, "do not auto-start what we did not pause");
+  assert.equal(state.running, false);
+});
+
+test("user manual stop during interruption suppresses auto-resume", async () => {
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  notifyInterruptionBegin();
+  assert.equal(state.running, false);
+  // 사용자가 인터럽션 중(예: 화면이 잠시 돌아왔을 때) 직접 멈춤을 신호.
+  notifyUserMetronomeToggle();
+  notifyInterruptionEnd();
+  assert.equal(state.resumeCount, 0, "user intent honored, no auto-resume");
+  assert.equal(state.running, false);
+});
+
+test("interruption while modal is active: modal release does not resume mid-interruption", async () => {
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  await acquireAudioSession("rec", "recording");
+  assert.equal(state.pauseCount, 1, "modal pauses metronome");
+  // 모달 사용 중에 전화가 옴.
+  notifyInterruptionBegin();
+  // 이미 멈춰있으므로 추가 pause는 없다.
+  assert.equal(state.pauseCount, 1);
+  // 사용자가 모달을 닫음 (전화 통화는 진행 중).
+  await releaseAudioSession("rec");
+  assert.equal(state.resumeCount, 0, "must not resume while interruption still active");
+  // 통화 종료.
+  notifyInterruptionEnd();
+  assert.equal(state.resumeCount, 1, "resume after interruption ends");
+  assert.equal(state.running, true);
+});
+
+test("modal acquired during interruption: only resumes once after both clear", async () => {
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  notifyInterruptionBegin();
+  assert.equal(state.pauseCount, 1);
+  // 사용자가 통화 중에 모달을 엶 (드물지만 가능).
+  await acquireAudioSession("rec", "recording");
+  // 이미 멈춰있으므로 모달은 추가로 pause하지 않는다.
+  assert.equal(state.pauseCount, 1);
+  // 통화 먼저 종료.
+  notifyInterruptionEnd();
+  // 모달이 아직 열려있으므로 재개하면 안 된다.
+  assert.equal(state.resumeCount, 0);
+  await releaseAudioSession("rec");
+  assert.equal(state.resumeCount, 1, "resume only after both clear");
+});
+
+test("interruption begin before bridge is registered is a no-op", async () => {
+  _resetAudioSessionForTests();
+  // bridge 등록 전에 들어온 인터럽션은 우리가 제어할 게 없으므로 추적하지
+  // 않는다. 나중에 bridge가 등록되고 end가 호출돼도 잘못된 자동 재개를
+  // 시도하지 않아야 한다.
+  notifyInterruptionBegin();
+  const { state, bridge } = makeBridge(false);
+  registerMetronomeBridge(bridge);
+  notifyInterruptionEnd();
+  assert.equal(state.pauseCount, 0);
+  assert.equal(state.resumeCount, 0);
+  assert.equal(state.running, false);
+});
+
+test("repeated interruption cycles work consistently", async () => {
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  for (let i = 0; i < 3; i++) {
+    notifyInterruptionBegin();
+    assert.equal(state.running, false, `cycle ${i}: paused`);
+    notifyInterruptionEnd();
+    assert.equal(state.running, true, `cycle ${i}: resumed`);
+  }
+  assert.equal(state.pauseCount, 3);
+  assert.equal(state.resumeCount, 3);
 });
