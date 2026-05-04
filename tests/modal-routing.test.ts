@@ -493,6 +493,93 @@ test("source: MoreMenuModal — 각 항목 Pressable에 testID 속성이 존재�
   }
 });
 
+// ────────────────────────────────────────────────────────────────
+// 6. 소스 구조 테스트 — DrumKit·TempoQuiz 핸들러 내부 구조 검증
+//
+//    onDrumKit / onTempoQuiz 핸들러는 엔진 정지·상태 초기화 코드를 포함해
+//    단순 람다가 아니다. 그럼에도 openExclusive("drumKit") /
+//    openExclusive("tempoQuiz") 를 반드시 경유해야 하며,
+//    setActiveModal 을 직접 호출해 openExclusive 를 우회해선 안 된다.
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * app/index.tsx 에서 <MoreMenuModal … /> JSX 블록을 추출하고,
+ * 지정한 핸들러 prop (e.g. "onDrumKit") 의 화살표 함수 본문을 반환한다.
+ *
+ * 핸들러는 다음 형태로 작성되어 있다고 가정한다:
+ *   onDrumKit={() => {
+ *     ...
+ *   }}
+ */
+function extractMoreMenuHandlerBody(handlerName: string): string {
+  const src = readFileSync(join(process.cwd(), "app/index.tsx"), "utf-8");
+
+  const startIdx = src.indexOf("<MoreMenuModal");
+  assert.ok(startIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
+
+  const endIdx = src.indexOf("/>", startIdx);
+  assert.ok(endIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 의 닫는 /> 를 찾을 수 없다");
+
+  const block = src.slice(startIdx, endIdx + 2);
+
+  // handlerName={() => { … }} 형태에서 중괄호 내부를 추출
+  const propIdx = block.indexOf(`${handlerName}={() => {`);
+  assert.ok(
+    propIdx !== -1,
+    `<MoreMenuModal 블록에서 ${handlerName}={() => { 를 찾을 수 없다`,
+  );
+
+  // 중괄호 깊이 추적으로 핸들러 본문 종료 위치를 찾는다
+  const bodyStart = block.indexOf("{", propIdx + handlerName.length + "={() => ".length);
+  let depth = 0;
+  let i = bodyStart;
+  for (; i < block.length; i++) {
+    if (block[i] === "{") depth++;
+    else if (block[i] === "}") {
+      depth--;
+      if (depth === 0) break;
+    }
+  }
+
+  return block.slice(bodyStart, i + 1);
+}
+
+test("source: onDrumKit 핸들러가 openExclusive(\"drumKit\")를 호출한다", () => {
+  const body = extractMoreMenuHandlerBody("onDrumKit");
+  assert.ok(
+    /openExclusive\(["']drumKit["']\)/.test(body),
+    `onDrumKit 핸들러 본문에 openExclusive("drumKit") 호출이 없다 — ` +
+    `핸들러 내부에서 모달 전환은 반드시 openExclusive 를 경유해야 한다:\n${body}`,
+  );
+});
+
+test("source: onTempoQuiz 핸들러가 openExclusive(\"tempoQuiz\")를 호출한다", () => {
+  const body = extractMoreMenuHandlerBody("onTempoQuiz");
+  assert.ok(
+    /openExclusive\(["']tempoQuiz["']\)/.test(body),
+    `onTempoQuiz 핸들러 본문에 openExclusive("tempoQuiz") 호출이 없다 — ` +
+    `핸들러 내부에서 모달 전환은 반드시 openExclusive 를 경유해야 한다:\n${body}`,
+  );
+});
+
+test("source: onDrumKit 핸들러가 setActiveModal을 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
+  const body = extractMoreMenuHandlerBody("onDrumKit");
+  assert.ok(
+    !body.includes("setActiveModal("),
+    `onDrumKit 핸들러 본문에서 setActiveModal 직접 호출이 발견됐다 — ` +
+    `openExclusive 를 우회하면 mutual exclusion 보장이 깨진다:\n${body}`,
+  );
+});
+
+test("source: onTempoQuiz 핸들러가 setActiveModal을 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
+  const body = extractMoreMenuHandlerBody("onTempoQuiz");
+  assert.ok(
+    !body.includes("setActiveModal("),
+    `onTempoQuiz 핸들러 본문에서 setActiveModal 직접 호출이 발견됐다 — ` +
+    `openExclusive 를 우회하면 mutual exclusion 보장이 깨진다:\n${body}`,
+  );
+});
+
 test("source: MoreMenuModal onXxx 핸들러 목록과 app/index.tsx openExclusive 키 목록이 동기화되어 있다", () => {
   // 정답 소스: app/index.tsx <MoreMenuModal> 블록의 openExclusive 호출 키
   const canonicalKeys = [...extractMoreMenuOpenExclusiveKeys()].sort();
