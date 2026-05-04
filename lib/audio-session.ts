@@ -23,6 +23,12 @@ export interface MetronomeBridge {
   resume: () => void;
 }
 
+/** Android 오디오 포커스 프로브의 start/stop 진입점. */
+export interface AndroidFocusProbeController {
+  start: () => void;
+  stop: () => void;
+}
+
 const activeCallers: Map<string, SessionMode> = new Map();
 let bridge: MetronomeBridge | null = null;
 let pausedByUs = false;
@@ -40,6 +46,23 @@ let pausedByInterruption = false;
 // 인터럽션 도중 사용자가 직접 메트로놈을 토글했는지. 인터럽션이 끝났을 때
 // 사용자의 의도를 존중해 자동 재개를 건너뛰는 데 사용한다.
 let userToggledDuringInterruption = false;
+
+// Android: 오디오 포커스 프로브 컨트롤러.
+// app/_layout.tsx 에서 initAndroidFocusCallbacks / startAndroidFocusProbe /
+// stopAndroidFocusProbe 를 registerAndroidFocusProbeController 로 주입한다.
+// 메트로놈이 실제로 재생될 때만 프로브를 실행해 오디오 포커스를 점유한다.
+let androidProbe: AndroidFocusProbeController | null = null;
+
+/**
+ * Android 오디오 포커스 프로브 컨트롤러를 주입한다.
+ * null 을 전달하면 해제(앱 언마운트 시 사용).
+ * 순환 임포트를 피하기 위해 의존성 주입 패턴을 사용한다.
+ */
+export function registerAndroidFocusProbeController(
+  ctrl: AndroidFocusProbeController | null,
+): void {
+  androidProbe = ctrl;
+}
 
 export function registerMetronomeBridge(b: MetronomeBridge | null) {
   bridge = b;
@@ -77,7 +100,12 @@ export async function acquireAudioSession(callerId: string, mode: SessionMode): 
     try {
       if (bridge.isRunning()) {
         suppressUserToggle++;
-        try { bridge.pause(); } finally { suppressUserToggle--; }
+        try {
+          bridge.pause();
+          androidProbe?.stop();
+        } finally {
+          suppressUserToggle--;
+        }
         pausedByUs = true;
       }
     } catch (e) {
@@ -92,7 +120,12 @@ export async function releaseAudioSession(callerId: string): Promise<void> {
     // 이미 해제된 caller라도 baseline 복귀 보장.
     if (activeCallers.size === 0 && pausedByUs) {
       pausedByUs = false;
-      try { bridge?.resume(); } catch (e) { logger.warn("[audioSession] resume failed:", e); }
+      try {
+        bridge?.resume();
+        androidProbe?.start();
+      } catch (e) {
+        logger.warn("[audioSession] resume failed:", e);
+      }
     }
     return;
   }
@@ -112,7 +145,12 @@ export async function releaseAudioSession(callerId: string): Promise<void> {
     try {
       if (!wasUserToggled && !pausedByInterruption && bridge && !bridge.isRunning()) {
         suppressUserToggle++;
-        try { bridge.resume(); } finally { suppressUserToggle--; }
+        try {
+          bridge.resume();
+          androidProbe?.start();
+        } finally {
+          suppressUserToggle--;
+        }
       }
     } catch (e) {
       logger.warn("[audioSession] metronome resume failed:", e);
@@ -128,6 +166,17 @@ export function notifyUserMetronomeToggle(): void {
   }
   if (pausedByInterruption) {
     userToggledDuringInterruption = true;
+  }
+  // Android: 토글이 일어나기 직전에 bridge.isRunning() 으로 현재 상태를 읽어
+  // 토글 후 상태를 추론해 프로브를 시작/정지한다.
+  // isRunning() == true  → 토글 후 정지 → 프로브 정지
+  // isRunning() == false → 토글 후 시작 → 프로브 시작
+  if (bridge && Platform.OS === "android") {
+    if (bridge.isRunning()) {
+      androidProbe?.stop();
+    } else {
+      androidProbe?.start();
+    }
   }
 }
 
@@ -145,7 +194,14 @@ export function notifyInterruptionBegin(): void {
   try {
     if (bridge.isRunning()) {
       suppressUserToggle++;
-      try { bridge.pause(); } finally { suppressUserToggle--; }
+      try {
+        bridge.pause();
+        // 주의: androidProbe?.stop() 을 호출하지 않는다.
+        // 프로브는 OS 인터럽션 동안 살아있어야 포커스 회복(isPlaying: true)을
+        // 감지하고 onFocusGain → notifyInterruptionEnd 를 호출할 수 있다.
+      } finally {
+        suppressUserToggle--;
+      }
       pausedByInterruption = true;
       userToggledDuringInterruption = false;
       logger.info("[audioSession] interruption begin → metronome paused");
@@ -192,7 +248,14 @@ export function notifyInterruptionEnd(): void {
   try {
     if (!bridge.isRunning()) {
       suppressUserToggle++;
-      try { bridge.resume(); } finally { suppressUserToggle--; }
+      try {
+        bridge.resume();
+        // 주의: androidProbe?.start() 를 호출하지 않는다.
+        // 프로브는 이미 살아있다 — OS 가 Sound 를 자동 재개해 isPlaying: true
+        // 이벤트를 발생시키고 그 이벤트가 이 함수를 호출했다.
+      } finally {
+        suppressUserToggle--;
+      }
       logger.info("[audioSession] interruption end → metronome resumed");
     } else {
       logger.info("[audioSession] interruption end → metronome already running, no-op");
@@ -224,6 +287,7 @@ export function _resetAudioSessionForTests() {
   suppressUserToggle = 0;
   pausedByInterruption = false;
   userToggledDuringInterruption = false;
+  androidProbe = null;
 }
 
 export function _audioSessionDebugState() {

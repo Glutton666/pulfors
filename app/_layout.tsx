@@ -20,7 +20,16 @@ import { DeepLinkProvider } from "@/contexts/DeepLinkContext";
 import { initErrorTracking } from "@/lib/error-tracking";
 import { StorageErrorAlert } from "@/components/StorageErrorAlert";
 import { rollbackPendingRestoreIfAny } from "@/lib/backup/full";
-import { notifyInterruptionBegin, notifyInterruptionEnd } from "@/lib/audio-session";
+import {
+  notifyInterruptionBegin,
+  notifyInterruptionEnd,
+  registerAndroidFocusProbeController,
+} from "@/lib/audio-session";
+import {
+  initAndroidFocusCallbacks,
+  startAndroidFocusProbe,
+  stopAndroidFocusProbe,
+} from "@/lib/android-audio-focus";
 
 import {
   useFonts,
@@ -90,26 +99,43 @@ export default function RootLayout() {
     });
   }, []);
 
-  // 외부 OS 오디오 인터럽션(전화 수신, Siri, 알람, 다른 앱의 미디어 재생 등)
-  // 처리. expo-audio가 JS 레벨 인터럽션 콜백을 노출하지 않으므로 AppState를
-  // 신호원으로 사용한다.
+  // ── Android: expo-av 프로브 기반 오디오 포커스 모니터 ────────────────────────
+  // Android는 AppState 'inactive'가 거의 발생하지 않아 전화 수신 같은 포그라운드
+  // 인터럽션을 AppState만으로 감지할 수 없다.
   //
-  // iOS (UIBackgroundModes에 "audio" 등록 → shouldPlayInBackground 실제 동작):
-  //   - 인터럽션이 들어오면 시스템이 'inactive' 상태로 전이시킨다.
-  //   - 'background'는 사용자가 의도적으로 백그라운드로 보낸 것이고 메트로놈은
-  //     계속 재생되어야 하므로 건드리지 않는다.
+  // 구조:
+  // 1. initAndroidFocusCallbacks — 인터럽션 콜백만 등록, 사운드 없음.
+  // 2. registerAndroidFocusProbeController — 메트로놈이 실제로 재생을 시작/정지할
+  //    때 audio-session.ts 가 start/stop 을 호출하도록 컨트롤러를 주입한다.
+  //    프로브는 메트로놈이 실행 중일 때만 오디오 포커스를 점유한다.
+  //
+  // notifyInterruptionBegin / notifyInterruptionEnd 는 멱등하므로 아래 AppState
+  // 백업과 중복 호출돼도 안전하다.
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    initAndroidFocusCallbacks(notifyInterruptionBegin, notifyInterruptionEnd);
+    registerAndroidFocusProbeController({
+      start: () => { void startAndroidFocusProbe(); },
+      stop: () => { void stopAndroidFocusProbe(); },
+    });
+    return () => {
+      registerAndroidFocusProbeController(null);
+      void stopAndroidFocusProbe();
+    };
+  }, []);
+
+  // ── AppState 기반 인터럽션 감지 (iOS 주 경로, Android 백업) ─────────────────
+  // iOS: 전화/Siri/알람 수신 시 시스템이 'inactive' 로 전이 → 인터럽션 시작.
+  //      'background'는 사용자가 의도적으로 홈 버튼을 누른 것이며 메트로놈은
+  //      백그라운드에서도 계속 재생되어야 하므로 건드리지 않는다.
   //   → 'inactive' = 인터럽션 시작, 'active' 복귀 = 인터럽션 종료.
   //
-  // Android (foreground service 미구성 → 백그라운드 시 OS가 오디오를 강제
-  // 중단):
-  //   - 'inactive'는 거의 발생하지 않고, 인터럽션은 보통 'background'로 나타
-  //     난다. 사용자 의도(잠금)와 OS 인터럽션(전화)을 구분할 수 없으므로
-  //     일단 모든 'background' 진입을 인터럽션으로 간주한다 (어차피 오디오는
-  //     멈춘다). 'active'로 돌아오면 사용자 의도가 아니었던 한 자동 재개한다.
+  // Android: 포그라운드 인터럽션(전화 수신 등)은 위 expo-av 프로브가 주로
+  //          처리한다. 앱이 'background'로 전환될 때도 foreground service 미구성
+  //          상태에서는 오디오가 어차피 멈추므로 'background'를 인터럽션 신호로
+  //          유지한다. notifyInterruptionBegin/End 가 멱등하므로 프로브와
+  //          중복 신호가 발생해도 안전하다.
   //   → 'background'·'inactive' = 인터럽션 시작, 'active' 복귀 = 인터럽션 종료.
-  //
-  // Android focus listener를 직접 구독하는 것이 정공법이지만 Expo Go에서는
-  // expo-audio가 해당 콜백을 노출하지 않아 AppState로 근사한다.
   useEffect(() => {
     if (Platform.OS === "web") return;
     const interruptStates: ReadonlyArray<string> =
