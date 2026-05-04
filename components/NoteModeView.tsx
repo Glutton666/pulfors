@@ -544,24 +544,34 @@ export function NoteModeView({
 
   if (isPlaying && queue.length > 0) {
     if (isLandscape) {
+      const hasImgL = !!currentEntry?.imageUri;
       return (
         <View style={[styles.container, { flexDirection: "row" as const }]}>
+          {/* 가로모드: 사진이 있으면 전체 배경으로 */}
+          {hasImgL && (
+            <Image
+              source={{ uri: currentEntry!.imageUri }}
+              style={StyleSheet.absoluteFillObject}
+              resizeMode="cover"
+            />
+          )}
           <View style={styles.landscapePlayingLeft}>
-            <View style={styles.playingImageArea}>
-              {currentEntry?.imageUri ? (
-                <Image source={{ uri: currentEntry.imageUri }} style={styles.playingImage} resizeMode="contain" />
-              ) : (
+            {!hasImgL && (
+              <View style={styles.playingImageArea}>
                 <View style={styles.playingImagePlaceholder}>
                   <Ionicons name="musical-notes" size={S.ms(36, 0.4)} color={C.textTertiary} />
                   <Text style={[styles.playingImagePlaceholderText, { fontSize: S.ms(14, 0.3) }]}>{currentEntry?.label}</Text>
                 </View>
-              )}
-            </View>
+              </View>
+            )}
           </View>
-          <View style={styles.landscapePlayingRight}>
+          <View style={[
+            styles.landscapePlayingRight,
+            hasImgL && { backgroundColor: "rgba(0,0,0,0.55)" },
+          ]}>
             <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: S.ms(8, 0.3), marginBottom: S.ms(6, 0.3) }}>
-              <View style={[styles.progressBadge, { backgroundColor: C.accent + "22" }]}>
-                <Text style={[styles.progressText, { color: C.accent }]}>{currentIndex + 1}/{queue.length}</Text>
+              <View style={[styles.progressBadge, { backgroundColor: hasImgL ? "rgba(0,0,0,0.45)" : C.accent + "22" }]}>
+                <Text style={[styles.progressText, { color: hasImgL ? "#fff" : C.accent }]}>{currentIndex + 1}/{queue.length}</Text>
               </View>
               <Pressable
                 style={[styles.playButton, { backgroundColor: C.danger, width: S.ms(36, 0.4), height: S.ms(36, 0.4), borderRadius: S.ms(18, 0.4) }]}
@@ -578,28 +588,54 @@ export function NoteModeView({
       );
     }
 
+    const hasImg = !!currentEntry?.imageUri;
+
     return (
       <View style={styles.container}>
+        {/* 사진 전체 화면 배경 */}
+        {hasImg && (
+          <Image
+            source={{ uri: currentEntry!.imageUri }}
+            style={StyleSheet.absoluteFillObject}
+            resizeMode="cover"
+          />
+        )}
+
+        {/* 상단 스크림 — 헤더 가독성 */}
+        {hasImg && (
+          <View style={styles.imgScrimTop} pointerEvents="none" />
+        )}
+
         <View style={styles.header}>
           <View style={{ width: 22 }} />
-          <Text style={[styles.title, { color: C.accent }]}>{t("noteMode", "title")}</Text>
-          <View style={[styles.progressBadge, { backgroundColor: C.accent + "22" }]}>
-            <Text style={[styles.progressText, { color: C.accent }]}>{currentIndex + 1}/{queue.length}</Text>
+          <Text style={[styles.title, { color: hasImg ? "#fff" : C.accent }]}>
+            {t("noteMode", "title")}
+          </Text>
+          <View style={[styles.progressBadge, { backgroundColor: hasImg ? "rgba(0,0,0,0.45)" : C.accent + "22" }]}>
+            <Text style={[styles.progressText, { color: hasImg ? "#fff" : C.accent }]}>
+              {currentIndex + 1}/{queue.length}
+            </Text>
           </View>
         </View>
 
-        <View style={styles.playingImageArea}>
-          {currentEntry?.imageUri ? (
-            <Image source={{ uri: currentEntry.imageUri }} style={styles.playingImage} resizeMode="contain" />
-          ) : (
+        {/* 이미지 없을 때만 플레이스홀더 표시 */}
+        {!hasImg && (
+          <View style={styles.playingImageArea}>
             <View style={styles.playingImagePlaceholder}>
               <Ionicons name="musical-notes" size={S.ms(48, 0.4)} color={C.textTertiary} />
               <Text style={styles.playingImagePlaceholderText}>{currentEntry?.label}</Text>
             </View>
-          )}
-        </View>
+          </View>
+        )}
+
+        <View style={{ flex: 1 }} />
 
         {renderControlPadSection(true)}
+
+        {/* 하단 스크림 — 스트립/버튼 가독성 */}
+        {hasImg && (
+          <View style={styles.imgScrimBottom} pointerEvents="none" />
+        )}
 
         <View style={styles.playingStripContainer}>
           {renderPlayingStrip()}
@@ -1008,6 +1044,24 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     width: S.ms(32, 0.4),
     height: S.ms(32, 0.4),
     borderRadius: S.ms(6, 0.3),
+  },
+  imgScrimTop: {
+    position: "absolute" as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 90,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    zIndex: 1,
+  },
+  imgScrimBottom: {
+    position: "absolute" as const,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 180,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    zIndex: 1,
   },
   playingImageArea: {
     flex: 1,
