@@ -132,6 +132,11 @@ export const translations = {
     timerStopHintEndCycle: { ko: "현재 마디가 끝나면 정지합니다", en: "Stops at the end of the current measure" },
     timerStopHintImmediate: { ko: "타이머가 끝나면 즉시 정지합니다", en: "Stops immediately when the timer ends" },
     backgroundPlay: { ko: "백그라운드 재생", en: "Background Play" },
+    autoResumeAfterInterruption: { ko: "통화 후 자동 재개", en: "Auto-resume After Call" },
+    autoResumeAfterInterruptionHint: {
+      ko: "전화·Siri·알람이 끝나면 메트로놈을 자동으로 다시 시작합니다",
+      en: "Automatically restarts the metronome after a phone call, Siri, or alarm ends",
+    },
     nickname: { ko: "닉네임", en: "Nickname" },
     nicknamePlaceholder: { ko: "이름을 입력하세요", en: "Enter your name" },
     practiceRoom: { ko: "연습실", en: "Practice Room" },

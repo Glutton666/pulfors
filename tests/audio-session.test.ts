@@ -8,6 +8,7 @@ import {
   notifyUserMetronomeToggle,
   notifyInterruptionBegin,
   notifyInterruptionEnd,
+  setAutoResumeAfterInterruption,
   _resetAudioSessionForTests,
   _audioSessionDebugState,
 } from "../lib/audio-session";
@@ -353,6 +354,45 @@ test("interruption begin before bridge is registered is a no-op", async () => {
   assert.equal(state.pauseCount, 0);
   assert.equal(state.resumeCount, 0);
   assert.equal(state.running, false);
+});
+
+test("autoResumeAfterInterruption=false skips resume on interruption end", async () => {
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  setAutoResumeAfterInterruption(false);
+  notifyInterruptionBegin();
+  assert.equal(state.pauseCount, 1, "interruption begin still pauses metronome");
+  assert.equal(state.running, false);
+  notifyInterruptionEnd();
+  assert.equal(state.resumeCount, 0, "auto-resume disabled: bridge.resume must NOT be called");
+  assert.equal(state.running, false);
+});
+
+test("autoResumeAfterInterruption=true (default) still resumes on interruption end", async () => {
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  // default is true — no explicit call to setAutoResumeAfterInterruption needed
+  notifyInterruptionBegin();
+  assert.equal(state.pauseCount, 1);
+  notifyInterruptionEnd();
+  assert.equal(state.resumeCount, 1, "auto-resume enabled: bridge.resume must be called");
+  assert.equal(state.running, true);
+});
+
+test("autoResumeAfterInterruption=false does not affect modal session release", async () => {
+  // The guard only applies inside notifyInterruptionEnd. Modal acquire/release
+  // auto-resume should work regardless of this flag.
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  setAutoResumeAfterInterruption(false);
+  await acquireAudioSession("rec", "recording");
+  assert.equal(state.pauseCount, 1);
+  await releaseAudioSession("rec");
+  assert.equal(state.resumeCount, 1, "modal release still auto-resumes regardless of interruption setting");
+  assert.equal(state.running, true);
 });
 
 test("repeated interruption cycles work consistently", async () => {

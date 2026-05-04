@@ -33,7 +33,7 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import { safePlay, notifyAudioPoolFallback, detectPoolCutoffRisk } from "@/lib/audio-utils";
-import { registerMetronomeBridge, notifyUserMetronomeToggle } from "@/lib/audio-session";
+import { registerMetronomeBridge, notifyUserMetronomeToggle, setAutoResumeAfterInterruption as setAudioSessionAutoResume } from "@/lib/audio-session";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
@@ -244,6 +244,7 @@ export default function MetronomeScreen() {
     showTempoQuiz,
   } = deriveModalFlags(activeModal);
   const [backgroundPlay, setBackgroundPlay] = useState(false);
+  const [autoResumeAfterInterruption, setAutoResumeAfterInterruption] = useState(true);
   const [soundSet, setSoundSet] = useState<SoundSet>("classic");
   const [layerSoundSets, setLayerSoundSets] = useState<Record<number, SoundSet>>({});
   const layerSoundSetsRef = useRef<Record<number, SoundSet>>({});
@@ -737,6 +738,10 @@ export default function MetronomeScreen() {
       }
       if (settings.backgroundPlay !== undefined) {
         setBackgroundPlay(settings.backgroundPlay);
+      }
+      if (settings.autoResumeAfterInterruption !== undefined) {
+        setAutoResumeAfterInterruption(settings.autoResumeAfterInterruption);
+        setAudioSessionAutoResume(settings.autoResumeAfterInterruption);
       }
       if (settings.soundSet) {
         setSoundSet(settings.soundSet);
@@ -1547,6 +1552,7 @@ export default function MetronomeScreen() {
     volume,
     sampleVolume,
     backgroundPlay,
+    autoResumeAfterInterruption,
     soundSet,
     layerSoundSets,
     flashMode,
@@ -1568,6 +1574,7 @@ export default function MetronomeScreen() {
     volume,
     sampleVolume,
     backgroundPlay,
+    autoResumeAfterInterruption,
     soundSet,
     layerSoundSets,
     flashMode,
@@ -1626,6 +1633,15 @@ export default function MetronomeScreen() {
     (value: boolean) => {
       setBackgroundPlay(value);
       persistSettings({ backgroundPlay: value });
+    },
+    [persistSettings]
+  );
+
+  const updateAutoResumeAfterInterruption = useCallback(
+    (value: boolean) => {
+      setAutoResumeAfterInterruption(value);
+      setAudioSessionAutoResume(value);
+      persistSettings({ autoResumeAfterInterruption: value });
     },
     [persistSettings]
   );
@@ -4478,6 +4494,8 @@ export default function MetronomeScreen() {
         onSampleVolumeChange={updateSampleVolume}
         backgroundPlay={backgroundPlay}
         onBackgroundPlayChange={updateBackgroundPlay}
+        autoResumeAfterInterruption={autoResumeAfterInterruption}
+        onAutoResumeAfterInterruptionChange={updateAutoResumeAfterInterruption}
         soundSet={soundSet}
         onSoundSetChange={updateSoundSet}
         layerSoundSets={layerSoundSets}

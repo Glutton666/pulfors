@@ -146,6 +146,7 @@ export interface MetronomeSettings {
   beatDirection?: "cw" | "ccw";
   layerSoundSets?: Record<number, SoundSet>;
   barMetronomeChannel?: SampleChannel;
+  autoResumeAfterInterruption?: boolean;
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
@@ -168,6 +169,7 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   landscapeContentType: "photo",
   beatDirection: "cw",
   barMetronomeChannel: "both",
+  autoResumeAfterInterruption: true,
 };
 
 export async function loadSettings(): Promise<MetronomeSettings> {

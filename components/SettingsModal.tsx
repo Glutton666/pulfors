@@ -68,6 +68,8 @@ interface SettingsModalProps {
   onSampleVolumeChange: (volume: number) => void;
   backgroundPlay: boolean;
   onBackgroundPlayChange: (value: boolean) => void;
+  autoResumeAfterInterruption: boolean;
+  onAutoResumeAfterInterruptionChange: (value: boolean) => void;
   soundSet: SoundSet;
   onSoundSetChange: (value: SoundSet) => void;
   layerSoundSets: Record<number, SoundSet>;
@@ -114,6 +116,8 @@ export function SettingsModal({
   onSampleVolumeChange,
   backgroundPlay,
   onBackgroundPlayChange,
+  autoResumeAfterInterruption,
+  onAutoResumeAfterInterruptionChange,
   soundSet,
   onSoundSetChange,
   layerSoundSets,
@@ -1902,6 +1906,25 @@ export function SettingsModal({
             style={{ transform: [{ scale: 0.85 }] }}
           />
         </View>
+      </View>
+
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="call-outline" size={S.ms(18, 0.4)} color={C.accent} />
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "autoResumeAfterInterruption")}</Text>
+          <Switch
+            value={autoResumeAfterInterruption}
+            onValueChange={onAutoResumeAfterInterruptionChange}
+            trackColor={{ false: C.surfaceLight, true: C.accentMuted }}
+            thumbColor={autoResumeAfterInterruption ? C.accent : C.textSecondary}
+            style={{ transform: [{ scale: 0.85 }] }}
+          />
+        </View>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>
+          {t("settings", "autoResumeAfterInterruptionHint")}
+        </Text>
       </View>
 
     </>

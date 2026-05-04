@@ -53,6 +53,19 @@ let userToggledDuringInterruption = false;
 // 메트로놈이 실제로 재생될 때만 프로브를 실행해 오디오 포커스를 점유한다.
 let androidProbe: AndroidFocusProbeController | null = null;
 
+// 인터럽션(전화/Siri/알람 등)이 끝났을 때 메트로놈을 자동으로 재개할지 여부.
+// 기본값 true (기존 동작 유지). false로 설정하면 notifyInterruptionEnd에서
+// bridge.resume() 호출을 건너뛴다.
+let autoResumeAfterInterruption = true;
+
+/**
+ * 인터럽션 후 자동 재개 여부를 설정한다.
+ * app/index.tsx에서 사용자 설정 변경 시 호출한다.
+ */
+export function setAutoResumeAfterInterruption(value: boolean): void {
+  autoResumeAfterInterruption = value;
+}
+
 /**
  * Android 오디오 포커스 프로브 컨트롤러를 주입한다.
  * null 을 전달하면 해제(앱 언마운트 시 사용).
@@ -245,6 +258,10 @@ export function notifyInterruptionEnd(): void {
     return;
   }
   if (!bridge) return;
+  if (!autoResumeAfterInterruption) {
+    logger.info("[audioSession] interruption end → auto-resume disabled by user setting, skipping resume");
+    return;
+  }
   try {
     if (!bridge.isRunning()) {
       suppressUserToggle++;
@@ -288,6 +305,7 @@ export function _resetAudioSessionForTests() {
   pausedByInterruption = false;
   userToggledDuringInterruption = false;
   androidProbe = null;
+  autoResumeAfterInterruption = true;
 }
 
 export function _audioSessionDebugState() {
