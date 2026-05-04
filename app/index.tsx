@@ -70,6 +70,13 @@ import { VoiceAssistantButton } from "@/components/VoiceAssistantButton";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { make_styles } from "./index.styles";
 import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore } from "./index.helpers";
+import {
+  type ActiveModal,
+  type SgTgState,
+  deriveModalFlags,
+  openTuningGuideFromSignalGen,
+  closeTuningGuide,
+} from "@/lib/modal-routing";
 import { useAudioPlayers } from "@/hooks/useAudioPlayers";
 import { useNoteSamples } from "@/hooks/useNoteSamples";
 import { useBarConfig, useDialConfig } from "@/hooks/useBarDialConfig";
@@ -117,21 +124,6 @@ import {
   type PracticeRoom,
 } from "@/lib/practice-room";
 
-
-type ActiveModal =
-  | "settings"
-  | "menu"
-  | "signalGen"
-  | "tuningGuide"
-  | "practiceBook"
-  | "workUp"
-  | "onboarding"
-  | "moreMenu"
-  | "drumKit"
-  | "scheduledStart"
-  | "fadeOut"
-  | "tempoQuiz"
-  | null;
 
 export default function MetronomeScreen() {
   const insets = useSafeAreaInsets();
@@ -238,18 +230,20 @@ export default function MetronomeScreen() {
   const sampleVolumeRef = useRef(0.8);
   // 단일 활성 모달 상태 머신: null = 모달 없음. openExclusive로만 전환해 mutual exclusion 보장.
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
-  const showSettings     = activeModal === "settings";
-  const showMenu         = activeModal === "menu";
-  const showSignalGen    = activeModal === "signalGen";
-  const showTuningGuide  = activeModal === "tuningGuide";
-  const showPracticeBook = activeModal === "practiceBook";
-  const showWorkUp       = activeModal === "workUp";
-  const showOnboarding   = activeModal === "onboarding";
-  const showMoreMenu     = activeModal === "moreMenu";
-  const showDrumKit      = activeModal === "drumKit";
-  const showScheduledStart = activeModal === "scheduledStart";
-  const showFadeOut      = activeModal === "fadeOut";
-  const showTempoQuiz    = activeModal === "tempoQuiz";
+  const {
+    showSettings,
+    showMenu,
+    showSignalGen,
+    showTuningGuide,
+    showPracticeBook,
+    showWorkUp,
+    showOnboarding,
+    showMoreMenu,
+    showDrumKit,
+    showScheduledStart,
+    showFadeOut,
+    showTempoQuiz,
+  } = deriveModalFlags(activeModal);
   const [backgroundPlay, setBackgroundPlay] = useState(false);
   const [soundSet, setSoundSet] = useState<SoundSet>("classic");
   const [layerSoundSets, setLayerSoundSets] = useState<Record<number, SoundSet>>({});
@@ -4349,11 +4343,15 @@ export default function MetronomeScreen() {
         androidMicFrequency={androidMicFreq}
         androidMicNote={androidMicNote}
         onOpenTuningGuide={(currentFreq, onSelectFreq) => {
-          // activeModal 상태 머신: SignalGen → TuningGuide를 단일 렌더에서 전환.
-          // TG 종료 시 자동 재오픈하기 위해 플래그를 세팅.
+          // activeModal 상태 머신: SignalGen → TuningGuide 전환.
+          // openTuningGuideFromSignalGen 이 activeModal + 재오픈 플래그를 원자적으로 결정한다.
           tuningGuideOnSelectRef.current = onSelectFreq;
-          reopenSignalGenAfterTuningGuideRef.current = true;
-          setActiveModal("tuningGuide");
+          const next = openTuningGuideFromSignalGen({
+            activeModal,
+            reopenSignalGenAfterTuningGuide: reopenSignalGenAfterTuningGuideRef.current,
+          } satisfies SgTgState);
+          reopenSignalGenAfterTuningGuideRef.current = next.reopenSignalGenAfterTuningGuide;
+          setActiveModal(next.activeModal);
         }}
       />
       {androidMicActive && Platform.OS === "android" && (
@@ -4388,13 +4386,13 @@ export default function MetronomeScreen() {
         visible={showTuningGuide}
         onClose={() => {
           tuningGuideOnSelectRef.current = null;
-          // SignalGen에서 진입한 흐름이면 TG 종료 후 SignalGen을 재오픈한다.
-          if (reopenSignalGenAfterTuningGuideRef.current) {
-            reopenSignalGenAfterTuningGuideRef.current = false;
-            setActiveModal("signalGen");
-          } else {
-            setActiveModal(null);
-          }
+          // closeTuningGuide 가 재오픈 플래그를 보고 다음 activeModal 을 결정한다.
+          const next = closeTuningGuide({
+            activeModal,
+            reopenSignalGenAfterTuningGuide: reopenSignalGenAfterTuningGuideRef.current,
+          } satisfies SgTgState);
+          reopenSignalGenAfterTuningGuideRef.current = next.reopenSignalGenAfterTuningGuide;
+          setActiveModal(next.activeModal);
         }}
         onSelectFreq={(freq) => {
           // SignalGen이 닫혀 있어도 콜백 자체는 호출한다.
@@ -4402,12 +4400,12 @@ export default function MetronomeScreen() {
             tuningGuideOnSelectRef.current(freq);
           }
           tuningGuideOnSelectRef.current = null;
-          if (reopenSignalGenAfterTuningGuideRef.current) {
-            reopenSignalGenAfterTuningGuideRef.current = false;
-            setActiveModal("signalGen");
-          } else {
-            setActiveModal(null);
-          }
+          const next = closeTuningGuide({
+            activeModal,
+            reopenSignalGenAfterTuningGuide: reopenSignalGenAfterTuningGuideRef.current,
+          } satisfies SgTgState);
+          reopenSignalGenAfterTuningGuideRef.current = next.reopenSignalGenAfterTuningGuide;
+          setActiveModal(next.activeModal);
         }}
         lang={language as "ko" | "en"}
         accentColor={C.accent}
