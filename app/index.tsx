@@ -2675,6 +2675,10 @@ export default function MetronomeScreen() {
         }
         if (elapsed === sess.N) {
           fadeOutMutedRef.current = true;
+          // pre-rendered loop (webRenderedLoopRef / renderedPlayerRef)는
+          // fadeOutMutedRef를 확인하지 않으므로 반드시 명시적으로 중단해야 한다.
+          // stopRenderedAudio()는 loop 정지 + engine.setPreRenderedAudio(false) 포함.
+          stopRenderedAudio();
           setFadeOutPhase("muted");
           setFadeOutMeasureInPhase(0);
         } else if (elapsed === sess.N + sess.M) {
