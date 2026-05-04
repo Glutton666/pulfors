@@ -92,6 +92,9 @@ const DrumPad = React.memo(function DrumPad({
   const playerRef = useRef(player);
   useEffect(() => { playerRef.current = player; }, [player]);
   const lastSourceRef = useRef<string>("");
+  const [pressed, setPressed] = useState(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longFiredRef = useRef(false);
 
   useEffect(() => {
     if (!config) { lastSourceRef.current = ""; return; }
@@ -105,31 +108,57 @@ const DrumPad = React.memo(function DrumPad({
     try { player.replace(src); } catch {}
   }, [config, player]);
 
-  const handlePress = useCallback(() => {
-    if (!config) { onTap(index); return; }
+  const triggerSound = useCallback(() => {
+    if (!config) return;
     try { player.seekTo(0); } catch {}
     safePlay(player, "drumKit.pad");
-    onTap(index);
-  }, [config, player, index, onTap]);
+  }, [config, player]);
+
+  const clearLongTimer = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
+  const touchHandlers = useMemo(() => ({
+    onStartShouldSetResponder: () => true,
+    onResponderGrant: () => {
+      setPressed(true);
+      longFiredRef.current = false;
+      triggerSound();
+      onTap(index);
+      longPressTimer.current = setTimeout(() => {
+        longFiredRef.current = true;
+        onLongPress(index);
+      }, 400);
+    },
+    onResponderRelease: () => {
+      setPressed(false);
+      clearLongTimer();
+    },
+    onResponderTerminate: () => {
+      setPressed(false);
+      clearLongTimer();
+    },
+  }), [triggerSound, onTap, onLongPress, index, clearLongTimer]);
 
   const label = !config ? "" : config.source.type === "builtin"
     ? `${config.source.setName.slice(0, 4)}/${config.source.role[0]}`
     : (config.source.name || (config.source.type === "recording" ? "REC" : "FILE"));
 
   return (
-    <Pressable
-      onPress={handlePress}
-      onLongPress={() => onLongPress(index)}
-      delayLongPress={400}
-      style={({ pressed }) => [
+    <View
+      {...touchHandlers}
+      style={[
         styles.pad,
         {
           width: size, height: size,
           backgroundColor: flashing ? accent + "55" : bgColor,
           borderColor: flashing ? accent : borderColor,
+          opacity: pressed ? 0.7 : 1,
         },
         !config && { borderStyle: "dashed" as const },
-        pressed && { opacity: 0.7 },
       ]}
       testID={`drum-pad-${index}`}
     >
@@ -148,7 +177,7 @@ const DrumPad = React.memo(function DrumPad({
           )}
         </>
       )}
-    </Pressable>
+    </View>
   );
 });
 
