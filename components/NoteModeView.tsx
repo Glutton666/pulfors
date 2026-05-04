@@ -8,9 +8,9 @@ import {
   Alert,
   Platform,
   Image,
-  Modal,
   useWindowDimensions,
 } from "react-native";
+import { AnimatedModal } from "@/components/AnimatedModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
@@ -402,10 +402,9 @@ export function NoteModeView({
   );
 
   const renderAssignModal = () => (
-    <Modal
+    <AnimatedModal
       visible={assignSlot !== null}
       transparent
-      animationType="fade"
       onRequestClose={() => setAssignSlot(null)}
     >
       <Pressable style={styles.modalBackdrop} onPress={() => setAssignSlot(null)}>
@@ -469,7 +468,7 @@ export function NoteModeView({
           )}
         </Pressable>
       </Pressable>
-    </Modal>
+    </AnimatedModal>
   );
 
   const playModes: Array<"once" | "loop" | "random"> = ["once", "loop", "random"];

@@ -1,5 +1,6 @@
 import React from "react";
-import { Modal, Pressable, View, Text, StyleSheet, Platform } from "react-native";
+import { Pressable, View, Text, StyleSheet, Platform } from "react-native";
+import { AnimatedModal } from "@/components/AnimatedModal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -25,7 +26,7 @@ export function MoreMenuModal({ visible, onClose, onScheduledStart, onFadeOut, o
   const styles = makeStyles(C);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <AnimatedModal visible={visible} transparent onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <View
           style={[
@@ -106,7 +107,7 @@ export function MoreMenuModal({ visible, onClose, onScheduledStart, onFadeOut, o
           </Pressable>
         </View>
       </Pressable>
-    </Modal>
+    </AnimatedModal>
   );
 }
 

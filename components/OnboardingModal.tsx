@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   Pressable,
   TextInput,
   Platform,
@@ -13,6 +12,7 @@ import {
   useWindowDimensions,
   PanResponder,
 } from "react-native";
+import { AnimatedModal } from "@/components/AnimatedModal";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
@@ -1030,7 +1030,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   };
 
   return (
-    <Modal visible={visible} animationType="fade" transparent={false}>
+    <AnimatedModal visible={visible} transparent={false}>
       <View
         style={[
           styles.container,
@@ -1077,7 +1077,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           </View>
         )}
       </View>
-    </Modal>
+    </AnimatedModal>
   );
 }
 

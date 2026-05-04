@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   Platform,
-  Modal,
   TextInput,
   PanResponder,
   ScrollView,
@@ -13,6 +12,7 @@ import {
   useWindowDimensions,
   Alert,
 } from "react-native";
+import { AnimatedModal } from "@/components/AnimatedModal";
 import { logger } from "@/lib/logger";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -381,7 +381,7 @@ export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentC
   }, [onClose]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose} statusBarTranslucent>
+    <AnimatedModal visible={visible} transparent onRequestClose={handleClose} statusBarTranslucent>
       <View style={tgStyles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
         <View style={tgStyles.card}>
@@ -474,7 +474,7 @@ export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentC
           </ScrollView>
         </View>
       </View>
-    </Modal>
+    </AnimatedModal>
   );
 }
 
@@ -1256,10 +1256,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   }, [frequency]);
 
   return (
-    <Modal
+    <AnimatedModal
       visible={visible}
       transparent
-      animationType="fade"
       onRequestClose={handleClose}
       statusBarTranslucent
     >
@@ -1672,7 +1671,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 
         </View>
       </View>
-    </Modal>
+    </AnimatedModal>
   );
 }
 

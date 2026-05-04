@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Modal, Pressable, View, Text, TextInput, StyleSheet, Platform, ScrollView } from "react-native";
+import { Pressable, View, Text, TextInput, StyleSheet, Platform, ScrollView } from "react-native";
+import { AnimatedModal } from "@/components/AnimatedModal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -85,7 +86,7 @@ export function TempoQuizModal({
   }, [startNew]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
+    <AnimatedModal visible={visible} transparent onRequestClose={handleClose}>
       <Pressable style={styles.overlay} onPress={handleClose}>
         <View
           style={[
@@ -210,7 +211,7 @@ export function TempoQuizModal({
           </ScrollView>
         </View>
       </Pressable>
-    </Modal>
+    </AnimatedModal>
   );
 }
 

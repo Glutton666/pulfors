@@ -14,6 +14,7 @@ import {
   Image,
   useWindowDimensions,
 } from "react-native";
+import { AnimatedModal } from "@/components/AnimatedModal";
 import { logger } from "@/lib/logger";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -685,7 +686,7 @@ export function WorkUpOverviewModal({
   );
 
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose} statusBarTranslucent>
+    <AnimatedModal visible={visible} transparent onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={s.overlay} onPress={onClose}>
         <ScrollView
           style={{ marginTop: (insets.top || webTopInset) + 44 }}
@@ -924,7 +925,7 @@ export function WorkUpOverviewModal({
       </Modal>
 
       {/* ── Yearly Summary Modal ── */}
-      <Modal visible={showYearlySummary} animationType="fade" transparent onRequestClose={() => setShowYearlySummary(false)} statusBarTranslucent>
+      <AnimatedModal visible={showYearlySummary} transparent onRequestClose={() => setShowYearlySummary(false)} statusBarTranslucent>
         <Pressable style={yearStyles.overlay} onPress={() => setShowYearlySummary(false)}>
           <Pressable style={[yearStyles.card, { backgroundColor: C.surface }]} onPress={(e) => e.stopPropagation()}>
             <View style={yearStyles.header}>
@@ -958,8 +959,8 @@ export function WorkUpOverviewModal({
             <Text style={yearStyles.footerText}>{t("workUp", "keepUp")}</Text>
           </Pressable>
         </Pressable>
-      </Modal>
-    </Modal>
+      </AnimatedModal>
+    </AnimatedModal>
   );
 }
 

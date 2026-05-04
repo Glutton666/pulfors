@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Modal, Pressable, View, Text, TextInput, StyleSheet, Platform, Switch, ScrollView } from "react-native";
+import { Pressable, View, Text, TextInput, StyleSheet, Platform, Switch, ScrollView } from "react-native";
+import { AnimatedModal } from "@/components/AnimatedModal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -86,7 +87,7 @@ export function FadeOutModal({ visible, onClose, onStart }: FadeOutModalProps) {
   }, [nText, mText, kText, parseField]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <AnimatedModal visible={visible} transparent onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <View
           style={[
@@ -163,7 +164,7 @@ export function FadeOutModal({ visible, onClose, onStart }: FadeOutModalProps) {
           </ScrollView>
         </View>
       </Pressable>
-    </Modal>
+    </AnimatedModal>
   );
 }
 

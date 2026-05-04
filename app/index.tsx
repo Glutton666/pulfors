@@ -6,12 +6,12 @@ import {
   StyleSheet,
   Platform,
   Pressable,
-  Modal,
   Alert,
   useWindowDimensions,
   BackHandler,
   AppState,
 } from "react-native";
+import { AnimatedModal } from "@/components/AnimatedModal";
 import * as ImagePicker from "expo-image-picker";
 import { ensurePermission, tryRecoverPermissionActions, hasAnyPendingPermissionAction, runPermissionRecoveryLoop } from "@/lib/permissions";
 import * as Linking from "expo-linking";
@@ -4083,70 +4083,68 @@ export default function MetronomeScreen() {
       </Pressable>
       )}
 
-      {showMenu && (
-        <Modal transparent animationType="fade" onRequestClose={() => setActiveModal(null)}>
-          <Pressable style={styles.menuOverlay} onPress={() => setActiveModal(null)}>
-            <View style={[styles.menuDropdown, { backgroundColor: C.surface, borderColor: C.border }, isLandscape ? { left: S.ms(20, 0.3), right: "auto" as any, top: (insets.top || webTopInset) + S.ms(40, 0.3) } : { top: (insets.top || webTopInset) + 52 }]}>
-              <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-                onPress={() => openExclusive("settings")}
-                accessibilityRole="menuitem"
-                accessibilityLabel={t("a11y", "menuSettings")}
-              >
-                <Ionicons name="settings-outline" size={S.ms(18, 0.3)} color={C.textSecondary} />
-                <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuSettings")}</Text>
-              </Pressable>
-              <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
-              <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-                onPress={() => {
-                  if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
-                  openExclusive("signalGen");
-                }}
-                accessibilityRole="menuitem"
-                accessibilityLabel={t("a11y", "menuSignalGenerator")}
-              >
-                <MaterialCommunityIcons name="waveform" size={S.ms(18, 0.3)} color={C.accent} />
-                <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuSignalGenerator")}</Text>
-              </Pressable>
-              <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
-              <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-                onPress={() => openExclusive("workUp")}
-                accessibilityRole="menuitem"
-                accessibilityLabel={t("a11y", "menuWorkUp")}
-              >
-                <MaterialCommunityIcons name="chart-line" size={S.ms(18, 0.3)} color={C.accent} />
-                <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuWorkUp")}</Text>
-              </Pressable>
-              <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
-              <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-                onPress={() => {
-                  if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
-                  openExclusive("practiceBook");
-                }}
-                accessibilityRole="menuitem"
-                accessibilityLabel={t("a11y", "menuPracticeBook")}
-              >
-                <MaterialCommunityIcons name="notebook-outline" size={S.ms(18, 0.3)} color={C.accent} />
-                <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuPracticeNote")}</Text>
-              </Pressable>
-              <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
-              <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-                onPress={() => openExclusive("moreMenu")}
-                accessibilityRole="menuitem"
-                accessibilityLabel={t("main", "menuMore")}
-                testID="menu-more"
-              >
-                <Ionicons name="ellipsis-horizontal" size={S.ms(18, 0.3)} color={C.accent} />
-                <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuMore")}</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Modal>
-      )}
+      <AnimatedModal transparent visible={showMenu} onRequestClose={() => setActiveModal(null)}>
+        <Pressable style={styles.menuOverlay} onPress={() => setActiveModal(null)}>
+          <View style={[styles.menuDropdown, { backgroundColor: C.surface, borderColor: C.border }, isLandscape ? { left: S.ms(20, 0.3), right: "auto" as any, top: (insets.top || webTopInset) + S.ms(40, 0.3) } : { top: (insets.top || webTopInset) + 52 }]}>
+            <Pressable
+              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+              onPress={() => openExclusive("settings")}
+              accessibilityRole="menuitem"
+              accessibilityLabel={t("a11y", "menuSettings")}
+            >
+              <Ionicons name="settings-outline" size={S.ms(18, 0.3)} color={C.textSecondary} />
+              <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuSettings")}</Text>
+            </Pressable>
+            <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
+            <Pressable
+              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+              onPress={() => {
+                if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
+                openExclusive("signalGen");
+              }}
+              accessibilityRole="menuitem"
+              accessibilityLabel={t("a11y", "menuSignalGenerator")}
+            >
+              <MaterialCommunityIcons name="waveform" size={S.ms(18, 0.3)} color={C.accent} />
+              <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuSignalGenerator")}</Text>
+            </Pressable>
+            <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
+            <Pressable
+              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+              onPress={() => openExclusive("workUp")}
+              accessibilityRole="menuitem"
+              accessibilityLabel={t("a11y", "menuWorkUp")}
+            >
+              <MaterialCommunityIcons name="chart-line" size={S.ms(18, 0.3)} color={C.accent} />
+              <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuWorkUp")}</Text>
+            </Pressable>
+            <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
+            <Pressable
+              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+              onPress={() => {
+                if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
+                openExclusive("practiceBook");
+              }}
+              accessibilityRole="menuitem"
+              accessibilityLabel={t("a11y", "menuPracticeBook")}
+            >
+              <MaterialCommunityIcons name="notebook-outline" size={S.ms(18, 0.3)} color={C.accent} />
+              <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuPracticeNote")}</Text>
+            </Pressable>
+            <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
+            <Pressable
+              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+              onPress={() => openExclusive("moreMenu")}
+              accessibilityRole="menuitem"
+              accessibilityLabel={t("main", "menuMore")}
+              testID="menu-more"
+            >
+              <Ionicons name="ellipsis-horizontal" size={S.ms(18, 0.3)} color={C.accent} />
+              <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuMore")}</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </AnimatedModal>
 
       <MoreMenuModal
         visible={showMoreMenu}
@@ -4286,7 +4284,7 @@ export default function MetronomeScreen() {
         />
       )}
 
-      <Modal visible={landscapeImageModalVisible} transparent animationType="fade" onRequestClose={() => setLandscapeImageModalVisible(false)}>
+      <AnimatedModal visible={landscapeImageModalVisible} transparent onRequestClose={() => setLandscapeImageModalVisible(false)}>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center" as const, alignItems: "center" as const }} onPress={() => setLandscapeImageModalVisible(false)}>
           <View style={{ backgroundColor: C.background, borderRadius: 16, padding: 24, gap: 12, minWidth: 220 }} onStartShouldSetResponder={() => true}>
             <Text style={{ fontFamily: "SpaceGrotesk_600SemiBold", fontSize: 16, color: C.text, textAlign: "center" as const }}>{t("settings", "hubImages")}</Text>
@@ -4302,7 +4300,7 @@ export default function MetronomeScreen() {
             )}
           </View>
         </Pressable>
-      </Modal>
+      </AnimatedModal>
 
       {/* SignalGeneratorModal은 항상 마운트 상태로 유지한다.
           TuningGuide로 전환 시 SignalGen을 visible=false로 잠시 숨긴 뒤

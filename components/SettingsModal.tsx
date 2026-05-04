@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   Pressable,
   Platform,
   PanResponder,
@@ -16,6 +15,7 @@ import {
   ActivityIndicator,
   Animated,
 } from "react-native";
+import { AnimatedModal } from "@/components/AnimatedModal";
 import { logger } from "@/lib/logger";
 import { make_styles, make_csStyles } from "./SettingsModal.styles";
 import { AssistantShortcutsGuide } from "@/components/AssistantShortcutsGuide";
@@ -2204,9 +2204,8 @@ export function SettingsModal({
   };
 
   return (
-    <Modal
+    <AnimatedModal
       visible={visible}
-      animationType="fade"
       transparent
       onRequestClose={onClose}
       statusBarTranslucent
@@ -2260,9 +2259,8 @@ export function SettingsModal({
         </ScrollView>
       </Pressable>
 
-      <Modal
+      <AnimatedModal
         visible={showLoggingInfo}
-        animationType="fade"
         transparent
         onRequestClose={() => setShowLoggingInfo(false)}
         statusBarTranslucent
@@ -2317,8 +2315,8 @@ export function SettingsModal({
             </Pressable>
           </View>
         </Pressable>
-      </Modal>
-    </Modal>
+      </AnimatedModal>
+    </AnimatedModal>
   );
 }
 

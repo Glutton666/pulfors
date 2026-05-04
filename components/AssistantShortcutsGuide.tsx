@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  Modal,
   View,
   Text,
   ScrollView,
@@ -8,6 +7,7 @@ import {
   StyleSheet,
   Alert,
 } from "react-native";
+import { AnimatedModal } from "@/components/AnimatedModal";
 import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -111,7 +111,7 @@ export function AssistantShortcutsGuide({ visible, onClose }: Props) {
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <AnimatedModal visible={visible} transparent onRequestClose={onClose}>
       <Pressable style={[s.overlay, { backgroundColor: "rgba(0,0,0,0.6)" }]} onPress={onClose}>
         <Pressable
           style={[s.sheet, { backgroundColor: C.surface, borderColor: C.border }]}
@@ -184,7 +184,7 @@ export function AssistantShortcutsGuide({ visible, onClose }: Props) {
           </ScrollView>
         </Pressable>
       </Pressable>
-    </Modal>
+    </AnimatedModal>
   );
 }
 

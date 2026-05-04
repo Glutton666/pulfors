@@ -5,12 +5,12 @@ import {
   StyleSheet,
   Pressable,
   Platform,
-  Modal,
   Alert,
   PanResponder,
   ActivityIndicator,
   TextInput,
 } from "react-native";
+import { AnimatedModal } from "@/components/AnimatedModal";
 import { ensurePermission } from "@/lib/permissions";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -607,7 +607,7 @@ export function NoteRecorderModal({
   const trimDuration = ((trimEnd - trimStart) * audioDuration).toFixed(2);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
+    <AnimatedModal visible={visible} transparent onRequestClose={handleClose}>
       <Pressable style={styles.overlay} onPress={handleClose}>
         <Pressable style={[styles.container, { backgroundColor: C.surface }]} onPress={(e) => e.stopPropagation()}>
           <View style={styles.header}>
@@ -873,7 +873,7 @@ export function NoteRecorderModal({
           )}
         </Pressable>
       </Pressable>
-    </Modal>
+    </AnimatedModal>
   );
 }
 

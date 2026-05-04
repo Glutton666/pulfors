@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
-  Modal,
   Pressable,
   View,
   Text,
@@ -12,6 +11,7 @@ import {
   type NativeSyntheticEvent,
   type NativeTouchEvent,
 } from "react-native";
+import { AnimatedModal } from "@/components/AnimatedModal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
@@ -327,7 +327,7 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
   }, [S]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <AnimatedModal visible={visible} transparent onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable
           style={[
@@ -380,10 +380,9 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
         </Pressable>
       </Pressable>
 
-      <Modal
+      <AnimatedModal
         visible={assignSlot !== null && !showBuiltinPicker}
         transparent
-        animationType="fade"
         onRequestClose={() => setAssignSlot(null)}
       >
         <Pressable style={styles.assignBackdrop} onPress={() => !isRecordingMic && setAssignSlot(null)}>
@@ -440,12 +439,11 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
             )}
           </Pressable>
         </Pressable>
-      </Modal>
+      </AnimatedModal>
 
-      <Modal
+      <AnimatedModal
         visible={showBuiltinPicker}
         transparent
-        animationType="fade"
         onRequestClose={() => setShowBuiltinPicker(false)}
       >
         <Pressable style={styles.assignBackdrop} onPress={() => setShowBuiltinPicker(false)}>
@@ -468,8 +466,8 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
             />
           </Pressable>
         </Pressable>
-      </Modal>
-    </Modal>
+      </AnimatedModal>
+    </AnimatedModal>
   );
 }
 

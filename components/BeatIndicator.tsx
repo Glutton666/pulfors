@@ -7,7 +7,6 @@ import {
   PanResponder,
   Pressable,
   ScrollView,
-  Modal,
   TextInput,
   Image,
   ActivityIndicator,
@@ -16,6 +15,7 @@ import {
   type TextStyle,
   type ImageStyle,
 } from "react-native";
+import { AnimatedModal } from "@/components/AnimatedModal";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   useAnimatedStyle,
@@ -2070,7 +2070,7 @@ export function BeatIndicator({
             )}
           </View>
 
-          <Modal visible={barTimerEditing} transparent animationType="fade" onRequestClose={() => setBarTimerEditing(false)}>
+          <AnimatedModal visible={barTimerEditing} transparent onRequestClose={() => setBarTimerEditing(false)}>
             <View style={styles.barTimerOverlay}>
               <Pressable style={StyleSheet.absoluteFill} onPress={() => setBarTimerEditing(false)} />
               <View style={{ alignItems: "center", gap: 10 }}>
@@ -2109,7 +2109,7 @@ export function BeatIndicator({
                 </View>
               </View>
             </View>
-          </Modal>
+          </AnimatedModal>
 
         </View>
       );
@@ -2402,10 +2402,9 @@ export function BeatIndicator({
           </View>
         </View>
 
-        <Modal
+        <AnimatedModal
           visible={barTimerEditing}
           transparent
-          animationType="fade"
           onRequestClose={() => setBarTimerEditing(false)}
         >
           <View style={styles.barTimerOverlay}>
@@ -2449,12 +2448,11 @@ export function BeatIndicator({
               </View>
             </View>
           </View>
-        </Modal>
+        </AnimatedModal>
 
-        <Modal
+        <AnimatedModal
           visible={repeatModalBeat !== null}
           transparent
-          animationType="fade"
           onRequestClose={() => setRepeatModalBeat(null)}
         >
           <View style={styles.barTimerOverlay}>
@@ -2675,7 +2673,7 @@ export function BeatIndicator({
               </View>
             </View>
           </View>
-        </Modal>
+        </AnimatedModal>
 
       </View>
       {pillDragGhost}
