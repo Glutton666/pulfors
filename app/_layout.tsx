@@ -16,7 +16,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
-import { VoiceAssistantProvider } from "@/contexts/VoiceAssistantContext";
+import { DeepLinkProvider } from "@/contexts/DeepLinkContext";
 import { initErrorTracking } from "@/lib/error-tracking";
 import { StorageErrorAlert } from "@/components/StorageErrorAlert";
 import { rollbackPendingRestoreIfAny } from "@/lib/backup/full";
@@ -156,7 +156,7 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <LanguageProvider>
-            <VoiceAssistantProvider>
+            <DeepLinkProvider>
               <GestureHandlerRootView style={{ flex: 1 }}>
                 <KeyboardProvider>
                   <StorageErrorAlert />
@@ -166,7 +166,7 @@ export default function RootLayout() {
                   </Stack>
                 </KeyboardProvider>
               </GestureHandlerRootView>
-            </VoiceAssistantProvider>
+            </DeepLinkProvider>
           </LanguageProvider>
         </ThemeProvider>
       </QueryClientProvider>

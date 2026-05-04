@@ -18,8 +18,7 @@ import {
 } from "react-native";
 import { logger } from "@/lib/logger";
 import { make_styles, make_csStyles } from "./SettingsModal.styles";
-import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
-import { VoiceCommandsModal } from "@/components/VoiceCommandsModal";
+import { AssistantShortcutsGuide } from "@/components/AssistantShortcutsGuide";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -158,10 +157,7 @@ export function SettingsModal({
   const [showCustomPicker, setShowCustomPicker] = useState(themeColor === "custom");
   const [hexInput, setHexInput] = useState(customHex);
   const [localUsername, setLocalUsername] = useState(username);
-  const voice = useVoiceAssistant();
-  const [showVoiceCommands, setShowVoiceCommands] = useState(false);
-  const [localNickname, setLocalNickname] = useState(voice.nickname);
-  useEffect(() => { setLocalNickname(voice.nickname); }, [voice.nickname]);
+  const [showAssistantGuide, setShowAssistantGuide] = useState(false);
   const hueTrackRef = useRef<View>(null);
   const hueTrackWidthRef = useRef(0);
   const trackWidthRef = useRef(0);
@@ -2144,76 +2140,31 @@ export function SettingsModal({
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="mic-outline" size={S.ms(18, 0.4)} color={C.accent} />
-          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("voice", "title")}</Text>
+          <Ionicons name="link-outline" size={S.ms(18, 0.4)} color={C.accent} />
+          <Text style={[styles.sectionLabel, { color: C.text }]}>
+            {language === "ko" ? "어시스턴트 연동" : "Assistant Integration"}
+          </Text>
         </View>
-        <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingVertical: Spacing.sm }}>
-          <View style={{ flex: 1, paddingRight: 12 }}>
-            <Text style={{ color: C.text, fontSize: 14, fontFamily: "Inter_500Medium" }}>{t("voice", "enable")}</Text>
-            <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "Inter_400Regular", marginTop: Spacing.xxs }}>
-              {voice.isSupported ? t("voice", "enableHint") : t("voice", "notSupported")}
-            </Text>
-          </View>
-          <Switch
-            value={voice.enabled}
-            onValueChange={voice.setEnabled}
-            disabled={!voice.isSupported}
-            trackColor={{ false: C.border, true: C.accent }}
-          />
-        </View>
-
-        {voice.enabled && voice.isSupported && (
-          <>
-            <View style={{ marginTop: 12 }}>
-              <Text style={{ color: C.text, fontSize: 13, fontFamily: "Inter_500Medium" }}>{t("voice", "nickname")}</Text>
-              <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "Inter_400Regular", marginTop: Spacing.xxs, marginBottom: 6 }}>
-                {t("voice", "nicknameHint")}
-              </Text>
-              <TextInput
-                style={[styles.usernameInput, { borderColor: C.accentMuted }]}
-                value={localNickname}
-                onChangeText={(text) => {
-                  setLocalNickname(text);
-                  voice.setNickname(text);
-                }}
-                placeholder={t("voice", "nicknamePlaceholder")}
-                placeholderTextColor={C.textTertiary}
-                maxLength={20}
-                testID="voice-nickname-input"
-              />
-            </View>
-
-            <View style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingVertical: Spacing.sm, marginTop: Spacing.xs }}>
-              <View style={{ flex: 1, paddingRight: 12 }}>
-                <Text style={{ color: C.text, fontSize: 14, fontFamily: "Inter_500Medium" }}>{t("voice", "strict")}</Text>
-                <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "Inter_400Regular", marginTop: Spacing.xxs }}>
-                  {t("voice", "strictHint")}
-                </Text>
-              </View>
-              <Switch
-                value={voice.strictNickname}
-                onValueChange={voice.setStrictNickname}
-                trackColor={{ false: C.border, true: C.accent }}
-              />
-            </View>
-
-            <Pressable
-              onPress={() => setShowVoiceCommands(true)}
-              style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.overlay10, marginTop: Spacing.xs }}
-              testID="voice-show-commands"
-            >
-              <Text style={{ color: C.text, fontSize: 14, fontFamily: "Inter_500Medium" }}>{t("voice", "showCommands")}</Text>
-              <Ionicons name="chevron-forward" size={18} color={C.textSecondary} />
-            </Pressable>
-          </>
-        )}
+        <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "Inter_400Regular", marginBottom: Spacing.sm }}>
+          {language === "ko"
+            ? "Siri 또는 Google 어시스턴트로 메트로놈을 제어할 수 있습니다."
+            : "Control the metronome with Siri or Google Assistant."}
+        </Text>
+        <Pressable
+          onPress={() => setShowAssistantGuide(true)}
+          style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.overlay10 }}
+          testID="assistant-shortcuts-guide"
+        >
+          <Text style={{ color: C.text, fontSize: 14, fontFamily: "Inter_500Medium" }}>
+            {language === "ko" ? "단축어 설정 방법 보기" : "How to set up shortcuts"}
+          </Text>
+          <Ionicons name="chevron-forward" size={18} color={C.textSecondary} />
+        </Pressable>
       </View>
 
-      <VoiceCommandsModal
-        visible={showVoiceCommands}
-        onClose={() => setShowVoiceCommands(false)}
-        nickname={voice.nickname}
-        strictNickname={voice.strictNickname}
+      <AssistantShortcutsGuide
+        visible={showAssistantGuide}
+        onClose={() => setShowAssistantGuide(false)}
       />
     </>
   );

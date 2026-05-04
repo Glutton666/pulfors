@@ -34,6 +34,13 @@
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [{ "scheme": "pulfors" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0D1117",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

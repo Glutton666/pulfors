@@ -26,8 +26,8 @@ import type { FlashMode, HapticMode } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LANGUAGE_OPTIONS, type Language } from "@/lib/i18n";
-import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { Switch } from "react-native";
+import { AssistantShortcutsGuide } from "@/components/AssistantShortcutsGuide";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -216,7 +216,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   const styles = make_styles(C);
   const cpStyles = make_cpStyles(C);
   const { t, language, setLanguage } = useLanguage();
-  const voice = useVoiceAssistant();
+  const [showAssistantGuide, setShowAssistantGuide] = useState(false);
   const insets = useSafeAreaInsets();
   const { width: winW, height: winH } = useWindowDimensions();
   const isLandscape = winW > winH;
@@ -952,48 +952,36 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   };
 
   const renderVoiceStep = () => {
+    const isKo = language === "ko";
     const content = (
       <>
         <View style={{
           width: "100%", marginTop: Spacing.sm, padding: 16, borderRadius: 12,
           backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
         }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={{ color: C.text, fontSize: 15, fontWeight: "600" }}>{t("onboarding", "voiceEnable")}</Text>
-              <Text style={{ color: C.textSecondary, fontSize: FontSize.small, marginTop: Spacing.xs }}>
-                {voice.isSupported ? t("voice", "enableHint") : t("onboarding", "voiceNotSupportedShort")}
-              </Text>
-            </View>
-            <Switch
-              value={voice.enabled}
-              onValueChange={voice.setEnabled}
-              disabled={!voice.isSupported}
-              trackColor={{ false: C.border, true: accentColor }}
-              testID="onboarding-voice-toggle"
-            />
-          </View>
+          <Text style={{ color: C.textSecondary, fontSize: FontSize.small, marginBottom: Spacing.sm }}>
+            {isKo
+              ? "Siri 또는 Google 어시스턴트에 단축어를 등록하면 음성으로 메트로놈을 제어할 수 있습니다."
+              : "Register shortcuts with Siri or Google Assistant to control the metronome by voice."}
+          </Text>
+          <Pressable
+            onPress={() => setShowAssistantGuide(true)}
+            style={{
+              flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+              paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.overlay10,
+            }}
+            testID="onboarding-assistant-guide"
+          >
+            <Text style={{ color: C.text, fontSize: 14, fontFamily: "Inter_500Medium" }}>
+              {isKo ? "단축어 설정 방법 보기" : "How to set up shortcuts"}
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={C.textSecondary} />
+          </Pressable>
         </View>
-
-        {voice.enabled && voice.isSupported && (
-          <View style={{ width: "100%", marginTop: 12 }}>
-            <Text style={{ color: C.text, fontSize: 13, fontWeight: "600", marginBottom: Spacing.xs }}>
-              {t("onboarding", "voiceNicknameLabel")}
-            </Text>
-            <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, marginBottom: Spacing.sm }}>
-              {t("onboarding", "voiceNicknameHint")}
-            </Text>
-            <TextInput
-              style={[styles.textInput, isLandscape && { height: 40 }, { borderColor: accentColor }]}
-              value={voice.nickname}
-              onChangeText={voice.setNickname}
-              placeholder={t("voice", "nicknamePlaceholder")}
-              placeholderTextColor={C.textTertiary}
-              maxLength={20}
-              testID="onboarding-voice-nickname"
-            />
-          </View>
-        )}
+        <AssistantShortcutsGuide
+          visible={showAssistantGuide}
+          onClose={() => setShowAssistantGuide(false)}
+        />
       </>
     );
 
@@ -1001,7 +989,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       return (
         <View style={styles.landRow}>
           {renderStepHeader(
-            <Ionicons name="mic-outline" size={36} color={accentColor} />,
+            <Ionicons name="link-outline" size={36} color={accentColor} />,
             "voiceTitle", "voiceSubtitle"
           )}
           <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -1012,7 +1000,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
     }
     return (
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.stepContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <Ionicons name="mic-outline" size={40} color={accentColor} />
+        <Ionicons name="link-outline" size={40} color={accentColor} />
         <Text style={styles.stepTitle}>{t("onboarding", "voiceTitle")}</Text>
         <Text style={styles.stepSubtitle}>{t("onboarding", "voiceSubtitle")}</Text>
         {content}

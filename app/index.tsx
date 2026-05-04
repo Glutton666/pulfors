@@ -66,8 +66,7 @@ import { MicWebView, MicWebViewHandle } from "@/components/MicWebView";
 import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import PracticeStatsGraph from "@/components/PracticeStatsGraph";
-import { VoiceAssistantButton } from "@/components/VoiceAssistantButton";
-import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
+import { useDeepLink } from "@/contexts/DeepLinkContext";
 import { make_styles } from "./index.styles";
 import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore } from "./index.helpers";
 import {
@@ -580,13 +579,6 @@ export default function MetronomeScreen() {
       return toggle ? players.lowB : players.lowA;
     };
 
-    // 음성 인식 blackout 통지: 엔진 내부 fireTick에서 mute가 아닌 모든 경로
-    // (일반/레이어/블록/프리렌더)에 대해 동기적으로 한 번씩 호출된다. 개별 오디오
-    // 콜백 안에서 마킹하면 프리렌더 모드(웹 toggleStart 시) 등에서 누락되므로
-    // 단일 진입점인 setOnClickEmitted로 통합한다.
-    engine.setOnClickEmitted((at) => {
-      try { noteMetronomeClickRef.current?.(at); } catch {}
-    });
     engine.setAudioCallbacks(
       () => {
         if (fadeOutMutedRef.current) return;
@@ -2102,10 +2094,8 @@ export default function MetronomeScreen() {
   const beatsPerMeasureRef = useRef(beatsPerMeasure);
   useEffect(() => { beatsPerMeasureRef.current = beatsPerMeasure; }, [beatsPerMeasure]);
 
-  // 음성 어시스턴트 명령 핸들러 등록
-  const { setCommandHandler, noteMetronomeClick } = useVoiceAssistant();
-  const noteMetronomeClickRef = useRef(noteMetronomeClick);
-  useEffect(() => { noteMetronomeClickRef.current = noteMetronomeClick; }, [noteMetronomeClick]);
+  // 딥링크 명령 핸들러 등록
+  const { setCommandHandler } = useDeepLink();
   useEffect(() => {
     const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
     setCommandHandler((cmd) => {
@@ -4934,7 +4924,6 @@ export default function MetronomeScreen() {
           y={dragPos.y}
         />
       )}
-      <VoiceAssistantButton />
     </View>
   );
 }
