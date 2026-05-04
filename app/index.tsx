@@ -4271,18 +4271,11 @@ export default function MetronomeScreen() {
           onClose={() => setActiveModal(null)}
           bpm={bpm}
           beatsPerMeasure={beatsPerMeasure}
-          onScheduled={({ payload, startAtPerformanceTime }) => {
+          onScheduled={({ startAtPerformanceTime }) => {
             const engine = engineRef.current;
             if (!engine) return;
             engine.stop();
             resetPlaybackVisuals();
-            const newBeatTypes = defaultBeatTypes(payload.beatsPerMeasure);
-            setBpm(payload.bpm);
-            setBeatsPerMeasure(payload.beatsPerMeasure);
-            setBeatTypes(newBeatTypes);
-            engine.setBpm(payload.bpm);
-            engine.setBeatsPerMeasure(payload.beatsPerMeasure);
-            engine.setBeatTypes(newBeatTypes);
             setIsPlaying(true);
             engine.start({ startAtPerformanceTime });
           }}
