@@ -22,6 +22,9 @@ export interface ScheduledStartModalProps {
   onScheduled: (params: { startAtPerformanceTime: number }) => void;
 }
 
+const OFFSET_STEP = 50;
+const OFFSET_MAX = 2000;
+
 function getDefaultTarget(): { h: number; m: number; s: number } {
   const now = new Date();
   now.setSeconds(now.getSeconds() + 60);
@@ -39,6 +42,11 @@ function formatRemaining(ms: number) {
   const s = totalSec % 60;
   if (h > 0) return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
   return `${pad2(m)}:${pad2(s)}`;
+}
+
+function formatOffset(ms: number): string {
+  if (ms === 0) return "0 ms";
+  return (ms > 0 ? "+" : "") + ms + " ms";
 }
 
 interface SpinnerProps {
@@ -122,6 +130,7 @@ export function ScheduledStartModal({
   const [targetH, setTargetH] = useState(0);
   const [targetM, setTargetM] = useState(0);
   const [targetS, setTargetS] = useState(0);
+  const [offsetMs, setOffsetMs] = useState(0);
   const [nowStr, setNowStr] = useState("");
   const [pastError, setPastError] = useState(false);
 
@@ -149,6 +158,7 @@ export function ScheduledStartModal({
       setTargetH(def.h);
       setTargetM(def.m);
       setTargetS(def.s);
+      setOffsetMs(0);
       setPastError(false);
       updateNow();
       clockTimerRef.current = setInterval(updateNow, 1000);
@@ -170,13 +180,15 @@ export function ScheduledStartModal({
     const now = new Date();
     const target = new Date(now);
     target.setHours(targetH, targetM, targetS, 0);
-    if (target.getTime() <= Date.now() + 500) {
+    const rawFireAt = target.getTime() + offsetMs;
+    if (rawFireAt <= Date.now() + 500) {
       target.setDate(target.getDate() + 1);
+      const nextFireAt = target.getTime() + offsetMs;
+      if (nextFireAt <= Date.now() + 500) return null;
+      return nextFireAt;
     }
-    const diff = target.getTime() - Date.now();
-    if (diff <= 500) return null;
-    return target.getTime();
-  }, [targetH, targetM, targetS]);
+    return rawFireAt;
+  }, [targetH, targetM, targetS, offsetMs]);
 
   const handleStart = useCallback(() => {
     clearAll();
@@ -220,6 +232,21 @@ export function ScheduledStartModal({
     updateNow();
     clockTimerRef.current = setInterval(updateNow, 1000);
   }, [clearAll, updateNow]);
+
+  const incOffset = useCallback(() => {
+    setOffsetMs((v) => Math.min(OFFSET_MAX, v + OFFSET_STEP));
+    setPastError(false);
+  }, []);
+
+  const decOffset = useCallback(() => {
+    setOffsetMs((v) => Math.max(-OFFSET_MAX, v - OFFSET_STEP));
+    setPastError(false);
+  }, []);
+
+  const resetOffset = useCallback(() => {
+    setOffsetMs(0);
+    setPastError(false);
+  }, []);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={counting ? handleCancel : onClose}>
@@ -278,6 +305,42 @@ export function ScheduledStartModal({
                   />
                 </View>
 
+                <View style={styles.offsetRow}>
+                  <Text style={[styles.offsetLabel, { color: C.textSecondary }]}>
+                    {t("scheduledStart", "offsetLabel")}
+                  </Text>
+                  <View style={styles.offsetControls}>
+                    <Pressable
+                      onPress={decOffset}
+                      hitSlop={8}
+                      style={[styles.offsetBtn, { borderColor: C.border, backgroundColor: C.surface }]}
+                      testID="offset-dec"
+                    >
+                      <Ionicons name="remove" size={16} color={C.text} />
+                    </Pressable>
+                    <Pressable
+                      onPress={resetOffset}
+                      style={[styles.offsetValue, { borderColor: offsetMs !== 0 ? C.accent : C.border, backgroundColor: C.surface }]}
+                      testID="offset-value"
+                    >
+                      <Text style={[styles.offsetValueText, { color: offsetMs !== 0 ? C.accent : C.textSecondary }]}>
+                        {formatOffset(offsetMs)}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={incOffset}
+                      hitSlop={8}
+                      style={[styles.offsetBtn, { borderColor: C.border, backgroundColor: C.surface }]}
+                      testID="offset-inc"
+                    >
+                      <Ionicons name="add" size={16} color={C.text} />
+                    </Pressable>
+                  </View>
+                  <Text style={[styles.offsetHint, { color: C.textTertiary }]}>
+                    {t("scheduledStart", "offsetHint")}
+                  </Text>
+                </View>
+
                 {pastError && (
                   <Text style={[styles.errorText, { color: C.danger }]}>
                     {t("scheduledStart", "pastTimeError")}
@@ -307,6 +370,9 @@ export function ScheduledStartModal({
                 </Text>
                 <Text style={[styles.targetTimeText, { color: C.textTertiary }]}>
                   {pad2(targetH)}:{pad2(targetM)}:{pad2(targetS)}
+                  {offsetMs !== 0 && (
+                    <Text style={{ fontSize: FontSize.small }}>{"  "}{formatOffset(offsetMs)}</Text>
+                  )}
                 </Text>
                 <Text style={[styles.countdown, { color: C.accent }]} testID="scheduled-start-countdown">
                   {formatRemaining(countdownMs)}
@@ -382,6 +448,43 @@ const makeStyles = (C: any) =>
       fontFamily: "SpaceGrotesk_700Bold",
       fontSize: 28,
       marginTop: 24,
+    },
+    offsetRow: {
+      gap: Spacing.xs,
+    },
+    offsetLabel: {
+      fontFamily: "SpaceGrotesk_500Medium",
+      fontSize: FontSize.small,
+    },
+    offsetControls: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: Spacing.sm,
+    },
+    offsetBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: Radius.md,
+      borderWidth: 1,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    offsetValue: {
+      flex: 1,
+      height: 36,
+      borderRadius: Radius.md,
+      borderWidth: 1,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      paddingHorizontal: Spacing.sm,
+    },
+    offsetValueText: {
+      fontFamily: "SpaceMono_400Regular",
+      fontSize: FontSize.small,
+    },
+    offsetHint: {
+      fontFamily: "SpaceGrotesk_400Regular",
+      fontSize: FontSize.caption,
     },
     errorText: {
       fontFamily: "SpaceGrotesk_400Regular",

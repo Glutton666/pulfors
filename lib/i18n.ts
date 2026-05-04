@@ -544,6 +544,8 @@ export const translations = {
     hourLabel: { ko: "시", en: "H" },
     minLabel: { ko: "분", en: "M" },
     secLabel: { ko: "초", en: "S" },
+    offsetLabel: { ko: "기기 오프셋", en: "Device offset" },
+    offsetHint: { ko: "탭하면 0으로 초기화. 양수: 내 기기가 빠름 → 늦게 시작. 음수: 내 기기가 느림 → 일찍 시작.", en: "Tap value to reset. Positive: my clock is fast → start later. Negative: my clock is slow → start earlier." },
     pastTimeError: { ko: "이미 지난 시각입니다. 내일 해당 시각에 시작됩니다.", en: "That time has passed — will start at that time tomorrow." },
     settingsSummary: { ko: "현재 설정: %bpm BPM · %meter박자", en: "Current: %bpm BPM · %meter beats" },
     start: { ko: "시작", en: "Start" },
