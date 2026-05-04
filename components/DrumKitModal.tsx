@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -10,6 +10,8 @@ import {
   TextInput,
   FlatList,
   ScrollView,
+  type NativeSyntheticEvent,
+  type NativeTouchEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -64,6 +66,10 @@ export interface DrumKitModalProps {
   onClose: () => void;
 }
 
+interface DrumPadHandle {
+  play: () => void;
+}
+
 interface DrumPadProps {
   index: number;
   config: DrumPadConfig | null;
@@ -73,8 +79,7 @@ interface DrumPadProps {
   textTertiary: string;
   accent: string;
   flashing: boolean;
-  onTap: (index: number) => void;
-  onLongPress: (index: number) => void;
+  pressed: boolean;
   size: number;
 }
 
@@ -85,16 +90,12 @@ function padSourceToAudioSource(config: DrumPadConfig): AudioSource | null {
   return { uri: config.source.uri };
 }
 
-const DrumPad = React.memo(function DrumPad({
-  index, config, bgColor, borderColor, textColor, textTertiary, accent, flashing, onTap, onLongPress, size,
-}: DrumPadProps) {
+const DrumPad = React.memo(React.forwardRef<DrumPadHandle, DrumPadProps>(function DrumPad(
+  { index, config, bgColor, borderColor, textColor, textTertiary, accent, flashing, pressed, size },
+  ref,
+) {
   const player = useAudioPlayer(null) as AudioPlayer;
-  const playerRef = useRef(player);
-  useEffect(() => { playerRef.current = player; }, [player]);
   const lastSourceRef = useRef<string>("");
-  const [pressed, setPressed] = useState(false);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longFiredRef = useRef(false);
 
   useEffect(() => {
     if (!config) { lastSourceRef.current = ""; return; }
@@ -108,40 +109,13 @@ const DrumPad = React.memo(function DrumPad({
     try { player.replace(src); } catch {}
   }, [config, player]);
 
-  const triggerSound = useCallback(() => {
-    if (!config) return;
-    try { player.seekTo(0); } catch {}
-    safePlay(player, "drumKit.pad");
-  }, [config, player]);
-
-  const clearLongTimer = useCallback(() => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  }, []);
-
-  const touchHandlers = useMemo(() => ({
-    onStartShouldSetResponder: () => true,
-    onResponderGrant: () => {
-      setPressed(true);
-      longFiredRef.current = false;
-      triggerSound();
-      onTap(index);
-      longPressTimer.current = setTimeout(() => {
-        longFiredRef.current = true;
-        onLongPress(index);
-      }, 400);
+  useImperativeHandle(ref, () => ({
+    play() {
+      if (!config) return;
+      try { player.seekTo(0); } catch {}
+      safePlay(player, "drumKit.pad");
     },
-    onResponderRelease: () => {
-      setPressed(false);
-      clearLongTimer();
-    },
-    onResponderTerminate: () => {
-      setPressed(false);
-      clearLongTimer();
-    },
-  }), [triggerSound, onTap, onLongPress, index, clearLongTimer]);
+  }), [config, player]);
 
   const label = !config ? "" : config.source.type === "builtin"
     ? `${config.source.setName.slice(0, 4)}/${config.source.role[0]}`
@@ -149,7 +123,7 @@ const DrumPad = React.memo(function DrumPad({
 
   return (
     <View
-      {...touchHandlers}
+      pointerEvents="none"
       style={[
         styles.pad,
         {
@@ -179,7 +153,7 @@ const DrumPad = React.memo(function DrumPad({
       )}
     </View>
   );
-});
+}));
 
 export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
   const { colors: C } = useTheme();
@@ -195,7 +169,8 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
   const [countInValue, setCountInValue] = useState(0);
   const [recordedHits, setRecordedHits] = useState<RecordedHit[]>([]);
   const [activeCell, setActiveCell] = useState<number | null>(null);
-  const [flashingPad, setFlashingPad] = useState<number | null>(null);
+  const [flashingPads, setFlashingPads] = useState<Set<number>>(new Set());
+  const [pressedPads, setPressedPads] = useState<Set<number>>(new Set());
   const [assignSlot, setAssignSlot] = useState<number | null>(null);
   const [showBuiltinPicker, setShowBuiltinPicker] = useState(false);
   const [entryName, setEntryName] = useState("");
@@ -207,7 +182,14 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
   const countInTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recordEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cellTickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const padRefs = useRef<Array<{ current: DrumPadHandle | null }>>(
+    Array.from({ length: DRUM_PAD_COUNT }, () => ({ current: null }))
+  );
+  const activeTouches = useRef<Map<string, number>>(new Map());
+  const flashTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const longPressTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const padSizeRef = useRef(0);
 
   const clickPlayer = useAudioPlayer(soundSets.classic.high);
 
@@ -225,7 +207,10 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
     if (countInTimerRef.current) { clearTimeout(countInTimerRef.current); countInTimerRef.current = null; }
     if (recordEndTimerRef.current) { clearTimeout(recordEndTimerRef.current); recordEndTimerRef.current = null; }
     if (cellTickerRef.current) { clearInterval(cellTickerRef.current); cellTickerRef.current = null; }
-    if (flashTimerRef.current) { clearTimeout(flashTimerRef.current); flashTimerRef.current = null; }
+    flashTimers.current.forEach((t) => clearTimeout(t));
+    flashTimers.current.clear();
+    longPressTimers.current.forEach((t) => clearTimeout(t));
+    longPressTimers.current.clear();
   }, []);
 
   useEffect(() => {
@@ -236,7 +221,9 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
       recordedHitsRef.current = [];
       setActiveCell(null);
       setCountInValue(0);
-      setFlashingPad(null);
+      setFlashingPads(new Set());
+      setPressedPads(new Set());
+      activeTouches.current.clear();
       setAssignSlot(null);
       setShowBuiltinPicker(false);
       setEntryName("");
@@ -318,22 +305,63 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
     const next = [...recordedHitsRef.current.filter((h) => h.cell !== cell), { cell, pad: padIdx }];
     recordedHitsRef.current = next;
     setRecordedHits(next);
-    setFlashingPad(padIdx);
-    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-    flashTimerRef.current = setTimeout(() => setFlashingPad(null), 120);
+  }, [bpm]);
+
+  const hitPadIndex = useCallback((x: number, y: number): number => {
+    const ps = padSizeRef.current;
+    const step = ps + Spacing.sm;
+    const col = Math.floor(x / step);
+    const row = Math.floor(y / step);
+    if (col < 0 || col >= DRUM_KIT_COLS || row < 0) return -1;
+    if ((x - col * step) > ps || (y - row * step) > ps) return -1;
+    const idx = row * DRUM_KIT_COLS + col;
+    return idx >= 0 && idx < DRUM_PAD_COUNT ? idx : -1;
+  }, []);
+
+  const triggerPad = useCallback((padIdx: number) => {
+    padRefs.current[padIdx]?.current?.play();
+    recordHit(padIdx);
+    setFlashingPads((prev) => new Set([...prev, padIdx]));
+    const existing = flashTimers.current.get(padIdx);
+    if (existing) clearTimeout(existing);
+    const ft = setTimeout(() => {
+      setFlashingPads((prev) => { const n = new Set(prev); n.delete(padIdx); return n; });
+      flashTimers.current.delete(padIdx);
+    }, 120);
+    flashTimers.current.set(padIdx, ft);
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
-  }, [bpm]);
-
-  const handlePadTap = useCallback((idx: number) => {
-    recordHit(idx);
   }, [recordHit]);
 
-  const handlePadLongPress = useCallback((idx: number) => {
-    if (phaseRef.current === "recording" || phaseRef.current === "countin") return;
-    setAssignSlot(idx);
+  const handleGridTouchEnd = useCallback((e: NativeSyntheticEvent<NativeTouchEvent>) => {
+    for (const touch of e.nativeEvent.changedTouches) {
+      const padIdx = activeTouches.current.get(touch.identifier);
+      activeTouches.current.delete(touch.identifier);
+      if (padIdx === undefined) continue;
+      setPressedPads((prev) => { const n = new Set(prev); n.delete(padIdx); return n; });
+      const lpt = longPressTimers.current.get(padIdx);
+      if (lpt) { clearTimeout(lpt); longPressTimers.current.delete(padIdx); }
+    }
   }, []);
+
+  const handleGridTouchStart = useCallback((e: NativeSyntheticEvent<NativeTouchEvent>) => {
+    for (const touch of e.nativeEvent.changedTouches) {
+      if (activeTouches.current.has(touch.identifier)) continue;
+      const padIdx = hitPadIndex(touch.locationX, touch.locationY);
+      if (padIdx < 0) continue;
+      activeTouches.current.set(touch.identifier, padIdx);
+      setPressedPads((prev) => new Set([...prev, padIdx]));
+      triggerPad(padIdx);
+      if (phaseRef.current !== "recording" && phaseRef.current !== "countin") {
+        const lpt = setTimeout(() => {
+          setAssignSlot(padIdx);
+          longPressTimers.current.delete(padIdx);
+        }, 400);
+        longPressTimers.current.set(padIdx, lpt);
+      }
+    }
+  }, [hitPadIndex, triggerPad]);
 
   const handleAssignBuiltin = useCallback((setName: BuiltinSoundSet, role: SoundRole) => {
     if (assignSlot === null) return;
@@ -471,7 +499,9 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
 
   const padSize = useMemo(() => {
     const maxW = Math.min(360, S.ms(280, 0.4));
-    return Math.floor((maxW - Spacing.sm * (DRUM_KIT_COLS - 1)) / DRUM_KIT_COLS);
+    const v = Math.floor((maxW - Spacing.sm * (DRUM_KIT_COLS - 1)) / DRUM_KIT_COLS);
+    padSizeRef.current = v;
+    return v;
   }, [S]);
 
   const recordedCellSet = useMemo(() => new Set(recordedHits.map((h) => h.cell)), [recordedHits]);
@@ -556,9 +586,15 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
               </View>
             )}
 
-            <View style={[styles.padGrid, { gap: Spacing.sm, alignSelf: "center" }]}>
+            <View
+              style={[styles.padGrid, { gap: Spacing.sm, alignSelf: "center" }]}
+              onTouchStart={handleGridTouchStart}
+              onTouchEnd={handleGridTouchEnd}
+              onTouchCancel={handleGridTouchEnd}
+            >
               {Array.from({ length: DRUM_PAD_COUNT }).map((_, i) => (
                 <DrumPad
+                  ref={padRefs.current[i]}
                   key={`pad-${i}`}
                   index={i}
                   config={mapping[i]}
@@ -567,9 +603,8 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
                   textColor={C.text}
                   textTertiary={C.textTertiary}
                   accent={C.accent}
-                  flashing={flashingPad === i}
-                  onTap={handlePadTap}
-                  onLongPress={handlePadLongPress}
+                  flashing={flashingPads.has(i)}
+                  pressed={pressedPads.has(i)}
                   size={padSize}
                 />
               ))}
