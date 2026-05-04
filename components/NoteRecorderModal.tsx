@@ -53,6 +53,7 @@ interface NoteRecorderModalProps {
   existingName?: string;
   existingChannel?: SampleChannel;
   bpm: number;
+  beatsPerMeasure?: number;
   soundSet?: BuiltinSoundSet;
 }
 
@@ -70,6 +71,7 @@ export function NoteRecorderModal({
   existingName,
   existingChannel = "both",
   bpm,
+  beatsPerMeasure = 4,
   soundSet = "classic",
 }: NoteRecorderModalProps) {
   const { colors: C } = useTheme();
@@ -95,6 +97,7 @@ export function NoteRecorderModal({
   const [audioDuration, setAudioDuration] = useState(0);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const [autoPreview, setAutoPreview] = useState(true);
+  const [withClick, setWithClick] = useState(true);
   // 채널별로 미리듣기용 stereo wav uri를 캐시. recordedUri 변경 시 무효화.
   const previewStereoCacheRef = useRef<{ left?: string; right?: string }>({});
   const previewTokenRef = useRef(0);
@@ -351,6 +354,8 @@ export function NoteRecorderModal({
       clearInterval(previewWatchRef.current);
       previewWatchRef.current = null;
     }
+    // 이전 미리듣기 클릭 정리
+    stopMetronomeClicks();
 
     const token = ++previewTokenRef.current;
 
@@ -399,6 +404,15 @@ export function NoteRecorderModal({
       setIsPlayingPreview(true);
       safePlay(player, "noteRecorder.preview");
 
+      // 1/1 클릭: 미리듣기 시작과 동시에 한 마디 간격으로 클릭
+      if (withClick) {
+        playClick();
+        const measureMs = Math.round((60000 / bpm) * beatsPerMeasure);
+        metronomeTimerRef.current = setInterval(() => {
+          playClick();
+        }, measureMs);
+      }
+
       const startedAt = Date.now();
       const expectedDurMs = Math.max(50, (endSec - startSec) * 1000);
       previewWatchRef.current = setInterval(() => {
@@ -411,6 +425,11 @@ export function NoteRecorderModal({
               clearInterval(previewWatchRef.current);
               previewWatchRef.current = null;
             }
+            // 클릭도 같이 종료
+            if (metronomeTimerRef.current) {
+              clearInterval(metronomeTimerRef.current);
+              metronomeTimerRef.current = null;
+            }
             setIsPlayingPreview(false);
           }
         } catch {
@@ -418,14 +437,19 @@ export function NoteRecorderModal({
             clearInterval(previewWatchRef.current);
             previewWatchRef.current = null;
           }
+          if (metronomeTimerRef.current) {
+            clearInterval(metronomeTimerRef.current);
+            metronomeTimerRef.current = null;
+          }
           setIsPlayingPreview(false);
         }
       }, 50);
     } catch (e) {
       captureBreadcrumb({ category: "noteRecorder", message: "playPreview failed", level: "warning", data: { error: String(e) } });
+      stopMetronomeClicks();
       setIsPlayingPreview(false);
     }
-  }, [recordedUri, trimStart, trimEnd, audioDuration, channel]);
+  }, [recordedUri, trimStart, trimEnd, audioDuration, channel, withClick, bpm, beatsPerMeasure, playClick, stopMetronomeClicks]);
 
   const playPreviewRef = useRef(playPreview);
   useEffect(() => { playPreviewRef.current = playPreview; }, [playPreview]);
@@ -796,7 +820,7 @@ export function NoteRecorderModal({
                 </Pressable>
               </View>
 
-              <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", gap: Spacing.sm, marginTop: Spacing.xs, alignSelf: "stretch" }}>
+              <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", gap: Spacing.xl, marginTop: Spacing.xs, alignSelf: "stretch" }}>
                 <Pressable
                   onPress={() => setAutoPreview((v) => !v)}
                   style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
@@ -809,6 +833,20 @@ export function NoteRecorderModal({
                   />
                   <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>
                     {t("noteRecorder", "autoPreview")}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setWithClick((v) => !v)}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                  hitSlop={8}
+                >
+                  <Ionicons
+                    name={withClick ? "checkbox" : "square-outline"}
+                    size={18}
+                    color={withClick ? C.accent : C.textSecondary}
+                  />
+                  <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>
+                    {t("noteRecorder", "previewWithClick")}
                   </Text>
                 </Pressable>
               </View>

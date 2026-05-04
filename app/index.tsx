@@ -4361,6 +4361,7 @@ export default function MetronomeScreen() {
         existingName={recorderTarget ? (noteSampleNames[`${recorderTarget.beat}-${recorderTarget.sub}`] || "") : ""}
         existingChannel={recorderTarget ? (noteSampleChannels[`${recorderTarget.beat}-${recorderTarget.sub}`] ?? "both") : "both"}
         bpm={bpm}
+        beatsPerMeasure={beatsPerMeasure}
         soundSet={soundSet.startsWith("custom") ? "classic" : soundSet as any}
       />
       )}
