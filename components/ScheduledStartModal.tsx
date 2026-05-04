@@ -4,6 +4,7 @@ import {
   View,
   Text,
   Pressable,
+  ScrollView,
   StyleSheet,
   Platform,
 } from "react-native";
@@ -273,93 +274,102 @@ export function ScheduledStartModal({
           <View style={styles.body}>
             {!counting ? (
               <>
-                <View style={styles.nowRow}>
-                  <Text style={[styles.nowLabel, { color: C.textTertiary }]}>{t("scheduledStart", "nowLabel")}</Text>
-                  <Text style={[styles.nowTime, { color: C.textSecondary }]}>{nowStr}</Text>
-                </View>
-
-                <Text style={[styles.sectionLabel, { color: C.text }]}>
-                  {t("scheduledStart", "targetTimeLabel")}
-                </Text>
-
-                <View style={styles.spinnerRow}>
-                  <Spinner
-                    value={targetH} min={0} max={23}
-                    onChange={(v) => { setTargetH(v); setPastError(false); }}
-                    label={t("scheduledStart", "hourLabel")}
-                    accent={C.accent} text={C.text} border={C.border} surface={C.surface}
-                  />
-                  <Text style={[styles.colon, { color: C.text }]}>:</Text>
-                  <Spinner
-                    value={targetM} min={0} max={59}
-                    onChange={(v) => { setTargetM(v); setPastError(false); }}
-                    label={t("scheduledStart", "minLabel")}
-                    accent={C.accent} text={C.text} border={C.border} surface={C.surface}
-                  />
-                  <Text style={[styles.colon, { color: C.text }]}>:</Text>
-                  <Spinner
-                    value={targetS} min={0} max={59}
-                    onChange={(v) => { setTargetS(v); setPastError(false); }}
-                    label={t("scheduledStart", "secLabel")}
-                    accent={C.accent} text={C.text} border={C.border} surface={C.surface}
-                  />
-                </View>
-
-                <View style={styles.offsetRow}>
-                  <Text style={[styles.offsetLabel, { color: C.textSecondary }]}>
-                    {t("scheduledStart", "offsetLabel")}
-                  </Text>
-                  <View style={styles.offsetControls}>
-                    <Pressable
-                      onPress={decOffset}
-                      hitSlop={8}
-                      style={[styles.offsetBtn, { borderColor: C.border, backgroundColor: C.surface }]}
-                      testID="offset-dec"
-                    >
-                      <Ionicons name="remove" size={16} color={C.text} />
-                    </Pressable>
-                    <Pressable
-                      onPress={resetOffset}
-                      style={[styles.offsetValue, { borderColor: offsetMs !== 0 ? C.accent : C.border, backgroundColor: C.surface }]}
-                      testID="offset-value"
-                    >
-                      <Text style={[styles.offsetValueText, { color: offsetMs !== 0 ? C.accent : C.textSecondary }]}>
-                        {formatOffset(offsetMs)}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={incOffset}
-                      hitSlop={8}
-                      style={[styles.offsetBtn, { borderColor: C.border, backgroundColor: C.surface }]}
-                      testID="offset-inc"
-                    >
-                      <Ionicons name="add" size={16} color={C.text} />
-                    </Pressable>
-                  </View>
-                  <Text style={[styles.offsetHint, { color: C.textTertiary }]}>
-                    {t("scheduledStart", "offsetHint")}
-                  </Text>
-                </View>
-
-                {pastError && (
-                  <Text style={[styles.errorText, { color: C.danger }]}>
-                    {t("scheduledStart", "pastTimeError")}
-                  </Text>
-                )}
-
-                <Text style={[styles.summaryText, { color: C.textSecondary }]}>
-                  {t("scheduledStart", "settingsSummary")
-                    .replace("%bpm", String(bpm))
-                    .replace("%meter", String(beatsPerMeasure))}
-                </Text>
-
-                <Pressable
-                  style={({ pressed }) => [styles.primaryBtn, { backgroundColor: C.accent }, pressed && { opacity: 0.85 }]}
-                  onPress={handleStart}
-                  testID="scheduled-start-fire"
+                <ScrollView
+                  style={styles.scroll}
+                  contentContainerStyle={styles.scrollContent}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
                 >
-                  <Text style={styles.primaryBtnText}>{t("scheduledStart", "start")}</Text>
-                </Pressable>
+                  <View style={styles.nowRow}>
+                    <Text style={[styles.nowLabel, { color: C.textTertiary }]}>{t("scheduledStart", "nowLabel")}</Text>
+                    <Text style={[styles.nowTime, { color: C.textSecondary }]}>{nowStr}</Text>
+                  </View>
+
+                  <Text style={[styles.sectionLabel, { color: C.text }]}>
+                    {t("scheduledStart", "targetTimeLabel")}
+                  </Text>
+
+                  <View style={styles.spinnerRow}>
+                    <Spinner
+                      value={targetH} min={0} max={23}
+                      onChange={(v) => { setTargetH(v); setPastError(false); }}
+                      label={t("scheduledStart", "hourLabel")}
+                      accent={C.accent} text={C.text} border={C.border} surface={C.surface}
+                    />
+                    <Text style={[styles.colon, { color: C.text }]}>:</Text>
+                    <Spinner
+                      value={targetM} min={0} max={59}
+                      onChange={(v) => { setTargetM(v); setPastError(false); }}
+                      label={t("scheduledStart", "minLabel")}
+                      accent={C.accent} text={C.text} border={C.border} surface={C.surface}
+                    />
+                    <Text style={[styles.colon, { color: C.text }]}>:</Text>
+                    <Spinner
+                      value={targetS} min={0} max={59}
+                      onChange={(v) => { setTargetS(v); setPastError(false); }}
+                      label={t("scheduledStart", "secLabel")}
+                      accent={C.accent} text={C.text} border={C.border} surface={C.surface}
+                    />
+                  </View>
+
+                  <View style={styles.offsetRow}>
+                    <Text style={[styles.offsetLabel, { color: C.textSecondary }]}>
+                      {t("scheduledStart", "offsetLabel")}
+                    </Text>
+                    <View style={styles.offsetControls}>
+                      <Pressable
+                        onPress={decOffset}
+                        hitSlop={8}
+                        style={[styles.offsetBtn, { borderColor: C.border, backgroundColor: C.surface }]}
+                        testID="offset-dec"
+                      >
+                        <Ionicons name="remove" size={16} color={C.text} />
+                      </Pressable>
+                      <Pressable
+                        onPress={resetOffset}
+                        style={[styles.offsetValue, { borderColor: offsetMs !== 0 ? C.accent : C.border, backgroundColor: C.surface }]}
+                        testID="offset-value"
+                      >
+                        <Text style={[styles.offsetValueText, { color: offsetMs !== 0 ? C.accent : C.textSecondary }]}>
+                          {formatOffset(offsetMs)}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={incOffset}
+                        hitSlop={8}
+                        style={[styles.offsetBtn, { borderColor: C.border, backgroundColor: C.surface }]}
+                        testID="offset-inc"
+                      >
+                        <Ionicons name="add" size={16} color={C.text} />
+                      </Pressable>
+                    </View>
+                    <Text style={[styles.offsetHint, { color: C.textTertiary }]}>
+                      {t("scheduledStart", "offsetHint")}
+                    </Text>
+                  </View>
+
+                  {pastError && (
+                    <Text style={[styles.errorText, { color: C.danger }]}>
+                      {t("scheduledStart", "pastTimeError")}
+                    </Text>
+                  )}
+
+                  <Text style={[styles.summaryText, { color: C.textSecondary }]}>
+                    {t("scheduledStart", "settingsSummary")
+                      .replace("%bpm", String(bpm))
+                      .replace("%meter", String(beatsPerMeasure))}
+                  </Text>
+                </ScrollView>
+
+                <View style={[styles.bottomBar, { borderTopColor: C.border }]}>
+                  <Pressable
+                    style={({ pressed }) => [styles.primaryBtn, { backgroundColor: C.accent }, pressed && { opacity: 0.85 }]}
+                    onPress={handleStart}
+                    testID="scheduled-start-fire"
+                  >
+                    <Text style={styles.primaryBtnText}>{t("scheduledStart", "start")}</Text>
+                  </Pressable>
+                </View>
               </>
             ) : (
               <View style={styles.countdownBox}>
@@ -418,8 +428,19 @@ const makeStyles = (C: any) =>
     },
     body: {
       flex: 1,
+    },
+    scroll: {
+      flex: 1,
+    },
+    scrollContent: {
       padding: Spacing.lg,
       gap: Spacing.lg,
+    },
+    bottomBar: {
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.md,
+      paddingBottom: Spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
     },
     nowRow: {
       flexDirection: "row" as const,
