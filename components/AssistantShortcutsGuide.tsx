@@ -6,10 +6,9 @@ import {
   ScrollView,
   Pressable,
   StyleSheet,
-  Platform,
-  Clipboard,
   Alert,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -104,9 +103,9 @@ export function AssistantShortcutsGuide({ visible, onClose }: Props) {
   const copyHint = isKo ? "URL 복사" : "Copy URL";
   const copiedMsg = isKo ? "복사됨" : "Copied";
 
-  function copyUrl(url: string) {
+  async function copyUrl(url: string) {
     try {
-      Clipboard.setString(url);
+      await Clipboard.setStringAsync(url);
       Alert.alert(copiedMsg, url);
     } catch {}
   }
