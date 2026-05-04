@@ -22,7 +22,87 @@ export interface ScheduledStartModalProps {
   onScheduled: (params: { startAtPerformanceTime: number }) => void;
 }
 
-const LEAD_OPTIONS = [5, 10, 20] as const;
+function getDefaultTarget(): { h: number; m: number; s: number } {
+  const now = new Date();
+  now.setSeconds(now.getSeconds() + 60);
+  return { h: now.getHours(), m: now.getMinutes(), s: now.getSeconds() };
+}
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function formatRemaining(ms: number) {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
+  return `${pad2(m)}:${pad2(s)}`;
+}
+
+interface SpinnerProps {
+  value: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+  label: string;
+  accent: string;
+  text: string;
+  border: string;
+  surface: string;
+}
+
+function Spinner({ value, min, max, onChange, label, accent, text, border, surface }: SpinnerProps) {
+  const inc = () => onChange(value >= max ? min : value + 1);
+  const dec = () => onChange(value <= min ? max : value - 1);
+  return (
+    <View style={spinnerStyles.col}>
+      <Text style={[spinnerStyles.label, { color: text + "88" }]}>{label}</Text>
+      <Pressable onPress={inc} hitSlop={8} style={[spinnerStyles.chevron, { borderColor: border, backgroundColor: surface }]}>
+        <Ionicons name="chevron-up" size={20} color={accent} />
+      </Pressable>
+      <View style={[spinnerStyles.valueBox, { borderColor: border, backgroundColor: surface }]}>
+        <Text style={[spinnerStyles.value, { color: text }]}>{pad2(value)}</Text>
+      </View>
+      <Pressable onPress={dec} hitSlop={8} style={[spinnerStyles.chevron, { borderColor: border, backgroundColor: surface }]}>
+        <Ionicons name="chevron-down" size={20} color={accent} />
+      </Pressable>
+    </View>
+  );
+}
+
+const spinnerStyles = StyleSheet.create({
+  col: {
+    alignItems: "center" as const,
+    gap: Spacing.xs,
+  },
+  label: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: FontSize.caption,
+    marginBottom: Spacing.xxs,
+  },
+  chevron: {
+    width: 44,
+    height: 36,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  valueBox: {
+    width: 60,
+    height: 52,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  value: {
+    fontFamily: "SpaceMono_400Regular",
+    fontSize: 28,
+  },
+});
 
 export function ScheduledStartModal({
   visible,
@@ -39,32 +119,74 @@ export function ScheduledStartModal({
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
-  const [leadIn, setLeadIn] = useState<number>(10);
+  const [targetH, setTargetH] = useState(0);
+  const [targetM, setTargetM] = useState(0);
+  const [targetS, setTargetS] = useState(0);
+  const [nowStr, setNowStr] = useState("");
+  const [pastError, setPastError] = useState(false);
+
   const [counting, setCounting] = useState(false);
   const [countdownMs, setCountdownMs] = useState(0);
 
+  const clockTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tickTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fireTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearAll = useCallback(() => {
+    if (clockTimerRef.current) { clearInterval(clockTimerRef.current); clockTimerRef.current = null; }
     if (tickTimerRef.current) { clearInterval(tickTimerRef.current); tickTimerRef.current = null; }
     if (fireTimerRef.current) { clearTimeout(fireTimerRef.current); fireTimerRef.current = null; }
   }, []);
 
+  const updateNow = useCallback(() => {
+    const now = new Date();
+    setNowStr(`${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`);
+  }, []);
+
   useEffect(() => {
+    if (visible && !counting) {
+      const def = getDefaultTarget();
+      setTargetH(def.h);
+      setTargetM(def.m);
+      setTargetS(def.s);
+      setPastError(false);
+      updateNow();
+      clockTimerRef.current = setInterval(updateNow, 1000);
+    }
     if (!visible) {
       clearAll();
       setCounting(false);
       setCountdownMs(0);
+      setPastError(false);
     }
-  }, [visible, clearAll]);
+    return () => {
+      if (clockTimerRef.current) { clearInterval(clockTimerRef.current); clockTimerRef.current = null; }
+    };
+  }, [visible, counting, clearAll, updateNow]);
 
   useEffect(() => { return () => clearAll(); }, [clearAll]);
 
+  const computeFireAt = useCallback((): number | null => {
+    const now = new Date();
+    const target = new Date(now);
+    target.setHours(targetH, targetM, targetS, 0);
+    if (target.getTime() <= Date.now() + 500) {
+      target.setDate(target.getDate() + 1);
+    }
+    const diff = target.getTime() - Date.now();
+    if (diff <= 500) return null;
+    return target.getTime();
+  }, [targetH, targetM, targetS]);
+
   const handleStart = useCallback(() => {
     clearAll();
-    const delayMs = leadIn * 1000;
-    const fireAt = Date.now() + delayMs;
+    const fireAt = computeFireAt();
+    if (!fireAt) {
+      setPastError(true);
+      return;
+    }
+    setPastError(false);
+    const delayMs = fireAt - Date.now();
     const startAtPerf =
       typeof performance !== "undefined" && typeof performance.now === "function"
         ? performance.now() + delayMs
@@ -80,7 +202,7 @@ export function ScheduledStartModal({
         clearInterval(tickTimerRef.current!);
         tickTimerRef.current = null;
       }
-    }, 100);
+    }, 250);
 
     fireTimerRef.current = setTimeout(() => {
       fireTimerRef.current = null;
@@ -89,15 +211,15 @@ export function ScheduledStartModal({
       onScheduled({ startAtPerformanceTime: startAtPerf });
       onClose();
     }, delayMs);
-  }, [leadIn, clearAll, onScheduled, onClose]);
+  }, [computeFireAt, clearAll, onScheduled, onClose]);
 
   const handleCancel = useCallback(() => {
     clearAll();
     setCounting(false);
     setCountdownMs(0);
-  }, [clearAll]);
-
-  const sec = Math.max(0, Math.ceil(countdownMs / 1000));
+    updateNow();
+    clockTimerRef.current = setInterval(updateNow, 1000);
+  }, [clearAll, updateNow]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={counting ? handleCancel : onClose}>
@@ -124,35 +246,49 @@ export function ScheduledStartModal({
           <View style={styles.body}>
             {!counting ? (
               <>
-                <Text style={[styles.label, { color: C.textSecondary }]}>
+                <View style={styles.nowRow}>
+                  <Text style={[styles.nowLabel, { color: C.textTertiary }]}>{t("scheduledStart", "nowLabel")}</Text>
+                  <Text style={[styles.nowTime, { color: C.textSecondary }]}>{nowStr}</Text>
+                </View>
+
+                <Text style={[styles.sectionLabel, { color: C.text }]}>
+                  {t("scheduledStart", "targetTimeLabel")}
+                </Text>
+
+                <View style={styles.spinnerRow}>
+                  <Spinner
+                    value={targetH} min={0} max={23}
+                    onChange={(v) => { setTargetH(v); setPastError(false); }}
+                    label={t("scheduledStart", "hourLabel")}
+                    accent={C.accent} text={C.text} border={C.border} surface={C.surface}
+                  />
+                  <Text style={[styles.colon, { color: C.text }]}>:</Text>
+                  <Spinner
+                    value={targetM} min={0} max={59}
+                    onChange={(v) => { setTargetM(v); setPastError(false); }}
+                    label={t("scheduledStart", "minLabel")}
+                    accent={C.accent} text={C.text} border={C.border} surface={C.surface}
+                  />
+                  <Text style={[styles.colon, { color: C.text }]}>:</Text>
+                  <Spinner
+                    value={targetS} min={0} max={59}
+                    onChange={(v) => { setTargetS(v); setPastError(false); }}
+                    label={t("scheduledStart", "secLabel")}
+                    accent={C.accent} text={C.text} border={C.border} surface={C.surface}
+                  />
+                </View>
+
+                {pastError && (
+                  <Text style={[styles.errorText, { color: C.danger }]}>
+                    {t("scheduledStart", "pastTimeError")}
+                  </Text>
+                )}
+
+                <Text style={[styles.summaryText, { color: C.textSecondary }]}>
                   {t("scheduledStart", "settingsSummary")
                     .replace("%bpm", String(bpm))
                     .replace("%meter", String(beatsPerMeasure))}
                 </Text>
-
-                <Text style={[styles.sectionLabel, { color: C.text }]}>
-                  {t("scheduledStart", "leadInLabel")}
-                </Text>
-                <View style={styles.pillRow}>
-                  {LEAD_OPTIONS.map((sec) => {
-                    const selected = leadIn === sec;
-                    return (
-                      <Pressable
-                        key={sec}
-                        style={[
-                          styles.pill,
-                          { borderColor: selected ? C.accent : C.border, backgroundColor: selected ? C.accent : C.surface },
-                        ]}
-                        onPress={() => setLeadIn(sec)}
-                        testID={`lead-in-${sec}`}
-                      >
-                        <Text style={[styles.pillText, { color: selected ? "#fff" : C.text }]}>
-                          {sec}{t("scheduledStart", "secSuffix")}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
 
                 <Pressable
                   style={({ pressed }) => [styles.primaryBtn, { backgroundColor: C.accent }, pressed && { opacity: 0.85 }]}
@@ -169,8 +305,11 @@ export function ScheduledStartModal({
                     .replace("%bpm", String(bpm))
                     .replace("%meter", String(beatsPerMeasure))}
                 </Text>
+                <Text style={[styles.targetTimeText, { color: C.textTertiary }]}>
+                  {pad2(targetH)}:{pad2(targetM)}:{pad2(targetS)}
+                </Text>
                 <Text style={[styles.countdown, { color: C.accent }]} testID="scheduled-start-countdown">
-                  {sec}
+                  {formatRemaining(countdownMs)}
                 </Text>
                 <Pressable
                   style={({ pressed }) => [styles.secondaryBtn, { borderColor: C.border, backgroundColor: C.surface }, pressed && { opacity: 0.85 }]}
@@ -216,27 +355,41 @@ const makeStyles = (C: any) =>
       padding: Spacing.lg,
       gap: Spacing.lg,
     },
-    label: {
+    nowRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: Spacing.sm,
+    },
+    nowLabel: {
       fontFamily: "SpaceGrotesk_400Regular",
-      fontSize: FontSize.body,
+      fontSize: FontSize.small,
+    },
+    nowTime: {
+      fontFamily: "SpaceMono_400Regular",
+      fontSize: FontSize.small,
     },
     sectionLabel: {
       fontFamily: "SpaceGrotesk_500Medium",
       fontSize: FontSize.body,
     },
-    pillRow: {
+    spinnerRow: {
       flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
       gap: Spacing.sm,
     },
-    pill: {
-      paddingVertical: Spacing.sm,
-      paddingHorizontal: Spacing.xl,
-      borderRadius: Radius.lg,
-      borderWidth: 1,
+    colon: {
+      fontFamily: "SpaceGrotesk_700Bold",
+      fontSize: 28,
+      marginTop: 24,
     },
-    pillText: {
-      fontFamily: "SpaceGrotesk_500Medium",
-      fontSize: FontSize.body,
+    errorText: {
+      fontFamily: "SpaceGrotesk_400Regular",
+      fontSize: FontSize.small,
+    },
+    summaryText: {
+      fontFamily: "SpaceGrotesk_400Regular",
+      fontSize: FontSize.small,
     },
     primaryBtn: {
       paddingVertical: Spacing.md,
@@ -253,15 +406,19 @@ const makeStyles = (C: any) =>
       flex: 1,
       alignItems: "center" as const,
       justifyContent: "center" as const,
-      gap: Spacing.xl,
+      gap: Spacing.lg,
     },
     countdownLabel: {
       fontFamily: "SpaceGrotesk_400Regular",
       fontSize: FontSize.body,
     },
+    targetTimeText: {
+      fontFamily: "SpaceMono_400Regular",
+      fontSize: FontSize.subtitle,
+    },
     countdown: {
       fontFamily: "SpaceGrotesk_700Bold",
-      fontSize: 96,
+      fontSize: 72,
       textAlign: "center" as const,
     },
     secondaryBtn: {
