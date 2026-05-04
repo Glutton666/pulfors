@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Platform,
   Alert,
-  TextInput,
   FlatList,
   ScrollView,
   type NativeSyntheticEvent,
@@ -31,7 +30,6 @@ import { useScale } from "@/lib/scale";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import { ensurePermission } from "@/lib/permissions";
 import { safePlay } from "@/lib/audio-utils";
-import { soundSets } from "@/lib/metronome-engine";
 import {
   DRUM_PAD_COUNT,
   DRUM_KIT_COLS,
@@ -45,21 +43,9 @@ import {
   getBuiltinPadModule,
 } from "@/lib/drum-kit";
 import {
-  loadPracticeBook,
-  savePracticeBook,
-  createPracticeEntry,
-  type PracticeEntry,
   type BuiltinSoundSet,
   type SoundRole,
 } from "@/lib/storage";
-import type { BeatType } from "@/lib/metronome-engine";
-
-const BEATS = 4;
-const SUBS = 4;
-const CELLS = BEATS * SUBS;
-
-type Phase = "idle" | "countin" | "recording" | "review";
-type RecordedHit = { cell: number; pad: number };
 
 export interface DrumKitModalProps {
   visible: boolean;
@@ -164,24 +150,10 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
   const [mapping, setMapping] = useState<DrumKitMapping>(createDefaultDrumKitMapping());
-  const [phase, setPhase] = useState<Phase>("idle");
-  const [bpm, setBpm] = useState(100);
-  const [countInValue, setCountInValue] = useState(0);
-  const [recordedHits, setRecordedHits] = useState<RecordedHit[]>([]);
-  const [activeCell, setActiveCell] = useState<number | null>(null);
   const [flashingPads, setFlashingPads] = useState<Set<number>>(new Set());
   const [pressedPads, setPressedPads] = useState<Set<number>>(new Set());
   const [assignSlot, setAssignSlot] = useState<number | null>(null);
   const [showBuiltinPicker, setShowBuiltinPicker] = useState(false);
-  const [entryName, setEntryName] = useState("");
-
-  const phaseRef = useRef<Phase>("idle");
-  useEffect(() => { phaseRef.current = phase; }, [phase]);
-  const recordStartRef = useRef<number>(0);
-  const recordedHitsRef = useRef<RecordedHit[]>([]);
-  const countInTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const recordEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cellTickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const padRefs = useRef<Array<{ current: DrumPadHandle | null }>>(
     Array.from({ length: DRUM_PAD_COUNT }, () => ({ current: null }))
@@ -191,7 +163,10 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
   const longPressTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const padSizeRef = useRef(0);
 
-  const clickPlayer = useAudioPlayer(soundSets.classic.high);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderRef = useRef(recorder);
+  useEffect(() => { recorderRef.current = recorder; }, [recorder]);
+  const [isRecordingMic, setIsRecordingMic] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -204,9 +179,6 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
   }, []);
 
   const cleanupTimers = useCallback(() => {
-    if (countInTimerRef.current) { clearTimeout(countInTimerRef.current); countInTimerRef.current = null; }
-    if (recordEndTimerRef.current) { clearTimeout(recordEndTimerRef.current); recordEndTimerRef.current = null; }
-    if (cellTickerRef.current) { clearInterval(cellTickerRef.current); cellTickerRef.current = null; }
     flashTimers.current.forEach((t) => clearTimeout(t));
     flashTimers.current.clear();
     longPressTimers.current.forEach((t) => clearTimeout(t));
@@ -216,96 +188,13 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
   useEffect(() => {
     if (!visible) {
       cleanupTimers();
-      setPhase("idle");
-      setRecordedHits([]);
-      recordedHitsRef.current = [];
-      setActiveCell(null);
-      setCountInValue(0);
       setFlashingPads(new Set());
       setPressedPads(new Set());
       activeTouches.current.clear();
       setAssignSlot(null);
       setShowBuiltinPicker(false);
-      setEntryName("");
     }
   }, [visible, cleanupTimers]);
-
-  const playClick = useCallback(() => {
-    try { clickPlayer.seekTo(0); } catch {}
-    safePlay(clickPlayer, "drumKit.click");
-  }, [clickPlayer]);
-
-  const stopRecording = useCallback(() => {
-    cleanupTimers();
-    if (phaseRef.current === "recording" || phaseRef.current === "countin") {
-      setPhase("review");
-    }
-    setActiveCell(null);
-  }, [cleanupTimers]);
-
-  const startRecording = useCallback(() => {
-    if (phaseRef.current !== "idle" && phaseRef.current !== "review") return;
-    cleanupTimers();
-    setRecordedHits([]);
-    recordedHitsRef.current = [];
-
-    const safeBpm = Math.max(40, Math.min(240, bpm));
-    const beatMs = 60000 / safeBpm;
-    const cellMs = beatMs / SUBS;
-    const measureMs = beatMs * BEATS;
-
-    setPhase("countin");
-    setCountInValue(1);
-    playClick();
-
-    let count = 1;
-    const doCountIn = () => {
-      count++;
-      if (count <= BEATS) {
-        setCountInValue(count);
-        playClick();
-        countInTimerRef.current = setTimeout(doCountIn, beatMs);
-      } else {
-        setPhase("recording");
-        setCountInValue(0);
-        recordStartRef.current = Date.now();
-        playClick();
-        let lastBeat = 0;
-        let lastCell = -1;
-        cellTickerRef.current = setInterval(() => {
-          const elapsed = Date.now() - recordStartRef.current;
-          const idx = Math.floor(elapsed / cellMs);
-          if (idx < 0 || idx >= CELLS) return;
-          if (idx !== lastCell) {
-            lastCell = idx;
-            setActiveCell(idx);
-          }
-          const beat = Math.floor(idx / SUBS);
-          if (beat > lastBeat) {
-            lastBeat = beat;
-            playClick();
-          }
-        }, Math.max(15, Math.floor(cellMs / 4)));
-        recordEndTimerRef.current = setTimeout(() => {
-          stopRecording();
-        }, measureMs + 50);
-      }
-    };
-    countInTimerRef.current = setTimeout(doCountIn, beatMs);
-  }, [bpm, cleanupTimers, playClick, stopRecording]);
-
-  const recordHit = useCallback((padIdx: number) => {
-    if (phaseRef.current !== "recording") return;
-    const safeBpm = Math.max(40, Math.min(240, bpm));
-    const beatMs = 60000 / safeBpm;
-    const cellMs = beatMs / SUBS;
-    const elapsed = Date.now() - recordStartRef.current;
-    const cell = Math.round(elapsed / cellMs);
-    if (cell < 0 || cell >= CELLS) return;
-    const next = [...recordedHitsRef.current.filter((h) => h.cell !== cell), { cell, pad: padIdx }];
-    recordedHitsRef.current = next;
-    setRecordedHits(next);
-  }, [bpm]);
 
   const hitPadIndex = useCallback((x: number, y: number): number => {
     const ps = padSizeRef.current;
@@ -320,7 +209,6 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
 
   const triggerPad = useCallback((padIdx: number) => {
     padRefs.current[padIdx]?.current?.play();
-    recordHit(padIdx);
     setFlashingPads((prev) => new Set([...prev, padIdx]));
     const existing = flashTimers.current.get(padIdx);
     if (existing) clearTimeout(existing);
@@ -332,7 +220,7 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
-  }, [recordHit]);
+  }, []);
 
   const handleGridTouchEnd = useCallback((e: NativeSyntheticEvent<NativeTouchEvent>) => {
     for (const touch of e.nativeEvent.changedTouches) {
@@ -353,13 +241,11 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
       activeTouches.current.set(touch.identifier, padIdx);
       setPressedPads((prev) => new Set([...prev, padIdx]));
       triggerPad(padIdx);
-      if (phaseRef.current !== "recording" && phaseRef.current !== "countin") {
-        const lpt = setTimeout(() => {
-          setAssignSlot(padIdx);
-          longPressTimers.current.delete(padIdx);
-        }, 400);
-        longPressTimers.current.set(padIdx, lpt);
-      }
+      const lpt = setTimeout(() => {
+        setAssignSlot(padIdx);
+        longPressTimers.current.delete(padIdx);
+      }, 400);
+      longPressTimers.current.set(padIdx, lpt);
     }
   }, [hitPadIndex, triggerPad]);
 
@@ -397,11 +283,6 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
     }
   }, [assignSlot, mapping, persistMapping, t]);
 
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const recorderRef = useRef(recorder);
-  useEffect(() => { recorderRef.current = recorder; }, [recorder]);
-  const [isRecordingMic, setIsRecordingMic] = useState(false);
-
   const handleAssignRecord = useCallback(async () => {
     if (assignSlot === null) return;
     const slot = assignSlot;
@@ -432,70 +313,11 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
     } catch {
       setIsRecordingMic(false);
       setAssignSlot(null);
-      // prepare/record 시작이 실패하면 세션 회복.
       if (acquired) {
         try { await releaseAudioSession("drumKitRec"); } catch {}
       }
     }
   }, [assignSlot, mapping, persistMapping, t]);
-
-  const handleSave = useCallback(async () => {
-    if (recordedHits.length === 0) {
-      Alert.alert(t("drumKit", "nothingRecorded"));
-      return;
-    }
-    const noteSamples: Record<string, string> = {};
-    const noteSampleNames: Record<string, string> = {};
-    const noteSampleSources: Record<string, "recording" | "import"> = {};
-    for (const hit of recordedHits) {
-      const beat = Math.floor(hit.cell / SUBS);
-      const sub = hit.cell % SUBS;
-      const key = `${beat}-${sub}`;
-      const pad = mapping[hit.pad];
-      if (!pad) continue;
-      const resolved = await resolvePadUri(pad);
-      if (!resolved) continue;
-      noteSamples[key] = resolved.uri;
-      noteSampleNames[key] = resolved.name;
-      noteSampleSources[key] = resolved.source;
-    }
-    const subPattern: BeatType[] = ["normal", "normal", "normal", "normal"];
-    const beatSubdivisions: Record<string, BeatType[]> = {
-      "0": [...subPattern],
-      "1": [...subPattern],
-      "2": [...subPattern],
-      "3": [...subPattern],
-    };
-    const beatTypes: BeatType[] = ["accent", "normal", "normal", "normal"];
-    const label = (entryName.trim() || t("drumKit", "namePlaceholder")) + ` (${bpm})`;
-    const entry = createPracticeEntry(label, {
-      mode: "note",
-      bpm,
-      beatsPerMeasure: BEATS,
-      beatTypes,
-      beatSubdivisions,
-      barRepeats: {},
-      barLoopMode: "loop",
-      subdivisionPattern: ["accent"],
-      noteSamples,
-      noteSampleNames,
-      noteSampleSources,
-    });
-    const existing = await loadPracticeBook();
-    await savePracticeBook([entry, ...existing]);
-    Alert.alert(t("drumKit", "saved"));
-    setPhase("idle");
-    setRecordedHits([]);
-    recordedHitsRef.current = [];
-    setEntryName("");
-  }, [recordedHits, mapping, bpm, entryName, t]);
-
-  const handleDiscard = useCallback(() => {
-    setRecordedHits([]);
-    recordedHitsRef.current = [];
-    setPhase("idle");
-    setActiveCell(null);
-  }, []);
 
   const padSize = useMemo(() => {
     const maxW = Math.min(360, S.ms(280, 0.4));
@@ -503,8 +325,6 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
     padSizeRef.current = v;
     return v;
   }, [S]);
-
-  const recordedCellSet = useMemo(() => new Set(recordedHits.map((h) => h.cell)), [recordedHits]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -530,61 +350,8 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
 
           <ScrollView contentContainerStyle={{ paddingBottom: Spacing.lg }} showsVerticalScrollIndicator={false}>
             <Text style={[styles.hint, { color: C.textSecondary }]}>
-              {phase === "idle" || phase === "review" ? t("drumKit", "tapToPlay") : t("drumKit", "recordingHint")}
+              {t("drumKit", "tapToPlay")}
             </Text>
-
-            <View style={styles.controlRow}>
-              <View style={[styles.bpmBox, { borderColor: C.border, backgroundColor: C.background }]}>
-                <Text style={[styles.bpmLabel, { color: C.textTertiary }]}>{t("drumKit", "bpmLabel")}</Text>
-                <TextInput
-                  value={String(bpm)}
-                  onChangeText={(v) => {
-                    const n = parseInt(v.replace(/[^0-9]/g, ""), 10);
-                    if (Number.isFinite(n)) setBpm(Math.max(40, Math.min(240, n)));
-                    else setBpm(40);
-                  }}
-                  keyboardType="number-pad"
-                  editable={phase === "idle" || phase === "review"}
-                  style={[styles.bpmInput, { color: C.text }]}
-                  testID="drum-kit-bpm"
-                />
-              </View>
-
-              {phase === "idle" || phase === "review" ? (
-                <Pressable
-                  onPress={startRecording}
-                  style={[styles.recordBtn, { backgroundColor: C.accent }]}
-                  testID="drum-kit-record"
-                >
-                  <Ionicons name="radio-button-on" size={S.ms(16, 0.3)} color="#fff" />
-                  <Text style={styles.recordBtnText}>{t("drumKit", "record")}</Text>
-                </Pressable>
-              ) : (
-                <Pressable
-                  onPress={stopRecording}
-                  style={[styles.recordBtn, { backgroundColor: C.danger }]}
-                  testID="drum-kit-stop"
-                >
-                  <Ionicons name="square" size={S.ms(14, 0.3)} color="#fff" />
-                  <Text style={styles.recordBtnText}>{t("drumKit", "stop")}</Text>
-                </Pressable>
-              )}
-            </View>
-
-            {phase === "countin" && (
-              <View style={[styles.statusBox, { borderColor: C.accent, backgroundColor: C.accent + "22" }]}>
-                <Text style={[styles.statusText, { color: C.accent }]}>
-                  {t("drumKit", "countIn")} {countInValue}/{BEATS}
-                </Text>
-              </View>
-            )}
-            {phase === "recording" && (
-              <View style={[styles.statusBox, { borderColor: C.danger, backgroundColor: C.danger + "22" }]}>
-                <Text style={[styles.statusText, { color: C.danger }]}>
-                  {t("drumKit", "recording")} {(activeCell ?? 0) + 1}/{CELLS}
-                </Text>
-              </View>
-            )}
 
             <View
               style={[styles.padGrid, { gap: Spacing.sm, alignSelf: "center" }]}
@@ -609,52 +376,6 @@ export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
                 />
               ))}
             </View>
-
-            {phase === "review" && recordedHits.length > 0 && (
-              <View style={styles.reviewBox}>
-                <View style={styles.gridStrip}>
-                  {Array.from({ length: CELLS }).map((_, i) => {
-                    const filled = recordedCellSet.has(i);
-                    const beatStart = i % SUBS === 0;
-                    return (
-                      <View
-                        key={`cell-${i}`}
-                        style={[
-                          styles.cellDot,
-                          { borderColor: beatStart ? C.accent : C.border, backgroundColor: filled ? C.accent : C.background },
-                        ]}
-                      />
-                    );
-                  })}
-                </View>
-                <View style={[styles.nameRow, { borderColor: C.border, backgroundColor: C.background }]}>
-                  <Text style={[styles.bpmLabel, { color: C.textTertiary }]}>{t("drumKit", "nameLabel")}</Text>
-                  <TextInput
-                    value={entryName}
-                    onChangeText={setEntryName}
-                    placeholder={t("drumKit", "namePlaceholder")}
-                    placeholderTextColor={C.textTertiary}
-                    style={[styles.nameInput, { color: C.text }]}
-                    testID="drum-kit-name"
-                  />
-                </View>
-                <View style={styles.reviewBtnRow}>
-                  <Pressable
-                    onPress={handleDiscard}
-                    style={[styles.reviewBtn, { borderColor: C.border, backgroundColor: C.background }]}
-                  >
-                    <Text style={[styles.reviewBtnText, { color: C.textSecondary }]}>{t("drumKit", "discard")}</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={handleSave}
-                    style={[styles.reviewBtn, { borderColor: C.accent, backgroundColor: C.accent }]}
-                    testID="drum-kit-save"
-                  >
-                    <Text style={[styles.reviewBtnText, { color: "#fff" }]}>{t("drumKit", "save")}</Text>
-                  </Pressable>
-                </View>
-              </View>
-            )}
           </ScrollView>
         </Pressable>
       </Pressable>
@@ -783,56 +504,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.small,
     marginBottom: Spacing.md,
   },
-  controlRow: {
-    flexDirection: "row" as const,
-    gap: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  bpmBox: {
-    flex: 1,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-  },
-  bpmLabel: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: FontSize.caption,
-  },
-  bpmInput: {
-    flex: 1,
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: FontSize.body,
-    paddingVertical: 0,
-  },
-  recordBtn: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.md,
-  },
-  recordBtnText: {
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: FontSize.body,
-    color: "#fff",
-  },
-  statusBox: {
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    marginBottom: Spacing.md,
-    alignItems: "center" as const,
-  },
-  statusText: {
-    fontFamily: "SpaceGrotesk_600SemiBold",
-    fontSize: FontSize.body,
-  },
   padGrid: {
     flexDirection: "row" as const,
     flexWrap: "wrap" as const,
@@ -851,49 +522,15 @@ const styles = StyleSheet.create({
     fontSize: FontSize.caption,
     textAlign: "center" as const,
   },
-  reviewBox: {
-    marginTop: Spacing.lg,
-    gap: Spacing.md,
-  },
-  gridStrip: {
-    flexDirection: "row" as const,
-    gap: Spacing.xxs,
-    flexWrap: "wrap" as const,
-    justifyContent: "center" as const,
-  },
-  cellDot: {
-    width: 14,
-    height: 14,
-    borderRadius: Radius.xs,
-    borderWidth: 1,
-  },
-  nameRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
+  statusBox: {
     paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
     borderRadius: Radius.md,
     borderWidth: 1,
-  },
-  nameInput: {
-    flex: 1,
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: FontSize.body,
-    paddingVertical: 0,
-  },
-  reviewBtnRow: {
-    flexDirection: "row" as const,
-    gap: Spacing.md,
-  },
-  reviewBtn: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.md,
-    borderWidth: 1,
+    marginBottom: Spacing.md,
     alignItems: "center" as const,
   },
-  reviewBtnText: {
+  statusText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: FontSize.body,
   },
