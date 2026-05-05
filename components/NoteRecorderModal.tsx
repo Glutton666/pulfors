@@ -96,6 +96,8 @@ export function NoteRecorderModal({
     }
   }, [visible, existingChannel, existingMetronomeChannel]);
 
+  const [localBpm, setLocalBpm] = useState(bpm);
+
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(1);
   const [audioDuration, setAudioDuration] = useState(0);
@@ -191,8 +193,9 @@ export function NoteRecorderModal({
       previewTokenRef.current += 1;
     } else {
       setSampleName(existingName || "");
+      setLocalBpm(bpm);
     }
-  }, [visible, cleanup, existingName]);
+  }, [visible, cleanup, existingName, bpm]);
 
   useEffect(() => {
     // recordedUri 변경 시 채널별 stereo 캐시 무효화.
@@ -411,7 +414,7 @@ export function NoteRecorderModal({
       // 1/1 클릭: 미리듣기 시작과 동시에 한 마디 간격으로 클릭
       if (withClick) {
         playClick();
-        const measureMs = Math.round((60000 / bpm) * beatsPerMeasure);
+        const measureMs = Math.round((60000 / localBpm) * beatsPerMeasure);
         metronomeTimerRef.current = setInterval(() => {
           playClick();
         }, measureMs);
@@ -453,7 +456,7 @@ export function NoteRecorderModal({
       stopMetronomeClicks();
       setIsPlayingPreview(false);
     }
-  }, [recordedUri, trimStart, trimEnd, audioDuration, channel, withClick, bpm, beatsPerMeasure, playClick, stopMetronomeClicks]);
+  }, [recordedUri, trimStart, trimEnd, audioDuration, channel, withClick, localBpm, beatsPerMeasure, playClick, stopMetronomeClicks]);
 
   const playPreviewRef = useRef(playPreview);
   useEffect(() => { playPreviewRef.current = playPreview; }, [playPreview]);
@@ -854,6 +857,29 @@ export function NoteRecorderModal({
                   </Text>
                 </Pressable>
               </View>
+
+              {withClick && (
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm, marginTop: Spacing.xs }}>
+                  <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>{t("noteRecorder", "previewBpm")}</Text>
+                  <Pressable
+                    onPress={() => setLocalBpm((v) => Math.max(30, v - 1))}
+                    onLongPress={() => setLocalBpm((v) => Math.max(30, v - 5))}
+                    hitSlop={8}
+                    style={{ width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: C.surfaceLight, alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Ionicons name="remove" size={16} color={C.text} />
+                  </Pressable>
+                  <Text style={{ color: C.text, fontSize: FontSize.body, fontWeight: "600" as const, minWidth: 36, textAlign: "center" }}>{localBpm}</Text>
+                  <Pressable
+                    onPress={() => setLocalBpm((v) => Math.min(300, v + 1))}
+                    onLongPress={() => setLocalBpm((v) => Math.min(300, v + 5))}
+                    hitSlop={8}
+                    style={{ width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: C.surfaceLight, alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Ionicons name="add" size={16} color={C.text} />
+                  </Pressable>
+                </View>
+              )}
 
               <View style={{ flexDirection: "row", justifyContent: "center", gap: Spacing.xs, marginTop: Spacing.sm, alignSelf: "stretch" }}>
                 {(["both", "left", "right"] as const).map((opt) => {

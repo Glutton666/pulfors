@@ -491,6 +491,7 @@ export const translations = {
     channel_right: { ko: "오른쪽", en: "Right" },
     autoPreview: { ko: "드래그 후 자동 재생", en: "Auto-play after drag" },
     previewWithClick: { ko: "1/1 클릭 함께 듣기", en: "Play with 1/1 click" },
+    previewBpm: { ko: "미리듣기 BPM", en: "Preview BPM" },
     headphonesHint: { ko: "채널 차이는 헤드폰에서 또렷하게 들립니다", en: "Use headphones to clearly hear channel separation" },
     metronomeChannel: { ko: "클릭 채널 (이 비트만)", en: "Click channel (this beat only)" },
   },
