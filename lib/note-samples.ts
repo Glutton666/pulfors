@@ -6,6 +6,7 @@ const STORAGE_KEY = "@note_samples";
 const NAMES_STORAGE_KEY = "@note_sample_names";
 const SOURCES_STORAGE_KEY = "@note_sample_sources";
 const CHANNELS_STORAGE_KEY = "@note_sample_channels";
+const METRO_CHANNELS_STORAGE_KEY = "@note_sample_metro_channels_beat";
 
 /**
  * Per-storage-key serialized writer built on top of `createDebouncedPersister`.
@@ -67,12 +68,14 @@ const samplesWriter = createSerializedWriter<NoteSampleMap>(STORAGE_KEY);
 const namesWriter = createSerializedWriter<NoteSampleNameMap>(NAMES_STORAGE_KEY);
 const sourcesWriter = createSerializedWriter<NoteSampleSourceMap>(SOURCES_STORAGE_KEY);
 const channelsWriter = createSerializedWriter<NoteSampleChannelMap>(CHANNELS_STORAGE_KEY);
+const metroChannelsWriter = createSerializedWriter<NoteSampleMetroChannelMap>(METRO_CHANNELS_STORAGE_KEY);
 
 export type NoteSampleMap = Record<string, string>;
 export type NoteSampleNameMap = Record<string, string>;
 export type SampleSource = "recording" | "import";
 export type NoteSampleSourceMap = Record<string, SampleSource>;
 export type NoteSampleChannelMap = Record<string, SampleChannel>;
+export type NoteSampleMetroChannelMap = Record<string, SampleChannel>;
 
 function sampleKey(beatIndex: number, subIndex: number): string {
   return `${beatIndex}-${subIndex}`;
@@ -259,6 +262,57 @@ export function getNoteSampleChannel(
   channels: NoteSampleChannelMap,
 ): SampleChannel {
   return channels[sampleKey(beatIndex, subIndex)] ?? "both";
+}
+
+export async function loadNoteSampleMetroChannels(): Promise<NoteSampleMetroChannelMap> {
+  try {
+    const raw = await AsyncStorage.getItem(METRO_CHANNELS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const out: NoteSampleMetroChannelMap = {};
+      if (parsed && typeof parsed === "object") {
+        for (const [k, v] of Object.entries(parsed)) {
+          out[k] = normalizeSampleChannel(v);
+        }
+      }
+      return out;
+    }
+  } catch {}
+  return {};
+}
+
+export async function saveNoteSampleMetroChannels(channels: NoteSampleMetroChannelMap): Promise<void> {
+  try {
+    await metroChannelsWriter(channels);
+  } catch {}
+}
+
+export async function setNoteSampleMetroChannel(
+  beatIndex: number,
+  channel: SampleChannel,
+  existing: NoteSampleMetroChannelMap,
+): Promise<NoteSampleMetroChannelMap> {
+  const key = String(beatIndex);
+  const updated: NoteSampleMetroChannelMap = { ...existing };
+  if (channel === "both") {
+    delete updated[key];
+  } else {
+    updated[key] = channel;
+  }
+  await saveNoteSampleMetroChannels(updated);
+  return updated;
+}
+
+export async function removeNoteSampleMetroChannel(
+  beatIndex: number,
+  existing: NoteSampleMetroChannelMap,
+): Promise<NoteSampleMetroChannelMap> {
+  const key = String(beatIndex);
+  if (!(key in existing)) return existing;
+  const updated = { ...existing };
+  delete updated[key];
+  await saveNoteSampleMetroChannels(updated);
+  return updated;
 }
 
 export function hasNoteSample(

@@ -45,13 +45,14 @@ type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
 interface NoteRecorderModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (uri: string, name: string, source: SampleSource, channel: SampleChannel) => void;
+  onSave: (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: SampleChannel) => void;
   onDelete: () => void;
   beatIndex: number;
   subIndex: number;
   hasExisting: boolean;
   existingName?: string;
   existingChannel?: SampleChannel;
+  existingMetronomeChannel?: SampleChannel;
   bpm: number;
   beatsPerMeasure?: number;
   soundSet?: BuiltinSoundSet;
@@ -70,6 +71,7 @@ export function NoteRecorderModal({
   hasExisting,
   existingName,
   existingChannel = "both",
+  existingMetronomeChannel,
   bpm,
   beatsPerMeasure = 4,
   soundSet = "classic",
@@ -85,12 +87,14 @@ export function NoteRecorderModal({
   const [sampleName, setSampleName] = useState("");
   const sourceTypeRef = useRef<SampleSource>("recording");
   const [channel, setChannel] = useState<SampleChannel>(existingChannel);
+  const [metronomeChannel, setMetronomeChannel] = useState<SampleChannel>(existingMetronomeChannel ?? "both");
 
   useEffect(() => {
     if (visible) {
       setChannel(existingChannel);
+      setMetronomeChannel(existingMetronomeChannel ?? "both");
     }
-  }, [visible, existingChannel]);
+  }, [visible, existingChannel, existingMetronomeChannel]);
 
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(1);
@@ -466,11 +470,11 @@ export function NoteRecorderModal({
     if (audioDuration > 0) {
       const startMs = Math.floor(trimStart * audioDuration * 1000);
       const endMs = Math.floor(trimEnd * audioDuration * 1000);
-      onSave(`${recordedUri}#t=${startMs},${endMs}`, sampleName, sourceTypeRef.current, channel);
+      onSave(`${recordedUri}#t=${startMs},${endMs}`, sampleName, sourceTypeRef.current, channel, metronomeChannel);
     } else {
-      onSave(recordedUri, sampleName, sourceTypeRef.current, channel);
+      onSave(recordedUri, sampleName, sourceTypeRef.current, channel, metronomeChannel);
     }
-  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave, sampleName, channel]);
+  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave, sampleName, channel, metronomeChannel]);
 
   const MAX_DURATION_SEC = 600;
   const MAX_FILE_SIZE_MB = 50;
@@ -881,6 +885,37 @@ export function NoteRecorderModal({
                   {t("noteRecorder", "headphonesHint")}
                 </Text>
               </View>
+
+              {existingMetronomeChannel !== undefined && (
+                <View style={{ marginTop: Spacing.sm }}>
+                  <Text style={{ color: C.textSecondary, fontSize: FontSize.small, marginBottom: Spacing.xs, textAlign: "center" }}>
+                    {t("noteRecorder", "metronomeChannel")}
+                  </Text>
+                  <View style={{ flexDirection: "row", justifyContent: "center", gap: Spacing.xs, alignSelf: "stretch" }}>
+                    {(["both", "left", "right"] as const).map((opt) => {
+                      const active = metronomeChannel === opt;
+                      const label = opt === "left" ? t("noteRecorder", "channel_left") : opt === "right" ? t("noteRecorder", "channel_right") : t("noteRecorder", "channel_both");
+                      return (
+                        <Pressable
+                          key={opt}
+                          onPress={() => setMetronomeChannel(opt)}
+                          style={{
+                            flex: 1,
+                            paddingVertical: Spacing.sm,
+                            borderRadius: Radius.md,
+                            borderWidth: 1,
+                            borderColor: active ? C.accent : C.border,
+                            backgroundColor: active ? C.accentDim : C.surface,
+                            alignItems: "center",
+                          }}
+                        >
+                          <Text style={{ color: active ? C.accent : C.textSecondary, fontSize: FontSize.small }}>{label}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
 
               <View style={styles.nameInputRow}>
                 <Ionicons name="pricetag-outline" size={14} color={C.textSecondary} />

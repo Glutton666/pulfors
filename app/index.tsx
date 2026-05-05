@@ -93,8 +93,8 @@ import type { OnboardingResult } from "@/components/OnboardingModal";
 import { GoalCompletePopup } from "@/components/GoalCompletePopup";
 import type { PracticeEntry } from "@/lib/storage";
 import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
-import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource, loadNoteSampleChannels, saveNoteSampleChannels, setNoteSampleChannel, removeNoteSampleChannel } from "@/lib/note-samples";
-import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap, SampleSource } from "@/lib/note-samples";
+import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource, loadNoteSampleChannels, saveNoteSampleChannels, setNoteSampleChannel, removeNoteSampleChannel, loadNoteSampleMetroChannels, saveNoteSampleMetroChannels, setNoteSampleMetroChannel, removeNoteSampleMetroChannel } from "@/lib/note-samples";
+import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap, NoteSampleMetroChannelMap, SampleSource } from "@/lib/note-samples";
 import type { SampleChannel } from "@/lib/stereo-channel";
 import { NoteRecorderModal } from "@/components/NoteRecorderModal";
 import { NoteModeView } from "@/components/NoteModeView";
@@ -480,6 +480,8 @@ export default function MetronomeScreen() {
   } = noteSamplesHook;
   const [barMetronomeChannel, setBarMetronomeChannel] = useState<SampleChannel>("both");
   const barMetronomeChannelRef = useRef<SampleChannel>("both");
+  const [noteSampleMetroChannels, setNoteSampleMetroChannels] = useState<NoteSampleMetroChannelMap>({});
+  const noteSampleMetroChannelsRef = useRef<NoteSampleMetroChannelMap>({});
   const noteSampleSoundsRef = useRef<Record<string, ExpoAudioPlayer>>({});
   const samplePlayStateRef = useRef<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>({});
   const [recorderTarget, setRecorderTarget] = useState<{ beat: number; sub: number } | null>(null);
@@ -584,7 +586,10 @@ export default function MetronomeScreen() {
       () => {
         if (fadeOutMutedRef.current) return;
         if (Platform.OS === "web" && webClickReadyRef.current) {
-          playWebClick("high", barModeRef.current ? barMetronomeChannelRef.current : "both");
+          const ch = barModeRef.current
+            ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
+            : "both";
+          playWebClick("high", ch);
           return;
         }
         try {
@@ -596,7 +601,10 @@ export default function MetronomeScreen() {
       () => {
         if (fadeOutMutedRef.current) return;
         if (Platform.OS === "web" && webClickReadyRef.current) {
-          playWebClick("low", barModeRef.current ? barMetronomeChannelRef.current : "both");
+          const ch = barModeRef.current
+            ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
+            : "both";
+          playWebClick("low", ch);
           return;
         }
         try {
@@ -608,7 +616,10 @@ export default function MetronomeScreen() {
       () => {
         if (fadeOutMutedRef.current) return;
         if (Platform.OS === "web" && webClickReadyRef.current) {
-          playWebClick("strong", barModeRef.current ? barMetronomeChannelRef.current : "both");
+          const ch = barModeRef.current
+            ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
+            : "both";
+          playWebClick("strong", ch);
           return;
         }
         try {
@@ -628,7 +639,10 @@ export default function MetronomeScreen() {
       layerToggle[toggleKey] = !toggle;
 
       if (Platform.OS === "web" && webClickReadyRef.current) {
-        playWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low", barModeRef.current ? barMetronomeChannelRef.current : "both");
+        const ch = barModeRef.current
+          ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
+          : "both";
+        playWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low", ch);
         return;
       }
 
@@ -665,7 +679,10 @@ export default function MetronomeScreen() {
       blockToggle[toggleKey] = !toggle;
 
       if (Platform.OS === "web" && webClickReadyRef.current) {
-        playWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low", barModeRef.current ? barMetronomeChannelRef.current : "both");
+        const ch = barModeRef.current
+          ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
+          : "both";
+        playWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low", ch);
         return;
       }
 
@@ -800,7 +817,7 @@ export default function MetronomeScreen() {
       }).catch(() => {});
     });
 
-    Promise.all([loadNoteSamples(), loadNoteSampleNames(), loadNoteSampleSources(), loadNoteSampleChannels()]).then(async ([samples, names, sources, channels]) => {
+    Promise.all([loadNoteSamples(), loadNoteSampleNames(), loadNoteSampleSources(), loadNoteSampleChannels(), loadNoteSampleMetroChannels()]).then(async ([samples, names, sources, channels, metroChannels]) => {
       setNoteSamples(samples);
       noteSamplesRef.current = samples;
       setNoteSampleNames(names);
@@ -809,6 +826,8 @@ export default function MetronomeScreen() {
       noteSampleSourcesRef.current = sources;
       setNoteSampleChannels(channels);
       noteSampleChannelsRef.current = channels;
+      setNoteSampleMetroChannels(metroChannels);
+      noteSampleMetroChannelsRef.current = metroChannels;
       if (Object.keys(samples).length > 0) {
         await preloadSounds(samples);
       }
@@ -1254,7 +1273,7 @@ export default function MetronomeScreen() {
     setRecorderTarget({ beat: beatIndex, sub: subIndex });
   }, []);
 
-  const handleNoteRecordSave = useCallback(async (uri: string, name: string, source: SampleSource, channel: SampleChannel) => {
+  const handleNoteRecordSave = useCallback(async (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: SampleChannel) => {
     if (!recorderTarget) return;
     const key = `${recorderTarget.beat}-${recorderTarget.sub}`;
     invalidateSamplePCMCache(key);
@@ -1270,6 +1289,9 @@ export default function MetronomeScreen() {
     const updatedChannels = await setNoteSampleChannel(recorderTarget.beat, recorderTarget.sub, channel, noteSampleChannelsRef.current);
     setNoteSampleChannels(updatedChannels);
     noteSampleChannelsRef.current = updatedChannels;
+    const updatedMetroChannels = await setNoteSampleMetroChannel(recorderTarget.beat, metronomeChannel, noteSampleMetroChannelsRef.current);
+    setNoteSampleMetroChannels(updatedMetroChannels);
+    noteSampleMetroChannelsRef.current = updatedMetroChannels;
     await preloadNoteSampleSounds(updated, true);
     scheduleReRender();
     setRecorderTarget(null);
@@ -1291,6 +1313,12 @@ export default function MetronomeScreen() {
     const updatedChannels = await removeNoteSampleChannel(recorderTarget.beat, recorderTarget.sub, noteSampleChannelsRef.current);
     setNoteSampleChannels(updatedChannels);
     noteSampleChannelsRef.current = updatedChannels;
+    const beatStillHasSamples = Object.keys(updated).some((k) => k.startsWith(`${recorderTarget.beat}-`));
+    if (!beatStillHasSamples) {
+      const updatedMetroChannels = await removeNoteSampleMetroChannel(recorderTarget.beat, noteSampleMetroChannelsRef.current);
+      setNoteSampleMetroChannels(updatedMetroChannels);
+      noteSampleMetroChannelsRef.current = updatedMetroChannels;
+    }
     if (noteSampleSoundsRef.current[key]) {
       try { noteSampleSoundsRef.current[key].release(); } catch {}
       delete noteSampleSoundsRef.current[key];
@@ -1784,10 +1812,12 @@ export default function MetronomeScreen() {
       setNoteSampleNames({});
       setNoteSampleSources({});
       setNoteSampleChannels({});
+      setNoteSampleMetroChannels({});
       noteSamplesRef.current = {};
       noteSampleNamesRef.current = {};
       noteSampleSourcesRef.current = {};
       noteSampleChannelsRef.current = {};
+      noteSampleMetroChannelsRef.current = {};
       loadedPracticeNoteRef.current = null;
 
       if (engine) {
@@ -2488,6 +2518,8 @@ export default function MetronomeScreen() {
         noteSampleSourcesRef.current = {};
         setNoteSampleChannels({});
         noteSampleChannelsRef.current = {};
+        setNoteSampleMetroChannels({});
+        noteSampleMetroChannelsRef.current = {};
         engine.setBeatsPerMeasure(defaultBeats);
         engine.setBeatTypes([...defaultTypes]);
         engine.setAllBeatSubdivisions({});
@@ -4376,6 +4408,7 @@ export default function MetronomeScreen() {
         hasExisting={recorderTarget ? hasNoteSample(recorderTarget.beat, recorderTarget.sub, noteSamples) : false}
         existingName={recorderTarget ? (noteSampleNames[`${recorderTarget.beat}-${recorderTarget.sub}`] || "") : ""}
         existingChannel={recorderTarget ? (noteSampleChannels[`${recorderTarget.beat}-${recorderTarget.sub}`] ?? "both") : "both"}
+        existingMetronomeChannel={barMode ? (noteSampleMetroChannels[String(recorderTarget?.beat ?? 0)] ?? "both") : undefined}
         bpm={bpm}
         beatsPerMeasure={beatsPerMeasure}
         soundSet={soundSet.startsWith("custom") ? "classic" : soundSet as any}
