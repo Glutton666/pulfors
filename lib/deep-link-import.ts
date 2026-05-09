@@ -23,6 +23,8 @@ import type { BeatType } from "./metronome-engine";
 const MAX_LABEL_LEN = 200;
 const MAX_QUEUE_ENTRIES = 500;
 const MAX_QUEUE_IDS = 500;
+/** noteQueueEntries 최대 재귀 깊이 (pathological 중첩 페이로드 방어) */
+const MAX_DEPTH = 4;
 
 /**
  * 외부에서 수신한 `raw` 페이로드를 검증하여 안전한 PracticeEntry 를 반환한다.
@@ -31,7 +33,11 @@ const MAX_QUEUE_IDS = 500;
  * 호출자는 반환된 entry 의 `id` 와 `createdAt` 을 자신의 UUID / 타임스탬프로
  * 반드시 덮어씌워야 한다.
  */
-export function sanitizeDeepLinkEntry(raw: unknown): PracticeEntry | null {
+export function sanitizeDeepLinkEntry(raw: unknown, _depth = 0): PracticeEntry | null {
+  if (_depth >= MAX_DEPTH) {
+    logger.warn(`[DeepLink] noteQueueEntries 재귀 깊이 초과 (${MAX_DEPTH}), 항목 무시`);
+    return null;
+  }
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
     return null;
   }
@@ -144,7 +150,7 @@ export function sanitizeDeepLinkEntry(raw: unknown): PracticeEntry | null {
   if (Array.isArray(d.noteQueueEntries)) {
     entry.noteQueueEntries = (d.noteQueueEntries as unknown[])
       .slice(0, MAX_QUEUE_ENTRIES)
-      .map((qe) => sanitizeDeepLinkEntry(qe))
+      .map((qe) => sanitizeDeepLinkEntry(qe, _depth + 1))
       .filter((qe): qe is PracticeEntry => qe !== null);
   }
 
