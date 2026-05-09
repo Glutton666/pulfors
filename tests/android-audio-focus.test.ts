@@ -232,8 +232,8 @@ test("포커스 손실/회복 사이클이 여러 번 반복돼도 정상 동작
 
 // ── 섹션 B: 우선순위 1 — expo-audio 네이티브 인터럽션 경로 테스트 ─────────
 //
-// 조사 결과 (2026-05-09 기준):
-//   expo-audio 1.1.1 ~ 55.0.14(최신 stable) 모두 NativeAudioModule 에
+// 조사 결과 (2026-05-09 기준, 2026-05-09 56.0.3 재확인):
+//   expo-audio 1.1.1 ~ 56.0.3(최신, next 채널 포함) 모두 NativeAudioModule 에
 //   addInterruptionListener 를 JS API 로 노출하지 않는다.
 //   따라서 현재는 expo-av 프로브(우선순위 2)가 계속 사용된다.
 //
@@ -291,7 +291,7 @@ function installNativeMock() {
 
 test("소스 검증: expo-audio AudioModule addInterruptionListener 노출 여부 감지", () => {
   // 이 테스트는 비차단(non-blocking) 업그레이드 감지 역할을 한다.
-  // 2026-05-09 기준: expo-audio 1.1.1 ~ 55.0.14(최신 stable) 모두
+  // 2026-05-09 기준(56.0.3 재확인): expo-audio 1.1.1 ~ 56.0.3(next 채널 포함) 모두
   // addInterruptionListener 를 JS 레이어에 노출하지 않으므로
   // expo-av 프로브(우선순위 2)가 사용된다.
   //
@@ -312,11 +312,11 @@ test("소스 검증: expo-audio AudioModule addInterruptionListener 노출 여�
       "섹션 B 상단 '업그레이드 준비 체크리스트'에 따라 이 소스 검증 테스트를 삭제하세요.",
     );
   } else {
-    // 현재 상태(expo-audio 1.1.1 ~ 55.0.14): 미노출 확인
+    // 현재 상태(expo-audio 1.1.1 ~ 56.0.3): 미노출 확인
     assert.equal(
       hasApi,
       false,
-      "expo-audio 55.0.14 이하는 addInterruptionListener 를 노출하지 않는다",
+      "expo-audio 56.0.3 이하는 addInterruptionListener 를 노출하지 않는다",
     );
   }
 });

@@ -7,7 +7,7 @@
 // addInterruptionListener 를 여기서 추가하면 expo-audio 네이티브 경로가
 // 테스트 환경에서도 활성화되어 android-audio-focus 테스트 흐름이 바뀐다.
 //
-// 2026-05-09 조사: expo-audio 1.1.1 ~ 55.0.14(최신 stable) 모두
+// 2026-05-09 조사(56.0.3 재확인): expo-audio 1.1.1 ~ 56.0.3(next 채널 포함) 모두
 // NativeAudioModule 에 addInterruptionListener 를 노출하지 않는다.
 // 해당 API 가 추가된 버전이 출시되면 tests/android-audio-focus.test.ts
 // 섹션 B 상단의 "업그레이드 준비 체크리스트"를 따라 대응한다.
