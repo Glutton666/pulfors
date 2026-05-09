@@ -513,6 +513,30 @@ test("source: MoreMenuModal — 각 항목 Pressable에 testID 속성이 존재�
   }
 });
 
+test("source: MoreMenuModal — 닫기 Pressable에 testID=\"more-menu-close\" 속성이 존재한다", () => {
+  const modalSrc = readFileSync(join(process.cwd(), "components/MoreMenuModal.tsx"), "utf-8");
+
+  // <Pressable 태그 기준으로 소스를 분할해 닫기 버튼 블록을 찾는다.
+  // overlay Pressable 도 onPress={onClose} 를 가지므로, 닫기 버튼 고유 스타일
+  // (closeBtn) 로 구별한다.
+  const pressableBlocks = modalSrc.split("<Pressable");
+  const closeBlock = pressableBlocks.find(
+    (b) => b.includes("onPress={onClose}") && b.includes("closeBtn"),
+  );
+
+  assert.ok(
+    closeBlock !== undefined,
+    "closeBtn 스타일과 onPress={onClose} 가 함께 있는 <Pressable 블록을 찾을 수 없다 — " +
+    "닫기 버튼이 제거되거나 스타일 이름이 변경되었을 수 있다",
+  );
+
+  assert.ok(
+    closeBlock!.includes('testID="more-menu-close"'),
+    'onPress={onClose} 가 있는 닫기 <Pressable 에 testID="more-menu-close" 가 없다 — ' +
+    "e2e 테스트에서 닫기 버튼에 접근하려면 testID 가 필요하다",
+  );
+});
+
 // ────────────────────────────────────────────────────────────────
 // 6. 소스 구조 테스트 — DrumKit·TempoQuiz 핸들러 내부 구조 검증
 //

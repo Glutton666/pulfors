@@ -122,6 +122,7 @@ export function MoreMenuModal({ visible, onClose, onScheduledStart, onFadeOut, o
             style={({ pressed }) => [styles.closeBtn, { backgroundColor: C.background, borderColor: C.border }, pressed && { opacity: 0.8 }]}
             onPress={onClose}
             accessibilityRole="button"
+            testID="more-menu-close"
           >
             <Text style={[styles.closeText, { color: C.text }]}>{t("scheduledStart", "close")}</Text>
           </Pressable>
