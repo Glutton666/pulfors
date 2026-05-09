@@ -19,6 +19,14 @@ export function DeepLinkProvider({ children }: { children: ReactNode }) {
   const [lastUrl, setLastUrl] = useState("");
   const handleRef = useRef<DeepLinkCommandHandler | null>(null);
 
+  /**
+   * Cold-start 경합 조건 대응:
+   * getInitialURL() 콜백이 실행될 때 setCommandHandler 가 아직 호출되지 않아
+   * handleRef.current 가 null 인 경우, 명령을 여기에 보관한다.
+   * setCommandHandler 가 핸들러를 등록할 때 이 값을 확인하여 즉시 재전달한다.
+   */
+  const pendingCommandRef = useRef<VoiceCommand | null>(null);
+
   const dispatch = useCallback((url: string) => {
     if (!url) return;
     setLastUrl(url);
@@ -28,10 +36,17 @@ export function DeepLinkProvider({ children }: { children: ReactNode }) {
       return;
     }
     setLastCommand(cmd);
-    try {
-      handleRef.current?.(cmd);
-    } catch (err) {
-      logger.warn("[deeplink] command handler error:", err);
+    if (handleRef.current) {
+      pendingCommandRef.current = null;
+      try {
+        handleRef.current(cmd);
+      } catch (err) {
+        logger.warn("[deeplink] command handler error:", err);
+      }
+    } else {
+      // 핸들러가 아직 등록되지 않았으면 보관 — setCommandHandler 에서 재전달.
+      pendingCommandRef.current = cmd;
+      logger.info("[deeplink] handler not yet registered, queuing command:", cmd.type);
     }
   }, []);
 
@@ -48,6 +63,16 @@ export function DeepLinkProvider({ children }: { children: ReactNode }) {
 
   const setCommandHandler = useCallback((h: DeepLinkCommandHandler | null) => {
     handleRef.current = h;
+    if (h && pendingCommandRef.current) {
+      const pending = pendingCommandRef.current;
+      pendingCommandRef.current = null;
+      logger.info("[deeplink] replaying queued command:", pending.type);
+      try {
+        h(pending);
+      } catch (err) {
+        logger.warn("[deeplink] replayed command handler error:", err);
+      }
+    }
   }, []);
 
   return (
