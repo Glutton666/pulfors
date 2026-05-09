@@ -26,6 +26,10 @@ export default function PracticeDeepLink() {
       const raw = decodeURIComponent(d);
       const decoded = JSON.parse(atob(raw));
       if (decoded && decoded.bpm && decoded.beatTypes) {
+        // noteSamples 는 송신 디바이스의 로컬 파일 URI 이므로 수신 측에서는
+        // 유효하지 않고, 외부 URL이 포함될 경우 외부 네트워크 요청을 유발한다.
+        // pending import 저장 전에 제거한다.
+        decoded.noteSamples = {};
         setPendingImport(decoded);
       }
     } catch (e) {

@@ -33,6 +33,11 @@ export const SAMPLES_DIR = "note_samples/";
 export const MAX_IMPORT_JSON_CHARS = 100 * 1024 * 1024;
 export const MAX_AUDIO_FILE_COUNT = 500;
 export const MAX_AUDIO_FILE_B64_CHARS = 70 * 1024 * 1024;
+// 복원된 note sample 맵의 최대 항목 수. 초과 시 앱 기동마다 플레이어 생성
+// 부담이 반복되는 지속적 서비스 거부를 방지한다.
+export const MAX_NOTE_SAMPLES_PER_MAP = 200;
+// 백업에서 복원하는 practice book 항목의 최대 수.
+export const MAX_PRACTICE_BOOK_ENTRIES = 500;
 
 export interface BackupFile {
   _meta: {
