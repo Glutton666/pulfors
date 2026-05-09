@@ -103,11 +103,13 @@ export async function setupNotificationControls(lang: Language = "ko") {
 
     const t = createT(lang);
     if (Platform.OS === "android") {
-      // Delete and recreate channel so importance change takes effect
+      // Delete and recreate channel so importance change takes effect.
+      // MAX importance is required for the notification to be treated as
+      // a foreground-service notification on Android 8+ (API 26+).
       try { await N.deleteNotificationChannelAsync("metronome"); } catch {}
       await N.setNotificationChannelAsync("metronome", {
         name: t("notification", "channelName"),
-        importance: N.AndroidImportance.HIGH,
+        importance: N.AndroidImportance.MAX,
         sound: undefined,
         vibrationPattern: [],
         enableVibrate: false,

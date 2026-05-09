@@ -131,15 +131,16 @@ export default function RootLayout() {
   //   → 'inactive' = 인터럽션 시작, 'active' 복귀 = 인터럽션 종료.
   //
   // Android: 포그라운드 인터럽션(전화 수신 등)은 위 expo-av 프로브가 주로
-  //          처리한다. 앱이 'background'로 전환될 때도 foreground service 미구성
-  //          상태에서는 오디오가 어차피 멈추므로 'background'를 인터럽션 신호로
-  //          유지한다. notifyInterruptionBegin/End 가 멱등하므로 프로브와
-  //          중복 신호가 발생해도 안전하다.
-  //   → 'background'·'inactive' = 인터럽션 시작, 'active' 복귀 = 인터럽션 종료.
+  //          처리한다. 홈 버튼·화면 잠금은 사용자가 의도적으로 전환한 것이므로
+  //          'background' 전환을 인터럽션으로 처리하지 않는다 (iOS 와 동일).
+  //          foreground service 권한(FOREGROUND_SERVICE_MEDIA_PLAYBACK)이
+  //          app.json 에 선언되어 있어 실제 빌드에서 백그라운드 오디오가 유지된다.
+  //          notifyInterruptionBegin/End 가 멱등하므로 프로브와 중복 신호가
+  //          발생해도 안전하다.
+  //   → 'inactive' = 인터럽션 시작, 'active' 복귀 = 인터럽션 종료 (iOS/Android 동일).
   useEffect(() => {
     if (Platform.OS === "web") return;
-    const interruptStates: ReadonlyArray<string> =
-      Platform.OS === "android" ? ["background", "inactive"] : ["inactive"];
+    const interruptStates: ReadonlyArray<string> = ["inactive"];
     const sub = AppState.addEventListener("change", (next) => {
       logger.info(`[appState] → ${next} (interruption states: ${interruptStates.join(",")})`);
       if (interruptStates.includes(next)) {
