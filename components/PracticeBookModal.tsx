@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   Pressable,
   FlatList,
   TextInput,
@@ -13,6 +12,7 @@ import {
   PanResponder,
   Dimensions,
 } from "react-native";
+import { AnimatedSlideModal } from "@/components/AnimatedModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -646,9 +646,8 @@ export function PracticeBookModal({
   );
 
   return (
-    <Modal
+    <AnimatedSlideModal
       visible={visible}
-      animationType="slide"
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
@@ -867,7 +866,7 @@ export function PracticeBookModal({
           </View>
         )}
       </View>
-    </Modal>
+    </AnimatedSlideModal>
   );
 }
 

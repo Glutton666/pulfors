@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   Pressable,
   TextInput,
   Platform,
   ActivityIndicator,
 } from "react-native";
+import { AnimatedSlideModal } from "@/components/AnimatedModal";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
@@ -146,9 +146,8 @@ export function ExportEntryModal({ visible, entry, onClose }: ExportEntryModalPr
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
   return (
-    <Modal
+    <AnimatedSlideModal
       visible={visible}
-      animationType="slide"
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
     >
@@ -300,7 +299,7 @@ export function ExportEntryModal({ visible, entry, onClose }: ExportEntryModalPr
           </Pressable>
         </View>
       </View>
-    </Modal>
+    </AnimatedSlideModal>
   );
 }
 

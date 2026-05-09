@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Modal,
   View,
   Text,
   Pressable,
@@ -8,6 +7,7 @@ import {
   StyleSheet,
   Platform,
 } from "react-native";
+import { AnimatedSlideModal } from "@/components/AnimatedModal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -250,7 +250,7 @@ export function ScheduledStartModal({
   }, []);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={counting ? handleCancel : onClose}>
+    <AnimatedSlideModal visible={visible} transparent onRequestClose={counting ? handleCancel : onClose}>
       <View style={styles.overlay}>
         <View
           style={[
@@ -399,7 +399,7 @@ export function ScheduledStartModal({
           </View>
         </View>
       </View>
-    </Modal>
+    </AnimatedSlideModal>
   );
 }
 

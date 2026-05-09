@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   Pressable,
   Platform,
   ScrollView,
@@ -14,7 +13,7 @@ import {
   Image,
   useWindowDimensions,
 } from "react-native";
-import { AnimatedModal } from "@/components/AnimatedModal";
+import { AnimatedModal, AnimatedSlideModal } from "@/components/AnimatedModal";
 import { logger } from "@/lib/logger";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -754,7 +753,7 @@ export function WorkUpOverviewModal({
       </Pressable>
 
       {/* ── Share Summary Modal ── */}
-      <Modal visible={showShareModal} animationType="slide" transparent onRequestClose={() => setShowShareModal(false)} statusBarTranslucent>
+      <AnimatedSlideModal visible={showShareModal} transparent onRequestClose={() => setShowShareModal(false)} statusBarTranslucent>
         <View style={shareStyles.overlay}>
           <View style={[shareStyles.container, { paddingTop: (insets.top || webTopInset) + 10, paddingBottom: insets.bottom + 10 }]}>
             <View style={shareStyles.topBar}>
@@ -922,7 +921,7 @@ export function WorkUpOverviewModal({
             </ScrollView>
           </View>
         </View>
-      </Modal>
+      </AnimatedSlideModal>
 
       {/* ── Yearly Summary Modal ── */}
       <AnimatedModal visible={showYearlySummary} transparent onRequestClose={() => setShowYearlySummary(false)} statusBarTranslucent>
