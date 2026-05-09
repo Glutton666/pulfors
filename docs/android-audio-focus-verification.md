@@ -8,19 +8,32 @@
 
 ---
 
-## ⚠️ 검증 상태: 부분 완료 (실기기 미수행)
+## 검증 상태
 
 | 검증 계층 | 상태 |
 |----------|------|
 | JS 로직 단위 테스트 (시뮬레이터) | ✅ 완료 — 12/12 pass |
-| 실제 Android 기기/에뮬레이터 런타임 | ❌ **미수행** — Replit 환경에서 Android 런타임 접근 불가 |
+| CI Android 에뮬레이터 E2E (GSM 시뮬레이션) | ⏳ 대기 — GitHub Actions 수동 실행 필요 |
+| 실제 Android 물리 기기 런타임 | ⬜ 미수행 — [하단 체크리스트](#실기기-검증-체크리스트) 참고 |
 
-**Replit 클라우드 환경에는 Android 에뮬레이터나 물리 기기 연결 인터페이스가 없다.**
-실제 `AudioManager.OnAudioFocusChangeListener` 이벤트, GSM 전화 시뮬레이션,
-다른 앱의 미디어 포커스 요청은 이 환경에서 실행할 수 없다.
+**Replit 클라우드 환경에는 Android 에뮬레이터가 없다.**
+E2E 자동화는 GitHub Actions 워크플로우(`.github/workflows/android-audio-focus-e2e.yml`)를
+통해 실행한다.
 
-팀원이 Android 기기/에뮬레이터로 [하단 실기기 체크리스트](#실기기-검증-체크리스트)를
-수행한 후 결과를 이 문서에 추가해야 한다.
+### CI E2E 자동화 실행 방법
+
+```bash
+# GitHub 저장소 → Actions 탭 →
+# "Android 오디오 포커스 E2E (전화 수신 시뮬레이션)" → "Run workflow"
+# API 레벨 선택 (기본값 29) 후 실행
+```
+
+워크플로우가 완료되면 `scripts/android-phone-call-e2e.sh`가 검증 결과를
+이 문서의 [CI 자동화 결과 섹션](#계층-2-a-ci-자동화-테스트-결과-android-에뮬레이터)에
+자동으로 기록하고 커밋한다.
+
+팀원이 Android 물리 기기로 추가 검증을 수행하려면
+[하단 실기기 체크리스트](#실기기-검증-체크리스트)를 참고한다.
 
 ---
 
@@ -49,6 +62,25 @@ Android에서는 `AppState 'inactive'`가 거의 발생하지 않아 전화 수�
 
 **핵심 불변식**: `notifyInterruptionBegin()`은 `stopAndroidFocusProbe()`를 절대 호출하지
 않는다. 프로브가 살아있어야 OS의 포커스 반환 이벤트(`isPlaying: true`)를 받을 수 있다.
+
+---
+
+<!-- CI_RESULTS_START -->
+## 계층 2-A: CI 자동화 테스트 결과 (Android 에뮬레이터)
+
+> 이 섹션은 GitHub Actions 워크플로우(`android-audio-focus-e2e.yml`)가 자동 갱신합니다.
+> 아직 실행된 적 없습니다. 워크플로우를 수동으로 실행하면 결과가 여기에 기록됩니다.
+
+| 항목 | 값 |
+|------|-----|
+| 실행 일시 | — |
+| 기기 모델 | — |
+| Android API | — |
+| 시나리오 A (전화 수신/거절) | — |
+| 시나리오 B (통화 수락/종료) | — |
+| 시나리오 C (3회 반복 사이클) | — |
+| **전체 결과** | **미실행** |
+<!-- CI_RESULTS_END -->
 
 ---
 
