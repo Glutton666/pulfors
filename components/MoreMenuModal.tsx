@@ -27,7 +27,7 @@ export function MoreMenuModal({ visible, onClose, onScheduledStart, onFadeOut, o
 
   return (
     <AnimatedModal visible={visible} transparent onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
+      <Pressable style={styles.overlay} onPress={onClose} testID="more-menu-overlay">
         <View
           style={[
             styles.sheet,

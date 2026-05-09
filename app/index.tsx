@@ -4137,7 +4137,7 @@ export default function MetronomeScreen() {
       )}
 
       <AnimatedModal transparent visible={showMenu} onRequestClose={() => setActiveModal(null)}>
-        <Pressable style={styles.menuOverlay} onPress={() => setActiveModal(null)}>
+        <Pressable style={styles.menuOverlay} onPress={() => setActiveModal(null)} testID="menu-overlay">
           <View style={[styles.menuDropdown, { backgroundColor: C.surface, borderColor: C.border }, isLandscape ? { left: S.ms(20, 0.3), right: "auto" as any, top: (insets.top || webTopInset) + S.ms(40, 0.3) } : { top: (insets.top || webTopInset) + 52 }]}>
             <Pressable
               style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
