@@ -2,6 +2,10 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { createT, type Language } from "@/lib/i18n";
 import { logger } from "./logger";
+import {
+  requestForegroundPlayback,
+  relinquishForegroundPlayback,
+} from "./android-foreground-service";
 
 const CATEGORY_ID = "metronome_controls";
 const NOTIFICATION_ID = "metronome_playback";
@@ -138,6 +142,11 @@ export async function showPlayingNotification(
     if (!isSetup) return;
   }
 
+  // Android: AudioControlsService(foreground service)가 백그라운드에서
+  // 오디오를 유지하도록 AudioModule을 설정합니다.
+  // 알림 표시와 병렬로 실행해 지연을 최소화합니다.
+  void requestForegroundPlayback();
+
   const N = await getNotifications();
   if (!N) return;
 
@@ -187,6 +196,11 @@ export async function showPausedNotification(
 ) {
   if (Platform.OS === "web" || !isSetup) return;
   if (isExpoGo) return;
+
+  // Android: 메트로놈이 정지되면 포그라운드 서비스 상태를 초기화합니다.
+  // AudioPlayer가 정지되면 AudioControlsService가 자동으로 stopForeground()를
+  // 호출하므로 JS 레벨 상태만 초기화합니다.
+  relinquishForegroundPlayback();
 
   const N = await getNotifications();
   if (!N) return;
