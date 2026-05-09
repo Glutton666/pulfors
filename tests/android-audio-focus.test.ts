@@ -229,3 +229,154 @@ test("포커스 손실/회복 사이클이 여러 번 반복돼도 정상 동작
   // 테스트 종료 후 Platform.OS 복구 (다른 테스트에 영향 없도록).
   (Platform as unknown as Record<string, unknown>).OS = "ios";
 });
+
+// ── 섹션 B: 우선순위 1 — expo-audio 네이티브 인터럽션 경로 테스트 ─────────
+//
+// expo-audio 1.1.1 에는 addInterruptionListener 가 JS API 로 노출되지 않는다.
+// 이 섹션은 expo-audio 가 해당 API 를 노출하는 버전으로 업그레이드되었을 때
+// 우선순위 1 경로가 올바르게 동작하는지 보장하기 위한 테스트이다.
+//
+// 방법: 테스트 내에서 expo-audio 스텁의 AudioModule 에
+// addInterruptionListener 를 임시로 추가한 뒤, 각 테스트가 끝나면 제거한다.
+// _resetAndroidFocusForTests() 는 expoAudioCapabilityChecked/expoAudioNativeAvailable
+// 캐시를 null 로 초기화하므로 각 테스트는 독립적으로 실행된다.
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const expoAudioStub = require("expo-audio") as Record<string, unknown>;
+const stubAudioModule = expoAudioStub.AudioModule as Record<string, unknown>;
+
+/**
+ * expo-audio 스텁의 AudioModule 에 mock addInterruptionListener 를 설치한다.
+ * 반환된 객체로 이벤트를 발생시키거나 구독 해제 횟수를 확인하고,
+ * cleanup() 으로 설치된 mock 을 제거한다.
+ */
+function installNativeMock() {
+  const registeredCallbacks: Array<(e: { type: string }) => void> = [];
+  let removeCount = 0;
+
+  stubAudioModule.addInterruptionListener = (
+    _event: string,
+    cb: (e: { type: string }) => void,
+  ) => {
+    registeredCallbacks.push(cb);
+    return { remove: () => { removeCount++; } };
+  };
+
+  return {
+    emit(type: string) {
+      registeredCallbacks.forEach((cb) => cb({ type }));
+    },
+    getRemoveCount: () => removeCount,
+    cleanup() {
+      delete stubAudioModule.addInterruptionListener;
+    },
+  };
+}
+
+test("소스 검증: expo-audio 1.1.1 AudioModule 에는 addInterruptionListener 가 없다", () => {
+  const mod = require("expo-audio") as { AudioModule?: Record<string, unknown> };
+  const hasApi =
+    mod.AudioModule != null &&
+    typeof mod.AudioModule["addInterruptionListener"] === "function";
+  assert.equal(
+    hasApi,
+    false,
+    "expo-audio 1.1.1 은 addInterruptionListener 를 노출하지 않는다 — " +
+    "이 테스트가 실패하면 expo-audio 가 업그레이드된 것이므로 " +
+    "lib/android-audio-focus.ts 우선순위 1 경로가 자동으로 활성화된다",
+  );
+});
+
+test("addInterruptionListener 가 있으면 expo-av Sound 대신 네이티브 경로를 사용한다", async () => {
+  resetAll("android");
+  const mock = installNativeMock();
+  try {
+    initAndroidFocusCallbacks(() => {}, () => {});
+    await startAndroidFocusProbe();
+    assert.equal(
+      lastSound,
+      null,
+      "네이티브 경로 선택 시 expo-av Sound 가 생성되면 안 된다",
+    );
+    await stopAndroidFocusProbe();
+  } finally {
+    mock.cleanup();
+  }
+});
+
+test("네이티브 경로: 'began' 이벤트 → onFocusLoss 호출", async () => {
+  resetAll("android");
+  const mock = installNativeMock();
+  try {
+    let lossCount = 0;
+    let gainCount = 0;
+    initAndroidFocusCallbacks(() => lossCount++, () => gainCount++);
+    await startAndroidFocusProbe();
+
+    mock.emit("began");
+    assert.equal(lossCount, 1, "'began' 이벤트가 onFocusLoss 를 1회 호출해야 한다");
+    assert.equal(gainCount, 0, "onFocusGain 은 호출되지 않아야 한다");
+
+    await stopAndroidFocusProbe();
+  } finally {
+    mock.cleanup();
+  }
+});
+
+test("네이티브 경로: 'ended' 이벤트 → onFocusGain 호출", async () => {
+  resetAll("android");
+  const mock = installNativeMock();
+  try {
+    let lossCount = 0;
+    let gainCount = 0;
+    initAndroidFocusCallbacks(() => lossCount++, () => gainCount++);
+    await startAndroidFocusProbe();
+
+    mock.emit("began");
+    assert.equal(lossCount, 1);
+    mock.emit("ended");
+    assert.equal(gainCount, 1, "'ended' 이벤트가 onFocusGain 을 1회 호출해야 한다");
+
+    await stopAndroidFocusProbe();
+  } finally {
+    mock.cleanup();
+  }
+});
+
+test("네이티브 경로: stopAndroidFocusProbe 가 구독을 해제한다", async () => {
+  resetAll("android");
+  const mock = installNativeMock();
+  try {
+    initAndroidFocusCallbacks(() => {}, () => {});
+    await startAndroidFocusProbe();
+    assert.equal(mock.getRemoveCount(), 0, "stop 전에는 remove 가 호출되지 않아야 한다");
+
+    await stopAndroidFocusProbe();
+    assert.equal(mock.getRemoveCount(), 1, "stopAndroidFocusProbe 후 remove 가 1회 호출돼야 한다");
+  } finally {
+    mock.cleanup();
+  }
+});
+
+test("expoAudioNativeAvailable 캐시: 두 번째 probe 시작에서도 네이티브 경로가 유지된다", async () => {
+  resetAll("android");
+  const mock = installNativeMock();
+  try {
+    initAndroidFocusCallbacks(() => {}, () => {});
+
+    await startAndroidFocusProbe();
+    assert.equal(lastSound, null, "첫 번째 probe: 네이티브 경로여야 한다");
+    await stopAndroidFocusProbe();
+
+    lastSound = null;
+    await startAndroidFocusProbe();
+    assert.equal(
+      lastSound,
+      null,
+      "두 번째 probe: 캐시된 expoAudioNativeAvailable=true 로 여전히 네이티브 경로여야 한다",
+    );
+    await stopAndroidFocusProbe();
+  } finally {
+    mock.cleanup();
+  }
+});
