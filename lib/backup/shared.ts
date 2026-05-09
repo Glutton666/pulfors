@@ -190,7 +190,12 @@ export function sanitizeNoteSampleUris(
 ): Record<string, string> | undefined {
   if (!samples) return samples;
   const safe: Record<string, string> = {};
+  let accepted = 0;
   for (const [k, v] of Object.entries(samples)) {
+    if (accepted >= MAX_NOTE_SAMPLES_PER_MAP) {
+      logger.warn(`[Backup] Note sample map exceeds limit (${MAX_NOTE_SAMPLES_PER_MAP}), remaining entries dropped`);
+      break;
+    }
     if (typeof v !== "string") continue;
     const raw = v.split("#")[0];
     const isLocal =
@@ -200,6 +205,7 @@ export function sanitizeNoteSampleUris(
       raw.startsWith("data:");
     if (isLocal) {
       safe[k] = v;
+      accepted++;
     } else {
       logger.warn("[Backup] Unsafe noteSample URI stripped at import:", k, raw.slice(0, 80));
     }
@@ -242,7 +248,11 @@ export function sanitizeBackupData(
 
   if (result["practice_book"]) {
     try {
-      const entries: PracticeEntry[] = JSON.parse(result["practice_book"]!);
+      let entries: PracticeEntry[] = JSON.parse(result["practice_book"]!);
+      if (entries.length > MAX_PRACTICE_BOOK_ENTRIES) {
+        logger.warn(`[Backup] Practice book too large (${entries.length}), truncating to ${MAX_PRACTICE_BOOK_ENTRIES}`);
+        entries = entries.slice(0, MAX_PRACTICE_BOOK_ENTRIES);
+      }
       const sanitized = entries.map((e) => ({
         ...e,
         noteSamples: sanitizeNoteSampleUris(e.noteSamples),

@@ -3865,6 +3865,9 @@ export default function MetronomeScreen() {
           const entry: PracticeEntry = {
             id: Crypto.randomUUID(),
             ...decoded,
+            // noteSamples 는 송신 디바이스의 로컬 파일 URI — 수신 측에서 유효하지
+            // 않으며 외부 URL이면 outbound 네트워크 요청을 유발한다. 제거한다.
+            noteSamples: {},
           };
           Alert.alert(
             t("main", "importSettings"),
@@ -3913,6 +3916,9 @@ export default function MetronomeScreen() {
         const entry: PracticeEntry = {
           id: Crypto.randomUUID(),
           ...decoded,
+          // 딥링크 경유 pending import 는 송신 디바이스의 파일 URI를 포함할 수
+          // 있으므로 noteSamples를 비워 outbound 요청 및 잘못된 URI 저장을 방지.
+          noteSamples: {},
         };
         const existing = await loadPracticeBook();
         await savePracticeBook([entry, ...existing]);
