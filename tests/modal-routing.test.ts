@@ -624,6 +624,94 @@ test("source: onTempoQuiz 핸들러가 setActiveModal을 직접 호출하지 않
   );
 });
 
+// ────────────────────────────────────────────────────────────────
+// 6b. 소스 구조 테스트 — ScheduledStart·FadeOut 핸들러 구조 검증
+//
+//    onScheduledStart / onFadeOut 은 현재 단순 표현식 람다:
+//      onScheduledStart={() => openExclusive("scheduledStart")}
+//      onFadeOut={() => openExclusive("fadeOut")}
+//    이므로 extractMoreMenuHandlerBody (블록 람다 전용) 를 사용할 수 없다.
+//    prop 전체를 중괄호 깊이 추적으로 추출하는 별도 헬퍼를 사용한다.
+//
+//    향후 핸들러에 엔진 정지 등 부수 효과 코드가 추가될 때
+//    openExclusive 경유를 잊거나 setActiveModal 을 직접 호출하는 회귀를
+//    사전 차단하기 위해 커버한다.
+// ────────────────────────────────────────────────────────────────
+
+/**
+ * app/index.tsx 의 <MoreMenuModal … /> JSX 블록에서
+ * 지정한 prop 전체 소스 문자열을 반환한다.
+ *
+ * 단순 표현식 람다(onScheduledStart={() => openExclusive(...)}) 와
+ * 블록 람다(onDrumKit={() => { ... }}) 를 모두 처리한다.
+ * 중괄호 깊이 추적을 사용해 중첩 구조를 올바르게 처리한다.
+ */
+function extractMoreMenuPropSource(handlerName: string): string {
+  const src = readFileSync(join(process.cwd(), "app/index.tsx"), "utf-8");
+
+  const startIdx = src.indexOf("<MoreMenuModal");
+  assert.ok(startIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
+
+  const endIdx = src.indexOf("/>", startIdx);
+  assert.ok(endIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 의 닫는 /> 를 찾을 수 없다");
+
+  const block = src.slice(startIdx, endIdx + 2);
+
+  // handlerName={...} 시작 위치 탐색
+  const propStart = block.indexOf(`${handlerName}={`);
+  assert.ok(
+    propStart !== -1,
+    `<MoreMenuModal 블록에서 ${handlerName}={ 를 찾을 수 없다`,
+  );
+
+  // { ... } 전체를 중괄호 깊이 추적으로 추출
+  const braceStart = block.indexOf("{", propStart + handlerName.length + 1);
+  let depth = 0;
+  let i = braceStart;
+  for (; i < block.length; i++) {
+    if (block[i] === "{") depth++;
+    else if (block[i] === "}") { depth--; if (depth === 0) break; }
+  }
+
+  return block.slice(propStart, i + 1);
+}
+
+test("source: onScheduledStart 핸들러가 openExclusive(\"scheduledStart\")를 호출한다", () => {
+  const prop = extractMoreMenuPropSource("onScheduledStart");
+  assert.ok(
+    /openExclusive\(["']scheduledStart["']\)/.test(prop),
+    `onScheduledStart prop 에 openExclusive("scheduledStart") 호출이 없다 — ` +
+    `모달 전환은 반드시 openExclusive 를 경유해야 한다:\n${prop}`,
+  );
+});
+
+test("source: onFadeOut 핸들러가 openExclusive(\"fadeOut\")를 호출한다", () => {
+  const prop = extractMoreMenuPropSource("onFadeOut");
+  assert.ok(
+    /openExclusive\(["']fadeOut["']\)/.test(prop),
+    `onFadeOut prop 에 openExclusive("fadeOut") 호출이 없다 — ` +
+    `모달 전환은 반드시 openExclusive 를 경유해야 한다:\n${prop}`,
+  );
+});
+
+test("source: onScheduledStart 핸들러가 setActiveModal을 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
+  const prop = extractMoreMenuPropSource("onScheduledStart");
+  assert.ok(
+    !prop.includes("setActiveModal("),
+    `onScheduledStart prop 에서 setActiveModal 직접 호출이 발견됐다 — ` +
+    `openExclusive 를 우회하면 mutual exclusion 보장이 깨진다:\n${prop}`,
+  );
+});
+
+test("source: onFadeOut 핸들러가 setActiveModal을 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
+  const prop = extractMoreMenuPropSource("onFadeOut");
+  assert.ok(
+    !prop.includes("setActiveModal("),
+    `onFadeOut prop 에서 setActiveModal 직접 호출이 발견됐다 — ` +
+    `openExclusive 를 우회하면 mutual exclusion 보장이 깨진다:\n${prop}`,
+  );
+});
+
 test("source: MoreMenuModal onXxx 핸들러 목록과 app/index.tsx openExclusive 키 목록이 동기화되어 있다", () => {
   // 정답 소스: app/index.tsx <MoreMenuModal> 블록의 openExclusive 호출 키
   const canonicalKeys = [...extractMoreMenuOpenExclusiveKeys()].sort();
