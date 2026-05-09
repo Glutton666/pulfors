@@ -1071,3 +1071,154 @@ test("android-appstate: 소스 검증 — BackHandler useEffect 의존 배열에
     "simulateBackPress 의 최신 상태 참조 전제가 무효화된다",
   );
 });
+
+// ────────────────────────────────────────────────────────────────
+// 8. Android auto-resume — autoResumeAfterInterruption 설정이
+//    Android 포커스 회복 경로에서도 존중되는지 검증
+//
+//    구조:
+//      Android audio focus 손실/회복
+//        → initAndroidFocusCallbacks(notifyInterruptionBegin, notifyInterruptionEnd)
+//        → onFocusLoss  → notifyInterruptionBegin()
+//        → onFocusGain  → notifyInterruptionEnd()
+//        → notifyInterruptionEnd 내부에서 autoResumeAfterInterruption 가드
+//
+//    소스 검증 2개 + 기능 테스트 2개로 구성한다.
+// ────────────────────────────────────────────────────────────────
+
+test("android-auto-resume: 소스 검증 — _layout.tsx가 initAndroidFocusCallbacks에 notifyInterruptionEnd를 전달한다", () => {
+  // Android audio focus 회복(onFocusGain)이 notifyInterruptionEnd를 호출해야
+  // autoResumeAfterInterruption 플래그가 존중된다.
+  // initAndroidFocusCallbacks의 두 번째 인자로 notifyInterruptionEnd가
+  // 전달되는지 소스 분석으로 검증한다.
+  const src = readFileSync(join(process.cwd(), "app/_layout.tsx"), "utf-8");
+
+  const callIdx = src.indexOf("initAndroidFocusCallbacks(");
+  assert.ok(callIdx !== -1, "initAndroidFocusCallbacks 호출을 찾을 수 없다");
+
+  // 호출 인자 목록 추출: initAndroidFocusCallbacks(arg1, arg2)
+  const afterCall = src.slice(callIdx);
+  const argsMatch = afterCall.match(/initAndroidFocusCallbacks\s*\(([^)]+)\)/);
+  assert.ok(argsMatch, "initAndroidFocusCallbacks 인자 목록을 파싱할 수 없다");
+
+  const args = argsMatch![1];
+  assert.ok(
+    args.includes("notifyInterruptionEnd"),
+    `initAndroidFocusCallbacks의 두 번째 인자로 notifyInterruptionEnd가 없다: [${args}]\n` +
+    "두 번째 인자는 onFocusGain 콜백으로 등록되므로 notifyInterruptionEnd 이어야 한다 — " +
+    "그래야 autoResumeAfterInterruption 플래그 가드가 Android 경로에서 실행된다",
+  );
+});
+
+test("android-auto-resume: 소스 검증 — notifyInterruptionEnd가 autoResumeAfterInterruption 가드를 포함한다", () => {
+  // notifyInterruptionEnd 함수 본문에서 autoResumeAfterInterruption 확인이
+  // bridge.resume() 호출 전에 존재해야 한다.
+  const src = readFileSync(join(process.cwd(), "lib/audio-session.ts"), "utf-8");
+
+  const fnIdx = src.indexOf("export function notifyInterruptionEnd()");
+  assert.ok(fnIdx !== -1, "notifyInterruptionEnd 함수를 찾을 수 없다");
+
+  const fnBody = extractBracedBlock(src, fnIdx);
+
+  assert.ok(
+    fnBody.includes("autoResumeAfterInterruption"),
+    "notifyInterruptionEnd 본문에 autoResumeAfterInterruption 체크가 없다\n" +
+    "이 가드가 없으면 사용자가 설정을 꺼도 Android 포커스 회복 시 메트로놈이 자동 재개된다",
+  );
+
+  // 가드가 bridge.resume() 호출 전에 위치하는지 확인
+  const guardPos = fnBody.indexOf("autoResumeAfterInterruption");
+  const resumePos = fnBody.indexOf("bridge.resume()");
+  assert.ok(
+    resumePos !== -1,
+    "notifyInterruptionEnd 본문에 bridge.resume() 호출이 없다",
+  );
+  assert.ok(
+    guardPos < resumePos,
+    `autoResumeAfterInterruption 가드(pos=${guardPos})가 bridge.resume()(pos=${resumePos})보다 뒤에 있다 — ` +
+    "가드는 resume 호출 전에 위치해야 한다",
+  );
+});
+
+test("android-auto-resume: 기능 테스트 — autoResumeAfterInterruption=false이면 포커스 회복 후 resume을 호출하지 않는다", () => {
+  // 실제 audio-session 모듈 함수를 직접 호출해 플래그 동작을 검증한다.
+  // 이 경로는 Android에서 initAndroidFocusCallbacks → onFocusGain → notifyInterruptionEnd로
+  // 이어지는 흐름과 동일하다.
+  const {
+    _resetAudioSessionForTests,
+    registerMetronomeBridge,
+    setAutoResumeAfterInterruption,
+    notifyInterruptionBegin,
+    notifyInterruptionEnd,
+  } = require("../lib/audio-session") as typeof import("../lib/audio-session");
+
+  _resetAudioSessionForTests();
+
+  let resumeCount = 0;
+  const fakeBridge = {
+    isRunning: () => true,  // 인터럽션 전 메트로놈이 재생 중
+    pause: () => {},
+    resume: () => { resumeCount++; },
+  };
+  registerMetronomeBridge(fakeBridge);
+
+  // 자동 재개 비활성화
+  setAutoResumeAfterInterruption(false);
+
+  // 인터럽션 시작 (전화 수신 등) → pause 처리됨
+  notifyInterruptionBegin();
+  // 이 시점에서 bridge.isRunning()이 true → pause 호출 후 pausedByInterruption=true
+
+  // 포커스 회복 (onFocusGain 경로) → notifyInterruptionEnd 호출
+  notifyInterruptionEnd();
+
+  assert.equal(
+    resumeCount,
+    0,
+    `autoResumeAfterInterruption=false일 때 resume이 ${resumeCount}회 호출됐다 (0이어야 한다) — ` +
+    "Android 포커스 회복 경로에서 사용자 설정이 무시되고 있다",
+  );
+
+  _resetAudioSessionForTests();
+});
+
+test("android-auto-resume: 기능 테스트 — autoResumeAfterInterruption=true이면 포커스 회복 후 resume을 호출한다", () => {
+  // 반대 경우: 설정이 활성화되어 있으면 자동 재개가 정상적으로 동작해야 한다.
+  const {
+    _resetAudioSessionForTests,
+    registerMetronomeBridge,
+    setAutoResumeAfterInterruption,
+    notifyInterruptionBegin,
+    notifyInterruptionEnd,
+  } = require("../lib/audio-session") as typeof import("../lib/audio-session");
+
+  _resetAudioSessionForTests();
+
+  let resumeCount = 0;
+  let isRunning = true;
+  const fakeBridge = {
+    isRunning: () => isRunning,
+    pause: () => { isRunning = false; },
+    resume: () => { resumeCount++; isRunning = true; },
+  };
+  registerMetronomeBridge(fakeBridge);
+
+  // 자동 재개 활성화 (기본값이지만 명시적으로 설정)
+  setAutoResumeAfterInterruption(true);
+
+  // 인터럽션 시작 → pause
+  notifyInterruptionBegin();
+  assert.equal(isRunning, false, "notifyInterruptionBegin 후 bridge.pause()가 호출돼야 한다");
+
+  // 포커스 회복 → resume
+  notifyInterruptionEnd();
+
+  assert.equal(
+    resumeCount,
+    1,
+    `autoResumeAfterInterruption=true일 때 resume이 ${resumeCount}회 호출됐다 (1이어야 한다) — ` +
+    "Android 포커스 회복 경로에서 자동 재개가 동작하지 않는다",
+  );
+
+  _resetAudioSessionForTests();
+});
