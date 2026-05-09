@@ -110,7 +110,8 @@ export async function startAndroidFocusProbe(): Promise<void> {
   // 가용성 확인은 최초 1회만 수행하고 결과를 캐시해 반복 경고 로그를 방지한다.
   if (expoAudioCapabilityChecked === null) {
     try {
-      const expoAudioMod = await import("expo-audio");
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const expoAudioMod = require("expo-audio") as typeof import("expo-audio");
       const audioModule = (expoAudioMod as Record<string, unknown>).AudioModule as
         | {
             addInterruptionListener?: (
@@ -134,7 +135,8 @@ export async function startAndroidFocusProbe(): Promise<void> {
 
   if (expoAudioNativeAvailable) {
     try {
-      const expoAudioMod = await import("expo-audio");
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const expoAudioMod = require("expo-audio") as typeof import("expo-audio");
       const audioModule = (expoAudioMod as Record<string, unknown>).AudioModule as
         | {
             addInterruptionListener?: (
