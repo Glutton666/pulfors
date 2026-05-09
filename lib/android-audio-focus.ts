@@ -33,7 +33,8 @@ import { logger } from "@/lib/logger";
  *
  * 우선순위:
  * 1. expo-audio 가 나중에 인터럽션 콜백을 노출하면 그 API를 우선 사용.
- *    (현재 expo-audio v1.x 에서는 미노출 → 가드 조건이 false 로 평가됨)
+ *    (2026-05-09 조사: expo-audio 1.1.1 ~ 55.0.14 모두 미노출
+ *     → 가드 조건이 false 로 평가됨)
  * 2. 현재는 expo-av 폴백으로 동작한다.
  */
 

@@ -232,14 +232,30 @@ test("포커스 손실/회복 사이클이 여러 번 반복돼도 정상 동작
 
 // ── 섹션 B: 우선순위 1 — expo-audio 네이티브 인터럽션 경로 테스트 ─────────
 //
-// expo-audio 1.1.1 에는 addInterruptionListener 가 JS API 로 노출되지 않는다.
-// 이 섹션은 expo-audio 가 해당 API 를 노출하는 버전으로 업그레이드되었을 때
-// 우선순위 1 경로가 올바르게 동작하는지 보장하기 위한 테스트이다.
+// 조사 결과 (2026-05-09 기준):
+//   expo-audio 1.1.1 ~ 55.0.14(최신 stable) 모두 NativeAudioModule 에
+//   addInterruptionListener 를 JS API 로 노출하지 않는다.
+//   따라서 현재는 expo-av 프로브(우선순위 2)가 계속 사용된다.
+//
+// 이 섹션의 목적:
+//   expo-audio 가 해당 API 를 노출하는 버전으로 업그레이드되었을 때
+//   우선순위 1 경로가 올바르게 동작하는지 미리 보장하기 위한 테스트이다.
 //
 // 방법: 테스트 내에서 expo-audio 스텁의 AudioModule 에
 // addInterruptionListener 를 임시로 추가한 뒤, 각 테스트가 끝나면 제거한다.
 // _resetAndroidFocusForTests() 는 expoAudioCapabilityChecked/expoAudioNativeAvailable
 // 캐시를 null 로 초기화하므로 각 테스트는 독립적으로 실행된다.
+//
+// 업그레이드 준비 체크리스트 (addInterruptionListener 가 노출되는 버전 출시 시):
+//   1. package.json 의 expo-audio 버전 범위를 해당 버전 이상으로 올린다.
+//   2. 아래 소스 검증 테스트가 "hasApi=true" 분기로 진입하는지 확인한다.
+//   3. 소스 검증 테스트를 삭제하고 이 주석의 "업그레이드 준비" 섹션을 제거한다.
+//   4. lib/android-audio-focus.ts 35-38 행의 "(현재 expo-audio v1.x 에서는 미노출...)" 주석을 제거한다.
+//   5. 실제 Android 기기에서 아래 흐름을 직접 검증한다:
+//      a) 메트로놈 재생 → 전화 수신 → 메트로놈 자동 일시정지 확인
+//      b) 통화 종료 → 메트로놈 자동 재개 확인
+//      c) 로그에 "[androidFocus] expo-audio: interruption began/ended" 출력 확인
+//         (expo-av probe 로그 "starting expo-av sound probe" 가 없어야 한다)
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const expoAudioStub = require("expo-audio") as Record<string, unknown>;
@@ -275,11 +291,14 @@ function installNativeMock() {
 
 test("소스 검증: expo-audio AudioModule addInterruptionListener 노출 여부 감지", () => {
   // 이 테스트는 비차단(non-blocking) 업그레이드 감지 역할을 한다.
-  // expo-audio 1.1.1 에서는 addInterruptionListener 가 JS 레이어에 노출되지 않으므로
+  // 2026-05-09 기준: expo-audio 1.1.1 ~ 55.0.14(최신 stable) 모두
+  // addInterruptionListener 를 JS 레이어에 노출하지 않으므로
   // expo-av 프로브(우선순위 2)가 사용된다.
+  //
   // expo-audio 가 해당 API 를 노출하는 버전으로 업그레이드되면 이 테스트는 assert 없이
   // 경고 로그만 남기고 통과한다 — lib/android-audio-focus.ts 우선순위 1 경로가
   // 자동으로 활성화되며, 아래의 네이티브 경로 테스트들이 실제 동작을 검증한다.
+  // 그 시점에는 섹션 B 상단의 "업그레이드 준비 체크리스트"를 따라 후속 작업을 진행한다.
   const mod = require("expo-audio") as { AudioModule?: Record<string, unknown> };
   const hasApi =
     mod.AudioModule != null &&
@@ -290,14 +309,14 @@ test("소스 검증: expo-audio AudioModule addInterruptionListener 노출 여�
     console.info(
       "[android-audio-focus] 주의: expo-audio 가 addInterruptionListener 를 노출합니다. " +
       "lib/android-audio-focus.ts 우선순위 1 경로가 자동 활성화됩니다. " +
-      "이 소스 검증 테스트를 삭제하고 네이티브 경로 전용 테스트만 남기도록 업데이트하세요.",
+      "섹션 B 상단 '업그레이드 준비 체크리스트'에 따라 이 소스 검증 테스트를 삭제하세요.",
     );
   } else {
-    // 현재 상태(expo-audio 1.1.1): 미노출 확인
+    // 현재 상태(expo-audio 1.1.1 ~ 55.0.14): 미노출 확인
     assert.equal(
       hasApi,
       false,
-      "expo-audio 1.1.1 은 addInterruptionListener 를 노출하지 않는다",
+      "expo-audio 55.0.14 이하는 addInterruptionListener 를 노출하지 않는다",
     );
   }
 });
