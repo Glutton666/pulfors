@@ -100,9 +100,22 @@ export async function importPracticeEntry(): Promise<{ success: boolean; entry?:
     }
 
     const asset = result.assets[0];
-    if (typeof asset.size === "number" && asset.size > MAX_IMPORT_JSON_CHARS) {
-      logger.warn("[Backup] Native practice import too large:", asset.size);
-      return { success: false };
+    if (typeof asset.size === "number") {
+      if (asset.size > MAX_IMPORT_JSON_CHARS) {
+        logger.warn("[Backup] Native practice import too large (picker size):", asset.size);
+        return { success: false };
+      }
+    } else {
+      // Picker did not report size — fall back to filesystem stat before reading.
+      try {
+        const info = await FileSystem.getInfoAsync(asset.uri);
+        if (info.exists && "size" in info && typeof info.size === "number" && info.size > MAX_IMPORT_JSON_CHARS) {
+          logger.warn("[Backup] Native practice import too large (fs stat):", info.size);
+          return { success: false };
+        }
+      } catch (statErr) {
+        logger.warn("[Backup] Could not stat practice import file, proceeding cautiously:", statErr);
+      }
     }
     const json = await readStringFromFile(asset.uri);
     return await parsePracticeJson(json);
