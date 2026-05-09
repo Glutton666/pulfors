@@ -8,6 +8,26 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
 
+// ─── MoreMenu 새 항목 추가 체크리스트 ────────────────────────────────────────
+//
+// 새 항목을 추가할 때 아래 4개 파일을 모두 수정해야 한다.
+// 하나라도 빠뜨리면 회귀 테스트가 실패하거나 실제 기능이 동작하지 않는다.
+//
+//  1. lib/modal-routing.ts
+//       ActiveModal 유니온 타입에 새 리터럴 추가 (예: | "myFeature")
+//
+//  2. components/MoreMenuModal.tsx  ← 지금 여기
+//       a) MoreMenuModalProps 에 핸들러 prop 추가 (onMyFeature: () => void)
+//       b) 함수 시그니처에서 구조 분해 추가
+//       c) 새 <Pressable onPress={onMyFeature} testID="more-menu-myFeature"> 항목 추가
+//
+//  3. app/index.tsx
+//       <MoreMenuModal … /> JSX 블록에 onMyFeature={() => openExclusive("myFeature")} 추가
+//
+//  4. tests/modal-routing.test.ts
+//       MORE_MENU_ITEMS 배열에 ["myFeature", "showMyFeature"] 항목 추가
+//
+// ─────────────────────────────────────────────────────────────────────────────
 export interface MoreMenuModalProps {
   visible: boolean;
   onClose: () => void;
