@@ -41,10 +41,12 @@ describe("핸들러 미등록 상태에서 dispatch()", () => {
     assert.deepEqual(q.pending, SET_BPM);
   });
 
-  test("핸들러가 null 인 상태에서 핸들러는 호출되지 않는다", () => {
-    let called = 0;
+  test("핸들러를 해제(null)한 뒤 dispatch() 해도 즉시 호출되지 않는다", () => {
+    const received: VoiceCommand[] = [];
+    q.setHandler((cmd) => received.push(cmd));
+    q.setHandler(null);
     q.dispatch(PLAY);
-    assert.equal(called, 0);
+    assert.deepEqual(received, []);
   });
 });
 
