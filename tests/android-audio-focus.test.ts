@@ -247,11 +247,14 @@ test("포커스 손실/회복 사이클이 여러 번 반복돼도 정상 동작
 // 캐시를 null 로 초기화하므로 각 테스트는 독립적으로 실행된다.
 //
 // 업그레이드 준비 체크리스트 (addInterruptionListener 가 노출되는 버전 출시 시):
+//   API 가용성은 scripts/check-expo-audio-api.sh 를 실행해 자동으로 감지할 수 있다.
+//   스크립트가 exit 1 로 종료되면 아래 절차를 따른다:
 //   1. package.json 의 expo-audio 버전 범위를 해당 버전 이상으로 올린다.
 //   2. 아래 소스 검증 테스트가 "hasApi=true" 분기로 진입하는지 확인한다.
 //   3. 소스 검증 테스트를 삭제하고 이 주석의 "업그레이드 준비" 섹션을 제거한다.
-//   4. lib/android-audio-focus.ts 35-38 행의 "(현재 expo-audio v1.x 에서는 미노출...)" 주석을 제거한다.
-//   5. 실제 Android 기기에서 아래 흐름을 직접 검증한다:
+//   4. lib/android-audio-focus.ts 39-40 행의 "(2026-05-09 조사...)" 주석을 제거한다.
+//   5. scripts/check-expo-audio-api.sh 를 삭제하거나 비활성화한다.
+//   6. 실제 Android 기기에서 아래 흐름을 직접 검증한다:
 //      a) 메트로놈 재생 → 전화 수신 → 메트로놈 자동 일시정지 확인
 //      b) 통화 종료 → 메트로놈 자동 재개 확인
 //      c) 로그에 "[androidFocus] expo-audio: interruption began/ended" 출력 확인
