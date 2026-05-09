@@ -110,6 +110,11 @@ export async function startAndroidFocusProbe(): Promise<void> {
   // 가용성 확인은 최초 1회만 수행하고 결과를 캐시해 반복 경고 로그를 방지한다.
   if (expoAudioCapabilityChecked === null) {
     try {
+      // require() 는 의도적이다: await import() 는 Node.js 22 에서 ESM 경로로
+      // 처리되어 테스트용 Module._resolveFilename 훅을 우회한다. require() 를
+      // 사용하면 tests/_stubs/setup.cjs 의 STUB_MAP 이 작동해 노이즈 없는
+      // 스텁 교체가 가능하다. 런타임(Metro)에서는 정적 require 로 번들링되어
+      // 동작에 차이가 없다.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const expoAudioMod = require("expo-audio") as typeof import("expo-audio");
       const audioModule = (expoAudioMod as Record<string, unknown>).AudioModule as
