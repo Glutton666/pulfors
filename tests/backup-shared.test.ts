@@ -8,6 +8,7 @@ import {
   sanitizeNoteSampleUris,
   sanitizeNoteSampleChannelMap,
   sanitizeBackupData,
+  sanitizeCustomSoundSetsJson,
   collectUrisFromSampleMap,
   collectAllAudioUris,
   remapUri,
@@ -225,6 +226,95 @@ test("formatDateForFilename: YYYYMMDD_HHmm 형식", () => {
 
 test("ALL_KEYS: @note_sample_channels 포함", () => {
   assert.ok(ALL_KEYS.includes("@note_sample_channels"));
+});
+
+test("sanitizeCustomSoundSetsJson: 안전한 URI는 그대로 보존", () => {
+  const input = JSON.stringify({
+    custom1: {
+      name: "My Set",
+      strong: { type: "custom", sampleUri: "file:///local/kick.wav", sampleName: "kick", duration: 0.3 },
+      accent: { type: "custom", sampleUri: "asset:///pkg/hi.wav", duration: 0.2 },
+      normal: { type: "custom", sampleUri: "blob:abc123", duration: 0.1 },
+    },
+  });
+  const out = JSON.parse(sanitizeCustomSoundSetsJson(input));
+  assert.equal(out.custom1.strong.sampleUri, "file:///local/kick.wav");
+  assert.equal(out.custom1.accent.sampleUri, "asset:///pkg/hi.wav");
+  assert.equal(out.custom1.normal.sampleUri, "blob:abc123");
+});
+
+test("sanitizeCustomSoundSetsJson: http/https URI는 제거되고 type=builtin으로 강등", () => {
+  const input = JSON.stringify({
+    custom1: {
+      name: "Evil Set",
+      strong: { type: "custom", sampleUri: "https://attacker.example.com/track.mp3", sampleName: "evil", duration: 0.5 },
+      accent: { type: "custom", sampleUri: "http://192.168.1.1:8080/probe", sampleName: "probe", duration: 0.1 },
+      normal: { type: "builtin", sourceSet: "classic", sourceRole: "low", duration: 0.1 },
+    },
+  });
+  const out = JSON.parse(sanitizeCustomSoundSetsJson(input));
+  assert.equal(out.custom1.strong.sampleUri, undefined);
+  assert.equal(out.custom1.strong.sampleName, undefined);
+  assert.equal(out.custom1.strong.type, "builtin");
+  assert.equal(out.custom1.accent.sampleUri, undefined);
+  assert.equal(out.custom1.accent.sampleName, undefined);
+  assert.equal(out.custom1.accent.type, "builtin");
+  assert.equal(out.custom1.normal.sampleUri, undefined);
+});
+
+test("sanitizeCustomSoundSetsJson: javascript: URI는 제거", () => {
+  const input = JSON.stringify({
+    custom2: {
+      name: "xss",
+      strong: { type: "custom", sampleUri: "javascript:alert(1)", duration: 0 },
+      accent: { type: "builtin", duration: 0 },
+      normal: { type: "builtin", duration: 0 },
+    },
+  });
+  const out = JSON.parse(sanitizeCustomSoundSetsJson(input));
+  assert.equal(out.custom2.strong.sampleUri, undefined);
+  assert.equal(out.custom2.strong.type, "builtin");
+});
+
+test("sanitizeCustomSoundSetsJson: data: URI는 보존", () => {
+  const input = JSON.stringify({
+    custom3: {
+      name: "inline",
+      strong: { type: "custom", sampleUri: "data:audio/wav;base64,UklGR", duration: 0.1 },
+      accent: { type: "builtin", duration: 0 },
+      normal: { type: "builtin", duration: 0 },
+    },
+  });
+  const out = JSON.parse(sanitizeCustomSoundSetsJson(input));
+  assert.equal(out.custom3.strong.sampleUri, "data:audio/wav;base64,UklGR");
+});
+
+test("sanitizeCustomSoundSetsJson: 손상된 JSON은 원본 반환", () => {
+  const bad = "{ not valid json }}}";
+  assert.equal(sanitizeCustomSoundSetsJson(bad), bad);
+});
+
+test("sanitizeCustomSoundSetsJson: 배열/비객체 최상위는 원본 반환", () => {
+  const arr = JSON.stringify([1, 2, 3]);
+  assert.equal(sanitizeCustomSoundSetsJson(arr), arr);
+});
+
+test("sanitizeBackupData: metronome_custom_sound_sets의 위험 URI 제거", () => {
+  const data = {
+    "metronome_custom_sound_sets": JSON.stringify({
+      custom1: {
+        name: "Test",
+        strong: { type: "custom", sampleUri: "https://evil.example.com/x.mp3", sampleName: "evil", duration: 0.5 },
+        accent: { type: "custom", sampleUri: "file:///local/ok.wav", duration: 0.2 },
+        normal: { type: "builtin", duration: 0.1 },
+      },
+    }),
+  };
+  const out = sanitizeBackupData(data);
+  const parsed = JSON.parse(out["metronome_custom_sound_sets"]!);
+  assert.equal(parsed.custom1.strong.sampleUri, undefined);
+  assert.equal(parsed.custom1.strong.type, "builtin");
+  assert.equal(parsed.custom1.accent.sampleUri, "file:///local/ok.wav");
 });
 
 test("sanitizeNoteSampleChannelMap: 유효 값 유지, 잘못된 값은 'both'", () => {

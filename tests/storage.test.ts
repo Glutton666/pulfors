@@ -61,6 +61,41 @@ test("loadCustomSoundSets: 잘못된 형태 → {}", async () => {
   assert.deepEqual(await loadCustomSoundSets(), {});
 });
 
+test("loadCustomSoundSets: 안전하지 않은 sampleUri는 제거되고 type=builtin으로 강등", async () => {
+  await AsyncStorage.setItem("metronome_custom_sound_sets", JSON.stringify({
+    custom1: {
+      name: "Test",
+      strong: { type: "custom", sampleUri: "https://evil.example.com/kick.mp3", sampleName: "evil", duration: 0.5 },
+      accent: { type: "custom", sampleUri: "http://192.168.1.1:8080/probe", duration: 0.1 },
+      normal: { type: "custom", sampleUri: "javascript:alert(1)", duration: 0 },
+    },
+  }));
+  const result = await loadCustomSoundSets();
+  assert.ok(result.custom1);
+  assert.equal(result.custom1.strong.sampleUri, undefined);
+  assert.equal(result.custom1.strong.sampleName, undefined);
+  assert.equal(result.custom1.strong.type, "builtin");
+  assert.equal(result.custom1.accent.sampleUri, undefined);
+  assert.equal(result.custom1.accent.type, "builtin");
+  assert.equal(result.custom1.normal.sampleUri, undefined);
+  assert.equal(result.custom1.normal.type, "builtin");
+});
+
+test("loadCustomSoundSets: 안전한 sampleUri는 보존", async () => {
+  await AsyncStorage.setItem("metronome_custom_sound_sets", JSON.stringify({
+    custom1: {
+      name: "Safe Set",
+      strong: { type: "custom", sampleUri: "file:///local/kick.wav", sampleName: "kick", duration: 0.3 },
+      accent: { type: "custom", sampleUri: "asset:///pkg/hi.wav", sampleName: "hi", duration: 0.2 },
+      normal: { type: "custom", sampleUri: "blob:abc123", sampleName: "rim", duration: 0.1 },
+    },
+  }));
+  const result = await loadCustomSoundSets();
+  assert.equal(result.custom1.strong.sampleUri, "file:///local/kick.wav");
+  assert.equal(result.custom1.accent.sampleUri, "asset:///pkg/hi.wav");
+  assert.equal(result.custom1.normal.sampleUri, "blob:abc123");
+});
+
 test("loadPracticeBook: 손상/비배열 → []", async () => {
   await AsyncStorage.setItem("practice_book", "}}}");
   assert.deepEqual(await loadPracticeBook(), []);

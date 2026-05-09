@@ -98,13 +98,66 @@ export interface CustomSoundSetConfig {
 
 const CUSTOM_SOUND_SETS_KEY = "metronome_custom_sound_sets";
 
+function isSafeCustomSoundUri(uri: string): boolean {
+  const raw = uri.split("#")[0];
+  return (
+    raw.startsWith("file://") ||
+    raw.startsWith("asset://") ||
+    raw.startsWith("blob:") ||
+    raw.startsWith("data:")
+  );
+}
+
+function sanitizeCustomSoundSample(sample: unknown): CustomSoundSample | null {
+  if (typeof sample !== "object" || sample === null || Array.isArray(sample)) return null;
+  const s = sample as Record<string, unknown>;
+  const type = s.type === "builtin" || s.type === "custom" ? s.type : "builtin";
+  const out: CustomSoundSample = {
+    type,
+    duration: typeof s.duration === "number" && isFinite(s.duration) ? s.duration : 0,
+  };
+  if (typeof s.sourceSet === "string") out.sourceSet = s.sourceSet as BuiltinSoundSet;
+  if (typeof s.sourceRole === "string") out.sourceRole = s.sourceRole as SoundRole;
+  if (typeof s.sampleUri === "string") {
+    if (isSafeCustomSoundUri(s.sampleUri)) {
+      out.sampleUri = s.sampleUri;
+      if (typeof s.sampleName === "string") out.sampleName = s.sampleName;
+    } else {
+      out.type = "builtin";
+    }
+  } else if (typeof s.sampleName === "string") {
+    out.sampleName = s.sampleName;
+  }
+  return out;
+}
+
+function sanitizeCustomSoundSetConfig(raw: unknown): CustomSoundSetConfig | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  const strong = sanitizeCustomSoundSample(r.strong);
+  const accent = sanitizeCustomSoundSample(r.accent);
+  const normal = sanitizeCustomSoundSample(r.normal);
+  if (!strong || !accent || !normal) return null;
+  return {
+    name: typeof r.name === "string" ? r.name : "",
+    strong,
+    accent,
+    normal,
+  };
+}
+
 export async function loadCustomSoundSets(): Promise<Record<string, CustomSoundSetConfig>> {
   try {
     const data = await AsyncStorage.getItem(CUSTOM_SOUND_SETS_KEY);
     if (data) {
       const parsed: unknown = JSON.parse(data);
       if (isPlainObject(parsed)) {
-        return parsed as Record<string, CustomSoundSetConfig>;
+        const result: Record<string, CustomSoundSetConfig> = {};
+        for (const [key, value] of Object.entries(parsed)) {
+          const sanitized = sanitizeCustomSoundSetConfig(value);
+          if (sanitized) result[key] = sanitized;
+        }
+        return result;
       }
     }
   } catch (e) {

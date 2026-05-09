@@ -336,6 +336,15 @@ export function SettingsModal({
     }
     try {
       const rawUri = uri.split("#")[0];
+      const isSafeUri =
+        rawUri.startsWith("file://") ||
+        rawUri.startsWith("asset://") ||
+        rawUri.startsWith("blob:") ||
+        rawUri.startsWith("data:");
+      if (!isSafeUri) {
+        logger.warn("[SettingsModal] Blocked unsafe custom sound URI:", rawUri.slice(0, 80));
+        return;
+      }
       const player = createAudioPlayer({ uri: rawUri });
       previewProbePlayerRef.current = player;
       const hashParts = uri.split("#t=")[1];

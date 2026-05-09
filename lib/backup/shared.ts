@@ -225,10 +225,56 @@ export function sanitizeNoteSampleChannelMap(
   return out;
 }
 
+export function sanitizeCustomSoundSetsJson(json: string): string {
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return json;
+    const sets = parsed as Record<string, unknown>;
+    for (const setKey of Object.keys(sets)) {
+      const set = sets[setKey];
+      if (typeof set !== "object" || set === null || Array.isArray(set)) continue;
+      const setObj = set as Record<string, unknown>;
+      for (const role of ["strong", "accent", "normal"]) {
+        const sample = setObj[role];
+        if (typeof sample !== "object" || sample === null || Array.isArray(sample)) continue;
+        const sampleObj = sample as Record<string, unknown>;
+        if (typeof sampleObj.sampleUri === "string") {
+          const raw = sampleObj.sampleUri.split("#")[0];
+          const isLocal =
+            raw.startsWith("file://") ||
+            raw.startsWith("asset://") ||
+            raw.startsWith("blob:") ||
+            raw.startsWith("data:");
+          if (!isLocal) {
+            logger.warn(
+              "[Backup] Unsafe customSoundSet sampleUri stripped:",
+              setKey,
+              role,
+              raw.slice(0, 80),
+            );
+            delete sampleObj.sampleUri;
+            delete sampleObj.sampleName;
+            sampleObj.type = "builtin";
+          }
+        }
+      }
+    }
+    return JSON.stringify(parsed);
+  } catch {
+    return json;
+  }
+}
+
 export function sanitizeBackupData(
   data: Record<string, string | null>,
 ): Record<string, string | null> {
   const result = { ...data };
+
+  if (result["metronome_custom_sound_sets"]) {
+    result["metronome_custom_sound_sets"] = sanitizeCustomSoundSetsJson(
+      result["metronome_custom_sound_sets"]!,
+    );
+  }
 
   if (result["@note_samples"]) {
     try {
