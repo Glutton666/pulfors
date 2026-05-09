@@ -639,110 +639,221 @@ test("source: MoreMenuModal onXxx 핸들러 목록과 app/index.tsx openExclusiv
 //      setActiveModal(next) 는 원자적으로 값을 교체한다.
 //      → 어떤 순서로 AppState / BackHandler 이벤트가 와도
 //        visible 모달 수는 항상 ≤ 1 이다.
+//
+//    시뮬레이션 방식:
+//      두 핸들러의 실제 동작을 순수 함수로 모델링한 뒤,
+//      이벤트 시퀀스(foreground 복귀 → back-press)를 단계별로
+//      시뮬레이션하여 각 단계의 visible 모달 수를 검증한다.
 // ────────────────────────────────────────────────────────────────
 
-test("android-appstate: settings 열림 → background 복귀 → AppState 이벤트는 activeModal 변경 없음 → visible=1", () => {
-  // app/index.tsx AppState "active" 핸들러는 resyncTiming() 만 호출한다.
-  // activeModal 을 변경하지 않으므로 복귀 후 settings 가 여전히 1개만 visible.
-  const activeModal: ActiveModal = "settings";
-  // background → foreground: AppState 핸들러 효과 없음 → 상태 그대로
-  const afterAppStateReturn: ActiveModal = activeModal;
+/**
+ * app/index.tsx AppState "change" → "active" 핸들러 동작 시뮬레이션.
+ *
+ * 실제 구현:
+ *   AppState.addEventListener("change", (nextState) => {
+ *     if (nextState === "active") {
+ *       engineRef.current?.resyncTiming();   ← activeModal 변경 없음
+ *     }
+ *   });
+ *
+ * 반환: background 진입 전과 동일한 activeModal (핸들러가 변경하지 않음).
+ */
+function simulateAppStateForegroundReturn(activeModal: ActiveModal): ActiveModal {
+  // resyncTiming() 만 호출 — activeModal 상태를 건드리지 않는다.
+  return activeModal;
+}
 
-  assert.equal(
-    countVisibleModals(deriveModalFlags(afterAppStateReturn)),
-    1,
-    "foreground 복귀 후에도 settings 모달 1개만 visible 이어야 한다",
-  );
+/**
+ * app/index.tsx BackHandler "hardwareBackPress" 핸들러 동작 시뮬레이션.
+ *
+ * 실제 핸들러의 if-else 체인을 그대로 재현한다:
+ *   if (showSettings)      { setActiveModal(null); return true; }
+ *   if (showTuningGuide)   { ...; setActiveModal(signalGen|null); return true; }
+ *   if (showSignalGen)     { setActiveModal(null); return true; }
+ *   ... (모든 모달 분기)
+ *   Alert.alert(...)       (activeModal 변경 없음)
+ *
+ * 반환값:
+ *   nextActiveModal — 핸들러가 setActiveModal 에 전달하는 값
+ *   consumed        — 이벤트를 소비했는지 여부 (항상 true)
+ */
+function simulateBackPress(
+  activeModal: ActiveModal,
+  reopenSignalGenAfterTuningGuide: boolean,
+): { nextActiveModal: ActiveModal; consumed: boolean } {
+  const {
+    showSettings,
+    showTuningGuide,
+    showSignalGen,
+    showPracticeBook,
+    showWorkUp,
+    showTempoQuiz,
+    showFadeOut,
+    showScheduledStart,
+    showDrumKit,
+    showMoreMenu,
+    showMenu,
+    showOnboarding,
+  } = deriveModalFlags(activeModal);
+
+  // app/index.tsx BackHandler onBack 의 if-else 체인과 동일한 순서
+  if (showSettings)      return { nextActiveModal: null,          consumed: true };
+  if (showTuningGuide) {
+    // SignalGen 경로로 진입했으면 SignalGen 재오픈, 아니면 null
+    const next: ActiveModal = reopenSignalGenAfterTuningGuide ? "signalGen" : null;
+    return { nextActiveModal: next, consumed: true };
+  }
+  if (showSignalGen)     return { nextActiveModal: null,          consumed: true };
+  if (showPracticeBook)  return { nextActiveModal: null,          consumed: true };
+  if (showWorkUp)        return { nextActiveModal: null,          consumed: true };
+  if (showTempoQuiz)     return { nextActiveModal: null,          consumed: true }; // closeTempoQuiz() → null
+  if (showFadeOut)       return { nextActiveModal: null,          consumed: true };
+  if (showScheduledStart)return { nextActiveModal: null,          consumed: true };
+  if (showDrumKit)       return { nextActiveModal: null,          consumed: true };
+  if (showMoreMenu)      return { nextActiveModal: null,          consumed: true };
+  if (showMenu)          return { nextActiveModal: null,          consumed: true };
+  if (showOnboarding)    return { nextActiveModal: null,          consumed: true };
+  // 모든 모달이 닫혀 있거나 showReboot 상태: Alert.alert — activeModal 변경 없음
+  return { nextActiveModal: activeModal,                          consumed: true };
+}
+
+test("android-appstate: settings 열림 → foreground 복귀 → AppState 이벤트 후 activeModal 불변 → visible=1", () => {
+  // simulateAppStateForegroundReturn 은 "AppState active 핸들러가 activeModal 을 바꾸지 않는다"
+  // 는 명시적 계약을 실행하는 시뮬레이션이다.
+  const before: ActiveModal = "settings";
+  const after = simulateAppStateForegroundReturn(before);
+
+  assert.equal(after, "settings", "AppState active 이후 activeModal 값이 바뀌어서는 안 된다");
+  assert.equal(countVisibleModals(deriveModalFlags(after)), 1,
+    "foreground 복귀 후에도 settings 모달 1개만 visible 이어야 한다");
 });
 
-test("android-appstate: moreMenu 열림 → background 복귀 → AppState 이벤트는 activeModal 변경 없음 → visible=1", () => {
-  const activeModal: ActiveModal = "moreMenu";
-  const afterAppStateReturn: ActiveModal = activeModal;
+test("android-appstate: moreMenu 열림 → foreground 복귀 → AppState 이벤트 후 activeModal 불변 → visible=1", () => {
+  const before: ActiveModal = "moreMenu";
+  const after = simulateAppStateForegroundReturn(before);
 
-  assert.equal(
-    countVisibleModals(deriveModalFlags(afterAppStateReturn)),
-    1,
-    "foreground 복귀 후에도 moreMenu 모달 1개만 visible 이어야 한다",
-  );
+  assert.equal(after, "moreMenu", "AppState active 이후 activeModal 값이 바뀌어서는 안 된다");
+  assert.equal(countVisibleModals(deriveModalFlags(after)), 1,
+    "foreground 복귀 후에도 moreMenu 모달 1개만 visible 이어야 한다");
 });
 
-test("android-appstate: settings 열림 → back-press → setActiveModal(null) → visible=0", () => {
-  // BackHandler onBack: if (showSettings) { setActiveModal(null); return true; }
-  const beforeBackPress: ActiveModal = "settings";
-  const flags = deriveModalFlags(beforeBackPress);
-  assert.equal(flags.showSettings, true, "back-press 전: settings 가 열려 있어야 한다");
+test("android-appstate: settings 열림 → foreground 복귀 → back-press → visible=0 (이벤트 시퀀스 시뮬레이션)", () => {
+  // 이벤트 시퀀스: AppState active → hardwareBackPress
+  let activeModal: ActiveModal = "settings";
 
-  // BackHandler 가 setActiveModal(null) 호출
-  const afterBackPress: ActiveModal = null;
-  assert.equal(
-    countVisibleModals(deriveModalFlags(afterBackPress)),
-    0,
-    "back-press 후: 모든 모달이 닫혀야 한다",
-  );
+  // 1단계: background → foreground (AppState 핸들러 실행)
+  activeModal = simulateAppStateForegroundReturn(activeModal);
+  assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 1,
+    "foreground 복귀 직후: settings visible=1");
+
+  // 2단계: system back-press (BackHandler onBack 실행)
+  const { nextActiveModal, consumed } = simulateBackPress(activeModal, false);
+  assert.equal(consumed, true, "back-press 이벤트는 항상 소비된다");
+  assert.equal(nextActiveModal, null, "settings 상태에서 back-press → setActiveModal(null)");
+  assert.equal(countVisibleModals(deriveModalFlags(nextActiveModal)), 0,
+    "back-press 처리 후 visible 모달 0개");
 });
 
-test("android-appstate: moreMenu 열림 → back-press → setActiveModal(null) → visible=0", () => {
-  // BackHandler onBack: if (showMoreMenu) { setActiveModal(null); return true; }
-  const beforeBackPress: ActiveModal = "moreMenu";
-  const flags = deriveModalFlags(beforeBackPress);
-  assert.equal(flags.showMoreMenu, true, "back-press 전: moreMenu 가 열려 있어야 한다");
+test("android-appstate: moreMenu 열림 → foreground 복귀 → back-press → visible=0 (이벤트 시퀀스 시뮬레이션)", () => {
+  let activeModal: ActiveModal = "moreMenu";
 
-  const afterBackPress: ActiveModal = null;
-  assert.equal(
-    countVisibleModals(deriveModalFlags(afterBackPress)),
-    0,
-    "back-press 후: 모든 모달이 닫혀야 한다",
-  );
+  // 1단계: background → foreground
+  activeModal = simulateAppStateForegroundReturn(activeModal);
+  assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 1,
+    "foreground 복귀 직후: moreMenu visible=1");
+
+  // 2단계: back-press
+  const { nextActiveModal, consumed } = simulateBackPress(activeModal, false);
+  assert.equal(consumed, true);
+  assert.equal(nextActiveModal, null, "moreMenu 상태에서 back-press → setActiveModal(null)");
+  assert.equal(countVisibleModals(deriveModalFlags(nextActiveModal)), 0,
+    "back-press 처리 후 visible 모달 0개");
+});
+
+test("android-appstate: 모든 모달 상태에서 foreground 복귀 → back-press → visible ≤ 1 (완전 커버리지)", () => {
+  // 모든 ActiveModal 값에 대해 이벤트 시퀀스를 시뮬레이션한다.
+  const allModals: ActiveModal[] = [
+    "settings", "menu", "signalGen", "tuningGuide",
+    "practiceBook", "workUp", "moreMenu", "drumKit",
+    "scheduledStart", "fadeOut", "tempoQuiz", "onboarding",
+    null,
+  ];
+
+  for (const modal of allModals) {
+    // 1단계: foreground 복귀 — AppState 핸들러 실행
+    const afterReturn = simulateAppStateForegroundReturn(modal);
+    const expectedVisible = modal === null ? 0 : 1;
+    assert.equal(
+      countVisibleModals(deriveModalFlags(afterReturn)),
+      expectedVisible,
+      `${modal}: foreground 복귀 후 visible 모달 수 불일치`,
+    );
+
+    // 2단계: back-press — BackHandler 실행
+    const { nextActiveModal } = simulateBackPress(afterReturn, false);
+    assert.ok(
+      countVisibleModals(deriveModalFlags(nextActiveModal)) <= 1,
+      `${modal}: back-press 후 visible 모달이 1개를 초과하면 안 된다`,
+    );
+  }
 });
 
 test("android-appstate: 전체 시나리오 — settings 열림 → background → foreground → back-press → 각 단계 visible ≤ 1", () => {
-  // 단계별 activeModal 값과 레이블
-  //   background 진입·복귀는 AppState 핸들러가 activeModal 을 변경하지 않으므로
-  //   동일한 "settings" 값으로 표현한다.
-  const steps: Array<{ label: string; activeModal: ActiveModal }> = [
-    { label: "초기: null",                             activeModal: null },
-    { label: "메뉴 열기: menu",                         activeModal: "menu" },
-    { label: "설정 열기: settings",                     activeModal: "settings" },
-    { label: "background → foreground 복귀: settings", activeModal: "settings" },
-    { label: "back-press 처리 후: null",                activeModal: null },
-  ];
+  // 각 단계의 activeModal 값을 시뮬레이션 함수로 전파하며 검증한다.
+  let activeModal: ActiveModal = null;
+  assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 0, "초기: null");
 
-  for (const { label, activeModal } of steps) {
-    const count = countVisibleModals(deriveModalFlags(activeModal));
-    assert.ok(
-      count <= 1,
-      `${label} 단계에서 visible 모달이 ${count}개 — 최대 1개여야 한다`,
-    );
-  }
+  // 메뉴 열기
+  activeModal = "menu";
+  assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 1, "메뉴 열기: menu");
+
+  // 설정 열기
+  activeModal = "settings";
+  assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 1, "설정 열기: settings");
+
+  // background → foreground (AppState 핸들러 실행)
+  activeModal = simulateAppStateForegroundReturn(activeModal);
+  assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 1,
+    "background → foreground 복귀: settings 그대로");
+
+  // back-press (BackHandler 실행)
+  const { nextActiveModal } = simulateBackPress(activeModal, false);
+  activeModal = nextActiveModal;
+  assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 0, "back-press 후: null");
 });
 
 test("android-appstate: 전체 시나리오 — moreMenu 열림 → background → foreground → back-press → 각 단계 visible ≤ 1", () => {
-  const steps: Array<{ label: string; activeModal: ActiveModal }> = [
-    { label: "초기: null",                              activeModal: null },
-    { label: "메뉴 열기: menu",                          activeModal: "menu" },
-    { label: "더보기 열기: moreMenu",                    activeModal: "moreMenu" },
-    { label: "background → foreground 복귀: moreMenu", activeModal: "moreMenu" },
-    { label: "back-press 처리 후: null",                 activeModal: null },
-  ];
+  let activeModal: ActiveModal = null;
 
-  for (const { label, activeModal } of steps) {
-    const count = countVisibleModals(deriveModalFlags(activeModal));
-    assert.ok(
-      count <= 1,
-      `${label} 단계에서 visible 모달이 ${count}개 — 최대 1개여야 한다`,
-    );
-  }
+  activeModal = "menu";
+  assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 1, "메뉴 열기");
+
+  activeModal = "moreMenu";
+  assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 1, "더보기 열기");
+
+  // background → foreground
+  activeModal = simulateAppStateForegroundReturn(activeModal);
+  assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 1, "복귀 후: moreMenu 그대로");
+
+  // back-press
+  const { nextActiveModal } = simulateBackPress(activeModal, false);
+  activeModal = nextActiveModal;
+  assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 0, "back-press 후: null");
 });
 
 test("android-appstate: 복귀 후 연속 모달 전환에서도 mutual exclusion 유지", () => {
-  // 복귀 후 사용자가 다른 모달을 열거나 닫는 시나리오의 각 전환 단계 검증
+  // foreground 복귀 후 사용자가 다른 모달을 여닫는 시나리오
+  // 각 전환의 before/after 사이에 동시에 true 인 플래그가 없어야 한다.
+  let activeModal: ActiveModal = "settings";
+  activeModal = simulateAppStateForegroundReturn(activeModal); // 복귀 → 동일
+
   const transitions: Array<[ActiveModal, ActiveModal]> = [
-    ["settings", null],       // back-press 로 settings 닫힘
-    [null,       "menu"],     // 다시 메뉴 열기
-    ["menu",     "moreMenu"], // 더보기 열기
-    ["moreMenu", null],       // back-press 로 moreMenu 닫힘
-    [null,       "settings"], // 직접 설정 재진입
-    ["settings", null],       // 닫기
+    [activeModal, simulateBackPress(activeModal, false).nextActiveModal], // back-press
+    [null, "menu"],
+    ["menu", "moreMenu"],
+    ["moreMenu", simulateBackPress("moreMenu", false).nextActiveModal],  // back-press
+    [null, "settings"],
+    ["settings", simulateBackPress("settings", false).nextActiveModal],  // back-press
   ];
 
   for (const [from, to] of transitions) {
@@ -758,80 +869,73 @@ test("android-appstate: 복귀 후 연속 모달 전환에서도 mutual exclusio
   }
 });
 
-test("android-appstate: back-press 가 모든 모달 상태에서 setActiveModal(null) 로 수렴한다", () => {
-  // BackHandler 는 각 show* 플래그를 확인 후 setActiveModal(null) 을 호출한다.
-  // 따라서 어떤 activeModal 이든 back-press 후 visible 모달은 0 이어야 한다.
-  // (tempoQuiz 는 closeTempoQuiz() 경유이지만 결과는 동일하게 null)
-  const modalsWithBackHandler: ActiveModal[] = [
-    "settings", "tuningGuide", "signalGen", "practiceBook",
-    "workUp", "tempoQuiz", "fadeOut", "scheduledStart",
-    "drumKit", "moreMenu", "menu", "onboarding",
-  ];
-
-  for (const modal of modalsWithBackHandler) {
-    // back-press 후 activeModal = null (또는 signalGen 재오픈이지만 여전히 ≤ 1)
-    const afterBackPress: ActiveModal = null;
-    assert.equal(
-      countVisibleModals(deriveModalFlags(afterBackPress)),
-      0,
-      `${modal} 상태에서 back-press 후 visible 모달이 0 이어야 한다`,
-    );
-  }
-});
-
 // ────────────────────────────────────────────────────────────────
 // 7b. 소스 구조 테스트 — AppState / BackHandler 구현 계약 검증
 //
-//     위의 런타임 시나리오 테스트가 올바르게 동작하려면
-//     app/index.tsx 의 두 핸들러가 다음 계약을 지켜야 한다:
-//       1. AppState "active" 핸들러: setActiveModal / openExclusive 미호출
-//       2. BackHandler: useEffect 의존 배열에 activeModal 포함 (stale closure 방지)
+//     위 시뮬레이션 테스트의 전제 조건(simulateAppStateForegroundReturn 과
+//     simulateBackPress 의 모델이 실제 구현과 일치하는지)을 소스 분석으로 검증.
+//
+//     중괄호 깊이 추적으로 콜백 본문을 정확히 추출해 계약 위반을 탐지한다.
 // ────────────────────────────────────────────────────────────────
 
-test("android-appstate: 소스 검증 — AppState 핸들러가 setActiveModal을 호출하지 않는다", () => {
+/**
+ * 주어진 소스 문자열에서 startIdx 부터 시작하는 첫 번째 { } 블록을 반환한다.
+ * 중괄호 깊이를 추적해 중첩 구조를 올바르게 처리한다.
+ */
+function extractBracedBlock(src: string, startIdx: number): string {
+  const braceStart = src.indexOf("{", startIdx);
+  if (braceStart === -1) throw new Error("{ 를 찾을 수 없다");
+  let depth = 0, i = braceStart;
+  for (; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") { depth--; if (depth === 0) break; }
+  }
+  return src.slice(braceStart, i + 1);
+}
+
+test("android-appstate: 소스 검증 — AppState 콜백 본문에 setActiveModal·openExclusive 미포함", () => {
+  // simulateAppStateForegroundReturn 의 "activeModal 변경 없음" 모델이 성립하려면
+  // 실제 AppState 핸들러 콜백 본문에 setActiveModal / openExclusive 가 없어야 한다.
   const src = readFileSync(join(process.cwd(), "app/index.tsx"), "utf-8");
 
-  // AppState.addEventListener("change", ...) 위치 탐색
-  const marker = 'AppState.addEventListener("change"';
-  const markerIdx = src.indexOf(marker);
-  assert.ok(markerIdx !== -1, `app/index.tsx 에서 ${marker} 를 찾을 수 없다`);
+  const adapterIdx = src.indexOf('AppState.addEventListener("change"');
+  assert.ok(adapterIdx !== -1, 'AppState.addEventListener("change" 를 찾을 수 없다');
 
-  // 해당 useEffect 블록 끝(return () => sub.remove()) 까지 추출
-  // "sub.remove()" 이후 첫 번째 }); 가 useEffect 종료
-  const subRemoveIdx = src.indexOf("sub.remove()", markerIdx);
-  assert.ok(subRemoveIdx !== -1, "AppState useEffect 에서 sub.remove() 를 찾을 수 없다");
-  const blockEnd = src.indexOf("});", subRemoveIdx);
-  const handlerBlock = src.slice(markerIdx, blockEnd + 3);
+  // 콜백 화살표 함수의 { ... } 본문을 중괄호 깊이 추적으로 추출
+  const callbackBody = extractBracedBlock(src, adapterIdx);
 
-  // setActiveModal / openExclusive 호출 금지 검증
   assert.ok(
-    !handlerBlock.includes("setActiveModal("),
-    "AppState 핸들러가 setActiveModal 을 호출하면 안 된다 — " +
-    "foreground 복귀 시 모달 상태를 임의로 변경하면 경쟁 조건이 발생한다",
+    !callbackBody.includes("setActiveModal("),
+    "AppState 콜백 본문에 setActiveModal 호출이 있어서는 안 된다 — " +
+    "simulateAppStateForegroundReturn 의 '변경 없음' 모델 전제가 무효화된다\n" +
+    `추출된 본문:\n${callbackBody}`,
   );
   assert.ok(
-    !handlerBlock.includes("openExclusive("),
-    "AppState 핸들러가 openExclusive 를 호출하면 안 된다",
+    !callbackBody.includes("openExclusive("),
+    "AppState 콜백 본문에 openExclusive 호출이 있어서는 안 된다",
   );
 });
 
-test("android-appstate: 소스 검증 — BackHandler useEffect 의존 배열에 activeModal이 포함된다", () => {
+test("android-appstate: 소스 검증 — BackHandler useEffect 의존 배열에 activeModal 포함 (stale closure 방지)", () => {
+  // simulateBackPress 가 항상 최신 activeModal 을 참조한다고 가정하는 근거:
+  // BackHandler useEffect 의존 배열에 activeModal 이 있어야 한다.
   const src = readFileSync(join(process.cwd(), "app/index.tsx"), "utf-8");
 
-  // BackHandler.addEventListener 위치 탐색
-  const backHandlerMarker = 'BackHandler.addEventListener("hardwareBackPress"';
-  const backHandlerIdx = src.indexOf(backHandlerMarker);
-  assert.ok(backHandlerIdx !== -1, `app/index.tsx 에서 ${backHandlerMarker} 를 찾을 수 없다`);
+  const addListenerIdx = src.indexOf('BackHandler.addEventListener("hardwareBackPress"');
+  assert.ok(addListenerIdx !== -1, 'BackHandler.addEventListener("hardwareBackPress" 를 찾을 수 없다');
 
-  // 해당 useEffect 블록의 의존 배열([...]) 추출 — addEventListener 이전 500자 범위
-  const searchStart = Math.max(0, backHandlerIdx - 800);
-  const effectBlock = src.slice(searchStart, backHandlerIdx + 200);
+  // addEventListener 이후의 소스에서 useEffect 의존 배열 }, [...]) 패턴 추출
+  const afterListener = src.slice(addListenerIdx);
+  const depsMatch = afterListener.match(/\},\s*\[([^\]]*)\]/);
+  assert.ok(depsMatch,
+    "BackHandler useEffect 의존 배열 }, [...]) 패턴을 찾을 수 없다 — " +
+    "addEventListener 이후 useEffect 종료 패턴이 변경되었을 수 있다");
 
-  // useEffect((...) => { ... }, [activeModal, ...]) 패턴 확인
-  // 의존 배열에 activeModal 이 없으면 stale closure 로 최신 모달 상태를 참조 못 함
+  const deps = depsMatch![1];
   assert.ok(
-    effectBlock.includes("activeModal"),
-    "BackHandler useEffect 의존 배열에 activeModal 이 포함되어야 한다 — " +
-    "누락 시 stale closure 로 back-press 핸들러가 이전 모달 상태를 참조할 수 있다",
+    deps.includes("activeModal"),
+    `BackHandler useEffect 의존 배열에 activeModal 이 없다: [${deps}]\n` +
+    "의존 배열 누락 시 stale closure 로 back-press 핸들러가 이전 모달 상태를 참조한다 — " +
+    "simulateBackPress 의 최신 상태 참조 전제가 무효화된다",
   );
 });
