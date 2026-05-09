@@ -85,7 +85,7 @@ jobs:
           profile: pixel_4
           avd-name: pulfors_avd
           force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back none
           disable-animations: false
           script: echo "AVD 캐시 준비 완료"
 
@@ -99,7 +99,7 @@ jobs:
           profile: pixel_4
           avd-name: pulfors_avd
           force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back none
           disable-animations: true
           script: |
             set -euo pipefail
