@@ -24,6 +24,10 @@ export function DeepLinkProvider({ children }: { children: ReactNode }) {
    * getInitialURL() 콜백이 실행될 때 setCommandHandler 가 아직 호출되지 않아
    * handleRef.current 가 null 인 경우, 명령을 여기에 보관한다.
    * setCommandHandler 가 핸들러를 등록할 때 이 값을 확인하여 즉시 재전달한다.
+   *
+   * 설계 결정: 핸들러 등록 전 여러 URL이 도착하면 마지막 명령만 보관된다
+   * (latest-wins). Cold start 에서 복수의 딥링크 URL 이 연달아 수신되는 상황은
+   * 실제로 발생하지 않으며, 마지막 의도가 가장 최신이므로 이 정책이 적합하다.
    */
   const pendingCommandRef = useRef<VoiceCommand | null>(null);
 
