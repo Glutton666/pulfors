@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { setPendingImport } from "@/lib/pending-import";
+import { sanitizeDeepLinkEntry } from "@/lib/deep-link-import";
 import Colors from "@/constants/colors";
 import { useTheme } from "@/contexts/ThemeContext";
 import { logger } from "@/lib/logger";
@@ -25,12 +26,9 @@ export default function PracticeDeepLink() {
     try {
       const raw = decodeURIComponent(d);
       const decoded = JSON.parse(atob(raw));
-      if (decoded && decoded.bpm && decoded.beatTypes) {
-        // noteSamples 는 송신 디바이스의 로컬 파일 URI 이므로 수신 측에서는
-        // 유효하지 않고, 외부 URL이 포함될 경우 외부 네트워크 요청을 유발한다.
-        // pending import 저장 전에 제거한다.
-        decoded.noteSamples = {};
-        setPendingImport(decoded);
+      const safe = sanitizeDeepLinkEntry(decoded);
+      if (safe) {
+        setPendingImport(safe);
       }
     } catch (e) {
       logger.warn("Deep link parse error:", e);

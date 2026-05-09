@@ -35,6 +35,7 @@ import Animated, {
 import { safePlay, notifyAudioPoolFallback, detectPoolCutoffRisk } from "@/lib/audio-utils";
 import { registerMetronomeBridge, notifyUserMetronomeToggle, setAutoResumeAfterInterruption as setAudioSessionAutoResume } from "@/lib/audio-session";
 import { captureBreadcrumb } from "@/lib/error-tracking";
+import { sanitizeDeepLinkEntry } from "@/lib/deep-link-import";
 import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
 import { LinearGradient } from "expo-linear-gradient";
@@ -3861,13 +3862,12 @@ export default function MetronomeScreen() {
       const parsed = Linking.parse(url);
       if (parsed.path === "practice" && parsed.queryParams?.d) {
         const decoded = JSON.parse(atob(decodeURIComponent(parsed.queryParams.d as string)));
-        if (decoded && decoded.bpm && decoded.beatTypes) {
+        const safe = sanitizeDeepLinkEntry(decoded);
+        if (safe) {
           const entry: PracticeEntry = {
+            ...safe,
             id: Crypto.randomUUID(),
-            ...decoded,
-            // noteSamples 는 송신 디바이스의 로컬 파일 URI — 수신 측에서 유효하지
-            // 않으며 외부 URL이면 outbound 네트워크 요청을 유발한다. 제거한다.
-            noteSamples: {},
+            createdAt: Date.now(),
           };
           Alert.alert(
             t("main", "importSettings"),
@@ -3911,14 +3911,13 @@ export default function MetronomeScreen() {
     const timer = setTimeout(async () => {
       const { consumePendingImport } = require("@/lib/pending-import");
       const decoded = consumePendingImport();
-      if (decoded && decoded.bpm && decoded.beatTypes) {
+      const safe = decoded ? sanitizeDeepLinkEntry(decoded) : null;
+      if (safe) {
         pendingImportProcessed.current = true;
         const entry: PracticeEntry = {
+          ...safe,
           id: Crypto.randomUUID(),
-          ...decoded,
-          // 딥링크 경유 pending import 는 송신 디바이스의 파일 URI를 포함할 수
-          // 있으므로 noteSamples를 비워 outbound 요청 및 잘못된 URI 저장을 방지.
-          noteSamples: {},
+          createdAt: Date.now(),
         };
         const existing = await loadPracticeBook();
         await savePracticeBook([entry, ...existing]);
