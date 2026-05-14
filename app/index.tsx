@@ -2212,7 +2212,7 @@ export default function MetronomeScreen() {
   }, [setCommandHandler]);
   const handleNoteTogglePlayRef = useRef<(() => void) | null>(null);
   const anyModalOpenRef = useRef(false);
-  useEffect(() => { anyModalOpenRef.current = activeModal !== null || landscapeImageModalVisible || recorderTarget !== null; }, [activeModal, landscapeImageModalVisible, recorderTarget]);
+  useEffect(() => { anyModalOpenRef.current = activeModal !== null || landscapeImageModalVisible || recorderTarget !== null || showKbShortcuts; }, [activeModal, landscapeImageModalVisible, recorderTarget, showKbShortcuts]);
 
   const bpmTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bpmTapCountRef = useRef<{ direction: string; count: number }>({ direction: "", count: 0 });
@@ -2385,21 +2385,38 @@ export default function MetronomeScreen() {
         return;
       }
 
-      // 비트 모드 전용 단축키 (바 모드에서는 S/A/N/M/D가 다를 수 있으나 현재는 동일하게 적용)
-      // S/A/N/M — 비트 추가
-      const addBeatShortcuts: { binding: typeof b.addBeatNormal; type: BeatType }[] = [
-        { binding: b.addBeatNormal, type: "normal" },
-        { binding: b.addBeatAccent, type: "accent" },
-        { binding: b.addBeatStrong, type: "strong" },
-        { binding: b.addBeatMute,   type: "mute" },
-      ];
-      for (const { binding, type } of addBeatShortcuts) {
-        if (matchesBinding(e, binding)) {
+      // S/A/N/M — 비트 추가 (재생 중에는 비활성화)
+      if (!isPlaying) {
+        const addBeatShortcuts: { binding: typeof b.addBeatStrong; type: BeatType }[] = [
+          { binding: b.addBeatStrong, type: "strong" },
+          { binding: b.addBeatAccent, type: "accent" },
+          { binding: b.addBeatNormal, type: "normal" },
+          { binding: b.addBeatMute,   type: "mute" },
+        ];
+        for (const { binding, type } of addBeatShortcuts) {
+          if (matchesBinding(e, binding)) {
+            e.preventDefault();
+            const cur = beatsPerMeasureRef.current;
+            if (cur < 16) {
+              const newBeats = cur + 1;
+              const newTypes: BeatType[] = [...beatTypesRef.current, type];
+              setBeatsPerMeasure(newBeats);
+              setBeatTypes(newTypes);
+              engineRef.current?.setBeatsPerMeasure(newBeats);
+              engineRef.current?.setBeatTypes(newTypes);
+              if (!inBarMode) persistSettings({ beatsPerMeasure: newBeats });
+            }
+            return;
+          }
+        }
+
+        // D — 마지막 비트 삭제 (재생 중에는 비활성화)
+        if (matchesBinding(e, b.removeBeat)) {
           e.preventDefault();
           const cur = beatsPerMeasureRef.current;
-          if (cur < 16) {
-            const newBeats = cur + 1;
-            const newTypes: BeatType[] = [...beatTypesRef.current, type];
+          if (cur > 1) {
+            const newBeats = cur - 1;
+            const newTypes = beatTypesRef.current.slice(0, newBeats);
             setBeatsPerMeasure(newBeats);
             setBeatTypes(newTypes);
             engineRef.current?.setBeatsPerMeasure(newBeats);
@@ -2410,35 +2427,33 @@ export default function MetronomeScreen() {
         }
       }
 
-      // D — 마지막 비트 삭제
-      if (matchesBinding(e, b.removeBeat)) {
-        e.preventDefault();
-        const cur = beatsPerMeasureRef.current;
-        if (cur > 1) {
-          const newBeats = cur - 1;
-          const newTypes = beatTypesRef.current.slice(0, newBeats);
-          setBeatsPerMeasure(newBeats);
-          setBeatTypes(newTypes);
-          engineRef.current?.setBeatsPerMeasure(newBeats);
-          engineRef.current?.setBeatTypes(newTypes);
-          if (!inBarMode) persistSettings({ beatsPerMeasure: newBeats });
+      // Shift+S/A/N/M — 서브디비전 셀 추가 (재생 중에는 비활성화)
+      if (!isPlaying) {
+        const addSubShortcuts: { binding: typeof b.addSubStrong; type: BeatType }[] = [
+          { binding: b.addSubStrong, type: "strong" },
+          { binding: b.addSubAccent, type: "accent" },
+          { binding: b.addSubNormal, type: "normal" },
+          { binding: b.addSubMute,   type: "mute" },
+        ];
+        for (const { binding, type } of addSubShortcuts) {
+          if (matchesBinding(e, binding)) {
+            e.preventDefault();
+            const p = subdivisionPatternRef.current;
+            if (p.length < 8) {
+              const newP: BeatType[] = [...p, type];
+              setSubdivisionPattern(newP);
+              persistSettings({ subdivisionPattern: newP });
+            }
+            return;
+          }
         }
-        return;
-      }
 
-      // Shift+S/A/N/M — 서브디비전 셀 추가
-      const addSubShortcuts: { binding: typeof b.addSubNormal; type: BeatType }[] = [
-        { binding: b.addSubNormal, type: "normal" },
-        { binding: b.addSubAccent, type: "accent" },
-        { binding: b.addSubStrong, type: "strong" },
-        { binding: b.addSubMute,   type: "mute" },
-      ];
-      for (const { binding, type } of addSubShortcuts) {
-        if (matchesBinding(e, binding)) {
+        // Shift+D — 서브디비전 셀 삭제 (재생 중에는 비활성화)
+        if (matchesBinding(e, b.removeSub)) {
           e.preventDefault();
           const p = subdivisionPatternRef.current;
-          if (p.length < 8) {
-            const newP: BeatType[] = [...p, type];
+          if (p.length > 1) {
+            const newP = p.slice(0, -1);
             setSubdivisionPattern(newP);
             persistSettings({ subdivisionPattern: newP });
           }
@@ -2446,30 +2461,27 @@ export default function MetronomeScreen() {
         }
       }
 
-      // Shift+D — 서브디비전 셀 삭제
-      if (matchesBinding(e, b.removeSub)) {
+      // 0 — 서브디비전 셀 전체 타입 순환 (strong→accent→normal→mute)
+      if (matchesBinding(e, b.cycleBeatTypes)) {
         e.preventDefault();
-        const p = subdivisionPatternRef.current;
-        if (p.length > 1) {
-          const newP = p.slice(0, -1);
-          setSubdivisionPattern(newP);
-          persistSettings({ subdivisionPattern: newP });
-        }
+        const subCycleOrder: BeatType[] = ["strong", "accent", "normal", "mute"];
+        setSubdivisionPattern((prev) => {
+          const first = prev[0] || "normal";
+          const idx = subCycleOrder.indexOf(first as BeatType);
+          const next = subCycleOrder[(idx + 1) % subCycleOrder.length];
+          const newP = prev.map(() => next) as BeatType[];
+          return newP;
+        });
         return;
       }
 
-      // 0 — 전체 비트 타입 순환
-      if (matchesBinding(e, b.cycleBeatTypes)) {
-        e.preventDefault();
-        const beatTypeOrder: BeatType[] = ["normal", "accent", "strong", "mute"];
-        setBeatTypes((prev) => {
-          const first = prev[0] || "normal";
-          const idx = beatTypeOrder.indexOf(first);
-          const next = beatTypeOrder[(idx + 1) % beatTypeOrder.length];
-          const newTypes = prev.map(() => next);
-          engineRef.current?.setBeatTypes(newTypes);
-          return newTypes;
-        });
+      // 숫자 키 — 타이머 idle 상태에서 분 입력 라우팅
+      if (/^Digit[0-9]$/.test(e.code)) {
+        const digit = e.code.slice(5);
+        const ref = stopwatchTimerRef.current || stopwatchTimerLandscapeRef.current;
+        if (ref) {
+          ref.handleDigit(digit);
+        }
         return;
       }
 

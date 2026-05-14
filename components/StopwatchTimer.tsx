@@ -85,6 +85,7 @@ export interface StopwatchTimerHandle {
   toggleOpen: () => void;
   openStopwatch: () => void;
   openTimer: () => void;
+  handleDigit: (digit: string) => void;
 }
 
 export const StopwatchTimer = React.forwardRef<StopwatchTimerHandle, StopwatchTimerProps>(
@@ -240,20 +241,36 @@ function StopwatchTimer({
       });
     },
     openStopwatch: () => {
-      setMode("stopwatch");
-      if (!openRef.current) {
-        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (openRef.current && modeRef.current === "stopwatch") {
+        openRef.current = false;
+        setOpen(false);
+      } else {
+        setMode("stopwatch");
         openRef.current = true;
         setOpen(true);
       }
     },
     openTimer: () => {
-      setMode("timer");
-      if (!openRef.current) {
-        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (openRef.current && modeRef.current === "timer") {
+        openRef.current = false;
+        setOpen(false);
+      } else {
+        setMode("timer");
         openRef.current = true;
         setOpen(true);
       }
+    },
+    handleDigit: (digit: string) => {
+      if (modeRef.current !== "timer" || !openRef.current) return;
+      if (stateRef.current !== "idle" && stateRef.current !== "paused") return;
+      setEditingTimer(true);
+      setTimerMinInput((prev) => {
+        const combined = prev + digit;
+        if (combined.length <= 2) return combined;
+        return combined.slice(-2);
+      });
     },
   }), []);
 

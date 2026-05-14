@@ -44,14 +44,14 @@ export const DEFAULT_BINDINGS: KeyBindingsMap = {
   bpmDown:          { code: "ArrowDown", label: "↓" },
   bpmLeft:          { code: "ArrowLeft", label: "←" },
   bpmRight:         { code: "ArrowRight",label: "→" },
-  addBeatNormal:    { code: "KeyS",      label: "S" },
+  addBeatStrong:    { code: "KeyS",      label: "S" },
   addBeatAccent:    { code: "KeyA",      label: "A" },
-  addBeatStrong:    { code: "KeyN",      label: "N" },
+  addBeatNormal:    { code: "KeyN",      label: "N" },
   addBeatMute:      { code: "KeyM",      label: "M" },
   removeBeat:       { code: "KeyD",      label: "D" },
-  addSubNormal:     { code: "KeyS", shift: true, label: "Shift+S" },
+  addSubStrong:     { code: "KeyS", shift: true, label: "Shift+S" },
   addSubAccent:     { code: "KeyA", shift: true, label: "Shift+A" },
-  addSubStrong:     { code: "KeyN", shift: true, label: "Shift+N" },
+  addSubNormal:     { code: "KeyN", shift: true, label: "Shift+N" },
   addSubMute:       { code: "KeyM", shift: true, label: "Shift+M" },
   removeSub:        { code: "KeyD", shift: true, label: "Shift+D" },
   cycleBeatTypes:   { code: "Digit0",    label: "0" },
@@ -65,7 +65,7 @@ export const DEFAULT_BINDINGS: KeyBindingsMap = {
   blockPlayModeNext:{ code: "KeyG",      label: "G" },
 };
 
-const STORAGE_KEY = "metronome_key_bindings_v1";
+const STORAGE_KEY = "metronome_keyboard_bindings_v1";
 
 export async function loadKeyBindings(): Promise<KeyBindingsMap> {
   try {
