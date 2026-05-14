@@ -58,9 +58,9 @@ import { loadGoals, saveGoals, type Goal } from "@/lib/activity-log";
 import { HelpIcon } from "@/components/HelpIcon";
 import {
   DEFAULT_BINDINGS,
-  saveKeyBindings,
   buildLabel,
-  applyRebinding,
+  executeRebind,
+  executeRebindReset,
   type KeyBindingsMap,
   type KeyAction,
   type KeyBinding,
@@ -2374,21 +2374,14 @@ export function SettingsModal({
       if (!newBinding.ctrl) delete newBinding.ctrl;
       if (!newBinding.alt) delete newBinding.alt;
 
-      const { updated, conflict: conflictAction } = applyRebinding(
-        localKeyBindings, rebindingAction, newBinding
-      );
-
-      if (conflictAction) {
-        setRebindConflict(t("keyboard", "conflict"));
-        return;
-      }
-
-      setLocalKeyBindings(updated);
-      onKeyBindingsChange?.(updated);
-      saveKeyBindings(updated);
-      setRebindingAction(null);
-      setRebindConflict(null);
-      showKbSaved();
+      executeRebind(localKeyBindings, rebindingAction, newBinding, {
+        setLocalKeyBindings,
+        setRebindingAction,
+        setRebindConflict,
+        onKeyBindingsChange,
+        showKbSaved,
+        conflictMessage: t("keyboard", "conflict"),
+      });
     };
 
     return (
@@ -2410,11 +2403,7 @@ export function SettingsModal({
               {
                 text: t("keyboard", "resetBtn"),
                 onPress: () => {
-                  const def = { ...DEFAULT_BINDINGS };
-                  setLocalKeyBindings(def);
-                  onKeyBindingsChange?.(def);
-                  saveKeyBindings(def);
-                  showKbSaved();
+                  executeRebindReset({ setLocalKeyBindings, onKeyBindingsChange, showKbSaved });
                 },
               },
             ]);

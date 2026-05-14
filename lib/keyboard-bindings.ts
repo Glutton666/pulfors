@@ -175,6 +175,62 @@ export function applyRebinding(
   return { updated: { ...current, [action]: newBinding }, conflict: null };
 }
 
+/** Side-effect callbacks injected into executeRebind for testability. */
+export interface RebindFx {
+  setLocalKeyBindings: (kb: KeyBindingsMap) => void;
+  setRebindingAction: (action: KeyAction | null) => void;
+  setRebindConflict: (msg: string | null) => void;
+  onKeyBindingsChange?: (kb: KeyBindingsMap) => void;
+  showKbSaved: () => void;
+  conflictMessage: string;
+}
+
+/**
+ * Core logic of handleRebindKeyDown's save/conflict branch.
+ * Calls applyRebinding, then either sets the conflict message or
+ * commits the change (setLocalKeyBindings + onKeyBindingsChange + saveKeyBindings
+ * + clear rebind state + showKbSaved).
+ * Returns true when the rebind succeeded, false when a conflict was found.
+ */
+export function executeRebind(
+  current: KeyBindingsMap,
+  action: KeyAction,
+  newBinding: KeyBinding,
+  fx: RebindFx
+): boolean {
+  const { updated, conflict } = applyRebinding(current, action, newBinding);
+  if (conflict) {
+    fx.setRebindConflict(fx.conflictMessage);
+    return false;
+  }
+  fx.setLocalKeyBindings(updated);
+  fx.onKeyBindingsChange?.(updated);
+  saveKeyBindings(updated);
+  fx.setRebindingAction(null);
+  fx.setRebindConflict(null);
+  fx.showKbSaved();
+  return true;
+}
+
+/** Side-effect callbacks injected into executeRebindReset for testability. */
+export interface ResetFx {
+  setLocalKeyBindings: (kb: KeyBindingsMap) => void;
+  onKeyBindingsChange?: (kb: KeyBindingsMap) => void;
+  showKbSaved: () => void;
+}
+
+/**
+ * Core logic of the reset-to-defaults button in the keyboard settings tab.
+ * Applies DEFAULT_BINDINGS and calls saveKeyBindings in the background.
+ */
+export function executeRebindReset(fx: ResetFx): void {
+  const def = { ...DEFAULT_BINDINGS };
+  fx.setLocalKeyBindings(def);
+  fx.onKeyBindingsChange?.(def);
+  saveKeyBindings(def);
+  fx.showKbSaved();
+}
+
 export function isConflicting(a: KeyBinding, b: KeyBinding): boolean {
   return (
     a.code === b.code &&
