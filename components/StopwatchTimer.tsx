@@ -121,6 +121,9 @@ function StopwatchTimer({
   const isPlayingRef = useRef(isMetronomePlaying);
   const stateRef = useRef<TimerState>(state);
   const modeRef = useRef<Mode>(mode);
+  const timerMinInputRef = useRef("");
+  const timerSecInputRef = useRef("");
+  const startTimerRef = useRef<(() => void) | null>(null);
   const bumpTick = useCallback(() => setTick((t) => (t + 1) | 0), []);
 
   const { colors: C } = useTheme();
@@ -129,6 +132,8 @@ function StopwatchTimer({
 
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { modeRef.current = mode; }, [mode]);
+  useEffect(() => { timerMinInputRef.current = timerMinInput; }, [timerMinInput]);
+  useEffect(() => { timerSecInputRef.current = timerSecInput; }, [timerSecInput]);
 
   useEffect(() => {
     isPlayingRef.current = isMetronomePlaying;
@@ -281,9 +286,24 @@ function StopwatchTimer({
     },
     handleEnterKey: () => {
       if (modeRef.current !== "timer" || !openRef.current) return false;
-      if (stateRef.current === "idle" || stateRef.current === "paused") {
+      if (stateRef.current === "idle") {
+        const mins = parseInt(timerMinInputRef.current || "0", 10) || 0;
+        const secs = parseInt(timerSecInputRef.current || "0", 10) || 0;
+        const totalSeconds = mins * 60 + secs;
+        if (totalSeconds <= 0) return false;
+        setTimerDigitBuf("");
+        setTimerMinInput(String(mins).padStart(2, "0"));
+        setTimerSecInput(String(secs).padStart(2, "0"));
+        setTimerDuration(totalSeconds);
+        setRemaining(totalSeconds);
+        setEditingTimer(false);
+        startTimerRef.current?.();
+        return true;
+      }
+      if (stateRef.current === "paused") {
         setTimerDigitBuf("");
         commitTimerEditRef.current?.();
+        startTimerRef.current?.();
         return true;
       }
       return false;
@@ -691,6 +711,10 @@ function StopwatchTimer({
   useEffect(() => {
     commitTimerEditRef.current = commitTimerEdit;
   }, [commitTimerEdit]);
+
+  useEffect(() => {
+    startTimerRef.current = startTimer;
+  }, [startTimer]);
 
   const isActive = state !== "idle";
 

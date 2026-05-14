@@ -14,13 +14,14 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { KeyBindingsMap, buildLabel } from "@/lib/keyboard-bindings";
 import type { KeyAction } from "@/lib/keyboard-bindings";
+import type { KbSectionKey } from "@/lib/i18n";
 
 interface ShortcutRow {
   action: KeyAction;
-  labelKey: string;
+  labelKey: KbSectionKey;
 }
 
-const SECTIONS: { titleKey: string; rows: ShortcutRow[] }[] = [
+const SECTIONS: { titleKey: KbSectionKey; rows: ShortcutRow[] }[] = [
   {
     titleKey: "sectionGeneral",
     rows: [
@@ -99,14 +100,14 @@ export function KeyboardShortcutsModal({ visible, onClose, bindings }: Props) {
             {SECTIONS.map((section) => (
               <View key={section.titleKey} style={s.section}>
                 <Text style={[s.sectionTitle, { color: C.textSecondary }]}>
-                  {t("keyboard", section.titleKey as any)}
+                  {t("keyboard", section.titleKey)}
                 </Text>
                 {section.rows.map((row) => {
                   const binding = bindings[row.action];
                   return (
                     <View key={row.action} style={[s.row, { borderBottomColor: C.border }]}>
                       <Text style={[s.actionLabel, { color: C.text }]}>
-                        {t("keyboard", row.labelKey as any)}
+                        {t("keyboard", row.labelKey)}
                       </Text>
                       <View style={[s.keyBadge, { backgroundColor: C.surfaceLight, borderColor: C.border }]}>
                         <Text style={[s.keyText, { color: C.accent }]}>

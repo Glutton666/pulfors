@@ -2398,9 +2398,9 @@ export default function MetronomeScreen() {
         return;
       }
 
-      // S/A/N/M — 비트 추가 (재생 중에는 비활성화)
+      // S/A/N/M — 비트 추가 (비트 모드 + 재생 중 비활성화)
       const playing = engineRef.current?.getIsRunning() ?? false;
-      if (!playing) {
+      if (!playing && !barModeRef.current && !noteModeRef.current) {
         const addBeatShortcuts: { binding: typeof b.addBeatStrong; type: BeatType }[] = [
           { binding: b.addBeatStrong, type: "strong" },
           { binding: b.addBeatAccent, type: "accent" },
@@ -2441,8 +2441,8 @@ export default function MetronomeScreen() {
         }
       }
 
-      // Shift+S/A/N/M — 서브디비전 셀 추가 (재생 중에는 비활성화)
-      if (!playing) {
+      // Shift+S/A/N/M — 서브디비전 셀 추가 (비트 모드 + 재생 중 비활성화)
+      if (!playing && !barModeRef.current && !noteModeRef.current) {
         const addSubShortcuts: { binding: typeof b.addSubStrong; type: BeatType }[] = [
           { binding: b.addSubStrong, type: "strong" },
           { binding: b.addSubAccent, type: "accent" },
@@ -2475,17 +2475,17 @@ export default function MetronomeScreen() {
         }
       }
 
-      // 0 — 서브디비전 셀 전체 타입 순환 (strong→accent→normal→mute)
-      if (matchesBinding(e, b.cycleBeatTypes)) {
+      // 0 — 서브디비전 셀 전체 타입 순환 (strong→accent→normal→mute, 비트 모드 전용)
+      if (!barModeRef.current && !noteModeRef.current && matchesBinding(e, b.cycleBeatTypes)) {
         e.preventDefault();
         const subCycleOrder: BeatType[] = ["strong", "accent", "normal", "mute"];
-        setSubdivisionPattern((prev) => {
-          const first = prev[0] || "normal";
-          const idx = subCycleOrder.indexOf(first as BeatType);
-          const next = subCycleOrder[(idx + 1) % subCycleOrder.length];
-          const newP = prev.map(() => next) as BeatType[];
-          return newP;
-        });
+        const prev = subdivisionPatternRef.current;
+        const first = prev[0] || "normal";
+        const idx = subCycleOrder.indexOf(first as BeatType);
+        const next = subCycleOrder[(idx + 1) % subCycleOrder.length];
+        const newP = prev.map(() => next) as BeatType[];
+        setSubdivisionPattern(newP);
+        persistSettings({ subdivisionPattern: newP });
         return;
       }
 

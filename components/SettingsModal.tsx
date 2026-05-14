@@ -42,7 +42,7 @@ import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, SoundRole, Custo
 import { loadCustomSoundSets, saveCustomSoundSets, BUILTIN_SOUND_SETS } from "@/lib/storage";
 import { soundSets } from "@/lib/metronome-engine";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { LANGUAGE_OPTIONS, type Language } from "@/lib/i18n";
+import { LANGUAGE_OPTIONS, type Language, type KbSectionKey } from "@/lib/i18n";
 import { safePlay } from "@/lib/audio-utils";
 import { ensurePermission } from "@/lib/permissions";
 import {
@@ -2288,7 +2288,7 @@ export function SettingsModal({
     });
   }, [activeTab, tabFadeAnim, tabSlideAnim]);
 
-  const KB_SECTIONS: { titleKey: string; rows: { action: KeyAction; labelKey: string }[] }[] = [
+  const KB_SECTIONS: { titleKey: KbSectionKey; rows: { action: KeyAction; labelKey: KbSectionKey }[] }[] = [
     {
       titleKey: "sectionGeneral",
       rows: [
@@ -2390,7 +2390,7 @@ export function SettingsModal({
       <View>
         {rebindingAction !== null && (
           <KeyRebindOverlay
-            actionLabel={t("keyboard", (KB_SECTIONS.flatMap(s => s.rows).find(r => r.action === rebindingAction)?.labelKey ?? rebindingAction) as any)}
+            actionLabel={t("keyboard", KB_SECTIONS.flatMap(s => s.rows).find(r => r.action === rebindingAction)?.labelKey ?? "actionPlayPause")}
             conflict={rebindConflict}
             onKeyDown={handleRebindKeyDown}
             onCancel={() => { setRebindingAction(null); setRebindConflict(null); }}
@@ -2418,7 +2418,7 @@ export function SettingsModal({
         {KB_SECTIONS.map((section) => (
           <View key={section.titleKey} style={kbStyles.section}>
             <Text style={[kbStyles.sectionTitle, { color: C.textSecondary }]}>
-              {t("keyboard", section.titleKey as any)}
+              {t("keyboard", section.titleKey)}
             </Text>
             {section.rows.map((row) => {
               const binding = localKeyBindings[row.action];
@@ -2434,7 +2434,7 @@ export function SettingsModal({
                   onPress={() => handleRebindPress(row.action)}
                 >
                   <Text style={[kbStyles.actionLabel, { color: C.text }]}>
-                    {t("keyboard", row.labelKey as any)}
+                    {t("keyboard", row.labelKey)}
                   </Text>
                   <View style={[
                     kbStyles.keyBadge,

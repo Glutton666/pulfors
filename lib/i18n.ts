@@ -741,6 +741,8 @@ export const translations = {
 
 type TranslationKeys = typeof translations;
 
+export type KbSectionKey = keyof (typeof translations)["keyboard"];
+
 export type TranslationFn = {
   <S extends keyof TranslationKeys, K extends keyof TranslationKeys[S]>(
     section: S,
