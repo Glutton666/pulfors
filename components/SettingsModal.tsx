@@ -139,7 +139,7 @@ function KeyRebindOverlay({
   }, [onKeyDown]);
 
   return (
-    <View style={kbStyles.overlayBg} pointerEvents="box-only">
+    <View style={kbStyles.overlayBg} pointerEvents="box-only" dataSet={{ capturesKeys: "true" }}>
       <View style={[kbStyles.overlayCard, { backgroundColor: C.surface, borderColor: C.border, borderWidth: 1 }]}>
         <Text style={[kbStyles.overlayTitle, { color: C.text }]}>{t("keyboard", "listening")}</Text>
         <Text style={[kbStyles.overlayActionLabel, { color: C.accent }]}>{actionLabel}</Text>

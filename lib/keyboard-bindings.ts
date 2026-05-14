@@ -90,6 +90,27 @@ export async function saveKeyBindings(bindings: KeyBindingsMap): Promise<void> {
   } catch {}
 }
 
+/**
+ * Returns true when the keyboard event originates from an element that
+ * captures text input and therefore should NOT trigger metronome shortcuts.
+ *
+ * Covers:
+ *  - Standard form fields: INPUT, TEXTAREA, SELECT
+ *  - contentEditable elements
+ *  - Any element (or ancestor) with data-captures-keys="true"
+ *    — use this attribute on custom components such as BpmInput or
+ *      SliderModal that intercept key events for their own purposes.
+ */
+export function isEditableTarget(e: KeyboardEvent): boolean {
+  const el = e.target as HTMLElement | null;
+  if (!el) return false;
+  const tag = el.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (el.isContentEditable) return true;
+  if (el.closest?.('[data-captures-keys="true"]')) return true;
+  return false;
+}
+
 export function matchesBinding(e: KeyboardEvent, binding: KeyBinding): boolean {
   if (e.code !== binding.code) return false;
   if ((binding.shift ?? false) !== e.shiftKey) return false;

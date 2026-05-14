@@ -7,6 +7,7 @@ import {
   isConflicting,
   buildLabel,
   loadKeyBindings,
+  isEditableTarget,
   type KeyBinding,
 } from "../lib/keyboard-bindings";
 
@@ -162,4 +163,56 @@ test("DEFAULT_BINDINGS: 비트/서브디비전 쌍 shift 분리", () => {
   assert.ok(!DEFAULT_BINDINGS.addBeatStrong.shift);
   assert.ok(DEFAULT_BINDINGS.addSubStrong.shift);
   assert.equal(DEFAULT_BINDINGS.addBeatStrong.code, DEFAULT_BINDINGS.addSubStrong.code);
+});
+
+// isEditableTarget
+
+function makeEventWithTarget(code: string, target: Partial<HTMLElement>): KeyboardEvent {
+  return { code, target, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false } as unknown as KeyboardEvent;
+}
+
+test("isEditableTarget: INPUT 태그 → true", () => {
+  const e = makeEventWithTarget("Space", { tagName: "INPUT" } as Partial<HTMLElement>);
+  assert.ok(isEditableTarget(e));
+});
+
+test("isEditableTarget: TEXTAREA 태그 → true", () => {
+  const e = makeEventWithTarget("Space", { tagName: "TEXTAREA" } as Partial<HTMLElement>);
+  assert.ok(isEditableTarget(e));
+});
+
+test("isEditableTarget: SELECT 태그 → true", () => {
+  const e = makeEventWithTarget("Space", { tagName: "SELECT" } as Partial<HTMLElement>);
+  assert.ok(isEditableTarget(e));
+});
+
+test("isEditableTarget: contentEditable 요소 → true", () => {
+  const e = makeEventWithTarget("Space", { tagName: "DIV", isContentEditable: true } as Partial<HTMLElement>);
+  assert.ok(isEditableTarget(e));
+});
+
+test("isEditableTarget: data-captures-keys 조상이 있을 때 → true", () => {
+  const ancestor = { getAttribute: (a: string) => a === "data-captures-keys" ? "true" : null };
+  const el = {
+    tagName: "DIV",
+    isContentEditable: false,
+    closest: (sel: string) => sel === '[data-captures-keys="true"]' ? ancestor : null,
+  };
+  const e = makeEventWithTarget("ArrowUp", el as unknown as Partial<HTMLElement>);
+  assert.ok(isEditableTarget(e));
+});
+
+test("isEditableTarget: 일반 DIV → false", () => {
+  const el = {
+    tagName: "DIV",
+    isContentEditable: false,
+    closest: () => null,
+  };
+  const e = makeEventWithTarget("Space", el as unknown as Partial<HTMLElement>);
+  assert.ok(!isEditableTarget(e));
+});
+
+test("isEditableTarget: target 없음 → false", () => {
+  const e = { code: "Space", target: null } as unknown as KeyboardEvent;
+  assert.ok(!isEditableTarget(e));
 });

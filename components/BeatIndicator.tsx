@@ -1851,7 +1851,7 @@ export function BeatIndicator({
                           <Ionicons name="add" size={S.ms(12, 0.4)} color={C.accent} />
                         </Pressable>
                       </View>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs, marginBottom: Spacing.xs }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs, marginBottom: Spacing.xs }} dataSet={{ capturesKeys: "true" }}>
                         <Text style={{ color: C.textSecondary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", width: 36 }}>BPM</Text>
                         <Pressable
                           onPress={() => { if (editBlock.bpm) updateBlock(editingBlockIndex!, { bpm: Math.max(20, editBlock.bpm - 5) }); }}
@@ -2086,7 +2086,7 @@ export function BeatIndicator({
                   </View>
                   <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, textAlign: "center", marginTop: Spacing.xxs }}>Swipe left/right to switch mode</Text>
                 </View>
-                <View style={styles.barTimerCard}>
+                <View style={styles.barTimerCard} dataSet={{ capturesKeys: "true" }}>
                   <View style={styles.barTimerHeader}>
                     <Ionicons name="timer-outline" size={S.ms(20, 0.4)} color={C.danger} />
                     <Text style={styles.barTimerTitle}>Timer</Text>
@@ -2422,7 +2422,7 @@ export function BeatIndicator({
                 </View>
                 <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, textAlign: "center", marginTop: Spacing.xxs }}>Swipe left/right to switch mode</Text>
               </View>
-              <View style={styles.barTimerCard}>
+              <View style={styles.barTimerCard} dataSet={{ capturesKeys: "true" }}>
                 <View style={styles.barTimerHeader}>
                   <Ionicons name="timer-outline" size={S.ms(20, 0.4)} color={C.danger} />
                   <Text style={styles.barTimerTitle}>Timer</Text>
@@ -2457,7 +2457,7 @@ export function BeatIndicator({
         >
           <View style={styles.barTimerOverlay}>
             <Pressable style={StyleSheet.absoluteFill} onPress={() => setRepeatModalBeat(null)} />
-            <View style={[styles.barTimerCard, { width: 260 }]}>
+            <View style={[styles.barTimerCard, { width: 260 }]} dataSet={{ capturesKeys: "true" }}>
               <View style={styles.barTimerHeader}>
                 <Ionicons name="repeat" size={S.ms(18, 0.4)} color={C.accent} />
                 <Text style={[styles.barTimerTitle, { color: C.accent }]}>

@@ -1139,7 +1139,7 @@ function StopwatchTimer({
         )}
 
         {state === "idle" && editingTimer && (
-          <View style={styles.timerEditRow}>
+          <View style={styles.timerEditRow} dataSet={{ capturesKeys: "true" }}>
             <View style={styles.timerEditField}>
               <TextInput
                 style={[styles.timerEditInput, { borderColor: C.accent }]}
