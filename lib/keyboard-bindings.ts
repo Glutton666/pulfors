@@ -156,6 +156,25 @@ export function nativeKeyToCode(key: string): string {
   return key;
 }
 
+/**
+ * Apply a rebinding to the current bindings map.
+ * Returns the updated map and null if no conflict,
+ * or the current map unchanged and the conflicting action if a conflict exists.
+ * `action` is excluded from the conflict check (self-rebind is always safe).
+ */
+export function applyRebinding(
+  current: KeyBindingsMap,
+  action: KeyAction,
+  newBinding: KeyBinding
+): { updated: KeyBindingsMap; conflict: KeyAction | null } {
+  for (const [act, binding] of Object.entries(current) as [KeyAction, KeyBinding][]) {
+    if (act !== action && isConflicting(binding, newBinding)) {
+      return { updated: current, conflict: act };
+    }
+  }
+  return { updated: { ...current, [action]: newBinding }, conflict: null };
+}
+
 export function isConflicting(a: KeyBinding, b: KeyBinding): boolean {
   return (
     a.code === b.code &&

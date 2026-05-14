@@ -60,7 +60,7 @@ import {
   DEFAULT_BINDINGS,
   saveKeyBindings,
   buildLabel,
-  isConflicting,
+  applyRebinding,
   type KeyBindingsMap,
   type KeyAction,
   type KeyBinding,
@@ -2374,20 +2374,15 @@ export function SettingsModal({
       if (!newBinding.ctrl) delete newBinding.ctrl;
       if (!newBinding.alt) delete newBinding.alt;
 
-      let conflictAction: KeyAction | null = null;
-      for (const [act, binding] of Object.entries(localKeyBindings) as [KeyAction, KeyBinding][]) {
-        if (act !== rebindingAction && isConflicting(binding, newBinding)) {
-          conflictAction = act;
-          break;
-        }
-      }
+      const { updated, conflict: conflictAction } = applyRebinding(
+        localKeyBindings, rebindingAction, newBinding
+      );
 
       if (conflictAction) {
         setRebindConflict(t("keyboard", "conflict"));
         return;
       }
 
-      const updated = { ...localKeyBindings, [rebindingAction]: newBinding };
       setLocalKeyBindings(updated);
       onKeyBindingsChange?.(updated);
       saveKeyBindings(updated);
