@@ -57,6 +57,43 @@ export const soundSets = {
   },
 };
 
+/**
+ * Drum-machine sounds used exclusively by the drum pad.
+ * Kept separate from soundSets so they don't appear in the metronome sound picker.
+ */
+export const drumPadSounds = {
+  kick: {
+    strong: require("@/assets/sounds/kick-strong.wav"),
+    high: require("@/assets/sounds/kick-high.wav"),
+    low: require("@/assets/sounds/kick-low.wav"),
+  },
+  snare: {
+    strong: require("@/assets/sounds/snare-strong.wav"),
+    high: require("@/assets/sounds/snare-high.wav"),
+    low: require("@/assets/sounds/snare-low.wav"),
+  },
+  clap: {
+    strong: require("@/assets/sounds/clap-strong.wav"),
+    high: require("@/assets/sounds/clap-high.wav"),
+    low: require("@/assets/sounds/clap-low.wav"),
+  },
+  openhat: {
+    strong: require("@/assets/sounds/openhat-strong.wav"),
+    high: require("@/assets/sounds/openhat-high.wav"),
+    low: require("@/assets/sounds/openhat-low.wav"),
+  },
+  tom: {
+    strong: require("@/assets/sounds/tom-strong.wav"),
+    high: require("@/assets/sounds/tom-high.wav"),
+    low: require("@/assets/sounds/tom-low.wav"),
+  },
+  crash: {
+    strong: require("@/assets/sounds/crash-strong.wav"),
+    high: require("@/assets/sounds/crash-high.wav"),
+    low: require("@/assets/sounds/crash-low.wav"),
+  },
+};
+
 export const highClickSource = soundSets.classic.high;
 export const lowClickSource = soundSets.classic.low;
 export const strongClickSource = soundSets.classic.strong;

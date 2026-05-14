@@ -114,7 +114,7 @@ export function NoteRecorderModal({
   const recorderRef = useRef(recorder);
   useEffect(() => { recorderRef.current = recorder; }, [recorder]);
 
-  const clickSource = soundSets[soundSet]?.low ?? soundSets.classic.low;
+  const clickSource = (soundSets as Record<string, typeof soundSets.classic>)[soundSet]?.low ?? soundSets.classic.low;
   const clickPlayer = useAudioPlayer(clickSource);
   const previewPlayer = useAudioPlayer(null);
   const previewPlayerRef = useRef(previewPlayer);

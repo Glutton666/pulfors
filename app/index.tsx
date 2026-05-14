@@ -77,7 +77,7 @@ import {
   openTuningGuideFromSignalGen,
   closeTuningGuide,
 } from "@/lib/modal-routing";
-import { useAudioPlayers } from "@/hooks/useAudioPlayers";
+import { useAudioPlayers, type BuiltinPlayers } from "@/hooks/useAudioPlayers";
 import { useNoteSamples } from "@/hooks/useNoteSamples";
 import { useBarConfig, useDialConfig } from "@/hooks/useBarDialConfig";
 import { useMetronomeEngine } from "@/hooks/useMetronomeEngine";
@@ -593,8 +593,8 @@ export default function MetronomeScreen() {
           return toggle ? fallbackPlayers.lowB : fallbackPlayers.lowA;
         }
         const srcSet = mapping.sourceSet || "classic";
-        const srcPlayers = allPlayersRef.current[srcSet] || allPlayersRef.current.classic;
-        if (!allPlayersRef.current[srcSet]) {
+        const srcPlayers = allPlayersRef.current[srcSet as keyof BuiltinPlayers] || allPlayersRef.current.classic;
+        if (!allPlayersRef.current[srcSet as keyof BuiltinPlayers]) {
           notifyAudioPoolFallback("custom-mapping-missing-source", { role, soundSet: set, requestedSourceSet: srcSet });
         }
         const r = mapping.sourceRole || "strong";
@@ -680,7 +680,7 @@ export default function MetronomeScreen() {
           const mapping = role === "strong" ? customCfg.strong : role === "high" ? customCfg.accent : customCfg.normal;
           if (mapping.type === "builtin") {
             const srcSet = mapping.sourceSet || "classic";
-            players = allPlayersRef.current[srcSet] || allPlayersRef.current.classic;
+            players = allPlayersRef.current[srcSet as keyof BuiltinPlayers] || allPlayersRef.current.classic;
             const r = mapping.sourceRole || "strong";
             const active = r === "strong" ? (toggle ? players.strongB : players.strongA) : r === "high" ? (toggle ? players.highB : players.highA) : (toggle ? players.lowB : players.lowA);
             restartPlayer(active);
@@ -720,7 +720,7 @@ export default function MetronomeScreen() {
           const mapping = role === "strong" ? customCfg.strong : role === "high" ? customCfg.accent : customCfg.normal;
           if (mapping.type === "builtin") {
             const srcSet = mapping.sourceSet || "classic";
-            players = allPlayersRef.current[srcSet] || allPlayersRef.current.classic;
+            players = allPlayersRef.current[srcSet as keyof BuiltinPlayers] || allPlayersRef.current.classic;
             const r = mapping.sourceRole || "strong";
             const active = r === "strong" ? (toggle ? players.strongB : players.strongA) : r === "high" ? (toggle ? players.highB : players.highA) : (toggle ? players.lowB : players.lowA);
             restartPlayer(active);
@@ -1049,7 +1049,7 @@ export default function MetronomeScreen() {
         }
         const srcSet = cfg.sourceSet || "classic";
         const srcRole = cfg.sourceRole || "strong";
-        const src = soundSets[srcSet];
+        const src = (soundSets as Record<string, typeof soundSets.classic>)[srcSet] ?? soundSets.classic;
         const asset = srcRole === "strong" ? src.strong : srcRole === "high" ? src.high : src.low;
         const raw = await loadAssetPCM(asset);
         const trimmed = trimPCM({ pcm: raw, trimStartSamples: 0, trimLenSamples: raw.length }, cfg.duration);
@@ -1147,7 +1147,7 @@ export default function MetronomeScreen() {
       const set = soundSetRef.current;
       const customCfg = customSoundSetsRef.current[set];
       const builtinSet: BuiltinSoundSet = (customCfg ? customCfg.strong.sourceSet : (set as BuiltinSoundSet)) || "classic";
-      const pool = allPlayersRef.current[builtinSet];
+      const pool = allPlayersRef.current[builtinSet as keyof BuiltinPlayers];
       if (!pool) {
         notifyAudioPoolFallback("warmup-missing-set", { requestedSet: String(builtinSet) });
       }

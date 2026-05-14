@@ -75,7 +75,8 @@ export async function saveFadeOutSettings(s: FadeOutSettings): Promise<void> {
 
 export type FlashMode = "all" | "accent" | "off";
 export type HapticMode = "all" | "accent" | "off";
-export type BuiltinSoundSet = "classic" | "woodblock" | "cowbell" | "digital" | "rimshot" | "triangle" | "hihat";
+export type BuiltinSoundSet = "classic" | "woodblock" | "cowbell" | "digital" | "rimshot" | "triangle" | "hihat"
+  | "kick" | "snare" | "clap" | "openhat" | "tom" | "crash";
 export type SoundSet = BuiltinSoundSet | "custom1" | "custom2" | "custom3";
 
 export type SoundRole = "strong" | "high" | "low";

@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Asset } from "expo-asset";
-import { soundSets } from "./metronome-engine";
+import { soundSets, drumPadSounds } from "./metronome-engine";
 import type { BuiltinSoundSet, SoundRole } from "./storage";
 import { notifyStorageError } from "./storage-notifier";
 
@@ -21,28 +21,57 @@ export interface DrumPadConfig {
 
 export type DrumKitMapping = (DrumPadConfig | null)[];
 
+/**
+ * Default order for the 16-pad drum kit.
+ * Drum-machine sounds come first so the out-of-the-box mapping feels
+ * like a real drum machine (kick, snare, hi-hat, clap, toms, crash).
+ * Metronome click sounds follow as additional options.
+ */
 const BUILTIN_ORDER: Array<{ setName: BuiltinSoundSet; role: SoundRole }> = [
+  { setName: "kick",    role: "strong" },  // 1  hard kick
+  { setName: "kick",    role: "high"   },  // 2  soft kick
+  { setName: "snare",   role: "strong" },  // 3  hard snare
+  { setName: "snare",   role: "high"   },  // 4  normal snare
+  { setName: "snare",   role: "low"    },  // 5  ghost snare
+  { setName: "hihat",   role: "strong" },  // 6  closed hat accent
+  { setName: "hihat",   role: "high"   },  // 7  closed hat normal
+  { setName: "openhat", role: "strong" },  // 8  open hat long
+  { setName: "openhat", role: "high"   },  // 9  open hat medium
+  { setName: "clap",    role: "strong" },  // 10 hard clap
+  { setName: "clap",    role: "high"   },  // 11 normal clap
+  { setName: "tom",     role: "low"    },  // 12 hi-tom
+  { setName: "tom",     role: "high"   },  // 13 mid tom
+  { setName: "tom",     role: "strong" },  // 14 floor tom
+  { setName: "crash",   role: "strong" },  // 15 full crash
+  { setName: "crash",   role: "high"   },  // 16 medium crash
+];
+
+/** All options available in the pad-picker (drum sounds first, then metronome clicks). */
+const ALL_BUILTIN_OPTIONS: Array<{ setName: BuiltinSoundSet; role: SoundRole }> = [
+  ...BUILTIN_ORDER,
+  { setName: "kick",    role: "low"    },
+  { setName: "openhat", role: "low"    },
+  { setName: "clap",    role: "low"    },
+  { setName: "crash",   role: "low"    },
   { setName: "classic", role: "strong" },
-  { setName: "classic", role: "high" },
-  { setName: "classic", role: "low" },
+  { setName: "classic", role: "high"   },
+  { setName: "classic", role: "low"    },
   { setName: "woodblock", role: "strong" },
-  { setName: "woodblock", role: "high" },
-  { setName: "woodblock", role: "low" },
+  { setName: "woodblock", role: "high"   },
+  { setName: "woodblock", role: "low"    },
   { setName: "cowbell", role: "strong" },
-  { setName: "cowbell", role: "high" },
-  { setName: "cowbell", role: "low" },
+  { setName: "cowbell", role: "high"   },
+  { setName: "cowbell", role: "low"    },
   { setName: "digital", role: "strong" },
-  { setName: "digital", role: "high" },
-  { setName: "digital", role: "low" },
+  { setName: "digital", role: "high"   },
+  { setName: "digital", role: "low"    },
   { setName: "rimshot", role: "strong" },
-  { setName: "rimshot", role: "high" },
-  { setName: "rimshot", role: "low" },
+  { setName: "rimshot", role: "high"   },
+  { setName: "rimshot", role: "low"    },
   { setName: "triangle", role: "strong" },
-  { setName: "triangle", role: "high" },
-  { setName: "triangle", role: "low" },
-  { setName: "hihat", role: "strong" },
-  { setName: "hihat", role: "high" },
-  { setName: "hihat", role: "low" },
+  { setName: "triangle", role: "high"   },
+  { setName: "triangle", role: "low"    },
+  { setName: "hihat",   role: "low"    },
 ];
 
 export function createDefaultDrumKitMapping(): DrumKitMapping {
@@ -55,11 +84,14 @@ export function createDefaultDrumKitMapping(): DrumKitMapping {
 }
 
 export function listBuiltinPadOptions(): Array<{ setName: BuiltinSoundSet; role: SoundRole }> {
-  return BUILTIN_ORDER.slice(0, 15);
+  return ALL_BUILTIN_OPTIONS;
 }
 
+const DRUM_PAD_SET_NAMES = new Set<string>(["kick", "snare", "clap", "openhat", "tom", "crash"]);
+const METRONOME_SET_NAMES = new Set<string>(["classic", "woodblock", "cowbell", "digital", "rimshot", "triangle", "hihat"]);
+
 function isBuiltinSetName(v: unknown): v is BuiltinSoundSet {
-  return v === "classic" || v === "woodblock" || v === "cowbell" || v === "digital" || v === "rimshot" || v === "triangle" || v === "hihat";
+  return typeof v === "string" && (DRUM_PAD_SET_NAMES.has(v) || METRONOME_SET_NAMES.has(v));
 }
 function isRole(v: unknown): v is SoundRole {
   return v === "strong" || v === "high" || v === "low";
@@ -113,7 +145,10 @@ export async function saveDrumKitMapping(mapping: DrumKitMapping): Promise<void>
 }
 
 export function getBuiltinPadModule(setName: BuiltinSoundSet, role: SoundRole): number {
-  return soundSets[setName][role] as unknown as number;
+  if (setName in drumPadSounds) {
+    return drumPadSounds[setName as keyof typeof drumPadSounds][role] as unknown as number;
+  }
+  return (soundSets as Record<string, Record<string, unknown>>)[setName]?.[role] as unknown as number;
 }
 
 export function describePad(pad: DrumPadConfig | null): { label: string; sub: string } {
@@ -126,7 +161,8 @@ export function describePad(pad: DrumPadConfig | null): { label: string; sub: st
 
 export async function resolveBuiltinAssetUri(setName: BuiltinSoundSet, role: SoundRole): Promise<string | null> {
   try {
-    const mod = soundSets[setName][role];
+    const allSounds: Record<string, Record<string, unknown>> = { ...soundSets, ...drumPadSounds };
+    const mod = allSounds[setName]?.[role] as number;
     const asset = Asset.fromModule(mod);
     if (!asset.localUri) {
       try { await asset.downloadAsync(); } catch {}
