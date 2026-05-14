@@ -879,3 +879,104 @@ export const make_csStyles = (C: typeof Colors) => StyleSheet.create({
     color: C.white,
   },
 });
+
+export const kbStyles = StyleSheet.create({
+  section: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 11,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  actionLabel: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 14,
+    flex: 1,
+  },
+  keyBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    minWidth: 48,
+    alignItems: "center",
+  },
+  keyText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 12,
+  },
+  resetBtn: {
+    alignSelf: "flex-end",
+    marginBottom: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  resetBtnText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+  },
+  overlayBg: {
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 9999,
+  },
+  overlayCard: {
+    borderRadius: 16,
+    padding: 24,
+    alignItems: "center",
+    minWidth: 260,
+    gap: 8,
+  },
+  overlayTitle: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: 16,
+    marginBottom: 4,
+    textAlign: "center",
+  },
+  overlayActionLabel: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  overlayHint: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 12,
+    textAlign: "center",
+    opacity: 0.7,
+  },
+  overlayConflict: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 12,
+    color: "#FF6B6B",
+    textAlign: "center",
+  },
+  overlayCancel: {
+    marginTop: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  overlayCancelText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
+  },
+});

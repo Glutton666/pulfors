@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import { logger } from "@/lib/logger";
-import { make_styles, make_csStyles } from "./SettingsModal.styles";
+import { make_styles, make_csStyles, kbStyles } from "./SettingsModal.styles";
 import { AssistantShortcutsGuide } from "@/components/AssistantShortcutsGuide";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -56,8 +56,17 @@ import {
 import { Share } from "react-native";
 import { loadGoals, saveGoals, type Goal } from "@/lib/activity-log";
 import { HelpIcon } from "@/components/HelpIcon";
+import {
+  DEFAULT_BINDINGS,
+  saveKeyBindings,
+  buildLabel,
+  isConflicting,
+  type KeyBindingsMap,
+  type KeyAction,
+  type KeyBinding,
+} from "@/lib/keyboard-bindings";
 
-type SettingsTab = "theme" | "sound" | "profile";
+type SettingsTab = "theme" | "sound" | "profile" | "keyboard";
 
 interface SettingsModalProps {
   visible: boolean;
@@ -103,9 +112,52 @@ interface SettingsModalProps {
   onBarMetronomeChannelChange: (val: import("@/lib/stereo-channel").SampleChannel) => void;
   onShowOnboarding?: () => void;
   onEnterNoteMode?: () => void;
+  keyBindings?: import("@/lib/keyboard-bindings").KeyBindingsMap;
+  onKeyBindingsChange?: (kb: import("@/lib/keyboard-bindings").KeyBindingsMap) => void;
 }
 
 import { getSoundSetOptions, getTripleOptions, TripleSelector } from "./SettingsModal.helpers";
+
+function KeyRebindOverlay({
+  actionLabel,
+  conflict,
+  onKeyDown,
+  onCancel,
+  t,
+}: {
+  actionLabel: string;
+  conflict: string | null;
+  onKeyDown: (e: KeyboardEvent) => void;
+  onCancel: () => void;
+  t: import("@/lib/i18n").TranslationFn;
+}) {
+  const { colors: C } = useTheme();
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [onKeyDown]);
+
+  return (
+    <View style={kbStyles.overlayBg} pointerEvents="box-only">
+      <View style={[kbStyles.overlayCard, { backgroundColor: C.surface, borderColor: C.border, borderWidth: 1 }]}>
+        <Text style={[kbStyles.overlayTitle, { color: C.text }]}>{t("keyboard", "listening")}</Text>
+        <Text style={[kbStyles.overlayActionLabel, { color: C.accent }]}>{actionLabel}</Text>
+        {conflict ? (
+          <Text style={kbStyles.overlayConflict}>{conflict}</Text>
+        ) : (
+          <Text style={[kbStyles.overlayHint, { color: C.textSecondary }]}>{t("keyboard", "pressKeyHint")}</Text>
+        )}
+        <Pressable
+          style={[kbStyles.overlayCancel, { borderColor: C.border }]}
+          onPress={onCancel}
+        >
+          <Text style={[kbStyles.overlayCancelText, { color: C.textSecondary }]}>{t("keyboard", "cancelRebind")}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
 
 export function SettingsModal({
   visible,
@@ -150,6 +202,8 @@ export function SettingsModal({
   barMetronomeChannel,
   onBarMetronomeChannelChange,
   onShowOnboarding,
+  keyBindings: keyBindingsProp,
+  onKeyBindingsChange,
 }: SettingsModalProps) {
   const { themeColor, customHex, themeMode, setThemeColor, setCustomHex, setThemeMode, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
   const S = useScale();
@@ -177,6 +231,12 @@ export function SettingsModal({
   const [addingRoom, setAddingRoom] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showLoggingInfo, setShowLoggingInfo] = useState(false);
+  const [localKeyBindings, setLocalKeyBindings] = useState<KeyBindingsMap>(keyBindingsProp ?? DEFAULT_BINDINGS);
+  const [rebindingAction, setRebindingAction] = useState<KeyAction | null>(null);
+  const [rebindConflict, setRebindConflict] = useState<string | null>(null);
+  useEffect(() => {
+    if (keyBindingsProp) setLocalKeyBindings(keyBindingsProp);
+  }, [keyBindingsProp]);
   const layerKeys = Object.keys(layerSoundSets).map(k => Number(k)).filter(n => !isNaN(n) && n > 0);
   const initialLayerCount = layerKeys.length > 0 ? Math.max(...layerKeys) : 1;
   const [layerSoundRowCount, setLayerSoundRowCount] = useState(initialLayerCount);
@@ -2205,12 +2265,13 @@ export function SettingsModal({
     { key: "theme", icon: "color-palette-outline", label: t("settings", "themeTab") },
     { key: "sound", icon: "musical-notes-outline", label: t("settings", "soundTab") },
     { key: "profile", icon: "person-circle-outline", label: t("settings", "profileTab") },
+    ...(Platform.OS === "web" ? [{ key: "keyboard" as SettingsTab, icon: "keypad-outline", label: t("keyboard", "tabLabel") }] : []),
   ];
 
   const switchTab = useCallback((tab: SettingsTab) => {
     if (activeTab === tab) return;
     if (Platform.OS !== "web") Haptics.selectionAsync();
-    const tabs: SettingsTab[] = ["theme", "sound", "profile"];
+    const tabs: SettingsTab[] = ["theme", "sound", "profile", "keyboard"];
     const currentIdx = tabs.indexOf(activeTab);
     const nextIdx = tabs.indexOf(tab);
     const slideDir = nextIdx > currentIdx ? 1 : -1;
@@ -2227,11 +2288,177 @@ export function SettingsModal({
     });
   }, [activeTab, tabFadeAnim, tabSlideAnim]);
 
+  const KB_SECTIONS: { titleKey: string; rows: { action: KeyAction; labelKey: string }[] }[] = [
+    {
+      titleKey: "sectionGeneral",
+      rows: [
+        { action: "playPause",        labelKey: "actionPlayPause" },
+        { action: "tapTempo",         labelKey: "actionTapTempo" },
+        { action: "bpmUp",            labelKey: "actionBpmUp" },
+        { action: "bpmDown",          labelKey: "actionBpmDown" },
+        { action: "bpmRight",         labelKey: "actionBpmRight" },
+        { action: "bpmLeft",          labelKey: "actionBpmLeft" },
+        { action: "toggleMenu",       labelKey: "actionToggleMenu" },
+        { action: "toggleStopwatch",  labelKey: "actionToggleStopwatch" },
+        { action: "toggleTimer",      labelKey: "actionToggleTimer" },
+        { action: "openPracticeBook", labelKey: "actionOpenBook" },
+        { action: "showShortcuts",    labelKey: "actionShowShortcuts" },
+        { action: "escape",           labelKey: "actionEscape" },
+      ],
+    },
+    {
+      titleKey: "sectionBeat",
+      rows: [
+        { action: "addBeatNormal",  labelKey: "actionAddNormal" },
+        { action: "addBeatAccent",  labelKey: "actionAddAccent" },
+        { action: "addBeatStrong",  labelKey: "actionAddStrong" },
+        { action: "addBeatMute",    labelKey: "actionAddMute" },
+        { action: "removeBeat",     labelKey: "actionRemoveBeat" },
+        { action: "cycleBeatTypes", labelKey: "actionCycleBeat" },
+      ],
+    },
+    {
+      titleKey: "sectionSub",
+      rows: [
+        { action: "addSubNormal", labelKey: "actionAddSubNormal" },
+        { action: "addSubAccent", labelKey: "actionAddSubAccent" },
+        { action: "addSubStrong", labelKey: "actionAddSubStrong" },
+        { action: "addSubMute",   labelKey: "actionAddSubMute" },
+        { action: "removeSub",    labelKey: "actionRemoveSub" },
+      ],
+    },
+    {
+      titleKey: "sectionBar",
+      rows: [
+        { action: "loopToggle",        labelKey: "actionLoopToggle" },
+        { action: "blockPlayModeNext", labelKey: "actionBlockPlayNext" },
+      ],
+    },
+  ];
+
+  const renderKeyboardTab = () => {
+    const handleRebindPress = (action: KeyAction) => {
+      setRebindingAction(action);
+      setRebindConflict(null);
+    };
+
+    const handleRebindKeyDown = (e: KeyboardEvent) => {
+      if (!rebindingAction) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.code === "Escape") {
+        setRebindingAction(null);
+        setRebindConflict(null);
+        return;
+      }
+
+      const newBinding: KeyBinding = {
+        code: e.code,
+        shift: e.shiftKey || undefined,
+        ctrl: (e.ctrlKey || e.metaKey) || undefined,
+        alt: e.altKey || undefined,
+        label: buildLabel({ code: e.code, shift: e.shiftKey || undefined, ctrl: (e.ctrlKey || e.metaKey) || undefined, alt: e.altKey || undefined }),
+      };
+      if (!newBinding.shift) delete newBinding.shift;
+      if (!newBinding.ctrl) delete newBinding.ctrl;
+      if (!newBinding.alt) delete newBinding.alt;
+
+      let conflictAction: KeyAction | null = null;
+      for (const [act, binding] of Object.entries(localKeyBindings) as [KeyAction, KeyBinding][]) {
+        if (act !== rebindingAction && isConflicting(binding, newBinding)) {
+          conflictAction = act;
+          break;
+        }
+      }
+
+      if (conflictAction) {
+        setRebindConflict(t("keyboard", "conflict"));
+        return;
+      }
+
+      const updated = { ...localKeyBindings, [rebindingAction]: newBinding };
+      setLocalKeyBindings(updated);
+      saveKeyBindings(updated).then(() => {
+        onKeyBindingsChange?.(updated);
+      });
+      setRebindingAction(null);
+      setRebindConflict(null);
+    };
+
+    return (
+      <View>
+        {rebindingAction !== null && (
+          <KeyRebindOverlay
+            actionLabel={t("keyboard", (KB_SECTIONS.flatMap(s => s.rows).find(r => r.action === rebindingAction)?.labelKey ?? rebindingAction) as any)}
+            conflict={rebindConflict}
+            onKeyDown={handleRebindKeyDown}
+            onCancel={() => { setRebindingAction(null); setRebindConflict(null); }}
+            t={t}
+          />
+        )}
+        <Pressable
+          style={[kbStyles.resetBtn, { borderColor: C.border }]}
+          onPress={() => {
+            Alert.alert(t("keyboard", "resetAll"), t("keyboard", "resetConfirm"), [
+              { text: t("keyboard", "cancel"), style: "cancel" },
+              {
+                text: t("keyboard", "resetBtn"),
+                onPress: () => {
+                  const def = { ...DEFAULT_BINDINGS };
+                  setLocalKeyBindings(def);
+                  saveKeyBindings(def).then(() => onKeyBindingsChange?.(def));
+                },
+              },
+            ]);
+          }}
+        >
+          <Text style={[kbStyles.resetBtnText, { color: C.textSecondary }]}>{t("keyboard", "resetAll")}</Text>
+        </Pressable>
+        {KB_SECTIONS.map((section) => (
+          <View key={section.titleKey} style={kbStyles.section}>
+            <Text style={[kbStyles.sectionTitle, { color: C.textSecondary }]}>
+              {t("keyboard", section.titleKey as any)}
+            </Text>
+            {section.rows.map((row) => {
+              const binding = localKeyBindings[row.action];
+              const isRebinding = rebindingAction === row.action;
+              return (
+                <Pressable
+                  key={row.action}
+                  style={[
+                    kbStyles.row,
+                    { borderBottomColor: C.border },
+                    isRebinding && { backgroundColor: C.overlay10 },
+                  ]}
+                  onPress={() => handleRebindPress(row.action)}
+                >
+                  <Text style={[kbStyles.actionLabel, { color: C.text }]}>
+                    {t("keyboard", row.labelKey as any)}
+                  </Text>
+                  <View style={[
+                    kbStyles.keyBadge,
+                    { backgroundColor: isRebinding ? C.accent : C.surfaceLight, borderColor: C.border },
+                  ]}>
+                    <Text style={[kbStyles.keyText, { color: isRebinding ? C.background : C.accent }]}>
+                      {isRebinding ? t("keyboard", "pressKey") : buildLabel(binding)}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
+      </View>
+    );
+  };
+
   const renderTabContent = () => {
     switch (activeTab) {
       case "theme": return renderThemeTab();
       case "sound": return renderSoundTab();
       case "profile": return renderProfileTab();
+      case "keyboard": return renderKeyboardTab();
     }
   };
 

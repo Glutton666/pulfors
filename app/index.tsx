@@ -60,7 +60,7 @@ import { BeatIndicator } from "@/components/BeatIndicator";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
 import { BpmSlider } from "@/components/BpmSlider";
 import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
-import { StopwatchTimer } from "@/components/StopwatchTimer";
+import { StopwatchTimer, type StopwatchTimerHandle } from "@/components/StopwatchTimer";
 import { SettingsModal } from "@/components/SettingsModal";
 import { SignalGeneratorModal, TuningGuideModal } from "@/components/SignalGeneratorModal";
 import { MicWebView, MicWebViewHandle } from "@/components/MicWebView";
@@ -123,6 +123,14 @@ import {
   findNearbyRoom,
   type PracticeRoom,
 } from "@/lib/practice-room";
+import {
+  loadKeyBindings,
+  saveKeyBindings,
+  matchesBinding,
+  DEFAULT_BINDINGS,
+  type KeyBindingsMap,
+} from "@/lib/keyboard-bindings";
+import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 
 
 export default function MetronomeScreen() {
@@ -169,6 +177,12 @@ export default function MetronomeScreen() {
   const [barStartBeat, setBarStartBeat] = useState<number | null>(null);
   const [barLoopMode, setBarLoopMode] = useState<"loop" | "once">("once");
   const [blockPlayMode, setBlockPlayMode] = useState<"sequential" | "loop" | "random">("loop");
+  const [keyBindings, setKeyBindings] = useState<KeyBindingsMap>(DEFAULT_BINDINGS);
+  const keyBindingsRef = useRef<KeyBindingsMap>(DEFAULT_BINDINGS);
+  useEffect(() => { keyBindingsRef.current = keyBindings; }, [keyBindings]);
+  const [showKbShortcuts, setShowKbShortcuts] = useState(false);
+  const stopwatchTimerRef = useRef<StopwatchTimerHandle>(null);
+  const stopwatchTimerLandscapeRef = useRef<StopwatchTimerHandle>(null);
   const [barRepeats, setBarRepeats] = useState<Record<number, BarRepeat>>({});
   const [loopBlocks, setLoopBlocks] = useState<LoopBlock[]>([]);
   const barAreaRef = useRef<View>(null);
@@ -805,6 +819,7 @@ export default function MetronomeScreen() {
         setUsername(settings.username);
       }
       loadCustomSoundSets().then(setCustomSoundSets);
+      loadKeyBindings().then((kb) => { setKeyBindings(kb); keyBindingsRef.current = kb; });
       setIsLoaded(true);
 
       const set = settings.soundSet || "classic";
@@ -2140,6 +2155,10 @@ export default function MetronomeScreen() {
   useEffect(() => { updateTimeSignatureRef.current = updateTimeSignature; }, [updateTimeSignature]);
   const beatsPerMeasureRef = useRef(beatsPerMeasure);
   useEffect(() => { beatsPerMeasureRef.current = beatsPerMeasure; }, [beatsPerMeasure]);
+  const beatTypesRef = useRef(beatTypes);
+  useEffect(() => { beatTypesRef.current = beatTypes; }, [beatTypes]);
+  const subdivisionPatternRef = useRef(subdivisionPattern);
+  useEffect(() => { subdivisionPatternRef.current = subdivisionPattern; }, [subdivisionPattern]);
 
   // 딥링크 명령 핸들러 등록
   const { setCommandHandler } = useDeepLink();
@@ -2223,12 +2242,54 @@ export default function MetronomeScreen() {
     const TAP_RESET_MS = 2000;
     const TAP_MIN_TAPS = 2;
 
+    const kb = () => keyBindingsRef.current;
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (anyModalOpenRef.current) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
 
-      if (e.code === "Enter") {
+      const b = kb();
+      const inNoteMode = noteModeRef.current;
+      const inBarMode = barModeRef.current;
+      const modalOpen = anyModalOpenRef.current;
+
+      // Escape — 항상 처리 (모달 닫기 / 노트모드·바모드 종료)
+      if (matchesBinding(e, b.escape)) {
+        if (modalOpen) {
+          // anyModalOpen이면 App level 뒤로가기가 처리
+          return;
+        }
+        if (inNoteMode) {
+          e.preventDefault();
+          setNoteMode(false);
+          return;
+        }
+        if (inBarMode) {
+          e.preventDefault();
+          setBarMode(false);
+          return;
+        }
+        return;
+      }
+
+      if (modalOpen) return;
+
+      // Space — 재생/정지 (노트모드에서는 노트 토글)
+      if (matchesBinding(e, b.playPause)) {
+        e.preventDefault();
+        if (inNoteMode && handleNoteTogglePlayRef.current) {
+          handleNoteTogglePlayRef.current();
+        } else {
+          togglePlayPauseRef.current();
+        }
+        return;
+      }
+
+      // 노트 모드에서는 Space 외 단축키 비활성
+      if (inNoteMode) return;
+
+      // Enter — 탭 템포
+      if (matchesBinding(e, b.tapTempo)) {
         e.preventDefault();
         const now = performance.now();
         if (tapTimestamps.length > 0 && now - tapTimestamps[tapTimestamps.length - 1] > TAP_RESET_MS) {
@@ -2250,19 +2311,10 @@ export default function MetronomeScreen() {
         return;
       }
 
-      if (e.code === "Space") {
+      // Arrow Up/Down — BPM ±1 (키 반복 지원)
+      if (matchesBinding(e, b.bpmUp) || matchesBinding(e, b.bpmDown)) {
         e.preventDefault();
-        if (noteModeRef.current && handleNoteTogglePlayRef.current) {
-          handleNoteTogglePlayRef.current();
-        } else {
-          togglePlayPauseRef.current();
-        }
-        return;
-      }
-
-      if (e.code === "ArrowUp" || e.code === "ArrowDown") {
-        e.preventDefault();
-        const delta = e.code === "ArrowUp" ? 1 : -1;
+        const delta = matchesBinding(e, b.bpmUp) ? 1 : -1;
         applyBeatDelta(delta);
         if (heldKeyRef.current !== e.code) {
           clearRepeat();
@@ -2277,9 +2329,10 @@ export default function MetronomeScreen() {
         return;
       }
 
-      if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
+      // Arrow Left/Right — BPM ±5 (키 반복 지원)
+      if (matchesBinding(e, b.bpmRight) || matchesBinding(e, b.bpmLeft)) {
         e.preventDefault();
-        const delta = e.code === "ArrowRight" ? 5 : -5;
+        const delta = matchesBinding(e, b.bpmRight) ? 5 : -5;
         applyBpmDelta(delta);
         if (heldKeyRef.current !== e.code) {
           clearRepeat();
@@ -2288,10 +2341,153 @@ export default function MetronomeScreen() {
           repeatTimerRef.current = setInterval(() => {
             repeatCountRef.current++;
             const step = repeatCountRef.current > 10 ? 20 : repeatCountRef.current > 5 ? 10 : 5;
-            const d = e.code === "ArrowRight" ? step : -step;
+            const d = matchesBinding(e, b.bpmRight) ? step : -step;
             applyBpmDelta(d);
           }, 120);
         }
+        return;
+      }
+
+      // Tab — 메뉴 토글
+      if (matchesBinding(e, b.toggleMenu)) {
+        e.preventDefault();
+        setActiveModal((prev) => (prev === "menu" ? null : "menu"));
+        return;
+      }
+
+      // W — 스톱워치 토글
+      if (matchesBinding(e, b.toggleStopwatch)) {
+        e.preventDefault();
+        const ref = stopwatchTimerRef.current || stopwatchTimerLandscapeRef.current;
+        if (ref) ref.openStopwatch();
+        return;
+      }
+
+      // T — 타이머 토글
+      if (matchesBinding(e, b.toggleTimer)) {
+        e.preventDefault();
+        const ref = stopwatchTimerRef.current || stopwatchTimerLandscapeRef.current;
+        if (ref) ref.openTimer();
+        return;
+      }
+
+      // P — Practice Book 열기
+      if (matchesBinding(e, b.openPracticeBook)) {
+        e.preventDefault();
+        setActiveModal((prev) => (prev === "practiceBook" ? null : "practiceBook"));
+        return;
+      }
+
+      // ? — 단축키 목록 팝업
+      if (matchesBinding(e, b.showShortcuts)) {
+        e.preventDefault();
+        setShowKbShortcuts((prev) => !prev);
+        return;
+      }
+
+      // 비트 모드 전용 단축키 (바 모드에서는 S/A/N/M/D가 다를 수 있으나 현재는 동일하게 적용)
+      // S/A/N/M — 비트 추가
+      const addBeatShortcuts: { binding: typeof b.addBeatNormal; type: BeatType }[] = [
+        { binding: b.addBeatNormal, type: "normal" },
+        { binding: b.addBeatAccent, type: "accent" },
+        { binding: b.addBeatStrong, type: "strong" },
+        { binding: b.addBeatMute,   type: "mute" },
+      ];
+      for (const { binding, type } of addBeatShortcuts) {
+        if (matchesBinding(e, binding)) {
+          e.preventDefault();
+          const cur = beatsPerMeasureRef.current;
+          if (cur < 16) {
+            const newBeats = cur + 1;
+            const newTypes: BeatType[] = [...beatTypesRef.current, type];
+            setBeatsPerMeasure(newBeats);
+            setBeatTypes(newTypes);
+            engineRef.current?.setBeatsPerMeasure(newBeats);
+            engineRef.current?.setBeatTypes(newTypes);
+            if (!inBarMode) persistSettings({ beatsPerMeasure: newBeats });
+          }
+          return;
+        }
+      }
+
+      // D — 마지막 비트 삭제
+      if (matchesBinding(e, b.removeBeat)) {
+        e.preventDefault();
+        const cur = beatsPerMeasureRef.current;
+        if (cur > 1) {
+          const newBeats = cur - 1;
+          const newTypes = beatTypesRef.current.slice(0, newBeats);
+          setBeatsPerMeasure(newBeats);
+          setBeatTypes(newTypes);
+          engineRef.current?.setBeatsPerMeasure(newBeats);
+          engineRef.current?.setBeatTypes(newTypes);
+          if (!inBarMode) persistSettings({ beatsPerMeasure: newBeats });
+        }
+        return;
+      }
+
+      // Shift+S/A/N/M — 서브디비전 셀 추가
+      const addSubShortcuts: { binding: typeof b.addSubNormal; type: BeatType }[] = [
+        { binding: b.addSubNormal, type: "normal" },
+        { binding: b.addSubAccent, type: "accent" },
+        { binding: b.addSubStrong, type: "strong" },
+        { binding: b.addSubMute,   type: "mute" },
+      ];
+      for (const { binding, type } of addSubShortcuts) {
+        if (matchesBinding(e, binding)) {
+          e.preventDefault();
+          const p = subdivisionPatternRef.current;
+          if (p.length < 8) {
+            const newP: BeatType[] = [...p, type];
+            setSubdivisionPattern(newP);
+            persistSettings({ subdivisionPattern: newP });
+          }
+          return;
+        }
+      }
+
+      // Shift+D — 서브디비전 셀 삭제
+      if (matchesBinding(e, b.removeSub)) {
+        e.preventDefault();
+        const p = subdivisionPatternRef.current;
+        if (p.length > 1) {
+          const newP = p.slice(0, -1);
+          setSubdivisionPattern(newP);
+          persistSettings({ subdivisionPattern: newP });
+        }
+        return;
+      }
+
+      // 0 — 전체 비트 타입 순환
+      if (matchesBinding(e, b.cycleBeatTypes)) {
+        e.preventDefault();
+        const beatTypeOrder: BeatType[] = ["normal", "accent", "strong", "mute"];
+        setBeatTypes((prev) => {
+          const first = prev[0] || "normal";
+          const idx = beatTypeOrder.indexOf(first);
+          const next = beatTypeOrder[(idx + 1) % beatTypeOrder.length];
+          const newTypes = prev.map(() => next);
+          engineRef.current?.setBeatTypes(newTypes);
+          return newTypes;
+        });
+        return;
+      }
+
+      // L — 루프 모드 토글 (바 모드)
+      if (inBarMode && matchesBinding(e, b.loopToggle)) {
+        e.preventDefault();
+        setBarLoopMode((prev) => (prev === "once" ? "loop" : "once"));
+        return;
+      }
+
+      // G — 재생 순서 순환 (바 모드)
+      if (inBarMode && matchesBinding(e, b.blockPlayModeNext)) {
+        e.preventDefault();
+        setBlockPlayMode((prev) => {
+          const order: ("sequential" | "loop" | "random")[] = ["sequential", "loop", "random"];
+          const idx = order.indexOf(prev);
+          return order[(idx + 1) % order.length];
+        });
         return;
       }
     };
@@ -4592,6 +4788,11 @@ export default function MetronomeScreen() {
         }}
         onEnterNoteMode={handleEnterNoteMode}
         onShowOnboarding={() => openExclusive("onboarding")}
+        keyBindings={keyBindings}
+        onKeyBindingsChange={(kb) => {
+          setKeyBindings(kb);
+          keyBindingsRef.current = kb;
+        }}
       />
       )}
 
@@ -4909,6 +5110,7 @@ export default function MetronomeScreen() {
                   </View>
                 )}
                 <StopwatchTimer
+                  ref={stopwatchTimerLandscapeRef}
                   onTimerExpired={handleTimerExpired}
                   onStopRequested={handleTimerExpired}
                   onStartMetronome={startMetronome}
@@ -4960,6 +5162,7 @@ export default function MetronomeScreen() {
 
       {!barMode && !noteMode && !isLandscape && (
         <StopwatchTimer
+          ref={stopwatchTimerRef}
           onTimerExpired={handleTimerExpired}
           onStopRequested={handleTimerExpired}
           onStartMetronome={startMetronome}
@@ -4974,6 +5177,14 @@ export default function MetronomeScreen() {
           pattern={subdivisionPattern}
           x={dragPos.x}
           y={dragPos.y}
+        />
+      )}
+
+      {Platform.OS === "web" && (
+        <KeyboardShortcutsModal
+          visible={showKbShortcuts}
+          onClose={() => setShowKbShortcuts(false)}
+          bindings={keyBindings}
         />
       )}
     </View>

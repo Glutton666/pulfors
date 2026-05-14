@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo, useImperativeHandle } from "react";
 import {
   View,
   Text,
@@ -81,7 +81,14 @@ interface StopwatchTimerProps {
   isLandscape?: boolean;
 }
 
-export function StopwatchTimer({
+export interface StopwatchTimerHandle {
+  toggleOpen: () => void;
+  openStopwatch: () => void;
+  openTimer: () => void;
+}
+
+export const StopwatchTimer = React.forwardRef<StopwatchTimerHandle, StopwatchTimerProps>(
+function StopwatchTimer({
   onTimerExpired,
   onStopRequested,
   onStartMetronome,
@@ -89,7 +96,7 @@ export function StopwatchTimer({
   currentBeat,
   topInset,
   isLandscape = false,
-}: StopwatchTimerProps) {
+}: StopwatchTimerProps, ref) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("stopwatch");
@@ -221,6 +228,34 @@ export function StopwatchTimer({
       setOpen(false);
     }
   }, []);
+
+  useImperativeHandle(ref, () => ({
+    toggleOpen: () => {
+      if (Platform.OS !== "web") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      setOpen((prev) => {
+        openRef.current = !prev;
+        return !prev;
+      });
+    },
+    openStopwatch: () => {
+      setMode("stopwatch");
+      if (!openRef.current) {
+        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        openRef.current = true;
+        setOpen(true);
+      }
+    },
+    openTimer: () => {
+      setMode("timer");
+      if (!openRef.current) {
+        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        openRef.current = true;
+        setOpen(true);
+      }
+    },
+  }), []);
 
   const drawerPanResponder = useMemo(
     () =>
@@ -1174,7 +1209,7 @@ export function StopwatchTimer({
     );
   }
 
-}
+});
 
 const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   landscapeContainer: {
