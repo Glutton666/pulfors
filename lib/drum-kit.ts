@@ -1,6 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 import { Asset } from "expo-asset";
 import { soundSets, drumPadSounds } from "./metronome-engine";
+import { resolveWebAssetUrl } from "./audio-renderer";
 import type { BuiltinSoundSet, SoundRole } from "./storage";
 import { notifyStorageError } from "./storage-notifier";
 
@@ -167,7 +169,13 @@ export async function resolveBuiltinAssetUri(setName: BuiltinSoundSet, role: Sou
     if (!asset.localUri) {
       try { await asset.downloadAsync(); } catch {}
     }
-    return asset.localUri || asset.uri || null;
+    const uri = asset.localUri || asset.uri || null;
+    if (uri) return uri;
+    // On web, Asset.fromModule().uri can be empty; fall back to Metro's unstable_path API
+    if (Platform.OS === "web") {
+      return resolveWebAssetUrl(mod) || null;
+    }
+    return null;
   } catch {
     return null;
   }

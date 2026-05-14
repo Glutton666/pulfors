@@ -175,10 +175,8 @@ export async function loadAssetPCM(
   assetModule: number | string
 ): Promise<Float32Array> {
   if (Platform.OS === "web") {
-    const url =
-      typeof assetModule === "string"
-        ? assetModule
-        : Asset.fromModule(assetModule).uri;
+    const url = resolveWebAssetUrl(assetModule);
+    if (!url) throw new Error("[AudioRenderer] Could not resolve URL for asset");
     const resp = await fetch(url);
     const ab = await resp.arrayBuffer();
     try {
@@ -512,6 +510,29 @@ export function getWebAudioContext(): AudioContext | null {
   return getSharedAudioContext();
 }
 
+/**
+ * Resolves a require() asset module to a fetchable URL on web.
+ * In Expo web dev mode Asset.fromModule().uri is often an empty string because
+ * the manifest2 devServerUrl path is not populated outside of Expo Go.
+ * Metro in SDK 54 reliably serves assets via the unstable_path query API:
+ *   /assets?unstable_path=assets%2Fsounds%2Fclick-strong.wav
+ * We construct that URL from the asset's httpServerLocation / name / type metadata
+ * as a fallback whenever uri is empty.
+ */
+export function resolveWebAssetUrl(src: number | string): string {
+  if (typeof src === "string") return src;
+  const asset = Asset.fromModule(src);
+  if (asset.uri) return asset.uri;
+  const loc: string = (asset as any).httpServerLocation || "";
+  const name: string = (asset as any).name || "";
+  const type: string = (asset as any).type || "";
+  if (loc && name && type) {
+    const relPath = `${loc.replace(/^\//, "")}/${name}.${type}`;
+    return `/assets?unstable_path=${encodeURIComponent(relPath)}`;
+  }
+  return "";
+}
+
 export async function ensureWebClickBuffers(
   soundSet: Record<string, number | string>
 ): Promise<boolean> {
@@ -523,8 +544,10 @@ export async function ensureWebClickBuffers(
 
   try {
     const loadOne = async (src: number | string): Promise<AudioBuffer> => {
-      const url = typeof src === "string" ? src : Asset.fromModule(src).uri;
+      const url = resolveWebAssetUrl(src);
+      if (!url) throw new Error("[WebAudio] Could not resolve URL for asset");
       const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`[WebAudio] HTTP ${resp.status} fetching ${url}`);
       const ab = await resp.arrayBuffer();
       return ctx.decodeAudioData(ab.slice(0));
     };

@@ -42,6 +42,7 @@ import {
   resolvePadUri,
   getBuiltinPadModule,
 } from "@/lib/drum-kit";
+import { resolveWebAssetUrl } from "@/lib/audio-renderer";
 import {
   type BuiltinSoundSet,
   type SoundRole,
@@ -90,6 +91,15 @@ const DrumPad = React.memo(React.forwardRef<DrumPadHandle, DrumPadProps>(functio
       : `${config.source.type}:${config.source.uri}`;
     if (key === lastSourceRef.current) return;
     lastSourceRef.current = key;
+
+    if (Platform.OS === "web" && config.source.type === "builtin") {
+      // On web, Asset.fromModule().uri may be empty; resolve via Metro's unstable_path API
+      const mod = getBuiltinPadModule(config.source.setName, config.source.role);
+      const uri = resolveWebAssetUrl(mod as number);
+      if (uri) try { player.replace({ uri }); } catch {}
+      return;
+    }
+
     const src = padSourceToAudioSource(config);
     if (!src) return;
     try { player.replace(src); } catch {}
