@@ -234,6 +234,13 @@ export function SettingsModal({
   const [localKeyBindings, setLocalKeyBindings] = useState<KeyBindingsMap>(keyBindingsProp ?? DEFAULT_BINDINGS);
   const [rebindingAction, setRebindingAction] = useState<KeyAction | null>(null);
   const [rebindConflict, setRebindConflict] = useState<string | null>(null);
+  const [kbSavedToast, setKbSavedToast] = useState(false);
+  const kbSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showKbSaved = useCallback(() => {
+    setKbSavedToast(true);
+    if (kbSavedTimerRef.current) clearTimeout(kbSavedTimerRef.current);
+    kbSavedTimerRef.current = setTimeout(() => setKbSavedToast(false), 1500);
+  }, []);
   useEffect(() => {
     if (keyBindingsProp) setLocalKeyBindings(keyBindingsProp);
   }, [keyBindingsProp]);
@@ -2379,11 +2386,11 @@ export function SettingsModal({
 
       const updated = { ...localKeyBindings, [rebindingAction]: newBinding };
       setLocalKeyBindings(updated);
-      saveKeyBindings(updated).then(() => {
-        onKeyBindingsChange?.(updated);
-      });
+      onKeyBindingsChange?.(updated);
+      saveKeyBindings(updated);
       setRebindingAction(null);
       setRebindConflict(null);
+      showKbSaved();
     };
 
     return (
@@ -2407,7 +2414,9 @@ export function SettingsModal({
                 onPress: () => {
                   const def = { ...DEFAULT_BINDINGS };
                   setLocalKeyBindings(def);
-                  saveKeyBindings(def).then(() => onKeyBindingsChange?.(def));
+                  onKeyBindingsChange?.(def);
+                  saveKeyBindings(def);
+                  showKbSaved();
                 },
               },
             ]);
@@ -2449,6 +2458,13 @@ export function SettingsModal({
             })}
           </View>
         ))}
+        {kbSavedToast && (
+          <View style={kbStyles.savedToast} pointerEvents="none">
+            <Text style={[kbStyles.savedToastText, { color: C.accent }]}>
+              {t("keyboard", "saved")}
+            </Text>
+          </View>
+        )}
       </View>
     );
   };

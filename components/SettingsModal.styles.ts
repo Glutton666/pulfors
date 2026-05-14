@@ -979,4 +979,13 @@ export const kbStyles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: 13,
   },
+  savedToast: {
+    alignItems: "center",
+    paddingVertical: 8,
+    marginTop: 8,
+  },
+  savedToastText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 13,
+  },
 });
