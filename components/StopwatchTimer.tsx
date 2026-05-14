@@ -86,6 +86,8 @@ export interface StopwatchTimerHandle {
   openStopwatch: () => void;
   openTimer: () => void;
   handleDigit: (digit: string) => void;
+  handleEnterKey: () => boolean;
+  isTimerInputActive: () => boolean;
 }
 
 export const StopwatchTimer = React.forwardRef<StopwatchTimerHandle, StopwatchTimerProps>(
@@ -107,6 +109,8 @@ function StopwatchTimer({
   const [editingTimer, setEditingTimer] = useState(false);
   const [timerMinInput, setTimerMinInput] = useState("");
   const [timerSecInput, setTimerSecInput] = useState("");
+  const [timerDigitBuf, setTimerDigitBuf] = useState("");
+  const commitTimerEditRef = useRef<(() => void) | null>(null);
   const [countdownLeft, setCountdownLeft] = useState(0);
   const [remaining, setRemaining] = useState(180);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -266,11 +270,27 @@ function StopwatchTimer({
       if (modeRef.current !== "timer" || !openRef.current) return;
       if (stateRef.current !== "idle" && stateRef.current !== "paused") return;
       setEditingTimer(true);
-      setTimerMinInput((prev) => {
-        const combined = prev + digit;
-        if (combined.length <= 2) return combined;
-        return combined.slice(-2);
+      setTimerDigitBuf((prev) => {
+        const next = (prev + digit).slice(-4);
+        const mm = next.slice(0, -2).padStart(1, "0");
+        const ss = next.slice(-2);
+        setTimerMinInput(mm || "0");
+        setTimerSecInput(ss);
+        return next;
       });
+    },
+    handleEnterKey: () => {
+      if (modeRef.current !== "timer" || !openRef.current) return false;
+      if (stateRef.current === "idle" || stateRef.current === "paused") {
+        setTimerDigitBuf("");
+        commitTimerEditRef.current?.();
+        return true;
+      }
+      return false;
+    },
+    isTimerInputActive: () => {
+      return openRef.current && modeRef.current === "timer" &&
+        (stateRef.current === "idle" || stateRef.current === "paused");
     },
   }), []);
 
@@ -664,8 +684,13 @@ function StopwatchTimer({
   }, [timerMinInput, timerSecInput]);
 
   const cancelTimerEdit = useCallback(() => {
+    setTimerDigitBuf("");
     setEditingTimer(false);
   }, []);
+
+  useEffect(() => {
+    commitTimerEditRef.current = commitTimerEdit;
+  }, [commitTimerEdit]);
 
   const isActive = state !== "idle";
 

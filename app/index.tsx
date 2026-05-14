@@ -181,6 +181,8 @@ export default function MetronomeScreen() {
   const keyBindingsRef = useRef<KeyBindingsMap>(DEFAULT_BINDINGS);
   useEffect(() => { keyBindingsRef.current = keyBindings; }, [keyBindings]);
   const [showKbShortcuts, setShowKbShortcuts] = useState(false);
+  const showKbShortcutsRef = useRef(false);
+  useEffect(() => { showKbShortcutsRef.current = showKbShortcuts; }, [showKbShortcuts]);
   const stopwatchTimerRef = useRef<StopwatchTimerHandle>(null);
   const stopwatchTimerLandscapeRef = useRef<StopwatchTimerHandle>(null);
   const [barRepeats, setBarRepeats] = useState<Record<number, BarRepeat>>({});
@@ -2253,12 +2255,8 @@ export default function MetronomeScreen() {
       const inBarMode = barModeRef.current;
       const modalOpen = anyModalOpenRef.current;
 
-      // Escape — 항상 처리 (모달 닫기 / 노트모드·바모드 종료)
+      // Escape — 우선순위: 노트모드 → 바모드 → 단축키 모달 → 기타 모달
       if (matchesBinding(e, b.escape)) {
-        if (modalOpen) {
-          // anyModalOpen이면 App level 뒤로가기가 처리
-          return;
-        }
         if (inNoteMode) {
           e.preventDefault();
           setNoteMode(false);
@@ -2267,6 +2265,15 @@ export default function MetronomeScreen() {
         if (inBarMode) {
           e.preventDefault();
           setBarMode(false);
+          return;
+        }
+        if (showKbShortcutsRef.current) {
+          e.preventDefault();
+          setShowKbShortcuts(false);
+          return;
+        }
+        if (modalOpen) {
+          // anyModalOpen이면 App level 뒤로가기가 처리
           return;
         }
         return;
@@ -2288,8 +2295,14 @@ export default function MetronomeScreen() {
       // 노트 모드에서는 Space 외 단축키 비활성
       if (inNoteMode) return;
 
-      // Enter — 탭 템포
+      // Enter — 타이머 idle/편집 중이면 타이머 설정 완료, 아니면 탭 템포
       if (matchesBinding(e, b.tapTempo)) {
+        const swRef = stopwatchTimerRef.current || stopwatchTimerLandscapeRef.current;
+        if (swRef?.isTimerInputActive()) {
+          e.preventDefault();
+          swRef.handleEnterKey();
+          return;
+        }
         e.preventDefault();
         const now = performance.now();
         if (tapTimestamps.length > 0 && now - tapTimestamps[tapTimestamps.length - 1] > TAP_RESET_MS) {
@@ -2386,7 +2399,8 @@ export default function MetronomeScreen() {
       }
 
       // S/A/N/M — 비트 추가 (재생 중에는 비활성화)
-      if (!isPlaying) {
+      const playing = engineRef.current?.getIsRunning() ?? false;
+      if (!playing) {
         const addBeatShortcuts: { binding: typeof b.addBeatStrong; type: BeatType }[] = [
           { binding: b.addBeatStrong, type: "strong" },
           { binding: b.addBeatAccent, type: "accent" },
@@ -2428,7 +2442,7 @@ export default function MetronomeScreen() {
       }
 
       // Shift+S/A/N/M — 서브디비전 셀 추가 (재생 중에는 비활성화)
-      if (!isPlaying) {
+      if (!playing) {
         const addSubShortcuts: { binding: typeof b.addSubStrong; type: BeatType }[] = [
           { binding: b.addSubStrong, type: "strong" },
           { binding: b.addSubAccent, type: "accent" },
