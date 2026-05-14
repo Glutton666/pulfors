@@ -241,6 +241,9 @@ export function SettingsModal({
     if (kbSavedTimerRef.current) clearTimeout(kbSavedTimerRef.current);
     kbSavedTimerRef.current = setTimeout(() => setKbSavedToast(false), 1500);
   }, []);
+  useEffect(() => () => {
+    if (kbSavedTimerRef.current) clearTimeout(kbSavedTimerRef.current);
+  }, []);
   useEffect(() => {
     if (keyBindingsProp) setLocalKeyBindings(keyBindingsProp);
   }, [keyBindingsProp]);
