@@ -2489,14 +2489,14 @@ export default function MetronomeScreen() {
         return;
       }
 
-      // 숫자 키 — 타이머 idle 상태에서 분 입력 라우팅
+      // 숫자 키 — 타이머 입력 활성 상태일 때만 consume (미활성 시 하위 액션 재바인딩 허용)
       if (/^Digit[0-9]$/.test(e.code)) {
-        const digit = e.code.slice(5);
-        const ref = stopwatchTimerRef.current || stopwatchTimerLandscapeRef.current;
-        if (ref) {
-          ref.handleDigit(digit);
+        const swRef = stopwatchTimerRef.current || stopwatchTimerLandscapeRef.current;
+        if (swRef?.isTimerInputActive()) {
+          const digit = e.code.slice(5);
+          swRef.handleDigit(digit);
+          return;
         }
-        return;
       }
 
       // L — 루프 모드 토글 (바 모드)
