@@ -37,6 +37,12 @@ const BUILTIN_ORDER: Array<{ setName: BuiltinSoundSet; role: SoundRole }> = [
   { setName: "rimshot", role: "strong" },
   { setName: "rimshot", role: "high" },
   { setName: "rimshot", role: "low" },
+  { setName: "triangle", role: "strong" },
+  { setName: "triangle", role: "high" },
+  { setName: "triangle", role: "low" },
+  { setName: "hihat", role: "strong" },
+  { setName: "hihat", role: "high" },
+  { setName: "hihat", role: "low" },
 ];
 
 export function createDefaultDrumKitMapping(): DrumKitMapping {
@@ -53,7 +59,7 @@ export function listBuiltinPadOptions(): Array<{ setName: BuiltinSoundSet; role:
 }
 
 function isBuiltinSetName(v: unknown): v is BuiltinSoundSet {
-  return v === "classic" || v === "woodblock" || v === "cowbell" || v === "digital" || v === "rimshot";
+  return v === "classic" || v === "woodblock" || v === "cowbell" || v === "digital" || v === "rimshot" || v === "triangle" || v === "hihat";
 }
 function isRole(v: unknown): v is SoundRole {
   return v === "strong" || v === "high" || v === "low";

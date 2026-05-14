@@ -45,6 +45,16 @@ export const soundSets = {
     low: require("@/assets/sounds/rimshot-low.wav"),
     strong: require("@/assets/sounds/rimshot-strong.wav"),
   },
+  triangle: {
+    high: require("@/assets/sounds/triangle-high.wav"),
+    low: require("@/assets/sounds/triangle-low.wav"),
+    strong: require("@/assets/sounds/triangle-strong.wav"),
+  },
+  hihat: {
+    high: require("@/assets/sounds/hihat-high.wav"),
+    low: require("@/assets/sounds/hihat-low.wav"),
+    strong: require("@/assets/sounds/hihat-strong.wav"),
+  },
 };
 
 export const highClickSource = soundSets.classic.high;

@@ -198,6 +198,8 @@ export const translations = {
     cowbell: { ko: "카우벨", en: "Cowbell" },
     digital: { ko: "디지털", en: "Digital" },
     rimshot: { ko: "림샷", en: "Rimshot" },
+    triangle: { ko: "트라이앵글", en: "Triangle" },
+    hihat: { ko: "하이햇", en: "Hi-hat" },
     custom: { ko: "커스텀", en: "Custom" },
   },
   customSoundSet: {

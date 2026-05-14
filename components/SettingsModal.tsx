@@ -385,6 +385,12 @@ export function SettingsModal({
   const rimshotStrong = useAudioPlayer(soundSets.rimshot.strong);
   const rimshotHigh = useAudioPlayer(soundSets.rimshot.high);
   const rimshotLow = useAudioPlayer(soundSets.rimshot.low);
+  const triangleStrong = useAudioPlayer(soundSets.triangle.strong);
+  const triangleHigh = useAudioPlayer(soundSets.triangle.high);
+  const triangleLow = useAudioPlayer(soundSets.triangle.low);
+  const hihatStrong = useAudioPlayer(soundSets.hihat.strong);
+  const hihatHigh = useAudioPlayer(soundSets.hihat.high);
+  const hihatLow = useAudioPlayer(soundSets.hihat.low);
 
   const previewPlayers: Partial<Record<SoundSet, typeof classicStrong[]>> = {
     classic: [classicStrong, classicHigh, classicLow],
@@ -392,6 +398,8 @@ export function SettingsModal({
     cowbell: [cowbellStrong, cowbellHigh, cowbellLow],
     digital: [digitalStrong, digitalHigh, digitalLow],
     rimshot: [rimshotStrong, rimshotHigh, rimshotLow],
+    triangle: [triangleStrong, triangleHigh, triangleLow],
+    hihat: [hihatStrong, hihatHigh, hihatLow],
   };
 
   const playCustomSampleUri = useCallback(async (uri: string, duration: number) => {
