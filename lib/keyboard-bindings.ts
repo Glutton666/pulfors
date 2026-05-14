@@ -91,6 +91,23 @@ export async function saveKeyBindings(bindings: KeyBindingsMap): Promise<void> {
 }
 
 /**
+ * Platform-neutral keyboard event interface.
+ * Web passes the native KeyboardEvent (which satisfies this shape); native
+ * Bluetooth-keyboard paths build a plain object that matches it.
+ */
+export interface NormalizedKeyEvent {
+  readonly code: string;
+  readonly key: string;
+  readonly shiftKey: boolean;
+  readonly ctrlKey: boolean;
+  readonly altKey: boolean;
+  readonly metaKey: boolean;
+  preventDefault(): void;
+  /** Web: EventTarget | null. Native: null. Typed as unknown so both KeyboardEvent and plain objects satisfy this interface. */
+  readonly target?: unknown;
+}
+
+/**
  * Returns true when the keyboard event originates from an element that
  * captures text input and therefore should NOT trigger metronome shortcuts.
  *
@@ -100,8 +117,10 @@ export async function saveKeyBindings(bindings: KeyBindingsMap): Promise<void> {
  *  - Any element (or ancestor) with data-captures-keys="true"
  *    — use this attribute on custom components such as BpmInput or
  *      SliderModal that intercept key events for their own purposes.
+ *
+ * On native the target is always null, so the function returns false quickly.
  */
-export function isEditableTarget(e: KeyboardEvent): boolean {
+export function isEditableTarget(e: NormalizedKeyEvent): boolean {
   const el = e.target as HTMLElement | null;
   if (!el) return false;
   const tag = el.tagName;
@@ -111,12 +130,30 @@ export function isEditableTarget(e: KeyboardEvent): boolean {
   return false;
 }
 
-export function matchesBinding(e: KeyboardEvent, binding: KeyBinding): boolean {
+export function matchesBinding(e: NormalizedKeyEvent, binding: KeyBinding): boolean {
   if (e.code !== binding.code) return false;
   if ((binding.shift ?? false) !== e.shiftKey) return false;
   if ((binding.ctrl ?? false) !== (e.ctrlKey || e.metaKey)) return false;
   if ((binding.alt ?? false) !== e.altKey) return false;
   return true;
+}
+
+/** Map a React Native hardware-keyboard `key` string to a standard `code`. */
+export function nativeKeyToCode(key: string): string {
+  const map: Record<string, string> = {
+    " ": "Space",
+    "ArrowUp": "ArrowUp", "ArrowDown": "ArrowDown",
+    "ArrowLeft": "ArrowLeft", "ArrowRight": "ArrowRight",
+    "Enter": "Enter", "Escape": "Escape", "Tab": "Tab",
+    "Backspace": "Backspace", "Delete": "Delete",
+    "?": "Slash", "/": "Slash", "`": "Backquote",
+  };
+  if (key in map) return map[key];
+  if (key.length === 1) {
+    if (/[0-9]/.test(key)) return `Digit${key}`;
+    if (/[a-zA-Z]/.test(key)) return `Key${key.toUpperCase()}`;
+  }
+  return key;
 }
 
 export function isConflicting(a: KeyBinding, b: KeyBinding): boolean {

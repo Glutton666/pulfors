@@ -128,10 +128,13 @@ import {
   saveKeyBindings,
   matchesBinding,
   isEditableTarget,
+  nativeKeyToCode,
   DEFAULT_BINDINGS,
   type KeyBindingsMap,
+  type NormalizedKeyEvent,
 } from "@/lib/keyboard-bindings";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
+import { NativeKeyboardHintOverlay } from "@/components/NativeKeyboardHintOverlay";
 
 
 export default function MetronomeScreen() {
@@ -184,6 +187,11 @@ export default function MetronomeScreen() {
   const [showKbShortcuts, setShowKbShortcuts] = useState(false);
   const showKbShortcutsRef = useRef(false);
   useEffect(() => { showKbShortcutsRef.current = showKbShortcuts; }, [showKbShortcuts]);
+  const [showNativeKbHint, setShowNativeKbHint] = useState(false);
+  const showNativeKbHintRef = useRef(false);
+  useEffect(() => { showNativeKbHintRef.current = showNativeKbHint; }, [showNativeKbHint]);
+  const nativeKbDownRef = useRef<((e: NormalizedKeyEvent) => void) | null>(null);
+  const nativeKbUpRef = useRef<((e: NormalizedKeyEvent) => void) | null>(null);
   const stopwatchTimerRef = useRef<StopwatchTimerHandle>(null);
   const stopwatchTimerLandscapeRef = useRef<StopwatchTimerHandle>(null);
   const [barRepeats, setBarRepeats] = useState<Record<number, BarRepeat>>({});
@@ -2215,13 +2223,50 @@ export default function MetronomeScreen() {
   }, [setCommandHandler]);
   const handleNoteTogglePlayRef = useRef<(() => void) | null>(null);
   const anyModalOpenRef = useRef(false);
-  useEffect(() => { anyModalOpenRef.current = activeModal !== null || landscapeImageModalVisible || recorderTarget !== null || showKbShortcuts; }, [activeModal, landscapeImageModalVisible, recorderTarget, showKbShortcuts]);
+  useEffect(() => { anyModalOpenRef.current = activeModal !== null || landscapeImageModalVisible || recorderTarget !== null || showKbShortcuts || showNativeKbHint; }, [activeModal, landscapeImageModalVisible, recorderTarget, showKbShortcuts, showNativeKbHint]);
 
   const bpmTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bpmTapCountRef = useRef<{ direction: string; count: number }>({ direction: "", count: 0 });
 
+  const rootViewRef = useRef<View>(null);
+
   useEffect(() => {
-    if (Platform.OS !== "web") return;
+    if (Platform.OS !== "web") {
+      rootViewRef.current?.focus?.();
+    }
+  }, []);
+
+  const handleNativeKeyDown = useCallback((nativeEvent: { key: string; shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean }) => {
+    if (!nativeKbDownRef.current) return;
+    const e: NormalizedKeyEvent = {
+      code: nativeKeyToCode(nativeEvent.key),
+      key: nativeEvent.key,
+      shiftKey: nativeEvent.shiftKey ?? false,
+      ctrlKey: nativeEvent.ctrlKey ?? false,
+      altKey: nativeEvent.altKey ?? false,
+      metaKey: nativeEvent.metaKey ?? false,
+      preventDefault: () => {},
+      target: null,
+    };
+    nativeKbDownRef.current(e);
+  }, []);
+
+  const handleNativeKeyUp = useCallback((nativeEvent: { key: string }) => {
+    if (!nativeKbUpRef.current) return;
+    const e: NormalizedKeyEvent = {
+      code: nativeKeyToCode(nativeEvent.key),
+      key: nativeEvent.key,
+      shiftKey: false,
+      ctrlKey: false,
+      altKey: false,
+      metaKey: false,
+      preventDefault: () => {},
+      target: null,
+    };
+    nativeKbUpRef.current(e);
+  }, []);
+
+  useEffect(() => {
     const repeatTimerRef = { current: null as ReturnType<typeof setInterval> | null };
     const heldKeyRef = { current: "" };
     const repeatCountRef = { current: 0 };
@@ -2247,7 +2292,7 @@ export default function MetronomeScreen() {
 
     const kb = () => keyBindingsRef.current;
 
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: NormalizedKeyEvent) => {
       if (isEditableTarget(e)) return;
 
       const b = kb();
@@ -2255,7 +2300,7 @@ export default function MetronomeScreen() {
       const inBarMode = barModeRef.current;
       const modalOpen = anyModalOpenRef.current;
 
-      // Escape — 우선순위: 노트모드 → 바모드 → 단축키 모달 → 기타 모달
+      // Escape — 우선순위: 노트모드 → 바모드 → 단축키 모달 → 네이티브 힌트 → 기타 모달
       if (matchesBinding(e, b.escape)) {
         if (inNoteMode) {
           e.preventDefault();
@@ -2270,6 +2315,11 @@ export default function MetronomeScreen() {
         if (showKbShortcutsRef.current) {
           e.preventDefault();
           setShowKbShortcuts(false);
+          return;
+        }
+        if (showNativeKbHintRef.current) {
+          e.preventDefault();
+          setShowNativeKbHint(false);
           return;
         }
         if (modalOpen) {
@@ -2391,10 +2441,15 @@ export default function MetronomeScreen() {
         return;
       }
 
-      // ? — 단축키 목록 팝업
-      if (matchesBinding(e, b.showShortcuts)) {
+      // ? — 단축키 목록 팝업 (web) / 힌트 오버레이 (native)
+      // 네이티브에서는 shiftKey 없이 key==="?" 만 전달될 수 있으므로 직접 비교도 추가
+      if (matchesBinding(e, b.showShortcuts) || (Platform.OS !== "web" && e.key === "?")) {
         e.preventDefault();
-        setShowKbShortcuts((prev) => !prev);
+        if (Platform.OS === "web") {
+          setShowKbShortcuts((prev) => !prev);
+        } else {
+          setShowNativeKbHint((prev) => !prev);
+        }
         return;
       }
 
@@ -2518,17 +2573,29 @@ export default function MetronomeScreen() {
       }
     };
 
-    const handleKeyUp = (e: KeyboardEvent) => {
+    const handleKeyUp = (e: NormalizedKeyEvent) => {
       if (e.code === heldKeyRef.current) clearRepeat();
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-    return () => {
-      clearRepeat();
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-    };
+    if (Platform.OS === "web") {
+      const webKeyDown = (e: KeyboardEvent) => handleKeyDown(e);
+      const webKeyUp = (e: KeyboardEvent) => handleKeyUp(e);
+      window.addEventListener("keydown", webKeyDown);
+      window.addEventListener("keyup", webKeyUp);
+      return () => {
+        clearRepeat();
+        window.removeEventListener("keydown", webKeyDown);
+        window.removeEventListener("keyup", webKeyUp);
+      };
+    } else {
+      nativeKbDownRef.current = handleKeyDown;
+      nativeKbUpRef.current = handleKeyUp;
+      return () => {
+        clearRepeat();
+        nativeKbDownRef.current = null;
+        nativeKbUpRef.current = null;
+      };
+    }
   }, []);
 
   useEffect(() => {
@@ -4245,8 +4312,22 @@ export default function MetronomeScreen() {
     );
   }
 
+  type NativeKbViewProps = React.ComponentProps<typeof View> & {
+    ref?: React.Ref<View>;
+    focusable?: boolean;
+    onKeyDown?: (e: { nativeEvent: { key: string; shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean } }) => void;
+    onKeyUp?: (e: { nativeEvent: { key: string } }) => void;
+  };
+  const KbView = View as React.ComponentType<NativeKbViewProps>;
+
   return (
-    <View style={styles.screen}>
+    <KbView
+      ref={rootViewRef}
+      style={styles.screen}
+      focusable={Platform.OS !== "web" ? true : undefined}
+      onKeyDown={Platform.OS !== "web" ? (e) => handleNativeKeyDown(e.nativeEvent) : undefined}
+      onKeyUp={Platform.OS !== "web" ? (e) => handleNativeKeyUp(e.nativeEvent) : undefined}
+    >
       <StatusBar style={themeMode === "day" ? "dark" : "light"} />
       {permissionRecoveryToast ? (
         <View
@@ -5213,7 +5294,15 @@ export default function MetronomeScreen() {
           bindings={keyBindings}
         />
       )}
-    </View>
+
+      {Platform.OS !== "web" && (
+        <NativeKeyboardHintOverlay
+          visible={showNativeKbHint}
+          onClose={() => setShowNativeKbHint(false)}
+          bindings={keyBindings}
+        />
+      )}
+    </KbView>
   );
 }
 
