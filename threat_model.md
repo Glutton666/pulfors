@@ -22,6 +22,7 @@ Assumptions for this scan: only production-reachable code matters; mockup/sandbo
 - **Client to server** -- the mobile/web app sends untrusted requests to the Express server, especially `POST /api/analyze-audio`. The server must treat all body fields, headers, and content types as attacker-controlled.
 - **User-selected file to app storage** -- backup and practice-entry import flows accept attacker-controlled JSON and embedded audio files from local files or share sheets, then write them into app storage and the app sandbox.
 - **Imported configuration to runtime media playback** -- backup-restored custom sound sets and stored sample metadata are later consumed by preview and rendering code. Imported URIs must remain constrained to local media schemes when replayed at runtime.
+- **Imported image metadata to runtime rendering** -- backup-restored hub images and practice-entry thumbnails are later passed into React Native `Image` components. Imported image URIs must stay constrained to safe local schemes so the app does not make attacker-chosen network requests from the user's device or browser.
 - **Deep link / URL to app state** -- `/practice?d=...` and `pulfors://practice?...` feed attacker-controlled JSON into runtime state and persistence logic. Imported fields must be schema-checked before they are applied, saved, or used as media URIs.
 - **App storage to runtime logic** -- AsyncStorage-backed settings, practice data, and note sample URIs are trusted later by rendering, sharing, and playback code.
 - **Server to host filesystem / native tools** -- the backend writes temporary files and invokes `ffmpeg` on user-supplied media. File paths, input size, and processing cost matter here.
@@ -30,7 +31,7 @@ Assumptions for this scan: only production-reachable code matters; mockup/sandbo
 ## Scan Anchors
 
 - **Production entry points:** `app/_layout.tsx`, `app/index.tsx`, `app/practice.tsx`, `server/index.ts`, `server/routes.ts`
-- **Highest-risk code areas:** `server/index.ts`, `server/routes.ts`, `server/templates/landing-page.html`, `lib/backup.ts`, `lib/pending-import.ts`, `components/SettingsModal.tsx`, `components/SignalGeneratorModal.tsx`, `components/MicWebView.tsx`, `lib/practice-room.ts`, `lib/audio-renderer.ts`, `lib/storage.ts`
+- **Highest-risk code areas:** `server/index.ts`, `server/routes.ts`, `server/templates/landing-page.html`, `lib/backup.ts`, `lib/backup/full.ts`, `lib/backup/practice.ts`, `lib/backup/shared.ts`, `lib/pending-import.ts`, `contexts/ThemeContext.tsx`, `components/SettingsModal.tsx`, `components/BeatIndicator.tsx`, `components/NoteModeView.tsx`, `components/SignalGeneratorModal.tsx`, `components/MicWebView.tsx`, `lib/practice-room.ts`, `lib/audio-renderer.ts`, `lib/storage.ts`
 - **Public surfaces:** `/`, `/manifest`, static asset serving, `/practice`, custom-scheme deep links, and `POST /api/analyze-audio`
 - **Authenticated/admin surfaces:** none currently implemented in production
 - **Usually dev-only / ignore unless proven reachable:** `scripts/`, build helpers, generated assets, Expo dev-server behavior
@@ -43,7 +44,7 @@ The biggest tampering risk is the import pipeline. Backup files, shared practice
 
 ### Information Disclosure
 
-The main disclosure risks are local rather than server-side. Practice-room coordinates, activity logs, usernames, and imported media are stored in client-side storage and can also be packaged into share/backup exports. Deep-linked or imported media URIs must not cause the app to leak user reachability or internal-network access by fetching attacker-controlled URLs, including when restored custom sound-set entries are previewed later in settings.
+The main disclosure risks are local rather than server-side. Practice-room coordinates, activity logs, usernames, and imported media are stored in client-side storage and can also be packaged into share/backup exports. Deep-linked or imported media URIs must not cause the app to leak user reachability or internal-network access by fetching attacker-controlled URLs, including when restored custom sound-set entries, hub images, or practice-entry thumbnails are rendered later in the app.
 
 ### Denial of Service
 
