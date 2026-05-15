@@ -1,10 +1,210 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import { execFile } from "node:child_process";
-import { writeFile, unlink, mkdtemp } from "node:fs/promises";
+import { writeFile, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Worker } from "node:worker_threads";
+
+// ---------------------------------------------------------------------------
+// Audio-analysis worker code (plain JS, runs off the main event loop)
+// ---------------------------------------------------------------------------
+const WAV_WORKER_CODE = `
+const { workerData, parentPort } = require('worker_threads');
+
+const MAX_ANALYSIS_SECONDS = 3;
+const FFMPEG_SAMPLE_RATE = 48000;
+const MAX_AUDIO_SAMPLES = MAX_ANALYSIS_SECONDS * FFMPEG_SAMPLE_RATE;
+const MAX_ANALYSIS_WINDOWS = 5;
+
+function autoCorrelate(buffer, sampleRate, rmsThreshold) {
+  if (rmsThreshold === undefined) rmsThreshold = 0.03;
+  const SIZE = buffer.length;
+  let rms = 0;
+  for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
+  rms = Math.sqrt(rms / SIZE);
+  if (rms < rmsThreshold) return -1;
+  let r1 = 0;
+  let r2 = SIZE - 1;
+  const thresh = 0.2;
+  for (let i = 0; i < SIZE / 2; i++) {
+    if (Math.abs(buffer[i]) < thresh) { r1 = i; break; }
+  }
+  for (let i = 1; i < SIZE / 2; i++) {
+    if (Math.abs(buffer[SIZE - i]) < thresh) { r2 = SIZE - i; break; }
+  }
+  const buf = buffer.slice(r1, r2);
+  if (buf.length < 2) return -1;
+  const c = new Float32Array(buf.length);
+  for (let i = 0; i < buf.length; i++) {
+    for (let j = 0; j < buf.length - i; j++) c[i] += buf[j] * buf[j + i];
+  }
+  let d = 0;
+  while (d < buf.length - 1 && c[d] > c[d + 1]) d++;
+  let maxval = -1;
+  let maxpos = -1;
+  for (let i = d; i < buf.length; i++) {
+    if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
+  }
+  if (maxpos < 0 || maxval < 0) return -1;
+  const clarity = c[0] > 0 ? maxval / c[0] : 0;
+  if (clarity < 0.5) return -1;
+  let T0 = maxpos;
+  const x1 = c[T0 - 1] ?? 0;
+  const x2 = c[T0];
+  const x3 = c[T0 + 1] ?? 0;
+  const a = (x1 + x3 - 2 * x2) / 2;
+  const b = (x3 - x1) / 2;
+  if (a) T0 = T0 - b / (2 * a);
+  return sampleRate / T0;
+}
+
+function frequencyToNote(freq) {
+  const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const semitones = 12 * Math.log2(freq / 440);
+  const rounded = Math.round(semitones);
+  const noteIndex = ((rounded % 12) + 12 + 9) % 12;
+  const octave = Math.floor((rounded + 9) / 12) + 4;
+  return { name: NOTE_NAMES[noteIndex], octave };
+}
+
+function pickDominantFreq(readings) {
+  if (readings.length === 0) return null;
+  const noteMap = new Map();
+  for (const f of readings) {
+    const info = frequencyToNote(f);
+    const key = info.name + info.octave;
+    if (!noteMap.has(key)) noteMap.set(key, []);
+    noteMap.get(key).push(f);
+  }
+  let bestKey = '';
+  let bestCount = 0;
+  for (const [key, freqs] of noteMap) {
+    if (freqs.length > bestCount) { bestCount = freqs.length; bestKey = key; }
+  }
+  if (!bestKey) return null;
+  const freqs = noteMap.get(bestKey);
+  freqs.sort((a, b) => a - b);
+  return freqs[Math.floor(freqs.length / 2)];
+}
+
+function decodeWavBuffer(buf) {
+  try {
+    if (buf.length < 44) return null;
+    if (buf.toString('ascii', 0, 4) !== 'RIFF') return null;
+    const audioFormat  = buf.readUInt16LE(20);
+    const numChannels  = buf.readUInt16LE(22);
+    const sampleRate   = buf.readUInt32LE(24);
+    const bitsPerSample = buf.readUInt16LE(34);
+    let offset = 12;
+    while (offset < buf.length - 8) {
+      const tag       = buf.toString('ascii', offset, offset + 4);
+      const chunkSize = buf.readUInt32LE(offset + 4);
+      if (tag === 'data') {
+        offset += 8;
+        const bytesPerSample   = bitsPerSample / 8;
+        const availableBytes   = buf.length - offset;
+        const samplesFromHdr   = Math.floor(chunkSize / (bytesPerSample * numChannels));
+        const samplesFromBuf   = Math.floor(availableBytes / (bytesPerSample * numChannels));
+        const numSamples       = Math.min(samplesFromHdr, samplesFromBuf, MAX_AUDIO_SAMPLES);
+        if (numSamples <= 0) return null;
+        const samples = new Float32Array(numSamples);
+        for (let i = 0; i < numSamples; i++) {
+          const off = offset + i * bytesPerSample * numChannels;
+          if (off + bytesPerSample > buf.length) break;
+          if (audioFormat === 3 && bitsPerSample === 32) {
+            samples[i] = buf.readFloatLE(off);
+          } else if (bitsPerSample === 16) {
+            samples[i] = buf.readInt16LE(off) / 32768;
+          } else if (bitsPerSample === 24) {
+            const lo  = buf[off] | (buf[off + 1] << 8);
+            const hi  = buf[off + 2];
+            const val = (hi & 0x80) ? (lo | (hi << 16) | 0xff000000) : (lo | (hi << 16));
+            samples[i] = val / 8388608;
+          } else if (bitsPerSample === 8) {
+            samples[i] = (buf[off] - 128) / 128;
+          }
+        }
+        return { samples, rate: sampleRate };
+      }
+      offset += 8 + (chunkSize % 2 === 1 ? chunkSize + 1 : chunkSize);
+    }
+    return null;
+  } catch { return null; }
+}
+
+function analyzeWavDirect(audioBuffer) {
+  const decoded = decodeWavBuffer(audioBuffer);
+  if (!decoded) return { frequency: null, note: null };
+  const { rate } = decoded;
+  const samples = decoded.samples.length > MAX_AUDIO_SAMPLES
+    ? decoded.samples.slice(0, MAX_AUDIO_SAMPLES)
+    : decoded.samples;
+  const WINDOW_SIZE = 8192;
+  const MIC_GATE = 0.02;
+  if (samples.length < WINDOW_SIZE) return { frequency: null, note: null };
+  const readings = [];
+  const step = Math.floor(WINDOW_SIZE / 2);
+  let windowCount = 0;
+  for (let offset = 0; offset + WINDOW_SIZE <= samples.length; offset += step) {
+    if (windowCount >= MAX_ANALYSIS_WINDOWS) break;
+    const win = samples.slice(offset, offset + WINDOW_SIZE);
+    const freq = autoCorrelate(win, rate, MIC_GATE);
+    if (freq > 20 && freq <= 20000) readings.push(freq);
+    windowCount++;
+  }
+  const dominant = pickDominantFreq(readings);
+  if (!dominant) return { frequency: null, note: null };
+  const rounded = Math.round(dominant * 10) / 10;
+  const noteInfo = frequencyToNote(dominant);
+  return { frequency: rounded, note: noteInfo.name + noteInfo.octave };
+}
+
+const buf = Buffer.from(workerData.audioData);
+const result = analyzeWavDirect(buf);
+parentPort.postMessage(result);
+`;
+
+function analyzeWavInWorker(
+  audioBuffer: Buffer,
+): Promise<{ frequency: number | null; note: string | null }> {
+  return new Promise((resolve, reject) => {
+    const ab = audioBuffer.buffer.slice(
+      audioBuffer.byteOffset,
+      audioBuffer.byteOffset + audioBuffer.byteLength,
+    ) as ArrayBuffer;
+    const worker = new Worker(WAV_WORKER_CODE, {
+      eval: true,
+      workerData: { audioData: ab },
+      transferList: [ab],
+    });
+    const timeout = setTimeout(() => {
+      worker.terminate();
+      reject(new Error("WAV analysis timed out"));
+    }, 8000);
+    worker.once("message", (result) => {
+      clearTimeout(timeout);
+      resolve(result);
+    });
+    worker.once("error", (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Helpers used only by the ffmpeg path (main thread)
+// ---------------------------------------------------------------------------
+function frequencyToNote(freq: number): { name: string; octave: number; cents: number } {
+  const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const semitones = 12 * Math.log2(freq / 440);
+  const rounded = Math.round(semitones);
+  const cents = Math.round((semitones - rounded) * 100);
+  const noteIndex = ((rounded % 12) + 12 + 9) % 12;
+  const octave = Math.floor((rounded + 9) / 12) + 4;
+  return { name: NOTE_NAMES[noteIndex], octave, cents };
+}
 
 function autoCorrelate(buffer: Float32Array, sampleRate: number, rmsThreshold: number = 0.03): number {
   const SIZE = buffer.length;
@@ -47,16 +247,6 @@ function autoCorrelate(buffer: Float32Array, sampleRate: number, rmsThreshold: n
   return sampleRate / T0;
 }
 
-function frequencyToNote(freq: number): { name: string; octave: number; cents: number } {
-  const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-  const semitones = 12 * Math.log2(freq / 440);
-  const rounded = Math.round(semitones);
-  const cents = Math.round((semitones - rounded) * 100);
-  const noteIndex = ((rounded % 12) + 12 + 9) % 12;
-  const octave = Math.floor((rounded + 9) / 12) + 4;
-  return { name: NOTE_NAMES[noteIndex], octave, cents };
-}
-
 function pickDominantFreq(readings: number[]): number | null {
   if (readings.length === 0) return null;
   const noteMap = new Map<string, number[]>();
@@ -80,6 +270,9 @@ function pickDominantFreq(readings: number[]): number | null {
   return freqs[Math.floor(freqs.length / 2)];
 }
 
+// ---------------------------------------------------------------------------
+// Concurrency guards
+// ---------------------------------------------------------------------------
 const MAX_ANALYSIS_SECONDS = 3;
 const FFMPEG_SAMPLE_RATE = 48000;
 const MAX_PCM_BYTES = MAX_ANALYSIS_SECONDS * FFMPEG_SAMPLE_RATE * 2;
@@ -92,155 +285,31 @@ const MAX_CONCURRENT_FFMPEG = 2;
 let activeWavCount = 0;
 export const MAX_CONCURRENT_WAV = 2;
 
+// ---------------------------------------------------------------------------
+// Per-IP rate limiter: max 20 requests per 60-second sliding window.
+// Uses req.ip which is correctly populated when Express trust proxy is set.
+// ---------------------------------------------------------------------------
 const RATE_LIMIT_WINDOW_MS = 60_000;
-export const RATE_LIMIT_MAX_REQUESTS = 20;
-export const _ipRequestLog = new Map<string, number[]>();
-export function isRateLimited(ip: string): boolean {
+const RATE_LIMIT_MAX_REQUESTS = 20;
+const rateLimitMap = new Map<string, { count: number; windowStart: number }>();
+
+function checkRateLimit(ip: string): boolean {
   const now = Date.now();
-  const windowStart = now - RATE_LIMIT_WINDOW_MS;
-  const timestamps = (_ipRequestLog.get(ip) ?? []).filter((t) => t > windowStart);
-  if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) return true;
-  timestamps.push(now);
-  _ipRequestLog.set(ip, timestamps);
-  return false;
-}
-
-// WAV 분석을 Worker Thread에서 실행 — 이벤트 루프 블로킹 방지
-const WAV_WORKER_CODE = `
-const { workerData, parentPort } = require('worker_threads');
-const MAX_AUDIO_SAMPLES = 144000;
-const MAX_ANALYSIS_WINDOWS = 5;
-function autoCorrelate(buffer, sampleRate, rmsThreshold) {
-  rmsThreshold = rmsThreshold || 0.03;
-  const SIZE = buffer.length;
-  let rms = 0;
-  for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
-  rms = Math.sqrt(rms / SIZE);
-  if (rms < rmsThreshold) return -1;
-  let r1 = 0; let r2 = SIZE - 1;
-  const thresh = 0.2;
-  for (let i = 0; i < SIZE / 2; i++) { if (Math.abs(buffer[i]) < thresh) { r1 = i; break; } }
-  for (let i = 1; i < SIZE / 2; i++) { if (Math.abs(buffer[SIZE - i]) < thresh) { r2 = SIZE - i; break; } }
-  const buf = buffer.slice(r1, r2);
-  if (buf.length < 2) return -1;
-  const c = new Float32Array(buf.length);
-  for (let i = 0; i < buf.length; i++) for (let j = 0; j < buf.length - i; j++) c[i] += buf[j] * buf[j + i];
-  let d = 0;
-  while (d < buf.length - 1 && c[d] > c[d + 1]) d++;
-  let maxval = -1; let maxpos = -1;
-  for (let i = d; i < buf.length; i++) { if (c[i] > maxval) { maxval = c[i]; maxpos = i; } }
-  if (maxpos < 0 || maxval < 0) return -1;
-  const clarity = c[0] > 0 ? maxval / c[0] : 0;
-  if (clarity < 0.5) return -1;
-  let T0 = maxpos;
-  const x1 = c[T0 - 1] !== undefined ? c[T0 - 1] : 0;
-  const x2 = c[T0];
-  const x3 = c[T0 + 1] !== undefined ? c[T0 + 1] : 0;
-  const a = (x1 + x3 - 2 * x2) / 2;
-  const b = (x3 - x1) / 2;
-  if (a) T0 = T0 - b / (2 * a);
-  return sampleRate / T0;
-}
-function frequencyToNote(freq) {
-  const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-  const semitones = 12 * Math.log2(freq / 440);
-  const rounded = Math.round(semitones);
-  const noteIndex = ((rounded % 12) + 12 + 9) % 12;
-  const octave = Math.floor((rounded + 9) / 12) + 4;
-  return { name: NOTE_NAMES[noteIndex], octave };
-}
-function pickDominantFreq(readings) {
-  if (!readings.length) return null;
-  const noteMap = new Map();
-  for (const f of readings) { const info = frequencyToNote(f); const key = info.name + info.octave; if (!noteMap.has(key)) noteMap.set(key, []); noteMap.get(key).push(f); }
-  let bestKey = ''; let bestCount = 0;
-  for (const [key, freqs] of noteMap) { if (freqs.length > bestCount) { bestCount = freqs.length; bestKey = key; } }
-  if (!bestKey) return null;
-  const freqs = noteMap.get(bestKey);
-  freqs.sort((a, b) => a - b);
-  return freqs[Math.floor(freqs.length / 2)];
-}
-function decodeWavBuffer(buf) {
-  try {
-    if (buf.length < 44) return null;
-    if (buf.toString('ascii', 0, 4) !== 'RIFF') return null;
-    const audioFormat = buf.readUInt16LE(20);
-    const numChannels = buf.readUInt16LE(22);
-    const sampleRate = buf.readUInt32LE(24);
-    const bitsPerSample = buf.readUInt16LE(34);
-    let offset = 12;
-    while (offset < buf.length - 8) {
-      const tag = buf.toString('ascii', offset, offset + 4);
-      const chunkSize = buf.readUInt32LE(offset + 4);
-      if (tag === 'data') {
-        offset += 8;
-        const bps = bitsPerSample / 8;
-        const n = Math.min(Math.floor(chunkSize / (bps * numChannels)), Math.floor((buf.length - offset) / (bps * numChannels)), MAX_AUDIO_SAMPLES);
-        if (n <= 0) return null;
-        const samples = new Float32Array(n);
-        for (let i = 0; i < n; i++) {
-          const off = offset + i * bps * numChannels;
-          if (off + bps > buf.length) break;
-          if (audioFormat === 3 && bitsPerSample === 32) samples[i] = buf.readFloatLE(off);
-          else if (bitsPerSample === 16) samples[i] = buf.readInt16LE(off) / 32768;
-          else if (bitsPerSample === 24) { const lo = buf[off] | (buf[off+1]<<8); const hi = buf[off+2]; samples[i] = ((hi&0x80)?(lo|(hi<<16)|0xff000000):(lo|(hi<<16)))/8388608; }
-          else if (bitsPerSample === 8) samples[i] = (buf[off]-128)/128;
-        }
-        return { samples, rate: sampleRate };
-      }
-      offset += 8 + (chunkSize % 2 === 1 ? chunkSize + 1 : chunkSize);
-    }
-    return null;
-  } catch { return null; }
-}
-function analyzeWav(audioBuffer) {
-  const decoded = decodeWavBuffer(audioBuffer);
-  if (!decoded) return { frequency: null, note: null };
-  const { rate } = decoded;
-  const samples = decoded.samples.length > MAX_AUDIO_SAMPLES ? decoded.samples.slice(0, MAX_AUDIO_SAMPLES) : decoded.samples;
-  const WINDOW_SIZE = 8192; const MIC_GATE = 0.02;
-  if (samples.length < WINDOW_SIZE) return { frequency: null, note: null };
-  const readings = [];
-  let windowCount = 0;
-  const step = Math.floor(WINDOW_SIZE / 2);
-  for (let offset = 0; offset + WINDOW_SIZE <= samples.length; offset += step) {
-    if (windowCount++ >= MAX_ANALYSIS_WINDOWS) break;
-    const win = samples.slice(offset, offset + WINDOW_SIZE);
-    const freq = autoCorrelate(win, rate, MIC_GATE);
-    if (freq > 20 && freq <= 20000) readings.push(freq);
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now - entry.windowStart >= RATE_LIMIT_WINDOW_MS) {
+    rateLimitMap.set(ip, { count: 1, windowStart: now });
+    return true;
   }
-  const dominant = pickDominantFreq(readings);
-  if (!dominant) return { frequency: null, note: null };
-  const noteInfo = frequencyToNote(dominant);
-  return { frequency: Math.round(dominant * 10) / 10, note: noteInfo.name + noteInfo.octave };
-}
-const buf = Buffer.from(workerData.buffer);
-try { parentPort.postMessage({ ok: true, result: analyzeWav(buf) }); }
-catch (e) { parentPort.postMessage({ ok: false, error: e.message }); }
-`;
-
-function runWavWorker(audioBuffer: Buffer): Promise<{ frequency: number | null; note: string | null }> {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(WAV_WORKER_CODE, {
-      eval: true,
-      workerData: { buffer: Array.from(audioBuffer) },
-    });
-    const timer = setTimeout(() => {
-      worker.terminate();
-      reject(new Error("WAV analysis worker timeout"));
-    }, 10_000);
-    worker.on("message", (msg: { ok: boolean; result?: { frequency: number | null; note: string | null }; error?: string }) => {
-      clearTimeout(timer);
-      if (msg.ok) resolve(msg.result!);
-      else reject(new Error(msg.error ?? "WAV analysis failed"));
-    });
-    worker.on("error", (err) => { clearTimeout(timer); reject(err); });
-    worker.on("exit", (code) => {
-      if (code !== 0) { clearTimeout(timer); reject(new Error(`WAV worker exited with code ${code}`)); }
-    });
-  });
+  if (entry.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return false;
+  }
+  entry.count++;
+  return true;
 }
 
+// ---------------------------------------------------------------------------
+// ffmpeg helper
+// ---------------------------------------------------------------------------
 function ffmpegConvertToPcm(inputPath: string, outputPath: string): Promise<void> {
   if (activeFfmpegCount >= MAX_CONCURRENT_FFMPEG) {
     return Promise.reject(new Error("Server busy: too many concurrent audio conversions"));
@@ -264,91 +333,16 @@ function ffmpegConvertToPcm(inputPath: string, outputPath: string): Promise<void
   });
 }
 
-// WAV 파일을 ffmpeg 없이 직접 디코딩 (PCM 16/24/32비트 지원)
-function decodeWavBuffer(buf: Buffer): { samples: Float32Array; rate: number } | null {
-  try {
-    if (buf.length < 44) return null;
-    const riff = buf.toString("ascii", 0, 4);
-    if (riff !== "RIFF") return null;
-    const audioFormat = buf.readUInt16LE(20); // 1=PCM, 3=IEEE float
-    const numChannels = buf.readUInt16LE(22);
-    const sampleRate = buf.readUInt32LE(24);
-    const bitsPerSample = buf.readUInt16LE(34);
-    let offset = 12;
-    while (offset < buf.length - 8) {
-      const tag = buf.toString("ascii", offset, offset + 4);
-      const chunkSize = buf.readUInt32LE(offset + 4);
-      if (tag === "data") {
-        offset += 8;
-        const bytesPerSample = bitsPerSample / 8;
-        const availableBytes = buf.length - offset;
-        const samplesFromHeader = Math.floor(chunkSize / (bytesPerSample * numChannels));
-        const samplesFromBuffer = Math.floor(availableBytes / (bytesPerSample * numChannels));
-        const numSamples = Math.min(samplesFromHeader, samplesFromBuffer, MAX_AUDIO_SAMPLES);
-        if (numSamples <= 0) return null;
-        const samples = new Float32Array(numSamples);
-        for (let i = 0; i < numSamples; i++) {
-          const off = offset + i * bytesPerSample * numChannels;
-          if (off + bytesPerSample > buf.length) break;
-          if (audioFormat === 3 && bitsPerSample === 32) {
-            samples[i] = buf.readFloatLE(off);
-          } else if (bitsPerSample === 16) {
-            samples[i] = buf.readInt16LE(off) / 32768;
-          } else if (bitsPerSample === 24) {
-            const lo = buf[off] | (buf[off + 1] << 8);
-            const hi = buf[off + 2];
-            const val = (hi & 0x80) ? (lo | (hi << 16) | 0xff000000) : (lo | (hi << 16));
-            samples[i] = val / 8388608;
-          } else if (bitsPerSample === 8) {
-            samples[i] = (buf[off] - 128) / 128;
-          }
-        }
-        return { samples, rate: sampleRate };
-      }
-      offset += 8 + (chunkSize % 2 === 1 ? chunkSize + 1 : chunkSize);
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
+// ---------------------------------------------------------------------------
+// Request handler
+// ---------------------------------------------------------------------------
 
-const WAV_MAX_ANALYSIS_SAMPLES = MAX_AUDIO_SAMPLES;
-
-function analyzeWavDirect(audioBuffer: Buffer): { frequency: number | null; note: string | null } {
-  const decoded = decodeWavBuffer(audioBuffer);
-  if (!decoded) return { frequency: null, note: null };
-  const { rate } = decoded;
-  const samples = decoded.samples.length > WAV_MAX_ANALYSIS_SAMPLES
-    ? decoded.samples.slice(0, WAV_MAX_ANALYSIS_SAMPLES)
-    : decoded.samples;
-  const WINDOW_SIZE = 8192;
-  const MIC_GATE = 0.02;
-  if (samples.length < WINDOW_SIZE) return { frequency: null, note: null };
-  const readings: number[] = [];
-  const step = Math.floor(WINDOW_SIZE / 2);
-  let windowCount = 0;
-  for (let offset = 0; offset + WINDOW_SIZE <= samples.length; offset += step) {
-    if (windowCount >= MAX_ANALYSIS_WINDOWS) break;
-    const win = samples.slice(offset, offset + WINDOW_SIZE);
-    const freq = autoCorrelate(win, rate, MIC_GATE);
-    if (freq > 20 && freq <= 20000) readings.push(freq);
-    windowCount++;
-  }
-  const dominant = pickDominantFreq(readings);
-  if (!dominant) return { frequency: null, note: null };
-  const rounded = Math.round(dominant * 10) / 10;
-  const noteInfo = frequencyToNote(dominant);
-  return { frequency: rounded, note: `${noteInfo.name}${noteInfo.octave}` };
-}
-
-// base64 인코딩된 5MB 바이너리의 최대 base64 길이
+// Max base64 length for a 5 MB binary payload — reject early before decoding
 const MAX_BASE64_AUDIO_CHARS = Math.ceil((5 * 1024 * 1024) / 3) * 4;
 
-export async function analyzeAudioHandler(req: Request, res: Response) {
-  const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
-
-  if (isRateLimited(ip)) {
+async function analyzeAudioHandler(req: Request, res: Response) {
+  const ip = req.ip ?? "unknown";
+  if (!checkRateLimit(ip)) {
     return res.status(429).json({ error: "Too many requests. Please try again later." });
   }
 
@@ -365,14 +359,14 @@ export async function analyzeAudioHandler(req: Request, res: Response) {
   const ext = ALLOWED_EXTS.includes(rawExt) ? rawExt : ".wav";
   const audioBuffer = Buffer.from(audio, "base64");
 
-  // WAV는 Worker Thread에서 분석 — 이벤트 루프 블로킹 방지
+  // WAV: run analysis in a worker thread so the main event loop stays free
   if (ext === ".wav") {
     if (activeWavCount >= MAX_CONCURRENT_WAV) {
       return res.status(503).json({ error: "Server busy: too many concurrent audio analyses" });
     }
     activeWavCount++;
     try {
-      const result = await runWavWorker(audioBuffer);
+      const result = await analyzeWavInWorker(audioBuffer);
       return res.json(result);
     } catch (e: any) {
       console.error("[analyze-audio] WAV worker error:", e.message);
@@ -382,7 +376,7 @@ export async function analyzeAudioHandler(req: Request, res: Response) {
     }
   }
 
-  // 다른 포맷은 ffmpeg 사용
+  // Other formats: use ffmpeg
   let tmpDir: string | null = null;
   try {
     tmpDir = await mkdtemp(join(tmpdir(), "mic-"));
