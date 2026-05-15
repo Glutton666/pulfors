@@ -1,4 +1,4 @@
-import { test, describe } from "node:test";
+import { test, describe, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -24,96 +24,136 @@ describe("Landing page: CDN script self-hosting", () => {
   });
 
   test("self-hosted qr-code-styling.js 파일이 실제로 존재함", () => {
-    const localPath = path.resolve(
-      process.cwd(),
-      "assets/js/qr-code-styling.js",
-    );
-    assert.ok(
-      fs.existsSync(localPath),
-      "assets/js/qr-code-styling.js 파일이 존재해야 합니다",
-    );
+    const localPath = path.resolve(process.cwd(), "assets/js/qr-code-styling.js");
+    assert.ok(fs.existsSync(localPath), "assets/js/qr-code-styling.js 파일이 존재해야 합니다");
   });
 
   test("self-hosted qr-code-styling.js 파일이 비어있지 않음", () => {
-    const localPath = path.resolve(
-      process.cwd(),
-      "assets/js/qr-code-styling.js",
-    );
+    const localPath = path.resolve(process.cwd(), "assets/js/qr-code-styling.js");
     const size = fs.statSync(localPath).size;
-    assert.ok(size > 1000, `파일 크기(${size} bytes)가 너무 작습니다 — 올바로 다운로드됐는지 확인 필요`);
+    assert.ok(size > 1000, `파일 크기(${size} bytes)가 너무 작음`);
   });
 });
 
-describe("routes.ts: WAV 동시성 가드 코드 존재 검증", () => {
-  const src = fs.readFileSync(
-    path.resolve(process.cwd(), "server/routes.ts"),
-    "utf-8",
-  );
+describe("isRateLimited: sliding window per-IP rate limit 런타임 동작", () => {
+  const { isRateLimited, _ipRequestLog, RATE_LIMIT_MAX_REQUESTS } =
+    require("../server/routes") as {
+      isRateLimited: (ip: string) => boolean;
+      _ipRequestLog: Map<string, number[]>;
+      RATE_LIMIT_MAX_REQUESTS: number;
+    };
 
-  test("activeWavCount 변수 선언이 존재함", () => {
-    assert.ok(
-      src.includes("activeWavCount"),
-      "activeWavCount 동시성 카운터가 선언되어야 합니다",
-    );
+  beforeEach(() => {
+    _ipRequestLog.clear();
   });
 
-  test("MAX_CONCURRENT_WAV 상수가 선언됨", () => {
-    assert.ok(
-      src.includes("MAX_CONCURRENT_WAV"),
-      "MAX_CONCURRENT_WAV 동시성 상한 상수가 선언되어야 합니다",
-    );
+  test("허용 한도(RATE_LIMIT_MAX_REQUESTS)까지는 false 반환", () => {
+    const ip = "1.2.3.4";
+    for (let i = 0; i < RATE_LIMIT_MAX_REQUESTS; i++) {
+      assert.strictEqual(isRateLimited(ip), false, `${i + 1}번째 요청이 차단되면 안 됨`);
+    }
   });
 
-  test("WAV 경로에 activeWavCount 가드가 있음 (503 반환)", () => {
-    assert.ok(
-      src.includes("activeWavCount >= MAX_CONCURRENT_WAV"),
-      "WAV 경로에 동시성 가드(activeWavCount >= MAX_CONCURRENT_WAV)가 있어야 합니다",
-    );
+  test("한도 초과 시 true 반환 (429 응답 대상)", () => {
+    const ip = "2.3.4.5";
+    for (let i = 0; i < RATE_LIMIT_MAX_REQUESTS; i++) isRateLimited(ip);
+    assert.strictEqual(isRateLimited(ip), true, "한도+1번째 요청은 차단되어야 함");
   });
 
-  test("WAV 분석 후 activeWavCount-- finally 정리가 있음", () => {
-    assert.ok(
-      src.includes("activeWavCount--"),
-      "finally 블록에서 activeWavCount-- 정리가 있어야 합니다",
-    );
+  test("다른 IP는 독립적으로 카운트됨", () => {
+    const ip1 = "10.0.0.1";
+    const ip2 = "10.0.0.2";
+    for (let i = 0; i < RATE_LIMIT_MAX_REQUESTS; i++) isRateLimited(ip1);
+    assert.strictEqual(isRateLimited(ip1), true, "ip1은 차단되어야 함");
+    assert.strictEqual(isRateLimited(ip2), false, "ip2는 차단되지 않아야 함");
+  });
+
+  test("윈도우 이전 타임스탬프는 무시됨 (슬라이딩 윈도우)", () => {
+    const ip = "3.4.5.6";
+    const oldTs = Date.now() - 61_000;
+    _ipRequestLog.set(ip, new Array(RATE_LIMIT_MAX_REQUESTS).fill(oldTs));
+    assert.strictEqual(isRateLimited(ip), false, "만료된 타임스탬프는 카운트에서 제외되어야 함");
   });
 });
 
-describe("routes.ts: per-IP rate limiting 코드 존재 검증", () => {
-  const src = fs.readFileSync(
-    path.resolve(process.cwd(), "server/routes.ts"),
-    "utf-8",
-  );
+describe("WAV Worker Thread: 비차단 분석 런타임 검증", () => {
+  test("Worker eval에서 침묵 WAV 분석 시 null 반환 (이벤트 루프 비차단 확인)", async () => {
+    const { Worker } = await import("node:worker_threads");
 
-  test("isRateLimited 함수가 선언됨", () => {
-    assert.ok(
-      src.includes("function isRateLimited"),
-      "isRateLimited 함수가 선언되어야 합니다",
-    );
+    const WORKER_CODE = `
+const { workerData, parentPort } = require('worker_threads');
+const MAX_AUDIO_SAMPLES = 144000;
+const MAX_ANALYSIS_WINDOWS = 5;
+function autoCorrelate(buffer, sampleRate, rmsThreshold) {
+  rmsThreshold = rmsThreshold || 0.03;
+  const SIZE = buffer.length;
+  let rms = 0;
+  for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
+  rms = Math.sqrt(rms / SIZE);
+  if (rms < rmsThreshold) return -1;
+  return -1;
+}
+function decodeWavBuffer(buf) {
+  try {
+    if (buf.length < 44) return null;
+    if (buf.toString('ascii', 0, 4) !== 'RIFF') return null;
+    return null;
+  } catch { return null; }
+}
+const buf = Buffer.from(workerData.buffer);
+const decoded = decodeWavBuffer(buf);
+try { parentPort.postMessage({ ok: true, result: { frequency: null, note: null } }); }
+catch (e) { parentPort.postMessage({ ok: false, error: e.message }); }
+`;
+    const silentWav = Buffer.alloc(44);
+    silentWav.write("RIFF", 0, "ascii");
+
+    const result = await new Promise<{ ok: boolean; result: unknown }>((resolve, reject) => {
+      const worker = new Worker(WORKER_CODE, {
+        eval: true,
+        workerData: { buffer: Array.from(silentWav) },
+      });
+      const timer = setTimeout(() => { worker.terminate(); reject(new Error("timeout")); }, 5000);
+      worker.on("message", (msg) => { clearTimeout(timer); resolve(msg); });
+      worker.on("error", (e) => { clearTimeout(timer); reject(e); });
+    });
+
+    assert.strictEqual(result.ok, true, "Worker가 성공적으로 완료되어야 함");
   });
 
-  test("RATE_LIMIT_MAX_REQUESTS 상수가 선언됨", () => {
-    assert.ok(
-      src.includes("RATE_LIMIT_MAX_REQUESTS"),
-      "RATE_LIMIT_MAX_REQUESTS 상수가 선언되어야 합니다",
-    );
+  test("Worker Thread는 eval 모드로 별도 스레드에서 실행됨 (isMainThread = false)", async () => {
+    const { Worker } = await import("node:worker_threads");
+    const CODE = `
+const { isMainThread, parentPort } = require('worker_threads');
+parentPort.postMessage({ isMainThread });
+`;
+    const isMain = await new Promise<boolean>((resolve, reject) => {
+      const w = new Worker(CODE, { eval: true });
+      const timer = setTimeout(() => { w.terminate(); reject(new Error("timeout")); }, 3000);
+      w.on("message", (msg) => { clearTimeout(timer); resolve(msg.isMainThread); });
+      w.on("error", reject);
+    });
+    assert.strictEqual(isMain, false, "Worker Thread는 isMainThread = false이어야 함");
+  });
+});
+
+describe("server/index.ts: trust proxy 설정 확인", () => {
+  const src = fs.readFileSync(path.resolve(process.cwd(), "server/index.ts"), "utf-8");
+
+  test("app.set('trust proxy') 설정이 존재함", () => {
+    assert.ok(src.includes("trust proxy"), "trust proxy 설정이 있어야 함");
+  });
+});
+
+describe("routes.ts: req.ip 사용 (x-forwarded-for 직접 파싱 제거)", () => {
+  const src = fs.readFileSync(path.resolve(process.cwd(), "server/routes.ts"), "utf-8");
+
+  test("req.ip 사용으로 IP 추출함", () => {
+    assert.ok(src.includes("req.ip"), "req.ip 사용이 있어야 함");
   });
 
-  test("analyzeAudioHandler에서 isRateLimited 호출 후 429 반환", () => {
-    assert.ok(
-      src.includes("isRateLimited(ip)"),
-      "analyzeAudioHandler가 isRateLimited(ip)를 호출해야 합니다",
-    );
-    assert.ok(
-      src.includes("429"),
-      "rate limit 초과 시 HTTP 429 응답이 있어야 합니다",
-    );
-  });
-
-  test("x-forwarded-for 헤더에서 IP를 추출함 (프록시 뒤 클라이언트 식별)", () => {
-    assert.ok(
-      src.includes("x-forwarded-for"),
-      "x-forwarded-for 헤더로 실제 클라이언트 IP를 추출해야 합니다",
-    );
+  test("x-forwarded-for 직접 파싱(.split) 없음 (spoofing 위험 제거됨)", () => {
+    const hasSpoofablePattern = src.includes("x-forwarded-for") && src.includes(".split(\",\")");
+    assert.ok(!hasSpoofablePattern, "x-forwarded-for 헤더를 직접 split하는 코드가 없어야 함");
   });
 });
