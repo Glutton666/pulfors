@@ -333,7 +333,7 @@ export interface AppliedEntryState {
 /** loopBlocks.layerOf를 barRepeats.layers로 마이그레이션하는 순수 함수.
  *  layerOf가 있는 블록들을 barRepeats[beat].layers 배열에 통합하고 loopBlocks에서 제거한다.
  */
-function migrateLayerBlocks(
+export function migrateLayerBlocks(
   loopBlocks: LoopBlock[],
   barRepeats: Record<number, BarRepeat>,
 ): { barRepeats: Record<number, BarRepeat>; loopBlocks: LoopBlock[] } {

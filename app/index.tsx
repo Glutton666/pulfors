@@ -69,7 +69,7 @@ import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import PracticeStatsGraph from "@/components/PracticeStatsGraph";
 import { useDeepLink } from "@/contexts/DeepLinkContext";
 import { make_styles } from "./index.styles";
-import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore } from "./index.helpers";
+import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks } from "./index.helpers";
 import {
   type ActiveModal,
   type SgTgState,
@@ -3624,13 +3624,13 @@ export default function MetronomeScreen() {
     const engine = engineRef.current;
     if (!engine) return;
 
+    const { barRepeats: mgRepeats1, loopBlocks: mgBlocks1 } = migrateLayerBlocks((entry as any).loopBlocks || [], { ...entry.barRepeats });
     setBpm(entry.bpm);
     setBeatsPerMeasure(entry.beatsPerMeasure);
     setBeatTypes([...entry.beatTypes]);
     setBeatSubdivisions({ ...entry.beatSubdivisions });
-    setBarRepeats({ ...entry.barRepeats });
-    const entryBlocks = (entry as any).loopBlocks || [];
-    setLoopBlocks([...entryBlocks]);
+    setBarRepeats(mgRepeats1);
+    setLoopBlocks([...mgBlocks1]);
     setBarLoopMode(entry.barLoopMode || "once");
     setBlockPlayMode((entry as any).blockPlayMode || "loop");
     if (entry.subdivisionPattern) setSubdivisionPattern([...entry.subdivisionPattern]);
@@ -3702,14 +3702,14 @@ export default function MetronomeScreen() {
     noteSampleNamesRef.current = { ...entryNames };
     noteSampleSourcesRef.current = { ...entrySources };
 
+    const { barRepeats: mgRepeats2, loopBlocks: mgBlocks2 } = migrateLayerBlocks((entry as any).loopBlocks || [], { ...entry.barRepeats });
     setBpm(entry.bpm);
     bpmRef.current = entry.bpm;
     setBeatsPerMeasure(entry.beatsPerMeasure);
     setBeatTypes([...entry.beatTypes]);
     setBeatSubdivisions({ ...entry.beatSubdivisions });
-    setBarRepeats({ ...entry.barRepeats });
-    const entryBlocks = (entry as any).loopBlocks || [];
-    setLoopBlocks([...entryBlocks]);
+    setBarRepeats(mgRepeats2);
+    setLoopBlocks([...mgBlocks2]);
     setBarLoopMode(entry.barLoopMode || "once");
     setBlockPlayMode((entry as any).blockPlayMode || "loop");
     if (entry.subdivisionPattern) setSubdivisionPattern([...entry.subdivisionPattern]);
@@ -3729,8 +3729,8 @@ export default function MetronomeScreen() {
       beatsPerMeasure: entry.beatsPerMeasure,
       beatTypes: [...entry.beatTypes],
       beatSubdivisions: { ...entry.beatSubdivisions },
-      barRepeats: { ...entry.barRepeats },
-      loopBlocks: [...entryBlocks],
+      barRepeats: { ...mgRepeats2 },
+      loopBlocks: [...mgBlocks2],
       barClockMode: entry.barClockMode || "stopwatch",
       barTimerDuration: entry.barTimerDuration ?? 180,
       noteSamples: { ...entrySamples },
@@ -4192,13 +4192,13 @@ export default function MetronomeScreen() {
       const barSources = entry.noteSampleSources || {};
       const barChannels = entry.noteSampleChannels || {};
 
+      const { barRepeats: mgRepeats3, loopBlocks: mgBlocks3 } = migrateLayerBlocks((entry as any).loopBlocks || [], { ...entry.barRepeats });
       setBpm(entry.bpm);
       setBeatsPerMeasure(entry.beatsPerMeasure);
       setBeatTypes([...entry.beatTypes]);
       setBeatSubdivisions({ ...entry.beatSubdivisions });
-      setBarRepeats({ ...entry.barRepeats });
-      const entryBlocks = (entry as any).loopBlocks || [];
-      setLoopBlocks([...entryBlocks]);
+      setBarRepeats(mgRepeats3);
+      setLoopBlocks([...mgBlocks3]);
       setBarLoopMode(entry.barLoopMode);
       setBlockPlayMode((entry as any).blockPlayMode || "loop");
       setSubdivisionPattern([...entry.subdivisionPattern]);
@@ -4222,11 +4222,11 @@ export default function MetronomeScreen() {
       engine.setBeatsPerMeasure(entry.beatsPerMeasure);
       engine.setBeatTypes([...entry.beatTypes]);
       engine.setAllBeatSubdivisions(entry.beatSubdivisions);
-      engine.setLoopBlocks(entryBlocks);
+      engine.setLoopBlocks(mgBlocks3);
       engine.setBlockPlayMode((entry as any).blockPlayMode || "loop");
-      engine.setAllBarRepeats(entry.barRepeats || {});
+      engine.setAllBarRepeats(mgRepeats3 || {});
       const bpmOverridesEntry: Record<number, number> = {};
-      for (const [k, v] of Object.entries(entry.barRepeats || {})) {
+      for (const [k, v] of Object.entries(mgRepeats3 || {})) {
         if ((v as any).bpm) bpmOverridesEntry[Number(k)] = (v as any).bpm;
       }
       engine.setAllBarBpmOverrides(bpmOverridesEntry);
@@ -4235,8 +4235,8 @@ export default function MetronomeScreen() {
         beatsPerMeasure: entry.beatsPerMeasure,
         beatTypes: [...entry.beatTypes],
         beatSubdivisions: { ...entry.beatSubdivisions },
-        barRepeats: { ...entry.barRepeats },
-        loopBlocks: [...entryBlocks],
+        barRepeats: { ...mgRepeats3 },
+        loopBlocks: [...mgBlocks3],
         barClockMode: entry.barClockMode || "stopwatch",
         barTimerDuration: entry.barTimerDuration ?? 180,
         noteSamples: { ...barSamples },

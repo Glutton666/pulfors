@@ -105,23 +105,23 @@ const MAX_BEATS = 16;
 const SWIPE_ACTION_THRESHOLD = 60;
 const BLOCK_DEPTH_INDENT = 8;
 
-const SYMBOL_INFO: Record<SymbolType, { icon: IoniconName; label: string; color: (c: BarModeColors) => string }> = {
-  block:     { icon: "code-slash",       label: "[ ] 블록",  color: c => c.accent },
-  repeat:    { icon: "repeat",           label: "⟳ 반복",   color: c => c.accent },
-  jump_from: { icon: "arrow-forward",    label: "→N 점프",  color: c => "#f0ad4e" },
-  jump_to:   { icon: "arrow-back",       label: "←N 목적지", color: c => "#f0ad4e" },
-  volta:     { icon: "hourglass-outline", label: "N회",     color: c => "#7b68ee" },
-  end:       { icon: "stop",             label: "■ 끝",     color: c => c.danger },
+const SYMBOL_INFO: Record<SymbolType, { icon: IoniconName; labelKey: string; color: (c: BarModeColors) => string }> = {
+  block:     { icon: "code-slash",        labelKey: "symbolBlock",    color: c => c.accent },
+  repeat:    { icon: "repeat",            labelKey: "symbolRepeat",   color: c => c.accent },
+  jump_from: { icon: "arrow-forward",     labelKey: "symbolJumpFrom", color: c => "#f0ad4e" },
+  jump_to:   { icon: "arrow-back",        labelKey: "symbolJumpTo",   color: c => "#f0ad4e" },
+  volta:     { icon: "hourglass-outline", labelKey: "symbolVolta",    color: c => "#7b68ee" },
+  end:       { icon: "stop",              labelKey: "symbolEnd",      color: c => c.danger },
 };
 
-const SOUND_SET_OPTIONS: { key: string; label: string }[] = [
-  { key: "classic",   label: "클래식" },
-  { key: "woodblock", label: "우드블록" },
-  { key: "cowbell",   label: "카우벨" },
-  { key: "digital",   label: "디지털" },
-  { key: "rimshot",   label: "림샷" },
-  { key: "triangle",  label: "트라이앵글" },
-  { key: "hihat",     label: "하이햇" },
+const SOUND_SET_OPTIONS: { key: string; labelKey: string }[] = [
+  { key: "classic",   labelKey: "ssClassic" },
+  { key: "woodblock", labelKey: "ssWoodblock" },
+  { key: "cowbell",   labelKey: "ssCowbell" },
+  { key: "digital",   labelKey: "ssDigital" },
+  { key: "rimshot",   labelKey: "ssRimshot" },
+  { key: "triangle",  labelKey: "ssTriangle" },
+  { key: "hihat",     labelKey: "ssHihat" },
 ];
 
 // ─── 헬퍼 ────────────────────────────────────────────────────────────────────
@@ -551,6 +551,18 @@ export function BarModeView({
       handleSymbolPlacement(beat);
       return;
     }
+    // 이 바가 loopBlock의 startBeat 또는 endBeat이면 해당 블록 편집 모달 열기
+    const blockIdx = loopBlocks.findIndex(b => b.layerOf === undefined && (b.startBeat === beat || b.endBeat === beat));
+    if (blockIdx !== -1) {
+      const lb = loopBlocks[blockIdx];
+      setBlockEditingIdx(blockIdx);
+      setBlockRepType(lb.type);
+      if (lb.type === "count") setBlockRepCount(lb.value);
+      else { setBlockRepMin(Math.floor(lb.value / 60)); setBlockRepSec(lb.value % 60); }
+      setBlockRepBpm(lb.bpm ?? null);
+      setBlockRepSoundSet((lb.soundSet ?? null) as string | null);
+      return;
+    }
     // 탭 → 해당 바 편집기로 로드
     if (barStartBeat === beat) {
       onBarStartBeatSelect(null);
@@ -558,7 +570,7 @@ export function BarModeView({
       onBarStartBeatSelect(beat);
       setActiveLayerTab(0);
     }
-  }, [isPlaying, placingSymbol, barStartBeat, onBarStartBeatSelect]);
+  }, [isPlaying, placingSymbol, loopBlocks, barStartBeat, onBarStartBeatSelect]);
 
   const handleBarRowLongPress = useCallback((beat: number) => {
     if (isPlaying) return;
@@ -727,7 +739,13 @@ export function BarModeView({
     }
 
     if (placingSymbol === "jump_from") {
-      const pairId = nextJumpPairId(barRepeats);
+      // jump_to가 먼저 배치된 미연결 항목이 있으면 그 ID를 재사용해 자동 연결
+      const allRepeatsArr = Object.values(barRepeats);
+      const unmatchedTo = Object.entries(barRepeats)
+        .filter(([, r]) => r.jumpToId !== undefined)
+        .filter(([, r]) => !allRepeatsArr.some(rr => rr.jumpFromId === r.jumpToId))
+        .sort(([a], [b]) => Number(a) - Number(b))[0];
+      const pairId = unmatchedTo ? (unmatchedTo[1].jumpToId ?? nextJumpPairId(barRepeats)) : nextJumpPairId(barRepeats);
       const existing = barRepeats[beat] ?? { type: "count" as const, value: 1 };
       onBarRepeatChange(beat, { ...existing, jumpFromId: pairId });
       setPlacingSymbol(null);
@@ -735,10 +753,13 @@ export function BarModeView({
     }
 
     if (placingSymbol === "jump_to") {
-      const lastFrom = Object.entries(barRepeats)
+      // jump_from이 먼저 배치된 미연결 항목이 있으면 그 ID를 재사용해 자동 연결
+      const allRepeatsArr = Object.values(barRepeats);
+      const unmatchedFrom = Object.entries(barRepeats)
         .filter(([, r]) => r.jumpFromId !== undefined)
+        .filter(([, r]) => !allRepeatsArr.some(rr => rr.jumpToId === r.jumpFromId))
         .sort(([a], [b]) => Number(b) - Number(a))[0];
-      const pairId = lastFrom ? (lastFrom[1].jumpFromId ?? nextJumpPairId(barRepeats)) : nextJumpPairId(barRepeats);
+      const pairId = unmatchedFrom ? (unmatchedFrom[1].jumpFromId ?? nextJumpPairId(barRepeats)) : nextJumpPairId(barRepeats);
       const existing = barRepeats[beat] ?? { type: "count" as const, value: 1 };
       onBarRepeatChange(beat, { ...existing, jumpToId: pairId });
       setPlacingSymbol(null);
@@ -876,8 +897,8 @@ export function BarModeView({
               <Ionicons name="close-circle" size={ms(14, 0.4)} color={SYMBOL_INFO[placingSymbol].color(C)} />
               <Text style={{ color: SYMBOL_INFO[placingSymbol].color(C), fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_600SemiBold" }}>
                 {placingSymbol === "block" && blockSelectFirst !== null
-                  ? `바 ${blockSelectFirst + 1} 선택됨 — 끝 바 탭`
-                  : `${SYMBOL_INFO[placingSymbol].label} 배치 중 — 바 탭`}
+                  ? t("barModeView", "blockSelectStarted").replace("{{n}}", String(blockSelectFirst + 1))
+                  : `${t("barModeView", SYMBOL_INFO[placingSymbol].labelKey as any)} ${t("barModeView", "blockSelectPrompt")}`}
               </Text>
             </View>
           ) : (
@@ -888,7 +909,7 @@ export function BarModeView({
                 color={C.textTertiary}
               />
               <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium" }}>
-                {symbolDrawerOpen ? "부호 드로어 닫기" : "부호 드로어"}
+                {symbolDrawerOpen ? t("barModeView", "symbolDrawerClose") : t("barModeView", "symbolDrawerLabel")}
               </Text>
             </View>
           )}
@@ -942,7 +963,7 @@ export function BarModeView({
               >
                 <Ionicons name={info.icon} size={ms(14, 0.4)} color={isActive ? col : C.textSecondary} />
                 <Text style={{ color: isActive ? col : C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", marginTop: 2 }}>
-                  {info.label}
+                  {t("barModeView", info.labelKey as any)}
                 </Text>
               </Pressable>
             );
@@ -1010,7 +1031,7 @@ export function BarModeView({
           >
             <Ionicons name="add" size={ms(16, 0.4)} color={C.accent + "80"} />
             <Text style={{ color: C.accent + "80", fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_500Medium" }}>
-              바 추가
+              {t("barModeView", "addBar")}
             </Text>
           </Pressable>
         )}
@@ -1028,7 +1049,7 @@ export function BarModeView({
             style={[styles.layerTab, { borderBottomWidth: activeLayerTab === 0 ? 2 : 0, borderBottomColor: C.accent }]}
           >
             <Text style={{ color: activeLayerTab === 0 ? C.accent : C.textTertiary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_600SemiBold" }}>
-              메인
+              {t("barModeView", "mainLayer")}
             </Text>
           </Pressable>
           {editingLayers.map((layer, li) => (
@@ -1040,7 +1061,7 @@ export function BarModeView({
               style={[styles.layerTab, { borderBottomWidth: activeLayerTab === li + 1 ? 2 : 0, borderBottomColor: C.accent }]}
             >
               <Text style={{ color: activeLayerTab === li + 1 ? C.accent : C.textTertiary, fontSize: FontSize.micro }}>
-                레이어{li + 1}
+                {t("barModeView", "layerLabel")}{li + 1}
               </Text>
             </Pressable>
           ))}
@@ -1148,7 +1169,7 @@ export function BarModeView({
                 {t("barModeView", "soundSetLabel")}
               </Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
-                {[{ key: null, label: t("barModeView", "soundSetDefault") }, ...SOUND_SET_OPTIONS.map(o => ({ key: o.key, label: o.label }))].map(opt => {
+                {[{ key: null, label: t("barModeView", "soundSetDefault") }, ...SOUND_SET_OPTIONS.map(o => ({ key: o.key, label: t("barModeView", o.labelKey as any) }))].map(opt => {
                   const isActive = (opt.key === null) ? !layer?.soundSet : layer?.soundSet === opt.key;
                   return (
                     <Pressable
@@ -1234,7 +1255,7 @@ export function BarModeView({
             <View style={[styles.modalHeader, { borderBottomColor: C.overlay08 }]}>
               <Ionicons name="repeat" size={ms(16, 0.4)} color={C.accent} />
               <Text style={{ color: C.accent, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_700Bold" }}>
-                바 {editingRepeatBeat !== null ? editingRepeatBeat + 1 : ""} 반복
+                {t("barModeView", "repeatTitle").replace("{{n}}", String((editingRepeatBeat ?? 0) + 1))}
               </Text>
               <View style={{ flex: 1 }} />
               <Pressable onPress={() => { if (editingRepeatBeat !== null) onBarRepeatChange(editingRepeatBeat, null); setEditingRepeatBeat(null); }} hitSlop={8}>
@@ -1253,7 +1274,7 @@ export function BarModeView({
                   style={[styles.typeToggle, { backgroundColor: repType === type ? C.accent + "30" : C.overlay08 }]}
                 >
                   <Text style={{ color: repType === type ? C.accent : C.textSecondary, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_600SemiBold" }}>
-                    {type === "count" ? "횟수" : "시간"}
+                    {type === "count" ? t("barModeView", "repCount") : t("barModeView", "repDuration")}
                   </Text>
                 </Pressable>
               ))}
@@ -1388,7 +1409,7 @@ export function BarModeView({
               </Pressable>
             </View>
             <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, textAlign: "center", paddingBottom: 8 }}>
-              이 바는 최대 {voltaVal}번만 재생됩니다
+              {t("barModeView", "voltaHint").replace("{{n}}", String(voltaVal))}
             </Text>
           </View>
         </View>
@@ -1406,7 +1427,7 @@ export function BarModeView({
             <View style={[styles.modalHeader, { borderBottomColor: C.overlay08 }]}>
               <Ionicons name="code-slash" size={ms(16, 0.4)} color={C.accent} />
               <Text style={{ color: C.accent, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_700Bold" }}>
-                블록 {blockEditingIdx !== null ? blockEditingIdx + 1 : ""} 설정
+                {t("barModeView", "blockEditTitle").replace("{{n}}", String((blockEditingIdx ?? 0) + 1))}
               </Text>
               <View style={{ flex: 1 }} />
               <Pressable onPress={() => setBlockEditingIdx(null)} hitSlop={8}>
@@ -1419,14 +1440,14 @@ export function BarModeView({
 
             {/* 반복 유형 탭 */}
             <View style={{ flexDirection: "row", gap: 6, marginBottom: 12 }}>
-              {(["count", "duration"] as const).map(t => (
+              {(["count", "duration"] as const).map(repT => (
                 <Pressable
-                  key={t}
-                  onPress={() => setBlockRepType(t)}
-                  style={[styles.typeToggle, { backgroundColor: blockRepType === t ? C.accent + "30" : C.overlay08 }]}
+                  key={repT}
+                  onPress={() => setBlockRepType(repT)}
+                  style={[styles.typeToggle, { backgroundColor: blockRepType === repT ? C.accent + "30" : C.overlay08 }]}
                 >
-                  <Text style={{ color: blockRepType === t ? C.accent : C.textSecondary, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_600SemiBold" }}>
-                    {t === "count" ? "횟수" : "시간"}
+                  <Text style={{ color: blockRepType === repT ? C.accent : C.textSecondary, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_600SemiBold" }}>
+                    {repT === "count" ? t("barModeView", "repCount") : t("barModeView", "repDuration")}
                   </Text>
                 </Pressable>
               ))}
@@ -1514,7 +1535,7 @@ export function BarModeView({
                   style={[styles.typeToggle, { backgroundColor: blockRepSoundSet === opt.key ? C.accent + "30" : C.overlay08 }]}
                 >
                   <Text style={{ color: blockRepSoundSet === opt.key ? C.accent : C.textSecondary, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_600SemiBold" }}>
-                    {opt.label}
+                    {t("barModeView", opt.labelKey as any)}
                   </Text>
                 </Pressable>
               ))}
