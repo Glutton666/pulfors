@@ -658,9 +658,9 @@ export default function MetronomeScreen() {
     );
 
     const layerToggle: Record<string, boolean> = {};
-    engine.setLayerAudioCallback((layerIndex: number, role: "high" | "low" | "strong") => {
+    engine.setLayerAudioCallback((layerIndex: number, role: "high" | "low" | "strong", soundSet?: string) => {
       if (fadeOutMutedRef.current) return;
-      const layerSet = layerSoundSetsRef.current[layerIndex] || soundSetRef.current;
+      const layerSet = soundSet || layerSoundSetsRef.current[layerIndex] || soundSetRef.current;
       const toggleKey = `${layerIndex}-${role}`;
       const toggle = !!layerToggle[toggleKey];
       layerToggle[toggleKey] = !toggle;
@@ -3477,12 +3477,17 @@ export default function MetronomeScreen() {
       engineRef.current?.setBeatSubdivision(newBeat, [...currentPattern]);
     }
     setBeatSubdivisions(newSubs);
+    // 현재 편집 중인 바의 레이어 패턴도 새 바에 복사해 BarRepeatEntry에 저장
+    const srcLayers = barStartBeat !== null ? (barRepeats[barStartBeat]?.layers ?? []) : [];
+    const newRepeat: BarRepeat = { type: "count", value: 1, layers: srcLayers.length ? srcLayers.map(l => ({ ...l })) : [] };
+    setBarRepeats(prev => ({ ...prev, [newBeat]: newRepeat }));
     setBarStartBeat(newBeat);
     barConfigRef.current.beatsPerMeasure = newBeats;
     barConfigRef.current.beatTypes = newTypes;
     barConfigRef.current.beatSubdivisions = newSubs;
+    barConfigRef.current.barRepeats = { ...barConfigRef.current.barRepeats, [newBeat]: newRepeat };
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [beatsPerMeasure, beatTypes, beatSubdivisions, subdivisionPattern]);
+  }, [beatsPerMeasure, beatTypes, beatSubdivisions, subdivisionPattern, barStartBeat, barRepeats]);
 
   const handleCopyBar = useCallback((beatIndex: number) => {
     if (isPlaying) return;

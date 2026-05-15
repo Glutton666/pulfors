@@ -3,7 +3,7 @@ import type { BeatType } from "@/lib/metronome-engine";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
 import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap } from "@/lib/note-samples";
 import type { ActivityLog, PracticeSessionData } from "@/lib/activity-log";
-import type { PracticeEntry } from "@/lib/storage";
+import type { PracticeEntry, SoundSet } from "@/lib/storage";
 
 export interface LandscapeStatsTotals {
   todayTotal: number;
@@ -347,6 +347,7 @@ export function migrateLayerBlocks(
       const layer: NonNullable<BarRepeat["layers"]>[number] = {
         beatType: (lb.ownBeatTypes?.[beat] ?? "normal") as BeatType,
         subdivisions: lb.ownSubdivisions?.[String(beat)] as BeatType[] | undefined,
+        ...(lb.soundSet ? { soundSet: lb.soundSet as SoundSet } : {}),
       };
       const existingLayers = existing.layers ?? [];
       nextRepeats[beat] = { ...existing, layers: [...existingLayers, layer] };

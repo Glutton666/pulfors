@@ -114,6 +114,7 @@ export interface ScheduledTick {
   jumpSourceBlockIndex: number;
   layerIndex: number;
   layerBeat: number;
+  layerSoundSet?: string;
 }
 
 export interface LoopBlockData {
@@ -142,7 +143,7 @@ export type BarRepeatSpec = {
   /** ←N 점프 목적지 */
   jumpToId?: number;
   /** 바 단위 레이어: 각 레이어는 독립적인 subdivision 패턴으로 메인 비트와 동시에 재생됨 */
-  layers?: Array<{ beatType?: string; subdivisions?: string[] }>;
+  layers?: Array<{ beatType?: string; subdivisions?: string[]; soundSet?: string }>;
 };
 
 export interface ScheduleInputs {
@@ -315,7 +316,7 @@ function pureAddBarLayerTicks(
   blockBpm: number | undefined,
   beatStartTime: number,
   beatDur: number,
-  layers: Array<{ beatType?: string; subdivisions?: string[] }>,
+  layers: Array<{ beatType?: string; subdivisions?: string[]; soundSet?: string }>,
 ): void {
   for (let li = 0; li < layers.length; li++) {
     const layer = layers[li];
@@ -340,6 +341,7 @@ function pureAddBarLayerTicks(
         jumpSourceBlockIndex: state.jump.sourceBlockIndex,
         layerIndex: li + 1,
         layerBeat: beat,
+        layerSoundSet: layer.soundSet,
       });
     }
   }
@@ -718,7 +720,7 @@ export class MetronomeEngine {
     this.playStrongClick = playStrong || null;
   }
 
-  private playLayerClick: ((layerIndex: number, role: "high" | "low" | "strong") => void) | null = null;
+  private playLayerClick: ((layerIndex: number, role: "high" | "low" | "strong", soundSet?: string) => void) | null = null;
   private playBlockClick: ((blockIndex: number, role: "high" | "low" | "strong") => void) | null = null;
   private onClickEmitted: ((at: number) => void) | null = null;
 
@@ -726,7 +728,7 @@ export class MetronomeEngine {
     this.onClickEmitted = cb;
   }
 
-  setLayerAudioCallback(cb: (layerIndex: number, role: "high" | "low" | "strong") => void) {
+  setLayerAudioCallback(cb: (layerIndex: number, role: "high" | "low" | "strong", soundSet?: string) => void) {
     this.playLayerClick = cb;
   }
 
@@ -1361,12 +1363,12 @@ export class MetronomeEngine {
     }
   }
 
-  private playTickAudio(beat: number, subBeat: number, isStrong: boolean, isAccent: boolean, isMute: boolean, layerIndex: number = 0, blockIndex: number = -1) {
+  private playTickAudio(beat: number, subBeat: number, isStrong: boolean, isAccent: boolean, isMute: boolean, layerIndex: number = 0, blockIndex: number = -1, layerSoundSet?: string) {
     if (!isMute) {
       try {
         if (layerIndex > 0 && this.playLayerClick) {
           const role = isStrong ? "strong" : isAccent ? "high" : "low";
-          this.playLayerClick(layerIndex, role);
+          this.playLayerClick(layerIndex, role, layerSoundSet);
         } else if (blockIndex >= 0 && this.loopBlocks[blockIndex]?.soundSet && this.playBlockClick) {
           const role = isStrong ? "strong" : isAccent ? "high" : "low";
           this.playBlockClick(blockIndex, role);
@@ -1469,18 +1471,19 @@ export class MetronomeEngine {
       this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat);
       const li = tick.layerIndex;
       const bi = tick.blockIndex;
+      const lss = tick.layerSoundSet;
       this.scheduleOffsetCallback(
-        () => this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, li, bi),
+        () => this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, li, bi, lss),
         offset,
       );
     } else if (offset < 0) {
-      this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, tick.layerIndex, tick.blockIndex);
+      this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, tick.layerIndex, tick.blockIndex, tick.layerSoundSet);
       this.scheduleOffsetCallback(
         () => this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat),
         Math.abs(offset),
       );
     } else {
-      this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, tick.layerIndex, tick.blockIndex);
+      this.playTickAudio(tick.beat, tick.subBeat, isStrong, isAccent, isMute, tick.layerIndex, tick.blockIndex, tick.layerSoundSet);
       this.fireTickHaptic(isMute, isStrong, isAccent, tick.isMainBeat);
     }
   }
