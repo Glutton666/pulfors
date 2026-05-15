@@ -38,6 +38,12 @@ export const MAX_AUDIO_FILE_B64_CHARS = 70 * 1024 * 1024;
 export const MAX_NOTE_SAMPLES_PER_MAP = 200;
 // 백업에서 복원하는 practice book 항목의 최대 수.
 export const MAX_PRACTICE_BOOK_ENTRIES = 500;
+// 단일 practice entry 의 noteQueueEntries / noteQueueEntryIds 최대 수.
+// deep-link-import.ts 의 동일 상수와 값을 맞춘다.
+export const MAX_QUEUE_ENTRIES = 500;
+export const MAX_QUEUE_IDS = 500;
+// noteQueueEntries 최대 재귀 깊이. deep-link-import.ts 의 MAX_DEPTH 와 동일.
+export const MAX_ENTRY_DEPTH = 4;
 
 export interface BackupFile {
   _meta: {
@@ -213,6 +219,25 @@ export function sanitizeNoteSampleUris(
   return safe;
 }
 
+/**
+ * 이미지 URI 가 로컬 스킴(file://, asset://, blob:, data:)인지 확인한다.
+ * 원격 URL(http, https 등)은 빈 문자열로 교체해 아웃바운드 요청을 차단한다.
+ */
+export function sanitizeImageUri(uri: unknown): string | undefined {
+  if (typeof uri !== "string") return undefined;
+  const raw = uri.split("#")[0];
+  const isLocal =
+    raw.startsWith("file://") ||
+    raw.startsWith("asset://") ||
+    raw.startsWith("blob:") ||
+    raw.startsWith("data:");
+  if (!isLocal) {
+    logger.warn("[Backup] Unsafe image URI stripped at import:", raw.slice(0, 80));
+    return undefined;
+  }
+  return uri;
+}
+
 export function sanitizeNoteSampleChannelMap(
   channels: Record<string, unknown> | undefined,
 ): Record<string, SampleChannel> | undefined {
@@ -265,6 +290,59 @@ export function sanitizeCustomSoundSetsJson(json: string): string {
   }
 }
 
+/**
+ * PracticeEntry 를 재귀적으로 sanitize 한다.
+ *
+ * `raw` 가 null / non-object / Array 이면 null 을 반환한다 (호출자가 필터).
+ * 개별 하위 항목의 처리 오류는 그 항목만 드랍하고 나머지를 계속 진행한다.
+ *
+ * - imageUri: 로컬 스킴만 허용 (sanitizeImageUri)
+ * - noteSamples / noteSampleChannels: 기존 헬퍼로 검증
+ * - noteQueueEntries: MAX_QUEUE_ENTRIES 로 절단 후 재귀 처리
+ *   depth >= MAX_ENTRY_DEPTH 에 도달하면 하위 noteQueueEntries 를 드랍해
+ *   pathological 중첩 페이로드로 인한 지속적 DoS 를 방지한다.
+ * - noteQueueEntryIds: MAX_QUEUE_IDS 로 절단
+ */
+export function sanitizePracticeEntry(raw: unknown, depth = 0): PracticeEntry | null {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    logger.warn("[Backup] sanitizePracticeEntry: null/non-object input, dropping entry");
+    return null;
+  }
+  const entry = raw as PracticeEntry;
+
+  let queueEntries: PracticeEntry[] | undefined;
+  if (Array.isArray(entry.noteQueueEntries)) {
+    if (depth >= MAX_ENTRY_DEPTH) {
+      logger.warn(`[Backup] noteQueueEntries 재귀 깊이 초과 (${MAX_ENTRY_DEPTH}), 하위 항목 드랍`);
+      queueEntries = undefined;
+    } else {
+      let raw_queue = entry.noteQueueEntries;
+      if (raw_queue.length > MAX_QUEUE_ENTRIES) {
+        logger.warn(`[Backup] noteQueueEntries too large (${raw_queue.length}), truncating to ${MAX_QUEUE_ENTRIES}`);
+        raw_queue = raw_queue.slice(0, MAX_QUEUE_ENTRIES);
+      }
+      queueEntries = raw_queue
+        .map((qe) => { try { return sanitizePracticeEntry(qe, depth + 1); } catch { return null; } })
+        .filter((qe): qe is PracticeEntry => qe !== null);
+    }
+  }
+
+  let queueEntryIds = entry.noteQueueEntryIds;
+  if (Array.isArray(queueEntryIds) && queueEntryIds.length > MAX_QUEUE_IDS) {
+    logger.warn(`[Backup] noteQueueEntryIds too large (${queueEntryIds.length}), truncating to ${MAX_QUEUE_IDS}`);
+    queueEntryIds = queueEntryIds.slice(0, MAX_QUEUE_IDS);
+  }
+
+  return {
+    ...entry,
+    noteSamples: sanitizeNoteSampleUris(entry.noteSamples),
+    noteSampleChannels: sanitizeNoteSampleChannelMap(entry.noteSampleChannels),
+    imageUri: sanitizeImageUri(entry.imageUri),
+    noteQueueEntries: queueEntries,
+    noteQueueEntryIds: queueEntryIds,
+  };
+}
+
 export function sanitizeBackupData(
   data: Record<string, string | null>,
 ): Record<string, string | null> {
@@ -292,25 +370,51 @@ export function sanitizeBackupData(
     } catch {}
   }
 
-  if (result["practice_book"]) {
+  if (result["metronome_hub_images"] !== undefined) {
+    let safeImages: unknown[] = [];
     try {
-      let entries: PracticeEntry[] = JSON.parse(result["practice_book"]!);
-      if (entries.length > MAX_PRACTICE_BOOK_ENTRIES) {
-        logger.warn(`[Backup] Practice book too large (${entries.length}), truncating to ${MAX_PRACTICE_BOOK_ENTRIES}`);
-        entries = entries.slice(0, MAX_PRACTICE_BOOK_ENTRIES);
+      const parsed: unknown = JSON.parse(result["metronome_hub_images"] ?? "[]");
+      if (!Array.isArray(parsed)) {
+        logger.warn("[Backup] metronome_hub_images is not an array, resetting to []");
+      } else {
+        safeImages = parsed.map((img) => {
+          if (typeof img !== "object" || img === null) return img;
+          const o = img as Record<string, unknown>;
+          const safeUri = sanitizeImageUri(o.uri);
+          return { ...o, uri: safeUri ?? "" };
+        });
       }
-      const sanitized = entries.map((e) => ({
-        ...e,
-        noteSamples: sanitizeNoteSampleUris(e.noteSamples),
-        noteSampleChannels: sanitizeNoteSampleChannelMap(e.noteSampleChannels),
-        noteQueueEntries: e.noteQueueEntries?.map((qe) => ({
-          ...qe,
-          noteSamples: sanitizeNoteSampleUris(qe.noteSamples),
-          noteSampleChannels: sanitizeNoteSampleChannelMap(qe.noteSampleChannels),
-        })),
-      }));
-      result["practice_book"] = JSON.stringify(sanitized);
-    } catch {}
+    } catch (err) {
+      logger.warn("[Backup] metronome_hub_images JSON parse failed, resetting to []:", err);
+    }
+    result["metronome_hub_images"] = JSON.stringify(safeImages);
+  }
+
+  if (result["practice_book"] !== undefined) {
+    let safe: PracticeEntry[] = [];
+    try {
+      const parsed: unknown = JSON.parse(result["practice_book"] ?? "[]");
+      if (!Array.isArray(parsed)) {
+        logger.warn("[Backup] practice_book is not an array, resetting to []");
+      } else {
+        let entries = parsed as unknown[];
+        if (entries.length > MAX_PRACTICE_BOOK_ENTRIES) {
+          logger.warn(`[Backup] Practice book too large (${entries.length}), truncating to ${MAX_PRACTICE_BOOK_ENTRIES}`);
+          entries = entries.slice(0, MAX_PRACTICE_BOOK_ENTRIES);
+        }
+        for (const e of entries) {
+          try {
+            const sanitized = sanitizePracticeEntry(e);
+            if (sanitized !== null) safe.push(sanitized);
+          } catch (err) {
+            logger.warn("[Backup] practice_book entry sanitization failed, dropping entry:", err);
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn("[Backup] practice_book JSON parse failed, resetting to []:", err);
+    }
+    result["practice_book"] = JSON.stringify(safe);
   }
 
   return result;

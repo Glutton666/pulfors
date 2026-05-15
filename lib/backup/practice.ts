@@ -16,8 +16,7 @@ import {
   readStringFromFile,
   remapSampleMap,
   restoreAudioFiles,
-  sanitizeNoteSampleChannelMap,
-  sanitizeNoteSampleUris,
+  sanitizePracticeEntry,
   writeStringToFile,
 } from "./shared";
 
@@ -145,40 +144,33 @@ async function parsePracticeJson(
       return { success: false };
     }
 
+    const sanitized = sanitizePracticeEntry(entry);
+    if (sanitized === null) {
+      logger.warn("[Backup] Practice entry failed sanitization, rejecting import");
+      return { success: false };
+    }
+
     if (data.audioFiles && Object.keys(data.audioFiles).length > 0 && Platform.OS !== "web") {
       const uriMapping = await restoreAudioFiles(data.audioFiles);
-      if (uriMapping.size > 0 && entry.noteSamples) {
-        entry.noteSamples = remapSampleMap(entry.noteSamples, uriMapping);
+      if (uriMapping.size > 0 && sanitized.noteSamples) {
+        sanitized.noteSamples = remapSampleMap(sanitized.noteSamples, uriMapping);
       }
-      if (uriMapping.size > 0 && entry.noteQueueEntries) {
-        entry.noteQueueEntries = entry.noteQueueEntries.map((qe) => ({
+      if (uriMapping.size > 0 && sanitized.noteQueueEntries) {
+        sanitized.noteQueueEntries = sanitized.noteQueueEntries.map((qe) => ({
           ...qe,
           noteSamples: qe.noteSamples ? remapSampleMap(qe.noteSamples, uriMapping) : qe.noteSamples,
         }));
       }
     }
 
-    if (entry.noteSamples) {
-      entry.noteSamples = sanitizeNoteSampleUris(entry.noteSamples) ?? {};
-    }
-    if (entry.noteSampleChannels) {
-      entry.noteSampleChannels = sanitizeNoteSampleChannelMap(entry.noteSampleChannels) ?? {};
-    }
-    if (entry.noteQueueEntries) {
-      entry.noteQueueEntries = entry.noteQueueEntries.map((qe) => ({
-        ...qe,
-        noteSamples: sanitizeNoteSampleUris(qe.noteSamples),
-        noteSampleChannels: sanitizeNoteSampleChannelMap(qe.noteSampleChannels),
-      }));
-    }
-
     const newId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
 
     const book = await loadPracticeBook();
 
-    if (entry.mode === "note" && entry.noteQueueEntries?.length) {
+    let finalEntry = sanitized;
+    if (sanitized.mode === "note" && sanitized.noteQueueEntries?.length) {
       const idMap = new Map<string, string>();
-      for (const qe of entry.noteQueueEntries) {
+      for (const qe of sanitized.noteQueueEntries) {
         const existsInBook = book.some((b) => b.id === qe.id);
         if (!existsInBook) {
           const qeNewId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
@@ -188,15 +180,18 @@ async function parsePracticeJson(
           idMap.set(qe.id, qe.id);
         }
       }
-      entry.noteQueueEntryIds = (entry.noteQueueEntryIds || []).map((id) => idMap.get(id) || id);
-      entry.noteQueueEntries = entry.noteQueueEntries.map((qe) => ({
-        ...qe,
-        id: idMap.get(qe.id) || qe.id,
-      }));
+      finalEntry = {
+        ...sanitized,
+        noteQueueEntryIds: (sanitized.noteQueueEntryIds || []).map((id) => idMap.get(id) || id),
+        noteQueueEntries: sanitized.noteQueueEntries.map((qe) => ({
+          ...qe,
+          id: idMap.get(qe.id) || qe.id,
+        })),
+      };
     }
 
     const importedEntry: PracticeEntry = {
-      ...entry,
+      ...finalEntry,
       id: newId,
       createdAt: Date.now(),
     };

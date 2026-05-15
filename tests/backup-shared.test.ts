@@ -8,6 +8,8 @@ import {
   sanitizeNoteSampleUris,
   sanitizeNoteSampleChannelMap,
   sanitizeBackupData,
+  sanitizePracticeEntry,
+  sanitizeImageUri,
   sanitizeCustomSoundSetsJson,
   collectUrisFromSampleMap,
   collectAllAudioUris,
@@ -16,6 +18,9 @@ import {
   remapDataUris,
   formatDateForFilename,
   ALL_KEYS,
+  MAX_QUEUE_ENTRIES,
+  MAX_QUEUE_IDS,
+  MAX_ENTRY_DEPTH,
 } from "../lib/backup/shared";
 
 test("extractBaseUri: # fragment 제거", () => {
@@ -138,14 +143,18 @@ test("sanitizeBackupData: practice_book의 noteSamples 정화", () => {
   assert.equal(entries[0].noteQueueEntries[0].noteSamples.d, undefined);
 });
 
-test("sanitizeBackupData: 잘못된 JSON은 조용히 통과", () => {
+test("sanitizeBackupData: @note_samples 잘못된 JSON은 조용히 통과", () => {
   const data = {
     "@note_samples": "{ not valid",
-    practice_book: "}}}",
   };
   const out = sanitizeBackupData(data);
   assert.equal(out["@note_samples"], "{ not valid");
-  assert.equal(out.practice_book, "}}}");
+});
+
+test("sanitizeBackupData: practice_book 잘못된 JSON은 []로 리셋 (fail-closed)", () => {
+  const data = { practice_book: "}}}" };
+  const out = sanitizeBackupData(data);
+  assert.equal(out.practice_book, "[]");
 });
 
 test("collectUrisFromSampleMap: filename → baseUri 매핑", () => {
@@ -393,4 +402,180 @@ test("sanitizeBackupData: practice_book의 noteSampleChannels (entry+queue) 정�
     "0-0": "right",
     "1-0": "both",
   });
+});
+
+// ─── sanitizeImageUri ────────────────────────────────────────────────────────
+
+test("sanitizeImageUri: 로컬 스킴은 그대로 허용", () => {
+  assert.equal(sanitizeImageUri("file:///photos/a.jpg"), "file:///photos/a.jpg");
+  assert.equal(sanitizeImageUri("asset:///img/b.png"), "asset:///img/b.png");
+  assert.equal(sanitizeImageUri("blob:abc"), "blob:abc");
+  assert.equal(sanitizeImageUri("data:image/png;base64,x"), "data:image/png;base64,x");
+});
+
+test("sanitizeImageUri: http/https URL 은 undefined 반환", () => {
+  assert.equal(sanitizeImageUri("https://attacker.example.com/pixel?u=1"), undefined);
+  assert.equal(sanitizeImageUri("http://192.168.1.1/probe"), undefined);
+});
+
+test("sanitizeImageUri: 비문자열/null 은 undefined 반환", () => {
+  assert.equal(sanitizeImageUri(null), undefined);
+  assert.equal(sanitizeImageUri(42), undefined);
+  assert.equal(sanitizeImageUri(undefined), undefined);
+});
+
+// ─── sanitizePracticeEntry ───────────────────────────────────────────────────
+
+test("sanitizePracticeEntry: null/비객체 입력은 null 반환", () => {
+  assert.equal(sanitizePracticeEntry(null), null);
+  assert.equal(sanitizePracticeEntry("string"), null);
+  assert.equal(sanitizePracticeEntry([1, 2]), null);
+  assert.equal(sanitizePracticeEntry(42), null);
+});
+
+test("sanitizePracticeEntry: 정상 entry는 sanitize 후 반환", () => {
+  const entry = {
+    id: "a", label: "t", bpm: 120, beatsPerMeasure: 4, beatTypes: [], createdAt: 1,
+    imageUri: "file:///ok.jpg",
+    noteSamples: { k: "file:///ok.wav" },
+  };
+  const out = sanitizePracticeEntry(entry);
+  assert.ok(out !== null);
+  assert.equal(out!.imageUri, "file:///ok.jpg");
+  assert.equal(out!.noteSamples!.k, "file:///ok.wav");
+});
+
+test("sanitizePracticeEntry: 원격 imageUri 제거", () => {
+  const entry = {
+    id: "a", label: "t", bpm: 120, beatsPerMeasure: 4, beatTypes: [], createdAt: 1,
+    imageUri: "https://attacker.example.com/pixel.png",
+  };
+  const out = sanitizePracticeEntry(entry);
+  assert.ok(out !== null);
+  assert.equal(out!.imageUri, undefined);
+});
+
+test("sanitizePracticeEntry: noteQueueEntries MAX_QUEUE_ENTRIES 로 절단", () => {
+  const entry = {
+    id: "root", bpm: 100, beatsPerMeasure: 4, beatTypes: [], createdAt: 1,
+    noteQueueEntries: Array.from({ length: MAX_QUEUE_ENTRIES + 50 }, (_, i) => ({
+      id: `q${i}`, bpm: 100, beatsPerMeasure: 4, beatTypes: [], createdAt: 1,
+    })),
+  };
+  const out = sanitizePracticeEntry(entry);
+  assert.ok(out !== null);
+  assert.equal(out!.noteQueueEntries!.length, MAX_QUEUE_ENTRIES);
+});
+
+test("sanitizePracticeEntry: noteQueueEntryIds MAX_QUEUE_IDS 로 절단", () => {
+  const entry = {
+    id: "root", bpm: 100, beatsPerMeasure: 4, beatTypes: [], createdAt: 1,
+    noteQueueEntryIds: Array.from({ length: MAX_QUEUE_IDS + 100 }, (_, i) => `id${i}`),
+  };
+  const out = sanitizePracticeEntry(entry);
+  assert.ok(out !== null);
+  assert.equal(out!.noteQueueEntryIds!.length, MAX_QUEUE_IDS);
+});
+
+test("sanitizePracticeEntry: depth >= MAX_ENTRY_DEPTH 에서 noteQueueEntries 드랍", () => {
+  const inner = {
+    id: "leaf", bpm: 80, beatsPerMeasure: 4, beatTypes: [], createdAt: 1,
+    noteQueueEntries: [{ id: "x", bpm: 80, beatsPerMeasure: 4, beatTypes: [], createdAt: 1 }],
+  };
+  const out = sanitizePracticeEntry(inner, MAX_ENTRY_DEPTH);
+  assert.ok(out !== null);
+  assert.equal(out!.noteQueueEntries, undefined);
+});
+
+test("sanitizePracticeEntry: 중첩 큐의 원격 imageUri 도 재귀적으로 제거", () => {
+  const entry = {
+    id: "root", bpm: 100, beatsPerMeasure: 4, beatTypes: [], createdAt: 1,
+    noteQueueEntries: [
+      {
+        id: "child", bpm: 100, beatsPerMeasure: 4, beatTypes: [], createdAt: 1,
+        imageUri: "https://evil.example.com/tracker.gif",
+        noteQueueEntries: [
+          {
+            id: "grandchild", bpm: 100, beatsPerMeasure: 4, beatTypes: [], createdAt: 1,
+            imageUri: "https://evil.example.com/deep.png",
+          },
+        ],
+      },
+    ],
+  };
+  const out = sanitizePracticeEntry(entry);
+  assert.ok(out !== null);
+  assert.equal(out!.noteQueueEntries![0].imageUri, undefined);
+  assert.equal(out!.noteQueueEntries![0].noteQueueEntries![0].imageUri, undefined);
+});
+
+test("sanitizePracticeEntry: 말포드된 항목 포함 시 해당 항목만 드랍", () => {
+  const entry = {
+    id: "root", bpm: 100, beatsPerMeasure: 4, beatTypes: [], createdAt: 1,
+    noteQueueEntries: [
+      null,
+      { id: "good", bpm: 100, beatsPerMeasure: 4, beatTypes: [], createdAt: 1 },
+      "bad",
+    ] as unknown[],
+  };
+  const out = sanitizePracticeEntry(entry);
+  assert.ok(out !== null);
+  assert.equal(out!.noteQueueEntries!.length, 1);
+  assert.equal(out!.noteQueueEntries![0].id, "good");
+});
+
+// ─── sanitizeBackupData: 보안 회귀 ───────────────────────────────────────────
+
+test("sanitizeBackupData: practice_book 중 null 항목은 드랍 (fail-closed)", () => {
+  const data = {
+    practice_book: JSON.stringify([
+      null,
+      { id: "ok", bpm: 120, beatsPerMeasure: 4, beatTypes: [], createdAt: 1 },
+    ]),
+  };
+  const out = sanitizeBackupData(data);
+  const entries = JSON.parse(out.practice_book!);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].id, "ok");
+});
+
+test("sanitizeBackupData: practice_book 말포드 항목 + 원격 imageUri 포함 → 원격 URI 제거, 말포드 항목 드랍", () => {
+  const data = {
+    practice_book: JSON.stringify([
+      null,
+      {
+        id: "malicious", bpm: 120, beatsPerMeasure: 4, beatTypes: [], createdAt: 1,
+        imageUri: "https://attacker.example.com/pixel?u=1",
+      },
+    ]),
+  };
+  const out = sanitizeBackupData(data);
+  const entries = JSON.parse(out.practice_book!);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].imageUri, undefined);
+});
+
+test("sanitizeBackupData: practice_book 중 단일 entry 에 대규모 noteQueueEntries → 절단", () => {
+  const entry = {
+    id: "big", bpm: 120, beatsPerMeasure: 4, beatTypes: [], createdAt: 1,
+    noteQueueEntries: Array.from({ length: MAX_QUEUE_ENTRIES + 100 }, (_, i) => ({
+      id: `q${i}`, bpm: 100, beatsPerMeasure: 4, beatTypes: [], createdAt: 1,
+    })),
+  };
+  const data = { practice_book: JSON.stringify([entry]) };
+  const out = sanitizeBackupData(data);
+  const entries = JSON.parse(out.practice_book!);
+  assert.equal(entries[0].noteQueueEntries.length, MAX_QUEUE_ENTRIES);
+});
+
+test("sanitizeBackupData: metronome_hub_images 원격 URI 제거", () => {
+  const images = [
+    { id: "1", uri: "file:///local/img.jpg", beatTypes: ["normal"] },
+    { id: "2", uri: "https://attacker.example.com/pixel.png", beatTypes: ["strong"] },
+  ];
+  const data = { metronome_hub_images: JSON.stringify(images) };
+  const out = sanitizeBackupData(data);
+  const parsed = JSON.parse(out.metronome_hub_images!);
+  assert.equal(parsed[0].uri, "file:///local/img.jpg");
+  assert.equal(parsed[1].uri, "");
 });
