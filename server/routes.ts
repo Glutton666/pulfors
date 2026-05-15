@@ -88,6 +88,22 @@ const MAX_ANALYSIS_WINDOWS = 5;
 let activeFfmpegCount = 0;
 const MAX_CONCURRENT_FFMPEG = 2;
 
+let activeWavCount = 0;
+const MAX_CONCURRENT_WAV = 2;
+
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 20;
+const _ipRequestLog = new Map<string, number[]>();
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+  const timestamps = (_ipRequestLog.get(ip) ?? []).filter((t) => t > windowStart);
+  if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) return true;
+  timestamps.push(now);
+  _ipRequestLog.set(ip, timestamps);
+  return false;
+}
+
 function ffmpegConvertToPcm(inputPath: string, outputPath: string): Promise<void> {
   if (activeFfmpegCount >= MAX_CONCURRENT_FFMPEG) {
     return Promise.reject(new Error("Server busy: too many concurrent audio conversions"));
@@ -190,6 +206,15 @@ function analyzeWavDirect(audioBuffer: Buffer): { frequency: number | null; note
 }
 
 async function analyzeAudioHandler(req: Request, res: Response) {
+  const ip =
+    (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0].trim() ||
+    req.socket.remoteAddress ||
+    "unknown";
+
+  if (isRateLimited(ip)) {
+    return res.status(429).json({ error: "Too many requests. Please try again later." });
+  }
+
   const { audio, format } = req.body;
   if (!audio || typeof audio !== "string") {
     return res.status(400).json({ error: "Missing audio data" });
@@ -202,12 +227,18 @@ async function analyzeAudioHandler(req: Request, res: Response) {
 
   // WAV는 ffmpeg 없이 직접 디코딩 (Cloud Run 등 ffmpeg 미설치 환경 호환)
   if (ext === ".wav") {
+    if (activeWavCount >= MAX_CONCURRENT_WAV) {
+      return res.status(503).json({ error: "Server busy: too many concurrent audio analyses" });
+    }
+    activeWavCount++;
     try {
       const result = analyzeWavDirect(audioBuffer);
       return res.json(result);
     } catch (e: any) {
       console.error("[analyze-audio] WAV direct decode error:", e.message);
       return res.status(500).json({ error: e.message });
+    } finally {
+      activeWavCount--;
     }
   }
 
