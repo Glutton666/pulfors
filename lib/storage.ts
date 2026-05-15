@@ -282,11 +282,27 @@ export async function flushPendingSettings(): Promise<void> {
   }
 }
 
+export interface BarLayer {
+  beatType: BeatType;
+  subdivisions?: BeatType[];
+  soundSet?: SoundSet;
+}
+
 export interface BarRepeatEntry {
   type: "count" | "duration";
   value: number;
   /** Optional per-bar BPM override picked up by engine.setAllBarBpmOverrides. */
   bpm?: number;
+  /** N회 부호: 최대 N번까지만 재생, 소진 후 건너뜀 */
+  voltaMax?: number;
+  /** 끝 부호: 모든 N회 조건 소진 시 정지 지점 */
+  isEnd?: boolean;
+  /** →N 점프 출발지 쌍 ID */
+  jumpFromId?: number;
+  /** ←N 점프 목적지 쌍 ID */
+  jumpToId?: number;
+  /** 바 단위 레이어 목록 */
+  layers?: BarLayer[];
 }
 
 export interface LoopBlockEntry {
