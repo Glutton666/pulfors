@@ -3499,9 +3499,12 @@ export default function MetronomeScreen() {
     const newTypes = [...beatTypes, srcType];
     const newSubs = { ...beatSubdivisions };
     if (srcSub.length > 0) newSubs[String(newBeat)] = [...srcSub];
-    // barRepeats 전체 복사 (반복 유형/BPM/심볼/레이어 포함)
+    // barRepeats 전체 복사 (반복 유형/BPM/심볼/레이어 포함) — layers 깊은 복사로 공유 참조 방지
     const newRepeats = { ...barRepeats };
-    if (srcRepeat) newRepeats[newBeat] = { ...srcRepeat };
+    if (srcRepeat) newRepeats[newBeat] = {
+      ...srcRepeat,
+      layers: srcRepeat.layers ? srcRepeat.layers.map(l => ({ ...l })) : undefined,
+    };
     setBeatsPerMeasure(beatsPerMeasure + 1);
     setBeatTypes(newTypes);
     setBeatSubdivisions(newSubs);
@@ -5156,7 +5159,7 @@ export default function MetronomeScreen() {
                 activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
               />
             ) : undefined}
-            bpmSliderElement={barMode && isLandscape ? (
+            bpmSliderElement={!barMode && isLandscape ? (
               <BpmSlider
                 bpm={bpm}
                 onBpmChange={updateBpm}
