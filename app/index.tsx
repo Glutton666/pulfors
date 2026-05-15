@@ -3483,6 +3483,26 @@ export default function MetronomeScreen() {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [beatsPerMeasure, beatTypes, beatSubdivisions, subdivisionPattern]);
 
+  const handleCopyBar = useCallback((beatIndex: number) => {
+    if (isPlaying) return;
+    const srcType = beatTypes[beatIndex] ?? "strong";
+    const srcSub = beatSubdivisions[String(beatIndex)] ?? [];
+    const newBeat = beatsPerMeasure;
+    const newTypes = [...beatTypes, srcType];
+    const newSubs = { ...beatSubdivisions };
+    if (srcSub.length > 0) newSubs[String(newBeat)] = [...srcSub];
+    setBeatsPerMeasure(beatsPerMeasure + 1);
+    setBeatTypes(newTypes);
+    setBeatSubdivisions(newSubs);
+    engineRef.current?.setBeatsPerMeasure(beatsPerMeasure + 1);
+    engineRef.current?.setBeatTypes(newTypes);
+    engineRef.current?.setAllBeatSubdivisions(newSubs);
+    barConfigRef.current.beatsPerMeasure = beatsPerMeasure + 1;
+    barConfigRef.current.beatTypes = newTypes;
+    barConfigRef.current.beatSubdivisions = newSubs;
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [isPlaying, beatTypes, beatSubdivisions, beatsPerMeasure]);
+
   const handleDeleteBar = useCallback((beatIndex: number) => {
     if (beatsPerMeasure <= 1) return;
     const newBeats = beatsPerMeasure - 1;
@@ -5112,6 +5132,7 @@ export default function MetronomeScreen() {
             onEnterNoteMode={handleEnterNoteMode}
             onAddBar={handleAddBar}
             onDeleteBar={handleDeleteBar}
+            onCopyBar={handleCopyBar}
             tempoLabel={tempoLabel}
           />
         </View>

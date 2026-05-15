@@ -130,7 +130,18 @@ export interface LoopBlockData {
   ownSubdivisions?: Record<string, string[]>;
 }
 
-export type BarRepeatSpec = { type: "count" | "duration"; value: number };
+export type BarRepeatSpec = {
+  type: "count" | "duration";
+  value: number;
+  /** N회 부호: blockIteration >= voltaMax 이면 이 바를 건너뜀 */
+  voltaMax?: number;
+  /** 끝 부호: 이 바 이후 현재 범위 emit을 즉시 중단 */
+  isEnd?: boolean;
+  /** →N 점프 출발지: 매칭 jumpToId 바로 리다이렉트 (1회) */
+  jumpFromId?: number;
+  /** ←N 점프 목적지 */
+  jumpToId?: number;
+};
 
 export interface ScheduleInputs {
   bpm: number;
@@ -300,6 +311,10 @@ export function pureAddBarWithRepeat(
   blockBpm?: number,
 ): void {
   const barRep = inputs.barRepeats.get(beat);
+  // voltaMax: 이 바를 최대 voltaMax번만 재생. blockIteration >= voltaMax 이면 건너뜀.
+  if (barRep?.voltaMax && barRep.voltaMax > 0 && blockIteration >= barRep.voltaMax) {
+    return;
+  }
   const beatDur = pureGetBeatDur(inputs, beat, blockBpm);
   if (barRep) {
     let barRepeatCount = 1;
@@ -313,7 +328,10 @@ export function pureAddBarWithRepeat(
   }
 }
 
-/** 순수 함수(state mutate): [startB, endB] 범위의 비트들을 차례로 emit. inner 블록을 만나면 재귀로 처리. */
+/** 순수 함수(state mutate): [startB, endB] 범위의 비트들을 차례로 emit. inner 블록을 만나면 재귀로 처리.
+ *  - isEnd 바에서 범위 emit을 조기 종료.
+ *  - jumpFromId 바에서 매칭 jumpToId 바로 1회 리다이렉트.
+ */
 export function pureEmitBeatsInRange(
   inputs: ScheduleInputs,
   state: EmitState,
@@ -327,6 +345,8 @@ export function pureEmitBeatsInRange(
 ): void {
   const { sortedBlocks, sortedToOrig, startBeatToBlocks } = inputs;
   let b = startB;
+  /** jumpFromId → 이미 점프 실행된 ID 집합 (동일 패스 내 무한루프 방지) */
+  const usedJumpIds = new Set<number>();
   while (b <= endB) {
     const innerIdx = pureFindInnerBlock(sortedBlocks, startBeatToBlocks, b, endB, outerBlockIdx);
     if (innerIdx >= 0) {
@@ -349,6 +369,23 @@ export function pureEmitBeatsInRange(
       b = innerEnd + 1;
     } else {
       pureAddBarWithRepeat(inputs, state, b, outerIter, outerBlockIdx, outerRepTotal, blockBpm);
+      const barRep = inputs.barRepeats.get(b);
+      // isEnd: 이 바를 emit한 뒤 나머지 범위 건너뜀
+      if (barRep?.isEnd) break;
+      // jumpFromId: 매칭 jumpToId 바로 1회 리다이렉트 (이전 바 중 검색)
+      if (barRep?.jumpFromId && !usedJumpIds.has(barRep.jumpFromId)) {
+        const jumpId = barRep.jumpFromId;
+        let jumpTarget = -1;
+        for (let jb = startB; jb < b; jb++) {
+          const jr = inputs.barRepeats.get(jb);
+          if (jr?.jumpToId === jumpId) { jumpTarget = jb; break; }
+        }
+        if (jumpTarget >= 0) {
+          usedJumpIds.add(jumpId);
+          b = jumpTarget;
+          continue;
+        }
+      }
       b++;
     }
   }
@@ -838,7 +875,7 @@ export class MetronomeEngine {
     this.onProgress = callback;
   }
 
-  setBarRepeat(beat: number, repeat: { type: "count" | "duration"; value: number } | null) {
+  setBarRepeat(beat: number, repeat: BarRepeatSpec | null) {
     if (repeat) {
       this.barRepeats.set(beat, { ...repeat });
     } else {
@@ -850,7 +887,7 @@ export class MetronomeEngine {
     }
   }
 
-  setAllBarRepeats(repeats: Record<number, { type: "count" | "duration"; value: number }>) {
+  setAllBarRepeats(repeats: Record<number, BarRepeatSpec>) {
     this.barRepeats.clear();
     for (const [key, value] of Object.entries(repeats)) {
       this.barRepeats.set(Number(key), { ...value });

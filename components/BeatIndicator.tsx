@@ -123,6 +123,7 @@ interface BeatIndicatorProps {
   tempoLabel?: string;
   onAddBar?: () => void;
   onDeleteBar?: (beatIndex: number) => void;
+  onCopyBar?: (beat: number) => void;
 }
 
 // BlockPill 컴포넌트는 components/BlockPill.tsx 로 분리되었습니다.
@@ -181,6 +182,7 @@ export function BeatIndicator({
   tempoLabel,
   onAddBar,
   onDeleteBar,
+  onCopyBar,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
   const { t } = useLanguage();
@@ -1158,6 +1160,7 @@ export function BeatIndicator({
         onBarStartBeatSelect={onBarStartBeatSelect ?? (() => {})}
         onAddBar={onAddBar}
         onDeleteBar={onDeleteBar}
+        onCopyBar={onCopyBar}
         subdivisionBarElement={subdivisionBarElement}
         onBarQuickSave={onBarQuickSave}
         onResetFlash={onResetFlash}
