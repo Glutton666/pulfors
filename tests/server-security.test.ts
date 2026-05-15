@@ -157,3 +157,58 @@ describe("routes.ts: req.ip 사용 (x-forwarded-for 직접 파싱 제거)", () =
     assert.ok(!hasSpoofablePattern, "x-forwarded-for 헤더를 직접 split하는 코드가 없어야 함");
   });
 });
+
+describe("/api/analyze-audio: 429/503 통합 동작 테스트 (mock req/res)", () => {
+  const routesModule = require("../server/routes") as {
+    analyzeAudioHandler: (req: any, res: any) => Promise<any>;
+    isRateLimited: (ip: string) => boolean;
+    _ipRequestLog: Map<string, number[]>;
+    RATE_LIMIT_MAX_REQUESTS: number;
+    MAX_CONCURRENT_WAV: number;
+  };
+
+  function makeRes() {
+    let statusCode = 200;
+    let body: unknown = null;
+    const res = {
+      status(code: number) { statusCode = code; return res; },
+      json(b: unknown) { body = b; return res; },
+      get statusCode() { return statusCode; },
+      get body() { return body; },
+    };
+    return res;
+  }
+
+  beforeEach(() => {
+    routesModule._ipRequestLog.clear();
+  });
+
+  test("rate limit 초과 시 429 반환", async () => {
+    const ip = "9.9.9.9";
+    for (let i = 0; i < routesModule.RATE_LIMIT_MAX_REQUESTS; i++) {
+      routesModule.isRateLimited(ip);
+    }
+    const req = { ip, socket: { remoteAddress: ip }, body: { audio: "dGVzdA==", format: ".wav" } };
+    const res = makeRes();
+    await routesModule.analyzeAudioHandler(req, res);
+    assert.strictEqual(res.statusCode, 429, "rate limit 초과 시 HTTP 429이어야 함");
+    assert.ok((res.body as any)?.error, "에러 메시지가 포함되어야 함");
+  });
+
+  test("audio 필드 누락 시 400 반환", async () => {
+    const ip = "8.8.8.8";
+    const req = { ip, socket: { remoteAddress: ip }, body: {} };
+    const res = makeRes();
+    await routesModule.analyzeAudioHandler(req, res);
+    assert.strictEqual(res.statusCode, 400, "audio 누락 시 400이어야 함");
+  });
+
+  test("audio 필드 크기 초과 시 413 반환", async () => {
+    const ip = "7.7.7.7";
+    const MAX_CHARS = Math.ceil((5 * 1024 * 1024) / 3) * 4;
+    const req = { ip, socket: { remoteAddress: ip }, body: { audio: "A".repeat(MAX_CHARS + 1), format: ".wav" } };
+    const res = makeRes();
+    await routesModule.analyzeAudioHandler(req, res);
+    assert.strictEqual(res.statusCode, 413, "audio 크기 초과 시 413이어야 함");
+  });
+});

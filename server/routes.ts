@@ -342,7 +342,10 @@ function analyzeWavDirect(audioBuffer: Buffer): { frequency: number | null; note
   return { frequency: rounded, note: `${noteInfo.name}${noteInfo.octave}` };
 }
 
-async function analyzeAudioHandler(req: Request, res: Response) {
+// base64 인코딩된 5MB 바이너리의 최대 base64 길이
+const MAX_BASE64_AUDIO_CHARS = Math.ceil((5 * 1024 * 1024) / 3) * 4;
+
+export async function analyzeAudioHandler(req: Request, res: Response) {
   const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
 
   if (isRateLimited(ip)) {
@@ -352,6 +355,9 @@ async function analyzeAudioHandler(req: Request, res: Response) {
   const { audio, format } = req.body;
   if (!audio || typeof audio !== "string") {
     return res.status(400).json({ error: "Missing audio data" });
+  }
+  if (audio.length > MAX_BASE64_AUDIO_CHARS) {
+    return res.status(413).json({ error: "Audio data exceeds maximum allowed size" });
   }
 
   const ALLOWED_EXTS = [".wav", ".m4a", ".3gp", ".mp4", ".aac", ".webm"];
