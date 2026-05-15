@@ -442,19 +442,21 @@ export interface EntryEngineSetters {
 }
 
 export function applyEntryToEngine(engine: EntryEngineSetters, entry: PracticeEntry): void {
-  const blocks = entry.loopBlocks ?? [];
+  const rawBlocks = entry.loopBlocks ?? [];
+  const rawRepeats = { ...(entry.barRepeats || {}) } as Record<number, BarRepeat>;
+  const { barRepeats: migratedRepeats, loopBlocks: blocks } = migrateLayerBlocks(rawBlocks, rawRepeats);
   engine.setBpm(entry.bpm);
   engine.setBeatsPerMeasure(entry.beatsPerMeasure);
   engine.setBeatTypes([...entry.beatTypes]);
   engine.setAllBeatSubdivisions({ ...entry.beatSubdivisions });
   engine.setLoopBlocks([...blocks] as LoopBlock[]);
   engine.setBlockPlayMode(entry.blockPlayMode || "loop");
-  engine.setAllBarRepeats({ ...(entry.barRepeats || {}) } as Record<number, BarRepeat>);
+  engine.setAllBarRepeats(migratedRepeats);
   // BPM 오버라이드는 양수만 추출. 0/음수/누락은 "오버라이드 없음"으로 간주
   // (이전 인라인 코드의 truthy 체크와 동일 의도). 엔진은 20~300으로 클램프하므로
   // 0을 흘려보내면 20으로 잘못 강제될 수 있어, 이 경계는 헬퍼에서 막는다.
   const bpmOverrides: Record<number, number> = {};
-  for (const [k, v] of Object.entries(entry.barRepeats || {})) {
+  for (const [k, v] of Object.entries(migratedRepeats)) {
     if (typeof v.bpm === "number" && v.bpm > 0) bpmOverrides[Number(k)] = v.bpm;
   }
   engine.setAllBarBpmOverrides(bpmOverrides);

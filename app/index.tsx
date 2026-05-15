@@ -420,6 +420,7 @@ export default function MetronomeScreen() {
       if (showMenu) { setActiveModal(null); return true; }
       if (showOnboarding) { setActiveModal(null); return true; }
       if (showReboot) { setShowReboot(false); return true; }
+      if (barModeRef.current) { setBarMode(false); barModeRef.current = false; return true; }
       Alert.alert("앱 종료", "앱을 종료하시겠습니까?", [
         { text: "취소", style: "cancel" },
         { text: "종료", style: "destructive", onPress: () => BackHandler.exitApp() },
@@ -3485,6 +3486,7 @@ export default function MetronomeScreen() {
 
   const handleCopyBar = useCallback((beatIndex: number) => {
     if (isPlaying) return;
+    if (beatsPerMeasure >= 16) return;
     const srcType = beatTypes[beatIndex] ?? "strong";
     const srcSub = beatSubdivisions[String(beatIndex)] ?? [];
     const newBeat = beatsPerMeasure;
@@ -3519,14 +3521,36 @@ export default function MetronomeScreen() {
       if (ki < beatIndex) newRepeats[ki] = v;
       else if (ki > beatIndex) newRepeats[ki - 1] = v;
     }
+    // loopBlocks 재인덱싱: 삭제된 beat를 포함하는 블록 처리
+    const shiftBeat = (b: number) => b < beatIndex ? b : b - 1;
+    const newBlocks = loopBlocks
+      .map(lb => {
+        const newStart = lb.startBeat < beatIndex ? lb.startBeat : lb.startBeat > beatIndex ? lb.startBeat - 1 : lb.endBeat > beatIndex ? lb.startBeat : -1;
+        const newEnd = lb.endBeat < beatIndex ? lb.endBeat : lb.endBeat > beatIndex ? lb.endBeat - 1 : lb.startBeat < beatIndex ? lb.endBeat - 1 : -1;
+        if (newStart < 0 || newEnd < 0 || newStart > newEnd) return null;
+        const newOwnBeatTypes: Record<number, BeatType> = {};
+        for (const [k, v] of Object.entries(lb.ownBeatTypes ?? {})) {
+          const ki = Number(k);
+          if (ki !== beatIndex) newOwnBeatTypes[shiftBeat(ki)] = v;
+        }
+        const newOwnSubdivisions: Record<string, BeatType[]> = {};
+        for (const [k, v] of Object.entries(lb.ownSubdivisions ?? {})) {
+          const ki = Number(k);
+          if (ki !== beatIndex) newOwnSubdivisions[String(shiftBeat(ki))] = v;
+        }
+        return { ...lb, startBeat: newStart, endBeat: newEnd, ownBeatTypes: newOwnBeatTypes, ownSubdivisions: newOwnSubdivisions };
+      })
+      .filter((b): b is NonNullable<typeof b> => b !== null);
     setBeatsPerMeasure(newBeats);
     setBeatTypes(newTypes);
     setBeatSubdivisions(newSubs);
     setBarRepeats(newRepeats);
+    setLoopBlocks(newBlocks);
     engineRef.current?.setBeatsPerMeasure(newBeats);
     engineRef.current?.setBeatTypes(newTypes);
     engineRef.current?.setAllBeatSubdivisions(newSubs);
     engineRef.current?.setAllBarRepeats(newRepeats);
+    engineRef.current?.setLoopBlocks(newBlocks);
     if (barStartBeat !== null) {
       if (barStartBeat === beatIndex) setBarStartBeat(null);
       else if (barStartBeat > beatIndex) setBarStartBeat(barStartBeat - 1);
@@ -3535,8 +3559,9 @@ export default function MetronomeScreen() {
     barConfigRef.current.beatTypes = newTypes;
     barConfigRef.current.beatSubdivisions = newSubs;
     barConfigRef.current.barRepeats = newRepeats;
+    barConfigRef.current.loopBlocks = newBlocks;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  }, [beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, barStartBeat]);
+  }, [beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, barStartBeat, loopBlocks]);
 
   const handleBarReset = useCallback(() => {
     const engine = engineRef.current;
