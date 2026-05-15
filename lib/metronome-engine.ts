@@ -135,12 +135,14 @@ export type BarRepeatSpec = {
   value: number;
   /** N회 부호: blockIteration >= voltaMax 이면 이 바를 건너뜀 */
   voltaMax?: number;
-  /** 끝 부호: 이 바 이후 현재 범위 emit을 즉시 중단 */
+  /** 끝 부호: 마지막 외부 반복 패스(outerIter === outerRepTotal-1)에서 이 바 이후 정지 */
   isEnd?: boolean;
   /** →N 점프 출발지: 매칭 jumpToId 바로 리다이렉트 (1회) */
   jumpFromId?: number;
   /** ←N 점프 목적지 */
   jumpToId?: number;
+  /** 바 단위 레이어: 각 레이어는 독립적인 subdivision 패턴으로 메인 비트와 동시에 재생됨 */
+  layers?: Array<{ beatType?: string; subdivisions?: string[] }>;
 };
 
 export interface ScheduleInputs {
@@ -300,6 +302,49 @@ export function pureAddBeatTicks(
   }
 }
 
+/** 순수 함수(state mutate): barRepeats.layers의 레이어 ticks를 beatStartTime 기준으로 추가. */
+function pureAddBarLayerTicks(
+  inputs: ScheduleInputs,
+  state: EmitState,
+  beat: number,
+  iteration: number,
+  barRepIter: number,
+  barRepTotal: number,
+  blkIdx: number,
+  blkRepTotal: number,
+  blockBpm: number | undefined,
+  beatStartTime: number,
+  beatDur: number,
+  layers: Array<{ beatType?: string; subdivisions?: string[] }>,
+): void {
+  for (let li = 0; li < layers.length; li++) {
+    const layer = layers[li];
+    const subPattern: BeatType[] = layer.subdivisions?.length
+      ? (layer.subdivisions as BeatType[])
+      : (layer.beatType ? [layer.beatType as BeatType] : ["normal"]);
+    const subDur = beatDur / subPattern.length;
+    for (let sub = 0; sub < subPattern.length; sub++) {
+      state.ticks.push({
+        time: beatStartTime + sub * subDur,
+        beat,
+        subBeat: sub,
+        type: subPattern[sub],
+        isMainBeat: sub === 0,
+        repeatIteration: iteration,
+        barRepeatIteration: barRepIter,
+        barRepeatTotal: barRepTotal,
+        blockIndex: blkIdx,
+        blockRepeatTotal: blkRepTotal,
+        jumpIteration: state.jump.iteration,
+        jumpTotal: state.jump.total,
+        jumpSourceBlockIndex: state.jump.sourceBlockIndex,
+        layerIndex: li + 1,
+        layerBeat: beat,
+      });
+    }
+  }
+}
+
 /** 순수 함수(state mutate): 바 반복(barRepeats)을 고려하여 한 비트의 ticks를 state에 추가. */
 export function pureAddBarWithRepeat(
   inputs: ScheduleInputs,
@@ -321,7 +366,11 @@ export function pureAddBarWithRepeat(
     if (barRep.type === "count") barRepeatCount = Math.max(1, barRep.value);
     else barRepeatCount = Math.max(1, Math.round((barRep.value * 1000) / beatDur));
     for (let r = 0; r < barRepeatCount; r++) {
+      const beatStartTime = state.time;
       pureAddBeatTicks(inputs, state, beat, blockIteration, r, barRepeatCount, blkIdx, blkRepTotal, blockBpm);
+      if (barRep.layers && barRep.layers.length > 0) {
+        pureAddBarLayerTicks(inputs, state, beat, blockIteration, r, barRepeatCount, blkIdx, blkRepTotal, blockBpm, beatStartTime, beatDur, barRep.layers);
+      }
     }
   } else {
     pureAddBeatTicks(inputs, state, beat, blockIteration, 0, 1, blkIdx, blkRepTotal, blockBpm);
@@ -370,8 +419,8 @@ export function pureEmitBeatsInRange(
     } else {
       pureAddBarWithRepeat(inputs, state, b, outerIter, outerBlockIdx, outerRepTotal, blockBpm);
       const barRep = inputs.barRepeats.get(b);
-      // isEnd: 이 바를 emit한 뒤 나머지 범위 건너뜀
-      if (barRep?.isEnd) break;
+      // isEnd: 마지막 외부 반복 패스에서만 이 바 이후 정지 (volta 조건 소진 후 종료)
+      if (barRep?.isEnd && outerIter >= outerRepTotal - 1) break;
       // jumpFromId: 매칭 jumpToId 바로 1회 리다이렉트 (이전 바 중 검색)
       if (barRep?.jumpFromId && !usedJumpIds.has(barRep.jumpFromId)) {
         const jumpId = barRep.jumpFromId;

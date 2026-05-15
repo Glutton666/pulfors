@@ -330,12 +330,40 @@ export interface AppliedEntryState {
  * deliberately not modeled here; tests can verify state-roundtrip without a
  * real engine instance.
  */
+/** loopBlocks.layerOf를 barRepeats.layers로 마이그레이션하는 순수 함수.
+ *  layerOf가 있는 블록들을 barRepeats[beat].layers 배열에 통합하고 loopBlocks에서 제거한다.
+ */
+function migrateLayerBlocks(
+  loopBlocks: LoopBlock[],
+  barRepeats: Record<number, BarRepeat>,
+): { barRepeats: Record<number, BarRepeat>; loopBlocks: LoopBlock[] } {
+  const layerBlocks = loopBlocks.filter(b => b.layerOf !== undefined);
+  if (layerBlocks.length === 0) return { barRepeats, loopBlocks };
+
+  const nextRepeats: Record<number, BarRepeat> = { ...barRepeats };
+  for (const lb of layerBlocks) {
+    for (let beat = lb.startBeat; beat <= lb.endBeat; beat++) {
+      const existing = nextRepeats[beat] ?? ({ type: "count", value: 1 } as BarRepeat);
+      const layer: NonNullable<BarRepeat["layers"]>[number] = {
+        beatType: (lb.ownBeatTypes?.[beat] ?? "normal") as BeatType,
+        subdivisions: lb.ownSubdivisions?.[String(beat)] as BeatType[] | undefined,
+      };
+      const existingLayers = existing.layers ?? [];
+      nextRepeats[beat] = { ...existing, layers: [...existingLayers, layer] };
+    }
+  }
+  const nextBlocks = loopBlocks.filter(b => b.layerOf === undefined);
+  return { barRepeats: nextRepeats, loopBlocks: nextBlocks };
+}
+
 export function applyEntryToState(entry: PracticeEntry): AppliedEntryState {
-  const blocks = entry.loopBlocks ?? [];
+  const rawBlocks = entry.loopBlocks ?? [];
+  const rawRepeats = { ...(entry.barRepeats || {}) } as Record<number, BarRepeat>;
+  const { barRepeats: migratedRepeats, loopBlocks: blocks } = migrateLayerBlocks(rawBlocks, rawRepeats);
   // BPM 오버라이드 정책: 양수만 통과. applyEntryToEngine과 동일하게 0/음수/누락은
   // "오버라이드 없음"으로 간주해 두 헬퍼가 같은 의미를 갖도록 잠근다.
   const bpmOverrides: Record<number, number> = {};
-  for (const [k, v] of Object.entries(entry.barRepeats || {})) {
+  for (const [k, v] of Object.entries(migratedRepeats)) {
     if (typeof v.bpm === "number" && v.bpm > 0) bpmOverrides[Number(k)] = v.bpm;
   }
   return {
@@ -343,7 +371,7 @@ export function applyEntryToState(entry: PracticeEntry): AppliedEntryState {
     beatsPerMeasure: entry.beatsPerMeasure,
     beatTypes: [...entry.beatTypes],
     beatSubdivisions: { ...entry.beatSubdivisions },
-    barRepeats: { ...(entry.barRepeats || {}) } as Record<number, BarRepeat>,
+    barRepeats: migratedRepeats,
     loopBlocks: [...blocks],
     barLoopMode: entry.barLoopMode || "once",
     blockPlayMode: entry.blockPlayMode || "loop",
@@ -368,12 +396,14 @@ export function applyEntryToState(entry: PracticeEntry): AppliedEntryState {
  * - Maps are shallow-cloned so callers can mutate without affecting the entry.
  */
 export function entryToBarConfig(entry: PracticeEntry): BarConfig {
-  const blocks = entry.loopBlocks ?? [];
+  const rawBlocks = entry.loopBlocks ?? [];
+  const rawRepeats = { ...(entry.barRepeats || {}) } as Record<number, BarRepeat>;
+  const { barRepeats: migratedRepeats, loopBlocks: blocks } = migrateLayerBlocks(rawBlocks, rawRepeats);
   return {
     beatsPerMeasure: entry.beatsPerMeasure,
     beatTypes: [...entry.beatTypes],
     beatSubdivisions: { ...entry.beatSubdivisions },
-    barRepeats: { ...(entry.barRepeats || {}) } as Record<number, BarRepeat>,
+    barRepeats: migratedRepeats,
     loopBlocks: [...blocks],
     barClockMode: entry.barClockMode || "stopwatch",
     barTimerDuration: entry.barTimerDuration ?? 180,
