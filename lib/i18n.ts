@@ -797,6 +797,8 @@ export const translations = {
 
 type TranslationKeys = typeof translations;
 
+export type BarModeViewKey = keyof (typeof translations)["barModeView"];
+
 export type KbSectionKey = keyof (typeof translations)["keyboard"];
 
 export type TranslationFn = {

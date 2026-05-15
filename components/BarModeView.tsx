@@ -25,6 +25,7 @@ import { BeatStepperButton } from "./BeatStepperButton";
 import { formatRepeat } from "./beat-indicator-helpers";
 import type { BeatType, BarRepeat, LoopBlock, BarLayer } from "./beat-indicator.types";
 import type { ProgressInfo } from "@/lib/metronome-engine";
+import type { BarModeViewKey } from "@/lib/i18n";
 import { Spacing, Radius, FontSize } from "@/constants/tokens";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -105,7 +106,7 @@ const MAX_BEATS = 16;
 const SWIPE_ACTION_THRESHOLD = 60;
 const BLOCK_DEPTH_INDENT = 8;
 
-const SYMBOL_INFO: Record<SymbolType, { icon: IoniconName; labelKey: string; color: (c: BarModeColors) => string }> = {
+const SYMBOL_INFO: Record<SymbolType, { icon: IoniconName; labelKey: BarModeViewKey; color: (c: BarModeColors) => string }> = {
   block:     { icon: "code-slash",        labelKey: "symbolBlock",    color: c => c.accent },
   repeat:    { icon: "repeat",            labelKey: "symbolRepeat",   color: c => c.accent },
   jump_from: { icon: "arrow-forward",     labelKey: "symbolJumpFrom", color: c => "#f0ad4e" },
@@ -114,7 +115,7 @@ const SYMBOL_INFO: Record<SymbolType, { icon: IoniconName; labelKey: string; col
   end:       { icon: "stop",              labelKey: "symbolEnd",      color: c => c.danger },
 };
 
-const SOUND_SET_OPTIONS: { key: string; labelKey: string }[] = [
+const SOUND_SET_OPTIONS: { key: string; labelKey: BarModeViewKey }[] = [
   { key: "classic",   labelKey: "ssClassic" },
   { key: "woodblock", labelKey: "ssWoodblock" },
   { key: "cowbell",   labelKey: "ssCowbell" },
@@ -898,7 +899,7 @@ export function BarModeView({
               <Text style={{ color: SYMBOL_INFO[placingSymbol].color(C), fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_600SemiBold" }}>
                 {placingSymbol === "block" && blockSelectFirst !== null
                   ? t("barModeView", "blockSelectStarted").replace("{{n}}", String(blockSelectFirst + 1))
-                  : `${t("barModeView", SYMBOL_INFO[placingSymbol].labelKey as any)} ${t("barModeView", "blockSelectPrompt")}`}
+                  : `${t("barModeView", SYMBOL_INFO[placingSymbol].labelKey)} ${t("barModeView", "blockSelectPrompt")}`}
               </Text>
             </View>
           ) : (
@@ -963,7 +964,7 @@ export function BarModeView({
               >
                 <Ionicons name={info.icon} size={ms(14, 0.4)} color={isActive ? col : C.textSecondary} />
                 <Text style={{ color: isActive ? col : C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", marginTop: 2 }}>
-                  {t("barModeView", info.labelKey as any)}
+                  {t("barModeView", info.labelKey)}
                 </Text>
               </Pressable>
             );
@@ -1169,7 +1170,7 @@ export function BarModeView({
                 {t("barModeView", "soundSetLabel")}
               </Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
-                {[{ key: null, label: t("barModeView", "soundSetDefault") }, ...SOUND_SET_OPTIONS.map(o => ({ key: o.key, label: t("barModeView", o.labelKey as any) }))].map(opt => {
+                {[{ key: null, label: t("barModeView", "soundSetDefault") }, ...SOUND_SET_OPTIONS.map(o => ({ key: o.key, label: t("barModeView", o.labelKey) }))].map(opt => {
                   const isActive = (opt.key === null) ? !layer?.soundSet : layer?.soundSet === opt.key;
                   return (
                     <Pressable
@@ -1535,7 +1536,7 @@ export function BarModeView({
                   style={[styles.typeToggle, { backgroundColor: blockRepSoundSet === opt.key ? C.accent + "30" : C.overlay08 }]}
                 >
                   <Text style={{ color: blockRepSoundSet === opt.key ? C.accent : C.textSecondary, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_600SemiBold" }}>
-                    {t("barModeView", opt.labelKey as any)}
+                    {t("barModeView", opt.labelKey)}
                   </Text>
                 </Pressable>
               ))}

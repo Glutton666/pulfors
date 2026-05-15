@@ -115,6 +115,8 @@ export interface ScheduledTick {
   layerIndex: number;
   layerBeat: number;
   layerSoundSet?: string;
+  /** isEnd 심볼의 마지막 허용 반복에서 발생 — 이 tick 재생 후 엔진 전체 정지 */
+  stopAfterThis?: boolean;
 }
 
 export interface LoopBlockData {
@@ -425,7 +427,16 @@ export function pureEmitBeatsInRange(
       // voltaMax가 있으면 outerIter >= voltaMax - 1 이 소진 기준, 없으면 마지막 외부 반복.
       if (barRep?.isEnd) {
         const isLastVolta = barRep.voltaMax ? (outerIter >= barRep.voltaMax - 1) : (outerIter >= outerRepTotal - 1);
-        if (isLastVolta) break;
+        if (isLastVolta) {
+          // 마지막 tick에 stopAfterThis 플래그 설정 → 엔진 루프에서 재생 즉시 정지
+          if (state.ticks.length > 0) {
+            state.ticks[state.ticks.length - 1] = {
+              ...state.ticks[state.ticks.length - 1],
+              stopAfterThis: true,
+            };
+          }
+          break;
+        }
       }
       // jumpFromId: 매칭 jumpToId 바로 1회 리다이렉트 (이전 바 중 검색)
       if (barRep?.jumpFromId && !usedJumpIds.has(barRep.jumpFromId)) {
@@ -1566,6 +1577,13 @@ export class MetronomeEngine {
 
       this.fireTick(tick);
       this.scheduleIndex++;
+
+      // isEnd 심볼 — volta 소진 후 전체 정지
+      if (tick.stopAfterThis && this.isRunning) {
+        this.stop();
+        this.onMeasureComplete?.();
+        return;
+      }
 
       if (this.scheduleIndex >= this.schedule.length) {
         if (this.stopAfterMeasure || (this.blockPlayMode === "sequential" && this.loopBlocks.length > 0)) {

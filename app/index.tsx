@@ -3494,21 +3494,28 @@ export default function MetronomeScreen() {
     if (beatsPerMeasure >= 16) return;
     const srcType = beatTypes[beatIndex] ?? "strong";
     const srcSub = beatSubdivisions[String(beatIndex)] ?? [];
+    const srcRepeat = barRepeats[beatIndex];
     const newBeat = beatsPerMeasure;
     const newTypes = [...beatTypes, srcType];
     const newSubs = { ...beatSubdivisions };
     if (srcSub.length > 0) newSubs[String(newBeat)] = [...srcSub];
+    // barRepeats 전체 복사 (반복 유형/BPM/심볼/레이어 포함)
+    const newRepeats = { ...barRepeats };
+    if (srcRepeat) newRepeats[newBeat] = { ...srcRepeat };
     setBeatsPerMeasure(beatsPerMeasure + 1);
     setBeatTypes(newTypes);
     setBeatSubdivisions(newSubs);
+    setBarRepeats(newRepeats);
     engineRef.current?.setBeatsPerMeasure(beatsPerMeasure + 1);
     engineRef.current?.setBeatTypes(newTypes);
     engineRef.current?.setAllBeatSubdivisions(newSubs);
+    engineRef.current?.setAllBarRepeats(newRepeats);
     barConfigRef.current.beatsPerMeasure = beatsPerMeasure + 1;
     barConfigRef.current.beatTypes = newTypes;
     barConfigRef.current.beatSubdivisions = newSubs;
+    barConfigRef.current.barRepeats = newRepeats;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [isPlaying, beatTypes, beatSubdivisions, beatsPerMeasure]);
+  }, [isPlaying, beatTypes, beatSubdivisions, beatsPerMeasure, barRepeats]);
 
   const handleDeleteBar = useCallback((beatIndex: number) => {
     if (beatsPerMeasure <= 1) return;
