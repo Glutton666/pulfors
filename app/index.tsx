@@ -4208,10 +4208,26 @@ export default function MetronomeScreen() {
           id: Crypto.randomUUID(),
           createdAt: Date.now(),
         };
-        const existing = await loadPracticeBook();
-        await savePracticeBook([entry, ...existing]);
-        handleLoadPracticeEntry(entry);
-        Alert.alert(t("main", "importComplete"), `"${entry.label}" ${t("main", "savedToNote")}\n\n${t("practiceBook", "bpmUnit")}: ${entry.bpm} | ${entry.beatsPerMeasure} ${t("practiceBook", "beatsUnit")}`);
+        Alert.alert(
+          t("main", "importSettings"),
+          `"${entry.label}" ${t("main", "importConfirm")}\n\n${t("practiceBook", "bpmUnit")}: ${entry.bpm} | ${entry.beatsPerMeasure} ${t("practiceBook", "beatsUnit")}`,
+          [
+            { text: t("main", "cancel"), style: "cancel" },
+            {
+              text: t("main", "apply"),
+              onPress: () => handleLoadPracticeEntry(entry),
+            },
+            {
+              text: t("main", "saveAndApply"),
+              onPress: async () => {
+                const existing = await loadPracticeBook();
+                await savePracticeBook([entry, ...existing]);
+                handleLoadPracticeEntry(entry);
+                Alert.alert(t("main", "saved"), `"${entry.label}" ${t("main", "savedToNote")}`);
+              },
+            },
+          ]
+        );
       }
     }, 500);
     return () => clearTimeout(timer);
