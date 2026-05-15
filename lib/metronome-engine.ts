@@ -421,8 +421,12 @@ export function pureEmitBeatsInRange(
     } else {
       pureAddBarWithRepeat(inputs, state, b, outerIter, outerBlockIdx, outerRepTotal, blockBpm);
       const barRep = inputs.barRepeats.get(b);
-      // isEnd: 마지막 외부 반복 패스에서만 이 바 이후 정지 (volta 조건 소진 후 종료)
-      if (barRep?.isEnd && outerIter >= outerRepTotal - 1) break;
+      // isEnd: volta 조건이 소진된 마지막 허용 반복에서 이 바 이후 재생 정지.
+      // voltaMax가 있으면 outerIter >= voltaMax - 1 이 소진 기준, 없으면 마지막 외부 반복.
+      if (barRep?.isEnd) {
+        const isLastVolta = barRep.voltaMax ? (outerIter >= barRep.voltaMax - 1) : (outerIter >= outerRepTotal - 1);
+        if (isLastVolta) break;
+      }
       // jumpFromId: 매칭 jumpToId 바로 1회 리다이렉트 (이전 바 중 검색)
       if (barRep?.jumpFromId && !usedJumpIds.has(barRep.jumpFromId)) {
         const jumpId = barRep.jumpFromId;

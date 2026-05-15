@@ -525,7 +525,7 @@ export function BarModeView({
     const rep = barRepeats[beat];
     if (rep?.jumpFromId) badges.push(`→${rep.jumpFromId}`);
     if (rep?.jumpToId) badges.push(`←${rep.jumpToId}`);
-    if (rep?.voltaMax) badges.push(`${rep.voltaMax}회`);
+    if (rep?.voltaMax) badges.push(t("barModeView", "voltaBadge").replace("{{n}}", String(rep.voltaMax)));
     if (rep?.isEnd) badges.push("■");
     return badges;
   }, [barRepeats]);
@@ -1312,7 +1312,7 @@ export function BarModeView({
             )}
 
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center", marginBottom: 4 }}>
-              <Text style={{ color: C.textSecondary, fontSize: FontSize.caption }}>BPM 오버라이드</Text>
+              <Text style={{ color: C.textSecondary, fontSize: FontSize.caption }}>{t("barModeView", "repBpmOverride")}</Text>
               {repBpm !== null ? (
                 <>
                   <Pressable onPress={() => setRepBpm(v => v !== null ? Math.max(20, v - 5) : null)} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
@@ -1341,7 +1341,7 @@ export function BarModeView({
                   onPress={() => setRepBpm(bpm ?? 120)}
                   style={[styles.typeToggle, { backgroundColor: C.overlay08 }]}
                 >
-                  <Text style={{ color: C.textTertiary, fontSize: FontSize.caption }}>설정</Text>
+                  <Text style={{ color: C.textTertiary, fontSize: FontSize.caption }}>{t("barModeView", "bpmSet")}</Text>
                 </Pressable>
               )}
             </View>
@@ -1356,7 +1356,7 @@ export function BarModeView({
           <View style={[styles.modalCard, { backgroundColor: C.backgroundSecondary }]} dataSet={{ capturesKeys: "true" }}>
             <View style={[styles.modalHeader, { borderBottomColor: C.overlay08 }]}>
               <Ionicons name="timer-outline" size={ms(16, 0.4)} color={C.danger} />
-              <Text style={{ color: C.danger, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_700Bold" }}>타이머 설정</Text>
+              <Text style={{ color: C.danger, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_700Bold" }}>{t("barModeView", "timerModalTitle")}</Text>
             </View>
             <TextInput
               style={[styles.timerInput, { borderBottomColor: C.accent, color: C.accent }]}
@@ -1370,13 +1370,13 @@ export function BarModeView({
               placeholderTextColor={C.textTertiary}
             />
             <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, textAlign: "center", marginBottom: 12 }}>
-              M:SS 또는 초
+              {t("barModeView", "timerHint")}
             </Text>
             <Pressable
               onPress={commitBarTimerInput}
               style={[styles.timerSetBtn, { backgroundColor: C.danger }]}
             >
-              <Text style={{ color: C.white, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_700Bold" }}>설정</Text>
+              <Text style={{ color: C.white, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_700Bold" }}>{t("barModeView", "timerSet")}</Text>
             </Pressable>
           </View>
         </View>
@@ -1390,7 +1390,7 @@ export function BarModeView({
             <View style={[styles.modalHeader, { borderBottomColor: C.overlay08 }]}>
               <Ionicons name="hourglass-outline" size={ms(16, 0.4)} color="#7b68ee" />
               <Text style={{ color: "#7b68ee", fontSize: FontSize.small, fontFamily: "SpaceGrotesk_700Bold" }}>
-                바 {voltaBeat !== null ? voltaBeat + 1 : ""} — N회 설정
+                {t("barModeView", "voltaModalTitle").replace("{{n}}", String((voltaBeat ?? 0) + 1))}
               </Text>
               <View style={{ flex: 1 }} />
               <Pressable onPress={saveVolta} hitSlop={8}>
@@ -1402,7 +1402,7 @@ export function BarModeView({
                 <Ionicons name="remove" size={ms(16, 0.4)} color={C.textSecondary} />
               </Pressable>
               <Text style={{ color: "#7b68ee", fontSize: 28, fontFamily: "SpaceGrotesk_700Bold" }}>
-                {voltaVal}회
+                {t("barModeView", "voltaBadge").replace("{{n}}", String(voltaVal))}
               </Text>
               <Pressable onPress={() => setVoltaVal(v => Math.min(99, v + 1))} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                 <Ionicons name="add" size={ms(16, 0.4)} color={C.textSecondary} />
@@ -1486,7 +1486,7 @@ export function BarModeView({
 
             {/* BPM 오버라이드 */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center", marginBottom: 12 }}>
-              <Text style={{ color: C.textSecondary, fontSize: FontSize.caption }}>BPM 오버라이드</Text>
+              <Text style={{ color: C.textSecondary, fontSize: FontSize.caption }}>{t("barModeView", "repBpmOverride")}</Text>
               {blockRepBpm !== null ? (
                 <>
                   <Pressable onPress={() => setBlockRepBpm(v => v !== null ? Math.max(20, v - 5) : null)} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
@@ -1507,25 +1507,25 @@ export function BarModeView({
                     <Ionicons name="add" size={ms(13, 0.4)} color={C.accent} />
                   </Pressable>
                   <Pressable onPress={() => setBlockRepBpm(null)} style={[styles.typeToggle, { backgroundColor: C.overlay08 }]} hitSlop={4}>
-                    <Text style={{ color: C.textSecondary, fontSize: FontSize.caption }}>초기화</Text>
+                    <Text style={{ color: C.textSecondary, fontSize: FontSize.caption }}>{t("barModeView", "repBpmReset")}</Text>
                   </Pressable>
                 </>
               ) : (
                 <Pressable onPress={() => setBlockRepBpm(120)} style={[styles.typeToggle, { backgroundColor: C.overlay08 }]}>
-                  <Text style={{ color: C.textSecondary, fontSize: FontSize.caption }}>+ 설정</Text>
+                  <Text style={{ color: C.textSecondary, fontSize: FontSize.caption }}>{t("barModeView", "repBpmSet")}</Text>
                 </Pressable>
               )}
             </View>
 
             {/* 사운드셋 선택 */}
-            <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, marginBottom: 6 }}>사운드셋</Text>
+            <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, marginBottom: 6 }}>{t("barModeView", "soundSetLabel")}</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
               <Pressable
                 onPress={() => setBlockRepSoundSet(null)}
                 style={[styles.typeToggle, { backgroundColor: blockRepSoundSet === null ? C.accent + "30" : C.overlay08 }]}
               >
                 <Text style={{ color: blockRepSoundSet === null ? C.accent : C.textSecondary, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_600SemiBold" }}>
-                  기본
+                  {t("barModeView", "soundSetDefault")}
                 </Text>
               </Pressable>
               {SOUND_SET_OPTIONS.map(opt => (
