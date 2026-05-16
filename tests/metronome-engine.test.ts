@@ -156,3 +156,35 @@ test("setOnClickEmitted(null)로 해제 가능", () => {
   (engine as unknown as { fireTick: (t: T) => void }).fireTick(tick);
   assert.equal(count, 0);
 });
+
+test("setBarRepeat: layers 배열은 deep copy되어 외부 변형으로부터 격리", () => {
+  const engine = new MetronomeEngine();
+  const layers = [{ beatType: "normal" as const, soundSet: "rimshot" }];
+  engine.setBarRepeat(0, { type: "count", value: 2, layers });
+  // 호출 후 외부 배열을 변형
+  layers[0].soundSet = "cowbell";
+  layers.push({ beatType: "accent" as const, soundSet: "hihat" });
+  const stored = engine.getAllBarRepeats();
+  assert.equal(stored[0].layers![0].soundSet, "rimshot", "저장된 값이 외부 변형 영향 없음");
+  assert.equal(stored[0].layers!.length, 1, "외부 push가 내부 배열에 반영 안 됨");
+});
+
+test("setAllBarRepeats: layers 배열은 deep copy되어 외부 변형으로부터 격리", () => {
+  const engine = new MetronomeEngine();
+  const layers = [{ beatType: "accent" as const, soundSet: "hihat" }];
+  engine.setAllBarRepeats({ 1: { type: "duration", value: 3, layers } });
+  layers[0].soundSet = "woodblock";
+  const stored = engine.getAllBarRepeats();
+  assert.equal(stored[1].layers![0].soundSet, "hihat", "setAllBarRepeats도 layers 격리");
+});
+
+test("getAllBarRepeats: 반환된 layers 변형이 내부 상태에 영향 없음", () => {
+  const engine = new MetronomeEngine();
+  engine.setBarRepeat(2, { type: "count", value: 1, layers: [{ beatType: "normal" as const }] });
+  const first = engine.getAllBarRepeats();
+  first[2].layers![0].beatType = "accent";
+  first[2].layers!.push({ beatType: "strong" as const });
+  const second = engine.getAllBarRepeats();
+  assert.equal(second[2].layers![0].beatType, "normal", "반환값 변형이 내부에 영향 없음");
+  assert.equal(second[2].layers!.length, 1, "반환값 push가 내부 배열에 반영 안 됨");
+});

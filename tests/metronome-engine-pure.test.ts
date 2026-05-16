@@ -384,6 +384,71 @@ test("pureCalcSinglePassDur: barRepeat duration의 시간 누적도 round 기반
   assert.ok(Math.abs(dur - expected) < 1e-9, `dur=${dur} ~ ${expected}`);
 });
 
+test("pureAddBarWithRepeat: barRep.layers가 있으면 layerIndex>0 tick 추가 생성", () => {
+  const inputs = makeInputs({
+    barRepeats: new Map([[0, {
+      type: "count",
+      value: 1,
+      layers: [{ beatType: "normal", subdivisions: ["normal", "normal"] }],
+    }]]),
+  });
+  const state = makeState();
+  pureAddBarWithRepeat(inputs, state, 0, 0, -1, 1);
+  const mainTicks = state.ticks.filter(t => t.layerIndex === 0);
+  const layerTicks = state.ticks.filter(t => t.layerIndex === 1);
+  assert.equal(mainTicks.length, 1, "메인 비트 1회");
+  assert.equal(layerTicks.length, 2, "레이어 서브디비전 2개 tick");
+  assert.equal(layerTicks[0].beat, 0);
+  assert.equal(layerTicks[0].subBeat, 0);
+  assert.equal(layerTicks[1].subBeat, 1);
+  assert.equal(layerTicks[0].time, 0, "레이어 첫 tick은 비트 시작 시각과 동일");
+});
+
+test("pureAddBarWithRepeat: 여러 레이어가 있을 때 각 레이어에 다른 layerIndex 부여", () => {
+  const inputs = makeInputs({
+    barRepeats: new Map([[0, {
+      type: "count",
+      value: 1,
+      layers: [
+        { beatType: "normal" },
+        { beatType: "accent", soundSet: "cowbell" },
+      ],
+    }]]),
+  });
+  const state = makeState();
+  pureAddBarWithRepeat(inputs, state, 0, 0, -1, 1);
+  const l1 = state.ticks.filter(t => t.layerIndex === 1);
+  const l2 = state.ticks.filter(t => t.layerIndex === 2);
+  assert.equal(l1.length, 1, "레이어 1 tick 1개");
+  assert.equal(l2.length, 1, "레이어 2 tick 1개");
+  assert.equal(l2[0].layerSoundSet, "cowbell", "레이어 2 soundSet 전달");
+});
+
+test("pureAddBarWithRepeat: 레이어 없는 바는 기존 글로벌 서브디비전만 사용", () => {
+  const inputs = makeInputs({
+    beatSubdivisions: new Map([[0, ["accent", "normal", "normal"]]]),
+    barRepeats: new Map([[0, { type: "count", value: 1 }]]),
+  });
+  const state = makeState();
+  pureAddBarWithRepeat(inputs, state, 0, 0, -1, 1);
+  assert.ok(state.ticks.every(t => t.layerIndex === 0), "레이어 tick 없음");
+  assert.equal(state.ticks.length, 3, "글로벌 서브디비전 3개 tick");
+});
+
+test("pureAddBarWithRepeat: count 반복 + layers — 각 반복마다 레이어 tick 생성", () => {
+  const inputs = makeInputs({
+    barRepeats: new Map([[0, {
+      type: "count",
+      value: 2,
+      layers: [{ beatType: "normal" }],
+    }]]),
+  });
+  const state = makeState();
+  pureAddBarWithRepeat(inputs, state, 0, 0, -1, 1);
+  const layerTicks = state.ticks.filter(t => t.layerIndex === 1);
+  assert.equal(layerTicks.length, 2, "2회 반복 × 레이어 1 = 2 tick");
+});
+
 test("pureEmitStackedBlockTicks: blockDurMs 경계를 벗어난 tick은 잘려나감", () => {
   // stackBpm=120 → 500ms/beat, 4박 layer지만 부모 dur=600ms면 2번째 비트(@500ms)는 들어가고 3번째(@1000ms)는 잘림
   const sorted: LoopBlockData[] = [

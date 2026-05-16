@@ -280,6 +280,50 @@ test("[apply-engine] BPM 오버라이드 정책 패리티: applyEntryToState와 
   assert.deepEqual(state.bpmOverrides, { 3: 140 });
 });
 
+test("[apply-engine] layers: barRepeats.layers 필드가 setAllBarRepeats 인자에 그대로 전달", () => {
+  const layersEntry: PracticeEntry = {
+    ...emptyEntry,
+    barRepeats: {
+      0: {
+        type: "count",
+        value: 3,
+        layers: [
+          { beatType: "normal", subdivisions: ["normal", "normal"], soundSet: "rimshot" },
+          { beatType: "accent" },
+        ],
+      } as BarRepeat,
+      2: { type: "duration", value: 2 },
+    },
+  };
+  const fake = createFakeEngine();
+  applyEntryToEngine(fake, layersEntry);
+  assertCanonicalSequence(fake.calls);
+  const r0 = fake.state.barRepeats![0] as BarRepeat;
+  assert.ok(Array.isArray(r0.layers), "beat 0에 layers 배열 존재");
+  assert.equal(r0.layers!.length, 2, "2개 레이어");
+  assert.equal(r0.layers![0].soundSet, "rimshot", "레이어 0 soundSet 보존");
+  assert.deepEqual(r0.layers![0].subdivisions, ["normal", "normal"], "레이어 0 subdivisions 보존");
+  assert.equal(r0.layers![1].beatType, "accent", "레이어 1 beatType 보존");
+  assert.ok(!("layers" in (fake.state.barRepeats![2] as BarRepeat) && (fake.state.barRepeats![2] as BarRepeat).layers?.length), "layers 없는 바는 영향 없음");
+});
+
+test("[apply-engine] layers: applyEntryToState도 동일하게 layers 보존", () => {
+  const layersEntry: PracticeEntry = {
+    ...emptyEntry,
+    barRepeats: {
+      1: {
+        type: "count",
+        value: 2,
+        layers: [{ beatType: "normal", soundSet: "hihat" }],
+      } as BarRepeat,
+    },
+  };
+  const state = applyEntryToState(layersEntry);
+  const r1 = state.barRepeats[1] as BarRepeat;
+  assert.ok(Array.isArray(r1.layers), "state.barRepeats[1].layers가 배열");
+  assert.equal(r1.layers![0].soundSet, "hihat", "soundSet 보존");
+});
+
 test("[apply-engine] blockPlayMode 누락 시 'loop' 폴백, barRepeats 누락 시 빈 객체", () => {
   const noBlocksEntry: PracticeEntry = {
     ...emptyEntry,

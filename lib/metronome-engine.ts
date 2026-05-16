@@ -700,7 +700,7 @@ export class MetronomeEngine {
   private audioOffsetMs: number = 0;
   private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; soundSet?: string; layerOf?: number; ownBeatTypes?: Record<number, string>; ownSubdivisions?: Record<string, string[]> }[] = [];
   private blockPlayMode: "sequential" | "loop" | "random" = "loop";
-  private barRepeats: Map<number, { type: "count" | "duration"; value: number }> = new Map();
+  private barRepeats: Map<number, BarRepeatSpec> = new Map();
   private barBpmOverrides: Map<number, number> = new Map();
   private preRenderedAudio = false;
   private pendingMeasureStartAction: (() => void) | null = null;
@@ -901,10 +901,10 @@ export class MetronomeEngine {
     return this.blockPlayMode;
   }
 
-  getAllBarRepeats(): Record<number, { type: "count" | "duration"; value: number }> {
-    const result: Record<number, { type: "count" | "duration"; value: number }> = {};
+  getAllBarRepeats(): Record<number, BarRepeatSpec> {
+    const result: Record<number, BarRepeatSpec> = {};
     for (const [k, v] of this.barRepeats.entries()) {
-      result[k] = { ...v };
+      result[k] = { ...v, layers: v.layers ? v.layers.map(l => ({ ...l })) : undefined };
     }
     return result;
   }
@@ -943,7 +943,7 @@ export class MetronomeEngine {
 
   setBarRepeat(beat: number, repeat: BarRepeatSpec | null) {
     if (repeat) {
-      this.barRepeats.set(beat, { ...repeat });
+      this.barRepeats.set(beat, { ...repeat, layers: repeat.layers ? repeat.layers.map(l => ({ ...l })) : undefined });
     } else {
       this.barRepeats.delete(beat);
     }
@@ -956,7 +956,7 @@ export class MetronomeEngine {
   setAllBarRepeats(repeats: Record<number, BarRepeatSpec>) {
     this.barRepeats.clear();
     for (const [key, value] of Object.entries(repeats)) {
-      this.barRepeats.set(Number(key), { ...value });
+      this.barRepeats.set(Number(key), { ...value, layers: value.layers ? value.layers.map(l => ({ ...l })) : undefined });
     }
     this.invalidateScheduleCache();
     if (this.isRunning) {
