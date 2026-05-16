@@ -1073,7 +1073,7 @@ export class MetronomeEngine {
 
     const btSlice = this.beatTypes.slice(minBeat, maxBeat + 1);
     const subs: Array<[number, BeatType[]]> = [];
-    const reps: Array<[number, { type: string; value: number }]> = [];
+    const reps: Array<[number, BarRepeatSpec]> = [];
     const ovs: Array<[number, number]> = [];
     for (let b = minBeat; b <= maxBeat; b++) {
       const s = this.beatSubdivisions.get(b);
