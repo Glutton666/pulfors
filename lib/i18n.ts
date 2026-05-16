@@ -792,6 +792,8 @@ export const translations = {
     ssRimshot:          { ko: "림샷", en: "Rimshot" },
     ssTriangle:         { ko: "트라이앵글", en: "Triangle" },
     ssHihat:            { ko: "하이햇", en: "Hi-hat" },
+    minuteSuffix:       { ko: "분", en: "m" },
+    secondSuffix:       { ko: "초", en: "s" },
   },
 } as const satisfies TranslationsShape;
 

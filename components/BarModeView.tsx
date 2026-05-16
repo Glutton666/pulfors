@@ -1218,7 +1218,7 @@ export function BarModeView({
               {barTimeDisplay}
             </Text>
             <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_400Regular" }}>
-              {beatsPerMeasure} bars
+              {beatsPerMeasure} {t("barModeView", "barsDisplay")}
             </Text>
             <View style={{ flexDirection: "row", gap: 3, marginTop: 2 }}>
               <View style={[styles.clockDot, { backgroundColor: barClockMode === "stopwatch" ? C.accent : C.overlay08 }]} />
@@ -1298,14 +1298,14 @@ export function BarModeView({
                 <Pressable onPress={() => setRepMin(v => Math.max(0, v - 1))} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                   <Ionicons name="remove" size={ms(14, 0.4)} color={C.textSecondary} />
                 </Pressable>
-                <Text style={{ color: C.text, fontSize: 18, fontFamily: "SpaceGrotesk_700Bold", minWidth: 30, textAlign: "center" }}>{repMin}m</Text>
+                <Text style={{ color: C.text, fontSize: 18, fontFamily: "SpaceGrotesk_700Bold", minWidth: 30, textAlign: "center" }}>{repMin}{t("barModeView", "minuteSuffix")}</Text>
                 <Pressable onPress={() => setRepMin(v => Math.min(59, v + 1))} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                   <Ionicons name="add" size={ms(14, 0.4)} color={C.textSecondary} />
                 </Pressable>
                 <Pressable onPress={() => setRepSec(v => Math.max(0, v - 5))} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                   <Ionicons name="remove" size={ms(14, 0.4)} color={C.textSecondary} />
                 </Pressable>
-                <Text style={{ color: C.text, fontSize: 18, fontFamily: "SpaceGrotesk_700Bold", minWidth: 30, textAlign: "center" }}>{repSec}s</Text>
+                <Text style={{ color: C.text, fontSize: 18, fontFamily: "SpaceGrotesk_700Bold", minWidth: 30, textAlign: "center" }}>{repSec}{t("barModeView", "secondSuffix")}</Text>
                 <Pressable onPress={() => setRepSec(v => Math.min(59, v + 5))} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                   <Ionicons name="add" size={ms(14, 0.4)} color={C.textSecondary} />
                 </Pressable>
@@ -1471,14 +1471,14 @@ export function BarModeView({
                 <Pressable onPress={() => setBlockRepMin(v => Math.max(0, v - 1))} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                   <Ionicons name="remove" size={ms(14, 0.4)} color={C.textSecondary} />
                 </Pressable>
-                <Text style={{ color: C.text, fontSize: 18, fontFamily: "SpaceGrotesk_700Bold", minWidth: 30, textAlign: "center" }}>{blockRepMin}m</Text>
+                <Text style={{ color: C.text, fontSize: 18, fontFamily: "SpaceGrotesk_700Bold", minWidth: 30, textAlign: "center" }}>{blockRepMin}{t("barModeView", "minuteSuffix")}</Text>
                 <Pressable onPress={() => setBlockRepMin(v => Math.min(59, v + 1))} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                   <Ionicons name="add" size={ms(14, 0.4)} color={C.textSecondary} />
                 </Pressable>
                 <Pressable onPress={() => setBlockRepSec(v => Math.max(0, v - 5))} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                   <Ionicons name="remove" size={ms(14, 0.4)} color={C.textSecondary} />
                 </Pressable>
-                <Text style={{ color: C.text, fontSize: 18, fontFamily: "SpaceGrotesk_700Bold", minWidth: 30, textAlign: "center" }}>{blockRepSec}s</Text>
+                <Text style={{ color: C.text, fontSize: 18, fontFamily: "SpaceGrotesk_700Bold", minWidth: 30, textAlign: "center" }}>{blockRepSec}{t("barModeView", "secondSuffix")}</Text>
                 <Pressable onPress={() => setBlockRepSec(v => Math.min(59, v + 5))} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                   <Ionicons name="add" size={ms(14, 0.4)} color={C.textSecondary} />
                 </Pressable>
