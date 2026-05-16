@@ -540,6 +540,82 @@ test("pureProcessOuterCached: 점프 진행 중(state.jump.total>0)에는 finger
   assert.equal(s.ticks.length, 2, "그래도 처리는 정상 수행");
 });
 
+test("barRepeat.layers 추가 시 캐시 무효화 + 스케줄에 레이어 ticks 반영", () => {
+  const engine = new MetronomeEngine();
+  engine.setBeatsPerMeasure(4);
+  engine.setBpm(120);
+
+  // 레이어 없이 초기 빌드
+  engine.buildScheduleOnly();
+  assert.equal(engine._wasLastBuildCacheHit(), false);
+  const before = engine.getScheduleInfo();
+  const beforeLayerTicks = before.ticks.filter(t => t.layerIndex > 0);
+
+  // 같은 입력 → 캐시 적중
+  engine.buildScheduleOnly();
+  assert.equal(engine._wasLastBuildCacheHit(), true);
+
+  // 바 0에 레이어 추가
+  engine.setBarRepeat(0, {
+    type: "count",
+    value: 1,
+    layers: [{ subdivisions: ["normal", "normal"], soundSet: "woodblock" }],
+  });
+
+  // 레이어 변경 → 캐시 무효화
+  engine.buildScheduleOnly();
+  assert.equal(engine._wasLastBuildCacheHit(), false, "layers 변경은 캐시 무효화를 일으켜야 함");
+
+  const after = engine.getScheduleInfo();
+  const afterLayerTicks = after.ticks.filter(t => t.layerIndex > 0);
+  assert.ok(afterLayerTicks.length > beforeLayerTicks.length, "레이어 ticks이 스케줄에 추가되어야 함");
+  assert.ok(afterLayerTicks.some(t => t.layerSoundSet === "woodblock"), "레이어 soundSet이 tick에 전파되어야 함");
+});
+
+test("barRepeat.layers 변경(soundSet 교체) 시 캐시 무효화 + 새 soundSet 반영", () => {
+  const engine = new MetronomeEngine();
+  engine.setBeatsPerMeasure(4);
+  engine.setBpm(120);
+  engine.setBarRepeat(0, {
+    type: "count",
+    value: 1,
+    layers: [{ subdivisions: ["normal"], soundSet: "classic" }],
+  });
+
+  engine.buildScheduleOnly();
+  const tick1 = engine.getScheduleInfo().ticks.find(t => t.layerIndex > 0);
+  assert.equal(tick1?.layerSoundSet, "classic");
+
+  // soundSet을 woodblock으로 교체
+  engine.setBarRepeat(0, {
+    type: "count",
+    value: 1,
+    layers: [{ subdivisions: ["normal"], soundSet: "woodblock" }],
+  });
+
+  engine.buildScheduleOnly();
+  assert.equal(engine._wasLastBuildCacheHit(), false, "soundSet 교체는 캐시 무효화");
+
+  const tick2 = engine.getScheduleInfo().ticks.find(t => t.layerIndex > 0);
+  assert.equal(tick2?.layerSoundSet, "woodblock", "새 soundSet이 tick에 반영되어야 함");
+});
+
+test("getAllBarRepeats: layers 포함 반환 + 반환값 변형이 내부 상태에 영향 없음", () => {
+  const engine = new MetronomeEngine();
+  const layers = [{ subdivisions: ["normal", "normal"], soundSet: "hihat" }];
+  engine.setBarRepeat(2, { type: "count", value: 2, layers });
+
+  const got = engine.getAllBarRepeats();
+  assert.deepEqual(got[2].layers, layers, "getAllBarRepeats가 layers를 반환해야 함");
+
+  // 반환된 layers 배열을 변형
+  got[2].layers![0].soundSet = "cowbell";
+
+  // 재조회 시 내부 상태는 그대로여야 함 (깊은 복사 보장)
+  const got2 = engine.getAllBarRepeats();
+  assert.equal(got2[2].layers![0].soundSet, "hihat", "외부 변형이 내부 상태에 영향 없어야 함");
+});
+
 test("pureProcessOuterCached: jumpToBlock 블록 캐시 적중 시 jumpProcessed에 대상 추가", () => {
   const blocks: LoopBlockData[] = [
     { startBeat: 0, endBeat: 1, type: "count", value: 1, jumpToBlock: 1, jumpCount: 1 },

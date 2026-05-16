@@ -996,12 +996,12 @@ export class MetronomeEngine {
     this.scheduleIndex = 0;
   }
 
-  getScheduleInfo(): { ticks: { time: number; type: BeatType; beat: number; subBeat: number; repeatIteration: number; barRepeatIteration: number }[]; durationMs: number } {
+  getScheduleInfo(): { ticks: ScheduledTick[]; durationMs: number } {
     if (this.schedule.length === 0 || this.scheduleDirty) {
       this.buildScheduleOnly();
     }
     return {
-      ticks: this.schedule.map(t => ({ time: t.time, type: t.type, beat: t.beat, subBeat: t.subBeat, repeatIteration: t.repeatIteration, barRepeatIteration: t.barRepeatIteration })),
+      ticks: this.schedule.slice(),
       durationMs: this.measureDurationMs,
     };
   }
@@ -1248,7 +1248,7 @@ export class MetronomeEngine {
     const subKeys = [...this.beatSubdivisions.keys()].sort((a, b) => a - b);
     const subs: Array<[number, BeatType[]]> = subKeys.map(k => [k, this.beatSubdivisions.get(k)!]);
     const repKeys = [...this.barRepeats.keys()].sort((a, b) => a - b);
-    const reps: Array<[number, { type: string; value: number }]> = repKeys.map(k => [k, this.barRepeats.get(k)!]);
+    const reps: Array<[number, BarRepeatSpec]> = repKeys.map(k => [k, this.barRepeats.get(k)!]);
     const ovKeys = [...this.barBpmOverrides.keys()].sort((a, b) => a - b);
     const ovs: Array<[number, number]> = ovKeys.map(k => [k, this.barBpmOverrides.get(k)!]);
     return JSON.stringify({
