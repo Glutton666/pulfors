@@ -1103,27 +1103,60 @@ export default function MetronomeScreen() {
     return map;
   }, []);
 
+  const getLayerClickPCMsForSchedule = useCallback(async (
+    ticks: TickInfo[]
+  ): Promise<Map<string, ClickPCMs>> => {
+    const soundSetByName = new Set<string>();
+    const fallbackByIndex = new Map<number, string>();
+    for (const tick of ticks) {
+      const li = tick.layerIndex ?? 0;
+      if (li > 0) {
+        if (tick.layerSoundSet) {
+          soundSetByName.add(tick.layerSoundSet);
+        } else {
+          const ss = layerSoundSetsRef.current[li] || soundSetRef.current;
+          fallbackByIndex.set(li, ss);
+          soundSetByName.add(ss);
+        }
+      }
+    }
+    const loaded = new Map<string, ClickPCMs>();
+    await Promise.all([...soundSetByName].map(async (ss) => {
+      const pcms = await getClickPCMs(ss as SoundSet);
+      loaded.set(ss, pcms);
+    }));
+    const map = new Map<string, ClickPCMs>(loaded);
+    for (const [li, ss] of fallbackByIndex) {
+      const pcms = loaded.get(ss);
+      if (pcms) map.set(`#${li}`, pcms);
+    }
+    return map;
+  }, [getClickPCMs]);
+
   const buildRenderedPlayer = useCallback(async (): Promise<ExpoAudioPlayer | null> => {
     const engine = engineRef.current;
     if (!engine) return null;
 
     try {
       const scheduleInfo = engine.getScheduleInfo();
-      const [clickPCMs] = await Promise.all([
+      const ticks = scheduleInfo.ticks as TickInfo[];
+      const [clickPCMs, layerClickPCMs] = await Promise.all([
         getClickPCMs(soundSetRef.current),
+        getLayerClickPCMsForSchedule(ticks),
       ]);
       const samplePCMs = new Map<string, SamplePCMEntry>();
 
       await new Promise(r => setTimeout(r, 0));
 
       const pcm = renderMeasure({
-        schedule: scheduleInfo.ticks as TickInfo[],
+        schedule: ticks,
         measureDurationMs: scheduleInfo.durationMs,
         clickPCMs,
         samplePCMs,
         clickVolume: 1.0,
         sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current * 10.0 : 0,
         metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
+        layerClickPCMs,
       });
 
       const wavUri = await saveRenderedWav(pcm);
@@ -1141,7 +1174,7 @@ export default function MetronomeScreen() {
       captureBreadcrumb({ category: "pre-render", message: "Failed, falling back to per-tick audio", level: "warning", data: { error: String(e) } });
       return null;
     }
-  }, [getClickPCMs, getSamplePCMs]);
+  }, [getClickPCMs, getSamplePCMs, getLayerClickPCMsForSchedule]);
 
   const warmupAudioPlayers = useCallback(async () => {
     try {
@@ -1235,16 +1268,21 @@ export default function MetronomeScreen() {
       if (Platform.OS === "web") {
         try {
           const scheduleInfo = engine.getScheduleInfo();
-          const clickPCMs = await getClickPCMs(soundSetRef.current);
+          const ticks = scheduleInfo.ticks as TickInfo[];
+          const [clickPCMs, layerClickPCMs] = await Promise.all([
+            getClickPCMs(soundSetRef.current),
+            getLayerClickPCMsForSchedule(ticks),
+          ]);
           if (!engine.getIsRunning()) return;
           const pcm = renderMeasure({
-            schedule: scheduleInfo.ticks as TickInfo[],
+            schedule: ticks,
             measureDurationMs: scheduleInfo.durationMs,
             clickPCMs,
             samplePCMs: new Map(),
             clickVolume: 1.0,
             sampleVolume: 0,
             metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
+            layerClickPCMs,
           });
           engine.setPendingMeasureStartAction(() => {
             if (!engine.getIsRunning()) return;
@@ -1287,7 +1325,7 @@ export default function MetronomeScreen() {
         }
       }
     }, 300);
-  }, [stopRenderedAudio, buildRenderedPlayer, getClickPCMs]);
+  }, [stopRenderedAudio, buildRenderedPlayer, getClickPCMs, getLayerClickPCMsForSchedule]);
 
   const invalidateSamplePCMCache = useCallback((key?: string) => {
     if (key) {
@@ -2090,15 +2128,20 @@ export default function MetronomeScreen() {
 
           try {
             const scheduleInfo = engine.getScheduleInfo();
-            const clickPCMs = await getClickPCMs(soundSetRef.current);
+            const ticks = scheduleInfo.ticks as TickInfo[];
+            const [clickPCMs, layerClickPCMs] = await Promise.all([
+              getClickPCMs(soundSetRef.current),
+              getLayerClickPCMsForSchedule(ticks),
+            ]);
             const pcm = renderMeasure({
-              schedule: scheduleInfo.ticks as TickInfo[],
+              schedule: ticks,
               measureDurationMs: scheduleInfo.durationMs,
               clickPCMs,
               samplePCMs: new Map(),
               clickVolume: 1.0,
               sampleVolume: 0,
               metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
+              layerClickPCMs,
             });
             const loop = playWebRenderedLoop(pcm);
             webRenderedLoopRef.current = loop;
@@ -2143,7 +2186,7 @@ export default function MetronomeScreen() {
         setIsPreparing(false);
       }
     }
-  }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure, getClickPCMs]);
+  }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure, getClickPCMs, getLayerClickPCMsForSchedule]);
 
   const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
@@ -2914,15 +2957,20 @@ export default function MetronomeScreen() {
 
         try {
           const scheduleInfo = engine.getScheduleInfo();
-          const clickPCMs = await getClickPCMs(soundSetRef.current);
+          const ticks = scheduleInfo.ticks as TickInfo[];
+          const [clickPCMs, layerClickPCMs] = await Promise.all([
+            getClickPCMs(soundSetRef.current),
+            getLayerClickPCMsForSchedule(ticks),
+          ]);
           const pcm = renderMeasure({
-            schedule: scheduleInfo.ticks as TickInfo[],
+            schedule: ticks,
             measureDurationMs: scheduleInfo.durationMs,
             clickPCMs,
             samplePCMs: new Map(),
             clickVolume: 1.0,
             sampleVolume: 0,
             metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
+            layerClickPCMs,
           });
           const loop = playWebRenderedLoop(pcm);
           webRenderedLoopRef.current = loop;
@@ -2963,7 +3011,7 @@ export default function MetronomeScreen() {
       captureBreadcrumb({ category: "metronome", message: "startMetronome error", level: "error", data: { error: String(e) } });
       setIsPreparing(false);
     }
-  }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio, getClickPCMs]);
+  }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio, getClickPCMs, getLayerClickPCMsForSchedule]);
 
   useEffect(() => {
     const engine = engineRef.current;

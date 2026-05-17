@@ -24,6 +24,8 @@ export interface TickInfo {
   subBeat: number;
   repeatIteration: number;
   barRepeatIteration: number;
+  layerIndex?: number;
+  layerSoundSet?: string;
 }
 
 export interface DecodedSample {
@@ -296,6 +298,7 @@ export function renderMeasure(params: {
   sampleVolume: number;
   metronomeChannel?: SampleChannel;
   sampleChannels?: Record<string, SampleChannel>;
+  layerClickPCMs?: Map<string, ClickPCMs>;
 }): Float32Array | { left: Float32Array; right: Float32Array } {
   const {
     schedule,
@@ -306,6 +309,7 @@ export function renderMeasure(params: {
     sampleVolume,
     metronomeChannel = "both",
     sampleChannels = {},
+    layerClickPCMs,
   } = params;
   const stereoMode =
     metronomeChannel !== "both" ||
@@ -348,10 +352,18 @@ export function renderMeasure(params: {
         const offsetSamples = copyOffset + Math.round((tick.time / 1000) * RENDER_SR);
         const key = `${tick.beat}-${tick.subBeat}`;
 
+        const isLayerTick = (tick.layerIndex ?? 0) > 0;
+        let effectiveClickPCMs = clickPCMs;
+        if (isLayerTick && layerClickPCMs) {
+          const bySet = tick.layerSoundSet ? layerClickPCMs.get(tick.layerSoundSet) : undefined;
+          const byIdx = layerClickPCMs.get(`#${tick.layerIndex ?? 0}`);
+          effectiveClickPCMs = bySet ?? byIdx ?? clickPCMs;
+        }
+
         let clickPCM: Float32Array;
-        if (tick.type === "strong") clickPCM = clickPCMs.strong;
-        else if (tick.type === "accent") clickPCM = clickPCMs.high;
-        else clickPCM = clickPCMs.low;
+        if (tick.type === "strong") clickPCM = effectiveClickPCMs.strong;
+        else if (tick.type === "accent") clickPCM = effectiveClickPCMs.high;
+        else clickPCM = effectiveClickPCMs.low;
         if (right) {
           mixToChannel(left, right, clickPCM, offsetSamples, clickVolume, metronomeChannel);
         } else {
