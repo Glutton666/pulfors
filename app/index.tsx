@@ -3469,7 +3469,8 @@ export default function MetronomeScreen() {
     setLoopBlocks(blocks);
     engineRef.current?.setLoopBlocks(blocks);
     barConfigRef.current.loopBlocks = [...blocks];
-  }, []);
+    scheduleReRender();
+  }, [scheduleReRender]);
 
   const fullScreenResetFlash = useSharedValue(0);
   const fullScreenResetFlashStyle = useAnimatedStyle(() => ({
