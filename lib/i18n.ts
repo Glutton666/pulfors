@@ -794,6 +794,17 @@ export const translations = {
     ssHihat:            { ko: "하이햇", en: "Hi-hat" },
     minuteSuffix:       { ko: "분", en: "m" },
     secondSuffix:       { ko: "초", en: "s" },
+    playLabel:          { ko: "재생", en: "Play" },
+    stopLabel:          { ko: "정지", en: "Stop" },
+    loopModeLoop:       { ko: "반복", en: "Loop" },
+    loopModeOnce:       { ko: "한 번", en: "Once" },
+    blockModeSequential: { ko: "순서대로", en: "Sequential" },
+    blockModeLoop:      { ko: "반복", en: "Loop" },
+    blockModeRandom:    { ko: "랜덤", en: "Random" },
+    hintSwitchToOnce:   { ko: "길게 누르면 한 번만 재생 모드로 변경", en: "Long press to switch to once mode" },
+    hintSwitchToLoop:   { ko: "길게 누르면 반복 재생 모드로 변경", en: "Long press to switch to loop mode" },
+    beatStepperDecrease: { ko: "박자 줄이기", en: "Decrease beats" },
+    beatStepperIncrease: { ko: "박자 늘리기", en: "Increase beats" },
   },
 } as const satisfies TranslationsShape;
 

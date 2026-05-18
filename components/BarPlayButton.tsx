@@ -3,6 +3,7 @@ import { View, Pressable, Platform, ActivityIndicator, PanResponder, Animated, t
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Spacing } from "@/constants/tokens";
+import type { TranslationFn } from "@/lib/i18n";
 
 export interface BarPlayButtonProps {
   isPlaying: boolean;
@@ -20,6 +21,7 @@ export interface BarPlayButtonProps {
   badgeIconSize: number;
   sizeOverride?: { width: number; height: number; borderRadius: number };
   testID?: string;
+  t: TranslationFn;
 }
 
 export function BarPlayButton({
@@ -38,6 +40,7 @@ export function BarPlayButton({
   badgeIconSize,
   sizeOverride,
   testID = "bar-play-button",
+  t,
 }: BarPlayButtonProps) {
   const shakeXRef = useRef(0);
   const lastDirRef = useRef<"left" | "right" | null>(null);
@@ -90,6 +93,22 @@ export function BarPlayButton({
 
   const isRandom = blockPlayMode === "random";
 
+  const barLoopModeLabel = barLoopMode === "loop"
+    ? t("barModeView", "loopModeLoop")
+    : t("barModeView", "loopModeOnce");
+
+  const blockPlayModeLabel = blockPlayMode === "sequential"
+    ? t("barModeView", "blockModeSequential")
+    : blockPlayMode === "loop"
+    ? t("barModeView", "blockModeLoop")
+    : blockPlayMode === "random"
+    ? t("barModeView", "blockModeRandom")
+    : undefined;
+
+  const accessibilityValueText = blockPlayModeLabel
+    ? `${barLoopModeLabel}, ${blockPlayModeLabel}`
+    : barLoopModeLabel;
+
   return (
     <Animated.View style={{ transform: [{ translateX: shakeAnim }] }} {...shakePanel.panHandlers}>
       <Pressable
@@ -106,12 +125,13 @@ export function BarPlayButton({
         testID={testID}
         disabled={isPreparing}
         accessibilityRole="button"
-        accessibilityLabel={isPlaying ? "정지 / Stop" : "재생 / Play"}
+        accessibilityLabel={isPlaying ? t("barModeView", "stopLabel") : t("barModeView", "playLabel")}
+        accessibilityValue={{ text: accessibilityValueText }}
         accessibilityState={{ busy: isPreparing, disabled: isPreparing }}
         accessibilityHint={
           barLoopMode === "loop"
-            ? "길게 누르면 한 번만 재생 모드로 변경 / Long press to switch to once mode"
-            : "길게 누르면 반복 재생 모드로 변경 / Long press to switch to loop mode"
+            ? t("barModeView", "hintSwitchToOnce")
+            : t("barModeView", "hintSwitchToLoop")
         }
       >
         {isPreparing ? (
@@ -127,6 +147,8 @@ export function BarPlayButton({
       </Pressable>
       {barLoopMode === "loop" && (
         <View
+          accessible
+          accessibilityLabel={t("barModeView", "loopModeLoop")}
           style={{
             position: "absolute",
             top: -6,
@@ -144,6 +166,8 @@ export function BarPlayButton({
       )}
       {isRandom && !isPlaying && (
         <View
+          accessible
+          accessibilityLabel={t("barModeView", "blockModeRandom")}
           style={{
             position: "absolute",
             bottom: -6,

@@ -925,6 +925,7 @@ export function BarModeView({
             iconColor={C.textSecondary}
             baseStyle={[styles.stpBtn, { backgroundColor: C.overlay08 }]}
             testID="bar-beats-minus"
+            t={t}
           />
           <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_500Medium", alignSelf: "center", minWidth: 24, textAlign: "center" }}>
             {beatsPerMeasure}
@@ -937,6 +938,7 @@ export function BarModeView({
             iconColor={C.textSecondary}
             baseStyle={[styles.stpBtn, { backgroundColor: C.overlay08 }]}
             testID="bar-beats-plus"
+            t={t}
           />
         </View>
       </View>
@@ -1241,6 +1243,7 @@ export function BarModeView({
           backgroundColor={C.background}
           iconSize={ms(22, 0.4)}
           badgeIconSize={ms(9, 0.4)}
+          t={t}
         />
       </View>
 
