@@ -813,7 +813,7 @@ export function BarModeView({
     if (editingBeat === null || isPlaying) return;
     const val = type === "count" ? count : min * 60 + sec;
     if (val <= 0) return;
-    const rep: BarRepeat = { type, value: Math.max(2, val) };
+    const rep: BarRepeat = { type, value: type === "count" ? Math.max(2, val) : Math.max(1, val) };
     if (bpmOverride !== null && bpmOverride > 0) rep.bpm = bpmOverride;
     const existing = barRepeats[editingBeat];
     if (existing) {
@@ -842,7 +842,7 @@ export function BarModeView({
     } else {
       onBarRepeatChange(editingBeat, null);
     }
-    setRepType("count"); setRepCount(2); setRepBpm(null);
+    setRepType("count"); setRepCount(2); setRepMin(0); setRepSec(30); setRepBpm(null);
   }, [editingBeat, isPlaying, barRepeats, onBarRepeatChange]);
 
   const editingLayers: BarLayer[] = (editingRepeat?.layers) ?? [];
