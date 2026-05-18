@@ -830,7 +830,7 @@ export function BarModeView({
     if (editingBeat === null || isPlaying) return;
     const existing = barRepeats[editingBeat];
     if (!existing) return;
-    const hasOtherFields = existing.voltaMax || existing.isEnd || existing.jumpFromId || existing.jumpToId;
+    const hasOtherFields = existing.voltaMax || existing.isEnd || existing.jumpFromId || existing.jumpToId || existing.layers;
     if (hasOtherFields) {
       const rep: BarRepeat = { type: "count", value: 1 };
       if (existing.voltaMax) rep.voltaMax = existing.voltaMax;
@@ -1101,9 +1101,9 @@ export function BarModeView({
           </View>
         </View>
 
-        {/* 인라인 반복 패널 (바 선택 시 — 반복 유무와 관계없이 항상 표시) */}
-        {editingBeat !== null && !isPlaying && (
-          <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08 }]}>
+        {/* 인라인 반복 패널 (바 선택 시 — 반복 유무와 관계없이 항상 표시, 재생 중에는 읽기 전용) */}
+        {editingBeat !== null && (
+          <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, opacity: isPlaying ? 0.5 : 1 }]}>
             {/* 타입 토글 + 지우기 */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
               <Ionicons
@@ -1114,7 +1114,7 @@ export function BarModeView({
               {(["count", "duration"] as const).map(type => (
                 <Pressable
                   key={type}
-                  onPress={() => { setRepType(type); commitRepeat(type, repCount, repMin, repSec, repBpm); }}
+                  onPress={() => { if (!isPlaying) { setRepType(type); commitRepeat(type, repCount, repMin, repSec, repBpm); } }}
                   style={[styles.typeToggle, { backgroundColor: repType === type ? C.accent + "30" : C.overlay08, paddingHorizontal: 10, paddingVertical: 4 }]}
                 >
                   <Text style={{ color: repType === type ? C.accent : C.textSecondary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_600SemiBold" }}>
@@ -1123,7 +1123,7 @@ export function BarModeView({
                 </Pressable>
               ))}
               <View style={{ flex: 1 }} />
-              {editingRepeat && (
+              {editingRepeat && !isPlaying && (
                 <Pressable onPress={clearRepeat} hitSlop={8}>
                   <Ionicons name="close-circle" size={ms(14, 0.4)} color={C.textTertiary} />
                 </Pressable>
@@ -1134,14 +1134,14 @@ export function BarModeView({
               {repType === "count" ? (
                 <>
                   <Pressable
-                    onPress={() => { const c = Math.max(2, repCount - 1); setRepCount(c); commitRepeat(repType, c, repMin, repSec, repBpm); }}
+                    onPress={() => { if (!isPlaying) { const c = Math.max(2, repCount - 1); setRepCount(c); commitRepeat(repType, c, repMin, repSec, repBpm); } }}
                     style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
                   >
                     <Ionicons name="remove" size={ms(14, 0.4)} color={C.textSecondary} />
                   </Pressable>
                   <Text style={{ color: C.text, fontSize: 18, fontFamily: "SpaceGrotesk_700Bold", minWidth: 36, textAlign: "center" }}>×{repCount}</Text>
                   <Pressable
-                    onPress={() => { const c = Math.min(99, repCount + 1); setRepCount(c); commitRepeat(repType, c, repMin, repSec, repBpm); }}
+                    onPress={() => { if (!isPlaying) { const c = Math.min(99, repCount + 1); setRepCount(c); commitRepeat(repType, c, repMin, repSec, repBpm); } }}
                     style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
                   >
                     <Ionicons name="add" size={ms(14, 0.4)} color={C.textSecondary} />
@@ -1149,18 +1149,18 @@ export function BarModeView({
                 </>
               ) : (
                 <>
-                  <Pressable onPress={() => { const m = Math.max(0, repMin - 1); setRepMin(m); commitRepeat(repType, repCount, m, repSec, repBpm); }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                  <Pressable onPress={() => { if (!isPlaying) { const m = Math.max(0, repMin - 1); setRepMin(m); commitRepeat(repType, repCount, m, repSec, repBpm); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                     <Ionicons name="remove" size={ms(13, 0.4)} color={C.textSecondary} />
                   </Pressable>
                   <Text style={{ color: C.text, fontSize: 16, fontFamily: "SpaceGrotesk_700Bold", minWidth: 28, textAlign: "center" }}>{repMin}{t("barModeView", "minuteSuffix")}</Text>
-                  <Pressable onPress={() => { const m = Math.min(59, repMin + 1); setRepMin(m); commitRepeat(repType, repCount, m, repSec, repBpm); }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                  <Pressable onPress={() => { if (!isPlaying) { const m = Math.min(59, repMin + 1); setRepMin(m); commitRepeat(repType, repCount, m, repSec, repBpm); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                     <Ionicons name="add" size={ms(13, 0.4)} color={C.textSecondary} />
                   </Pressable>
-                  <Pressable onPress={() => { const s = Math.max(0, repSec - 5); setRepSec(s); commitRepeat(repType, repCount, repMin, s, repBpm); }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                  <Pressable onPress={() => { if (!isPlaying) { const s = Math.max(0, repSec - 5); setRepSec(s); commitRepeat(repType, repCount, repMin, s, repBpm); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                     <Ionicons name="remove" size={ms(13, 0.4)} color={C.textSecondary} />
                   </Pressable>
                   <Text style={{ color: C.text, fontSize: 16, fontFamily: "SpaceGrotesk_700Bold", minWidth: 28, textAlign: "center" }}>{repSec}{t("barModeView", "secondSuffix")}</Text>
-                  <Pressable onPress={() => { const s = Math.min(59, repSec + 5); setRepSec(s); commitRepeat(repType, repCount, repMin, s, repBpm); }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                  <Pressable onPress={() => { if (!isPlaying) { const s = Math.min(59, repSec + 5); setRepSec(s); commitRepeat(repType, repCount, repMin, s, repBpm); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                     <Ionicons name="add" size={ms(13, 0.4)} color={C.textSecondary} />
                   </Pressable>
                 </>
@@ -1168,30 +1168,32 @@ export function BarModeView({
               <View style={{ flex: 1 }} />
               {repBpm !== null ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <Pressable onPress={() => { const v = Math.max(20, repBpm - 5); setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                  <Pressable onPress={() => { if (!isPlaying) { const v = Math.max(20, repBpm - 5); setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                     <Ionicons name="remove" size={ms(13, 0.4)} color={C.accent} />
                   </Pressable>
                   <TextInput
                     style={[styles.bpmInput, { color: C.accent, borderBottomColor: C.accent }]}
                     value={String(repBpm)}
                     keyboardType="number-pad"
+                    editable={!isPlaying}
                     onEndEditing={e => {
+                      if (isPlaying) return;
                       const v = parseInt(e.nativeEvent.text, 10);
                       if (!isNaN(v) && v >= 20 && v <= 300) { setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); }
                       else if (!e.nativeEvent.text) { setRepBpm(null); commitRepeat(repType, repCount, repMin, repSec, null); }
                     }}
                     selectTextOnFocus
                   />
-                  <Pressable onPress={() => { const v = Math.min(300, repBpm + 5); setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                  <Pressable onPress={() => { if (!isPlaying) { const v = Math.min(300, repBpm + 5); setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                     <Ionicons name="add" size={ms(13, 0.4)} color={C.accent} />
                   </Pressable>
-                  <Pressable onPress={() => { setRepBpm(null); commitRepeat(repType, repCount, repMin, repSec, null); }} hitSlop={8}>
+                  <Pressable onPress={() => { if (!isPlaying) { setRepBpm(null); commitRepeat(repType, repCount, repMin, repSec, null); } }} hitSlop={8}>
                     <Ionicons name="close-circle" size={ms(14, 0.4)} color={C.textTertiary} />
                   </Pressable>
                 </View>
               ) : (
                 <Pressable
-                  onPress={() => { const v = bpm ?? 120; setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); }}
+                  onPress={() => { if (!isPlaying) { const v = bpm ?? 120; setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); } }}
                   style={[styles.typeToggle, { backgroundColor: C.overlay08, paddingHorizontal: 10, paddingVertical: 4 }]}
                 >
                   <Text style={{ color: C.textTertiary, fontSize: FontSize.micro }}>+ BPM</Text>
