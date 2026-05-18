@@ -3462,7 +3462,8 @@ export default function MetronomeScreen() {
       engineRef.current?.setBarBpmOverride(beat, repeat?.bpm ?? null);
       return next;
     });
-  }, []);
+    scheduleReRender();
+  }, [scheduleReRender]);
 
   const handleLoopBlocksChange = useCallback((blocks: LoopBlock[]) => {
     setLoopBlocks(blocks);

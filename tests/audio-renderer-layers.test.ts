@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { renderMeasure, getRenderSampleRate, type ClickPCMs, type TickInfo } from "../lib/audio-renderer";
+import { MetronomeEngine } from "../lib/metronome-engine";
 
 const SR = getRenderSampleRate(); // 44100
 
@@ -187,4 +188,75 @@ test("레이어 틱과 메인 틱이 동일 오프셋에 있으면 두 PCM이 �
   // 두 PCM이 합산되므로 peak ≈ 0.6 (합산 후 클램프 전 구간)
   const peak = peakAt(buf, 0);
   assert.ok(peak > 0.5, `메인+레이어 PCM 합산: peak=${peak}`);
+});
+
+// --- MetronomeEngine 통합 테스트 (Task #159) ---
+
+test("MetronomeEngine.setBarRepeat(layers) → getScheduleInfo에 layerIndex>0 틱 포함", () => {
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+
+  // barRepeat 없이는 레이어 틱이 없어야 한다
+  const before = engine.getScheduleInfo();
+  const beforeLayerTicks = before.ticks.filter(t => t.layerIndex > 0);
+  assert.equal(beforeLayerTicks.length, 0, "초기 상태에는 레이어 틱 없음");
+
+  // beat 1에 barRepeat + layers 설정
+  engine.setBarRepeat(1, {
+    type: "count",
+    value: 1,
+    layers: [{ subdivisions: ["normal", "normal"], soundSet: "woodblock" }],
+  });
+
+  const after = engine.getScheduleInfo();
+  const afterLayerTicks = after.ticks.filter(t => t.layerIndex > 0);
+  assert.ok(afterLayerTicks.length > 0, "barRepeat.layers 설정 후 레이어 틱이 스케줄에 포함돼야 함");
+  assert.ok(
+    afterLayerTicks.every(t => t.layerSoundSet === "woodblock"),
+    "모든 레이어 틱에 layerSoundSet='woodblock'이 전파돼야 함",
+  );
+});
+
+test("barRepeat.layers 틱들이 renderMeasure에 전달되면 해당 오프셋에서 비-0 버퍼 생성", () => {
+  const LAYER_VAL = 0.75;
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(2);
+
+  // beat 1, 서브디비전 2개 → 비트 중간(500ms 근처)에 레이어 틱 발생
+  engine.setBarRepeat(1, {
+    type: "count",
+    value: 1,
+    layers: [{ subdivisions: ["normal", "normal"], soundSet: "woodblock" }],
+  });
+
+  const scheduleInfo = engine.getScheduleInfo();
+  const layerTicks = scheduleInfo.ticks.filter(t => t.layerIndex > 0);
+  assert.ok(layerTicks.length > 0, "레이어 틱이 스케줄에 포함돼야 함");
+
+  const mainPCMs = makeClickPCMs(0.2, 0.2, 0.2);
+  const layerPCMs = makeClickPCMs(LAYER_VAL, LAYER_VAL, LAYER_VAL);
+
+  const layerClickPCMs = new Map<string, ClickPCMs>();
+  layerClickPCMs.set("woodblock", layerPCMs);
+
+  const result = renderMeasure({
+    schedule: scheduleInfo.ticks as TickInfo[],
+    measureDurationMs: scheduleInfo.durationMs,
+    clickPCMs: mainPCMs,
+    samplePCMs: new Map(),
+    clickVolume: 1.0,
+    sampleVolume: 0,
+    layerClickPCMs,
+  });
+
+  const buf = result instanceof Float32Array ? result : result.left;
+
+  // 각 레이어 틱 오프셋에서 레이어 PCM 값(0.75)이 렌더됐는지 확인
+  for (const tick of layerTicks) {
+    const offset = msToSample(tick.time);
+    const peak = peakAt(buf, offset);
+    assert.ok(peak > 0.5, `레이어 틱(time=${tick.time}ms) 오프셋에서 비-0 렌더: peak=${peak}`);
+  }
 });

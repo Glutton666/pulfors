@@ -8,6 +8,8 @@ module.exports = {
     // node:test / node:assert 브릿지
     "^node:test$": "<rootDir>/tests/_stubs/node-test.js",
     "^node:assert/strict$": "<rootDir>/tests/_stubs/node-assert.js",
+    // @/ alias 경로의 바이너리 에셋 → 먼저 stub 처리 (@/ 일반 alias보다 앞에 위치해야 함)
+    "^@/.*\\.(wav|mp3|png|jpg|jpeg|gif|webp|ttf|otf)$": "<rootDir>/tests/_stubs/asset-file.js",
     // 경로 별칭 (@/ → 프로젝트 루트)
     "^@/(.*)$": "<rootDir>/$1",
     // 바이너리 에셋 → 빈 stub
