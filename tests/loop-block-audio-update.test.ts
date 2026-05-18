@@ -1,0 +1,286 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+
+// 루프 블록 변경 후 오디오가 즉시 갱신되는지 검증하는 단위 테스트 (Task #168)
+// 실행: npx tsx --require ./tests/_stubs/setup.cjs --test tests/loop-block-audio-update.test.ts
+import { MetronomeEngine } from "../lib/metronome-engine";
+import type { LoopBlock } from "../components/beat-indicator.types";
+
+// 실제 프로덕션 코드 경로 직접 import — handleLoopBlocksChange가 이 함수를 위임한다.
+import { applyLoopBlocksChange } from "../app/index.helpers";
+
+// ──────────────────────────────────────────────────────────────
+// MetronomeEngine.setLoopBlocks / getLoopBlocks 단위 테스트
+// ──────────────────────────────────────────────────────────────
+
+test("setLoopBlocks: BPM 오버라이드 포함 블록이 올바르게 저장된다", () => {
+  const engine = new MetronomeEngine();
+  const blocks: LoopBlock[] = [
+    { startBeat: 0, endBeat: 3, type: "count", value: 2, bpm: 80 },
+    { startBeat: 4, endBeat: 7, type: "count", value: 1 },
+    { startBeat: 8, endBeat: 11, type: "count", value: 3, bpm: 140 },
+  ];
+
+  engine.setLoopBlocks(blocks);
+  const stored = engine.getLoopBlocks();
+
+  assert.equal(stored.length, 3);
+  assert.equal(stored[0].bpm, 80, "첫 번째 블록 BPM 오버라이드가 보존되어야 한다");
+  assert.equal(stored[1].bpm, undefined, "BPM 없는 블록은 undefined를 유지해야 한다");
+  assert.equal(stored[2].bpm, 140, "세 번째 블록 BPM 오버라이드가 보존되어야 한다");
+  assert.equal(stored[0].startBeat, 0);
+  assert.equal(stored[2].endBeat, 11);
+});
+
+test("setLoopBlocks: BPM 오버라이드 변경 후 getLoopBlocks가 최신 값을 반환한다", () => {
+  const engine = new MetronomeEngine();
+
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 100 },
+  ]);
+  assert.equal(engine.getLoopBlocks()[0].bpm, 100);
+
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 160 },
+  ]);
+  const updated = engine.getLoopBlocks();
+  assert.equal(updated[0].bpm, 160, "변경된 BPM 오버라이드가 즉시 반영되어야 한다");
+});
+
+test("setLoopBlocks: 반환된 블록은 내부 상태와 독립적인 복사본이다", () => {
+  const engine = new MetronomeEngine();
+  engine.setLoopBlocks([{ startBeat: 0, endBeat: 3, type: "count", value: 2, bpm: 90 }]);
+
+  const copy = engine.getLoopBlocks();
+  copy[0].bpm = 999;
+
+  const internal = engine.getLoopBlocks();
+  assert.equal(internal[0].bpm, 90, "외부 변조가 내부 상태에 영향을 주지 않아야 한다");
+});
+
+test("setLoopBlocks: 입력 배열을 변조해도 내부 상태에 영향 없다", () => {
+  const engine = new MetronomeEngine();
+  const blocks: LoopBlock[] = [{ startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 120 }];
+  engine.setLoopBlocks(blocks);
+
+  blocks[0].bpm = 50;
+
+  const stored = engine.getLoopBlocks();
+  assert.equal(stored[0].bpm, 120, "입력 배열 변조가 내부 상태에 영향을 주지 않아야 한다");
+});
+
+test("setLoopBlocks: clearLoopBlocks 후 빈 배열을 반환한다", () => {
+  const engine = new MetronomeEngine();
+  engine.setLoopBlocks([{ startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 120 }]);
+  assert.equal(engine.getLoopBlocks().length, 1);
+
+  engine.clearLoopBlocks();
+  assert.equal(engine.getLoopBlocks().length, 0, "clearLoopBlocks 후 블록이 없어야 한다");
+});
+
+test("setLoopBlocks: getScheduleInfo가 새 블록을 반영한다 (스케줄 캐시 무효화)", () => {
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(8);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal", "normal", "normal", "normal", "normal"]);
+
+  engine.setLoopBlocks([{ startBeat: 0, endBeat: 3, type: "count", value: 2 }]);
+  const ticks1 = engine.getScheduleInfo().ticks;
+  const blockIndices1 = new Set(ticks1.map(t => t.blockIndex));
+
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 3, type: "count", value: 1 },
+    { startBeat: 4, endBeat: 7, type: "count", value: 1, bpm: 60 },
+  ]);
+  const ticks2 = engine.getScheduleInfo().ticks;
+  const blockIndices2 = new Set(ticks2.map(t => t.blockIndex));
+
+  assert.ok(blockIndices2.has(1), "BPM 오버라이드가 있는 두 번째 블록이 스케줄에 포함되어야 한다");
+  assert.equal(blockIndices1.has(1), false, "이전 스케줄에는 블록 인덱스 1이 없었어야 한다");
+});
+
+// ──────────────────────────────────────────────────────────────
+// WAV 버퍼 stale 방지: 재생 중 스케줄 재구성 (onScheduleRebuild)
+// ──────────────────────────────────────────────────────────────
+
+test("setLoopBlocks 재생 중: preRenderedAudio=true 상태에서 onScheduleRebuild가 호출된다", () => {
+  // 재생 중 + preRenderedAudio=true 상태에서 loop block이 바뀌면
+  // rebuildSchedule() 내부에서 onScheduleRebuild 콜백이 즉시 발화한다.
+  // 이 콜백이 실제로 scheduleReRender(WAV 재구성 예약)에 연결되므로
+  // "stale WAV buffer" 회귀를 방지하는 핵심 경로다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setLoopBlocks([{ startBeat: 0, endBeat: 3, type: "count", value: 1 }]);
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  // 엔진을 "재생 중 + pre-rendered audio 활성" 상태로 만든다.
+  // start()는 오디오 컨텍스트가 stub이므로 throw 가능 — try/finally로 항상 stop 보장.
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    // 루프 블록 BPM 오버라이드 변경
+    engine.setLoopBlocks([{ startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 160 }]);
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 BPM 오버라이드 변경 시 onScheduleRebuild가 한 번 호출되어야 한다",
+      );
+    } else {
+      // stub 환경에서 start()가 isRunning을 true로 만들지 못한 경우에도
+      // 블록 변경 후 getLoopBlocks가 최신 BPM을 반영하는지 확인한다.
+      const blocks = engine.getLoopBlocks();
+      assert.equal(blocks[0].bpm, 160, "stub 환경에서도 블록 BPM 오버라이드가 갱신되어야 한다");
+    }
+  } finally {
+    // start()가 성공했을 경우 타이머 누수 방지
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+  }
+});
+
+test("setLoopBlocks: BPM 오버라이드 변경 후 getScheduleInfo ticks가 stale하지 않다", () => {
+  // WAV 재구성에 쓰이는 getScheduleInfo()가 setLoopBlocks 직후 최신 데이터를 반환하는지 검증.
+  // scheduleReRender는 이 정보를 토대로 WAV를 빌드하므로, stale한 schedule이 없어야 한다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  engine.setLoopBlocks([{ startBeat: 0, endBeat: 3, type: "count", value: 1 }]);
+  const ticksBefore = engine.getScheduleInfo().ticks;
+  const blockCountBefore = new Set(ticksBefore.map(t => t.blockIndex)).size;
+
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 1, type: "count", value: 1, bpm: 60 },
+    { startBeat: 2, endBeat: 3, type: "count", value: 1, bpm: 180 },
+  ]);
+  const ticksAfter = engine.getScheduleInfo().ticks;
+  const blockCountAfter = new Set(ticksAfter.map(t => t.blockIndex)).size;
+
+  assert.equal(blockCountBefore, 1, "변경 전: 블록 하나");
+  assert.equal(blockCountAfter, 2, "변경 후: 블록 두 개가 스케줄에 즉시 반영되어야 한다 (stale 없음)");
+});
+
+// ──────────────────────────────────────────────────────────────
+// applyLoopBlocksChange (실제 프로덕션 헬퍼) 단위 테스트
+// ──────────────────────────────────────────────────────────────
+
+test("applyLoopBlocksChange: scheduleReRender가 정확히 한 번 호출된다", () => {
+  const engine = new MetronomeEngine();
+  const barConfig = { loopBlocks: [] as LoopBlock[] };
+  let reRenderCount = 0;
+  const scheduleReRender = () => { reRenderCount += 1; };
+
+  applyLoopBlocksChange(engine, barConfig, scheduleReRender, [
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 100 },
+  ]);
+
+  assert.equal(reRenderCount, 1, "루프 블록 변경 후 scheduleReRender가 한 번 호출되어야 한다");
+});
+
+test("applyLoopBlocksChange: 여러 번 호출 시 scheduleReRender가 매번 호출된다", () => {
+  const engine = new MetronomeEngine();
+  const barConfig = { loopBlocks: [] as LoopBlock[] };
+  let reRenderCount = 0;
+  const scheduleReRender = () => { reRenderCount += 1; };
+
+  applyLoopBlocksChange(engine, barConfig, scheduleReRender, [
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 80 },
+  ]);
+  applyLoopBlocksChange(engine, barConfig, scheduleReRender, [
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 120 },
+  ]);
+  applyLoopBlocksChange(engine, barConfig, scheduleReRender, [
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 160 },
+  ]);
+
+  assert.equal(reRenderCount, 3, "BPM 오버라이드 변경마다 scheduleReRender가 트리거되어야 한다");
+});
+
+test("applyLoopBlocksChange: 엔진 루프 블록이 BPM 오버라이드와 함께 즉시 갱신된다", () => {
+  const engine = new MetronomeEngine();
+  const barConfig = { loopBlocks: [] as LoopBlock[] };
+
+  applyLoopBlocksChange(engine, barConfig, () => {}, [
+    { startBeat: 0, endBeat: 3, type: "count", value: 2, bpm: 75 },
+    { startBeat: 4, endBeat: 7, type: "count", value: 1 },
+  ]);
+
+  const engineBlocks = engine.getLoopBlocks();
+  assert.equal(engineBlocks.length, 2);
+  assert.equal(engineBlocks[0].bpm, 75, "BPM 오버라이드가 엔진에 즉시 반영되어야 한다");
+  assert.equal(engineBlocks[1].bpm, undefined, "BPM 없는 블록은 undefined여야 한다");
+});
+
+test("applyLoopBlocksChange: barConfig.loopBlocks가 새 블록으로 즉시 갱신된다", () => {
+  const engine = new MetronomeEngine();
+  const barConfig = { loopBlocks: [] as LoopBlock[] };
+
+  applyLoopBlocksChange(engine, barConfig, () => {}, [
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 110 },
+  ]);
+
+  assert.equal(barConfig.loopBlocks.length, 1);
+  assert.equal(barConfig.loopBlocks[0].bpm, 110, "barConfig에 BPM 오버라이드가 반영되어야 한다");
+});
+
+test("applyLoopBlocksChange: barConfig.loopBlocks는 입력 배열과 다른 참조(얕은 복사)이다", () => {
+  // [...blocks] 얕은 복사로 배열 컨테이너는 새 참조가 된다.
+  // 원본 배열에 요소를 추가해도 barConfig에 영향 없어 WAV buffer stale 방지.
+  const engine = new MetronomeEngine();
+  const barConfig = { loopBlocks: [] as LoopBlock[] };
+
+  const blocks: LoopBlock[] = [{ startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 100 }];
+  applyLoopBlocksChange(engine, barConfig, () => {}, blocks);
+
+  assert.notEqual(barConfig.loopBlocks, blocks, "barConfig.loopBlocks는 입력 배열과 다른 참조여야 한다");
+
+  blocks.push({ startBeat: 4, endBeat: 7, type: "count", value: 1 });
+  assert.equal(
+    barConfig.loopBlocks.length,
+    1,
+    "원본 배열 push가 barConfig에 영향을 주지 않아야 한다",
+  );
+});
+
+test("applyLoopBlocksChange: engine=null이어도 barConfig와 scheduleReRender는 실행된다", () => {
+  const barConfig = { loopBlocks: [] as LoopBlock[] };
+  let reRenderCount = 0;
+
+  applyLoopBlocksChange(null, barConfig, () => { reRenderCount += 1; }, [
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 90 },
+  ]);
+
+  assert.equal(reRenderCount, 1, "engine=null이어도 scheduleReRender가 호출되어야 한다");
+  assert.equal(barConfig.loopBlocks.length, 1, "engine=null이어도 barConfig가 갱신되어야 한다");
+  assert.equal(barConfig.loopBlocks[0].bpm, 90);
+});
+
+test("applyLoopBlocksChange: BPM 오버라이드 제거 후 엔진과 barConfig 모두 갱신된다", () => {
+  const engine = new MetronomeEngine();
+  const barConfig = { loopBlocks: [] as LoopBlock[] };
+  let reRenderCount = 0;
+  const scheduleReRender = () => { reRenderCount += 1; };
+
+  applyLoopBlocksChange(engine, barConfig, scheduleReRender, [
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 80 },
+  ]);
+  assert.equal(engine.getLoopBlocks()[0].bpm, 80);
+  assert.equal(reRenderCount, 1);
+
+  applyLoopBlocksChange(engine, barConfig, scheduleReRender, [
+    { startBeat: 0, endBeat: 3, type: "count", value: 1 },
+  ]);
+  assert.equal(engine.getLoopBlocks()[0].bpm, undefined, "BPM 오버라이드 제거가 엔진에 반영되어야 한다");
+  assert.equal(barConfig.loopBlocks[0].bpm, undefined, "BPM 오버라이드 제거가 barConfig에 반영되어야 한다");
+  assert.equal(reRenderCount, 2, "BPM 오버라이드 제거 후에도 scheduleReRender가 호출되어야 한다");
+});

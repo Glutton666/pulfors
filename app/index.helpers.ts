@@ -463,6 +463,31 @@ export function applyEntryToEngine(engine: EntryEngineSetters, entry: PracticeEn
   engine.setAllBarBpmOverrides(bpmOverrides);
 }
 
+/**
+ * handleLoopBlocksChange의 순수 로직 (엔진 갱신 + barConfig 갱신 + scheduleReRender).
+ * app/index.tsx의 useCallback이 이 함수를 호출해 실제 동작을 위임한다.
+ * React 상태 setter(setLoopBlocks)는 호출자가 별도로 수행한다.
+ *
+ * @param engine setLoopBlocks를 갖는 엔진 인터페이스 (null이면 스킵)
+ * @param barConfig barConfigRef.current — loopBlocks 필드가 갱신된다
+ * @param scheduleReRender WAV 버퍼 재구성을 예약하는 콜백
+ * @param blocks 새 루프 블록 배열
+ */
+export interface LoopBlocksTarget {
+  setLoopBlocks(blocks: LoopBlock[]): void;
+}
+
+export function applyLoopBlocksChange(
+  engine: LoopBlocksTarget | null,
+  barConfig: { loopBlocks: LoopBlock[] },
+  scheduleReRender: () => void,
+  blocks: LoopBlock[],
+): void {
+  engine?.setLoopBlocks(blocks);
+  barConfig.loopBlocks = [...blocks];
+  scheduleReRender();
+}
+
 export function createInitialBarConfig(beats = 4): BarConfig {
   return {
     beatsPerMeasure: beats,

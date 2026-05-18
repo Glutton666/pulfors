@@ -69,7 +69,7 @@ import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import PracticeStatsGraph from "@/components/PracticeStatsGraph";
 import { useDeepLink } from "@/contexts/DeepLinkContext";
 import { make_styles } from "./index.styles";
-import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks } from "./index.helpers";
+import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks, applyLoopBlocksChange } from "./index.helpers";
 import {
   type ActiveModal,
   type SgTgState,
@@ -3467,9 +3467,7 @@ export default function MetronomeScreen() {
 
   const handleLoopBlocksChange = useCallback((blocks: LoopBlock[]) => {
     setLoopBlocks(blocks);
-    engineRef.current?.setLoopBlocks(blocks);
-    barConfigRef.current.loopBlocks = [...blocks];
-    scheduleReRender();
+    applyLoopBlocksChange(engineRef.current ?? null, barConfigRef.current, scheduleReRender, blocks);
   }, [scheduleReRender]);
 
   const fullScreenResetFlash = useSharedValue(0);
