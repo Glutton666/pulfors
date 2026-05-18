@@ -1742,10 +1742,12 @@ export default function MetronomeScreen() {
 
   const updateSoundSet = useCallback(
     (value: SoundSet) => {
+      delete clickPCMCacheRef.current[value];
       setSoundSet(value);
       persistSettings({ soundSet: value });
+      scheduleReRender();
     },
-    [persistSettings]
+    [persistSettings, scheduleReRender]
   );
 
   const updateFlashMode = useCallback(
@@ -5023,8 +5025,13 @@ export default function MetronomeScreen() {
         onSoundSetChange={updateSoundSet}
         layerSoundSets={layerSoundSets}
         onLayerSoundSetsChange={(val) => {
+          for (const ss of Object.values(val)) {
+            delete clickPCMCacheRef.current[ss];
+          }
           setLayerSoundSets(val);
+          layerSoundSetsRef.current = val;
           persistSettings({ layerSoundSets: val });
+          scheduleReRender();
         }}
         flashMode={flashMode}
         onFlashModeChange={updateFlashMode}
