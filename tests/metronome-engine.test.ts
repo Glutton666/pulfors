@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 // 모듈 stub은 tests/_stubs/setup.cjs에서 처리 (--require로 사전 로드).
 // 실행 명령: npx tsx --require ./tests/_stubs/setup.cjs --test tests/*.test.ts
 import { MetronomeEngine } from "../lib/metronome-engine";
+import type { BarLayer } from "../lib/storage";
 
 test("MetronomeEngine 생성자가 throw하지 않는다", () => {
   const engine = new MetronomeEngine();
@@ -159,7 +160,7 @@ test("setOnClickEmitted(null)로 해제 가능", () => {
 
 test("setBarRepeat: layers 배열은 deep copy되어 외부 변형으로부터 격리", () => {
   const engine = new MetronomeEngine();
-  const layers = [{ beatType: "normal" as const, soundSet: "rimshot" }];
+  const layers: BarLayer[] = [{ beatType: "normal", soundSet: "rimshot" }];
   engine.setBarRepeat(0, { type: "count", value: 2, layers });
   // 호출 후 외부 배열을 변형
   layers[0].soundSet = "cowbell";
