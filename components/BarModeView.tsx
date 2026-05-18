@@ -1207,9 +1207,9 @@ export function BarModeView({
         {editingBeat === null && (
           <View style={styles.swipeHintRow}>
             <Text style={[styles.swipeHintText, { color: C.textTertiary }]}>{t("barModeView", "swipeHintCopy")}</Text>
-            <Text style={{ color: C.overlay08, fontSize: FontSize.micro, marginHorizontal: 8 }}>·</Text>
+            <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, opacity: 0.3, marginHorizontal: 8 }}>|</Text>
             <Text style={[styles.swipeHintText, { color: C.textTertiary }]}>{t("barModeView", "swipeHintEdit")}</Text>
-            <Text style={{ color: C.overlay08, fontSize: FontSize.micro, marginHorizontal: 8 }}>·</Text>
+            <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, opacity: 0.3, marginHorizontal: 8 }}>|</Text>
             <Text style={[styles.swipeHintText, { color: C.textTertiary }]}>{t("barModeView", "swipeHintAdd")}</Text>
           </View>
         )}

@@ -807,7 +807,7 @@ export const translations = {
     beatStepperIncrease: { ko: "박자 늘리기", en: "Increase beats" },
     swipeHintCopy:       { ko: "← 복사", en: "← Copy" },
     swipeHintEdit:       { ko: "편집 →", en: "Edit →" },
-    swipeHintAdd:        { ko: "↑ 추가", en: "↑ Add" },
+    swipeHintAdd:        { ko: "↑ 바 추가", en: "↑ Add Bar" },
     repBpmAdd:           { ko: "+ BPM", en: "+ BPM" },
   },
 } as const satisfies TranslationsShape;
