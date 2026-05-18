@@ -805,6 +805,11 @@ export const translations = {
     hintSwitchToLoop:   { ko: "길게 누르면 반복 재생 모드로 변경", en: "Long press to switch to loop mode" },
     beatStepperDecrease: { ko: "박자 줄이기", en: "Decrease beats" },
     beatStepperIncrease: { ko: "박자 늘리기", en: "Increase beats" },
+    swipeHintCopy:       { ko: "← 복사", en: "← Copy" },
+    swipeHintEdit:       { ko: "편집 →", en: "Edit →" },
+    swipeHintAdd:        { ko: "↑ 추가", en: "↑ Add" },
+    repeatAdd:           { ko: "+ 반복", en: "+ Repeat" },
+    repeatClear:         { ko: "반복 제거", en: "Remove repeat" },
   },
 } as const satisfies TranslationsShape;
 

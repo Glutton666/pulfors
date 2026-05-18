@@ -5444,7 +5444,7 @@ export default function MetronomeScreen() {
             />
           </View>
         )}
-        {!isLandscape && (
+        {!isLandscape && !barMode && (
         <View style={[styles.bpmSection, { flex: 2 }]}>
           <BpmSlider
             bpm={bpm}
