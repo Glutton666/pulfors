@@ -400,6 +400,75 @@ test("buildScheduleOnly: 두 블록에 각기 다른 BPM 오버라이드 적용 
   }
 });
 
+// ──────────────────────────────────────────────────────────────
+// 통합 테스트: 바-레벨 BPM 오버라이드 우선순위 검증 (Task #174)
+// 우선순위: barBpmOverride > blockBpm > engineBpm (pureGetBeatDur)
+// ──────────────────────────────────────────────────────────────
+
+test("우선순위 체인: 바-레벨 오버라이드(180)가 블록 오버라이드(60)를 이긴다 — 해당 beat만 ~333ms, 나머지는 1000ms", () => {
+  const engine = new MetronomeEngine();
+  // 엔진 기본 BPM=90 (검증 대상이 아님), 블록 BPM=60 → 기본 간격 1000ms
+  engine.setBpm(90);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  // 블록 BPM=60: barBpmOverride 없으면 모든 간격 1000ms
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 60 },
+  ]);
+
+  // beat 0에만 barBpmOverride=180 (60000/180 ≈ 333ms)
+  engine.setBarBpmOverride(0, 180);
+
+  engine.buildScheduleOnly();
+  const { ticks } = engine.getScheduleInfo();
+  const intervals = getMainBeatIntervals(ticks, 0);
+
+  // 4비트 → 간격 3개: [333, 1000, 1000]
+  assert.ok(intervals.length >= 3, `간격이 최소 3개여야 한다 (실제: ${intervals.length})`);
+  assert.equal(
+    Math.round(intervals[0]),
+    333,
+    `beat 0: barBpmOverride=180 → 간격 ≈333ms여야 한다 (실제: ${intervals[0]}ms)`,
+  );
+  for (const interval of intervals.slice(1)) {
+    assert.equal(
+      interval,
+      1000,
+      `beat 1~3: blockBpm=60 → 간격 1000ms여야 한다 (실제: ${interval}ms)`,
+    );
+  }
+
+  // 정리
+  engine.setBarBpmOverride(0, null);
+});
+
+test("우선순위 체인: 블록 오버라이드(60)가 엔진 기본 BPM(120)을 이긴다 — 바-레벨 오버라이드 없을 때", () => {
+  const engine = new MetronomeEngine();
+  // 엔진 기본 BPM=120 → 간격 500ms, 블록 BPM=60 → 간격 1000ms
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 60 },
+  ]);
+  // barBpmOverride 없음 → blockBpm=60이 우선
+
+  engine.buildScheduleOnly();
+  const { ticks } = engine.getScheduleInfo();
+  const intervals = getMainBeatIntervals(ticks, 0);
+
+  assert.ok(intervals.length >= 3, `간격이 최소 3개여야 한다 (실제: ${intervals.length})`);
+  for (const interval of intervals) {
+    assert.equal(
+      interval,
+      1000,
+      `blockBpm=60이 engineBpm=120을 이겨야 한다 → 간격 1000ms (실제: ${interval}ms)`,
+    );
+  }
+});
+
 test("buildScheduleOnly: BPM 오버라이드 변경 후 buildScheduleOnly 재호출 시 tick 간격이 즉시 갱신된다", () => {
   const engine = new MetronomeEngine();
   engine.setBpm(120);
