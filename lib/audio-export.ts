@@ -61,14 +61,51 @@ function encodeWavMonoBytes(pcm: Float32Array, sampleRate: number = SR): Uint8Ar
   return new Uint8Array(encodeWav(pcm, sampleRate));
 }
 
-async function loadDefaultClickPCMs(): Promise<ClickPCMs> {
-  const set = soundSets.classic;
+async function loadClickPCMsForSoundSet(setName: string): Promise<ClickPCMs> {
+  const set = (soundSets as Record<string, typeof soundSets.classic>)[setName] ?? soundSets.classic;
   const [strong, high, low] = await Promise.all([
     loadAssetPCM(set.strong),
     loadAssetPCM(set.high),
     loadAssetPCM(set.low),
   ]);
   return { strong, high, low };
+}
+
+async function loadDefaultClickPCMs(): Promise<ClickPCMs> {
+  return loadClickPCMsForSoundSet("classic");
+}
+
+/**
+ * 스케줄 틱에서 layerIndex > 0인 레이어들의 사운드 셋 PCM을 로드한다.
+ * layerSoundSet이 명시된 경우 해당 셋을, 없으면 classic으로 fallback.
+ * 반환 Map 키: 사운드 셋 이름 ("classic" 등) 및 인덱스 키 ("#1" 등).
+ */
+async function loadLayerClickPCMsForSchedule(ticks: TickInfo[]): Promise<Map<string, ClickPCMs>> {
+  const soundSetByName = new Set<string>();
+  const fallbackByIndex = new Map<number, string>();
+  for (const tick of ticks) {
+    const li = tick.layerIndex ?? 0;
+    if (li > 0) {
+      if (tick.layerSoundSet) {
+        soundSetByName.add(tick.layerSoundSet);
+      } else {
+        fallbackByIndex.set(li, "classic");
+        soundSetByName.add("classic");
+      }
+    }
+  }
+  if (soundSetByName.size === 0) return new Map();
+  const loaded = new Map<string, ClickPCMs>();
+  await Promise.all([...soundSetByName].map(async (ss) => {
+    const pcms = await loadClickPCMsForSoundSet(ss);
+    loaded.set(ss, pcms);
+  }));
+  const map = new Map<string, ClickPCMs>(loaded);
+  for (const [li, ss] of fallbackByIndex) {
+    const pcms = loaded.get(ss);
+    if (pcms) map.set(`#${li}`, pcms);
+  }
+  return map;
 }
 
 async function loadEntrySamplePCMs(entry: PracticeEntry): Promise<Map<string, SamplePCMEntry>> {
@@ -99,18 +136,21 @@ async function renderSingleEntryLoopPCM(entry: PracticeEntry): Promise<Float32Ar
   if (!info.ticks.length || info.durationMs <= 0) {
     return new Float32Array(0);
   }
-  const [clickPCMs, samplePCMs] = await Promise.all([
+  const ticks = info.ticks as TickInfo[];
+  const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
     loadDefaultClickPCMs(),
+    loadLayerClickPCMsForSchedule(ticks),
     loadEntrySamplePCMs(entry),
   ]);
   const rendered = renderMeasure({
-    schedule: info.ticks as TickInfo[],
+    schedule: ticks,
     measureDurationMs: info.durationMs,
     clickPCMs,
     samplePCMs,
     clickVolume: 1.0,
     sampleVolume: samplePCMs.size > 0 ? 1.0 : 0,
     metronomeChannel: "both",
+    layerClickPCMs: layerClickPCMs.size > 0 ? layerClickPCMs : undefined,
   });
   // renderMeasure returns 2 copies; take first measure span (it includes wrapped
   // tail from the previous loop iteration, so tiling stays seamless).
