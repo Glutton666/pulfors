@@ -808,6 +808,7 @@ export const translations = {
     swipeHintCopy:       { ko: "← 복사", en: "← Copy" },
     swipeHintEdit:       { ko: "편집 →", en: "Edit →" },
     swipeHintAdd:        { ko: "↑ 추가", en: "↑ Add" },
+    repBpmAdd:           { ko: "+ BPM", en: "+ BPM" },
   },
 } as const satisfies TranslationsShape;
 

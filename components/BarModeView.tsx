@@ -1196,7 +1196,7 @@ export function BarModeView({
                   onPress={() => { if (!isPlaying) { const v = bpm ?? 120; setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); } }}
                   style={[styles.typeToggle, { backgroundColor: C.overlay08, paddingHorizontal: 10, paddingVertical: 4 }]}
                 >
-                  <Text style={{ color: C.textTertiary, fontSize: FontSize.micro }}>+ BPM</Text>
+                  <Text style={{ color: C.textTertiary, fontSize: FontSize.micro }}>{t("barModeView", "repBpmAdd")}</Text>
                 </Pressable>
               )}
             </View>
