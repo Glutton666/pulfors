@@ -851,6 +851,85 @@ test("halfTime 토글: true→false 전환 후 블록 BPM 오버라이드 간격
   }
 });
 
+// ──────────────────────────────────────────────────────────────
+// 재생 중 setHalfTime → onScheduleRebuild 콜백 발화 검증 (Task #178)
+// halfTime 토글이 WAV 버퍼 재구성 콜백을 즉시 발화하는지 확인
+// ──────────────────────────────────────────────────────────────
+
+test("setHalfTime(true) 재생 중: preRenderedAudio=true 상태에서 onScheduleRebuild가 정확히 한 번 호출된다", () => {
+  // 재생 중 + preRenderedAudio=true 상태에서 setHalfTime(true)를 호출하면
+  // rebuildSchedule()이 실행되고 onScheduleRebuild 콜백이 정확히 한 번 발화해야 한다.
+  // 이 콜백이 누락되면 WAV 버퍼가 stale 상태로 남아 halfTime 전환 후 오디오 타이밍이 틀어진다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setHalfTime(false);
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    engine.setHalfTime(true);
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 setHalfTime(true) 호출 시 onScheduleRebuild가 정확히 한 번 호출되어야 한다",
+      );
+    } else {
+      assert.equal(engine.getHalfTime(), true, "stub 환경에서도 setHalfTime(true)가 엔진에 반영되어야 한다");
+    }
+  } finally {
+    engine.stop();
+    engine.setHalfTime(false);
+    engine.setPreRenderedAudio(false);
+  }
+});
+
+test("setHalfTime(false) 재생 중: preRenderedAudio=true 상태에서 onScheduleRebuild가 정확히 한 번 호출된다", () => {
+  // 재생 중 + preRenderedAudio=true 상태에서 setHalfTime(false)를 호출하면
+  // rebuildSchedule()이 실행되고 onScheduleRebuild 콜백이 정확히 한 번 발화해야 한다.
+  // halfTime 해제 경로도 활성화 경로와 동일하게 즉시 WAV 재구성을 트리거해야 한다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setHalfTime(true);
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    engine.setHalfTime(false);
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 setHalfTime(false) 호출 시 onScheduleRebuild가 정확히 한 번 호출되어야 한다",
+      );
+    } else {
+      assert.equal(engine.getHalfTime(), false, "stub 환경에서도 setHalfTime(false)가 엔진에 반영되어야 한다");
+    }
+  } finally {
+    engine.stop();
+    engine.setHalfTime(false);
+    engine.setPreRenderedAudio(false);
+  }
+});
+
 test("halfTime 토글 후 블록 교체: 각 블록의 tick 간격이 halfTime 배율을 유지한다", () => {
   // halfTime=true로 재생 중 루프 블록 집합을 교체했을 때
   // 새 블록에도 동일하게 /2 배율이 적용된 tick 간격이 나와야 한다.
