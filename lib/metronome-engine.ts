@@ -929,6 +929,14 @@ export class MetronomeEngine {
     this.invalidateScheduleCache();
   }
 
+  clearBarBpmOverrides() {
+    this.barBpmOverrides.clear();
+    this.invalidateScheduleCache();
+    if (this.isRunning) {
+      this.rebuildSchedule();
+    }
+  }
+
   getBarBpmOverrides(): Record<number, number> {
     const result: Record<number, number> = {};
     for (const [key, value] of this.barBpmOverrides.entries()) {

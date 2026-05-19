@@ -546,3 +546,87 @@ test("buildScheduleOnly: 블록 BPM=60 + halfTime=true → tick 간격이 2000ms
     );
   }
 });
+
+// ──────────────────────────────────────────────────────────────
+// 재생 중 setBarBpmOverride / clearBarBpmOverrides → onScheduleRebuild (Task #176)
+// ──────────────────────────────────────────────────────────────
+
+test("setBarBpmOverride 재생 중: onScheduleRebuild가 정확히 한 번 호출된다", () => {
+  // 재생 중 + preRenderedAudio=true 상태에서 setBarBpmOverride()를 호출하면
+  // rebuildSchedule()이 실행되고 onScheduleRebuild 콜백이 한 번 발화해야 한다.
+  // 이 경로가 누락되면 WAV 버퍼가 stale 상태로 남아 오디오 타이밍이 틀어진다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setLoopBlocks([{ startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 60 }]);
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    engine.setBarBpmOverride(0, 180);
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 setBarBpmOverride 호출 시 onScheduleRebuild가 정확히 한 번 호출되어야 한다",
+      );
+    } else {
+      const overrides = engine.getBarBpmOverrides();
+      assert.equal(overrides[0], 180, "stub 환경에서도 barBpmOverride가 저장되어야 한다");
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+  }
+});
+
+test("clearBarBpmOverrides 재생 중: onScheduleRebuild가 정확히 한 번 호출된다", () => {
+  // 재생 중 + preRenderedAudio=true 상태에서 clearBarBpmOverrides()를 호출하면
+  // rebuildSchedule()이 실행되고 onScheduleRebuild 콜백이 한 번 발화해야 한다.
+  // 오버라이드 제거 경로도 setBarBpmOverride(beat, null)과 동일하게 즉시 반영되어야 한다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setBarBpmOverride(0, 180);
+  engine.setBarBpmOverride(2, 90);
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+    rebuildCount = 0;
+
+    engine.clearBarBpmOverrides();
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 clearBarBpmOverrides 호출 시 onScheduleRebuild가 정확히 한 번 호출되어야 한다",
+      );
+      assert.deepEqual(
+        engine.getBarBpmOverrides(),
+        {},
+        "clearBarBpmOverrides 후 오버라이드 맵이 비어야 한다",
+      );
+    } else {
+      assert.deepEqual(engine.getBarBpmOverrides(), {}, "stub 환경에서도 오버라이드가 비워져야 한다");
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+  }
+});
