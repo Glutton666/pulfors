@@ -927,6 +927,9 @@ export class MetronomeEngine {
       this.barBpmOverrides.set(Number(key), Math.max(20, Math.min(300, value)));
     }
     this.invalidateScheduleCache();
+    if (this.isRunning) {
+      this.rebuildSchedule();
+    }
   }
 
   clearBarBpmOverrides() {

@@ -631,6 +631,48 @@ test("clearBarBpmOverrides 재생 중: onScheduleRebuild가 정확히 한 번 �
   }
 });
 
+test("setAllBarBpmOverrides 재생 중: onScheduleRebuild가 정확히 한 번 호출된다", () => {
+  // 재생 중 + preRenderedAudio=true 상태에서 setAllBarBpmOverrides()를 호출하면
+  // rebuildSchedule()이 실행되고 onScheduleRebuild 콜백이 한 번 발화해야 한다.
+  // 이 경로가 누락되면 WAV 버퍼가 stale 상태로 남아 오디오 타이밍이 틀어진다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setLoopBlocks([{ startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 60 }]);
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+    rebuildCount = 0;
+
+    engine.setAllBarBpmOverrides({ 0: 180, 2: 90 });
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 setAllBarBpmOverrides 호출 시 onScheduleRebuild가 정확히 한 번 호출되어야 한다",
+      );
+      const overrides = engine.getBarBpmOverrides();
+      assert.equal(overrides[0], 180, "bar 0의 BPM 오버라이드가 저장되어야 한다");
+      assert.equal(overrides[2], 90, "bar 2의 BPM 오버라이드가 저장되어야 한다");
+    } else {
+      const overrides = engine.getBarBpmOverrides();
+      assert.equal(overrides[0], 180, "stub 환경에서도 bar 0 오버라이드가 저장되어야 한다");
+      assert.equal(overrides[2], 90, "stub 환경에서도 bar 2 오버라이드가 저장되어야 한다");
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+  }
+});
+
 // ──────────────────────────────────────────────────────────────
 // 재생 중 halfTime 토글 → buildScheduleOnly 후 tick 간격 정확성 (Task #175)
 // halfTime 토글이 스케줄을 stale 없이 즉시 갱신하는지 검증
