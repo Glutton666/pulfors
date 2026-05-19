@@ -489,3 +489,60 @@ test("buildScheduleOnly: BPM 오버라이드 변경 후 buildScheduleOnly 재호
   const after = getMainBeatIntervals(engine.getScheduleInfo().ticks, 0);
   assert.ok(after.every(i => i === 500), "변경 후: BPM=120 → 500ms");
 });
+
+// ──────────────────────────────────────────────────────────────
+// 하프타임 모드 + BPM 오버라이드 상호작용 테스트 (Task #173)
+// halfTime=true 시 블록 BPM 오버라이드에도 /2 배율이 적용되는지 검증
+// ──────────────────────────────────────────────────────────────
+
+test("buildScheduleOnly: 블록 BPM=120 + halfTime=true → tick 간격이 1000ms여야 한다", () => {
+  // halfTime 시 effectiveBpm = blockBpm / 2 = 120 / 2 = 60 → 60000 / 60 = 1000ms
+  const engine = new MetronomeEngine();
+  engine.setBpm(90);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setHalfTime(true);
+
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 120 },
+  ]);
+
+  engine.buildScheduleOnly();
+  const { ticks } = engine.getScheduleInfo();
+  const intervals = getMainBeatIntervals(ticks, 0);
+
+  assert.ok(intervals.length >= 3, "4비트 블록에서 최소 3개의 간격이 있어야 한다");
+  for (const interval of intervals) {
+    assert.equal(
+      interval,
+      1000,
+      `블록 BPM=120 + halfTime=true → tick 간격은 1000ms여야 한다 (실제: ${interval}ms)`,
+    );
+  }
+});
+
+test("buildScheduleOnly: 블록 BPM=60 + halfTime=true → tick 간격이 2000ms여야 한다", () => {
+  // halfTime 시 effectiveBpm = blockBpm / 2 = 60 / 2 = 30 → 60000 / 30 = 2000ms
+  const engine = new MetronomeEngine();
+  engine.setBpm(90);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setHalfTime(true);
+
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 60 },
+  ]);
+
+  engine.buildScheduleOnly();
+  const { ticks } = engine.getScheduleInfo();
+  const intervals = getMainBeatIntervals(ticks, 0);
+
+  assert.ok(intervals.length >= 3, "4비트 블록에서 최소 3개의 간격이 있어야 한다");
+  for (const interval of intervals) {
+    assert.equal(
+      interval,
+      2000,
+      `블록 BPM=60 + halfTime=true → tick 간격은 2000ms여야 한다 (실제: ${interval}ms)`,
+    );
+  }
+});
