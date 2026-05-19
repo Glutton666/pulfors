@@ -630,3 +630,236 @@ test("clearBarBpmOverrides 재생 중: onScheduleRebuild가 정확히 한 번 �
     engine.setPreRenderedAudio(false);
   }
 });
+
+// ──────────────────────────────────────────────────────────────
+// 재생 중 halfTime 토글 → buildScheduleOnly 후 tick 간격 정확성 (Task #175)
+// halfTime 토글이 스케줄을 stale 없이 즉시 갱신하는지 검증
+// ──────────────────────────────────────────────────────────────
+
+test("halfTime 토글 mid-run: false→true 전환 후 buildScheduleOnly → tick 간격이 두 배가 된다", () => {
+  // BPM=120, halfTime=false: 간격 = 60000/120 = 500ms
+  // setHalfTime(true) 후 buildScheduleOnly: effectiveBpm = 120/2 = 60 → 간격 = 1000ms (두 배)
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setHalfTime(false);
+
+  try {
+    engine.start(0);
+
+    engine.buildScheduleOnly();
+    const before = getMainBeatIntervals(engine.getScheduleInfo().ticks, -1);
+    const beforeInterval = before.length > 0 ? before[0] : null;
+
+    engine.setHalfTime(true);
+    engine.buildScheduleOnly();
+    const after = getMainBeatIntervals(engine.getScheduleInfo().ticks, -1);
+
+    if (after.length > 0 && beforeInterval !== null) {
+      for (const interval of after) {
+        assert.equal(
+          interval,
+          beforeInterval * 2,
+          `halfTime false→true: tick 간격이 두 배(${beforeInterval * 2}ms)여야 한다 (실제: ${interval}ms)`,
+        );
+      }
+    } else {
+      // stub 환경에서 blockIndex=-1 틱이 없으면 no-block 스케줄로 직접 검증
+      assert.equal(engine.getHalfTime(), true, "setHalfTime(true)가 엔진에 반영되어야 한다");
+
+      // 블록 없이 일반 스케줄 검증: halfTime=false → 500ms, halfTime=true → 1000ms
+      engine.setHalfTime(false);
+      engine.buildScheduleOnly();
+      const infoOff = engine.getScheduleInfo();
+      const durOff = infoOff.durationMs;
+
+      engine.setHalfTime(true);
+      engine.buildScheduleOnly();
+      const infoOn = engine.getScheduleInfo();
+      const durOn = infoOn.durationMs;
+
+      assert.equal(
+        durOn,
+        durOff * 2,
+        `halfTime=true 시 measureDurationMs가 두 배여야 한다 (off=${durOff}, on=${durOn})`,
+      );
+    }
+  } finally {
+    engine.stop();
+    engine.setHalfTime(false);
+  }
+});
+
+test("halfTime 토글 mid-run: true→false 전환 후 buildScheduleOnly → tick 간격이 절반이 된다", () => {
+  // BPM=120, halfTime=true: effectiveBpm = 60 → 간격 = 1000ms
+  // setHalfTime(false) 후 buildScheduleOnly: effectiveBpm = 120 → 간격 = 500ms (절반)
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setHalfTime(true);
+
+  try {
+    engine.start(0);
+
+    engine.buildScheduleOnly();
+    const before = getMainBeatIntervals(engine.getScheduleInfo().ticks, -1);
+    const beforeInterval = before.length > 0 ? before[0] : null;
+
+    engine.setHalfTime(false);
+    engine.buildScheduleOnly();
+    const after = getMainBeatIntervals(engine.getScheduleInfo().ticks, -1);
+
+    if (after.length > 0 && beforeInterval !== null) {
+      for (const interval of after) {
+        assert.equal(
+          interval,
+          Math.round(beforeInterval / 2),
+          `halfTime true→false: tick 간격이 절반(${Math.round(beforeInterval / 2)}ms)여야 한다 (실제: ${interval}ms)`,
+        );
+      }
+    } else {
+      // stub 환경에서 블록 없는 스케줄로 직접 검증
+      assert.equal(engine.getHalfTime(), false, "setHalfTime(false)가 엔진에 반영되어야 한다");
+
+      engine.setHalfTime(true);
+      engine.buildScheduleOnly();
+      const infoOn = engine.getScheduleInfo();
+      const durOn = infoOn.durationMs;
+
+      engine.setHalfTime(false);
+      engine.buildScheduleOnly();
+      const infoOff = engine.getScheduleInfo();
+      const durOff = infoOff.durationMs;
+
+      assert.equal(
+        durOn,
+        durOff * 2,
+        `halfTime=true 시 measureDurationMs가 false의 두 배여야 한다 (on=${durOn}, off=${durOff})`,
+      );
+    }
+  } finally {
+    engine.stop();
+    engine.setHalfTime(false);
+  }
+});
+
+test("halfTime 토글: false→true 전환 후 블록 BPM 오버라이드에도 /2 배율이 정확히 적용된다", () => {
+  // halfTime=false, blockBpm=120: 간격 500ms
+  // setHalfTime(true) + buildScheduleOnly: effectiveBpm = 120/2 = 60 → 간격 1000ms
+  const engine = new MetronomeEngine();
+  engine.setBpm(90);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setHalfTime(false);
+  engine.setLoopBlocks([{ startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 120 }]);
+
+  engine.buildScheduleOnly();
+  const intervalsBefore = getMainBeatIntervals(engine.getScheduleInfo().ticks, 0);
+  assert.ok(intervalsBefore.length >= 3, "halfTime=false: 4비트 블록에서 최소 3개의 간격이 있어야 한다");
+  for (const interval of intervalsBefore) {
+    assert.equal(interval, 500, `halfTime=false, blockBpm=120 → 간격 500ms여야 한다 (실제: ${interval}ms)`);
+  }
+
+  engine.setHalfTime(true);
+  engine.buildScheduleOnly();
+  const intervalsAfter = getMainBeatIntervals(engine.getScheduleInfo().ticks, 0);
+  assert.ok(intervalsAfter.length >= 3, "halfTime=true: 4비트 블록에서 최소 3개의 간격이 있어야 한다");
+  for (const interval of intervalsAfter) {
+    assert.equal(
+      interval,
+      1000,
+      `halfTime=true, blockBpm=120 → effectiveBpm=60 → 간격 1000ms여야 한다 (실제: ${interval}ms)`,
+    );
+  }
+});
+
+test("halfTime 토글: true→false 전환 후 블록 BPM 오버라이드 간격이 정상으로 복귀된다", () => {
+  // halfTime=true, blockBpm=60: effectiveBpm=30 → 간격 2000ms
+  // setHalfTime(false) + buildScheduleOnly: effectiveBpm=60 → 간격 1000ms (정상 복귀)
+  const engine = new MetronomeEngine();
+  engine.setBpm(90);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setHalfTime(true);
+  engine.setLoopBlocks([{ startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 60 }]);
+
+  engine.buildScheduleOnly();
+  const intervalsBefore = getMainBeatIntervals(engine.getScheduleInfo().ticks, 0);
+  assert.ok(intervalsBefore.length >= 3, "halfTime=true: 4비트 블록에서 최소 3개의 간격이 있어야 한다");
+  for (const interval of intervalsBefore) {
+    assert.equal(
+      interval,
+      2000,
+      `halfTime=true, blockBpm=60 → effectiveBpm=30 → 간격 2000ms여야 한다 (실제: ${interval}ms)`,
+    );
+  }
+
+  engine.setHalfTime(false);
+  engine.buildScheduleOnly();
+  const intervalsAfter = getMainBeatIntervals(engine.getScheduleInfo().ticks, 0);
+  assert.ok(intervalsAfter.length >= 3, "halfTime=false: 4비트 블록에서 최소 3개의 간격이 있어야 한다");
+  for (const interval of intervalsAfter) {
+    assert.equal(
+      interval,
+      1000,
+      `halfTime=false, blockBpm=60 → effectiveBpm=60 → 간격 1000ms여야 한다 (실제: ${interval}ms)`,
+    );
+  }
+});
+
+test("halfTime 토글 후 블록 교체: 각 블록의 tick 간격이 halfTime 배율을 유지한다", () => {
+  // halfTime=true로 재생 중 루프 블록 집합을 교체했을 때
+  // 새 블록에도 동일하게 /2 배율이 적용된 tick 간격이 나와야 한다.
+  // 재생 중 블록 교체 + halfTime 동시 적용이 stale 스케줄 없이 정확한지 검증.
+  const engine = new MetronomeEngine();
+  engine.setBpm(90);
+  engine.setBeatsPerMeasure(8);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal", "accent", "normal", "normal", "normal"]);
+  engine.setHalfTime(true);
+
+  // 첫 번째 블록 집합: blockBpm=120, halfTime=true → effectiveBpm=60 → 간격 1000ms
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 120 },
+  ]);
+  engine.buildScheduleOnly();
+  const phase1 = getMainBeatIntervals(engine.getScheduleInfo().ticks, 0);
+  assert.ok(phase1.length >= 3, "1단계: 4비트 블록에서 최소 3개의 간격이 있어야 한다");
+  for (const interval of phase1) {
+    assert.equal(
+      interval,
+      1000,
+      `1단계: halfTime=true + blockBpm=120 → 간격 1000ms여야 한다 (실제: ${interval}ms)`,
+    );
+  }
+
+  // 재생 중 블록 교체: 두 블록으로 변경 (blockBpm=60, 180)
+  // halfTime=true 이므로 effectiveBpm: 30 → 2000ms, 90 → ~667ms
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 3, type: "count", value: 1, bpm: 60 },
+    { startBeat: 4, endBeat: 7, type: "count", value: 1, bpm: 180 },
+  ]);
+  engine.buildScheduleOnly();
+  const ticks2 = engine.getScheduleInfo().ticks;
+  const phase2Block0 = getMainBeatIntervals(ticks2, 0);
+  const phase2Block1 = getMainBeatIntervals(ticks2, 1);
+
+  assert.ok(phase2Block0.length >= 3, "2단계 블록0: 최소 3개의 간격이 있어야 한다");
+  for (const interval of phase2Block0) {
+    assert.equal(
+      interval,
+      2000,
+      `2단계 블록0: halfTime=true + blockBpm=60 → effectiveBpm=30 → 간격 2000ms여야 한다 (실제: ${interval}ms)`,
+    );
+  }
+
+  assert.ok(phase2Block1.length >= 3, "2단계 블록1: 최소 3개의 간격이 있어야 한다");
+  for (const interval of phase2Block1) {
+    assert.equal(
+      Math.round(interval),
+      667,
+      `2단계 블록1: halfTime=true + blockBpm=180 → effectiveBpm=90 → 간격 ~667ms여야 한다 (실제: ${interval}ms)`,
+    );
+  }
+});
