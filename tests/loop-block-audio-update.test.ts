@@ -674,6 +674,79 @@ test("setAllBarBpmOverrides 재생 중: onScheduleRebuild가 정확히 한 번 �
 });
 
 // ──────────────────────────────────────────────────────────────
+// 재생 중 단일 바 BPM 오버라이드 제거 → tick 간격 정확성 (Task #185)
+// setBarBpmOverride(beat, null) 후 WAV 버퍼가 기본 BPM으로 복원되는지 검증
+// ──────────────────────────────────────────────────────────────
+
+test("setBarBpmOverride(0, null) 재생 중: buildScheduleOnly 후 모든 tick 간격이 기본 BPM(500ms)으로 복원된다", () => {
+  // 회귀 방지: 재생 중 단일 바 BPM 오버라이드를 null로 제거했을 때
+  // WAV 버퍼(buildScheduleOnly)가 stale 오버라이드 없이 엔진 기본 BPM=120(500ms)을
+  // 올바르게 반영하는지 확인한다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  // beat 0에 BPM=60 오버라이드를 설정한 뒤 엔진을 시작한다.
+  engine.setBarBpmOverride(0, 60);
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    // 재생 중 단일 바 오버라이드 제거
+    engine.setBarBpmOverride(0, null);
+
+    // WAV 재구성 트리거 (scheduleReRender가 실제로 호출하는 경로와 동일)
+    engine.buildScheduleOnly();
+    const { ticks } = engine.getScheduleInfo();
+
+    // 오버라이드가 없으므로 블록 인덱스 없는(-1) 일반 ticks 사용
+    const mainTicks = ticks
+      .filter(t => t.isMainBeat)
+      .sort((a, b) => a.time - b.time);
+    const intervals: number[] = [];
+    for (let i = 1; i < mainTicks.length; i++) {
+      intervals.push(Math.round(mainTicks[i].time - mainTicks[i - 1].time));
+    }
+
+    if (wasRunning) {
+      // 오버라이드 제거 후 오버라이드 맵이 비어 있어야 한다.
+      assert.deepEqual(
+        engine.getBarBpmOverrides(),
+        {},
+        "setBarBpmOverride(0, null) 후 오버라이드 맵이 비어야 한다",
+      );
+      // 모든 tick 간격이 엔진 기본 BPM=120 → 500ms여야 한다.
+      assert.ok(
+        intervals.length >= 3,
+        `4비트에서 최소 3개의 tick 간격이 있어야 한다 (실제: ${intervals.length})`,
+      );
+      for (const interval of intervals) {
+        assert.equal(
+          interval,
+          500,
+          `오버라이드 제거 후 tick 간격은 기본 BPM=120 → 500ms여야 한다 (실제: ${interval}ms)`,
+        );
+      }
+    } else {
+      // stub 환경에서 start()가 isRunning을 true로 만들지 못한 경우:
+      // 오버라이드가 제거됐는지만 확인한다.
+      assert.deepEqual(
+        engine.getBarBpmOverrides(),
+        {},
+        "stub 환경에서도 setBarBpmOverride(0, null) 후 오버라이드가 비워져야 한다",
+      );
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+  }
+});
+
+// ──────────────────────────────────────────────────────────────
 // 재생 중 halfTime 토글 → buildScheduleOnly 후 tick 간격 정확성 (Task #175)
 // halfTime 토글이 스케줄을 stale 없이 즉시 갱신하는지 검증
 // ──────────────────────────────────────────────────────────────
