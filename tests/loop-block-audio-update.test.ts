@@ -930,6 +930,141 @@ test("setHalfTime(false) 재생 중: preRenderedAudio=true 상태에서 onSchedu
   }
 });
 
+// ──────────────────────────────────────────────────────────────
+// setAllBarBpmOverrides + buildScheduleOnly 타이밍 정확성 검증 (Task #179)
+// rebuildSchedule()이 호출되는지뿐 아니라 tick 간격이 실제로 새 BPM을 반영하는지 확인
+// ──────────────────────────────────────────────────────────────
+
+test("setAllBarBpmOverrides 재생 중: buildScheduleOnly 후 bar 0의 tick 간격이 BPM=180 (~333ms)로 갱신된다", () => {
+  // 재생 중 setAllBarBpmOverrides({ 0: 180 })를 호출한 뒤 buildScheduleOnly()를 실행하면
+  // bar 0 (beat 0 → beat 1) 의 tick 간격이 60000/180 ≈ 333ms로 갱신되어야 한다.
+  // 이 테스트는 rebuildSchedule 콜백 발화 여부가 아닌 스케줄 내 실제 타이밍 정확성을 검증한다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  // 블록 BPM 오버라이드 없음 → 엔진 기본 BPM=120 → 간격 500ms
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 3, type: "count", value: 1 },
+  ]);
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    // setAllBarBpmOverrides 호출 — 재생 중 내부적으로 rebuildSchedule()이 실행된다
+    engine.setAllBarBpmOverrides({ 0: 180 });
+
+    // buildScheduleOnly: 스케줄 스냅샷을 강제로 재구성해 최신 barBpmOverride를 반영
+    engine.buildScheduleOnly();
+    const { ticks } = engine.getScheduleInfo();
+    const intervals = getMainBeatIntervals(ticks, 0);
+
+    assert.ok(intervals.length >= 3, `블록 0에서 최소 3개의 간격이 있어야 한다 (실제: ${intervals.length})`);
+
+    // bar 0에 barBpmOverride=180이 적용되었으므로
+    // beat 0 → beat 1 간격(첫 번째 간격)은 60000/180 ≈ 333ms여야 한다
+    assert.equal(
+      Math.round(intervals[0]),
+      333,
+      `setAllBarBpmOverrides({0: 180}) 후 bar 0 첫 번째 tick 간격은 ≈333ms여야 한다 (실제: ${intervals[0]}ms)`,
+    );
+
+    // bar 0에만 오버라이드가 적용되었으므로 나머지 간격은 기본 BPM=120 → 500ms여야 한다
+    for (const interval of intervals.slice(1)) {
+      assert.equal(
+        interval,
+        500,
+        `bar 0 이후 beat들은 engineBpm=120 → 간격 500ms여야 한다 (실제: ${interval}ms)`,
+      );
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+    engine.clearBarBpmOverrides();
+  }
+});
+
+test("setAllBarBpmOverrides: 여러 bar에 서로 다른 BPM 적용 후 buildScheduleOnly → 각 bar tick 간격이 독립적으로 갱신된다", () => {
+  // setAllBarBpmOverrides({ 0: 60, 2: 240 }) 적용 시:
+  //   bar 0 (beat 0 → 1): 60000/60 = 1000ms
+  //   bar 1 (beat 1 → 2): engineBpm=120 → 500ms
+  //   bar 2 (beat 2 → 3): 60000/240 = 250ms
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 3, type: "count", value: 1 },
+  ]);
+
+  engine.setAllBarBpmOverrides({ 0: 60, 2: 240 });
+  engine.buildScheduleOnly();
+  const { ticks } = engine.getScheduleInfo();
+  const intervals = getMainBeatIntervals(ticks, 0);
+
+  assert.ok(intervals.length >= 3, `최소 3개의 간격이 있어야 한다 (실제: ${intervals.length})`);
+
+  assert.equal(
+    Math.round(intervals[0]),
+    1000,
+    `bar 0: barBpmOverride=60 → 간격 1000ms여야 한다 (실제: ${intervals[0]}ms)`,
+  );
+  assert.equal(
+    Math.round(intervals[1]),
+    500,
+    `bar 1: 오버라이드 없음 → engineBpm=120 → 간격 500ms여야 한다 (실제: ${intervals[1]}ms)`,
+  );
+  assert.equal(
+    Math.round(intervals[2]),
+    250,
+    `bar 2: barBpmOverride=240 → 간격 250ms여야 한다 (실제: ${intervals[2]}ms)`,
+  );
+
+  engine.clearBarBpmOverrides();
+});
+
+test("setAllBarBpmOverrides: 호출 전후 buildScheduleOnly → tick 간격이 stale 없이 즉시 갱신된다", () => {
+  // 이전 barBpmOverride 상태(비어 있음)로 빌드한 스케줄과
+  // setAllBarBpmOverrides({ 0: 180 }) 후 재빌드한 스케줄을 비교해
+  // stale 스케줄 재사용 없이 올바르게 갱신되는지 회귀 방지.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 3, type: "count", value: 1 },
+  ]);
+
+  // 오버라이드 없음 → 모든 간격 500ms
+  engine.buildScheduleOnly();
+  const before = getMainBeatIntervals(engine.getScheduleInfo().ticks, 0);
+  assert.ok(
+    before.every(i => i === 500),
+    `오버라이드 전: 모든 간격이 500ms여야 한다 (실제: ${before})`,
+  );
+
+  // setAllBarBpmOverrides → bar 0 = 180 BPM → 첫 번째 간격만 ~333ms
+  engine.setAllBarBpmOverrides({ 0: 180 });
+  engine.buildScheduleOnly();
+  const after = getMainBeatIntervals(engine.getScheduleInfo().ticks, 0);
+
+  assert.equal(
+    Math.round(after[0]),
+    333,
+    `오버라이드 후 bar 0: BPM=180 → 간격 ≈333ms여야 한다 (실제: ${after[0]}ms)`,
+  );
+  assert.ok(
+    after.slice(1).every(i => i === 500),
+    `오버라이드 후 bar 1~: engineBpm=120 → 간격 500ms여야 한다 (실제: ${after.slice(1)})`,
+  );
+
+  engine.clearBarBpmOverrides();
+});
+
 test("halfTime 토글 후 블록 교체: 각 블록의 tick 간격이 halfTime 배율을 유지한다", () => {
   // halfTime=true로 재생 중 루프 블록 집합을 교체했을 때
   // 새 블록에도 동일하게 /2 배율이 적용된 tick 간격이 나와야 한다.
