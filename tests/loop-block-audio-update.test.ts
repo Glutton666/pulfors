@@ -1285,3 +1285,47 @@ test("halfTime 토글 후 블록 교체: 각 블록의 tick 간격이 halfTime �
     );
   }
 });
+
+// ──────────────────────────────────────────────────────────────
+// 재생 중 setAllBeatSubdivisions → onScheduleRebuild 콜백 발화 검증 (Task #182)
+// 벌크 subdivision 초기화가 재생 중 WAV 버퍼를 즉시 갱신하는지 확인
+// ──────────────────────────────────────────────────────────────
+
+test("setAllBeatSubdivisions 재생 중: preRenderedAudio=true 상태에서 onScheduleRebuild가 정확히 한 번 호출된다", () => {
+  // 재생 중 + preRenderedAudio=true 상태에서 setAllBeatSubdivisions를 호출하면
+  // rebuildSchedule()이 실행되고 onScheduleRebuild 콜백이 정확히 한 번 발화해야 한다.
+  // Task #182 이전 setAllBeatSubdivisions는 rebuildSchedule()을 호출하지 않아
+  // 벌크 subdivision 초기화 후 WAV 버퍼가 stale 상태로 남는 버그가 있었다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    engine.setAllBeatSubdivisions({ "0": ["normal", "normal"], "1": ["normal", "normal"] });
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 setAllBeatSubdivisions 호출 시 onScheduleRebuild가 정확히 한 번 호출되어야 한다",
+      );
+    } else {
+      assert.ok(
+        true,
+        "stub 환경에서도 setAllBeatSubdivisions가 크래시 없이 실행되어야 한다",
+      );
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+  }
+});

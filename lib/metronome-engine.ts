@@ -870,6 +870,9 @@ export class MetronomeEngine {
       this.beatSubdivisions.set(Number(key), [...value]);
     }
     this.invalidateScheduleCache();
+    if (this.isRunning) {
+      this.rebuildSchedule();
+    }
   }
 
   setLoopBlocks(blocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; soundSet?: string; layerOf?: number; ownBeatTypes?: Record<number, string>; ownSubdivisions?: Record<string, string[]> }[]) {
