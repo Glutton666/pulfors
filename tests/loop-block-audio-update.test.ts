@@ -2231,3 +2231,111 @@ test("setBarBpmOverride(0, null) 재생 중: preRenderedAudio=true 상태에서 
     engine.setBarBpmOverride(0, null);
   }
 });
+
+// ──────────────────────────────────────────────────────────────
+// 재생 중 버퍼 이미 진행된 상태에서 오버라이드 일괄 제거 → 타이밍 정확성 (Task #193)
+// start() 시 첫 틱(time=0)이 동기 발화 → scheduleIndex=1(마디 중간) 상태에서
+// 세 오버라이드를 일괄 제거했을 때 다음 마디 tick 간격 검증
+// ──────────────────────────────────────────────────────────────
+
+test("재생 중 첫 틱 발화 후 일괄 제거 + buildScheduleOnly: preRenderedAudio=true + scheduleIndex=1(한 틱 진행) 상태에서 세 오버라이드 일괄 제거 후 buildScheduleOnly → 다음 마디 tick 간격이 모두 500ms여야 한다 (stale 오버라이드 누출 없음)", () => {
+  // Task #193: WAV 버퍼가 이미 한 틱 진행된(마디 중간) 상태에서 바 BPM 오버라이드를
+  // 일괄 제거한 뒤 buildScheduleOnly()를 호출할 때, 다음 전체 마디의 tick 간격이
+  // engineBpm=120 → 500ms로 정확히 복원되는지 검증한다.
+  //
+  // 기존 Task #192 테스트와의 차이점(핵심):
+  // - start()를 호출하면 loop()가 동기 실행되어 첫 틱(time=0)이 즉시 발화하고
+  //   scheduleIndex가 1로 증가한다. 이것이 "한 틱 진행" 상태이며,
+  //   이 시점에서 오버라이드를 적용하면 rebuildSchedule()이 oldIndex=1
+  //   (비-제로) 경로를 타서 lastFiredTick 기반 화해를 수행한다.
+  // - 오버라이드 적용 중에는 buildScheduleOnly()를 호출하지 않는다.
+  //   buildScheduleOnly()는 scheduleIndex를 0으로 리셋해 oldIndex=0 경로만
+  //   타게 만들므로 비-제로 인덱스 화해 로직이 우회된다.
+  // - 일괄 제거 후에는 buildScheduleOnly()를 명시적으로 호출하여 다음 마디
+  //   tick 간격을 검증한다. 이것이 Task #193이 요구하는 시퀀스다:
+  //   "start → 오버라이드 적용(한 틱 진행) → 일괄 제거 → buildScheduleOnly()".
+  //
+  // 설정: BPM=120, 4비트, 루프 블록 오버라이드 없음
+  //       beat-0=60(1000ms), beat-1=80(750ms), beat-2=60(1000ms) 바 오버라이드 적용
+  // 검증: 한 틱 진행 후 세 오버라이드 일괄 제거 → buildScheduleOnly() → 모든 tick 간격 500ms
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 3, type: "count", value: 1 },
+  ]);
+
+  try {
+    // start() → loop()가 동기 실행 → 첫 틱(time=0) 즉시 발화 → scheduleIndex=1.
+    // 이것이 "한 틱 진행" 상태다.
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    // 바 BPM 오버라이드 적용 (각기 다른 BPM → stale 검출 용이).
+    // wasRunning=true 시 각 호출이 rebuildSchedule()을 트리거하며,
+    // scheduleIndex≥1이므로 oldIndex>0 → lastFiredTick 화해 경로를 탄다.
+    // 오버라이드 적용 중에는 buildScheduleOnly()를 호출하지 않는다 —
+    // 호출하면 scheduleIndex가 0으로 리셋되어 oldIndex=0 경로만 타게 된다.
+    engine.setBarBpmOverride(0, 60);  // beat-0 → 1000ms
+    engine.setBarBpmOverride(1, 80);  // beat-1 → 750ms
+    engine.setBarBpmOverride(2, 60);  // beat-2 → 1000ms
+
+    // 일괄 제거: 세 beat 모두 null → 오버라이드 맵이 비어야 한다.
+    engine.setBarBpmOverride(0, null);
+    engine.setBarBpmOverride(1, null);
+    engine.setBarBpmOverride(2, null);
+
+    // Task #193 요구 시퀀스: 일괄 제거 후 buildScheduleOnly() 호출.
+    // 이 시점의 스케줄은 오버라이드가 없으므로 500ms 간격으로 구성되어야 한다.
+    engine.buildScheduleOnly();
+    const intervals = getMainBeatIntervals(engine.getScheduleInfo().ticks, 0);
+
+    if (wasRunning) {
+      assert.deepEqual(
+        engine.getBarBpmOverrides(),
+        {},
+        "한 틱 진행 후 세 오버라이드 일괄 제거 시 오버라이드 맵이 비어야 한다",
+      );
+      assert.ok(
+        intervals.length >= 3,
+        `최소 3개의 간격이 있어야 한다 (실제: ${intervals.length})`,
+      );
+      for (const interval of intervals) {
+        assert.equal(
+          interval,
+          500,
+          `재생 중 한 틱 진행 후 전체 제거 + buildScheduleOnly 시 tick 간격은 engineBpm=120 → 500ms여야 한다 (stale 오버라이드 누출 없음, 실제: ${interval}ms)`,
+        );
+      }
+    } else {
+      // stub 환경: start()가 isRunning=true를 만들지 못한 경우에도
+      // 오버라이드 맵이 비어 있고 buildScheduleOnly가 500ms 간격을 반환하는지 확인한다.
+      assert.deepEqual(
+        engine.getBarBpmOverrides(),
+        {},
+        "stub 환경에서도 세 오버라이드 일괄 제거 후 오버라이드 맵이 비어야 한다",
+      );
+      assert.ok(
+        intervals.length >= 3,
+        `stub 환경에서도 최소 3개의 간격이 있어야 한다 (실제: ${intervals.length})`,
+      );
+      for (const interval of intervals) {
+        assert.equal(
+          interval,
+          500,
+          `stub 환경에서도 일괄 제거 + buildScheduleOnly 후 tick 간격은 500ms여야 한다 (실제: ${interval}ms)`,
+        );
+      }
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+    engine.setBarBpmOverride(0, null);
+    engine.setBarBpmOverride(1, null);
+    engine.setBarBpmOverride(2, null);
+  }
+});
