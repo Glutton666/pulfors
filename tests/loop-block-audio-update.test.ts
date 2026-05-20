@@ -1957,6 +1957,114 @@ test("setBarBpmOverride(0, 60→90) 재생 중: preRenderedAudio=true 상태에�
   }
 });
 
+// ──────────────────────────────────────────────────────────────
+// 재생 중 다중 바 BPM 오버라이드 동시 변경 → tick 간격 타이밍 정확성 검증 (Task #191)
+// setBarBpmOverride(beat0, newVal) + setBarBpmOverride(beat2, newVal) 경로:
+// 두 오버라이드를 같은 라이브 세션에서 각각 다른 값으로 교체한 뒤
+// buildScheduleOnly가 두 beat 모두 새 BPM 기준 간격을 stale 없이 반환하는지 확인한다.
+// ──────────────────────────────────────────────────────────────
+
+test("setBarBpmOverride(0, 60→90) + setBarBpmOverride(2, 60→180) 재생 중: preRenderedAudio=true 상태에서 두 오버라이드 동시 변경 후 buildScheduleOnly → intervals[0]≈667ms, intervals[1]=500ms, intervals[2]≈333ms여야 한다", () => {
+  // Task #191: 재생 중 두 개의 바 BPM 오버라이드를 각각 다른 값으로 교체하는 경우의
+  // 타이밍 정확성 회귀 방지.
+  // setBarBpmOverride(beat, value)는 해당 beat 하나의 간격만 제어한다.
+  // 1) preRenderedAudio=true + beat-0과 beat-2에 각각 BPM=60 적용(재생 중).
+  // 2) 재생 중 beat-0 → 90, beat-2 → 180으로 각각 교체 후 buildScheduleOnly().
+  // 3) intervals[0](beat-0→1) ≈ 667ms(BPM=90), intervals[1](beat-1→2) = 500ms(engineBpm=120),
+  //    intervals[2](beat-2→3) ≈ 333ms(BPM=180) 여야 한다.
+  //    어느 한 beat라도 stale 오버라이드(60)가 남으면 해당 간격이 1000ms가 되므로 회귀를 감지한다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 3, type: "count", value: 1 },
+  ]);
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    // 초기 상태: beat-0과 beat-2에 BPM=60 오버라이드 적용
+    engine.setBarBpmOverride(0, 60);
+    engine.setBarBpmOverride(2, 60);
+
+    // 동시 교체: beat-0 → 90, beat-2 → 180
+    engine.setBarBpmOverride(0, 90);
+    engine.setBarBpmOverride(2, 180);
+
+    engine.buildScheduleOnly();
+    const intervals = getMainBeatIntervals(engine.getScheduleInfo().ticks, 0);
+
+    if (wasRunning) {
+      assert.deepEqual(
+        engine.getBarBpmOverrides(),
+        { 0: 90, 2: 180 },
+        "두 오버라이드 교체 후 맵에 { 0: 90, 2: 180 }만 있어야 한다",
+      );
+      assert.ok(
+        intervals.length >= 3,
+        `최소 3개의 간격이 있어야 한다 (실제: ${intervals.length})`,
+      );
+      // intervals[0]: beat-0→1, barBpmOverride=90 → 60000/90 ≈ 667ms
+      // (stale BPM=60이면 1000ms, engineBpm=120이면 500ms — 두 쪽 모두 회귀를 감지한다)
+      assert.equal(
+        Math.round(intervals[0]),
+        667,
+        `beat-0: setBarBpmOverride(0, 90) 후 간격은 ~667ms여야 한다 (stale=1000ms, engineBpm=500ms, 실제: ${intervals[0]}ms)`,
+      );
+      // intervals[1]: beat-1→2, barBpmOverride 없음 → engineBpm=120 → 500ms
+      assert.equal(
+        intervals[1],
+        500,
+        `beat-1: barBpmOverride 없음 → engineBpm=120 → 500ms여야 한다 (실제: ${intervals[1]}ms)`,
+      );
+      // intervals[2]: beat-2→3, barBpmOverride=180 → 60000/180 ≈ 333ms
+      // (stale BPM=60이면 1000ms, engineBpm=120이면 500ms — 두 쪽 모두 회귀를 감지한다)
+      assert.equal(
+        Math.round(intervals[2]),
+        333,
+        `beat-2: setBarBpmOverride(2, 180) 후 간격은 ~333ms여야 한다 (stale=1000ms, engineBpm=500ms, 실제: ${intervals[2]}ms)`,
+      );
+    } else {
+      // stub 환경: start()가 isRunning=true를 만들지 못한 경우에도
+      // 오버라이드 맵과 스케줄이 최신 값을 반영하는지 확인한다.
+      assert.deepEqual(
+        engine.getBarBpmOverrides(),
+        { 0: 90, 2: 180 },
+        "stub 환경에서도 두 오버라이드 교체 후 맵에 { 0: 90, 2: 180 }이 있어야 한다",
+      );
+      assert.ok(
+        intervals.length >= 3,
+        `stub 환경에서도 최소 3개의 간격이 있어야 한다 (실제: ${intervals.length})`,
+      );
+      assert.equal(
+        Math.round(intervals[0]),
+        667,
+        `stub 환경에서도 beat-0 간격은 BPM=90 → ~667ms여야 한다 (실제: ${intervals[0]}ms)`,
+      );
+      assert.equal(
+        intervals[1],
+        500,
+        `stub 환경에서도 beat-1 간격은 engineBpm=120 → 500ms여야 한다 (실제: ${intervals[1]}ms)`,
+      );
+      assert.equal(
+        Math.round(intervals[2]),
+        333,
+        `stub 환경에서도 beat-2 간격은 BPM=180 → ~333ms여야 한다 (실제: ${intervals[2]}ms)`,
+      );
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+    engine.setBarBpmOverride(0, null);
+    engine.setBarBpmOverride(2, null);
+  }
+});
+
 test("setBarBpmOverride(0, null) 재생 중: preRenderedAudio=true 상태에서 단일 오버라이드 제거 후 buildScheduleOnly → 모든 tick 간격이 엔진 기본 BPM으로 복원된다", () => {
   // Task #188: 재생 중 단일 바 BPM 오버라이드 제거 경로의 타이밍 정확성 회귀 방지.
   // 1) preRenderedAudio=true + setBarBpmOverride(0, 60) 적용(재생 중) → WAV 버퍼에 stale 오버라이드 가능.
