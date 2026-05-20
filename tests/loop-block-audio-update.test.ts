@@ -1065,6 +1065,48 @@ test("setAllBarBpmOverrides: 호출 전후 buildScheduleOnly → tick 간격이 
   engine.clearBarBpmOverrides();
 });
 
+test("clearBarBpmOverrides: setAllBarBpmOverrides 후 clearBarBpmOverrides + buildScheduleOnly → 모든 tick 간격이 엔진 기본 BPM으로 복원된다", () => {
+  // Task #181: clearBarBpmOverrides 경로의 타이밍 정확성 회귀 방지.
+  // 1) setAllBarBpmOverrides({ 0: 60 }) 적용 후 buildScheduleOnly → 첫 번째 간격 1000ms 확인.
+  // 2) clearBarBpmOverrides() 호출 후 buildScheduleOnly 재실행.
+  // 3) 모든 tick 간격이 engineBpm=120 → 500ms로 복원되어야 한다 (stale override 없음).
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  engine.setLoopBlocks([
+    { startBeat: 0, endBeat: 3, type: "count", value: 1 },
+  ]);
+
+  // 1단계: bar 0에 BPM=60 오버라이드 적용 → 첫 번째 간격 1000ms
+  engine.setAllBarBpmOverrides({ 0: 60 });
+  engine.buildScheduleOnly();
+  const overrideIntervals = getMainBeatIntervals(engine.getScheduleInfo().ticks, 0);
+
+  assert.ok(overrideIntervals.length >= 3, `오버라이드 적용 후 최소 3개의 간격이 있어야 한다 (실제: ${overrideIntervals.length})`);
+  assert.equal(
+    Math.round(overrideIntervals[0]),
+    1000,
+    `setAllBarBpmOverrides({0: 60}) 후 bar 0 첫 번째 tick 간격은 1000ms여야 한다 (실제: ${overrideIntervals[0]}ms)`,
+  );
+
+  // 2단계: 오버라이드 전체 삭제 후 스케줄 재구성
+  engine.clearBarBpmOverrides();
+  engine.buildScheduleOnly();
+  const clearedIntervals = getMainBeatIntervals(engine.getScheduleInfo().ticks, 0);
+
+  // 3단계: 모든 간격이 engineBpm=120 → 500ms로 복원
+  assert.ok(clearedIntervals.length >= 3, `clearBarBpmOverrides 후 최소 3개의 간격이 있어야 한다 (실제: ${clearedIntervals.length})`);
+  for (const interval of clearedIntervals) {
+    assert.equal(
+      interval,
+      500,
+      `clearBarBpmOverrides 후 모든 tick 간격은 engineBpm=120 → 500ms여야 한다 (stale override 없음, 실제: ${interval}ms)`,
+    );
+  }
+});
+
 // ──────────────────────────────────────────────────────────────
 // 재생 중 subdivision·accent·beatsPerMeasure → onScheduleRebuild 발화 검증 (Task #180)
 // setBeatSubdivision, setBeatTypes, setBeatsPerMeasure가 WAV 버퍼 재구성 콜백을 즉시 발화하는지 확인
