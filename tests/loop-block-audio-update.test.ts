@@ -1786,3 +1786,75 @@ test("setBarRepeat 재생 중 (단일 바): preRenderedAudio=true 상태에서 o
     engine.setBarRepeat(0, null);
   }
 });
+
+// ──────────────────────────────────────────────────────────────
+// 다중 바 오버라이드 순차 제거 타이밍 검증 (Task #187)
+// ──────────────────────────────────────────────────────────────
+
+test("setBarBpmOverride null 순차 제거: 두 바 오버라이드를 개별 제거 후 모든 tick 간격이 엔진 기본 BPM으로 복귀한다", () => {
+  const engine = new MetronomeEngine();
+  // 엔진 BPM=120 → 오버라이드 없을 때 간격 500ms
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setLoopBlocks([{ startBeat: 0, endBeat: 3, type: "count", value: 1 }]);
+
+  // 재생 전 두 바에 서로 다른 오버라이드 설정
+  engine.setBarBpmOverride(0, 60);  // beat 0 → 1000ms
+  engine.setBarBpmOverride(2, 90);  // beat 2 → ~667ms
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    // 재생 중 beat 0 오버라이드 제거
+    engine.setBarBpmOverride(0, null);
+    // 재생 중 beat 2 오버라이드 제거
+    engine.setBarBpmOverride(2, null);
+
+    engine.buildScheduleOnly();
+    const intervals = getMainBeatIntervals(engine.getScheduleInfo().ticks, 0);
+
+    if (wasRunning) {
+      // 각 setBarBpmOverride(beat, null)마다 rebuildSchedule이 호출되므로 총 2회
+      assert.equal(
+        rebuildCount,
+        2,
+        `두 번의 단일 바 오버라이드 제거 → onScheduleRebuild 2회 호출되어야 한다 (실제: ${rebuildCount})`,
+      );
+      // 모든 오버라이드 제거 후 tick 간격은 engineBpm=120 → 500ms
+      assert.ok(intervals.length >= 3, `최소 3개의 간격이 있어야 한다 (실제: ${intervals.length})`);
+      for (const interval of intervals) {
+        assert.equal(
+          interval,
+          500,
+          `두 오버라이드 제거 후 모든 tick 간격은 engineBpm=120 → 500ms여야 한다 (stale 없음, 실제: ${interval}ms)`,
+        );
+      }
+    } else {
+      // stub 환경: overrides 맵이 비어있는지, tick 간격이 올바른지 확인
+      assert.deepEqual(
+        engine.getBarBpmOverrides(),
+        {},
+        "stub 환경에서도 두 오버라이드 제거 후 barBpmOverrides가 비어 있어야 한다",
+      );
+      assert.ok(intervals.length >= 3, `stub 환경에서도 최소 3개의 간격이 있어야 한다 (실제: ${intervals.length})`);
+      for (const interval of intervals) {
+        assert.equal(
+          interval,
+          500,
+          `stub 환경에서도 오버라이드 제거 후 tick 간격은 500ms여야 한다 (실제: ${interval}ms)`,
+        );
+      }
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+    engine.clearBarBpmOverrides();
+  }
+});
