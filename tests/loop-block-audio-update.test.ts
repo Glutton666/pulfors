@@ -1336,6 +1336,228 @@ test("setAllBeatSubdivisions 재생 중: preRenderedAudio=true 상태에서 onSc
 // 엔진 기본 BPM(500ms)으로 복원되는지 확인
 // ──────────────────────────────────────────────────────────────
 
+// ──────────────────────────────────────────────────────────────
+// 재생 중 setAllBarBpmOverrides → onScheduleRebuild 콜백 발화 검증 (Task #184)
+// 벌크 bar BPM 오버라이드 설정이 재생 중 WAV 버퍼를 즉시 갱신하는지 확인
+// ──────────────────────────────────────────────────────────────
+
+test("setAllBarBpmOverrides 재생 중: preRenderedAudio=true 상태에서 onScheduleRebuild가 정확히 한 번 호출된다", () => {
+  // 재생 중 + preRenderedAudio=true 상태에서 setAllBarBpmOverrides를 호출하면
+  // rebuildSchedule()이 실행되고 onScheduleRebuild 콜백이 정확히 한 번 발화해야 한다.
+  // Task #179는 타이밍 정확성만 검증했고, 이 테스트는 콜백 발화 자체를 직접 검증한다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    engine.setAllBarBpmOverrides({ 0: 180, 2: 60 });
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 setAllBarBpmOverrides 호출 시 onScheduleRebuild가 정확히 한 번 호출되어야 한다",
+      );
+    } else {
+      assert.deepEqual(
+        engine.getBarBpmOverrides(),
+        { 0: 180, 2: 60 },
+        "stub 환경에서도 setAllBarBpmOverrides가 엔진에 반영되어야 한다",
+      );
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+    engine.clearBarBpmOverrides();
+  }
+});
+
+// ──────────────────────────────────────────────────────────────
+// 재생 중 setAllBarRepeats → onScheduleRebuild 콜백 발화 검증 (Task #184)
+// ──────────────────────────────────────────────────────────────
+
+test("setAllBarRepeats 재생 중: preRenderedAudio=true 상태에서 onScheduleRebuild가 정확히 한 번 호출된다", () => {
+  // 재생 중 + preRenderedAudio=true 상태에서 setAllBarRepeats를 호출하면
+  // rebuildSchedule()이 실행되고 onScheduleRebuild 콜백이 정확히 한 번 발화해야 한다.
+  // 벌크 bar repeat 갱신 후 WAV 버퍼가 stale 상태로 남는 회귀를 방지한다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    engine.setAllBarRepeats({ 0: { type: "count", value: 2 }, 2: { type: "count", value: 3 } });
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 setAllBarRepeats 호출 시 onScheduleRebuild가 정확히 한 번 호출되어야 한다",
+      );
+    } else {
+      const repeats = engine.getAllBarRepeats();
+      assert.ok(
+        repeats[0] !== undefined,
+        "stub 환경에서도 setAllBarRepeats가 엔진에 반영되어야 한다",
+      );
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+    engine.clearBarRepeats();
+  }
+});
+
+// ──────────────────────────────────────────────────────────────
+// 재생 중 clearBarRepeats → onScheduleRebuild 콜백 발화 검증 (Task #184)
+// ──────────────────────────────────────────────────────────────
+
+test("clearBarRepeats 재생 중: preRenderedAudio=true 상태에서 onScheduleRebuild가 정확히 한 번 호출된다", () => {
+  // 재생 중 + preRenderedAudio=true 상태에서 clearBarRepeats를 호출하면
+  // rebuildSchedule()이 실행되고 onScheduleRebuild 콜백이 정확히 한 번 발화해야 한다.
+  // bar repeat 전체 삭제 후 WAV 버퍼가 stale 상태로 남는 회귀를 방지한다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setAllBarRepeats({ 0: { type: "count", value: 2 } });
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    engine.clearBarRepeats();
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 clearBarRepeats 호출 시 onScheduleRebuild가 정확히 한 번 호출되어야 한다",
+      );
+    } else {
+      assert.deepEqual(
+        engine.getAllBarRepeats(),
+        {},
+        "stub 환경에서도 clearBarRepeats 후 barRepeats가 비어 있어야 한다",
+      );
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+  }
+});
+
+// ──────────────────────────────────────────────────────────────
+// 재생 중 clearLoopBlocks → onScheduleRebuild 콜백 발화 검증 (Task #184)
+// ──────────────────────────────────────────────────────────────
+
+test("clearLoopBlocks 재생 중: preRenderedAudio=true 상태에서 onScheduleRebuild가 정확히 한 번 호출된다", () => {
+  // 재생 중 + preRenderedAudio=true 상태에서 clearLoopBlocks를 호출하면
+  // rebuildSchedule()이 실행되고 onScheduleRebuild 콜백이 정확히 한 번 발화해야 한다.
+  // 루프 블록 전체 삭제 후 WAV 버퍼가 stale 상태로 남는 회귀를 방지한다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setLoopBlocks([{ startBeat: 0, endBeat: 3, type: "count", value: 2, bpm: 80 }]);
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    engine.clearLoopBlocks();
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 clearLoopBlocks 호출 시 onScheduleRebuild가 정확히 한 번 호출되어야 한다",
+      );
+    } else {
+      assert.equal(
+        engine.getLoopBlocks().length,
+        0,
+        "stub 환경에서도 clearLoopBlocks 후 루프 블록이 없어야 한다",
+      );
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+  }
+});
+
+// ──────────────────────────────────────────────────────────────
+// 재생 중 setBlockPlayMode → onScheduleRebuild 콜백 발화 검증 (Task #184)
+// ──────────────────────────────────────────────────────────────
+
+test("setBlockPlayMode 재생 중: preRenderedAudio=true 상태에서 onScheduleRebuild가 정확히 한 번 호출된다", () => {
+  // 재생 중 + preRenderedAudio=true 상태에서 setBlockPlayMode를 호출하면
+  // rebuildSchedule()이 실행되고 onScheduleRebuild 콜백이 정확히 한 번 발화해야 한다.
+  // 재생 모드 변경(sequential→random 등) 후 WAV 버퍼가 stale 상태로 남는 회귀를 방지한다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setLoopBlocks([{ startBeat: 0, endBeat: 3, type: "count", value: 1 }]);
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    engine.setBlockPlayMode("random");
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 setBlockPlayMode 호출 시 onScheduleRebuild가 정확히 한 번 호출되어야 한다",
+      );
+    } else {
+      assert.equal(
+        engine.getBlockPlayMode(),
+        "random",
+        "stub 환경에서도 setBlockPlayMode가 엔진에 반영되어야 한다",
+      );
+    }
+  } finally {
+    engine.stop();
+    engine.setBlockPlayMode("sequential");
+    engine.setPreRenderedAudio(false);
+  }
+});
+
 test("clearBarBpmOverrides 재생 중: preRenderedAudio=true 상태에서 clearBarBpmOverrides + buildScheduleOnly → 모든 tick 간격이 엔진 기본 BPM으로 복원된다", () => {
   // Task #183: 재생 중 clearBarBpmOverrides 경로의 타이밍 정확성 회귀 방지.
   // 1) preRenderedAudio=true + setAllBarBpmOverrides({ 0: 60 }) 적용 → WAV 버퍼에 stale 오버라이드 가능.
