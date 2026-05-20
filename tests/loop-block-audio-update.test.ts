@@ -1629,3 +1629,87 @@ test("clearBarBpmOverrides 재생 중: preRenderedAudio=true 상태에서 clearB
     engine.clearBarBpmOverrides();
   }
 });
+
+// ──────────────────────────────────────────────────────────────
+// 단일 바 세터 재생 중 onScheduleRebuild 검증 (Task #186)
+// setBarBpmOverride / setBarRepeat (single-bar setters)
+// ──────────────────────────────────────────────────────────────
+
+test("setBarBpmOverride 재생 중 (단일 바): preRenderedAudio=true 상태에서 onScheduleRebuild가 정확히 한 번 호출된다", () => {
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setLoopBlocks([{ startBeat: 0, endBeat: 3, type: "count", value: 1 }]);
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    engine.setBarBpmOverride(0, 180);
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 setBarBpmOverride 호출 시 onScheduleRebuild가 정확히 한 번 호출되어야 한다",
+      );
+    } else {
+      // stub 환경: isRunning=true가 되지 않더라도 오버라이드 값이 저장됐는지 확인한다
+      assert.deepEqual(
+        engine.getBarBpmOverrides(),
+        { 0: 180 },
+        "stub 환경에서도 setBarBpmOverride 값이 저장되어야 한다",
+      );
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+    engine.setBarBpmOverride(0, null);
+  }
+});
+
+test("setBarRepeat 재생 중 (단일 바): preRenderedAudio=true 상태에서 onScheduleRebuild가 정확히 한 번 호출된다", () => {
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.setLoopBlocks([{ startBeat: 0, endBeat: 3, type: "count", value: 1 }]);
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    engine.setBarRepeat(0, { type: "count", value: 2 });
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 setBarRepeat 호출 시 onScheduleRebuild가 정확히 한 번 호출되어야 한다",
+      );
+    } else {
+      // stub 환경: isRunning=true가 되지 않더라도 반복 설정이 저장됐는지 확인한다
+      const stored = engine.getAllBarRepeats();
+      assert.ok(
+        stored[0] != null,
+        "stub 환경에서도 setBarRepeat 값이 저장되어야 한다",
+      );
+      assert.equal(stored[0].value, 2, "반복 횟수가 올바르게 저장되어야 한다");
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+    engine.setBarRepeat(0, null);
+  }
+});
