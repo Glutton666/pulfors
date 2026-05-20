@@ -823,6 +823,9 @@ export class MetronomeEngine {
       }
     }
     this.invalidateScheduleCache();
+    if (this.isRunning) {
+      this.rebuildSchedule();
+    }
   }
 
   setBeatTypes(types: BeatType[]) {

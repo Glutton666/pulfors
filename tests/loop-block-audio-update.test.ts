@@ -1065,6 +1065,130 @@ test("setAllBarBpmOverrides: 호출 전후 buildScheduleOnly → tick 간격이 
   engine.clearBarBpmOverrides();
 });
 
+// ──────────────────────────────────────────────────────────────
+// 재생 중 subdivision·accent·beatsPerMeasure → onScheduleRebuild 발화 검증 (Task #180)
+// setBeatSubdivision, setBeatTypes, setBeatsPerMeasure가 WAV 버퍼 재구성 콜백을 즉시 발화하는지 확인
+// ──────────────────────────────────────────────────────────────
+
+test("setBeatSubdivision 재생 중: preRenderedAudio=true 상태에서 onScheduleRebuild가 정확히 한 번 호출된다", () => {
+  // 재생 중 + preRenderedAudio=true 상태에서 setBeatSubdivision을 호출하면
+  // rebuildSchedule()이 실행되고 onScheduleRebuild 콜백이 정확히 한 번 발화해야 한다.
+  // 누락 시 subdivision 변경 후 WAV 버퍼가 stale 상태로 남아 오디오 타이밍이 틀어진다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    engine.setBeatSubdivision(0, ["accent", "normal", "normal"]);
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 setBeatSubdivision 호출 시 onScheduleRebuild가 정확히 한 번 호출되어야 한다",
+      );
+    } else {
+      assert.deepEqual(
+        engine.getBeatSubdivision(0),
+        ["accent", "normal", "normal"],
+        "stub 환경에서도 setBeatSubdivision이 엔진에 반영되어야 한다",
+      );
+    }
+  } finally {
+    engine.stop();
+    engine.setBeatSubdivision(0, null);
+    engine.setPreRenderedAudio(false);
+  }
+});
+
+test("setBeatTypes 재생 중: preRenderedAudio=true 상태에서 onScheduleRebuild가 정확히 한 번 호출된다", () => {
+  // 재생 중 + preRenderedAudio=true 상태에서 setBeatTypes를 호출하면
+  // rebuildSchedule()이 실행되고 onScheduleRebuild 콜백이 정확히 한 번 발화해야 한다.
+  // accent 패턴 변경 후 WAV 버퍼가 stale 상태로 남는 회귀를 방지한다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    engine.setBeatTypes(["accent", "normal", "accent", "normal"]);
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 setBeatTypes 호출 시 onScheduleRebuild가 정확히 한 번 호출되어야 한다",
+      );
+    } else {
+      assert.deepEqual(
+        engine.getBeatTypes(),
+        ["accent", "normal", "accent", "normal"],
+        "stub 환경에서도 setBeatTypes가 엔진에 반영되어야 한다",
+      );
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+  }
+});
+
+test("setBeatsPerMeasure 재생 중: preRenderedAudio=true 상태에서 onScheduleRebuild가 정확히 한 번 호출된다", () => {
+  // 재생 중 + preRenderedAudio=true 상태에서 setBeatsPerMeasure를 호출하면
+  // rebuildSchedule()이 실행되고 onScheduleRebuild 콜백이 정확히 한 번 발화해야 한다.
+  // Task #180 이전 setBeatsPerMeasure는 rebuildSchedule()을 호출하지 않아
+  // 박자 수 변경 후 WAV 버퍼가 stale 상태로 남는 버그가 있었다.
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  let rebuildCount = 0;
+  engine.setOnScheduleRebuild(() => { rebuildCount += 1; });
+
+  try {
+    engine.start(0);
+    engine.setPreRenderedAudio(true);
+
+    const wasRunning = engine.getIsRunning();
+
+    engine.setBeatsPerMeasure(3);
+
+    if (wasRunning) {
+      assert.equal(
+        rebuildCount,
+        1,
+        "재생 중 setBeatsPerMeasure 호출 시 onScheduleRebuild가 정확히 한 번 호출되어야 한다",
+      );
+    } else {
+      assert.equal(
+        engine.getBeatsPerMeasure(),
+        3,
+        "stub 환경에서도 setBeatsPerMeasure가 엔진에 반영되어야 한다",
+      );
+    }
+  } finally {
+    engine.stop();
+    engine.setPreRenderedAudio(false);
+  }
+});
+
 test("halfTime 토글 후 블록 교체: 각 블록의 tick 간격이 halfTime 배율을 유지한다", () => {
   // halfTime=true로 재생 중 루프 블록 집합을 교체했을 때
   // 새 블록에도 동일하게 /2 배율이 적용된 tick 간격이 나와야 한다.
