@@ -4039,6 +4039,21 @@ export default function MetronomeScreen() {
 
   useEffect(() => { handleNoteTogglePlayRef.current = handleNoteTogglePlay; }, [handleNoteTogglePlay]);
 
+  const handleNoteManualNext = useCallback(() => {
+    const engine = engineRef.current;
+    if (!engine || !noteIsPlayingRef.current) return;
+    engine.requestStopAfterMeasure();
+  }, []);
+
+  const handleNoteManualNextImmediate = useCallback(() => {
+    const engine = engineRef.current;
+    if (!engine || !noteIsPlayingRef.current) return;
+    engine.stop();
+    stopRenderedAudio();
+    clearSamplePlayStates();
+    noteAdvanceQueueRef.current();
+  }, []);
+
   const handleNoteSave = useCallback(async (): Promise<boolean> => {
     const q = noteQueueRef.current;
     if (q.length === 0) return false;
@@ -5128,6 +5143,8 @@ export default function MetronomeScreen() {
             onInsertNext={handleNoteInsertNext}
             onPlayModeChange={setNotePlayMode}
             onTogglePlay={handleNoteTogglePlay}
+            onManualNext={handleNoteManualNext}
+            onManualNextImmediate={handleNoteManualNextImmediate}
             onSave={handleNoteSave}
             onReset={handleNoteReset}
             onExitNoteMode={handleExitNoteMode}

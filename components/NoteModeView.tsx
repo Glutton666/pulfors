@@ -37,6 +37,8 @@ interface NoteModeViewProps {
   onInsertNext: (entry: PracticeEntry) => void;
   onPlayModeChange: (mode: "once" | "loop" | "random") => void;
   onTogglePlay: () => void;
+  onManualNext?: () => void;
+  onManualNextImmediate?: () => void;
   onSave: () => Promise<boolean>;
   onReset: () => void;
   onExitNoteMode: () => void;
@@ -219,6 +221,8 @@ export function NoteModeView({
   onInsertNext,
   onPlayModeChange,
   onTogglePlay,
+  onManualNext,
+  onManualNextImmediate,
   onSave,
   onReset,
   onExitNoteMode,
@@ -578,6 +582,19 @@ export function NoteModeView({
               >
                 <Ionicons name="stop" size={S.ms(20, 0.4)} color="#fff" />
               </Pressable>
+              {queue.length > 1 && (
+                <Pressable
+                  style={[styles.nextButton, { width: S.ms(44, 0.4), height: S.ms(36, 0.4), borderRadius: S.ms(8, 0.3) }]}
+                  onPress={onManualNext}
+                  onLongPress={onManualNextImmediate}
+                  delayLongPress={500}
+                >
+                  <Ionicons name="play-skip-forward" size={S.ms(14, 0.3)} color={C.accent} />
+                  <Text style={[styles.nextButtonText, { color: C.accent, fontSize: S.ms(9, 0.3) }]}>
+                    {t("noteMode", "nextBeat")}
+                  </Text>
+                </Pressable>
+              )}
             </View>
             {renderPlayingStrip()}
             {renderControlPadSection(true)}
@@ -638,12 +655,27 @@ export function NoteModeView({
 
         <View style={styles.playingStripContainer}>
           {renderPlayingStrip()}
-          <Pressable
-            style={[styles.playButton, { backgroundColor: C.danger }]}
-            onPress={onTogglePlay}
-          >
-            <Ionicons name="stop" size={S.ms(28, 0.4)} color="#fff" />
-          </Pressable>
+          <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: S.ms(8, 0.3) }}>
+            <Pressable
+              style={[styles.playButton, { backgroundColor: C.danger }]}
+              onPress={onTogglePlay}
+            >
+              <Ionicons name="stop" size={S.ms(28, 0.4)} color="#fff" />
+            </Pressable>
+            {queue.length > 1 && (
+              <Pressable
+                style={styles.nextButton}
+                onPress={onManualNext}
+                onLongPress={onManualNextImmediate}
+                delayLongPress={500}
+              >
+                <Ionicons name="play-skip-forward" size={S.ms(18, 0.4)} color={C.accent} />
+                <Text style={[styles.nextButtonText, { color: C.accent }]}>
+                  {t("noteMode", "nextBeat")}
+                </Text>
+              </Pressable>
+            )}
+          </View>
         </View>
         {renderAssignModal()}
       </View>
@@ -765,18 +797,37 @@ export function NoteModeView({
           </Pressable>
         ))}
       </View>
-      <Pressable
-        style={[
-          styles.playButton,
-          { backgroundColor: isPlaying ? C.danger : C.accent },
-          queue.length === 0 && { opacity: 0.4 },
-          isLandscape && { width: S.ms(60, 0.4), height: S.ms(30, 0.4), borderRadius: S.ms(8, 0.3) },
-        ]}
-        onPress={onTogglePlay}
-        disabled={queue.length === 0}
-      >
-        <Ionicons name={isPlaying ? "stop" : "play"} size={isLandscape ? 24 : 28} color="#fff" />
-      </Pressable>
+      <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: S.ms(6, 0.3) }}>
+        <Pressable
+          style={[
+            styles.playButton,
+            { backgroundColor: isPlaying ? C.danger : C.accent },
+            queue.length === 0 && { opacity: 0.4 },
+            isLandscape && { width: S.ms(60, 0.4), height: S.ms(30, 0.4), borderRadius: S.ms(8, 0.3) },
+          ]}
+          onPress={onTogglePlay}
+          disabled={queue.length === 0}
+        >
+          <Ionicons name={isPlaying ? "stop" : "play"} size={isLandscape ? 24 : 28} color="#fff" />
+        </Pressable>
+        {isPlaying && queue.length > 1 && (
+          <Pressable
+            style={[
+              styles.nextButton,
+              isLandscape && { width: S.ms(52, 0.4), height: S.ms(30, 0.4), borderRadius: S.ms(8, 0.3) },
+            ]}
+            onPress={onManualNext}
+            onLongPress={onManualNextImmediate}
+            delayLongPress={500}
+            accessibilityLabel={t("noteMode", "nextBeatHint")}
+          >
+            <Ionicons name="play-skip-forward" size={isLandscape ? 16 : 18} color={C.accent} />
+            <Text style={[styles.nextButtonText, { color: C.accent }, isLandscape && { fontSize: S.ms(9, 0.3) }]}>
+              {t("noteMode", "nextBeat")}
+            </Text>
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 
@@ -942,6 +993,22 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     borderRadius: S.ms(24, 0.4),
     alignItems: "center",
     justifyContent: "center",
+  },
+  nextButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: S.ms(4, 0.3),
+    paddingHorizontal: S.ms(12, 0.4),
+    height: S.ms(48, 0.4),
+    borderRadius: S.ms(10, 0.3),
+    borderWidth: 1,
+    borderColor: C.accent + "55",
+    backgroundColor: C.accent + "15",
+  },
+  nextButtonText: {
+    fontSize: S.ms(12, 0.3),
+    fontWeight: "600" as const,
   },
   sectionHeader: {
     flexDirection: "row",

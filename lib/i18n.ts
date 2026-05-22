@@ -636,6 +636,8 @@ export const translations = {
     padMissing: { ko: "항목 없음", en: "Missing item" },
     padPlayingHint: { ko: "패드를 누르면 큐 끝에 추가됩니다", en: "Tap a pad to append to the queue" },
     padNoBarEntries: { ko: "먼저 바 모드 항목을 저장하세요", en: "Save a bar mode item first" },
+    nextBeat: { ko: "다음", en: "Next" },
+    nextBeatHint: { ko: "탭: 현재 마디 끝 후 전환 / 길게: 즉시 전환", en: "Tap: skip at end of measure / Hold: skip immediately" },
   },
   duration: {
     s: { ko: "초", en: "s" },
