@@ -436,8 +436,8 @@ export function NoteModeView({
                 return (
                   <Pressable
                     key={`qa-${entry.id ?? idx}-${idx}`}
-                    style={[styles.quickAddItem, { borderColor: C.border, backgroundColor: C.surface }]}
-                    onPress={() => onAddToQueue(entry)}
+                    style={[styles.quickAddItem, { borderColor: C.border, backgroundColor: C.surface, opacity: isPlaying ? 1 : 0.6 }]}
+                    onPress={() => { if (isPlaying) onAddToQueue(entry); }}
                     onLongPress={() => setQuickAssignIdx(idx)}
                     delayLongPress={500}
                   >

@@ -2402,11 +2402,11 @@ export default function MetronomeScreen() {
         return;
       }
 
-      // 노트 모드 빠른 추가: 1~9 숫자 키
+      // 노트 모드 빠른 추가: 1~9 숫자 키 (재생 중일 때만 큐 추가)
       if (inNoteMode && /^Digit[1-9]$/.test(e.code)) {
         const idx = parseInt(e.code.slice(5), 10) - 1;
         const entry = quickAddListRef.current[idx];
-        if (entry) {
+        if (entry && noteIsPlayingRef.current) {
           e.preventDefault();
           quickAddNoteRef.current(entry);
         }
