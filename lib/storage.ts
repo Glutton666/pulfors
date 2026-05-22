@@ -384,6 +384,29 @@ export async function saveControlPadMapping(mapping: ControlPadMapping): Promise
   }
 }
 
+const QUICK_ADD_KEY = "metronome_quick_add_v1";
+
+export async function loadQuickAddList(): Promise<PracticeEntry[]> {
+  try {
+    const data = await AsyncStorage.getItem(QUICK_ADD_KEY);
+    if (data) {
+      const parsed: unknown = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed.filter((e) => isPlainObject(e)) as unknown as PracticeEntry[];
+    }
+  } catch (e) {
+    notifyStorageError({ key: QUICK_ADD_KEY, operation: "load", error: e });
+  }
+  return [];
+}
+
+export async function saveQuickAddList(list: PracticeEntry[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(QUICK_ADD_KEY, JSON.stringify(list));
+  } catch (e) {
+    notifyStorageError({ key: QUICK_ADD_KEY, operation: "save", error: e });
+  }
+}
+
 export async function loadPracticeBook(): Promise<PracticeEntry[]> {
   try {
     const data = await AsyncStorage.getItem(PRACTICE_BOOK_KEY);

@@ -45,6 +45,8 @@ interface NoteModeViewProps {
   onQueueItemImageChange?: (index: number, imageUri: string | undefined) => void;
   padMapping?: ControlPadMapping;
   onPadMappingChange?: (mapping: ControlPadMapping) => void;
+  quickAddList?: PracticeEntry[];
+  onQuickAddListChange?: (list: PracticeEntry[]) => void;
 }
 
 const BEAT_COLORS: Record<BeatType, string> = {
@@ -229,6 +231,8 @@ export function NoteModeView({
   onQueueItemImageChange,
   padMapping: padMappingProp,
   onPadMappingChange,
+  quickAddList,
+  onQuickAddListChange,
 }: NoteModeViewProps) {
   const { colors: C } = useTheme();
   const S = useScale();
@@ -248,6 +252,9 @@ export function NoteModeView({
   const [sourceCollapsed, setSourceCollapsed] = useState(false);
   const [padEnabled, setPadEnabled] = useState(false);
   const [assignSlot, setAssignSlot] = useState<number | null>(null);
+  const [activePadTab, setActivePadTab] = useState<"pad" | "quick">("pad");
+  const [quickAddExpanded, setQuickAddExpanded] = useState(true);
+  const [quickAssignIdx, setQuickAssignIdx] = useState<number | null>(null);
   const [lastTriggeredSlot, setLastTriggeredSlot] = useState<number | null>(null);
 
   useEffect(() => {
@@ -363,45 +370,206 @@ export function NoteModeView({
 
   const renderControlPadHeader = (showToggle: boolean) => (
     <View style={[styles.sectionHeader, isLandscape && { marginBottom: S.ms(2, 0.3) }]}>
-      <View style={styles.sectionHeaderLeft}>
-        <Text style={[styles.sectionTitle, { color: C.text }, isLandscape && { fontSize: S.ms(11, 0.3) }]}>
-          {t("noteMode", "controlPad")}
-        </Text>
+      <View style={{ flexDirection: "row", gap: 4 }}>
+        <Pressable
+          style={[styles.padTabBtn, { borderColor: activePadTab === "pad" ? C.accent : C.border, backgroundColor: activePadTab === "pad" ? C.accent + "22" : "transparent" }]}
+          onPress={() => setActivePadTab("pad")}
+        >
+          <Text style={[styles.padTabText, { color: activePadTab === "pad" ? C.accent : C.textSecondary }]}>
+            {t("noteMode", "controlPadTab")}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.padTabBtn, { borderColor: activePadTab === "quick" ? C.accent : C.border, backgroundColor: activePadTab === "quick" ? C.accent + "22" : "transparent" }]}
+          onPress={() => setActivePadTab("quick")}
+        >
+          <Text style={[styles.padTabText, { color: activePadTab === "quick" ? C.accent : C.textSecondary }]}>
+            {t("noteMode", "quickAdd")}
+          </Text>
+        </Pressable>
       </View>
-      {showToggle ? (
+      {activePadTab === "pad" && showToggle ? (
         <Pressable
           onPress={() => setPadEnabled(p => !p)}
-          style={[
-            styles.padToggle,
-            {
-              borderColor: padEnabled ? C.accent : C.border,
-              backgroundColor: padEnabled ? C.accent + "22" : C.surface,
-            },
-          ]}
+          style={[styles.padToggle, { borderColor: padEnabled ? C.accent : C.border, backgroundColor: padEnabled ? C.accent + "22" : C.surface }]}
           hitSlop={6}
         >
-          <Ionicons
-            name={padEnabled ? "radio-button-on" : "radio-button-off"}
-            size={S.ms(12, 0.3)}
-            color={padEnabled ? C.accent : C.textTertiary}
-          />
+          <Ionicons name={padEnabled ? "radio-button-on" : "radio-button-off"} size={S.ms(12, 0.3)} color={padEnabled ? C.accent : C.textTertiary} />
           <Text style={[styles.padToggleText, { color: padEnabled ? C.accent : C.textTertiary }]}>
             {t("noteMode", "controlPadEnable")}
+          </Text>
+        </Pressable>
+      ) : activePadTab === "quick" ? (
+        <Pressable
+          onPress={() => setQuickAddExpanded(p => !p)}
+          style={[styles.padToggle, { borderColor: quickAddExpanded ? C.accent : C.border, backgroundColor: quickAddExpanded ? C.accent + "22" : C.surface }]}
+          hitSlop={6}
+        >
+          <Ionicons name={quickAddExpanded ? "eye-outline" : "eye-off-outline"} size={S.ms(12, 0.3)} color={quickAddExpanded ? C.accent : C.textTertiary} />
+          <Text style={[styles.padToggleText, { color: quickAddExpanded ? C.accent : C.textTertiary }]}>
+            {t("noteMode", "quickAddToggle")}
           </Text>
         </Pressable>
       ) : null}
     </View>
   );
 
+  const renderQuickAddSection = () => {
+    const list = quickAddList || [];
+    return (
+      <View>
+        {quickAddExpanded && (
+          <>
+            {list.length > 0 && (
+              <Text style={[styles.padHint, { color: C.textTertiary }]}>
+                {t("noteMode", "quickAddHint")}
+                {Platform.OS === "web" ? `  ·  ${t("noteMode", "quickAddKeyHint")}` : ""}
+              </Text>
+            )}
+            {list.length === 0 ? (
+              <Text style={[styles.padHint, { color: C.textTertiary }]}>
+                {t("noteMode", "quickAddEmpty")}
+              </Text>
+            ) : (
+              list.map((entry, idx) => {
+                const badge = idx < 9 ? idx + 1 : null;
+                return (
+                  <Pressable
+                    key={`qa-${entry.id ?? idx}-${idx}`}
+                    style={[styles.quickAddItem, { borderColor: C.border, backgroundColor: C.surface }]}
+                    onPress={() => onAddToQueue(entry)}
+                    onLongPress={() => setQuickAssignIdx(idx)}
+                    delayLongPress={500}
+                  >
+                    {badge !== null ? (
+                      <View style={[styles.quickAddBadge, { backgroundColor: C.accent + "33", borderColor: C.accent + "66" }]}>
+                        <Text style={[styles.quickAddBadgeText, { color: C.accent }]}>{badge}</Text>
+                      </View>
+                    ) : (
+                      <View style={[styles.quickAddBadge, { backgroundColor: "transparent", borderColor: "transparent" }]} />
+                    )}
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={[styles.quickAddItemLabel, { color: C.text }]} numberOfLines={1}>{entry.label}</Text>
+                      <Text style={[styles.quickAddItemMeta, { color: C.textTertiary }]}>{entry.bpm} BPM</Text>
+                    </View>
+                    {!isPlaying && (
+                      <Pressable
+                        onPress={() => {
+                          const next = [...list];
+                          next.splice(idx, 1);
+                          onQuickAddListChange?.(next);
+                        }}
+                        hitSlop={8}
+                        style={{ padding: 4 }}
+                      >
+                        <Ionicons name="close-circle-outline" size={S.ms(16, 0.3)} color={C.textTertiary} />
+                      </Pressable>
+                    )}
+                  </Pressable>
+                );
+              })
+            )}
+            <Pressable
+              style={[styles.quickAddNewBtn, { borderColor: C.border }]}
+              onPress={() => setQuickAssignIdx(-1)}
+            >
+              <Ionicons name="add" size={S.ms(14, 0.3)} color={C.textTertiary} />
+              <Text style={[styles.quickAddNewText, { color: C.textTertiary }]}>{t("noteMode", "quickAddAssign")}</Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+    );
+  };
+
+  const renderQuickAssignModal = () => {
+    if (quickAssignIdx === null) return null;
+    const isAdd = quickAssignIdx === -1;
+    const list = quickAddList || [];
+    const currentEntry = !isAdd && quickAssignIdx >= 0 ? list[quickAssignIdx] : undefined;
+    return (
+      <AnimatedModal
+        visible={true}
+        transparent
+        onRequestClose={() => setQuickAssignIdx(null)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setQuickAssignIdx(null)}>
+          <Pressable style={[styles.modalSheet, { backgroundColor: C.surface, borderColor: C.border }]} onPress={() => {}}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: C.text }]}>
+                {isAdd ? t("noteMode", "quickAddAssign") : t("noteMode", "quickAddChange")}
+              </Text>
+              {!isAdd && (
+                <Pressable
+                  onPress={() => {
+                    const next = [...list];
+                    next.splice(quickAssignIdx!, 1);
+                    onQuickAddListChange?.(next);
+                    setQuickAssignIdx(null);
+                  }}
+                  style={[styles.modalClearBtn, { borderColor: C.danger }]}
+                  hitSlop={8}
+                >
+                  <Text style={[styles.modalClearText, { color: C.danger }]}>{t("noteMode", "quickAddRemove")}</Text>
+                </Pressable>
+              )}
+            </View>
+            {barEntries.length === 0 ? (
+              <Text style={[styles.padHint, { color: C.textTertiary, paddingVertical: S.ms(12, 0.3) }]}>
+                {t("noteMode", "quickAddNoEntries")}
+              </Text>
+            ) : (
+              <FlatList
+                data={barEntries}
+                keyExtractor={(item, i) => `qa-pick-${item.id ?? i}`}
+                style={{ maxHeight: S.ms(300, 0.4) }}
+                renderItem={({ item }) => {
+                  const selected = !isAdd && currentEntry?.id === item.id;
+                  return (
+                    <Pressable
+                      onPress={() => {
+                        const next = [...list];
+                        if (isAdd) {
+                          next.push(item);
+                        } else if (quickAssignIdx !== null && quickAssignIdx >= 0) {
+                          next[quickAssignIdx] = item;
+                        }
+                        onQuickAddListChange?.(next);
+                        setQuickAssignIdx(null);
+                      }}
+                      style={[styles.modalItem, { borderColor: selected ? C.accent : C.border, backgroundColor: selected ? C.accent + "22" : "transparent" }]}
+                    >
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={[styles.modalItemLabel, { color: C.text }]} numberOfLines={1}>{item.label}</Text>
+                        <Text style={[styles.modalItemMeta, { color: C.textSecondary }]}>{item.bpm} BPM · {item.beatsPerMeasure}박</Text>
+                      </View>
+                      {selected && <Ionicons name="checkmark" size={S.ms(16, 0.3)} color={C.accent} />}
+                    </Pressable>
+                  );
+                }}
+              />
+            )}
+          </Pressable>
+        </Pressable>
+      </AnimatedModal>
+    );
+  };
+
   const renderControlPadSection = (compact: boolean) => (
     <View style={isLandscape ? { marginTop: S.ms(4, 0.3) } : { marginTop: S.ms(6, 0.3) }}>
       {renderControlPadHeader(isPlaying)}
-      {isPlaying && padEnabled && (
-        <Text style={[styles.padHint, { color: C.textTertiary }]}>
-          {t("noteMode", "padPlayingHint")}
-        </Text>
+      {activePadTab === "pad" ? (
+        <>
+          {isPlaying && padEnabled && (
+            <Text style={[styles.padHint, { color: C.textTertiary }]}>
+              {t("noteMode", "padPlayingHint")}
+            </Text>
+          )}
+          {renderPadGrid(compact)}
+        </>
+      ) : (
+        renderQuickAddSection()
       )}
-      {renderPadGrid(compact)}
     </View>
   );
 
@@ -600,6 +768,7 @@ export function NoteModeView({
             {renderControlPadSection(true)}
           </View>
           {renderAssignModal()}
+          {renderQuickAssignModal()}
         </View>
       );
     }
@@ -678,6 +847,7 @@ export function NoteModeView({
           </View>
         </View>
         {renderAssignModal()}
+        {renderQuickAssignModal()}
       </View>
     );
   }
@@ -857,6 +1027,7 @@ export function NoteModeView({
           {renderPlayControls()}
         </View>
         {renderAssignModal()}
+        {renderQuickAssignModal()}
       </View>
     );
   }
@@ -889,6 +1060,7 @@ export function NoteModeView({
       {renderControlPadSection(false)}
 
       {renderAssignModal()}
+      {renderQuickAssignModal()}
     </View>
   );
 }
@@ -1392,6 +1564,61 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   },
   modalItemMeta: {
     fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: S.ms(11, 0.3),
+  },
+  padTabBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+  },
+  padTabText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: S.ms(11, 0.3),
+  },
+  quickAddItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 7,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    marginBottom: 4,
+  },
+  quickAddBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  quickAddBadgeText: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    fontSize: S.ms(11, 0.3),
+  },
+  quickAddItemLabel: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: S.ms(12, 0.3),
+  },
+  quickAddItemMeta: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: S.ms(10, 0.3),
+  },
+  quickAddNewBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 7,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    marginTop: 2,
+  },
+  quickAddNewText: {
+    fontFamily: "SpaceGrotesk_500Medium",
     fontSize: S.ms(11, 0.3),
   },
 });

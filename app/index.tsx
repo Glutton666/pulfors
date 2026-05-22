@@ -54,7 +54,7 @@ import {
   soundSets,
 } from "@/lib/metronome-engine";
 import type { BeatType, ProgressInfo } from "@/lib/metronome-engine";
-import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, loadControlPadMapping, saveControlPadMapping, createEmptyControlPadMapping, type ControlPadMapping, type MetronomeSettings } from "@/lib/storage";
+import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, loadControlPadMapping, saveControlPadMapping, createEmptyControlPadMapping, loadQuickAddList, saveQuickAddList, type ControlPadMapping, type MetronomeSettings } from "@/lib/storage";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample } from "@/lib/storage";
 import { BeatIndicator } from "@/components/BeatIndicator";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
@@ -241,6 +241,20 @@ export default function MetronomeScreen() {
     saveControlPadMapping(m).catch(() => {});
   }, []);
   const noteAdvanceQueueRef = useRef<() => void>(() => {});
+  const quickAddNoteRef = useRef<(entry: PracticeEntry) => void>(() => {});
+
+  const [quickAddList, setQuickAddList] = useState<PracticeEntry[]>([]);
+  const quickAddListRef = useRef<PracticeEntry[]>([]);
+  useEffect(() => { quickAddListRef.current = quickAddList; }, [quickAddList]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const list = await loadQuickAddList();
+      if (!cancelled) setQuickAddList(list);
+    })();
+    return () => { cancelled = true; };
+  }, []);
   const noteShuffledIndicesRef = useRef<number[]>([]);
   const noteShuffledPosRef = useRef(0);
 
@@ -2388,6 +2402,17 @@ export default function MetronomeScreen() {
         return;
       }
 
+      // 노트 모드 빠른 추가: 1~9 숫자 키
+      if (inNoteMode && /^Digit[1-9]$/.test(e.code)) {
+        const idx = parseInt(e.code.slice(5), 10) - 1;
+        const entry = quickAddListRef.current[idx];
+        if (entry) {
+          e.preventDefault();
+          quickAddNoteRef.current(entry);
+        }
+        return;
+      }
+
       // 노트 모드에서는 Space 외 단축키 비활성
       if (inNoteMode) return;
 
@@ -3934,6 +3959,14 @@ export default function MetronomeScreen() {
     });
   }, []);
 
+  useEffect(() => { quickAddNoteRef.current = handleNoteAddToQueue; }, [handleNoteAddToQueue]);
+
+  const handleQuickAddListChange = useCallback((list: PracticeEntry[]) => {
+    setQuickAddList(list);
+    quickAddListRef.current = list;
+    saveQuickAddList(list).catch(() => {});
+  }, []);
+
   const handleNoteRemoveFromQueue = useCallback((index: number) => {
     const curIdx = noteCurrentIndexRef.current;
     const wasPlaying = noteIsPlayingRef.current;
@@ -5145,6 +5178,8 @@ export default function MetronomeScreen() {
             onTogglePlay={handleNoteTogglePlay}
             onManualNext={handleNoteManualNext}
             onManualNextImmediate={handleNoteManualNextImmediate}
+            quickAddList={quickAddList}
+            onQuickAddListChange={handleQuickAddListChange}
             onSave={handleNoteSave}
             onReset={handleNoteReset}
             onExitNoteMode={handleExitNoteMode}
