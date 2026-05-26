@@ -814,7 +814,7 @@ export function BarModeView({
     if (editingBeat === null || isPlaying) return;
     const val = type === "count" ? count : min * 60 + sec;
     if (val <= 0) return;
-    const rep: BarRepeat = { type, value: type === "count" ? Math.max(2, val) : Math.max(1, val) };
+    const rep: BarRepeat = { type, value: type === "count" ? Math.max(1, val) : Math.max(1, val) };
     if (bpmOverride !== null && bpmOverride > 0) rep.bpm = bpmOverride;
     const existing = barRepeats[editingBeat];
     if (existing) {
@@ -1264,20 +1264,21 @@ export function BarModeView({
                   );
                 })}
               </View>
-              {/* 서브디비전 바 (개별 비트 편집) */}
-              {layer?.subdivisions && layer.subdivisions.length > 0 && (
-                <View style={{ marginTop: 6 }}>
-                  <SubdivisionBar
-                    pattern={layer.subdivisions}
-                    onPatternChange={p => updateLayerSubdivisions(layerIdx, p)}
-                    onDragStart={() => {}}
-                    onDragMove={() => {}}
-                    onDragEnd={() => {}}
-                    onReset={() => updateLayerSubdivisions(layerIdx, null)}
-                    isPlaying={isPlaying}
-                  />
-                </View>
-              )}
+              {/* 서브디비전 바 (개별 비트 편집) — 항상 표시, 기본값은 레이어 beatType 단일 셀 */}
+              <View style={{ marginTop: 6 }}>
+                <SubdivisionBar
+                  pattern={layer?.subdivisions && layer.subdivisions.length > 0 ? layer.subdivisions : [layer?.beatType ?? "normal"]}
+                  onPatternChange={p => {
+                    const isDefaultSingle = p.length === 1 && p[0] === (layer?.beatType ?? "normal");
+                    updateLayerSubdivisions(layerIdx, isDefaultSingle ? null : p);
+                  }}
+                  onDragStart={() => {}}
+                  onDragMove={() => {}}
+                  onDragEnd={() => {}}
+                  onReset={() => updateLayerSubdivisions(layerIdx, null)}
+                  isPlaying={isPlaying}
+                />
+              </View>
               {/* 서브디비전 프리셋 */}
               <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, marginTop: 6, marginBottom: 3 }}>
                 {t("barModeView", "subPatternLabel")}
@@ -1514,36 +1515,38 @@ export function BarModeView({
             )}
 
             {/* BPM 오버라이드 */}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center", marginBottom: 12 }}>
-              <Text style={{ color: C.textSecondary, fontSize: FontSize.caption }}>{t("barModeView", "repBpmOverride")}</Text>
-              {blockRepBpm !== null ? (
-                <>
-                  <Pressable onPress={() => setBlockRepBpm(v => v !== null ? Math.max(20, v - 5) : null)} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
-                    <Ionicons name="remove" size={ms(13, 0.4)} color={C.accent} />
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, marginBottom: 6 }}>{t("barModeView", "repBpmOverride")}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center" }}>
+                {blockRepBpm !== null ? (
+                  <>
+                    <Pressable onPress={() => setBlockRepBpm(v => v !== null ? Math.max(20, v - 5) : null)} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                      <Ionicons name="remove" size={ms(13, 0.4)} color={C.accent} />
+                    </Pressable>
+                    <TextInput
+                      style={[styles.bpmInput, { color: C.accent, borderBottomColor: C.accent }]}
+                      value={String(blockRepBpm)}
+                      keyboardType="number-pad"
+                      onEndEditing={e => {
+                        const v = parseInt(e.nativeEvent.text, 10);
+                        if (!isNaN(v) && v >= 20 && v <= 300) setBlockRepBpm(v);
+                        else if (!e.nativeEvent.text) setBlockRepBpm(null);
+                      }}
+                      selectTextOnFocus
+                    />
+                    <Pressable onPress={() => setBlockRepBpm(v => v !== null ? Math.min(300, v + 5) : null)} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                      <Ionicons name="add" size={ms(13, 0.4)} color={C.accent} />
+                    </Pressable>
+                    <Pressable onPress={() => setBlockRepBpm(null)} style={[styles.typeToggle, { backgroundColor: C.overlay08 }]} hitSlop={4}>
+                      <Text style={{ color: C.textSecondary, fontSize: FontSize.caption }}>{t("barModeView", "repBpmReset")}</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <Pressable onPress={() => setBlockRepBpm(120)} style={[styles.typeToggle, { backgroundColor: C.overlay08 }]}>
+                    <Text style={{ color: C.textSecondary, fontSize: FontSize.caption }}>{t("barModeView", "repBpmSet")}</Text>
                   </Pressable>
-                  <TextInput
-                    style={[styles.bpmInput, { color: C.accent, borderBottomColor: C.accent }]}
-                    value={String(blockRepBpm)}
-                    keyboardType="number-pad"
-                    onEndEditing={e => {
-                      const v = parseInt(e.nativeEvent.text, 10);
-                      if (!isNaN(v) && v >= 20 && v <= 300) setBlockRepBpm(v);
-                      else if (!e.nativeEvent.text) setBlockRepBpm(null);
-                    }}
-                    selectTextOnFocus
-                  />
-                  <Pressable onPress={() => setBlockRepBpm(v => v !== null ? Math.min(300, v + 5) : null)} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
-                    <Ionicons name="add" size={ms(13, 0.4)} color={C.accent} />
-                  </Pressable>
-                  <Pressable onPress={() => setBlockRepBpm(null)} style={[styles.typeToggle, { backgroundColor: C.overlay08 }]} hitSlop={4}>
-                    <Text style={{ color: C.textSecondary, fontSize: FontSize.caption }}>{t("barModeView", "repBpmReset")}</Text>
-                  </Pressable>
-                </>
-              ) : (
-                <Pressable onPress={() => setBlockRepBpm(120)} style={[styles.typeToggle, { backgroundColor: C.overlay08 }]}>
-                  <Text style={{ color: C.textSecondary, fontSize: FontSize.caption }}>{t("barModeView", "repBpmSet")}</Text>
-                </Pressable>
-              )}
+                )}
+              </View>
             </View>
 
             {/* 사운드셋 선택 */}
