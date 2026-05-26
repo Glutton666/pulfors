@@ -20,6 +20,7 @@ import * as Haptics from "expo-haptics";
 
 import { LinearGradient } from "expo-linear-gradient";
 import { AnimatedModal } from "@/components/AnimatedModal";
+import { SubdivisionBar } from "./SubdivisionBar";
 import { BarPlayButton } from "./BarPlayButton";
 import { BeatStepperButton } from "./BeatStepperButton";
 import { formatRepeat } from "./beat-indicator-helpers";
@@ -368,7 +369,7 @@ export function BarModeView({
 
   // 반복 편집 로컬 상태
   const [repType, setRepType] = useState<"count" | "duration">("count");
-  const [repCount, setRepCount] = useState(2);
+  const [repCount, setRepCount] = useState(1);
   const [repMin, setRepMin] = useState(0);
   const [repSec, setRepSec] = useState(30);
   const [repBpm, setRepBpm] = useState<number | null>(null);
@@ -793,11 +794,11 @@ export function BarModeView({
     const existing = barRepeats[editingBeat];
     if (existing) {
       setRepType(existing.type);
-      if (existing.type === "count") setRepCount(existing.value > 1 ? existing.value : 2);
+      if (existing.type === "count") setRepCount(existing.value >= 1 ? existing.value : 1);
       else { setRepMin(Math.floor(existing.value / 60)); setRepSec(existing.value % 60); }
       setRepBpm(existing.bpm ?? null);
     } else {
-      setRepType("count"); setRepCount(2); setRepMin(0); setRepSec(30); setRepBpm(null);
+      setRepType("count"); setRepCount(1); setRepMin(0); setRepSec(30); setRepBpm(null);
     }
   }, [editingBeat]); // barRepeats 제외 의도적
 
@@ -842,7 +843,7 @@ export function BarModeView({
     } else {
       onBarRepeatChange(editingBeat, null);
     }
-    setRepType("count"); setRepCount(2); setRepMin(0); setRepSec(30); setRepBpm(null);
+    setRepType("count"); setRepCount(1); setRepMin(0); setRepSec(30); setRepBpm(null);
   }, [editingBeat, isPlaying, barRepeats, onBarRepeatChange]);
 
   const editingLayers: BarLayer[] = (editingRepeat?.layers) ?? [];
@@ -1129,12 +1130,12 @@ export function BarModeView({
                 </Pressable>
               )}
             </View>
-            {/* 값 스테퍼 + BPM */}
+            {/* 값 스테퍼 */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               {repType === "count" ? (
                 <>
                   <Pressable
-                    onPress={() => { if (!isPlaying) { const c = Math.max(2, repCount - 1); setRepCount(c); commitRepeat(repType, c, repMin, repSec, repBpm); } }}
+                    onPress={() => { if (!isPlaying) { const c = Math.max(1, repCount - 1); setRepCount(c); commitRepeat(repType, c, repMin, repSec, repBpm); } }}
                     style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
                   >
                     <Ionicons name="remove" size={ms(14, 0.4)} color={C.textSecondary} />
@@ -1165,7 +1166,9 @@ export function BarModeView({
                   </Pressable>
                 </>
               )}
-              <View style={{ flex: 1 }} />
+            </View>
+            {/* BPM 입력 — 별도 행으로 분리 */}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end" }}>
               {repBpm !== null ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Pressable onPress={() => { if (!isPlaying) { const v = Math.max(20, repBpm - 5); setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
@@ -1261,6 +1264,20 @@ export function BarModeView({
                   );
                 })}
               </View>
+              {/* 서브디비전 바 (개별 비트 편집) */}
+              {layer?.subdivisions && layer.subdivisions.length > 0 && (
+                <View style={{ marginTop: 6 }}>
+                  <SubdivisionBar
+                    pattern={layer.subdivisions}
+                    onPatternChange={p => updateLayerSubdivisions(layerIdx, p)}
+                    onDragStart={() => {}}
+                    onDragMove={() => {}}
+                    onDragEnd={() => {}}
+                    onReset={() => updateLayerSubdivisions(layerIdx, null)}
+                    isPlaying={isPlaying}
+                  />
+                </View>
+              )}
               {/* 서브디비전 프리셋 */}
               <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, marginTop: 6, marginBottom: 3 }}>
                 {t("barModeView", "subPatternLabel")}
