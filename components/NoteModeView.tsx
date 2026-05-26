@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Alert,
   Platform,
   Image,
+  PanResponder,
   useWindowDimensions,
 } from "react-native";
 import { AnimatedModal } from "@/components/AnimatedModal";
@@ -211,6 +212,72 @@ function SourceItem({
 }
 
 
+function DragHandle({
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+  color,
+}: {
+  onDragStart: () => void;
+  onDragMove: (dy: number) => void;
+  onDragEnd: (dy: number) => void;
+  color: string;
+}) {
+  const onDragStartRef = useRef(onDragStart);
+  const onDragMoveRef = useRef(onDragMove);
+  const onDragEndRef = useRef(onDragEnd);
+  useEffect(() => { onDragStartRef.current = onDragStart; }, [onDragStart]);
+  useEffect(() => { onDragMoveRef.current = onDragMove; }, [onDragMove]);
+  useEffect(() => { onDragEndRef.current = onDragEnd; }, [onDragEnd]);
+
+  const panResponder = useRef(
+    Platform.OS !== "web"
+      ? PanResponder.create({
+          onStartShouldSetPanResponder: () => true,
+          onMoveShouldSetPanResponder: () => true,
+          onPanResponderGrant: () => { onDragStartRef.current(); },
+          onPanResponderMove: (_, gs) => { onDragMoveRef.current(gs.dy); },
+          onPanResponderRelease: (_, gs) => { onDragEndRef.current(gs.dy); },
+          onPanResponderTerminate: (_, gs) => { onDragEndRef.current(gs.dy); },
+        })
+      : null,
+  ).current;
+
+  const webHandlers =
+    Platform.OS === "web"
+      ? {
+          onPointerDown: (e: any) => {
+            e.preventDefault();
+            const startY = e.clientY;
+            onDragStartRef.current();
+            const onMove = (me: PointerEvent) => {
+              onDragMoveRef.current(me.clientY - startY);
+            };
+            const onUp = (me: PointerEvent) => {
+              onDragEndRef.current(me.clientY - startY);
+              window.removeEventListener("pointermove", onMove);
+              window.removeEventListener("pointerup", onUp);
+            };
+            window.addEventListener("pointermove", onMove);
+            window.addEventListener("pointerup", onUp);
+          },
+        }
+      : {};
+
+  return (
+    <View
+      style={[
+        { padding: 6, justifyContent: "center", alignItems: "center" },
+        Platform.OS === "web" ? ({ cursor: "grab", userSelect: "none" } as any) : {},
+      ]}
+      {...(panResponder?.panHandlers ?? {})}
+      {...webHandlers}
+    >
+      <MaterialCommunityIcons name="drag-vertical" size={18} color={color} />
+    </View>
+  );
+}
+
 export function NoteModeView({
   queue,
   barEntries,
@@ -256,6 +323,26 @@ export function NoteModeView({
   const [quickAddExpanded, setQuickAddExpanded] = useState(true);
   const [quickAssignIdx, setQuickAssignIdx] = useState<number | null>(null);
   const [lastTriggeredSlot, setLastTriggeredSlot] = useState<number | null>(null);
+  const [qaRearranging, setQaRearranging] = useState<{ fromIdx: number; toIdx: number } | null>(null);
+  const qaItemLayouts = useRef<{ y: number; height: number }[]>([]);
+
+  const calcQaDropIndex = useCallback((fromIdx: number, dy: number, listLen: number): number => {
+    const layouts = qaItemLayouts.current;
+    if (!layouts.length) return fromIdx;
+    const fromLayout = layouts[fromIdx];
+    if (!fromLayout) return fromIdx;
+    const draggedCenterY = fromLayout.y + fromLayout.height / 2 + dy;
+    let best = fromIdx;
+    let bestDist = Infinity;
+    for (let i = 0; i < listLen; i++) {
+      const l = layouts[i];
+      if (!l) continue;
+      const centerY = l.y + l.height / 2;
+      const dist = Math.abs(draggedCenterY - centerY);
+      if (dist < bestDist) { bestDist = dist; best = i; }
+    }
+    return best;
+  }, []);
 
   useEffect(() => {
     if (isPlaying) setSourceCollapsed(true);
@@ -433,39 +520,78 @@ export function NoteModeView({
             ) : (
               list.map((entry, idx) => {
                 const badge = idx < 9 ? idx + 1 : null;
+                const isDragging = qaRearranging?.fromIdx === idx;
+                const isDropTarget = qaRearranging !== null && qaRearranging.toIdx === idx && qaRearranging.fromIdx !== idx;
                 return (
-                  <Pressable
+                  <View
                     key={`qa-${entry.id ?? idx}-${idx}`}
-                    style={[styles.quickAddItem, { borderColor: C.border, backgroundColor: C.surface, opacity: isPlaying ? 1 : 0.6 }]}
-                    onPress={() => { if (isPlaying) onAddToQueue(entry); }}
-                    onLongPress={() => setQuickAssignIdx(idx)}
-                    delayLongPress={500}
+                    onLayout={(e) => {
+                      qaItemLayouts.current[idx] = { y: e.nativeEvent.layout.y, height: e.nativeEvent.layout.height };
+                    }}
                   >
-                    {badge !== null ? (
-                      <View style={[styles.quickAddBadge, { backgroundColor: C.accent + "33", borderColor: C.accent + "66" }]}>
-                        <Text style={[styles.quickAddBadgeText, { color: C.accent }]}>{badge}</Text>
+                    {isDropTarget && (
+                      <View style={[styles.qaDropIndicator, { backgroundColor: C.accent }]} />
+                    )}
+                    <Pressable
+                      style={[
+                        styles.quickAddItem,
+                        {
+                          borderColor: isDragging ? C.accent : C.border,
+                          backgroundColor: C.surface,
+                          opacity: isDragging ? 0.45 : isPlaying ? 1 : 0.6,
+                        },
+                      ]}
+                      onPress={() => { if (isPlaying && !qaRearranging) onAddToQueue(entry); }}
+                      onLongPress={() => { if (!qaRearranging) setQuickAssignIdx(idx); }}
+                      delayLongPress={500}
+                    >
+                      {!isPlaying && (
+                        <DragHandle
+                          color={C.textTertiary}
+                          onDragStart={() => setQaRearranging({ fromIdx: idx, toIdx: idx })}
+                          onDragMove={(dy) => {
+                            setQaRearranging((prev) =>
+                              prev ? { ...prev, toIdx: calcQaDropIndex(prev.fromIdx, dy, list.length) } : null,
+                            );
+                          }}
+                          onDragEnd={(dy) => {
+                            const toIdx = calcQaDropIndex(idx, dy, list.length);
+                            if (toIdx !== idx) {
+                              const next = [...list];
+                              const [moved] = next.splice(idx, 1);
+                              next.splice(toIdx, 0, moved);
+                              onQuickAddListChange?.(next);
+                            }
+                            setQaRearranging(null);
+                          }}
+                        />
+                      )}
+                      {badge !== null ? (
+                        <View style={[styles.quickAddBadge, { backgroundColor: C.accent + "33", borderColor: C.accent + "66" }]}>
+                          <Text style={[styles.quickAddBadgeText, { color: C.accent }]}>{badge}</Text>
+                        </View>
+                      ) : (
+                        <View style={[styles.quickAddBadge, { backgroundColor: "transparent", borderColor: "transparent" }]} />
+                      )}
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={[styles.quickAddItemLabel, { color: C.text }]} numberOfLines={1}>{entry.label}</Text>
+                        <Text style={[styles.quickAddItemMeta, { color: C.textTertiary }]}>{entry.bpm} BPM</Text>
                       </View>
-                    ) : (
-                      <View style={[styles.quickAddBadge, { backgroundColor: "transparent", borderColor: "transparent" }]} />
-                    )}
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={[styles.quickAddItemLabel, { color: C.text }]} numberOfLines={1}>{entry.label}</Text>
-                      <Text style={[styles.quickAddItemMeta, { color: C.textTertiary }]}>{entry.bpm} BPM</Text>
-                    </View>
-                    {!isPlaying && (
-                      <Pressable
-                        onPress={() => {
-                          const next = [...list];
-                          next.splice(idx, 1);
-                          onQuickAddListChange?.(next);
-                        }}
-                        hitSlop={8}
-                        style={{ padding: 4 }}
-                      >
-                        <Ionicons name="close-circle-outline" size={S.ms(16, 0.3)} color={C.textTertiary} />
-                      </Pressable>
-                    )}
-                  </Pressable>
+                      {!isPlaying && (
+                        <Pressable
+                          onPress={() => {
+                            const next = [...list];
+                            next.splice(idx, 1);
+                            onQuickAddListChange?.(next);
+                          }}
+                          hitSlop={8}
+                          style={{ padding: 4 }}
+                        >
+                          <Ionicons name="close-circle-outline" size={S.ms(16, 0.3)} color={C.textTertiary} />
+                        </Pressable>
+                      )}
+                    </Pressable>
+                  </View>
                 );
               })
             )}
@@ -1620,5 +1746,11 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   quickAddNewText: {
     fontFamily: "SpaceGrotesk_500Medium",
     fontSize: S.ms(11, 0.3),
+  },
+  qaDropIndicator: {
+    height: 2,
+    borderRadius: 1,
+    marginBottom: 2,
+    marginHorizontal: 4,
   },
 });
