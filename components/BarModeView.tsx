@@ -357,6 +357,7 @@ export function BarModeView({
   const [placingSymbol, setPlacingSymbol] = useState<SymbolType | null>(null);
   const [blockSelectFirst, setBlockSelectFirst] = useState<number | null>(null);
   const [activeLayerTab, setActiveLayerTab] = useState(0);
+  const [editorCollapsed, setEditorCollapsed] = useState(false);
 
   // ─── 블록 편집 모달 상태 ─────────────────────────────────────────────────
   const [blockEditingIdx, setBlockEditingIdx] = useState<number | null>(null);
@@ -1097,13 +1098,13 @@ export function BarModeView({
 
           <View style={{ flex: 1 }} />
 
-          <View style={{ width: ms(10, 0.4) }}>
-            <Ionicons name="chevron-up" size={ms(11, 0.4)} color={C.textTertiary + "60"} />
-          </View>
+          <Pressable onPress={() => setEditorCollapsed(v => !v)} hitSlop={10} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
+            <Ionicons name={editorCollapsed ? "chevron-up" : "chevron-down"} size={ms(13, 0.4)} color={C.textTertiary + "99"} />
+          </Pressable>
         </View>
 
         {/* 인라인 반복 패널 (바 선택 시 — 반복 유무와 관계없이 항상 표시, 재생 중에는 읽기 전용) */}
-        {editingBeat !== null && (
+        {!editorCollapsed && editingBeat !== null && (
           <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, opacity: isPlaying ? 0.5 : 1 }]}>
             {/* 타입 토글 + 지우기 */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
@@ -1207,7 +1208,7 @@ export function BarModeView({
         )}
 
         {/* 스와이프 힌트 (바 미선택 시) */}
-        {editingBeat === null && (
+        {!editorCollapsed && editingBeat === null && (
           <View style={styles.swipeHintRow}>
             <Text style={[styles.swipeHintText, { color: C.textTertiary }]}>{t("barModeView", "swipeHintCopy")}</Text>
             <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, opacity: 0.3, marginHorizontal: 8 }}>|</Text>
@@ -1218,7 +1219,7 @@ export function BarModeView({
         )}
 
         {/* 레이어 내용 */}
-        {activeLayerTab === 0 ? (
+        {!editorCollapsed && (activeLayerTab === 0 ? (
           <View style={styles.mainSubdivisionSlot}>
             {subdivisionBarElement ?? (
               <View style={{ alignItems: "center", paddingVertical: 12 }}>
@@ -1231,79 +1232,22 @@ export function BarModeView({
         ) : (() => {
           const layer = editingLayers[activeLayerTab - 1];
           const layerIdx = activeLayerTab - 1;
-          const SUB_PRESETS: { key: string; subs: BeatType[] | null }[] = [
-            { key: t("barModeView", "subPatternDefault"), subs: null },
-            { key: "×2", subs: ["normal", "normal"] },
-            { key: "×3", subs: ["normal", "normal", "normal"] },
-            { key: "×4", subs: ["normal", "normal", "normal", "normal"] },
-            { key: "×6", subs: ["normal", "normal", "normal", "normal", "normal", "normal"] },
-          ];
-          const currentSubs = layer?.subdivisions ? JSON.stringify(layer.subdivisions) : null;
           return (
-            <View style={{ paddingHorizontal: Spacing.sm, paddingVertical: 6 }}>
-              {/* 비트 타입 선택 */}
-              <View style={styles.layerEditorRow}>
-                {(["normal", "accent", "strong", "mute"] as BeatType[]).map(bt => {
-                  const isActive = layer?.beatType === bt;
-                  return (
-                    <Pressable
-                      key={bt}
-                      onPress={() => updateLayerBeatType(layerIdx, bt)}
-                      style={[
-                        styles.layerBeatTypeBtn,
-                        {
-                          backgroundColor: isActive ? C.accent + "30" : C.backgroundSecondary,
-                          borderColor: isActive ? C.accent : "transparent",
-                        },
-                      ]}
-                    >
-                      <Text style={{ color: isActive ? C.accent : C.textSecondary, fontSize: FontSize.micro }}>
-                        {bt === "normal" ? t("barModeView", "layerBeatNormal") : bt === "accent" ? t("barModeView", "layerBeatAccent") : bt === "strong" ? t("barModeView", "layerBeatStrong") : t("barModeView", "layerBeatMute")}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              {/* 서브디비전 바 (개별 비트 편집) — 항상 표시, 기본값은 레이어 beatType 단일 셀 */}
-              <View style={{ marginTop: 6 }}>
-                <SubdivisionBar
-                  pattern={layer?.subdivisions && layer.subdivisions.length > 0 ? layer.subdivisions : [layer?.beatType ?? "normal"]}
-                  onPatternChange={p => {
-                    const isDefaultSingle = p.length === 1 && p[0] === (layer?.beatType ?? "normal");
-                    updateLayerSubdivisions(layerIdx, isDefaultSingle ? null : p);
-                  }}
-                  onDragStart={() => {}}
-                  onDragMove={() => {}}
-                  onDragEnd={() => {}}
-                  onReset={() => updateLayerSubdivisions(layerIdx, null)}
-                  isPlaying={isPlaying}
-                />
-              </View>
-              {/* 서브디비전 프리셋 */}
-              <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, marginTop: 6, marginBottom: 3 }}>
-                {t("barModeView", "subPatternLabel")}
-              </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
-                {SUB_PRESETS.map(p => {
-                  const isActive = p.subs === null ? !layer?.subdivisions : currentSubs === JSON.stringify(p.subs);
-                  return (
-                    <Pressable
-                      key={p.key}
-                      onPress={() => updateLayerSubdivisions(layerIdx, p.subs)}
-                      style={[styles.typeToggle, { backgroundColor: isActive ? C.accent + "30" : C.overlay08 }]}
-                    >
-                      <Text style={{ color: isActive ? C.accent : C.textSecondary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_600SemiBold" }}>
-                        {p.key}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              {/* 사운드셋 선택 */}
-              <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, marginTop: 6, marginBottom: 3 }}>
-                {t("barModeView", "soundSetLabel")}
-              </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
+            <View style={styles.mainSubdivisionSlot}>
+              <SubdivisionBar
+                pattern={layer?.subdivisions && layer.subdivisions.length > 0 ? layer.subdivisions : [layer?.beatType ?? "normal"]}
+                onPatternChange={p => {
+                  const isDefaultSingle = p.length === 1 && p[0] === (layer?.beatType ?? "normal");
+                  updateLayerSubdivisions(layerIdx, isDefaultSingle ? null : p);
+                }}
+                onDragStart={() => {}}
+                onDragMove={() => {}}
+                onDragEnd={() => {}}
+                onReset={() => updateLayerSubdivisions(layerIdx, null)}
+                isPlaying={isPlaying}
+              />
+              {/* 사운드셋 선택 — 레이어 전용 */}
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
                 {[{ key: null, label: t("barModeView", "soundSetDefault") }, ...SOUND_SET_OPTIONS.map(o => ({ key: o.key, label: t("barModeView", o.labelKey) }))].map(opt => {
                   const isActive = (opt.key === null) ? !layer?.soundSet : layer?.soundSet === opt.key;
                   return (
@@ -1321,7 +1265,7 @@ export function BarModeView({
               </View>
             </View>
           );
-        })()}
+        })())}
 
         {tempoLabel ? (
           <Text style={{ color: C.accentMuted, fontSize: ms(10, 0.3), textAlign: "center", paddingVertical: 2 }}>

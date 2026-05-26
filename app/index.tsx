@@ -2854,7 +2854,7 @@ export default function MetronomeScreen() {
           if (v.bpm) engine.setBarBpmOverride(Number(k), v.bpm);
         }
       } else {
-        const defaultBeats = 4;
+        const defaultBeats = 1;
         const defaultTypes = defaultBeatTypes(defaultBeats);
         barConfigRef.current = {
           ...bc,
