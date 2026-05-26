@@ -200,47 +200,240 @@ describe("/api/analyze-audio: bpm/bpmCandidates 응답 필드 검증", () => {
   });
 });
 
-// ─── NoteRecorderModal 소스 구조 검증 ────────────────────────────────────────
+// ─── NoteRecorderModal: BPM fetch 상태 머신 시뮬레이션 ───────────────────────
+//
+// NoteRecorderModal.tsx의 fetchBpm / suggestedBpms / onSuggestBpm 로직을
+// 동일한 알고리즘으로 추출해 mocked fetch와 함께 행동 테스트를 수행한다.
+// (animated-modal.test.ts가 AnimatedModal의 useEffect를 시뮬레이션하는 방식과 동일)
 
-describe("NoteRecorderModal: BPM 자동 추천 UI 구조 검증", () => {
-  const src = fs.readFileSync(
-    path.resolve(process.cwd(), "components/NoteRecorderModal.tsx"),
-    "utf-8",
-  );
+type MockFetch = (url: string, opts?: RequestInit) => Promise<Response>;
 
-  test("suggestedBpms state 선언 존재", () => {
-    assert.ok(
-      src.includes("suggestedBpms"),
-      "suggestedBpms state가 NoteRecorderModal.tsx에 없음",
-    );
+class BpmFetchSimulation {
+  suggestedBpms: number[] = [];
+  isFetchingBpm = false;
+  private _fetch: MockFetch;
+
+  constructor(mockFetch: MockFetch) {
+    this._fetch = mockFetch;
+  }
+
+  /** NoteRecorderModal.tsx의 fetchBpm useCallback과 동일한 로직 */
+  async fetchBpm(audioUri: string): Promise<void> {
+    try {
+      this.suggestedBpms = [];
+      this.isFetchingBpm = true;
+
+      const MAX_SEND_BYTES = 3 * 1024 * 1024;
+      const resp = await this._fetch(audioUri);
+      if (!resp.ok) return;
+      const ab = await resp.arrayBuffer();
+      const bytes = new Uint8Array(ab).slice(0, MAX_SEND_BYTES);
+
+      // base64 인코딩 (btoa 대신 Node.js Buffer 사용)
+      const base64Audio = Buffer.from(bytes).toString("base64");
+
+      const uriLower = audioUri.toLowerCase().split("?")[0];
+      const dotIdx = uriLower.lastIndexOf(".");
+      const rawExt = dotIdx >= 0 ? uriLower.slice(dotIdx) : ".wav";
+      const ALLOWED_EXTS = [".wav", ".m4a", ".3gp", ".mp4", ".aac", ".webm"];
+      const format = ALLOWED_EXTS.includes(rawExt) ? rawExt : ".wav";
+
+      const apiResp = await this._fetch("/api/analyze-audio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audio: base64Audio, format }),
+      });
+      if (!apiResp.ok) return;
+      const data = await apiResp.json() as { bpm?: number | null; bpmCandidates?: number[] };
+      const rawCandidates = Array.isArray(data.bpmCandidates)
+        ? data.bpmCandidates
+        : (typeof data.bpm === "number" ? [data.bpm] : []);
+      const validCandidates = rawCandidates.filter(
+        (b) => typeof b === "number" && b >= 50 && b <= 250,
+      );
+      if (validCandidates.length > 0) {
+        this.suggestedBpms = validCandidates;
+      }
+    } catch {
+      // 실패 시 조용히 종료 (NoteRecorderModal.tsx와 동일)
+    } finally {
+      this.isFetchingBpm = false;
+    }
+  }
+
+  /** BPM 칩 onPress 시 동작 (NoteRecorderModal.tsx 1027~1028번 줄과 동일) */
+  onChipPress(bpm: number, onSuggestBpm?: (bpm: number) => void): void {
+    if (onSuggestBpm) onSuggestBpm(bpm);
+    this.suggestedBpms = [];
+  }
+}
+
+/** 간단한 mock fetch 팩토리 */
+function mockFetchPair(
+  audioBuf: ArrayBuffer,
+  apiResponse: object,
+  apiOk = true,
+): MockFetch {
+  return async (url: string) => {
+    if (url === "/api/analyze-audio") {
+      const body = JSON.stringify(apiResponse);
+      return {
+        ok: apiOk,
+        status: apiOk ? 200 : 500,
+        arrayBuffer: async () => new ArrayBuffer(0),
+        json: async () => JSON.parse(body),
+      } as unknown as Response;
+    }
+    // 오디오 URI 요청
+    return {
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => audioBuf,
+      json: async () => ({}),
+    } as unknown as Response;
+  };
+}
+
+describe("NoteRecorderModal: BPM fetch 상태 머신 행동 테스트", () => {
+  const silentAudioBuf = new ArrayBuffer(44); // 최소 WAV 크기
+
+  test("fetchBpm 전 suggestedBpms는 빈 배열, isFetchingBpm=false", () => {
+    const sim = new BpmFetchSimulation(mockFetchPair(silentAudioBuf, {}));
+    assert.deepStrictEqual(sim.suggestedBpms, []);
+    assert.strictEqual(sim.isFetchingBpm, false);
   });
 
-  test("fetchBpm 함수 존재", () => {
-    assert.ok(
-      src.includes("fetchBpm"),
-      "fetchBpm 함수가 NoteRecorderModal.tsx에 없음",
+  test("fetchBpm 완료 후 isFetchingBpm=false (finally 보장)", async () => {
+    const sim = new BpmFetchSimulation(
+      mockFetchPair(silentAudioBuf, { bpmCandidates: [120] }),
     );
+    await sim.fetchBpm("https://example.com/test.wav");
+    assert.strictEqual(sim.isFetchingBpm, false);
   });
 
-  test("bpmCandidates API 응답 필드 처리 존재", () => {
-    assert.ok(
-      src.includes("bpmCandidates"),
-      "bpmCandidates 처리 코드가 NoteRecorderModal.tsx에 없음",
+  test("API가 bpmCandidates:[120,60] 반환 → suggestedBpms에 두 칩 모두 설정", async () => {
+    const sim = new BpmFetchSimulation(
+      mockFetchPair(silentAudioBuf, { bpm: 120, bpmCandidates: [120, 60] }),
     );
+    await sim.fetchBpm("https://example.com/audio.wav");
+    assert.deepStrictEqual(sim.suggestedBpms, [120, 60], "두 BPM 칩이 모두 설정되어야 함");
   });
 
-  test("BPM 칩 렌더링 코드 존재 (map으로 복수 후보 표시)", () => {
-    assert.ok(
-      src.includes("suggestedBpms") && src.includes(".map("),
-      "suggestedBpms.map() 패턴이 없음 — BPM 칩 복수 렌더링 미구현",
+  test("bpmCandidates 없고 bpm 단독 반환 → suggestedBpms에 [bpm] 설정 (fallback)", async () => {
+    const sim = new BpmFetchSimulation(
+      mockFetchPair(silentAudioBuf, { bpm: 96, bpmCandidates: undefined }),
     );
+    await sim.fetchBpm("https://example.com/audio.wav");
+    assert.deepStrictEqual(sim.suggestedBpms, [96]);
   });
 
-  test("onSuggestBpm 콜백 prop 존재", () => {
-    assert.ok(
-      src.includes("onSuggestBpm"),
-      "onSuggestBpm prop이 NoteRecorderModal.tsx에 없음",
+  test("유효 범위(50~250) 밖 BPM은 필터링됨", async () => {
+    const sim = new BpmFetchSimulation(
+      mockFetchPair(silentAudioBuf, { bpmCandidates: [30, 120, 300] }),
     );
+    await sim.fetchBpm("https://example.com/audio.wav");
+    assert.deepStrictEqual(sim.suggestedBpms, [120], "30과 300은 필터링되어야 함");
+  });
+
+  test("API 응답 bpm/bpmCandidates 모두 없거나 빈 배열 → suggestedBpms=[]", async () => {
+    const sim = new BpmFetchSimulation(
+      mockFetchPair(silentAudioBuf, { bpm: null, bpmCandidates: [] }),
+    );
+    await sim.fetchBpm("https://example.com/audio.wav");
+    assert.deepStrictEqual(sim.suggestedBpms, []);
+  });
+
+  test("오디오 URI fetch 실패(ok=false) → suggestedBpms=[], fetchBpm 조용히 종료", async () => {
+    const failFetch: MockFetch = async () => ({
+      ok: false,
+      status: 404,
+      arrayBuffer: async () => new ArrayBuffer(0),
+      json: async () => ({}),
+    } as unknown as Response);
+    const sim = new BpmFetchSimulation(failFetch);
+    await sim.fetchBpm("https://example.com/missing.wav");
+    assert.deepStrictEqual(sim.suggestedBpms, []);
+  });
+
+  test("API POST 실패(ok=false) → suggestedBpms=[]", async () => {
+    const sim = new BpmFetchSimulation(
+      mockFetchPair(silentAudioBuf, {}, false /* apiOk=false */),
+    );
+    await sim.fetchBpm("https://example.com/audio.wav");
+    assert.deepStrictEqual(sim.suggestedBpms, []);
+  });
+
+  test("BPM 칩 클릭 → onSuggestBpm(bpm) 호출 + suggestedBpms 초기화", async () => {
+    const sim = new BpmFetchSimulation(
+      mockFetchPair(silentAudioBuf, { bpmCandidates: [120, 60] }),
+    );
+    await sim.fetchBpm("https://example.com/audio.wav");
+    assert.deepStrictEqual(sim.suggestedBpms, [120, 60]);
+
+    let called: number | null = null;
+    sim.onChipPress(120, (bpm) => { called = bpm; });
+    assert.strictEqual(called, 120, "onSuggestBpm이 선택한 BPM으로 호출되어야 함");
+    assert.deepStrictEqual(sim.suggestedBpms, [], "칩 클릭 후 suggestedBpms 초기화");
+  });
+
+  test("두 번째 칩 클릭도 정상 동작 — onSuggestBpm(60) 호출", async () => {
+    const sim = new BpmFetchSimulation(
+      mockFetchPair(silentAudioBuf, { bpmCandidates: [120, 60] }),
+    );
+    await sim.fetchBpm("https://example.com/audio.wav");
+
+    let called: number | null = null;
+    sim.onChipPress(60, (bpm) => { called = bpm; });
+    assert.strictEqual(called, 60);
+    assert.deepStrictEqual(sim.suggestedBpms, []);
+  });
+
+  test("URL 확장자에 따라 format이 올바르게 전달됨 (.m4a)", async () => {
+    let capturedFormat: string | null = null;
+    const captureFetch: MockFetch = async (url, opts) => {
+      if (url === "/api/analyze-audio" && opts?.body) {
+        const body = JSON.parse(opts.body as string);
+        capturedFormat = body.format;
+        return {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => new ArrayBuffer(0),
+          json: async () => ({ bpmCandidates: [100] }),
+        } as unknown as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => silentAudioBuf,
+        json: async () => ({}),
+      } as unknown as Response;
+    };
+    const sim = new BpmFetchSimulation(captureFetch);
+    await sim.fetchBpm("https://example.com/recording.m4a");
+    assert.strictEqual(capturedFormat, ".m4a", "format이 URL 확장자에서 올바르게 추출되어야 함");
+  });
+
+  test("허용 안 된 확장자(.xyz) → format='.wav' fallback", async () => {
+    let capturedFormat: string | null = null;
+    const captureFetch: MockFetch = async (url, opts) => {
+      if (url === "/api/analyze-audio" && opts?.body) {
+        const body = JSON.parse(opts.body as string);
+        capturedFormat = body.format;
+        return {
+          ok: true, status: 200,
+          arrayBuffer: async () => new ArrayBuffer(0),
+          json: async () => ({ bpmCandidates: [100] }),
+        } as unknown as Response;
+      }
+      return {
+        ok: true, status: 200,
+        arrayBuffer: async () => silentAudioBuf,
+        json: async () => ({}),
+      } as unknown as Response;
+    };
+    const sim = new BpmFetchSimulation(captureFetch);
+    await sim.fetchBpm("https://example.com/file.xyz");
+    assert.strictEqual(capturedFormat, ".wav", "허용되지 않은 확장자는 .wav로 fallback");
   });
 });
 
