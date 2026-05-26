@@ -327,7 +327,7 @@ function pickDominantFreq(readings: number[]): number | null {
   return freqs[Math.floor(freqs.length / 2)];
 }
 
-function detectBpmCandidatesFromSamples(samples: Float32Array, sampleRate: number): number[] {
+export function detectBpmCandidatesFromSamples(samples: Float32Array, sampleRate: number): number[] {
   const FRAME = 512;
   const MIN_BPM = 50;
   const MAX_BPM = 250;
@@ -402,7 +402,7 @@ export const MAX_CONCURRENT_WAV = 2;
 // Uses req.ip which is correctly populated when Express trust proxy is set.
 // ---------------------------------------------------------------------------
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX_REQUESTS = 20;
+export const RATE_LIMIT_MAX_REQUESTS = 20;
 const rateLimitMap = new Map<string, { count: number; windowStart: number }>();
 
 function checkRateLimit(ip: string): boolean {
@@ -452,7 +452,7 @@ function ffmpegConvertToPcm(inputPath: string, outputPath: string): Promise<void
 // Max base64 length for a 5 MB binary payload — reject early before decoding
 const MAX_BASE64_AUDIO_CHARS = Math.ceil((5 * 1024 * 1024) / 3) * 4;
 
-async function analyzeAudioHandler(req: Request, res: Response) {
+export async function analyzeAudioHandler(req: Request, res: Response) {
   const ip = req.ip ?? "unknown";
   if (!checkRateLimit(ip)) {
     return res.status(429).json({ error: "Too many requests. Please try again later." });
