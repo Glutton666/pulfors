@@ -573,9 +573,12 @@ export function NoteModeView({
                       ) : (
                         <View style={[styles.quickAddBadge, { backgroundColor: "transparent", borderColor: "transparent" }]} />
                       )}
+                      {entry.imageUri ? (
+                        <Image source={{ uri: entry.imageUri }} style={styles.quickAddThumb} />
+                      ) : null}
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={[styles.quickAddItemLabel, { color: C.text }]} numberOfLines={1}>{entry.label}</Text>
-                        <Text style={[styles.quickAddItemMeta, { color: C.textTertiary }]}>{entry.bpm} BPM</Text>
+                        <Text style={[styles.quickAddItemMeta, { color: C.textTertiary }]}>{entry.bpm} BPM · {entry.beatsPerMeasure} {t("practiceBook", "beatsUnit")}</Text>
                       </View>
                       {!isPlaying && (
                         <Pressable
@@ -1731,6 +1734,11 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   quickAddItemMeta: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: S.ms(10, 0.3),
+  },
+  quickAddThumb: {
+    width: 30,
+    height: 30,
+    borderRadius: Radius.sm,
   },
   quickAddNewBtn: {
     flexDirection: "row",
