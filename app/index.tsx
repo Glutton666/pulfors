@@ -1379,6 +1379,12 @@ export default function MetronomeScreen() {
     setRecorderTarget(null);
   }, [recorderTarget, preloadNoteSampleSounds, invalidateSamplePCMCache, scheduleReRender]);
 
+  const handleNoteRecordSuggestBpm = useCallback((detectedBpm: number) => {
+    const clamped = Math.max(20, Math.min(300, Math.round(detectedBpm)));
+    setBpm(clamped);
+    engineRef.current?.setBpm(clamped);
+  }, []);
+
   const handleNoteRecordDelete = useCallback(async () => {
     if (!recorderTarget) return;
     const key = `${recorderTarget.beat}-${recorderTarget.sub}`;
@@ -4955,6 +4961,7 @@ export default function MetronomeScreen() {
         onClose={() => setRecorderTarget(null)}
         onSave={handleNoteRecordSave}
         onDelete={handleNoteRecordDelete}
+        onSuggestBpm={handleNoteRecordSuggestBpm}
         beatIndex={recorderTarget?.beat ?? 0}
         subIndex={recorderTarget?.sub ?? 0}
         hasExisting={recorderTarget ? hasNoteSample(recorderTarget.beat, recorderTarget.sub, noteSamples) : false}

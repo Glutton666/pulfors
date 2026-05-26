@@ -35,6 +35,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import type { SampleSource } from "@/lib/note-samples";
 import type { SampleChannel } from "@/lib/stereo-channel";
 import { buildPreviewUri } from "@/lib/note-preview";
+import { getApiUrl } from "@/lib/query-client";
 import { soundSets } from "@/lib/metronome-engine";
 import type { BuiltinSoundSet } from "@/lib/storage";
 import { safePlay } from "@/lib/audio-utils";
@@ -56,6 +57,7 @@ interface NoteRecorderModalProps {
   bpm: number;
   beatsPerMeasure?: number;
   soundSet?: BuiltinSoundSet;
+  onSuggestBpm?: (bpm: number) => void;
 }
 
 const MAX_RECORD_SECONDS = 10;
@@ -75,6 +77,7 @@ export function NoteRecorderModal({
   bpm,
   beatsPerMeasure = 4,
   soundSet = "classic",
+  onSuggestBpm,
 }: NoteRecorderModalProps) {
   const { colors: C } = useTheme();
   const styles = make_styles(C);
@@ -109,6 +112,8 @@ export function NoteRecorderModal({
   const previewTokenRef = useRef(0);
   const [loadingMessage, setLoadingMessage] = useState("");
   const [loadingProgress, setLoadingProgress] = useState(0);
+  const [suggestedBpm, setSuggestedBpm] = useState<number | null>(null);
+  const [isFetchingBpm, setIsFetchingBpm] = useState(false);
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderRef = useRef(recorder);
@@ -154,6 +159,49 @@ export function NoteRecorderModal({
     try {
       await releaseAudioSession("noteRecorderModal");
     } catch {}
+    setSuggestedBpm(null);
+    setIsFetchingBpm(false);
+  }, []);
+
+  const fetchBpm = useCallback(async (audioUri: string) => {
+    try {
+      setSuggestedBpm(null);
+      setIsFetchingBpm(true);
+
+      const MAX_SEND_BYTES = 3 * 1024 * 1024;
+      const resp = await fetch(audioUri);
+      if (!resp.ok) return;
+      const ab = await resp.arrayBuffer();
+      const bytes = new Uint8Array(ab.slice(0, MAX_SEND_BYTES));
+
+      let binary = "";
+      const chunkSize = 8192;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...(bytes.subarray(i, i + chunkSize) as unknown as number[]));
+      }
+      const base64Audio = btoa(binary);
+
+      const uriLower = audioUri.toLowerCase().split("?")[0];
+      const dotIdx = uriLower.lastIndexOf(".");
+      const rawExt = dotIdx >= 0 ? uriLower.slice(dotIdx) : ".wav";
+      const ALLOWED_EXTS = [".wav", ".m4a", ".3gp", ".mp4", ".aac", ".webm"];
+      const format = ALLOWED_EXTS.includes(rawExt) ? rawExt : ".wav";
+
+      const apiUrl = new URL("/api/analyze-audio", getApiUrl()).toString();
+      const apiResp = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audio: base64Audio, format }),
+      });
+      if (!apiResp.ok) return;
+      const data = await apiResp.json() as { bpm?: number | null };
+      if (typeof data.bpm === "number" && data.bpm >= 50 && data.bpm <= 250) {
+        setSuggestedBpm(data.bpm);
+      }
+    } catch {
+    } finally {
+      setIsFetchingBpm(false);
+    }
   }, []);
 
   const playClick = useCallback(() => {
@@ -340,6 +388,7 @@ export function NoteRecorderModal({
           setTrimEnd(1);
         }
         setPhase("trimming");
+        void fetchBpm(uri);
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
@@ -545,6 +594,7 @@ export function NoteRecorderModal({
         setPhase("trimming");
         setLoadingMessage("");
         setLoadingProgress(0);
+        void fetchBpm(fileUri);
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
@@ -955,6 +1005,39 @@ export function NoteRecorderModal({
                   maxLength={30}
                 />
               </View>
+
+              {isFetchingBpm && (
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: Spacing.sm }}>
+                  <ActivityIndicator size="small" color={C.accent} />
+                  <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>{t("noteRecorder", "bpmDetecting")}</Text>
+                </View>
+              )}
+              {!isFetchingBpm && suggestedBpm !== null && (
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm, marginTop: Spacing.sm }}>
+                  <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>
+                    {t("noteRecorder", "bpmDetected").replace("{bpm}", String(suggestedBpm))}
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      if (onSuggestBpm) onSuggestBpm(suggestedBpm);
+                      setSuggestedBpm(null);
+                    }}
+                    style={{
+                      paddingHorizontal: Spacing.sm,
+                      paddingVertical: 4,
+                      borderRadius: Radius.sm,
+                      backgroundColor: C.accentDim,
+                      borderWidth: 1,
+                      borderColor: C.accent,
+                    }}
+                    hitSlop={8}
+                  >
+                    <Text style={{ color: C.accent, fontSize: FontSize.small, fontWeight: "600" as const }}>
+                      {t("noteRecorder", "bpmApply")}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
 
               <View style={styles.saveRow}>
                 <Pressable style={styles.cancelBtn} onPress={handleClose}>

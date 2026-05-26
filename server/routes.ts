@@ -133,16 +133,52 @@ function decodeWavBuffer(buf) {
   } catch { return null; }
 }
 
+function detectBpm(samples, sampleRate) {
+  const FRAME = 512;
+  const MIN_BPM = 50;
+  const MAX_BPM = 250;
+  const numFrames = Math.floor(samples.length / FRAME);
+  if (numFrames < 8) return null;
+  const energy = new Float32Array(numFrames);
+  for (let f = 0; f < numFrames; f++) {
+    let sum = 0;
+    for (let i = 0; i < FRAME; i++) { const s = samples[f * FRAME + i]; sum += s * s; }
+    energy[f] = Math.sqrt(sum / FRAME);
+  }
+  const onset = new Float32Array(numFrames);
+  for (let f = 1; f < numFrames; f++) {
+    const d = energy[f] - energy[f - 1];
+    onset[f] = d > 0 ? d : 0;
+  }
+  const fps = sampleRate / FRAME;
+  const lagMin = Math.max(1, Math.floor(fps * 60 / MAX_BPM));
+  const lagMax = Math.min(numFrames - 1, Math.ceil(fps * 60 / MIN_BPM));
+  if (lagMin >= lagMax) return null;
+  let bestLag = -1;
+  let bestCorr = -1;
+  for (let lag = lagMin; lag <= lagMax; lag++) {
+    const count = numFrames - lag;
+    if (count <= 0) continue;
+    let corr = 0;
+    for (let i = 0; i < count; i++) corr += onset[i] * onset[i + lag];
+    corr /= count;
+    if (corr > bestCorr) { bestCorr = corr; bestLag = lag; }
+  }
+  if (bestLag < 1 || bestCorr <= 0) return null;
+  const bpm = Math.round(fps * 60 / bestLag);
+  return (bpm >= MIN_BPM && bpm <= MAX_BPM) ? bpm : null;
+}
+
 function analyzeWavDirect(audioBuffer) {
   const decoded = decodeWavBuffer(audioBuffer);
-  if (!decoded) return { frequency: null, note: null };
+  if (!decoded) return { frequency: null, note: null, bpm: null };
   const { rate } = decoded;
   const samples = decoded.samples.length > MAX_AUDIO_SAMPLES
     ? decoded.samples.slice(0, MAX_AUDIO_SAMPLES)
     : decoded.samples;
   const WINDOW_SIZE = 8192;
   const MIC_GATE = 0.02;
-  if (samples.length < WINDOW_SIZE) return { frequency: null, note: null };
+  if (samples.length < WINDOW_SIZE) return { frequency: null, note: null, bpm: null };
   const readings = [];
   const step = Math.floor(WINDOW_SIZE / 2);
   let windowCount = 0;
@@ -154,10 +190,11 @@ function analyzeWavDirect(audioBuffer) {
     windowCount++;
   }
   const dominant = pickDominantFreq(readings);
-  if (!dominant) return { frequency: null, note: null };
+  const bpm = detectBpm(samples, rate);
+  if (!dominant) return { frequency: null, note: null, bpm };
   const rounded = Math.round(dominant * 10) / 10;
   const noteInfo = frequencyToNote(dominant);
-  return { frequency: rounded, note: noteInfo.name + noteInfo.octave };
+  return { frequency: rounded, note: noteInfo.name + noteInfo.octave, bpm };
 }
 
 const buf = Buffer.from(workerData.audioData);
@@ -167,7 +204,7 @@ parentPort.postMessage(result);
 
 function analyzeWavInWorker(
   audioBuffer: Buffer,
-): Promise<{ frequency: number | null; note: string | null }> {
+): Promise<{ frequency: number | null; note: string | null; bpm: number | null }> {
   return new Promise((resolve, reject) => {
     const ab = audioBuffer.buffer.slice(
       audioBuffer.byteOffset,
@@ -268,6 +305,42 @@ function pickDominantFreq(readings: number[]): number | null {
   const freqs = noteMap.get(bestKey)!;
   freqs.sort((a, b) => a - b);
   return freqs[Math.floor(freqs.length / 2)];
+}
+
+function detectBpmFromSamples(samples: Float32Array, sampleRate: number): number | null {
+  const FRAME = 512;
+  const MIN_BPM = 50;
+  const MAX_BPM = 250;
+  const numFrames = Math.floor(samples.length / FRAME);
+  if (numFrames < 8) return null;
+  const energy = new Float32Array(numFrames);
+  for (let f = 0; f < numFrames; f++) {
+    let sum = 0;
+    for (let i = 0; i < FRAME; i++) { const s = samples[f * FRAME + i]; sum += s * s; }
+    energy[f] = Math.sqrt(sum / FRAME);
+  }
+  const onset = new Float32Array(numFrames);
+  for (let f = 1; f < numFrames; f++) {
+    const d = energy[f] - energy[f - 1];
+    onset[f] = d > 0 ? d : 0;
+  }
+  const fps = sampleRate / FRAME;
+  const lagMin = Math.max(1, Math.floor(fps * 60 / MAX_BPM));
+  const lagMax = Math.min(numFrames - 1, Math.ceil(fps * 60 / MIN_BPM));
+  if (lagMin >= lagMax) return null;
+  let bestLag = -1;
+  let bestCorr = -1;
+  for (let lag = lagMin; lag <= lagMax; lag++) {
+    const count = numFrames - lag;
+    if (count <= 0) continue;
+    let corr = 0;
+    for (let i = 0; i < count; i++) corr += onset[i] * onset[i + lag];
+    corr /= count;
+    if (corr > bestCorr) { bestCorr = corr; bestLag = lag; }
+  }
+  if (bestLag < 1 || bestCorr <= 0) return null;
+  const bpm = Math.round(fps * 60 / bestLag);
+  return (bpm >= MIN_BPM && bpm <= MAX_BPM) ? bpm : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -399,7 +472,7 @@ async function analyzeAudioHandler(req: Request, res: Response) {
     const numSamples = Math.min(Math.floor(pcmData.length / 2), MAX_AUDIO_SAMPLES);
 
     if (numSamples < WINDOW_SIZE) {
-      return res.json({ frequency: null, note: null });
+      return res.json({ frequency: null, note: null, bpm: null });
     }
 
     const samples = new Float32Array(numSamples);
@@ -420,6 +493,7 @@ async function analyzeAudioHandler(req: Request, res: Response) {
       windowCount++;
     }
 
+    const bpm = detectBpmFromSamples(samples, SAMPLE_RATE);
     const dominant = pickDominantFreq(readings);
     if (dominant) {
       const rounded = Math.round(dominant * 10) / 10;
@@ -427,9 +501,10 @@ async function analyzeAudioHandler(req: Request, res: Response) {
       return res.json({
         frequency: rounded,
         note: `${noteInfo.name}${noteInfo.octave}`,
+        bpm,
       });
     }
-    return res.json({ frequency: null, note: null });
+    return res.json({ frequency: null, note: null, bpm });
   } catch (e: any) {
     console.error("[analyze-audio] Error:", e.message);
     const status = typeof e.message === "string" && e.message.startsWith("Server busy") ? 503 : 500;

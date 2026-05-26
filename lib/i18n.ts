@@ -502,6 +502,9 @@ export const translations = {
     previewBpm: { ko: "미리듣기 BPM", en: "Preview BPM" },
     headphonesHint: { ko: "채널 차이는 헤드폰에서 또렷하게 들립니다", en: "Use headphones to clearly hear channel separation" },
     metronomeChannel: { ko: "클릭 채널 (이 비트만)", en: "Click channel (this beat only)" },
+    bpmDetecting: { ko: "BPM 감지 중...", en: "Detecting BPM..." },
+    bpmDetected: { ko: "감지된 BPM: {bpm}", en: "Detected BPM: {bpm}" },
+    bpmApply: { ko: "적용", en: "Apply" },
   },
   permissions: {
     title: { ko: "권한 필요", en: "Permission Required" },
