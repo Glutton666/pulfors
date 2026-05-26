@@ -504,6 +504,7 @@ export const translations = {
     metronomeChannel: { ko: "클릭 채널 (이 비트만)", en: "Click channel (this beat only)" },
     bpmDetecting: { ko: "BPM 감지 중...", en: "Detecting BPM..." },
     bpmDetected: { ko: "감지된 BPM: {bpm}", en: "Detected BPM: {bpm}" },
+    bpmCandidatesLabel: { ko: "감지된 BPM", en: "Detected BPM" },
     bpmApply: { ko: "적용", en: "Apply" },
   },
   permissions: {

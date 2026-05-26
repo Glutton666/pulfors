@@ -112,7 +112,7 @@ export function NoteRecorderModal({
   const previewTokenRef = useRef(0);
   const [loadingMessage, setLoadingMessage] = useState("");
   const [loadingProgress, setLoadingProgress] = useState(0);
-  const [suggestedBpm, setSuggestedBpm] = useState<number | null>(null);
+  const [suggestedBpms, setSuggestedBpms] = useState<number[]>([]);
   const [isFetchingBpm, setIsFetchingBpm] = useState(false);
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -159,13 +159,13 @@ export function NoteRecorderModal({
     try {
       await releaseAudioSession("noteRecorderModal");
     } catch {}
-    setSuggestedBpm(null);
+    setSuggestedBpms([]);
     setIsFetchingBpm(false);
   }, []);
 
   const fetchBpm = useCallback(async (audioUri: string) => {
     try {
-      setSuggestedBpm(null);
+      setSuggestedBpms([]);
       setIsFetchingBpm(true);
 
       const MAX_SEND_BYTES = 3 * 1024 * 1024;
@@ -194,9 +194,11 @@ export function NoteRecorderModal({
         body: JSON.stringify({ audio: base64Audio, format }),
       });
       if (!apiResp.ok) return;
-      const data = await apiResp.json() as { bpm?: number | null };
-      if (typeof data.bpm === "number" && data.bpm >= 50 && data.bpm <= 250) {
-        setSuggestedBpm(data.bpm);
+      const data = await apiResp.json() as { bpm?: number | null; bpmCandidates?: number[] };
+      const rawCandidates = Array.isArray(data.bpmCandidates) ? data.bpmCandidates : (typeof data.bpm === "number" ? [data.bpm] : []);
+      const validCandidates = rawCandidates.filter((b) => typeof b === "number" && b >= 50 && b <= 250);
+      if (validCandidates.length > 0) {
+        setSuggestedBpms(validCandidates);
       }
     } catch {
     } finally {
@@ -1012,30 +1014,35 @@ export function NoteRecorderModal({
                   <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>{t("noteRecorder", "bpmDetecting")}</Text>
                 </View>
               )}
-              {!isFetchingBpm && suggestedBpm !== null && (
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm, marginTop: Spacing.sm }}>
+              {!isFetchingBpm && suggestedBpms.length > 0 && (
+                <View style={{ marginTop: Spacing.sm, alignItems: "center", gap: 6 }}>
                   <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>
-                    {t("noteRecorder", "bpmDetected").replace("{bpm}", String(suggestedBpm))}
+                    {t("noteRecorder", "bpmCandidatesLabel")}
                   </Text>
-                  <Pressable
-                    onPress={() => {
-                      if (onSuggestBpm) onSuggestBpm(suggestedBpm);
-                      setSuggestedBpm(null);
-                    }}
-                    style={{
-                      paddingHorizontal: Spacing.sm,
-                      paddingVertical: 4,
-                      borderRadius: Radius.sm,
-                      backgroundColor: C.accentDim,
-                      borderWidth: 1,
-                      borderColor: C.accent,
-                    }}
-                    hitSlop={8}
-                  >
-                    <Text style={{ color: C.accent, fontSize: FontSize.small, fontWeight: "600" as const }}>
-                      {t("noteRecorder", "bpmApply")}
-                    </Text>
-                  </Pressable>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6 }}>
+                    {suggestedBpms.map((bpm) => (
+                      <Pressable
+                        key={bpm}
+                        onPress={() => {
+                          if (onSuggestBpm) onSuggestBpm(bpm);
+                          setSuggestedBpms([]);
+                        }}
+                        style={{
+                          paddingHorizontal: Spacing.sm,
+                          paddingVertical: 4,
+                          borderRadius: Radius.sm,
+                          backgroundColor: C.accentDim,
+                          borderWidth: 1,
+                          borderColor: C.accent,
+                        }}
+                        hitSlop={8}
+                      >
+                        <Text style={{ color: C.accent, fontSize: FontSize.small, fontWeight: "600" as const }}>
+                          {bpm} BPM
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
                 </View>
               )}
 

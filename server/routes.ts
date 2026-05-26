@@ -133,12 +133,12 @@ function decodeWavBuffer(buf) {
   } catch { return null; }
 }
 
-function detectBpm(samples, sampleRate) {
+function detectBpmCandidates(samples, sampleRate) {
   const FRAME = 512;
   const MIN_BPM = 50;
   const MAX_BPM = 250;
   const numFrames = Math.floor(samples.length / FRAME);
-  if (numFrames < 8) return null;
+  if (numFrames < 8) return [];
   const energy = new Float32Array(numFrames);
   for (let f = 0; f < numFrames; f++) {
     let sum = 0;
@@ -153,32 +153,51 @@ function detectBpm(samples, sampleRate) {
   const fps = sampleRate / FRAME;
   const lagMin = Math.max(1, Math.floor(fps * 60 / MAX_BPM));
   const lagMax = Math.min(numFrames - 1, Math.ceil(fps * 60 / MIN_BPM));
-  if (lagMin >= lagMax) return null;
-  let bestLag = -1;
-  let bestCorr = -1;
+  if (lagMin >= lagMax) return [];
+  const acf = new Float32Array(lagMax + 1);
   for (let lag = lagMin; lag <= lagMax; lag++) {
     const count = numFrames - lag;
     if (count <= 0) continue;
     let corr = 0;
     for (let i = 0; i < count; i++) corr += onset[i] * onset[i + lag];
-    corr /= count;
-    if (corr > bestCorr) { bestCorr = corr; bestLag = lag; }
+    acf[lag] = corr / count;
   }
-  if (bestLag < 1 || bestCorr <= 0) return null;
-  const bpm = Math.round(fps * 60 / bestLag);
-  return (bpm >= MIN_BPM && bpm <= MAX_BPM) ? bpm : null;
+  let bestLag = lagMin, bestCorr = 0;
+  for (let lag = lagMin; lag <= lagMax; lag++) {
+    if (acf[lag] > bestCorr) { bestCorr = acf[lag]; bestLag = lag; }
+  }
+  if (bestCorr <= 0) return [];
+  const candidates = [];
+  const addCandidate = (lag) => {
+    if (lag < lagMin || lag > lagMax) return;
+    const bpm = Math.round(fps * 60 / lag);
+    if (bpm < MIN_BPM || bpm > MAX_BPM) return;
+    const corr = acf[lag] || 0;
+    const tempoBonus = (bpm >= 80 && bpm <= 160) ? 1.2 : 1.0;
+    candidates.push({ bpm, score: (corr / bestCorr) * tempoBonus });
+  };
+  addCandidate(bestLag);
+  addCandidate(Math.round(bestLag / 2));
+  addCandidate(bestLag * 2);
+  candidates.sort((a, b) => b.score - a.score);
+  const seen = new Set();
+  const result = [];
+  for (const c of candidates) {
+    if (!seen.has(c.bpm)) { seen.add(c.bpm); result.push(c.bpm); }
+  }
+  return result;
 }
 
 function analyzeWavDirect(audioBuffer) {
   const decoded = decodeWavBuffer(audioBuffer);
-  if (!decoded) return { frequency: null, note: null, bpm: null };
+  if (!decoded) return { frequency: null, note: null, bpm: null, bpmCandidates: [] };
   const { rate } = decoded;
   const samples = decoded.samples.length > MAX_AUDIO_SAMPLES
     ? decoded.samples.slice(0, MAX_AUDIO_SAMPLES)
     : decoded.samples;
   const WINDOW_SIZE = 8192;
   const MIC_GATE = 0.02;
-  if (samples.length < WINDOW_SIZE) return { frequency: null, note: null, bpm: null };
+  if (samples.length < WINDOW_SIZE) return { frequency: null, note: null, bpm: null, bpmCandidates: [] };
   const readings = [];
   const step = Math.floor(WINDOW_SIZE / 2);
   let windowCount = 0;
@@ -190,11 +209,12 @@ function analyzeWavDirect(audioBuffer) {
     windowCount++;
   }
   const dominant = pickDominantFreq(readings);
-  const bpm = detectBpm(samples, rate);
-  if (!dominant) return { frequency: null, note: null, bpm };
+  const bpmCandidates = detectBpmCandidates(samples, rate);
+  const bpm = bpmCandidates.length > 0 ? bpmCandidates[0] : null;
+  if (!dominant) return { frequency: null, note: null, bpm, bpmCandidates };
   const rounded = Math.round(dominant * 10) / 10;
   const noteInfo = frequencyToNote(dominant);
-  return { frequency: rounded, note: noteInfo.name + noteInfo.octave, bpm };
+  return { frequency: rounded, note: noteInfo.name + noteInfo.octave, bpm, bpmCandidates };
 }
 
 const buf = Buffer.from(workerData.audioData);
@@ -307,12 +327,12 @@ function pickDominantFreq(readings: number[]): number | null {
   return freqs[Math.floor(freqs.length / 2)];
 }
 
-function detectBpmFromSamples(samples: Float32Array, sampleRate: number): number | null {
+function detectBpmCandidatesFromSamples(samples: Float32Array, sampleRate: number): number[] {
   const FRAME = 512;
   const MIN_BPM = 50;
   const MAX_BPM = 250;
   const numFrames = Math.floor(samples.length / FRAME);
-  if (numFrames < 8) return null;
+  if (numFrames < 8) return [];
   const energy = new Float32Array(numFrames);
   for (let f = 0; f < numFrames; f++) {
     let sum = 0;
@@ -327,20 +347,39 @@ function detectBpmFromSamples(samples: Float32Array, sampleRate: number): number
   const fps = sampleRate / FRAME;
   const lagMin = Math.max(1, Math.floor(fps * 60 / MAX_BPM));
   const lagMax = Math.min(numFrames - 1, Math.ceil(fps * 60 / MIN_BPM));
-  if (lagMin >= lagMax) return null;
-  let bestLag = -1;
-  let bestCorr = -1;
+  if (lagMin >= lagMax) return [];
+  const acf = new Float32Array(lagMax + 1);
   for (let lag = lagMin; lag <= lagMax; lag++) {
     const count = numFrames - lag;
     if (count <= 0) continue;
     let corr = 0;
     for (let i = 0; i < count; i++) corr += onset[i] * onset[i + lag];
-    corr /= count;
-    if (corr > bestCorr) { bestCorr = corr; bestLag = lag; }
+    acf[lag] = corr / count;
   }
-  if (bestLag < 1 || bestCorr <= 0) return null;
-  const bpm = Math.round(fps * 60 / bestLag);
-  return (bpm >= MIN_BPM && bpm <= MAX_BPM) ? bpm : null;
+  let bestLag = lagMin, bestCorr = 0;
+  for (let lag = lagMin; lag <= lagMax; lag++) {
+    if (acf[lag] > bestCorr) { bestCorr = acf[lag]; bestLag = lag; }
+  }
+  if (bestCorr <= 0) return [];
+  const candidates: { bpm: number; score: number }[] = [];
+  const addCandidate = (lag: number) => {
+    if (lag < lagMin || lag > lagMax) return;
+    const bpm = Math.round(fps * 60 / lag);
+    if (bpm < MIN_BPM || bpm > MAX_BPM) return;
+    const corr = acf[lag] ?? 0;
+    const tempoBonus = (bpm >= 80 && bpm <= 160) ? 1.2 : 1.0;
+    candidates.push({ bpm, score: (corr / bestCorr) * tempoBonus });
+  };
+  addCandidate(bestLag);
+  addCandidate(Math.round(bestLag / 2));
+  addCandidate(bestLag * 2);
+  candidates.sort((a, b) => b.score - a.score);
+  const seen = new Set<number>();
+  const result: number[] = [];
+  for (const c of candidates) {
+    if (!seen.has(c.bpm)) { seen.add(c.bpm); result.push(c.bpm); }
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -493,7 +532,8 @@ async function analyzeAudioHandler(req: Request, res: Response) {
       windowCount++;
     }
 
-    const bpm = detectBpmFromSamples(samples, SAMPLE_RATE);
+    const bpmCandidates = detectBpmCandidatesFromSamples(samples, SAMPLE_RATE);
+    const bpm = bpmCandidates.length > 0 ? bpmCandidates[0] : null;
     const dominant = pickDominantFreq(readings);
     if (dominant) {
       const rounded = Math.round(dominant * 10) / 10;
@@ -502,9 +542,10 @@ async function analyzeAudioHandler(req: Request, res: Response) {
         frequency: rounded,
         note: `${noteInfo.name}${noteInfo.octave}`,
         bpm,
+        bpmCandidates,
       });
     }
-    return res.json({ frequency: null, note: null, bpm });
+    return res.json({ frequency: null, note: null, bpm, bpmCandidates });
   } catch (e: any) {
     console.error("[analyze-audio] Error:", e.message);
     const status = typeof e.message === "string" && e.message.startsWith("Server busy") ? 503 : 500;
