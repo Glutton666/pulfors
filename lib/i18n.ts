@@ -822,6 +822,19 @@ export const translations = {
     swipeHintAdd:        { ko: "↑ 바 추가", en: "↑ Add Bar" },
     repBpmAdd:           { ko: "+ BPM", en: "+ BPM" },
   },
+  bpmDetect: {
+    title:      { ko: "주변 BPM 감지", en: "Detect BPM" },
+    menuHint:   { ko: "마이크로 주변 음악의 BPM을 감지합니다", en: "Detect BPM from surrounding music via microphone" },
+    requesting: { ko: "마이크 권한 요청 중...", en: "Requesting microphone..." },
+    listening:  { ko: "듣는 중...", en: "Listening..." },
+    listenHint: { ko: "주변 음악이 들리도록 기기를 소리 근처에 놓으세요", en: "Hold device near the music source" },
+    detected:   { ko: "감지된 BPM", en: "Detected BPM" },
+    apply:      { ko: "적용", en: "Apply" },
+    cancel:     { ko: "취소", en: "Cancel" },
+    retry:      { ko: "다시 시도", en: "Try Again" },
+    tooQuiet:   { ko: "소리가 너무 작거나 박자를 인식할 수 없습니다", en: "Audio too quiet or no steady beat found" },
+    failed:     { ko: "BPM을 감지하지 못했습니다", en: "Could not detect BPM" },
+  },
 } as const satisfies TranslationsShape;
 
 type TranslationKeys = typeof translations;

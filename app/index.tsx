@@ -85,6 +85,7 @@ import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist
 import { createRafBatcher } from "@/lib/raf-batcher";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { MoreMenuModal } from "@/components/MoreMenuModal";
+import { BpmDetectModal } from "@/components/BpmDetectModal";
 import { DrumKitModal } from "@/components/DrumKitModal";
 import { ScheduledStartModal } from "@/components/ScheduledStartModal";
 import { FadeOutModal } from "@/components/FadeOutModal";
@@ -282,6 +283,7 @@ export default function MetronomeScreen() {
     showScheduledStart,
     showFadeOut,
     showTempoQuiz,
+    showBpmDetect,
   } = deriveModalFlags(activeModal);
   const [backgroundPlay, setBackgroundPlay] = useState(false);
   const [autoResumeAfterInterruption, setAutoResumeAfterInterruption] = useState(true);
@@ -4749,6 +4751,7 @@ export default function MetronomeScreen() {
           setIsPlaying(false);
           openExclusive("drumKit");
         }}
+        onBpmDetect={() => openExclusive("bpmDetect")}
         onTempoQuiz={() => {
           const engine = engineRef.current;
           if (engine?.getIsRunning()) engine.stop();
@@ -4783,6 +4786,15 @@ export default function MetronomeScreen() {
       <DrumKitModal
         visible={showDrumKit}
         onClose={() => setActiveModal(null)}
+      />
+
+      <BpmDetectModal
+        visible={showBpmDetect}
+        onClose={() => setActiveModal(null)}
+        onApply={(bpm) => {
+          updateBpm(bpm);
+          setActiveModal(null);
+        }}
       />
 
       <TempoQuizModal

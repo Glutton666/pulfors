@@ -103,6 +103,7 @@ const MORE_MENU_ITEMS: Array<[ActiveModal, keyof ReturnType<typeof deriveModalFl
   ["fadeOut",        "showFadeOut"],
   ["drumKit",        "showDrumKit"],
   ["tempoQuiz",      "showTempoQuiz"],
+  ["bpmDetect",      "showBpmDetect"],
 ];
 
 for (const [item, flagKey] of MORE_MENU_ITEMS) {

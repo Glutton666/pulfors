@@ -21,6 +21,7 @@ export type ActiveModal =
   | "scheduledStart"
   | "fadeOut"
   | "tempoQuiz"
+  | "bpmDetect"
   | null;
 
 /** activeModal 단일 값에서 각 모달의 visible 여부를 파생한다. */
@@ -38,6 +39,7 @@ export function deriveModalFlags(activeModal: ActiveModal) {
     showScheduledStart: activeModal === "scheduledStart",
     showFadeOut:        activeModal === "fadeOut",
     showTempoQuiz:      activeModal === "tempoQuiz",
+    showBpmDetect:      activeModal === "bpmDetect",
   };
 }
 
