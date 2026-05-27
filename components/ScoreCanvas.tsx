@@ -466,61 +466,67 @@ export function ScoreCanvas({
         highlightColor={highlightColor}
       />
 
-      {/* 터치 + 가이드선 + 고스트 SVG 오버레이 */}
-      <Svg
-        width={containerWidth}
-        height={svgH}
-        style={StyleSheet.absoluteFillObject}
+      {/* 터치 + 가이드선 + 고스트 SVG 오버레이
+          View로 감싸서 panHandlers를 View에 붙임 —
+          웹에서 SVG에 직접 panHandlers를 붙이면 포인터 이벤트가 차단됨 */}
+      <View
+        style={{ position: "absolute", top: 0, left: 0, width: containerWidth, height: svgH }}
         {...panResponder.panHandlers}
       >
-        {/* 수평 점선 가이드 (음높이) */}
-        {ghost && (
-          <Line
-            x1={0}
-            y1={ghost.noteY}
-            x2={containerWidth}
-            y2={ghost.noteY}
-            stroke={C.accent}
-            strokeWidth={0.8}
-            strokeDasharray="4,3"
-            opacity={0.65}
-          />
-        )}
-        {/* 수직 점선 가이드 (박자 위치) */}
-        {ghost && (
-          <Line
-            x1={ghost.x}
-            y1={0}
-            x2={ghost.x}
-            y2={svgH}
-            stroke={C.accent}
-            strokeWidth={0.8}
-            strokeDasharray="4,3"
-            opacity={0.65}
-          />
-        )}
+        <Svg
+          width={containerWidth}
+          height={svgH}
+          style={StyleSheet.absoluteFillObject}
+        >
+          {/* 수평 점선 가이드 (음높이) */}
+          {ghost && (
+            <Line
+              x1={0}
+              y1={ghost.noteY}
+              x2={containerWidth}
+              y2={ghost.noteY}
+              stroke={C.accent}
+              strokeWidth={0.8}
+              strokeDasharray="4,3"
+              opacity={0.65}
+            />
+          )}
+          {/* 수직 점선 가이드 (박자 위치) */}
+          {ghost && (
+            <Line
+              x1={ghost.x}
+              y1={0}
+              x2={ghost.x}
+              y2={svgH}
+              stroke={C.accent}
+              strokeWidth={0.8}
+              strokeDasharray="4,3"
+              opacity={0.65}
+            />
+          )}
 
-        {/* 고스트 음표 */}
-        {ghost && activeTool === "note" && (
-          <GhostNote
-            x={ghost.x}
-            y={ghost.noteY}
-            staffY={ghost.staffY}
-            duration={dur}
-            color={C.accent}
-          />
-        )}
+          {/* 고스트 음표 */}
+          {ghost && activeTool === "note" && (
+            <GhostNote
+              x={ghost.x}
+              y={ghost.noteY}
+              staffY={ghost.staffY}
+              duration={dur}
+              color={C.accent}
+            />
+          )}
 
-        {/* 고스트 쉼표 */}
-        {ghost && activeTool === "rest" && (
-          <GhostRest
-            x={ghost.x}
-            staffY={ghost.staffY}
-            duration={dur}
-            color={C.accent}
-          />
-        )}
-      </Svg>
+          {/* 고스트 쉼표 */}
+          {ghost && activeTool === "rest" && (
+            <GhostRest
+              x={ghost.x}
+              staffY={ghost.staffY}
+              duration={dur}
+              color={C.accent}
+            />
+          )}
+        </Svg>
+      </View>
 
       {/* 돋보기 미니뷰 — 터치 주변 3배 확대 */}
       {ghost && (activeTool === "note" || activeTool === "rest") && (

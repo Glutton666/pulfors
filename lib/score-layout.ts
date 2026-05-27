@@ -40,10 +40,10 @@ export const NOTE_WIDTH: Record<NoteDuration, number> = {
   sixteenth_dot:  16,
 };
 
-// 음표 머리 크기
-export const NOTE_HEAD_RX = 4.5;  // 가로 반축
-export const NOTE_HEAD_RY = 3.2;  // 세로 반축
-export const STEM_HEIGHT = 30;    // 기둥 높이
+// 음표 머리 크기 (오선 선간격 10px 기준)
+export const NOTE_HEAD_RX = 5.5;  // 가로 반축 (LINE_SPACING * 0.55)
+export const NOTE_HEAD_RY = 4.0;  // 세로 반축 (LINE_SPACING * 0.40)
+export const STEM_HEIGHT = 32;    // 기둥 높이
 export const FLAG_OFFSET = 2;     // 꼬리 시작 오프셋
 
 // ── 음높이 → 오선 위치 변환 ────────────────────────────────────

@@ -1119,8 +1119,24 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
         showsVerticalScrollIndicator={false}
         scrollEnabled={activeTool !== "note" && activeTool !== "rest"}
       >
-        {/* 악보 메타 */}
-        <View style={styles.scoreHeader}>
+        {/* 악보 메타 — 탭하면 편집 모달 */}
+        <Pressable
+          style={styles.scoreHeader}
+          onPress={() => {
+            setMetaDraft({
+              title: doc.metadata.title,
+              subtitle: doc.metadata.subtitle ?? "",
+              composer: doc.metadata.composer ?? "",
+              arranger: doc.metadata.arranger ?? "",
+              lyricist: doc.metadata.lyricist ?? "",
+              copyright: doc.metadata.copyright ?? "",
+              difficulty: doc.metadata.difficulty,
+              memo: doc.metadata.memo ?? "",
+            });
+            setShowMetaModal(true);
+          }}
+          testID="score-header-tap"
+        >
           <Text style={[styles.scoreTitle, { color: C.text }]}>
             {doc.metadata.title || t("scoreMode", "untitled")}
           </Text>
@@ -1129,7 +1145,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
               {doc.metadata.composer}
             </Text>
           )}
-        </View>
+        </Pressable>
 
         {/* 입력 힌트 */}
         {currentPart && currentPart.measures[0]?.elements.length === 0 &&
