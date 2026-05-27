@@ -3548,7 +3548,7 @@ export default function MetronomeScreen() {
     );
   }, []);
 
-  const handleAddBar = useCallback(() => {
+  const handleAddBar = useCallback((draftRepeat?: BarRepeat) => {
     if (beatsPerMeasure >= 16) return;
     const newBeat = beatsPerMeasure;
     const newBeats = beatsPerMeasure + 1;
@@ -3564,9 +3564,13 @@ export default function MetronomeScreen() {
       engineRef.current?.setBeatSubdivision(newBeat, [...currentPattern]);
     }
     setBeatSubdivisions(newSubs);
-    // 현재 편집 중인 바의 레이어 패턴도 새 바에 복사해 BarRepeatEntry에 저장
-    const srcLayers = barStartBeat !== null ? (barRepeats[barStartBeat]?.layers ?? []) : [];
-    const newRepeat: BarRepeat = { type: "count", value: 1, layers: srcLayers.length ? srcLayers.map(l => ({ ...l })) : [] };
+    // draftRepeat이 있으면 그 설정을 사용, 없으면 현재 편집 중인 바 레이어 복사
+    const newRepeat: BarRepeat = draftRepeat
+      ? { ...draftRepeat }
+      : (() => {
+          const srcLayers = barStartBeat !== null ? (barRepeats[barStartBeat]?.layers ?? []) : [];
+          return { type: "count", value: 1, layers: srcLayers.length ? srcLayers.map(l => ({ ...l })) : [] };
+        })();
     setBarRepeats(prev => ({ ...prev, [newBeat]: newRepeat }));
     setBarStartBeat(newBeat);
     barConfigRef.current.beatsPerMeasure = newBeats;

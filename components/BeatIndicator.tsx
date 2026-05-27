@@ -121,7 +121,7 @@ interface BeatIndicatorProps {
   beatDirection?: "cw" | "ccw";
   onEnterNoteMode?: () => void;
   tempoLabel?: string;
-  onAddBar?: () => void;
+  onAddBar?: (draftRepeat?: BarRepeat) => void;
   onDeleteBar?: (beatIndex: number) => void;
   onCopyBar?: (beat: number) => void;
   soundSet?: string;

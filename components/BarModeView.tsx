@@ -76,7 +76,7 @@ export interface BarModeViewProps {
   measureCount?: number;
   barStartBeat: number | null;
   onBarStartBeatSelect: (beat: number | null) => void;
-  onAddBar?: () => void;
+  onAddBar?: (draftRepeat?: BarRepeat) => void;
   onDeleteBar?: (beatIndex: number) => void;
   onCopyBar?: (beat: number) => void;
   subdivisionBarElement?: React.ReactNode;
@@ -381,6 +381,9 @@ export function BarModeView({
   const [repSec, setRepSec] = useState(30);
   const [repBpm, setRepBpm] = useState<number | null>(null);
 
+  // 바 미선택 상태에서 "다음 추가할 바"의 레이어 draft
+  const [draftLayers, setDraftLayers] = useState<BarLayer[]>([]);
+
   // 바 클럭 (stopwatch/timer)
   const [barClockMode, setBarClockModeRaw] = useState<"stopwatch" | "timer">(initialBarClockMode || "stopwatch");
   const [barTimerDuration, setBarTimerDurationRaw] = useState(initialBarTimerDuration || 180);
@@ -601,8 +604,14 @@ export function BarModeView({
   const handleAddBar = useCallback(() => {
     if (isPlaying) return;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onAddBar?.();
-  }, [isPlaying, onAddBar]);
+    // draft 상태(반복 설정 + 레이어)를 적용해서 새 바 추가
+    const val = repType === "count" ? repCount : repMin * 60 + repSec;
+    const draftRepeat: BarRepeat | undefined =
+      (repType === "count" && repCount === 1 && !repBpm && draftLayers.length === 0)
+        ? undefined
+        : { type: repType, value: Math.max(1, val), ...(repBpm ? { bpm: repBpm } : {}), ...(draftLayers.length > 0 ? { layers: draftLayers.map(l => ({ ...l })) } : {}) };
+    onAddBar?.(draftRepeat);
+  }, [isPlaying, onAddBar, repType, repCount, repMin, repSec, repBpm, draftLayers]);
 
   const handleBeatsIncrement = useCallback(() => {
     if (beatsPerMeasure < MAX_BEATS) onBeatsChange(beatsPerMeasure + 1);
@@ -797,7 +806,13 @@ export function BarModeView({
   // 선택된 바 변경 시 반복 로컬 상태 동기화 (barRepeats는 의도적 제외 — 값 변경마다 리셋 방지)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (editingBeat === null) return;
+    if (editingBeat === null) {
+      // 바 선택 해제 시 draft 초기화
+      setDraftLayers([]);
+      setRepType("count"); setRepCount(1); setRepMin(0); setRepSec(30); setRepBpm(null);
+      setActiveLayerTab(0);
+      return;
+    }
     const existing = barRepeats[editingBeat];
     if (existing) {
       setRepType(existing.type);
@@ -818,9 +833,10 @@ export function BarModeView({
     sec: number,
     bpmOverride: number | null,
   ) => {
-    if (editingBeat === null || isPlaying) return;
+    if (isPlaying) return;
     const val = type === "count" ? count : min * 60 + sec;
     if (val <= 0) return;
+    if (editingBeat === null) return; // draft 모드에서는 repCount/repType 로컬 상태만 유지
     const rep: BarRepeat = { type, value: type === "count" ? Math.max(1, val) : Math.max(1, val) };
     if (bpmOverride !== null && bpmOverride > 0) rep.bpm = bpmOverride;
     const existing = barRepeats[editingBeat];
@@ -835,7 +851,12 @@ export function BarModeView({
   }, [editingBeat, isPlaying, barRepeats, onBarRepeatChange]);
 
   const clearRepeat = useCallback(() => {
-    if (editingBeat === null || isPlaying) return;
+    if (isPlaying) return;
+    if (editingBeat === null) {
+      // draft 모드: 반복 설정 초기화
+      setRepType("count"); setRepCount(1); setRepMin(0); setRepSec(30); setRepBpm(null);
+      return;
+    }
     const existing = barRepeats[editingBeat];
     if (!existing) return;
     const hasOtherFields = existing.voltaMax || existing.isEnd || existing.jumpFromId || existing.jumpToId || existing.layers;
@@ -853,27 +874,45 @@ export function BarModeView({
     setRepType("count"); setRepCount(1); setRepMin(0); setRepSec(30); setRepBpm(null);
   }, [editingBeat, isPlaying, barRepeats, onBarRepeatChange]);
 
-  const editingLayers: BarLayer[] = (editingRepeat?.layers) ?? [];
+  // 현재 편집 중인 레이어 목록: 바 선택 시 barRepeats, 미선택 시 draft
+  const editingLayers: BarLayer[] = editingBeat !== null
+    ? (editingRepeat?.layers ?? [])
+    : draftLayers;
 
   const addLayer = useCallback(() => {
-    if (editingBeat === null) return;
+    if (editingBeat === null) {
+      // draft 모드
+      const layers = [...draftLayers, { beatType: "normal" as BeatType }];
+      setDraftLayers(layers);
+      setActiveLayerTab(layers.length);
+      return;
+    }
     const existing = barRepeats[editingBeat] ?? { type: "count" as const, value: 1 };
     const layers = [...(existing.layers ?? []), { beatType: "normal" as BeatType }];
     onBarRepeatChange(editingBeat, { ...existing, layers });
     setActiveLayerTab(layers.length);
-  }, [editingBeat, barRepeats, onBarRepeatChange]);
+  }, [editingBeat, draftLayers, barRepeats, onBarRepeatChange]);
 
   const removeLayer = useCallback((layerIdx: number) => {
-    if (editingBeat === null) return;
+    if (editingBeat === null) {
+      // draft 모드
+      const layers = draftLayers.filter((_, i) => i !== layerIdx);
+      setDraftLayers(layers);
+      setActiveLayerTab(0);
+      return;
+    }
     const existing = barRepeats[editingBeat];
     if (!existing?.layers) return;
     const layers = existing.layers.filter((_, i) => i !== layerIdx);
     onBarRepeatChange(editingBeat, { ...existing, layers: layers.length === 0 ? undefined : layers });
     setActiveLayerTab(0);
-  }, [editingBeat, barRepeats, onBarRepeatChange]);
+  }, [editingBeat, draftLayers, barRepeats, onBarRepeatChange]);
 
   const updateLayerBeatType = useCallback((layerIdx: number, bt: BeatType) => {
-    if (editingBeat === null) return;
+    if (editingBeat === null) {
+      setDraftLayers(prev => prev.map((l, i) => i === layerIdx ? { ...l, beatType: bt } : l));
+      return;
+    }
     const existing = barRepeats[editingBeat];
     if (!existing?.layers) return;
     const layers = existing.layers.map((l, i) => i === layerIdx ? { ...l, beatType: bt } : l);
@@ -881,7 +920,14 @@ export function BarModeView({
   }, [editingBeat, barRepeats, onBarRepeatChange]);
 
   const updateLayerSubdivisions = useCallback((layerIdx: number, subs: BeatType[] | null) => {
-    if (editingBeat === null) return;
+    if (editingBeat === null) {
+      setDraftLayers(prev => prev.map((l, i) => {
+        if (i !== layerIdx) return l;
+        if (subs === null) { const { subdivisions: _d, ...rest } = l; return rest; }
+        return { ...l, subdivisions: subs };
+      }));
+      return;
+    }
     const existing = barRepeats[editingBeat];
     if (!existing?.layers) return;
     const layers = existing.layers.map((l, i) => {
@@ -893,7 +939,14 @@ export function BarModeView({
   }, [editingBeat, barRepeats, onBarRepeatChange]);
 
   const updateLayerSoundSet = useCallback((layerIdx: number, ss: BarLayer["soundSet"] | null) => {
-    if (editingBeat === null) return;
+    if (editingBeat === null) {
+      setDraftLayers(prev => prev.map((l, i) => {
+        if (i !== layerIdx) return l;
+        if (ss === null) { const { soundSet: _d, ...rest } = l; return rest; }
+        return { ...l, soundSet: ss };
+      }));
+      return;
+    }
     const existing = barRepeats[editingBeat];
     if (!existing?.layers) return;
     const layers = existing.layers.map((l, i) => {
@@ -1096,7 +1149,7 @@ export function BarModeView({
               </Text>
             </Pressable>
           ))}
-          {editingBeat !== null && !isPlaying && (
+          {!isPlaying && (
             <Pressable onPress={addLayer} style={styles.layerTab} hitSlop={8}>
               <Text style={{ color: C.textTertiary, fontSize: FontSize.micro }}>+</Text>
             </Pressable>
@@ -1109,8 +1162,8 @@ export function BarModeView({
           </Pressable>
         </View>
 
-        {/* 인라인 반복 패널 (메인 탭 + 바 선택 시만 표시, 재생 중에는 읽기 전용) */}
-        {!editorCollapsed && editingBeat !== null && activeLayerTab === 0 && (
+        {/* 인라인 반복 패널 (메인 탭에서 항상 표시, 재생 중에는 읽기 전용) */}
+        {!editorCollapsed && activeLayerTab === 0 && (
           <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, opacity: isPlaying ? 0.5 : 1 }]}>
             {/* 타입 토글 + 지우기 */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
@@ -1131,7 +1184,7 @@ export function BarModeView({
                 </Pressable>
               ))}
               <View style={{ flex: 1 }} />
-              {editingRepeat && !isPlaying && (
+              {(editingRepeat || (editingBeat === null && (repCount > 1 || repType === "duration" || repBpm))) && !isPlaying && (
                 <Pressable onPress={clearRepeat} hitSlop={8}>
                   <Ionicons name="close-circle" size={ms(14, 0.4)} color={C.textTertiary} />
                 </Pressable>
