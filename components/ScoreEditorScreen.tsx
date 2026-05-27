@@ -609,6 +609,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           { paddingHorizontal: Spacing.lg, paddingBottom: bottomInset + 180 },
         ]}
         showsVerticalScrollIndicator={false}
+        scrollEnabled={activeTool === "select" || activeTool === "erase"}
       >
         {/* 악보 메타 */}
         <View style={styles.scoreHeader}>

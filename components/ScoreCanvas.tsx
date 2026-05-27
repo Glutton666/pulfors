@@ -4,7 +4,7 @@
 // ============================================================
 
 import React, { useMemo, useRef, useCallback, useState } from "react";
-import { View, PanResponder, StyleSheet } from "react-native";
+import { View, PanResponder, StyleSheet, Pressable } from "react-native";
 import Svg, { Line, Ellipse, G, Rect, Text as SvgText } from "react-native-svg";
 import { useTheme } from "@/contexts/ThemeContext";
 import { ScoreRenderer } from "@/components/ScoreRenderer";
@@ -223,14 +223,23 @@ export function ScoreCanvas({
     let isMoving = false;
 
     return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => {
+      // note/rest 도구만 시작 시 제스처 캡처
+      // select/erase는 Pressable 오버레이에서 탭 처리, ScrollView 스크롤 보장
+      onStartShouldSetPanResponder: () => {
+        const tool = activeToolRef.current;
+        return tool === "note" || tool === "rest";
+      },
+      onMoveShouldSetPanResponder: (_, gestureState) => {
         const tool = activeToolRef.current;
         if (tool === "note" || tool === "rest") return true;
-        // 선택 모드 + 선택된 음표가 있으면 드래그 허용
-        if (tool === "select" && selectedElementIdRef.current) return true;
+        // select 도구 + 선택된 음표가 있고 충분한 이동 → 드래그 캡처
+        if (tool === "select" && selectedElementIdRef.current) {
+          const dist = Math.sqrt(gestureState.dx ** 2 + gestureState.dy ** 2);
+          return dist > 6;
+        }
         return false;
       },
+      onPanResponderTerminationRequest: () => true,
 
       onPanResponderGrant: (e) => {
         const { locationX: lx, locationY: ly } = e.nativeEvent;
@@ -388,6 +397,25 @@ export function ScoreCanvas({
           />
         )}
       </Svg>
+
+      {/* select/erase 도구: ScrollView 스크롤을 막지 않도록 PanResponder 대신 Pressable로 탭 처리 */}
+      {(activeTool === "select" || activeTool === "erase") && (
+        <Pressable
+          style={StyleSheet.absoluteFillObject}
+          onPress={(e) => {
+            const { locationX: lx, locationY: ly } = e.nativeEvent;
+            if (activeTool === "erase") {
+              const hit = hitTestElement(lx, ly);
+              if (hit) onEraseElement(hit.elementId, hit.measureIdx);
+            } else {
+              // select: 음표 탭 → 선택, 마디 탭 → 마디 선택
+              const hit = hitTestElement(lx, ly);
+              if (hit) onElementTap(hit.elementId, hit.measureIdx);
+              // hitTestElement 내부에서 miss 시 onMeasureTap 이미 호출
+            }
+          }}
+        />
+      )}
 
       {/* 돋보기 미니뷰 — 터치 주변 3배 확대 */}
       {ghost && (activeTool === "note" || activeTool === "rest") && (

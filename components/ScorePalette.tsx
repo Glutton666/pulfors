@@ -193,7 +193,17 @@ export function ScorePalette({
     activeTool === "rest" ? "rests" : "notes",
   );
   const [selectedTempo, setSelectedTempo] = useState<string | null>(null);
-  const [instrSubTab, setInstrSubTab] = useState<InstrSubTab>("all");
+  const [instrSubTab, setInstrSubTab] = useState<InstrSubTab>(() => {
+    switch (instrumentCategory) {
+      case "strings":    return "strings";
+      case "keyboard":   return "keyboard";
+      case "woodwind":
+      case "brass":      return "woodwind_brass";
+      case "percussion": return "percussion";
+      case "vocal":      return "vocal";
+      default:           return "all";
+    }
+  });
 
   const styles = makeStyles(C);
 
