@@ -4,10 +4,10 @@
  * SubdivisionBar 의 long-press 타입 피커 Modal E2E 테스트.
  *
  * 검증 대상:
- *   1. subdivision 셀 long-press → 타입 피커 Modal 표시
+ *   1. subdivision 셀 long-press → 타입 피커 Modal 표시 (4개 옵션 모두 렌더링)
  *   2. 4가지 beat type(normal, accent, strong, mute) 각각 선택 →
- *      패턴이 올바르게 업데이트되고 피커가 닫힘
- *   3. backdrop(overlay) 탭 → 피커 닫힘, 패턴 변경 없음
+ *      피커가 닫히고, 재오픈 시 선택한 항목에만 체크마크(svg)가 표시됨
+ *   3. backdrop(overlay) 탭 → 피커 닫힘, 이전 선택 유지
  *
  * 실행:
  *   npx playwright test e2e/subdivision-type-picker.spec.ts
@@ -16,6 +16,8 @@
  *   - 모든 어설션은 data-testid 기반 (locale/언어 독립적)
  *   - long-press 는 mouse.down() + waitForTimeout(450ms) + mouse.up() 으로 재현
  *     (Pressable.delayLongPress=350ms 보다 충분히 길게)
+ *   - 선택 상태 검증: 선택된 옵션 안에 svg(체크마크)가 visible,
+ *     선택되지 않은 옵션 안에는 svg가 없음 — toBeHidden() 또는 count()=0 확인
  *   - backdrop 닫기는 overlay 좌상단 좌표 클릭 (메뉴 영역 바깥)
  *   - 모달 가시성은 waitFor(state:"visible"|"hidden") 조건부 대기
  *
@@ -27,7 +29,9 @@
  *     testID="type-picker-option-{beatType}"
  */
 import { test, expect, type Page } from "@playwright/test";
-import type { BeatType } from "../lib/metronome-engine";
+
+const BEAT_TYPES = ["normal", "accent", "strong", "mute"] as const;
+type BeatType = (typeof BEAT_TYPES)[number];
 
 /** 온보딩이 있으면 모두 건너뛴다 (최대 5회). */
 async function skipOnboarding(page: Page) {
@@ -62,7 +66,27 @@ async function longPressCell(page: Page, cellIndex: number) {
   await page.mouse.up();
 }
 
-const BEAT_TYPES: BeatType[] = ["normal", "accent", "strong", "mute"];
+/**
+ * 피커가 열린 상태에서 특정 beat type 옵션에만 체크마크 svg가 있고
+ * 나머지에는 없음을 검증한다.
+ *
+ * Feather name="check" 는 웹에서 <svg> 로 렌더된다.
+ */
+async function assertCheckMarkOnlyFor(page: Page, selectedType: BeatType) {
+  for (const bt of BEAT_TYPES) {
+    const svgLocator = page.locator(
+      `[data-testid="type-picker-option-${bt}"] svg`
+    );
+    if (bt === selectedType) {
+      // 선택된 항목: 체크마크 svg가 visible 이어야 함
+      await expect(svgLocator).toBeVisible();
+    } else {
+      // 선택되지 않은 항목: svg가 없어야 함
+      const svgCount = await svgLocator.count();
+      expect(svgCount, `'${bt}' 에 체크마크가 없어야 한다`).toBe(0);
+    }
+  }
+}
 
 test.describe("SubdivisionBar 타입 피커", () => {
   test.beforeEach(async ({ page }) => {
@@ -96,42 +120,44 @@ test.describe("SubdivisionBar 타입 피커", () => {
         page.locator(`[data-testid="type-picker-option-${bt}"]`)
       ).toBeVisible();
     }
+
+    // 정리
+    await page
+      .locator('[data-testid="type-picker-overlay"]')
+      .click({ position: { x: 5, y: 5 } });
+    await expect(pickerMenu).toBeHidden();
   });
 
-  // ── 2. 타입 선택 → 패턴 업데이트 ──────────────────────────────────────────
+  // ── 2. 타입 선택 → 체크마크가 해당 타입에만 표시됨 ─────────────────────────
 
   for (const bt of BEAT_TYPES) {
-    test(`'${bt}' 선택 시 피커가 닫히고 해당 타입이 적용된다`, async ({
+    test(`'${bt}' 선택 시 피커 닫힘 + 재오픈 시 해당 항목에만 체크마크`, async ({
       page,
     }) => {
       const pickerMenu = page.locator('[data-testid="type-picker-menu"]');
-      const option = page.locator(`[data-testid="type-picker-option-${bt}"]`);
+      const overlay = page.locator('[data-testid="type-picker-overlay"]');
 
+      // 피커 열기
       await longPressCell(page, 0);
       await expect(pickerMenu).toBeVisible();
 
       // 타입 옵션 선택
-      await option.click();
+      await page
+        .locator(`[data-testid="type-picker-option-${bt}"]`)
+        .click();
 
-      // 피커가 닫혀야 함
+      // 선택 후 피커가 자동으로 닫혀야 함
       await expect(pickerMenu).toBeHidden();
 
-      // 동일 셀을 다시 long-press 해서 피커를 열고 선택된 항목에 체크마크가 있는지 확인
+      // 동일 셀을 다시 long-press 해서 피커를 재오픈
       await longPressCell(page, 0);
       await expect(pickerMenu).toBeVisible();
 
-      // 선택된 항목은 체크마크 아이콘을 포함한다 (Feather name="check")
-      // testID="type-picker-option-{bt}" 안에 svg 가 있으면 선택된 상태
-      const selectedOption = page.locator(
-        `[data-testid="type-picker-option-${bt}"]`
-      );
-      // 선택된 옵션이 visible 하면 충분 (타입이 적용됐다는 간접 검증)
-      await expect(selectedOption).toBeVisible();
+      // 선택된 타입에만 체크마크 svg가 있고, 나머지에는 없어야 함
+      await assertCheckMarkOnlyFor(page, bt);
 
-      // 닫기
-      await page
-        .locator('[data-testid="type-picker-overlay"]')
-        .click({ position: { x: 5, y: 5 } });
+      // 정리
+      await overlay.click({ position: { x: 5, y: 5 } });
       await expect(pickerMenu).toBeHidden();
     });
   }
@@ -144,22 +170,16 @@ test.describe("SubdivisionBar 타입 피커", () => {
     const pickerMenu = page.locator('[data-testid="type-picker-menu"]');
     const overlay = page.locator('[data-testid="type-picker-overlay"]');
 
-    // 피커를 열어 현재 셀 타입을 확인한다
+    // 먼저 'accent' 타입으로 설정
     await longPressCell(page, 0);
     await expect(pickerMenu).toBeVisible();
+    await page.locator('[data-testid="type-picker-option-accent"]').click();
+    await expect(pickerMenu).toBeHidden();
 
-    // 어떤 옵션이 현재 선택돼 있는지 기록 (체크마크 svg 포함 여부로 판단)
-    let initialSelectedType: string | null = null;
-    for (const bt of BEAT_TYPES) {
-      const optionEl = page.locator(
-        `[data-testid="type-picker-option-${bt}"] svg`
-      );
-      const count = await optionEl.count();
-      if (count > 0) {
-        initialSelectedType = bt;
-        break;
-      }
-    }
+    // 피커를 다시 열고 체크마크 위치 확인
+    await longPressCell(page, 0);
+    await expect(pickerMenu).toBeVisible();
+    await assertCheckMarkOnlyFor(page, "accent");
 
     // backdrop 클릭 (메뉴 영역 밖인 overlay 좌상단)
     await overlay.click({ position: { x: 5, y: 5 } });
@@ -170,13 +190,7 @@ test.describe("SubdivisionBar 타입 피커", () => {
     // 다시 long-press 해서 선택 타입이 바뀌지 않았는지 검증
     await longPressCell(page, 0);
     await expect(pickerMenu).toBeVisible();
-
-    if (initialSelectedType) {
-      const checkInSelected = page.locator(
-        `[data-testid="type-picker-option-${initialSelectedType}"] svg`
-      );
-      await expect(checkInSelected).toBeVisible();
-    }
+    await assertCheckMarkOnlyFor(page, "accent");
 
     // 정리
     await overlay.click({ position: { x: 5, y: 5 } });
