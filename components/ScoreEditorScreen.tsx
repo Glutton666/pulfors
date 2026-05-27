@@ -191,7 +191,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
 
   // ── 음표 추가 (터치 확정) ─────────────────────────────────────
   const handleNotePlaced = useCallback(
-    (measureIdx: number, pitch: Pitch, duration: NoteDuration) => {
+    (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number) => {
       const newElement = makeNote(
         pitch,
         duration,
@@ -207,7 +207,10 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             ...p,
             measures: p.measures.map((m, mi) => {
               if (mi !== measureIdx) return m;
-              return { ...m, elements: [...m.elements, newElement] };
+              // X 좌표로 계산한 위치에 삽입
+              const next = [...m.elements];
+              next.splice(insertIdx, 0, newElement);
+              return { ...m, elements: next };
             }),
           };
         }),
@@ -215,13 +218,18 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
       applyDoc(newDoc);
       setSelectedMeasureIdx(measureIdx);
       setSelectedElementId(newElement.id);
+      // 확정 후 다음 마디로 커서 이동
+      const totalMeasures = doc.parts[selectedPartIdx]?.measures.length ?? 1;
+      if (measureIdx < totalMeasures - 1) {
+        setSelectedMeasureIdx(measureIdx + 1);
+      }
     },
     [doc, selectedPartIdx, accidental, selectedArticulation, selectedDynamic],
   );
 
   // ── 쉼표 추가 ─────────────────────────────────────────────────
   const handleRestPlaced = useCallback(
-    (measureIdx: number, duration: NoteDuration) => {
+    (measureIdx: number, duration: NoteDuration, insertIdx: number) => {
       const newElement = makeRest(duration);
       const newDoc: ScoreDocument = {
         ...doc,
@@ -231,7 +239,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             ...p,
             measures: p.measures.map((m, mi) => {
               if (mi !== measureIdx) return m;
-              return { ...m, elements: [...m.elements, newElement] };
+              const next = [...m.elements];
+              next.splice(insertIdx, 0, newElement);
+              return { ...m, elements: next };
             }),
           };
         }),
@@ -239,6 +249,10 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
       applyDoc(newDoc);
       setSelectedMeasureIdx(measureIdx);
       setSelectedElementId(newElement.id);
+      const totalMeasures = doc.parts[selectedPartIdx]?.measures.length ?? 1;
+      if (measureIdx < totalMeasures - 1) {
+        setSelectedMeasureIdx(measureIdx + 1);
+      }
     },
     [doc, selectedPartIdx, selectedDynamic],
   );
@@ -394,9 +408,10 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
     applyDoc(newDoc);
   }
 
-  // ── 빠르기 기호 선택 → 현재 선택된 마디 첫 박에 추가 ────────
+  // ── 빠르기 기호 선택 → 현재 선택된 마디에 tempoText 저장 ────
   function handleTempoSelect(tempoText: string, bpm: number) {
     const targetIdx = selectedMeasureIdx ?? 0;
+    const isGradual = tempoText === "rit." || tempoText === "accel.";
     const newDoc: ScoreDocument = {
       ...doc,
       bpm: bpm > 0 ? bpm : doc.bpm,
@@ -406,15 +421,13 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           ...p,
           measures: p.measures.map((m, mIdx) => {
             if (mIdx !== targetIdx) return m;
-            // tempoText를 첫 번째 음표/쉼표의 rehearsalMark 옆에 저장
-            // ScoreMeasure에 tempoText 필드가 없으므로 elements[0]의 jumpText로 저장
-            if (m.elements.length === 0) return m;
             return {
               ...m,
-              elements: m.elements.map((el, ei) => {
-                if (ei !== 0) return el;
-                return { ...el, jumpText: tempoText };
-              }),
+              tempoText,
+              bpm: bpm > 0 ? bpm : m.bpm,
+              tempoChangeType: isGradual
+                ? (tempoText === "rit." ? "rit" : "accel")
+                : "fixed",
             };
           }),
         };

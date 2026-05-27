@@ -988,6 +988,13 @@ export const translations = {
     symEnableHint:          { ko: "탭하여 활성화/비활성화", en: "Tap to toggle" },
     symEnabled:             { ko: "활성화됨", en: "Enabled" },
     symDisabled:            { ko: "비활성화됨", en: "Disabled" },
+    // 악기 카테고리 서브탭
+    catAll:                 { ko: "전체", en: "All" },
+    catStrings:             { ko: "현악", en: "Strings" },
+    catWoodwindBrass:       { ko: "관악", en: "Wind/Brass" },
+    catPercussion:          { ko: "타악", en: "Percussion" },
+    catKeyboard:            { ko: "건반", en: "Keyboard" },
+    catVocal:               { ko: "성악", en: "Vocal" },
   },
 } as const satisfies TranslationsShape;
 

@@ -51,6 +51,7 @@ export interface GhostState {
   noteY: number;
   pitch: Pitch;
   measureIdx: number;
+  insertIdx: number;
 }
 
 export interface ScoreCanvasProps {
@@ -62,8 +63,8 @@ export interface ScoreCanvasProps {
   activeDuration: NoteDuration;
   isDotted: boolean;
   accidental: Accidental | null;
-  onNotePlaced: (measureIdx: number, pitch: Pitch, duration: NoteDuration) => void;
-  onRestPlaced: (measureIdx: number, duration: NoteDuration) => void;
+  onNotePlaced: (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number) => void;
+  onRestPlaced: (measureIdx: number, duration: NoteDuration, insertIdx: number) => void;
   onElementTap: (elementId: string, measureIdx: number) => void;
   onMeasureTap: (measureIdx: number) => void;
   onEraseAtPoint: (measureIdx: number) => void;
@@ -98,12 +99,16 @@ export function ScoreCanvas({
   const accidentalRef = useRef(accidental);
   const selectedElementIdRef = useRef(selectedElementId);
   const onNoteMoveRef = useRef(onNoteMoved);
+  const docRef = useRef(doc);
+  const selectedPartIdxRef = useRef(selectedPartIdx);
   activeToolRef.current = activeTool;
   activeDurationRef.current = activeDuration;
   isDottedRef.current = isDotted;
   accidentalRef.current = accidental;
   selectedElementIdRef.current = selectedElementId;
   onNoteMoveRef.current = onNoteMoved;
+  docRef.current = doc;
+  selectedPartIdxRef.current = selectedPartIdx;
 
   // 음표 드래그 상태 refs
   const dragElementIdRef = useRef<string | null>(null);
@@ -121,7 +126,7 @@ export function ScoreCanvas({
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
 
-  // 터치 좌표 → 마디 인덱스 + 음높이
+  // 터치 좌표 → 마디 인덱스 + 음높이 + 삽입 위치(insertIdx)
   const touchToGhost = useCallback(
     (lx: number, ly: number): GhostState | null => {
       for (const row of rowsRef.current) {
@@ -138,11 +143,22 @@ export function ScoreCanvas({
             const pitch = yToPitch(staffRelY, clefRef.current);
             const acc = accidentalRef.current;
             const finalPitch: Pitch =
-              acc != null
+              acc != null && acc !== "natural"
                 ? { ...pitch, accidental: acc }
                 : pitch;
             const noteY = staffY + pitchToY(finalPitch, clefRef.current);
-            return { x: lx, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx };
+
+            // X 좌표 → 삽입 위치 계산
+            const measure = docRef.current.parts[selectedPartIdxRef.current]?.measures[mIdx];
+            const nElements = measure?.elements.length ?? 0;
+            const contentX = accX + 4;
+            const totalWidth = Math.max(mWidth - 8, 1);
+            const nSlots = nElements + 1;
+            const slotWidth = totalWidth / nSlots;
+            const relX = lx - contentX;
+            const insertIdx = Math.max(0, Math.min(nElements, Math.round(relX / slotWidth)));
+
+            return { x: lx, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx, insertIdx };
           }
           accX += mWidth;
         }
@@ -265,10 +281,10 @@ export function ScoreCanvas({
 
         if (tool === "note") {
           const info = touchToGhost(lx, ly);
-          if (info) onNotePlaced(info.measureIdx, info.pitch, dur);
+          if (info) onNotePlaced(info.measureIdx, info.pitch, dur, info.insertIdx);
         } else if (tool === "rest") {
           const info = touchToGhost(lx, ly);
-          if (info) onRestPlaced(info.measureIdx, dur);
+          if (info) onRestPlaced(info.measureIdx, dur, info.insertIdx);
         } else if (tool === "erase") {
           const info = touchToGhost(lx, ly);
           if (info) onEraseAtPoint(info.measureIdx);

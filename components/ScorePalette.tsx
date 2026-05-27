@@ -39,10 +39,10 @@ const ARTICULATIONS: Array<{ id: ArticulationType; symbol: string; labelKey: str
 
 // ── 임시표 ────────────────────────────────────────────────────
 
-const ACCIDENTALS: Array<{ value: Accidental | null; symbol: string; labelKey: string }> = [
-  { value: null,    symbol: "♮", labelKey: "accidentalNatural" },
-  { value: "sharp", symbol: "♯", labelKey: "accidentalSharp" },
-  { value: "flat",  symbol: "♭", labelKey: "accidentalFlat" },
+const ACCIDENTALS: Array<{ value: Accidental; symbol: string; labelKey: string }> = [
+  { value: "natural",      symbol: "♮", labelKey: "accidentalNatural" },
+  { value: "sharp",        symbol: "♯", labelKey: "accidentalSharp" },
+  { value: "flat",         symbol: "♭", labelKey: "accidentalFlat" },
   { value: "double_sharp", symbol: "𝄪", labelKey: "accidentalDoubleSharp" },
   { value: "double_flat",  symbol: "𝄫", labelKey: "accidentalDoubleFlat" },
 ];
@@ -113,22 +113,34 @@ const VOCAL_SYMBOLS: InstrSymbol[] = [
 ];
 
 const PERC_SYMBOLS: InstrSymbol[] = [
-  { id: "bowUp",     symbol: "↑",  labelKey: "symBowUp" },
-  { id: "bowDown",   symbol: "↓",  labelKey: "symBowDown" },
-  { id: "harmonic",  symbol: "◇",  labelKey: "symHarmonic" },
+  { id: "bowUp",    symbol: "↑",  labelKey: "symBowUp" },
+  { id: "bowDown",  symbol: "↓",  labelKey: "symBowDown" },
+  { id: "harmonic", symbol: "◇",  labelKey: "symHarmonic" },
 ];
 
-function getInstrSymbols(cat?: InstrumentCategory): InstrSymbol[] {
-  switch (cat) {
-    case "strings":    return STRINGS_SYMBOLS;
-    case "keyboard":   return KEYBOARD_SYMBOLS;
-    case "woodwind":
-    case "brass":      return WOODWIND_SYMBOLS;
-    case "vocal":      return VOCAL_SYMBOLS;
-    case "percussion": return PERC_SYMBOLS;
-    default:           return [...STRINGS_SYMBOLS, ...KEYBOARD_SYMBOLS];
-  }
-}
+// ── 악기 카테고리 서브탭 ──────────────────────────────────────
+
+type InstrSubTab = "all" | "strings" | "woodwind_brass" | "percussion" | "keyboard" | "vocal";
+
+interface SubTabDef { id: InstrSubTab; labelKey: string; }
+
+const INSTR_SUB_TABS: SubTabDef[] = [
+  { id: "all",            labelKey: "catAll" },
+  { id: "strings",        labelKey: "catStrings" },
+  { id: "woodwind_brass", labelKey: "catWoodwindBrass" },
+  { id: "percussion",     labelKey: "catPercussion" },
+  { id: "keyboard",       labelKey: "catKeyboard" },
+  { id: "vocal",          labelKey: "catVocal" },
+];
+
+const INSTR_SYMBOL_MAP: Record<InstrSubTab, InstrSymbol[]> = {
+  all:            [...STRINGS_SYMBOLS, ...KEYBOARD_SYMBOLS],
+  strings:        STRINGS_SYMBOLS,
+  woodwind_brass: WOODWIND_SYMBOLS,
+  percussion:     PERC_SYMBOLS,
+  keyboard:       KEYBOARD_SYMBOLS,
+  vocal:          VOCAL_SYMBOLS,
+};
 
 // ── 팔레트 탭 ─────────────────────────────────────────────────
 
@@ -181,10 +193,12 @@ export function ScorePalette({
     activeTool === "rest" ? "rests" : "notes",
   );
   const [selectedTempo, setSelectedTempo] = useState<string | null>(null);
+  const [instrSubTab, setInstrSubTab] = useState<InstrSubTab>("all");
 
   const styles = makeStyles(C);
 
-  const instrSymbols = getInstrSymbols(instrumentCategory);
+  // 카테고리 서브탭 기호 목록
+  const instrSymbols = INSTR_SYMBOL_MAP[instrSubTab] ?? INSTR_SYMBOL_MAP.all;
 
   const TAB_DEFS: Array<{ id: PaletteTab; labelKey: string; tool?: EditorTool }> = [
     { id: "notes",    labelKey: "paletteNotes",    tool: "note" },
@@ -438,37 +452,69 @@ export function ScorePalette({
 
       {/* ── 악기별 기호 탭 ────────────────────────────────────── */}
       {tab === "instr" && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.itemRow}
-        >
-          {instrSymbols.map((sym) => {
-            const isEnabled = enabledSymbols[sym.id] !== false; // 기본값 true
-            return (
-              <Pressable
-                key={sym.id}
-                style={[
-                  styles.instrBtn,
-                  {
-                    backgroundColor: isEnabled ? C.accent + "22" : "transparent",
-                    borderColor: isEnabled ? C.accent : C.border,
-                    opacity: isEnabled ? 1 : 0.5,
-                  },
-                ]}
-                onPress={() => onSymbolToggle?.(sym.id, !isEnabled)}
-                testID={`score-palette-sym-${sym.id}`}
-              >
-                <Text style={[styles.instrSymbol, { color: isEnabled ? C.accent : C.text }]}>
-                  {sym.symbol}
-                </Text>
-                <Text style={[styles.durLabel, { color: isEnabled ? C.accent : C.textSecondary }]}>
-                  {t("scoreMode", sym.labelKey as any)}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        <View>
+          {/* 카테고리 서브탭 */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[styles.itemRow, { paddingVertical: 4 }]}
+          >
+            {INSTR_SUB_TABS.map((sub) => {
+              const isSubActive = instrSubTab === sub.id;
+              return (
+                <Pressable
+                  key={sub.id}
+                  style={[
+                    styles.subTabBtn,
+                    {
+                      backgroundColor: isSubActive ? C.accent + "33" : "transparent",
+                      borderColor: isSubActive ? C.accent : C.border,
+                    },
+                  ]}
+                  onPress={() => setInstrSubTab(sub.id)}
+                  testID={`score-palette-instr-sub-${sub.id}`}
+                >
+                  <Text style={[styles.durLabel, { color: isSubActive ? C.accent : C.textSecondary }]}>
+                    {t("scoreMode", sub.labelKey as any)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {/* 해당 카테고리 기호 목록 */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.itemRow}
+          >
+            {instrSymbols.map((sym) => {
+              const isEnabled = enabledSymbols[sym.id] !== false;
+              return (
+                <Pressable
+                  key={sym.id}
+                  style={[
+                    styles.instrBtn,
+                    {
+                      backgroundColor: isEnabled ? C.accent + "22" : "transparent",
+                      borderColor: isEnabled ? C.accent : C.border,
+                      opacity: isEnabled ? 1 : 0.5,
+                    },
+                  ]}
+                  onPress={() => onSymbolToggle?.(sym.id, !isEnabled)}
+                  testID={`score-palette-sym-${sym.id}`}
+                >
+                  <Text style={[styles.instrSymbol, { color: isEnabled ? C.accent : C.text }]}>
+                    {sym.symbol}
+                  </Text>
+                  <Text style={[styles.durLabel, { color: isEnabled ? C.accent : C.textSecondary }]}>
+                    {t("scoreMode", sym.labelKey as any)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
       )}
     </View>
   );
@@ -589,5 +635,14 @@ const makeStyles = (C: any) =>
     instrSymbol: {
       fontSize: 16,
       fontFamily: "SpaceGrotesk_600SemiBold",
+    },
+    subTabBtn: {
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderRadius: Radius.sm,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      minWidth: 36,
     },
   });
