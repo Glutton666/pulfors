@@ -1038,89 +1038,6 @@ export function BarModeView({
   return (
     <View style={[styles.container, { backgroundColor: C.background }]} testID="beat-indicator-bar-mode">
 
-      {/* ── 심볼 드로어 ── */}
-      <View style={[styles.drawerToggleRow, { borderBottomColor: C.overlay06, paddingTop: topInset + 6 }]}>
-        <Pressable
-          onPress={() => {
-            if (placingSymbol) { setPlacingSymbol(null); setBlockSelectFirst(null); return; }
-            setSymbolDrawerOpen(v => !v);
-          }}
-          style={styles.drawerToggleBtn}
-          hitSlop={10}
-        >
-          {placingSymbol ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Ionicons name="close-circle" size={ms(14, 0.4)} color={SYMBOL_INFO[placingSymbol].color(C)} />
-              <Text style={{ color: SYMBOL_INFO[placingSymbol].color(C), fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_600SemiBold" }}>
-                {placingSymbol === "block" && blockSelectFirst !== null
-                  ? t("barModeView", "blockSelectStarted").replace("{{n}}", String(blockSelectFirst + 1))
-                  : `${t("barModeView", SYMBOL_INFO[placingSymbol].labelKey)} ${t("barModeView", "blockSelectPrompt")}`}
-              </Text>
-            </View>
-          ) : (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Ionicons
-                name={symbolDrawerOpen ? "chevron-up" : "chevron-down"}
-                size={ms(14, 0.4)}
-                color={C.textTertiary}
-              />
-              <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium" }}>
-                {symbolDrawerOpen ? t("barModeView", "symbolDrawerClose") : t("barModeView", "symbolDrawerLabel")}
-              </Text>
-            </View>
-          )}
-        </Pressable>
-
-        <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
-          {measureCount > 0 && (
-            <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium" }}>
-              {measureCount}{t("barModeView", "barsDisplay")}
-              {totalDurationDisplay ? `  ${totalDurationDisplay}` : ""}
-            </Text>
-          )}
-          {onExitBarMode && (
-            <Pressable
-              onPress={onExitBarMode}
-              hitSlop={10}
-              style={[styles.stpBtn, { backgroundColor: C.overlay08 }]}
-            >
-              <Ionicons name="close" size={ms(14, 0.4)} color={C.textSecondary} />
-            </Pressable>
-          )}
-        </View>
-      </View>
-
-      <Animated.View style={[styles.symbolDrawer, { height: drawerHeight, overflow: "hidden" }]}>
-        <View style={[styles.symbolDrawerInner, { borderBottomColor: C.overlay08 }]}>
-          {(Object.keys(SYMBOL_INFO) as SymbolType[]).map((sym) => {
-            const info = SYMBOL_INFO[sym];
-            const isActive = placingSymbol === sym;
-            const col = info.color(C);
-            return (
-              <Pressable
-                key={sym}
-                onPress={() => {
-                  if (isActive) { setPlacingSymbol(null); setBlockSelectFirst(null); }
-                  else { setPlacingSymbol(sym); setBlockSelectFirst(null); }
-                }}
-                style={[
-                  styles.symbolBtn,
-                  {
-                    backgroundColor: isActive ? col + "30" : C.backgroundSecondary,
-                    borderColor: isActive ? col : "transparent",
-                  },
-                ]}
-              >
-                <Ionicons name={info.icon} size={ms(14, 0.4)} color={isActive ? col : C.textSecondary} />
-                <Text style={{ color: isActive ? col : C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", marginTop: 2 }}>
-                  {t("barModeView", info.labelKey)}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </Animated.View>
-
       {/* ── 바 목록 ── */}
       <ScrollView
         ref={barScrollRef}
@@ -1177,6 +1094,89 @@ export function BarModeView({
             />
           );
         })}
+
+        {/* ── 심볼 드로어 (마지막 바 아래) ── */}
+        <View style={[styles.drawerToggleRow, { borderTopColor: C.overlay06, borderTopWidth: StyleSheet.hairlineWidth, borderBottomColor: C.overlay06, marginTop: 4 }]}>
+          <Pressable
+            onPress={() => {
+              if (placingSymbol) { setPlacingSymbol(null); setBlockSelectFirst(null); return; }
+              setSymbolDrawerOpen(v => !v);
+            }}
+            style={styles.drawerToggleBtn}
+            hitSlop={10}
+          >
+            {placingSymbol ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Ionicons name="close-circle" size={ms(14, 0.4)} color={SYMBOL_INFO[placingSymbol].color(C)} />
+                <Text style={{ color: SYMBOL_INFO[placingSymbol].color(C), fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_600SemiBold" }}>
+                  {placingSymbol === "block" && blockSelectFirst !== null
+                    ? t("barModeView", "blockSelectStarted").replace("{{n}}", String(blockSelectFirst + 1))
+                    : `${t("barModeView", SYMBOL_INFO[placingSymbol].labelKey)} ${t("barModeView", "blockSelectPrompt")}`}
+                </Text>
+              </View>
+            ) : (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Ionicons
+                  name={symbolDrawerOpen ? "chevron-up" : "chevron-down"}
+                  size={ms(14, 0.4)}
+                  color={C.textTertiary}
+                />
+                <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium" }}>
+                  {symbolDrawerOpen ? t("barModeView", "symbolDrawerClose") : t("barModeView", "symbolDrawerLabel")}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+            {measureCount > 0 && (
+              <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium" }}>
+                {measureCount}{t("barModeView", "barsDisplay")}
+                {totalDurationDisplay ? `  ${totalDurationDisplay}` : ""}
+              </Text>
+            )}
+            {onExitBarMode && (
+              <Pressable
+                onPress={onExitBarMode}
+                hitSlop={10}
+                style={[styles.stpBtn, { backgroundColor: C.overlay08 }]}
+              >
+                <Ionicons name="close" size={ms(14, 0.4)} color={C.textSecondary} />
+              </Pressable>
+            )}
+          </View>
+        </View>
+
+        <Animated.View style={[styles.symbolDrawer, { height: drawerHeight, overflow: "hidden" }]}>
+          <View style={[styles.symbolDrawerInner, { borderBottomColor: C.overlay08 }]}>
+            {(Object.keys(SYMBOL_INFO) as SymbolType[]).map((sym) => {
+              const info = SYMBOL_INFO[sym];
+              const isActive = placingSymbol === sym;
+              const col = info.color(C);
+              return (
+                <Pressable
+                  key={sym}
+                  onPress={() => {
+                    if (isActive) { setPlacingSymbol(null); setBlockSelectFirst(null); }
+                    else { setPlacingSymbol(sym); setBlockSelectFirst(null); }
+                  }}
+                  style={[
+                    styles.symbolBtn,
+                    {
+                      backgroundColor: isActive ? col + "30" : C.backgroundSecondary,
+                      borderColor: isActive ? col : "transparent",
+                    },
+                  ]}
+                >
+                  <Ionicons name={info.icon} size={ms(14, 0.4)} color={isActive ? col : C.textSecondary} />
+                  <Text style={{ color: isActive ? col : C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", marginTop: 2 }}>
+                    {t("barModeView", info.labelKey)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Animated.View>
 
         {/* 스와이프 힌트 (바 미선택 시 빈 공간에 표시) */}
         {editingBeat === null && !isPlaying && (
