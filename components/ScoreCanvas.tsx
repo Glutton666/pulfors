@@ -145,11 +145,33 @@ export function ScoreCanvas({
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
 
-  // 헤더 폭 계산 — ScoreRenderer의 MeasureRender와 동일한 로직
+  // ScoreRenderer.PartRender와 동일한 박자표 변경 감지 (mIdx → Set)
+  const timeSigChangedAt = useMemo(() => {
+    const changed = new Set<number>();
+    let prevNum = doc.timeSignature.numerator;
+    let prevDen = doc.timeSignature.denominator;
+    const allMeasureIndices = rows.flatMap((r) => r.measureIndices);
+    for (const mIdx of allMeasureIndices) {
+      const m = doc.parts[selectedPartIdx]?.measures[mIdx];
+      if (!m) continue;
+      const sig = m.timeSignature;
+      if (sig && (sig.numerator !== prevNum || sig.denominator !== prevDen)) {
+        changed.add(mIdx);
+        prevNum = sig.numerator;
+        prevDen = sig.denominator;
+      }
+    }
+    return changed;
+  }, [doc, rows, selectedPartIdx]);
+  const timeSigChangedAtRef = useRef(timeSigChangedAt);
+  timeSigChangedAtRef.current = timeSigChangedAt;
+
+  // 헤더 폭 계산 — ScoreRenderer의 MeasureRender/PartRender와 완전히 동일한 로직
   const measureContentX = useCallback(
-    (measureX: number, posInRow: number): number => {
+    (measureX: number, posInRow: number, mIdx?: number): number => {
       const showClef = posInRow === 0;
-      const showTimeSig = posInRow === 0;
+      // ScoreRenderer.PartRender와 동일: posInRow===0이거나 박자표 변경 마디
+      const showTimeSig = posInRow === 0 || (mIdx !== undefined && timeSigChangedAtRef.current.has(mIdx));
       const sharps = docRef.current.keySignature?.sharps ?? 0;
       const clef = clefRef.current;
       let cx = measureX + 4;
@@ -185,7 +207,7 @@ export function ScoreCanvas({
 
             // X 좌표 → 삽입 위치 계산 (ScoreRenderer 파이프라인 동기화)
             const measure = docRef.current.parts[selectedPartIdxRef.current]?.measures[mIdx];
-            const contentX = measureContentX(accX, i);
+            const contentX = measureContentX(accX, i, mIdx);
             const contentWidth = Math.max(mWidth - (contentX - accX), 1);
             const positions = measure
               ? layoutMeasure(measure, 0, clefRef.current, contentWidth)
@@ -233,8 +255,8 @@ export function ScoreCanvas({
               onMeasureTap(mIdx);
               return null;
             }
-            // ScoreRenderer와 동일한 contentX 계산
-            const contentX = measureContentX(accX, i);
+            // ScoreRenderer와 동일한 contentX 계산 (박자표 변경 마디 포함)
+            const contentX = measureContentX(accX, i, mIdx);
             const contentWidth = Math.max(mWidth - (contentX - accX), 1);
             // ScoreRenderer와 동일한 layoutMeasure 결과로 실제 음표 x 위치 계산
             const positions = layoutMeasure(measure, 0, clefRef.current, contentWidth);
