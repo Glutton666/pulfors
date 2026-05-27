@@ -583,6 +583,24 @@ export function BarModeView({
     return map;
   }, [loopBlocks, beatsPerMeasure]);
 
+  const totalDurationDisplay = useMemo(() => {
+    if (!bpm || bpm <= 0 || measureCount <= 0) return null;
+    let totalSec = 0;
+    for (let i = 0; i < measureCount; i++) {
+      const rep = barRepeats[i];
+      const effectiveBpm = (rep?.bpm && rep.bpm > 0) ? rep.bpm : bpm;
+      const barSec = (beatsPerMeasure / effectiveBpm) * 60;
+      if (!rep || rep.type === "count") {
+        totalSec += barSec * (rep?.value ?? 1);
+      } else {
+        totalSec += rep.value;
+      }
+    }
+    const mm = Math.floor(totalSec / 60);
+    const ss = Math.round(totalSec % 60);
+    return `${mm}:${String(ss).padStart(2, "0")}`;
+  }, [bpm, beatsPerMeasure, measureCount, barRepeats]);
+
   const getSymbolBadges = useCallback((beat: number): string[] => {
     const badges: string[] = [];
     const rep = barRepeats[beat];
@@ -1049,35 +1067,18 @@ export function BarModeView({
           )}
         </Pressable>
 
-        <View style={{ flexDirection: "row", gap: Spacing.xs }}>
-          <BeatStepperButton
-            direction="minus"
-            onPress={handleBeatsDecrement}
-            disabled={isPlaying || beatsPerMeasure <= MIN_BEATS}
-            iconSize={ms(13, 0.4)}
-            iconColor={C.textSecondary}
-            baseStyle={[styles.stpBtn, { backgroundColor: C.overlay08 }]}
-            testID="bar-beats-minus"
-            t={t}
-          />
-          <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_500Medium", alignSelf: "center", minWidth: 24, textAlign: "center" }}>
-            {beatsPerMeasure}
-          </Text>
-          <BeatStepperButton
-            direction="plus"
-            onPress={handleBeatsIncrement}
-            disabled={isPlaying || beatsPerMeasure >= MAX_BEATS}
-            iconSize={ms(13, 0.4)}
-            iconColor={C.textSecondary}
-            baseStyle={[styles.stpBtn, { backgroundColor: C.overlay08 }]}
-            testID="bar-beats-plus"
-            t={t}
-          />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+          {measureCount > 0 && (
+            <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium" }}>
+              {measureCount}{t("barModeView", "barsDisplay")}
+              {totalDurationDisplay ? `  ${totalDurationDisplay}` : ""}
+            </Text>
+          )}
           {onExitBarMode && (
             <Pressable
               onPress={onExitBarMode}
               hitSlop={10}
-              style={[styles.stpBtn, { backgroundColor: C.overlay08, marginLeft: 4 }]}
+              style={[styles.stpBtn, { backgroundColor: C.overlay08 }]}
             >
               <Ionicons name="close" size={ms(14, 0.4)} color={C.textSecondary} />
             </Pressable>
