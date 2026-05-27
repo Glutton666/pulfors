@@ -351,7 +351,6 @@ function SwipeableBarRow({
 
             {/* 비트 셀 위 info overlay */}
             <View style={styles.barCellOverlay} pointerEvents="none">
-              <Ionicons name="time-outline" size={8} color={isCurrentBeat ? C.accent : C.text} />
               <Text
                 style={[styles.barCenterInfo, { color: isCurrentBeat ? C.accent : C.text }]}
                 numberOfLines={1}
