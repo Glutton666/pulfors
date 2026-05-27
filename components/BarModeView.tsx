@@ -10,6 +10,7 @@
 import React, {
   useState, useRef, useCallback, useMemo, useEffect,
 } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   View, Text, ScrollView, Pressable, PanResponder,
   Animated, TextInput, Platform, StyleSheet,
@@ -405,6 +406,9 @@ export function BarModeView({
 
   const { t } = useLanguage();
   const S = useScale();
+  const insets = useSafeAreaInsets();
+  const webTopInset = Platform.OS === "web" ? 67 : 0;
+  const topInset = insets.top || webTopInset;
 
   // ─── 상태 ────────────────────────────────────────────────────────────────
 
@@ -1035,7 +1039,7 @@ export function BarModeView({
     <View style={[styles.container, { backgroundColor: C.background }]} testID="beat-indicator-bar-mode">
 
       {/* ── 심볼 드로어 ── */}
-      <View style={[styles.drawerToggleRow, { borderBottomColor: C.overlay06 }]}>
+      <View style={[styles.drawerToggleRow, { borderBottomColor: C.overlay06, paddingTop: topInset + 6 }]}>
         <Pressable
           onPress={() => {
             if (placingSymbol) { setPlacingSymbol(null); setBlockSelectFirst(null); return; }

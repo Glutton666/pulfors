@@ -5172,7 +5172,9 @@ export default function MetronomeScreen() {
           {
             paddingTop: noteMode
               ? (isLandscape ? (insets.top || 8) : (insets.top || webTopInset) + 4)
-              : (insets.top || webTopInset) + (isLandscape ? 8 : 12),
+              : barMode
+                ? 0
+                : (insets.top || webTopInset) + (isLandscape ? 8 : 12),
             paddingBottom: noteMode
               ? (isLandscape ? (insets.bottom || 4) : (insets.bottom || webBottomInset) + 4)
               : (insets.bottom || webBottomInset) + (isLandscape ? 8 : 12),
