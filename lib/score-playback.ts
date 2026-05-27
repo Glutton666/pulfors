@@ -113,11 +113,12 @@ export function measureDurationMs(
 ): { durationMs: number; startBpm: number; endBpm: number } {
   const num = measure.timeSignature?.numerator ?? docTimeSignature.numerator;
   const den = measure.timeSignature?.denominator ?? docTimeSignature.denominator;
-  const startBpm = (measure.bpm && measure.bpm > 0) ? measure.bpm : prevBpm;
+  const startBpm = (measure.bpm && measure.bpm > 0) ? measure.bpm : Math.max(1, prevBpm);
 
   // den=4 → 4분음표 기준. 분자(num)개의 4분음표 단위.
-  const beatFactor = 4 / den; // ex: den=8 → 0.5
-  const totalBeats = num * beatFactor;
+  const safeDen = den > 0 ? den : 4;
+  const beatFactor = 4 / safeDen; // ex: den=8 → 0.5
+  const totalBeats = Math.max(0.25, num * beatFactor);
 
   let endBpm = startBpm;
   let durationMs: number;

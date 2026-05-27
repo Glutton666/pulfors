@@ -5,46 +5,49 @@
 import type { ClefType, NoteDuration, Pitch, ScoreMeasure, ScoreDocument } from "./score-types";
 
 // ── 오선보 기본 상수 ───────────────────────────────────────────
+// LINE_SPACING을 변경하면 모든 파생 상수가 자동으로 스케일링됩니다.
 export const STAFF_LINE_COUNT = 5;
-export const LINE_SPACING = 10;        // 선 간격 (px)
+export const LINE_SPACING = 10;        // 선 간격 (px) — 기준값: 10
 export const STAFF_HEIGHT = LINE_SPACING * (STAFF_LINE_COUNT - 1); // 40px
-export const LEDGER_LINE_WIDTH = 14;
 
-// 음자리표 너비
+// 덧줄 너비 = 음표머리 너비의 2.5배
+export const LEDGER_LINE_WIDTH = Math.round(LINE_SPACING * 1.4); // 14
+
+// 음자리표 너비 (LINE_SPACING 기반)
 export const CLEF_WIDTH: Record<ClefType, number> = {
-  treble: 24,
-  bass: 20,
-  alto: 18,
-  tenor: 18,
-  percussion: 14,
+  treble:     Math.round(LINE_SPACING * 2.4),  // 24
+  bass:       Math.round(LINE_SPACING * 2.0),  // 20
+  alto:       Math.round(LINE_SPACING * 1.8),  // 18
+  tenor:      Math.round(LINE_SPACING * 1.8),  // 18
+  percussion: Math.round(LINE_SPACING * 1.4),  // 14
 };
 
-// 박자표 너비 (숫자 너비 기준)
-export const TIME_SIG_WIDTH = 20;
+// 박자표 너비
+export const TIME_SIG_WIDTH = Math.round(LINE_SPACING * 2.0); // 20
 
-// 조표 너비 (샤프/플랫 한 개당 8px)
-export const KEY_SIG_ACCIDENTAL_WIDTH = 8;
+// 조표 너비 (샤프/플랫 한 개당)
+export const KEY_SIG_ACCIDENTAL_WIDTH = Math.round(LINE_SPACING * 0.8); // 8
 
-// 음표 너비 (duration별)
+// 음표 너비 (duration별 — LINE_SPACING 기반)
 export const NOTE_WIDTH: Record<NoteDuration, number> = {
-  whole:          48,
-  half:           32,
-  quarter:        24,
-  eighth:         18,
-  sixteenth:      14,
-  thirty_second:  12,
-  whole_dot:      56,
-  half_dot:       38,
-  quarter_dot:    28,
-  eighth_dot:     22,
-  sixteenth_dot:  16,
+  whole:          Math.round(LINE_SPACING * 4.8), // 48
+  half:           Math.round(LINE_SPACING * 3.2), // 32
+  quarter:        Math.round(LINE_SPACING * 2.4), // 24
+  eighth:         Math.round(LINE_SPACING * 1.8), // 18
+  sixteenth:      Math.round(LINE_SPACING * 1.4), // 14
+  thirty_second:  Math.round(LINE_SPACING * 1.2), // 12
+  whole_dot:      Math.round(LINE_SPACING * 5.6), // 56
+  half_dot:       Math.round(LINE_SPACING * 3.8), // 38
+  quarter_dot:    Math.round(LINE_SPACING * 2.8), // 28
+  eighth_dot:     Math.round(LINE_SPACING * 2.2), // 22
+  sixteenth_dot:  Math.round(LINE_SPACING * 1.6), // 16
 };
 
-// 음표 머리 크기 (오선 선간격 10px 기준)
-export const NOTE_HEAD_RX = 5.5;  // 가로 반축 (LINE_SPACING * 0.55)
-export const NOTE_HEAD_RY = 4.0;  // 세로 반축 (LINE_SPACING * 0.40)
-export const STEM_HEIGHT = 32;    // 기둥 높이
-export const FLAG_OFFSET = 2;     // 꼬리 시작 오프셋
+// 음표 머리·기둥 크기 (LINE_SPACING 기반)
+export const NOTE_HEAD_RX = LINE_SPACING * 0.55;        // 5.5 — 가로 반축
+export const NOTE_HEAD_RY = LINE_SPACING * 0.40;        // 4.0 — 세로 반축
+export const STEM_HEIGHT   = Math.round(LINE_SPACING * 3.2); // 32 — 기둥 높이
+export const FLAG_OFFSET   = Math.round(LINE_SPACING * 0.2); // 2  — 꼬리 시작 오프셋
 
 // ── 음높이 → 오선 위치 변환 ────────────────────────────────────
 
@@ -339,14 +342,14 @@ export interface ScoreRowLayout {
   rowWidth: number;
 }
 
-// ScoreRenderer와 동일한 레이아웃 상수
-export const SCORE_STAFF_PADDING_TOP = 24;
-export const SCORE_STAFF_PADDING_BOTTOM = 28;
+// ScoreRenderer와 동일한 레이아웃 상수 (LINE_SPACING 기반)
+export const SCORE_STAFF_PADDING_TOP    = Math.round(LINE_SPACING * 2.4); // 24
+export const SCORE_STAFF_PADDING_BOTTOM = Math.round(LINE_SPACING * 2.8); // 28
 export const SCORE_PART_HEIGHT = SCORE_STAFF_PADDING_TOP + STAFF_HEIGHT + SCORE_STAFF_PADDING_BOTTOM; // 92
-export const SCORE_ROW_MARGIN_TOP = 16;
-export const SCORE_ROW_MARGIN_BOTTOM = 8;
-export const SCORE_DEFAULT_MEASURE_WIDTH = 120;
-export const SCORE_FIRST_MEASURE_EXTRA = 60;
+export const SCORE_ROW_MARGIN_TOP    = Math.round(LINE_SPACING * 1.6); // 16
+export const SCORE_ROW_MARGIN_BOTTOM = Math.round(LINE_SPACING * 0.8); // 8
+export const SCORE_DEFAULT_MEASURE_WIDTH = Math.round(LINE_SPACING * 12); // 120
+export const SCORE_FIRST_MEASURE_EXTRA   = Math.round(LINE_SPACING * 6);  // 60
 
 /**
  * 악보 전체 레이아웃 계산 — ScoreRenderer와 동일한 로직

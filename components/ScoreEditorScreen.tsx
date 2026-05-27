@@ -8,10 +8,7 @@ import {
   Text,
   TextInput,
   ScrollView,
-  Modal,
-  StyleSheet,
   Pressable,
-  Switch,
   Alert,
   Platform,
   Image,
@@ -43,9 +40,20 @@ import { INSTRUMENTS } from "@/lib/score-types";
 import { ScoreCanvas } from "@/components/ScoreCanvas";
 import type { EditorTool } from "@/components/ScoreCanvas";
 import { ScoreRenderer } from "@/components/ScoreRenderer";
-import { ScorePalette, ALL_INSTR_SYMBOLS } from "@/components/ScorePalette";
+import { ScorePalette } from "@/components/ScorePalette";
 import type { RepeatSignId, CrescType } from "@/components/ScorePalette";
 import { useScorePlayback } from "@/hooks/useScorePlayback";
+import { makeStyles } from "@/components/ScoreEditorScreen.styles";
+import { confirmDestructive } from "@/lib/confirm";
+import {
+  ScoreMoreMenuModal,
+  ScoreExtractPartModal,
+  ScoreSymbolSettingsModal,
+  ScoreMeasureContextMenu,
+  ScoreMetaModal,
+  ScoreMeasureEditModal,
+} from "@/components/ScoreEditorModals";
+import { HintBanner } from "@/components/HintTooltip";
 
 // ── 헬퍼 ──────────────────────────────────────────────────────
 
@@ -910,6 +918,11 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>
+      <HintBanner
+        hintKey="score_editor_intro"
+        message={t("scoreMode", "hintInputNote")}
+        icon="musical-notes-outline"
+      />
       {/* ── 상단 툴바 ─────────────────────────────────────────── */}
       <View
         style={[
@@ -1174,7 +1187,12 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
               onMeasureLongPress={handleMeasureLongPress}
               onEraseElement={handleEraseElement}
               onNoteMoved={handleNoteMoved}
-              playheadMeasureIdx={playback.isPlaying ? playback.currentMeasureIdx : undefined}
+              playheadMeasureIdx={
+                playback.isPlaying &&
+                playback.currentMeasureIdx < (doc.parts[selectedPartIdx]?.measures.length ?? 0)
+                  ? playback.currentMeasureIdx
+                  : undefined
+              }
               playheadFraction={playback.playheadFraction}
               showPlayhead={showPlayhead}
               highlightColor={highlightColor}
@@ -1235,22 +1253,11 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
                   setSelectedElementId(null);
                 }}
                 onLongPress={() => {
-                  if (Platform.OS === "web") {
-                    if (window.confirm(t("scoreMode", "deleteMeasure"))) handleDeleteMeasure(mIdx);
-                    return;
-                  }
-                  Alert.alert(
-                    t("scoreMode", "deleteMeasure"),
-                    undefined,
-                    [
-                      { text: t("scoreMode", "cancel"), style: "cancel" },
-                      {
-                        text: t("scoreMode", "deleteMeasure"),
-                        style: "destructive",
-                        onPress: () => handleDeleteMeasure(mIdx),
-                      },
-                    ],
-                  );
+                  confirmDestructive(t("scoreMode", "deleteMeasure"), {
+                    confirmText: t("scoreMode", "deleteMeasure"),
+                    cancelText: t("scoreMode", "cancel"),
+                    onConfirm: () => handleDeleteMeasure(mIdx),
+                  });
                 }}
                 testID={`score-editor-measure-${mIdx}`}
               >
@@ -1297,7 +1304,11 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
                 ...doc,
                 parts: doc.parts.map((p) => ({
                   ...p,
-                  measures: [p.measures[playback.currentMeasureIdx]].filter(Boolean) as typeof p.measures,
+                  measures: (
+                    playback.currentMeasureIdx < p.measures.length
+                      ? [p.measures[playback.currentMeasureIdx]]
+                      : []
+                  ).filter(Boolean) as typeof p.measures,
                 })),
               }}
               containerWidth={containerWidth * 1.4}
@@ -1396,783 +1407,67 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
         />
       </View>
 
-      {/* ── ⋯ 더 보기 메뉴 모달 ─────────────────────────────────── */}
-      <Modal
+      {/* ── 모달 영역 (ScoreEditorModals.tsx로 분리) ──────────── */}
+      <ScoreMoreMenuModal
         visible={showMoreMenu}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowMoreMenu(false)}
-      >
-        <Pressable style={styles.symbolModalBackdrop} onPress={() => setShowMoreMenu(false)}>
-          <Pressable
-            style={[styles.symbolModalCard, { backgroundColor: C.surface, borderColor: C.border }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text style={[styles.symbolModalTitle, { color: C.text }]}>
-              {t("scoreMode", "moreMenu")}
-            </Text>
-            <Pressable
-              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-              onPress={handleExportJpg}
-              testID="score-menu-export-jpg"
-            >
-              <Ionicons name="image-outline" size={18} color={C.accent} />
-              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "exportJpg")}</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-              onPress={handleExportJson}
-              testID="score-menu-export"
-            >
-              <Ionicons name="download-outline" size={18} color={C.accent} />
-              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "exportJson")}</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-              onPress={handleShareScore}
-              testID="score-menu-share"
-            >
-              <Ionicons name="share-social-outline" size={18} color={C.accent} />
-              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "shareScore")}</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-              onPress={handleImportJson}
-              testID="score-menu-import"
-            >
-              <Ionicons name="folder-open-outline" size={18} color={C.accent} />
-              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "importJson")}</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-              onPress={handleImportReferenceImageAction}
-              testID="score-menu-import-ref"
-            >
-              <Ionicons name="albums-outline" size={18} color={C.accent} />
-              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "importReferenceImage")}</Text>
-            </Pressable>
-            {doc.referenceImageUri ? (
-              <Pressable
-                style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-                onPress={handleClearReferenceImage}
-                testID="score-menu-clear-ref"
-              >
-                <Ionicons name="eye-off-outline" size={18} color={C.textSecondary} />
-                <Text style={[styles.ctxMenuLabel, { color: C.textSecondary }]}>{t("scoreMode", "clearReferenceImage")}</Text>
-              </Pressable>
-            ) : null}
-            <Pressable
-              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-              onPress={handleAddToPractice}
-              testID="score-menu-add-to-practice"
-            >
-              <Ionicons name="book-outline" size={18} color={C.accent} />
-              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "addToPractice")}</Text>
-            </Pressable>
-            {doc.parts.length > 1 && (
-              <Pressable
-                style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-                onPress={handleExtractPartOpen}
-                testID="score-menu-extract-part"
-              >
-                <Ionicons name="git-branch-outline" size={18} color={C.accent} />
-                <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "extractPart")}</Text>
-              </Pressable>
-            )}
-            <Pressable
-              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-              onPress={() => { setShowMoreMenu(false); setShowSymbolSettings(true); }}
-              testID="score-menu-symbol-settings"
-            >
-              <Ionicons name="settings-outline" size={18} color={C.accent} />
-              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "symbolSettingsTitle")}</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* ── 성부 분리 모달 ─────────────────────────────────────────── */}
-      <Modal
+        onClose={() => setShowMoreMenu(false)}
+        hasReferenceImage={!!doc.referenceImageUri}
+        hasMultipleParts={doc.parts.length > 1}
+        onExportJpg={handleExportJpg}
+        onExportJson={handleExportJson}
+        onShareScore={handleShareScore}
+        onImportJson={handleImportJson}
+        onImportReferenceImage={handleImportReferenceImageAction}
+        onClearReferenceImage={handleClearReferenceImage}
+        onAddToPractice={handleAddToPractice}
+        onExtractPart={handleExtractPartOpen}
+        onOpenSymbolSettings={() => { setShowMoreMenu(false); setShowSymbolSettings(true); }}
+      />
+      <ScoreExtractPartModal
         visible={showExtractPartModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowExtractPartModal(false)}
-      >
-        <Pressable style={styles.symbolModalBackdrop} onPress={() => setShowExtractPartModal(false)}>
-          <Pressable
-            style={[styles.symbolModalCard, { backgroundColor: C.surface, borderColor: C.border }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text style={[styles.symbolModalTitle, { color: C.text }]}>
-              {t("scoreMode", "extractPartTitle")}
-            </Text>
-            {doc.parts.map((part, pIdx) => (
-              <Pressable
-                key={part.id}
-                style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-                onPress={() =>
-                  setExtractPartIndices((prev) =>
-                    prev.includes(pIdx) ? prev.filter((i) => i !== pIdx) : [...prev, pIdx],
-                  )
-                }
-                testID={`score-extract-part-${pIdx}`}
-              >
-                <Ionicons
-                  name={extractPartIndices.includes(pIdx) ? "checkbox" : "square-outline"}
-                  size={18}
-                  color={C.accent}
-                />
-                <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
-                  {part.name ?? part.instrumentId}
-                </Text>
-              </Pressable>
-            ))}
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-              <Pressable
-                style={[styles.ctxMenuItem, { flex: 1, borderBottomWidth: 0 }]}
-                onPress={() => setShowExtractPartModal(false)}
-              >
-                <Text style={[styles.ctxMenuLabel, { color: C.textSecondary, textAlign: "center" }]}>
-                  {t("scoreMode", "cancel")}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[styles.symbolModalClose, { flex: 1, backgroundColor: extractPartIndices.length > 0 ? C.accent : C.border }]}
-                onPress={handleExtractConfirm}
-                testID="score-extract-confirm"
-              >
-                <Text style={styles.symbolModalCloseText}>{t("scoreMode", "extractPart")}</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* ── 악기 기호 설정 모달 ─────────────────────────────────── */}
-      <Modal
+        onClose={() => setShowExtractPartModal(false)}
+        parts={doc.parts}
+        selectedIndices={extractPartIndices}
+        onTogglePart={(pIdx) =>
+          setExtractPartIndices((prev) =>
+            prev.includes(pIdx) ? prev.filter((i) => i !== pIdx) : [...prev, pIdx],
+          )
+        }
+        onConfirm={handleExtractConfirm}
+      />
+      <ScoreSymbolSettingsModal
         visible={showSymbolSettings}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowSymbolSettings(false)}
-      >
-        <Pressable
-          style={[styles.symbolModalBackdrop]}
-          onPress={() => setShowSymbolSettings(false)}
-        >
-          <Pressable
-            style={[styles.symbolModalCard, { backgroundColor: C.surface, borderColor: C.border }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text style={[styles.symbolModalTitle, { color: C.text }]}>
-              {t("scoreMode", "symbolSettingsTitle")}
-            </Text>
-            <Text style={[styles.symbolModalSub, { color: C.textSecondary }]}>
-              {currentPart?.name ?? currentPart?.instrumentId ?? ""}
-            </Text>
-            {/* 재생 설정 섹션 */}
-            <View style={[styles.playbackSection, { borderBottomColor: C.border }]}>
-              <Text style={[styles.playbackSectionTitle, { color: C.textSecondary }]}>
-                {t("scoreMode", "playbackSettings")}
-              </Text>
-              <View style={[styles.symbolRow, { borderBottomColor: C.border }]}>
-                <Text style={[styles.symbolRowLabel, { color: C.text }]}>
-                  {t("scoreMode", "showPlayhead")}
-                </Text>
-                <Switch
-                  value={showPlayhead}
-                  onValueChange={(v) => updatePlaybackSettings({ showPlayhead: v })}
-                  trackColor={{ false: C.border, true: C.accent }}
-                  thumbColor={showPlayhead ? "#fff" : "#ccc"}
-                  testID="score-toggle-show-playhead"
-                />
-              </View>
-              <View style={[styles.symbolRow, { borderBottomColor: C.border }]}>
-                <Text style={[styles.symbolRowLabel, { color: C.text }]}>
-                  {t("scoreMode", "showZoomView")}
-                </Text>
-                <Switch
-                  value={showZoomView}
-                  onValueChange={(v) => updatePlaybackSettings({ showZoomView: v })}
-                  trackColor={{ false: C.border, true: C.accent }}
-                  thumbColor={showZoomView ? "#fff" : "#ccc"}
-                  testID="score-toggle-show-zoom-view"
-                />
-              </View>
-            </View>
-
-            <ScrollView style={styles.symbolModalList} showsVerticalScrollIndicator={false}>
-              {ALL_INSTR_SYMBOLS.map((sym) => {
-                const enabled = (currentPart?.enabledSymbols ?? {})[sym.id] !== false;
-                return (
-                  <View key={sym.id} style={[styles.symbolRow, { borderBottomColor: C.border }]}>
-                    <Text style={[styles.symbolRowSym, { color: C.accent }]}>{sym.symbol}</Text>
-                    <Text style={[styles.symbolRowLabel, { color: C.text }]}>
-                      {t("scoreMode", sym.labelKey as any) || sym.id}
-                    </Text>
-                    <Switch
-                      value={enabled}
-                      onValueChange={(v) => handleSymbolToggle(sym.id, v)}
-                      trackColor={{ false: C.border, true: C.accent }}
-                      thumbColor={enabled ? "#fff" : "#ccc"}
-                      testID={`score-symbol-toggle-${sym.id}`}
-                    />
-                  </View>
-                );
-              })}
-            </ScrollView>
-            <Pressable
-              style={[styles.symbolModalClose, { backgroundColor: C.accent }]}
-              onPress={() => setShowSymbolSettings(false)}
-            >
-              <Text style={styles.symbolModalCloseText}>{t("scoreMode", "done")}</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* ── 마디 컨텍스트 메뉴 모달 ─────────────────────────────── */}
-      <Modal
+        onClose={() => setShowSymbolSettings(false)}
+        currentPart={currentPart}
+        showPlayhead={showPlayhead}
+        showZoomView={showZoomView}
+        onUpdatePlaybackSettings={updatePlaybackSettings}
+        onSymbolToggle={handleSymbolToggle}
+      />
+      <ScoreMeasureContextMenu
+        measureIdx={measureContextMenu?.measureIdx ?? null}
         visible={!!measureContextMenu?.visible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setMeasureContextMenu(null)}
-      >
-        <Pressable
-          style={styles.symbolModalBackdrop}
-          onPress={() => setMeasureContextMenu(null)}
-        >
-          <Pressable
-            style={[styles.symbolModalCard, { backgroundColor: C.surface, borderColor: C.border }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text style={[styles.symbolModalTitle, { color: C.text }]}>
-              {t("scoreMode", "measureOptions")} #{(measureContextMenu?.measureIdx ?? 0) + 1}
-            </Text>
-
-            {/* BPM 변경 */}
-            <Pressable
-              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-              onPress={() => measureContextMenu && handleMeasureBpmChange(measureContextMenu.measureIdx)}
-            >
-              <Ionicons name="musical-note" size={18} color={C.accent} />
-              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
-                {t("scoreMode", "measureBpmChange")}
-              </Text>
-            </Pressable>
-
-            {/* 박자표 변경 */}
-            <Pressable
-              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-              onPress={() => measureContextMenu && handleMeasureTimeSigChange(measureContextMenu.measureIdx)}
-            >
-              <Ionicons name="time-outline" size={18} color={C.accent} />
-              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
-                {t("scoreMode", "measureTimeSigChange")}
-              </Text>
-            </Pressable>
-
-            {/* 리허설 마크 */}
-            <Pressable
-              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-              onPress={() => measureContextMenu && handleAddRehearsalMark(measureContextMenu.measureIdx)}
-            >
-              <Ionicons name="bookmark-outline" size={18} color={C.accent} />
-              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
-                {t("scoreMode", "measureAddRehearsal")}
-              </Text>
-            </Pressable>
-
-            {/* 마디 부호 지우기 */}
-            <Pressable
-              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-              onPress={() => measureContextMenu && handleClearMeasureSigns(measureContextMenu.measureIdx)}
-            >
-              <Ionicons name="trash-outline" size={18} color="#FF453A" />
-              <Text style={[styles.ctxMenuLabel, { color: "#FF453A" }]}>
-                {t("scoreMode", "measureClearSigns")}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              style={[styles.symbolModalClose, { backgroundColor: C.border }]}
-              onPress={() => setMeasureContextMenu(null)}
-            >
-              <Text style={[styles.symbolModalCloseText, { color: C.text }]}>
-                {t("scoreMode", "done")}
-              </Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* ── 악보 메타데이터 편집 모달 ──────────────────────────── */}
-      <Modal
-        visible={showMetaModal && !!metaDraft}
-        transparent
-        animationType="slide"
-        onRequestClose={() => { setShowMetaModal(false); setMetaDraft(null); }}
-      >
-        <Pressable
-          style={styles.symbolModalBackdrop}
-          onPress={() => { setShowMetaModal(false); setMetaDraft(null); }}
-        >
-          <Pressable
-            style={[styles.symbolModalCard, { backgroundColor: C.surface, borderColor: C.border, maxHeight: "80%" }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text style={[styles.symbolModalTitle, { color: C.text }]}>
-              {t("scoreMode", "editMetadata")}
-            </Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* 제목 */}
-              <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
-                {t("scoreMode", "title")}
-              </Text>
-              <TextInput
-                style={[styles.metaInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
-                value={metaDraft?.title ?? ""}
-                onChangeText={(v) => setMetaDraft((d) => d ? { ...d, title: v } : d)}
-                placeholder={t("scoreMode", "untitled")}
-                placeholderTextColor={C.textSecondary}
-                testID="score-meta-title"
-              />
-              {/* 부제목 */}
-              <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
-                {t("scoreMode", "metaSubtitle")}
-              </Text>
-              <TextInput
-                style={[styles.metaInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
-                value={metaDraft?.subtitle ?? ""}
-                onChangeText={(v) => setMetaDraft((d) => d ? { ...d, subtitle: v } : d)}
-                placeholderTextColor={C.textSecondary}
-              />
-              {/* 작곡가 */}
-              <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
-                {t("scoreMode", "metaComposer")}
-              </Text>
-              <TextInput
-                style={[styles.metaInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
-                value={metaDraft?.composer ?? ""}
-                onChangeText={(v) => setMetaDraft((d) => d ? { ...d, composer: v } : d)}
-                placeholderTextColor={C.textSecondary}
-                testID="score-meta-composer"
-              />
-              {/* 편곡자 */}
-              <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
-                {t("scoreMode", "metaArranger")}
-              </Text>
-              <TextInput
-                style={[styles.metaInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
-                value={metaDraft?.arranger ?? ""}
-                onChangeText={(v) => setMetaDraft((d) => d ? { ...d, arranger: v } : d)}
-                placeholderTextColor={C.textSecondary}
-              />
-              {/* 작사가 */}
-              <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
-                {t("scoreMode", "metaLyricist")}
-              </Text>
-              <TextInput
-                style={[styles.metaInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
-                value={metaDraft?.lyricist ?? ""}
-                onChangeText={(v) => setMetaDraft((d) => d ? { ...d, lyricist: v } : d)}
-                placeholderTextColor={C.textSecondary}
-              />
-              {/* 저작권 */}
-              <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
-                {t("scoreMode", "metaCopyright")}
-              </Text>
-              <TextInput
-                style={[styles.metaInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
-                value={metaDraft?.copyright ?? ""}
-                onChangeText={(v) => setMetaDraft((d) => d ? { ...d, copyright: v } : d)}
-                placeholderTextColor={C.textSecondary}
-              />
-              {/* 난이도 */}
-              <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
-                {t("scoreMode", "metaDifficulty")}
-              </Text>
-              <View style={styles.diffRow}>
-                {(["beginner", "intermediate", "advanced", "expert"] as const).map((d) => (
-                  <Pressable
-                    key={d}
-                    style={[
-                      styles.diffBtn,
-                      {
-                        borderColor: metaDraft?.difficulty === d ? C.accent : C.border,
-                        backgroundColor: metaDraft?.difficulty === d ? C.accent + "22" : "transparent",
-                      },
-                    ]}
-                    onPress={() => setMetaDraft((prev) => prev ? { ...prev, difficulty: d } : prev)}
-                  >
-                    <Text style={[styles.diffBtnText, { color: metaDraft?.difficulty === d ? C.accent : C.textSecondary }]}>
-                      {t("scoreMode", `diff${d.charAt(0).toUpperCase()}${d.slice(1)}` as any)}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-              {/* 메모 */}
-              <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
-                {t("scoreMode", "metaMemo")}
-              </Text>
-              <TextInput
-                style={[styles.metaInput, styles.metaInputMulti, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
-                value={metaDraft?.memo ?? ""}
-                onChangeText={(v) => setMetaDraft((d) => d ? { ...d, memo: v } : d)}
-                multiline
-                numberOfLines={3}
-                placeholderTextColor={C.textSecondary}
-              />
-            </ScrollView>
-            <Pressable
-              style={[styles.symbolModalClose, { backgroundColor: C.accent }]}
-              onPress={handleMetaSave}
-              testID="score-meta-save"
-            >
-              <Text style={styles.symbolModalCloseText}>{t("scoreMode", "done")}</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* ── 마디 인라인 편집 모달 (크로스 플랫폼 TextInput) ─── */}
-      <Modal
-        visible={showMeasureEditModal && !!measureEditTarget}
-        transparent
-        animationType="fade"
-        onRequestClose={() => { setShowMeasureEditModal(false); setMeasureEditTarget(null); }}
-      >
-        <Pressable
-          style={styles.symbolModalBackdrop}
-          onPress={() => { setShowMeasureEditModal(false); setMeasureEditTarget(null); }}
-        >
-          <Pressable
-            style={[styles.symbolModalCard, { backgroundColor: C.surface, borderColor: C.border }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text style={[styles.symbolModalTitle, { color: C.text }]}>
-              {measureEditTarget?.label ?? ""}
-            </Text>
-            <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
-              {measureEditTarget?.hint ?? ""}
-            </Text>
-            <TextInput
-              style={[styles.metaInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
-              value={measureEditTarget?.value ?? ""}
-              onChangeText={(v) => setMeasureEditTarget((t) => t ? { ...t, value: v } : t)}
-              keyboardType={measureEditTarget?.field === "bpm" ? "number-pad" : "default"}
-              autoFocus
-              returnKeyType="done"
-              onSubmitEditing={handleMeasureEditSave}
-              testID="score-measure-edit-input"
-            />
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
-              <Pressable
-                style={[styles.symbolModalClose, { flex: 1, backgroundColor: C.border }]}
-                onPress={() => { setShowMeasureEditModal(false); setMeasureEditTarget(null); }}
-              >
-                <Text style={[styles.symbolModalCloseText, { color: C.text }]}>{t("scoreMode", "cancel")}</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.symbolModalClose, { flex: 1, backgroundColor: C.accent }]}
-                onPress={handleMeasureEditSave}
-                testID="score-measure-edit-save"
-              >
-                <Text style={styles.symbolModalCloseText}>{t("scoreMode", "done")}</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        onClose={() => setMeasureContextMenu(null)}
+        onBpmChange={handleMeasureBpmChange}
+        onTimeSigChange={handleMeasureTimeSigChange}
+        onAddRehearsal={handleAddRehearsalMark}
+        onClearSigns={handleClearMeasureSigns}
+      />
+      <ScoreMetaModal
+        visible={showMetaModal}
+        metaDraft={metaDraft}
+        onClose={() => { setShowMetaModal(false); setMetaDraft(null); }}
+        onChangeDraft={setMetaDraft}
+        onSave={handleMetaSave}
+      />
+      <ScoreMeasureEditModal
+        visible={showMeasureEditModal}
+        editTarget={measureEditTarget}
+        onClose={() => { setShowMeasureEditModal(false); setMeasureEditTarget(null); }}
+        onChangeTarget={setMeasureEditTarget}
+        onSave={handleMeasureEditSave}
+      />
     </View>
   );
 }
 
-const makeStyles = (C: any, S: any) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-    },
-    topBar: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: Spacing.md,
-      paddingBottom: 10,
-      borderBottomWidth: 1,
-      gap: Spacing.xs ?? 4,
-    },
-    iconBtn: {
-      padding: 4,
-    },
-    topTitle: {
-      flex: 1,
-      fontFamily: "SpaceGrotesk_600SemiBold",
-      fontSize: FontSize.body,
-    },
-    savedToast: {
-      fontFamily: "SpaceGrotesk_500Medium",
-      fontSize: FontSize.small,
-    },
-    saveBtn: {
-      paddingHorizontal: Spacing.md,
-      paddingVertical: 7,
-      borderRadius: Radius.md,
-    },
-    saveBtnText: {
-      fontFamily: "SpaceGrotesk_600SemiBold",
-      fontSize: FontSize.small,
-      color: "#fff",
-    },
-    partTabsScroll: {
-      borderBottomWidth: 1,
-      maxHeight: 40,
-    },
-    partTabsContent: {
-      paddingHorizontal: Spacing.md,
-    },
-    partTab: {
-      paddingHorizontal: Spacing.md,
-      paddingVertical: 8,
-    },
-    partTabText: {
-      fontFamily: "SpaceGrotesk_500Medium",
-      fontSize: FontSize.small,
-    },
-    selectionBar: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: Spacing.md,
-      paddingVertical: 6,
-      borderBottomWidth: 1,
-      gap: 6,
-    },
-    selectionLabel: {
-      fontFamily: "SpaceGrotesk_400Regular",
-      fontSize: FontSize.small,
-    },
-    selBarBtn: {
-      borderWidth: 1,
-      borderRadius: Radius.sm,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      alignItems: "center",
-      justifyContent: "center",
-      minWidth: 32,
-    },
-    selBarBtnText: {
-      fontSize: 16,
-      fontFamily: "serif",
-    },
-    scoreScroll: {
-      flex: 1,
-    },
-    scoreContent: {
-      gap: 0,
-    },
-    scoreHeader: {
-      alignItems: "center",
-      paddingVertical: Spacing.md,
-      gap: 4,
-    },
-    scoreTitle: {
-      fontFamily: "SpaceGrotesk_700Bold",
-      fontSize: FontSize.subtitle,
-    },
-    scoreMeta: {
-      fontFamily: "SpaceGrotesk_400Regular",
-      fontSize: FontSize.small,
-    },
-    inputHint: {
-      fontFamily: "SpaceGrotesk_400Regular",
-      fontSize: FontSize.small,
-      textAlign: "center",
-      marginBottom: 8,
-      opacity: 0.7,
-    },
-    measureTabsRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 6,
-    },
-    measureTab: {
-      borderWidth: 1,
-      borderRadius: Radius.sm,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      alignItems: "center",
-      minWidth: 44,
-    },
-    measureTabNum: {
-      fontFamily: "SpaceGrotesk_600SemiBold",
-      fontSize: FontSize.small,
-    },
-    measureTabCount: {
-      fontFamily: "SpaceGrotesk_400Regular",
-      fontSize: 10,
-    },
-    addMeasureBtn: {
-      borderWidth: 1,
-      borderStyle: "dashed",
-      borderRadius: Radius.sm,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-    },
-    addMeasureText: {
-      fontFamily: "SpaceGrotesk_400Regular",
-      fontSize: FontSize.small,
-    },
-    // ── 확대 뷰 ──────────────────────────────────────────────────
-    zoomViewWrapper: {
-      borderTopWidth: 1,
-      paddingVertical: 6,
-      paddingHorizontal: Spacing.md,
-      maxHeight: 180,
-    },
-    zoomViewLabel: {
-      fontFamily: "SpaceGrotesk_400Regular",
-      fontSize: 10,
-      marginBottom: 4,
-      letterSpacing: 0.5,
-    },
-    // ── 재생 설정 섹션 ────────────────────────────────────────────
-    playbackSection: {
-      borderBottomWidth: 1,
-      paddingBottom: 8,
-      marginBottom: 8,
-    },
-    playbackSectionTitle: {
-      fontFamily: "SpaceGrotesk_500Medium",
-      fontSize: FontSize.small,
-      marginBottom: 6,
-      marginTop: 4,
-    },
-    paletteWrapper: {
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: -2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 4,
-      elevation: 4,
-    },
-    // ── 악기 기호 설정 모달 ─────────────────────────────────────
-    symbolModalBackdrop: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.5)",
-      justifyContent: "center",
-      alignItems: "center",
-      padding: Spacing.lg,
-    },
-    symbolModalCard: {
-      width: "100%",
-      maxWidth: 400,
-      maxHeight: "70%",
-      borderRadius: Radius.lg,
-      borderWidth: 1,
-      padding: Spacing.lg,
-    },
-    symbolModalTitle: {
-      fontFamily: "SpaceGrotesk_600SemiBold",
-      fontSize: FontSize.body,
-      marginBottom: 2,
-    },
-    symbolModalSub: {
-      fontFamily: "SpaceGrotesk_400Regular",
-      fontSize: FontSize.small,
-      marginBottom: Spacing.md,
-    },
-    symbolModalList: {
-      maxHeight: 320,
-      marginBottom: Spacing.md,
-    },
-    symbolRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingVertical: 10,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      gap: 8,
-    },
-    symbolRowSym: {
-      width: 36,
-      fontFamily: "SpaceGrotesk_600SemiBold",
-      fontSize: FontSize.body,
-      textAlign: "center",
-    },
-    symbolRowLabel: {
-      flex: 1,
-      fontFamily: "SpaceGrotesk_400Regular",
-      fontSize: FontSize.small,
-    },
-    symbolModalClose: {
-      borderRadius: Radius.md,
-      paddingVertical: 10,
-      alignItems: "center",
-    },
-    symbolModalCloseText: {
-      fontFamily: "SpaceGrotesk_600SemiBold",
-      fontSize: FontSize.small,
-      color: "#fff",
-    },
-    // 마디 컨텍스트 메뉴
-    ctxMenuItem: {
-      flexDirection: "row" as const,
-      alignItems: "center" as const,
-      paddingVertical: 12,
-      paddingHorizontal: 4,
-      borderBottomWidth: 1,
-      gap: 10,
-    },
-    ctxMenuLabel: {
-      fontFamily: "SpaceGrotesk_400Regular",
-      fontSize: FontSize.body,
-      flex: 1,
-    },
-    refOpacityBtn: {
-      position: "absolute",
-      top: 6,
-      right: 6,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 8,
-      borderWidth: 1,
-    },
-    refOpacityLabel: {
-      fontFamily: "SpaceGrotesk_600SemiBold",
-      fontSize: 11,
-    },
-    // 메타데이터 편집 모달
-    metaFieldLabel: {
-      fontFamily: "SpaceGrotesk_500Medium",
-      fontSize: FontSize.small,
-      marginTop: 10,
-      marginBottom: 4,
-    },
-    metaInput: {
-      borderWidth: 1,
-      borderRadius: Radius.sm,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-      fontFamily: "SpaceGrotesk_400Regular",
-      fontSize: FontSize.body,
-    },
-    metaInputMulti: {
-      height: 64,
-      textAlignVertical: "top" as const,
-    },
-    diffRow: {
-      flexDirection: "row" as const,
-      flexWrap: "wrap" as const,
-      gap: 6,
-      marginBottom: 4,
-    },
-    diffBtn: {
-      borderWidth: 1,
-      borderRadius: Radius.sm,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-    },
-    diffBtnText: {
-      fontFamily: "SpaceGrotesk_500Medium",
-      fontSize: FontSize.small,
-    },
-  });

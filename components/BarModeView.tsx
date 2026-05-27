@@ -33,6 +33,7 @@ import type { CustomSoundSetConfig } from "@/lib/storage";
 import { Spacing, Radius, FontSize } from "@/constants/tokens";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
+import { HintBanner } from "@/components/HintTooltip";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -1037,6 +1038,12 @@ export function BarModeView({
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]} testID="beat-indicator-bar-mode">
+
+      <HintBanner
+        hintKey="bar_mode_intro"
+        message={t("barModeView", "hintLongPress")}
+        icon="hand-left-outline"
+      />
 
       {/* ── 바 목록 ── */}
       <ScrollView

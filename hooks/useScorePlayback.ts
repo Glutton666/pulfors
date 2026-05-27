@@ -95,10 +95,20 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     }
   }, []);
 
-  // doc이 바뀌면 재생 중지
+  // 다른 악보로 전환 시 재생 중지
   useEffect(() => {
     stop();
   }, [doc.id, stop]);
+
+  // 재생 중 마디 수가 바뀌면 타임라인이 구식이 되므로 중지
+  const measureCountRef = useRef(doc.parts[0]?.measures.length ?? 0);
+  useEffect(() => {
+    const newCount = doc.parts[0]?.measures.length ?? 0;
+    if (measureCountRef.current !== newCount) {
+      measureCountRef.current = newCount;
+      if (isPlayingRef.current) stop();
+    }
+  });
 
   // unmount cleanup
   useEffect(() => {

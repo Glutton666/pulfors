@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import { logger } from "@/lib/logger";
+import { confirmDestructive } from "@/lib/confirm";
 import { make_styles, make_csStyles, kbStyles } from "./SettingsModal.styles";
 import { AssistantShortcutsGuide } from "@/components/AssistantShortcutsGuide";
 import { LinearGradient } from "expo-linear-gradient";
@@ -828,25 +829,19 @@ export function SettingsModal({
   }, [editingCustomSlot, customName, customStrong, customAccent, customNormal, customSoundSets, onCustomSoundSetsChange, t]);
 
   const deleteCustomSet = useCallback((slot: string) => {
-    Alert.alert(
-      t("customSoundSet", "deleteTitle"),
-      t("customSoundSet", "deleteConfirm"),
-      [
-        { text: t("customSoundSet", "cancel"), style: "cancel" },
-        {
-          text: t("customSoundSet", "delete"),
-          style: "destructive",
-          onPress: () => {
-            const updated = { ...customSoundSets };
-            delete updated[slot];
-            onCustomSoundSetsChange(updated);
-            saveCustomSoundSets(updated);
-            if (soundSet === slot) onSoundSetChange("classic");
-            if (editingCustomSlot === slot) setEditingCustomSlot(null);
-          },
-        },
-      ]
-    );
+    confirmDestructive(t("customSoundSet", "deleteConfirm"), {
+      title: t("customSoundSet", "deleteTitle"),
+      confirmText: t("customSoundSet", "delete"),
+      cancelText: t("customSoundSet", "cancel"),
+      onConfirm: () => {
+        const updated = { ...customSoundSets };
+        delete updated[slot];
+        onCustomSoundSetsChange(updated);
+        saveCustomSoundSets(updated);
+        if (soundSet === slot) onSoundSetChange("classic");
+        if (editingCustomSlot === slot) setEditingCustomSlot(null);
+      },
+    });
   }, [customSoundSets, onCustomSoundSetsChange, soundSet, onSoundSetChange, editingCustomSlot, t]);
 
   const getNextCustomSlot = useCallback((): string | null => {

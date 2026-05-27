@@ -33,19 +33,16 @@ import {
   measureMinWidth,
   headerWidth,
   KEY_SIG_POSITIONS,
+  computeScoreLayout,
 } from "@/lib/score-layout";
+import type { ScoreRowLayout } from "@/lib/score-layout";
 import type { ScoreDocument, ScorePart, ScoreMeasure, ScoreNote, ScoreRest, ClefType, NoteDuration, ArticulationType } from "@/lib/score-types";
 
 // ── 상수 ─────────────────────────────────────────────────────
-const MEASURE_GAP = 0;          // 마디 사이 간격
 const PART_GAP = 32;            // 성부 간 간격
 const STAFF_PADDING_TOP = 24;   // 오선 위 여백 (덧줄/기호 공간)
 const STAFF_PADDING_BOTTOM = 28; // 오선 아래 여백
 const PART_HEIGHT = STAFF_PADDING_TOP + STAFF_HEIGHT + STAFF_PADDING_BOTTOM;
-const ROW_MARGIN_TOP = 16;
-const ROW_MARGIN_BOTTOM = 8;
-const DEFAULT_MEASURE_WIDTH = 120;
-const FIRST_MEASURE_EXTRA = 60; // 첫 마디 헤더 추가 폭
 
 // ── 음자리표 SVG Path ─────────────────────────────────────────
 
@@ -806,7 +803,7 @@ interface PartRenderProps {
   part: ScorePart;
   measures: ScoreMeasure[];
   partIdx: number;
-  rowLayout: RowLayout[];
+  rowLayout: ScoreRowLayout[];
   doc: ScoreDocument;
   color: string;
   selectedElementId?: string | null;
@@ -814,13 +811,6 @@ interface PartRenderProps {
   playheadFraction?: number;
   highlightColor?: string;
   showPlayhead?: boolean;
-}
-
-interface RowLayout {
-  measureIndices: number[];
-  y: number;
-  measureWidths: number[];
-  rowWidth: number;
 }
 
 function PartRender({
@@ -949,77 +939,6 @@ export interface ScoreRendererProps {
   showPartNames?: boolean;
 }
 
-interface RowLayout {
-  measureIndices: number[];
-  y: number;
-  measureWidths: number[];
-  rowWidth: number;
-}
-
-function computeLayout(
-  doc: ScoreDocument,
-  containerWidth: number,
-): { rows: RowLayout[]; totalHeight: number } {
-  if (!doc.parts.length) return { rows: [], totalHeight: 100 };
-
-  const partCount = doc.parts.length;
-  const measures = doc.parts[0]?.measures ?? [];
-  const measureCount = measures.length;
-
-  // 각 마디의 최소 폭 계산
-  const minWidths = measures.map((m) => measureMinWidth(m));
-  const firstMeasureHeader = headerWidth(
-    doc.parts[0]?.clef ?? "treble",
-    true,
-    doc.keySignature.sharps,
-  ) + FIRST_MEASURE_EXTRA;
-
-  const rows: RowLayout[] = [];
-  let currentRow: number[] = [];
-  let currentRowWidth = firstMeasureHeader;
-  let y = ROW_MARGIN_TOP;
-
-  for (let i = 0; i < measureCount; i++) {
-    const mw = Math.max(minWidths[i], DEFAULT_MEASURE_WIDTH);
-    const extraHeader = currentRow.length === 0 && i > 0
-      ? headerWidth(doc.parts[0]?.clef ?? "treble", false, 0)
-      : 0;
-
-    if (currentRow.length > 0 && currentRowWidth + mw + extraHeader > containerWidth) {
-      // 새 줄
-      const rowHeight = PART_HEIGHT * partCount + ROW_MARGIN_BOTTOM;
-      const equalWidth = (containerWidth) / currentRow.length;
-      rows.push({
-        measureIndices: [...currentRow],
-        y,
-        measureWidths: currentRow.map(() => equalWidth),
-        rowWidth: containerWidth,
-      });
-      y += rowHeight;
-      currentRow = [i];
-      currentRowWidth = mw;
-    } else {
-      currentRow.push(i);
-      currentRowWidth += mw + extraHeader;
-    }
-  }
-
-  // 마지막 줄
-  if (currentRow.length > 0) {
-    const rowHeight = PART_HEIGHT * partCount + ROW_MARGIN_BOTTOM;
-    const totalMin = currentRow.reduce((sum, mi) => sum + Math.max(minWidths[mi], DEFAULT_MEASURE_WIDTH), 0);
-    const scale = Math.max(1, (containerWidth) / totalMin);
-    rows.push({
-      measureIndices: [...currentRow],
-      y,
-      measureWidths: currentRow.map((mi) => Math.max(minWidths[mi], DEFAULT_MEASURE_WIDTH) * Math.min(scale, 2)),
-      rowWidth: containerWidth,
-    });
-    y += rowHeight;
-  }
-
-  return { rows, totalHeight: y + ROW_MARGIN_BOTTOM };
-}
 
 export function ScoreRenderer({
   doc,
@@ -1035,7 +954,7 @@ export function ScoreRenderer({
   const strokeColor = C.text;
 
   const { rows, totalHeight } = useMemo(
-    () => computeLayout(doc, containerWidth),
+    () => computeScoreLayout(doc, containerWidth),
     [doc, containerWidth],
   );
 

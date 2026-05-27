@@ -12,6 +12,7 @@ import {
   PanResponder,
   Dimensions,
 } from "react-native";
+import { confirmDestructive } from "@/lib/confirm";
 import { AnimatedSlideModal } from "@/components/AnimatedModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -552,14 +553,12 @@ export function PracticeBookModal({
         setEntries(updated);
         await savePracticeBook(updated);
       };
-      if (Platform.OS === "web") {
-        doDelete();
-      } else {
-        Alert.alert(t("practiceBook", "delete"), t("practiceBook", "deleteConfirm"), [
-          { text: t("practiceBook", "cancel"), style: "cancel" },
-          { text: t("practiceBook", "delete"), style: "destructive", onPress: doDelete },
-        ]);
-      }
+      confirmDestructive(t("practiceBook", "deleteConfirm"), {
+        title: t("practiceBook", "delete"),
+        confirmText: t("practiceBook", "delete"),
+        cancelText: t("practiceBook", "cancel"),
+        onConfirm: doDelete,
+      });
     },
     [entries]
   );

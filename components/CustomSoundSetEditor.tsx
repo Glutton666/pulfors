@@ -10,6 +10,7 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { confirmDestructive } from "@/lib/confirm";
 import * as Haptics from "expo-haptics";
 import * as DocumentPicker from "expo-document-picker";
 import {
@@ -276,25 +277,19 @@ export function CustomSoundSetEditor({
 
   const handleDelete = useCallback(() => {
     if (!slot) return;
-    Alert.alert(
-      t("customSoundSet", "deleteTitle"),
-      t("customSoundSet", "deleteConfirm"),
-      [
-        { text: t("customSoundSet", "cancel"), style: "cancel" },
-        {
-          text: t("customSoundSet", "delete"),
-          style: "destructive",
-          onPress: () => {
-            const updated = { ...customSoundSets };
-            delete updated[slot];
-            onCustomSoundSetsChange(updated);
-            saveCustomSoundSets(updated);
-            if (currentSoundSet === slot) onSoundSetChange?.("classic");
-            onClose();
-          },
-        },
-      ]
-    );
+    confirmDestructive(t("customSoundSet", "deleteConfirm"), {
+      title: t("customSoundSet", "deleteTitle"),
+      confirmText: t("customSoundSet", "delete"),
+      cancelText: t("customSoundSet", "cancel"),
+      onConfirm: () => {
+        const updated = { ...customSoundSets };
+        delete updated[slot];
+        onCustomSoundSetsChange(updated);
+        saveCustomSoundSets(updated);
+        if (currentSoundSet === slot) onSoundSetChange?.("classic");
+        onClose();
+      },
+    });
   }, [slot, customSoundSets, onCustomSoundSetsChange, currentSoundSet, onSoundSetChange, t, onClose]);
 
   const styles = makeStyles(C);

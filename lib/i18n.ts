@@ -657,6 +657,7 @@ export const translations = {
     quickAddChange: { ko: "항목 변경", en: "Change Item" },
     quickAddRemove: { ko: "슬롯 비우기", en: "Remove from slot" },
     quickAddNoEntries: { ko: "먼저 바 모드 항목을 저장하세요", en: "Save a bar mode entry first" },
+    hintAddToQueue:    { ko: "아래 항목을 탭해서 큐에 추가하고 순서를 조정하세요", en: "Tap items below to add to queue and reorder them" },
   },
   duration: {
     s: { ko: "초", en: "s" },
@@ -721,7 +722,7 @@ export const translations = {
     prefixHint: { ko: "엄격 모드에서는 다음 형태로 말하세요", en: "In strict mode, speak like" },
     listening: { ko: "듣는 중…", en: "Listening…" },
     cmdExecuted: { ko: "명령 실행됨", en: "Command executed" },
-    cmdUnknown: { ko: "명령을 인식하지 못했습니다", en: "Could not recognize command" },
+    cmdUnknown:  { ko: "명령을 인식하지 못했습니다", en: "Could not recognize command" },
   },
   keyboard: {
     tabLabel:           { ko: "키보드", en: "Keyboard" },
@@ -831,6 +832,7 @@ export const translations = {
     swipeHintAdd:        { ko: "↑ 바 추가", en: "↑ Add Bar" },
     repBpmAdd:           { ko: "+ BPM", en: "+ BPM" },
     longPressEdit:       { ko: "길게 탭해서 편집", en: "Long-press to edit" },
+    hintLongPress:       { ko: "바를 길게 누르면 BPM·반복 옵션을 설정할 수 있습니다", en: "Long-press a bar to set BPM and repeat options" },
   },
   bpmDetect: {
     title:      { ko: "주변 BPM 감지", en: "Detect BPM" },
@@ -1061,6 +1063,7 @@ export const translations = {
     measureClearSigns:      { ko: "이 마디 부호 지우기", en: "Clear Measure Signs" },
     measureAddRehearsal:    { ko: "리허설 마크", en: "Rehearsal Mark" },
     rehearsalMarkLabel:     { ko: "리허설 마크 (A, B, 1 …)", en: "Rehearsal Mark (A, B, 1 …)" },
+    hintInputNote:          { ko: "음표를 선택 후 악보를 탭하여 입력하세요. 길게 누르면 삭제됩니다", en: "Select a note then tap the score to insert. Long-press to delete" },
   },
 } as const satisfies TranslationsShape;
 

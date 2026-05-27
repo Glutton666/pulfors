@@ -5,12 +5,12 @@ import {
   StyleSheet,
   Pressable,
   FlatList,
-  Alert,
   Platform,
   Image,
   PanResponder,
   useWindowDimensions,
 } from "react-native";
+import { confirmDestructive } from "@/lib/confirm";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
@@ -25,6 +25,7 @@ import { CONTROL_PAD_SLOT_COUNT, createEmptyControlPadMapping } from "@/lib/stor
 import type { BeatType } from "@/lib/metronome-engine";
 import { useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
+import { HintBanner } from "@/components/HintTooltip";
 
 interface NoteModeViewProps {
   queue: PracticeEntry[];
@@ -785,14 +786,12 @@ export function NoteModeView({
   };
 
   const handleReset = useCallback(() => {
-    if (Platform.OS === "web") {
-      onReset();
-    } else {
-      Alert.alert(t("noteMode", "reset"), t("noteMode", "resetConfirm"), [
-        { text: t("main", "cancel"), style: "cancel" },
-        { text: t("noteMode", "reset"), style: "destructive", onPress: onReset },
-      ]);
-    }
+    confirmDestructive(t("noteMode", "resetConfirm"), {
+      title: t("noteMode", "reset"),
+      confirmText: t("noteMode", "reset"),
+      cancelText: t("main", "cancel"),
+      onConfirm: onReset,
+    });
   }, [onReset, t]);
 
   const currentEntry = queue[currentIndex];
@@ -1181,6 +1180,12 @@ export function NoteModeView({
       </View>
 
       {renderPlayControls()}
+
+      <HintBanner
+        hintKey="note_mode_intro"
+        message={t("noteMode", "hintAddToQueue")}
+        icon="list-outline"
+      />
 
       {renderQueueSection()}
 
