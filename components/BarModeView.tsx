@@ -324,34 +324,32 @@ function SwipeableBarRow({
             </Text>
           </View>
 
-          {/* 중앙: 비트 셀 + info overlay */}
-          <View style={{ flex: 1, position: "relative" }}>
-            <View style={[styles.barRowCells, { alignSelf: "stretch", height: undefined, overflow: "hidden" }]}>
-              {cells.map((ct, ci) => {
-                const isLast = ci === cells.length - 1;
-                const isActiveCell = isCurrentBeat;
-                return (
-                  <View
-                    key={ci}
-                    style={[
-                      styles.barMiniCell,
-                      !isLast && { borderRightWidth: 0.5, borderRightColor: C.overlay06 },
-                      {
-                        backgroundColor:
-                          ct === "strong" ? (isActiveCell ? C.accent : C.accent + "90")
-                          : ct === "accent" ? (isActiveCell ? C.accentMuted : C.accentMuted + "90")
-                          : ct === "mute" ? "transparent"
-                          : (isActiveCell ? C.textSecondary : C.textTertiary + "60"),
-                        borderWidth: ct === "mute" ? 1 : 0,
-                        borderColor: ct === "mute" ? C.textTertiary + "80" : "transparent",
-                      },
-                    ]}
-                  />
-                );
-              })}
-            </View>
+          {/* 중앙: 비트 셀 (info overlay 포함) */}
+          <View style={styles.barRowCells}>
+            {cells.map((ct, ci) => {
+              const isLast = ci === cells.length - 1;
+              const isActiveCell = isCurrentBeat;
+              return (
+                <View
+                  key={ci}
+                  style={[
+                    styles.barMiniCell,
+                    !isLast && { borderRightWidth: 0.5, borderRightColor: C.overlay06 },
+                    {
+                      backgroundColor:
+                        ct === "strong" ? (isActiveCell ? C.accent : C.accent + "90")
+                        : ct === "accent" ? (isActiveCell ? C.accentMuted : C.accentMuted + "90")
+                        : ct === "mute" ? "transparent"
+                        : (isActiveCell ? C.textSecondary : C.textTertiary + "60"),
+                      borderWidth: ct === "mute" ? 1 : 0,
+                      borderColor: ct === "mute" ? C.textTertiary + "80" : "transparent",
+                    },
+                  ]}
+                />
+              );
+            })}
 
-            {/* 비트 셀 위 절대 위치 info overlay */}
+            {/* 비트 셀 위 info overlay */}
             <View style={styles.barCellOverlay} pointerEvents="none">
               <Ionicons name="time-outline" size={8} color={isCurrentBeat ? C.accent : C.text} />
               <Text
