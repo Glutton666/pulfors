@@ -2832,73 +2832,44 @@ export default function MetronomeScreen() {
       };
 
       const bc = barConfigRef.current;
-      if (bc.hasBeenConfigured) {
-        setBeatsPerMeasure(bc.beatsPerMeasure);
-        setBeatTypes([...bc.beatTypes]);
-        setBeatSubdivisions({ ...bc.beatSubdivisions });
-        setBarRepeats({ ...bc.barRepeats });
-        setLoopBlocks([...bc.loopBlocks]);
-        setBarLoopMode(bc.barLoopMode);
-        setBlockPlayMode((bc as any).blockPlayMode || "loop");
-        setNoteSamples({ ...bc.noteSamples });
-        noteSamplesRef.current = { ...bc.noteSamples };
-        setNoteSampleNames({ ...bc.noteSampleNames });
-        noteSampleNamesRef.current = { ...bc.noteSampleNames };
-        setNoteSampleSources({ ...bc.noteSampleSources });
-        noteSampleSourcesRef.current = { ...bc.noteSampleSources };
-        setNoteSampleChannels({ ...(bc.noteSampleChannels || {}) });
-        noteSampleChannelsRef.current = { ...(bc.noteSampleChannels || {}) };
-        engine.setBeatsPerMeasure(bc.beatsPerMeasure);
-        engine.setBeatTypes([...bc.beatTypes]);
-        engine.setAllBeatSubdivisions(bc.beatSubdivisions);
-        engine.setAllBarRepeats(bc.barRepeats);
-        engine.setLoopBlocks(bc.loopBlocks);
-        engine.setBlockPlayMode((bc as any).blockPlayMode || "loop");
-        for (const [k, v] of Object.entries(bc.barRepeats)) {
-          if (v.bpm) engine.setBarBpmOverride(Number(k), v.bpm);
-        }
-      } else {
-        const defaultBeats = 1;
-        const defaultTypes = defaultBeatTypes(defaultBeats);
-        barConfigRef.current = {
-          ...bc,
-          beatsPerMeasure: defaultBeats,
-          beatTypes: [...defaultTypes],
-          beatSubdivisions: {},
-          barRepeats: {},
-          loopBlocks: [],
-          barClockMode: "stopwatch",
-          barTimerDuration: 180,
-          noteSamples: {},
-          noteSampleNames: {},
-          noteSampleSources: {},
-          noteSampleChannels: {},
-          barLoopMode: "once",
-          blockPlayMode: "loop",
-          hasBeenConfigured: true,
-        };
-        setBeatsPerMeasure(defaultBeats);
-        setBeatTypes([...defaultTypes]);
-        setBeatSubdivisions({});
-        setBarRepeats({});
-        setLoopBlocks([]);
-        setBarLoopMode("once");
-        setNoteSamples({});
-        noteSamplesRef.current = {};
-        setNoteSampleNames({});
-        noteSampleNamesRef.current = {};
-        setNoteSampleSources({});
-        noteSampleSourcesRef.current = {};
-        setNoteSampleChannels({});
-        noteSampleChannelsRef.current = {};
-        setNoteSampleMetroChannels({});
-        noteSampleMetroChannelsRef.current = {};
-        engine.setBeatsPerMeasure(defaultBeats);
-        engine.setBeatTypes([...defaultTypes]);
-        engine.setAllBeatSubdivisions({});
-        engine.clearLoopBlocks();
-        engine.clearBarRepeats();
-      }
+      barConfigRef.current = {
+        ...bc,
+        beatsPerMeasure: 0,
+        beatTypes: [],
+        beatSubdivisions: {},
+        barRepeats: {},
+        loopBlocks: [],
+        barClockMode: "stopwatch",
+        barTimerDuration: 180,
+        noteSamples: {},
+        noteSampleNames: {},
+        noteSampleSources: {},
+        noteSampleChannels: {},
+        barLoopMode: "once",
+        blockPlayMode: "loop",
+        hasBeenConfigured: true,
+      };
+      setBeatsPerMeasure(0);
+      setBeatTypes([]);
+      setBeatSubdivisions({});
+      setBarRepeats({});
+      setLoopBlocks([]);
+      setBarLoopMode("once");
+      setNoteSamples({});
+      noteSamplesRef.current = {};
+      setNoteSampleNames({});
+      noteSampleNamesRef.current = {};
+      setNoteSampleSources({});
+      noteSampleSourcesRef.current = {};
+      setNoteSampleChannels({});
+      noteSampleChannelsRef.current = {};
+      setNoteSampleMetroChannels({});
+      noteSampleMetroChannelsRef.current = {};
+      engine.setBeatsPerMeasure(0);
+      engine.setBeatTypes([]);
+      engine.setAllBeatSubdivisions({});
+      engine.clearLoopBlocks();
+      engine.clearBarRepeats();
     } else {
       barConfigRef.current = {
         ...barConfigRef.current,
