@@ -1,5 +1,5 @@
 // ============================================================
-// ScoreEditorScreen — 악보 편집 화면
+// ScoreEditorScreen — 악보 편집 화면 (2단계 터치 입력 UX)
 // ============================================================
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
@@ -14,44 +14,48 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as Crypto from "expo-crypto";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
-import { saveScore } from "@/lib/score-storage";
-import { createEmptyMeasure } from "@/lib/score-storage";
+import { saveScore, createEmptyMeasure } from "@/lib/score-storage";
 import type {
   ScoreDocument,
   ScoreNote,
   ScoreRest,
-  ScoreMeasure,
   NoteDuration,
   Pitch,
+  Accidental,
+  ArticulationType,
+  Dynamic,
 } from "@/lib/score-types";
-import { ScoreRenderer } from "@/components/ScoreRenderer";
+import { ScoreCanvas } from "@/components/ScoreCanvas";
+import type { EditorTool } from "@/components/ScoreCanvas";
+import { ScorePalette } from "@/components/ScorePalette";
 
-// ── 툴 타입 ────────────────────────────────────────────────────
+// ── 헬퍼 ──────────────────────────────────────────────────────
 
-type EditorTool = "select" | "note" | "rest" | "erase";
+const MAX_HISTORY = 50;
 
-const DURATION_OPTIONS: Array<{ value: NoteDuration; symbol: string }> = [
-  { value: "whole",      symbol: "𝅝" },
-  { value: "half",       symbol: "𝅗𝅥" },
-  { value: "quarter",    symbol: "♩" },
-  { value: "eighth",     symbol: "♪" },
-  { value: "sixteenth",  symbol: "𝅘𝅥𝅯" },
-];
-
-// ── 음표 타입 ───────────────────────────────────────────────────
-
-function makeNote(pitch: Pitch, duration: NoteDuration): ScoreNote {
+function makeNote(
+  pitch: Pitch,
+  duration: NoteDuration,
+  accidental?: Accidental | null,
+  articulations?: ArticulationType[],
+  dynamic?: Dynamic,
+): ScoreNote {
+  const finalPitch: Pitch = accidental
+    ? { ...pitch, accidental }
+    : pitch;
   return {
     id: Crypto.randomUUID(),
     type: "note",
-    pitch,
+    pitch: finalPitch,
     duration,
+    articulations: articulations?.length ? articulations : undefined,
+    dynamic: dynamic ?? undefined,
   };
 }
 
@@ -63,11 +67,7 @@ function makeRest(duration: NoteDuration): ScoreRest {
   };
 }
 
-// ── 기본 음표 (C4 4분음표) ──────────────────────────────────────
-
-const DEFAULT_PITCH: Pitch = { step: "C", octave: 4 };
-
-// ── Props ───────────────────────────────────────────────────────
+// ── Props ─────────────────────────────────────────────────────
 
 export interface ScoreEditorScreenProps {
   doc: ScoreDocument;
@@ -75,7 +75,7 @@ export interface ScoreEditorScreenProps {
   onSaved: (doc: ScoreDocument) => void;
 }
 
-// ── 메인 컴포넌트 ───────────────────────────────────────────────
+// ── 메인 컴포넌트 ─────────────────────────────────────────────
 
 export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEditorScreenProps) {
   const { colors: C } = useTheme();
@@ -87,19 +87,67 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   const topInset = insets.top || webTopInset;
   const bottomInset = insets.bottom || (Platform.OS === "web" ? 34 : 0);
 
-  const [doc, setDoc] = useState<ScoreDocument>(initialDoc);
+  // ── 악보 상태 ────────────────────────────────────────────────
+  const [doc, setDocRaw] = useState<ScoreDocument>(initialDoc);
+
+  // ── undo/redo 스택 ────────────────────────────────────────────
+  const historyRef = useRef<ScoreDocument[]>([initialDoc]);
+  const histIdxRef = useRef(0);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  function applyDoc(newDoc: ScoreDocument, addToHistory = true) {
+    setDocRaw(newDoc);
+    if (!addToHistory) return;
+    // 현재 인덱스 이후 히스토리 제거
+    const sliced = historyRef.current.slice(0, histIdxRef.current + 1);
+    sliced.push(newDoc);
+    if (sliced.length > MAX_HISTORY) sliced.shift();
+    historyRef.current = sliced;
+    histIdxRef.current = sliced.length - 1;
+    setCanUndo(histIdxRef.current > 0);
+    setCanRedo(false);
+  }
+
+  function handleUndo() {
+    if (histIdxRef.current <= 0) return;
+    histIdxRef.current--;
+    const prev = historyRef.current[histIdxRef.current];
+    if (prev) {
+      setDocRaw(prev);
+      setCanUndo(histIdxRef.current > 0);
+      setCanRedo(true);
+    }
+  }
+
+  function handleRedo() {
+    if (histIdxRef.current >= historyRef.current.length - 1) return;
+    histIdxRef.current++;
+    const next = historyRef.current[histIdxRef.current];
+    if (next) {
+      setDocRaw(next);
+      setCanUndo(true);
+      setCanRedo(histIdxRef.current < historyRef.current.length - 1);
+    }
+  }
+
+  // ── 편집 도구 상태 ────────────────────────────────────────────
   const [activeTool, setActiveTool] = useState<EditorTool>("note");
   const [activeDuration, setActiveDuration] = useState<NoteDuration>("quarter");
+  const [isDotted, setIsDotted] = useState(false);
+  const [accidental, setAccidental] = useState<Accidental | null>(null);
+  const [selectedArticulation, setSelectedArticulation] = useState<ArticulationType | null>(null);
+  const [selectedDynamic, setSelectedDynamic] = useState<Dynamic | null>(null);
+
+  // ── 선택 상태 ─────────────────────────────────────────────────
   const [selectedPartIdx, setSelectedPartIdx] = useState(0);
   const [selectedMeasureIdx, setSelectedMeasureIdx] = useState<number | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
-  const [isDotted, setIsDotted] = useState(false);
+
+  // ── 저장 ──────────────────────────────────────────────────────
   const [savedToast, setSavedToast] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const styles = makeStyles(C, S);
-
-  // 저장
   const handleSave = useCallback(async () => {
     try {
       await saveScore(doc);
@@ -112,121 +160,219 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
     }
   }, [doc, onSaved]);
 
-  // 마디 추가
+  // ── 마디 추가 ─────────────────────────────────────────────────
   function handleAddMeasure() {
-    const newMeasure = createEmptyMeasure();
-    setDoc((prev) => {
-      const parts = prev.parts.map((part, pIdx) => {
-        if (pIdx !== selectedPartIdx) {
-          return {
-            ...part,
-            measures: [...part.measures, createEmptyMeasure()],
-          };
-        }
-        return {
-          ...part,
-          measures: [...part.measures, newMeasure],
-        };
-      });
-      return { ...prev, parts };
-    });
-    setSelectedMeasureIdx(
-      (doc.parts[selectedPartIdx]?.measures.length ?? 0)
-    );
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((part) => ({
+        ...part,
+        measures: [...part.measures, createEmptyMeasure()],
+      })),
+    };
+    applyDoc(newDoc);
+    setSelectedMeasureIdx((doc.parts[selectedPartIdx]?.measures.length) ?? 0);
   }
 
-  // 마디 삭제
+  // ── 마디 삭제 ─────────────────────────────────────────────────
   function handleDeleteMeasure(mIdx: number) {
     const part = doc.parts[selectedPartIdx];
     if (!part || part.measures.length <= 1) return;
-    setDoc((prev) => ({
-      ...prev,
-      parts: prev.parts.map((p) => ({
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p) => ({
         ...p,
         measures: p.measures.filter((_, i) => i !== mIdx),
       })),
-    }));
+    };
+    applyDoc(newDoc);
     if (selectedMeasureIdx === mIdx) setSelectedMeasureIdx(null);
   }
 
-  // 음표/쉼표 추가
-  function handleAddElement(mIdx: number) {
-    if (activeTool === "select") {
-      setSelectedMeasureIdx(mIdx);
-      return;
-    }
-    if (activeTool === "erase") {
-      handleEraseSelected(mIdx);
-      return;
-    }
+  // ── 음표 추가 (터치 확정) ─────────────────────────────────────
+  const handleNotePlaced = useCallback(
+    (measureIdx: number, pitch: Pitch, duration: NoteDuration) => {
+      const newElement = makeNote(
+        pitch,
+        duration,
+        accidental,
+        selectedArticulation ? [selectedArticulation] : [],
+        selectedDynamic ?? undefined,
+      );
+      const newDoc: ScoreDocument = {
+        ...doc,
+        parts: doc.parts.map((p, pIdx) => {
+          if (pIdx !== selectedPartIdx) return p;
+          return {
+            ...p,
+            measures: p.measures.map((m, mi) => {
+              if (mi !== measureIdx) return m;
+              return { ...m, elements: [...m.elements, newElement] };
+            }),
+          };
+        }),
+      };
+      applyDoc(newDoc);
+      setSelectedMeasureIdx(measureIdx);
+      setSelectedElementId(newElement.id);
+    },
+    [doc, selectedPartIdx, accidental, selectedArticulation, selectedDynamic],
+  );
 
-    // 점음표 suffix 적용 (isDotted가 true이면 _dot suffix 추가)
-    const baseDur = activeDuration;
-    const dur: NoteDuration = isDotted && !baseDur.endsWith("_dot")
-      ? (`${baseDur}_dot` as NoteDuration)
-      : baseDur;
+  // ── 쉼표 추가 ─────────────────────────────────────────────────
+  const handleRestPlaced = useCallback(
+    (measureIdx: number, duration: NoteDuration) => {
+      const newElement = makeRest(duration);
+      const newDoc: ScoreDocument = {
+        ...doc,
+        parts: doc.parts.map((p, pIdx) => {
+          if (pIdx !== selectedPartIdx) return p;
+          return {
+            ...p,
+            measures: p.measures.map((m, mi) => {
+              if (mi !== measureIdx) return m;
+              return { ...m, elements: [...m.elements, newElement] };
+            }),
+          };
+        }),
+      };
+      applyDoc(newDoc);
+      setSelectedMeasureIdx(measureIdx);
+      setSelectedElementId(newElement.id);
+    },
+    [doc, selectedPartIdx, selectedDynamic],
+  );
 
-    const newElement =
-      activeTool === "note"
-        ? makeNote(DEFAULT_PITCH, dur)   // 수정: activeDuration → dur
-        : makeRest(dur);                 // 수정: activeDuration → dur
+  // ── 지우기 (마지막 요소 제거) ─────────────────────────────────
+  const handleEraseAtPoint = useCallback(
+    (measureIdx: number) => {
+      const newDoc: ScoreDocument = {
+        ...doc,
+        parts: doc.parts.map((p, pIdx) => {
+          if (pIdx !== selectedPartIdx) return p;
+          return {
+            ...p,
+            measures: p.measures.map((m, mi) => {
+              if (mi !== measureIdx) return m;
+              return { ...m, elements: m.elements.slice(0, -1) };
+            }),
+          };
+        }),
+      };
+      applyDoc(newDoc);
+    },
+    [doc, selectedPartIdx],
+  );
 
-    setDoc((prev) => ({
-      ...prev,
-      parts: prev.parts.map((p, pIdx) => {
+  // ── 음표 탭 선택 ──────────────────────────────────────────────
+  const handleElementTap = useCallback(
+    (elementId: string, measureIdx: number) => {
+      setSelectedElementId((prev) => (prev === elementId ? null : elementId));
+      setSelectedMeasureIdx(measureIdx);
+    },
+    [],
+  );
+
+  const handleMeasureTap = useCallback((measureIdx: number) => {
+    setSelectedMeasureIdx(measureIdx);
+    setSelectedElementId(null);
+  }, []);
+
+  // ── 선택된 음표 삭제 ──────────────────────────────────────────
+  function handleDeleteSelected() {
+    if (!selectedElementId) return;
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
         if (pIdx !== selectedPartIdx) return p;
         return {
           ...p,
-          measures: p.measures.map((m, mi) => {
-            if (mi !== mIdx) return m;
-            return { ...m, elements: [...m.elements, newElement] };
-          }),
+          measures: p.measures.map((m) => ({
+            ...m,
+            elements: m.elements.filter((el) => el.id !== selectedElementId),
+          })),
         };
       }),
-    }));
-    setSelectedMeasureIdx(mIdx);
-    setSelectedElementId(newElement.id);
+    };
+    applyDoc(newDoc);
+    setSelectedElementId(null);
   }
 
-  // 마지막 요소 지우기
-  function handleEraseSelected(mIdx: number) {
-    setDoc((prev) => ({
-      ...prev,
-      parts: prev.parts.map((p, pIdx) => {
+  // ── 선택된 음표에 임시표 적용 ─────────────────────────────────
+  function handleApplyAccidentalToSelected(acc: Accidental | null) {
+    if (!selectedElementId) return;
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
         if (pIdx !== selectedPartIdx) return p;
         return {
           ...p,
-          measures: p.measures.map((m, mi) => {
-            if (mi !== mIdx) return m;
-            return { ...m, elements: m.elements.slice(0, -1) };
-          }),
+          measures: p.measures.map((m) => ({
+            ...m,
+            elements: m.elements.map((el) => {
+              if (el.id !== selectedElementId || el.type !== "note") return el;
+              return { ...el, accidental: acc ?? undefined };
+            }),
+          })),
         };
       }),
-    }));
+    };
+    applyDoc(newDoc);
+  }
+
+  // ── 선택된 음표에 아티큘레이션 적용 ───────────────────────────
+  function handleApplyArticulationToSelected(art: ArticulationType | null) {
+    if (!selectedElementId) return;
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
+        if (pIdx !== selectedPartIdx) return p;
+        return {
+          ...p,
+          measures: p.measures.map((m) => ({
+            ...m,
+            elements: m.elements.map((el) => {
+              if (el.id !== selectedElementId || el.type !== "note") return el;
+              const existing = el.articulations ?? [];
+              const has = existing.includes(art as ArticulationType);
+              const next = art === null
+                ? []
+                : has
+                  ? existing.filter((a) => a !== art)
+                  : [...existing, art];
+              return { ...el, articulations: next.length ? next : undefined };
+            }),
+          })),
+        };
+      }),
+    };
+    applyDoc(newDoc);
   }
 
   const containerWidth = windowWidth - Spacing.lg * 2;
-
   const currentPart = doc.parts[selectedPartIdx];
+
+  const styles = makeStyles(C, S);
 
   return (
     <View style={[styles.container, { backgroundColor: C.background }]}>
-      {/* 상단 툴바 */}
+      {/* ── 상단 툴바 ─────────────────────────────────────────── */}
       <View
         style={[
           styles.topBar,
           { paddingTop: topInset + 4, borderBottomColor: C.border, backgroundColor: C.surface },
         ]}
       >
+        {/* 뒤로가기 */}
         <Pressable
           style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
           onPress={onBack}
           hitSlop={12}
           testID="score-editor-back"
         >
-          <Ionicons name="chevron-back" size={S.ms(24, 0.4)} color={C.text} />
+          <Ionicons name="chevron-back" size={S.ms(22, 0.4)} color={C.text} />
         </Pressable>
 
+        {/* 제목 */}
         <Text style={[styles.topTitle, { color: C.text }]} numberOfLines={1}>
           {doc.metadata.title || t("scoreMode", "untitled")}
         </Text>
@@ -237,6 +383,37 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           </Text>
         )}
 
+        {/* 실행취소 */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.iconBtn,
+            !canUndo && { opacity: 0.3 },
+            pressed && canUndo && { opacity: 0.6 },
+          ]}
+          onPress={handleUndo}
+          disabled={!canUndo}
+          hitSlop={8}
+          testID="score-editor-undo"
+        >
+          <Ionicons name="arrow-undo" size={S.ms(20, 0.4)} color={C.text} />
+        </Pressable>
+
+        {/* 다시실행 */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.iconBtn,
+            !canRedo && { opacity: 0.3 },
+            pressed && canRedo && { opacity: 0.6 },
+          ]}
+          onPress={handleRedo}
+          disabled={!canRedo}
+          hitSlop={8}
+          testID="score-editor-redo"
+        >
+          <Ionicons name="arrow-redo" size={S.ms(20, 0.4)} color={C.text} />
+        </Pressable>
+
+        {/* 저장 */}
         <Pressable
           style={({ pressed }) => [
             styles.saveBtn,
@@ -250,7 +427,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
         </Pressable>
       </View>
 
-      {/* 성부 탭 (2+ 성부 시) */}
+      {/* ── 성부 탭 (2+ 성부 시) ───────────────────────────────── */}
       {doc.parts.length > 1 && (
         <ScrollView
           horizontal
@@ -284,12 +461,46 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
         </ScrollView>
       )}
 
-      {/* 악보 스크롤 영역 */}
+      {/* ── 선택된 음표 액션 바 ────────────────────────────────── */}
+      {selectedElementId && (
+        <View style={[styles.selectionBar, { backgroundColor: C.surface, borderBottomColor: C.border }]}>
+          <Text style={[styles.selectionLabel, { color: C.textSecondary }]}>
+            {t("scoreMode", "toolSelect")} ·
+          </Text>
+
+          {/* 임시표 빠른 적용 */}
+          {(["♯", "♭", "♮"] as const).map((sym, i) => {
+            const accVal: Array<Accidental | null> = ["sharp", "flat", null];
+            return (
+              <Pressable
+                key={sym}
+                style={[styles.selBarBtn, { borderColor: C.border }]}
+                onPress={() => handleApplyAccidentalToSelected(accVal[i] ?? null)}
+              >
+                <Text style={[styles.selBarBtnText, { color: C.text }]}>{sym}</Text>
+              </Pressable>
+            );
+          })}
+
+          <View style={{ flex: 1 }} />
+
+          {/* 삭제 */}
+          <Pressable
+            style={[styles.selBarBtn, { borderColor: "#FF4444" }]}
+            onPress={handleDeleteSelected}
+            testID="score-editor-delete-selected"
+          >
+            <Ionicons name="trash-outline" size={16} color="#FF4444" />
+          </Pressable>
+        </View>
+      )}
+
+      {/* ── 악보 스크롤 영역 ───────────────────────────────────── */}
       <ScrollView
         style={styles.scoreScroll}
         contentContainerStyle={[
           styles.scoreContent,
-          { paddingHorizontal: Spacing.lg, paddingBottom: bottomInset + 120 },
+          { paddingHorizontal: Spacing.lg, paddingBottom: bottomInset + 180 },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -305,12 +516,30 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           )}
         </View>
 
-        {/* SVG 오선보 렌더링 */}
+        {/* 입력 힌트 */}
+        {currentPart && currentPart.measures[0]?.elements.length === 0 &&
+          (activeTool === "note" || activeTool === "rest") && (
+          <Text style={[styles.inputHint, { color: C.textSecondary }]}>
+            {t("scoreMode", "inputHint")}
+          </Text>
+        )}
+
+        {/* 오선보 터치 캔버스 */}
         {currentPart ? (
-          <ScoreRenderer
+          <ScoreCanvas
             doc={{ ...doc, parts: [currentPart] }}
             containerWidth={containerWidth}
             selectedElementId={selectedElementId}
+            selectedPartIdx={0}
+            activeTool={activeTool}
+            activeDuration={activeDuration}
+            isDotted={isDotted}
+            accidental={accidental}
+            onNotePlaced={handleNotePlaced}
+            onRestPlaced={handleRestPlaced}
+            onElementTap={handleElementTap}
+            onMeasureTap={handleMeasureTap}
+            onEraseAtPoint={handleEraseAtPoint}
           />
         ) : (
           <Text style={{ color: C.textSecondary, marginTop: 24 }}>
@@ -318,7 +547,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           </Text>
         )}
 
-        {/* 마디 탭 목록 (간략한 마디 선택) */}
+        {/* ── 마디 관리 탭 ─────────────────────────────────────── */}
         {currentPart && (
           <View style={[styles.measureTabsRow, { marginTop: 16 }]}>
             {currentPart.measures.map((m, mIdx) => (
@@ -333,7 +562,10 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
                   },
                   pressed && { opacity: 0.7 },
                 ]}
-                onPress={() => handleAddElement(mIdx)}
+                onPress={() => {
+                  setSelectedMeasureIdx(mIdx);
+                  setSelectedElementId(null);
+                }}
                 onLongPress={() => {
                   Alert.alert(
                     t("scoreMode", "deleteMeasure"),
@@ -350,15 +582,23 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
                 }}
                 testID={`score-editor-measure-${mIdx}`}
               >
-                <Text style={[styles.measureTabNum, { color: selectedMeasureIdx === mIdx ? C.accent : C.textSecondary }]}>
+                <Text
+                  style={[
+                    styles.measureTabNum,
+                    { color: selectedMeasureIdx === mIdx ? C.accent : C.textSecondary },
+                  ]}
+                >
                   {mIdx + 1}
                 </Text>
                 <Text style={[styles.measureTabCount, { color: C.textSecondary }]}>
-                  {m.elements.length > 0 ? `(${m.elements.length})` : t("scoreMode", "measureEmpty")}
+                  {m.elements.length > 0
+                    ? `(${m.elements.length})`
+                    : t("scoreMode", "measureEmpty")}
                 </Text>
               </Pressable>
             ))}
 
+            {/* 마디 추가 버튼 */}
             <Pressable
               style={[styles.addMeasureBtn, { borderColor: C.border }]}
               onPress={handleAddMeasure}
@@ -373,118 +613,40 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
         )}
       </ScrollView>
 
-      {/* 하단 입력 툴바 */}
+      {/* ── 하단 팔레트 ──────────────────────────────────────────── */}
       <View
         style={[
-          styles.bottomBar,
+          styles.paletteWrapper,
           {
-            paddingBottom: bottomInset + 8,
-            borderTopColor: C.border,
+            paddingBottom: bottomInset + 4,
             backgroundColor: C.surface,
           },
         ]}
       >
-        {/* 툴 선택 */}
-        <View style={styles.toolRow}>
-          {(["note", "rest", "erase", "select"] as EditorTool[]).map((tool) => {
-            const isActive = activeTool === tool;
-            const iconName =
-              tool === "note" ? "musical-note" :
-              tool === "rest" ? "remove" :
-              tool === "erase" ? "backspace-outline" :
-              "hand-left-outline";
-            const label =
-              tool === "note" ? t("scoreMode", "toolNote") :
-              tool === "rest" ? t("scoreMode", "toolRest") :
-              tool === "erase" ? t("scoreMode", "toolErase") :
-              t("scoreMode", "toolSelect");
-            return (
-              <Pressable
-                key={tool}
-                style={[
-                  styles.toolBtn,
-                  {
-                    backgroundColor: isActive ? C.accent : C.background,
-                    borderColor: isActive ? C.accent : C.border,
-                  },
-                ]}
-                onPress={() => setActiveTool(tool)}
-                testID={`score-editor-tool-${tool}`}
-              >
-                <Ionicons
-                  name={iconName as any}
-                  size={S.ms(16, 0.3)}
-                  color={isActive ? "#fff" : C.text}
-                />
-                <Text style={[styles.toolLabel, { color: isActive ? "#fff" : C.text }]}>
-                  {label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* 음표 길이 선택 */}
-        <View style={styles.durationRow}>
-          {DURATION_OPTIONS.map((dur) => {
-            const isActive = activeDuration === dur.value;
-            return (
-              <Pressable
-                key={dur.value}
-                style={[
-                  styles.durationBtn,
-                  {
-                    backgroundColor: isActive ? C.accent + "33" : "transparent",
-                    borderColor: isActive ? C.accent : C.border,
-                  },
-                ]}
-                onPress={() => setActiveDuration(dur.value)}
-                testID={`score-editor-dur-${dur.value}`}
-              >
-                <Text style={[styles.durationSymbol, { color: isActive ? C.accent : C.text }]}>
-                  {dur.symbol}
-                </Text>
-                <Text style={[styles.durationLabel, { color: isActive ? C.accent : C.textSecondary }]}>
-                  {t("scoreMode", getDurationKey(dur.value))}
-                </Text>
-              </Pressable>
-            );
-          })}
-
-          {/* 점 토글 */}
-          <Pressable
-            style={[
-              styles.dotBtn,
-              {
-                backgroundColor: isDotted ? C.accent + "33" : "transparent",
-                borderColor: isDotted ? C.accent : C.border,
-              },
-            ]}
-            onPress={() => setIsDotted((v) => !v)}
-            testID="score-editor-dot"
-          >
-            <Text style={[styles.durationSymbol, { color: isDotted ? C.accent : C.text }]}>
-              •
-            </Text>
-            <Text style={[styles.durationLabel, { color: isDotted ? C.accent : C.textSecondary }]}>
-              {t("scoreMode", "durationDot")}
-            </Text>
-          </Pressable>
-        </View>
+        <ScorePalette
+          activeTool={activeTool}
+          activeDuration={activeDuration}
+          isDotted={isDotted}
+          accidental={accidental}
+          selectedArticulation={selectedArticulation}
+          selectedDynamic={selectedDynamic}
+          onToolChange={setActiveTool}
+          onDurationChange={setActiveDuration}
+          onDottedChange={setIsDotted}
+          onAccidentalChange={(acc) => {
+            setAccidental(acc);
+            // 선택된 음표에 즉시 적용
+            if (selectedElementId) handleApplyAccidentalToSelected(acc);
+          }}
+          onArticulationSelect={(art) => {
+            setSelectedArticulation(art);
+            if (selectedElementId) handleApplyArticulationToSelected(art);
+          }}
+          onDynamicSelect={setSelectedDynamic}
+        />
       </View>
     </View>
   );
-}
-
-function getDurationKey(dur: NoteDuration): any {
-  const map: Record<string, string> = {
-    whole: "durationWhole",
-    half: "durationHalf",
-    quarter: "durationQuarter",
-    eighth: "durationEighth",
-    sixteenth: "durationSixteenth",
-  };
-  return map[dur] ?? "durationQuarter";
 }
 
 const makeStyles = (C: any, S: any) =>
@@ -498,7 +660,7 @@ const makeStyles = (C: any, S: any) =>
       paddingHorizontal: Spacing.md,
       paddingBottom: 10,
       borderBottomWidth: 1,
-      gap: Spacing.sm,
+      gap: Spacing.xs ?? 4,
     },
     iconBtn: {
       padding: 4,
@@ -537,6 +699,31 @@ const makeStyles = (C: any, S: any) =>
       fontFamily: "SpaceGrotesk_500Medium",
       fontSize: FontSize.small,
     },
+    selectionBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: Spacing.md,
+      paddingVertical: 6,
+      borderBottomWidth: 1,
+      gap: 6,
+    },
+    selectionLabel: {
+      fontFamily: "SpaceGrotesk_400Regular",
+      fontSize: FontSize.small,
+    },
+    selBarBtn: {
+      borderWidth: 1,
+      borderRadius: Radius.sm,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      alignItems: "center",
+      justifyContent: "center",
+      minWidth: 32,
+    },
+    selBarBtnText: {
+      fontSize: 16,
+      fontFamily: "serif",
+    },
     scoreScroll: {
       flex: 1,
     },
@@ -555,6 +742,13 @@ const makeStyles = (C: any, S: any) =>
     scoreMeta: {
       fontFamily: "SpaceGrotesk_400Regular",
       fontSize: FontSize.small,
+    },
+    inputHint: {
+      fontFamily: "SpaceGrotesk_400Regular",
+      fontSize: FontSize.small,
+      textAlign: "center",
+      marginBottom: 8,
+      opacity: 0.7,
     },
     measureTabsRow: {
       flexDirection: "row",
@@ -591,56 +785,11 @@ const makeStyles = (C: any, S: any) =>
       fontFamily: "SpaceGrotesk_400Regular",
       fontSize: FontSize.small,
     },
-    bottomBar: {
-      borderTopWidth: 1,
-      paddingTop: 10,
-      paddingHorizontal: Spacing.md,
-      gap: 8,
-    },
-    toolRow: {
-      flexDirection: "row",
-      gap: 6,
-    },
-    toolBtn: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 4,
-      borderWidth: 1,
-      borderRadius: Radius.md,
-      paddingVertical: 7,
-    },
-    toolLabel: {
-      fontFamily: "SpaceGrotesk_500Medium",
-      fontSize: 11,
-    },
-    durationRow: {
-      flexDirection: "row",
-      gap: 4,
-    },
-    durationBtn: {
-      flex: 1,
-      borderWidth: 1,
-      borderRadius: Radius.sm,
-      paddingVertical: 5,
-      alignItems: "center",
-      gap: 2,
-    },
-    dotBtn: {
-      borderWidth: 1,
-      borderRadius: Radius.sm,
-      paddingVertical: 5,
-      paddingHorizontal: 10,
-      alignItems: "center",
-      gap: 2,
-    },
-    durationSymbol: {
-      fontSize: 16,
-      fontFamily: "serif",
-    },
-    durationLabel: {
-      fontFamily: "SpaceGrotesk_400Regular",
-      fontSize: 9,
+    paletteWrapper: {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: -2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 4,
+      elevation: 4,
     },
   });

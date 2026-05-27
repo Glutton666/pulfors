@@ -2,7 +2,7 @@
 // 악보 SVG 레이아웃 계산 엔진 (순수 함수)
 // ============================================================
 
-import type { ClefType, NoteDuration, Pitch, ScoreMeasure } from "./score-types";
+import type { ClefType, NoteDuration, Pitch, ScoreMeasure, ScoreDocument } from "./score-types";
 
 // ── 오선보 기본 상수 ───────────────────────────────────────────
 export const STAFF_LINE_COUNT = 5;
@@ -328,6 +328,93 @@ export function calcBeamGroups(
     }
   }
   return groups;
+}
+
+// ── 전체 악보 레이아웃 계산 (ScoreCanvas 터치 처리용) ────────────
+
+export interface ScoreRowLayout {
+  measureIndices: number[];
+  y: number;
+  measureWidths: number[];
+  rowWidth: number;
+}
+
+// ScoreRenderer와 동일한 레이아웃 상수
+export const SCORE_STAFF_PADDING_TOP = 24;
+export const SCORE_STAFF_PADDING_BOTTOM = 28;
+export const SCORE_PART_HEIGHT = SCORE_STAFF_PADDING_TOP + STAFF_HEIGHT + SCORE_STAFF_PADDING_BOTTOM; // 92
+export const SCORE_ROW_MARGIN_TOP = 16;
+export const SCORE_ROW_MARGIN_BOTTOM = 8;
+export const SCORE_DEFAULT_MEASURE_WIDTH = 120;
+export const SCORE_FIRST_MEASURE_EXTRA = 60;
+
+/**
+ * 악보 전체 레이아웃 계산 — ScoreRenderer와 동일한 로직
+ * ScoreCanvas의 터치 → 마디/음높이 역계산에 사용
+ */
+export function computeScoreLayout(
+  doc: ScoreDocument,
+  containerWidth: number,
+): { rows: ScoreRowLayout[]; totalHeight: number } {
+  if (!doc.parts.length) return { rows: [], totalHeight: 100 };
+
+  const partCount = doc.parts.length;
+  const measures = doc.parts[0]?.measures ?? [];
+  const measureCount = measures.length;
+
+  const minWidths = measures.map((m) => measureMinWidth(m));
+  const firstMeasureHeader =
+    headerWidth(doc.parts[0]?.clef ?? "treble", true, doc.keySignature.sharps) + SCORE_FIRST_MEASURE_EXTRA;
+
+  const rows: ScoreRowLayout[] = [];
+  let currentRow: number[] = [];
+  let currentRowWidth = firstMeasureHeader;
+  let y = SCORE_ROW_MARGIN_TOP;
+
+  for (let i = 0; i < measureCount; i++) {
+    const mw = Math.max(minWidths[i], SCORE_DEFAULT_MEASURE_WIDTH);
+    const extraHeader =
+      currentRow.length === 0 && i > 0
+        ? headerWidth(doc.parts[0]?.clef ?? "treble", false, 0)
+        : 0;
+
+    if (currentRow.length > 0 && currentRowWidth + mw + extraHeader > containerWidth) {
+      const rowHeight = SCORE_PART_HEIGHT * partCount + SCORE_ROW_MARGIN_BOTTOM;
+      const equalWidth = containerWidth / currentRow.length;
+      rows.push({
+        measureIndices: [...currentRow],
+        y,
+        measureWidths: currentRow.map(() => equalWidth),
+        rowWidth: containerWidth,
+      });
+      y += rowHeight;
+      currentRow = [i];
+      currentRowWidth = mw;
+    } else {
+      currentRow.push(i);
+      currentRowWidth += mw + extraHeader;
+    }
+  }
+
+  if (currentRow.length > 0) {
+    const rowHeight = SCORE_PART_HEIGHT * partCount + SCORE_ROW_MARGIN_BOTTOM;
+    const totalMin = currentRow.reduce(
+      (sum, mi) => sum + Math.max(minWidths[mi], SCORE_DEFAULT_MEASURE_WIDTH),
+      0,
+    );
+    const scale = Math.max(1, containerWidth / totalMin);
+    rows.push({
+      measureIndices: [...currentRow],
+      y,
+      measureWidths: currentRow.map(
+        (mi) => Math.max(minWidths[mi], SCORE_DEFAULT_MEASURE_WIDTH) * Math.min(scale, 2),
+      ),
+      rowWidth: containerWidth,
+    });
+    y += rowHeight;
+  }
+
+  return { rows, totalHeight: y + SCORE_ROW_MARGIN_BOTTOM };
 }
 
 // ── 조표 배치 ─────────────────────────────────────────────────
