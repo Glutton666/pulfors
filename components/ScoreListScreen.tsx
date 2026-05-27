@@ -74,19 +74,20 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor }: ScoreList
   }
 
   async function handleDelete(id: string, title: string) {
+    const doDelete = async () => {
+      await deleteScore(id);
+      await refresh();
+    };
+    if (Platform.OS === "web") {
+      if (window.confirm(t("scoreMode", "deleteConfirm"))) await doDelete();
+      return;
+    }
     Alert.alert(
       t("scoreMode", "delete"),
       t("scoreMode", "deleteConfirm"),
       [
         { text: t("scoreMode", "cancel"), style: "cancel" },
-        {
-          text: t("scoreMode", "delete"),
-          style: "destructive",
-          onPress: async () => {
-            await deleteScore(id);
-            await refresh();
-          },
-        },
+        { text: t("scoreMode", "delete"), style: "destructive", onPress: doDelete },
       ],
     );
   }

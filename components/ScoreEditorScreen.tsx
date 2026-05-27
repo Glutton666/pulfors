@@ -1235,6 +1235,10 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
                   setSelectedElementId(null);
                 }}
                 onLongPress={() => {
+                  if (Platform.OS === "web") {
+                    if (window.confirm(t("scoreMode", "deleteMeasure"))) handleDeleteMeasure(mIdx);
+                    return;
+                  }
                   Alert.alert(
                     t("scoreMode", "deleteMeasure"),
                     undefined,
