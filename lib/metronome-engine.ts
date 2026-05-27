@@ -1232,6 +1232,16 @@ export class MetronomeEngine {
             beat = Math.min(jumpedBlock.endBeat + 1, this.beatsPerMeasure);
           } else {
             pureAddBarWithRepeat(inputs, state, beat, 0, -1, 1);
+            const barRepEnd = inputs.barRepeats.get(beat);
+            if (barRepEnd?.isEnd) {
+              if (state.ticks.length > 0) {
+                state.ticks[state.ticks.length - 1] = {
+                  ...state.ticks[state.ticks.length - 1],
+                  stopAfterThis: true,
+                };
+              }
+              break;
+            }
             beat++;
           }
         }
