@@ -188,6 +188,7 @@ export default function MetronomeScreen() {
   const [showKbShortcuts, setShowKbShortcuts] = useState(false);
   const showKbShortcutsRef = useRef(false);
   useEffect(() => { showKbShortcutsRef.current = showKbShortcuts; }, [showKbShortcuts]);
+  const [showSubdivisionLongPressHint, setShowSubdivisionLongPressHint] = useState(false);
   const [showNativeKbHint, setShowNativeKbHint] = useState(false);
   const showNativeKbHintRef = useRef(false);
   useEffect(() => { showNativeKbHintRef.current = showNativeKbHint; }, [showNativeKbHint]);
@@ -956,6 +957,9 @@ export default function MetronomeScreen() {
       if (!val) {
         setActiveModal("onboarding");
       }
+    });
+    AsyncStorage.getItem("metronome_subdivision_longpress_hint_v1").then((val) => {
+      if (!val) setShowSubdivisionLongPressHint(true);
     });
     setupNotificationControls();
 
@@ -5338,6 +5342,19 @@ export default function MetronomeScreen() {
               activeSubNote={activeSubNote}
               activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
             />
+            {showSubdivisionLongPressHint && (
+              <Pressable
+                onPress={() => {
+                  setShowSubdivisionLongPressHint(false);
+                  AsyncStorage.setItem("metronome_subdivision_longpress_hint_v1", "1");
+                }}
+                hitSlop={{ top: 6, bottom: 6, left: 16, right: 16 }}
+              >
+                <Text style={[styles.beatHintText, { color: C.textTertiary, textAlign: "center" }]}>
+                  {t("main", "subdivisionLongPressHint")}
+                </Text>
+              </Pressable>
+            )}
             <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
           </View>
         )}
@@ -5502,6 +5519,19 @@ export default function MetronomeScreen() {
               activeSubNote={activeSubNote}
               activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
             />
+            {showSubdivisionLongPressHint && (
+              <Pressable
+                onPress={() => {
+                  setShowSubdivisionLongPressHint(false);
+                  AsyncStorage.setItem("metronome_subdivision_longpress_hint_v1", "1");
+                }}
+                hitSlop={{ top: 6, bottom: 6, left: 16, right: 16 }}
+              >
+                <Text style={[styles.beatHintText, { color: C.textTertiary, textAlign: "center" }]}>
+                  {t("main", "subdivisionLongPressHint")}
+                </Text>
+              </Pressable>
+            )}
             <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
             <BpmSlider
               bpm={bpm}

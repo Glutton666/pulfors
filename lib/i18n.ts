@@ -555,6 +555,7 @@ export const translations = {
     tapToDismiss: { ko: "탭하여 닫기", en: "Tap to dismiss" },
     bpmHint: { ko: "양쪽 홀드 ±10 · 중앙 슬라이드로 조절", en: "hold sides ±10 · slide center to adjust" },
     beatHint: { ko: "스와이프하여 비트 추가/제거", en: "swipe to add or remove beats" },
+    subdivisionLongPressHint: { ko: "셀 길게 누르면 박자 유형 선택", en: "long-press a cell to pick its type" },
   },
   scheduledStart: {
     title: { ko: "동시 시작", en: "Scheduled Start" },
