@@ -5304,6 +5304,19 @@ export default function MetronomeScreen() {
             onDeleteBar={handleDeleteBar}
             onCopyBar={handleCopyBar}
             tempoLabel={tempoLabel}
+            soundSet={soundSet}
+            onSoundSetChange={(ss) => updateSoundSet(ss as SoundSet)}
+            layerSoundSets={layerSoundSets as Record<number, string>}
+            onLayerSoundSetsChange={(val) => {
+              const typed = val as Record<number, SoundSet>;
+              for (const ss of Object.values(typed)) {
+                delete clickPCMCacheRef.current[ss];
+              }
+              setLayerSoundSets(typed);
+              layerSoundSetsRef.current = typed;
+              persistSettings({ layerSoundSets: typed });
+              scheduleReRender();
+            }}
           />
         </View>
 

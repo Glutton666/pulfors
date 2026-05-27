@@ -124,6 +124,10 @@ interface BeatIndicatorProps {
   onAddBar?: () => void;
   onDeleteBar?: (beatIndex: number) => void;
   onCopyBar?: (beat: number) => void;
+  soundSet?: string;
+  onSoundSetChange?: (ss: string) => void;
+  layerSoundSets?: Record<number, string>;
+  onLayerSoundSetsChange?: (val: Record<number, string>) => void;
 }
 
 // BlockPill 컴포넌트는 components/BlockPill.tsx 로 분리되었습니다.
@@ -183,6 +187,10 @@ export function BeatIndicator({
   onAddBar,
   onDeleteBar,
   onCopyBar,
+  soundSet,
+  onSoundSetChange,
+  layerSoundSets = {},
+  onLayerSoundSetsChange,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
   const { t } = useLanguage();
@@ -1191,6 +1199,10 @@ export function BeatIndicator({
           overlay10: C.overlay10,
           white: C.white,
         }}
+        soundSet={soundSet}
+        onSoundSetChange={onSoundSetChange}
+        layerSoundSets={layerSoundSets}
+        onLayerSoundSetsChange={onLayerSoundSetsChange}
         ms={S.ms}
       />
     );

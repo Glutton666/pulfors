@@ -95,6 +95,10 @@ export interface BarModeViewProps {
   halfTime?: boolean;
   isLandscape?: boolean;
   tempoLabel?: string;
+  soundSet?: string;
+  onSoundSetChange?: (ss: string) => void;
+  layerSoundSets?: Record<number, string>;
+  onLayerSoundSetsChange?: (val: Record<number, string>) => void;
   colors: BarModeColors;
   ms: (size: number, factor?: number) => number;
 }
@@ -346,7 +350,9 @@ export function BarModeView({
   measureCount = 0, barStartBeat, onBarStartBeatSelect, onAddBar, onDeleteBar, onCopyBar,
   subdivisionBarElement, onBarQuickSave, onResetFlash, onBarReset, onBarScrollOffset,
   onBarTimerExpired, onBarClockConfigChange, initialBarClockMode, initialBarTimerDuration,
-  noteSamples, bpm, isLandscape, tempoLabel, colors: C, ms,
+  noteSamples, bpm, isLandscape, tempoLabel,
+  soundSet = "classic", onSoundSetChange, layerSoundSets = {} as Record<number, string>, onLayerSoundSetsChange,
+  colors: C, ms,
 }: BarModeViewProps) {
 
   const { t } = useLanguage();
@@ -1228,10 +1234,27 @@ export function BarModeView({
                 </Text>
               </View>
             )}
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+              {SOUND_SET_OPTIONS.map(opt => {
+                const isActive = soundSet === opt.key;
+                return (
+                  <Pressable
+                    key={opt.key}
+                    onPress={() => onSoundSetChange?.(opt.key)}
+                    style={[styles.typeToggle, { backgroundColor: isActive ? C.accent + "30" : C.overlay08 }]}
+                  >
+                    <Text style={{ color: isActive ? C.accent : C.textSecondary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_600SemiBold" }}>
+                      {t("barModeView", opt.labelKey)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         ) : (() => {
           const layer = editingLayers[activeLayerTab - 1];
           const layerIdx = activeLayerTab - 1;
+          const layerNum = layerIdx + 1;
           return (
             <View style={styles.mainSubdivisionSlot}>
               <SubdivisionBar
@@ -1246,6 +1269,26 @@ export function BarModeView({
                 onReset={() => updateLayerSubdivisions(layerIdx, null)}
                 isPlaying={isPlaying}
               />
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+                {[{ key: "", labelKey: "soundSetDefault" as BarModeViewKey }, ...SOUND_SET_OPTIONS].map(opt => {
+                  const isActive = opt.key === "" ? !layerSoundSets[layerNum] : layerSoundSets[layerNum] === opt.key;
+                  return (
+                    <Pressable
+                      key={opt.key || "__default"}
+                      onPress={() => {
+                        const updated = { ...layerSoundSets };
+                        if (opt.key === "") { delete updated[layerNum]; } else { updated[layerNum] = opt.key; }
+                        onLayerSoundSetsChange?.(updated);
+                      }}
+                      style={[styles.typeToggle, { backgroundColor: isActive ? C.accent + "30" : C.overlay08 }]}
+                    >
+                      <Text style={{ color: isActive ? C.accent : C.textSecondary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_600SemiBold" }}>
+                        {t("barModeView", opt.labelKey)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
           );
         })())}
