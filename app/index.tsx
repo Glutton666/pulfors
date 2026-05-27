@@ -5175,6 +5175,12 @@ export default function MetronomeScreen() {
           },
           isLandscape && noteMode && { paddingHorizontal: Spacing.sm },
           noteMode && { justifyContent: "flex-start" as const },
+          barMode && !isLandscape && {
+            maxWidth: undefined,
+            paddingHorizontal: 0,
+            alignSelf: "stretch" as const,
+            width: undefined,
+          },
         ]}
       >
         {noteMode ? (
