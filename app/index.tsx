@@ -5227,7 +5227,7 @@ export default function MetronomeScreen() {
               ? { flex: 1, justifyContent: "flex-start" as const, alignItems: "stretch" as const }
               : { flex: 5, justifyContent: "center" as const, alignItems: "center" as const }
             : barMode
-              ? { flex: 5, justifyContent: "flex-start" as const, alignItems: "center" as const }
+              ? { flex: 5, justifyContent: "flex-start" as const, alignItems: "stretch" as const }
               : { flex: 5, justifyContent: "center" as const, alignItems: "center" as const }
         }>
           <BeatIndicator
