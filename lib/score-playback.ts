@@ -2,7 +2,19 @@
 // 악보 재생 타임라인 계산 (순수 함수)
 // ============================================================
 
-import type { ScoreDocument, ScoreMeasure } from "./score-types";
+import type { ScoreDocument, ScoreMeasure, NoteDuration } from "./score-types";
+import { pitchToMidi } from "./score-layout";
+
+// ── 마디 내 단일 음표 재생 이벤트 ────────────────────────────
+
+export interface PlayNoteEvent {
+  /** MIDI 번호 (21–108) */
+  midiNote: number;
+  /** 발음 지속 시간(ms) — 이론 길이의 82% */
+  durationMs: number;
+  /** 마디 시작 시점 기준 오프셋(ms) */
+  startOffsetMs: number;
+}
 
 // ── 재생 이벤트 ────────────────────────────────────────────────
 
@@ -19,6 +31,30 @@ export interface PlayEvent {
   effectiveBpm: number;
   /** rit./accel.로 도달할 목표 BPM (없으면 effectiveBpm과 동일) */
   endBpm: number;
+  /** 이 마디에서 재생할 음표 목록 (타악기 파트는 빈 배열) */
+  notes: PlayNoteEvent[];
+  /** 타악기(percussion) 클레프 파트 여부 */
+  isPercussion: boolean;
+}
+
+// ── 음표 길이 → 박자 변환 ─────────────────────────────────────
+
+/** NoteDuration → 4분음표 단위 박자 수 */
+export function noteDurationToBeats(dur: NoteDuration): number {
+  switch (dur) {
+    case "whole":         return 4;
+    case "whole_dot":     return 6;
+    case "half":          return 2;
+    case "half_dot":      return 3;
+    case "quarter":       return 1;
+    case "quarter_dot":   return 1.5;
+    case "eighth":        return 0.5;
+    case "eighth_dot":    return 0.75;
+    case "sixteenth":     return 0.25;
+    case "sixteenth_dot": return 0.375;
+    case "thirty_second": return 0.125;
+    default:              return 1;
+  }
 }
 
 // ── 반복 부호에 따른 재생 순서 계산 ──────────────────────────
@@ -138,16 +174,51 @@ export function measureDurationMs(
   return { durationMs, startBpm, endBpm };
 }
 
+// ── 마디 내 음표 이벤트 빌드 ─────────────────────────────────
+
+/**
+ * 단일 마디의 PlayNoteEvent 배열을 계산한다.
+ * tieEnd 음표는 이전 음표의 연장이므로 새로 발음하지 않는다.
+ */
+function buildMeasureNotes(
+  measure: ScoreMeasure,
+  startBpm: number,
+): PlayNoteEvent[] {
+  const noteEvents: PlayNoteEvent[] = [];
+  let offsetMs = 0;
+  const msPerBeat = 60000 / Math.max(1, startBpm);
+
+  for (const el of measure.elements) {
+    const beats = noteDurationToBeats(el.duration as NoteDuration);
+    const elDurMs = beats * msPerBeat;
+
+    if (el.type === "note" && !el.tieEnd) {
+      const soundDurMs = Math.max(40, elDurMs * 0.82); // 18% 간격
+      noteEvents.push({
+        midiNote: pitchToMidi(el.pitch),
+        durationMs: soundDurMs,
+        startOffsetMs: offsetMs,
+      });
+    }
+    offsetMs += elDurMs;
+  }
+
+  return noteEvents;
+}
+
 // ── 전체 타임라인 빌드 ────────────────────────────────────────
 
 /**
  * ScoreDocument → PlayEvent[] 타임라인 빌드
  * 반복 부호, 인라인 BPM 변화, rit./accel.을 처리한다.
+ * 각 PlayEvent에는 음표 발음 스케줄(notes)이 포함된다.
  */
 export function buildPlayTimeline(doc: ScoreDocument): PlayEvent[] {
   const order = resolvePlayOrder(doc);
   const measures = doc.parts[0]?.measures ?? [];
   if (measures.length === 0 || order.length === 0) return [];
+
+  const isPercussion = (doc.parts[0]?.clef ?? "treble") === "percussion";
 
   const events: PlayEvent[] = [];
   let currentBpm = doc.bpm > 0 ? doc.bpm : 120;
@@ -164,6 +235,10 @@ export function buildPlayTimeline(doc: ScoreDocument): PlayEvent[] {
       currentBpm,
     );
 
+    const notes: PlayNoteEvent[] = isPercussion
+      ? []
+      : buildMeasureNotes(measure, startBpm);
+
     events.push({
       seqIdx: seq,
       measureIdx: mIdx,
@@ -171,6 +246,8 @@ export function buildPlayTimeline(doc: ScoreDocument): PlayEvent[] {
       durationMs,
       effectiveBpm: startBpm,
       endBpm,
+      notes,
+      isPercussion,
     });
 
     t += durationMs;
