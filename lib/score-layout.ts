@@ -331,8 +331,10 @@ export function calcBeamGroups(
 }
 
 // ── 조표 배치 ─────────────────────────────────────────────────
+// 각 음자리표별 샤프/플랫 기호의 Y 좌표 배열
+// 순서: F, C, G, D, A, E, B (샤프) / B, E, A, D, G, C, F (플랫)
 
-// 높은음자리표 샤프 위치 (F5, C5, G5, D5, A4, E5, B4) - Y 좌표
+// 높은음자리표
 export const TREBLE_SHARP_POSITIONS = [
   pitchToY({ step: "F", octave: 5 }, "treble"),
   pitchToY({ step: "C", octave: 5 }, "treble"),
@@ -342,8 +344,6 @@ export const TREBLE_SHARP_POSITIONS = [
   pitchToY({ step: "E", octave: 5 }, "treble"),
   pitchToY({ step: "B", octave: 4 }, "treble"),
 ];
-
-// 높은음자리표 플랫 위치 (B4, E5, A4, D5, G4, C5, F4)
 export const TREBLE_FLAT_POSITIONS = [
   pitchToY({ step: "B", octave: 4 }, "treble"),
   pitchToY({ step: "E", octave: 5 }, "treble"),
@@ -353,3 +353,75 @@ export const TREBLE_FLAT_POSITIONS = [
   pitchToY({ step: "C", octave: 5 }, "treble"),
   pitchToY({ step: "F", octave: 4 }, "treble"),
 ];
+
+// 낮은음자리표
+export const BASS_SHARP_POSITIONS = [
+  pitchToY({ step: "F", octave: 3 }, "bass"),
+  pitchToY({ step: "C", octave: 3 }, "bass"),
+  pitchToY({ step: "G", octave: 3 }, "bass"),
+  pitchToY({ step: "D", octave: 3 }, "bass"),
+  pitchToY({ step: "A", octave: 2 }, "bass"),
+  pitchToY({ step: "E", octave: 3 }, "bass"),
+  pitchToY({ step: "B", octave: 2 }, "bass"),
+];
+export const BASS_FLAT_POSITIONS = [
+  pitchToY({ step: "B", octave: 2 }, "bass"),
+  pitchToY({ step: "E", octave: 3 }, "bass"),
+  pitchToY({ step: "A", octave: 2 }, "bass"),
+  pitchToY({ step: "D", octave: 3 }, "bass"),
+  pitchToY({ step: "G", octave: 2 }, "bass"),
+  pitchToY({ step: "C", octave: 3 }, "bass"),
+  pitchToY({ step: "F", octave: 2 }, "bass"),
+];
+
+// 알토 음자리표
+export const ALTO_SHARP_POSITIONS = [
+  pitchToY({ step: "F", octave: 4 }, "alto"),
+  pitchToY({ step: "C", octave: 4 }, "alto"),
+  pitchToY({ step: "G", octave: 4 }, "alto"),
+  pitchToY({ step: "D", octave: 4 }, "alto"),
+  pitchToY({ step: "A", octave: 3 }, "alto"),
+  pitchToY({ step: "E", octave: 4 }, "alto"),
+  pitchToY({ step: "B", octave: 3 }, "alto"),
+];
+export const ALTO_FLAT_POSITIONS = [
+  pitchToY({ step: "B", octave: 3 }, "alto"),
+  pitchToY({ step: "E", octave: 4 }, "alto"),
+  pitchToY({ step: "A", octave: 3 }, "alto"),
+  pitchToY({ step: "D", octave: 4 }, "alto"),
+  pitchToY({ step: "G", octave: 3 }, "alto"),
+  pitchToY({ step: "C", octave: 4 }, "alto"),
+  pitchToY({ step: "F", octave: 3 }, "alto"),
+];
+
+// 테너 음자리표
+export const TENOR_SHARP_POSITIONS = [
+  pitchToY({ step: "F", octave: 4 }, "tenor"),
+  pitchToY({ step: "C", octave: 4 }, "tenor"),
+  pitchToY({ step: "G", octave: 4 }, "tenor"),
+  pitchToY({ step: "D", octave: 4 }, "tenor"),
+  pitchToY({ step: "A", octave: 3 }, "tenor"),
+  pitchToY({ step: "E", octave: 4 }, "tenor"),
+  pitchToY({ step: "B", octave: 3 }, "tenor"),
+];
+export const TENOR_FLAT_POSITIONS = [
+  pitchToY({ step: "B", octave: 3 }, "tenor"),
+  pitchToY({ step: "E", octave: 4 }, "tenor"),
+  pitchToY({ step: "A", octave: 3 }, "tenor"),
+  pitchToY({ step: "D", octave: 4 }, "tenor"),
+  pitchToY({ step: "G", octave: 3 }, "tenor"),
+  pitchToY({ step: "C", octave: 4 }, "tenor"),
+  pitchToY({ step: "F", octave: 3 }, "tenor"),
+];
+
+// 클레프별 조표 위치 통합 맵
+export const KEY_SIG_POSITIONS: Record<
+  ClefType,
+  { sharp: number[]; flat: number[] }
+> = {
+  treble:     { sharp: TREBLE_SHARP_POSITIONS, flat: TREBLE_FLAT_POSITIONS },
+  bass:       { sharp: BASS_SHARP_POSITIONS,   flat: BASS_FLAT_POSITIONS },
+  alto:       { sharp: ALTO_SHARP_POSITIONS,   flat: ALTO_FLAT_POSITIONS },
+  tenor:      { sharp: TENOR_SHARP_POSITIONS,  flat: TENOR_FLAT_POSITIONS },
+  percussion: { sharp: [],                     flat: [] }, // 타악기는 조표 없음
+};

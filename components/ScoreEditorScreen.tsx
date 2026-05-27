@@ -160,14 +160,16 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
       return;
     }
 
-    const dur: NoteDuration = isDotted
-      ? (`${activeDuration}_dot` as NoteDuration)
-      : activeDuration;
+    // 점음표 suffix 적용 (isDotted가 true이면 _dot suffix 추가)
+    const baseDur = activeDuration;
+    const dur: NoteDuration = isDotted && !baseDur.endsWith("_dot")
+      ? (`${baseDur}_dot` as NoteDuration)
+      : baseDur;
 
     const newElement =
       activeTool === "note"
-        ? makeNote(DEFAULT_PITCH, activeDuration)
-        : makeRest(activeDuration);
+        ? makeNote(DEFAULT_PITCH, dur)   // 수정: activeDuration → dur
+        : makeRest(dur);                 // 수정: activeDuration → dur
 
     setDoc((prev) => ({
       ...prev,

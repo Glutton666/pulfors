@@ -32,8 +32,7 @@ import {
   layoutMeasure,
   measureMinWidth,
   headerWidth,
-  TREBLE_SHARP_POSITIONS,
-  TREBLE_FLAT_POSITIONS,
+  KEY_SIG_POSITIONS,
 } from "@/lib/score-layout";
 import type { ScoreDocument, ScorePart, ScoreMeasure, ScoreNote, ScoreRest, ClefType, NoteDuration } from "@/lib/score-types";
 
@@ -191,7 +190,8 @@ function KeySignatureSymbols({ x, y, sharps, clef, color }: {
   if (sharps === 0) return null;
   const count = Math.abs(sharps);
   const isSharp = sharps > 0;
-  const positions = isSharp ? TREBLE_SHARP_POSITIONS : TREBLE_FLAT_POSITIONS;
+  const clefPositions = KEY_SIG_POSITIONS[clef] ?? KEY_SIG_POSITIONS.treble;
+  const positions = isSharp ? clefPositions.sharp : clefPositions.flat;
 
   return (
     <G>
