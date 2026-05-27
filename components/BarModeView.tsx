@@ -1777,7 +1777,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginHorizontal: 2,
-    height: 20,
+    height: 28,
     borderRadius: Radius.xs,
     overflow: "hidden",
     borderWidth: 0.5,
@@ -1802,8 +1802,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.30)",
   },
   barCenterInfo: {
-    fontSize: 9,
-    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 13,
+    fontFamily: "SpaceGrotesk_600SemiBold",
     flexShrink: 1,
   },
   barAddRightBtn: {
