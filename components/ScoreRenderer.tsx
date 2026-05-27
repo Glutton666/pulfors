@@ -1,0 +1,791 @@
+// ============================================================
+// ScoreRenderer — 오선보 SVG 렌더링 컴포넌트
+// ============================================================
+
+import React, { useMemo } from "react";
+import { View, ScrollView, StyleSheet, Text, Platform } from "react-native";
+import Svg, {
+  Line,
+  Ellipse,
+  Rect,
+  Path,
+  G,
+  Text as SvgText,
+  Circle,
+} from "react-native-svg";
+import { useTheme } from "@/contexts/ThemeContext";
+import {
+  STAFF_LINE_COUNT,
+  LINE_SPACING,
+  STAFF_HEIGHT,
+  CLEF_WIDTH,
+  TIME_SIG_WIDTH,
+  KEY_SIG_ACCIDENTAL_WIDTH,
+  NOTE_HEAD_RX,
+  NOTE_HEAD_RY,
+  STEM_HEIGHT,
+  NOTE_WIDTH,
+  LEDGER_LINE_WIDTH,
+  pitchToY,
+  getLedgerLines,
+  getStemDirection,
+  layoutMeasure,
+  measureMinWidth,
+  headerWidth,
+  TREBLE_SHARP_POSITIONS,
+  TREBLE_FLAT_POSITIONS,
+} from "@/lib/score-layout";
+import type { ScoreDocument, ScorePart, ScoreMeasure, ScoreNote, ScoreRest, ClefType, NoteDuration } from "@/lib/score-types";
+
+// ── 상수 ─────────────────────────────────────────────────────
+const MEASURE_GAP = 0;          // 마디 사이 간격
+const PART_GAP = 32;            // 성부 간 간격
+const STAFF_PADDING_TOP = 24;   // 오선 위 여백 (덧줄/기호 공간)
+const STAFF_PADDING_BOTTOM = 28; // 오선 아래 여백
+const PART_HEIGHT = STAFF_PADDING_TOP + STAFF_HEIGHT + STAFF_PADDING_BOTTOM;
+const ROW_MARGIN_TOP = 16;
+const ROW_MARGIN_BOTTOM = 8;
+const DEFAULT_MEASURE_WIDTH = 120;
+const FIRST_MEASURE_EXTRA = 60; // 첫 마디 헤더 추가 폭
+
+// ── 음자리표 SVG Path ─────────────────────────────────────────
+
+function TrebleClef({ x, y, color }: { x: number; y: number; color: string }) {
+  // 단순화된 높은음자리표 (G자형)
+  return (
+    <SvgText
+      x={x}
+      y={y + STAFF_HEIGHT * 0.85}
+      fontSize={STAFF_HEIGHT * 1.8}
+      fontFamily="serif"
+      fill={color}
+      textAnchor="middle"
+    >
+      𝄞
+    </SvgText>
+  );
+}
+
+function BassClef({ x, y, color }: { x: number; y: number; color: string }) {
+  return (
+    <SvgText
+      x={x}
+      y={y + STAFF_HEIGHT * 0.6}
+      fontSize={STAFF_HEIGHT * 1.2}
+      fontFamily="serif"
+      fill={color}
+      textAnchor="middle"
+    >
+      𝄢
+    </SvgText>
+  );
+}
+
+function AltoClef({ x, y, color }: { x: number; y: number; color: string }) {
+  return (
+    <SvgText
+      x={x}
+      y={y + STAFF_HEIGHT * 0.7}
+      fontSize={STAFF_HEIGHT * 1.2}
+      fontFamily="serif"
+      fill={color}
+      textAnchor="middle"
+    >
+      𝄡
+    </SvgText>
+  );
+}
+
+function PercClef({ x, y, color }: { x: number; y: number; color: string }) {
+  const cx = x;
+  const cy = y + STAFF_HEIGHT / 2;
+  return (
+    <G>
+      <Rect x={cx - 7} y={cy - STAFF_HEIGHT / 2} width={3} height={STAFF_HEIGHT} fill={color} />
+      <Rect x={cx + 4} y={cy - STAFF_HEIGHT / 2} width={3} height={STAFF_HEIGHT} fill={color} />
+    </G>
+  );
+}
+
+// ── 오선 ─────────────────────────────────────────────────────
+
+function StaffLines({ x, y, width, color }: { x: number; y: number; width: number; color: string }) {
+  return (
+    <G>
+      {Array.from({ length: STAFF_LINE_COUNT }, (_, i) => (
+        <Line
+          key={i}
+          x1={x}
+          y1={y + i * LINE_SPACING}
+          x2={x + width}
+          y2={y + i * LINE_SPACING}
+          stroke={color}
+          strokeWidth={1}
+        />
+      ))}
+    </G>
+  );
+}
+
+// ── 박자표 ────────────────────────────────────────────────────
+
+function TimeSignature({ x, y, numerator, denominator, color }: {
+  x: number;
+  y: number;
+  numerator: number;
+  denominator: number;
+  color: string;
+}) {
+  const cx = x + TIME_SIG_WIDTH / 2;
+  return (
+    <G>
+      <SvgText
+        x={cx}
+        y={y + LINE_SPACING * 1.5}
+        fontSize={LINE_SPACING * 1.8}
+        fontFamily="SpaceGrotesk_700Bold"
+        fill={color}
+        textAnchor="middle"
+      >
+        {numerator}
+      </SvgText>
+      <SvgText
+        x={cx}
+        y={y + LINE_SPACING * 3.5}
+        fontSize={LINE_SPACING * 1.8}
+        fontFamily="SpaceGrotesk_700Bold"
+        fill={color}
+        textAnchor="middle"
+      >
+        {denominator}
+      </SvgText>
+    </G>
+  );
+}
+
+// ── 조표 샤프/플랫 ────────────────────────────────────────────
+
+function SharpAccidental({ x, y, color }: { x: number; y: number; color: string }) {
+  return (
+    <SvgText x={x} y={y + 5} fontSize={13} fill={color} textAnchor="middle">
+      ♯
+    </SvgText>
+  );
+}
+
+function FlatAccidental({ x, y, color }: { x: number; y: number; color: string }) {
+  return (
+    <SvgText x={x} y={y + 5} fontSize={13} fill={color} textAnchor="middle">
+      ♭
+    </SvgText>
+  );
+}
+
+function KeySignatureSymbols({ x, y, sharps, clef, color }: {
+  x: number;
+  y: number;
+  sharps: number;
+  clef: ClefType;
+  color: string;
+}) {
+  if (sharps === 0) return null;
+  const count = Math.abs(sharps);
+  const isSharp = sharps > 0;
+  const positions = isSharp ? TREBLE_SHARP_POSITIONS : TREBLE_FLAT_POSITIONS;
+
+  return (
+    <G>
+      {Array.from({ length: count }, (_, i) => {
+        const accY = y + (positions[i] ?? 0);
+        const accX = x + i * (KEY_SIG_ACCIDENTAL_WIDTH + 1);
+        return isSharp
+          ? <SharpAccidental key={i} x={accX} y={accY} color={color} />
+          : <FlatAccidental key={i} x={accX} y={accY} color={color} />;
+      })}
+    </G>
+  );
+}
+
+// ── 음표 머리 ─────────────────────────────────────────────────
+
+function NoteHead({ x, y, duration, color, filled }: {
+  x: number;
+  y: number;
+  duration: NoteDuration;
+  color: string;
+  filled: boolean;
+}) {
+  const isOpen = duration === "whole" || duration === "half" || duration === "whole_dot" || duration === "half_dot";
+  return (
+    <Ellipse
+      cx={x}
+      cy={y}
+      rx={NOTE_HEAD_RX}
+      ry={NOTE_HEAD_RY}
+      fill={isOpen ? "none" : color}
+      stroke={color}
+      strokeWidth={1.2}
+    />
+  );
+}
+
+// ── 기둥(Stem) ───────────────────────────────────────────────
+
+function Stem({ x, y, direction, color }: {
+  x: number;
+  y: number;
+  direction: "up" | "down";
+  color: string;
+}) {
+  const x2 = direction === "up" ? x + NOTE_HEAD_RX - 1 : x - NOTE_HEAD_RX + 1;
+  const y2 = direction === "up" ? y - STEM_HEIGHT : y + STEM_HEIGHT;
+  return <Line x1={x2} y1={y} x2={x2} y2={y2} stroke={color} strokeWidth={1.2} />;
+}
+
+// ── 꼬리(Flag) ────────────────────────────────────────────────
+
+function Flag({ x, y, direction, count, color }: {
+  x: number;
+  y: number;
+  direction: "up" | "down";
+  count: number; // 꼬리 개수 (8분=1, 16분=2, 32분=3)
+  color: string;
+}) {
+  const stemX = direction === "up" ? x + NOTE_HEAD_RX - 1 : x - NOTE_HEAD_RX + 1;
+  const stemEndY = direction === "up" ? y - STEM_HEIGHT : y + STEM_HEIGHT;
+  const flags = [];
+  for (let i = 0; i < count; i++) {
+    const fy = direction === "up" ? stemEndY + i * 6 : stemEndY - i * 6;
+    const path = direction === "up"
+      ? `M${stemX},${fy} Q${stemX + 12},${fy + 8} ${stemX + 8},${fy + 16}`
+      : `M${stemX},${fy} Q${stemX - 12},${fy - 8} ${stemX - 8},${fy - 16}`;
+    flags.push(<Path key={i} d={path} stroke={color} strokeWidth={1.5} fill="none" />);
+  }
+  return <G>{flags}</G>;
+}
+
+// ── 쉼표 ─────────────────────────────────────────────────────
+
+function RestSymbol({ x, y, duration, color }: {
+  x: number;
+  y: number;
+  duration: NoteDuration;
+  color: string;
+}) {
+  const cy = y + STAFF_HEIGHT / 2;
+  switch (duration) {
+    case "whole":
+    case "whole_dot":
+      return <Rect x={x - 7} y={cy - LINE_SPACING - 3} width={14} height={5} fill={color} />;
+    case "half":
+    case "half_dot":
+      return <Rect x={x - 7} y={cy - 4} width={14} height={5} rx={1} fill={color} />;
+    case "quarter":
+    case "quarter_dot":
+      return (
+        <SvgText x={x} y={cy + 5} fontSize={18} fill={color} textAnchor="middle" fontFamily="serif">
+          𝄽
+        </SvgText>
+      );
+    case "eighth":
+    case "eighth_dot":
+      return (
+        <SvgText x={x} y={cy + 4} fontSize={16} fill={color} textAnchor="middle" fontFamily="serif">
+          𝄾
+        </SvgText>
+      );
+    case "sixteenth":
+    case "sixteenth_dot":
+      return (
+        <SvgText x={x} y={cy + 4} fontSize={16} fill={color} textAnchor="middle" fontFamily="serif">
+          𝄿
+        </SvgText>
+      );
+    default:
+      return <Rect x={x - 5} y={cy - 5} width={10} height={5} fill={color} />;
+  }
+}
+
+// ── 점(Dot) ───────────────────────────────────────────────────
+
+function DotSymbol({ x, y, color }: { x: number; y: number; color: string }) {
+  return <Circle cx={x + NOTE_HEAD_RX + 4} cy={y} r={1.8} fill={color} />;
+}
+
+// ── 덧줄 ─────────────────────────────────────────────────────
+
+function LedgerLines({ cx, noteY, staffY, color }: {
+  cx: number;
+  noteY: number;
+  staffY: number;
+  color: string;
+}) {
+  const ledgers = getLedgerLines(noteY);
+  return (
+    <G>
+      {ledgers.map((ly, i) => (
+        <Line
+          key={i}
+          x1={cx - NOTE_HEAD_RX * 2}
+          y1={staffY + ly}
+          x2={cx + NOTE_HEAD_RX * 2}
+          y2={staffY + ly}
+          stroke={color}
+          strokeWidth={1}
+        />
+      ))}
+    </G>
+  );
+}
+
+// ── 음표 렌더링 ───────────────────────────────────────────────
+
+function NoteElement({ note, x, staffY, clef, color, isSelected }: {
+  note: ScoreNote;
+  x: number;
+  staffY: number;
+  clef: ClefType;
+  color: string;
+  isSelected: boolean;
+}) {
+  const noteY = staffY + pitchToY(note.pitch, clef);
+  const dur = note.duration;
+  const needsStem = dur !== "whole" && dur !== "whole_dot";
+  const direction = getStemDirection(pitchToY(note.pitch, clef));
+
+  const flagCount =
+    dur === "eighth" || dur === "eighth_dot" ? 1 :
+    dur === "sixteenth" || dur === "sixteenth_dot" ? 2 :
+    dur === "thirty_second" ? 3 : 0;
+
+  const dotted =
+    dur === "whole_dot" || dur === "half_dot" || dur === "quarter_dot" ||
+    dur === "eighth_dot" || dur === "sixteenth_dot";
+
+  const highlightColor = isSelected ? "#4A9EFF" : color;
+
+  return (
+    <G>
+      <LedgerLines cx={x} noteY={pitchToY(note.pitch, clef)} staffY={staffY} color={highlightColor} />
+      <NoteHead x={x} y={noteY} duration={dur} color={highlightColor} filled />
+      {needsStem && <Stem x={x} y={noteY} direction={direction} color={highlightColor} />}
+      {flagCount > 0 && <Flag x={x} y={noteY} direction={direction} count={flagCount} color={highlightColor} />}
+      {dotted && <DotSymbol x={x} y={noteY} color={highlightColor} />}
+    </G>
+  );
+}
+
+// ── 쉼표 렌더링 ───────────────────────────────────────────────
+
+function RestElement({ rest, x, staffY, color }: {
+  rest: ScoreRest;
+  x: number;
+  staffY: number;
+  color: string;
+}) {
+  const dotted =
+    rest.duration === "whole_dot" || rest.duration === "half_dot" || rest.duration === "quarter_dot" ||
+    rest.duration === "eighth_dot" || rest.duration === "sixteenth_dot";
+
+  return (
+    <G>
+      <RestSymbol x={x} y={staffY} duration={rest.duration} color={color} />
+      {dotted && <DotSymbol x={x + 8} y={staffY + STAFF_HEIGHT / 2} color={color} />}
+    </G>
+  );
+}
+
+// ── 마디선 ────────────────────────────────────────────────────
+
+function Barline({ x, y, height, color, isDouble }: {
+  x: number;
+  y: number;
+  height: number;
+  color: string;
+  isDouble?: boolean;
+}) {
+  if (isDouble) {
+    return (
+      <G>
+        <Line x1={x - 3} y1={y} x2={x - 3} y2={y + height} stroke={color} strokeWidth={1} />
+        <Line x1={x} y1={y} x2={x} y2={y + height} stroke={color} strokeWidth={3} />
+      </G>
+    );
+  }
+  return <Line x1={x} y1={y} x2={x} y2={y + height} stroke={color} strokeWidth={1} />;
+}
+
+// ── 반복 기호 ─────────────────────────────────────────────────
+
+function RepeatDots({ x, y, isStart, color }: { x: number; y: number; isStart: boolean; color: string }) {
+  const dotX = isStart ? x + 6 : x - 6;
+  return (
+    <G>
+      <Line x1={x} y1={y} x2={x} y2={y + STAFF_HEIGHT} stroke={color} strokeWidth={3} />
+      <Line x1={isStart ? x + 3 : x - 3} y1={y} x2={isStart ? x + 3 : x - 3} y2={y + STAFF_HEIGHT} stroke={color} strokeWidth={1} />
+      <Circle cx={dotX} cy={y + LINE_SPACING * 1.5} r={2} fill={color} />
+      <Circle cx={dotX} cy={y + LINE_SPACING * 2.5} r={2} fill={color} />
+    </G>
+  );
+}
+
+// ── 마디 하나 렌더링 ──────────────────────────────────────────
+
+interface MeasureRenderProps {
+  measure: ScoreMeasure;
+  part: ScorePart;
+  x: number;
+  staffY: number;
+  width: number;
+  isFirst: boolean;
+  showClef: boolean;
+  showTimeSig: boolean;
+  sharps: number;
+  color: string;
+  timeNumerator: number;
+  timeDenominator: number;
+  selectedElementId?: string | null;
+}
+
+function MeasureRender({
+  measure,
+  part,
+  x,
+  staffY,
+  width,
+  isFirst,
+  showClef,
+  showTimeSig,
+  sharps,
+  color,
+  timeNumerator,
+  timeDenominator,
+  selectedElementId,
+}: MeasureRenderProps) {
+  const clef = part.clef;
+
+  // 헤더 폭 계산
+  let headerX = x + 4;
+  let contentX = x + 4;
+
+  if (showClef) {
+    contentX += CLEF_WIDTH[clef] + 4;
+  }
+  if (Math.abs(sharps) > 0) {
+    contentX += Math.abs(sharps) * KEY_SIG_ACCIDENTAL_WIDTH + 4;
+  }
+  if (showTimeSig) {
+    contentX += TIME_SIG_WIDTH + 4;
+  }
+
+  // 음표 레이아웃
+  const contentWidth = width - (contentX - x);
+  const positions = layoutMeasure(measure, 0, clef, contentWidth);
+
+  return (
+    <G>
+      <StaffLines x={x} y={staffY} width={width} color={color} />
+
+      {/* 음자리표 */}
+      {showClef && clef === "treble" && <TrebleClef x={headerX + CLEF_WIDTH[clef] / 2} y={staffY} color={color} />}
+      {showClef && clef === "bass" && <BassClef x={headerX + CLEF_WIDTH[clef] / 2} y={staffY} color={color} />}
+      {showClef && (clef === "alto" || clef === "tenor") && <AltoClef x={headerX + CLEF_WIDTH[clef] / 2} y={staffY} color={color} />}
+      {showClef && clef === "percussion" && <PercClef x={headerX + CLEF_WIDTH[clef] / 2} y={staffY} color={color} />}
+      {showClef && (() => { headerX += CLEF_WIDTH[clef] + 4; return null; })()}
+
+      {/* 조표 */}
+      {Math.abs(sharps) > 0 && (
+        <KeySignatureSymbols x={headerX} y={staffY} sharps={sharps} clef={clef} color={color} />
+      )}
+
+      {/* 박자표 */}
+      {showTimeSig && (
+        <TimeSignature
+          x={contentX - TIME_SIG_WIDTH - 4}
+          y={staffY}
+          numerator={timeNumerator}
+          denominator={timeDenominator}
+          color={color}
+        />
+      )}
+
+      {/* 반복 시작 */}
+      {measure.repeatStart && <RepeatDots x={x + 6} y={staffY} isStart color={color} />}
+
+      {/* 음표/쉼표 */}
+      {positions.map((pos) => {
+        const el = measure.elements.find((e) => e.id === pos.elementId);
+        if (!el) return null;
+        const absX = contentX + pos.x;
+        if (el.type === "note") {
+          return (
+            <NoteElement
+              key={el.id}
+              note={el}
+              x={absX}
+              staffY={staffY}
+              clef={clef}
+              color={color}
+              isSelected={el.id === selectedElementId}
+            />
+          );
+        } else {
+          return (
+            <RestElement
+              key={el.id}
+              rest={el}
+              x={absX}
+              staffY={staffY}
+              color={color}
+            />
+          );
+        }
+      })}
+
+      {/* 마디 박자표/BPM 텍스트 (마디 중간 변경 표시) */}
+      {measure.tempoText && (
+        <SvgText
+          x={contentX + 4}
+          y={staffY - 8}
+          fontSize={9}
+          fill={color}
+          fontFamily="SpaceGrotesk_600SemiBold"
+        >
+          {measure.tempoText}
+        </SvgText>
+      )}
+
+      {/* 반복 끝 */}
+      {measure.repeatEnd && <RepeatDots x={x + width - 6} y={staffY} isStart={false} color={color} />}
+
+      {/* 마디선 */}
+      <Barline x={x + width} y={staffY} height={STAFF_HEIGHT} color={color} />
+    </G>
+  );
+}
+
+// ── 성부 하나 렌더링 ──────────────────────────────────────────
+
+interface PartRenderProps {
+  part: ScorePart;
+  measures: ScoreMeasure[];
+  partIdx: number;
+  rowLayout: RowLayout[];
+  doc: ScoreDocument;
+  color: string;
+  selectedElementId?: string | null;
+  playheadMeasureIdx?: number;
+}
+
+interface RowLayout {
+  measureIndices: number[];
+  y: number;
+  measureWidths: number[];
+  rowWidth: number;
+}
+
+function PartRender({ part, measures, rowLayout, doc, color, selectedElementId, playheadMeasureIdx }: PartRenderProps) {
+  return (
+    <G>
+      {rowLayout.map((row, rowIdx) =>
+        row.measureIndices.map((mIdx, posInRow) => {
+          const measure = measures[mIdx];
+          if (!measure) return null;
+          const isFirst = mIdx === 0;
+          const showClef = posInRow === 0;
+          const showTimeSig = posInRow === 0;
+          const x = row.measureWidths.slice(0, posInRow).reduce((a, b) => a + b, 0);
+          const staffY = row.y + STAFF_PADDING_TOP;
+
+          return (
+            <MeasureRender
+              key={measure.id}
+              measure={measure}
+              part={part}
+              x={x}
+              staffY={staffY}
+              width={row.measureWidths[posInRow]}
+              isFirst={isFirst}
+              showClef={showClef}
+              showTimeSig={showTimeSig}
+              sharps={doc.keySignature.sharps}
+              color={color}
+              timeNumerator={doc.timeSignature.numerator}
+              timeDenominator={doc.timeSignature.denominator}
+              selectedElementId={selectedElementId}
+            />
+          );
+        })
+      )}
+    </G>
+  );
+}
+
+// ── 메인 ScoreRenderer ────────────────────────────────────────
+
+export interface ScoreRendererProps {
+  doc: ScoreDocument;
+  containerWidth: number;
+  selectedElementId?: string | null;
+  playheadMeasureIdx?: number;
+  showPartNames?: boolean;
+}
+
+interface RowLayout {
+  measureIndices: number[];
+  y: number;
+  measureWidths: number[];
+  rowWidth: number;
+}
+
+function computeLayout(
+  doc: ScoreDocument,
+  containerWidth: number,
+): { rows: RowLayout[]; totalHeight: number } {
+  if (!doc.parts.length) return { rows: [], totalHeight: 100 };
+
+  const partCount = doc.parts.length;
+  const measures = doc.parts[0]?.measures ?? [];
+  const measureCount = measures.length;
+
+  // 각 마디의 최소 폭 계산
+  const minWidths = measures.map((m) => measureMinWidth(m));
+  const firstMeasureHeader = headerWidth(
+    doc.parts[0]?.clef ?? "treble",
+    true,
+    doc.keySignature.sharps,
+  ) + FIRST_MEASURE_EXTRA;
+
+  const rows: RowLayout[] = [];
+  let currentRow: number[] = [];
+  let currentRowWidth = firstMeasureHeader;
+  let y = ROW_MARGIN_TOP;
+
+  for (let i = 0; i < measureCount; i++) {
+    const mw = Math.max(minWidths[i], DEFAULT_MEASURE_WIDTH);
+    const extraHeader = currentRow.length === 0 && i > 0
+      ? headerWidth(doc.parts[0]?.clef ?? "treble", false, 0)
+      : 0;
+
+    if (currentRow.length > 0 && currentRowWidth + mw + extraHeader > containerWidth) {
+      // 새 줄
+      const rowHeight = PART_HEIGHT * partCount + ROW_MARGIN_BOTTOM;
+      const equalWidth = (containerWidth) / currentRow.length;
+      rows.push({
+        measureIndices: [...currentRow],
+        y,
+        measureWidths: currentRow.map(() => equalWidth),
+        rowWidth: containerWidth,
+      });
+      y += rowHeight;
+      currentRow = [i];
+      currentRowWidth = mw;
+    } else {
+      currentRow.push(i);
+      currentRowWidth += mw + extraHeader;
+    }
+  }
+
+  // 마지막 줄
+  if (currentRow.length > 0) {
+    const rowHeight = PART_HEIGHT * partCount + ROW_MARGIN_BOTTOM;
+    const totalMin = currentRow.reduce((sum, mi) => sum + Math.max(minWidths[mi], DEFAULT_MEASURE_WIDTH), 0);
+    const scale = Math.max(1, (containerWidth) / totalMin);
+    rows.push({
+      measureIndices: [...currentRow],
+      y,
+      measureWidths: currentRow.map((mi) => Math.max(minWidths[mi], DEFAULT_MEASURE_WIDTH) * Math.min(scale, 2)),
+      rowWidth: containerWidth,
+    });
+    y += rowHeight;
+  }
+
+  return { rows, totalHeight: y + ROW_MARGIN_BOTTOM };
+}
+
+export function ScoreRenderer({
+  doc,
+  containerWidth,
+  selectedElementId,
+  playheadMeasureIdx,
+  showPartNames = true,
+}: ScoreRendererProps) {
+  const { colors: C } = useTheme();
+  const strokeColor = C.text;
+
+  const { rows, totalHeight } = useMemo(
+    () => computeLayout(doc, containerWidth),
+    [doc, containerWidth],
+  );
+
+  if (!doc.parts.length) {
+    return (
+      <View style={[styles.empty]}>
+        <Text style={{ color: C.textSecondary, fontSize: 13 }}>성부가 없습니다</Text>
+      </View>
+    );
+  }
+
+  const svgWidth = containerWidth;
+  const svgHeight = Math.max(totalHeight, 100);
+
+  return (
+    <Svg width={svgWidth} height={svgHeight} style={styles.svg}>
+      {doc.parts.map((part, partIdx) => {
+        // 각 성부는 y 오프셋 적용
+        const partYOffset = partIdx * PART_HEIGHT;
+        const partMeasures = part.measures;
+
+        return (
+          <G key={part.id} y={partYOffset}>
+            {/* 성부 이름 */}
+            {showPartNames && rows[0] && (
+              <SvgText
+                x={2}
+                y={rows[0].y + STAFF_PADDING_TOP + STAFF_HEIGHT / 2 + 4}
+                fontSize={9}
+                fill={strokeColor}
+                fontFamily="SpaceGrotesk_400Regular"
+              >
+                {part.name ?? part.instrumentId}
+              </SvgText>
+            )}
+            <PartRender
+              part={part}
+              measures={partMeasures}
+              partIdx={partIdx}
+              rowLayout={rows}
+              doc={doc}
+              color={strokeColor}
+              selectedElementId={selectedElementId}
+              playheadMeasureIdx={playheadMeasureIdx}
+            />
+          </G>
+        );
+      })}
+
+      {/* 첫 마디 세로선 (왼쪽 경계) */}
+      {rows.map((row, rowIdx) => (
+        <Line
+          key={`row-start-${rowIdx}`}
+          x1={0}
+          y1={row.y + STAFF_PADDING_TOP}
+          x2={0}
+          y2={row.y + STAFF_PADDING_TOP + STAFF_HEIGHT * doc.parts.length + PART_GAP * (doc.parts.length - 1)}
+          stroke={strokeColor}
+          strokeWidth={1.5}
+        />
+      ))}
+    </Svg>
+  );
+}
+
+const styles = StyleSheet.create({
+  svg: {
+    alignSelf: "flex-start",
+  },
+  empty: {
+    paddingVertical: 24,
+    alignItems: "center",
+  },
+});

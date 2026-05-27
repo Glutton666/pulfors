@@ -85,6 +85,9 @@ import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist
 import { createRafBatcher } from "@/lib/raf-batcher";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { MoreMenuModal } from "@/components/MoreMenuModal";
+import { ScoreListScreen } from "@/components/ScoreListScreen";
+import { ScoreEditorScreen } from "@/components/ScoreEditorScreen";
+import type { ScoreDocument } from "@/lib/score-types";
 import { BpmDetectModal } from "@/components/BpmDetectModal";
 import { DrumKitModal } from "@/components/DrumKitModal";
 import { ScheduledStartModal } from "@/components/ScheduledStartModal";
@@ -211,6 +214,10 @@ export default function MetronomeScreen() {
   const [noteMode, setNoteMode] = useState(false);
   const noteModeRef = useRef(false);
   useEffect(() => { noteModeRef.current = noteMode; }, [noteMode]);
+
+  // 악보 모드: null=비활성, "list"=목록, "editor"=편집기
+  const [scoreMode, setScoreMode] = useState<null | "list" | "editor">(null);
+  const [scoreEditorDoc, setScoreEditorDoc] = useState<ScoreDocument | null>(null);
   const [noteQueue, setNoteQueue] = useState<PracticeEntry[]>([]);
   const noteQueueRef = useRef<PracticeEntry[]>([]);
   useEffect(() => { noteQueueRef.current = noteQueue; }, [noteQueue]);
@@ -4554,6 +4561,31 @@ export default function MetronomeScreen() {
       onKeyUp={Platform.OS !== "web" ? (e) => handleNativeKeyUp(e.nativeEvent) : undefined}
     >
       <StatusBar style={themeMode === "day" ? "dark" : "light"} />
+
+      {/* ── 악보 모드 전체화면 오버레이 ── */}
+      {scoreMode === "list" && (
+        <View style={[StyleSheet.absoluteFillObject, { zIndex: 500, backgroundColor: C.background }]}>
+          <ScoreListScreen
+            defaultBpm={bpm}
+            onClose={() => setScoreMode(null)}
+            onOpenEditor={(doc) => {
+              setScoreEditorDoc(doc);
+              setScoreMode("editor");
+            }}
+          />
+        </View>
+      )}
+      {scoreMode === "editor" && scoreEditorDoc && (
+        <View style={[StyleSheet.absoluteFillObject, { zIndex: 500, backgroundColor: C.background }]}>
+          <ScoreEditorScreen
+            doc={scoreEditorDoc}
+            onBack={() => setScoreMode("list")}
+            onSaved={(updatedDoc) => {
+              setScoreEditorDoc(updatedDoc);
+            }}
+          />
+        </View>
+      )}
       {permissionRecoveryToast ? (
         <View
           pointerEvents="none"
@@ -4743,6 +4775,10 @@ export default function MetronomeScreen() {
           openExclusive("drumKit");
         }}
         onBpmDetect={() => openExclusive("bpmDetect")}
+        onScoreMode={() => {
+          setActiveModal(null);
+          setScoreMode("list");
+        }}
         onTempoQuiz={() => {
           const engine = engineRef.current;
           if (engine?.getIsRunning()) engine.stop();
