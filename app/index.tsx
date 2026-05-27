@@ -4644,7 +4644,7 @@ export default function MetronomeScreen() {
         </Text>
       </Animated.View>
 
-      {!noteMode && (
+      {!noteMode && !barMode && (
       <Pressable
         style={[
           styles.menuButton,
