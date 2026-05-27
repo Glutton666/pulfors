@@ -155,6 +155,16 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
     visible: boolean;
   } | null>(null);
 
+  // ── 마디 인라인 편집 모달 (크로스 플랫폼) ────────────────────
+  const [showMeasureEditModal, setShowMeasureEditModal] = useState(false);
+  const [measureEditTarget, setMeasureEditTarget] = useState<{
+    measureIdx: number;
+    field: "bpm" | "timeSig";
+    value: string;
+    label: string;
+    hint: string;
+  } | null>(null);
+
   // ── 악보 메타데이터 편집 모달 ─────────────────────────────────
   const [showMetaModal, setShowMetaModal] = useState(false);
   const [metaDraft, setMetaDraft] = useState<{
@@ -412,53 +422,139 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
 
   // ── 마디 탭 ──────────────────────────────────────────────────
   const handleMeasureTap = useCallback((measureIdx: number) => {
+    // 1) 반복부호 선택 중 → 부호 적용
     if (selectedRepeatSign) {
       handleRepeatSignApply(measureIdx, selectedRepeatSign);
       return;
     }
+    // 2) 강약 기호 선택 중 → 마디에 dynamic 적용
+    if (selectedDynamic) {
+      const newDoc: ScoreDocument = {
+        ...doc,
+        parts: doc.parts.map((p, pIdx) => {
+          if (pIdx !== selectedPartIdx) return p;
+          return {
+            ...p,
+            measures: p.measures.map((m, mIdx) =>
+              mIdx !== measureIdx ? m : { ...m, dynamic: selectedDynamic },
+            ),
+          };
+        }),
+      };
+      applyDoc(newDoc);
+      return;
+    }
+    // 3) cresc/decresc 선택 중 → 마디에 크레셴도 헤어핀 적용
+    if (selectedCrescType) {
+      const curMeasure = doc.parts[selectedPartIdx]?.measures[measureIdx];
+      const isCrescent = selectedCrescType === "cresc";
+
+      // crescStart/decrescStart 이미 설정된 마디가 있으면 현재 탭 마디를 End로 설정
+      const hasStart = doc.parts[selectedPartIdx]?.measures.some(
+        (m, i) => i < measureIdx && (isCrescent ? m.crescStart : m.decrescStart),
+      );
+      const newDoc: ScoreDocument = {
+        ...doc,
+        parts: doc.parts.map((p, pIdx) => {
+          if (pIdx !== selectedPartIdx) return p;
+          return {
+            ...p,
+            measures: p.measures.map((m, mIdx) => {
+              if (mIdx !== measureIdx) return m;
+              if (isCrescent) {
+                if (hasStart) return { ...m, crescEnd: true };
+                return { ...m, crescStart: true, decrescStart: undefined };
+              } else {
+                if (hasStart) return { ...m, decrescEnd: true };
+                return { ...m, decrescStart: true, crescStart: undefined };
+              }
+            }),
+          };
+        }),
+      };
+      applyDoc(newDoc);
+      // crescEnd 설정 후 선택 해제
+      if (hasStart) setSelectedCrescType(null);
+      return;
+    }
+    // 4) 기본 동작: 마디 선택
     setSelectedMeasureIdx(measureIdx);
     setSelectedElementId(null);
-  }, [selectedRepeatSign, handleRepeatSignApply]);
+  }, [selectedRepeatSign, selectedDynamic, selectedCrescType, selectedPartIdx, doc, handleRepeatSignApply, applyDoc]);
 
   // ── 마디 롱프레스 → 컨텍스트 메뉴 ───────────────────────────
   const handleMeasureLongPress = useCallback((measureIdx: number) => {
     setMeasureContextMenu({ measureIdx, visible: true });
   }, []);
 
-  // ── 마디 컨텍스트 메뉴: BPM 변경 ────────────────────────────
+  // ── 마디 컨텍스트 메뉴: BPM 변경 (크로스 플랫폼 모달) ───────
   function handleMeasureBpmChange(measureIdx: number) {
     setMeasureContextMenu(null);
     const curMeasure = doc.parts[selectedPartIdx]?.measures[measureIdx];
     const curBpm = curMeasure?.bpm ?? doc.bpm;
-    if (Alert.prompt) {
-      Alert.prompt(
-        t("scoreMode", "measureBpmChange"),
-        `BPM (20-300, current: ${curBpm})`,
-        (val) => {
-          const n = parseInt(val ?? "", 10);
-          if (!n || n < 20 || n > 300) return;
-          const newDoc: ScoreDocument = {
-            ...doc,
-            parts: doc.parts.map((p, pIdx) => {
-              if (pIdx !== selectedPartIdx) return p;
-              return {
-                ...p,
-                measures: p.measures.map((m, mIdx) => mIdx !== measureIdx ? m : { ...m, bpm: n }),
-              };
-            }),
-          };
-          applyDoc(newDoc);
-        },
-        "plain-text",
-        String(curBpm),
-      );
-    } else {
-      Alert.alert(
-        t("scoreMode", "measureBpmChange"),
-        `Current BPM: ${curBpm}`,
-        [{ text: t("scoreMode", "done"), style: "cancel" }],
-      );
+    setMeasureEditTarget({
+      measureIdx,
+      field: "bpm",
+      value: String(curBpm),
+      label: t("scoreMode", "measureBpmChange"),
+      hint: "20–300",
+    });
+    setShowMeasureEditModal(true);
+  }
+
+  // ── 마디 컨텍스트 메뉴: 박자표 변경 ─────────────────────────
+  function handleMeasureTimeSigChange(measureIdx: number) {
+    setMeasureContextMenu(null);
+    const curMeasure = doc.parts[selectedPartIdx]?.measures[measureIdx];
+    const curSig = curMeasure?.timeSignature ?? doc.timeSignature;
+    setMeasureEditTarget({
+      measureIdx,
+      field: "timeSig",
+      value: `${curSig.numerator}/${curSig.denominator}`,
+      label: t("scoreMode", "measureTimeSigChange"),
+      hint: "e.g. 3/4  6/8  5/4",
+    });
+    setShowMeasureEditModal(true);
+  }
+
+  // ── 마디 인라인 편집 저장 ─────────────────────────────────────
+  function handleMeasureEditSave() {
+    if (!measureEditTarget) { setShowMeasureEditModal(false); return; }
+    const { measureIdx, field, value } = measureEditTarget;
+    if (field === "bpm") {
+      const n = parseInt(value.trim(), 10);
+      if (n >= 20 && n <= 300) {
+        const newDoc: ScoreDocument = {
+          ...doc,
+          parts: doc.parts.map((p, pIdx) => {
+            if (pIdx !== selectedPartIdx) return p;
+            return { ...p, measures: p.measures.map((m, mIdx) => mIdx !== measureIdx ? m : { ...m, bpm: n }) };
+          }),
+        };
+        applyDoc(newDoc);
+      }
+    } else if (field === "timeSig") {
+      const parts = value.trim().split("/");
+      const num = parseInt(parts[0] ?? "", 10);
+      const den = parseInt(parts[1] ?? "", 10);
+      if (num > 0 && den > 0) {
+        const newDoc: ScoreDocument = {
+          ...doc,
+          parts: doc.parts.map((p, pIdx) => {
+            if (pIdx !== selectedPartIdx) return p;
+            return {
+              ...p,
+              measures: p.measures.map((m, mIdx) =>
+                mIdx !== measureIdx ? m : { ...m, timeSignature: { numerator: num, denominator: den } },
+              ),
+            };
+          }),
+        };
+        applyDoc(newDoc);
+      }
     }
+    setShowMeasureEditModal(false);
+    setMeasureEditTarget(null);
   }
 
   // ── 마디 컨텍스트 메뉴: 마디 부호 지우기 ────────────────────
@@ -1211,18 +1307,27 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
               </Text>
             </Pressable>
 
+            {/* 박자표 변경 */}
+            <Pressable
+              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+              onPress={() => measureContextMenu && handleMeasureTimeSigChange(measureContextMenu.measureIdx)}
+            >
+              <Ionicons name="time-outline" size={18} color={C.accent} />
+              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
+                {t("scoreMode", "measureTimeSigChange")}
+              </Text>
+            </Pressable>
+
             {/* 리허설 마크 */}
-            {Platform.OS === "ios" && (
-              <Pressable
-                style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-                onPress={() => measureContextMenu && handleAddRehearsalMark(measureContextMenu.measureIdx)}
-              >
-                <Ionicons name="bookmark-outline" size={18} color={C.accent} />
-                <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
-                  {t("scoreMode", "measureAddRehearsal")}
-                </Text>
-              </Pressable>
-            )}
+            <Pressable
+              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+              onPress={() => measureContextMenu && handleAddRehearsalMark(measureContextMenu.measureIdx)}
+            >
+              <Ionicons name="bookmark-outline" size={18} color={C.accent} />
+              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
+                {t("scoreMode", "measureAddRehearsal")}
+              </Text>
+            </Pressable>
 
             {/* 마디 부호 지우기 */}
             <Pressable
@@ -1372,6 +1477,56 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             >
               <Text style={styles.symbolModalCloseText}>{t("scoreMode", "done")}</Text>
             </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── 마디 인라인 편집 모달 (크로스 플랫폼 TextInput) ─── */}
+      <Modal
+        visible={showMeasureEditModal && !!measureEditTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setShowMeasureEditModal(false); setMeasureEditTarget(null); }}
+      >
+        <Pressable
+          style={styles.symbolModalBackdrop}
+          onPress={() => { setShowMeasureEditModal(false); setMeasureEditTarget(null); }}
+        >
+          <Pressable
+            style={[styles.symbolModalCard, { backgroundColor: C.surface, borderColor: C.border }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={[styles.symbolModalTitle, { color: C.text }]}>
+              {measureEditTarget?.label ?? ""}
+            </Text>
+            <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
+              {measureEditTarget?.hint ?? ""}
+            </Text>
+            <TextInput
+              style={[styles.metaInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
+              value={measureEditTarget?.value ?? ""}
+              onChangeText={(v) => setMeasureEditTarget((t) => t ? { ...t, value: v } : t)}
+              keyboardType={measureEditTarget?.field === "bpm" ? "number-pad" : "default"}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleMeasureEditSave}
+              testID="score-measure-edit-input"
+            />
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+              <Pressable
+                style={[styles.symbolModalClose, { flex: 1, backgroundColor: C.border }]}
+                onPress={() => { setShowMeasureEditModal(false); setMeasureEditTarget(null); }}
+              >
+                <Text style={[styles.symbolModalCloseText, { color: C.text }]}>{t("scoreMode", "cancel")}</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.symbolModalClose, { flex: 1, backgroundColor: C.accent }]}
+                onPress={handleMeasureEditSave}
+                testID="score-measure-edit-save"
+              >
+                <Text style={styles.symbolModalCloseText}>{t("scoreMode", "done")}</Text>
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>

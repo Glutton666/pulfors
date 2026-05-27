@@ -4,7 +4,7 @@
 // ============================================================
 
 import React, { useState } from "react";
-import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
+import { View, Text, Pressable, ScrollView, StyleSheet, TextInput } from "react-native";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Spacing, Radius } from "@/constants/tokens";
@@ -253,6 +253,8 @@ export function ScorePalette({
     activeTool === "rest" ? "rests" : "notes",
   );
   const [selectedTempo, setSelectedTempo] = useState<string | null>(null);
+  const [customTempoText, setCustomTempoText] = useState("");
+  const [customBpmValue, setCustomBpmValue] = useState("");
   const [instrSubTab, setInstrSubTab] = useState<InstrSubTab>(() => {
     switch (instrumentCategory) {
       case "strings":    return "strings";
@@ -537,44 +539,84 @@ export function ScorePalette({
 
       {/* ── 빠르기 탭 ─────────────────────────────────────────── */}
       {tab === "tempo" && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.itemRow}
-        >
-          {TEMPOS.map((tempo) => {
-            const isActive = selectedTempo === tempo.id;
-            const displayLabel = t("scoreMode", tempo.labelKey as any);
-            return (
-              <Pressable
-                key={tempo.id}
-                style={[
-                  styles.tempoBtn,
-                  {
-                    backgroundColor: isActive ? C.accent + "33" : "transparent",
-                    borderColor: isActive ? C.accent : C.border,
-                  },
-                ]}
-                onPress={() => {
-                  setSelectedTempo(isActive ? null : tempo.id);
-                  if (!isActive) {
-                    onTempoSelect?.(tempo.id, tempo.bpm);
-                  }
-                }}
-                testID={`score-palette-tempo-${tempo.id}`}
-              >
-                <Text style={[styles.tempoName, { color: isActive ? C.accent : C.text }]}>
-                  {tempo.symbol ?? displayLabel}
-                </Text>
-                {tempo.bpm > 0 && (
-                  <Text style={[styles.tempoBpm, { color: isActive ? C.accent : C.textSecondary }]}>
-                    ♩={tempo.bpm}
+        <View>
+          {/* 프리셋 버튼 가로 스크롤 */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.itemRow}
+          >
+            {TEMPOS.map((tempo) => {
+              const isActive = selectedTempo === tempo.id;
+              const displayLabel = t("scoreMode", tempo.labelKey as any);
+              return (
+                <Pressable
+                  key={tempo.id}
+                  style={[
+                    styles.tempoBtn,
+                    {
+                      backgroundColor: isActive ? C.accent + "33" : "transparent",
+                      borderColor: isActive ? C.accent : C.border,
+                    },
+                  ]}
+                  onPress={() => {
+                    setSelectedTempo(isActive ? null : tempo.id);
+                    if (!isActive) {
+                      onTempoSelect?.(tempo.id, tempo.bpm);
+                    }
+                  }}
+                  testID={`score-palette-tempo-${tempo.id}`}
+                >
+                  <Text style={[styles.tempoName, { color: isActive ? C.accent : C.text }]}>
+                    {tempo.symbol ?? displayLabel}
                   </Text>
-                )}
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+                  {tempo.bpm > 0 && (
+                    <Text style={[styles.tempoBpm, { color: isActive ? C.accent : C.textSecondary }]}>
+                      ♩={tempo.bpm}
+                    </Text>
+                  )}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {/* 자유 텍스트 입력 행 */}
+          <View style={[styles.tempoCustomRow, { borderTopColor: C.border }]}>
+            <TextInput
+              style={[styles.tempoCustomInput, { color: C.text, borderColor: C.border, backgroundColor: C.background, flex: 2 }]}
+              value={customTempoText}
+              onChangeText={setCustomTempoText}
+              placeholder="Allegro / rit. / accel."
+              placeholderTextColor={C.textSecondary}
+              returnKeyType="done"
+              testID="score-palette-custom-tempo-text"
+            />
+            <TextInput
+              style={[styles.tempoCustomInput, { color: C.text, borderColor: C.border, backgroundColor: C.background, flex: 1 }]}
+              value={customBpmValue}
+              onChangeText={setCustomBpmValue}
+              placeholder="BPM"
+              placeholderTextColor={C.textSecondary}
+              keyboardType="number-pad"
+              returnKeyType="done"
+              testID="score-palette-custom-tempo-bpm"
+            />
+            <Pressable
+              style={[styles.tempoCustomApply, { backgroundColor: C.accent }]}
+              onPress={() => {
+                const text = customTempoText.trim();
+                const bpm = parseInt(customBpmValue.trim(), 10);
+                if (!text && !bpm) return;
+                onTempoSelect?.(text || "custom", bpm > 0 ? bpm : 0);
+                setCustomTempoText("");
+                setCustomBpmValue("");
+              }}
+              testID="score-palette-custom-tempo-apply"
+            >
+              <Text style={styles.tempoCustomApplyText}>✓</Text>
+            </Pressable>
+          </View>
+        </View>
       )}
 
       {/* ── 악기별 기호 탭 ────────────────────────────────────── */}
@@ -771,5 +813,33 @@ const makeStyles = (C: any) =>
       paddingHorizontal: 8,
       paddingVertical: 4,
       minWidth: 36,
+    },
+    tempoCustomRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 6,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 6,
+      borderTopWidth: 1,
+    },
+    tempoCustomInput: {
+      borderWidth: 1,
+      borderRadius: Radius.sm,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+      fontSize: 12,
+      fontFamily: "SpaceGrotesk_400Regular",
+    },
+    tempoCustomApply: {
+      borderRadius: Radius.sm,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    tempoCustomApplyText: {
+      color: "#fff",
+      fontSize: 14,
+      fontFamily: "SpaceGrotesk_600SemiBold",
     },
   });
