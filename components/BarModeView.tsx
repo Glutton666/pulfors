@@ -244,18 +244,6 @@ function SwipeableBarRow({
 
   return (
     <View style={{ position: "relative", overflow: "hidden" }}>
-      <View style={{
-        position: "absolute", top: 0, bottom: 0, left: 0, right: 0,
-        flexDirection: "row", alignItems: "center",
-      }}>
-        <View style={{ flex: 1, alignItems: "flex-end", paddingRight: 12 }}>
-          <Ionicons name="copy-outline" size={14} color={C.accent} />
-        </View>
-        <View style={{ flex: 1, alignItems: "flex-start", paddingLeft: 12 }}>
-          <Ionicons name="pencil-outline" size={14} color={C.textSecondary} />
-        </View>
-      </View>
-
       <Animated.View
         style={{ transform: [{ translateX }] }}
         {...panResponder.panHandlers}
@@ -318,6 +306,7 @@ function SwipeableBarRow({
                   : beatType === "mute" ? C.textTertiary
                   : C.textSecondary,
                 fontFamily: isCurrentBeat ? "SpaceGrotesk_700Bold" : "SpaceGrotesk_500Medium",
+                opacity: 0.2,
               },
             ]}>
               {beat + 1}
