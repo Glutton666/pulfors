@@ -71,6 +71,7 @@ export interface ScoreCanvasProps {
   onRestPlaced: (measureIdx: number, duration: NoteDuration, insertIdx: number) => void;
   onElementTap: (elementId: string, measureIdx: number) => void;
   onMeasureTap: (measureIdx: number) => void;
+  onMeasureLongPress?: (measureIdx: number) => void;
   onEraseElement: (elementId: string, measureIdx: number) => void;
   onNoteMoved?: (elementId: string, measureIdx: number, newPitch: Pitch) => void;
   // 재생 연동
@@ -95,6 +96,7 @@ export function ScoreCanvas({
   onRestPlaced,
   onElementTap,
   onMeasureTap,
+  onMeasureLongPress,
   onEraseElement,
   onNoteMoved,
   playheadMeasureIdx,
@@ -112,6 +114,7 @@ export function ScoreCanvas({
   const accidentalRef = useRef(accidental);
   const selectedElementIdRef = useRef(selectedElementId);
   const onNoteMoveRef = useRef(onNoteMoved);
+  const onMeasureLongPressRef = useRef(onMeasureLongPress);
   const docRef = useRef(doc);
   const selectedPartIdxRef = useRef(selectedPartIdx);
   activeToolRef.current = activeTool;
@@ -120,6 +123,7 @@ export function ScoreCanvas({
   accidentalRef.current = accidental;
   selectedElementIdRef.current = selectedElementId;
   onNoteMoveRef.current = onNoteMoved;
+  onMeasureLongPressRef.current = onMeasureLongPress;
   docRef.current = doc;
   selectedPartIdxRef.current = selectedPartIdx;
 
@@ -263,10 +267,34 @@ export function ScoreCanvas({
     [measureContentX, onMeasureTap],
   );
 
+  // 마디 인덱스만 찾는 hitTest (롱프레스용)
+  const hitTestMeasure = useCallback(
+    (lx: number, ly: number): number | null => {
+      for (const row of rowsRef.current) {
+        const rowBottom = row.y + SCORE_PART_HEIGHT;
+        if (ly < row.y || ly > rowBottom) continue;
+        let accX = 0;
+        for (let i = 0; i < row.measureIndices.length; i++) {
+          const mIdx = row.measureIndices[i];
+          const mWidth = row.measureWidths[i] ?? 0;
+          if (lx >= accX && lx <= accX + mWidth) return mIdx;
+          accX += mWidth;
+        }
+      }
+      return null;
+    },
+    [],
+  );
+
   const panResponder = useMemo(() => {
     let tapStartX = 0;
     let tapStartY = 0;
     let isMoving = false;
+    let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearLongPress = () => {
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    };
 
     return PanResponder.create({
       // 모든 도구에서 터치 시작 시 캡처 — 단일 PanResponder 레이어로 탭/드래그 통합 처리
@@ -282,6 +310,16 @@ export function ScoreCanvas({
         isMoving = false;
         dragElementIdRef.current = null;
         dragMeasureIdxRef.current = -1;
+
+        // 롱프레스 타이머 시작 (500ms)
+        clearLongPress();
+        longPressTimer = setTimeout(() => {
+          longPressTimer = null;
+          if (!isMoving && onMeasureLongPressRef.current) {
+            const mIdx = hitTestMeasure(lx, ly);
+            if (mIdx !== null) onMeasureLongPressRef.current(mIdx);
+          }
+        }, 500);
 
         if (activeToolRef.current === "note" || activeToolRef.current === "rest") {
           setGhost(touchToGhost(lx, ly));
@@ -306,7 +344,7 @@ export function ScoreCanvas({
         const { locationX: lx, locationY: ly } = e.nativeEvent;
         const dx = lx - tapStartX;
         const dy = ly - tapStartY;
-        if (Math.sqrt(dx * dx + dy * dy) > 4) isMoving = true;
+        if (Math.sqrt(dx * dx + dy * dy) > 8) { isMoving = true; clearLongPress(); }
 
         if (activeToolRef.current === "note" || activeToolRef.current === "rest") {
           setGhost(touchToGhost(lx, ly));
@@ -321,6 +359,7 @@ export function ScoreCanvas({
       },
 
       onPanResponderRelease: (e) => {
+        clearLongPress();
         const { locationX: lx, locationY: ly } = e.nativeEvent;
         setGhost(null);
         const tool = activeToolRef.current;
@@ -336,15 +375,12 @@ export function ScoreCanvas({
           const info = touchToGhost(lx, ly);
           if (info) onRestPlaced(info.measureIdx, dur, info.insertIdx);
         } else if (tool === "erase") {
-          // hitTest로 가장 가까운 요소를 찾아 정확히 삭제
           const hit = hitTestElement(lx, ly);
           if (hit) onEraseElement(hit.elementId, hit.measureIdx);
         } else if (tool === "select") {
           if (isMoving && dragElementIdRef.current && dragMeasureIdxRef.current >= 0) {
-            // 드래그 종료 → 새 음높이로 이동 (accidental은 원래 음표의 것 유지)
             const info = touchToGhost(lx, ly);
             if (info) {
-              // 드래그 전 accidental 복원 (undefined: 기존 없음, null: 없음, string: 유지)
               const origAcc = dragOriginalAccidentalRef.current;
               const finalPitch: Pitch =
                 origAcc !== undefined
@@ -360,7 +396,6 @@ export function ScoreCanvas({
             dragMeasureIdxRef.current = -1;
             dragOriginalAccidentalRef.current = undefined;
           } else if (!isMoving) {
-            // 탭 → 선택
             const hit = hitTestElement(lx, ly);
             if (hit) onElementTap(hit.elementId, hit.measureIdx);
           }
@@ -368,12 +403,13 @@ export function ScoreCanvas({
       },
 
       onPanResponderTerminate: () => {
+        clearLongPress();
         setGhost(null);
         dragElementIdRef.current = null;
         dragMeasureIdxRef.current = -1;
       },
     });
-  }, [touchToGhost, hitTestElement, onNotePlaced, onRestPlaced, onEraseElement, onElementTap]);
+  }, [touchToGhost, hitTestElement, hitTestMeasure, onNotePlaced, onRestPlaced, onEraseElement, onElementTap]);
 
   const dur = isDotted
     ? (`${activeDuration}_dot` as NoteDuration)

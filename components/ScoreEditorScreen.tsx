@@ -6,6 +6,7 @@ import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
+  TextInput,
   ScrollView,
   Modal,
   StyleSheet,
@@ -25,6 +26,7 @@ import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import { saveScore, createEmptyMeasure } from "@/lib/score-storage";
 import type {
   ScoreDocument,
+  ScoreMetadata,
   ScoreNote,
   ScoreRest,
   NoteDuration,
@@ -38,6 +40,7 @@ import { ScoreCanvas } from "@/components/ScoreCanvas";
 import type { EditorTool } from "@/components/ScoreCanvas";
 import { ScoreRenderer } from "@/components/ScoreRenderer";
 import { ScorePalette, ALL_INSTR_SYMBOLS } from "@/components/ScorePalette";
+import type { RepeatSignId, CrescType } from "@/components/ScorePalette";
 import { useScorePlayback } from "@/hooks/useScorePlayback";
 
 // ── 헬퍼 ──────────────────────────────────────────────────────
@@ -143,6 +146,27 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   const [accidental, setAccidental] = useState<Accidental | null>(null);
   const [selectedArticulation, setSelectedArticulation] = useState<ArticulationType | null>(null);
   const [selectedDynamic, setSelectedDynamic] = useState<Dynamic | null>(null);
+  const [selectedRepeatSign, setSelectedRepeatSign] = useState<RepeatSignId | null>(null);
+  const [selectedCrescType, setSelectedCrescType] = useState<CrescType>(null);
+
+  // ── 마디 컨텍스트 메뉴 state ──────────────────────────────────
+  const [measureContextMenu, setMeasureContextMenu] = useState<{
+    measureIdx: number;
+    visible: boolean;
+  } | null>(null);
+
+  // ── 악보 메타데이터 편집 모달 ─────────────────────────────────
+  const [showMetaModal, setShowMetaModal] = useState(false);
+  const [metaDraft, setMetaDraft] = useState<{
+    title: string;
+    subtitle: string;
+    composer: string;
+    arranger: string;
+    lyricist: string;
+    copyright: string;
+    difficulty: ScoreMetadata["difficulty"];
+    memo: string;
+  } | null>(null);
 
   // ── 선택 상태 ─────────────────────────────────────────────────
   const [selectedPartIdx, setSelectedPartIdx] = useState(0);
@@ -340,10 +364,152 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
     [],
   );
 
+  // ── 마디에 반복/이동 부호 적용 ────────────────────────────────
+  const handleRepeatSignApply = useCallback((measureIdx: number, signId: RepeatSignId) => {
+    const patch: Partial<import("@/lib/score-types").ScoreMeasure> = {};
+    switch (signId) {
+      case "repeat_start":
+        patch.repeatStart = true; break;
+      case "repeat_end":
+        patch.repeatEnd = true; break;
+      case "repeat_both":
+        patch.repeatStart = true; patch.repeatEnd = true; break;
+      case "segno":
+        patch.segno = true; break;
+      case "coda":
+        patch.coda = true; break;
+      case "da_capo":
+        patch.jumpText = "D.C."; patch.jumpTo = "start"; break;
+      case "dal_segno":
+        patch.jumpText = "D.S."; patch.jumpTo = "segno"; break;
+      case "dal_segno_coda":
+        patch.jumpText = "D.S.𝄌"; patch.jumpTo = "coda"; break;
+      case "da_capo_coda":
+        patch.jumpText = "D.C.𝄌"; patch.jumpTo = "start"; break;
+      case "fine":
+        patch.jumpText = "Fine"; patch.jumpTo = "fine"; break;
+      case "volta1":
+        patch.voltaBracket = 1; break;
+      case "volta2":
+        patch.voltaBracket = 2; break;
+    }
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
+        if (pIdx !== selectedPartIdx) return p;
+        return {
+          ...p,
+          measures: p.measures.map((m, mIdx) => {
+            if (mIdx !== measureIdx) return m;
+            return { ...m, ...patch };
+          }),
+        };
+      }),
+    };
+    applyDoc(newDoc);
+    setSelectedRepeatSign(null); // 적용 후 선택 해제
+  }, [doc, selectedPartIdx, applyDoc]);
+
+  // ── 마디 탭 ──────────────────────────────────────────────────
   const handleMeasureTap = useCallback((measureIdx: number) => {
+    if (selectedRepeatSign) {
+      handleRepeatSignApply(measureIdx, selectedRepeatSign);
+      return;
+    }
     setSelectedMeasureIdx(measureIdx);
     setSelectedElementId(null);
+  }, [selectedRepeatSign, handleRepeatSignApply]);
+
+  // ── 마디 롱프레스 → 컨텍스트 메뉴 ───────────────────────────
+  const handleMeasureLongPress = useCallback((measureIdx: number) => {
+    setMeasureContextMenu({ measureIdx, visible: true });
   }, []);
+
+  // ── 마디 컨텍스트 메뉴: BPM 변경 ────────────────────────────
+  function handleMeasureBpmChange(measureIdx: number) {
+    setMeasureContextMenu(null);
+    const curMeasure = doc.parts[selectedPartIdx]?.measures[measureIdx];
+    const curBpm = curMeasure?.bpm ?? doc.bpm;
+    if (Alert.prompt) {
+      Alert.prompt(
+        t("scoreMode", "measureBpmChange"),
+        `BPM (20-300, current: ${curBpm})`,
+        (val) => {
+          const n = parseInt(val ?? "", 10);
+          if (!n || n < 20 || n > 300) return;
+          const newDoc: ScoreDocument = {
+            ...doc,
+            parts: doc.parts.map((p, pIdx) => {
+              if (pIdx !== selectedPartIdx) return p;
+              return {
+                ...p,
+                measures: p.measures.map((m, mIdx) => mIdx !== measureIdx ? m : { ...m, bpm: n }),
+              };
+            }),
+          };
+          applyDoc(newDoc);
+        },
+        "plain-text",
+        String(curBpm),
+      );
+    } else {
+      Alert.alert(
+        t("scoreMode", "measureBpmChange"),
+        `Current BPM: ${curBpm}`,
+        [{ text: t("scoreMode", "done"), style: "cancel" }],
+      );
+    }
+  }
+
+  // ── 마디 컨텍스트 메뉴: 마디 부호 지우기 ────────────────────
+  function handleClearMeasureSigns(measureIdx: number) {
+    setMeasureContextMenu(null);
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
+        if (pIdx !== selectedPartIdx) return p;
+        return {
+          ...p,
+          measures: p.measures.map((m, mIdx) => {
+            if (mIdx !== measureIdx) return m;
+            const { repeatStart, repeatEnd, segno, coda, jumpText, jumpTo, voltaBracket, voltaBracketEnd, dynamic, crescStart, decrescStart, rehearsalMark, ...rest } = m;
+            return rest as typeof m;
+          }),
+        };
+      }),
+    };
+    applyDoc(newDoc);
+  }
+
+  // ── 리허설 마크 추가 ──────────────────────────────────────────
+  function handleAddRehearsalMark(measureIdx: number) {
+    setMeasureContextMenu(null);
+    const curMark = doc.parts[selectedPartIdx]?.measures[measureIdx]?.rehearsalMark ?? "";
+    if (Alert.prompt) {
+      Alert.prompt(
+        t("scoreMode", "measureAddRehearsal"),
+        t("scoreMode", "rehearsalMarkLabel"),
+        (val) => {
+          if (val === null) return;
+          const newDoc: ScoreDocument = {
+            ...doc,
+            parts: doc.parts.map((p, pIdx) => {
+              if (pIdx !== selectedPartIdx) return p;
+              return {
+                ...p,
+                measures: p.measures.map((m, mIdx) =>
+                  mIdx !== measureIdx ? m : { ...m, rehearsalMark: val.trim() || undefined },
+                ),
+              };
+            }),
+          };
+          applyDoc(newDoc);
+        },
+        "plain-text",
+        curMark,
+      );
+    }
+  }
 
   // ── 선택된 음표 삭제 ──────────────────────────────────────────
   function handleDeleteSelected() {
@@ -415,6 +581,49 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
               return { ...el, articulations: next.length ? next : undefined };
             }),
           })),
+        };
+      }),
+    };
+    applyDoc(newDoc);
+  }
+
+  // ── 악보 메타데이터 저장 ──────────────────────────────────────
+  function handleMetaSave() {
+    if (!metaDraft) return;
+    const newDoc: ScoreDocument = {
+      ...doc,
+      metadata: {
+        ...doc.metadata,
+        title: metaDraft.title.trim() || doc.metadata.title,
+        subtitle: metaDraft.subtitle.trim() || undefined,
+        composer: metaDraft.composer.trim() || undefined,
+        arranger: metaDraft.arranger.trim() || undefined,
+        lyricist: metaDraft.lyricist.trim() || undefined,
+        copyright: metaDraft.copyright.trim() || undefined,
+        difficulty: metaDraft.difficulty,
+        memo: metaDraft.memo.trim() || undefined,
+        updatedAt: Date.now(),
+      },
+    };
+    applyDoc(newDoc);
+    setShowMetaModal(false);
+    setMetaDraft(null);
+  }
+
+  // ── cresc/decresc 마디에 적용 ──────────────────────────────
+  function handleCrescApplyToMeasure(measureIdx: number) {
+    if (!selectedCrescType) return;
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
+        if (pIdx !== selectedPartIdx) return p;
+        return {
+          ...p,
+          measures: p.measures.map((m, mIdx) => {
+            if (mIdx !== measureIdx) return m;
+            if (selectedCrescType === "cresc") return { ...m, crescStart: true, decrescStart: undefined };
+            return { ...m, decrescStart: true, crescStart: undefined };
+          }),
         };
       }),
     };
@@ -580,6 +789,28 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           </Pressable>
         )}
 
+        {/* 악보 정보 편집 */}
+        <Pressable
+          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
+          onPress={() => {
+            setMetaDraft({
+              title: doc.metadata.title,
+              subtitle: doc.metadata.subtitle ?? "",
+              composer: doc.metadata.composer ?? "",
+              arranger: doc.metadata.arranger ?? "",
+              lyricist: doc.metadata.lyricist ?? "",
+              copyright: doc.metadata.copyright ?? "",
+              difficulty: doc.metadata.difficulty,
+              memo: doc.metadata.memo ?? "",
+            });
+            setShowMetaModal(true);
+          }}
+          hitSlop={8}
+          testID="score-editor-meta"
+        >
+          <Ionicons name="information-circle-outline" size={S.ms(20, 0.4)} color={C.text} />
+        </Pressable>
+
         {/* 악기 기호 설정 */}
         <Pressable
           style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
@@ -718,6 +949,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             onRestPlaced={handleRestPlaced}
             onElementTap={handleElementTap}
             onMeasureTap={handleMeasureTap}
+            onMeasureLongPress={handleMeasureLongPress}
             onEraseElement={handleEraseElement}
             onNoteMoved={handleNoteMoved}
             playheadMeasureIdx={playback.isPlaying ? playback.currentMeasureIdx : undefined}
@@ -858,6 +1090,10 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             if (selectedElementId) handleApplyArticulationToSelected(art);
           }}
           onDynamicSelect={setSelectedDynamic}
+          selectedRepeatSign={selectedRepeatSign}
+          selectedCrescType={selectedCrescType}
+          onRepeatSignSelect={setSelectedRepeatSign}
+          onCrescTypeSelect={setSelectedCrescType}
           onTempoSelect={handleTempoSelect}
           onSymbolToggle={handleSymbolToggle}
         />
@@ -938,6 +1174,201 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             <Pressable
               style={[styles.symbolModalClose, { backgroundColor: C.accent }]}
               onPress={() => setShowSymbolSettings(false)}
+            >
+              <Text style={styles.symbolModalCloseText}>{t("scoreMode", "done")}</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── 마디 컨텍스트 메뉴 모달 ─────────────────────────────── */}
+      <Modal
+        visible={!!measureContextMenu?.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMeasureContextMenu(null)}
+      >
+        <Pressable
+          style={styles.symbolModalBackdrop}
+          onPress={() => setMeasureContextMenu(null)}
+        >
+          <Pressable
+            style={[styles.symbolModalCard, { backgroundColor: C.surface, borderColor: C.border }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={[styles.symbolModalTitle, { color: C.text }]}>
+              {t("scoreMode", "measureOptions")} #{(measureContextMenu?.measureIdx ?? 0) + 1}
+            </Text>
+
+            {/* BPM 변경 */}
+            <Pressable
+              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+              onPress={() => measureContextMenu && handleMeasureBpmChange(measureContextMenu.measureIdx)}
+            >
+              <Ionicons name="musical-note" size={18} color={C.accent} />
+              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
+                {t("scoreMode", "measureBpmChange")}
+              </Text>
+            </Pressable>
+
+            {/* 리허설 마크 */}
+            {Platform.OS === "ios" && (
+              <Pressable
+                style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+                onPress={() => measureContextMenu && handleAddRehearsalMark(measureContextMenu.measureIdx)}
+              >
+                <Ionicons name="bookmark-outline" size={18} color={C.accent} />
+                <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
+                  {t("scoreMode", "measureAddRehearsal")}
+                </Text>
+              </Pressable>
+            )}
+
+            {/* 마디 부호 지우기 */}
+            <Pressable
+              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+              onPress={() => measureContextMenu && handleClearMeasureSigns(measureContextMenu.measureIdx)}
+            >
+              <Ionicons name="trash-outline" size={18} color="#FF453A" />
+              <Text style={[styles.ctxMenuLabel, { color: "#FF453A" }]}>
+                {t("scoreMode", "measureClearSigns")}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.symbolModalClose, { backgroundColor: C.border }]}
+              onPress={() => setMeasureContextMenu(null)}
+            >
+              <Text style={[styles.symbolModalCloseText, { color: C.text }]}>
+                {t("scoreMode", "done")}
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── 악보 메타데이터 편집 모달 ──────────────────────────── */}
+      <Modal
+        visible={showMetaModal && !!metaDraft}
+        transparent
+        animationType="slide"
+        onRequestClose={() => { setShowMetaModal(false); setMetaDraft(null); }}
+      >
+        <Pressable
+          style={styles.symbolModalBackdrop}
+          onPress={() => { setShowMetaModal(false); setMetaDraft(null); }}
+        >
+          <Pressable
+            style={[styles.symbolModalCard, { backgroundColor: C.surface, borderColor: C.border, maxHeight: "80%" }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={[styles.symbolModalTitle, { color: C.text }]}>
+              {t("scoreMode", "editMetadata")}
+            </Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* 제목 */}
+              <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
+                {t("scoreMode", "title")}
+              </Text>
+              <TextInput
+                style={[styles.metaInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
+                value={metaDraft?.title ?? ""}
+                onChangeText={(v) => setMetaDraft((d) => d ? { ...d, title: v } : d)}
+                placeholder={t("scoreMode", "untitled")}
+                placeholderTextColor={C.textSecondary}
+                testID="score-meta-title"
+              />
+              {/* 부제목 */}
+              <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
+                {t("scoreMode", "metaSubtitle")}
+              </Text>
+              <TextInput
+                style={[styles.metaInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
+                value={metaDraft?.subtitle ?? ""}
+                onChangeText={(v) => setMetaDraft((d) => d ? { ...d, subtitle: v } : d)}
+                placeholderTextColor={C.textSecondary}
+              />
+              {/* 작곡가 */}
+              <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
+                {t("scoreMode", "metaComposer")}
+              </Text>
+              <TextInput
+                style={[styles.metaInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
+                value={metaDraft?.composer ?? ""}
+                onChangeText={(v) => setMetaDraft((d) => d ? { ...d, composer: v } : d)}
+                placeholderTextColor={C.textSecondary}
+                testID="score-meta-composer"
+              />
+              {/* 편곡자 */}
+              <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
+                {t("scoreMode", "metaArranger")}
+              </Text>
+              <TextInput
+                style={[styles.metaInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
+                value={metaDraft?.arranger ?? ""}
+                onChangeText={(v) => setMetaDraft((d) => d ? { ...d, arranger: v } : d)}
+                placeholderTextColor={C.textSecondary}
+              />
+              {/* 작사가 */}
+              <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
+                {t("scoreMode", "metaLyricist")}
+              </Text>
+              <TextInput
+                style={[styles.metaInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
+                value={metaDraft?.lyricist ?? ""}
+                onChangeText={(v) => setMetaDraft((d) => d ? { ...d, lyricist: v } : d)}
+                placeholderTextColor={C.textSecondary}
+              />
+              {/* 저작권 */}
+              <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
+                {t("scoreMode", "metaCopyright")}
+              </Text>
+              <TextInput
+                style={[styles.metaInput, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
+                value={metaDraft?.copyright ?? ""}
+                onChangeText={(v) => setMetaDraft((d) => d ? { ...d, copyright: v } : d)}
+                placeholderTextColor={C.textSecondary}
+              />
+              {/* 난이도 */}
+              <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
+                {t("scoreMode", "metaDifficulty")}
+              </Text>
+              <View style={styles.diffRow}>
+                {(["beginner", "intermediate", "advanced", "expert"] as const).map((d) => (
+                  <Pressable
+                    key={d}
+                    style={[
+                      styles.diffBtn,
+                      {
+                        borderColor: metaDraft?.difficulty === d ? C.accent : C.border,
+                        backgroundColor: metaDraft?.difficulty === d ? C.accent + "22" : "transparent",
+                      },
+                    ]}
+                    onPress={() => setMetaDraft((prev) => prev ? { ...prev, difficulty: d } : prev)}
+                  >
+                    <Text style={[styles.diffBtnText, { color: metaDraft?.difficulty === d ? C.accent : C.textSecondary }]}>
+                      {t("scoreMode", `diff${d.charAt(0).toUpperCase()}${d.slice(1)}` as any)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              {/* 메모 */}
+              <Text style={[styles.metaFieldLabel, { color: C.textSecondary }]}>
+                {t("scoreMode", "metaMemo")}
+              </Text>
+              <TextInput
+                style={[styles.metaInput, styles.metaInputMulti, { color: C.text, borderColor: C.border, backgroundColor: C.background }]}
+                value={metaDraft?.memo ?? ""}
+                onChangeText={(v) => setMetaDraft((d) => d ? { ...d, memo: v } : d)}
+                multiline
+                numberOfLines={3}
+                placeholderTextColor={C.textSecondary}
+              />
+            </ScrollView>
+            <Pressable
+              style={[styles.symbolModalClose, { backgroundColor: C.accent }]}
+              onPress={handleMetaSave}
+              testID="score-meta-save"
             >
               <Text style={styles.symbolModalCloseText}>{t("scoreMode", "done")}</Text>
             </Pressable>
@@ -1173,5 +1604,54 @@ const makeStyles = (C: any, S: any) =>
       fontFamily: "SpaceGrotesk_600SemiBold",
       fontSize: FontSize.small,
       color: "#fff",
+    },
+    // 마디 컨텍스트 메뉴
+    ctxMenuItem: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingVertical: 12,
+      paddingHorizontal: 4,
+      borderBottomWidth: 1,
+      gap: 10,
+    },
+    ctxMenuLabel: {
+      fontFamily: "SpaceGrotesk_400Regular",
+      fontSize: FontSize.body,
+      flex: 1,
+    },
+    // 메타데이터 편집 모달
+    metaFieldLabel: {
+      fontFamily: "SpaceGrotesk_500Medium",
+      fontSize: FontSize.small,
+      marginTop: 10,
+      marginBottom: 4,
+    },
+    metaInput: {
+      borderWidth: 1,
+      borderRadius: Radius.sm,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      fontFamily: "SpaceGrotesk_400Regular",
+      fontSize: FontSize.body,
+    },
+    metaInputMulti: {
+      height: 64,
+      textAlignVertical: "top" as const,
+    },
+    diffRow: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      gap: 6,
+      marginBottom: 4,
+    },
+    diffBtn: {
+      borderWidth: 1,
+      borderRadius: Radius.sm,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    diffBtnText: {
+      fontFamily: "SpaceGrotesk_500Medium",
+      fontSize: FontSize.small,
     },
   });

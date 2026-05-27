@@ -47,17 +47,56 @@ const ACCIDENTALS: Array<{ value: Accidental; symbol: string; labelKey: string }
   { value: "double_flat",  symbol: "𝄫", labelKey: "accidentalDoubleFlat" },
 ];
 
+// ── 반복/이동 부호 ─────────────────────────────────────────────
+
+export type RepeatSignId =
+  | "repeat_start"
+  | "repeat_end"
+  | "repeat_both"
+  | "segno"
+  | "coda"
+  | "da_capo"
+  | "dal_segno"
+  | "dal_segno_coda"
+  | "da_capo_coda"
+  | "fine"
+  | "volta1"
+  | "volta2";
+
+export interface RepeatSignItem { id: RepeatSignId; symbol: string; labelKey: string; }
+
+const REPEAT_SIGNS: RepeatSignItem[] = [
+  { id: "repeat_start",    symbol: "||:",   labelKey: "signRepeatStart" },
+  { id: "repeat_end",      symbol: ":||",   labelKey: "signRepeatEnd" },
+  { id: "repeat_both",     symbol: ":||:",  labelKey: "signRepeatBoth" },
+  { id: "segno",           symbol: "𝄋",    labelKey: "signSegno" },
+  { id: "coda",            symbol: "𝄌",    labelKey: "signCoda" },
+  { id: "da_capo",         symbol: "D.C.",  labelKey: "signDaCapo" },
+  { id: "dal_segno",       symbol: "D.S.",  labelKey: "signDalSegno" },
+  { id: "dal_segno_coda",  symbol: "D.S.𝄌", labelKey: "signDalSegnoCoda" },
+  { id: "da_capo_coda",    symbol: "D.C.𝄌", labelKey: "signDaCapoCoda" },
+  { id: "fine",            symbol: "Fine",  labelKey: "signFine" },
+  { id: "volta1",          symbol: "1.",    labelKey: "signVolta1" },
+  { id: "volta2",          symbol: "2.",    labelKey: "signVolta2" },
+];
+
 // ── 강약 ──────────────────────────────────────────────────────
 
 const DYNAMICS: Array<{ id: Dynamic; symbol: string }> = [
-  { id: "pp",  symbol: "pp" },
-  { id: "p",   symbol: "p" },
-  { id: "mp",  symbol: "mp" },
-  { id: "mf",  symbol: "mf" },
-  { id: "f",   symbol: "f" },
-  { id: "ff",  symbol: "ff" },
-  { id: "sfz", symbol: "sfz" },
-  { id: "fp",  symbol: "fp" },
+  { id: "pp",   symbol: "pp" },
+  { id: "p",    symbol: "p" },
+  { id: "mp",   symbol: "mp" },
+  { id: "mf",   symbol: "mf" },
+  { id: "f",    symbol: "f" },
+  { id: "ff",   symbol: "ff" },
+  { id: "sfz",  symbol: "sfz" },
+  { id: "fp",   symbol: "fp" },
+];
+
+export type CrescType = "cresc" | "decresc" | null;
+const CRESC_ITEMS: Array<{ id: CrescType; symbol: string; labelKey: string }> = [
+  { id: "cresc",   symbol: "<",  labelKey: "dynCresc" },
+  { id: "decresc", symbol: ">",  labelKey: "dynDecresc" },
 ];
 
 // ── 빠르기 ────────────────────────────────────────────────────
@@ -168,6 +207,8 @@ export interface ScorePaletteProps {
   accidental: Accidental | null;
   selectedArticulation: ArticulationType | null;
   selectedDynamic: Dynamic | null;
+  selectedRepeatSign?: RepeatSignId | null;
+  selectedCrescType?: CrescType;
   instrumentCategory?: InstrumentCategory;
   enabledSymbols?: Record<string, boolean>;
   onToolChange: (tool: EditorTool) => void;
@@ -176,6 +217,8 @@ export interface ScorePaletteProps {
   onAccidentalChange: (acc: Accidental | null) => void;
   onArticulationSelect: (id: ArticulationType | null) => void;
   onDynamicSelect: (id: Dynamic | null) => void;
+  onRepeatSignSelect?: (id: RepeatSignId | null) => void;
+  onCrescTypeSelect?: (type: CrescType) => void;
   onTempoSelect?: (text: string, bpm: number) => void;
   onSymbolToggle?: (id: string, enabled: boolean) => void;
 }
@@ -189,6 +232,8 @@ export function ScorePalette({
   accidental,
   selectedArticulation,
   selectedDynamic,
+  selectedRepeatSign,
+  selectedCrescType,
   instrumentCategory,
   enabledSymbols = {},
   onToolChange,
@@ -197,6 +242,8 @@ export function ScorePalette({
   onAccidentalChange,
   onArticulationSelect,
   onDynamicSelect,
+  onRepeatSignSelect,
+  onCrescTypeSelect,
   onTempoSelect,
   onSymbolToggle,
 }: ScorePaletteProps) {
@@ -342,13 +389,42 @@ export function ScorePalette({
         </ScrollView>
       )}
 
-      {/* ── 부호 탭: 임시표 + 아티큘레이션 ────────────────────── */}
+      {/* ── 부호 탭: 반복부호 + 임시표 + 아티큘레이션 ─────────── */}
       {tab === "signs" && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.itemRow}
         >
+          {/* 반복/이동 부호 */}
+          {REPEAT_SIGNS.map((rs) => {
+            const isActive = selectedRepeatSign === rs.id;
+            return (
+              <Pressable
+                key={rs.id}
+                style={[
+                  styles.signBtn,
+                  {
+                    backgroundColor: isActive ? C.accent + "33" : "transparent",
+                    borderColor: isActive ? C.accent : C.border,
+                    minWidth: 40,
+                  },
+                ]}
+                onPress={() => onRepeatSignSelect?.(isActive ? null : rs.id)}
+                testID={`score-palette-repeat-${rs.id}`}
+              >
+                <Text style={[styles.accSymbol, { color: isActive ? C.accent : C.text, fontSize: 12 }]}>
+                  {rs.symbol}
+                </Text>
+                <Text style={[styles.durLabel, { color: isActive ? C.accent : C.textSecondary }]}>
+                  {t("scoreMode", rs.labelKey as any)}
+                </Text>
+              </Pressable>
+            );
+          })}
+
+          <View style={[styles.divider, { backgroundColor: C.border }]} />
+
           {ACCIDENTALS.map((a) => {
             const isActive = accidental === a.value;
             return (
@@ -424,6 +500,34 @@ export function ScorePalette({
               >
                 <Text style={[styles.dynSymbol, { color: isActive ? C.accent : C.text }]}>
                   {dyn.symbol}
+                </Text>
+              </Pressable>
+            );
+          })}
+
+          <View style={[styles.divider, { backgroundColor: C.border }]} />
+
+          {CRESC_ITEMS.map((ci) => {
+            const isActive = selectedCrescType === ci.id;
+            return (
+              <Pressable
+                key={ci.id as string}
+                style={[
+                  styles.dynBtn,
+                  {
+                    backgroundColor: isActive ? C.accent + "33" : "transparent",
+                    borderColor: isActive ? C.accent : C.border,
+                    width: 56,
+                  },
+                ]}
+                onPress={() => onCrescTypeSelect?.(isActive ? null : ci.id)}
+                testID={`score-palette-cresc-${ci.id}`}
+              >
+                <Text style={[styles.dynSymbol, { color: isActive ? C.accent : C.text, fontSize: 18 }]}>
+                  {ci.symbol}
+                </Text>
+                <Text style={[styles.durLabel, { color: isActive ? C.accent : C.textSecondary }]}>
+                  {t("scoreMode", ci.labelKey as any)}
                 </Text>
               </Pressable>
             );

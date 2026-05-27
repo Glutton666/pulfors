@@ -34,7 +34,7 @@ import {
   headerWidth,
   KEY_SIG_POSITIONS,
 } from "@/lib/score-layout";
-import type { ScoreDocument, ScorePart, ScoreMeasure, ScoreNote, ScoreRest, ClefType, NoteDuration } from "@/lib/score-types";
+import type { ScoreDocument, ScorePart, ScoreMeasure, ScoreNote, ScoreRest, ClefType, NoteDuration, ArticulationType } from "@/lib/score-types";
 
 // ── 상수 ─────────────────────────────────────────────────────
 const MEASURE_GAP = 0;          // 마디 사이 간격
@@ -338,6 +338,49 @@ function LedgerLines({ cx, noteY, staffY, color }: {
   );
 }
 
+// ── 아티큘레이션 기호 ────────────────────────────────────────
+
+function ArticulationMark({ art, noteX, noteY, direction, color, idx }: {
+  art: ArticulationType;
+  noteX: number;
+  noteY: number;
+  direction: "up" | "down";
+  color: string;
+  idx: number;
+}) {
+  // 기둥이 위이면 아티큘레이션은 음표 머리 아래쪽, 기둥이 아래이면 위쪽
+  const offset = direction === "up" ? 8 + idx * 7 : -8 - idx * 7;
+  const y = noteY + offset;
+  switch (art) {
+    case "staccato":
+      return <Circle cx={noteX} cy={y} r={1.8} fill={color} />;
+    case "staccatissimo":
+      return <Rect x={noteX - 1.5} y={y - 4} width={3} height={8} rx={1} fill={color} />;
+    case "tenuto":
+      return <Line x1={noteX - 5} y1={y} x2={noteX + 5} y2={y} stroke={color} strokeWidth={1.5} strokeLinecap="round" />;
+    case "accent":
+      return <Path d={`M${noteX - 6},${y - 3} L${noteX + 6},${y} L${noteX - 6},${y + 3}`} stroke={color} strokeWidth={1.2} fill="none" strokeLinejoin="round" />;
+    case "marcato":
+      return <Path d={`M${noteX - 5},${y + 1} L${noteX},${y - 7} L${noteX + 5},${y + 1}`} stroke={color} strokeWidth={1.2} fill="none" strokeLinejoin="round" />;
+    case "fermata":
+      return (
+        <G>
+          <Path d={`M${noteX - 8},${y} Q${noteX},${y - 10} ${noteX + 8},${y}`} stroke={color} strokeWidth={1.2} fill="none" />
+          <Circle cx={noteX} cy={y - 3} r={1.5} fill={color} />
+        </G>
+      );
+    case "portato":
+      return (
+        <G>
+          <Line x1={noteX - 5} y1={y + 2} x2={noteX + 5} y2={y + 2} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+          <Circle cx={noteX} cy={y - 3} r={1.8} fill={color} />
+        </G>
+      );
+    default:
+      return null;
+  }
+}
+
 // ── 음표 렌더링 ───────────────────────────────────────────────
 
 function NoteElement({ note, x, staffY, clef, color, isSelected }: {
@@ -363,6 +406,7 @@ function NoteElement({ note, x, staffY, clef, color, isSelected }: {
     dur === "eighth_dot" || dur === "sixteenth_dot";
 
   const highlightColor = isSelected ? "#4A9EFF" : color;
+  const articulations = note.articulations ?? [];
 
   return (
     <G>
@@ -371,6 +415,9 @@ function NoteElement({ note, x, staffY, clef, color, isSelected }: {
       {needsStem && <Stem x={x} y={noteY} direction={direction} color={highlightColor} />}
       {flagCount > 0 && <Flag x={x} y={noteY} direction={direction} count={flagCount} color={highlightColor} />}
       {dotted && <DotSymbol x={x} y={noteY} color={highlightColor} />}
+      {articulations.map((art, i) => (
+        <ArticulationMark key={art} art={art} noteX={x} noteY={noteY} direction={direction} color={highlightColor} idx={i} />
+      ))}
     </G>
   );
 }
@@ -562,17 +609,115 @@ function MeasureRender({
         }
       })}
 
-      {/* 마디 박자표/BPM 텍스트 (마디 중간 변경 표시) */}
+      {/* 리허설 마크 (A, B, 1 등) */}
+      {measure.rehearsalMark && (
+        <G>
+          <Rect x={contentX + 2} y={staffY - 20} width={14} height={13} fill="none" stroke={color} strokeWidth={1} />
+          <SvgText x={contentX + 9} y={staffY - 10} fontSize={9} fill={color} fontFamily="SpaceGrotesk_700Bold" textAnchor="middle">
+            {measure.rehearsalMark}
+          </SvgText>
+        </G>
+      )}
+
+      {/* 세뇨 (𝄋) */}
+      {measure.segno && (
+        <SvgText x={x + 6} y={staffY - 4} fontSize={16} fill={color} fontFamily="serif">𝄋</SvgText>
+      )}
+
+      {/* 코다 (𝄌) */}
+      {measure.coda && (
+        <SvgText x={x + (measure.segno ? 22 : 6)} y={staffY - 4} fontSize={16} fill={color} fontFamily="serif">𝄌</SvgText>
+      )}
+
+      {/* Volta 괄호 (1·2번 번호 괄호) */}
+      {measure.voltaBracket && (
+        <G>
+          <Rect
+            x={x + 1}
+            y={staffY - STAFF_PADDING_TOP + 2}
+            width={width - 2}
+            height={10}
+            fill="none"
+            stroke={color}
+            strokeWidth={1}
+          />
+          <SvgText
+            x={x + 5}
+            y={staffY - STAFF_PADDING_TOP + 10}
+            fontSize={8}
+            fill={color}
+            fontFamily="SpaceGrotesk_600SemiBold"
+          >
+            {measure.voltaBracket}.
+          </SvgText>
+        </G>
+      )}
+
+      {/* 빠르기말 */}
       {measure.tempoText && (
         <SvgText
           x={contentX + 4}
+          y={staffY - 10}
+          fontSize={9}
+          fill={color}
+          fontFamily="SpaceGrotesk_600SemiBold"
+          fontStyle="italic"
+        >
+          {measure.tempoText}
+        </SvgText>
+      )}
+
+      {/* BPM 표시 (빠르기말과 같이) */}
+      {measure.bpm && !measure.tempoText && (
+        <SvgText x={contentX + 4} y={staffY - 10} fontSize={8} fill={color} fontFamily="SpaceGrotesk_500Medium">
+          ♩={measure.bpm}
+        </SvgText>
+      )}
+
+      {/* D.C. / D.S. / Fine 등 이동 텍스트 */}
+      {measure.jumpText && (
+        <SvgText
+          x={x + width - 4}
           y={staffY - 8}
           fontSize={9}
           fill={color}
           fontFamily="SpaceGrotesk_600SemiBold"
+          textAnchor="end"
+          fontStyle="italic"
         >
-          {measure.tempoText}
+          {measure.jumpText}
         </SvgText>
+      )}
+
+      {/* 강약 기호 (마디 아래) */}
+      {measure.dynamic && (
+        <SvgText
+          x={contentX + 4}
+          y={staffY + STAFF_HEIGHT + 14}
+          fontSize={11}
+          fill={color}
+          fontFamily="serif"
+          fontStyle="italic"
+          fontWeight="bold"
+        >
+          {measure.dynamic}
+        </SvgText>
+      )}
+
+      {/* 크레셴도 헤어핀 (< 모양) */}
+      {measure.crescStart && (
+        <G>
+          <Line x1={contentX + 4} y1={staffY + STAFF_HEIGHT + 16} x2={x + width - 4} y2={staffY + STAFF_HEIGHT + 10} stroke={color} strokeWidth={1} strokeLinecap="round" />
+          <Line x1={contentX + 4} y1={staffY + STAFF_HEIGHT + 16} x2={x + width - 4} y2={staffY + STAFF_HEIGHT + 22} stroke={color} strokeWidth={1} strokeLinecap="round" />
+        </G>
+      )}
+
+      {/* 데크레셴도 헤어핀 (> 모양) */}
+      {measure.decrescStart && (
+        <G>
+          <Line x1={contentX + 4} y1={staffY + STAFF_HEIGHT + 10} x2={x + width - 4} y2={staffY + STAFF_HEIGHT + 16} stroke={color} strokeWidth={1} strokeLinecap="round" />
+          <Line x1={contentX + 4} y1={staffY + STAFF_HEIGHT + 22} x2={x + width - 4} y2={staffY + STAFF_HEIGHT + 16} stroke={color} strokeWidth={1} strokeLinecap="round" />
+        </G>
       )}
 
       {/* 반복 끝 */}
