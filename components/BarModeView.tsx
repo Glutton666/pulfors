@@ -1109,8 +1109,8 @@ export function BarModeView({
           </Pressable>
         </View>
 
-        {/* 인라인 반복 패널 (바 선택 시 — 반복 유무와 관계없이 항상 표시, 재생 중에는 읽기 전용) */}
-        {!editorCollapsed && editingBeat !== null && (
+        {/* 인라인 반복 패널 (메인 탭 + 바 선택 시만 표시, 재생 중에는 읽기 전용) */}
+        {!editorCollapsed && editingBeat !== null && activeLayerTab === 0 && (
           <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, opacity: isPlaying ? 0.5 : 1 }]}>
             {/* 타입 토글 + 지우기 */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
