@@ -12,6 +12,7 @@ import {
   Alert,
   Platform,
   Image,
+  ActivityIndicator,
   useWindowDimensions,
 } from "react-native";
 import { captureRef } from "react-native-view-shot";
@@ -985,16 +986,25 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
 
         {/* 재생/정지 버튼 */}
         <Pressable
-          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [
+            styles.iconBtn,
+            pressed && !playback.isPreparing && { opacity: 0.6 },
+            playback.isPreparing && { opacity: 0.5 },
+          ]}
           onPress={playback.isPlaying ? playback.pause : playback.play}
+          disabled={playback.isPreparing}
           hitSlop={8}
           testID="score-editor-play"
         >
-          <Ionicons
-            name={playback.isPlaying ? "pause" : "play"}
-            size={S.ms(20, 0.4)}
-            color={playback.isPlaying ? C.accent : C.text}
-          />
+          {playback.isPreparing ? (
+            <ActivityIndicator size="small" color={C.text} />
+          ) : (
+            <Ionicons
+              name={playback.isPlaying ? "pause" : "play"}
+              size={S.ms(20, 0.4)}
+              color={playback.isPlaying ? C.accent : C.text}
+            />
+          )}
         </Pressable>
 
         {/* 정지 버튼 (재생 중에만) */}

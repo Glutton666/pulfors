@@ -3,6 +3,7 @@
 // ============================================================
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { Platform } from "react-native";
 import { buildPlayTimeline, findCurrentEvent, totalTimelineMs } from "@/lib/score-playback";
 import type { PlayEvent } from "@/lib/score-playback";
 import type { ScoreDocument } from "@/lib/score-types";
@@ -17,6 +18,8 @@ const LATE_THRESHOLD_MS = 50;
 
 export interface ScorePlaybackState {
   isPlaying: boolean;
+  /** 네이티브에서 WAV 파일 준비 중일 때 true */
+  isPreparing: boolean;
   /** 현재 재생 중인 악보 내 마디 인덱스 */
   currentMeasureIdx: number;
   /** 현재 마디 내 Playhead 위치 (0=시작, 1=끝) */
@@ -30,6 +33,7 @@ export interface ScorePlaybackState {
 
 export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isPreparing, setIsPreparing] = useState(false);
   const [currentMeasureIdx, setCurrentMeasureIdx] = useState(0);
   const [playheadFraction, setPlayheadFraction] = useState(0);
   const [totalMs, setTotalMs] = useState(0);
@@ -39,6 +43,8 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   const startWallRef = useRef(0);     // Date.now() at play/resume
   const resumeOffsetRef = useRef(0);  // elapsed ms at pause
   const rafRef = useRef<number | null>(null);
+  // 준비 요청 세션 ID — stop/unmount 시 증가시켜 stale callback 무효화
+  const prepareSessionRef = useRef(0);
 
   // 오디오: 마디 변경 감지용 seqIdx 추적
   const lastSeqIdxRef = useRef(-1);
@@ -96,30 +102,43 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   }, []);
 
   const play = useCallback(() => {
-    if (isPlayingRef.current) return;
+    if (isPlayingRef.current || isPreparing) return;
     const timeline = buildPlayTimeline(doc);
     timelineRef.current = timeline;
     setTotalMs(totalTimelineMs(timeline));
 
-    // 네이티브: 음표 WAV 파일 미리 생성 (비동기, 재생 시작은 즉시)
-    if (timeline.length > 0) {
+    const startRaf = () => {
+      lastSeqIdxRef.current = -1;
+      startWallRef.current = Date.now();
+      isPlayingRef.current = true;
+      setIsPlaying(true);
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    if (Platform.OS !== "web" && timeline.length > 0) {
+      // 네이티브: WAV 파일 준비가 완료된 뒤 재생 시작
       const allMidi: number[] = [];
       for (const ev of timeline) {
         for (const n of ev.notes) allMidi.push(n.midiNote);
       }
       if (allMidi.length > 0) {
-        prepareScoreAudio(allMidi).catch(() => {});
+        // 세션 ID 채번 — stop/unmount 시 증가하므로 stale callback이 startRaf 호출을 건너뜀
+        const sessionId = ++prepareSessionRef.current;
+        setIsPreparing(true);
+        prepareScoreAudio(allMidi)
+          .catch(() => {})
+          .finally(() => {
+            if (prepareSessionRef.current !== sessionId) return;
+            setIsPreparing(false);
+            startRaf();
+          });
+        return;
       }
     }
 
-    lastSeqIdxRef.current = -1;
-    startWallRef.current = Date.now();
-    isPlayingRef.current = true;
-    setIsPlaying(true);
-
-    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-    rafRef.current = requestAnimationFrame(tick);
-  }, [doc, tick]);
+    startRaf();
+  }, [doc, tick, isPreparing]);
 
   const pause = useCallback(() => {
     if (!isPlayingRef.current) return;
@@ -135,6 +154,9 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   }, []);
 
   const stop = useCallback(() => {
+    // 진행 중인 prepare 비동기 작업을 무효화
+    prepareSessionRef.current++;
+    setIsPreparing(false);
     isPlayingRef.current = false;
     stopAllScoreNotes();
     lastSeqIdxRef.current = -1;
@@ -166,11 +188,13 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   // unmount cleanup
   useEffect(() => {
     return () => {
+      // 진행 중인 prepare 비동기 작업 무효화
+      prepareSessionRef.current++;
       isPlayingRef.current = false;
       stopAllScoreNotes();
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
   }, []);
 
-  return { isPlaying, currentMeasureIdx, playheadFraction, totalMs, play, pause, stop };
+  return { isPlaying, isPreparing, currentMeasureIdx, playheadFraction, totalMs, play, pause, stop };
 }
