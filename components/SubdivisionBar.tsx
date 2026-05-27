@@ -480,13 +480,15 @@ export function SubdivisionBar({
         <Pressable
           style={styles.typePickerOverlay}
           onPress={() => setTypePicker(null)}
+          testID="type-picker-overlay"
         >
-          <View style={[styles.typePickerMenu, { backgroundColor: C.backgroundSecondary, shadowColor: C.text }]}>
+          <View style={[styles.typePickerMenu, { backgroundColor: C.backgroundSecondary, shadowColor: C.text }]} testID="type-picker-menu">
             {BEAT_TYPES.map((bt) => {
               const isSelected = pattern[typePicker.cellIndex] === bt;
               return (
                 <Pressable
                   key={bt}
+                  testID={`type-picker-option-${bt}`}
                   onPress={() => {
                     const newPattern = [...pattern];
                     newPattern[typePicker.cellIndex] = bt;
