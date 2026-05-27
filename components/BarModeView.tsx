@@ -324,9 +324,9 @@ function SwipeableBarRow({
             </Text>
           </View>
 
-          {/* 중앙: 비트 셀 + info 텍스트 */}
-          <View style={{ flex: 1, flexDirection: "column", justifyContent: "center", gap: 2 }}>
-            <View style={[styles.barRowCells, { height: 12 }]}>
+          {/* 중앙: 비트 셀 + info overlay */}
+          <View style={{ flex: 1, position: "relative" }}>
+            <View style={[styles.barRowCells, { overflow: "hidden" }]}>
               {cells.map((ct, ci) => {
                 const isLast = ci === cells.length - 1;
                 const isActiveCell = isCurrentBeat;
@@ -351,11 +351,11 @@ function SwipeableBarRow({
               })}
             </View>
 
-            {/* 바 중앙 info: 시계 아이콘 + BPM / 반복정보 */}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-              <Ionicons name="time-outline" size={9} color={C.textSecondary} />
+            {/* 비트 셀 위 절대 위치 info overlay */}
+            <View style={styles.barCellOverlay} pointerEvents="none">
+              <Ionicons name="time-outline" size={8} color={isCurrentBeat ? C.accent : C.text} />
               <Text
-                style={[styles.barCenterInfo, { color: isCurrentBeat ? C.accent : C.textSecondary }]}
+                style={[styles.barCenterInfo, { color: isCurrentBeat ? C.accent : C.text }]}
                 numberOfLines={1}
               >
                 {isPlaying && progressTotal && progressTotal > 1 && progressCurrent !== undefined
@@ -1801,6 +1801,19 @@ const styles = StyleSheet.create({
     flex: 1,
     height: "100%",
     borderRadius: 0,
+  },
+  barCellOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+    paddingHorizontal: 4,
+    backgroundColor: "rgba(0,0,0,0.30)",
   },
   barCenterInfo: {
     fontSize: 9,
