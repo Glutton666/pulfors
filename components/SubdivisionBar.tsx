@@ -6,6 +6,7 @@ import {
   Pressable,
   PanResponder,
   Platform,
+  Modal,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import Animated, {
@@ -18,6 +19,7 @@ import Animated, {
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import Colors from "@/constants/colors";
 import { moderateScale, IS_TABLET, useScale } from "@/lib/scale";
 import { Radius, Spacing } from "@/constants/tokens";
@@ -57,6 +59,8 @@ function getCellBorder(type: BeatType, textTertiaryColor: string, whiteColor: st
   return "transparent";
 }
 
+const BEAT_TYPES: BeatType[] = ["normal", "accent", "strong", "mute"];
+
 export function SubdivisionBar({
   pattern,
   onPatternChange,
@@ -69,9 +73,11 @@ export function SubdivisionBar({
   activeBeatPattern = null,
 }: SubdivisionBarProps) {
   const { colors: C } = useTheme();
+  const { t } = useLanguage();
   const S = useScale();
   const styles = useMemo(() => make_styles(C, S), [C, S]);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [typePicker, setTypePicker] = useState<{ cellIndex: number } | null>(null);
   const isDraggingUpRef = useRef(false);
   const horizontalTriggeredRef = useRef(false);
   const patternRef = useRef(pattern);
@@ -393,6 +399,7 @@ export function SubdivisionBar({
   const dynamicFontSize = Math.max(7, Math.round(clampedCellSize * 11 / baseCellSize));
 
   return (
+    <>
     <View ref={webContainerRef} style={styles.gestureWrapper} {...nativePanHandlers}>
     <Animated.View
       style={[styles.wrapper, shakeAnimStyle]}
@@ -411,6 +418,14 @@ export function SubdivisionBar({
               onPress={() => {
                 if (!activeBeatPattern) cycleType(i);
               }}
+              onLongPress={() => {
+                if (isPlaying) return;
+                if (Platform.OS !== "web") {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                }
+                setTypePicker({ cellIndex: i });
+              }}
+              delayLongPress={350}
               style={({ pressed }) => [pressed && !activeBeatPattern && { opacity: 0.6 }]}
               hitSlop={8}
               testID={`subdivision-cell-${i}`}
@@ -453,6 +468,69 @@ export function SubdivisionBar({
       </View>
     </Animated.View>
     </View>
+
+    {typePicker !== null && (
+      <Modal
+        transparent
+        animationType="fade"
+        visible={true}
+        onRequestClose={() => setTypePicker(null)}
+        statusBarTranslucent
+      >
+        <Pressable
+          style={styles.typePickerOverlay}
+          onPress={() => setTypePicker(null)}
+        >
+          <View style={[styles.typePickerMenu, { backgroundColor: C.backgroundSecondary, shadowColor: C.text }]}>
+            {BEAT_TYPES.map((bt) => {
+              const isSelected = pattern[typePicker.cellIndex] === bt;
+              return (
+                <Pressable
+                  key={bt}
+                  onPress={() => {
+                    const newPattern = [...pattern];
+                    newPattern[typePicker.cellIndex] = bt;
+                    if (Platform.OS !== "web") {
+                      Haptics.impactAsync(
+                        bt === "strong"
+                          ? Haptics.ImpactFeedbackStyle.Heavy
+                          : bt === "accent"
+                          ? Haptics.ImpactFeedbackStyle.Heavy
+                          : bt === "mute"
+                          ? Haptics.ImpactFeedbackStyle.Light
+                          : Haptics.ImpactFeedbackStyle.Medium
+                      );
+                    }
+                    onPatternChange(newPattern);
+                    setTypePicker(null);
+                  }}
+                  style={[
+                    styles.typePickerOption,
+                    isSelected && { backgroundColor: C.accent + "22" },
+                  ]}
+                >
+                  <View style={[styles.typePickerSwatch, {
+                    backgroundColor: bt === "strong" ? C.accent : bt === "accent" ? C.accentMuted : bt === "normal" ? C.text : "transparent",
+                    borderWidth: bt === "mute" ? 1.5 : 0,
+                    borderColor: bt === "mute" ? C.textTertiary : "transparent",
+                  }]} />
+                  <Text style={[styles.typePickerLabel, {
+                    color: isSelected ? C.accent : C.text,
+                    fontWeight: isSelected ? ("700" as const) : ("400" as const),
+                  }]}>
+                    {t("beatTypes", bt)}
+                  </Text>
+                  {isSelected && (
+                    <Feather name="check" size={14} color={C.accent} style={{ marginLeft: "auto" }} />
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
+    )}
+    </>
   );
 }
 
@@ -550,5 +628,36 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     width: S.ms(18, 0.4),
     height: S.ms(18, 0.4),
     borderRadius: S.ms(4, 0.3),
+  },
+  typePickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  typePickerMenu: {
+    borderRadius: Radius.md,
+    overflow: "hidden",
+    minWidth: 180,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  typePickerOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  typePickerSwatch: {
+    width: 14,
+    height: 14,
+    borderRadius: 4,
+  },
+  typePickerLabel: {
+    fontSize: 15,
+    letterSpacing: 0.1,
   },
 });
