@@ -34,6 +34,33 @@ import { useLanguage } from "@/contexts/LanguageContext";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
+function formatBarCenterInfo(
+  repeat: BarRepeat | null,
+  bpm: number,
+  beatsPerMeasure: number,
+): string | null {
+  const effectiveBpm = (repeat?.bpm && repeat.bpm > 0) ? repeat.bpm : bpm;
+  const measureSec = beatsPerMeasure * 60 / Math.max(1, effectiveBpm);
+  const bpmStr = String(Math.round(effectiveBpm));
+
+  if (!repeat || (repeat.type === "count" && repeat.value <= 1 && !repeat.bpm)) {
+    return `${bpmStr}`;
+  }
+
+  if (repeat.type === "count") {
+    const totalSec = repeat.value * measureSec;
+    const mm = Math.floor(totalSec / 60).toString().padStart(2, "0");
+    const ss = Math.round(totalSec % 60).toString().padStart(2, "0");
+    return `${bpmStr} / ×${repeat.value}(${mm}:${ss})`;
+  } else {
+    const totalSec = repeat.value;
+    const mm = Math.floor(totalSec / 60).toString().padStart(2, "0");
+    const ss = (totalSec % 60).toString().padStart(2, "0");
+    const count = measureSec > 0 ? Math.round(totalSec / measureSec) : 0;
+    return `${bpmStr} / ×${count}(${mm}:${ss})`;
+  }
+}
+
 // ─── 타입 ────────────────────────────────────────────────────────────────────
 
 type SymbolType = "block" | "repeat" | "jump_from" | "jump_to" | "volta" | "end";
@@ -168,6 +195,9 @@ interface SwipeableBarRowProps {
   isPlaying: boolean;
   progressCurrent?: number;
   progressTotal?: number;
+  bpm: number;
+  beatsPerMeasure: number;
+  onAddBarRight: () => void;
   onPress: (beat: number) => void;
   onSwipeLeft: (beat: number) => void;
   onSwipeRight: (beat: number) => void;
@@ -179,7 +209,7 @@ interface SwipeableBarRowProps {
 function SwipeableBarRow({
   beat, beatType, subdivisions, repeat, isCurrentBeat, isEditingBeat,
   blockDepth, blockStart, blockEnd, symbolBadges, isPlaying, progressCurrent,
-  progressTotal, onPress, onSwipeLeft, onSwipeRight, onLongPress, colors: C, ms,
+  progressTotal, bpm, beatsPerMeasure, onAddBarRight, onPress, onSwipeLeft, onSwipeRight, onLongPress, colors: C, ms,
 }: SwipeableBarRowProps) {
   const translateX = useRef(new Animated.Value(0)).current;
   const actionTriggered = useRef(false);
@@ -294,50 +324,59 @@ function SwipeableBarRow({
             </Text>
           </View>
 
-          <View style={styles.barRowCells}>
-            {cells.map((ct, ci) => {
-              const isLast = ci === cells.length - 1;
-              const isActiveCell = isCurrentBeat;
-              return (
-                <View
-                  key={ci}
-                  style={[
-                    styles.barMiniCell,
-                    !isLast && { borderRightWidth: 0.5, borderRightColor: C.overlay06 },
-                    {
-                      backgroundColor:
-                        ct === "strong" ? (isActiveCell ? C.accent : C.accent + "90")
-                        : ct === "accent" ? (isActiveCell ? C.accentMuted : C.accentMuted + "90")
-                        : ct === "mute" ? "transparent"
-                        : (isActiveCell ? C.textSecondary : C.textTertiary + "60"),
-                      borderWidth: ct === "mute" ? 1 : 0,
-                      borderColor: ct === "mute" ? C.textTertiary + "80" : "transparent",
-                    },
-                  ]}
-                />
-              );
-            })}
+          {/* 중앙: 비트 셀 + info 텍스트 */}
+          <View style={{ flex: 1, flexDirection: "column", justifyContent: "center", gap: 2 }}>
+            <View style={[styles.barRowCells, { height: 12 }]}>
+              {cells.map((ct, ci) => {
+                const isLast = ci === cells.length - 1;
+                const isActiveCell = isCurrentBeat;
+                return (
+                  <View
+                    key={ci}
+                    style={[
+                      styles.barMiniCell,
+                      !isLast && { borderRightWidth: 0.5, borderRightColor: C.overlay06 },
+                      {
+                        backgroundColor:
+                          ct === "strong" ? (isActiveCell ? C.accent : C.accent + "90")
+                          : ct === "accent" ? (isActiveCell ? C.accentMuted : C.accentMuted + "90")
+                          : ct === "mute" ? "transparent"
+                          : (isActiveCell ? C.textSecondary : C.textTertiary + "60"),
+                        borderWidth: ct === "mute" ? 1 : 0,
+                        borderColor: ct === "mute" ? C.textTertiary + "80" : "transparent",
+                      },
+                    ]}
+                  />
+                );
+              })}
+            </View>
+
+            {/* 바 중앙 info: 시계 아이콘 + BPM / 반복정보 */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+              <Ionicons name="time-outline" size={9} color={C.textSecondary} />
+              <Text
+                style={[styles.barCenterInfo, { color: isCurrentBeat ? C.accent : C.textSecondary }]}
+                numberOfLines={1}
+              >
+                {isPlaying && progressTotal && progressTotal > 1 && progressCurrent !== undefined
+                  ? `${formatBarCenterInfo(repeat, bpm, beatsPerMeasure) ?? String(Math.round(bpm))} [${progressCurrent + 1}/${progressTotal}]`
+                  : (formatBarCenterInfo(repeat, bpm, beatsPerMeasure) ?? String(Math.round(bpm)))
+                }
+                {symbolBadges.length > 0 ? `  ${symbolBadges.join(" ")}` : ""}
+              </Text>
+            </View>
           </View>
 
-          <View style={styles.barRowRight}>
-            {symbolBadges.map((badge, bi) => (
-              <Text key={bi} style={[styles.badgeText, { color: C.accent }]}>{badge}</Text>
-            ))}
-            {isPlaying && progressTotal && progressTotal > 1 && progressCurrent !== undefined ? (
-              <Text style={[styles.barRepeatBadge, { color: C.accent, backgroundColor: C.accent + "30" }]}>
-                {progressCurrent + 1}/{progressTotal}
-              </Text>
-            ) : repeat ? (
-              <Text style={[styles.barRepeatBadge, { color: C.accent, backgroundColor: C.accent + "18" }]}>
-                {formatRepeat(repeat)}
-              </Text>
-            ) : null}
-            {repeat?.bpm ? (
-              <Text style={[styles.barBpmBadge, { color: C.textSecondary }]}>
-                {repeat.bpm}
-              </Text>
-            ) : null}
-          </View>
+          {/* 오른쪽: 추가 버튼 */}
+          {!isPlaying && (
+            <Pressable
+              onPress={onAddBarRight}
+              style={styles.barAddRightBtn}
+              hitSlop={8}
+            >
+              <Ionicons name="add" size={ms(15, 0.4)} color={C.accent + "70"} />
+            </Pressable>
+          )}
         </Pressable>
       </Animated.View>
     </View>
@@ -1104,6 +1143,9 @@ export function BarModeView({
               isPlaying={isPlaying}
               progressCurrent={progressInfo?.beat === beat ? progressInfo.barRepeatCurrent : undefined}
               progressTotal={progressInfo?.beat === beat ? progressInfo.barRepeatTotal : undefined}
+              bpm={bpm ?? 120}
+              beatsPerMeasure={beatsPerMeasure}
+              onAddBarRight={handleAddBar}
               onPress={handleBarRowPress}
               onSwipeLeft={handleSwipeLeft}
               onSwipeRight={handleSwipeRight}
@@ -1114,18 +1156,8 @@ export function BarModeView({
           );
         })}
 
-        {!isPlaying && (
-          <Pressable
-            onPress={handleAddBar}
-            style={[styles.addBarBtn, { borderColor: C.accent + "40" }]}
-            testID="bar-add-btn"
-          >
-            <Ionicons name="add" size={ms(16, 0.4)} color={C.accent + "80"} />
-            <Text style={{ color: C.accent + "80", fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_500Medium" }}>
-              {t("barModeView", "addBar")}
-            </Text>
-          </Pressable>
-        )}
+        {/* 바 목록 하단 여백 */}
+        <View style={{ height: 8 }} />
       </ScrollView>
 
       {/* ── 편집기 영역 ── */}
@@ -1769,6 +1801,17 @@ const styles = StyleSheet.create({
     flex: 1,
     height: "100%",
     borderRadius: 0,
+  },
+  barCenterInfo: {
+    fontSize: 9,
+    fontFamily: "SpaceGrotesk_500Medium",
+    flexShrink: 1,
+  },
+  barAddRightBtn: {
+    width: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "stretch",
   },
   barRowRight: {
     flexDirection: "row",
