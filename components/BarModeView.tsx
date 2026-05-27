@@ -1246,23 +1246,6 @@ export function BarModeView({
                 onReset={() => updateLayerSubdivisions(layerIdx, null)}
                 isPlaying={isPlaying}
               />
-              {/* 사운드셋 선택 — 레이어 전용 */}
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
-                {[{ key: null, label: t("barModeView", "soundSetDefault") }, ...SOUND_SET_OPTIONS.map(o => ({ key: o.key, label: t("barModeView", o.labelKey) }))].map(opt => {
-                  const isActive = (opt.key === null) ? !layer?.soundSet : layer?.soundSet === opt.key;
-                  return (
-                    <Pressable
-                      key={opt.key ?? "__default"}
-                      onPress={() => updateLayerSoundSet(layerIdx, opt.key as BarLayer["soundSet"] | null)}
-                      style={[styles.typeToggle, { backgroundColor: isActive ? C.accent + "30" : C.overlay08 }]}
-                    >
-                      <Text style={{ color: isActive ? C.accent : C.textSecondary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_600SemiBold" }}>
-                        {opt.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
             </View>
           );
         })())}
