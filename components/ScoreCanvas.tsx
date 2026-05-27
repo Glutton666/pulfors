@@ -67,7 +67,7 @@ export interface ScoreCanvasProps {
   onRestPlaced: (measureIdx: number, duration: NoteDuration, insertIdx: number) => void;
   onElementTap: (elementId: string, measureIdx: number) => void;
   onMeasureTap: (measureIdx: number) => void;
-  onEraseAtPoint: (measureIdx: number) => void;
+  onEraseElement: (elementId: string, measureIdx: number) => void;
   onNoteMoved?: (elementId: string, measureIdx: number, newPitch: Pitch) => void;
 }
 
@@ -86,7 +86,7 @@ export function ScoreCanvas({
   onRestPlaced,
   onElementTap,
   onMeasureTap,
-  onEraseAtPoint,
+  onEraseElement,
   onNoteMoved,
 }: ScoreCanvasProps) {
   const { colors: C } = useTheme();
@@ -286,8 +286,9 @@ export function ScoreCanvas({
           const info = touchToGhost(lx, ly);
           if (info) onRestPlaced(info.measureIdx, dur, info.insertIdx);
         } else if (tool === "erase") {
-          const info = touchToGhost(lx, ly);
-          if (info) onEraseAtPoint(info.measureIdx);
+          // hitTest로 가장 가까운 요소를 찾아 정확히 삭제
+          const hit = hitTestElement(lx, ly);
+          if (hit) onEraseElement(hit.elementId, hit.measureIdx);
         } else if (tool === "select") {
           if (isMoving && dragElementIdRef.current && dragMeasureIdxRef.current >= 0) {
             // 드래그 종료 → 새 음높이로 이동
@@ -315,7 +316,7 @@ export function ScoreCanvas({
         dragMeasureIdxRef.current = -1;
       },
     });
-  }, [touchToGhost, hitTestElement, onNotePlaced, onRestPlaced, onEraseAtPoint, onElementTap]);
+  }, [touchToGhost, hitTestElement, onNotePlaced, onRestPlaced, onEraseElement, onElementTap]);
 
   const dur = isDotted
     ? (`${activeDuration}_dot` as NoteDuration)
@@ -388,17 +389,16 @@ export function ScoreCanvas({
         )}
       </Svg>
 
-      {/* 돋보기 미니뷰 */}
+      {/* 돋보기 미니뷰 — 터치 주변 3배 확대 */}
       {ghost && (activeTool === "note" || activeTool === "rest") && (
         <View
           style={[styles.magnifier, { backgroundColor: C.surface, borderColor: C.accent }]}
           pointerEvents="none"
         >
           <MagnifierView
-            pitch={ghost.pitch}
+            ghost={ghost}
             duration={dur}
             activeTool={activeTool}
-            clef={clef}
             accentColor={C.accent}
           />
         </View>
@@ -503,28 +503,24 @@ function GhostRest({
 // ── 돋보기 미니뷰 ─────────────────────────────────────────────
 
 function MagnifierView({
-  pitch,
+  ghost,
   duration,
   activeTool,
-  clef,
   accentColor,
 }: {
-  pitch: Pitch;
+  ghost: GhostState;
   duration: NoteDuration;
   activeTool: EditorTool;
-  clef: ClefType;
   accentColor: string;
 }) {
-  const MINI_W = 84;
-  const MINI_H = 62;
-  const STAFF_Y = 10;
-  const LINE_SP = 7;
+  // 터치 주변 30×30 픽셀 영역을 90×90에 표시 = 3배 확대
+  const MAG_SIZE = 90;
+  const VIEW_HALF = 15; // 30px 영역의 절반
 
-  // 현재 음 위치 (오선보 스케일 → 미니 스케일)
-  const scale = LINE_SP / LINE_SPACING;
-  const relY = pitchToY(pitch, clef);
-  const noteY = STAFF_Y + relY * scale;
-  const cx = MINI_W / 2;
+  const vbX = ghost.x - VIEW_HALF;
+  const vbY = ghost.y - VIEW_HALF;
+  const vbW = VIEW_HALF * 2;
+  const vbH = VIEW_HALF * 2;
 
   const isOpen =
     duration === "whole" ||
@@ -532,51 +528,69 @@ function MagnifierView({
     duration === "whole_dot" ||
     duration === "half_dot";
 
-  const label = activeTool === "note" ? pitchLabel(pitch) : "";
+  const label = activeTool === "note" ? pitchLabel(ghost.pitch) : "";
 
   return (
-    <Svg width={MINI_W} height={MINI_H}>
-      {/* 오선 5개 */}
+    <Svg
+      width={MAG_SIZE}
+      height={MAG_SIZE}
+      viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
+    >
+      {/* 오선 5개 — 실제 staffY 기준 */}
       {Array.from({ length: 5 }, (_, i) => (
         <Line
           key={i}
-          x1={6}
-          y1={STAFF_Y + i * LINE_SP}
-          x2={MINI_W - 6}
-          y2={STAFF_Y + i * LINE_SP}
+          x1={vbX}
+          y1={ghost.staffY + i * LINE_SPACING}
+          x2={vbX + vbW}
+          y2={ghost.staffY + i * LINE_SPACING}
           stroke={accentColor}
-          strokeWidth={0.8}
-          opacity={0.45}
+          strokeWidth={0.5}
+          opacity={0.5}
         />
       ))}
 
-      {/* 음표 또는 쉼표 */}
+      {/* 세로 기준선 (삽입 위치 표시) */}
+      <Line
+        x1={ghost.x}
+        y1={vbY}
+        x2={ghost.x}
+        y2={vbY + vbH}
+        stroke={accentColor}
+        strokeWidth={0.3}
+        strokeDasharray="1,1"
+        opacity={0.4}
+      />
+
+      {/* 음표 또는 쉼표 고스트 */}
       {activeTool === "note" ? (
         <Ellipse
-          cx={cx}
-          cy={noteY}
-          rx={5}
-          ry={3.5}
+          cx={ghost.x}
+          cy={ghost.noteY}
+          rx={NOTE_HEAD_RX}
+          ry={NOTE_HEAD_RY}
           fill={isOpen ? "none" : accentColor}
           stroke={accentColor}
-          strokeWidth={1}
+          strokeWidth={0.8}
+          opacity={0.9}
         />
       ) : (
         <Rect
-          x={cx - 6}
-          y={STAFF_Y + LINE_SP * 2 - 3}
-          width={12}
-          height={4}
+          x={ghost.x - 4}
+          y={ghost.staffY + LINE_SPACING * 2 - 2}
+          width={8}
+          height={3}
           fill={accentColor}
+          opacity={0.9}
         />
       )}
 
-      {/* 음이름 */}
+      {/* 음이름 레이블 — viewBox 좌표계에서 하단 */}
       {label ? (
         <SvgText
-          x={cx}
-          y={MINI_H - 4}
-          fontSize={10}
+          x={ghost.x}
+          y={vbY + vbH - 1}
+          fontSize={5}
           fill={accentColor}
           textAnchor="middle"
           fontFamily="SpaceGrotesk_600SemiBold"

@@ -216,12 +216,20 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
         }),
       };
       applyDoc(newDoc);
-      setSelectedMeasureIdx(measureIdx);
       setSelectedElementId(newElement.id);
-      // 확정 후 다음 마디로 커서 이동
-      const totalMeasures = doc.parts[selectedPartIdx]?.measures.length ?? 1;
-      if (measureIdx < totalMeasures - 1) {
-        setSelectedMeasureIdx(measureIdx + 1);
+      // 같은 마디 내 다음 슬롯으로 커서 이동
+      // 현재 마디의 elements 수 + 1 (방금 삽입한 것)
+      const curMeasure = doc.parts[selectedPartIdx]?.measures[measureIdx];
+      const newLen = (curMeasure?.elements.length ?? 0) + 1;
+      const nextIdx = insertIdx + 1;
+      if (nextIdx >= newLen) {
+        // 마디 끝 → 다음 마디로
+        const totalMeasures = doc.parts[selectedPartIdx]?.measures.length ?? 1;
+        if (measureIdx < totalMeasures - 1) {
+          setSelectedMeasureIdx(measureIdx + 1);
+        }
+      } else {
+        setSelectedMeasureIdx(measureIdx);
       }
     },
     [doc, selectedPartIdx, accidental, selectedArticulation, selectedDynamic],
@@ -247,19 +255,25 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
         }),
       };
       applyDoc(newDoc);
-      setSelectedMeasureIdx(measureIdx);
       setSelectedElementId(newElement.id);
-      const totalMeasures = doc.parts[selectedPartIdx]?.measures.length ?? 1;
-      if (measureIdx < totalMeasures - 1) {
-        setSelectedMeasureIdx(measureIdx + 1);
+      const curMeasure = doc.parts[selectedPartIdx]?.measures[measureIdx];
+      const newLen = (curMeasure?.elements.length ?? 0) + 1;
+      const nextIdx = insertIdx + 1;
+      if (nextIdx >= newLen) {
+        const totalMeasures = doc.parts[selectedPartIdx]?.measures.length ?? 1;
+        if (measureIdx < totalMeasures - 1) {
+          setSelectedMeasureIdx(measureIdx + 1);
+        }
+      } else {
+        setSelectedMeasureIdx(measureIdx);
       }
     },
     [doc, selectedPartIdx, selectedDynamic],
   );
 
-  // ── 지우기 (마지막 요소 제거) ─────────────────────────────────
-  const handleEraseAtPoint = useCallback(
-    (measureIdx: number) => {
+  // ── 지우기 — hitTest로 찾은 정확한 요소 제거 ─────────────────
+  const handleEraseElement = useCallback(
+    (elementId: string, measureIdx: number) => {
       const newDoc: ScoreDocument = {
         ...doc,
         parts: doc.parts.map((p, pIdx) => {
@@ -268,14 +282,18 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             ...p,
             measures: p.measures.map((m, mi) => {
               if (mi !== measureIdx) return m;
-              return { ...m, elements: m.elements.slice(0, -1) };
+              return {
+                ...m,
+                elements: m.elements.filter((el) => el.id !== elementId),
+              };
             }),
           };
         }),
       };
       applyDoc(newDoc);
+      if (selectedElementId === elementId) setSelectedElementId(null);
     },
-    [doc, selectedPartIdx],
+    [doc, selectedPartIdx, selectedElementId],
   );
 
   // ── 음표 탭 선택 ──────────────────────────────────────────────
@@ -627,7 +645,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             onRestPlaced={handleRestPlaced}
             onElementTap={handleElementTap}
             onMeasureTap={handleMeasureTap}
-            onEraseAtPoint={handleEraseAtPoint}
+            onEraseElement={handleEraseElement}
             onNoteMoved={handleNoteMoved}
           />
         ) : (
