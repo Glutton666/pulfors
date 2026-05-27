@@ -826,6 +826,7 @@ export const translations = {
     swipeHintEdit:       { ko: "편집 →", en: "Edit →" },
     swipeHintAdd:        { ko: "↑ 바 추가", en: "↑ Add Bar" },
     repBpmAdd:           { ko: "+ BPM", en: "+ BPM" },
+    longPressEdit:       { ko: "길게 탭해서 편집", en: "Long-press to edit" },
   },
   bpmDetect: {
     title:      { ko: "주변 BPM 감지", en: "Detect BPM" },

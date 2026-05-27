@@ -5321,6 +5321,13 @@ export default function MetronomeScreen() {
               persistSettings({ layerSoundSets: typed });
               scheduleReRender();
             }}
+            customSoundSets={customSoundSets}
+            onCustomSoundSetsChange={(configs) => {
+              setCustomSoundSets(configs);
+              for (const key of Object.keys(clickPCMCacheRef.current)) {
+                if (key.startsWith("custom")) delete clickPCMCacheRef.current[key];
+              }
+            }}
           />
         </View>
 
