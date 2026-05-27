@@ -31,6 +31,7 @@ import type { BarModeViewKey } from "@/lib/i18n";
 import type { CustomSoundSetConfig } from "@/lib/storage";
 import { Spacing, Radius, FontSize } from "@/constants/tokens";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useScale } from "@/lib/scale";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -301,10 +302,11 @@ function SwipeableBarRow({
             }} />
           )}
 
-          <View style={[styles.barRowNumber, { paddingLeft: leftPad + 4 }]}>
+          <View style={[styles.barRowNumber, { paddingLeft: leftPad + 4, width: ms(28, 0.5) }]}>
             <Text style={[
               styles.barRowNumberText,
               {
+                fontSize: ms(13, 0.45),
                 color: isCurrentBeat
                   ? C.accent
                   : beatType === "strong" ? C.accent
@@ -347,7 +349,7 @@ function SwipeableBarRow({
             {/* 비트 셀 위 info overlay */}
             <View style={[styles.barCellOverlay, { backgroundColor: `rgba(0,0,0,${cellOverlayOpacity ?? 0.55})` }]} pointerEvents="none">
               <Text
-                style={[styles.barCenterInfo, { color: isCurrentBeat ? C.accent : C.text }]}
+                style={[styles.barCenterInfo, { color: isCurrentBeat ? C.accent : C.text, fontSize: ms(13, 0.45) }]}
                 numberOfLines={1}
               >
                 {isPlaying && progressTotal && progressTotal > 1 && progressCurrent !== undefined
@@ -363,10 +365,10 @@ function SwipeableBarRow({
           {!isPlaying && (
             <Pressable
               onPress={onAddBarRight}
-              style={styles.barAddRightBtn}
+              style={[styles.barAddRightBtn, { width: ms(28, 0.5) }]}
               hitSlop={8}
             >
-              <Ionicons name="add" size={ms(15, 0.4)} color={C.accent + "70"} />
+              <Ionicons name="add" size={ms(15, 0.45)} color={C.accent + "70"} />
             </Pressable>
           )}
         </Pressable>
@@ -394,6 +396,7 @@ export function BarModeView({
 }: BarModeViewProps) {
 
   const { t } = useLanguage();
+  const S = useScale();
 
   // ─── 상태 ────────────────────────────────────────────────────────────────
 
@@ -1099,7 +1102,7 @@ export function BarModeView({
       {/* ── 바 목록 ── */}
       <ScrollView
         ref={barScrollRef}
-        style={styles.barList}
+        style={[styles.barList, S.isTablet && { paddingHorizontal: S.ms(16, 0.5) }]}
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
         scrollEnabled={!isPlaying}
@@ -1813,7 +1816,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.30)",
   },
   barCenterInfo: {
-    fontSize: 13,
     fontFamily: "SpaceGrotesk_600SemiBold",
     flexShrink: 1,
   },
