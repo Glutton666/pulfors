@@ -37,6 +37,7 @@ interface PracticeBookModalProps {
   onSetGoal?: (entry: PracticeEntry, targetMinutes: number) => void;
   currentConfig: Omit<PracticeEntry, "id" | "label" | "createdAt"> | null;
   username?: string;
+  onOpenScore?: (scoreId: string) => void;
 }
 
 const BEAT_COLORS: Record<BeatType, string> = {
@@ -86,6 +87,7 @@ function SwipeableEntry({
   editLabel,
   setEditLabel,
   editInputRef,
+  onOpenScore,
   onRename,
   onLoad,
   onDelete,
@@ -102,6 +104,7 @@ function SwipeableEntry({
   setEditLabel: (v: string) => void;
   editInputRef: React.RefObject<TextInput | null>;
 
+  onOpenScore?: (scoreId: string) => void;
   onRename: (id: string) => void;
   onLoad: (entry: PracticeEntry) => void;
   onDelete: (id: string) => void;
@@ -262,7 +265,13 @@ function SwipeableEntry({
       >
         <Pressable
           style={styles.entryMain}
-          onPress={() => onLoad(item)}
+          onPress={() => {
+            if (item.scoreId && onOpenScore) {
+              onOpenScore(item.scoreId);
+            } else {
+              onLoad(item);
+            }
+          }}
           delayLongPress={500}
         >
           <View style={styles.entryHeader}>
@@ -278,9 +287,14 @@ function SwipeableEntry({
                 selectTextOnFocus
               />
             ) : (
-              <Text style={styles.entryLabel} numberOfLines={1}>
-                {item.label}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flex: 1 }}>
+                {item.scoreId ? (
+                  <Ionicons name="musical-note" size={12} color="#22c55e" />
+                ) : null}
+                <Text style={[styles.entryLabel, { flex: 1 }]} numberOfLines={1}>
+                  {item.label}
+                </Text>
+              </View>
             )}
             <Text style={styles.entryDate}>{formatDate(item.createdAt)}</Text>
             <Pressable
@@ -477,6 +491,7 @@ export function PracticeBookModal({
   onSetGoal,
   currentConfig,
   username,
+  onOpenScore,
 }: PracticeBookModalProps) {
   const insets = useSafeAreaInsets();
   const { colors: C } = useTheme();
@@ -630,6 +645,7 @@ export function PracticeBookModal({
       editLabel={editLabel}
       setEditLabel={setEditLabel}
       editInputRef={editInputRef}
+      onOpenScore={onOpenScore}
       onRename={editingId === item.id ? handleRename : handleStartRename}
       onLoad={handleLoad}
       onDelete={handleDelete}

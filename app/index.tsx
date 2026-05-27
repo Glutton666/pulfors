@@ -5042,6 +5042,17 @@ export default function MetronomeScreen() {
         onSetGoal={handleSetPracticeNoteGoal}
         currentConfig={currentBarConfig}
         username={username}
+        onOpenScore={(scoreId) => {
+          setActiveModal(null);
+          import("@/lib/score-storage").then(({ loadScore }) => {
+            loadScore(scoreId).then((scoreDoc) => {
+              if (scoreDoc) {
+                setScoreEditorDoc(scoreDoc);
+                setScoreMode("editor");
+              }
+            });
+          });
+        }}
       />
       )}
 

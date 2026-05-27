@@ -27,6 +27,7 @@ import {
 } from "@/lib/score-storage";
 import type { ScoreListItem, ScoreDocument } from "@/lib/score-types";
 import { ScoreNewModal } from "@/components/ScoreNewModal";
+import { importScoreFromJson } from "@/lib/score-io";
 
 export interface ScoreListScreenProps {
   defaultBpm: number;
@@ -94,6 +95,16 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor }: ScoreList
     const copy = await duplicateScore(id);
     if (copy) {
       await refresh();
+    }
+  }
+
+  async function handleImport() {
+    const result = await importScoreFromJson();
+    if (result.success && result.doc) {
+      await refresh();
+      onOpenEditor(result.doc);
+    } else if (result.errorCode && result.errorCode !== "cancelled") {
+      Alert.alert(t("scoreMode", "importJson"), t("scoreMode", "importFail"));
     }
   }
 
@@ -196,6 +207,14 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor }: ScoreList
         </Pressable>
         <Text style={[styles.headerTitle, { color: C.text }]}>{t("scoreMode", "title")}</Text>
         <Pressable
+          style={({ pressed }) => [styles.importBtn, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
+          onPress={handleImport}
+          testID="score-list-import"
+          hitSlop={8}
+        >
+          <Ionicons name="folder-open-outline" size={S.ms(18, 0.4)} color={C.text} />
+        </Pressable>
+        <Pressable
           style={({ pressed }) => [styles.newBtn, { backgroundColor: C.accent }, pressed && { opacity: 0.8 }]}
           onPress={() => setShowNewModal(true)}
           testID="score-list-new"
@@ -271,6 +290,11 @@ const makeStyles = (C: any, S: any) =>
       flex: 1,
       fontFamily: "SpaceGrotesk_600SemiBold",
       fontSize: FontSize.subtitle,
+    },
+    importBtn: {
+      borderWidth: 1,
+      borderRadius: Radius.md,
+      padding: 8,
     },
     newBtn: {
       flexDirection: "row",

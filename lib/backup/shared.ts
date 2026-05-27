@@ -21,7 +21,12 @@ export const ALL_KEYS = [
   "@note_sample_sources",
   "@note_sample_channels",
   "metronome_onboarding_done",
+  // 악보 모드 인덱스 (개별 악보는 SCORE_KEY_PREFIX + id 형태로 동적 관리)
+  "metronome_scores_v1",
 ];
+
+// 악보 개별 항목 키 접두사
+export const SCORE_KEY_PREFIX = "metronome_score_";
 
 // 복원 트랜잭션용 임시 스냅샷 키. restoreFromJson 시작 시 ALL_KEYS의 현재
 // 값을 직렬화해 이 키에 저장하고, 정상 종료 시 삭제한다. 앱이 강제 종료되거나

@@ -7,6 +7,7 @@ import { logger } from "../logger";
 import { captureBreadcrumb } from "../error-tracking";
 import {
   ALL_KEYS,
+  SCORE_KEY_PREFIX,
   MAX_IMPORT_JSON_CHARS,
   RESTORE_SNAPSHOT_KEY,
   type BackupFile,
@@ -31,9 +32,26 @@ export interface ImportBackupResult {
   errorCode?: ImportBackupErrorCode;
 }
 
+/** score 인덱스에서 모든 개별 악보 키를 동적으로 수집한다 */
+async function collectScoreKeys(): Promise<string[]> {
+  try {
+    const indexJson = await AsyncStorage.getItem("metronome_scores_v1");
+    if (!indexJson) return [];
+    const ids: unknown = JSON.parse(indexJson);
+    if (!Array.isArray(ids)) return [];
+    return (ids as unknown[])
+      .filter((v) => typeof v === "string")
+      .map((id) => `${SCORE_KEY_PREFIX}${id}`);
+  } catch {
+    return [];
+  }
+}
+
 export async function exportBackup(): Promise<boolean> {
   try {
-    const pairs = await AsyncStorage.multiGet(ALL_KEYS);
+    const scoreKeys = await collectScoreKeys();
+    const allKeys = [...ALL_KEYS, ...scoreKeys];
+    const pairs = await AsyncStorage.multiGet(allKeys);
     const data: Record<string, string | null> = {};
     for (const [key, value] of pairs) {
       data[key] = value;
@@ -207,7 +225,8 @@ async function restoreFromJsonInternal(
 
     const pairs: [string, string][] = [];
     for (const [key, value] of Object.entries(data)) {
-      if (value !== null && value !== undefined && ALL_KEYS.includes(key)) {
+      const isKnownKey = ALL_KEYS.includes(key) || key.startsWith(SCORE_KEY_PREFIX);
+      if (value !== null && value !== undefined && isKnownKey) {
         pairs.push([key, value]);
       }
     }

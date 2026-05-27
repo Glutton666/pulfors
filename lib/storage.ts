@@ -346,6 +346,7 @@ export interface PracticeEntry {
   notePlayMode?: "once" | "loop" | "random";
   noteQueueEntries?: PracticeEntry[];
   imageUri?: string;
+  scoreId?: string;
 }
 
 // === 컨트롤 패드 매핑 ============================================

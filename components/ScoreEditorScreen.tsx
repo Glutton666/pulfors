@@ -24,6 +24,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import { saveScore, createEmptyMeasure } from "@/lib/score-storage";
+import { exportScoreAsJson, importScoreFromJson, extractParts } from "@/lib/score-io";
+import { loadPracticeBook, savePracticeBook, createPracticeEntry } from "@/lib/storage";
 import type {
   ScoreDocument,
   ScoreMetadata,
@@ -214,9 +216,86 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   // ── 악기 기호 설정 모달 ──────────────────────────────────────
   const [showSymbolSettings, setShowSymbolSettings] = useState(false);
 
+  // ── ⋯ 메뉴 ──────────────────────────────────────────────────
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+
+  // ── 성부 분리 모달 ─────────────────────────────────────────────
+  const [showExtractPartModal, setShowExtractPartModal] = useState(false);
+  const [extractPartIndices, setExtractPartIndices] = useState<number[]>([]);
+
   // ── 저장 ──────────────────────────────────────────────────────
   const [savedToast, setSavedToast] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── IO 핸들러 ─────────────────────────────────────────────────
+
+  async function handleExportJson() {
+    setShowMoreMenu(false);
+    await exportScoreAsJson(doc);
+  }
+
+  async function handleShareScore() {
+    setShowMoreMenu(false);
+    await exportScoreAsJson(doc);
+  }
+
+  async function handleAddToPractice() {
+    setShowMoreMenu(false);
+    try {
+      await saveScore(doc);
+      onSaved(doc);
+      const book = await loadPracticeBook();
+      const bpm_ = doc.bpm;
+      const beats = doc.timeSignature.numerator;
+      const entry = createPracticeEntry(
+        doc.metadata.title || t("scoreMode", "untitled"),
+        {
+          mode: "beat",
+          bpm: bpm_,
+          beatsPerMeasure: beats,
+          beatTypes: (["accent", ...Array(Math.max(0, beats - 1)).fill("normal")] as any),
+          beatSubdivisions: {},
+          barRepeats: {},
+          barLoopMode: "loop",
+          subdivisionPattern: ["accent"],
+          scoreId: doc.id,
+        },
+      );
+      book.unshift(entry);
+      await savePracticeBook(book);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      setSavedToast(true);
+      toastTimerRef.current = setTimeout(() => setSavedToast(false), 1800);
+    } catch {}
+  }
+
+  async function handleImportJson() {
+    setShowMoreMenu(false);
+    const result = await importScoreFromJson();
+    if (result.success) {
+      onBack();
+    } else if (result.errorCode && result.errorCode !== "cancelled") {
+      Alert.alert(t("scoreMode", "importJson"), t("scoreMode", "importFail"));
+    }
+  }
+
+  async function handleExtractPartOpen() {
+    setShowMoreMenu(false);
+    if (doc.parts.length <= 1) {
+      const newDoc = await extractParts(doc, [0]);
+      if (newDoc) onBack();
+      return;
+    }
+    setExtractPartIndices([]);
+    setShowExtractPartModal(true);
+  }
+
+  async function handleExtractConfirm() {
+    setShowExtractPartModal(false);
+    if (extractPartIndices.length === 0) return;
+    const newDoc = await extractParts(doc, extractPartIndices);
+    if (newDoc) onBack();
+  }
 
   const handleSave = useCallback(async () => {
     try {
@@ -907,12 +986,12 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           <Ionicons name="information-circle-outline" size={S.ms(20, 0.4)} color={C.text} />
         </Pressable>
 
-        {/* 악기 기호 설정 */}
+        {/* ⋯ 더 보기 메뉴 */}
         <Pressable
           style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
-          onPress={() => setShowSymbolSettings(true)}
+          onPress={() => setShowMoreMenu(true)}
           hitSlop={8}
-          testID="score-editor-symbol-settings"
+          testID="score-editor-more-menu"
         >
           <Ionicons name="ellipsis-horizontal" size={S.ms(20, 0.4)} color={C.text} />
         </Pressable>
@@ -1194,6 +1273,124 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           onSymbolToggle={handleSymbolToggle}
         />
       </View>
+
+      {/* ── ⋯ 더 보기 메뉴 모달 ─────────────────────────────────── */}
+      <Modal
+        visible={showMoreMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMoreMenu(false)}
+      >
+        <Pressable style={styles.symbolModalBackdrop} onPress={() => setShowMoreMenu(false)}>
+          <Pressable
+            style={[styles.symbolModalCard, { backgroundColor: C.surface, borderColor: C.border }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={[styles.symbolModalTitle, { color: C.text }]}>
+              {t("scoreMode", "moreMenu")}
+            </Text>
+            <Pressable
+              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+              onPress={handleExportJson}
+              testID="score-menu-export"
+            >
+              <Ionicons name="share-outline" size={18} color={C.accent} />
+              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "exportJson")}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+              onPress={handleImportJson}
+              testID="score-menu-import"
+            >
+              <Ionicons name="folder-open-outline" size={18} color={C.accent} />
+              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "importJson")}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+              onPress={handleAddToPractice}
+              testID="score-menu-add-to-practice"
+            >
+              <Ionicons name="book-outline" size={18} color={C.accent} />
+              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "addToPractice")}</Text>
+            </Pressable>
+            {doc.parts.length > 1 && (
+              <Pressable
+                style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+                onPress={handleExtractPartOpen}
+                testID="score-menu-extract-part"
+              >
+                <Ionicons name="git-branch-outline" size={18} color={C.accent} />
+                <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "extractPart")}</Text>
+              </Pressable>
+            )}
+            <Pressable
+              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+              onPress={() => { setShowMoreMenu(false); setShowSymbolSettings(true); }}
+              testID="score-menu-symbol-settings"
+            >
+              <Ionicons name="settings-outline" size={18} color={C.accent} />
+              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "symbolSettingsTitle")}</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── 성부 분리 모달 ─────────────────────────────────────────── */}
+      <Modal
+        visible={showExtractPartModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowExtractPartModal(false)}
+      >
+        <Pressable style={styles.symbolModalBackdrop} onPress={() => setShowExtractPartModal(false)}>
+          <Pressable
+            style={[styles.symbolModalCard, { backgroundColor: C.surface, borderColor: C.border }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={[styles.symbolModalTitle, { color: C.text }]}>
+              {t("scoreMode", "extractPartTitle")}
+            </Text>
+            {doc.parts.map((part, pIdx) => (
+              <Pressable
+                key={part.id}
+                style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+                onPress={() =>
+                  setExtractPartIndices((prev) =>
+                    prev.includes(pIdx) ? prev.filter((i) => i !== pIdx) : [...prev, pIdx],
+                  )
+                }
+                testID={`score-extract-part-${pIdx}`}
+              >
+                <Ionicons
+                  name={extractPartIndices.includes(pIdx) ? "checkbox" : "square-outline"}
+                  size={18}
+                  color={C.accent}
+                />
+                <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
+                  {part.name ?? part.instrumentId}
+                </Text>
+              </Pressable>
+            ))}
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+              <Pressable
+                style={[styles.ctxMenuItem, { flex: 1, borderBottomWidth: 0 }]}
+                onPress={() => setShowExtractPartModal(false)}
+              >
+                <Text style={[styles.ctxMenuLabel, { color: C.textSecondary, textAlign: "center" }]}>
+                  {t("scoreMode", "cancel")}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.symbolModalClose, { flex: 1, backgroundColor: extractPartIndices.length > 0 ? C.accent : C.border }]}
+                onPress={handleExtractConfirm}
+                testID="score-extract-confirm"
+              >
+                <Text style={styles.symbolModalCloseText}>{t("scoreMode", "extractPart")}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* ── 악기 기호 설정 모달 ─────────────────────────────────── */}
       <Modal
