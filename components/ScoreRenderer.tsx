@@ -496,6 +496,9 @@ interface MeasureRenderProps {
   playheadFraction?: number;
   highlightColor?: string;
   showPlayhead?: boolean;
+  // 크레셴도/데크레셴도 span 상태 (PartRender에서 계산)
+  crescState?: "start" | "middle" | "end" | "full";
+  decrescState?: "start" | "middle" | "end" | "full";
 }
 
 function MeasureRender({
@@ -516,6 +519,8 @@ function MeasureRender({
   playheadFraction = 0,
   highlightColor = "rgba(100,180,255,0.18)",
   showPlayhead = true,
+  crescState,
+  decrescState,
 }: MeasureRenderProps) {
   const clef = part.clef;
 
@@ -704,21 +709,75 @@ function MeasureRender({
         </SvgText>
       )}
 
-      {/* 크레셴도 헤어핀 (< 모양) */}
-      {measure.crescStart && (
-        <G>
-          <Line x1={contentX + 4} y1={staffY + STAFF_HEIGHT + 16} x2={x + width - 4} y2={staffY + STAFF_HEIGHT + 10} stroke={color} strokeWidth={1} strokeLinecap="round" />
-          <Line x1={contentX + 4} y1={staffY + STAFF_HEIGHT + 16} x2={x + width - 4} y2={staffY + STAFF_HEIGHT + 22} stroke={color} strokeWidth={1} strokeLinecap="round" />
-        </G>
-      )}
+      {/* 크레셴도 헤어핀 (< 모양) — span 기반 */}
+      {crescState && (() => {
+        const hairY = staffY + STAFF_HEIGHT + 16;
+        const x0 = x + 4;
+        const x1 = x + width - 4;
+        // "start": 왼쪽 꼭짓점 → 오른쪽 열린 끝
+        if (crescState === "start") return (
+          <G>
+            <Line x1={x0} y1={hairY} x2={x1} y2={hairY - 6} stroke={color} strokeWidth={1} strokeLinecap="round" />
+            <Line x1={x0} y1={hairY} x2={x1} y2={hairY + 6} stroke={color} strokeWidth={1} strokeLinecap="round" />
+          </G>
+        );
+        // "middle": 두 수평선
+        if (crescState === "middle") return (
+          <G>
+            <Line x1={x0} y1={hairY - 6} x2={x1} y2={hairY - 6} stroke={color} strokeWidth={1} strokeLinecap="round" />
+            <Line x1={x0} y1={hairY + 6} x2={x1} y2={hairY + 6} stroke={color} strokeWidth={1} strokeLinecap="round" />
+          </G>
+        );
+        // "end": 왼쪽 열린 끝 → 오른쪽 꼭짓점
+        if (crescState === "end") return (
+          <G>
+            <Line x1={x0} y1={hairY - 6} x2={x1} y2={hairY} stroke={color} strokeWidth={1} strokeLinecap="round" />
+            <Line x1={x0} y1={hairY + 6} x2={x1} y2={hairY} stroke={color} strokeWidth={1} strokeLinecap="round" />
+          </G>
+        );
+        // "full": 단일 마디 전체
+        return (
+          <G>
+            <Line x1={x0} y1={hairY} x2={x1} y2={hairY - 6} stroke={color} strokeWidth={1} strokeLinecap="round" />
+            <Line x1={x0} y1={hairY} x2={x1} y2={hairY + 6} stroke={color} strokeWidth={1} strokeLinecap="round" />
+          </G>
+        );
+      })()}
 
-      {/* 데크레셴도 헤어핀 (> 모양) */}
-      {measure.decrescStart && (
-        <G>
-          <Line x1={contentX + 4} y1={staffY + STAFF_HEIGHT + 10} x2={x + width - 4} y2={staffY + STAFF_HEIGHT + 16} stroke={color} strokeWidth={1} strokeLinecap="round" />
-          <Line x1={contentX + 4} y1={staffY + STAFF_HEIGHT + 22} x2={x + width - 4} y2={staffY + STAFF_HEIGHT + 16} stroke={color} strokeWidth={1} strokeLinecap="round" />
-        </G>
-      )}
+      {/* 데크레셴도 헤어핀 (> 모양) — span 기반 */}
+      {decrescState && (() => {
+        const hairY = staffY + STAFF_HEIGHT + 16;
+        const x0 = x + 4;
+        const x1 = x + width - 4;
+        // "start": 왼쪽 열린 끝 → 오른쪽 진행
+        if (decrescState === "start") return (
+          <G>
+            <Line x1={x0} y1={hairY - 6} x2={x1} y2={hairY} stroke={color} strokeWidth={1} strokeLinecap="round" />
+            <Line x1={x0} y1={hairY + 6} x2={x1} y2={hairY} stroke={color} strokeWidth={1} strokeLinecap="round" />
+          </G>
+        );
+        // "middle": 두 수평선
+        if (decrescState === "middle") return (
+          <G>
+            <Line x1={x0} y1={hairY - 6} x2={x1} y2={hairY - 6} stroke={color} strokeWidth={1} strokeLinecap="round" />
+            <Line x1={x0} y1={hairY + 6} x2={x1} y2={hairY + 6} stroke={color} strokeWidth={1} strokeLinecap="round" />
+          </G>
+        );
+        // "end": 닫힌 꼭짓점
+        if (decrescState === "end") return (
+          <G>
+            <Line x1={x0} y1={hairY} x2={x1} y2={hairY + 6} stroke={color} strokeWidth={1} strokeLinecap="round" />
+            <Line x1={x0} y1={hairY} x2={x1} y2={hairY - 6} stroke={color} strokeWidth={1} strokeLinecap="round" />
+          </G>
+        );
+        // "full": 단일 마디 전체
+        return (
+          <G>
+            <Line x1={x0} y1={hairY - 6} x2={x1} y2={hairY} stroke={color} strokeWidth={1} strokeLinecap="round" />
+            <Line x1={x0} y1={hairY + 6} x2={x1} y2={hairY} stroke={color} strokeWidth={1} strokeLinecap="round" />
+          </G>
+        );
+      })()}
 
       {/* 반복 끝 */}
       {measure.repeatEnd && <RepeatDots x={x + width - 6} y={staffY} isStart={false} color={color} />}
@@ -776,15 +835,73 @@ function PartRender({
   highlightColor,
   showPlayhead = true,
 }: PartRenderProps) {
+  // 마디별 유효 박자표/BPM + cresc span 사전 계산
+  let effNum = doc.timeSignature.numerator;
+  let effDen = doc.timeSignature.denominator;
+  let crescActive = false;
+  let decrescActive = false;
+
+  // 선형 순서로 모든 마디 스캔 (rowLayout flatten)
+  const allMeasureIndices = rowLayout.flatMap((r) => r.measureIndices);
+  const measureMeta: {
+    timeNum: number; timeDen: number;
+    crescState?: "start" | "middle" | "end" | "full";
+    decrescState?: "start" | "middle" | "end" | "full";
+  }[] = allMeasureIndices.map((mIdx) => {
+    const m = measures[mIdx];
+    if (!m) return { timeNum: effNum, timeDen: effDen };
+
+    // 마디별 박자표 갱신
+    if (m.timeSignature) {
+      effNum = m.timeSignature.numerator;
+      effDen = m.timeSignature.denominator;
+    }
+
+    // cresc span 계산
+    let cState: "start" | "middle" | "end" | "full" | undefined;
+    if (m.crescStart && m.crescEnd) { cState = "full"; crescActive = false; }
+    else if (m.crescStart)          { cState = "start"; crescActive = true; }
+    else if (crescActive && m.crescEnd)  { cState = "end"; crescActive = false; }
+    else if (crescActive)           { cState = "middle"; }
+
+    let dState: "start" | "middle" | "end" | "full" | undefined;
+    if (m.decrescStart && m.decrescEnd) { dState = "full"; decrescActive = false; }
+    else if (m.decrescStart)            { dState = "start"; decrescActive = true; }
+    else if (decrescActive && m.decrescEnd) { dState = "end"; decrescActive = false; }
+    else if (decrescActive)             { dState = "middle"; }
+
+    return { timeNum: effNum, timeDen: effDen, crescState: cState, decrescState: dState };
+  });
+  // mIdx → 위 배열 인덱스 매핑
+  const mIdxToMetaIdx: Record<number, number> = {};
+  allMeasureIndices.forEach((mIdx, i) => { mIdxToMetaIdx[mIdx] = i; });
+
+  // 박자표 표시 변경 감지 (이전 마디와 다를 때만 표시)
+  const timeSigChangedAt: Set<number> = new Set();
+  let prevNum = doc.timeSignature.numerator;
+  let prevDen = doc.timeSignature.denominator;
+  allMeasureIndices.forEach((mIdx) => {
+    const meta = measureMeta[mIdxToMetaIdx[mIdx]];
+    if (!meta) return;
+    if (meta.timeNum !== prevNum || meta.timeDen !== prevDen) {
+      timeSigChangedAt.add(mIdx);
+      prevNum = meta.timeNum;
+      prevDen = meta.timeDen;
+    }
+  });
+
   return (
     <G>
       {rowLayout.map((row, rowIdx) =>
         row.measureIndices.map((mIdx, posInRow) => {
           const measure = measures[mIdx];
           if (!measure) return null;
+          const metaIdx = mIdxToMetaIdx[mIdx] ?? 0;
+          const meta = measureMeta[metaIdx] ?? { timeNum: doc.timeSignature.numerator, timeDen: doc.timeSignature.denominator };
           const isFirst = mIdx === 0;
           const showClef = posInRow === 0;
-          const showTimeSig = posInRow === 0;
+          // 박자표 표시: 첫 마디이거나 박자표가 변경된 마디
+          const showTimeSig = posInRow === 0 || timeSigChangedAt.has(mIdx);
           const x = row.measureWidths.slice(0, posInRow).reduce((a, b) => a + b, 0);
           const staffY = row.y + STAFF_PADDING_TOP;
           const isPlayheadMeasure = playheadMeasureIdx === mIdx;
@@ -802,13 +919,15 @@ function PartRender({
               showTimeSig={showTimeSig}
               sharps={doc.keySignature.sharps}
               color={color}
-              timeNumerator={doc.timeSignature.numerator}
-              timeDenominator={doc.timeSignature.denominator}
+              timeNumerator={meta.timeNum}
+              timeDenominator={meta.timeDen}
               selectedElementId={selectedElementId}
               isPlayheadMeasure={isPlayheadMeasure}
               playheadFraction={isPlayheadMeasure ? playheadFraction : 0}
               highlightColor={highlightColor}
               showPlayhead={showPlayhead}
+              crescState={meta.crescState}
+              decrescState={meta.decrescState}
             />
           );
         })

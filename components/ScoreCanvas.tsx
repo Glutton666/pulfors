@@ -290,6 +290,7 @@ export function ScoreCanvas({
     let tapStartX = 0;
     let tapStartY = 0;
     let isMoving = false;
+    let didLongPress = false;
     let longPressTimer: ReturnType<typeof setTimeout> | null = null;
 
     const clearLongPress = () => {
@@ -308,6 +309,7 @@ export function ScoreCanvas({
         tapStartX = lx;
         tapStartY = ly;
         isMoving = false;
+        didLongPress = false;
         dragElementIdRef.current = null;
         dragMeasureIdxRef.current = -1;
 
@@ -317,7 +319,10 @@ export function ScoreCanvas({
           longPressTimer = null;
           if (!isMoving && onMeasureLongPressRef.current) {
             const mIdx = hitTestMeasure(lx, ly);
-            if (mIdx !== null) onMeasureLongPressRef.current(mIdx);
+            if (mIdx !== null) {
+              didLongPress = true;
+              onMeasureLongPressRef.current(mIdx);
+            }
           }
         }, 500);
 
@@ -362,6 +367,15 @@ export function ScoreCanvas({
         clearLongPress();
         const { locationX: lx, locationY: ly } = e.nativeEvent;
         setGhost(null);
+
+        // 롱프레스로 컨텍스트 메뉴가 열렸으면 탭/도구 액션 억제
+        if (didLongPress) {
+          didLongPress = false;
+          dragElementIdRef.current = null;
+          dragMeasureIdxRef.current = -1;
+          return;
+        }
+
         const tool = activeToolRef.current;
         const baseDur = activeDurationRef.current;
         const dur: NoteDuration = isDottedRef.current
