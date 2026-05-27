@@ -15,6 +15,12 @@ export const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.crea
     justifyContent: "flex-end",
     overflow: "hidden" as const,
   },
+  contentBarMode: {
+    flex: 1,
+    paddingHorizontal: 0,
+    justifyContent: "flex-end",
+    overflow: "hidden" as const,
+  },
   contentLandscape: {
     flex: 1,
     paddingHorizontal: S.ms(16, 0.3),

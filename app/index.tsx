@@ -5164,7 +5164,11 @@ export default function MetronomeScreen() {
 
       <View
         style={[
-          isLandscape ? styles.contentLandscape : styles.content,
+          isLandscape
+            ? styles.contentLandscape
+            : barMode
+              ? styles.contentBarMode
+              : styles.content,
           {
             paddingTop: noteMode
               ? (isLandscape ? (insets.top || 8) : (insets.top || webTopInset) + 4)
@@ -5175,12 +5179,6 @@ export default function MetronomeScreen() {
           },
           isLandscape && noteMode && { paddingHorizontal: Spacing.sm },
           noteMode && { justifyContent: "flex-start" as const },
-          barMode && !isLandscape && {
-            maxWidth: undefined,
-            paddingHorizontal: 0,
-            alignSelf: "stretch" as const,
-            width: undefined,
-          },
         ]}
       >
         {noteMode ? (
