@@ -445,6 +445,10 @@ interface MeasureRenderProps {
   timeNumerator: number;
   timeDenominator: number;
   selectedElementId?: string | null;
+  isPlayheadMeasure?: boolean;
+  playheadFraction?: number;
+  highlightColor?: string;
+  showPlayhead?: boolean;
 }
 
 function MeasureRender({
@@ -461,6 +465,10 @@ function MeasureRender({
   timeNumerator,
   timeDenominator,
   selectedElementId,
+  isPlayheadMeasure = false,
+  playheadFraction = 0,
+  highlightColor = "rgba(100,180,255,0.18)",
+  showPlayhead = true,
 }: MeasureRenderProps) {
   const clef = part.clef;
 
@@ -484,6 +492,18 @@ function MeasureRender({
 
   return (
     <G>
+      {/* 현재 마디 하이라이트 */}
+      {isPlayheadMeasure && (
+        <Rect
+          x={x}
+          y={staffY - STAFF_PADDING_TOP + 4}
+          width={width}
+          height={STAFF_PADDING_TOP + STAFF_HEIGHT + STAFF_PADDING_BOTTOM - 8}
+          fill={highlightColor}
+          rx={4}
+        />
+      )}
+
       <StaffLines x={x} y={staffY} width={width} color={color} />
 
       {/* 음자리표 */}
@@ -560,6 +580,18 @@ function MeasureRender({
 
       {/* 마디선 */}
       <Barline x={x + width} y={staffY} height={STAFF_HEIGHT} color={color} />
+
+      {/* Playhead 세로선 */}
+      {isPlayheadMeasure && showPlayhead && (
+        <Line
+          x1={x + playheadFraction * width}
+          y1={staffY - STAFF_PADDING_TOP + 8}
+          x2={x + playheadFraction * width}
+          y2={staffY + STAFF_HEIGHT + STAFF_PADDING_BOTTOM - 8}
+          stroke="rgba(60,140,255,0.9)"
+          strokeWidth={2}
+        />
+      )}
     </G>
   );
 }
@@ -575,6 +607,9 @@ interface PartRenderProps {
   color: string;
   selectedElementId?: string | null;
   playheadMeasureIdx?: number;
+  playheadFraction?: number;
+  highlightColor?: string;
+  showPlayhead?: boolean;
 }
 
 interface RowLayout {
@@ -584,7 +619,18 @@ interface RowLayout {
   rowWidth: number;
 }
 
-function PartRender({ part, measures, rowLayout, doc, color, selectedElementId, playheadMeasureIdx }: PartRenderProps) {
+function PartRender({
+  part,
+  measures,
+  rowLayout,
+  doc,
+  color,
+  selectedElementId,
+  playheadMeasureIdx,
+  playheadFraction = 0,
+  highlightColor,
+  showPlayhead = true,
+}: PartRenderProps) {
   return (
     <G>
       {rowLayout.map((row, rowIdx) =>
@@ -596,6 +642,7 @@ function PartRender({ part, measures, rowLayout, doc, color, selectedElementId, 
           const showTimeSig = posInRow === 0;
           const x = row.measureWidths.slice(0, posInRow).reduce((a, b) => a + b, 0);
           const staffY = row.y + STAFF_PADDING_TOP;
+          const isPlayheadMeasure = playheadMeasureIdx === mIdx;
 
           return (
             <MeasureRender
@@ -613,6 +660,10 @@ function PartRender({ part, measures, rowLayout, doc, color, selectedElementId, 
               timeNumerator={doc.timeSignature.numerator}
               timeDenominator={doc.timeSignature.denominator}
               selectedElementId={selectedElementId}
+              isPlayheadMeasure={isPlayheadMeasure}
+              playheadFraction={isPlayheadMeasure ? playheadFraction : 0}
+              highlightColor={highlightColor}
+              showPlayhead={showPlayhead}
             />
           );
         })
@@ -628,6 +679,9 @@ export interface ScoreRendererProps {
   containerWidth: number;
   selectedElementId?: string | null;
   playheadMeasureIdx?: number;
+  playheadFraction?: number;
+  showPlayhead?: boolean;
+  highlightColor?: string;
   showPartNames?: boolean;
 }
 
@@ -708,6 +762,9 @@ export function ScoreRenderer({
   containerWidth,
   selectedElementId,
   playheadMeasureIdx,
+  playheadFraction = 0,
+  showPlayhead = true,
+  highlightColor,
   showPartNames = true,
 }: ScoreRendererProps) {
   const { colors: C } = useTheme();
@@ -759,6 +816,9 @@ export function ScoreRenderer({
               color={strokeColor}
               selectedElementId={selectedElementId}
               playheadMeasureIdx={playheadMeasureIdx}
+              playheadFraction={playheadFraction}
+              showPlayhead={showPlayhead}
+              highlightColor={highlightColor}
             />
           </G>
         );

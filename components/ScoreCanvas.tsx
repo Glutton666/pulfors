@@ -73,6 +73,11 @@ export interface ScoreCanvasProps {
   onMeasureTap: (measureIdx: number) => void;
   onEraseElement: (elementId: string, measureIdx: number) => void;
   onNoteMoved?: (elementId: string, measureIdx: number, newPitch: Pitch) => void;
+  // 재생 연동
+  playheadMeasureIdx?: number;
+  playheadFraction?: number;
+  showPlayhead?: boolean;
+  highlightColor?: string;
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
@@ -92,6 +97,10 @@ export function ScoreCanvas({
   onMeasureTap,
   onEraseElement,
   onNoteMoved,
+  playheadMeasureIdx,
+  playheadFraction = 0,
+  showPlayhead = true,
+  highlightColor,
 }: ScoreCanvasProps) {
   const { colors: C } = useTheme();
   const [ghost, setGhost] = useState<GhostState | null>(null);
@@ -379,6 +388,10 @@ export function ScoreCanvas({
         doc={doc}
         containerWidth={containerWidth}
         selectedElementId={selectedElementId}
+        playheadMeasureIdx={playheadMeasureIdx}
+        playheadFraction={playheadFraction}
+        showPlayhead={showPlayhead}
+        highlightColor={highlightColor}
       />
 
       {/* 터치 + 가이드선 + 고스트 SVG 오버레이 */}

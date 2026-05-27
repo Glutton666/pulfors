@@ -957,7 +957,7 @@ export const translations = {
     articulAccent:          { ko: "악센트", en: "Accent" },
     articulFermata:         { ko: "페르마타", en: "Fermata" },
     articulMarcato:         { ko: "마르카토", en: "Marcato" },
-    zoomViewLabel:          { ko: "확대 보기", en: "Zoom" },
+    zoomViewLabel:          { ko: "현재 마디 확대", en: "Current Measure" },
     instrumentSymbolsLabel: { ko: "악기별 기호", en: "Instrument Symbols" },
     deleteSelected:         { ko: "선택 삭제", en: "Delete Selected" },
     inputHint:              { ko: "오선보를 탭해서 음표 입력", en: "Tap the staff to place a note" },
@@ -998,6 +998,13 @@ export const translations = {
     // 설정 모달
     symbolSettingsTitle:    { ko: "악기 기호 설정", en: "Symbol Settings" },
     done:                   { ko: "완료", en: "Done" },
+    // 재생 관련
+    play:                   { ko: "재생", en: "Play" },
+    pause:                  { ko: "일시정지", en: "Pause" },
+    stop:                   { ko: "정지", en: "Stop" },
+    playbackSettings:       { ko: "재생 설정", en: "Playback Settings" },
+    showPlayhead:           { ko: "재생 위치 선 표시", en: "Show Playhead" },
+    showZoomView:           { ko: "확대 뷰 표시", en: "Show Zoom View" },
   },
 } as const satisfies TranslationsShape;
 

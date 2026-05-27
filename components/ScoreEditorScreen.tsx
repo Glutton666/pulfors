@@ -36,7 +36,9 @@ import type {
 import { INSTRUMENTS } from "@/lib/score-types";
 import { ScoreCanvas } from "@/components/ScoreCanvas";
 import type { EditorTool } from "@/components/ScoreCanvas";
+import { ScoreRenderer } from "@/components/ScoreRenderer";
 import { ScorePalette, ALL_INSTR_SYMBOLS } from "@/components/ScorePalette";
+import { useScorePlayback } from "@/hooks/useScorePlayback";
 
 // ── 헬퍼 ──────────────────────────────────────────────────────
 
@@ -146,6 +148,34 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   const [selectedPartIdx, setSelectedPartIdx] = useState(0);
   const [selectedMeasureIdx, setSelectedMeasureIdx] = useState<number | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+
+  // ── 재생 연동 ─────────────────────────────────────────────────
+  const playback = useScorePlayback(doc);
+  const scoreScrollRef = useRef<ScrollView>(null);
+  const measureRowYRef = useRef<Record<number, number>>({}); // measureIdx → scrollY
+
+  // currentMeasureIdx 변경 시 자동 스크롤
+  useEffect(() => {
+    if (!playback.isPlaying) return;
+    const y = measureRowYRef.current[playback.currentMeasureIdx];
+    if (y !== undefined) {
+      scoreScrollRef.current?.scrollTo({ y: Math.max(0, y - 48), animated: true });
+    }
+  }, [playback.currentMeasureIdx, playback.isPlaying]);
+
+  // 재생 설정 (doc.playbackSettings 기반)
+  const showPlayhead = doc.playbackSettings?.showPlayhead !== false;
+  const showZoomView = doc.playbackSettings?.showZoomView !== false;
+
+  function updatePlaybackSettings(patch: { showPlayhead?: boolean; showZoomView?: boolean }) {
+    applyDoc({
+      ...doc,
+      playbackSettings: { ...doc.playbackSettings, ...patch },
+    });
+  }
+
+  // 하이라이트 색상
+  const highlightColor = C.accent + "28"; // ~16% opacity
 
   // ── 악기 기호 설정 모달 ──────────────────────────────────────
   const [showSymbolSettings, setShowSymbolSettings] = useState(false);
@@ -524,6 +554,32 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           <Ionicons name="arrow-redo" size={S.ms(20, 0.4)} color={C.text} />
         </Pressable>
 
+        {/* 재생/정지 버튼 */}
+        <Pressable
+          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
+          onPress={playback.isPlaying ? playback.pause : playback.play}
+          hitSlop={8}
+          testID="score-editor-play"
+        >
+          <Ionicons
+            name={playback.isPlaying ? "pause" : "play"}
+            size={S.ms(20, 0.4)}
+            color={playback.isPlaying ? C.accent : C.text}
+          />
+        </Pressable>
+
+        {/* 정지 버튼 (재생 중에만) */}
+        {playback.isPlaying && (
+          <Pressable
+            style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
+            onPress={playback.stop}
+            hitSlop={8}
+            testID="score-editor-stop"
+          >
+            <Ionicons name="stop" size={S.ms(18, 0.4)} color={C.text} />
+          </Pressable>
+        )}
+
         {/* 악기 기호 설정 */}
         <Pressable
           style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
@@ -618,6 +674,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
 
       {/* ── 악보 스크롤 영역 ───────────────────────────────────── */}
       <ScrollView
+        ref={scoreScrollRef}
         style={styles.scoreScroll}
         contentContainerStyle={[
           styles.scoreContent,
@@ -663,6 +720,10 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             onMeasureTap={handleMeasureTap}
             onEraseElement={handleEraseElement}
             onNoteMoved={handleNoteMoved}
+            playheadMeasureIdx={playback.isPlaying ? playback.currentMeasureIdx : undefined}
+            playheadFraction={playback.playheadFraction}
+            showPlayhead={showPlayhead}
+            highlightColor={highlightColor}
           />
         ) : (
           <Text style={{ color: C.textSecondary, marginTop: 24 }}>
@@ -736,6 +797,32 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
         )}
       </ScrollView>
 
+      {/* ── 확대 뷰 (재생 중 현재 마디) ────────────────────────── */}
+      {playback.isPlaying && showZoomView && currentPart && (
+        <View style={[styles.zoomViewWrapper, { backgroundColor: C.surface, borderTopColor: C.border }]}>
+          <Text style={[styles.zoomViewLabel, { color: C.textSecondary }]}>
+            {t("scoreMode", "zoomViewLabel")} — {playback.currentMeasureIdx + 1}
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <ScoreRenderer
+              doc={{
+                ...doc,
+                parts: doc.parts.map((p) => ({
+                  ...p,
+                  measures: [p.measures[playback.currentMeasureIdx]].filter(Boolean) as typeof p.measures,
+                })),
+              }}
+              containerWidth={containerWidth * 1.4}
+              playheadMeasureIdx={0}
+              playheadFraction={playback.playheadFraction}
+              showPlayhead={showPlayhead}
+              highlightColor={highlightColor}
+              showPartNames={false}
+            />
+          </ScrollView>
+        </View>
+      )}
+
       {/* ── 하단 팔레트 ──────────────────────────────────────────── */}
       <View
         style={[
@@ -797,6 +884,37 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             <Text style={[styles.symbolModalSub, { color: C.textSecondary }]}>
               {currentPart?.name ?? currentPart?.instrumentId ?? ""}
             </Text>
+            {/* 재생 설정 섹션 */}
+            <View style={[styles.playbackSection, { borderBottomColor: C.border }]}>
+              <Text style={[styles.playbackSectionTitle, { color: C.textSecondary }]}>
+                {t("scoreMode", "playbackSettings")}
+              </Text>
+              <View style={[styles.symbolRow, { borderBottomColor: C.border }]}>
+                <Text style={[styles.symbolRowLabel, { color: C.text }]}>
+                  {t("scoreMode", "showPlayhead")}
+                </Text>
+                <Switch
+                  value={showPlayhead}
+                  onValueChange={(v) => updatePlaybackSettings({ showPlayhead: v })}
+                  trackColor={{ false: C.border, true: C.accent }}
+                  thumbColor={showPlayhead ? "#fff" : "#ccc"}
+                  testID="score-toggle-show-playhead"
+                />
+              </View>
+              <View style={[styles.symbolRow, { borderBottomColor: C.border }]}>
+                <Text style={[styles.symbolRowLabel, { color: C.text }]}>
+                  {t("scoreMode", "showZoomView")}
+                </Text>
+                <Switch
+                  value={showZoomView}
+                  onValueChange={(v) => updatePlaybackSettings({ showZoomView: v })}
+                  trackColor={{ false: C.border, true: C.accent }}
+                  thumbColor={showZoomView ? "#fff" : "#ccc"}
+                  testID="score-toggle-show-zoom-view"
+                />
+              </View>
+            </View>
+
             <ScrollView style={styles.symbolModalList} showsVerticalScrollIndicator={false}>
               {ALL_INSTR_SYMBOLS.map((sym) => {
                 const enabled = (currentPart?.enabledSymbols ?? {})[sym.id] !== false;
@@ -965,6 +1083,31 @@ const makeStyles = (C: any, S: any) =>
     addMeasureText: {
       fontFamily: "SpaceGrotesk_400Regular",
       fontSize: FontSize.small,
+    },
+    // ── 확대 뷰 ──────────────────────────────────────────────────
+    zoomViewWrapper: {
+      borderTopWidth: 1,
+      paddingVertical: 6,
+      paddingHorizontal: Spacing.md,
+      maxHeight: 180,
+    },
+    zoomViewLabel: {
+      fontFamily: "SpaceGrotesk_400Regular",
+      fontSize: 10,
+      marginBottom: 4,
+      letterSpacing: 0.5,
+    },
+    // ── 재생 설정 섹션 ────────────────────────────────────────────
+    playbackSection: {
+      borderBottomWidth: 1,
+      paddingBottom: 8,
+      marginBottom: 8,
+    },
+    playbackSectionTitle: {
+      fontFamily: "SpaceGrotesk_500Medium",
+      fontSize: FontSize.small,
+      marginBottom: 6,
+      marginTop: 4,
     },
     paletteWrapper: {
       shadowColor: "#000",
