@@ -326,6 +326,7 @@ export function BeatIndicator({
   const startXRef = useRef(0);
   const isDraggingRef = useRef(false);
   const triggeredRef = useRef(false);
+  const lastDxRef = useRef(0);
   const beatsRef = useRef(beatsPerMeasure);
   const onBeatsChangeRef = useRef(onBeatsChange);
   const containerRef = useRef<View>(null);
@@ -358,11 +359,13 @@ export function BeatIndicator({
   }, []);
 
   const processMoveByDx = useCallback((dx: number) => {
+    lastDxRef.current = dx;
     const progress = Math.min(Math.abs(dx) / SWIPE_THRESHOLD, 1);
     const canAdd = beatsRef.current < MAX_BEATS;
     const canRemove = beatsRef.current > MIN_BEATS;
 
-    dialRotation.value = dx * -0.08;
+    // 부호 수정: 오른쪽 스와이프(dx>0)면 다이얼이 오른쪽으로 기움
+    dialRotation.value = dx * 0.08;
 
     if (dx > 0 && canAdd) {
       swipeDirection.value = 1;
@@ -374,22 +377,33 @@ export function BeatIndicator({
       swipeDirection.value = 0;
       swipeProgress.value = 0;
     }
+    // 비트 변경은 스와이프 종료(release) 시점에만 실행
+  }, []);
 
-    if (progress >= 1 && !triggeredRef.current) {
-      triggeredRef.current = true;
+  // 스와이프 종료 시 실제 비트 변경 커밋
+  const commitAndResetRef = useRef<() => void>(() => {});
+  const commitAndReset = useCallback(() => {
+    const dx = lastDxRef.current;
+    const progress = Math.min(Math.abs(dx) / SWIPE_THRESHOLD, 1);
+    if (progress >= 1) {
+      const canAdd = beatsRef.current < MAX_BEATS;
+      const canRemove = beatsRef.current > MIN_BEATS;
       if (dx > 0 && canAdd) {
-        if (Platform.OS !== "web") {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        }
+        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         onBeatsChangeRef.current(beatsRef.current + 1);
       } else if (dx < 0 && canRemove) {
-        if (Platform.OS !== "web") {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        }
+        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         onBeatsChangeRef.current(beatsRef.current - 1);
       }
     }
-  }, []);
+    lastDxRef.current = 0;
+    triggeredRef.current = false;
+    resetVisuals();
+  }, [resetVisuals]);
+
+  useEffect(() => {
+    commitAndResetRef.current = commitAndReset;
+  }, [commitAndReset]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -408,7 +422,7 @@ export function BeatIndicator({
     const handleMouseUp = () => {
       if (!isDraggingRef.current) return;
       isDraggingRef.current = false;
-      resetVisuals();
+      commitAndResetRef.current();
     };
     const handleTouchStart = (e: TouchEvent) => {
       if (e.touches.length === 0) return;
@@ -423,7 +437,7 @@ export function BeatIndicator({
     const handleTouchEnd = () => {
       if (!isDraggingRef.current) return;
       isDraggingRef.current = false;
-      resetVisuals();
+      commitAndResetRef.current();
     };
 
     // dial 컨테이너가 다음 페인트에 마운트되었을 수 있으므로 짧게 폴링
@@ -491,9 +505,10 @@ export function BeatIndicator({
             processMoveByDx(gs.dx);
           },
           onPanResponderRelease: () => {
-            resetVisuals();
+            commitAndResetRef.current();
           },
           onPanResponderTerminate: () => {
+            lastDxRef.current = 0;
             resetVisuals();
           },
           onPanResponderTerminationRequest: () => true,
