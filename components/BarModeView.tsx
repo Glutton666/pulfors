@@ -347,10 +347,16 @@ function SwipeableBarRow({
               );
             })}
 
-            {/* 비트 셀 위 info overlay — 재생 중 현재 바는 투명하게 */}
-            <View style={[styles.barCellOverlay, { backgroundColor: `rgba(0,0,0,${isCurrentBeat && isPlaying ? 0 : cellOverlayOpacity ?? 0.55})` }]} pointerEvents="none">
+            {/* 비트 셀 위 info overlay — 오버레이 제거, 텍스트 그림자로 가독성 확보 */}
+            <View style={[styles.barCellOverlay, { backgroundColor: "transparent" }]} pointerEvents="none">
               <Text
-                style={[styles.barCenterInfo, { color: isCurrentBeat ? C.accent : C.text, fontSize: ms(13, 0.45) }]}
+                style={[styles.barCenterInfo, {
+                  color: isCurrentBeat ? C.accent : C.text,
+                  fontSize: ms(13, 0.45),
+                  textShadowColor: "rgba(0,0,0,0.85)",
+                  textShadowOffset: { width: 0, height: 1 },
+                  textShadowRadius: 4,
+                }]}
                 numberOfLines={1}
               >
                 {isPlaying && progressTotal && progressTotal > 1 && progressCurrent !== undefined
@@ -1223,8 +1229,8 @@ export function BarModeView({
           </Pressable>
         </View>
 
-        {/* 인라인 반복 패널 (메인 탭에서 항상 표시, 재생 중에는 읽기 전용) */}
-        {activeLayerTab === 0 && (
+        {/* 인라인 반복 패널 (모든 탭에서 표시, 편집기 접힘 시 숨김) */}
+        {!editorCollapsed && (
           <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, opacity: isPlaying ? 0.5 : 1 }]}>
             {/* 타입 토글 + 값 스테퍼 한 줄 */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
