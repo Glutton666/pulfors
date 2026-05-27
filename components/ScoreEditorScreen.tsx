@@ -21,6 +21,7 @@ import * as Crypto from "expo-crypto";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
+import { useScoreLineSpacing } from "@/lib/score-scale";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import { saveScore, createEmptyMeasure } from "@/lib/score-storage";
 import { exportScoreAsJson, exportScoreAsJpg, importScoreFromJson, importReferenceImage, extractParts } from "@/lib/score-io";
@@ -103,6 +104,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   const insets = useSafeAreaInsets();
   const S = useScale();
   const { width: windowWidth } = useWindowDimensions();
+  const lineSpacing = useScoreLineSpacing();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const topInset = insets.top || webTopInset;
   const bottomInset = insets.bottom || (Platform.OS === "web" ? 34 : 0);
@@ -1196,6 +1198,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
               playheadFraction={playback.playheadFraction}
               showPlayhead={showPlayhead}
               highlightColor={highlightColor}
+              lineSpacing={lineSpacing}
             />
             {/* 참조 이미지 오버레이 (편집 불가) */}
             {doc.referenceImageUri ? (
@@ -1317,6 +1320,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
               showPlayhead={showPlayhead}
               highlightColor={highlightColor}
               showPartNames={false}
+              lineSpacing={lineSpacing}
             />
           </ScrollView>
         </View>

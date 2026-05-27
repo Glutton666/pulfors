@@ -25,6 +25,7 @@ import {
   KEY_SIG_ACCIDENTAL_WIDTH,
   layoutMeasure,
 } from "@/lib/score-layout";
+import { BASE_LINE_SPACING, scoreScaleFactor } from "@/lib/score-scale";
 import type {
   ScoreDocument,
   Pitch,
@@ -79,6 +80,8 @@ export interface ScoreCanvasProps {
   playheadFraction?: number;
   showPlayhead?: boolean;
   highlightColor?: string;
+  /** 화면 크기에 맞는 line spacing (px). 기본값 = 10. useScoreLineSpacing()으로 계산. */
+  lineSpacing?: number;
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
@@ -103,9 +106,17 @@ export function ScoreCanvas({
   playheadFraction = 0,
   showPlayhead = true,
   highlightColor,
+  lineSpacing = BASE_LINE_SPACING,
 }: ScoreCanvasProps) {
   const { colors: C } = useTheme();
   const [ghost, setGhost] = useState<GhostState | null>(null);
+
+  // SVG 스케일 팩터: 물리 터치 좌표 ↔ 레이아웃 좌표 변환에 사용
+  const sf = scoreScaleFactor(lineSpacing);
+  const sfRef = useRef(sf);
+  sfRef.current = sf;
+  // 레이아웃 계산에 사용하는 논리 너비 (LINE_SPACING=10 기반)
+  const layoutWidth = containerWidth / sf;
 
   // refs를 통해 PanResponder 클로저에서 최신 값 참조
   const activeToolRef = useRef(activeTool);
@@ -134,8 +145,8 @@ export function ScoreCanvas({
   const dragOriginalAccidentalRef = useRef<Accidental | null | undefined>(undefined);
 
   const { rows, totalHeight } = useMemo(
-    () => computeScoreLayout(doc, containerWidth),
-    [doc, containerWidth],
+    () => computeScoreLayout(doc, layoutWidth),
+    [doc, layoutWidth],
   );
 
   const clef = doc.parts[selectedPartIdx]?.clef ?? "treble";
@@ -328,8 +339,12 @@ export function ScoreCanvas({
 
       onPanResponderGrant: (e) => {
         const { locationX: lx, locationY: ly } = e.nativeEvent;
-        tapStartX = lx;
-        tapStartY = ly;
+        // 물리 터치 좌표 → 레이아웃 좌표 (LINE_SPACING=10 기반)
+        const scale = sfRef.current;
+        const slx = lx / scale;
+        const sly = ly / scale;
+        tapStartX = slx;
+        tapStartY = sly;
         isMoving = false;
         didLongPress = false;
         dragElementIdRef.current = null;
@@ -340,7 +355,7 @@ export function ScoreCanvas({
         longPressTimer = setTimeout(() => {
           longPressTimer = null;
           if (!isMoving && onMeasureLongPressRef.current) {
-            const mIdx = hitTestMeasure(lx, ly);
+            const mIdx = hitTestMeasure(slx, sly);
             if (mIdx !== null) {
               didLongPress = true;
               onMeasureLongPressRef.current(mIdx);
@@ -349,10 +364,10 @@ export function ScoreCanvas({
         }, 500);
 
         if (activeToolRef.current === "note" || activeToolRef.current === "rest") {
-          setGhost(touchToGhost(lx, ly));
+          setGhost(touchToGhost(slx, sly));
         } else if (activeToolRef.current === "select" && selectedElementIdRef.current) {
           // 선택된 음표의 드래그 시작점 기록
-          const hit = hitTestElement(lx, ly);
+          const hit = hitTestElement(slx, sly);
           if (hit && hit.elementId === selectedElementIdRef.current) {
             dragElementIdRef.current = hit.elementId;
             dragMeasureIdxRef.current = hit.measureIdx;
@@ -369,25 +384,31 @@ export function ScoreCanvas({
 
       onPanResponderMove: (e) => {
         const { locationX: lx, locationY: ly } = e.nativeEvent;
-        const dx = lx - tapStartX;
-        const dy = ly - tapStartY;
+        const scale = sfRef.current;
+        const slx = lx / scale;
+        const sly = ly / scale;
+        const dx = slx - tapStartX;
+        const dy = sly - tapStartY;
         if (Math.sqrt(dx * dx + dy * dy) > 8) { isMoving = true; clearLongPress(); }
 
         if (activeToolRef.current === "note" || activeToolRef.current === "rest") {
-          setGhost(touchToGhost(lx, ly));
+          setGhost(touchToGhost(slx, sly));
         } else if (
           activeToolRef.current === "select" &&
           dragElementIdRef.current &&
           isMoving
         ) {
           // 선택된 음표 드래그: 고스트로 새 음높이 미리 보기
-          setGhost(touchToGhost(lx, ly));
+          setGhost(touchToGhost(slx, sly));
         }
       },
 
       onPanResponderRelease: (e) => {
         clearLongPress();
         const { locationX: lx, locationY: ly } = e.nativeEvent;
+        const scale = sfRef.current;
+        const slx = lx / scale;
+        const sly = ly / scale;
         setGhost(null);
 
         // 롱프레스로 컨텍스트 메뉴가 열렸으면 탭/도구 액션 억제
@@ -405,17 +426,17 @@ export function ScoreCanvas({
           : baseDur;
 
         if (tool === "note") {
-          const info = touchToGhost(lx, ly);
+          const info = touchToGhost(slx, sly);
           if (info) onNotePlaced(info.measureIdx, info.pitch, dur, info.insertIdx);
         } else if (tool === "rest") {
-          const info = touchToGhost(lx, ly);
+          const info = touchToGhost(slx, sly);
           if (info) onRestPlaced(info.measureIdx, dur, info.insertIdx);
         } else if (tool === "erase") {
-          const hit = hitTestElement(lx, ly);
+          const hit = hitTestElement(slx, sly);
           if (hit) onEraseElement(hit.elementId, hit.measureIdx);
         } else if (tool === "select") {
           if (isMoving && dragElementIdRef.current && dragMeasureIdxRef.current >= 0) {
-            const info = touchToGhost(lx, ly);
+            const info = touchToGhost(slx, sly);
             if (info) {
               const origAcc = dragOriginalAccidentalRef.current;
               const finalPitch: Pitch =
@@ -432,7 +453,7 @@ export function ScoreCanvas({
             dragMeasureIdxRef.current = -1;
             dragOriginalAccidentalRef.current = undefined;
           } else if (!isMoving) {
-            const hit = hitTestElement(lx, ly);
+            const hit = hitTestElement(slx, sly);
             if (hit) onElementTap(hit.elementId, hit.measureIdx);
           }
         }
@@ -451,7 +472,11 @@ export function ScoreCanvas({
     ? (`${activeDuration}_dot` as NoteDuration)
     : activeDuration;
 
-  const svgH = Math.max(totalHeight, 60);
+  // 레이아웃 높이(논리)와 물리 높이 분리
+  const svgH = Math.max(totalHeight, 60);        // 논리 높이 (layout space)
+  const svgHPhys = svgH * sf;                    // 물리 높이 (physical pixels)
+  // 오버레이 SVG viewBox: 논리 좌표계(layout space)를 물리 픽셀로 균일 확대
+  const overlayViewBox = `0 0 ${layoutWidth} ${svgH}`;
 
   return (
     <View style={styles.container}>
@@ -464,26 +489,29 @@ export function ScoreCanvas({
         playheadFraction={playheadFraction}
         showPlayhead={showPlayhead}
         highlightColor={highlightColor}
+        lineSpacing={lineSpacing}
       />
 
       {/* 터치 + 가이드선 + 고스트 SVG 오버레이
           View로 감싸서 panHandlers를 View에 붙임 —
-          웹에서 SVG에 직접 panHandlers를 붙이면 포인터 이벤트가 차단됨 */}
+          웹에서 SVG에 직접 panHandlers를 붙이면 포인터 이벤트가 차단됨.
+          overlayViewBox = layout space → ghost 좌표가 ScoreRenderer와 동일한 논리 좌표계 사용 */}
       <View
-        style={{ position: "absolute", top: 0, left: 0, width: containerWidth, height: svgH }}
+        style={{ position: "absolute", top: 0, left: 0, width: containerWidth, height: svgHPhys }}
         {...panResponder.panHandlers}
       >
         <Svg
           width={containerWidth}
-          height={svgH}
+          height={svgHPhys}
+          viewBox={overlayViewBox}
           style={StyleSheet.absoluteFillObject}
         >
-          {/* 수평 점선 가이드 (음높이) */}
+          {/* 수평 점선 가이드 (음높이) — ghost 좌표는 layout space */}
           {ghost && (
             <Line
               x1={0}
               y1={ghost.noteY}
-              x2={containerWidth}
+              x2={layoutWidth}
               y2={ghost.noteY}
               stroke={C.accent}
               strokeWidth={0.8}

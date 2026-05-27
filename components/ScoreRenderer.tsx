@@ -35,6 +35,7 @@ import {
   KEY_SIG_POSITIONS,
   computeScoreLayout,
 } from "@/lib/score-layout";
+import { BASE_LINE_SPACING, scoreScaleFactor } from "@/lib/score-scale";
 import type { ScoreRowLayout } from "@/lib/score-layout";
 import type { ScoreDocument, ScorePart, ScoreMeasure, ScoreNote, ScoreRest, ClefType, NoteDuration, ArticulationType } from "@/lib/score-types";
 
@@ -937,6 +938,8 @@ export interface ScoreRendererProps {
   showPlayhead?: boolean;
   highlightColor?: string;
   showPartNames?: boolean;
+  /** 화면 크기에 맞는 line spacing (px). 기본값 = 10. useScoreLineSpacing()으로 계산. */
+  lineSpacing?: number;
 }
 
 
@@ -949,13 +952,19 @@ export function ScoreRenderer({
   showPlayhead = true,
   highlightColor,
   showPartNames = true,
+  lineSpacing = BASE_LINE_SPACING,
 }: ScoreRendererProps) {
   const { colors: C } = useTheme();
   const strokeColor = C.text;
 
+  // SVG 스케일 팩터: LINE_SPACING(10) 기반 레이아웃을 lineSpacing 크기로 균일 확대
+  const sf = scoreScaleFactor(lineSpacing);
+  // 레이아웃은 항상 LINE_SPACING=10 기반으로 계산; containerWidth를 sf로 나눠 논리 너비를 좁힘
+  const layoutWidth = containerWidth / sf;
+
   const { rows, totalHeight } = useMemo(
-    () => computeScoreLayout(doc, containerWidth),
-    [doc, containerWidth],
+    () => computeScoreLayout(doc, layoutWidth),
+    [doc, layoutWidth],
   );
 
   if (!doc.parts.length) {
@@ -966,11 +975,14 @@ export function ScoreRenderer({
     );
   }
 
-  const svgWidth = containerWidth;
   const svgHeight = Math.max(totalHeight, 100);
 
+  // viewBox="0 0 {layoutWidth} {svgHeight}" 으로 SVG 콘텐츠를 sf배 균일 확대
+  // 물리 SVG 크기: width=containerWidth, height=svgHeight*sf
+  const viewBox = `0 0 ${layoutWidth} ${svgHeight}`;
+
   return (
-    <Svg width={svgWidth} height={svgHeight} style={styles.svg}>
+    <Svg width={containerWidth} height={svgHeight * sf} viewBox={viewBox} style={styles.svg}>
       {doc.parts.map((part, partIdx) => {
         // 각 성부는 y 오프셋 적용
         const partYOffset = partIdx * PART_HEIGHT;
