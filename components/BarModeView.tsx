@@ -135,6 +135,7 @@ export interface BarModeViewProps {
   ms: (size: number, factor?: number) => number;
   cellOverlayOpacity?: number;
   rowHeight?: number;
+  onExitBarMode?: () => void;
 }
 
 // ─── 상수 ────────────────────────────────────────────────────────────────────
@@ -346,8 +347,8 @@ function SwipeableBarRow({
               );
             })}
 
-            {/* 비트 셀 위 info overlay */}
-            <View style={[styles.barCellOverlay, { backgroundColor: `rgba(0,0,0,${cellOverlayOpacity ?? 0.55})` }]} pointerEvents="none">
+            {/* 비트 셀 위 info overlay — 재생 중 현재 바는 투명하게 */}
+            <View style={[styles.barCellOverlay, { backgroundColor: `rgba(0,0,0,${isCurrentBeat && isPlaying ? 0 : cellOverlayOpacity ?? 0.55})` }]} pointerEvents="none">
               <Text
                 style={[styles.barCenterInfo, { color: isCurrentBeat ? C.accent : C.text, fontSize: ms(13, 0.45) }]}
                 numberOfLines={1}
@@ -393,6 +394,7 @@ export function BarModeView({
   colors: C, ms,
   cellOverlayOpacity,
   rowHeight,
+  onExitBarMode,
 }: BarModeViewProps) {
 
   const { t } = useLanguage();
@@ -1065,6 +1067,15 @@ export function BarModeView({
             testID="bar-beats-plus"
             t={t}
           />
+          {onExitBarMode && (
+            <Pressable
+              onPress={onExitBarMode}
+              hitSlop={10}
+              style={[styles.stpBtn, { backgroundColor: C.overlay08, marginLeft: 4 }]}
+            >
+              <Ionicons name="close" size={ms(14, 0.4)} color={C.textSecondary} />
+            </Pressable>
+          )}
         </View>
       </View>
 
@@ -1156,6 +1167,17 @@ export function BarModeView({
           );
         })}
 
+        {/* 스와이프 힌트 (바 미선택 시 빈 공간에 표시) */}
+        {editingBeat === null && !isPlaying && (
+          <View style={[styles.swipeHintRow, { paddingTop: 12 }]}>
+            <Text style={[styles.swipeHintText, { color: C.textTertiary }]}>{t("barModeView", "swipeHintCopy")}</Text>
+            <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, opacity: 0.3, marginHorizontal: 8 }}>|</Text>
+            <Text style={[styles.swipeHintText, { color: C.textTertiary }]}>{t("barModeView", "swipeHintEdit")}</Text>
+            <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, opacity: 0.3, marginHorizontal: 8 }}>|</Text>
+            <Text style={[styles.swipeHintText, { color: C.textTertiary }]}>{t("barModeView", "swipeHintAdd")}</Text>
+          </View>
+        )}
+
         {/* 바 목록 하단 여백 */}
         <View style={{ height: 8 }} />
       </ScrollView>
@@ -1202,7 +1224,7 @@ export function BarModeView({
         </View>
 
         {/* 인라인 반복 패널 (메인 탭에서 항상 표시, 재생 중에는 읽기 전용) */}
-        {!editorCollapsed && activeLayerTab === 0 && (
+        {activeLayerTab === 0 && (
           <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, opacity: isPlaying ? 0.5 : 1 }]}>
             {/* 타입 토글 + 값 스테퍼 한 줄 */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
@@ -1303,16 +1325,6 @@ export function BarModeView({
           </View>
         )}
 
-        {/* 스와이프 힌트 (바 미선택 시) */}
-        {!editorCollapsed && editingBeat === null && (
-          <View style={styles.swipeHintRow}>
-            <Text style={[styles.swipeHintText, { color: C.textTertiary }]}>{t("barModeView", "swipeHintCopy")}</Text>
-            <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, opacity: 0.3, marginHorizontal: 8 }}>|</Text>
-            <Text style={[styles.swipeHintText, { color: C.textTertiary }]}>{t("barModeView", "swipeHintEdit")}</Text>
-            <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, opacity: 0.3, marginHorizontal: 8 }}>|</Text>
-            <Text style={[styles.swipeHintText, { color: C.textTertiary }]}>{t("barModeView", "swipeHintAdd")}</Text>
-          </View>
-        )}
 
         {/* 레이어 내용 */}
         {!editorCollapsed && (activeLayerTab === 0 ? (
