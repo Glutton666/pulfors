@@ -995,6 +995,9 @@ export const translations = {
     catPercussion:          { ko: "타악", en: "Percussion" },
     catKeyboard:            { ko: "건반", en: "Keyboard" },
     catVocal:               { ko: "성악", en: "Vocal" },
+    // 설정 모달
+    symbolSettingsTitle:    { ko: "악기 기호 설정", en: "Symbol Settings" },
+    done:                   { ko: "완료", en: "Done" },
   },
 } as const satisfies TranslationsShape;
 

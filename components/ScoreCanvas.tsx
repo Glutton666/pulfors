@@ -263,7 +263,8 @@ export function ScoreCanvas({
       // 모든 도구에서 터치 시작 시 캡처 — 단일 PanResponder 레이어로 탭/드래그 통합 처리
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderTerminationRequest: () => false,
+      // 드래그 중이 아니면 ScrollView에 양보하여 스크롤 허용
+      onPanResponderTerminationRequest: () => !dragElementIdRef.current,
 
       onPanResponderGrant: (e) => {
         const { locationX: lx, locationY: ly } = e.nativeEvent;

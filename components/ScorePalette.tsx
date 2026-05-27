@@ -83,7 +83,7 @@ const TEMPOS: TempoItem[] = [
 
 // ── 악기별 특수 기호 ──────────────────────────────────────────
 
-interface InstrSymbol { id: string; symbol: string; labelKey: string; }
+export interface InstrSymbol { id: string; symbol: string; labelKey: string; }
 
 const STRINGS_SYMBOLS: InstrSymbol[] = [
   { id: "bowUp",     symbol: "↑",     labelKey: "symBowUp" },
@@ -117,6 +117,19 @@ const PERC_SYMBOLS: InstrSymbol[] = [
   { id: "bowDown",  symbol: "↓",  labelKey: "symBowDown" },
   { id: "harmonic", symbol: "◇",  labelKey: "symHarmonic" },
 ];
+
+// 설정 메뉴에서 사용할 전체 악기 기호 목록 (중복 제거)
+export const ALL_INSTR_SYMBOLS: InstrSymbol[] = (() => {
+  const seen = new Set<string>();
+  return [
+    ...STRINGS_SYMBOLS, ...KEYBOARD_SYMBOLS,
+    ...WOODWIND_SYMBOLS, ...VOCAL_SYMBOLS, ...PERC_SYMBOLS,
+  ].filter((s) => {
+    if (seen.has(s.id)) return false;
+    seen.add(s.id);
+    return true;
+  });
+})();
 
 // ── 악기 카테고리 서브탭 ──────────────────────────────────────
 

@@ -7,8 +7,10 @@ import {
   View,
   Text,
   ScrollView,
+  Modal,
   StyleSheet,
   Pressable,
+  Switch,
   Alert,
   Platform,
   useWindowDimensions,
@@ -34,7 +36,7 @@ import type {
 import { INSTRUMENTS } from "@/lib/score-types";
 import { ScoreCanvas } from "@/components/ScoreCanvas";
 import type { EditorTool } from "@/components/ScoreCanvas";
-import { ScorePalette } from "@/components/ScorePalette";
+import { ScorePalette, ALL_INSTR_SYMBOLS } from "@/components/ScorePalette";
 
 // ── 헬퍼 ──────────────────────────────────────────────────────
 
@@ -144,6 +146,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   const [selectedPartIdx, setSelectedPartIdx] = useState(0);
   const [selectedMeasureIdx, setSelectedMeasureIdx] = useState<number | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+
+  // ── 악기 기호 설정 모달 ──────────────────────────────────────
+  const [showSymbolSettings, setShowSymbolSettings] = useState(false);
 
   // ── 저장 ──────────────────────────────────────────────────────
   const [savedToast, setSavedToast] = useState(false);
@@ -519,6 +524,16 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           <Ionicons name="arrow-redo" size={S.ms(20, 0.4)} color={C.text} />
         </Pressable>
 
+        {/* 악기 기호 설정 */}
+        <Pressable
+          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
+          onPress={() => setShowSymbolSettings(true)}
+          hitSlop={8}
+          testID="score-editor-symbol-settings"
+        >
+          <Ionicons name="ellipsis-horizontal" size={S.ms(20, 0.4)} color={C.text} />
+        </Pressable>
+
         {/* 저장 */}
         <Pressable
           style={({ pressed }) => [
@@ -609,7 +624,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           { paddingHorizontal: Spacing.lg, paddingBottom: bottomInset + 180 },
         ]}
         showsVerticalScrollIndicator={false}
-        scrollEnabled={false}
+        scrollEnabled={activeTool !== "note" && activeTool !== "rest"}
       >
         {/* 악보 메타 */}
         <View style={styles.scoreHeader}>
@@ -760,6 +775,57 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           onSymbolToggle={handleSymbolToggle}
         />
       </View>
+
+      {/* ── 악기 기호 설정 모달 ─────────────────────────────────── */}
+      <Modal
+        visible={showSymbolSettings}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSymbolSettings(false)}
+      >
+        <Pressable
+          style={[styles.symbolModalBackdrop]}
+          onPress={() => setShowSymbolSettings(false)}
+        >
+          <Pressable
+            style={[styles.symbolModalCard, { backgroundColor: C.surface, borderColor: C.border }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={[styles.symbolModalTitle, { color: C.text }]}>
+              {t("scoreMode", "symbolSettingsTitle")}
+            </Text>
+            <Text style={[styles.symbolModalSub, { color: C.textSecondary }]}>
+              {currentPart?.name ?? currentPart?.instrumentId ?? ""}
+            </Text>
+            <ScrollView style={styles.symbolModalList} showsVerticalScrollIndicator={false}>
+              {ALL_INSTR_SYMBOLS.map((sym) => {
+                const enabled = (currentPart?.enabledSymbols ?? {})[sym.id] !== false;
+                return (
+                  <View key={sym.id} style={[styles.symbolRow, { borderBottomColor: C.border }]}>
+                    <Text style={[styles.symbolRowSym, { color: C.accent }]}>{sym.symbol}</Text>
+                    <Text style={[styles.symbolRowLabel, { color: C.text }]}>
+                      {t("scoreMode", sym.labelKey as any) || sym.id}
+                    </Text>
+                    <Switch
+                      value={enabled}
+                      onValueChange={(v) => handleSymbolToggle(sym.id, v)}
+                      trackColor={{ false: C.border, true: C.accent }}
+                      thumbColor={enabled ? "#fff" : "#ccc"}
+                      testID={`score-symbol-toggle-${sym.id}`}
+                    />
+                  </View>
+                );
+              })}
+            </ScrollView>
+            <Pressable
+              style={[styles.symbolModalClose, { backgroundColor: C.accent }]}
+              onPress={() => setShowSymbolSettings(false)}
+            >
+              <Text style={styles.symbolModalCloseText}>{t("scoreMode", "done")}</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -906,5 +972,63 @@ const makeStyles = (C: any, S: any) =>
       shadowOpacity: 0.08,
       shadowRadius: 4,
       elevation: 4,
+    },
+    // ── 악기 기호 설정 모달 ─────────────────────────────────────
+    symbolModalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "center",
+      alignItems: "center",
+      padding: Spacing.lg,
+    },
+    symbolModalCard: {
+      width: "100%",
+      maxWidth: 400,
+      maxHeight: "70%",
+      borderRadius: Radius.lg,
+      borderWidth: 1,
+      padding: Spacing.lg,
+    },
+    symbolModalTitle: {
+      fontFamily: "SpaceGrotesk_600SemiBold",
+      fontSize: FontSize.body,
+      marginBottom: 2,
+    },
+    symbolModalSub: {
+      fontFamily: "SpaceGrotesk_400Regular",
+      fontSize: FontSize.small,
+      marginBottom: Spacing.md,
+    },
+    symbolModalList: {
+      maxHeight: 320,
+      marginBottom: Spacing.md,
+    },
+    symbolRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      gap: 8,
+    },
+    symbolRowSym: {
+      width: 36,
+      fontFamily: "SpaceGrotesk_600SemiBold",
+      fontSize: FontSize.body,
+      textAlign: "center",
+    },
+    symbolRowLabel: {
+      flex: 1,
+      fontFamily: "SpaceGrotesk_400Regular",
+      fontSize: FontSize.small,
+    },
+    symbolModalClose: {
+      borderRadius: Radius.md,
+      paddingVertical: 10,
+      alignItems: "center",
+    },
+    symbolModalCloseText: {
+      fontFamily: "SpaceGrotesk_600SemiBold",
+      fontSize: FontSize.small,
+      color: "#fff",
     },
   });
