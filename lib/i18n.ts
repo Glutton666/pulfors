@@ -962,6 +962,32 @@ export const translations = {
     deleteSelected:         { ko: "선택 삭제", en: "Delete Selected" },
     inputHint:              { ko: "오선보를 탭해서 음표 입력", en: "Tap the staff to place a note" },
     symbolsOnOff:           { ko: "악기 기호 활성화", en: "Instrument Symbols" },
+    // 팔레트 탭 추가
+    paletteTempo:           { ko: "빠르기", en: "Tempo" },
+    paletteInstr:           { ko: "악기 기호", en: "Symbols" },
+    // 빠르기 용어
+    tempoLargo:             { ko: "라르고", en: "Largo" },
+    tempoAdagio:            { ko: "아다지오", en: "Adagio" },
+    tempoAndante:           { ko: "안단테", en: "Andante" },
+    tempoModerato:          { ko: "모데라토", en: "Moderato" },
+    tempoAllegro:           { ko: "알레그로", en: "Allegro" },
+    tempoVivace:            { ko: "비바체", en: "Vivace" },
+    tempoPresto:            { ko: "프레스토", en: "Presto" },
+    tempoRit:               { ko: "rit.", en: "rit." },
+    tempoAccel:             { ko: "accel.", en: "accel." },
+    // 악기별 특수 기호
+    symBowUp:               { ko: "활 위", en: "Bow Up" },
+    symBowDown:             { ko: "활 아래", en: "Bow Down" },
+    symHarmonic:            { ko: "하모닉스", en: "Harmonic" },
+    symPizzicato:           { ko: "피치카토", en: "Pizzicato" },
+    symArco:                { ko: "아르코", en: "Arco" },
+    symPedal:               { ko: "페달", en: "Pedal" },
+    symPedalEnd:            { ko: "페달 끝", en: "Ped. Off" },
+    symOttava:              { ko: "8va", en: "8va" },
+    symArpeggio:            { ko: "아르페지오", en: "Arpeggio" },
+    symEnableHint:          { ko: "탭하여 활성화/비활성화", en: "Tap to toggle" },
+    symEnabled:             { ko: "활성화됨", en: "Enabled" },
+    symDisabled:            { ko: "비활성화됨", en: "Disabled" },
   },
 } as const satisfies TranslationsShape;
 

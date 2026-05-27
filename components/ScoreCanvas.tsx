@@ -67,6 +67,7 @@ export interface ScoreCanvasProps {
   onElementTap: (elementId: string, measureIdx: number) => void;
   onMeasureTap: (measureIdx: number) => void;
   onEraseAtPoint: (measureIdx: number) => void;
+  onNoteMoved?: (elementId: string, measureIdx: number, newPitch: Pitch) => void;
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
@@ -85,6 +86,7 @@ export function ScoreCanvas({
   onElementTap,
   onMeasureTap,
   onEraseAtPoint,
+  onNoteMoved,
 }: ScoreCanvasProps) {
   const { colors: C } = useTheme();
   const [ghost, setGhost] = useState<GhostState | null>(null);
@@ -94,10 +96,18 @@ export function ScoreCanvas({
   const activeDurationRef = useRef(activeDuration);
   const isDottedRef = useRef(isDotted);
   const accidentalRef = useRef(accidental);
+  const selectedElementIdRef = useRef(selectedElementId);
+  const onNoteMoveRef = useRef(onNoteMoved);
   activeToolRef.current = activeTool;
   activeDurationRef.current = activeDuration;
   isDottedRef.current = isDotted;
   accidentalRef.current = accidental;
+  selectedElementIdRef.current = selectedElementId;
+  onNoteMoveRef.current = onNoteMoved;
+
+  // 음표 드래그 상태 refs
+  const dragElementIdRef = useRef<string | null>(null);
+  const dragMeasureIdxRef = useRef<number>(-1);
 
   const { rows, totalHeight } = useMemo(
     () => computeScoreLayout(doc, containerWidth),
@@ -198,16 +208,31 @@ export function ScoreCanvas({
 
     return PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () =>
-        activeToolRef.current === "note" || activeToolRef.current === "rest",
+      onMoveShouldSetPanResponder: () => {
+        const tool = activeToolRef.current;
+        if (tool === "note" || tool === "rest") return true;
+        // 선택 모드 + 선택된 음표가 있으면 드래그 허용
+        if (tool === "select" && selectedElementIdRef.current) return true;
+        return false;
+      },
 
       onPanResponderGrant: (e) => {
         const { locationX: lx, locationY: ly } = e.nativeEvent;
         tapStartX = lx;
         tapStartY = ly;
         isMoving = false;
+        dragElementIdRef.current = null;
+        dragMeasureIdxRef.current = -1;
+
         if (activeToolRef.current === "note" || activeToolRef.current === "rest") {
           setGhost(touchToGhost(lx, ly));
+        } else if (activeToolRef.current === "select" && selectedElementIdRef.current) {
+          // 선택된 음표의 드래그 시작점 기록
+          const hit = hitTestElement(lx, ly);
+          if (hit && hit.elementId === selectedElementIdRef.current) {
+            dragElementIdRef.current = hit.elementId;
+            dragMeasureIdxRef.current = hit.measureIdx;
+          }
         }
       },
 
@@ -216,7 +241,15 @@ export function ScoreCanvas({
         const dx = lx - tapStartX;
         const dy = ly - tapStartY;
         if (Math.sqrt(dx * dx + dy * dy) > 4) isMoving = true;
+
         if (activeToolRef.current === "note" || activeToolRef.current === "rest") {
+          setGhost(touchToGhost(lx, ly));
+        } else if (
+          activeToolRef.current === "select" &&
+          dragElementIdRef.current &&
+          isMoving
+        ) {
+          // 선택된 음표 드래그: 고스트로 새 음높이 미리 보기
           setGhost(touchToGhost(lx, ly));
         }
       },
@@ -239,13 +272,32 @@ export function ScoreCanvas({
         } else if (tool === "erase") {
           const info = touchToGhost(lx, ly);
           if (info) onEraseAtPoint(info.measureIdx);
-        } else if (tool === "select" && !isMoving) {
-          const hit = hitTestElement(lx, ly);
-          if (hit) onElementTap(hit.elementId, hit.measureIdx);
+        } else if (tool === "select") {
+          if (isMoving && dragElementIdRef.current && dragMeasureIdxRef.current >= 0) {
+            // 드래그 종료 → 새 음높이로 이동
+            const info = touchToGhost(lx, ly);
+            if (info) {
+              onNoteMoveRef.current?.(
+                dragElementIdRef.current,
+                dragMeasureIdxRef.current,
+                info.pitch,
+              );
+            }
+            dragElementIdRef.current = null;
+            dragMeasureIdxRef.current = -1;
+          } else if (!isMoving) {
+            // 탭 → 선택
+            const hit = hitTestElement(lx, ly);
+            if (hit) onElementTap(hit.elementId, hit.measureIdx);
+          }
         }
       },
 
-      onPanResponderTerminate: () => setGhost(null),
+      onPanResponderTerminate: () => {
+        setGhost(null);
+        dragElementIdRef.current = null;
+        dragMeasureIdxRef.current = -1;
+      },
     });
   }, [touchToGhost, hitTestElement, onNotePlaced, onRestPlaced, onEraseAtPoint, onElementTap]);
 

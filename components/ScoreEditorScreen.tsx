@@ -31,6 +31,7 @@ import type {
   ArticulationType,
   Dynamic,
 } from "@/lib/score-types";
+import { INSTRUMENTS } from "@/lib/score-types";
 import { ScoreCanvas } from "@/components/ScoreCanvas";
 import type { EditorTool } from "@/components/ScoreCanvas";
 import { ScorePalette } from "@/components/ScorePalette";
@@ -310,7 +311,12 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             ...m,
             elements: m.elements.map((el) => {
               if (el.id !== selectedElementId || el.type !== "note") return el;
-              return { ...el, accidental: acc ?? undefined };
+              // accidental은 Pitch.accidental에 저장 (ScoreNote에 직접 없음)
+              const newPitch: Pitch = {
+                ...el.pitch,
+                accidental: acc ?? undefined,
+              };
+              return { ...el, pitch: newPitch };
             }),
           })),
         };
@@ -342,6 +348,75 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
               return { ...el, articulations: next.length ? next : undefined };
             }),
           })),
+        };
+      }),
+    };
+    applyDoc(newDoc);
+  }
+
+  // ── 음표 드래그 이동 (선택 모드에서 위아래 드래그 → 음높이 변경) ──
+  function handleNoteMoved(elementId: string, measureIdx: number, newPitch: Pitch) {
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
+        if (pIdx !== selectedPartIdx) return p;
+        return {
+          ...p,
+          measures: p.measures.map((m, mIdx) => {
+            if (mIdx !== measureIdx) return m;
+            return {
+              ...m,
+              elements: m.elements.map((el) => {
+                if (el.id !== elementId || el.type !== "note") return el;
+                return { ...el, pitch: newPitch };
+              }),
+            };
+          }),
+        };
+      }),
+    };
+    applyDoc(newDoc);
+  }
+
+  // ── 악기별 기호 ON/OFF 토글 ─────────────────────────────────
+  function handleSymbolToggle(symId: string, enabled: boolean) {
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
+        if (pIdx !== selectedPartIdx) return p;
+        const prevEnabled = p.enabledSymbols ?? {};
+        return {
+          ...p,
+          enabledSymbols: { ...prevEnabled, [symId]: enabled },
+        };
+      }),
+    };
+    applyDoc(newDoc);
+  }
+
+  // ── 빠르기 기호 선택 → 현재 선택된 마디 첫 박에 추가 ────────
+  function handleTempoSelect(tempoText: string, bpm: number) {
+    const targetIdx = selectedMeasureIdx ?? 0;
+    const newDoc: ScoreDocument = {
+      ...doc,
+      bpm: bpm > 0 ? bpm : doc.bpm,
+      parts: doc.parts.map((p, pIdx) => {
+        if (pIdx !== selectedPartIdx) return p;
+        return {
+          ...p,
+          measures: p.measures.map((m, mIdx) => {
+            if (mIdx !== targetIdx) return m;
+            // tempoText를 첫 번째 음표/쉼표의 rehearsalMark 옆에 저장
+            // ScoreMeasure에 tempoText 필드가 없으므로 elements[0]의 jumpText로 저장
+            if (m.elements.length === 0) return m;
+            return {
+              ...m,
+              elements: m.elements.map((el, ei) => {
+                if (ei !== 0) return el;
+                return { ...el, jumpText: tempoText };
+              }),
+            };
+          }),
         };
       }),
     };
@@ -540,6 +615,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             onElementTap={handleElementTap}
             onMeasureTap={handleMeasureTap}
             onEraseAtPoint={handleEraseAtPoint}
+            onNoteMoved={handleNoteMoved}
           />
         ) : (
           <Text style={{ color: C.textSecondary, marginTop: 24 }}>
@@ -630,12 +706,17 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           accidental={accidental}
           selectedArticulation={selectedArticulation}
           selectedDynamic={selectedDynamic}
+          instrumentCategory={
+            currentPart
+              ? (INSTRUMENTS[currentPart.instrumentId]?.category ?? undefined)
+              : undefined
+          }
+          enabledSymbols={currentPart?.enabledSymbols ?? {}}
           onToolChange={setActiveTool}
           onDurationChange={setActiveDuration}
           onDottedChange={setIsDotted}
           onAccidentalChange={(acc) => {
             setAccidental(acc);
-            // 선택된 음표에 즉시 적용
             if (selectedElementId) handleApplyAccidentalToSelected(acc);
           }}
           onArticulationSelect={(art) => {
@@ -643,6 +724,8 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             if (selectedElementId) handleApplyArticulationToSelected(art);
           }}
           onDynamicSelect={setSelectedDynamic}
+          onTempoSelect={handleTempoSelect}
+          onSymbolToggle={handleSymbolToggle}
         />
       </View>
     </View>
