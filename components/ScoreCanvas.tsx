@@ -20,6 +20,10 @@ import {
   getStemDirection,
   LINE_SPACING,
   STAFF_HEIGHT,
+  CLEF_WIDTH,
+  TIME_SIG_WIDTH,
+  KEY_SIG_ACCIDENTAL_WIDTH,
+  layoutMeasure,
 } from "@/lib/score-layout";
 import type {
   ScoreDocument,
@@ -113,6 +117,8 @@ export function ScoreCanvas({
   // 음표 드래그 상태 refs
   const dragElementIdRef = useRef<string | null>(null);
   const dragMeasureIdxRef = useRef<number>(-1);
+  // 드래그 시작 시 원래 음표의 accidental 보존 (이동 중 팔레트 accidental 변경 방지)
+  const dragOriginalAccidentalRef = useRef<Accidental | null | undefined>(undefined);
 
   const { rows, totalHeight } = useMemo(
     () => computeScoreLayout(doc, containerWidth),
@@ -125,6 +131,22 @@ export function ScoreCanvas({
 
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
+
+  // 헤더 폭 계산 — ScoreRenderer의 MeasureRender와 동일한 로직
+  const measureContentX = useCallback(
+    (measureX: number, posInRow: number): number => {
+      const showClef = posInRow === 0;
+      const showTimeSig = posInRow === 0;
+      const sharps = docRef.current.keySignature?.sharps ?? 0;
+      const clef = clefRef.current;
+      let cx = measureX + 4;
+      if (showClef) cx += CLEF_WIDTH[clef] + 4;
+      if (Math.abs(sharps) > 0) cx += Math.abs(sharps) * KEY_SIG_ACCIDENTAL_WIDTH + 4;
+      if (showTimeSig) cx += TIME_SIG_WIDTH + 4;
+      return cx;
+    },
+    [],
+  );
 
   // 터치 좌표 → 마디 인덱스 + 음높이 + 삽입 위치(insertIdx)
   const touchToGhost = useCallback(
@@ -148,15 +170,26 @@ export function ScoreCanvas({
                 : pitch;
             const noteY = staffY + pitchToY(finalPitch, clefRef.current);
 
-            // X 좌표 → 삽입 위치 계산
+            // X 좌표 → 삽입 위치 계산 (ScoreRenderer 파이프라인 동기화)
             const measure = docRef.current.parts[selectedPartIdxRef.current]?.measures[mIdx];
+            const contentX = measureContentX(accX, i);
+            const contentWidth = Math.max(mWidth - (contentX - accX), 1);
+            const positions = measure
+              ? layoutMeasure(measure, 0, clefRef.current, contentWidth)
+              : [];
             const nElements = measure?.elements.length ?? 0;
-            const contentX = accX + 4;
-            const totalWidth = Math.max(mWidth - 8, 1);
-            const nSlots = nElements + 1;
-            const slotWidth = totalWidth / nSlots;
-            const relX = lx - contentX;
-            const insertIdx = Math.max(0, Math.min(nElements, Math.round(relX / slotWidth)));
+
+            // 각 음표 위치 사이에서 insertIdx 산출
+            let insertIdx = nElements; // 기본값: 마지막
+            if (positions.length > 0) {
+              const relX = lx - contentX;
+              for (let ei = 0; ei < positions.length; ei++) {
+                const midpoint = ei === 0
+                  ? positions[ei].x / 2
+                  : (positions[ei - 1].x + (positions[ei - 1].width ?? 0) / 2 + positions[ei].x) / 2;
+                if (relX <= midpoint) { insertIdx = ei; break; }
+              }
+            }
 
             return { x: lx, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx, insertIdx };
           }
@@ -165,13 +198,13 @@ export function ScoreCanvas({
       }
       return null;
     },
-    [],
+    [measureContentX],
   );
 
-  // 선택 모드: 가장 가까운 음표 hitTest
+  // 선택 모드: 가장 가까운 음표 hitTest — ScoreRenderer 파이프라인과 동일한 좌표 사용
   const hitTestElement = useCallback(
     (lx: number, ly: number): { elementId: string; measureIdx: number } | null => {
-      const HIT_RADIUS = 20;
+      const HIT_RADIUS = 24;
       for (const row of rowsRef.current) {
         const rowBottom = row.y + SCORE_PART_HEIGHT;
         if (ly < row.y || ly > rowBottom) continue;
@@ -182,24 +215,28 @@ export function ScoreCanvas({
           const mWidth = row.measureWidths[i] ?? 0;
           if (lx >= accX && lx <= accX + mWidth) {
             const staffY = row.y + SCORE_STAFF_PADDING_TOP;
-            const measure = doc.parts[selectedPartIdx]?.measures[mIdx];
+            const measure = docRef.current.parts[selectedPartIdxRef.current]?.measures[mIdx];
             if (!measure || measure.elements.length === 0) {
               onMeasureTap(mIdx);
               return null;
             }
-            const contentX = accX + 4;
-            const noteSpacing = (mWidth - 8) / Math.max(measure.elements.length, 1);
+            // ScoreRenderer와 동일한 contentX 계산
+            const contentX = measureContentX(accX, i);
+            const contentWidth = Math.max(mWidth - (contentX - accX), 1);
+            // ScoreRenderer와 동일한 layoutMeasure 결과로 실제 음표 x 위치 계산
+            const positions = layoutMeasure(measure, 0, clefRef.current, contentWidth);
+
             let bestDist = HIT_RADIUS;
             let bestId: string | null = null;
-            for (let ei = 0; ei < measure.elements.length; ei++) {
-              const el = measure.elements[ei];
+            for (const pos of positions) {
+              const el = measure.elements.find((e) => e.id === pos.elementId);
               if (!el) continue;
-              const noteX = contentX + ei * noteSpacing + noteSpacing / 2;
+              const absX = contentX + pos.x;
               const noteY =
                 el.type === "note"
                   ? staffY + pitchToY(el.pitch, clefRef.current)
                   : staffY + STAFF_HEIGHT / 2;
-              const dist = Math.sqrt((lx - noteX) ** 2 + (ly - noteY) ** 2);
+              const dist = Math.sqrt((lx - absX) ** 2 + (ly - noteY) ** 2);
               if (dist < bestDist) {
                 bestDist = dist;
                 bestId = el.id;
@@ -214,7 +251,7 @@ export function ScoreCanvas({
       }
       return null;
     },
-    [doc, selectedPartIdx, onMeasureTap],
+    [measureContentX, onMeasureTap],
   );
 
   const panResponder = useMemo(() => {
@@ -257,6 +294,13 @@ export function ScoreCanvas({
           if (hit && hit.elementId === selectedElementIdRef.current) {
             dragElementIdRef.current = hit.elementId;
             dragMeasureIdxRef.current = hit.measureIdx;
+            // 드래그 시 기존 accidental 보존 — 팔레트 accidental이 변경되더라도 유지
+            const d = docRef.current;
+            const pIdx = selectedPartIdxRef.current;
+            const m = d.parts[pIdx]?.measures[hit.measureIdx];
+            const el = m?.elements.find((e) => e.id === hit.elementId);
+            dragOriginalAccidentalRef.current =
+              el?.type === "note" ? el.pitch.accidental : undefined;
           }
         }
       },
@@ -300,17 +344,24 @@ export function ScoreCanvas({
           if (hit) onEraseElement(hit.elementId, hit.measureIdx);
         } else if (tool === "select") {
           if (isMoving && dragElementIdRef.current && dragMeasureIdxRef.current >= 0) {
-            // 드래그 종료 → 새 음높이로 이동
+            // 드래그 종료 → 새 음높이로 이동 (accidental은 원래 음표의 것 유지)
             const info = touchToGhost(lx, ly);
             if (info) {
+              // 드래그 전 accidental 복원 (undefined: 기존 없음, null: 없음, string: 유지)
+              const origAcc = dragOriginalAccidentalRef.current;
+              const finalPitch: Pitch =
+                origAcc !== undefined
+                  ? { ...info.pitch, accidental: origAcc ?? undefined }
+                  : { ...info.pitch, accidental: undefined };
               onNoteMoveRef.current?.(
                 dragElementIdRef.current,
                 dragMeasureIdxRef.current,
-                info.pitch,
+                finalPitch,
               );
             }
             dragElementIdRef.current = null;
             dragMeasureIdxRef.current = -1;
+            dragOriginalAccidentalRef.current = undefined;
           } else if (!isMoving) {
             // 탭 → 선택
             const hit = hitTestElement(lx, ly);
