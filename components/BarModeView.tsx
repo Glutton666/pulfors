@@ -326,7 +326,7 @@ function SwipeableBarRow({
 
           {/* 중앙: 비트 셀 + info overlay */}
           <View style={{ flex: 1, position: "relative" }}>
-            <View style={[styles.barRowCells, { overflow: "hidden" }]}>
+            <View style={[styles.barRowCells, { alignSelf: "stretch", height: undefined, overflow: "hidden" }]}>
               {cells.map((ct, ci) => {
                 const isLast = ci === cells.length - 1;
                 const isActiveCell = isCurrentBeat;
