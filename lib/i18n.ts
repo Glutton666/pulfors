@@ -1007,8 +1007,10 @@ export const translations = {
     showZoomView:           { ko: "확대 뷰 표시", en: "Show Zoom View" },
     // 내보내기·불러오기·공유·연습장·성부분리
     moreMenu:               { ko: "더 보기", en: "More" },
+    exportJpg:              { ko: "JPG로 내보내기", en: "Export as JPG" },
     exportJson:             { ko: ".pulfors로 내보내기", en: "Export as .pulfors" },
     importJson:             { ko: ".pulfors 불러오기", en: "Import .pulfors" },
+    importReferenceImage:   { ko: "참조 이미지 가져오기", en: "Import Reference Image" },
     shareScore:             { ko: "공유", en: "Share" },
     addToPractice:          { ko: "연습장에 추가", en: "Add to Practice" },
     extractPart:            { ko: "성부 분리", en: "Extract Part" },
@@ -1016,8 +1018,12 @@ export const translations = {
     extractPartSuccess:     { ko: "성부 분리 완료", en: "Part extracted" },
     importSuccess:          { ko: "불러오기 완료", en: "Import complete" },
     importFail:             { ko: "불러오기 실패 — 올바른 .pulfors 파일인지 확인하세요", en: "Import failed — check that it is a valid .pulfors file" },
+    importJpgFail:          { ko: "이미지 가져오기 실패", en: "Failed to import image" },
     addToPracticeSuccess:   { ko: "연습장에 추가됨", en: "Added to Practice Book" },
     openScore:              { ko: "악보 열기", en: "Open Score" },
+    referenceOpacity:       { ko: "참조 이미지 투명도", en: "Reference Opacity" },
+    clearReferenceImage:    { ko: "참조 이미지 제거", en: "Remove Reference Image" },
+    exportJpgFail:          { ko: "JPG 내보내기 실패", en: "Failed to export JPG" },
     // 반복/이동 부호
     signRepeatStart:        { ko: "시작", en: "Start" },
     signRepeatEnd:          { ko: "끝", en: "End" },

@@ -232,6 +232,9 @@ export interface ScoreDocument {
     showPlayhead?: boolean;
     showZoomView?: boolean;
   };
+  // 참조 이미지 (편집 불가, 투명도 조절 가능)
+  referenceImageUri?: string;
+  referenceImageOpacity?: number;
 }
 
 // 악보 목록 아이템 (썸네일용 경량 정보)

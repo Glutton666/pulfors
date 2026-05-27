@@ -14,8 +14,10 @@ import {
   Switch,
   Alert,
   Platform,
+  Image,
   useWindowDimensions,
 } from "react-native";
+import { captureRef } from "react-native-view-shot";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Crypto from "expo-crypto";
@@ -24,7 +26,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import { saveScore, createEmptyMeasure } from "@/lib/score-storage";
-import { exportScoreAsJson, importScoreFromJson, extractParts } from "@/lib/score-io";
+import { exportScoreAsJson, exportScoreAsJpg, importScoreFromJson, importReferenceImage, extractParts } from "@/lib/score-io";
 import { loadPracticeBook, savePracticeBook, createPracticeEntry } from "@/lib/storage";
 import type {
   ScoreDocument,
@@ -223,11 +225,20 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   const [showExtractPartModal, setShowExtractPartModal] = useState(false);
   const [extractPartIndices, setExtractPartIndices] = useState<number[]>([]);
 
+  // ── JPG 내보내기 전용 캡처 뷰 ref ───────────────────────────
+  const exportViewRef = useRef<View>(null);
+
   // ── 저장 ──────────────────────────────────────────────────────
   const [savedToast, setSavedToast] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── IO 핸들러 ─────────────────────────────────────────────────
+
+  async function handleExportJpg() {
+    setShowMoreMenu(false);
+    const ok = await exportScoreAsJpg(exportViewRef as React.RefObject<unknown>, doc);
+    if (!ok) Alert.alert(t("scoreMode", "exportJpg"), t("scoreMode", "exportJpgFail"));
+  }
 
   async function handleExportJson() {
     setShowMoreMenu(false);
@@ -237,6 +248,25 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   async function handleShareScore() {
     setShowMoreMenu(false);
     await exportScoreAsJson(doc);
+  }
+
+  async function handleImportReferenceImageAction() {
+    setShowMoreMenu(false);
+    const result = await importReferenceImage();
+    if (!result) return;
+    applyDoc({ ...doc, referenceImageUri: result.uri, referenceImageOpacity: 0.4 });
+  }
+
+  function handleClearReferenceImage() {
+    setShowMoreMenu(false);
+    const { referenceImageUri: _a, referenceImageOpacity: _b, ...rest } = doc;
+    applyDoc(rest as ScoreDocument);
+  }
+
+  function handleReferenceOpacityToggle() {
+    const current = doc.referenceImageOpacity ?? 0.4;
+    const next = current <= 0.25 ? 0.4 : current <= 0.55 ? 0.7 : 0.2;
+    applyDoc({ ...doc, referenceImageOpacity: next });
   }
 
   async function handleAddToPractice() {
@@ -1109,29 +1139,60 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           </Text>
         )}
 
-        {/* 오선보 터치 캔버스 */}
+        {/* 오선보 터치 캔버스 (참조 이미지 포함) */}
         {currentPart ? (
-          <ScoreCanvas
-            doc={{ ...doc, parts: [currentPart] }}
-            containerWidth={containerWidth}
-            selectedElementId={selectedElementId}
-            selectedPartIdx={0}
-            activeTool={activeTool}
-            activeDuration={activeDuration}
-            isDotted={isDotted}
-            accidental={accidental}
-            onNotePlaced={handleNotePlaced}
-            onRestPlaced={handleRestPlaced}
-            onElementTap={handleElementTap}
-            onMeasureTap={handleMeasureTap}
-            onMeasureLongPress={handleMeasureLongPress}
-            onEraseElement={handleEraseElement}
-            onNoteMoved={handleNoteMoved}
-            playheadMeasureIdx={playback.isPlaying ? playback.currentMeasureIdx : undefined}
-            playheadFraction={playback.playheadFraction}
-            showPlayhead={showPlayhead}
-            highlightColor={highlightColor}
-          />
+          <View style={{ position: "relative" }}>
+            <ScoreCanvas
+              doc={{ ...doc, parts: [currentPart] }}
+              containerWidth={containerWidth}
+              selectedElementId={selectedElementId}
+              selectedPartIdx={0}
+              activeTool={activeTool}
+              activeDuration={activeDuration}
+              isDotted={isDotted}
+              accidental={accidental}
+              onNotePlaced={handleNotePlaced}
+              onRestPlaced={handleRestPlaced}
+              onElementTap={handleElementTap}
+              onMeasureTap={handleMeasureTap}
+              onMeasureLongPress={handleMeasureLongPress}
+              onEraseElement={handleEraseElement}
+              onNoteMoved={handleNoteMoved}
+              playheadMeasureIdx={playback.isPlaying ? playback.currentMeasureIdx : undefined}
+              playheadFraction={playback.playheadFraction}
+              showPlayhead={showPlayhead}
+              highlightColor={highlightColor}
+            />
+            {/* 참조 이미지 오버레이 (편집 불가) */}
+            {doc.referenceImageUri ? (
+              <>
+                <View
+                  style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+                  pointerEvents="none"
+                >
+                  <Image
+                    source={{ uri: doc.referenceImageUri }}
+                    style={{
+                      position: "absolute",
+                      top: 0, left: 0, right: 0, bottom: 0,
+                      opacity: doc.referenceImageOpacity ?? 0.4,
+                      resizeMode: "contain",
+                    }}
+                  />
+                </View>
+                <Pressable
+                  style={[styles.refOpacityBtn, { backgroundColor: C.surface + "CC", borderColor: C.border }]}
+                  onPress={handleReferenceOpacityToggle}
+                  hitSlop={8}
+                  testID="score-ref-opacity-btn"
+                >
+                  <Text style={[styles.refOpacityLabel, { color: C.text }]}>
+                    {Math.round((doc.referenceImageOpacity ?? 0.4) * 100)}%
+                  </Text>
+                </Pressable>
+              </>
+            ) : null}
+          </View>
         ) : (
           <Text style={{ color: C.textSecondary, marginTop: 24 }}>
             {t("scoreMode", "noPartsHint")}
@@ -1274,6 +1335,47 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
         />
       </View>
 
+      {/* ── JPG 내보내기 전용 캡처 뷰 (화면 바깥에 렌더링) ─────── */}
+      <View
+        ref={exportViewRef}
+        collapsable={false}
+        style={{
+          position: "absolute",
+          left: -9999,
+          top: 0,
+          width: containerWidth || 400,
+          backgroundColor: "#ffffff",
+        }}
+        pointerEvents="none"
+      >
+        {/* 내보내기 헤더 */}
+        <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: "#e0e0e0" }}>
+          <Text style={{ fontSize: 20, fontWeight: "700", color: "#000", textAlign: "center" }}>
+            {doc.metadata.title || t("scoreMode", "untitled")}
+          </Text>
+          {doc.metadata.composer ? (
+            <Text style={{ fontSize: 13, color: "#444", textAlign: "center", marginTop: 4 }}>
+              {doc.metadata.composer}
+            </Text>
+          ) : null}
+          {doc.metadata.arranger ? (
+            <Text style={{ fontSize: 12, color: "#666", textAlign: "center" }}>
+              Arr. {doc.metadata.arranger}
+            </Text>
+          ) : null}
+          {doc.metadata.copyright ? (
+            <Text style={{ fontSize: 11, color: "#888", textAlign: "center" }}>
+              © {doc.metadata.copyright}
+            </Text>
+          ) : null}
+        </View>
+        <ScoreRenderer
+          doc={doc}
+          containerWidth={containerWidth || 400}
+          showPartNames
+        />
+      </View>
+
       {/* ── ⋯ 더 보기 메뉴 모달 ─────────────────────────────────── */}
       <Modal
         visible={showMoreMenu}
@@ -1291,11 +1393,27 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             </Text>
             <Pressable
               style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+              onPress={handleExportJpg}
+              testID="score-menu-export-jpg"
+            >
+              <Ionicons name="image-outline" size={18} color={C.accent} />
+              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "exportJpg")}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
               onPress={handleExportJson}
               testID="score-menu-export"
             >
-              <Ionicons name="share-outline" size={18} color={C.accent} />
+              <Ionicons name="download-outline" size={18} color={C.accent} />
               <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "exportJson")}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+              onPress={handleShareScore}
+              testID="score-menu-share"
+            >
+              <Ionicons name="share-social-outline" size={18} color={C.accent} />
+              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "shareScore")}</Text>
             </Pressable>
             <Pressable
               style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
@@ -1305,6 +1423,24 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
               <Ionicons name="folder-open-outline" size={18} color={C.accent} />
               <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "importJson")}</Text>
             </Pressable>
+            <Pressable
+              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+              onPress={handleImportReferenceImageAction}
+              testID="score-menu-import-ref"
+            >
+              <Ionicons name="albums-outline" size={18} color={C.accent} />
+              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "importReferenceImage")}</Text>
+            </Pressable>
+            {doc.referenceImageUri ? (
+              <Pressable
+                style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+                onPress={handleClearReferenceImage}
+                testID="score-menu-clear-ref"
+              >
+                <Ionicons name="eye-off-outline" size={18} color={C.textSecondary} />
+                <Text style={[styles.ctxMenuLabel, { color: C.textSecondary }]}>{t("scoreMode", "clearReferenceImage")}</Text>
+              </Pressable>
+            ) : null}
             <Pressable
               style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
               onPress={handleAddToPractice}
@@ -1970,6 +2106,19 @@ const makeStyles = (C: any, S: any) =>
       fontFamily: "SpaceGrotesk_400Regular",
       fontSize: FontSize.body,
       flex: 1,
+    },
+    refOpacityBtn: {
+      position: "absolute",
+      top: 6,
+      right: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+      borderWidth: 1,
+    },
+    refOpacityLabel: {
+      fontFamily: "SpaceGrotesk_600SemiBold",
+      fontSize: 11,
     },
     // 메타데이터 편집 모달
     metaFieldLabel: {
