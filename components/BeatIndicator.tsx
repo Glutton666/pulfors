@@ -201,7 +201,8 @@ export function BeatIndicator({
   const S = useScale();
   const styles = useMemo(() => make_styles(C, S), [C, S]);
 
-  const SWIPE_THRESHOLD = S.screenWidth * 0.35;
+  // 원형 다이얼 — 각도 기반 threshold (45°)
+  const ANGLE_THRESHOLD = 45;
 
   const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
 
@@ -323,10 +324,11 @@ export function BeatIndicator({
     }
   }, [isPlaying, currentBeat, bpm]);
 
-  const startXRef = useRef(0);
+  const startPosRef = useRef({ x: 0, y: 0 });
+  const centerRef = useRef({ x: 0, y: 0 });
   const isDraggingRef = useRef(false);
   const triggeredRef = useRef(false);
-  const lastDxRef = useRef(0);
+  const lastDeltaAngleRef = useRef(0);
   const beatsRef = useRef(beatsPerMeasure);
   const onBeatsChangeRef = useRef(onBeatsChange);
   const containerRef = useRef<View>(null);
@@ -358,48 +360,61 @@ export function BeatIndicator({
     dialRotation.value = withSpring(0, { damping: 15, stiffness: 300 });
   }, []);
 
-  const processMoveByDx = useCallback((dx: number) => {
-    lastDxRef.current = dx;
-    const progress = Math.min(Math.abs(dx) / SWIPE_THRESHOLD, 1);
+  // 각도 헬퍼
+  const getAngleDeg = (cx: number, cy: number, px: number, py: number) =>
+    Math.atan2(py - cy, px - cx) * (180 / Math.PI);
+  const wrapAngle = (d: number) => {
+    let r = d % 360;
+    if (r > 180) r -= 360;
+    if (r < -180) r += 360;
+    return r;
+  };
+
+  // 원형 다이얼 기준 각도 차이로 비주얼 피드백 처리 (비트 변경은 release에서)
+  const processMoveByAngle = useCallback((deltaAngle: number) => {
+    lastDeltaAngleRef.current = deltaAngle;
+    const progress = Math.min(Math.abs(deltaAngle) / ANGLE_THRESHOLD, 1);
     const canAdd = beatsRef.current < MAX_BEATS;
     const canRemove = beatsRef.current > MIN_BEATS;
 
-    // 부호 수정: 오른쪽 스와이프(dx>0)면 다이얼이 오른쪽으로 기움
-    dialRotation.value = dx * 0.08;
+    // 다이얼 자체를 회전량에 비례해 시각적으로 돌림 (절반 감쇠)
+    dialRotation.value = deltaAngle * 0.5;
 
-    if (dx > 0 && canAdd) {
+    if (deltaAngle > 0 && canAdd) {
       swipeDirection.value = 1;
       swipeProgress.value = progress;
-    } else if (dx < 0 && canRemove) {
+    } else if (deltaAngle < 0 && canRemove) {
       swipeDirection.value = -1;
       swipeProgress.value = progress;
     } else {
       swipeDirection.value = 0;
       swipeProgress.value = 0;
     }
-    // 비트 변경은 스와이프 종료(release) 시점에만 실행
-  }, []);
+  }, [ANGLE_THRESHOLD]);
 
   // 스와이프 종료 시 실제 비트 변경 커밋
+  const processMoveByAngleRef = useRef<(delta: number) => void>(() => {});
+  useEffect(() => { processMoveByAngleRef.current = processMoveByAngle; }, [processMoveByAngle]);
+
   const commitAndResetRef = useRef<() => void>(() => {});
   const commitAndReset = useCallback(() => {
-    const dx = lastDxRef.current;
-    const progress = Math.min(Math.abs(dx) / SWIPE_THRESHOLD, 1);
+    const delta = lastDeltaAngleRef.current;
+    const progress = Math.min(Math.abs(delta) / ANGLE_THRESHOLD, 1);
     if (progress >= 1) {
       const canAdd = beatsRef.current < MAX_BEATS;
       const canRemove = beatsRef.current > MIN_BEATS;
-      if (dx > 0 && canAdd) {
+      if (delta > 0 && canAdd) {
         if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         onBeatsChangeRef.current(beatsRef.current + 1);
-      } else if (dx < 0 && canRemove) {
+      } else if (delta < 0 && canRemove) {
         if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         onBeatsChangeRef.current(beatsRef.current - 1);
       }
     }
-    lastDxRef.current = 0;
+    lastDeltaAngleRef.current = 0;
     triggeredRef.current = false;
     resetVisuals();
-  }, [resetVisuals]);
+  }, [ANGLE_THRESHOLD, resetVisuals]);
 
   useEffect(() => {
     commitAndResetRef.current = commitAndReset;
@@ -410,14 +425,25 @@ export function BeatIndicator({
     // barMode 에서는 dial 컨테이너가 언마운트되어 containerRef 가 null 이므로 스킵
     if (barMode) return;
 
+    // 원의 중심과 시작점을 저장하고 각도 차이로 처리
+    const getCenter = (el: HTMLElement) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    };
+    const calcDelta = (cx: number, cy: number, px: number, py: number) =>
+      wrapAngle(getAngleDeg(cx, cy, px, py) - getAngleDeg(cx, cy, startPosRef.current.x, startPosRef.current.y));
+
     const handleMouseDown = (e: MouseEvent) => {
-      startXRef.current = e.clientX;
+      const el = containerRef.current as unknown as HTMLElement | null;
+      if (el) centerRef.current = getCenter(el);
+      startPosRef.current = { x: e.clientX, y: e.clientY };
       isDraggingRef.current = true;
       triggeredRef.current = false;
+      lastDeltaAngleRef.current = 0;
     };
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDraggingRef.current) return;
-      processMoveByDx(e.clientX - startXRef.current);
+      processMoveByAngle(calcDelta(centerRef.current.x, centerRef.current.y, e.clientX, e.clientY));
     };
     const handleMouseUp = () => {
       if (!isDraggingRef.current) return;
@@ -426,13 +452,16 @@ export function BeatIndicator({
     };
     const handleTouchStart = (e: TouchEvent) => {
       if (e.touches.length === 0) return;
-      startXRef.current = e.touches[0].clientX;
+      const el = containerRef.current as unknown as HTMLElement | null;
+      if (el) centerRef.current = getCenter(el);
+      startPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       isDraggingRef.current = true;
       triggeredRef.current = false;
+      lastDeltaAngleRef.current = 0;
     };
     const handleTouchMove = (e: TouchEvent) => {
       if (!isDraggingRef.current || e.touches.length === 0) return;
-      processMoveByDx(e.touches[0].clientX - startXRef.current);
+      processMoveByAngle(calcDelta(centerRef.current.x, centerRef.current.y, e.touches[0].clientX, e.touches[0].clientY));
     };
     const handleTouchEnd = () => {
       if (!isDraggingRef.current) return;
@@ -487,7 +516,7 @@ export function BeatIndicator({
         resetVisuals();
       }
     };
-  }, [processMoveByDx, resetVisuals, barMode, isLandscape]);
+  }, [processMoveByAngle, resetVisuals, barMode, isLandscape]);
 
   const panResponder = useRef(
     Platform.OS !== "web"
@@ -495,20 +524,34 @@ export function BeatIndicator({
           onStartShouldSetPanResponder: () => false,
           onStartShouldSetPanResponderCapture: () => false,
           onMoveShouldSetPanResponder: (_, gs) =>
-            Math.abs(gs.dx) > 20 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+            Math.sqrt(gs.dx * gs.dx + gs.dy * gs.dy) > 20,
           onMoveShouldSetPanResponderCapture: () => false,
           onShouldBlockNativeResponder: () => false,
-          onPanResponderGrant: () => {
+          onPanResponderGrant: (e, gs) => {
             triggeredRef.current = false;
+            lastDeltaAngleRef.current = 0;
+            startPosRef.current = { x: gs.x0, y: gs.y0 };
+            // 다이얼 컨테이너 중심 측정
+            containerRef.current?.measure((_x, _y, width, height, pageX, pageY) => {
+              centerRef.current = { x: pageX + width / 2, y: pageY + height / 2 };
+            });
           },
           onPanResponderMove: (_, gs) => {
-            processMoveByDx(gs.dx);
+            const cx = centerRef.current.x;
+            const cy = centerRef.current.y;
+            if (cx === 0 && cy === 0) return;
+            const startAngle = Math.atan2(startPosRef.current.y - cy, startPosRef.current.x - cx) * (180 / Math.PI);
+            const curAngle = Math.atan2(gs.moveY - cy, gs.moveX - cx) * (180 / Math.PI);
+            let delta = curAngle - startAngle;
+            if (delta > 180) delta -= 360;
+            if (delta < -180) delta += 360;
+            processMoveByAngleRef.current(delta);
           },
           onPanResponderRelease: () => {
             commitAndResetRef.current();
           },
           onPanResponderTerminate: () => {
-            lastDxRef.current = 0;
+            lastDeltaAngleRef.current = 0;
             resetVisuals();
           },
           onPanResponderTerminationRequest: () => true,
