@@ -132,6 +132,8 @@ export interface BarModeViewProps {
   onCustomSoundSetsChange?: (configs: Record<string, CustomSoundSetConfig>) => void;
   colors: BarModeColors;
   ms: (size: number, factor?: number) => number;
+  cellOverlayOpacity?: number;
+  rowHeight?: number;
 }
 
 // ─── 상수 ────────────────────────────────────────────────────────────────────
@@ -204,12 +206,15 @@ interface SwipeableBarRowProps {
   onLongPress: (beat: number) => void;
   colors: BarModeColors;
   ms: (size: number, factor?: number) => number;
+  rowHeight?: number;
+  cellOverlayOpacity?: number;
 }
 
 function SwipeableBarRow({
   beat, beatType, subdivisions, repeat, isCurrentBeat, isEditingBeat,
   blockDepth, blockStart, blockEnd, symbolBadges, isPlaying, progressCurrent,
   progressTotal, bpm, beatsPerMeasure, onAddBarRight, onPress, onSwipeLeft, onSwipeRight, onLongPress, colors: C, ms,
+  rowHeight, cellOverlayOpacity,
 }: SwipeableBarRowProps) {
   const translateX = useRef(new Animated.Value(0)).current;
   const actionTriggered = useRef(false);
@@ -255,6 +260,7 @@ function SwipeableBarRow({
           style={[
             styles.barRow,
             {
+              height: rowHeight ?? BAR_ROW_H,
               backgroundColor: isCurrentBeat
                 ? C.accent + "18"
                 : isEditingBeat
@@ -268,8 +274,8 @@ function SwipeableBarRow({
             <View style={{
               position: "absolute",
               left: blockDepth * BLOCK_DEPTH_INDENT - 2,
-              top: blockStart ? BAR_ROW_H / 2 : 0,
-              bottom: blockEnd ? BAR_ROW_H / 2 : 0,
+              top: blockStart ? (rowHeight ?? BAR_ROW_H) / 2 : 0,
+              bottom: blockEnd ? (rowHeight ?? BAR_ROW_H) / 2 : 0,
               width: 2,
               backgroundColor: C.accent + "60",
             }} />
@@ -278,7 +284,7 @@ function SwipeableBarRow({
             <View style={{
               position: "absolute",
               left: blockDepth * BLOCK_DEPTH_INDENT - 2,
-              top: BAR_ROW_H / 2,
+              top: (rowHeight ?? BAR_ROW_H) / 2,
               width: 6,
               height: 2,
               backgroundColor: C.accent + "60",
@@ -288,7 +294,7 @@ function SwipeableBarRow({
             <View style={{
               position: "absolute",
               left: blockDepth * BLOCK_DEPTH_INDENT - 2,
-              bottom: BAR_ROW_H / 2,
+              bottom: (rowHeight ?? BAR_ROW_H) / 2,
               width: 6,
               height: 2,
               backgroundColor: C.accent + "60",
@@ -314,7 +320,7 @@ function SwipeableBarRow({
           </View>
 
           {/* 중앙: 비트 셀 (info overlay 포함) */}
-          <View style={styles.barRowCells}>
+          <View style={[styles.barRowCells, { height: rowHeight != null ? Math.max(20, rowHeight - 16) : 28 }]}>
             {cells.map((ct, ci) => {
               const isLast = ci === cells.length - 1;
               const isActiveCell = isCurrentBeat;
@@ -339,7 +345,7 @@ function SwipeableBarRow({
             })}
 
             {/* 비트 셀 위 info overlay */}
-            <View style={styles.barCellOverlay} pointerEvents="none">
+            <View style={[styles.barCellOverlay, { backgroundColor: `rgba(0,0,0,${cellOverlayOpacity ?? 0.55})` }]} pointerEvents="none">
               <Text
                 style={[styles.barCenterInfo, { color: isCurrentBeat ? C.accent : C.text }]}
                 numberOfLines={1}
@@ -383,6 +389,8 @@ export function BarModeView({
   soundSet = "classic", onSoundSetChange, layerSoundSets = {} as Record<number, string>, onLayerSoundSetsChange,
   customSoundSets = {} as Record<string, CustomSoundSetConfig>, onCustomSoundSetsChange,
   colors: C, ms,
+  cellOverlayOpacity,
+  rowHeight,
 }: BarModeViewProps) {
 
   const { t } = useLanguage();
@@ -528,8 +536,9 @@ export function BarModeView({
       return;
     }
     if (barContainerHeight <= 0 || currentBeat < 0) return;
-    const beatTop = currentBeat * BAR_ROW_H;
-    const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + BAR_ROW_H / 2);
+    const rowH = rowHeight ?? BAR_ROW_H;
+    const beatTop = currentBeat * rowH;
+    const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + rowH / 2);
     barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
   }, [isPlaying, currentBeat, barContainerHeight]);
 
@@ -1138,6 +1147,8 @@ export function BarModeView({
               onLongPress={handleBarRowLongPress}
               colors={C}
               ms={ms}
+              rowHeight={rowHeight}
+              cellOverlayOpacity={cellOverlayOpacity}
             />
           );
         })}

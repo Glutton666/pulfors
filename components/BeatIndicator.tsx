@@ -130,6 +130,8 @@ interface BeatIndicatorProps {
   onLayerSoundSetsChange?: (val: Record<number, string>) => void;
   customSoundSets?: Record<string, import("@/lib/storage").CustomSoundSetConfig>;
   onCustomSoundSetsChange?: (configs: Record<string, import("@/lib/storage").CustomSoundSetConfig>) => void;
+  barCellOpacity?: number;
+  barRowHeight?: number;
 }
 
 // BlockPill 컴포넌트는 components/BlockPill.tsx 로 분리되었습니다.
@@ -195,6 +197,8 @@ export function BeatIndicator({
   onLayerSoundSetsChange,
   customSoundSets,
   onCustomSoundSetsChange,
+  barCellOpacity,
+  barRowHeight,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
   const { t } = useLanguage();
@@ -1268,6 +1272,8 @@ export function BeatIndicator({
         customSoundSets={customSoundSets}
         onCustomSoundSetsChange={onCustomSoundSetsChange}
         ms={S.ms}
+        cellOverlayOpacity={barCellOpacity}
+        rowHeight={barRowHeight}
       />
     );
   }

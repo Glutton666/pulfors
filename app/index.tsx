@@ -524,6 +524,8 @@ export default function MetronomeScreen() {
   } = noteSamplesHook;
   const [barMetronomeChannel, setBarMetronomeChannel] = useState<SampleChannel>("both");
   const barMetronomeChannelRef = useRef<SampleChannel>("both");
+  const [barCellOpacity, setBarCellOpacity] = useState(0.55);
+  const [barRowHeight, setBarRowHeight] = useState(44);
   const [noteSampleMetroChannels, setNoteSampleMetroChannels] = useState<NoteSampleMetroChannelMap>({});
   const noteSampleMetroChannelsRef = useRef<NoteSampleMetroChannelMap>({});
   const noteSampleSoundsRef = useRef<Record<string, ExpoAudioPlayer>>({});
@@ -844,6 +846,8 @@ export default function MetronomeScreen() {
         setBarMetronomeChannel(settings.barMetronomeChannel);
         barMetronomeChannelRef.current = settings.barMetronomeChannel;
       }
+      if (settings.barCellOpacity != null) setBarCellOpacity(settings.barCellOpacity);
+      if (settings.barRowHeight != null) setBarRowHeight(settings.barRowHeight);
       if (settings.username) {
         setUsername(settings.username);
       }
@@ -1706,6 +1710,8 @@ export default function MetronomeScreen() {
     landscapeContentType,
     beatDirection,
     barMetronomeChannel,
+    barCellOpacity,
+    barRowHeight,
   };
   const persistSettingsRef = useRef<DebouncedPersister<MetronomeSettings> | null>(null);
   if (!persistSettingsRef.current) {
@@ -5128,6 +5134,16 @@ export default function MetronomeScreen() {
           persistSettings({ barMetronomeChannel: val });
           scheduleReRender();
         }}
+        barCellOpacity={barCellOpacity}
+        onBarCellOpacityChange={(val) => {
+          setBarCellOpacity(val);
+          persistSettings({ barCellOpacity: val });
+        }}
+        barRowHeight={barRowHeight}
+        onBarRowHeightChange={(val) => {
+          setBarRowHeight(val);
+          persistSettings({ barRowHeight: val });
+        }}
         onEnterNoteMode={handleEnterNoteMode}
         onShowOnboarding={() => openExclusive("onboarding")}
         keyBindings={keyBindings}
@@ -5299,6 +5315,8 @@ export default function MetronomeScreen() {
                 if (key.startsWith("custom")) delete clickPCMCacheRef.current[key];
               }
             }}
+            barCellOpacity={barCellOpacity}
+            barRowHeight={barRowHeight}
           />
         </View>
 

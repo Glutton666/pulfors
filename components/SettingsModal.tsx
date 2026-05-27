@@ -110,6 +110,10 @@ interface SettingsModalProps {
   onBeatDirectionChange: (val: "cw" | "ccw") => void;
   barMetronomeChannel: import("@/lib/stereo-channel").SampleChannel;
   onBarMetronomeChannelChange: (val: import("@/lib/stereo-channel").SampleChannel) => void;
+  barCellOpacity: number;
+  onBarCellOpacityChange: (val: number) => void;
+  barRowHeight: number;
+  onBarRowHeightChange: (val: number) => void;
   onShowOnboarding?: () => void;
   onEnterNoteMode?: () => void;
   keyBindings?: import("@/lib/keyboard-bindings").KeyBindingsMap;
@@ -201,6 +205,10 @@ export function SettingsModal({
   onBeatDirectionChange,
   barMetronomeChannel,
   onBarMetronomeChannelChange,
+  barCellOpacity,
+  onBarCellOpacityChange,
+  barRowHeight,
+  onBarRowHeightChange,
   onShowOnboarding,
   keyBindings: keyBindingsProp,
   onKeyBindingsChange,
@@ -1323,6 +1331,62 @@ export function SettingsModal({
               </Pressable>
             );
           })}
+        </View>
+      </View>
+
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="layers-outline" size={S.ms(18, 0.4)} color={C.accent} />
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "barCellOpacity")}</Text>
+          <Text style={[styles.sectionValue, { color: C.accent }]}>{Math.round(barCellOpacity * 100)}%</Text>
+        </View>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "barCellOpacityHint")}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingTop: 8 }}>
+          <Pressable
+            onPress={() => { const v = Math.max(0, Math.round((barCellOpacity - 0.05) * 100) / 100); onBarCellOpacityChange(v); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
+            style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
+          >
+            <Text style={{ color: C.text, fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold" }}>−</Text>
+          </Pressable>
+          <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: C.overlay06 }}>
+            <View style={{ width: `${barCellOpacity * 100}%` as any, height: 4, borderRadius: 2, backgroundColor: C.accent }} />
+          </View>
+          <Pressable
+            onPress={() => { const v = Math.min(1, Math.round((barCellOpacity + 0.05) * 100) / 100); onBarCellOpacityChange(v); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
+            style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
+          >
+            <Text style={{ color: C.text, fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold" }}>+</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="resize-outline" size={S.ms(18, 0.4)} color={C.accent} />
+          <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "barRowHeight")}</Text>
+          <Text style={[styles.sectionValue, { color: C.accent }]}>{barRowHeight}px</Text>
+        </View>
+        <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "barRowHeightHint")}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingTop: 8 }}>
+          <Pressable
+            onPress={() => { const v = Math.max(32, barRowHeight - 4); onBarRowHeightChange(v); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
+            style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
+          >
+            <Text style={{ color: C.text, fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold" }}>−</Text>
+          </Pressable>
+          <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: C.overlay06 }}>
+            <View style={{ width: `${((barRowHeight - 32) / 40) * 100}%` as any, height: 4, borderRadius: 2, backgroundColor: C.accent }} />
+          </View>
+          <Pressable
+            onPress={() => { const v = Math.min(72, barRowHeight + 4); onBarRowHeightChange(v); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
+            style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
+          >
+            <Text style={{ color: C.text, fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold" }}>+</Text>
+          </Pressable>
         </View>
       </View>
 

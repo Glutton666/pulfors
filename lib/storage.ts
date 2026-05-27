@@ -201,6 +201,8 @@ export interface MetronomeSettings {
   layerSoundSets?: Record<number, SoundSet>;
   barMetronomeChannel?: SampleChannel;
   autoResumeAfterInterruption?: boolean;
+  barCellOpacity?: number;
+  barRowHeight?: number;
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
@@ -224,6 +226,8 @@ const DEFAULT_SETTINGS: MetronomeSettings = {
   beatDirection: "cw",
   barMetronomeChannel: "both",
   autoResumeAfterInterruption: true,
+  barCellOpacity: 0.55,
+  barRowHeight: 44,
 };
 
 export async function loadSettings(): Promise<MetronomeSettings> {
