@@ -262,6 +262,55 @@ export function ScoreCanvas({
     (lx: number, ly: number): GhostState | null => {
       // 덧줄 영역까지 터치 인식하도록 행 경계를 확장 (위아래로 4줄 추가)
       const LEDGER_EXTRA = LINE_SPACING * 4;
+      const activeCursorMeasure = cursorMeasureIdxRef.current;
+      const activeCursorInsert = cursorInsertIdxRef.current;
+
+      // ── 스텝 입력 모드: 커서가 활성화된 경우 커서 마디로 전역 스냅 ──
+      // 음표/쉼표 입력 시 어느 곳을 탭해도 커서 마디 위치에 삽입됨.
+      // 음높이(pitch)는 탭한 Y 좌표를 커서 마디의 staffY 기준으로 계산.
+      if (activeCursorMeasure != null && activeCursorInsert != null) {
+        for (const row of rowsRef.current) {
+          let accX = 0;
+          for (let i = 0; i < row.measureIndices.length; i++) {
+            const mIdx = row.measureIndices[i];
+            const mWidth = row.measureWidths[i] ?? 0;
+            if (mIdx === activeCursorMeasure) {
+              const staffY = row.y + SCORE_STAFF_PADDING_TOP;
+              // 탭한 Y를 커서 마디의 staffY 기준으로 pitch 계산
+              const staffRelY = ly - staffY;
+              const pitch = yToPitch(staffRelY, clefRef.current);
+              const acc = accidentalRef.current;
+              const finalPitch: Pitch =
+                acc != null && acc !== "natural"
+                  ? { ...pitch, accidental: acc }
+                  : pitch;
+              const noteY = staffY + pitchToY(finalPitch, clefRef.current);
+
+              const contentX = measureContentX(accX, i, mIdx);
+              const contentWidth = Math.max(mWidth - (contentX - accX), 1);
+              const measure = docRef.current.parts[selectedPartIdxRef.current]?.measures[mIdx];
+              const positions = measure
+                ? layoutMeasure(measure, 0, clefRef.current, contentWidth)
+                : [];
+
+              let ghostX: number;
+              if (positions[activeCursorInsert]) {
+                ghostX = contentX + positions[activeCursorInsert].x;
+              } else if (positions.length > 0) {
+                const last = positions[positions.length - 1];
+                ghostX = contentX + last.x + (last.width ?? 24) + 4;
+              } else {
+                ghostX = contentX + 4;
+              }
+
+              return { x: ghostX, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx, insertIdx: activeCursorInsert };
+            }
+            accX += mWidth;
+          }
+        }
+      }
+
+      // ── 커서 없음(select/erase 모드 등): 탭 위치 그대로 사용 ──
       for (const row of rowsRef.current) {
         const rowBottom = row.y + SCORE_PART_HEIGHT;
         if (ly < row.y - LEDGER_EXTRA || ly > rowBottom + LEDGER_EXTRA) continue;
@@ -281,7 +330,6 @@ export function ScoreCanvas({
                 : pitch;
             const noteY = staffY + pitchToY(finalPitch, clefRef.current);
 
-            // X 좌표 → 삽입 위치 계산 (ScoreRenderer 파이프라인 동기화)
             const measure = docRef.current.parts[selectedPartIdxRef.current]?.measures[mIdx];
             const contentX = measureContentX(accX, i, mIdx);
             const contentWidth = Math.max(mWidth - (contentX - accX), 1);
@@ -290,8 +338,7 @@ export function ScoreCanvas({
               : [];
             const nElements = measure?.elements.length ?? 0;
 
-            // 각 음표 위치 사이에서 insertIdx 산출
-            let insertIdx = nElements; // 기본값: 마지막
+            let insertIdx = nElements;
             if (positions.length > 0) {
               const relX = lx - contentX;
               for (let ei = 0; ei < positions.length; ei++) {
@@ -302,24 +349,7 @@ export function ScoreCanvas({
               }
             }
 
-            // 커서가 이 마디에 활성화되어 있으면 insertIdx와 ghost X를 커서 위치로 스냅
-            const activeCursorMeasure = cursorMeasureIdxRef.current;
-            const activeCursorInsert = cursorInsertIdxRef.current;
-            let ghostX = lx;
-            if (activeCursorMeasure != null && mIdx === activeCursorMeasure && activeCursorInsert != null) {
-              insertIdx = activeCursorInsert;
-              // 커서 위치의 X 좌표 계산
-              if (positions[insertIdx]) {
-                ghostX = contentX + positions[insertIdx].x;
-              } else if (positions.length > 0) {
-                const last = positions[positions.length - 1];
-                ghostX = contentX + last.x + (last.width ?? 24) + 4;
-              } else {
-                ghostX = contentX + 4;
-              }
-            }
-
-            return { x: ghostX, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx, insertIdx };
+            return { x: lx, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx, insertIdx };
           }
           accX += mWidth;
         }

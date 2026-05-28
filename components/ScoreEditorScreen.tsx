@@ -27,6 +27,7 @@ import { useScoreLineSpacing } from "@/lib/score-scale";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import { saveScore, createEmptyMeasure } from "@/lib/score-storage";
 import { stopAllScoreNotes } from "@/lib/score-audio";
+import { noteDurationToBeats } from "@/lib/score-playback";
 import { exportScoreAsJson, exportScoreAsJpg, importScoreFromJson, importReferenceImage, extractParts } from "@/lib/score-io";
 import { loadPracticeBook, savePracticeBook, createPracticeEntry } from "@/lib/storage";
 import type {
@@ -202,7 +203,8 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
 
   // ── 스텝 입력 커서 ────────────────────────────────────────────
   // 음표/쉼표 입력 후 다음 삽입 위치를 가리키는 커서
-  const [cursorMeasureIdx, setCursorMeasureIdx] = useState<number | null>(null);
+  // 에디터 열릴 때 첫 번째 마디로 초기화
+  const [cursorMeasureIdx, setCursorMeasureIdx] = useState<number | null>(0);
   const [cursorInsertIdx, setCursorInsertIdx] = useState<number>(0);
 
   // ── 재생 연동 ─────────────────────────────────────────────────
@@ -405,6 +407,20 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
     if (selectedMeasureIdx === mIdx) setSelectedMeasureIdx(null);
   }
 
+  // ── 마디 박자 용량 계산 (beats used / beats total) ───────────
+  const measureBeatsInfo = useCallback(
+    (m: typeof doc.parts[0]["measures"][0], mIdx: number) => {
+      const timeSig = m.timeSignature ?? doc.timeSignature;
+      const beatsTotal = timeSig.numerator * (4 / timeSig.denominator);
+      const beatsUsed = m.elements.reduce(
+        (sum, el) => sum + noteDurationToBeats(el.duration as NoteDuration),
+        0,
+      );
+      return { beatsUsed: Math.round(beatsUsed * 100) / 100, beatsTotal };
+    },
+    [doc.timeSignature],
+  );
+
   // ── 음표 추가 (터치 확정) ─────────────────────────────────────
   const handleNotePlaced = useCallback(
     (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number) => {
@@ -415,40 +431,51 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
         selectedArticulation ? [selectedArticulation] : [],
         selectedDynamic ?? undefined,
       );
+
+      const currentMeasures = doc.parts[selectedPartIdx]?.measures ?? [];
+      const curMeasure = currentMeasures[measureIdx];
+      const nextIdx = insertIdx + 1;
+      const isLastMeasure = measureIdx >= currentMeasures.length - 1;
+
+      // 박자 기반 마디 꽉 참 판정 (element 수가 아닌 beats 기준)
+      const timeSig = curMeasure?.timeSignature ?? doc.timeSignature;
+      const beatsTotal = timeSig.numerator * (4 / timeSig.denominator);
+      const oldBeats = (curMeasure?.elements ?? []).reduce(
+        (sum, el) => sum + noteDurationToBeats(el.duration as NoteDuration), 0,
+      );
+      const newBeats = oldBeats + noteDurationToBeats(duration);
+      const isMeasureFull = newBeats >= beatsTotal;
+
       const newDoc: ScoreDocument = {
         ...doc,
         parts: doc.parts.map((p, pIdx) => {
           if (pIdx !== selectedPartIdx) return p;
-          return {
-            ...p,
-            measures: p.measures.map((m, mi) => {
-              if (mi !== measureIdx) return m;
-              // X 좌표로 계산한 위치에 삽입
-              const next = [...m.elements];
-              next.splice(insertIdx, 0, newElement);
-              return { ...m, elements: next };
-            }),
-          };
+          const newMeasures = p.measures.map((m, mi) => {
+            if (mi !== measureIdx) return m;
+            const next = [...m.elements];
+            next.splice(insertIdx, 0, newElement);
+            return { ...m, elements: next };
+          });
+          // 마지막 마디가 꽉 찼으면 새 마디 자동 추가
+          if (isMeasureFull && isLastMeasure) {
+            newMeasures.push(createEmptyMeasure());
+          }
+          return { ...p, measures: newMeasures };
         }),
       };
       applyDoc(newDoc);
       setSelectedElementId(newElement.id);
-      // 스텝 입력 커서: 방금 삽입한 위치 + 1
-      setCursorMeasureIdx(measureIdx);
-      setCursorInsertIdx(insertIdx + 1);
-      // 같은 마디 내 다음 슬롯으로 커서 이동
-      // 현재 마디의 elements 수 + 1 (방금 삽입한 것)
-      const curMeasure = doc.parts[selectedPartIdx]?.measures[measureIdx];
-      const newLen = (curMeasure?.elements.length ?? 0) + 1;
-      const nextIdx = insertIdx + 1;
-      if (nextIdx >= newLen) {
-        // 마디 끝 → 다음 마디로
-        const totalMeasures = doc.parts[selectedPartIdx]?.measures.length ?? 1;
-        if (measureIdx < totalMeasures - 1) {
-          setSelectedMeasureIdx(measureIdx + 1);
-        }
+
+      // 스텝 입력 커서: 마디가 꽉 차면 다음 마디로 이동
+      if (isMeasureFull) {
+        const nextMeasureIdx = measureIdx + 1;
+        setSelectedMeasureIdx(nextMeasureIdx);
+        setCursorMeasureIdx(nextMeasureIdx);
+        setCursorInsertIdx(0);
       } else {
         setSelectedMeasureIdx(measureIdx);
+        setCursorMeasureIdx(measureIdx);
+        setCursorInsertIdx(nextIdx);
       }
     },
     [doc, selectedPartIdx, accidental, selectedArticulation, selectedDynamic],
@@ -458,36 +485,48 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   const handleRestPlaced = useCallback(
     (measureIdx: number, duration: NoteDuration, insertIdx: number) => {
       const newElement = makeRest(duration);
+
+      const currentMeasures = doc.parts[selectedPartIdx]?.measures ?? [];
+      const curMeasure = currentMeasures[measureIdx];
+      const nextIdx = insertIdx + 1;
+      const isLastMeasure = measureIdx >= currentMeasures.length - 1;
+
+      const timeSig = curMeasure?.timeSignature ?? doc.timeSignature;
+      const beatsTotal = timeSig.numerator * (4 / timeSig.denominator);
+      const oldBeats = (curMeasure?.elements ?? []).reduce(
+        (sum, el) => sum + noteDurationToBeats(el.duration as NoteDuration), 0,
+      );
+      const newBeats = oldBeats + noteDurationToBeats(duration);
+      const isMeasureFull = newBeats >= beatsTotal;
+
       const newDoc: ScoreDocument = {
         ...doc,
         parts: doc.parts.map((p, pIdx) => {
           if (pIdx !== selectedPartIdx) return p;
-          return {
-            ...p,
-            measures: p.measures.map((m, mi) => {
-              if (mi !== measureIdx) return m;
-              const next = [...m.elements];
-              next.splice(insertIdx, 0, newElement);
-              return { ...m, elements: next };
-            }),
-          };
+          const newMeasures = p.measures.map((m, mi) => {
+            if (mi !== measureIdx) return m;
+            const next = [...m.elements];
+            next.splice(insertIdx, 0, newElement);
+            return { ...m, elements: next };
+          });
+          if (isMeasureFull && isLastMeasure) {
+            newMeasures.push(createEmptyMeasure());
+          }
+          return { ...p, measures: newMeasures };
         }),
       };
       applyDoc(newDoc);
       setSelectedElementId(newElement.id);
-      // 스텝 입력 커서: 방금 삽입한 위치 + 1
-      setCursorMeasureIdx(measureIdx);
-      setCursorInsertIdx(insertIdx + 1);
-      const curMeasure = doc.parts[selectedPartIdx]?.measures[measureIdx];
-      const newLen = (curMeasure?.elements.length ?? 0) + 1;
-      const nextIdx = insertIdx + 1;
-      if (nextIdx >= newLen) {
-        const totalMeasures = doc.parts[selectedPartIdx]?.measures.length ?? 1;
-        if (measureIdx < totalMeasures - 1) {
-          setSelectedMeasureIdx(measureIdx + 1);
-        }
+
+      if (isMeasureFull) {
+        const nextMeasureIdx = measureIdx + 1;
+        setSelectedMeasureIdx(nextMeasureIdx);
+        setCursorMeasureIdx(nextMeasureIdx);
+        setCursorInsertIdx(0);
       } else {
         setSelectedMeasureIdx(measureIdx);
+        setCursorMeasureIdx(measureIdx);
+        setCursorInsertIdx(nextIdx);
       }
     },
     [doc, selectedPartIdx, selectedDynamic],
@@ -1405,6 +1444,10 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
                 onPress={() => {
                   setSelectedMeasureIdx(mIdx);
                   setSelectedElementId(null);
+                  // 커서를 탭한 마디의 끝으로 이동
+                  const measureElements = currentPart.measures[mIdx]?.elements ?? [];
+                  setCursorMeasureIdx(mIdx);
+                  setCursorInsertIdx(measureElements.length);
                 }}
                 onLongPress={() => {
                   confirmDestructive(t("scoreMode", "deleteMeasure"), {
@@ -1415,19 +1458,33 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
                 }}
                 testID={`score-editor-measure-${mIdx}`}
               >
-                <Text
-                  style={[
-                    styles.measureTabNum,
-                    { color: selectedMeasureIdx === mIdx ? C.accent : C.textSecondary },
-                  ]}
-                >
-                  {mIdx + 1}
-                </Text>
-                <Text style={[styles.measureTabCount, { color: C.textSecondary }]}>
-                  {m.elements.length > 0
-                    ? `(${m.elements.length})`
-                    : t("scoreMode", "measureEmpty")}
-                </Text>
+                {(() => {
+                  const { beatsUsed, beatsTotal } = measureBeatsInfo(m, mIdx);
+                  const isFull = beatsUsed >= beatsTotal;
+                  const isOver = beatsUsed > beatsTotal;
+                  const beatColor = isOver
+                    ? "#ef4444"
+                    : isFull
+                    ? C.accent
+                    : C.textSecondary;
+                  return (
+                    <>
+                      <Text
+                        style={[
+                          styles.measureTabNum,
+                          { color: cursorMeasureIdx === mIdx ? C.accent : selectedMeasureIdx === mIdx ? C.accent : C.textSecondary },
+                        ]}
+                      >
+                        {mIdx + 1}
+                      </Text>
+                      <Text style={[styles.measureTabCount, { color: beatColor }]}>
+                        {m.elements.length === 0
+                          ? t("scoreMode", "measureEmpty")
+                          : `${beatsUsed}/${beatsTotal}`}
+                      </Text>
+                    </>
+                  );
+                })()}
               </Pressable>
             ))}
 
