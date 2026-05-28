@@ -76,6 +76,7 @@ audioStub.createAudioPlayer = jest.fn(() => ({
 (Platform as unknown as Record<string, unknown>).OS = "ios";
 
 import {
+  getPrepareBatchSize,
   prepareScoreAudio,
   scheduleMeasureNotes,
   stopAllScoreNotes,
@@ -383,5 +384,167 @@ describe("stopAllScoreNotes — cancels pending schedule (G)", () => {
     await Promise.resolve();
     // Only the second schedule's player should be created
     expect(audioStub.createAudioPlayer).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// H. batchSize parameter — edge cases and custom values
+// MIDI 50–65 (fresh notes not used by groups A–G)
+//   single: 50 | 4-note: 51–54 | 5-note: 55–59 | batchSize=2: 61–63 | batchSize=1: 64–65
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("prepareScoreAudio — batchSize edge cases (H)", () => {
+  beforeEach(() => {
+    fsStub._mockState.reset();
+  });
+
+  it("single note: progress fires once with done=1, total=1", async () => {
+    const calls: Array<[number, number]> = [];
+    await prepareScoreAudio([50], (done, total) => calls.push([done, total]));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEqual([1, 1]);
+  });
+
+  it("exactly 4 notes (= default batchSize): progress fires 4 times, total=4 throughout", async () => {
+    const dones: number[] = [];
+    const totals: number[] = [];
+    await prepareScoreAudio([51, 52, 53, 54], (done, total) => {
+      dones.push(done);
+      totals.push(total);
+    });
+    expect(dones).toHaveLength(4);
+    expect(totals.every((t) => t === 4)).toBe(true);
+    expect([...dones].sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("5 notes (default batchSize=4): progress fires 5 times across 2 batches", async () => {
+    const dones: number[] = [];
+    const totals: number[] = [];
+    await prepareScoreAudio([55, 56, 57, 58, 59], (done, total) => {
+      dones.push(done);
+      totals.push(total);
+    });
+    expect(dones).toHaveLength(5);
+    expect(totals.every((t) => t === 5)).toBe(true);
+    expect([...dones].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("custom batchSize=2: 3 notes → 2 batches, progress fires 3 times", async () => {
+    const dones: number[] = [];
+    await prepareScoreAudio(
+      [61, 62, 63],
+      (done) => dones.push(done),
+      2, // batchSize
+    );
+    expect(dones).toHaveLength(3);
+    expect([...dones].sort((a, b) => a - b)).toEqual([1, 2, 3]);
+  });
+
+  it("custom batchSize=1: 2 notes → strictly serial, done increments 1→2 in order", async () => {
+    const calls: Array<[number, number]> = [];
+    await prepareScoreAudio(
+      [64, 65],
+      (done, total) => calls.push([done, total]),
+      1, // batchSize=1 → each note is its own single-item batch
+    );
+    expect(calls).toHaveLength(2);
+    // batchSize=1 means strictly sequential — done must be exactly 1 then 2
+    expect(calls[0][0]).toBe(1);
+    expect(calls[1][0]).toBe(2);
+    expect(calls.every(([_, t]) => t === 2)).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// I. getPrepareBatchSize — device tier heuristic
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("getPrepareBatchSize — device tier heuristic (I)", () => {
+  // Save globals modified by these tests
+  const savedOS = (Platform as unknown as Record<string, unknown>).OS;
+  const savedVersion = (Platform as unknown as Record<string, unknown>).Version;
+  const savedNavigator = (global as unknown as Record<string, unknown>).navigator;
+
+  afterEach(() => {
+    (Platform as unknown as Record<string, unknown>).OS = savedOS;
+    (Platform as unknown as Record<string, unknown>).Version = savedVersion;
+    (global as unknown as Record<string, unknown>).navigator = savedNavigator;
+  });
+
+  // ── navigator.hardwareConcurrency tiers (web / environments that expose it) ──
+
+  it("hardwareConcurrency ≥ 8 → batchSize 8 (high-end machine)", () => {
+    (global as unknown as Record<string, unknown>).navigator = { hardwareConcurrency: 8 };
+    expect(getPrepareBatchSize()).toBe(8);
+  });
+
+  it("hardwareConcurrency = 16 → batchSize 8 (capped at 8)", () => {
+    (global as unknown as Record<string, unknown>).navigator = { hardwareConcurrency: 16 };
+    expect(getPrepareBatchSize()).toBe(8);
+  });
+
+  it("hardwareConcurrency = 4 → batchSize 6 (mid-range)", () => {
+    (global as unknown as Record<string, unknown>).navigator = { hardwareConcurrency: 4 };
+    expect(getPrepareBatchSize()).toBe(6);
+  });
+
+  it("hardwareConcurrency = 7 → batchSize 6", () => {
+    (global as unknown as Record<string, unknown>).navigator = { hardwareConcurrency: 7 };
+    expect(getPrepareBatchSize()).toBe(6);
+  });
+
+  it("hardwareConcurrency = 2 → batchSize 4 (low-end)", () => {
+    (global as unknown as Record<string, unknown>).navigator = { hardwareConcurrency: 2 };
+    expect(getPrepareBatchSize()).toBe(4);
+  });
+
+  // ── Native fallback (hardwareConcurrency = 0 / falsy → native heuristic) ──
+
+  describe("native fallback — platform version heuristic", () => {
+    beforeEach(() => {
+      // hardwareConcurrency=0 is falsy → function falls through to platform check
+      (global as unknown as Record<string, unknown>).navigator = { hardwareConcurrency: 0 };
+    });
+
+    it("iOS 16+ → batchSize 6 (A15 Bionic and newer)", () => {
+      (Platform as unknown as Record<string, unknown>).OS = "ios";
+      (Platform as unknown as Record<string, unknown>).Version = "17.4";
+      expect(getPrepareBatchSize()).toBe(6);
+    });
+
+    it("iOS 16.0 exactly → batchSize 6", () => {
+      (Platform as unknown as Record<string, unknown>).OS = "ios";
+      (Platform as unknown as Record<string, unknown>).Version = "16.0";
+      expect(getPrepareBatchSize()).toBe(6);
+    });
+
+    it("iOS 15.x → batchSize 4", () => {
+      (Platform as unknown as Record<string, unknown>).OS = "ios";
+      (Platform as unknown as Record<string, unknown>).Version = "15.7";
+      expect(getPrepareBatchSize()).toBe(4);
+    });
+
+    it("Android API 31+ → batchSize 6 (Android 12+)", () => {
+      (Platform as unknown as Record<string, unknown>).OS = "android";
+      (Platform as unknown as Record<string, unknown>).Version = 34;
+      expect(getPrepareBatchSize()).toBe(6);
+    });
+
+    it("Android API 31 exactly → batchSize 6", () => {
+      (Platform as unknown as Record<string, unknown>).OS = "android";
+      (Platform as unknown as Record<string, unknown>).Version = 31;
+      expect(getPrepareBatchSize()).toBe(6);
+    });
+
+    it("Android API 30 → batchSize 4", () => {
+      (Platform as unknown as Record<string, unknown>).OS = "android";
+      (Platform as unknown as Record<string, unknown>).Version = 30;
+      expect(getPrepareBatchSize()).toBe(4);
+    });
+
+    it("unknown platform → batchSize 4 (safe default)", () => {
+      (Platform as unknown as Record<string, unknown>).OS = "unknown";
+      expect(getPrepareBatchSize()).toBe(4);
+    });
   });
 });
