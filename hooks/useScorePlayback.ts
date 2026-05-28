@@ -49,6 +49,12 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   // 준비 요청 세션 ID — stop/unmount 시 증가시켜 stale callback 무효화
   const prepareSessionRef = useRef(0);
 
+  // 악기 변경 시 재준비를 위한 보조 refs
+  // - prepareParamsRef: 준비 중일 때 non-null (MIDI 목록 보관)
+  // - startRafRef: 준비 완료 후 호출할 startRaf 함수
+  const prepareParamsRef = useRef<{ allMidi: number[] } | null>(null);
+  const startRafRef = useRef<(() => void) | null>(null);
+
   // 오디오: 마디 변경 감지용 seqIdx 추적
   const lastSeqIdxRef = useRef(-1);
 
@@ -104,6 +110,33 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     rafRef.current = requestAnimationFrame(tick);
   }, []);
 
+  /** 내부 prepare 헬퍼 — play()와 악기 변경 effect 양쪽에서 호출 */
+  const _runPrepare = useCallback((allMidi: number[], instrumentId: string | undefined) => {
+    const sessionId = ++prepareSessionRef.current;
+    const total = [...new Set(allMidi)].filter((m) => m >= 21 && m <= 108).length;
+    setIsPreparing(true);
+    setPrepareProgress({ done: 0, total });
+    prepareParamsRef.current = { allMidi };
+
+    prepareScoreAudio(
+      allMidi,
+      (done, tot) => {
+        if (prepareSessionRef.current !== sessionId) return;
+        setPrepareProgress({ done, total: tot });
+      },
+      4,
+      instrumentId,
+    )
+      .catch(() => {})
+      .finally(() => {
+        if (prepareSessionRef.current !== sessionId) return;
+        prepareParamsRef.current = null;
+        setIsPreparing(false);
+        setPrepareProgress(null);
+        startRafRef.current?.();
+      });
+  }, []);
+
   const play = useCallback(() => {
     if (isPlayingRef.current || isPreparing) return;
     const timeline = buildPlayTimeline(doc);
@@ -118,6 +151,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(tick);
     };
+    startRafRef.current = startRaf;
 
     if (Platform.OS !== "web" && timeline.length > 0) {
       // 네이티브: WAV 파일 준비가 완료된 뒤 재생 시작
@@ -126,29 +160,25 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
         for (const n of ev.notes) allMidi.push(n.midiNote);
       }
       if (allMidi.length > 0) {
-        // 세션 ID 채번 — stop/unmount 시 증가하므로 stale callback이 startRaf 호출을 건너뜀
-        const sessionId = ++prepareSessionRef.current;
-        const total = [...new Set(allMidi)].filter((m) => m >= 21 && m <= 108).length;
-        setIsPreparing(true);
-        setPrepareProgress({ done: 0, total });
-        const partInstrumentId = doc.parts[0]?.instrumentId;
-        prepareScoreAudio(allMidi, (done, tot) => {
-          if (prepareSessionRef.current !== sessionId) return;
-          setPrepareProgress({ done, total: tot });
-        }, 4, partInstrumentId)
-          .catch(() => {})
-          .finally(() => {
-            if (prepareSessionRef.current !== sessionId) return;
-            setIsPreparing(false);
-            setPrepareProgress(null);
-            startRaf();
-          });
+        _runPrepare(allMidi, doc.parts[0]?.instrumentId);
         return;
       }
     }
 
     startRaf();
-  }, [doc, tick, isPreparing]);
+  }, [doc, tick, isPreparing, _runPrepare]);
+
+  // 준비 도중 악기가 바뀌면 새 악기로 다시 준비
+  // - prepareParamsRef.current: null이면 준비 중이 아니므로 즉시 리턴
+  // - 세션 ID 증가 → 이전 prepare의 .finally()가 startRaf를 호출하지 않음
+  // - 새 prepare가 완료되면 startRafRef.current()로 재생 시작
+  const partInstrumentId = doc.parts[0]?.instrumentId;
+  useEffect(() => {
+    if (!prepareParamsRef.current) return;
+    const { allMidi } = prepareParamsRef.current;
+    _runPrepare(allMidi, partInstrumentId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partInstrumentId]);
 
   const pause = useCallback(() => {
     if (!isPlayingRef.current) return;
@@ -166,6 +196,8 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   const stop = useCallback(() => {
     // 진행 중인 prepare 비동기 작업을 무효화
     prepareSessionRef.current++;
+    prepareParamsRef.current = null;
+    startRafRef.current = null;
     setIsPreparing(false);
     setPrepareProgress(null);
     isPlayingRef.current = false;
@@ -201,6 +233,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     return () => {
       // 진행 중인 prepare 비동기 작업 무효화
       prepareSessionRef.current++;
+      prepareParamsRef.current = null;
       isPlayingRef.current = false;
       stopAllScoreNotes();
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
