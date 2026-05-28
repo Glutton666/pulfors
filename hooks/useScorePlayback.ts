@@ -55,6 +55,8 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   // - startRafRef: 준비 완료 후 호출할 startRaf 함수
   const prepareParamsRef = useRef<{ allMidi: number[] } | null>(null);
   const startRafRef = useRef<(() => void) | null>(null);
+  // prepare 완료 후 true — pause→play 시 재준비 건너뜀. stop()/doc 변경 시 리셋.
+  const isAudioReadyRef = useRef(false);
 
   // 오디오: 마디 변경 감지용 seqIdx 추적
   const lastSeqIdxRef = useRef(-1);
@@ -134,6 +136,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
         prepareParamsRef.current = null;
         setIsPreparing(false);
         setPrepareProgress(null);
+        isAudioReadyRef.current = true;
         startRafRef.current?.();
       });
   }, []);
@@ -156,11 +159,12 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
 
     if (Platform.OS !== "web" && timeline.length > 0) {
       // 네이티브: WAV 파일 준비가 완료된 뒤 재생 시작
+      // (pause→play 재개 시에는 isAudioReadyRef가 true → 재준비 건너뜀)
       const allMidi: number[] = [];
       for (const ev of timeline) {
         for (const n of ev.notes) allMidi.push(n.midiNote);
       }
-      if (allMidi.length > 0) {
+      if (allMidi.length > 0 && !isAudioReadyRef.current) {
         _runPrepare(allMidi, doc.parts[0]?.instrumentId);
         return;
       }
@@ -176,6 +180,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   const partInstrumentId = doc.parts[0]?.instrumentId;
   useEffect(() => {
     if (!prepareParamsRef.current) return;
+    isAudioReadyRef.current = false; // 악기 변경 시 재준비 필요
     const { allMidi } = prepareParamsRef.current;
     _runPrepare(allMidi, partInstrumentId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -199,6 +204,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     prepareSessionRef.current++;
     prepareParamsRef.current = null;
     startRafRef.current = null;
+    isAudioReadyRef.current = false;
     setIsPreparing(false);
     setPrepareProgress(null);
     isPlayingRef.current = false;

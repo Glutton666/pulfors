@@ -455,8 +455,8 @@ describe("useScorePlayback — unmount cleanup (H14)", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("useScorePlayback — pause/resume (H15)", () => {
-  it("H15: pause() stops playback; subsequent play() resumes without a new prepare", async () => {
-    // First play: prepare resolves immediately (simulates cache-warm scenario)
+  it("H15: pause() stops playback; subsequent play() resumes without re-triggering prepare", async () => {
+    // First play: prepare resolves immediately
     mockPrepare.mockResolvedValue(undefined);
 
     const { result } = renderHook(() => useScorePlayback(DOC_WITH_NOTES));
@@ -468,21 +468,24 @@ describe("useScorePlayback — pause/resume (H15)", () => {
     });
     expect(result.current.isPlaying).toBe(true);
     expect(rafSpy).toHaveBeenCalledTimes(1);
-    const prepareCallsAfterFirstPlay = mockPrepare.mock.calls.length;
+    // prepareScoreAudio called exactly once during initial play
+    expect(mockPrepare).toHaveBeenCalledTimes(1);
 
-    // Pause — stops RAF, isPlaying → false
+    // Pause — stops RAF, isPlaying → false; isAudioReadyRef stays true
     act(() => { result.current.pause(); });
     expect(result.current.isPlaying).toBe(false);
-    // prepareScoreAudio must NOT have been called during pause
-    expect(mockPrepare.mock.calls.length).toBe(prepareCallsAfterFirstPlay);
+    // No extra prepare calls during pause
+    expect(mockPrepare).toHaveBeenCalledTimes(1);
 
-    // Resume via play() — on native this triggers a prepare call (fast, cache-warm)
-    // but playback must restart: isPlaying = true, RAF fired again
+    // Resume via play() — isAudioReadyRef=true → skips prepare, goes straight to startRaf
     await act(async () => {
       result.current.play();
       await flushMicrotasks();
     });
     expect(result.current.isPlaying).toBe(true);
+    // prepareScoreAudio must NOT have been called again (still 1 total)
+    expect(mockPrepare).toHaveBeenCalledTimes(1);
+    // RAF fired a second time (resume)
     expect(rafSpy).toHaveBeenCalledTimes(2);
   });
 });
