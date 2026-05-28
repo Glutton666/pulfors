@@ -9,9 +9,13 @@ const asyncNoop = async () => {};
 const _mockState = {
   writeCount: 0,
   writtenUris: [],
+  /** uri → Uint8Array: stores the raw bytes passed to file.write() so tests
+   *  can decode the WAV content and inspect PCM samples. */
+  writtenData: new Map(),
   reset() {
     this.writeCount = 0;
     this.writtenUris = [];
+    this.writtenData = new Map();
   },
 };
 
@@ -29,10 +33,15 @@ class MockFile {
   constructor(directory, filename) {
     this.uri = (directory || "file:///stub/cache/") + filename;
   }
-  /** Synchronous write — records the call in _mockState. */
-  write(_data) {
+  /** Synchronous write — records the call in _mockState and stores the raw
+   *  bytes so tests can decode WAV content for PCM inspection. */
+  write(data) {
     _mockState.writeCount++;
     _mockState.writtenUris.push(this.uri);
+    _mockState.writtenData.set(
+      this.uri,
+      data instanceof Uint8Array ? data : new Uint8Array(data),
+    );
   }
 }
 

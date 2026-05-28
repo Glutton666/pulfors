@@ -101,6 +101,7 @@ import * as audioRenderer from "../lib/audio-renderer";
 // Group E/F→ MIDI 47 (no-cache), 48 (with-cache)
 // Group G  → MIDI 49 (cancel)
 // Group K  → MIDI 75 (violin/native), 76 (piano/native), 77-78 (web — no file written)
+// Group L  → MIDI 80 (same pitch, three distinct cache keys: 80_sawtooth / 80_triangle / 80_sine)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // A. WAV file cache population
@@ -859,5 +860,120 @@ describe("previewScoreNote — web AudioContext oscillator type (K2)", () => {
 
     previewScoreNote(10, "violin"); // MIDI 10 < 21 → early return before web path
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// L. PCM waveform signature — sawtooth vs triangle vs sine differ in content
+//
+// Calls prepareScoreAudio with a real (non-mocked) encodeWav and decodes the
+// written WAV bytes back to Float32 PCM via parseWav.  Asserts that violin
+// (sawtooth) and piano (triangle) produce genuinely different PCM at the same
+// MIDI pitch, and that both differ from the default sine waveform.
+//
+// This catches a regression where the waveform parameter is silently dropped
+// inside _generatePCM — such a bug would still emit a WAV file and pass all
+// URI-suffix checks, but every instrument would sound identical (wrong timbre).
+//
+// MIDI allocation: 80 — three distinct cache keys: 80_sawtooth, 80_triangle,
+// 80_sine.  None of these appear in groups A–K.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("prepareScoreAudio — PCM waveform signature differs by instrument (L)", () => {
+  const MIDI = 80;
+
+  /** Fraction of sample positions where |a[i] − b[i]| > threshold. */
+  function diffFraction(
+    a: Float32Array,
+    b: Float32Array,
+    threshold = 0.01,
+  ): number {
+    const len = Math.min(a.length, b.length);
+    let count = 0;
+    for (let i = 0; i < len; i++) {
+      if (Math.abs(a[i] - b[i]) > threshold) count++;
+    }
+    return count / len;
+  }
+
+  let sawPcm: Float32Array;
+  let triPcm: Float32Array;
+  let sinPcm: Float32Array;
+
+  beforeAll(async () => {
+    // ── violin → sawtooth (cache key: 80_sawtooth, fresh) ──────────────────
+    fsStub._mockState.reset();
+    await prepareScoreAudio([MIDI], undefined, 4, "violin");
+    const sawUri = fsStub._mockState.writtenUris[0];
+    const sawBytes = (fsStub._mockState as any).writtenData.get(sawUri) as Uint8Array;
+    ({ pcm: sawPcm } = audioRenderer.parseWav(sawBytes.buffer as ArrayBuffer));
+
+    // ── piano → triangle (cache key: 80_triangle, fresh) ───────────────────
+    fsStub._mockState.reset();
+    await prepareScoreAudio([MIDI], undefined, 4, "piano");
+    const triUri = fsStub._mockState.writtenUris[0];
+    const triBytes = (fsStub._mockState as any).writtenData.get(triUri) as Uint8Array;
+    ({ pcm: triPcm } = audioRenderer.parseWav(triBytes.buffer as ArrayBuffer));
+
+    // ── default (no instrumentId) → sine (cache key: 80_sine, fresh) ───────
+    fsStub._mockState.reset();
+    await prepareScoreAudio([MIDI]);
+    const sinUri = fsStub._mockState.writtenUris[0];
+    const sinBytes = (fsStub._mockState as any).writtenData.get(sinUri) as Uint8Array;
+    ({ pcm: sinPcm } = audioRenderer.parseWav(sinBytes.buffer as ArrayBuffer));
+  });
+
+  it("WAV bytes are captured — PCM arrays are defined and non-empty", () => {
+    expect(sawPcm).toBeDefined();
+    expect(triPcm).toBeDefined();
+    expect(sinPcm).toBeDefined();
+    expect(sawPcm.length).toBeGreaterThan(0);
+  });
+
+  it("all three waveforms produce PCM of the same length (same MIDI / SR / duration)", () => {
+    expect(sawPcm.length).toBe(triPcm.length);
+    expect(sawPcm.length).toBe(sinPcm.length);
+  });
+
+  it("sawtooth PCM differs significantly from triangle PCM at MIDI 80 (>5% of samples)", () => {
+    expect(diffFraction(sawPcm, triPcm)).toBeGreaterThan(0.05);
+  });
+
+  it("sawtooth PCM differs significantly from sine PCM at MIDI 80 (>5% of samples)", () => {
+    expect(diffFraction(sawPcm, sinPcm)).toBeGreaterThan(0.05);
+  });
+
+  it("triangle PCM differs significantly from sine PCM at MIDI 80 (>5% of samples)", () => {
+    expect(diffFraction(triPcm, sinPcm)).toBeGreaterThan(0.05);
+  });
+
+  it("sawtooth steady-state peak amplitude is ≥ 0.5 (waveform not silenced)", () => {
+    // Skip the 8 ms attack window (≈176 samples at 22050 Hz) and inspect the
+    // next 1000 samples; the envelope is flat at 0.6 in that region.
+    const ATTACK_SAMPLES = 176;
+    const WINDOW = 1000;
+    let max = 0;
+    for (
+      let i = ATTACK_SAMPLES;
+      i < ATTACK_SAMPLES + WINDOW && i < sawPcm.length;
+      i++
+    ) {
+      if (Math.abs(sawPcm[i]) > max) max = Math.abs(sawPcm[i]);
+    }
+    expect(max).toBeGreaterThanOrEqual(0.5);
+  });
+
+  it("triangle steady-state peak amplitude is ≥ 0.5 (waveform not silenced)", () => {
+    const ATTACK_SAMPLES = 176;
+    const WINDOW = 1000;
+    let max = 0;
+    for (
+      let i = ATTACK_SAMPLES;
+      i < ATTACK_SAMPLES + WINDOW && i < triPcm.length;
+      i++
+    ) {
+      if (Math.abs(triPcm[i]) > max) max = Math.abs(triPcm[i]);
+    }
+    expect(max).toBeGreaterThanOrEqual(0.5);
   });
 });
