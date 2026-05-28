@@ -200,17 +200,20 @@ async function _playNativeNote(
 
 /**
  * 악보 재생 전 필요한 MIDI 음표 파일을 미리 준비합니다.
- * 네이티브: 사인파 WAV 파일 생성 + 캐시 (없는 음표만)
+ * 네이티브: 악기에 맞는 파형 WAV 파일 생성 + 캐시 (없는 음표만)
  * 웹: no-op (AudioContext는 지연 초기화)
  *
  * @param onProgress - 진행 상황 콜백 (done: 완료된 음표 수, total: 전체 음표 수)
+ * @param instrumentId - 악기 ID (없으면 sine 파형)
  */
 export async function prepareScoreAudio(
   midiNotes: number[],
   onProgress?: (done: number, total: number) => void,
   batchSize = 4,
+  instrumentId?: string,
 ): Promise<void> {
   if (Platform.OS === "web") return;
+  const waveform = instrumentToWaveform(instrumentId ?? "");
   const unique = [...new Set(midiNotes)].filter((m) => m >= 21 && m <= 108);
   const total = unique.length;
   let done = 0;
@@ -218,7 +221,7 @@ export async function prepareScoreAudio(
     const batch = unique.slice(i, i + batchSize);
     await Promise.all(
       batch.map(async (m) => {
-        await _ensureNoteFile(m, "sine");
+        await _ensureNoteFile(m, waveform);
         done += 1;
         onProgress?.(done, total);
       }),
@@ -230,11 +233,15 @@ export async function prepareScoreAudio(
  * 마디 내 음표들을 setTimeout으로 스케줄링합니다.
  * 이전 마디의 예약이 남아 있으면 먼저 취소합니다.
  * 반환된 함수를 호출하면 예약 취소 + 발음 중인 음표 즉시 정지.
+ *
+ * @param instrumentId - 악기 ID (없으면 sine 파형)
  */
 export function scheduleMeasureNotes(
   notes: PlayNoteEvent[],
   volume = 0.7,
+  instrumentId?: string,
 ): () => void {
+  const waveform = instrumentToWaveform(instrumentId ?? "");
   // 이전 마디 취소
   if (_currentMeasureStop) {
     _currentMeasureStop();
@@ -255,10 +262,10 @@ export function scheduleMeasureNotes(
       if (idx >= 0) myTids.splice(idx, 1);
 
       if (Platform.OS === "web") {
-        const stop = _playWebNote(note.midiNote, note.durationMs, volume);
+        const stop = _playWebNote(note.midiNote, note.durationMs, volume, waveform);
         myStopFns.push(stop);
       } else {
-        _playNativeNote(note.midiNote, note.durationMs, volume).then((stop) => {
+        _playNativeNote(note.midiNote, note.durationMs, volume, waveform).then((stop) => {
           if (cancelled) {
             stop();
           } else {

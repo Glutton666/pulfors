@@ -35,6 +35,8 @@ export interface PlayEvent {
   notes: PlayNoteEvent[];
   /** 타악기(percussion) 클레프 파트 여부 */
   isPercussion: boolean;
+  /** 파트의 악기 ID (INSTRUMENTS 키) — 음색 선택에 사용 */
+  instrumentId: string;
 }
 
 // ── 음표 길이 → 박자 변환 ─────────────────────────────────────
@@ -248,6 +250,7 @@ export function buildPlayTimeline(doc: ScoreDocument): PlayEvent[] {
       endBpm,
       notes,
       isPercussion,
+      instrumentId: doc.parts[0]?.instrumentId ?? "",
     });
 
     t += durationMs;

@@ -92,7 +92,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
               startOffsetMs: Math.max(0, n.startOffsetMs - elapsedInMeasure),
             }));
           if (adjustedNotes.length > 0) {
-            scheduleMeasureNotes(adjustedNotes);
+            scheduleMeasureNotes(adjustedNotes, undefined, event.instrumentId);
           }
         }
       }
@@ -131,10 +131,11 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
         const total = [...new Set(allMidi)].filter((m) => m >= 21 && m <= 108).length;
         setIsPreparing(true);
         setPrepareProgress({ done: 0, total });
+        const partInstrumentId = doc.parts[0]?.instrumentId;
         prepareScoreAudio(allMidi, (done, tot) => {
           if (prepareSessionRef.current !== sessionId) return;
           setPrepareProgress({ done, total: tot });
-        })
+        }, 4, partInstrumentId)
           .catch(() => {})
           .finally(() => {
             if (prepareSessionRef.current !== sessionId) return;
