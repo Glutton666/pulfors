@@ -121,8 +121,8 @@ describe("prepareScoreAudio — WAV cache population (A)", () => {
     // MIDI 33 and 34 — fresh notes
     await prepareScoreAudio([33, 34]);
     const uris = fsStub._mockState.writtenUris;
-    expect(uris.some((u) => u.includes("score_note_33.wav"))).toBe(true);
-    expect(uris.some((u) => u.includes("score_note_34.wav"))).toBe(true);
+    expect(uris.some((u) => u.includes("score_note_33_sine.wav"))).toBe(true);
+    expect(uris.some((u) => u.includes("score_note_34_sine.wav"))).toBe(true);
   });
 
   it("second call with already-cached notes writes nothing (cache hit)", async () => {
@@ -204,7 +204,7 @@ describe("prepareScoreAudio — range filter and dedup (C)", () => {
     // 19 invalid, 44 valid, 109 invalid
     await prepareScoreAudio([19, 44, 109]);
     expect(fsStub._mockState.writeCount).toBe(1);
-    expect(fsStub._mockState.writtenUris[0]).toContain("score_note_44.wav");
+    expect(fsStub._mockState.writtenUris[0]).toContain("score_note_44_sine.wav");
   });
 
   it("duplicate MIDI notes are deduplicated — one file per pitch", async () => {
@@ -322,7 +322,7 @@ describe("scheduleMeasureNotes — cached note playback (F)", () => {
     await Promise.resolve();
     await Promise.resolve();
     const arg = audioStub.createAudioPlayer.mock.calls[0][0] as { uri: string };
-    expect(arg.uri).toContain("score_note_48.wav");
+    expect(arg.uri).toContain("score_note_48_sine.wav");
   });
 
   it("scheduled note respects startOffsetMs — not called before the offset", async () => {
