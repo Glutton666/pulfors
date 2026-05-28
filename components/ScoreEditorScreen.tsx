@@ -13,6 +13,7 @@ import {
   Platform,
   Image,
   ActivityIndicator,
+  Animated,
   useWindowDimensions,
 } from "react-native";
 import { captureRef } from "react-native-view-shot";
@@ -202,6 +203,24 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   // ── 재생 연동 ─────────────────────────────────────────────────
   const playback = useScorePlayback(doc);
   const scoreScrollRef = useRef<ScrollView>(null);
+
+  // 진행 바 애니메이션 (0→1 fraction, 150ms ease)
+  const progressAnimRef = useRef(new Animated.Value(0));
+  useEffect(() => {
+    const fraction = playback.prepareProgress
+      ? playback.prepareProgress.done / playback.prepareProgress.total
+      : 0;
+    Animated.timing(progressAnimRef.current, {
+      toValue: fraction,
+      duration: 150,
+      useNativeDriver: false,
+    }).start();
+  }, [playback.prepareProgress]);
+  useEffect(() => {
+    if (!playback.isPreparing) {
+      progressAnimRef.current.setValue(0);
+    }
+  }, [playback.isPreparing]);
   const measureRowYRef = useRef<Record<number, number>>({}); // measureIdx → scrollY
 
   // currentMeasureIdx 변경 시 자동 스크롤
@@ -1012,14 +1031,15 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           </Pressable>
           {playback.isPreparing && (
             <View style={styles.prepareBarTrack}>
-              <View
+              <Animated.View
                 style={[
                   styles.prepareBarFill,
                   {
                     backgroundColor: C.accent,
-                    width: playback.prepareProgress
-                      ? `${(playback.prepareProgress.done / playback.prepareProgress.total) * 100}%`
-                      : "0%",
+                    width: progressAnimRef.current.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, 32],
+                    }),
                   },
                 ]}
               />
