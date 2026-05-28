@@ -180,7 +180,105 @@ describe("applyNotePreviewOnRelease — isPlaying 게이트 (실제 프로덕션
   });
 });
 
-// ── 3. pitchToMidi 연동 검증 ─────────────────────────────────────────────────
+// ── 3. notePreviewEnabled 게이트 — ScoreCanvas 조건부 호출 시뮬레이션 ──────────
+//
+// ScoreCanvas.tsx (line ~452):
+//   if (notePreviewEnabledRef.current) {
+//     applyNotePreviewOnRelease(isPlayingRef.current, pitchToMidi(info.pitch), previewScoreNote, instrumentIdRef.current);
+//   }
+//
+// React Native 컴포넌트를 렌더링할 수 없으므로, 위 조건부 호출을 순수 함수로
+// 시뮬레이션해 notePreviewEnabledRef가 게이트 역할을 하는지 검증한다.
+
+function simulateNoteRelease(
+  notePreviewEnabled: boolean,
+  isPlaying: boolean,
+  midi: number,
+  releaseFn: typeof applyNotePreviewOnRelease,
+  previewFn: (m: number, instrumentId?: string) => void,
+  instrumentId?: string,
+): void {
+  if (notePreviewEnabled) {
+    releaseFn(isPlaying, midi, previewFn, instrumentId);
+  }
+}
+
+describe("notePreviewEnabled 게이트 — ScoreCanvas 조건부 호출 시뮬레이션", () => {
+  test("notePreviewEnabled=false → applyNotePreviewOnRelease 호출되지 않음 (스파이 미발동)", () => {
+    let releaseCallCount = 0;
+    const releaseSpy: typeof applyNotePreviewOnRelease = (..._args) => { releaseCallCount++; };
+    let previewCallCount = 0;
+    const previewSpy = (_m: number) => { previewCallCount++; };
+
+    simulateNoteRelease(false, false, 60, releaseSpy, previewSpy);
+
+    assert.equal(releaseCallCount, 0, "notePreviewEnabled=false이면 applyNotePreviewOnRelease가 호출되면 안 됨");
+    assert.equal(previewCallCount, 0, "미리 듣기 함수도 호출되면 안 됨");
+  });
+
+  test("notePreviewEnabled=false, isPlaying=true → 모두 억제됨", () => {
+    let releaseCallCount = 0;
+    const releaseSpy: typeof applyNotePreviewOnRelease = (..._args) => { releaseCallCount++; };
+    const previewSpy = (_m: number) => {};
+
+    simulateNoteRelease(false, true, 60, releaseSpy, previewSpy);
+
+    assert.equal(releaseCallCount, 0, "notePreviewEnabled=false이면 isPlaying 값과 관계없이 억제되어야 함");
+  });
+
+  test("notePreviewEnabled=true, isPlaying=false → applyNotePreviewOnRelease 호출되고 미리 듣기 발동", () => {
+    const calls: number[] = [];
+    const previewSpy = (m: number) => calls.push(m);
+
+    simulateNoteRelease(true, false, 60, applyNotePreviewOnRelease, previewSpy);
+
+    assert.deepEqual(calls, [60], "notePreviewEnabled=true, isPlaying=false이면 미리 듣기가 발동되어야 함");
+  });
+
+  test("notePreviewEnabled=true, isPlaying=true → applyNotePreviewOnRelease 호출되지만 isPlaying 게이트가 억제", () => {
+    const calls: number[] = [];
+    const previewSpy = (m: number) => calls.push(m);
+
+    simulateNoteRelease(true, true, 60, applyNotePreviewOnRelease, previewSpy);
+
+    assert.deepEqual(calls, [], "notePreviewEnabled=true이지만 재생 중이면 미리 듣기가 억제되어야 함");
+  });
+
+  test("notePreviewEnabled 전환: false→true→false → true일 때만 발동", () => {
+    const calls: number[] = [];
+    const previewSpy = (m: number) => calls.push(m);
+
+    simulateNoteRelease(false, false, 60, applyNotePreviewOnRelease, previewSpy); // 억제
+    simulateNoteRelease(true,  false, 64, applyNotePreviewOnRelease, previewSpy); // 발동
+    simulateNoteRelease(false, false, 67, applyNotePreviewOnRelease, previewSpy); // 억제
+
+    assert.deepEqual(calls, [64], "notePreviewEnabled=true일 때만 미리 듣기가 발동되어야 함");
+  });
+
+  test("notePreviewEnabled=true + isPlaying 전환: false→true→false → isPlaying 게이트 정상 작동", () => {
+    const calls: number[] = [];
+    const previewSpy = (m: number) => calls.push(m);
+
+    simulateNoteRelease(true, false, 60, applyNotePreviewOnRelease, previewSpy); // 발동
+    simulateNoteRelease(true, true,  64, applyNotePreviewOnRelease, previewSpy); // isPlaying 억제
+    simulateNoteRelease(true, false, 67, applyNotePreviewOnRelease, previewSpy); // 발동
+
+    assert.deepEqual(calls, [60, 67], "notePreviewEnabled=true에서 isPlaying 게이트가 독립적으로 작동해야 함");
+  });
+
+  test("notePreviewEnabled=false, 여러 MIDI 연속 호출 → 전부 억제됨", () => {
+    const calls: number[] = [];
+    const previewSpy = (m: number) => calls.push(m);
+
+    simulateNoteRelease(false, false, 48, applyNotePreviewOnRelease, previewSpy);
+    simulateNoteRelease(false, false, 60, applyNotePreviewOnRelease, previewSpy);
+    simulateNoteRelease(false, false, 72, applyNotePreviewOnRelease, previewSpy);
+
+    assert.deepEqual(calls, [], "notePreviewEnabled=false이면 모든 호출이 억제되어야 함");
+  });
+});
+
+// ── 4. pitchToMidi 연동 검증 ─────────────────────────────────────────────────
 //
 // ScoreCanvas에서 previewScoreNote(pitchToMidi(info.pitch))로 호출된다.
 // pitchToMidi가 올바른 MIDI 번호를 반환하는지 확인한다.
