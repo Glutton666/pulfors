@@ -988,31 +988,44 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
         </Pressable>
 
         {/* 재생/정지 버튼 */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.iconBtn,
-            pressed && !playback.isPreparing && { opacity: 0.6 },
-            playback.isPreparing && { opacity: 0.5 },
-          ]}
-          onPress={playback.isPlaying ? playback.pause : playback.play}
-          disabled={playback.isPreparing}
-          hitSlop={8}
-          testID="score-editor-play"
-        >
-          {playback.isPreparing && playback.prepareProgress ? (
-            <Text style={[styles.prepareProgressText, { color: C.text }]}>
-              {playback.prepareProgress.done}/{playback.prepareProgress.total}
-            </Text>
-          ) : playback.isPreparing ? (
-            <ActivityIndicator size="small" color={C.text} />
-          ) : (
-            <Ionicons
-              name={playback.isPlaying ? "pause" : "play"}
-              size={S.ms(20, 0.4)}
-              color={playback.isPlaying ? C.accent : C.text}
-            />
+        <View style={styles.playBtnWrapper}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.iconBtn,
+              pressed && !playback.isPreparing && { opacity: 0.6 },
+              playback.isPreparing && { opacity: 0.5 },
+            ]}
+            onPress={playback.isPlaying ? playback.pause : playback.play}
+            disabled={playback.isPreparing}
+            hitSlop={8}
+            testID="score-editor-play"
+          >
+            {playback.isPreparing ? (
+              <ActivityIndicator size="small" color={C.text} />
+            ) : (
+              <Ionicons
+                name={playback.isPlaying ? "pause" : "play"}
+                size={S.ms(20, 0.4)}
+                color={playback.isPlaying ? C.accent : C.text}
+              />
+            )}
+          </Pressable>
+          {playback.isPreparing && (
+            <View style={styles.prepareBarTrack}>
+              <View
+                style={[
+                  styles.prepareBarFill,
+                  {
+                    backgroundColor: C.accent,
+                    width: playback.prepareProgress
+                      ? `${(playback.prepareProgress.done / playback.prepareProgress.total) * 100}%`
+                      : "0%",
+                  },
+                ]}
+              />
+            </View>
           )}
-        </Pressable>
+        </View>
 
         {/* 정지 버튼 (재생 중에만) */}
         {playback.isPlaying && (

@@ -17,11 +17,20 @@ export const makeStyles = (_C: any, _S: any) =>
     iconBtn: {
       padding: 4,
     },
-    prepareProgressText: {
-      fontFamily: "SpaceGrotesk_600SemiBold",
-      fontSize: 11,
-      minWidth: 28,
-      textAlign: "center",
+    playBtnWrapper: {
+      alignItems: "center",
+    },
+    prepareBarTrack: {
+      width: 32,
+      height: 2,
+      borderRadius: 1,
+      backgroundColor: "rgba(128,128,128,0.3)",
+      overflow: "hidden",
+      marginTop: 2,
+    },
+    prepareBarFill: {
+      height: 2,
+      borderRadius: 1,
     },
     topTitle: {
       flex: 1,
