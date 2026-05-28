@@ -199,6 +199,28 @@ async function _playNativeNote(
 // ── 공개 API ─────────────────────────────────────────────────
 
 /**
+ * 디바이스 성능에 맞는 오디오 파일 배치 크기를 반환합니다.
+ *
+ * - 웹: navigator.hardwareConcurrency (CPU 코어 수) 기반
+ *   - 8코어 이상 → 8 (고성능 데스크탑/노트북)
+ *   - 4코어 이상 → 6
+ *   - 그 미만    → 4 (기본)
+ * - 네이티브: 4 (Hermes JS 단일 스레드, 네이티브 I/O는 4가 안정적)
+ */
+export function getPrepareBatchSize(): number {
+  if (Platform.OS === "web") {
+    const cores =
+      typeof navigator !== "undefined" && navigator.hardwareConcurrency
+        ? navigator.hardwareConcurrency
+        : 4;
+    if (cores >= 8) return 8;
+    if (cores >= 4) return 6;
+    return 4;
+  }
+  return 4;
+}
+
+/**
  * 악보 재생 전 필요한 MIDI 음표 파일을 미리 준비합니다.
  * 네이티브: 악기에 맞는 파형 WAV 파일 생성 + 캐시 (없는 음표만)
  * 웹: no-op (AudioContext는 지연 초기화)

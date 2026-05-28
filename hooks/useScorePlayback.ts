@@ -8,6 +8,7 @@ import { buildPlayTimeline, findCurrentEvent, totalTimelineMs } from "@/lib/scor
 import type { PlayEvent } from "@/lib/score-playback";
 import type { ScoreDocument } from "@/lib/score-types";
 import {
+  getPrepareBatchSize,
   prepareScoreAudio,
   scheduleMeasureNotes,
   stopAllScoreNotes,
@@ -124,7 +125,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
         if (prepareSessionRef.current !== sessionId) return;
         setPrepareProgress({ done, total: tot });
       },
-      4,
+      getPrepareBatchSize(),
       instrumentId,
     )
       .catch(() => {})
