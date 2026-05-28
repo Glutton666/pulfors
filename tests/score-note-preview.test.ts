@@ -13,6 +13,7 @@
 import { test, describe, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { Platform } from "react-native";
+import { applyNotePreviewOnRelease } from "../lib/score-canvas-helpers";
 
 // ── Mock AudioContext ────────────────────────────────────────────────────────
 // audio-renderer.ts의 getSharedAudioContext()는 globalThis.AudioContext가
@@ -121,31 +122,18 @@ describe("previewScoreNote — MIDI 범위 유효성 검사", () => {
   });
 });
 
-// ── 2. isPlaying 게이트 (ScoreCanvas 로직 시뮬레이션) ───────────────────────
+// ── 2. isPlaying 게이트 — applyNotePreviewOnRelease (실제 프로덕션 코드) ────
 //
-// ScoreCanvas.tsx PanResponder release의 실제 코드:
-//   if (!isPlayingRef.current) {
-//     previewScoreNote(pitchToMidi(info.pitch));
-//   }
+// ScoreCanvas.tsx는 React Native 컴포넌트라 이 환경에서 렌더링할 수 없다.
+// 대신 onPanResponderRelease 내의 미리 듣기 결정 로직을
+// lib/score-canvas-helpers.ts의 applyNotePreviewOnRelease()로 추출했다.
 //
-// React Native 컴포넌트는 이 환경에서 렌더링할 수 없으므로,
-// 동일한 조건 분기를 순수 함수로 추출해 게이트 동작을 검증한다.
+// ScoreCanvas.tsx 에서 실제로 호출되는 코드:
+//   applyNotePreviewOnRelease(isPlayingRef.current, pitchToMidi(info.pitch), previewScoreNote);
+//
+// 여기서는 previewFn 인자에 스파이를 주입해 실제 프로덕션 함수를 직접 검증한다.
 
-describe("previewScoreNote — isPlaying 게이트 (ScoreCanvas 분기 시뮬레이션)", () => {
-  /**
-   * ScoreCanvas PanResponder release의 미리 듣기 분기를 순수 함수로 추출.
-   * previewFn에 스파이 함수를 주입해 호출 여부를 검증한다.
-   */
-  function simulateNoteRelease(
-    isPlaying: boolean,
-    midi: number,
-    previewFn: (m: number) => void,
-  ): void {
-    if (!isPlaying) {
-      previewFn(midi);
-    }
-  }
-
+describe("applyNotePreviewOnRelease — isPlaying 게이트 (실제 프로덕션 로직)", () => {
   test("isPlaying=false → previewScoreNote 호출됨", () => {
     let callCount = 0;
     let receivedMidi: number | null = null;
@@ -154,7 +142,7 @@ describe("previewScoreNote — isPlaying 게이트 (ScoreCanvas 분기 시뮬레
       receivedMidi = m;
     };
 
-    simulateNoteRelease(false, 60, spy);
+    applyNotePreviewOnRelease(false, 60, spy);
 
     assert.equal(callCount, 1, "재생 중이 아닐 때 미리 듣기가 호출되어야 함");
     assert.equal(receivedMidi, 60, "올바른 MIDI 번호가 전달되어야 함");
@@ -164,7 +152,7 @@ describe("previewScoreNote — isPlaying 게이트 (ScoreCanvas 분기 시뮬레
     let callCount = 0;
     const spy = (_m: number) => { callCount++; };
 
-    simulateNoteRelease(true, 60, spy);
+    applyNotePreviewOnRelease(true, 60, spy);
 
     assert.equal(callCount, 0, "재생 중일 때 미리 듣기가 호출되면 안 됨");
   });
@@ -173,9 +161,9 @@ describe("previewScoreNote — isPlaying 게이트 (ScoreCanvas 분기 시뮬레
     const calls: number[] = [];
     const spy = (m: number) => calls.push(m);
 
-    simulateNoteRelease(false, 60, spy);  // 호출됨
-    simulateNoteRelease(true, 64, spy);   // 억제됨
-    simulateNoteRelease(false, 67, spy);  // 호출됨
+    applyNotePreviewOnRelease(false, 60, spy);  // 호출됨
+    applyNotePreviewOnRelease(true, 64, spy);   // 억제됨
+    applyNotePreviewOnRelease(false, 67, spy);  // 호출됨
 
     assert.deepEqual(calls, [60, 67], "isPlaying=false일 때만 호출되어야 함");
   });
@@ -184,9 +172,9 @@ describe("previewScoreNote — isPlaying 게이트 (ScoreCanvas 분기 시뮬레
     const calls: number[] = [];
     const spy = (m: number) => calls.push(m);
 
-    simulateNoteRelease(false, 48, spy);
-    simulateNoteRelease(false, 72, spy);
-    simulateNoteRelease(false, 84, spy);
+    applyNotePreviewOnRelease(false, 48, spy);
+    applyNotePreviewOnRelease(false, 72, spy);
+    applyNotePreviewOnRelease(false, 84, spy);
 
     assert.deepEqual(calls, [48, 72, 84]);
   });

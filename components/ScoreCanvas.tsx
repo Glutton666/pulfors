@@ -8,6 +8,7 @@ import { View, PanResponder, StyleSheet } from "react-native";
 import Svg, { Line, Ellipse, G, Rect, Text as SvgText } from "react-native-svg";
 import { useTheme } from "@/contexts/ThemeContext";
 import { previewScoreNote } from "@/lib/score-audio";
+import { applyNotePreviewOnRelease } from "@/lib/score-canvas-helpers";
 import { pitchToMidi } from "@/lib/score-layout";
 import { ScoreRenderer } from "@/components/ScoreRenderer";
 import {
@@ -436,9 +437,7 @@ export function ScoreCanvas({
         if (tool === "note") {
           const info = touchToGhost(slx, sly);
           if (info) {
-            if (!isPlayingRef.current) {
-              previewScoreNote(pitchToMidi(info.pitch));
-            }
+            applyNotePreviewOnRelease(isPlayingRef.current, pitchToMidi(info.pitch), previewScoreNote);
             onNotePlaced(info.measureIdx, info.pitch, dur, info.insertIdx);
           }
         } else if (tool === "rest") {
