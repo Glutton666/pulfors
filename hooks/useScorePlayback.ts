@@ -179,8 +179,9 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   // - 새 prepare가 완료되면 startRafRef.current()로 재생 시작
   const partInstrumentId = doc.parts[0]?.instrumentId;
   useEffect(() => {
+    // 악기 변경 시 항상 무효화 — idle/pause/완료 상태에서도 새 악기로 재준비 필요
+    isAudioReadyRef.current = false;
     if (!prepareParamsRef.current) return;
-    isAudioReadyRef.current = false; // 악기 변경 시 재준비 필요
     const { allMidi } = prepareParamsRef.current;
     _runPrepare(allMidi, partInstrumentId);
     // eslint-disable-next-line react-hooks/exhaustive-deps

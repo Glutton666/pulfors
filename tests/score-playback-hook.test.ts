@@ -454,6 +454,50 @@ describe("useScorePlayback — unmount cleanup (H14)", () => {
 // H15. Pause / resume interaction
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// H16. Instrument change invalidation
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("useScorePlayback — instrument change invalidation (H16)", () => {
+  it("H16: changing instrument while idle invalidates readiness — next play() re-triggers prepare", async () => {
+    mockPrepare.mockResolvedValue(undefined);
+
+    const DOC_PIANO = DOC_WITH_NOTES;
+    const DOC_VIOLIN: ScoreDocument = {
+      ...DOC_WITH_NOTES,
+      id: "test-doc-violin",
+      parts: [{ ...DOC_WITH_NOTES.parts[0], instrumentId: "violin" }],
+    };
+
+    const { result, rerender } = renderHook(
+      (doc: ScoreDocument) => useScorePlayback(doc),
+      { initialProps: DOC_PIANO },
+    );
+
+    // Initial play — prepare for "piano"
+    await act(async () => {
+      result.current.play();
+      await flushMicrotasks();
+    });
+    expect(result.current.isPlaying).toBe(true);
+    expect(mockPrepare).toHaveBeenCalledTimes(1);
+
+    // Stop playback (resets isAudioReadyRef)
+    act(() => { result.current.stop(); });
+
+    // Change instrument while idle (not preparing)
+    act(() => { rerender(DOC_VIOLIN); });
+
+    // Next play() must call prepareScoreAudio again (new instrument)
+    await act(async () => {
+      result.current.play();
+      await flushMicrotasks();
+    });
+    expect(result.current.isPlaying).toBe(true);
+    expect(mockPrepare).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("useScorePlayback — pause/resume (H15)", () => {
   it("H15: pause() stops playback; subsequent play() resumes without re-triggering prepare", async () => {
     // First play: prepare resolves immediately
