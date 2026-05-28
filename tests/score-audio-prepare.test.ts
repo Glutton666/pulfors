@@ -49,6 +49,7 @@
  *  E. scheduleMeasureNotes — silent-fail for uncached notes (native)
  *  F. scheduleMeasureNotes — plays cached notes (native)
  *  G. stopAllScoreNotes / cancel — cancels pending measure schedule
+ *  J. instrument-specific waveforms — instrumentToWaveform + WAV suffix + schedule URI
  */
 
 import { Platform } from "react-native";
@@ -77,6 +78,7 @@ audioStub.createAudioPlayer = jest.fn(() => ({
 
 import {
   getPrepareBatchSize,
+  instrumentToWaveform,
   prepareScoreAudio,
   scheduleMeasureNotes,
   stopAllScoreNotes,
@@ -546,5 +548,127 @@ describe("getPrepareBatchSize — device tier heuristic (I)", () => {
       (Platform as unknown as Record<string, unknown>).OS = "unknown";
       expect(getPrepareBatchSize()).toBe(4);
     });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// J. Instrument-specific waveforms
+// J1: instrumentToWaveform — category → waveform mapping
+// J2: prepareScoreAudio — violin writes _sawtooth, piano writes _triangle WAV
+// J3: scheduleMeasureNotes — URI reflects instrument waveform suffix
+//
+// MIDI allocation (fresh, not used by A–I):
+//   MIDI 73 → violin  (sawtooth, cache key: 73_sawtooth)
+//   MIDI 74 → piano   (triangle, cache key: 74_triangle)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("instrumentToWaveform — category → waveform mapping (J1)", () => {
+  it("violin → sawtooth (strings category)", () => {
+    expect(instrumentToWaveform("violin")).toBe("sawtooth");
+  });
+
+  it("piano → triangle (keyboard category)", () => {
+    expect(instrumentToWaveform("piano")).toBe("triangle");
+  });
+
+  it("cello → sawtooth (strings category)", () => {
+    expect(instrumentToWaveform("cello")).toBe("sawtooth");
+  });
+
+  it("organ → triangle (keyboard category)", () => {
+    expect(instrumentToWaveform("organ")).toBe("triangle");
+  });
+
+  it("unknown instrument id → sine (safe default)", () => {
+    expect(instrumentToWaveform("unknown_xyz")).toBe("sine");
+  });
+
+  it("empty string → sine (safe default)", () => {
+    expect(instrumentToWaveform("")).toBe("sine");
+  });
+});
+
+describe("prepareScoreAudio — instrument waveform suffix in WAV filename (J2)", () => {
+  beforeEach(() => {
+    fsStub._mockState.reset();
+  });
+
+  it("violin instrumentId writes a _sawtooth WAV (MIDI 73)", async () => {
+    await prepareScoreAudio([73], undefined, 4, "violin");
+    expect(fsStub._mockState.writeCount).toBe(1);
+    expect(fsStub._mockState.writtenUris[0]).toContain("score_note_73_sawtooth.wav");
+  });
+
+  it("second call with same violin note hits cache — no new writes", async () => {
+    await prepareScoreAudio([73], undefined, 4, "violin");
+    expect(fsStub._mockState.writeCount).toBe(0);
+  });
+
+  it("piano instrumentId writes a _triangle WAV (MIDI 74)", async () => {
+    await prepareScoreAudio([74], undefined, 4, "piano");
+    expect(fsStub._mockState.writeCount).toBe(1);
+    expect(fsStub._mockState.writtenUris[0]).toContain("score_note_74_triangle.wav");
+  });
+
+  it("same MIDI, different instruments → separate cache entries (no cross-contamination)", async () => {
+    fsStub._mockState.reset();
+    await prepareScoreAudio([73], undefined, 4, "piano");
+    expect(fsStub._mockState.writtenUris[0]).toContain("score_note_73_triangle.wav");
+  });
+});
+
+describe("scheduleMeasureNotes — URI reflects instrument waveform suffix (J3)", () => {
+  beforeAll(async () => {
+    await prepareScoreAudio([73], undefined, 4, "violin");
+    await prepareScoreAudio([74], undefined, 4, "piano");
+  });
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    audioStub.createAudioPlayer.mockClear();
+  });
+
+  afterEach(() => {
+    stopAllScoreNotes();
+    jest.useRealTimers();
+  });
+
+  it("piano instrument — createAudioPlayer URI contains _triangle suffix", async () => {
+    scheduleMeasureNotes(
+      [{ midiNote: 74, startOffsetMs: 0, durationMs: 500 }],
+      undefined,
+      "piano",
+    );
+    jest.runAllTimers();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(audioStub.createAudioPlayer).toHaveBeenCalledTimes(1);
+    const arg = audioStub.createAudioPlayer.mock.calls[0][0] as { uri: string };
+    expect(arg.uri).toContain("score_note_74_triangle.wav");
+  });
+
+  it("violin instrument — createAudioPlayer URI contains _sawtooth suffix", async () => {
+    scheduleMeasureNotes(
+      [{ midiNote: 73, startOffsetMs: 0, durationMs: 500 }],
+      undefined,
+      "violin",
+    );
+    jest.runAllTimers();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(audioStub.createAudioPlayer).toHaveBeenCalledTimes(1);
+    const arg = audioStub.createAudioPlayer.mock.calls[0][0] as { uri: string };
+    expect(arg.uri).toContain("score_note_73_sawtooth.wav");
+  });
+
+  it("default (no instrument) — createAudioPlayer URI contains _sine suffix", async () => {
+    await prepareScoreAudio([73]);
+    scheduleMeasureNotes([{ midiNote: 73, startOffsetMs: 0, durationMs: 500 }]);
+    jest.runAllTimers();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(audioStub.createAudioPlayer).toHaveBeenCalledTimes(1);
+    const arg = audioStub.createAudioPlayer.mock.calls[0][0] as { uri: string };
+    expect(arg.uri).toContain("score_note_73_sine.wav");
   });
 });
