@@ -38,6 +38,7 @@ import { Platform } from "react-native";
 
 // ── Module mock — lib/score-audio ────────────────────────────────────────────
 jest.mock("../lib/score-audio", () => ({
+  getPrepareBatchSize: jest.fn(() => 4),
   prepareScoreAudio: jest.fn(),
   scheduleMeasureNotes: jest.fn(() => jest.fn()),
   stopAllScoreNotes: jest.fn(),

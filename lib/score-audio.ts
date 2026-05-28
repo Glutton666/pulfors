@@ -201,23 +201,43 @@ async function _playNativeNote(
 /**
  * 디바이스 성능에 맞는 오디오 파일 배치 크기를 반환합니다.
  *
- * - 웹: navigator.hardwareConcurrency (CPU 코어 수) 기반
+ * - 웹/공통: navigator.hardwareConcurrency (CPU 코어 수) 기반 (우선 시도)
  *   - 8코어 이상 → 8 (고성능 데스크탑/노트북)
  *   - 4코어 이상 → 6
  *   - 그 미만    → 4 (기본)
- * - 네이티브: 4 (Hermes JS 단일 스레드, 네이티브 I/O는 4가 안정적)
+ * - 네이티브 폴백 (Hermes는 hardwareConcurrency 미노출):
+ *   - iOS 16+   → 6 (A15 Bionic 이상, 퍼포먼스 코어 2개 이상)
+ *   - Android 12+ (API 31+) → 6 (최신 플래그십 기기)
+ *   - 그 외     → 4 (안전 기본값)
  */
 export function getPrepareBatchSize(): number {
-  if (Platform.OS === "web") {
-    const cores =
-      typeof navigator !== "undefined" && navigator.hardwareConcurrency
-        ? navigator.hardwareConcurrency
-        : 4;
+  // hardwareConcurrency가 노출된 환경(웹, 일부 RN 빌드)은 코어 수 기반
+  if (typeof navigator !== "undefined" && navigator.hardwareConcurrency) {
+    const cores = navigator.hardwareConcurrency;
     if (cores >= 8) return 8;
     if (cores >= 4) return 6;
     return 4;
   }
-  return 4;
+
+  // 네이티브 폴백: 플랫폼 버전을 기기 세대 프록시로 사용
+  if (Platform.OS === "ios") {
+    // Platform.Version은 iOS에서 "17.4" 같은 문자열
+    const ver =
+      typeof Platform.Version === "string"
+        ? parseFloat(Platform.Version)
+        : (Platform.Version as number);
+    return ver >= 16 ? 6 : 4;
+  }
+  if (Platform.OS === "android") {
+    // Platform.Version은 Android에서 API 레벨 숫자
+    const api =
+      typeof Platform.Version === "number"
+        ? Platform.Version
+        : parseInt(Platform.Version as string, 10);
+    return api >= 31 ? 6 : 4;
+  }
+
+  return 4; // 알 수 없는 플랫폼 안전 기본값
 }
 
 /**
