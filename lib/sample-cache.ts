@@ -29,11 +29,14 @@ const cache = new Map<string, CacheEntry>();
 const inflight = new Map<string, Promise<SyncResult>>();
 const MAX_ENTRIES = 32;
 
-async function getDefaultDeps(): Promise<{
+function getDefaultDeps(): {
   decode: NonNullable<SyncDeps["decode"]>;
   save: NonNullable<SyncDeps["save"]>;
-}> {
-  const m = await import("./audio-renderer");
+} {
+  // Use require() for lazy loading — works identically on Hermes/native and in
+  // Jest's CJS environment (dynamic import() is not transformed by babel-jest).
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const m = require("./audio-renderer") as typeof import("./audio-renderer");
   return { decode: m.decodeSampleFile, save: m.saveStereoSampleWav };
 }
 
@@ -63,7 +66,10 @@ async function defaultDeleteArtifact(path: string): Promise<void> {
     return;
   }
   try {
-    const m = (await import("expo-file-system")) as unknown as FileSystemModule;
+    // Use require() for lazy loading — works identically on Hermes/native and in
+    // Jest's CJS environment (dynamic import() is not transformed by babel-jest).
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const m = require("expo-file-system") as unknown as FileSystemModule;
     const fileUri = path.split("#")[0];
     if (m.File) {
       try {
@@ -148,7 +154,7 @@ async function syncStereoArtifactInner(
   let decode = deps.decode;
   let save = deps.save;
   if (!decode || !save) {
-    const d = await getDefaultDeps();
+    const d = getDefaultDeps();
     decode = decode ?? d.decode;
     save = save ?? d.save;
   }
