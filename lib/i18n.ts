@@ -1007,6 +1007,7 @@ export const translations = {
     playbackSettings:       { ko: "재생 설정", en: "Playback Settings" },
     showPlayhead:           { ko: "재생 위치 선 표시", en: "Show Playhead" },
     showZoomView:           { ko: "확대 뷰 표시", en: "Show Zoom View" },
+    notePreview:            { ko: "음표 입력 미리 듣기", en: "Note Input Preview" },
     // 내보내기·불러오기·공유·연습장·성부분리
     moreMenu:               { ko: "더 보기", en: "More" },
     exportJpg:              { ko: "JPG로 내보내기", en: "Export as JPG" },

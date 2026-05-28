@@ -233,6 +233,8 @@ export interface ScoreDocument {
     showZoomView?: boolean;
     /** true이면 악보 재생 시 음표 소리를 끔 */
     muteAudio?: boolean;
+    /** false이면 음표 입력 시 즉시 미리 듣기 소리를 끔 (기본값: true) */
+    notePreview?: boolean;
   };
   // 참조 이미지 (편집 불가, 투명도 조절 가능)
   referenceImageUri?: string;

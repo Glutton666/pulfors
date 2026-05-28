@@ -254,7 +254,8 @@ export interface ScoreSymbolSettingsModalProps {
   currentPart: ScorePart | null;
   showPlayhead: boolean;
   showZoomView: boolean;
-  onUpdatePlaybackSettings: (patch: { showPlayhead?: boolean; showZoomView?: boolean }) => void;
+  notePreviewEnabled: boolean;
+  onUpdatePlaybackSettings: (patch: { showPlayhead?: boolean; showZoomView?: boolean; notePreview?: boolean }) => void;
   onSymbolToggle: (symId: string, enabled: boolean) => void;
 }
 
@@ -264,6 +265,7 @@ export function ScoreSymbolSettingsModal({
   currentPart,
   showPlayhead,
   showZoomView,
+  notePreviewEnabled,
   onUpdatePlaybackSettings,
   onSymbolToggle,
 }: ScoreSymbolSettingsModalProps) {
@@ -314,6 +316,18 @@ export function ScoreSymbolSettingsModal({
                 trackColor={{ false: C.border, true: C.accent }}
                 thumbColor={showZoomView ? "#fff" : "#ccc"}
                 testID="score-toggle-show-zoom-view"
+              />
+            </View>
+            <View style={[styles.symbolRow, { borderBottomColor: C.border }]}>
+              <Text style={[styles.symbolRowLabel, { color: C.text }]}>
+                {t("scoreMode", "notePreview")}
+              </Text>
+              <Switch
+                value={notePreviewEnabled}
+                onValueChange={(v) => onUpdatePlaybackSettings({ notePreview: v })}
+                trackColor={{ false: C.border, true: C.accent }}
+                thumbColor={notePreviewEnabled ? "#fff" : "#ccc"}
+                testID="score-toggle-note-preview"
               />
             </View>
           </View>

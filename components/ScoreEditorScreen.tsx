@@ -217,8 +217,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   const showPlayhead = doc.playbackSettings?.showPlayhead !== false;
   const showZoomView = doc.playbackSettings?.showZoomView !== false;
   const muteAudio = doc.playbackSettings?.muteAudio === true;
+  const notePreviewEnabled = doc.playbackSettings?.notePreview !== false;
 
-  function updatePlaybackSettings(patch: { showPlayhead?: boolean; showZoomView?: boolean; muteAudio?: boolean }) {
+  function updatePlaybackSettings(patch: { showPlayhead?: boolean; showZoomView?: boolean; muteAudio?: boolean; notePreview?: boolean }) {
     applyDoc({
       ...doc,
       playbackSettings: { ...doc.playbackSettings, ...patch },
@@ -1224,6 +1225,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
               onEraseElement={handleEraseElement}
               onNoteMoved={handleNoteMoved}
               isPlaying={playback.isPlaying}
+              notePreviewEnabled={notePreviewEnabled}
               playheadMeasureIdx={
                 playback.isPlaying &&
                 playback.currentMeasureIdx < (doc.parts[selectedPartIdx]?.measures.length ?? 0)
@@ -1480,6 +1482,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
         currentPart={currentPart}
         showPlayhead={showPlayhead}
         showZoomView={showZoomView}
+        notePreviewEnabled={notePreviewEnabled}
         onUpdatePlaybackSettings={updatePlaybackSettings}
         onSymbolToggle={handleSymbolToggle}
       />
