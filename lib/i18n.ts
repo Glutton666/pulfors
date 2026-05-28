@@ -959,6 +959,7 @@ export const translations = {
     articulAccent:          { ko: "악센트", en: "Accent" },
     articulFermata:         { ko: "페르마타", en: "Fermata" },
     articulMarcato:         { ko: "마르카토", en: "Marcato" },
+    tieLabel:               { ko: "타이", en: "Tie" },
     zoomViewLabel:          { ko: "현재 마디 확대", en: "Current Measure" },
     instrumentSymbolsLabel: { ko: "악기별 기호", en: "Instrument Symbols" },
     deleteSelected:         { ko: "선택 삭제", en: "Delete Selected" },

@@ -2,7 +2,7 @@
 // ScoreEditorScreen — 악보 편집 화면 (2단계 터치 입력 UX)
 // ============================================================
 
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -199,6 +199,11 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   const [selectedPartIdx, setSelectedPartIdx] = useState(0);
   const [selectedMeasureIdx, setSelectedMeasureIdx] = useState<number | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+
+  // ── 스텝 입력 커서 ────────────────────────────────────────────
+  // 음표/쉼표 입력 후 다음 삽입 위치를 가리키는 커서
+  const [cursorMeasureIdx, setCursorMeasureIdx] = useState<number | null>(null);
+  const [cursorInsertIdx, setCursorInsertIdx] = useState<number>(0);
 
   // ── 재생 연동 ─────────────────────────────────────────────────
   const playback = useScorePlayback(doc);
@@ -428,6 +433,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
       };
       applyDoc(newDoc);
       setSelectedElementId(newElement.id);
+      // 스텝 입력 커서: 방금 삽입한 위치 + 1
+      setCursorMeasureIdx(measureIdx);
+      setCursorInsertIdx(insertIdx + 1);
       // 같은 마디 내 다음 슬롯으로 커서 이동
       // 현재 마디의 elements 수 + 1 (방금 삽입한 것)
       const curMeasure = doc.parts[selectedPartIdx]?.measures[measureIdx];
@@ -467,6 +475,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
       };
       applyDoc(newDoc);
       setSelectedElementId(newElement.id);
+      // 스텝 입력 커서: 방금 삽입한 위치 + 1
+      setCursorMeasureIdx(measureIdx);
+      setCursorInsertIdx(insertIdx + 1);
       const curMeasure = doc.parts[selectedPartIdx]?.measures[measureIdx];
       const newLen = (curMeasure?.elements.length ?? 0) + 1;
       const nextIdx = insertIdx + 1;
@@ -768,6 +779,69 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
     applyDoc(newDoc);
     setSelectedElementId(null);
   }
+
+  // ── 선택된 음표에 타이 토글 ───────────────────────────────────
+  function handleToggleTieOnSelected() {
+    if (!selectedElementId) return;
+    const part = doc.parts[selectedPartIdx];
+    if (!part) return;
+
+    // 선택된 음표의 마디/인덱스 탐색
+    let selMeasureIdx = -1;
+    let selElemIdx = -1;
+    for (let mi = 0; mi < part.measures.length; mi++) {
+      const idx = part.measures[mi].elements.findIndex((e) => e.id === selectedElementId);
+      if (idx >= 0) { selMeasureIdx = mi; selElemIdx = idx; break; }
+    }
+    if (selMeasureIdx < 0) return;
+    const selNote = part.measures[selMeasureIdx].elements[selElemIdx];
+    if (!selNote || selNote.type !== "note") return;
+
+    const newTie = !selNote.tieStart;
+
+    // 다음 음표(같은 마디 또는 다음 마디 첫 번째) 탐색
+    let nextMeasureIdx = selMeasureIdx;
+    let nextElemIdx = selElemIdx + 1;
+    if (nextElemIdx >= part.measures[selMeasureIdx].elements.length) {
+      nextMeasureIdx = selMeasureIdx + 1;
+      nextElemIdx = 0;
+    }
+
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
+        if (pIdx !== selectedPartIdx) return p;
+        return {
+          ...p,
+          measures: p.measures.map((m, mi) => ({
+            ...m,
+            elements: m.elements.map((el, ei) => {
+              if (mi === selMeasureIdx && ei === selElemIdx && el.type === "note") {
+                return { ...el, tieStart: newTie };
+              }
+              if (mi === nextMeasureIdx && ei === nextElemIdx && el.type === "note") {
+                return { ...el, tieEnd: newTie };
+              }
+              return el;
+            }),
+          })),
+        };
+      }),
+    };
+    applyDoc(newDoc);
+  }
+
+  // 선택된 음표의 tieStart 상태 (팔레트 버튼 활성화용)
+  const selectedTieActive = useMemo(() => {
+    if (!selectedElementId) return false;
+    for (const p of doc.parts) {
+      for (const m of p.measures) {
+        const el = m.elements.find((e) => e.id === selectedElementId);
+        if (el?.type === "note") return !!el.tieStart;
+      }
+    }
+    return false;
+  }, [selectedElementId, doc]);
 
   // ── 선택된 음표에 임시표 적용 ─────────────────────────────────
   function handleApplyAccidentalToSelected(acc: Accidental | null) {
@@ -1261,6 +1335,8 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
               onMeasureLongPress={handleMeasureLongPress}
               onEraseElement={handleEraseElement}
               onNoteMoved={handleNoteMoved}
+              cursorMeasureIdx={cursorMeasureIdx}
+              cursorInsertIdx={cursorInsertIdx}
               isPlaying={playback.isPlaying}
               notePreviewEnabled={notePreviewEnabled}
               instrumentId={doc.parts[selectedPartIdx]?.instrumentId}
@@ -1442,6 +1518,8 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           onCrescTypeSelect={setSelectedCrescType}
           onTempoSelect={handleTempoSelect}
           onSymbolToggle={handleSymbolToggle}
+          isTieActive={selectedTieActive}
+          onTieToggle={handleToggleTieOnSelected}
         />
       </View>
 

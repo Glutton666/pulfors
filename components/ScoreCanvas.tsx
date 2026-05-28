@@ -91,6 +91,10 @@ export interface ScoreCanvasProps {
   notePreviewEnabled?: boolean;
   /** 현재 선택된 악기 ID — 미리 듣기 음색 결정에 사용 */
   instrumentId?: string;
+  /** 스텝 입력 커서 — 다음 음표가 삽입될 마디 인덱스 (null이면 커서 비활성) */
+  cursorMeasureIdx?: number | null;
+  /** 스텝 입력 커서 — 다음 음표가 삽입될 마디 내 요소 인덱스 */
+  cursorInsertIdx?: number;
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
@@ -119,6 +123,8 @@ export function ScoreCanvas({
   isPlaying = false,
   notePreviewEnabled = true,
   instrumentId,
+  cursorMeasureIdx = null,
+  cursorInsertIdx = 0,
 }: ScoreCanvasProps) {
   const { colors: C } = useTheme();
   const [ghost, setGhost] = useState<GhostState | null>(null);
@@ -149,6 +155,12 @@ export function ScoreCanvas({
   onMeasureLongPressRef.current = onMeasureLongPress;
   docRef.current = doc;
   selectedPartIdxRef.current = selectedPartIdx;
+
+  // 커서 refs — PanResponder 클로저에서 최신값 참조
+  const cursorMeasureIdxRef = useRef(cursorMeasureIdx);
+  const cursorInsertIdxRef = useRef(cursorInsertIdx);
+  cursorMeasureIdxRef.current = cursorMeasureIdx;
+  cursorInsertIdxRef.current = cursorInsertIdx;
 
   // 음표 드래그 상태 refs
   const isPlayingRef = useRef(isPlaying);
@@ -215,12 +227,44 @@ export function ScoreCanvas({
     [],
   );
 
+  // 커서 SVG 좌표 계산 — cursorMeasureIdx/cursorInsertIdx → (x, staffY)
+  const { cursorSvgX, cursorSvgStaffY } = useMemo(() => {
+    if (cursorMeasureIdx == null) return { cursorSvgX: null, cursorSvgStaffY: null };
+    for (const row of rows) {
+      let accX = 0;
+      for (let i = 0; i < row.measureIndices.length; i++) {
+        const mIdx = row.measureIndices[i];
+        const mWidth = row.measureWidths[i] ?? 0;
+        if (mIdx === cursorMeasureIdx) {
+          const cx = measureContentX(accX, i, mIdx);
+          const measure = doc.parts[selectedPartIdx]?.measures[mIdx];
+          const cw = Math.max(mWidth - (cx - accX), 1);
+          const positions = measure ? layoutMeasure(measure, 0, clef, cw) : [];
+          let cxPos: number;
+          if (positions[cursorInsertIdx]) {
+            cxPos = cx + positions[cursorInsertIdx].x;
+          } else if (positions.length > 0) {
+            const last = positions[positions.length - 1];
+            cxPos = cx + last.x + (last.width ?? 24) + 4;
+          } else {
+            cxPos = cx + 4;
+          }
+          return { cursorSvgX: cxPos, cursorSvgStaffY: row.y + SCORE_STAFF_PADDING_TOP };
+        }
+        accX += mWidth;
+      }
+    }
+    return { cursorSvgX: null, cursorSvgStaffY: null };
+  }, [cursorMeasureIdx, cursorInsertIdx, rows, doc, selectedPartIdx, clef, measureContentX]);
+
   // 터치 좌표 → 마디 인덱스 + 음높이 + 삽입 위치(insertIdx)
   const touchToGhost = useCallback(
     (lx: number, ly: number): GhostState | null => {
+      // 덧줄 영역까지 터치 인식하도록 행 경계를 확장 (위아래로 4줄 추가)
+      const LEDGER_EXTRA = LINE_SPACING * 4;
       for (const row of rowsRef.current) {
         const rowBottom = row.y + SCORE_PART_HEIGHT;
-        if (ly < row.y || ly > rowBottom) continue;
+        if (ly < row.y - LEDGER_EXTRA || ly > rowBottom + LEDGER_EXTRA) continue;
 
         let accX = 0;
         for (let i = 0; i < row.measureIndices.length; i++) {
@@ -258,7 +302,24 @@ export function ScoreCanvas({
               }
             }
 
-            return { x: lx, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx, insertIdx };
+            // 커서가 이 마디에 활성화되어 있으면 insertIdx와 ghost X를 커서 위치로 스냅
+            const activeCursorMeasure = cursorMeasureIdxRef.current;
+            const activeCursorInsert = cursorInsertIdxRef.current;
+            let ghostX = lx;
+            if (activeCursorMeasure != null && mIdx === activeCursorMeasure && activeCursorInsert != null) {
+              insertIdx = activeCursorInsert;
+              // 커서 위치의 X 좌표 계산
+              if (positions[insertIdx]) {
+                ghostX = contentX + positions[insertIdx].x;
+              } else if (positions.length > 0) {
+                const last = positions[positions.length - 1];
+                ghostX = contentX + last.x + (last.width ?? 24) + 4;
+              } else {
+                ghostX = contentX + 4;
+              }
+            }
+
+            return { x: ghostX, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx, insertIdx };
           }
           accX += mWidth;
         }
@@ -546,7 +607,22 @@ export function ScoreCanvas({
               opacity={0.65}
             />
           )}
-          {/* 수직 점선 가이드 (박자 위치) */}
+          {/* 스텝 입력 커서 — 손가락이 없을 때만 표시 */}
+          {!ghost && cursorSvgX != null && cursorSvgStaffY != null &&
+            (activeTool === "note" || activeTool === "rest") && (
+            <G>
+              <Line
+                x1={cursorSvgX}
+                y1={cursorSvgStaffY - 4}
+                x2={cursorSvgX}
+                y2={cursorSvgStaffY + STAFF_HEIGHT + 4}
+                stroke={C.accent}
+                strokeWidth={2}
+                opacity={0.85}
+              />
+            </G>
+          )}
+
           {ghost && (
             <Line
               x1={ghost.x}

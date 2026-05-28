@@ -379,6 +379,28 @@ function ArticulationMark({ art, noteX, noteY, direction, color, idx }: {
   }
 }
 
+// ── 타이/슬러 아크 ────────────────────────────────────────────
+
+function TieArc({ x1, y1, x2, y2, color }: {
+  x1: number; y1: number; x2: number; y2: number; color: string;
+}) {
+  // 음표머리 바깥쪽에서 시작/끝, 중간에 베지어 커브
+  const sx = x1 + NOTE_HEAD_RX;
+  const ex = x2 - NOTE_HEAD_RX;
+  const midX = (sx + ex) / 2;
+  // 줄기 방향에 상관없이 음표 아래 방향으로 호를 그림 (실용적 기본값)
+  const bulge = y1 + LINE_SPACING * 2;
+  return (
+    <Path
+      d={`M${sx},${y1} Q${midX},${bulge} ${ex},${y2}`}
+      stroke={color}
+      strokeWidth={1.4}
+      fill="none"
+      strokeLinecap="round"
+    />
+  );
+}
+
 // ── 음표 렌더링 ───────────────────────────────────────────────
 
 function NoteElement({ note, x, staffY, clef, color, isSelected }: {
@@ -610,6 +632,40 @@ function MeasureRender({
             />
           );
         }
+      })}
+
+      {/* 타이 아크 — tieStart가 true인 음표와 다음 음표 연결 */}
+      {positions.map((pos, pi) => {
+        const el = measure.elements.find((e) => e.id === pos.elementId);
+        if (!el || el.type !== "note" || !el.tieStart) return null;
+        const x1 = contentX + pos.x;
+        const noteY1 = staffY + pitchToY(el.pitch, clef);
+        const nextPos = positions[pi + 1];
+        if (!nextPos) {
+          // 마디 끝 — 다음 마디 첫 음표까지 이어지는 타이: 마디 오른쪽 끝으로만 그림
+          return (
+            <TieArc
+              key={`tie-eom-${el.id}`}
+              x1={x1}
+              y1={noteY1}
+              x2={x + width - 4}
+              y2={noteY1}
+              color={color}
+            />
+          );
+        }
+        const elNext = measure.elements.find((e) => e.id === nextPos.elementId);
+        const noteY2 = elNext?.type === "note" ? staffY + pitchToY(elNext.pitch, clef) : noteY1;
+        return (
+          <TieArc
+            key={`tie-${el.id}`}
+            x1={x1}
+            y1={noteY1}
+            x2={contentX + nextPos.x}
+            y2={noteY2}
+            color={color}
+          />
+        );
       })}
 
       {/* 리허설 마크 (A, B, 1 등) */}
