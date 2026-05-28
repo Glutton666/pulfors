@@ -212,6 +212,24 @@ export function scheduleMeasureNotes(
 }
 
 /**
+ * 음표 입력 즉시 미리 듣기 (0.3초 고정, 볼륨 0.6)
+ * 네이티브: WAV 파일이 캐시에 없으면 먼저 생성 후 발음
+ * 웹: AudioContext 오실레이터로 즉시 발음
+ */
+export function previewScoreNote(midi: number): void {
+  if (midi < 21 || midi > 108) return;
+  const PREVIEW_MS = 300;
+  const PREVIEW_VOL = 0.6;
+  if (Platform.OS === "web") {
+    _playWebNote(midi, PREVIEW_MS, PREVIEW_VOL);
+  } else {
+    _ensureNoteFile(midi).then(() =>
+      _playNativeNote(midi, PREVIEW_MS, PREVIEW_VOL),
+    ).catch(() => {});
+  }
+}
+
+/**
  * 진행 중인 모든 악보 오디오를 즉시 중지합니다.
  * stop/pause 시 호출합니다.
  */

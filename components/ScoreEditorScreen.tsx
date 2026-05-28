@@ -1199,6 +1199,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
               onMeasureLongPress={handleMeasureLongPress}
               onEraseElement={handleEraseElement}
               onNoteMoved={handleNoteMoved}
+              isPlaying={playback.isPlaying}
               playheadMeasureIdx={
                 playback.isPlaying &&
                 playback.currentMeasureIdx < (doc.parts[selectedPartIdx]?.measures.length ?? 0)

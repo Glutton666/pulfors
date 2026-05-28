@@ -7,6 +7,8 @@ import React, { useMemo, useRef, useCallback, useState } from "react";
 import { View, PanResponder, StyleSheet } from "react-native";
 import Svg, { Line, Ellipse, G, Rect, Text as SvgText } from "react-native-svg";
 import { useTheme } from "@/contexts/ThemeContext";
+import { previewScoreNote } from "@/lib/score-audio";
+import { pitchToMidi } from "@/lib/score-layout";
 import { ScoreRenderer } from "@/components/ScoreRenderer";
 import {
   computeScoreLayout,
@@ -82,6 +84,8 @@ export interface ScoreCanvasProps {
   highlightColor?: string;
   /** 화면 크기에 맞는 line spacing (px). 기본값 = 10. useScoreLineSpacing()으로 계산. */
   lineSpacing?: number;
+  /** 재생 중일 때 true — 음표 입력 미리 듣기를 억제합니다 */
+  isPlaying?: boolean;
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
@@ -107,6 +111,7 @@ export function ScoreCanvas({
   showPlayhead = true,
   highlightColor,
   lineSpacing = BASE_LINE_SPACING,
+  isPlaying = false,
 }: ScoreCanvasProps) {
   const { colors: C } = useTheme();
   const [ghost, setGhost] = useState<GhostState | null>(null);
@@ -139,6 +144,9 @@ export function ScoreCanvas({
   selectedPartIdxRef.current = selectedPartIdx;
 
   // 음표 드래그 상태 refs
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
+
   const dragElementIdRef = useRef<string | null>(null);
   const dragMeasureIdxRef = useRef<number>(-1);
   // 드래그 시작 시 원래 음표의 accidental 보존 (이동 중 팔레트 accidental 변경 방지)
@@ -427,7 +435,12 @@ export function ScoreCanvas({
 
         if (tool === "note") {
           const info = touchToGhost(slx, sly);
-          if (info) onNotePlaced(info.measureIdx, info.pitch, dur, info.insertIdx);
+          if (info) {
+            if (!isPlayingRef.current) {
+              previewScoreNote(pitchToMidi(info.pitch));
+            }
+            onNotePlaced(info.measureIdx, info.pitch, dur, info.insertIdx);
+          }
         } else if (tool === "rest") {
           const info = touchToGhost(slx, sly);
           if (info) onRestPlaced(info.measureIdx, dur, info.insertIdx);
