@@ -43,10 +43,12 @@ function _generateSinePCM(midi: number, durationS: number, sr: number): Float32A
 /** 네이티브: 특정 MIDI 음표용 WAV 파일 생성 및 캐시 */
 async function _ensureNoteFile(midi: number): Promise<void> {
   if (_fileCache.has(midi)) return;
-  const [{ encodeWav }, { File, Paths }] = await Promise.all([
-    import("./audio-renderer"),
-    import("expo-file-system"),
-  ]);
+  // Use require() for lazy loading — works identically on Hermes/native and in
+  // Jest's CJS environment (dynamic import() is not transformed by babel-jest).
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { encodeWav } = require("./audio-renderer") as typeof import("./audio-renderer");
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { File, Paths } = require("expo-file-system") as typeof import("expo-file-system");
   const pcm = _generateSinePCM(midi, NOTE_FILE_DUR_S, NOTE_SR);
   const wav = encodeWav(pcm, NOTE_SR);
   const file = new File(Paths.cache, `score_note_${midi}.wav`);
@@ -117,7 +119,8 @@ async function _playNativeNote(
 
   let player: any;
   try {
-    const { createAudioPlayer } = await import("expo-audio");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createAudioPlayer } = require("expo-audio") as typeof import("expo-audio");
     player = createAudioPlayer({ uri });
     player.volume = Math.max(0, Math.min(1, volume));
     player.play();
