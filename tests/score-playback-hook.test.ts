@@ -417,3 +417,72 @@ describe("useScorePlayback — edge cases (H12–H13)", () => {
     expect(result.current.isPlaying).toBe(true);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// H14. Unmount cleanup
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("useScorePlayback — unmount cleanup (H14)", () => {
+  it("H14: unmount during prepare invalidates session — stale finally never fires RAF", async () => {
+    let resolvePrep!: () => void;
+    mockPrepare.mockImplementation(
+      () => new Promise<void>((r) => { resolvePrep = r; }),
+    );
+
+    const { result, unmount } = renderHook(() => useScorePlayback(DOC_WITH_NOTES));
+
+    // Trigger play — prepare is in flight
+    act(() => { result.current.play(); });
+    expect(result.current.isPreparing).toBe(true);
+    expect(rafSpy).not.toHaveBeenCalled();
+
+    // Unmount the hook — increments prepareSessionRef (unmount cleanup effect)
+    act(() => { unmount(); });
+
+    // Resolve the now-stale prepare promise
+    await act(async () => {
+      resolvePrep();
+      await flushMicrotasks();
+    });
+
+    // Session guard must block startRaf — RAF must NOT have been called
+    expect(rafSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// H15. Pause / resume interaction
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("useScorePlayback — pause/resume (H15)", () => {
+  it("H15: pause() stops playback; subsequent play() resumes without a new prepare", async () => {
+    // First play: prepare resolves immediately (simulates cache-warm scenario)
+    mockPrepare.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useScorePlayback(DOC_WITH_NOTES));
+
+    // Initial play — prepare + start RAF
+    await act(async () => {
+      result.current.play();
+      await flushMicrotasks();
+    });
+    expect(result.current.isPlaying).toBe(true);
+    expect(rafSpy).toHaveBeenCalledTimes(1);
+    const prepareCallsAfterFirstPlay = mockPrepare.mock.calls.length;
+
+    // Pause — stops RAF, isPlaying → false
+    act(() => { result.current.pause(); });
+    expect(result.current.isPlaying).toBe(false);
+    // prepareScoreAudio must NOT have been called during pause
+    expect(mockPrepare.mock.calls.length).toBe(prepareCallsAfterFirstPlay);
+
+    // Resume via play() — on native this triggers a prepare call (fast, cache-warm)
+    // but playback must restart: isPlaying = true, RAF fired again
+    await act(async () => {
+      result.current.play();
+      await flushMicrotasks();
+    });
+    expect(result.current.isPlaying).toBe(true);
+    expect(rafSpy).toHaveBeenCalledTimes(2);
+  });
+});
