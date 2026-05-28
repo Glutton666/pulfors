@@ -354,6 +354,7 @@ export function ScoreSymbolSettingsModal({
           <Pressable
             style={[styles.symbolModalClose, { backgroundColor: C.accent }]}
             onPress={onClose}
+            testID="score-symbol-settings-done"
           >
             <Text style={styles.symbolModalCloseText}>{t("scoreMode", "done")}</Text>
           </Pressable>

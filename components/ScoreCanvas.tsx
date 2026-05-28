@@ -524,6 +524,7 @@ export function ScoreCanvas({
           overlayViewBox = layout space → ghost 좌표가 ScoreRenderer와 동일한 논리 좌표계 사용 */}
       <View
         style={{ position: "absolute", top: 0, left: 0, width: containerWidth, height: svgHPhys }}
+        testID="score-canvas-overlay"
         {...panResponder.panHandlers}
       >
         <Svg
