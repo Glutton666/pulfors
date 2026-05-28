@@ -208,18 +208,22 @@ async function _playNativeNote(
 export async function prepareScoreAudio(
   midiNotes: number[],
   onProgress?: (done: number, total: number) => void,
+  batchSize = 4,
 ): Promise<void> {
   if (Platform.OS === "web") return;
   const unique = [...new Set(midiNotes)].filter((m) => m >= 21 && m <= 108);
   const total = unique.length;
   let done = 0;
-  await Promise.all(
-    unique.map(async (m) => {
-      await _ensureNoteFile(m, "sine");
-      done += 1;
-      onProgress?.(done, total);
-    }),
-  );
+  for (let i = 0; i < unique.length; i += batchSize) {
+    const batch = unique.slice(i, i + batchSize);
+    await Promise.all(
+      batch.map(async (m) => {
+        await _ensureNoteFile(m, "sine");
+        done += 1;
+        onProgress?.(done, total);
+      }),
+    );
+  }
 }
 
 /**
