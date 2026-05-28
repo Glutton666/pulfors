@@ -1230,6 +1230,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
               onNoteMoved={handleNoteMoved}
               isPlaying={playback.isPlaying}
               notePreviewEnabled={notePreviewEnabled}
+              instrumentId={doc.parts[selectedPartIdx]?.instrumentId}
               playheadMeasureIdx={
                 playback.isPlaying &&
                 playback.currentMeasureIdx < (doc.parts[selectedPartIdx]?.measures.length ?? 0)

@@ -9,18 +9,20 @@
  * 음표 입력(release) 시 미리 듣기를 발동시킬지 결정합니다.
  *
  * ScoreCanvas PanResponder의 onPanResponderRelease 분기:
- *   if (!isPlayingRef.current) { previewFn(midi); }
+ *   if (!isPlayingRef.current) { previewFn(midi, instrumentId); }
  *
- * @param isPlaying - 현재 재생 중이면 true (미리 듣기를 억제)
- * @param midi      - 발음할 MIDI 번호
- * @param previewFn - 발음 함수 (기본값: previewScoreNote)
+ * @param isPlaying    - 현재 재생 중이면 true (미리 듣기를 억제)
+ * @param midi         - 발음할 MIDI 번호
+ * @param previewFn    - 발음 함수 (기본값: previewScoreNote)
+ * @param instrumentId - 현재 선택된 악기 ID (음색 결정에 사용)
  */
 export function applyNotePreviewOnRelease(
   isPlaying: boolean,
   midi: number,
-  previewFn: (m: number) => void,
+  previewFn: (m: number, instrumentId?: string) => void,
+  instrumentId?: string,
 ): void {
   if (!isPlaying) {
-    previewFn(midi);
+    previewFn(midi, instrumentId);
   }
 }

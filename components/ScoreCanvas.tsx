@@ -89,6 +89,8 @@ export interface ScoreCanvasProps {
   isPlaying?: boolean;
   /** false이면 음표 입력 시 미리 듣기 소리를 내지 않습니다 (기본값: true) */
   notePreviewEnabled?: boolean;
+  /** 현재 선택된 악기 ID — 미리 듣기 음색 결정에 사용 */
+  instrumentId?: string;
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
@@ -116,6 +118,7 @@ export function ScoreCanvas({
   lineSpacing = BASE_LINE_SPACING,
   isPlaying = false,
   notePreviewEnabled = true,
+  instrumentId,
 }: ScoreCanvasProps) {
   const { colors: C } = useTheme();
   const [ghost, setGhost] = useState<GhostState | null>(null);
@@ -153,6 +156,9 @@ export function ScoreCanvas({
 
   const notePreviewEnabledRef = useRef(notePreviewEnabled);
   notePreviewEnabledRef.current = notePreviewEnabled;
+
+  const instrumentIdRef = useRef(instrumentId);
+  instrumentIdRef.current = instrumentId;
 
   const dragElementIdRef = useRef<string | null>(null);
   const dragMeasureIdxRef = useRef<number>(-1);
@@ -444,7 +450,7 @@ export function ScoreCanvas({
           const info = touchToGhost(slx, sly);
           if (info) {
             if (notePreviewEnabledRef.current) {
-              applyNotePreviewOnRelease(isPlayingRef.current, pitchToMidi(info.pitch), previewScoreNote);
+              applyNotePreviewOnRelease(isPlayingRef.current, pitchToMidi(info.pitch), previewScoreNote, instrumentIdRef.current);
             }
             onNotePlaced(info.measureIdx, info.pitch, dur, info.insertIdx);
           }

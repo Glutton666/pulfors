@@ -1,12 +1,13 @@
 // ============================================================
 // 악보 재생 오디오 엔진
-// 웹: Web Audio API 오실레이터 (사인파)
+// 웹: Web Audio API 오실레이터 (악기별 파형)
 // 네이티브: 사전 생성 WAV 파일 + expo-audio createAudioPlayer
 // ============================================================
 
 import { Platform } from "react-native";
 import { getWebAudioContext } from "./audio-renderer";
 import type { PlayNoteEvent } from "./score-playback";
+import { INSTRUMENTS } from "./score-types";
 
 // ── MIDI → 주파수 ─────────────────────────────────────────────
 
@@ -14,15 +15,49 @@ function midiToFreq(midi: number): number {
   return 440 * Math.pow(2, (midi - 69) / 12);
 }
 
+// ── 악기 → 오실레이터 파형 매핑 ─────────────────────────────
+
+type WaveformType = "sine" | "triangle" | "sawtooth" | "square";
+
+/**
+ * 악기 ID를 오실레이터 파형으로 변환합니다.
+ * - woodwind (플루트, 오보에, ...)  → sine   (맑고 순수한 음색)
+ * - keyboard (피아노, 오르간, ...) → triangle (배음이 있는 피아노 음색)
+ * - percussion (마림바, 팀파니)     → triangle
+ * - strings (바이올린, 첼로, ...)   → sawtooth (현악기 풍성한 배음)
+ * - brass (트럼펫, 호른, ...)       → sawtooth
+ * - guitar                         → sawtooth
+ * - vocal, other                   → sine
+ */
+export function instrumentToWaveform(instrumentId: string): WaveformType {
+  const def = INSTRUMENTS[instrumentId];
+  if (!def) return "sine";
+  switch (def.category) {
+    case "keyboard":
+    case "percussion":
+      return "triangle";
+    case "strings":
+    case "brass":
+    case "guitar":
+      return "sawtooth";
+    case "woodwind":
+    case "vocal":
+    case "other":
+    default:
+      return "sine";
+  }
+}
+
 // ── 네이티브: WAV 파일 캐시 ──────────────────────────────────
 
-const _fileCache = new Map<number, string>(); // midiNote → file URI
+// 캐시 키: `${midiNote}_${waveform}` (악기별로 별도 파일)
+const _fileCache = new Map<string, string>();
 
 const NOTE_SR = 22050;          // 샘플링 레이트
 const NOTE_FILE_DUR_S = 2.0;   // 파일에 저장할 음표 최대 길이 (2초)
 
-/** 사인파 PCM 생성 (attack/release envelope 포함) */
-function _generateSinePCM(midi: number, durationS: number, sr: number): Float32Array {
+/** 파형별 PCM 생성 (attack/release envelope 포함) */
+function _generatePCM(midi: number, durationS: number, sr: number, waveform: WaveformType): Float32Array {
   const freq = midiToFreq(midi);
   const n = Math.floor(sr * durationS);
   const pcm = new Float32Array(n);
@@ -35,25 +70,43 @@ function _generateSinePCM(midi: number, durationS: number, sr: number): Float32A
     } else if (i > n - releaseSamples) {
       env = Math.max(0, (n - i) / releaseSamples) * 0.6;
     }
-    pcm[i] = Math.sin(2 * Math.PI * freq * i / sr) * env;
+    const phase = (freq * i / sr) % 1;
+    let sample: number;
+    switch (waveform) {
+      case "triangle":
+        sample = 2 * Math.abs(2 * phase - 1) - 1;
+        break;
+      case "sawtooth":
+        sample = 2 * phase - 1;
+        break;
+      case "square":
+        sample = phase < 0.5 ? 1 : -1;
+        break;
+      case "sine":
+      default:
+        sample = Math.sin(2 * Math.PI * freq * i / sr);
+        break;
+    }
+    pcm[i] = sample * env;
   }
   return pcm;
 }
 
-/** 네이티브: 특정 MIDI 음표용 WAV 파일 생성 및 캐시 */
-async function _ensureNoteFile(midi: number): Promise<void> {
-  if (_fileCache.has(midi)) return;
+/** 네이티브: 특정 MIDI 음표 + 파형용 WAV 파일 생성 및 캐시 */
+async function _ensureNoteFile(midi: number, waveform: WaveformType): Promise<void> {
+  const cacheKey = `${midi}_${waveform}`;
+  if (_fileCache.has(cacheKey)) return;
   // Use require() for lazy loading — works identically on Hermes/native and in
   // Jest's CJS environment (dynamic import() is not transformed by babel-jest).
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { encodeWav } = require("./audio-renderer") as typeof import("./audio-renderer");
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { File, Paths } = require("expo-file-system") as typeof import("expo-file-system");
-  const pcm = _generateSinePCM(midi, NOTE_FILE_DUR_S, NOTE_SR);
+  const pcm = _generatePCM(midi, NOTE_FILE_DUR_S, NOTE_SR, waveform);
   const wav = encodeWav(pcm, NOTE_SR);
-  const file = new File(Paths.cache, `score_note_${midi}.wav`);
+  const file = new File(Paths.cache, `score_note_${midi}_${waveform}.wav`);
   file.write(new Uint8Array(wav));
-  _fileCache.set(midi, file.uri);
+  _fileCache.set(cacheKey, file.uri);
 }
 
 // ── 진행 중인 오디오 추적 ────────────────────────────────────
@@ -63,7 +116,7 @@ let _currentMeasureStop: (() => void) | null = null;
 
 // ── 웹: AudioContext 오실레이터 발음 ─────────────────────────
 
-function _playWebNote(midi: number, durationMs: number, volume: number): () => void {
+function _playWebNote(midi: number, durationMs: number, volume: number, oscType: WaveformType = "sine"): () => void {
   const ctx = getWebAudioContext();
   if (!ctx) return () => {};
   if (ctx.state === "suspended") ctx.resume().catch(() => {});
@@ -77,7 +130,7 @@ function _playWebNote(midi: number, durationMs: number, volume: number): () => v
 
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
-  osc.type = "sine";
+  osc.type = oscType;
   osc.frequency.value = freq;
 
   gain.gain.setValueAtTime(0, t);
@@ -113,8 +166,10 @@ async function _playNativeNote(
   midi: number,
   durationMs: number,
   volume: number,
+  waveform: WaveformType = "sine",
 ): Promise<() => void> {
-  const uri = _fileCache.get(midi);
+  const cacheKey = `${midi}_${waveform}`;
+  const uri = _fileCache.get(cacheKey);
   if (!uri) return () => {};
 
   let player: any;
@@ -160,7 +215,7 @@ export async function prepareScoreAudio(
   let done = 0;
   await Promise.all(
     unique.map(async (m) => {
-      await _ensureNoteFile(m);
+      await _ensureNoteFile(m, "sine");
       done += 1;
       onProgress?.(done, total);
     }),
@@ -229,18 +284,20 @@ export function scheduleMeasureNotes(
 
 /**
  * 음표 입력 즉시 미리 듣기 (0.3초 고정, 볼륨 0.6)
+ * instrumentId가 주어지면 해당 악기의 음색(파형)으로 재생합니다.
  * 네이티브: WAV 파일이 캐시에 없으면 먼저 생성 후 발음
  * 웹: AudioContext 오실레이터로 즉시 발음
  */
-export function previewScoreNote(midi: number): void {
+export function previewScoreNote(midi: number, instrumentId?: string): void {
   if (midi < 21 || midi > 108) return;
   const PREVIEW_MS = 300;
   const PREVIEW_VOL = 0.6;
+  const waveform = instrumentToWaveform(instrumentId ?? "");
   if (Platform.OS === "web") {
-    _playWebNote(midi, PREVIEW_MS, PREVIEW_VOL);
+    _playWebNote(midi, PREVIEW_MS, PREVIEW_VOL, waveform);
   } else {
-    _ensureNoteFile(midi).then(() =>
-      _playNativeNote(midi, PREVIEW_MS, PREVIEW_VOL),
+    _ensureNoteFile(midi, waveform).then(() =>
+      _playNativeNote(midi, PREVIEW_MS, PREVIEW_VOL, waveform),
     ).catch(() => {});
   }
 }
