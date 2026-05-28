@@ -20,6 +20,8 @@ export interface ScorePlaybackState {
   isPlaying: boolean;
   /** 네이티브에서 WAV 파일 준비 중일 때 true */
   isPreparing: boolean;
+  /** 준비 진행 상황 — 준비 중일 때만 non-null */
+  prepareProgress: { done: number; total: number } | null;
   /** 현재 재생 중인 악보 내 마디 인덱스 */
   currentMeasureIdx: number;
   /** 현재 마디 내 Playhead 위치 (0=시작, 1=끝) */
@@ -34,6 +36,7 @@ export interface ScorePlaybackState {
 export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
+  const [prepareProgress, setPrepareProgress] = useState<{ done: number; total: number } | null>(null);
   const [currentMeasureIdx, setCurrentMeasureIdx] = useState(0);
   const [playheadFraction, setPlayheadFraction] = useState(0);
   const [totalMs, setTotalMs] = useState(0);
@@ -125,12 +128,18 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
       if (allMidi.length > 0) {
         // 세션 ID 채번 — stop/unmount 시 증가하므로 stale callback이 startRaf 호출을 건너뜀
         const sessionId = ++prepareSessionRef.current;
+        const total = [...new Set(allMidi)].filter((m) => m >= 21 && m <= 108).length;
         setIsPreparing(true);
-        prepareScoreAudio(allMidi)
+        setPrepareProgress({ done: 0, total });
+        prepareScoreAudio(allMidi, (done, tot) => {
+          if (prepareSessionRef.current !== sessionId) return;
+          setPrepareProgress({ done, total: tot });
+        })
           .catch(() => {})
           .finally(() => {
             if (prepareSessionRef.current !== sessionId) return;
             setIsPreparing(false);
+            setPrepareProgress(null);
             startRaf();
           });
         return;
@@ -157,6 +166,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     // 진행 중인 prepare 비동기 작업을 무효화
     prepareSessionRef.current++;
     setIsPreparing(false);
+    setPrepareProgress(null);
     isPlayingRef.current = false;
     stopAllScoreNotes();
     lastSeqIdxRef.current = -1;
@@ -196,5 +206,5 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     };
   }, []);
 
-  return { isPlaying, isPreparing, currentMeasureIdx, playheadFraction, totalMs, play, pause, stop };
+  return { isPlaying, isPreparing, prepareProgress, currentMeasureIdx, playheadFraction, totalMs, play, pause, stop };
 }

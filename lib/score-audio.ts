@@ -144,11 +144,24 @@ async function _playNativeNote(
  * 악보 재생 전 필요한 MIDI 음표 파일을 미리 준비합니다.
  * 네이티브: 사인파 WAV 파일 생성 + 캐시 (없는 음표만)
  * 웹: no-op (AudioContext는 지연 초기화)
+ *
+ * @param onProgress - 진행 상황 콜백 (done: 완료된 음표 수, total: 전체 음표 수)
  */
-export async function prepareScoreAudio(midiNotes: number[]): Promise<void> {
+export async function prepareScoreAudio(
+  midiNotes: number[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<void> {
   if (Platform.OS === "web") return;
   const unique = [...new Set(midiNotes)].filter((m) => m >= 21 && m <= 108);
-  await Promise.all(unique.map((m) => _ensureNoteFile(m)));
+  const total = unique.length;
+  let done = 0;
+  await Promise.all(
+    unique.map(async (m) => {
+      await _ensureNoteFile(m);
+      done += 1;
+      onProgress?.(done, total);
+    }),
+  );
 }
 
 /**

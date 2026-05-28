@@ -999,7 +999,11 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           hitSlop={8}
           testID="score-editor-play"
         >
-          {playback.isPreparing ? (
+          {playback.isPreparing && playback.prepareProgress ? (
+            <Text style={[styles.prepareProgressText, { color: C.text }]}>
+              {playback.prepareProgress.done}/{playback.prepareProgress.total}
+            </Text>
+          ) : playback.isPreparing ? (
             <ActivityIndicator size="small" color={C.text} />
           ) : (
             <Ionicons

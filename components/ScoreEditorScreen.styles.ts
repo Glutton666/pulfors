@@ -17,6 +17,12 @@ export const makeStyles = (_C: any, _S: any) =>
     iconBtn: {
       padding: 4,
     },
+    prepareProgressText: {
+      fontFamily: "SpaceGrotesk_600SemiBold",
+      fontSize: 11,
+      minWidth: 28,
+      textAlign: "center",
+    },
     topTitle: {
       flex: 1,
       fontFamily: "SpaceGrotesk_600SemiBold",
