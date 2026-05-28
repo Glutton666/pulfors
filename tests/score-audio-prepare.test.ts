@@ -80,9 +80,12 @@ import {
   getPrepareBatchSize,
   instrumentToWaveform,
   prepareScoreAudio,
+  previewScoreNote,
   scheduleMeasureNotes,
   stopAllScoreNotes,
 } from "../lib/score-audio";
+
+import * as audioRenderer from "../lib/audio-renderer";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers — MIDI note allocation
@@ -97,6 +100,7 @@ import {
 // Group C  → MIDI 44, 45       (range filter / dedup)
 // Group E/F→ MIDI 47 (no-cache), 48 (with-cache)
 // Group G  → MIDI 49 (cancel)
+// Group K  → MIDI 75 (violin/native), 76 (piano/native), 77-78 (web — no file written)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // A. WAV file cache population
@@ -670,5 +674,190 @@ describe("scheduleMeasureNotes — URI reflects instrument waveform suffix (J3)"
     expect(audioStub.createAudioPlayer).toHaveBeenCalledTimes(1);
     const arg = audioStub.createAudioPlayer.mock.calls[0][0] as { uri: string };
     expect(arg.uri).toContain("score_note_73_sine.wav");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// K. previewScoreNote — instrument waveform routing
+//
+// K1: native path — _ensureNoteFile is called (writeCount) and createAudioPlayer
+//     receives a URI with the correct waveform suffix
+// K2: web path — AudioContext.createOscillator() is called with the correct
+//     oscillator type for the given instrument
+//
+// MIDI allocation (fresh, not used by A–J):
+//   MIDI 75 → violin/native  (sawtooth)
+//   MIDI 76 → piano/native   (triangle)
+//   MIDI 77 → violin/web     (sawtooth, no file written)
+//   MIDI 78 → piano/web      (triangle, no file written)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("previewScoreNote — native instrument waveform routing (K1)", () => {
+  const savedOS = (Platform as unknown as Record<string, unknown>).OS;
+
+  beforeAll(() => {
+    (Platform as unknown as Record<string, unknown>).OS = "ios";
+  });
+
+  afterAll(() => {
+    (Platform as unknown as Record<string, unknown>).OS = savedOS;
+  });
+
+  beforeEach(() => {
+    fsStub._mockState.reset();
+    audioStub.createAudioPlayer.mockClear();
+  });
+
+  it("violin — _ensureNoteFile writes a _sawtooth WAV (MIDI 75)", async () => {
+    previewScoreNote(75, "violin");
+    // Flush the _ensureNoteFile promise chain and the subsequent _playNativeNote
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fsStub._mockState.writeCount).toBe(1);
+    expect(fsStub._mockState.writtenUris[0]).toContain("score_note_75_sawtooth.wav");
+  });
+
+  it("violin — createAudioPlayer URI contains _sawtooth suffix (MIDI 75)", async () => {
+    // MIDI 75 was cached by the previous test; reset to force a fresh write
+    // (use same note — cache hit path still calls createAudioPlayer)
+    previewScoreNote(75, "violin");
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(audioStub.createAudioPlayer).toHaveBeenCalledTimes(1);
+    const arg = audioStub.createAudioPlayer.mock.calls[0][0] as { uri: string };
+    expect(arg.uri).toContain("score_note_75_sawtooth.wav");
+  });
+
+  it("piano — _ensureNoteFile writes a _triangle WAV (MIDI 76)", async () => {
+    previewScoreNote(76, "piano");
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fsStub._mockState.writeCount).toBe(1);
+    expect(fsStub._mockState.writtenUris[0]).toContain("score_note_76_triangle.wav");
+  });
+
+  it("piano — createAudioPlayer URI contains _triangle suffix (MIDI 76)", async () => {
+    previewScoreNote(76, "piano");
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(audioStub.createAudioPlayer).toHaveBeenCalledTimes(1);
+    const arg = audioStub.createAudioPlayer.mock.calls[0][0] as { uri: string };
+    expect(arg.uri).toContain("score_note_76_triangle.wav");
+  });
+
+  it("out-of-range MIDI — no file written, createAudioPlayer not called", async () => {
+    previewScoreNote(10, "violin"); // MIDI 10 < 21 → early return
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fsStub._mockState.writeCount).toBe(0);
+    expect(audioStub.createAudioPlayer).not.toHaveBeenCalled();
+  });
+});
+
+describe("previewScoreNote — web AudioContext oscillator type (K2)", () => {
+  const savedOS = (Platform as unknown as Record<string, unknown>).OS;
+
+  // Build a minimal AudioContext mock that records what was set on the oscillator
+  function makeMockCtx() {
+    const osc = {
+      type: "" as OscillatorType,
+      frequency: { value: 0 },
+      connect: jest.fn(),
+      start: jest.fn(),
+      stop: jest.fn(),
+      disconnect: jest.fn(),
+    };
+    const gain = {
+      gain: {
+        value: 0,
+        setValueAtTime: jest.fn(),
+        linearRampToValueAtTime: jest.fn(),
+        cancelScheduledValues: jest.fn(),
+      },
+      connect: jest.fn(),
+      disconnect: jest.fn(),
+    };
+    const ctx = {
+      state: "running" as AudioContextState,
+      currentTime: 0,
+      destination: {} as AudioDestinationNode,
+      createOscillator: jest.fn(() => osc),
+      createGain: jest.fn(() => gain),
+      resume: jest.fn().mockResolvedValue(undefined),
+    };
+    return { ctx, osc, gain };
+  }
+
+  beforeAll(() => {
+    (Platform as unknown as Record<string, unknown>).OS = "web";
+  });
+
+  afterAll(() => {
+    (Platform as unknown as Record<string, unknown>).OS = savedOS;
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("violin — oscillator type is 'sawtooth' (MIDI 77)", () => {
+    const { ctx, osc } = makeMockCtx();
+    jest
+      .spyOn(audioRenderer, "getWebAudioContext")
+      .mockReturnValueOnce(ctx as unknown as AudioContext);
+
+    previewScoreNote(77, "violin");
+
+    expect(ctx.createOscillator).toHaveBeenCalled();
+    expect(osc.type).toBe("sawtooth");
+  });
+
+  it("piano — oscillator type is 'triangle' (MIDI 78)", () => {
+    const { ctx, osc } = makeMockCtx();
+    jest
+      .spyOn(audioRenderer, "getWebAudioContext")
+      .mockReturnValueOnce(ctx as unknown as AudioContext);
+
+    previewScoreNote(78, "piano");
+
+    expect(ctx.createOscillator).toHaveBeenCalled();
+    expect(osc.type).toBe("triangle");
+  });
+
+  it("no instrument — oscillator type is 'sine' (default, MIDI 77)", () => {
+    const { ctx, osc } = makeMockCtx();
+    jest
+      .spyOn(audioRenderer, "getWebAudioContext")
+      .mockReturnValueOnce(ctx as unknown as AudioContext);
+
+    previewScoreNote(77); // no instrumentId → sine
+
+    expect(ctx.createOscillator).toHaveBeenCalled();
+    expect(osc.type).toBe("sine");
+  });
+
+  it("null AudioContext — no crash, createOscillator never called", () => {
+    jest
+      .spyOn(audioRenderer, "getWebAudioContext")
+      .mockReturnValueOnce(null);
+
+    expect(() => previewScoreNote(77, "violin")).not.toThrow();
+  });
+
+  it("out-of-range MIDI — AudioContext never consulted", () => {
+    const spy = jest
+      .spyOn(audioRenderer, "getWebAudioContext")
+      .mockReturnValueOnce(null);
+
+    previewScoreNote(10, "violin"); // MIDI 10 < 21 → early return before web path
+    expect(spy).not.toHaveBeenCalled();
   });
 });
