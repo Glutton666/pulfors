@@ -25,6 +25,7 @@ import { useScale } from "@/lib/scale";
 import { useScoreLineSpacing } from "@/lib/score-scale";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import { saveScore, createEmptyMeasure } from "@/lib/score-storage";
+import { stopAllScoreNotes } from "@/lib/score-audio";
 import { exportScoreAsJson, exportScoreAsJpg, importScoreFromJson, importReferenceImage, extractParts } from "@/lib/score-io";
 import { loadPracticeBook, savePracticeBook, createPracticeEntry } from "@/lib/storage";
 import type {
@@ -215,8 +216,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   // 재생 설정 (doc.playbackSettings 기반)
   const showPlayhead = doc.playbackSettings?.showPlayhead !== false;
   const showZoomView = doc.playbackSettings?.showZoomView !== false;
+  const muteAudio = doc.playbackSettings?.muteAudio === true;
 
-  function updatePlaybackSettings(patch: { showPlayhead?: boolean; showZoomView?: boolean }) {
+  function updatePlaybackSettings(patch: { showPlayhead?: boolean; showZoomView?: boolean; muteAudio?: boolean }) {
     applyDoc({
       ...doc,
       playbackSettings: { ...doc.playbackSettings, ...patch },
@@ -1018,6 +1020,28 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             <Ionicons name="stop" size={S.ms(18, 0.4)} color={C.text} />
           </Pressable>
         )}
+
+        {/* 소리 끄기/켜기 버튼 */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.iconBtn,
+            muteAudio && { backgroundColor: C.accent + "22" },
+            pressed && { opacity: 0.6 },
+          ]}
+          onPress={() => {
+            const next = !muteAudio;
+            updatePlaybackSettings({ muteAudio: next });
+            if (next) stopAllScoreNotes();
+          }}
+          hitSlop={8}
+          testID="score-editor-mute"
+        >
+          <Ionicons
+            name={muteAudio ? "volume-mute" : "volume-high"}
+            size={S.ms(20, 0.4)}
+            color={muteAudio ? C.accent : C.text}
+          />
+        </Pressable>
 
         {/* 악보 정보 편집 */}
         <Pressable
