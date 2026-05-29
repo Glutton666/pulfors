@@ -193,9 +193,16 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     // 악기 변경 시 항상 무효화 — idle/pause/완료 상태에서도 새 악기로 재준비 필요
     isAudioReadyRef.current = false;
     if (!prepareParamsRef.current) return;
-    const { noteInstrumentPairs } = prepareParamsRef.current;
-    // 악기가 바뀐 쌍들의 instrumentId를 최신 값으로 갱신해 재준비합니다.
-    _runPrepare(noteInstrumentPairs);
+    // 현재 doc 타임라인을 새로 빌드해 최신 instrumentId를 반영합니다.
+    // (stale prepareParamsRef 재사용 시 이전 악기 ID가 그대로 남는 버그 수정)
+    const freshTimeline = buildPlayTimeline(doc);
+    const freshPairs: Array<{ midi: number; instrumentId: string }> = [];
+    for (const ev of freshTimeline) {
+      for (const n of ev.notes) {
+        freshPairs.push({ midi: n.midiNote, instrumentId: ev.instrumentId });
+      }
+    }
+    _runPrepare(freshPairs);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partInstrumentId]);
 

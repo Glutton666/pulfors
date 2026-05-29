@@ -498,6 +498,144 @@ describe("useScorePlayback — instrument change invalidation (H16)", () => {
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// H17. Instrument change while prepare is in flight → re-prepare uses fresh pairs
+//
+// Regression guard for the stale-pairs bug:
+//   Old behaviour: the instrument-change effect reused prepareParamsRef.current
+//   .noteInstrumentPairs — pairs built when play() was called.  After the
+//   instrument changes those pairs still carry the OLD instrumentId, so the
+//   second prepareScoreAudio call would generate WAV files with the wrong
+//   waveform.
+//
+//   Fix: the effect now calls buildPlayTimeline(doc) to rebuild pairs from the
+//   current doc before passing them to _runPrepare.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("useScorePlayback — instrument change during prepare uses fresh pairs (H17)", () => {
+  it("H17a: second prepare is called with the new instrumentId when instrument changes mid-prepare", async () => {
+    let resolveFirst!: () => void;
+    mockPrepare
+      .mockImplementationOnce(() => new Promise<void>((r) => { resolveFirst = r; }))
+      .mockResolvedValue(undefined);
+
+    const DOC_PIANO = DOC_WITH_NOTES; // instrumentId: "piano"
+    const DOC_VIOLIN: ScoreDocument = {
+      ...DOC_WITH_NOTES,
+      id: "test-doc-violin-h17",
+      parts: [{ ...DOC_WITH_NOTES.parts[0], instrumentId: "violin" }],
+    };
+
+    const { result, rerender } = renderHook(
+      (doc: ScoreDocument) => useScorePlayback(doc),
+      { initialProps: DOC_PIANO },
+    );
+
+    // play() → first prepare starts (still pending)
+    act(() => { result.current.play(); });
+    expect(result.current.isPreparing).toBe(true);
+    expect(mockPrepare).toHaveBeenCalledTimes(1);
+
+    // Change instrument while first prepare is in flight
+    act(() => { rerender(DOC_VIOLIN); });
+
+    // Effect fires → second prepare is triggered with fresh pairs
+    expect(mockPrepare).toHaveBeenCalledTimes(2);
+
+    // Verify the second call's noteInstrumentPairs use the NEW instrumentId ("violin")
+    const secondCallPairs = mockPrepare.mock.calls[1][4] as Array<{ midi: number; instrumentId: string }>;
+    expect(secondCallPairs).toBeDefined();
+    expect(secondCallPairs.length).toBeGreaterThan(0);
+    expect(secondCallPairs.every((p) => p.instrumentId === "violin")).toBe(true);
+
+    // The FIRST call's pairs should have had the old instrumentId ("piano")
+    const firstCallPairs = mockPrepare.mock.calls[0][4] as Array<{ midi: number; instrumentId: string }>;
+    expect(firstCallPairs.every((p) => p.instrumentId === "piano")).toBe(true);
+
+    // Resolve first (stale) prepare — session guard ensures it does NOT start RAF
+    await act(async () => {
+      resolveFirst();
+      await flushMicrotasks();
+    });
+  });
+
+  it("H17b: second prepare pairs do not contain the old instrumentId (no stale contamination)", async () => {
+    let resolveFirst!: () => void;
+    mockPrepare
+      .mockImplementationOnce(() => new Promise<void>((r) => { resolveFirst = r; }))
+      .mockResolvedValue(undefined);
+
+    const DOC_PIANO = DOC_WITH_NOTES;
+    const DOC_CELLO: ScoreDocument = {
+      ...DOC_WITH_NOTES,
+      id: "test-doc-cello-h17",
+      parts: [{ ...DOC_WITH_NOTES.parts[0], instrumentId: "cello" }],
+    };
+
+    const { rerender, result } = renderHook(
+      (doc: ScoreDocument) => useScorePlayback(doc),
+      { initialProps: DOC_PIANO },
+    );
+
+    act(() => { result.current.play(); });
+    expect(mockPrepare).toHaveBeenCalledTimes(1);
+
+    // Change to cello while prepare is in flight
+    act(() => { rerender(DOC_CELLO); });
+    expect(mockPrepare).toHaveBeenCalledTimes(2);
+
+    const secondCallPairs = mockPrepare.mock.calls[1][4] as Array<{ midi: number; instrumentId: string }>;
+    // Must NOT contain "piano" (old stale value)
+    expect(secondCallPairs.some((p) => p.instrumentId === "piano")).toBe(false);
+    // Must contain "cello" (new instrument)
+    expect(secondCallPairs.every((p) => p.instrumentId === "cello")).toBe(true);
+
+    await act(async () => {
+      resolveFirst();
+      await flushMicrotasks();
+    });
+  });
+
+  it("H17c: isAudioReady is invalidated on instrument change — subsequent play re-prepares", async () => {
+    mockPrepare.mockResolvedValue(undefined);
+
+    const DOC_PIANO = DOC_WITH_NOTES;
+    const DOC_VIOLIN: ScoreDocument = {
+      ...DOC_WITH_NOTES,
+      id: "test-doc-violin-h17c",
+      parts: [{ ...DOC_WITH_NOTES.parts[0], instrumentId: "violin" }],
+    };
+
+    const { result, rerender } = renderHook(
+      (doc: ScoreDocument) => useScorePlayback(doc),
+      { initialProps: DOC_PIANO },
+    );
+
+    // First play → prepare → audio ready
+    await act(async () => {
+      result.current.play();
+      await flushMicrotasks();
+    });
+    expect(mockPrepare).toHaveBeenCalledTimes(1);
+
+    act(() => { result.current.stop(); });
+
+    // Change instrument while idle → invalidates isAudioReadyRef
+    act(() => { rerender(DOC_VIOLIN); });
+
+    // Next play must re-prepare (isAudioReadyRef was cleared by instrument change)
+    await act(async () => {
+      result.current.play();
+      await flushMicrotasks();
+    });
+    expect(mockPrepare).toHaveBeenCalledTimes(2);
+
+    // The re-prepare pairs must reflect "violin", not the old "piano"
+    const rePreparePairs = mockPrepare.mock.calls[1][4] as Array<{ midi: number; instrumentId: string }>;
+    expect(rePreparePairs.every((p) => p.instrumentId === "violin")).toBe(true);
+  });
+});
+
 describe("useScorePlayback — pause/resume (H15)", () => {
   it("H15: pause() stops playback; subsequent play() resumes without re-triggering prepare", async () => {
     // First play: prepare resolves immediately
