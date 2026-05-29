@@ -249,24 +249,59 @@ export function getPrepareBatchSize(): number {
  * 웹: no-op (AudioContext는 지연 초기화)
  *
  * @param onProgress - 진행 상황 콜백 (done: 완료된 음표 수, total: 전체 음표 수)
- * @param instrumentId - 악기 ID (없으면 sine 파형)
+ * @param instrumentId - 악기 ID (없으면 sine 파형; noteInstrumentPairs 미제공 시 전체 음표에 적용)
+ * @param noteInstrumentPairs - 음표별 악기 지정 목록. 제공 시 각 쌍의 instrumentId로
+ *   파형을 결정하며, (MIDI, 파형) 조합별로 별도 WAV 파일을 생성합니다.
+ *   하나의 MIDI 음이 여러 악기에 걸쳐 사용될 경우 각 악기마다 별도 파일이 준비됩니다.
+ *   이 파라미터를 사용하면 midiNotes와 instrumentId는 무시됩니다.
  */
 export async function prepareScoreAudio(
   midiNotes: number[],
   onProgress?: (done: number, total: number) => void,
   batchSize = 4,
   instrumentId?: string,
+  noteInstrumentPairs?: Array<{ midi: number; instrumentId: string }>,
 ): Promise<void> {
   if (Platform.OS === "web") return;
-  const waveform = instrumentToWaveform(instrumentId ?? "");
-  const unique = [...new Set(midiNotes)].filter((m) => m >= 21 && m <= 108);
-  const total = unique.length;
+
+  // Build the unique set of (midi, waveform) pairs to prepare.
+  // When noteInstrumentPairs is supplied we use per-note instrument data so that
+  // a score switching instruments mid-stream generates the correct WAV for each
+  // instrument (e.g. violin → sawtooth AND piano → triangle for the same pitch).
+  let pairs: Array<{ midi: number; waveform: WaveformType }>;
+
+  if (noteInstrumentPairs && noteInstrumentPairs.length > 0) {
+    const seen = new Set<string>();
+    pairs = [];
+    for (const { midi, instrumentId: instId } of noteInstrumentPairs) {
+      if (midi < 21 || midi > 108) continue;
+      const waveform = instrumentToWaveform(instId);
+      const key = `${midi}_${waveform}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        pairs.push({ midi, waveform });
+      }
+    }
+  } else {
+    const waveform = instrumentToWaveform(instrumentId ?? "");
+    const seen = new Set<number>();
+    pairs = [];
+    for (const midi of midiNotes) {
+      if (midi < 21 || midi > 108) continue;
+      if (!seen.has(midi)) {
+        seen.add(midi);
+        pairs.push({ midi, waveform });
+      }
+    }
+  }
+
+  const total = pairs.length;
   let done = 0;
-  for (let i = 0; i < unique.length; i += batchSize) {
-    const batch = unique.slice(i, i + batchSize);
+  for (let i = 0; i < pairs.length; i += batchSize) {
+    const batch = pairs.slice(i, i + batchSize);
     await Promise.all(
-      batch.map(async (m) => {
-        await _ensureNoteFile(m, waveform);
+      batch.map(async ({ midi, waveform }) => {
+        await _ensureNoteFile(midi, waveform);
         done += 1;
         onProgress?.(done, total);
       }),

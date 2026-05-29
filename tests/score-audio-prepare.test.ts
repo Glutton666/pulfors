@@ -1149,3 +1149,350 @@ describe("prepareScoreAudio — PCM waveform signature differs by instrument (L)
     expect(max).toBeGreaterThanOrEqual(0.5);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// M. Multi-instrument score preparation — noteInstrumentPairs API
+//
+// Verifies that a score with multiple instruments generates the correct WAV
+// file for each (MIDI, waveform) combination, not a single shared waveform.
+//
+// MIDI allocation (fresh, not used by A–L):
+//   MIDI 90 → violin measure (sawtooth) AND piano measure (triangle)
+//             — same pitch, two instruments → two distinct cache entries
+//   MIDI 91 → violin-only
+//   MIDI 92 → piano-only
+//   MIDI 93 → cello (sawtooth — same waveform as violin; dedup test)
+//   MIDI 94 → out-of-range test (19 and 109 used inline, not MIDI 94)
+//   MIDI 95 → progress callback test
+//   MIDI 96 → scheduleMeasureNotes multi-instrument URI test (violin)
+//   MIDI 97 → scheduleMeasureNotes multi-instrument URI test (piano)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("prepareScoreAudio — multi-instrument via noteInstrumentPairs (M1)", () => {
+  beforeEach(() => {
+    fsStub._mockState.reset();
+  });
+
+  it("violin + piano on the same MIDI pitch → two distinct WAV files (sawtooth + triangle)", async () => {
+    await prepareScoreAudio(
+      [],
+      undefined,
+      4,
+      undefined,
+      [
+        { midi: 90, instrumentId: "violin" },
+        { midi: 90, instrumentId: "piano" },
+      ],
+    );
+    expect(fsStub._mockState.writeCount).toBe(2);
+    const uris = fsStub._mockState.writtenUris;
+    expect(uris.some((u) => u.includes("score_note_90_sawtooth.wav"))).toBe(true);
+    expect(uris.some((u) => u.includes("score_note_90_triangle.wav"))).toBe(true);
+  });
+
+  it("two distinct pitches, two instruments → two WAV files with correct waveform suffix", async () => {
+    await prepareScoreAudio(
+      [],
+      undefined,
+      4,
+      undefined,
+      [
+        { midi: 91, instrumentId: "violin" },
+        { midi: 92, instrumentId: "piano" },
+      ],
+    );
+    expect(fsStub._mockState.writeCount).toBe(2);
+    const uris = fsStub._mockState.writtenUris;
+    expect(uris.some((u) => u.includes("score_note_91_sawtooth.wav"))).toBe(true);
+    expect(uris.some((u) => u.includes("score_note_92_triangle.wav"))).toBe(true);
+  });
+
+  it("same MIDI, same waveform category (violin + cello, both sawtooth) → one WAV file (dedup)", async () => {
+    await prepareScoreAudio(
+      [],
+      undefined,
+      4,
+      undefined,
+      [
+        { midi: 93, instrumentId: "violin" },
+        { midi: 93, instrumentId: "cello" },
+      ],
+    );
+    // Both map to sawtooth → only one unique (midi, waveform) pair
+    expect(fsStub._mockState.writeCount).toBe(1);
+    expect(fsStub._mockState.writtenUris[0]).toContain("score_note_93_sawtooth.wav");
+  });
+
+  it("duplicate pairs (same midi + same instrument repeated) → one WAV file (dedup)", async () => {
+    await prepareScoreAudio(
+      [],
+      undefined,
+      4,
+      undefined,
+      [
+        { midi: 91, instrumentId: "violin" },
+        { midi: 91, instrumentId: "violin" },
+        { midi: 91, instrumentId: "violin" },
+      ],
+    );
+    // violin × 91 was cached above; reset already done by beforeEach,
+    // but the module-level cache still has it → 0 new writes (cache hit)
+    expect(fsStub._mockState.writeCount).toBe(0);
+  });
+
+  it("out-of-range MIDI in pairs is filtered — no WAV written for it", async () => {
+    await prepareScoreAudio(
+      [],
+      undefined,
+      4,
+      undefined,
+      [
+        { midi: 19, instrumentId: "violin" },
+        { midi: 109, instrumentId: "piano" },
+        { midi: 90, instrumentId: "violin" }, // valid, but already cached (from first test above)
+      ],
+    );
+    // MIDI 19 and 109 are out of range; MIDI 90 (violin/sawtooth) already cached
+    expect(fsStub._mockState.writeCount).toBe(0);
+  });
+
+  it("empty noteInstrumentPairs → resolves immediately, no files written", async () => {
+    await expect(
+      prepareScoreAudio([], undefined, 4, undefined, []),
+    ).resolves.toBeUndefined();
+    // Empty pairs array is treated as "not provided" → falls back to midiNotes []
+    expect(fsStub._mockState.writeCount).toBe(0);
+  });
+});
+
+describe("prepareScoreAudio — multi-instrument progress callback (M2)", () => {
+  it("progress fires once per unique (midi, waveform) pair", async () => {
+    const calls: Array<{ done: number; total: number }> = [];
+    // MIDI 95: violin (sawtooth) and piano (triangle) → 2 unique pairs
+    await prepareScoreAudio(
+      [],
+      (done, total) => calls.push({ done, total }),
+      4,
+      undefined,
+      [
+        { midi: 95, instrumentId: "violin" },
+        { midi: 95, instrumentId: "piano" },
+      ],
+    );
+    expect(calls).toHaveLength(2);
+    expect(calls[calls.length - 1].done).toBe(calls[calls.length - 1].total);
+  });
+
+  it("total reported equals unique (midi, waveform) count (dedup applied)", async () => {
+    const totals: number[] = [];
+    // violin + cello both → sawtooth → 1 unique pair after dedup
+    // Progress fires once (total=1) because there is exactly 1 unique (midi, waveform) pair.
+    await prepareScoreAudio(
+      [],
+      (_done, total) => totals.push(total),
+      4,
+      undefined,
+      [
+        { midi: 95, instrumentId: "violin" }, // 95_sawtooth — cached from first M2 test
+        { midi: 95, instrumentId: "cello" },  // same waveform (sawtooth) → deduped away
+      ],
+    );
+    // After dedup: 1 unique pair (95_sawtooth). Progress fires once with total=1
+    // regardless of whether the file is a cache hit.
+    expect(totals).toHaveLength(1);
+    expect(totals[0]).toBe(1);
+  });
+
+  it("progress done values are 1-based and monotonically increasing", async () => {
+    // 91_triangle and 92_sawtooth are both fresh (M1 prepared 91_sawtooth and 92_triangle)
+    const calls: Array<[number, number]> = [];
+    await prepareScoreAudio(
+      [],
+      (done, total) => calls.push([done, total]),
+      4,
+      undefined,
+      [
+        { midi: 91, instrumentId: "piano" },  // 91_triangle — fresh
+        { midi: 92, instrumentId: "violin" }, // 92_sawtooth — fresh
+      ],
+    );
+    // 2 unique fresh pairs → progress fires twice
+    expect(calls).toHaveLength(2);
+    // done values form a 1-based sequence
+    const dones = calls.map(([d]) => d).sort((a, b) => a - b);
+    expect(dones).toEqual([1, 2]);
+    // total is 2 throughout
+    expect(calls.every(([, t]) => t === 2)).toBe(true);
+  });
+});
+
+describe("prepareScoreAudio — multi-instrument cache hit after prepare (M3)", () => {
+  beforeEach(() => {
+    fsStub._mockState.reset();
+  });
+
+  it("second call with same pairs writes nothing (all cache hits)", async () => {
+    // First call — fresh pairs (using already-cached 90_sawtooth + 90_triangle)
+    await prepareScoreAudio(
+      [],
+      undefined,
+      4,
+      undefined,
+      [
+        { midi: 90, instrumentId: "violin" }, // 90_sawtooth — cached in M1
+        { midi: 90, instrumentId: "piano" },  // 90_triangle — cached in M1
+      ],
+    );
+    expect(fsStub._mockState.writeCount).toBe(0);
+  });
+
+  it("cross-instrument cache isolation: violin WAV and piano WAV are separate entries", async () => {
+    // Verify cache keys are independent: prepare piano variant of MIDI 91
+    // (91_triangle is now cached from M2 progress test)
+    // This is a no-op prepare — confirms the waveform suffix separates the entries
+    await prepareScoreAudio(
+      [],
+      undefined,
+      4,
+      undefined,
+      [
+        { midi: 91, instrumentId: "violin" }, // 91_sawtooth — cached
+        { midi: 91, instrumentId: "piano" },  // 91_triangle — cached
+      ],
+    );
+    expect(fsStub._mockState.writeCount).toBe(0);
+  });
+});
+
+describe("prepareScoreAudio — multi-instrument PCM waveform integrity (M4)", () => {
+  /**
+   * Fraction of sample positions where |a[i] − b[i]| > threshold.
+   * Reused from Group L for the multi-instrument path.
+   */
+  function diffFraction(a: Float32Array, b: Float32Array, threshold = 0.01): number {
+    const len = Math.min(a.length, b.length);
+    let count = 0;
+    for (let i = 0; i < len; i++) {
+      if (Math.abs(a[i] - b[i]) > threshold) count++;
+    }
+    return count / len;
+  }
+
+  // MIDI 93: was prepared with violin (sawtooth) in M1.
+  // Now prepare the same MIDI with piano (triangle) via noteInstrumentPairs
+  // and verify the PCM content is genuinely different.
+  let sawPcm: Float32Array;
+  let triPcm: Float32Array;
+
+  beforeAll(async () => {
+    // 93_sawtooth already cached from M1; grab its bytes
+    fsStub._mockState.reset();
+    await prepareScoreAudio([], undefined, 4, undefined, [
+      { midi: 93, instrumentId: "violin" },
+    ]);
+    // If already cached, writtenUris is empty — use the previously written data
+    // by re-preparing fresh with a piano variant which IS new
+    fsStub._mockState.reset();
+    await prepareScoreAudio([], undefined, 4, undefined, [
+      { midi: 93, instrumentId: "piano" },
+    ]);
+    const triUri = fsStub._mockState.writtenUris[0];
+    const triBytes = (fsStub._mockState as any).writtenData.get(triUri) as Uint8Array;
+    ({ pcm: triPcm } = audioRenderer.parseWav(triBytes.buffer as ArrayBuffer));
+
+    // Get sawtooth PCM for MIDI 93 by writing it fresh (separate MIDI to avoid cache collision)
+    // Use MIDI 93 sawtooth — already in module cache, so prepare with a brand-new pitch
+    // to force a write. We use MIDI 96 (fresh) for the sawtooth reference.
+    fsStub._mockState.reset();
+    await prepareScoreAudio([], undefined, 4, undefined, [
+      { midi: 96, instrumentId: "violin" },
+    ]);
+    const sawUri = fsStub._mockState.writtenUris[0];
+    const sawBytes = (fsStub._mockState as any).writtenData.get(sawUri) as Uint8Array;
+    ({ pcm: sawPcm } = audioRenderer.parseWav(sawBytes.buffer as ArrayBuffer));
+  });
+
+  it("multi-instrument path: sawtooth PCM and triangle PCM differ significantly (>5%)", () => {
+    expect(sawPcm).toBeDefined();
+    expect(triPcm).toBeDefined();
+    expect(diffFraction(sawPcm, triPcm)).toBeGreaterThan(0.05);
+  });
+});
+
+describe("scheduleMeasureNotes — multi-instrument: URI matches waveform for each instrument (M5)", () => {
+  beforeAll(async () => {
+    // Prepare MIDI 96 (violin/sawtooth) and MIDI 97 (piano/triangle) for playback tests
+    await prepareScoreAudio([], undefined, 4, undefined, [
+      { midi: 96, instrumentId: "violin" },
+      { midi: 97, instrumentId: "piano" },
+    ]);
+  });
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    audioStub.createAudioPlayer.mockClear();
+  });
+
+  afterEach(() => {
+    stopAllScoreNotes();
+    jest.useRealTimers();
+  });
+
+  it("violin measure (MIDI 96) → createAudioPlayer URI contains _sawtooth suffix", async () => {
+    scheduleMeasureNotes(
+      [{ midiNote: 96, startOffsetMs: 0, durationMs: 500 }],
+      undefined,
+      "violin",
+    );
+    jest.runAllTimers();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(audioStub.createAudioPlayer).toHaveBeenCalledTimes(1);
+    const arg = audioStub.createAudioPlayer.mock.calls[0][0] as { uri: string };
+    expect(arg.uri).toContain("score_note_96_sawtooth.wav");
+  });
+
+  it("piano measure (MIDI 97) → createAudioPlayer URI contains _triangle suffix", async () => {
+    scheduleMeasureNotes(
+      [{ midiNote: 97, startOffsetMs: 0, durationMs: 500 }],
+      undefined,
+      "piano",
+    );
+    jest.runAllTimers();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(audioStub.createAudioPlayer).toHaveBeenCalledTimes(1);
+    const arg = audioStub.createAudioPlayer.mock.calls[0][0] as { uri: string };
+    expect(arg.uri).toContain("score_note_97_triangle.wav");
+  });
+
+  it("switching instruments between measures plays correct waveform each time", async () => {
+    // Measure 1: violin
+    scheduleMeasureNotes(
+      [{ midiNote: 96, startOffsetMs: 0, durationMs: 400 }],
+      undefined,
+      "violin",
+    );
+    jest.runAllTimers();
+    await Promise.resolve();
+    await Promise.resolve();
+    const callAfterViolin = audioStub.createAudioPlayer.mock.calls.length;
+    expect(callAfterViolin).toBe(1);
+    const violinArg = audioStub.createAudioPlayer.mock.calls[0][0] as { uri: string };
+    expect(violinArg.uri).toContain("score_note_96_sawtooth.wav");
+
+    // Measure 2: piano (new measure replaces the previous one)
+    audioStub.createAudioPlayer.mockClear();
+    scheduleMeasureNotes(
+      [{ midiNote: 97, startOffsetMs: 0, durationMs: 400 }],
+      undefined,
+      "piano",
+    );
+    jest.runAllTimers();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(audioStub.createAudioPlayer).toHaveBeenCalledTimes(1);
+    const pianoArg = audioStub.createAudioPlayer.mock.calls[0][0] as { uri: string };
+    expect(pianoArg.uri).toContain("score_note_97_triangle.wav");
+  });
+});

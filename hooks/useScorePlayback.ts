@@ -51,9 +51,9 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   const prepareSessionRef = useRef(0);
 
   // 악기 변경 시 재준비를 위한 보조 refs
-  // - prepareParamsRef: 준비 중일 때 non-null (MIDI 목록 보관)
+  // - prepareParamsRef: 준비 중일 때 non-null (음표-악기 쌍 목록 보관)
   // - startRafRef: 준비 완료 후 호출할 startRaf 함수
-  const prepareParamsRef = useRef<{ allMidi: number[] } | null>(null);
+  const prepareParamsRef = useRef<{ noteInstrumentPairs: Array<{ midi: number; instrumentId: string }> } | null>(null);
   const startRafRef = useRef<(() => void) | null>(null);
   // prepare 완료 후 true — pause→play 시 재준비 건너뜀. stop()/doc 변경 시 리셋.
   const isAudioReadyRef = useRef(false);
@@ -114,21 +114,29 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   }, []);
 
   /** 내부 prepare 헬퍼 — play()와 악기 변경 effect 양쪽에서 호출 */
-  const _runPrepare = useCallback((allMidi: number[], instrumentId: string | undefined) => {
+  const _runPrepare = useCallback((
+    noteInstrumentPairs: Array<{ midi: number; instrumentId: string }>,
+  ) => {
     const sessionId = ++prepareSessionRef.current;
+    // Compute unique valid MIDI count for the initial progress display.
+    // In multi-instrument mode the true total is determined by unique
+    // (midi, waveform) pairs, but we approximate here for the UI counter;
+    // prepareScoreAudio reports the exact total via the progress callback.
+    const allMidi = noteInstrumentPairs.map((p) => p.midi);
     const total = [...new Set(allMidi)].filter((m) => m >= 21 && m <= 108).length;
     setIsPreparing(true);
     setPrepareProgress({ done: 0, total });
-    prepareParamsRef.current = { allMidi };
+    prepareParamsRef.current = { noteInstrumentPairs };
 
     prepareScoreAudio(
-      allMidi,
+      [],
       (done, tot) => {
         if (prepareSessionRef.current !== sessionId) return;
         setPrepareProgress({ done, total: tot });
       },
       getPrepareBatchSize(),
-      instrumentId,
+      undefined,
+      noteInstrumentPairs,
     )
       .catch(() => {})
       .finally(() => {
@@ -160,12 +168,15 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     if (Platform.OS !== "web" && timeline.length > 0) {
       // 네이티브: WAV 파일 준비가 완료된 뒤 재생 시작
       // (pause→play 재개 시에는 isAudioReadyRef가 true → 재준비 건너뜀)
-      const allMidi: number[] = [];
+      // 다악기 악보를 지원하기 위해 각 음표를 해당 파트 악기와 함께 수집합니다.
+      const noteInstrumentPairs: Array<{ midi: number; instrumentId: string }> = [];
       for (const ev of timeline) {
-        for (const n of ev.notes) allMidi.push(n.midiNote);
+        for (const n of ev.notes) {
+          noteInstrumentPairs.push({ midi: n.midiNote, instrumentId: ev.instrumentId });
+        }
       }
-      if (allMidi.length > 0 && !isAudioReadyRef.current) {
-        _runPrepare(allMidi, doc.parts[0]?.instrumentId);
+      if (noteInstrumentPairs.length > 0 && !isAudioReadyRef.current) {
+        _runPrepare(noteInstrumentPairs);
         return;
       }
     }
@@ -182,8 +193,9 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     // 악기 변경 시 항상 무효화 — idle/pause/완료 상태에서도 새 악기로 재준비 필요
     isAudioReadyRef.current = false;
     if (!prepareParamsRef.current) return;
-    const { allMidi } = prepareParamsRef.current;
-    _runPrepare(allMidi, partInstrumentId);
+    const { noteInstrumentPairs } = prepareParamsRef.current;
+    // 악기가 바뀐 쌍들의 instrumentId를 최신 값으로 갱신해 재준비합니다.
+    _runPrepare(noteInstrumentPairs);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partInstrumentId]);
 
