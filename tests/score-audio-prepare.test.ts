@@ -101,6 +101,8 @@ import * as audioRenderer from "../lib/audio-renderer";
 // Group E/F→ MIDI 47 (no-cache), 48 (with-cache)
 // Group G  → MIDI 49 (cancel)
 // Group K  → MIDI 75 (violin/native), 76 (piano/native), 77-78 (web — no file written)
+// Group K3 → MIDI 85, 86 (native rapid-fire; pre-cached before tests)
+// Group K4 → MIDI 88, 89 (web rapid-fire)
 // Group L  → MIDI 80 (same pitch, three distinct cache keys: 80_sawtooth / 80_triangle / 80_sine)
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -860,6 +862,176 @@ describe("previewScoreNote — web AudioContext oscillator type (K2)", () => {
 
     previewScoreNote(10, "violin"); // MIDI 10 < 21 → early return before web path
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// K3. previewScoreNote — rapid successive calls (native): only one player active
+//
+// Two or more calls in quick succession must result in exactly one
+// createAudioPlayer invocation.  Earlier calls are cancelled via the token
+// mechanism before _playNativeNote resolves.
+//
+// MIDI allocation (fresh, pre-cached in beforeAll):
+//   MIDI 85 → same-pitch rapid-fire
+//   MIDI 86 → second pitch for cross-pitch cancellation test
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("previewScoreNote — rapid successive calls cancel previous (K3 native)", () => {
+  const savedOS = (Platform as unknown as Record<string, unknown>).OS;
+
+  beforeAll(async () => {
+    (Platform as unknown as Record<string, unknown>).OS = "ios";
+    // Pre-cache so _ensureNoteFile resolves as a microtask (cache hit)
+    await prepareScoreAudio([85, 86]);
+  });
+
+  afterAll(() => {
+    (Platform as unknown as Record<string, unknown>).OS = savedOS;
+  });
+
+  beforeEach(() => {
+    audioStub.createAudioPlayer.mockClear();
+  });
+
+  it("two rapid same-pitch calls — only one player created", async () => {
+    previewScoreNote(85);
+    previewScoreNote(85); // cancels the first before it resolves
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(audioStub.createAudioPlayer).toHaveBeenCalledTimes(1);
+  });
+
+  it("three rapid same-pitch calls — only one player created", async () => {
+    previewScoreNote(85);
+    previewScoreNote(85);
+    previewScoreNote(85); // cancels the first two
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(audioStub.createAudioPlayer).toHaveBeenCalledTimes(1);
+  });
+
+  it("two rapid different-pitch calls — only the second pitch player is created", async () => {
+    previewScoreNote(85); // first
+    previewScoreNote(86); // cancels first, plays second
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(audioStub.createAudioPlayer).toHaveBeenCalledTimes(1);
+    const arg = audioStub.createAudioPlayer.mock.calls[0][0] as { uri: string };
+    expect(arg.uri).toContain("score_note_86_sine.wav");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// K4. previewScoreNote — rapid successive calls (web): first oscillator stopped
+//
+// On web each call to _playWebNote returns a stop function immediately.
+// Rapid successive calls must invoke that stop function on the previous
+// oscillator before creating the next one — leaving only one active oscillator.
+//
+// MIDI allocation (fresh, web path — no WAV files involved):
+//   MIDI 88, 89 — not used by any other group
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("previewScoreNote — rapid successive calls cancel previous (K4 web)", () => {
+  const savedOS = (Platform as unknown as Record<string, unknown>).OS;
+
+  function makeMockCtx() {
+    const osc = {
+      type: "" as OscillatorType,
+      frequency: { value: 0 },
+      connect: jest.fn(),
+      start: jest.fn(),
+      stop: jest.fn(),
+      disconnect: jest.fn(),
+    };
+    const gain = {
+      gain: {
+        value: 0,
+        setValueAtTime: jest.fn(),
+        linearRampToValueAtTime: jest.fn(),
+        cancelScheduledValues: jest.fn(),
+      },
+      connect: jest.fn(),
+      disconnect: jest.fn(),
+    };
+    const ctx = {
+      state: "running" as AudioContextState,
+      currentTime: 0,
+      destination: {} as AudioDestinationNode,
+      createOscillator: jest.fn(() => osc),
+      createGain: jest.fn(() => gain),
+      resume: jest.fn().mockResolvedValue(undefined),
+    };
+    return { ctx, osc, gain };
+  }
+
+  beforeAll(() => {
+    (Platform as unknown as Record<string, unknown>).OS = "web";
+  });
+
+  afterAll(() => {
+    (Platform as unknown as Record<string, unknown>).OS = savedOS;
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("two rapid calls — first oscillator is stopped early (stop called twice)", () => {
+    const mock1 = makeMockCtx();
+    const mock2 = makeMockCtx();
+    const spy = jest.spyOn(audioRenderer, "getWebAudioContext");
+    spy.mockReturnValueOnce(mock1.ctx as unknown as AudioContext);
+    spy.mockReturnValueOnce(mock2.ctx as unknown as AudioContext);
+
+    previewScoreNote(88); // first — oscillator in mock1.ctx
+    previewScoreNote(88); // second — cancels first, oscillator in mock2.ctx
+
+    // First oscillator: scheduled stop (once) + early-cancel stop (once) = 2
+    expect(mock1.osc.stop).toHaveBeenCalledTimes(2);
+    // Second oscillator: only the scheduled stop = 1
+    expect(mock2.osc.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("three rapid calls — first two oscillators stopped early, last one active", () => {
+    const mocks = [makeMockCtx(), makeMockCtx(), makeMockCtx()];
+    const spy = jest.spyOn(audioRenderer, "getWebAudioContext");
+    spy.mockReturnValueOnce(mocks[0].ctx as unknown as AudioContext);
+    spy.mockReturnValueOnce(mocks[1].ctx as unknown as AudioContext);
+    spy.mockReturnValueOnce(mocks[2].ctx as unknown as AudioContext);
+
+    previewScoreNote(89);
+    previewScoreNote(89);
+    previewScoreNote(89);
+
+    // First two oscillators should each have stop called twice (scheduled + early-cancel)
+    expect(mocks[0].osc.stop).toHaveBeenCalledTimes(2);
+    expect(mocks[1].osc.stop).toHaveBeenCalledTimes(2);
+    // Last oscillator only has its scheduled stop
+    expect(mocks[2].osc.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("two rapid different-pitch calls — both AudioContexts consulted, first cancelled", () => {
+    const mock1 = makeMockCtx();
+    const mock2 = makeMockCtx();
+    const spy = jest.spyOn(audioRenderer, "getWebAudioContext");
+    spy.mockReturnValueOnce(mock1.ctx as unknown as AudioContext);
+    spy.mockReturnValueOnce(mock2.ctx as unknown as AudioContext);
+
+    previewScoreNote(88); // first pitch
+    previewScoreNote(89); // different pitch — cancels first
+
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(mock1.osc.stop).toHaveBeenCalledTimes(2); // cancelled
+    expect(mock2.osc.stop).toHaveBeenCalledTimes(1); // active
   });
 });
 

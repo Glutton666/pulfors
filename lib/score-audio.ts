@@ -114,6 +114,9 @@ async function _ensureNoteFile(midi: number, waveform: WaveformType): Promise<vo
 // 현재 스케줄된 마디의 취소 함수 (단일)
 let _currentMeasureStop: (() => void) | null = null;
 
+// 현재 재생 중인 미리 듣기의 취소 함수 (단일)
+let _currentPreviewStop: (() => void) | null = null;
+
 // ── 웹: AudioContext 오실레이터 발음 ─────────────────────────
 
 function _playWebNote(midi: number, durationMs: number, volume: number, oscType: WaveformType = "sine"): () => void {
@@ -338,20 +341,41 @@ export function scheduleMeasureNotes(
 /**
  * 음표 입력 즉시 미리 듣기 (0.3초 고정, 볼륨 0.6)
  * instrumentId가 주어지면 해당 악기의 음색(파형)으로 재생합니다.
+ * 이전 미리 듣기가 아직 재생 중이면 먼저 취소합니다 (빠른 연속 탭 시 겹침 방지).
  * 네이티브: WAV 파일이 캐시에 없으면 먼저 생성 후 발음
  * 웹: AudioContext 오실레이터로 즉시 발음
  */
 export function previewScoreNote(midi: number, instrumentId?: string): void {
   if (midi < 21 || midi > 108) return;
+
+  // 이전 미리 듣기를 즉시 취소
+  if (_currentPreviewStop) {
+    _currentPreviewStop();
+    _currentPreviewStop = null;
+  }
+
   const PREVIEW_MS = 300;
   const PREVIEW_VOL = 0.6;
   const waveform = instrumentToWaveform(instrumentId ?? "");
+
   if (Platform.OS === "web") {
-    _playWebNote(midi, PREVIEW_MS, PREVIEW_VOL, waveform);
+    const stop = _playWebNote(midi, PREVIEW_MS, PREVIEW_VOL, waveform);
+    _currentPreviewStop = stop;
   } else {
-    _ensureNoteFile(midi, waveform).then(() =>
-      _playNativeNote(midi, PREVIEW_MS, PREVIEW_VOL, waveform),
-    ).catch(() => {});
+    // 비동기 경로: 파일 준비가 완료된 시점에도 더 새로운 미리 듣기가
+    // 시작됐을 수 있으므로, 토큰 비교로 최신 호출인지 확인합니다.
+    const token = {};
+    _currentPreviewStop = () => { (token as any).__cancelled = true; };
+
+    _ensureNoteFile(midi, waveform).then(async () => {
+      if ((token as any).__cancelled) return;
+      const stop = await _playNativeNote(midi, PREVIEW_MS, PREVIEW_VOL, waveform);
+      if ((token as any).__cancelled) {
+        stop();
+      } else {
+        _currentPreviewStop = stop;
+      }
+    }).catch(() => {});
   }
 }
 
