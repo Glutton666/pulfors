@@ -415,6 +415,17 @@ export function previewScoreNote(midi: number, instrumentId?: string): void {
 }
 
 /**
+ * 진행 중인 미리 듣기(previewScoreNote) 오디오를 즉시 중지합니다.
+ * 에디터 닫힘(언마운트) 시 호출합니다.
+ */
+export function stopPreviewNote(): void {
+  if (_currentPreviewStop) {
+    _currentPreviewStop();
+    _currentPreviewStop = null;
+  }
+}
+
+/**
  * 진행 중인 모든 악보 오디오를 즉시 중지합니다.
  * stop/pause 시 호출합니다.
  */

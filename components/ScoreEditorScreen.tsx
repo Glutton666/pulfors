@@ -26,7 +26,7 @@ import { useScale } from "@/lib/scale";
 import { useScoreLineSpacing } from "@/lib/score-scale";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import { saveScore, createEmptyMeasure } from "@/lib/score-storage";
-import { stopAllScoreNotes } from "@/lib/score-audio";
+import { stopAllScoreNotes, stopPreviewNote } from "@/lib/score-audio";
 import { noteDurationToBeats } from "@/lib/score-playback";
 import { exportScoreAsJson, exportScoreAsJpg, importScoreFromJson, importReferenceImage, extractParts } from "@/lib/score-io";
 import { loadPracticeBook, savePracticeBook, createPracticeEntry } from "@/lib/storage";
@@ -228,6 +228,10 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
       progressAnimRef.current.setValue(0);
     }
   }, [playback.isPreparing]);
+  // 에디터 언마운트 시 미리 듣기 사운드를 즉시 중지
+  useEffect(() => {
+    return () => { stopPreviewNote(); };
+  }, []);
   const measureRowYRef = useRef<Record<number, number>>({}); // measureIdx → scrollY
 
   // currentMeasureIdx 변경 시 자동 스크롤

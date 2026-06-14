@@ -63,7 +63,7 @@ let oscillatorCount = 0;
 
 // score-audio 임포트는 위 전역 설정 이후에 이루어지므로 sharedAudioCtx가
 // null인 상태에서 첫 발음 시 MockAudioContext를 사용한다.
-import { previewScoreNote } from "../lib/score-audio";
+import { previewScoreNote, stopPreviewNote } from "../lib/score-audio";
 
 // ── 1. MIDI 범위 유효성 검사 ─────────────────────────────────────────────────
 
@@ -326,5 +326,34 @@ describe("pitchToMidi — 음계 → MIDI 변환 (score-audio 연동)", () => {
         `pitchToMidi(${pitch.step}${pitch.octave}) = ${midi} 이 MIDI 범위 밖임`,
       );
     }
+  });
+});
+
+// ── 5. stopPreviewNote — 진행 중인 미리 듣기 즉시 중지 ──────────────────────
+
+describe("stopPreviewNote — 진행 중인 미리 듣기 중지 (L1)", () => {
+  beforeEach(() => {
+    oscillatorCount = 0;
+  });
+
+  test("미리 듣기 시작 후 stopPreviewNote 호출 시 이후 previewScoreNote가 오실레이터를 새로 생성함 (기존 취소 확인)", () => {
+    previewScoreNote(60);
+    const beforeStop = oscillatorCount;
+    stopPreviewNote();
+    previewScoreNote(62);
+    // stopPreviewNote 이후 새 previewScoreNote는 정상 동작해야 함
+    assert.ok(oscillatorCount > beforeStop, "stopPreviewNote 이후 새 발음이 가능해야 함");
+  });
+
+  test("미리 듣기 없는 상태에서 stopPreviewNote 호출 시 에러 없음", () => {
+    assert.doesNotThrow(() => stopPreviewNote());
+  });
+
+  test("연속 stopPreviewNote 두 번 호출 시 에러 없음", () => {
+    previewScoreNote(60);
+    assert.doesNotThrow(() => {
+      stopPreviewNote();
+      stopPreviewNote();
+    });
   });
 });
