@@ -14,6 +14,11 @@ export interface PlayNoteEvent {
   durationMs: number;
   /** 마디 시작 시점 기준 오프셋(ms) */
   startOffsetMs: number;
+  /**
+   * 이 음표를 재생할 악기 ID (다악기 악보에서 파트별로 설정됨).
+   * 단일 파트 악보에서는 PlayEvent.instrumentId와 동일하다.
+   */
+  instrumentId?: string;
 }
 
 // ── 재생 이벤트 ────────────────────────────────────────────────
@@ -181,10 +186,12 @@ export function measureDurationMs(
 /**
  * 단일 마디의 PlayNoteEvent 배열을 계산한다.
  * tieEnd 음표는 이전 음표의 연장이므로 새로 발음하지 않는다.
+ * @param instrumentId — 다악기 악보에서 각 음표에 파트 악기를 태깅할 때 사용
  */
 function buildMeasureNotes(
   measure: ScoreMeasure,
   startBpm: number,
+  instrumentId?: string,
 ): PlayNoteEvent[] {
   const noteEvents: PlayNoteEvent[] = [];
   let offsetMs = 0;
@@ -200,6 +207,7 @@ function buildMeasureNotes(
         midiNote: pitchToMidi(el.pitch),
         durationMs: soundDurMs,
         startOffsetMs: offsetMs,
+        instrumentId,
       });
     }
     offsetMs += elDurMs;
@@ -213,14 +221,17 @@ function buildMeasureNotes(
 /**
  * ScoreDocument → PlayEvent[] 타임라인 빌드
  * 반복 부호, 인라인 BPM 변화, rit./accel.을 처리한다.
- * 각 PlayEvent에는 음표 발음 스케줄(notes)이 포함된다.
+ * 다악기 악보에서는 모든 파트의 음표를 하나의 PlayEvent로 병합합니다.
+ * 타악기(percussion) 클레프 파트는 음높이 음표가 없으므로 건너뜁니다.
+ * 각 PlayNoteEvent에는 어느 파트(악기)에서 온 것인지 instrumentId가 태깅됩니다.
  */
 export function buildPlayTimeline(doc: ScoreDocument): PlayEvent[] {
   const order = resolvePlayOrder(doc);
-  const measures = doc.parts[0]?.measures ?? [];
-  if (measures.length === 0 || order.length === 0) return [];
+  const primaryMeasures = doc.parts[0]?.measures ?? [];
+  if (primaryMeasures.length === 0 || order.length === 0) return [];
 
-  const isPercussion = (doc.parts[0]?.clef ?? "treble") === "percussion";
+  const primaryPart = doc.parts[0]!;
+  const primaryIsPercussion = (primaryPart.clef ?? "treble") === "percussion";
 
   const events: PlayEvent[] = [];
   let currentBpm = doc.bpm > 0 ? doc.bpm : 120;
@@ -228,18 +239,27 @@ export function buildPlayTimeline(doc: ScoreDocument): PlayEvent[] {
 
   for (let seq = 0; seq < order.length; seq++) {
     const mIdx = order[seq];
-    const measure = measures[mIdx];
-    if (!measure) continue;
+    const primaryMeasure = primaryMeasures[mIdx];
+    if (!primaryMeasure) continue;
 
     const { durationMs, startBpm, endBpm } = measureDurationMs(
-      measure,
+      primaryMeasure,
       doc.timeSignature,
       currentBpm,
     );
 
-    const notes: PlayNoteEvent[] = isPercussion
-      ? []
-      : buildMeasureNotes(measure, startBpm);
+    // 모든 파트의 음표를 하나의 배열로 병합합니다.
+    // 타악기 파트는 음높이 음표가 없으므로 건너뜁니다.
+    const notes: PlayNoteEvent[] = [];
+    for (const part of doc.parts) {
+      const isPartPercussion = (part.clef ?? "treble") === "percussion";
+      if (isPartPercussion) continue;
+      const partMeasure = part.measures[mIdx];
+      if (!partMeasure) continue;
+      const partInstrumentId = part.instrumentId ?? "";
+      const partNotes = buildMeasureNotes(partMeasure, startBpm, partInstrumentId);
+      for (const n of partNotes) notes.push(n);
+    }
 
     events.push({
       seqIdx: seq,
@@ -249,8 +269,8 @@ export function buildPlayTimeline(doc: ScoreDocument): PlayEvent[] {
       effectiveBpm: startBpm,
       endBpm,
       notes,
-      isPercussion,
-      instrumentId: doc.parts[0]?.instrumentId ?? "",
+      isPercussion: primaryIsPercussion,
+      instrumentId: primaryPart.instrumentId ?? "",
     });
 
     t += durationMs;

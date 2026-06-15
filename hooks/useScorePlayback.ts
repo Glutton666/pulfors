@@ -92,7 +92,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
       if (event.seqIdx !== lastSeqIdxRef.current) {
         lastSeqIdxRef.current = event.seqIdx;
 
-        if (!muteAudioRef.current && !event.isPercussion && event.notes.length > 0) {
+        if (!muteAudioRef.current && event.notes.length > 0) {
           const elapsedInMeasure = elapsed - event.startTimeMs;
           const adjustedNotes = event.notes
             .filter((n) => n.startOffsetMs >= elapsedInMeasure - LATE_THRESHOLD_MS)
@@ -172,7 +172,8 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
       const noteInstrumentPairs: Array<{ midi: number; instrumentId: string }> = [];
       for (const ev of timeline) {
         for (const n of ev.notes) {
-          noteInstrumentPairs.push({ midi: n.midiNote, instrumentId: ev.instrumentId });
+          // 다악기 악보: n.instrumentId(파트별 태깅) 우선 사용
+          noteInstrumentPairs.push({ midi: n.midiNote, instrumentId: n.instrumentId ?? ev.instrumentId });
         }
       }
       if (noteInstrumentPairs.length > 0 && !isAudioReadyRef.current) {
@@ -199,7 +200,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     const freshPairs: Array<{ midi: number; instrumentId: string }> = [];
     for (const ev of freshTimeline) {
       for (const n of ev.notes) {
-        freshPairs.push({ midi: n.midiNote, instrumentId: ev.instrumentId });
+        freshPairs.push({ midi: n.midiNote, instrumentId: n.instrumentId ?? ev.instrumentId });
       }
     }
     _runPrepare(freshPairs);

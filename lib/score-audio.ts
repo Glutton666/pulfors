@@ -321,7 +321,6 @@ export function scheduleMeasureNotes(
   volume = 0.7,
   instrumentId?: string,
 ): () => void {
-  const waveform = instrumentToWaveform(instrumentId ?? "");
   // 이전 마디 취소
   if (_currentMeasureStop) {
     _currentMeasureStop();
@@ -336,16 +335,20 @@ export function scheduleMeasureNotes(
     if (note.midiNote < 21 || note.midiNote > 108) continue;
     if (note.durationMs <= 0) continue;
 
+    // 다악기 악보: 음표별 instrumentId → waveform 결정
+    // 단일 파트 악보(note.instrumentId 없음): top-level instrumentId 폴백
+    const noteWaveform = instrumentToWaveform(note.instrumentId ?? instrumentId ?? "");
+
     const tid = setTimeout(() => {
       if (cancelled) return;
       const idx = myTids.indexOf(tid);
       if (idx >= 0) myTids.splice(idx, 1);
 
       if (Platform.OS === "web") {
-        const stop = _playWebNote(note.midiNote, note.durationMs, volume, waveform);
+        const stop = _playWebNote(note.midiNote, note.durationMs, volume, noteWaveform);
         myStopFns.push(stop);
       } else {
-        _playNativeNote(note.midiNote, note.durationMs, volume, waveform).then((stop) => {
+        _playNativeNote(note.midiNote, note.durationMs, volume, noteWaveform).then((stop) => {
           if (cancelled) {
             stop();
           } else {

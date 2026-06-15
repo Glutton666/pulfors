@@ -85,6 +85,9 @@ import {
   stopAllScoreNotes,
 } from "../lib/score-audio";
 
+import { buildPlayTimeline } from "../lib/score-playback";
+import type { ScoreDocument } from "../lib/score-types";
+
 import * as audioRenderer from "../lib/audio-renderer";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -104,6 +107,7 @@ import * as audioRenderer from "../lib/audio-renderer";
 // Group K3 → MIDI 85, 86 (native rapid-fire; pre-cached before tests)
 // Group K4 → MIDI 88, 89 (web rapid-fire)
 // Group L  → MIDI 80 (same pitch, three distinct cache keys: 80_sawtooth / 80_triangle / 80_sine)
+// Group N  → MIDI 62 (violin/sawtooth), 63 (piano/triangle) — two-part multi-instrument timeline
 
 // ─────────────────────────────────────────────────────────────────────────────
 // A. WAV file cache population
@@ -1494,5 +1498,154 @@ describe("scheduleMeasureNotes — multi-instrument: URI matches waveform for ea
     expect(audioStub.createAudioPlayer).toHaveBeenCalledTimes(1);
     const pianoArg = audioStub.createAudioPlayer.mock.calls[0][0] as { uri: string };
     expect(pianoArg.uri).toContain("score_note_97_triangle.wav");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// N. 다악기(multi-part) 타임라인 — buildPlayTimeline + scheduleMeasureNotes
+// MIDI 62 = 바이올린(D4, sawtooth), MIDI 63 = 피아노(Eb4, triangle)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 바이올린 + 피아노 2파트 악보 픽스처 */
+const TWO_PART_DOC: ScoreDocument = {
+  id: "two-part-doc",
+  metadata: { title: "두 파트 테스트", createdAt: 0, updatedAt: 0 },
+  parts: [
+    {
+      id: "part-violin",
+      instrumentId: "violin",
+      clef: "treble",
+      measures: [
+        {
+          id: "m-violin-1",
+          bpm: 120,
+          timeSignature: { numerator: 4, denominator: 4 },
+          elements: [
+            {
+              id: "n-v1",
+              type: "note",
+              pitch: { step: "D", octave: 5 }, // MIDI 62 = 5×12+2
+              duration: "quarter",
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "part-piano",
+      instrumentId: "piano",
+      clef: "treble",
+      measures: [
+        {
+          id: "m-piano-1",
+          bpm: 120,
+          timeSignature: { numerator: 4, denominator: 4 },
+          elements: [
+            {
+              id: "n-p1",
+              type: "note",
+              pitch: { step: "D", octave: 5, accidental: "sharp" }, // MIDI 63 = 5×12+2+1
+              duration: "quarter",
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  keySignature: { sharps: 0 },
+  timeSignature: { numerator: 4, denominator: 4 },
+  bpm: 120,
+};
+
+describe("buildPlayTimeline — 두 파트 악보: 두 파트 음표를 한 이벤트로 병합 (N1)", () => {
+  it("timeline에 마디 수만큼 이벤트가 생성되고 두 파트의 음표가 모두 포함됨", () => {
+    const timeline = buildPlayTimeline(TWO_PART_DOC);
+    expect(timeline).toHaveLength(1); // 마디 1개
+    expect(timeline[0].notes).toHaveLength(2); // 두 파트 각 1음표
+  });
+
+  it("바이올린 파트 음표의 instrumentId가 'violin'", () => {
+    const timeline = buildPlayTimeline(TWO_PART_DOC);
+    const violinNote = timeline[0].notes.find((n) => n.midiNote === 62);
+    expect(violinNote).toBeDefined();
+    expect(violinNote!.instrumentId).toBe("violin");
+  });
+
+  it("피아노 파트 음표의 instrumentId가 'piano'", () => {
+    const timeline = buildPlayTimeline(TWO_PART_DOC);
+    const pianoNote = timeline[0].notes.find((n) => n.midiNote === 63);
+    expect(pianoNote).toBeDefined();
+    expect(pianoNote!.instrumentId).toBe("piano");
+  });
+});
+
+describe("buildPlayTimeline — 타악기 파트는 음표 생략 (N2)", () => {
+  it("percussion 파트의 음표는 수집되지 않음", () => {
+    const doc: ScoreDocument = {
+      ...TWO_PART_DOC,
+      id: "perc-doc",
+      parts: [
+        TWO_PART_DOC.parts[0], // violin (treble)
+        { ...TWO_PART_DOC.parts[1], id: "part-perc", clef: "percussion" },
+      ],
+    };
+    const timeline = buildPlayTimeline(doc);
+    expect(timeline).toHaveLength(1);
+    // percussion 파트 음표는 포함되지 않고 violin 파트 음표 1개만 있어야 함
+    expect(timeline[0].notes).toHaveLength(1);
+    expect(timeline[0].notes[0].instrumentId).toBe("violin");
+  });
+});
+
+describe("scheduleMeasureNotes — 음표별 instrumentId → 파형 결정 (N3)", () => {
+  beforeAll(async () => {
+    // N-group 음표(MIDI 62, 63)를 native 경로로 준비
+    await prepareScoreAudio([], undefined, 4, undefined, [
+      { midi: 62, instrumentId: "violin" },
+      { midi: 63, instrumentId: "piano" },
+    ]);
+  });
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    audioStub.createAudioPlayer.mockClear();
+  });
+
+  afterEach(() => {
+    stopAllScoreNotes();
+    jest.useRealTimers();
+  });
+
+  it("바이올린(MIDI 62) 음표 → _sawtooth.wav URI, 피아노(MIDI 63) 음표 → _triangle.wav URI (동시 재생)", async () => {
+    // per-note instrumentId 사용 — top-level instrumentId 없음
+    scheduleMeasureNotes([
+      { midiNote: 62, startOffsetMs: 0, durationMs: 400, instrumentId: "violin" },
+      { midiNote: 63, startOffsetMs: 0, durationMs: 400, instrumentId: "piano" },
+    ]);
+    jest.runAllTimers();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(audioStub.createAudioPlayer).toHaveBeenCalledTimes(2);
+
+    const uris = audioStub.createAudioPlayer.mock.calls.map(
+      (c: [{ uri: string }]) => c[0].uri,
+    );
+    expect(uris.some((u: string) => u.includes("score_note_62_sawtooth.wav"))).toBe(true);
+    expect(uris.some((u: string) => u.includes("score_note_63_triangle.wav"))).toBe(true);
+  });
+
+  it("per-note instrumentId가 top-level instrumentId보다 우선함", async () => {
+    // top-level = "piano"이지만 note.instrumentId = "violin" → sawtooth 사용
+    scheduleMeasureNotes(
+      [{ midiNote: 62, startOffsetMs: 0, durationMs: 400, instrumentId: "violin" }],
+      undefined,
+      "piano", // top-level는 piano이지만 무시되어야 함
+    );
+    jest.runAllTimers();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(audioStub.createAudioPlayer).toHaveBeenCalledTimes(1);
+    const arg = audioStub.createAudioPlayer.mock.calls[0][0] as { uri: string };
+    expect(arg.uri).toContain("score_note_62_sawtooth.wav");
   });
 });
