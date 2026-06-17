@@ -14,6 +14,7 @@ import {
   Pressable,
   Platform,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import { WebView } from "react-native-webview";
 import Animated, {
@@ -26,6 +27,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
+import { useModalCardLayout } from "@/lib/modal-layout";
 import { ensurePermission } from "@/lib/permissions";
 import { detectBpm } from "@/lib/bpm-detect";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
@@ -104,6 +106,7 @@ export function BpmDetectModal({ visible, onClose, onApply }: BpmDetectModalProp
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
+  const layout = useModalCardLayout({ maxWidth: 400 });
   const styles = makeStyles(C, S);
 
   const [phase, setPhase] = useState<Phase>("requesting");
@@ -256,7 +259,7 @@ export function BpmDetectModal({ visible, onClose, onApply }: BpmDetectModalProp
   return (
     <AnimatedModal visible={visible} transparent onRequestClose={handleClose}>
       <Pressable style={styles.overlay} onPress={handleClose}>
-        <Pressable style={[styles.sheet, { backgroundColor: C.surface, borderColor: C.border }]}>
+        <Pressable style={[styles.sheet, { backgroundColor: C.surface, borderColor: C.border, maxWidth: layout.cardWidth, maxHeight: layout.cardMaxHeight }]}>
           {/* Header */}
           <View style={styles.header}>
             <Text style={[styles.title, { color: C.text }]}>{t("bpmDetect", "title")}</Text>
@@ -264,6 +267,7 @@ export function BpmDetectModal({ visible, onClose, onApply }: BpmDetectModalProp
               <Ionicons name="close" size={S.ms(22, 0.3)} color={C.textSecondary} />
             </Pressable>
           </View>
+          <ScrollView bounces={false} showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.lg }}>
 
           {/* Status area */}
           {phase === "requesting" && (
@@ -369,6 +373,7 @@ export function BpmDetectModal({ visible, onClose, onApply }: BpmDetectModalProp
               </Pressable>
             </View>
           )}
+          </ScrollView>
         </Pressable>
       </Pressable>
 
