@@ -4746,7 +4746,7 @@ export default function MetronomeScreen() {
       >
         <Text style={{
           fontFamily: "SpaceGrotesk_700Bold",
-          fontSize: 96,
+          fontSize: S.ms(96, 0.5),
           color: C.background,
           letterSpacing: 4,
         }}>
@@ -5304,6 +5304,7 @@ export default function MetronomeScreen() {
           },
           isLandscape && noteMode && { paddingHorizontal: Spacing.sm },
           noteMode && { justifyContent: "flex-start" as const },
+          S.contentMaxWidth != null && { maxWidth: S.contentMaxWidth, alignSelf: "center" as const, width: "100%" as const },
         ]}
       >
         {noteMode ? (
@@ -5461,7 +5462,7 @@ export default function MetronomeScreen() {
           />
         </View>
 
-        {!isLandscape && !barMode && windowHeight > 700 && (
+        {!isLandscape && !barMode && (windowHeight > 600 || S.isTablet) && (
           <Text style={[styles.beatHintText, { color: C.textTertiary, textAlign: "center" }]}>{t("main", "beatHint")}</Text>
         )}
 
@@ -5513,7 +5514,7 @@ export default function MetronomeScreen() {
           </View>
         )}
         {isLandscape && !barMode && (
-          <View style={{ flex: 3, justifyContent: "center" as const, alignItems: "center" as const, gap: 6 }}>
+          <View style={[{ flex: 3, justifyContent: "center" as const, alignItems: "center" as const, gap: 6 }, S.isTablet && { maxWidth: Math.min(windowWidth * 0.38, 420) }]}>
             {!noteMode && (
               <>
                 {showLandscapeImage && (

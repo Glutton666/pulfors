@@ -32,7 +32,7 @@ import type { BarModeViewKey } from "@/lib/i18n";
 import type { CustomSoundSetConfig } from "@/lib/storage";
 import { Spacing, Radius, FontSize } from "@/constants/tokens";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useScale } from "@/lib/scale";
+import { useScale, IS_TABLET } from "@/lib/scale";
 import { HintBanner } from "@/components/HintTooltip";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -1985,7 +1985,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     padding: Spacing.md,
     width: "100%",
-    maxWidth: 320,
+    maxWidth: IS_TABLET ? 520 : 320,
   },
   modalHeader: {
     flexDirection: "row",
