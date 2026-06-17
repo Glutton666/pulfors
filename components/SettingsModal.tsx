@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useState, useEffect } from "react";
+import React, { useRef, useCallback, useState, useEffect, useImperativeHandle } from "react";
 import {
   View,
   Text,
@@ -68,6 +68,94 @@ import {
 } from "@/lib/keyboard-bindings";
 
 type SettingsTab = "theme" | "sound" | "profile" | "keyboard";
+
+interface SoundPreviewHandle {
+  playSoundPreview: (set: SoundSet) => void;
+  previewCustomSample: (sourceSet: BuiltinSoundSet, sourceRole: SoundRole) => void;
+}
+
+const SoundPreviewPlayers = React.forwardRef<
+  SoundPreviewHandle,
+  { customSoundSets: Record<string, CustomSoundSetConfig>; playCustomSampleUri: (uri: string, duration: number) => Promise<void> }
+>(function SoundPreviewPlayers({ customSoundSets, playCustomSampleUri }, ref) {
+  const classicStrong = useAudioPlayer(soundSets.classic.strong);
+  const classicHigh = useAudioPlayer(soundSets.classic.high);
+  const classicLow = useAudioPlayer(soundSets.classic.low);
+  const woodblockStrong = useAudioPlayer(soundSets.woodblock.strong);
+  const woodblockHigh = useAudioPlayer(soundSets.woodblock.high);
+  const woodblockLow = useAudioPlayer(soundSets.woodblock.low);
+  const cowbellStrong = useAudioPlayer(soundSets.cowbell.strong);
+  const cowbellHigh = useAudioPlayer(soundSets.cowbell.high);
+  const cowbellLow = useAudioPlayer(soundSets.cowbell.low);
+  const digitalStrong = useAudioPlayer(soundSets.digital.strong);
+  const digitalHigh = useAudioPlayer(soundSets.digital.high);
+  const digitalLow = useAudioPlayer(soundSets.digital.low);
+  const rimshotStrong = useAudioPlayer(soundSets.rimshot.strong);
+  const rimshotHigh = useAudioPlayer(soundSets.rimshot.high);
+  const rimshotLow = useAudioPlayer(soundSets.rimshot.low);
+  const triangleStrong = useAudioPlayer(soundSets.triangle.strong);
+  const triangleHigh = useAudioPlayer(soundSets.triangle.high);
+  const triangleLow = useAudioPlayer(soundSets.triangle.low);
+  const hihatStrong = useAudioPlayer(soundSets.hihat.strong);
+  const hihatHigh = useAudioPlayer(soundSets.hihat.high);
+  const hihatLow = useAudioPlayer(soundSets.hihat.low);
+  const previewIndexRef = useRef<Record<string, number>>({});
+
+  type PlayerList = typeof classicStrong[];
+  const players: Partial<Record<string, PlayerList>> = {
+    classic: [classicStrong, classicHigh, classicLow],
+    woodblock: [woodblockStrong, woodblockHigh, woodblockLow],
+    cowbell: [cowbellStrong, cowbellHigh, cowbellLow],
+    digital: [digitalStrong, digitalHigh, digitalLow],
+    rimshot: [rimshotStrong, rimshotHigh, rimshotLow],
+    triangle: [triangleStrong, triangleHigh, triangleLow],
+    hihat: [hihatStrong, hihatHigh, hihatLow],
+  };
+
+  useImperativeHandle(ref, () => ({
+    playSoundPreview(set: SoundSet) {
+      const idx = previewIndexRef.current[set] ?? 0;
+      let list = players[set];
+      if (!list) {
+        const cfg = customSoundSets[set];
+        if (cfg) {
+          const samples = [cfg.strong, cfg.accent, cfg.normal];
+          const sample = samples[idx % 3];
+          if (sample.type === "custom" && sample.sampleUri) {
+            void playCustomSampleUri(sample.sampleUri, sample.duration);
+            previewIndexRef.current[set] = (idx + 1) % 3;
+            return;
+          }
+          const srcSet = sample.sourceSet || "classic";
+          const srcRole = sample.sourceRole || "strong";
+          list = players[srcSet];
+          if (list) {
+            const roleIdx = srcRole === "strong" ? 0 : srcRole === "high" ? 1 : 2;
+            try { list[roleIdx].seekTo(0); } catch {}
+            safePlay(list[roleIdx], "settings.previewSample.custom");
+            previewIndexRef.current[set] = (idx + 1) % 3;
+            return;
+          }
+        }
+        list = players.classic;
+      }
+      if (!list) return;
+      const player = list[idx];
+      try { player.seekTo(0); } catch {}
+      safePlay(player, "settings.previewSample.builtin");
+      previewIndexRef.current[set] = (idx + 1) % 3;
+    },
+    previewCustomSample(sourceSet: BuiltinSoundSet, sourceRole: SoundRole) {
+      const list = players[sourceSet];
+      if (!list) return;
+      const idx = sourceRole === "strong" ? 0 : sourceRole === "high" ? 1 : 2;
+      try { list[idx].seekTo(0); } catch {}
+      safePlay(list[idx], "settings.previewCustomSource");
+    },
+  }));
+
+  return null;
+});
 
 interface SettingsModalProps {
   visible: boolean;
@@ -230,7 +318,6 @@ export function SettingsModal({
   const trackWidthRef = useRef(0);
   const trackLeftRef = useRef(0);
   const lastHapticRef = useRef(volume);
-  const previewIndexRef = useRef<Record<string, number>>({});
   const tabFadeAnim = useRef(new Animated.Value(1)).current;
   const tabSlideAnim = useRef(new Animated.Value(0)).current;
 
@@ -271,12 +358,20 @@ export function SettingsModal({
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const previewProbePlayerRef = useRef<ExpoAudioPlayer | null>(null);
   const previewStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [previewPlayersReady, setPreviewPlayersReady] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setLocalUsername(username);
       setShowResetConfirm(false);
       loadPracticeRooms().then(setPracticeRooms);
+      // Defer mounting the 21 audio preview players until after the modal
+      // open animation (~150ms) so their initialization doesn't collide with
+      // the metronome's active AudioContext and trigger play/pause conflicts.
+      const tid = setTimeout(() => setPreviewPlayersReady(true), 300);
+      return () => clearTimeout(tid);
+    } else {
+      setPreviewPlayersReady(false);
     }
   }, [visible, username]);
 
@@ -379,37 +474,7 @@ export function SettingsModal({
     promptGoal("30");
   }, [t]);
 
-  const classicStrong = useAudioPlayer(soundSets.classic.strong);
-  const classicHigh = useAudioPlayer(soundSets.classic.high);
-  const classicLow = useAudioPlayer(soundSets.classic.low);
-  const woodblockStrong = useAudioPlayer(soundSets.woodblock.strong);
-  const woodblockHigh = useAudioPlayer(soundSets.woodblock.high);
-  const woodblockLow = useAudioPlayer(soundSets.woodblock.low);
-  const cowbellStrong = useAudioPlayer(soundSets.cowbell.strong);
-  const cowbellHigh = useAudioPlayer(soundSets.cowbell.high);
-  const cowbellLow = useAudioPlayer(soundSets.cowbell.low);
-  const digitalStrong = useAudioPlayer(soundSets.digital.strong);
-  const digitalHigh = useAudioPlayer(soundSets.digital.high);
-  const digitalLow = useAudioPlayer(soundSets.digital.low);
-  const rimshotStrong = useAudioPlayer(soundSets.rimshot.strong);
-  const rimshotHigh = useAudioPlayer(soundSets.rimshot.high);
-  const rimshotLow = useAudioPlayer(soundSets.rimshot.low);
-  const triangleStrong = useAudioPlayer(soundSets.triangle.strong);
-  const triangleHigh = useAudioPlayer(soundSets.triangle.high);
-  const triangleLow = useAudioPlayer(soundSets.triangle.low);
-  const hihatStrong = useAudioPlayer(soundSets.hihat.strong);
-  const hihatHigh = useAudioPlayer(soundSets.hihat.high);
-  const hihatLow = useAudioPlayer(soundSets.hihat.low);
-
-  const previewPlayers: Partial<Record<SoundSet, typeof classicStrong[]>> = {
-    classic: [classicStrong, classicHigh, classicLow],
-    woodblock: [woodblockStrong, woodblockHigh, woodblockLow],
-    cowbell: [cowbellStrong, cowbellHigh, cowbellLow],
-    digital: [digitalStrong, digitalHigh, digitalLow],
-    rimshot: [rimshotStrong, rimshotHigh, rimshotLow],
-    triangle: [triangleStrong, triangleHigh, triangleLow],
-    hihat: [hihatStrong, hihatHigh, hihatLow],
-  };
+  const soundPreviewRef = useRef<SoundPreviewHandle>(null);
 
   const playCustomSampleUri = useCallback(async (uri: string, duration: number) => {
     if (previewStopTimerRef.current) {
@@ -461,37 +526,12 @@ export function SettingsModal({
   }, []);
 
   const playSoundPreview = useCallback((set: SoundSet) => {
-    const idx = previewIndexRef.current[set] ?? 0;
-    let players = previewPlayers[set];
-    if (!players) {
-      const cfg = customSoundSets[set];
-      if (cfg) {
-        const samples = [cfg.strong, cfg.accent, cfg.normal];
-        const sample = samples[idx % 3];
-        if (sample.type === "custom" && sample.sampleUri) {
-          playCustomSampleUri(sample.sampleUri, sample.duration);
-          previewIndexRef.current[set] = (idx + 1) % 3;
-          return;
-        }
-        const srcSet = sample.sourceSet || "classic";
-        const srcRole = sample.sourceRole || "strong";
-        players = previewPlayers[srcSet];
-        if (players) {
-          const roleIdx = srcRole === "strong" ? 0 : srcRole === "high" ? 1 : 2;
-          try { players[roleIdx].seekTo(0); } catch {}
-          safePlay(players[roleIdx], "settings.previewSample.custom");
-          previewIndexRef.current[set] = (idx + 1) % 3;
-          return;
-        }
-      }
-      players = previewPlayers.classic;
-    }
-    if (!players) return;
-    const player = players[idx];
-    try { player.seekTo(0); } catch {}
-    safePlay(player, "settings.previewSample.builtin");
-    previewIndexRef.current[set] = (idx + 1) % 3;
-  }, [customSoundSets, playCustomSampleUri]);
+    soundPreviewRef.current?.playSoundPreview(set);
+  }, []);
+
+  const previewCustomSample = useCallback((sourceSet: BuiltinSoundSet, sourceRole: SoundRole) => {
+    soundPreviewRef.current?.previewCustomSample(sourceSet, sourceRole);
+  }, []);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
@@ -851,14 +891,6 @@ export function SettingsModal({
     }
     return null;
   }, [customSoundSets]);
-
-  const previewCustomSample = useCallback((sourceSet: BuiltinSoundSet, sourceRole: SoundRole) => {
-    const players = previewPlayers[sourceSet];
-    if (!players) return;
-    const idx = sourceRole === "strong" ? 0 : sourceRole === "high" ? 1 : 2;
-    try { players[idx].seekTo(0); } catch {}
-    safePlay(players[idx], "settings.previewCustomSource");
-  }, [previewPlayers]);
 
   const ROLE_OPTIONS: { value: SoundRole; labelKey: "roleStrong" | "roleAccent" | "roleNormal" }[] = [
     { value: "strong", labelKey: "roleStrong" },
@@ -2174,15 +2206,16 @@ export function SettingsModal({
     const currentIdx = tabs.indexOf(activeTab);
     const nextIdx = tabs.indexOf(tab);
     const slideDir = nextIdx > currentIdx ? 1 : -1;
+    const nativeDriver = Platform.OS !== "web";
     Animated.parallel([
-      Animated.timing(tabFadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
-      Animated.timing(tabSlideAnim, { toValue: slideDir * 30, duration: 100, useNativeDriver: true }),
+      Animated.timing(tabFadeAnim, { toValue: 0, duration: 100, useNativeDriver: nativeDriver }),
+      Animated.timing(tabSlideAnim, { toValue: slideDir * 30, duration: 100, useNativeDriver: nativeDriver }),
     ]).start(() => {
       setActiveTab(tab);
       tabSlideAnim.setValue(-slideDir * 30);
       Animated.parallel([
-        Animated.timing(tabFadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
-        Animated.timing(tabSlideAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
+        Animated.timing(tabFadeAnim, { toValue: 1, duration: 180, useNativeDriver: nativeDriver }),
+        Animated.timing(tabSlideAnim, { toValue: 0, duration: 180, useNativeDriver: nativeDriver }),
       ]).start();
     });
   }, [activeTab, tabFadeAnim, tabSlideAnim]);
@@ -2409,6 +2442,14 @@ export function SettingsModal({
           </Pressable>
         </ScrollView>
       </Pressable>
+
+      {previewPlayersReady && (
+        <SoundPreviewPlayers
+          ref={soundPreviewRef}
+          customSoundSets={customSoundSets}
+          playCustomSampleUri={playCustomSampleUri}
+        />
+      )}
 
       <AnimatedModal
         visible={showLoggingInfo}

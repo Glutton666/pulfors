@@ -17,6 +17,49 @@ function getSharedAudioContext(): AudioContext | null {
   return sharedAudioCtx;
 }
 
+// Suppress "play() interrupted by pause()" unhandled rejections that expo-audio
+// triggers on web during player initialization before user interaction. These
+// are benign races from the internal buffering logic, but left unhandled they
+// suspend the AudioContext and block metronome playback.
+//
+// We register the handler immediately at module load time (not inside a
+// function) so it is in place before any useAudioPlayer hook runs.
+export function installAudioPlayInterruptHandler(): void { /* no-op: installed at module init */ }
+
+if (Platform.OS === "web" && typeof window !== "undefined") {
+  const win = window as any;
+  if (!win.__audioPlayInterruptHandlerInstalled) {
+    win.__audioPlayInterruptHandlerInstalled = true;
+    // Patch HTMLMediaElement.prototype.play so that the "interrupted by pause"
+    // DOMException is caught at the source rather than bubbling up as an
+    // unhandledRejection. This is necessary because Expo's own error-reporting
+    // layer captures unhandledrejection events before our listener can call
+    // event.preventDefault(). By catching the rejection inline we prevent the
+    // AudioContext from being suspended by this benign race.
+    const nativePlay = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function patchedPlay(this: HTMLMediaElement) {
+      const result = nativePlay.call(this);
+      if (result && typeof result.then === "function") {
+        return result.catch((e: unknown) => {
+          const msg: string = (e as any)?.message ?? "";
+          if (
+            msg.includes("interrupted by a call to pause") ||
+            msg.includes("interrupted by a new load request")
+          ) {
+            // Benign race — silently swallow and resume the AudioContext.
+            if (sharedAudioCtx && sharedAudioCtx.state === "suspended") {
+              sharedAudioCtx.resume().catch(() => {});
+            }
+            return;
+          }
+          throw e;
+        });
+      }
+      return result;
+    };
+  }
+}
+
 export interface TickInfo {
   time: number;
   type: BeatType;

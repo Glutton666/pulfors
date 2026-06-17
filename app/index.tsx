@@ -116,6 +116,7 @@ import {
   clearWebClickBuffers,
   playWebRenderedLoop,
   getWebAudioContext,
+  installAudioPlayInterruptHandler,
 } from "@/lib/audio-renderer";
 import { syncStereoArtifact, releaseStereoArtifact, releaseAll as releaseAllStereoArtifacts } from "@/lib/sample-cache";
 import type { ClickPCMs, SamplePCMEntry, TickInfo, DecodedSample } from "@/lib/audio-renderer";

@@ -8,6 +8,7 @@ import { Platform } from "react-native";
 import { getWebAudioContext } from "./audio-renderer";
 import type { PlayNoteEvent } from "./score-playback";
 import { INSTRUMENTS } from "./score-types";
+import { safePlay } from "./audio-utils";
 
 // ── MIDI → 주파수 ─────────────────────────────────────────────
 
@@ -181,7 +182,7 @@ async function _playNativeNote(
     const { createAudioPlayer } = require("expo-audio") as typeof import("expo-audio");
     player = createAudioPlayer({ uri });
     player.volume = Math.max(0, Math.min(1, volume));
-    player.play();
+    safePlay(player, "score-audio.play");
   } catch {
     return () => {};
   }
