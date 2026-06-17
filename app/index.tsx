@@ -155,6 +155,8 @@ export default function MetronomeScreen() {
 
   const [bpm, setBpm] = useState(120);
   const [easterEggActive, setEasterEggActive] = useState(false);
+  const [easterEggShakeCount, setEasterEggShakeCount] = useState(0);
+  const [easterEggSuccessCount, setEasterEggSuccessCount] = useState(0);
   const easterEggPrevBpmRef = useRef(120);
   const easterEggActualBpmRef = useRef(120);
   const [halfTime, setHalfTime] = useState(false);
@@ -1967,10 +1969,14 @@ export default function MetronomeScreen() {
     const actual = easterEggActualBpmRef.current;
     if (Math.abs(guess - actual) <= 5) {
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      engineRef.current?.setBpm(easterEggPrevBpmRef.current);
-      setEasterEggActive(false);
+      setEasterEggSuccessCount(c => c + 1);
+      setTimeout(() => {
+        engineRef.current?.setBpm(easterEggPrevBpmRef.current);
+        setEasterEggActive(false);
+      }, 700);
     } else {
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setEasterEggShakeCount(c => c + 1);
     }
   }, []);
 
@@ -5369,6 +5375,8 @@ export default function MetronomeScreen() {
                 isLandscape={true}
                 easterEggMode={easterEggActive}
                 onEasterEggGuess={handleEasterEggGuess}
+                easterEggShakeCount={easterEggShakeCount}
+                easterEggSuccessCount={easterEggSuccessCount}
               />
             ) : undefined}
             onEnterNoteMode={handleEnterNoteMode}
@@ -5637,6 +5645,8 @@ export default function MetronomeScreen() {
               isLandscape={true}
               easterEggMode={easterEggActive}
               onEasterEggGuess={handleEasterEggGuess}
+              easterEggShakeCount={easterEggShakeCount}
+              easterEggSuccessCount={easterEggSuccessCount}
             />
           </View>
         )}
@@ -5651,6 +5661,8 @@ export default function MetronomeScreen() {
             isLandscape={false}
             easterEggMode={easterEggActive}
             onEasterEggGuess={handleEasterEggGuess}
+            easterEggShakeCount={easterEggShakeCount}
+            easterEggSuccessCount={easterEggSuccessCount}
           />
         </View>
         )}

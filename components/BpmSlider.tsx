@@ -34,11 +34,13 @@ interface BpmSliderProps {
   isLandscape?: boolean;
   easterEggMode?: boolean;
   onEasterEggGuess?: (bpm: number) => void;
+  easterEggShakeCount?: number;
+  easterEggSuccessCount?: number;
 }
 
 type Zone = "left" | "center" | "right";
 
-export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeToggle, isLandscape = false, easterEggMode = false, onEasterEggGuess }: BpmSliderProps) {
+export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeToggle, isLandscape = false, easterEggMode = false, onEasterEggGuess, easterEggShakeCount = 0, easterEggSuccessCount = 0 }: BpmSliderProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
@@ -85,6 +87,34 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
   const flash = useSharedValue(0);
   const glowL = useSharedValue(0);
   const glowR = useSharedValue(0);
+
+  const prevShakeCountRef = useRef(0);
+  useEffect(() => {
+    if (easterEggShakeCount > prevShakeCountRef.current) {
+      prevShakeCountRef.current = easterEggShakeCount;
+      offsetX.value = withSequence(
+        withTiming(-14, { duration: 55 }),
+        withTiming(14, { duration: 55 }),
+        withTiming(-10, { duration: 45 }),
+        withTiming(10, { duration: 45 }),
+        withTiming(-6, { duration: 35 }),
+        withTiming(0, { duration: 35 })
+      );
+    }
+  }, [easterEggShakeCount, offsetX]);
+
+  const prevSuccessCountRef = useRef(0);
+  useEffect(() => {
+    if (easterEggSuccessCount > prevSuccessCountRef.current) {
+      prevSuccessCountRef.current = easterEggSuccessCount;
+      flash.value = withSequence(
+        withTiming(1, { duration: 80 }),
+        withTiming(0.6, { duration: 120 }),
+        withTiming(1, { duration: 80 }),
+        withTiming(0, { duration: 400, easing: Easing.out(Easing.quad) })
+      );
+    }
+  }, [easterEggSuccessCount, flash]);
 
   const resolveZone = useCallback((pageX: number): Zone => {
     const { x, width } = layoutRef.current;
