@@ -615,7 +615,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const webMaxCard = isWeb && S.isTablet ? Math.min(520, winW * 0.45) : 460;
   const dynamicKnobSize = isLandscape
     ? Math.min(Math.max(120, winH * 0.52), 280)
-    : Math.min(Math.max(100, Math.min(S.minDim, webMaxCard) * 0.42), S.isTablet ? 280 : 240);
+    : Math.min(Math.max(Math.min(100, winH * 0.22), Math.min(S.minDim, webMaxCard) * 0.42), S.isTablet ? 280 : 240);
   const dynamicCardWidth = isLandscape
     ? Math.min(winW * 0.92, 1100)
     : Math.min(Math.max(300, S.screenWidth * 0.92), webMaxCard);
@@ -1311,7 +1311,13 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 
           <View style={isLandscape ? { flexDirection: "row" as const, gap: landscapeGap, alignItems: "stretch" as const, flex: 1 } : undefined}>
           {/* LEFT column: controls (same as portrait) */}
-          <View style={isLandscape ? { flex: 1 } : undefined}>
+          <ScrollView
+            style={isLandscape ? { flex: 1 } : undefined}
+            contentContainerStyle={!isLandscape ? { flexGrow: 1 } : undefined}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            nestedScrollEnabled
+          >
           <View style={styles.knobMicContainer}>
             <View style={styles.knobWrap}>
               <Knob
@@ -1560,7 +1566,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
               </Text>
             </Pressable>
             </View>
-          </View>
+          </ScrollView>
 
           {/* RIGHT column: detected Hz peaks (landscape only) */}
           {isLandscape && (
@@ -1576,8 +1582,20 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                       <Text style={{ flex: 0.7, color: C.textTertiary, fontSize: 9, letterSpacing: 0.8, fontFamily: "SpaceGrotesk_500Medium", textAlign: "center" as const }}>{t("signalGenerator", "noteLabel")}</Text>
                       <Text style={{ flex: 1, color: C.textTertiary, fontSize: 9, letterSpacing: 0.8, fontFamily: "SpaceGrotesk_500Medium", textAlign: "right" as const }}>dBFS</Text>
                     </View>
-                    {topPeaks.map((peak, i) => (
-                      <View key={i} style={{ flexDirection: "row" as const, alignItems: "center" as const, paddingVertical: 4, borderBottomWidth: 0.5, borderBottomColor: C.border + "30" }}>
+                    {topPeaks.map((peak, i) => {
+                      const isSelected = Math.abs(peak.hz - frequency) < 1;
+                      return (
+                      <Pressable
+                        key={i}
+                        onPress={() => {
+                          setFrequency(peak.hz);
+                          if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        }}
+                        style={[
+                          { flexDirection: "row" as const, alignItems: "center" as const, paddingVertical: 4, borderBottomWidth: 0.5, borderBottomColor: C.border + "30", borderRadius: 4 },
+                          isSelected && { backgroundColor: C.accentDim },
+                        ]}
+                      >
                         <Text style={{ flex: 1.4, color: i === 0 ? C.accent : C.text, fontFamily: "SpaceGrotesk_600SemiBold", fontSize: 12 }}>
                           {peak.hz}
                         </Text>
@@ -1587,8 +1605,9 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                         <Text style={{ flex: 1, color: C.textTertiary, fontSize: 11, textAlign: "right" as const, fontFamily: "SpaceGrotesk_400Regular" }}>
                           {peak.db}
                         </Text>
-                      </View>
-                    ))}
+                      </Pressable>
+                      );
+                    })}
                   </ScrollView>
                 ) : (
                   <Text style={{ color: C.textTertiary, fontSize: 12, fontFamily: "SpaceGrotesk_400Regular" }}>
