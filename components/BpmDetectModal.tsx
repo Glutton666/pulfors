@@ -396,7 +396,7 @@ const makeStyles = (C: any, S: any) =>
     },
     sheet: {
       width: "100%",
-      maxWidth: 400,
+      maxWidth: S.isTablet ? 520 : 400,
       borderRadius: Radius.xl,
       borderWidth: 1,
       padding: Spacing.xl,

@@ -9,6 +9,8 @@ import {
   PanResponder,
   ActivityIndicator,
   TextInput,
+  ScrollView,
+  useWindowDimensions,
 } from "react-native";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import { ensurePermission } from "@/lib/permissions";
@@ -82,6 +84,7 @@ export function NoteRecorderModal({
   const { colors: C } = useTheme();
   const styles = make_styles(C);
   const { t } = useLanguage();
+  const { width: winW, height: winH } = useWindowDimensions();
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [countdownValue, setCountdownValue] = useState(1);
@@ -692,7 +695,7 @@ export function NoteRecorderModal({
   return (
     <AnimatedModal visible={visible} transparent onRequestClose={handleClose}>
       <Pressable style={styles.overlay} onPress={handleClose}>
-        <Pressable style={[styles.container, { backgroundColor: C.surface }]} onPress={(e) => e.stopPropagation()}>
+        <Pressable style={[styles.container, { backgroundColor: C.surface, maxHeight: Math.round(winH * 0.9) }]} onPress={(e) => e.stopPropagation()}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: C.text }]}>
               {t("noteRecorder", "beatNote").replace("{0}", String(beatIndex + 1)).replace("{1}", String(subIndex + 1))}
@@ -701,6 +704,7 @@ export function NoteRecorderModal({
               <Ionicons name="close" size={22} color={C.textSecondary} />
             </Pressable>
           </View>
+          <ScrollView showsVerticalScrollIndicator={false} bounces={false} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
 
           {phase === "idle" && (
             <View style={styles.content}>
@@ -1060,6 +1064,7 @@ export function NoteRecorderModal({
               </View>
             </View>
           )}
+          </ScrollView>
         </Pressable>
       </Pressable>
     </AnimatedModal>

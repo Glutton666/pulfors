@@ -4,6 +4,7 @@ import { AnimatedModal } from "@/components/AnimatedModal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useScale } from "@/lib/scale";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import {
   TEMPO_QUIZ_MEASURES,
@@ -38,6 +39,7 @@ export function TempoQuizModal({
 }: TempoQuizModalProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
+  const S = useScale();
   const insets = useSafeAreaInsets();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const styles = makeStyles(C);
@@ -87,7 +89,7 @@ export function TempoQuizModal({
 
   return (
     <AnimatedModal visible={visible} transparent onRequestClose={handleClose}>
-      <Pressable style={styles.overlay} onPress={handleClose}>
+      <Pressable style={[styles.overlay, S.isTablet && { alignItems: "center" as const, justifyContent: "center" as const }]} onPress={handleClose}>
         <View
           style={[
             styles.sheet,
@@ -97,6 +99,7 @@ export function TempoQuizModal({
               paddingTop: (insets.top || webTopInset) + 16,
               paddingBottom: 24 + (insets.bottom || (Platform.OS === "web" ? 34 : 0)),
             },
+            S.isTablet && { maxWidth: 540, alignSelf: "center" as const, width: "100%" as const, borderRadius: Radius.xl, borderWidth: 1, borderColor: C.border },
           ]}
           onStartShouldSetResponder={() => true}
         >

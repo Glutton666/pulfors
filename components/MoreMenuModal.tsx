@@ -49,11 +49,12 @@ export function MoreMenuModal({ visible, onClose, onScheduledStart, onFadeOut, o
 
   return (
     <AnimatedModal visible={visible} transparent onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose} testID="more-menu-overlay">
+      <Pressable style={[styles.overlay, S.isTablet && { alignItems: "center" as const }]} onPress={onClose} testID="more-menu-overlay">
         <View
           style={[
             styles.sheet,
             { backgroundColor: C.surface, borderColor: C.border, paddingTop: (insets.top || webTopInset) + 16, paddingBottom: 24 + (insets.bottom || (Platform.OS === "web" ? 34 : 0)) },
+            S.isTablet && { maxWidth: 480, alignSelf: "center" as const, width: "100%" as const, borderRadius: Radius.xl, borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl },
           ]}
           onStartShouldSetResponder={() => true}
         >
