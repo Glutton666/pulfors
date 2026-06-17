@@ -463,6 +463,9 @@ export const translations = {
     tuningGuide: { ko: "튜닝 가이드", en: "Tuning Guide" },
     tapToSet: { ko: "탭하여 주파수 설정", en: "Tap to set frequency" },
     longPressToSet: { ko: "길게 눌러 주파수 설정", en: "Long press to set freq" },
+    detectedFreqs: { ko: "감지된 주파수", en: "Detected Frequencies" },
+    noteLabel: { ko: "음", en: "Note" },
+    micOffHint: { ko: "마이크를 켜면\n감지된 주파수 목록이\n표시됩니다", en: "Enable mic to see\ndetected frequency\nlist" },
   },
   noteRecorder: {
     permissionRequired: { ko: "권한 필요", en: "Permission Required" },
