@@ -157,6 +157,8 @@ export default function MetronomeScreen() {
   const [easterEggActive, setEasterEggActive] = useState(false);
   const [easterEggShakeCount, setEasterEggShakeCount] = useState(0);
   const [easterEggSuccessCount, setEasterEggSuccessCount] = useState(0);
+  const [easterEggRevealBpm, setEasterEggRevealBpm] = useState<number | null>(null);
+  const [easterEggGiveUpMode, setEasterEggGiveUpMode] = useState(false);
   const easterEggPrevBpmRef = useRef(120);
   const easterEggActualBpmRef = useRef(120);
   const [halfTime, setHalfTime] = useState(false);
@@ -1970,14 +1972,31 @@ export default function MetronomeScreen() {
     if (Math.abs(guess - actual) <= 5) {
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setEasterEggSuccessCount(c => c + 1);
+      setEasterEggGiveUpMode(false);
+      setEasterEggRevealBpm(actual);
       setTimeout(() => {
         engineRef.current?.setBpm(easterEggPrevBpmRef.current);
         setEasterEggActive(false);
-      }, 700);
+        setEasterEggRevealBpm(null);
+        setEasterEggGiveUpMode(false);
+      }, 2000);
     } else {
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setEasterEggShakeCount(c => c + 1);
     }
+  }, []);
+
+  const handleEasterEggGiveUp = useCallback(() => {
+    const actual = easterEggActualBpmRef.current;
+    if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    setEasterEggGiveUpMode(true);
+    setEasterEggRevealBpm(actual);
+    setTimeout(() => {
+      engineRef.current?.setBpm(easterEggPrevBpmRef.current);
+      setEasterEggActive(false);
+      setEasterEggRevealBpm(null);
+      setEasterEggGiveUpMode(false);
+    }, 2000);
   }, []);
 
   const toggleHalfTime = useCallback(() => {
@@ -5375,8 +5394,11 @@ export default function MetronomeScreen() {
                 isLandscape={true}
                 easterEggMode={easterEggActive}
                 onEasterEggGuess={handleEasterEggGuess}
+                onEasterEggGiveUp={handleEasterEggGiveUp}
                 easterEggShakeCount={easterEggShakeCount}
                 easterEggSuccessCount={easterEggSuccessCount}
+                easterEggRevealBpm={easterEggRevealBpm}
+                easterEggGiveUpMode={easterEggGiveUpMode}
               />
             ) : undefined}
             onEnterNoteMode={handleEnterNoteMode}
@@ -5645,8 +5667,11 @@ export default function MetronomeScreen() {
               isLandscape={true}
               easterEggMode={easterEggActive}
               onEasterEggGuess={handleEasterEggGuess}
+              onEasterEggGiveUp={handleEasterEggGiveUp}
               easterEggShakeCount={easterEggShakeCount}
               easterEggSuccessCount={easterEggSuccessCount}
+              easterEggRevealBpm={easterEggRevealBpm}
+              easterEggGiveUpMode={easterEggGiveUpMode}
             />
           </View>
         )}
@@ -5661,8 +5686,11 @@ export default function MetronomeScreen() {
             isLandscape={false}
             easterEggMode={easterEggActive}
             onEasterEggGuess={handleEasterEggGuess}
+            onEasterEggGiveUp={handleEasterEggGiveUp}
             easterEggShakeCount={easterEggShakeCount}
             easterEggSuccessCount={easterEggSuccessCount}
+            easterEggRevealBpm={easterEggRevealBpm}
+            easterEggGiveUpMode={easterEggGiveUpMode}
           />
         </View>
         )}

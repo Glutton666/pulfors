@@ -7,6 +7,7 @@ import {
   StyleSheet,
   PanResponder,
   Platform,
+  Pressable,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -34,13 +35,16 @@ interface BpmSliderProps {
   isLandscape?: boolean;
   easterEggMode?: boolean;
   onEasterEggGuess?: (bpm: number) => void;
+  onEasterEggGiveUp?: () => void;
   easterEggShakeCount?: number;
   easterEggSuccessCount?: number;
+  easterEggRevealBpm?: number | null;
+  easterEggGiveUpMode?: boolean;
 }
 
 type Zone = "left" | "center" | "right";
 
-export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeToggle, isLandscape = false, easterEggMode = false, onEasterEggGuess, easterEggShakeCount = 0, easterEggSuccessCount = 0 }: BpmSliderProps) {
+export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeToggle, isLandscape = false, easterEggMode = false, onEasterEggGuess, onEasterEggGiveUp, easterEggShakeCount = 0, easterEggSuccessCount = 0, easterEggRevealBpm = null, easterEggGiveUpMode = false }: BpmSliderProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
@@ -299,7 +303,11 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
           <View style={styles.bpmRow} pointerEvents={easterEggMode ? "box-none" : "none"}>
             <Feather name="minus" size={isLandscape ? S.ms(18, 0.4) : S.ms(24, 0.4)} color={easterEggMode ? "transparent" : C.textSecondary} style={styles.bpmIcon} />
             <View style={styles.bpmContent}>
-              {easterEggMode ? (
+              {easterEggMode && easterEggRevealBpm != null ? (
+                <Text style={[styles.bpmValue, { color: easterEggGiveUpMode ? C.textSecondary : C.accent }, isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) }]} testID="bpm-easter-egg-reveal">
+                  {easterEggRevealBpm}
+                </Text>
+              ) : easterEggMode ? (
                 <TextInput
                   ref={eggInputRef}
                   style={[styles.bpmValue, styles.eggInput, { color: C.accent, borderBottomColor: C.accent }, isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) }]}
@@ -316,8 +324,14 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
               ) : (
                 <Text style={[styles.bpmValue, { color: C.text }, isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) }]} testID="bpm-display">{bpm}</Text>
               )}
-              <Text style={[styles.bpmUnit, { color: easterEggMode ? C.accent : C.textTertiary }, halfTime && !easterEggMode && { color: C.accent }, isLandscape && { fontSize: S.ms(10, 0.3), marginTop: -2 }]}>
-                {easterEggMode ? "BPM ?" : halfTime ? "½× BPM" : "BPM"}
+              <Text style={[styles.bpmUnit, { color: easterEggMode ? (easterEggRevealBpm != null ? (easterEggGiveUpMode ? C.textSecondary : C.accent) : C.accent) : C.textTertiary }, halfTime && !easterEggMode && { color: C.accent }, isLandscape && { fontSize: S.ms(10, 0.3), marginTop: -2 }]}>
+                {easterEggMode
+                  ? easterEggRevealBpm != null
+                    ? easterEggGiveUpMode
+                      ? t("main", "eggRevealGiveUp")
+                      : t("main", "eggRevealCorrect")
+                    : "BPM ?"
+                  : halfTime ? "½× BPM" : "BPM"}
               </Text>
             </View>
             <Feather name="plus" size={isLandscape ? S.ms(18, 0.4) : S.ms(24, 0.4)} color={easterEggMode ? "transparent" : C.textSecondary} style={styles.bpmIcon} />
@@ -339,7 +353,17 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
         </Animated.View>
       </View>
 
-      <Text style={[styles.hint, { color: C.text }]}>{t("main", "bpmHint")}</Text>
+      {easterEggMode && easterEggRevealBpm == null ? (
+        <Pressable
+          onPress={onEasterEggGiveUp}
+          style={({ pressed }) => [styles.giveUpButton, { borderColor: C.border, backgroundColor: pressed ? C.surface : "transparent" }]}
+          testID="bpm-easter-egg-give-up"
+        >
+          <Text style={[styles.giveUpText, { color: C.textSecondary }]}>{t("main", "eggGiveUp")}</Text>
+        </Pressable>
+      ) : (
+        <Text style={[styles.hint, { color: C.text }]}>{t("main", "bpmHint")}</Text>
+      )}
     </View>
   );
 }
@@ -457,5 +481,16 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     fontSize: FontSize.caption,
     letterSpacing: 1,
     opacity: 0.5,
+  },
+  giveUpButton: {
+    paddingHorizontal: S.ms(16, 0.3),
+    paddingVertical: S.ms(5, 0.3),
+    borderRadius: S.ms(8, 0.3),
+    borderWidth: 1,
+  },
+  giveUpText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: FontSize.caption,
+    letterSpacing: 1,
   },
 });
