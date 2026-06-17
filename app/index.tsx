@@ -161,6 +161,8 @@ export default function MetronomeScreen() {
   const [easterEggGiveUpMode, setEasterEggGiveUpMode] = useState(false);
   const easterEggPrevBpmRef = useRef(120);
   const easterEggActualBpmRef = useRef(120);
+  const easterEggActiveRef = useRef(false);
+  useEffect(() => { easterEggActiveRef.current = easterEggActive; }, [easterEggActive]);
   const [halfTime, setHalfTime] = useState(false);
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
@@ -1986,18 +1988,29 @@ export default function MetronomeScreen() {
     }
   }, []);
 
-  const handleEasterEggGiveUp = useCallback(() => {
+  const handleEasterEggGiveUp = useCallback((stopEngine = false) => {
     const actual = easterEggActualBpmRef.current;
     if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     setEasterEggGiveUpMode(true);
     setEasterEggRevealBpm(actual);
+    if (stopEngine) {
+      engineRef.current?.stop();
+      stopRenderedAudio();
+      clearSamplePlayStates();
+      setIsPlaying(false);
+      setIsPreparing(false);
+      resetPlaybackVisuals();
+    }
     setTimeout(() => {
       engineRef.current?.setBpm(easterEggPrevBpmRef.current);
       setEasterEggActive(false);
       setEasterEggRevealBpm(null);
       setEasterEggGiveUpMode(false);
     }, 2000);
-  }, []);
+  }, [stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals]);
+
+  const handleEasterEggGiveUpRef = useRef(handleEasterEggGiveUp);
+  useEffect(() => { handleEasterEggGiveUpRef.current = handleEasterEggGiveUp; }, [handleEasterEggGiveUp]);
 
   const toggleHalfTime = useCallback(() => {
     setHalfTime((prev) => {
@@ -2114,6 +2127,12 @@ export default function MetronomeScreen() {
     // 모달이 열려있는 동안 사용자가 직접 토글했음을 audio-session에 알려서
     // 모달 닫힐 때 우리가 무심코 자동 resume하지 않도록 한다.
     notifyUserMetronomeToggle();
+
+    // BPM 퀴즈 이스터에그 활성 중 정지 → 정답 공개 후 비트모드로 복귀
+    if (easterEggActiveRef.current) {
+      handleEasterEggGiveUpRef.current(true);
+      return;
+    }
 
     if (isPreparing && !isPlaying) {
       preparingCancelledRef.current = true;
