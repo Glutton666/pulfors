@@ -9,7 +9,6 @@ export const make_styles = (C: typeof Colors) => StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingBottom: 80,
-    ...(Platform.OS === "web" ? { maxWidth: 540, alignSelf: "center" as const, width: "100%" as const } : {}),
   },
   sheet: {
     backgroundColor: C.surface,
@@ -88,6 +87,22 @@ export const make_styles = (C: typeof Colors) => StyleSheet.create({
     color: C.accent,
     minWidth: 40,
     textAlign: "right" as const,
+  },
+  sidebarTab: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    marginBottom: 4,
+  },
+  verticalDivider: {
+    width: 1,
+    marginHorizontal: 8,
+    backgroundColor: C.border,
   },
   divider: {
     height: 1,

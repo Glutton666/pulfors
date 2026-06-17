@@ -14,6 +14,7 @@ import {
   Alert,
   ActivityIndicator,
   Animated,
+  useWindowDimensions,
 } from "react-native";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import { logger } from "@/lib/logger";
@@ -534,6 +535,11 @@ export function SettingsModal({
   }, []);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
+  const { width: winW, height: winH } = useWindowDimensions();
+  const isLandscape = S.isLandscape;
+  const isTablet = S.isTablet;
+  const cardMaxWidth = isTablet ? 600 : (isLandscape ? Math.min(winW * 0.92, 900) : 540);
+  const maxSheetHeight = isLandscape ? winH * 0.96 : winH * 0.9;
 
   const onTrackLayout = useCallback((e: LayoutChangeEvent) => {
     trackWidthRef.current = e.nativeEvent.layout.width;
@@ -2396,49 +2402,88 @@ export function SettingsModal({
     >
       <Pressable style={styles.overlay} onPress={onClose}>
         <ScrollView
-          style={{ marginTop: (insets.top || webTopInset) + 50 }}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingTop: (insets.top || webTopInset) + 16,
+              maxWidth: cardMaxWidth,
+              alignSelf: "center" as const,
+              width: "100%",
+              paddingBottom: isLandscape ? 16 : 80,
+            },
+          ]}
           showsVerticalScrollIndicator={false}
           bounces={false}
           onStartShouldSetResponder={() => true}
         >
           <Pressable
-            style={[styles.sheet, { backgroundColor: C.surface, borderColor: C.border }]}
+            style={[styles.sheet, { backgroundColor: C.surface, borderColor: C.border }, isLandscape && { maxHeight: maxSheetHeight }]}
             onPress={(e) => e.stopPropagation()}
           >
-            <View style={styles.header}>
-              <Text style={[styles.title, { color: C.text }]}>{t("settings", "title")}</Text>
-              <Pressable
-                onPress={onClose}
-                hitSlop={12}
-                testID="settings-close"
-              >
-                <Ionicons name="close" size={S.ms(22, 0.4)} color={C.textSecondary} />
-              </Pressable>
-            </View>
-
-            <View style={styles.tabBar}>
-              {TAB_ITEMS.map((tab) => (
-                <Pressable
-                  key={tab.key}
-                  style={[styles.tabBtn, activeTab === tab.key && [styles.tabBtnActive, { borderColor: C.accent }]]}
-                  onPress={() => switchTab(tab.key)}
+            {isLandscape ? (
+              <View style={{ flexDirection: "row", flex: 1 }}>
+                <View style={{ width: 120 }}>
+                  <View style={[styles.header, { marginBottom: 12 }]}>
+                    <Text style={[styles.title, { color: C.text }]}>{t("settings", "title")}</Text>
+                    <Pressable onPress={onClose} hitSlop={12} testID="settings-close">
+                      <Ionicons name="close" size={S.ms(22, 0.4)} color={C.textSecondary} />
+                    </Pressable>
+                  </View>
+                  <View>
+                    {TAB_ITEMS.map((tab) => (
+                      <Pressable
+                        key={tab.key}
+                        style={[styles.sidebarTab, { borderColor: activeTab === tab.key ? C.accent : C.border, backgroundColor: activeTab === tab.key ? C.accentDim : C.surfaceLight }]}
+                        onPress={() => switchTab(tab.key)}
+                      >
+                        <Ionicons name={tab.icon as any} size={S.ms(16, 0.4)} color={activeTab === tab.key ? C.accent : C.textSecondary} />
+                        <Text style={[styles.tabBtnText, { color: activeTab === tab.key ? C.accent : C.textSecondary }]}>{tab.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+                <View style={[styles.verticalDivider, { backgroundColor: C.border }]} />
+                <ScrollView
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ paddingLeft: 16, paddingBottom: 16 }}
+                  showsVerticalScrollIndicator={false}
+                  bounces={false}
                 >
-                  <Ionicons
-                    name={tab.icon as any}
-                    size={S.ms(16, 0.4)}
-                    color={activeTab === tab.key ? C.accent : C.textSecondary}
-                  />
-                  <Text style={[styles.tabBtnText, { color: C.textSecondary }, activeTab === tab.key && { color: C.accent }]}>{tab.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: C.border }]} />
-
-            <Animated.View style={{ opacity: tabFadeAnim, transform: [{ translateX: tabSlideAnim }] }}>
-              {renderTabContent()}
-            </Animated.View>
+                  <Animated.View style={{ opacity: tabFadeAnim, transform: [{ translateY: tabSlideAnim }] }}>
+                    {renderTabContent()}
+                  </Animated.View>
+                </ScrollView>
+              </View>
+            ) : (
+              <>
+                <View style={styles.header}>
+                  <Text style={[styles.title, { color: C.text }]}>{t("settings", "title")}</Text>
+                  <Pressable onPress={onClose} hitSlop={12} testID="settings-close">
+                    <Ionicons name="close" size={S.ms(22, 0.4)} color={C.textSecondary} />
+                  </Pressable>
+                </View>
+                <View style={styles.tabBar}>
+                  {TAB_ITEMS.map((tab) => (
+                    <Pressable
+                      key={tab.key}
+                      style={[styles.tabBtn, activeTab === tab.key && [styles.tabBtnActive, { borderColor: C.accent }]]}
+                      onPress={() => switchTab(tab.key)}
+                    >
+                      <Ionicons
+                        name={tab.icon as any}
+                        size={S.ms(16, 0.4)}
+                        color={activeTab === tab.key ? C.accent : C.textSecondary}
+                      />
+                      <Text style={[styles.tabBtnText, { color: C.textSecondary }, activeTab === tab.key && { color: C.accent }]}>{tab.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <View style={[styles.divider, { backgroundColor: C.border }]} />
+                <Animated.View style={{ opacity: tabFadeAnim, transform: [{ translateX: tabSlideAnim }] }}>
+                  {renderTabContent()}
+                </Animated.View>
+              </>
+            )}
           </Pressable>
         </ScrollView>
       </Pressable>
