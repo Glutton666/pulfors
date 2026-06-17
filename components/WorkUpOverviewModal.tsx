@@ -220,6 +220,9 @@ export function WorkUpOverviewModal({
   const { width: winW, height: winH } = useWindowDimensions();
   const isLandscape = winW > winH;
   const isTablet = Math.min(winW, winH) >= 600;
+  const topOffset = (insets.top || webTopInset) + 44;
+  const bottomSafe = insets.bottom || (Platform.OS === "web" ? 34 : 0);
+  const sheetMaxH = Math.round(winH - topOffset - bottomSafe - 16);
 
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -695,7 +698,7 @@ export function WorkUpOverviewModal({
           bounces={false}
           onStartShouldSetResponder={() => true}
         >
-          <Pressable style={[s.sheet, { backgroundColor: C.surface }, isTablet && { maxWidth: 720, alignSelf: "center" as const, width: "100%" as const }]} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={[s.sheet, { backgroundColor: C.surface, maxHeight: sheetMaxH }, isTablet && { maxWidth: 720, alignSelf: "center" as const, width: "100%" as const }]} onPress={(e) => e.stopPropagation()}>
 
             <View style={s.header}>
               <Text style={[s.title, { color: C.text }]}>{t("workUp", "title")}</Text>

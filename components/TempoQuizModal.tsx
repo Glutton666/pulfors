@@ -40,7 +40,6 @@ export function TempoQuizModal({
 }: TempoQuizModalProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
-  const S = useScale();
   const layout = useModalCardLayout({ maxWidth: 540 });
   const insets = useSafeAreaInsets();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -102,7 +101,7 @@ export function TempoQuizModal({
               paddingBottom: 24 + (insets.bottom || (Platform.OS === "web" ? 34 : 0)),
               maxHeight: layout.cardMaxHeight,
             },
-            layout.isTablet && { maxWidth: 540, alignSelf: "center" as const, width: "100%" as const, borderRadius: Radius.xl, borderWidth: 1, borderColor: C.border },
+            layout.isTablet && { maxWidth: layout.cardWidth, alignSelf: "center" as const, width: "100%" as const, borderRadius: Radius.xl, borderWidth: 1, borderColor: C.border },
           ]}
           onStartShouldSetResponder={() => true}
         >
