@@ -25,7 +25,8 @@ export function useModalCardLayout(opts: {
   const landscapeMaxWidth = opts.landscapeMaxWidth ?? Math.min(winW * 0.85, 600);
   const maxHeightRatio = opts.maxHeightRatio ?? (isLandscape ? 0.88 : 0.85);
 
-  const cardWidth = isLandscape ? landscapeMaxWidth : maxWidth;
+  // maxWidth always acts as a hard cap — even in landscape
+  const cardWidth = isLandscape ? Math.min(maxWidth, landscapeMaxWidth) : maxWidth;
   const cardMaxHeight = Math.round((winH - insets.top - insets.bottom) * maxHeightRatio);
 
   return { cardWidth, cardMaxHeight, isLandscape, isTablet, winW, winH, insets };

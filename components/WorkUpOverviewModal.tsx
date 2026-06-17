@@ -692,13 +692,11 @@ export function WorkUpOverviewModal({
     <AnimatedModal visible={visible} transparent onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={s.overlay} onPress={onClose}>
         <ScrollView
-          style={{ marginTop: (insets.top || webTopInset) + 44 }}
-          contentContainerStyle={s.scrollContent}
+          contentContainerStyle={[s.scrollContent, { paddingTop: topOffset }]}
           showsVerticalScrollIndicator={false}
           bounces={false}
-          onStartShouldSetResponder={() => true}
         >
-          <Pressable style={[s.sheet, { backgroundColor: C.surface, maxHeight: sheetMaxH }, isTablet && { maxWidth: 720, alignSelf: "center" as const, width: "100%" as const }]} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={[s.sheet, { backgroundColor: C.surface, maxHeight: sheetMaxH }, isTablet && { maxWidth: 720, alignSelf: "center" as const, width: "100%" as const }]} onPress={(e) => e.stopPropagation()} onStartShouldSetResponder={() => true}>
 
             <View style={s.header}>
               <Text style={[s.title, { color: C.text }]}>{t("workUp", "title")}</Text>
