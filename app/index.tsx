@@ -3103,6 +3103,10 @@ export default function MetronomeScreen() {
     const randomBpm = Math.floor(Math.random() * (220 - 40 + 1)) + 40;
     easterEggActualBpmRef.current = randomBpm;
     engineRef.current?.setBpm(randomBpm);
+    setBeatsPerMeasure(1);
+    setBeatTypes(defaultBeatTypes(1));
+    engineRef.current?.setBeatsPerMeasure(1);
+    engineRef.current?.setBeatTypes(defaultBeatTypes(1));
     if (!engineRef.current?.getIsRunning()) {
       try { await startMetronome(); } catch (_) {}
     }
