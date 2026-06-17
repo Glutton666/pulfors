@@ -15,20 +15,17 @@ import {
   type TextStyle,
   type ImageStyle,
 } from "react-native";
-import Svg, { Circle } from "react-native-svg";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   useAnimatedStyle,
   useAnimatedReaction,
-  useAnimatedProps,
   withTiming,
   withSequence,
   withSpring,
   useSharedValue,
   cancelAnimation,
   Easing,
-  type SharedValue,
 } from "react-native-reanimated";
 import { glowPlan } from "@/lib/animation-lifecycle";
 import * as Haptics from "expo-haptics";
@@ -63,8 +60,6 @@ const MIN_BEATS = 1;
 const MAX_BEATS = 16;
 
 export { DIAL_SIZE, DIAL_RADIUS, DOT_RADIUS_FROM_CENTER };
-
-const AnimatedCircle = Animated.createAnimatedComponent(Circle as React.ComponentType<any>);
 
 // DialBeatDot 컴포넌트는 components/DialBeatDot.tsx 로 분리되었습니다.
 // (T-SPLIT 1차 진입: BeatIndicator 약 220줄 감소)
@@ -142,47 +137,6 @@ interface BeatIndicatorProps {
 
 // BlockPill 컴포넌트는 components/BlockPill.tsx 로 분리되었습니다.
 // (T-SPLIT 2차: BeatIndicator 약 170줄 추가 감소)
-
-function EasterEggArc({
-  progress,
-  size,
-  radius,
-  color,
-}: {
-  progress: SharedValue<number>;
-  size: number;
-  radius: number;
-  color: string;
-}) {
-  const circumference = 2 * Math.PI * radius;
-  const animatedProps = useAnimatedProps(() => ({
-    strokeDashoffset: circumference * (1 - progress.value),
-  }));
-  const containerStyle = useAnimatedStyle(() => ({
-    opacity: progress.value > 0.005 ? 0.65 : 0,
-  }));
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[{ position: "absolute", top: 0, left: 0 }, containerStyle]}
-    >
-      <Svg width={size} height={size}>
-        <AnimatedCircle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={color}
-          strokeWidth={4}
-          strokeDasharray={`${circumference} ${circumference}`}
-          strokeLinecap="round"
-          fill="none"
-          transform={`rotate(-90, ${size / 2}, ${size / 2})`}
-          animatedProps={animatedProps}
-        />
-      </Svg>
-    </Animated.View>
-  );
-}
 
 export function BeatIndicator({
   beatsPerMeasure,
@@ -343,7 +297,6 @@ export function BeatIndicator({
   const swipeDirection = useSharedValue(0);
   const dialRotation = useSharedValue(0);
   const centerGlow = useSharedValue(0);
-  const easterEggProgress = useSharedValue(0);
   const prevBeatRef = useRef(-1);
 
   useEffect(() => {
@@ -487,17 +440,9 @@ export function BeatIndicator({
       if (Math.abs(totalRotationRef.current) >= EASTER_EGG_THRESHOLD) {
         totalRotationRef.current = 0;
         easterEggLockRef.current = true;
-        easterEggProgress.value = withTiming(0, { duration: 400 });
         setTimeout(() => { easterEggLockRef.current = false; }, 3000);
         onEasterEggTriggerRef.current?.();
-      } else {
-        easterEggProgress.value = withTiming(
-          Math.min(Math.abs(totalRotationRef.current) / EASTER_EGG_THRESHOLD, 1),
-          { duration: 200 },
-        );
       }
-    } else if (easterEggLockRef.current) {
-      easterEggProgress.value = withTiming(0, { duration: 200 });
     }
 
     lastDeltaAngleRef.current = 0;
@@ -509,13 +454,12 @@ export function BeatIndicator({
     commitAndResetRef.current = commitAndReset;
   }, [commitAndReset]);
 
-  // 모드 전환 시 이스터에그 진행률 초기화
+  // 바 모드 전환 시 이스터에그 누적 회전량 초기화
   useEffect(() => {
     if (barMode) {
       totalRotationRef.current = 0;
-      easterEggProgress.value = withTiming(0, { duration: 200 });
     }
-  }, [barMode, easterEggProgress]);
+  }, [barMode]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -1443,12 +1387,6 @@ export function BeatIndicator({
           </Animated.View>
         </View>
 
-        <EasterEggArc
-          progress={easterEggProgress}
-          size={S.dialSize}
-          radius={S.dialRadius - 5}
-          color={C.accent}
-        />
 
         <View style={styles.centerArea} pointerEvents="box-none">
           {hubImages.length > 0 && (() => {
