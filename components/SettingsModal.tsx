@@ -2402,10 +2402,10 @@ export function SettingsModal({
     >
       <Pressable style={styles.overlay} onPress={onClose}>
         <ScrollView
+          style={{ marginTop: (insets.top || webTopInset) + 16 }}
           contentContainerStyle={[
             styles.scrollContent,
             {
-              paddingTop: (insets.top || webTopInset) + 16,
               maxWidth: cardMaxWidth,
               alignSelf: "center" as const,
               width: "100%",
