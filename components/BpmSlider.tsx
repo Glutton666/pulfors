@@ -1,13 +1,11 @@
-import React, { useRef, useEffect, useCallback, useMemo, useState } from "react";
+import React, { useRef, useEffect, useCallback, useMemo } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   PanResponder,
   Platform,
-  Pressable,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -33,18 +31,11 @@ interface BpmSliderProps {
   halfTime?: boolean;
   onHalfTimeToggle?: () => void;
   isLandscape?: boolean;
-  easterEggMode?: boolean;
-  onEasterEggGuess?: (bpm: number) => void;
-  onEasterEggGiveUp?: () => void;
-  easterEggShakeCount?: number;
-  easterEggSuccessCount?: number;
-  easterEggRevealBpm?: number | null;
-  easterEggGiveUpMode?: boolean;
 }
 
 type Zone = "left" | "center" | "right";
 
-export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeToggle, isLandscape = false, easterEggMode = false, onEasterEggGuess, onEasterEggGiveUp, easterEggShakeCount = 0, easterEggSuccessCount = 0, easterEggRevealBpm = null, easterEggGiveUpMode = false }: BpmSliderProps) {
+export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeToggle, isLandscape = false }: BpmSliderProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
@@ -68,57 +59,10 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
   const onHalfTimeToggleRef = useRef(onHalfTimeToggle);
   useEffect(() => { onHalfTimeToggleRef.current = onHalfTimeToggle; }, [onHalfTimeToggle]);
 
-  const [eggInput, setEggInput] = useState("");
-  const eggInputRef = useRef<TextInput>(null);
-  const onEasterEggGuessRef = useRef(onEasterEggGuess);
-  useEffect(() => { onEasterEggGuessRef.current = onEasterEggGuess; }, [onEasterEggGuess]);
-
-  useEffect(() => {
-    if (easterEggMode) {
-      setEggInput("");
-      setTimeout(() => eggInputRef.current?.focus(), 100);
-    }
-  }, [easterEggMode]);
-
-  const handleEggSubmit = useCallback(() => {
-    const val = parseInt(eggInput, 10);
-    if (!isNaN(val) && val >= 20 && val <= 300) {
-      onEasterEggGuessRef.current?.(val);
-    }
-  }, [eggInput]);
-
   const offsetX = useSharedValue(0);
   const flash = useSharedValue(0);
   const glowL = useSharedValue(0);
   const glowR = useSharedValue(0);
-
-  const prevShakeCountRef = useRef(0);
-  useEffect(() => {
-    if (easterEggShakeCount > prevShakeCountRef.current) {
-      prevShakeCountRef.current = easterEggShakeCount;
-      offsetX.value = withSequence(
-        withTiming(-14, { duration: 55 }),
-        withTiming(14, { duration: 55 }),
-        withTiming(-10, { duration: 45 }),
-        withTiming(10, { duration: 45 }),
-        withTiming(-6, { duration: 35 }),
-        withTiming(0, { duration: 35 })
-      );
-    }
-  }, [easterEggShakeCount, offsetX]);
-
-  const prevSuccessCountRef = useRef(0);
-  useEffect(() => {
-    if (easterEggSuccessCount > prevSuccessCountRef.current) {
-      prevSuccessCountRef.current = easterEggSuccessCount;
-      flash.value = withSequence(
-        withTiming(1, { duration: 80 }),
-        withTiming(0.6, { duration: 120 }),
-        withTiming(1, { duration: 80 }),
-        withTiming(0, { duration: 400, easing: Easing.out(Easing.quad) })
-      );
-    }
-  }, [easterEggSuccessCount, flash]);
 
   const resolveZone = useCallback((pageX: number): Zone => {
     const { x, width } = layoutRef.current;
@@ -274,7 +218,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
         accessibilityLabel={`BPM ${bpm}${halfTime ? `, ${t("a11y", "bpmHalfTime")}` : ""}`}
         accessibilityHint={t("a11y", "bpmSliderHint")}
         accessibilityValue={{ min: 20, max: 300, now: bpm }}
-        {...(easterEggMode ? {} : panResponder.panHandlers)}
+        {...panResponder.panHandlers}
       >
         <Animated.View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }, bodyStyle, halfTime && { borderColor: C.accent + "80" }, isLandscape && { paddingTop: S.ms(8, 0.3), paddingBottom: S.ms(6, 0.3) }]} testID="bpm-slider">
           <Animated.View style={[styles.flashOverlay, flashStyle, { backgroundColor: C.accent }]} />
@@ -300,41 +244,15 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
             <Text style={[styles.tapLabel, { color: C.textTertiary }, isLandscape && { fontSize: S.ms(8, 0.3) }]}>TAP</Text>
           </View>
 
-          <View style={styles.bpmRow} pointerEvents={easterEggMode ? "box-none" : "none"}>
-            <Feather name="minus" size={isLandscape ? S.ms(18, 0.4) : S.ms(24, 0.4)} color={easterEggMode ? "transparent" : C.textSecondary} style={styles.bpmIcon} />
+          <View style={styles.bpmRow} pointerEvents="none">
+            <Feather name="minus" size={isLandscape ? S.ms(18, 0.4) : S.ms(24, 0.4)} color={C.textSecondary} style={styles.bpmIcon} />
             <View style={styles.bpmContent}>
-              {easterEggMode && easterEggRevealBpm != null ? (
-                <Text style={[styles.bpmValue, { color: easterEggGiveUpMode ? C.textSecondary : C.accent }, isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) }]} testID="bpm-easter-egg-reveal">
-                  {easterEggRevealBpm}
-                </Text>
-              ) : easterEggMode ? (
-                <TextInput
-                  ref={eggInputRef}
-                  style={[styles.bpmValue, styles.eggInput, { color: C.accent, borderBottomColor: C.accent }, isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) }]}
-                  value={eggInput}
-                  onChangeText={setEggInput}
-                  keyboardType="numeric"
-                  placeholder="?"
-                  placeholderTextColor={C.textTertiary}
-                  returnKeyType="done"
-                  onSubmitEditing={handleEggSubmit}
-                  maxLength={3}
-                  testID="bpm-easter-egg-input"
-                />
-              ) : (
-                <Text style={[styles.bpmValue, { color: C.text }, isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) }]} testID="bpm-display">{bpm}</Text>
-              )}
-              <Text style={[styles.bpmUnit, { color: easterEggMode ? (easterEggRevealBpm != null ? (easterEggGiveUpMode ? C.textSecondary : C.accent) : C.accent) : C.textTertiary }, halfTime && !easterEggMode && { color: C.accent }, isLandscape && { fontSize: S.ms(10, 0.3), marginTop: -2 }]}>
-                {easterEggMode
-                  ? easterEggRevealBpm != null
-                    ? easterEggGiveUpMode
-                      ? t("main", "eggRevealGiveUp")
-                      : t("main", "eggRevealCorrect")
-                    : "BPM ?"
-                  : halfTime ? "½× BPM" : "BPM"}
+              <Text style={[styles.bpmValue, { color: C.text }, isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) }]} testID="bpm-display">{bpm}</Text>
+              <Text style={[styles.bpmUnit, { color: halfTime ? C.accent : C.textTertiary }, isLandscape && { fontSize: S.ms(10, 0.3), marginTop: -2 }]}>
+                {halfTime ? "½× BPM" : "BPM"}
               </Text>
             </View>
-            <Feather name="plus" size={isLandscape ? S.ms(18, 0.4) : S.ms(24, 0.4)} color={easterEggMode ? "transparent" : C.textSecondary} style={styles.bpmIcon} />
+            <Feather name="plus" size={isLandscape ? S.ms(18, 0.4) : S.ms(24, 0.4)} color={C.textSecondary} style={styles.bpmIcon} />
           </View>
 
           <View style={styles.ticks} pointerEvents="none">
@@ -353,17 +271,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
         </Animated.View>
       </View>
 
-      {easterEggMode && easterEggRevealBpm == null ? (
-        <Pressable
-          onPress={onEasterEggGiveUp}
-          style={({ pressed }) => [styles.giveUpButton, { borderColor: C.border, backgroundColor: pressed ? C.surface : "transparent" }]}
-          testID="bpm-easter-egg-give-up"
-        >
-          <Text style={[styles.giveUpText, { color: C.textSecondary }]}>{t("main", "eggGiveUp")}</Text>
-        </Pressable>
-      ) : (
-        <Text style={[styles.hint, { color: C.text }]}>{t("main", "bpmHint")}</Text>
-      )}
+      <Text style={[styles.hint, { color: C.text }]}>{t("main", "bpmHint")}</Text>
     </View>
   );
 }
@@ -414,12 +322,6 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: S.ms(64, 0.4),
     lineHeight: S.ms(72, 0.4),
-  },
-  eggInput: {
-    textAlign: "center",
-    borderBottomWidth: 2,
-    paddingBottom: 2,
-    minWidth: S.ms(80, 0.4),
   },
   bpmUnit: {
     fontFamily: "SpaceGrotesk_500Medium",
@@ -481,16 +383,5 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     fontSize: FontSize.caption,
     letterSpacing: 1,
     opacity: 0.5,
-  },
-  giveUpButton: {
-    paddingHorizontal: S.ms(16, 0.3),
-    paddingVertical: S.ms(5, 0.3),
-    borderRadius: S.ms(8, 0.3),
-    borderWidth: 1,
-  },
-  giveUpText: {
-    fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: FontSize.caption,
-    letterSpacing: 1,
   },
 });

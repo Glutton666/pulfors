@@ -59,6 +59,7 @@ import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetCo
 import { BeatIndicator } from "@/components/BeatIndicator";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
 import { BpmSlider } from "@/components/BpmSlider";
+import { EasterEggQuiz } from "@/components/EasterEggQuiz";
 import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer, type StopwatchTimerHandle } from "@/components/StopwatchTimer";
 import { SettingsModal } from "@/components/SettingsModal";
@@ -5405,21 +5406,25 @@ export default function MetronomeScreen() {
               />
             ) : undefined}
             bpmSliderElement={!barMode && isLandscape ? (
-              <BpmSlider
-                bpm={bpm}
-                onBpmChange={updateBpm}
-                onTapTempo={handleTapTempo}
-                halfTime={halfTime}
-                onHalfTimeToggle={toggleHalfTime}
-                isLandscape={true}
-                easterEggMode={easterEggActive}
-                onEasterEggGuess={handleEasterEggGuess}
-                onEasterEggGiveUp={handleEasterEggGiveUp}
-                easterEggShakeCount={easterEggShakeCount}
-                easterEggSuccessCount={easterEggSuccessCount}
-                easterEggRevealBpm={easterEggRevealBpm}
-                easterEggGiveUpMode={easterEggGiveUpMode}
-              />
+              easterEggActive ? (
+                <EasterEggQuiz
+                  onGuess={handleEasterEggGuess}
+                  revealBpm={easterEggRevealBpm}
+                  isGiveUp={easterEggGiveUpMode}
+                  shakeCount={easterEggShakeCount}
+                  successCount={easterEggSuccessCount}
+                  isLandscape={true}
+                />
+              ) : (
+                <BpmSlider
+                  bpm={bpm}
+                  onBpmChange={updateBpm}
+                  onTapTempo={handleTapTempo}
+                  halfTime={halfTime}
+                  onHalfTimeToggle={toggleHalfTime}
+                  isLandscape={true}
+                />
+              )
             ) : undefined}
             onEnterNoteMode={handleEnterNoteMode}
             onAddBar={handleAddBar}
@@ -5678,40 +5683,48 @@ export default function MetronomeScreen() {
               </Pressable>
             )}
             <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
+            {easterEggActive ? (
+              <EasterEggQuiz
+                onGuess={handleEasterEggGuess}
+                revealBpm={easterEggRevealBpm}
+                isGiveUp={easterEggGiveUpMode}
+                shakeCount={easterEggShakeCount}
+                successCount={easterEggSuccessCount}
+                isLandscape={true}
+              />
+            ) : (
+              <BpmSlider
+                bpm={bpm}
+                onBpmChange={updateBpm}
+                onTapTempo={handleTapTempo}
+                halfTime={halfTime}
+                onHalfTimeToggle={toggleHalfTime}
+                isLandscape={true}
+              />
+            )}
+          </View>
+        )}
+        {!isLandscape && !barMode && (
+        <View style={[styles.bpmSection, { flex: 2 }]}>
+          {easterEggActive ? (
+            <EasterEggQuiz
+              onGuess={handleEasterEggGuess}
+              revealBpm={easterEggRevealBpm}
+              isGiveUp={easterEggGiveUpMode}
+              shakeCount={easterEggShakeCount}
+              successCount={easterEggSuccessCount}
+              isLandscape={false}
+            />
+          ) : (
             <BpmSlider
               bpm={bpm}
               onBpmChange={updateBpm}
               onTapTempo={handleTapTempo}
               halfTime={halfTime}
               onHalfTimeToggle={toggleHalfTime}
-              isLandscape={true}
-              easterEggMode={easterEggActive}
-              onEasterEggGuess={handleEasterEggGuess}
-              onEasterEggGiveUp={handleEasterEggGiveUp}
-              easterEggShakeCount={easterEggShakeCount}
-              easterEggSuccessCount={easterEggSuccessCount}
-              easterEggRevealBpm={easterEggRevealBpm}
-              easterEggGiveUpMode={easterEggGiveUpMode}
+              isLandscape={false}
             />
-          </View>
-        )}
-        {!isLandscape && !barMode && (
-        <View style={[styles.bpmSection, { flex: 2 }]}>
-          <BpmSlider
-            bpm={bpm}
-            onBpmChange={updateBpm}
-            onTapTempo={handleTapTempo}
-            halfTime={halfTime}
-            onHalfTimeToggle={toggleHalfTime}
-            isLandscape={false}
-            easterEggMode={easterEggActive}
-            onEasterEggGuess={handleEasterEggGuess}
-            onEasterEggGiveUp={handleEasterEggGiveUp}
-            easterEggShakeCount={easterEggShakeCount}
-            easterEggSuccessCount={easterEggSuccessCount}
-            easterEggRevealBpm={easterEggRevealBpm}
-            easterEggGiveUpMode={easterEggGiveUpMode}
-          />
+          )}
         </View>
         )}
         </View>
