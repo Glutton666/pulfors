@@ -1,8 +1,9 @@
-import React, { useRef, useEffect, useCallback, useMemo } from "react";
+import React, { useRef, useEffect, useCallback, useMemo, useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   PanResponder,
   Platform,
@@ -31,11 +32,13 @@ interface BpmSliderProps {
   halfTime?: boolean;
   onHalfTimeToggle?: () => void;
   isLandscape?: boolean;
+  easterEggMode?: boolean;
+  onEasterEggGuess?: (bpm: number) => void;
 }
 
 type Zone = "left" | "center" | "right";
 
-export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeToggle, isLandscape = false }: BpmSliderProps) {
+export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeToggle, isLandscape = false, easterEggMode = false, onEasterEggGuess }: BpmSliderProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
@@ -58,6 +61,25 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
   useEffect(() => { onTapTempoRef.current = onTapTempo; }, [onTapTempo]);
   const onHalfTimeToggleRef = useRef(onHalfTimeToggle);
   useEffect(() => { onHalfTimeToggleRef.current = onHalfTimeToggle; }, [onHalfTimeToggle]);
+
+  const [eggInput, setEggInput] = useState("");
+  const eggInputRef = useRef<TextInput>(null);
+  const onEasterEggGuessRef = useRef(onEasterEggGuess);
+  useEffect(() => { onEasterEggGuessRef.current = onEasterEggGuess; }, [onEasterEggGuess]);
+
+  useEffect(() => {
+    if (easterEggMode) {
+      setEggInput("");
+      setTimeout(() => eggInputRef.current?.focus(), 100);
+    }
+  }, [easterEggMode]);
+
+  const handleEggSubmit = useCallback(() => {
+    const val = parseInt(eggInput, 10);
+    if (!isNaN(val) && val >= 20 && val <= 300) {
+      onEasterEggGuessRef.current?.(val);
+    }
+  }, [eggInput]);
 
   const offsetX = useSharedValue(0);
   const flash = useSharedValue(0);
@@ -218,7 +240,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
         accessibilityLabel={`BPM ${bpm}${halfTime ? `, ${t("a11y", "bpmHalfTime")}` : ""}`}
         accessibilityHint={t("a11y", "bpmSliderHint")}
         accessibilityValue={{ min: 20, max: 300, now: bpm }}
-        {...panResponder.panHandlers}
+        {...(easterEggMode ? {} : panResponder.panHandlers)}
       >
         <Animated.View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }, bodyStyle, halfTime && { borderColor: C.accent + "80" }, isLandscape && { paddingTop: S.ms(8, 0.3), paddingBottom: S.ms(6, 0.3) }]} testID="bpm-slider">
           <Animated.View style={[styles.flashOverlay, flashStyle, { backgroundColor: C.accent }]} />
@@ -244,13 +266,31 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
             <Text style={[styles.tapLabel, { color: C.textTertiary }, isLandscape && { fontSize: S.ms(8, 0.3) }]}>TAP</Text>
           </View>
 
-          <View style={styles.bpmRow} pointerEvents="none">
-            <Feather name="minus" size={isLandscape ? S.ms(18, 0.4) : S.ms(24, 0.4)} color={C.textSecondary} style={styles.bpmIcon} />
+          <View style={styles.bpmRow} pointerEvents={easterEggMode ? "box-none" : "none"}>
+            <Feather name="minus" size={isLandscape ? S.ms(18, 0.4) : S.ms(24, 0.4)} color={easterEggMode ? "transparent" : C.textSecondary} style={styles.bpmIcon} />
             <View style={styles.bpmContent}>
-              <Text style={[styles.bpmValue, { color: C.text }, isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) }]} testID="bpm-display">{bpm}</Text>
-              <Text style={[styles.bpmUnit, { color: C.textTertiary }, halfTime && { color: C.accent }, isLandscape && { fontSize: S.ms(10, 0.3), marginTop: -2 }]}>{halfTime ? "½× BPM" : "BPM"}</Text>
+              {easterEggMode ? (
+                <TextInput
+                  ref={eggInputRef}
+                  style={[styles.bpmValue, styles.eggInput, { color: C.accent, borderBottomColor: C.accent }, isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) }]}
+                  value={eggInput}
+                  onChangeText={setEggInput}
+                  keyboardType="numeric"
+                  placeholder="?"
+                  placeholderTextColor={C.textTertiary}
+                  returnKeyType="done"
+                  onSubmitEditing={handleEggSubmit}
+                  maxLength={3}
+                  testID="bpm-easter-egg-input"
+                />
+              ) : (
+                <Text style={[styles.bpmValue, { color: C.text }, isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) }]} testID="bpm-display">{bpm}</Text>
+              )}
+              <Text style={[styles.bpmUnit, { color: easterEggMode ? C.accent : C.textTertiary }, halfTime && !easterEggMode && { color: C.accent }, isLandscape && { fontSize: S.ms(10, 0.3), marginTop: -2 }]}>
+                {easterEggMode ? "BPM ?" : halfTime ? "½× BPM" : "BPM"}
+              </Text>
             </View>
-            <Feather name="plus" size={isLandscape ? S.ms(18, 0.4) : S.ms(24, 0.4)} color={C.textSecondary} style={styles.bpmIcon} />
+            <Feather name="plus" size={isLandscape ? S.ms(18, 0.4) : S.ms(24, 0.4)} color={easterEggMode ? "transparent" : C.textSecondary} style={styles.bpmIcon} />
           </View>
 
           <View style={styles.ticks} pointerEvents="none">
@@ -320,6 +360,12 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     fontFamily: "SpaceGrotesk_700Bold",
     fontSize: S.ms(64, 0.4),
     lineHeight: S.ms(72, 0.4),
+  },
+  eggInput: {
+    textAlign: "center",
+    borderBottomWidth: 2,
+    paddingBottom: 2,
+    minWidth: S.ms(80, 0.4),
   },
   bpmUnit: {
     fontFamily: "SpaceGrotesk_500Medium",

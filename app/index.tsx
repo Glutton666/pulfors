@@ -154,6 +154,9 @@ export default function MetronomeScreen() {
   useEffect(() => { languageRef.current = language; }, [language]);
 
   const [bpm, setBpm] = useState(120);
+  const [easterEggActive, setEasterEggActive] = useState(false);
+  const easterEggPrevBpmRef = useRef(120);
+  const easterEggActualBpmRef = useRef(120);
   const [halfTime, setHalfTime] = useState(false);
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
@@ -1960,6 +1963,17 @@ export default function MetronomeScreen() {
     [persistSettings, scheduleReRender]
   );
 
+  const handleEasterEggGuess = useCallback((guess: number) => {
+    const actual = easterEggActualBpmRef.current;
+    if (Math.abs(guess - actual) <= 5) {
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      engineRef.current?.setBpm(easterEggPrevBpmRef.current);
+      setEasterEggActive(false);
+    } else {
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  }, []);
+
   const toggleHalfTime = useCallback(() => {
     setHalfTime((prev) => {
       const next = !prev;
@@ -3036,6 +3050,19 @@ export default function MetronomeScreen() {
       setIsPreparing(false);
     }
   }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio, getClickPCMs, getLayerClickPCMsForSchedule]);
+
+  const handleEasterEggTrigger = useCallback(async () => {
+    if (barModeRef.current) return;
+    easterEggPrevBpmRef.current = bpmRef.current;
+    const randomBpm = Math.floor(Math.random() * (220 - 40 + 1)) + 40;
+    easterEggActualBpmRef.current = randomBpm;
+    engineRef.current?.setBpm(randomBpm);
+    if (!engineRef.current?.getIsRunning()) {
+      try { await startMetronome(); } catch (_) {}
+    }
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    setEasterEggActive(true);
+  }, [startMetronome]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -5340,6 +5367,8 @@ export default function MetronomeScreen() {
                 halfTime={halfTime}
                 onHalfTimeToggle={toggleHalfTime}
                 isLandscape={true}
+                easterEggMode={easterEggActive}
+                onEasterEggGuess={handleEasterEggGuess}
               />
             ) : undefined}
             onEnterNoteMode={handleEnterNoteMode}
@@ -5369,6 +5398,7 @@ export default function MetronomeScreen() {
             }}
             barCellOpacity={barCellOpacity}
             barRowHeight={barRowHeight}
+            onEasterEggTrigger={handleEasterEggTrigger}
           />
         </View>
 
@@ -5605,6 +5635,8 @@ export default function MetronomeScreen() {
               halfTime={halfTime}
               onHalfTimeToggle={toggleHalfTime}
               isLandscape={true}
+              easterEggMode={easterEggActive}
+              onEasterEggGuess={handleEasterEggGuess}
             />
           </View>
         )}
@@ -5617,6 +5649,8 @@ export default function MetronomeScreen() {
             halfTime={halfTime}
             onHalfTimeToggle={toggleHalfTime}
             isLandscape={false}
+            easterEggMode={easterEggActive}
+            onEasterEggGuess={handleEasterEggGuess}
           />
         </View>
         )}

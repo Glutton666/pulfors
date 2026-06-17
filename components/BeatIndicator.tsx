@@ -132,6 +132,7 @@ interface BeatIndicatorProps {
   onCustomSoundSetsChange?: (configs: Record<string, import("@/lib/storage").CustomSoundSetConfig>) => void;
   barCellOpacity?: number;
   barRowHeight?: number;
+  onEasterEggTrigger?: () => void;
 }
 
 // BlockPill 컴포넌트는 components/BlockPill.tsx 로 분리되었습니다.
@@ -199,6 +200,7 @@ export function BeatIndicator({
   onCustomSoundSetsChange,
   barCellOpacity,
   barRowHeight,
+  onEasterEggTrigger,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
   const { t } = useLanguage();
@@ -335,6 +337,9 @@ export function BeatIndicator({
   const lastDeltaAngleRef = useRef(0);
   const accumulatedAngleDeltaRef = useRef(0);
   const prevMoveAngleRef = useRef<number | null>(null);
+  const totalRotationRef = useRef(0);
+  const easterEggLockRef = useRef(false);
+  const onEasterEggTriggerRef = useRef(onEasterEggTrigger);
   const beatsRef = useRef(beatsPerMeasure);
   const onBeatsChangeRef = useRef(onBeatsChange);
   const containerRef = useRef<View>(null);
@@ -345,6 +350,9 @@ export function BeatIndicator({
   useEffect(() => {
     onBeatsChangeRef.current = onBeatsChange;
   }, [onBeatsChange]);
+  useEffect(() => {
+    onEasterEggTriggerRef.current = onEasterEggTrigger;
+  }, [onEasterEggTrigger]);
 
   const handleBeatsDecrement = useCallback(() => {
     if (beatsPerMeasure > MIN_BEATS) {
@@ -403,6 +411,7 @@ export function BeatIndicator({
   useEffect(() => { processMoveByAngleRef.current = processMoveByAngle; }, [processMoveByAngle]);
 
   const commitAndResetRef = useRef<() => void>(() => {});
+  const EASTER_EGG_THRESHOLD = 2520; // 7 full rotations
   const commitAndReset = useCallback(() => {
     const delta = lastDeltaAngleRef.current;
     const progress = Math.min(Math.abs(delta) / ANGLE_THRESHOLD, 1);
@@ -417,6 +426,24 @@ export function BeatIndicator({
         onBeatsChangeRef.current(beatsRef.current - 1);
       }
     }
+
+    // 이스터에그 회전 카운터: 7바퀴 같은 방향으로 돌리면 트리거
+    if (!easterEggLockRef.current && Math.abs(delta) > 10) {
+      const dir = delta > 0 ? 1 : -1;
+      const prevTotal = totalRotationRef.current;
+      if (prevTotal === 0 || Math.sign(prevTotal) === dir) {
+        totalRotationRef.current += delta;
+      } else {
+        totalRotationRef.current = delta;
+      }
+      if (Math.abs(totalRotationRef.current) >= EASTER_EGG_THRESHOLD) {
+        totalRotationRef.current = 0;
+        easterEggLockRef.current = true;
+        setTimeout(() => { easterEggLockRef.current = false; }, 3000);
+        onEasterEggTriggerRef.current?.();
+      }
+    }
+
     lastDeltaAngleRef.current = 0;
     triggeredRef.current = false;
     resetVisuals();
