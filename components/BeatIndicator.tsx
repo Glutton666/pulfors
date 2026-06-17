@@ -333,6 +333,8 @@ export function BeatIndicator({
   const isDraggingRef = useRef(false);
   const triggeredRef = useRef(false);
   const lastDeltaAngleRef = useRef(0);
+  const accumulatedAngleDeltaRef = useRef(0);
+  const prevMoveAngleRef = useRef<number | null>(null);
   const beatsRef = useRef(beatsPerMeasure);
   const onBeatsChangeRef = useRef(onBeatsChange);
   const containerRef = useRef<View>(null);
@@ -434,8 +436,26 @@ export function BeatIndicator({
       const r = el.getBoundingClientRect();
       return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     };
-    const calcDelta = (cx: number, cy: number, px: number, py: number) =>
-      wrapAngle(getAngleDeg(cx, cy, px, py) - getAngleDeg(cx, cy, startPosRef.current.x, startPosRef.current.y));
+
+    // 누적 증분 방식: start-to-current 방식은 180° 초과 스와이프 시 부호 반전됨
+    let prevWebAngle: number | null = null;
+    let accumulatedWebDelta = 0;
+    const stepWebAngle = (newAngle: number): number => {
+      if (prevWebAngle === null) {
+        prevWebAngle = newAngle;
+        return accumulatedWebDelta;
+      }
+      let step = newAngle - prevWebAngle;
+      if (step > 180) step -= 360;
+      if (step < -180) step += 360;
+      prevWebAngle = newAngle;
+      accumulatedWebDelta += step;
+      return accumulatedWebDelta;
+    };
+    const resetWebAngle = () => {
+      prevWebAngle = null;
+      accumulatedWebDelta = 0;
+    };
 
     const handleMouseDown = (e: MouseEvent) => {
       const el = containerRef.current as unknown as HTMLElement | null;
@@ -444,10 +464,12 @@ export function BeatIndicator({
       isDraggingRef.current = true;
       triggeredRef.current = false;
       lastDeltaAngleRef.current = 0;
+      resetWebAngle();
     };
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDraggingRef.current) return;
-      processMoveByAngle(calcDelta(centerRef.current.x, centerRef.current.y, e.clientX, e.clientY));
+      const curAngle = getAngleDeg(centerRef.current.x, centerRef.current.y, e.clientX, e.clientY);
+      processMoveByAngle(stepWebAngle(curAngle));
     };
     const handleMouseUp = () => {
       if (!isDraggingRef.current) return;
@@ -462,10 +484,12 @@ export function BeatIndicator({
       isDraggingRef.current = true;
       triggeredRef.current = false;
       lastDeltaAngleRef.current = 0;
+      resetWebAngle();
     };
     const handleTouchMove = (e: TouchEvent) => {
       if (!isDraggingRef.current || e.touches.length === 0) return;
-      processMoveByAngle(calcDelta(centerRef.current.x, centerRef.current.y, e.touches[0].clientX, e.touches[0].clientY));
+      const curAngle = getAngleDeg(centerRef.current.x, centerRef.current.y, e.touches[0].clientX, e.touches[0].clientY);
+      processMoveByAngle(stepWebAngle(curAngle));
     };
     const handleTouchEnd = () => {
       if (!isDraggingRef.current) return;
@@ -534,6 +558,8 @@ export function BeatIndicator({
           onPanResponderGrant: (e, gs) => {
             triggeredRef.current = false;
             lastDeltaAngleRef.current = 0;
+            accumulatedAngleDeltaRef.current = 0;
+            prevMoveAngleRef.current = null;
             startPosRef.current = { x: gs.x0, y: gs.y0 };
             // 다이얼 컨테이너 중심 측정
             containerRef.current?.measure((_x, _y, width, height, pageX, pageY) => {
@@ -544,12 +570,17 @@ export function BeatIndicator({
             const cx = centerRef.current.x;
             const cy = centerRef.current.y;
             if (cx === 0 && cy === 0) return;
-            const startAngle = Math.atan2(startPosRef.current.y - cy, startPosRef.current.x - cx) * (180 / Math.PI);
             const curAngle = Math.atan2(gs.moveY - cy, gs.moveX - cx) * (180 / Math.PI);
-            let delta = curAngle - startAngle;
-            if (delta > 180) delta -= 360;
-            if (delta < -180) delta += 360;
-            processMoveByAngleRef.current(delta);
+            if (prevMoveAngleRef.current === null) {
+              prevMoveAngleRef.current = curAngle;
+              return;
+            }
+            let step = curAngle - prevMoveAngleRef.current;
+            if (step > 180) step -= 360;
+            if (step < -180) step += 360;
+            prevMoveAngleRef.current = curAngle;
+            accumulatedAngleDeltaRef.current += step;
+            processMoveByAngleRef.current(accumulatedAngleDeltaRef.current);
           },
           onPanResponderRelease: () => {
             commitAndResetRef.current();
