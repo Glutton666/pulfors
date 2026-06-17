@@ -155,7 +155,7 @@ export default function MetronomeScreen() {
 
   const [bpm, setBpm] = useState(120);
   const [easterEggActive, setEasterEggActive] = useState(false);
-  const [easterEggConfirmPending, setEasterEggConfirmPending] = useState(false);
+
   const [easterEggShakeCount, setEasterEggShakeCount] = useState(0);
   const [easterEggSuccessCount, setEasterEggSuccessCount] = useState(0);
   const [easterEggRevealBpm, setEasterEggRevealBpm] = useState<number | null>(null);
@@ -3096,14 +3096,8 @@ export default function MetronomeScreen() {
     }
   }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio, getClickPCMs, getLayerClickPCMsForSchedule]);
 
-  const handleEasterEggTrigger = useCallback(() => {
+  const handleEasterEggTrigger = useCallback(async () => {
     if (barModeRef.current) return;
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setEasterEggConfirmPending(true);
-  }, []);
-
-  const confirmEasterEgg = useCallback(async () => {
-    setEasterEggConfirmPending(false);
     easterEggPrevBpmRef.current = bpmRef.current;
     const randomBpm = Math.floor(Math.random() * (220 - 40 + 1)) + 40;
     easterEggActualBpmRef.current = randomBpm;
@@ -3114,12 +3108,6 @@ export default function MetronomeScreen() {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setEasterEggActive(true);
   }, [startMetronome]);
-
-  useEffect(() => {
-    if (!easterEggConfirmPending) return;
-    const timer = setTimeout(() => setEasterEggConfirmPending(false), 5000);
-    return () => clearTimeout(timer);
-  }, [easterEggConfirmPending]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -4692,61 +4680,6 @@ export default function MetronomeScreen() {
           <Text style={{ color: C.text, fontSize: 14, fontWeight: "500" as const }}>
             {permissionRecoveryToast}
           </Text>
-        </View>
-      ) : null}
-      {easterEggConfirmPending ? (
-        <View
-          style={{
-            position: "absolute",
-            bottom: insets.bottom + 80,
-            left: 32,
-            right: 32,
-            zIndex: 9999,
-            backgroundColor: C.surface,
-            borderRadius: 16,
-            paddingVertical: 16,
-            paddingHorizontal: 20,
-            borderWidth: 1,
-            borderColor: C.border,
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <Text style={{ color: C.text, fontSize: 15, fontWeight: "600" as const }}>
-            {t("main", "eggConfirmTitle")}
-          </Text>
-          <View style={{ flexDirection: "row", gap: 12 }}>
-            <Pressable
-              onPress={() => setEasterEggConfirmPending(false)}
-              style={{
-                flex: 1,
-                paddingVertical: 10,
-                borderRadius: 10,
-                backgroundColor: C.surfaceLight,
-                borderWidth: 1,
-                borderColor: C.border,
-                alignItems: "center",
-              }}
-            >
-              <Text style={{ color: C.textSecondary, fontSize: 14, fontWeight: "500" as const }}>
-                {t("main", "eggConfirmCancel")}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={confirmEasterEgg}
-              style={{
-                flex: 1,
-                paddingVertical: 10,
-                borderRadius: 10,
-                backgroundColor: C.accent,
-                alignItems: "center",
-              }}
-            >
-              <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" as const }}>
-                {t("main", "eggConfirmStart")}
-              </Text>
-            </Pressable>
-          </View>
         </View>
       ) : null}
       <LinearGradient
