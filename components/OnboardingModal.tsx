@@ -28,6 +28,9 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LANGUAGE_OPTIONS, type Language } from "@/lib/i18n";
 import { Switch } from "react-native";
 import { AssistantShortcutsGuide } from "@/components/AssistantShortcutsGuide";
+import { Audio } from "expo-av";
+import * as Location from "expo-location";
+import { requestRecordingPermissionsAsync } from "expo-audio";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -66,7 +69,7 @@ const THEME_OPTIONS: { key: ThemeColor; color: string; label: string }[] = [
   { key: "neon", color: ACCENT_PRESETS.neon.accent, label: "Neon" },
 ];
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 9;
 
 const DEMO_BEAT_TYPES: BeatType[] = ["strong", "accent", "normal", "mute"];
 
@@ -134,18 +137,20 @@ function useDemo(
 ) {
   const [activeBeat, setActiveBeat] = useState(-1);
   const [playing, setPlaying] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const beatRef = useRef(-1);
   const playingRef = useRef(false);
   const hapticModeRef = useRef(hapticMode);
   const flashModeRef = useRef(flashMode);
+  const startTimeRef = useRef(0);
+  const beatCountRef = useRef(0);
 
   hapticModeRef.current = hapticMode;
   flashModeRef.current = flashMode;
 
   const stop = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = null;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
     playingRef.current = false;
     setPlaying(false);
     setActiveBeat(-1);
@@ -161,10 +166,12 @@ function useDemo(
       stop();
       return;
     }
-    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (timerRef.current) clearTimeout(timerRef.current);
     playingRef.current = true;
     setPlaying(true);
     beatRef.current = -1;
+    startTimeRef.current = performance.now();
+    beatCountRef.current = 0;
 
     const tick = () => {
       beatRef.current = (beatRef.current + 1) % 4;
@@ -196,15 +203,20 @@ function useDemo(
           ]).start();
         }
       }
+
+      if (!playingRef.current) return;
+      beatCountRef.current += 1;
+      const nextTarget = startTimeRef.current + beatCountRef.current * DEMO_INTERVAL;
+      const delay = Math.max(0, nextTarget - performance.now());
+      timerRef.current = setTimeout(tick, delay);
     };
 
     tick();
-    intervalRef.current = setInterval(tick, DEMO_INTERVAL);
   }, [mode, flashAnim, stop]);
 
   useEffect(() => {
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
 
@@ -231,6 +243,10 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   const [flashMode, setFlashMode] = useState<FlashMode>("accent");
   const [username, setUsername] = useState("");
   const [roomName, setRoomName] = useState("");
+  const [soundTestPlayed, setSoundTestPlayed] = useState(false);
+  const [permMicGranted, setPermMicGranted] = useState(false);
+  const [permLocationGranted, setPermLocationGranted] = useState(false);
+  const soundRef = useRef<Audio.Sound | null>(null);
   const hueTrackRef = useRef<View>(null);
   const hueTrackWidthRef = useRef(0);
 
@@ -247,9 +263,28 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       setFlashMode("accent");
       setUsername("");
       setRoomName("");
+      setSoundTestPlayed(false);
+      setPermMicGranted(false);
+      setPermLocationGranted(false);
+      if (soundRef.current) {
+        soundRef.current.unloadAsync().catch(() => {});
+        soundRef.current = null;
+      }
+    }
+    if (!visible && soundRef.current) {
+      soundRef.current.unloadAsync().catch(() => {});
+      soundRef.current = null;
     }
     prevVisibleRef.current = visible;
   }, [visible]);
+
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync().catch(() => {});
+      }
+    };
+  }, []);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const hapticFlashAnim = useRef(new Animated.Value(0)).current;
@@ -419,6 +454,39 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       animateToStep(step - 1);
     }
   }, [step, animateToStep, hapticDemo, flashDemo]);
+
+  const handlePlayTestSound = useCallback(async () => {
+    try {
+      if (soundRef.current) {
+        await soundRef.current.setPositionAsync(0);
+        await soundRef.current.playAsync();
+      } else {
+        const { sound } = await Audio.Sound.createAsync(
+          require("@/assets/sounds/click-strong.wav"),
+          { shouldPlay: true }
+        );
+        soundRef.current = sound;
+      }
+      setSoundTestPlayed(true);
+    } catch {
+    }
+  }, []);
+
+  const handleRequestMic = useCallback(async () => {
+    try {
+      const { status } = await requestRecordingPermissionsAsync();
+      setPermMicGranted(status === "granted");
+    } catch {
+    }
+  }, []);
+
+  const handleRequestLocation = useCallback(async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      setPermLocationGranted(status === "granted");
+    } catch {
+    }
+  }, []);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
@@ -1008,6 +1076,156 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
     );
   };
 
+  const renderSoundTestStep = () => {
+    const content = (
+      <>
+        <View style={[styles.demoSection, { paddingHorizontal: 20 }]}>
+          <Ionicons name="musical-note-outline" size={isLandscape ? 36 : 48} color={accentColor} />
+          <Pressable
+            onPress={handlePlayTestSound}
+            style={[
+              styles.demoButton,
+              { width: "80%", height: 52, marginTop: 8 },
+              soundTestPlayed
+                ? { backgroundColor: C.surfaceLight, borderWidth: 1, borderColor: accentColor }
+                : { backgroundColor: accentColor },
+            ]}
+            testID="onboarding-sound-test-play"
+          >
+            <Ionicons
+              name="volume-high-outline"
+              size={20}
+              color={soundTestPlayed ? accentColor : C.background}
+            />
+            <Text style={[styles.demoButtonText, { color: soundTestPlayed ? accentColor : C.background }]}>
+              {t("onboarding", "soundTestPlay")}
+            </Text>
+          </Pressable>
+          {soundTestPlayed && Platform.OS === "ios" && (
+            <Text style={{ color: C.textSecondary, fontSize: 12, textAlign: "center", paddingHorizontal: 12, lineHeight: 18 }}>
+              {t("onboarding", "soundTestMuteHint")}
+            </Text>
+          )}
+        </View>
+      </>
+    );
+
+    if (isLandscape) {
+      return (
+        <View style={styles.landRow}>
+          {renderStepHeader(
+            <Ionicons name="volume-high-outline" size={36} color={accentColor} />,
+            "soundTestTitle", "soundTestSubtitle"
+          )}
+          <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} showsVerticalScrollIndicator={false}>
+            {content}
+          </ScrollView>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.stepContent} showsVerticalScrollIndicator={false}>
+        <Ionicons name="volume-high-outline" size={40} color={accentColor} />
+        <Text style={styles.stepTitle}>{t("onboarding", "soundTestTitle")}</Text>
+        <Text style={styles.stepSubtitle}>{t("onboarding", "soundTestSubtitle")}</Text>
+        {content}
+      </ScrollView>
+    );
+  };
+
+  const renderPermissionsStep = () => {
+    const PermRow = ({
+      iconName,
+      label,
+      desc,
+      granted,
+      onAllow,
+      testID,
+    }: {
+      iconName: string;
+      label: string;
+      desc: string;
+      granted: boolean;
+      onAllow: () => void;
+      testID?: string;
+    }) => (
+      <View style={[styles.infoCard, { flexDirection: "row", alignItems: "center", gap: 12 }]}>
+        <Ionicons name={iconName as any} size={24} color={accentColor} />
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.inputLabel, { marginBottom: 2 }]}>{label}</Text>
+          <Text style={styles.modeOptionDesc}>{desc}</Text>
+        </View>
+        <Pressable
+          onPress={granted ? undefined : onAllow}
+          testID={testID}
+          style={{
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 8,
+            backgroundColor: granted ? C.surfaceLight : accentColor,
+            borderWidth: granted ? 1 : 0,
+            borderColor: C.border,
+          }}
+        >
+          <Text
+            style={{
+              color: granted ? C.textSecondary : C.background,
+              fontSize: 13,
+              fontFamily: "SpaceGrotesk_600SemiBold",
+            }}
+          >
+            {granted ? t("onboarding", "permGranted") : t("onboarding", "permAllow")}
+          </Text>
+        </Pressable>
+      </View>
+    );
+
+    const content = (
+      <>
+        <PermRow
+          iconName="mic-outline"
+          label={t("onboarding", "permMicLabel")}
+          desc={t("onboarding", "permMicDesc")}
+          granted={permMicGranted}
+          onAllow={handleRequestMic}
+          testID="onboarding-perm-mic"
+        />
+        <PermRow
+          iconName="location-outline"
+          label={t("onboarding", "permLocationLabel")}
+          desc={t("onboarding", "permLocationDesc")}
+          granted={permLocationGranted}
+          onAllow={handleRequestLocation}
+          testID="onboarding-perm-location"
+        />
+      </>
+    );
+
+    if (isLandscape) {
+      return (
+        <View style={styles.landRow}>
+          {renderStepHeader(
+            <Ionicons name="shield-checkmark-outline" size={36} color={accentColor} />,
+            "permTitle", "permSubtitle"
+          )}
+          <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} showsVerticalScrollIndicator={false}>
+            {content}
+          </ScrollView>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.stepContent} showsVerticalScrollIndicator={false}>
+        <Ionicons name="shield-checkmark-outline" size={40} color={accentColor} />
+        <Text style={styles.stepTitle}>{t("onboarding", "permTitle")}</Text>
+        <Text style={styles.stepSubtitle}>{t("onboarding", "permSubtitle")}</Text>
+        {content}
+      </ScrollView>
+    );
+  };
+
   const renderCurrentStep = () => {
     switch (step) {
       case 0:
@@ -1023,6 +1241,10 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       case 5:
         return renderFlashStep();
       case 6:
+        return renderSoundTestStep();
+      case 7:
+        return renderPermissionsStep();
+      case 8:
         return renderProfileStep();
       default:
         return null;
