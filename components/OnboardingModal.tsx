@@ -30,7 +30,7 @@ import { Switch } from "react-native";
 import { AssistantShortcutsGuide } from "@/components/AssistantShortcutsGuide";
 import { Audio } from "expo-av";
 import * as Location from "expo-location";
-import { requestRecordingPermissionsAsync } from "expo-audio";
+import { ensurePermission } from "@/lib/permissions";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -472,21 +472,15 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
     }
   }, []);
 
-  const handleRequestMic = useCallback(async () => {
-    try {
-      const { status } = await requestRecordingPermissionsAsync();
-      setPermMicGranted(status === "granted");
-    } catch {
-    }
-  }, []);
-
-  const handleRequestLocation = useCallback(async () => {
+  const handleAllowNow = useCallback(async () => {
+    const micGranted = await ensurePermission("mic", t, { showAlertOnDeny: false });
+    setPermMicGranted(micGranted);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       setPermLocationGranted(status === "granted");
     } catch {
     }
-  }, []);
+  }, [t]);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
@@ -1101,7 +1095,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
               {t("onboarding", "soundTestPlay")}
             </Text>
           </Pressable>
-          {soundTestPlayed && Platform.OS === "ios" && (
+          {soundTestPlayed && (
             <Text style={{ color: C.textSecondary, fontSize: 12, textAlign: "center", paddingHorizontal: 12, lineHeight: 18 }}>
               {t("onboarding", "soundTestMuteHint")}
             </Text>
@@ -1135,20 +1129,16 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   };
 
   const renderPermissionsStep = () => {
-    const PermRow = ({
+    const PermInfoRow = ({
       iconName,
       label,
       desc,
       granted,
-      onAllow,
-      testID,
     }: {
       iconName: string;
       label: string;
       desc: string;
       granted: boolean;
-      onAllow: () => void;
-      testID?: string;
     }) => (
       <View style={[styles.infoCard, { flexDirection: "row", alignItems: "center", gap: 12 }]}>
         <Ionicons name={iconName as any} size={24} color={accentColor} />
@@ -1156,49 +1146,52 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           <Text style={[styles.inputLabel, { marginBottom: 2 }]}>{label}</Text>
           <Text style={styles.modeOptionDesc}>{desc}</Text>
         </View>
-        <Pressable
-          onPress={granted ? undefined : onAllow}
-          testID={testID}
-          style={{
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            borderRadius: 8,
-            backgroundColor: granted ? C.surfaceLight : accentColor,
-            borderWidth: granted ? 1 : 0,
-            borderColor: C.border,
-          }}
-        >
-          <Text
-            style={{
-              color: granted ? C.textSecondary : C.background,
-              fontSize: 13,
-              fontFamily: "SpaceGrotesk_600SemiBold",
-            }}
-          >
-            {granted ? t("onboarding", "permGranted") : t("onboarding", "permAllow")}
-          </Text>
-        </Pressable>
+        {granted && (
+          <Ionicons name="checkmark-circle" size={22} color={accentColor} />
+        )}
       </View>
     );
 
+    const allGranted = permMicGranted && permLocationGranted;
+
     const content = (
       <>
-        <PermRow
+        <PermInfoRow
           iconName="mic-outline"
           label={t("onboarding", "permMicLabel")}
           desc={t("onboarding", "permMicDesc")}
           granted={permMicGranted}
-          onAllow={handleRequestMic}
-          testID="onboarding-perm-mic"
         />
-        <PermRow
+        <PermInfoRow
           iconName="location-outline"
           label={t("onboarding", "permLocationLabel")}
           desc={t("onboarding", "permLocationDesc")}
           granted={permLocationGranted}
-          onAllow={handleRequestLocation}
-          testID="onboarding-perm-location"
         />
+        {!allGranted && (
+          <Pressable
+            onPress={handleAllowNow}
+            testID="onboarding-perm-allow-now"
+            style={[
+              styles.demoButton,
+              { width: "100%", height: 52, backgroundColor: accentColor, marginTop: 4 },
+            ]}
+          >
+            <Ionicons name="shield-checkmark-outline" size={20} color={C.background} />
+            <Text style={[styles.demoButtonText, { color: C.background }]}>
+              {t("onboarding", "permAllowNow")}
+            </Text>
+          </Pressable>
+        )}
+        <Pressable
+          onPress={handleNext}
+          testID="onboarding-perm-later"
+          style={{ paddingVertical: 12, alignItems: "center" }}
+        >
+          <Text style={{ color: C.textTertiary, fontSize: 13, fontFamily: "SpaceGrotesk_400Regular" }}>
+            {t("onboarding", "permLater")}
+          </Text>
+        </Pressable>
       </>
     );
 

@@ -319,7 +319,7 @@ export const translations = {
     soundTestTitle: { ko: "소리 확인", en: "Sound Check" },
     soundTestSubtitle: { ko: "클릭 소리가 들리는지 확인하세요", en: "Verify you can hear the click sound" },
     soundTestPlay: { ko: "클릭 소리 재생", en: "Play Click Sound" },
-    soundTestMuteHint: { ko: "소리가 안 들리면 측면 무음 스위치를 확인하세요", en: "No sound? Check the silent switch on the side of your device" },
+    soundTestMuteHint: { ko: "소리가 안 들리면 무음 스위치(iOS) 또는 볼륨 설정을 확인하세요", en: "No sound? Check the mute switch (iOS) or your volume level" },
     permTitle: { ko: "앱 권한 설정", en: "App Permissions" },
     permSubtitle: { ko: "선택 사항이며 설정에서 언제든지 변경할 수 있습니다", en: "Optional — you can change these anytime in Settings" },
     permMicLabel: { ko: "마이크", en: "Microphone" },
@@ -328,6 +328,8 @@ export const translations = {
     permLocationDesc: { ko: "연습실 위치 자동 등록에 사용됩니다", en: "Used to automatically register practice room location" },
     permAllow: { ko: "허용", en: "Allow" },
     permGranted: { ko: "허용됨 ✓", en: "Granted ✓" },
+    permAllowNow: { ko: "지금 허용", en: "Allow Now" },
+    permLater: { ko: "나중에 설정할게요", en: "Set up later" },
   },
   stopwatchTimer: {
     stopwatch: { ko: "스톱워치", en: "STOPWATCH" },
