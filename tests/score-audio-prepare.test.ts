@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 /**
  * score-audio-prepare.test.ts
  *

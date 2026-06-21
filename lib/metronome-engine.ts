@@ -1101,6 +1101,14 @@ export class MetronomeEngine {
       if (o !== undefined) ovs.push([b, o]);
     }
 
+    // Safety note: `reps` contains the full BarRepeatSpec for each beat,
+    // including jumpFromId and jumpToId.  These are *structural/behavioral*
+    // fields — two bars with different jump IDs produce genuinely different
+    // playback outcomes — so including them in the fingerprint is intentional
+    // and prevents false cache hits between different jump configurations.
+    // They are NOT opaque object-reference IDs; their values encode the jump
+    // target relationship directly (matching jumpFromId === jumpToId pairs),
+    // so content-equal configurations naturally produce equal fingerprints.
     return JSON.stringify({
       bpm: this.bpm,
       ht: this.halfTime,
