@@ -1,10 +1,11 @@
 import { Alert, Linking, Platform } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
 import { requestRecordingPermissionsAsync } from "expo-audio";
 import type { TranslationFn } from "@/lib/i18n";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 
-export type PermissionKind = "mic" | "photo";
+export type PermissionKind = "mic" | "photo" | "location";
 
 export interface PermissionResult {
   granted: boolean;
@@ -16,6 +17,10 @@ type RequestImpl = (kind: PermissionKind) => Promise<PermissionResult>;
 const defaultRequestImpl: RequestImpl = async (kind) => {
   if (kind === "mic") {
     const { status, canAskAgain } = await requestRecordingPermissionsAsync();
+    return { granted: status === "granted", canAskAgain: canAskAgain ?? true };
+  }
+  if (kind === "location") {
+    const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
     return { granted: status === "granted", canAskAgain: canAskAgain ?? true };
   }
   const { status, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -149,9 +154,9 @@ async function runRecoveryOnce(now: number): Promise<PermissionRecoveryEvent[]> 
 }
 
 function deniedKeys(kind: PermissionKind) {
-  return kind === "mic"
-    ? { denied: "micDenied" as const, deepLink: "micDeniedOpenSettings" as const }
-    : { denied: "photoDenied" as const, deepLink: "photoDeniedOpenSettings" as const };
+  if (kind === "mic") return { denied: "micDenied" as const, deepLink: "micDeniedOpenSettings" as const };
+  if (kind === "location") return { denied: "locationDenied" as const, deepLink: "locationDeniedOpenSettings" as const };
+  return { denied: "photoDenied" as const, deepLink: "photoDeniedOpenSettings" as const };
 }
 
 export async function ensurePermission(

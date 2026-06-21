@@ -29,7 +29,6 @@ import { LANGUAGE_OPTIONS, type Language } from "@/lib/i18n";
 import { Switch } from "react-native";
 import { AssistantShortcutsGuide } from "@/components/AssistantShortcutsGuide";
 import { Audio } from "expo-av";
-import * as Location from "expo-location";
 import { ensurePermission } from "@/lib/permissions";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -475,11 +474,8 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   const handleAllowNow = useCallback(async () => {
     const micGranted = await ensurePermission("mic", t, { showAlertOnDeny: false });
     setPermMicGranted(micGranted);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      setPermLocationGranted(status === "granted");
-    } catch {
-    }
+    const locationGranted = await ensurePermission("location", t, { showAlertOnDeny: false });
+    setPermLocationGranted(locationGranted);
   }, [t]);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
