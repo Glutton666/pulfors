@@ -1317,6 +1317,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
             showsVerticalScrollIndicator={false}
             bounces={false}
             nestedScrollEnabled
+            testID="signal-scroll"
           >
           <View style={styles.knobMicContainer}>
             <View style={styles.knobWrap}>
@@ -1531,6 +1532,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                       key={w.type}
                       onPress={() => { hapticFeedback(); setWaveType(w.type); }}
                       style={[styles.waveBtn, active && { backgroundColor: C.accentDim, borderColor: C.accent }]}
+                      testID={`signal-wave-${w.type}`}
                     >
                       <MaterialCommunityIcons
                         name={w.icon as any}
