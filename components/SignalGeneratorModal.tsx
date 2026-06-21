@@ -1592,6 +1592,8 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                         onPress={() => {
                           setFrequency(peak.hz);
                           if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setPickerLockFlash(true);
+                          setTimeout(() => setPickerLockFlash(false), 200);
                         }}
                         style={[
                           { flexDirection: "row" as const, alignItems: "center" as const, paddingVertical: 4, borderBottomWidth: 0.5, borderBottomColor: C.border + "30", borderRadius: 4 },
