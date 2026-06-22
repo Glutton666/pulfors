@@ -599,7 +599,7 @@ export function ScoreMetaModal({
 
 type MeasureEditTarget = {
   measureIdx: number;
-  field: "bpm" | "timeSig";
+  field: "bpm" | "timeSig" | "linkedEntry";
   value: string;
   label: string;
   hint: string;

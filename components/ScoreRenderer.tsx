@@ -37,7 +37,7 @@ import {
 } from "@/lib/score-layout";
 import { BASE_LINE_SPACING, scoreScaleFactor } from "@/lib/score-scale";
 import type { ScoreRowLayout } from "@/lib/score-layout";
-import type { ScoreDocument, ScorePart, ScoreMeasure, ScoreNote, ScoreRest, ClefType, NoteDuration, ArticulationType } from "@/lib/score-types";
+import type { ScoreDocument, ScorePart, ScoreMeasure, ScoreNote, ScoreRest, ClefType, NoteDuration, ArticulationType, OrnamentType } from "@/lib/score-types";
 
 // ── 상수 ─────────────────────────────────────────────────────
 const PART_GAP = 32;            // 성부 간 간격
@@ -379,6 +379,71 @@ function ArticulationMark({ art, noteX, noteY, direction, color, idx }: {
   }
 }
 
+// ── 꾸밈음 기호 렌더링 ────────────────────────────────────────
+
+function OrnamentMark({ ornament, noteX, noteY, direction, color }: {
+  ornament: OrnamentType;
+  noteX: number;
+  noteY: number;
+  direction: "up" | "down";
+  color: string;
+}) {
+  const baseY = direction === "up" ? noteY - STEM_HEIGHT - 10 : noteY - 14;
+  switch (ornament) {
+    case "trill":
+      return (
+        <G>
+          <SvgText x={noteX} y={baseY} fontSize={10} fontStyle="italic" fill={color} textAnchor="middle">tr</SvgText>
+          <Path
+            d={`M${noteX - 4},${baseY + 4} Q${noteX - 1},${baseY + 1} ${noteX + 2},${baseY + 4} Q${noteX + 5},${baseY + 7} ${noteX + 8},${baseY + 4}`}
+            stroke={color} strokeWidth={1} fill="none"
+          />
+        </G>
+      );
+    case "mordent":
+      return (
+        <G>
+          <Line x1={noteX} y1={baseY - 3} x2={noteX} y2={baseY + 6} stroke={color} strokeWidth={1} />
+          <Path
+            d={`M${noteX - 5},${baseY + 1} Q${noteX - 2},${baseY - 3} ${noteX + 1},${baseY + 1} Q${noteX + 4},${baseY + 5} ${noteX + 7},${baseY + 1}`}
+            stroke={color} strokeWidth={1} fill="none"
+          />
+        </G>
+      );
+    case "turn":
+      return (
+        <Path
+          d={`M${noteX - 6},${baseY - 1} Q${noteX},${baseY - 8} ${noteX + 6},${baseY - 1} Q${noteX},${baseY + 6} ${noteX - 6},${baseY - 1}`}
+          stroke={color} strokeWidth={1} fill="none"
+        />
+      );
+    case "tremolo":
+      return (
+        <G>
+          <Line x1={noteX - 5} y1={baseY + 3} x2={noteX + 5} y2={baseY - 1} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+          <Line x1={noteX - 5} y1={baseY + 7} x2={noteX + 5} y2={baseY + 3} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+          <Line x1={noteX - 5} y1={baseY + 11} x2={noteX + 5} y2={baseY + 7} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+        </G>
+      );
+    case "grace_note":
+      return (
+        <G>
+          <Ellipse cx={noteX - 7} cy={baseY + 3} rx={3.5} ry={2.5} fill={color} />
+          <Line x1={noteX - 4} y1={baseY + 3} x2={noteX - 4} y2={baseY - 5} stroke={color} strokeWidth={1} />
+          <Line x1={noteX - 10} y1={baseY + 3} x2={noteX - 2} y2={baseY - 1} stroke={color} strokeWidth={1} />
+        </G>
+      );
+    case "glissando":
+      return (
+        <SvgText x={noteX + 3} y={baseY + 5} fontSize={8} fill={color} textAnchor="start" fontStyle="italic">
+          gliss.
+        </SvgText>
+      );
+    default:
+      return null;
+  }
+}
+
 // ── 타이/슬러 아크 ────────────────────────────────────────────
 
 function TieArc({ x1, y1, x2, y2, color }: {
@@ -419,11 +484,11 @@ function NoteElement({ note, x, staffY, clef, color, isSelected }: {
   const flagCount =
     dur === "eighth" || dur === "eighth_dot" ? 1 :
     dur === "sixteenth" || dur === "sixteenth_dot" ? 2 :
-    dur === "thirty_second" ? 3 : 0;
+    dur === "thirty_second" || dur === "thirty_second_dot" ? 3 : 0;
 
   const dotted =
     dur === "whole_dot" || dur === "half_dot" || dur === "quarter_dot" ||
-    dur === "eighth_dot" || dur === "sixteenth_dot";
+    dur === "eighth_dot" || dur === "sixteenth_dot" || dur === "thirty_second_dot";
 
   const highlightColor = isSelected ? "#4A9EFF" : color;
   const articulations = note.articulations ?? [];
@@ -438,6 +503,33 @@ function NoteElement({ note, x, staffY, clef, color, isSelected }: {
       {articulations.map((art, i) => (
         <ArticulationMark key={art} art={art} noteX={x} noteY={noteY} direction={direction} color={highlightColor} idx={i} />
       ))}
+      {/* 겹점 (doubleDotted) — 두 개의 점 */}
+      {note.doubleDotted && <DotSymbol x={x} y={noteY} color={highlightColor} />}
+      {note.doubleDotted && <DotSymbol x={x + 6} y={noteY} color={highlightColor} />}
+      {/* 노트 레벨 강약 기호 */}
+      {note.dynamic && (
+        <SvgText
+          x={x}
+          y={staffY + STAFF_HEIGHT + 14}
+          fontSize={9}
+          fill={highlightColor}
+          fontFamily="serif"
+          fontStyle="italic"
+          fontWeight="bold"
+          textAnchor="middle"
+        >
+          {note.dynamic}
+        </SvgText>
+      )}
+      {note.ornament && (
+        <OrnamentMark
+          ornament={note.ornament}
+          noteX={x}
+          noteY={noteY}
+          direction={direction}
+          color={highlightColor}
+        />
+      )}
     </G>
   );
 }
@@ -452,7 +544,7 @@ function RestElement({ rest, x, staffY, color }: {
 }) {
   const dotted =
     rest.duration === "whole_dot" || rest.duration === "half_dot" || rest.duration === "quarter_dot" ||
-    rest.duration === "eighth_dot" || rest.duration === "sixteenth_dot";
+    rest.duration === "eighth_dot" || rest.duration === "sixteenth_dot" || rest.duration === "thirty_second_dot";
 
   return (
     <G>
@@ -464,13 +556,22 @@ function RestElement({ rest, x, staffY, color }: {
 
 // ── 마디선 ────────────────────────────────────────────────────
 
-function Barline({ x, y, height, color, isDouble }: {
+function Barline({ x, y, height, color, isDouble, isFinal }: {
   x: number;
   y: number;
   height: number;
   color: string;
   isDouble?: boolean;
+  isFinal?: boolean;
 }) {
+  if (isFinal) {
+    return (
+      <G>
+        <Line x1={x - 5} y1={y} x2={x - 5} y2={y + height} stroke={color} strokeWidth={1} />
+        <Line x1={x} y1={y} x2={x} y2={y + height} stroke={color} strokeWidth={4} />
+      </G>
+    );
+  }
   if (isDouble) {
     return (
       <G>
@@ -519,6 +620,19 @@ interface MeasureRenderProps {
   // 크레셴도/데크레셴도 span 상태 (PartRender에서 계산)
   crescState?: "start" | "middle" | "end" | "full";
   decrescState?: "start" | "middle" | "end" | "full";
+  // 헤어핀 노트 앵커 IDs (note-level 정밀 위치)
+  crescNoteStartId?: string;
+  crescNoteEndId?: string;
+  decrescNoteStartId?: string;
+  decrescNoteEndId?: string;
+  // 마디별 유효 음자리표/조표 (PartRender에서 계산, 없으면 part.clef 사용)
+  effectiveClef?: ClefType;
+  // 이 마디에서 음자리표가 바뀌면 true (mid-staff 표시)
+  clefChanged?: boolean;
+  // 최종 마디 → 끝 마디선
+  isFinalMeasure?: boolean;
+  // 다음 마디에서 박자표/조표/음자리표가 바뀌면 true → 이중 마디선
+  isChangeBarline?: boolean;
 }
 
 function MeasureRender({
@@ -541,8 +655,16 @@ function MeasureRender({
   showPlayhead = true,
   crescState,
   decrescState,
+  crescNoteStartId,
+  crescNoteEndId,
+  decrescNoteStartId,
+  decrescNoteEndId,
+  effectiveClef,
+  clefChanged,
+  isFinalMeasure,
+  isChangeBarline,
 }: MeasureRenderProps) {
-  const clef = part.clef;
+  const clef = effectiveClef ?? part.clef;
 
   // 헤더 폭 계산
   let headerX = x + 4;
@@ -668,6 +790,47 @@ function MeasureRender({
         );
       })}
 
+      {/* 슬러 아크 — slurStart → slurEndNoteId (명시적 관계) 또는 마디 끝 폴백 */}
+      {positions.map((pos) => {
+        const el = measure.elements.find((e) => e.id === pos.elementId);
+        if (!el || el.type !== "note" || !el.slurStart) return null;
+        const x1 = contentX + pos.x;
+        const noteY1 = staffY + pitchToY(el.pitch, clef);
+        // slurEndNoteId로 정밀 탐색 (같은 마디 내)
+        const endNoteId = el.slurEndNoteId;
+        const endElPos = endNoteId ? positions.find((p2) => p2.elementId === endNoteId) : undefined;
+        const endEl = endNoteId
+          ? measure.elements.find((e) => e.id === endNoteId)
+          : measure.elements.find(
+              (e, ei) =>
+                ei > measure.elements.indexOf(el) && e.type === "note" && (e as typeof el).slurEnd,
+            );
+        if (!endElPos || !endEl) {
+          // 마디 끝까지 열린 슬러 (cross-measure: 다음 마디에서 끝남)
+          return (
+            <TieArc
+              key={`slur-eom-${el.id}`}
+              x1={x1}
+              y1={noteY1 - 2}
+              x2={x + width - 4}
+              y2={noteY1 - 2}
+              color={color}
+            />
+          );
+        }
+        const noteY2 = endEl.type === "note" ? staffY + pitchToY(endEl.pitch, clef) : noteY1;
+        return (
+          <TieArc
+            key={`slur-${el.id}`}
+            x1={x1}
+            y1={noteY1 - 2}
+            x2={contentX + endElPos.x}
+            y2={noteY2 - 2}
+            color={color}
+          />
+        );
+      })}
+
       {/* 리허설 마크 (A, B, 1 등) */}
       {measure.rehearsalMark && (
         <G>
@@ -763,11 +926,18 @@ function MeasureRender({
         </SvgText>
       )}
 
-      {/* 크레셴도 헤어핀 (< 모양) — span 기반 */}
+      {/* 크레셴도 헤어핀 (< 모양) — 노트 앵커 기반 (있을 때) 또는 span 기반 */}
       {crescState && (() => {
         const hairY = staffY + STAFF_HEIGHT + 16;
-        const x0 = x + 4;
-        const x1 = x + width - 4;
+        // 노트 앵커 ID가 있으면 해당 노트 x로 정밀 위치 결정
+        const startAnchorPos = crescNoteStartId
+          ? positions.find((p) => p.elementId === crescNoteStartId)
+          : undefined;
+        const endAnchorPos = crescNoteEndId
+          ? positions.find((p) => p.elementId === crescNoteEndId)
+          : undefined;
+        const x0 = startAnchorPos ? contentX + startAnchorPos.x : x + 4;
+        const x1 = endAnchorPos ? contentX + endAnchorPos.x : x + width - 4;
         // "start": 왼쪽 꼭짓점 → 오른쪽 열린 끝
         if (crescState === "start") return (
           <G>
@@ -789,7 +959,7 @@ function MeasureRender({
             <Line x1={x0} y1={hairY + 6} x2={x1} y2={hairY} stroke={color} strokeWidth={1} strokeLinecap="round" />
           </G>
         );
-        // "full": 단일 마디 전체
+        // "full": 단일 마디 전체 (같은 마디 내 start→end)
         return (
           <G>
             <Line x1={x0} y1={hairY} x2={x1} y2={hairY - 6} stroke={color} strokeWidth={1} strokeLinecap="round" />
@@ -798,11 +968,17 @@ function MeasureRender({
         );
       })()}
 
-      {/* 데크레셴도 헤어핀 (> 모양) — span 기반 */}
+      {/* 데크레셴도 헤어핀 (> 모양) — 노트 앵커 기반 (있을 때) 또는 span 기반 */}
       {decrescState && (() => {
         const hairY = staffY + STAFF_HEIGHT + 16;
-        const x0 = x + 4;
-        const x1 = x + width - 4;
+        const startAnchorPos = decrescNoteStartId
+          ? positions.find((p) => p.elementId === decrescNoteStartId)
+          : undefined;
+        const endAnchorPos = decrescNoteEndId
+          ? positions.find((p) => p.elementId === decrescNoteEndId)
+          : undefined;
+        const x0 = startAnchorPos ? contentX + startAnchorPos.x : x + 4;
+        const x1 = endAnchorPos ? contentX + endAnchorPos.x : x + width - 4;
         // "start": 왼쪽 열린 끝 → 오른쪽 진행
         if (decrescState === "start") return (
           <G>
@@ -824,7 +1000,7 @@ function MeasureRender({
             <Line x1={x0} y1={hairY} x2={x1} y2={hairY - 6} stroke={color} strokeWidth={1} strokeLinecap="round" />
           </G>
         );
-        // "full": 단일 마디 전체
+        // "full": 단일 마디 전체 (같은 마디 내 start→end)
         return (
           <G>
             <Line x1={x0} y1={hairY - 6} x2={x1} y2={hairY} stroke={color} strokeWidth={1} strokeLinecap="round" />
@@ -836,8 +1012,15 @@ function MeasureRender({
       {/* 반복 끝 */}
       {measure.repeatEnd && <RepeatDots x={x + width - 6} y={staffY} isStart={false} color={color} />}
 
-      {/* 마디선 */}
-      <Barline x={x + width} y={staffY} height={STAFF_HEIGHT} color={color} />
+      {/* 마디선 — 최종 마디: 끝 마디선, 변경점: 이중 마디선, 그 외: 단일 마디선 */}
+      <Barline
+        x={x + width}
+        y={staffY}
+        height={STAFF_HEIGHT}
+        color={color}
+        isFinal={isFinalMeasure}
+        isDouble={!isFinalMeasure && isChangeBarline}
+      />
 
       {/* Playhead 세로선 */}
       {isPlayheadMeasure && showPlayhead && (
@@ -885,6 +1068,8 @@ function PartRender({
   // 마디별 유효 박자표/BPM + cresc span 사전 계산
   let effNum = doc.timeSignature.numerator;
   let effDen = doc.timeSignature.denominator;
+  let effClef: ClefType = part.clef;
+  let effSharps = doc.keySignature.sharps;
   let crescActive = false;
   let decrescActive = false;
 
@@ -892,17 +1077,20 @@ function PartRender({
   const allMeasureIndices = rowLayout.flatMap((r) => r.measureIndices);
   const measureMeta: {
     timeNum: number; timeDen: number;
+    effClef: ClefType; effSharps: number;
     crescState?: "start" | "middle" | "end" | "full";
     decrescState?: "start" | "middle" | "end" | "full";
   }[] = allMeasureIndices.map((mIdx) => {
     const m = measures[mIdx];
-    if (!m) return { timeNum: effNum, timeDen: effDen };
+    if (!m) return { timeNum: effNum, timeDen: effDen, effClef, effSharps };
 
-    // 마디별 박자표 갱신
+    // 마디별 박자표/음자리표/조표 갱신
     if (m.timeSignature) {
       effNum = m.timeSignature.numerator;
       effDen = m.timeSignature.denominator;
     }
+    if (m.clef) effClef = m.clef;
+    if (m.keySignature) effSharps = m.keySignature.sharps;
 
     // cresc span 계산
     let cState: "start" | "middle" | "end" | "full" | undefined;
@@ -917,16 +1105,20 @@ function PartRender({
     else if (decrescActive && m.decrescEnd) { dState = "end"; decrescActive = false; }
     else if (decrescActive)             { dState = "middle"; }
 
-    return { timeNum: effNum, timeDen: effDen, crescState: cState, decrescState: dState };
+    return { timeNum: effNum, timeDen: effDen, effClef, effSharps, crescState: cState, decrescState: dState };
   });
   // mIdx → 위 배열 인덱스 매핑
   const mIdxToMetaIdx: Record<number, number> = {};
   allMeasureIndices.forEach((mIdx, i) => { mIdxToMetaIdx[mIdx] = i; });
 
-  // 박자표 표시 변경 감지 (이전 마디와 다를 때만 표시)
+  // 박자표/음자리표/조표 표시 변경 감지 (이전 마디와 다를 때만 표시)
   const timeSigChangedAt: Set<number> = new Set();
+  const clefChangedAt: Set<number> = new Set();
+  const keySigChangedAt: Set<number> = new Set();
   let prevNum = doc.timeSignature.numerator;
   let prevDen = doc.timeSignature.denominator;
+  let prevClef: ClefType = part.clef;
+  let prevSharps = doc.keySignature.sharps;
   allMeasureIndices.forEach((mIdx) => {
     const meta = measureMeta[mIdxToMetaIdx[mIdx]];
     if (!meta) return;
@@ -934,6 +1126,14 @@ function PartRender({
       timeSigChangedAt.add(mIdx);
       prevNum = meta.timeNum;
       prevDen = meta.timeDen;
+    }
+    if (meta.effClef !== prevClef) {
+      clefChangedAt.add(mIdx);
+      prevClef = meta.effClef;
+    }
+    if (meta.effSharps !== prevSharps) {
+      keySigChangedAt.add(mIdx);
+      prevSharps = meta.effSharps;
     }
   });
 
@@ -944,14 +1144,29 @@ function PartRender({
           const measure = measures[mIdx];
           if (!measure) return null;
           const metaIdx = mIdxToMetaIdx[mIdx] ?? 0;
-          const meta = measureMeta[metaIdx] ?? { timeNum: doc.timeSignature.numerator, timeDen: doc.timeSignature.denominator };
+          const meta = measureMeta[metaIdx] ?? {
+            timeNum: doc.timeSignature.numerator,
+            timeDen: doc.timeSignature.denominator,
+            effClef: part.clef,
+            effSharps: doc.keySignature.sharps,
+          };
           const isFirst = mIdx === 0;
-          const showClef = posInRow === 0;
+          // 행의 첫 마디이거나 이 마디에서 음자리표가 바뀐 경우 음자리표 표시
+          const showClef = posInRow === 0 || clefChangedAt.has(mIdx);
           // 박자표 표시: 첫 마디이거나 박자표가 변경된 마디
           const showTimeSig = posInRow === 0 || timeSigChangedAt.has(mIdx);
           const x = row.measureWidths.slice(0, posInRow).reduce((a, b) => a + b, 0);
           const staffY = row.y + STAFF_PADDING_TOP;
           const isPlayheadMeasure = playheadMeasureIdx === mIdx;
+          // 최종 마디 판정 (전체 measures 배열 기준)
+          const isFinalMeasure = mIdx === measures.length - 1;
+          // 다음 마디에서 박자표/조표/음자리표가 바뀌면 이중 마디선
+          const nextMIdx = allMeasureIndices[allMeasureIndices.indexOf(mIdx) + 1];
+          const isChangeBarline = nextMIdx !== undefined && (
+            timeSigChangedAt.has(nextMIdx) ||
+            clefChangedAt.has(nextMIdx) ||
+            keySigChangedAt.has(nextMIdx)
+          );
 
           return (
             <MeasureRender
@@ -964,7 +1179,7 @@ function PartRender({
               isFirst={isFirst}
               showClef={showClef}
               showTimeSig={showTimeSig}
-              sharps={doc.keySignature.sharps}
+              sharps={meta.effSharps ?? doc.keySignature.sharps}
               color={color}
               timeNumerator={meta.timeNum}
               timeDenominator={meta.timeDen}
@@ -975,6 +1190,14 @@ function PartRender({
               showPlayhead={showPlayhead}
               crescState={meta.crescState}
               decrescState={meta.decrescState}
+              crescNoteStartId={measures[mIdx]?.crescNoteStartId}
+              crescNoteEndId={measures[mIdx]?.crescNoteEndId}
+              decrescNoteStartId={measures[mIdx]?.decrescNoteStartId}
+              decrescNoteEndId={measures[mIdx]?.decrescNoteEndId}
+              effectiveClef={meta.effClef}
+              clefChanged={clefChangedAt.has(mIdx)}
+              isFinalMeasure={isFinalMeasure}
+              isChangeBarline={isChangeBarline}
             />
           );
         })

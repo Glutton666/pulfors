@@ -15,13 +15,14 @@ export type NoteDuration =
   | "half_dot"
   | "quarter_dot"
   | "eighth_dot"
-  | "sixteenth_dot";
+  | "sixteenth_dot"
+  | "thirty_second_dot";
 
 export type RestDuration = NoteDuration;
 
 export type Accidental = "sharp" | "flat" | "natural" | "double_sharp" | "double_flat";
 
-export type Dynamic = "pppp" | "ppp" | "pp" | "p" | "mp" | "mf" | "f" | "ff" | "fff" | "ffff" | "sfz" | "fp";
+export type Dynamic = "pppp" | "ppp" | "pp" | "p" | "mp" | "mf" | "f" | "ff" | "fff" | "ffff" | "sfz" | "fp" | "mute";
 
 export type ArticulationType =
   | "staccato"
@@ -30,7 +31,19 @@ export type ArticulationType =
   | "marcato"
   | "fermata"
   | "staccatissimo"
-  | "portato";
+  | "portato"
+  | "snap_pizzicato"
+  | "left_hand_pizzicato";
+
+export type OrnamentType =
+  | "trill"
+  | "mordent"
+  | "turn"
+  | "tremolo"
+  | "grace_note"
+  | "glissando"
+  | "arpeggio_up"
+  | "arpeggio_down";
 
 export type NoteHeadType = "normal" | "cross" | "diamond" | "triangle" | "slash";
 
@@ -115,14 +128,19 @@ export interface ScoreNote {
   pitch: Pitch;
   duration: NoteDuration;
   dotted?: boolean;
+  doubleDotted?: boolean;
   tieStart?: boolean;
   tieEnd?: boolean;
   slurStart?: boolean;
   slurEnd?: boolean;
+  slurEndNoteId?: string;
   articulations?: ArticulationType[];
   dynamic?: Dynamic;
   noteHead?: NoteHeadType;
+  ornament?: OrnamentType;
   lyric?: string; // 성악 가사
+  /** 자유 배치 X 좌표 (마디 content 영역 시작 기준, 논리 px). 렌더링 위치로 직접 사용. */
+  placedX?: number;
   // 현악기 특수
   bowUp?: boolean;    // 활 방향 위
   bowDown?: boolean;  // 활 방향 아래
@@ -142,6 +160,8 @@ export interface ScoreRest {
   type: "rest";
   duration: RestDuration;
   dotted?: boolean;
+  /** 자유 배치 X 좌표 (마디 content 영역 시작 기준, 논리 px). */
+  placedX?: number;
 }
 
 export type ScoreElement = ScoreNote | ScoreRest;
@@ -179,6 +199,11 @@ export interface ScoreMeasure {
   crescEnd?: boolean;
   decrescStart?: boolean;
   decrescEnd?: boolean;
+  // 헤어핀 노트 앵커 — 두 노트 사이 정밀 위치 지정
+  crescNoteStartId?: string;
+  crescNoteEndId?: string;
+  decrescNoteStartId?: string;
+  decrescNoteEndId?: string;
 
   // 반복/이동 부호
   repeatStart?: boolean;
@@ -190,8 +215,15 @@ export interface ScoreMeasure {
   jumpTo?: "start" | "segno" | "coda" | "fine";
   jumpText?: string;            // "D.C.", "D.S.", "Fine" 등
 
+  // 이 마디부터 음자리표/조표 변경 (없으면 파트/문서 기본값 유지)
+  clef?: ClefType;
+  keySignature?: { sharps: number };
+
   // 악보 위쪽 텍스트
   rehearsalMark?: string;       // "A", "B", "1" 등 리허설 마크
+
+  // 연결된 연주 항목 ID (연주 노트·Practice Entry 연동)
+  linkedPracticeEntryId?: string;
 }
 
 // 성부(파트)
@@ -239,6 +271,8 @@ export interface ScoreDocument {
   // 참조 이미지 (편집 불가, 투명도 조절 가능)
   referenceImageUri?: string;
   referenceImageOpacity?: number;
+  /** 한 줄에 표시할 마디 수. undefined이면 컨테이너 너비 기반 자동 배치 */
+  measuresPerLine?: number;
 }
 
 // 악보 목록 아이템 (썸네일용 경량 정보)

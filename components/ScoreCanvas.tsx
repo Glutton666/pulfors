@@ -60,6 +60,8 @@ export interface GhostState {
   pitch: Pitch;
   measureIdx: number;
   insertIdx: number;
+  /** 마디 content 영역 시작 기준 X (논리 px) — 자유 배치 placedX 저장용 */
+  measureRelX: number;
 }
 
 export interface ScoreCanvasProps {
@@ -71,12 +73,13 @@ export interface ScoreCanvasProps {
   activeDuration: NoteDuration;
   isDotted: boolean;
   accidental: Accidental | null;
-  onNotePlaced: (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number) => void;
-  onRestPlaced: (measureIdx: number, duration: NoteDuration, insertIdx: number) => void;
+  onNotePlaced: (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number) => void;
+  onRestPlaced: (measureIdx: number, duration: NoteDuration, insertIdx: number, placedX: number) => void;
   onElementTap: (elementId: string, measureIdx: number) => void;
   onMeasureTap: (measureIdx: number) => void;
   onMeasureLongPress?: (measureIdx: number) => void;
   onEraseElement: (elementId: string, measureIdx: number) => void;
+  onEraseMultiple?: (elements: Array<{elementId: string; measureIdx: number}>) => void;
   onNoteMoved?: (elementId: string, measureIdx: number, newPitch: Pitch) => void;
   // 재생 연동
   playheadMeasureIdx?: number;
@@ -114,6 +117,7 @@ export function ScoreCanvas({
   onMeasureTap,
   onMeasureLongPress,
   onEraseElement,
+  onEraseMultiple,
   onNoteMoved,
   playheadMeasureIdx,
   playheadFraction = 0,
@@ -144,6 +148,7 @@ export function ScoreCanvas({
   const selectedElementIdRef = useRef(selectedElementId);
   const onNoteMoveRef = useRef(onNoteMoved);
   const onMeasureLongPressRef = useRef(onMeasureLongPress);
+  const onEraseMultipleRef = useRef(onEraseMultiple);
   const docRef = useRef(doc);
   const selectedPartIdxRef = useRef(selectedPartIdx);
   activeToolRef.current = activeTool;
@@ -153,6 +158,7 @@ export function ScoreCanvas({
   selectedElementIdRef.current = selectedElementId;
   onNoteMoveRef.current = onNoteMoved;
   onMeasureLongPressRef.current = onMeasureLongPress;
+  onEraseMultipleRef.current = onEraseMultiple;
   docRef.current = doc;
   selectedPartIdxRef.current = selectedPartIdx;
 
@@ -210,17 +216,58 @@ export function ScoreCanvas({
   const timeSigChangedAtRef = useRef(timeSigChangedAt);
   timeSigChangedAtRef.current = timeSigChangedAt;
 
+  // ScoreRenderer.PartRender와 동일한 음자리표/조표 변경 감지
+  const effectiveClefAtMeasure = useMemo(() => {
+    const map = new Map<number, ClefType>();
+    let eff: ClefType = clef;
+    const allMeasureIndices = rows.flatMap((r) => r.measureIndices);
+    for (const mIdx of allMeasureIndices) {
+      const m = doc.parts[selectedPartIdx]?.measures[mIdx];
+      if (m?.clef) eff = m.clef;
+      map.set(mIdx, eff);
+    }
+    return map;
+  }, [doc, rows, selectedPartIdx, clef]);
+  const effectiveClefAtMeasureRef = useRef(effectiveClefAtMeasure);
+  effectiveClefAtMeasureRef.current = effectiveClefAtMeasure;
+
+  const effectiveSharpsAtMeasure = useMemo(() => {
+    const map = new Map<number, number>();
+    let eff = doc.keySignature?.sharps ?? 0;
+    const allMeasureIndices = rows.flatMap((r) => r.measureIndices);
+    for (const mIdx of allMeasureIndices) {
+      const m = doc.parts[selectedPartIdx]?.measures[mIdx];
+      if (m?.keySignature) eff = m.keySignature.sharps;
+      map.set(mIdx, eff);
+    }
+    return map;
+  }, [doc, rows, selectedPartIdx]);
+  const effectiveSharpsAtMeasureRef = useRef(effectiveSharpsAtMeasure);
+  effectiveSharpsAtMeasureRef.current = effectiveSharpsAtMeasure;
+
+  const clefChangedAtCanvas = useMemo(() => {
+    const changed = new Set<number>();
+    let prev: ClefType = clef;
+    for (const [mIdx, eff] of effectiveClefAtMeasure) {
+      if (eff !== prev) { changed.add(mIdx); prev = eff; }
+    }
+    return changed;
+  }, [effectiveClefAtMeasure, clef]);
+  const clefChangedAtCanvasRef = useRef(clefChangedAtCanvas);
+  clefChangedAtCanvasRef.current = clefChangedAtCanvas;
+
   // 헤더 폭 계산 — ScoreRenderer의 MeasureRender/PartRender와 완전히 동일한 로직
   const measureContentX = useCallback(
     (measureX: number, posInRow: number, mIdx?: number): number => {
-      const showClef = posInRow === 0;
+      // 행 첫 마디이거나 이 마디에서 음자리표가 바뀐 경우 음자리표 표시
+      const showClef = posInRow === 0 || (mIdx !== undefined && clefChangedAtCanvasRef.current.has(mIdx));
       // ScoreRenderer.PartRender와 동일: posInRow===0이거나 박자표 변경 마디
       const showTimeSig = posInRow === 0 || (mIdx !== undefined && timeSigChangedAtRef.current.has(mIdx));
-      const sharps = docRef.current.keySignature?.sharps ?? 0;
-      const clef = clefRef.current;
+      const effClef = (mIdx !== undefined ? effectiveClefAtMeasureRef.current.get(mIdx) : undefined) ?? clefRef.current;
+      const effSharps = (mIdx !== undefined ? effectiveSharpsAtMeasureRef.current.get(mIdx) : undefined) ?? (docRef.current.keySignature?.sharps ?? 0);
       let cx = measureX + 4;
-      if (showClef) cx += CLEF_WIDTH[clef] + 4;
-      if (Math.abs(sharps) > 0) cx += Math.abs(sharps) * KEY_SIG_ACCIDENTAL_WIDTH + 4;
+      if (showClef) cx += CLEF_WIDTH[effClef] + 4;
+      if (Math.abs(effSharps) > 0) cx += Math.abs(effSharps) * KEY_SIG_ACCIDENTAL_WIDTH + 4;
       if (showTimeSig) cx += TIME_SIG_WIDTH + 4;
       return cx;
     },
@@ -258,59 +305,13 @@ export function ScoreCanvas({
   }, [cursorMeasureIdx, cursorInsertIdx, rows, doc, selectedPartIdx, clef, measureContentX]);
 
   // 터치 좌표 → 마디 인덱스 + 음높이 + 삽입 위치(insertIdx)
+  // 자유 배치 입력: 손가락 위치(X,Y) 그대로 마디·음높이·삽입위치 결정
   const touchToGhost = useCallback(
     (lx: number, ly: number): GhostState | null => {
       // 덧줄 영역까지 터치 인식하도록 행 경계를 확장 (위아래로 4줄 추가)
       const LEDGER_EXTRA = LINE_SPACING * 4;
-      const activeCursorMeasure = cursorMeasureIdxRef.current;
-      const activeCursorInsert = cursorInsertIdxRef.current;
 
-      // ── 스텝 입력 모드: 커서가 활성화된 경우 커서 마디로 전역 스냅 ──
-      // 음표/쉼표 입력 시 어느 곳을 탭해도 커서 마디 위치에 삽입됨.
-      // 음높이(pitch)는 탭한 Y 좌표를 커서 마디의 staffY 기준으로 계산.
-      if (activeCursorMeasure != null && activeCursorInsert != null) {
-        for (const row of rowsRef.current) {
-          let accX = 0;
-          for (let i = 0; i < row.measureIndices.length; i++) {
-            const mIdx = row.measureIndices[i];
-            const mWidth = row.measureWidths[i] ?? 0;
-            if (mIdx === activeCursorMeasure) {
-              const staffY = row.y + SCORE_STAFF_PADDING_TOP;
-              // 탭한 Y를 커서 마디의 staffY 기준으로 pitch 계산
-              const staffRelY = ly - staffY;
-              const pitch = yToPitch(staffRelY, clefRef.current);
-              const acc = accidentalRef.current;
-              const finalPitch: Pitch =
-                acc != null && acc !== "natural"
-                  ? { ...pitch, accidental: acc }
-                  : pitch;
-              const noteY = staffY + pitchToY(finalPitch, clefRef.current);
-
-              const contentX = measureContentX(accX, i, mIdx);
-              const contentWidth = Math.max(mWidth - (contentX - accX), 1);
-              const measure = docRef.current.parts[selectedPartIdxRef.current]?.measures[mIdx];
-              const positions = measure
-                ? layoutMeasure(measure, 0, clefRef.current, contentWidth)
-                : [];
-
-              let ghostX: number;
-              if (positions[activeCursorInsert]) {
-                ghostX = contentX + positions[activeCursorInsert].x;
-              } else if (positions.length > 0) {
-                const last = positions[positions.length - 1];
-                ghostX = contentX + last.x + (last.width ?? 24) + 4;
-              } else {
-                ghostX = contentX + 4;
-              }
-
-              return { x: ghostX, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx, insertIdx: activeCursorInsert };
-            }
-            accX += mWidth;
-          }
-        }
-      }
-
-      // ── 커서 없음(select/erase 모드 등): 탭 위치 그대로 사용 ──
+      // ── 자유 배치: 탭 위치 그대로 사용 ──
       for (const row of rowsRef.current) {
         const rowBottom = row.y + SCORE_PART_HEIGHT;
         if (ly < row.y - LEDGER_EXTRA || ly > rowBottom + LEDGER_EXTRA) continue;
@@ -322,19 +323,20 @@ export function ScoreCanvas({
           if (lx >= accX && lx <= accX + mWidth) {
             const staffY = row.y + SCORE_STAFF_PADDING_TOP;
             const staffRelY = ly - staffY;
-            const pitch = yToPitch(staffRelY, clefRef.current);
+            const effClefGhost = effectiveClefAtMeasureRef.current.get(mIdx) ?? clefRef.current;
+            const pitch = yToPitch(staffRelY, effClefGhost);
             const acc = accidentalRef.current;
             const finalPitch: Pitch =
               acc != null && acc !== "natural"
                 ? { ...pitch, accidental: acc }
                 : pitch;
-            const noteY = staffY + pitchToY(finalPitch, clefRef.current);
+            const noteY = staffY + pitchToY(finalPitch, effClefGhost);
 
             const measure = docRef.current.parts[selectedPartIdxRef.current]?.measures[mIdx];
             const contentX = measureContentX(accX, i, mIdx);
             const contentWidth = Math.max(mWidth - (contentX - accX), 1);
             const positions = measure
-              ? layoutMeasure(measure, 0, clefRef.current, contentWidth)
+              ? layoutMeasure(measure, 0, effClefGhost, contentWidth)
               : [];
             const nElements = measure?.elements.length ?? 0;
 
@@ -349,7 +351,8 @@ export function ScoreCanvas({
               }
             }
 
-            return { x: lx, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx, insertIdx };
+            const measureRelX = Math.max(0, lx - contentX);
+            return { x: lx, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx, insertIdx, measureRelX };
           }
           accX += mWidth;
         }
@@ -382,7 +385,8 @@ export function ScoreCanvas({
             const contentX = measureContentX(accX, i, mIdx);
             const contentWidth = Math.max(mWidth - (contentX - accX), 1);
             // ScoreRenderer와 동일한 layoutMeasure 결과로 실제 음표 x 위치 계산
-            const positions = layoutMeasure(measure, 0, clefRef.current, contentWidth);
+            const effClefHit = effectiveClefAtMeasureRef.current.get(mIdx) ?? clefRef.current;
+            const positions = layoutMeasure(measure, 0, effClefHit, contentWidth);
 
             let bestDist = HIT_RADIUS;
             let bestId: string | null = null;
@@ -392,7 +396,7 @@ export function ScoreCanvas({
               const absX = contentX + pos.x;
               const noteY =
                 el.type === "note"
-                  ? staffY + pitchToY(el.pitch, clefRef.current)
+                  ? staffY + pitchToY(el.pitch, effClefHit)
                   : staffY + STAFF_HEIGHT / 2;
               const dist = Math.sqrt((lx - absX) ** 2 + (ly - noteY) ** 2);
               if (dist < bestDist) {
@@ -442,6 +446,10 @@ export function ScoreCanvas({
       if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
     };
 
+    // 지우개 드래그 범위 삭제용 누적 목록
+    let eraseHitsList: Array<{elementId: string; measureIdx: number}> = [];
+    const eraseHitIds = new Set<string>();
+
     return PanResponder.create({
       // 모든 도구에서 터치 시작 시 캡처 — 단일 PanResponder 레이어로 탭/드래그 통합 처리
       onStartShouldSetPanResponder: () => true,
@@ -461,6 +469,8 @@ export function ScoreCanvas({
         didLongPress = false;
         dragElementIdRef.current = null;
         dragMeasureIdxRef.current = -1;
+        eraseHitsList = [];
+        eraseHitIds.clear();
 
         // 롱프레스 타이머 시작 (500ms)
         clearLongPress();
@@ -512,6 +522,13 @@ export function ScoreCanvas({
         ) {
           // 선택된 음표 드래그: 고스트로 새 음높이 미리 보기
           setGhost(touchToGhost(slx, sly));
+        } else if (activeToolRef.current === "erase" && isMoving) {
+          // 지우개 드래그: 이동 경로의 모든 요소 누적
+          const eraseHit = hitTestElement(slx, sly);
+          if (eraseHit && !eraseHitIds.has(eraseHit.elementId)) {
+            eraseHitIds.add(eraseHit.elementId);
+            eraseHitsList.push(eraseHit);
+          }
         }
       },
 
@@ -543,14 +560,22 @@ export function ScoreCanvas({
             if (notePreviewEnabledRef.current) {
               applyNotePreviewOnRelease(isPlayingRef.current, pitchToMidi(info.pitch), previewScoreNote, instrumentIdRef.current);
             }
-            onNotePlaced(info.measureIdx, info.pitch, dur, info.insertIdx);
+            onNotePlaced(info.measureIdx, info.pitch, dur, info.insertIdx, info.measureRelX);
           }
         } else if (tool === "rest") {
           const info = touchToGhost(slx, sly);
-          if (info) onRestPlaced(info.measureIdx, dur, info.insertIdx);
+          if (info) onRestPlaced(info.measureIdx, dur, info.insertIdx, info.measureRelX);
         } else if (tool === "erase") {
-          const hit = hitTestElement(slx, sly);
-          if (hit) onEraseElement(hit.elementId, hit.measureIdx);
+          if (eraseHitsList.length > 0) {
+            // 드래그 범위 일괄 삭제
+            onEraseMultipleRef.current?.(eraseHitsList);
+          } else {
+            // 탭 단일 삭제
+            const hit = hitTestElement(slx, sly);
+            if (hit) onEraseElement(hit.elementId, hit.measureIdx);
+          }
+          eraseHitsList = [];
+          eraseHitIds.clear();
         } else if (tool === "select") {
           if (isMoving && dragElementIdRef.current && dragMeasureIdxRef.current >= 0) {
             const info = touchToGhost(slx, sly);
@@ -581,6 +606,8 @@ export function ScoreCanvas({
         setGhost(null);
         dragElementIdRef.current = null;
         dragMeasureIdxRef.current = -1;
+        eraseHitsList = [];
+        eraseHitIds.clear();
       },
     });
   }, [touchToGhost, hitTestElement, hitTestMeasure, onNotePlaced, onRestPlaced, onEraseElement, onElementTap]);

@@ -54,6 +54,7 @@ export function createScoreDocument(options: {
     keySignature: { sharps: options.keySharps ?? 0 },
     timeSignature: options.timeSignature ?? { numerator: 4, denominator: 4 },
     bpm: options.bpm ?? 120,
+    measuresPerLine: 4,
     playbackSettings: {
       showPlayhead: true,
       showZoomView: true,

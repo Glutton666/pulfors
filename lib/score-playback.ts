@@ -47,21 +47,26 @@ export interface PlayEvent {
 // ── 음표 길이 → 박자 변환 ─────────────────────────────────────
 
 /** NoteDuration → 4분음표 단위 박자 수 */
-export function noteDurationToBeats(dur: NoteDuration): number {
+export function noteDurationToBeats(dur: NoteDuration, doubleDotted?: boolean): number {
+  let base: number;
   switch (dur) {
-    case "whole":         return 4;
-    case "whole_dot":     return 6;
-    case "half":          return 2;
-    case "half_dot":      return 3;
-    case "quarter":       return 1;
-    case "quarter_dot":   return 1.5;
-    case "eighth":        return 0.5;
-    case "eighth_dot":    return 0.75;
-    case "sixteenth":     return 0.25;
-    case "sixteenth_dot": return 0.375;
-    case "thirty_second": return 0.125;
-    default:              return 1;
+    case "whole":         base = 4; break;
+    case "whole_dot":     base = 6; break;
+    case "half":          base = 2; break;
+    case "half_dot":      base = 3; break;
+    case "quarter":       base = 1; break;
+    case "quarter_dot":   base = 1.5; break;
+    case "eighth":        base = 0.5; break;
+    case "eighth_dot":    base = 0.75; break;
+    case "sixteenth":     base = 0.25; break;
+    case "sixteenth_dot": base = 0.375; break;
+    case "thirty_second":     base = 0.125; break;
+    case "thirty_second_dot": base = 0.1875; break;
+    default:              base = 1;
   }
+  // 겹점 음표: 기본값 × 1.75 (1 + 1/2 + 1/4)
+  if (doubleDotted) return base * 1.75;
+  return base;
 }
 
 // ── 반복 부호에 따른 재생 순서 계산 ──────────────────────────
@@ -198,7 +203,7 @@ function buildMeasureNotes(
   const msPerBeat = 60000 / Math.max(1, startBpm);
 
   for (const el of measure.elements) {
-    const beats = noteDurationToBeats(el.duration as NoteDuration);
+    const beats = noteDurationToBeats(el.duration as NoteDuration, el.type === "note" ? el.doubleDotted : undefined);
     const elDurMs = beats * msPerBeat;
 
     if (el.type === "note" && !el.tieEnd) {

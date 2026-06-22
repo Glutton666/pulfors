@@ -14,27 +14,30 @@ import type {
   ArticulationType,
   Dynamic,
   InstrumentCategory,
+  OrnamentType,
 } from "@/lib/score-types";
 import type { EditorTool } from "@/components/ScoreCanvas";
 
 // ── 음표 길이 ─────────────────────────────────────────────────
 
 const DURATIONS: Array<{ value: NoteDuration; symbol: string; labelKey: string }> = [
-  { value: "whole",     symbol: "𝅝",  labelKey: "durationWhole" },
-  { value: "half",      symbol: "𝅗𝅥", labelKey: "durationHalf" },
-  { value: "quarter",   symbol: "♩",  labelKey: "durationQuarter" },
-  { value: "eighth",    symbol: "♪",  labelKey: "durationEighth" },
-  { value: "sixteenth", symbol: "𝅘𝅥𝅯", labelKey: "durationSixteenth" },
+  { value: "whole",          symbol: "𝅝",  labelKey: "durationWhole" },
+  { value: "half",           symbol: "𝅗𝅥", labelKey: "durationHalf" },
+  { value: "quarter",        symbol: "♩",  labelKey: "durationQuarter" },
+  { value: "eighth",         symbol: "♪",  labelKey: "durationEighth" },
+  { value: "sixteenth",      symbol: "𝅘𝅥𝅯", labelKey: "durationSixteenth" },
+  { value: "thirty_second",  symbol: "𝅘𝅥𝅰", labelKey: "durationThirtySecond" },
 ];
 
 // ── 아티큘레이션 ──────────────────────────────────────────────
 
 const ARTICULATIONS: Array<{ id: ArticulationType; symbol: string; labelKey: string }> = [
-  { id: "staccato", symbol: "·",  labelKey: "articulStaccato" },
-  { id: "tenuto",   symbol: "—",  labelKey: "articulTenuto" },
-  { id: "accent",   symbol: ">",  labelKey: "articulAccent" },
-  { id: "fermata",  symbol: "𝄐",  labelKey: "articulFermata" },
-  { id: "marcato",  symbol: "^",  labelKey: "articulMarcato" },
+  { id: "staccato",      symbol: "·",  labelKey: "articulStaccato" },
+  { id: "tenuto",        symbol: "—",  labelKey: "articulTenuto" },
+  { id: "accent",        symbol: ">",  labelKey: "articulAccent" },
+  { id: "fermata",       symbol: "𝄐",  labelKey: "articulFermata" },
+  { id: "marcato",       symbol: "^",  labelKey: "articulMarcato" },
+  { id: "staccatissimo", symbol: "▼",  labelKey: "articulStaccatissimo" },
 ];
 
 // ── 임시표 ────────────────────────────────────────────────────
@@ -83,14 +86,28 @@ const REPEAT_SIGNS: RepeatSignItem[] = [
 // ── 강약 ──────────────────────────────────────────────────────
 
 const DYNAMICS: Array<{ id: Dynamic; symbol: string }> = [
+  { id: "ppp",  symbol: "ppp" },
   { id: "pp",   symbol: "pp" },
   { id: "p",    symbol: "p" },
   { id: "mp",   symbol: "mp" },
   { id: "mf",   symbol: "mf" },
   { id: "f",    symbol: "f" },
   { id: "ff",   symbol: "ff" },
+  { id: "fff",  symbol: "fff" },
   { id: "sfz",  symbol: "sfz" },
   { id: "fp",   symbol: "fp" },
+  { id: "mute", symbol: "𝄽" },
+];
+
+// ── 꾸밈음 ────────────────────────────────────────────────────
+
+const ORNAMENTS: Array<{ id: OrnamentType; symbol: string; labelKey: string }> = [
+  { id: "trill",        symbol: "tr~",  labelKey: "ornTrill" },
+  { id: "mordent",      symbol: "𝒎",   labelKey: "ornMordent" },
+  { id: "turn",         symbol: "𝒔",   labelKey: "ornTurn" },
+  { id: "tremolo",      symbol: "///",  labelKey: "ornTremolo" },
+  { id: "grace_note",   symbol: "𝅘♪",  labelKey: "ornGraceNote" },
+  { id: "glissando",    symbol: "gliss.", labelKey: "ornGlissando" },
 ];
 
 export type CrescType = "cresc" | "decresc" | null;
@@ -204,19 +221,27 @@ export interface ScorePaletteProps {
   activeTool: EditorTool;
   activeDuration: NoteDuration;
   isDotted: boolean;
+  isDoubleDotted?: boolean;
   accidental: Accidental | null;
   selectedArticulation: ArticulationType | null;
   selectedDynamic: Dynamic | null;
+  selectedOrnament?: OrnamentType | null;
   selectedRepeatSign?: RepeatSignId | null;
+  selectedInstrumentSymbol?: string | null;
+  onInstrumentSymbolSelect?: (id: string | null) => void;
   selectedCrescType?: CrescType;
+  selectedSlur?: boolean;
+  onSlurToggle?: (v: boolean) => void;
   instrumentCategory?: InstrumentCategory;
   enabledSymbols?: Record<string, boolean>;
   onToolChange: (tool: EditorTool) => void;
   onDurationChange: (dur: NoteDuration) => void;
   onDottedChange: (dotted: boolean) => void;
+  onDoubleDottedChange?: (doubleDotted: boolean) => void;
   onAccidentalChange: (acc: Accidental | null) => void;
   onArticulationSelect: (id: ArticulationType | null) => void;
   onDynamicSelect: (id: Dynamic | null) => void;
+  onOrnamentSelect?: (id: OrnamentType | null) => void;
   onRepeatSignSelect?: (id: RepeatSignId | null) => void;
   onCrescTypeSelect?: (type: CrescType) => void;
   onTempoSelect?: (text: string, bpm: number) => void;
@@ -233,19 +258,27 @@ export function ScorePalette({
   activeTool,
   activeDuration,
   isDotted,
+  isDoubleDotted = false,
   accidental,
   selectedArticulation,
   selectedDynamic,
+  selectedOrnament,
   selectedRepeatSign,
   selectedCrescType,
+  selectedSlur = false,
+  onSlurToggle,
+  selectedInstrumentSymbol = null,
+  onInstrumentSymbolSelect,
   instrumentCategory,
   enabledSymbols = {},
   onToolChange,
   onDurationChange,
   onDottedChange,
+  onDoubleDottedChange,
   onAccidentalChange,
   onArticulationSelect,
   onDynamicSelect,
+  onOrnamentSelect,
   onRepeatSignSelect,
   onCrescTypeSelect,
   onTempoSelect,
@@ -394,6 +427,22 @@ export function ScorePalette({
               {t("scoreMode", "durationDot")}
             </Text>
           </Pressable>
+          <Pressable
+            style={[
+              styles.durBtn,
+              {
+                backgroundColor: isDoubleDotted ? C.accent + "33" : "transparent",
+                borderColor: isDoubleDotted ? C.accent : C.border,
+              },
+            ]}
+            onPress={() => onDoubleDottedChange?.(!isDoubleDotted)}
+            testID="score-palette-double-dot"
+          >
+            <Text style={[styles.durSymbol, { color: isDoubleDotted ? C.accent : C.text }]}>••</Text>
+            <Text style={[styles.durLabel, { color: isDoubleDotted ? C.accent : C.textSecondary }]}>
+              {t("scoreMode", "durationDoubleDot")}
+            </Text>
+          </Pressable>
         </ScrollView>
       )}
 
@@ -504,6 +553,56 @@ export function ScorePalette({
               {t("scoreMode", "tieLabel" as any)}
             </Text>
           </Pressable>
+
+          {/* 슬러 버튼 */}
+          <Pressable
+            style={[
+              styles.signBtn,
+              {
+                backgroundColor: selectedSlur ? C.accent + "33" : "transparent",
+                borderColor: selectedSlur ? C.accent : C.border,
+                minWidth: 44,
+              },
+            ]}
+            onPress={() => onSlurToggle?.(!selectedSlur)}
+            testID="score-palette-slur"
+          >
+            <Text style={[styles.artSymbol, { color: selectedSlur ? C.accent : C.text, fontSize: 18 }]}>
+              ⌢
+            </Text>
+            <Text style={[styles.durLabel, { color: selectedSlur ? C.accent : C.textSecondary }]}>
+              {t("scoreMode", "slurLabel")}
+            </Text>
+          </Pressable>
+
+          <View style={[styles.divider, { backgroundColor: C.border }]} />
+
+          {/* 꾸밈음 */}
+          {ORNAMENTS.map((orn) => {
+            const isActive = selectedOrnament === orn.id;
+            return (
+              <Pressable
+                key={orn.id}
+                style={[
+                  styles.signBtn,
+                  {
+                    backgroundColor: isActive ? C.accent + "33" : "transparent",
+                    borderColor: isActive ? C.accent : C.border,
+                    minWidth: 44,
+                  },
+                ]}
+                onPress={() => onOrnamentSelect?.(isActive ? null : orn.id)}
+                testID={`score-palette-orn-${orn.id}`}
+              >
+                <Text style={[styles.artSymbol, { color: isActive ? C.accent : C.text, fontSize: 12 }]}>
+                  {orn.symbol}
+                </Text>
+                <Text style={[styles.durLabel, { color: isActive ? C.accent : C.textSecondary }]}>
+                  {t("scoreMode", orn.labelKey as any)}
+                </Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
       )}
 
@@ -688,24 +787,28 @@ export function ScorePalette({
           >
             {instrSymbols.map((sym) => {
               const isEnabled = enabledSymbols[sym.id] !== false;
+              const isActive = selectedInstrumentSymbol === sym.id;
               return (
                 <Pressable
                   key={sym.id}
                   style={[
                     styles.instrBtn,
                     {
-                      backgroundColor: isEnabled ? C.accent + "22" : "transparent",
-                      borderColor: isEnabled ? C.accent : C.border,
+                      backgroundColor: isActive ? C.accent + "44" : isEnabled ? C.accent + "22" : "transparent",
+                      borderColor: isActive ? C.accent : isEnabled ? C.accent + "88" : C.border,
                       opacity: isEnabled ? 1 : 0.5,
                     },
                   ]}
-                  onPress={() => onSymbolToggle?.(sym.id, !isEnabled)}
+                  onPress={() => {
+                    if (isEnabled) onInstrumentSymbolSelect?.(isActive ? null : sym.id);
+                  }}
+                  onLongPress={() => onSymbolToggle?.(sym.id, !isEnabled)}
                   testID={`score-palette-sym-${sym.id}`}
                 >
-                  <Text style={[styles.instrSymbol, { color: isEnabled ? C.accent : C.text }]}>
+                  <Text style={[styles.instrSymbol, { color: isActive ? C.accent : isEnabled ? C.accent : C.text }]}>
                     {sym.symbol}
                   </Text>
-                  <Text style={[styles.durLabel, { color: isEnabled ? C.accent : C.textSecondary }]}>
+                  <Text style={[styles.durLabel, { color: isActive ? C.accent : isEnabled ? C.accent : C.textSecondary }]}>
                     {t("scoreMode", sym.labelKey as any)}
                   </Text>
                 </Pressable>

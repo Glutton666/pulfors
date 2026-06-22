@@ -35,7 +35,8 @@ export const NOTE_WIDTH: Record<NoteDuration, number> = {
   quarter:        Math.round(LINE_SPACING * 2.4), // 24
   eighth:         Math.round(LINE_SPACING * 1.8), // 18
   sixteenth:      Math.round(LINE_SPACING * 1.4), // 14
-  thirty_second:  Math.round(LINE_SPACING * 1.2), // 12
+  thirty_second:      Math.round(LINE_SPACING * 1.2), // 12
+  thirty_second_dot:  Math.round(LINE_SPACING * 1.5), // 15
   whole_dot:      Math.round(LINE_SPACING * 5.6), // 56
   half_dot:       Math.round(LINE_SPACING * 3.8), // 38
   quarter_dot:    Math.round(LINE_SPACING * 2.8), // 28
@@ -259,13 +260,65 @@ export function layoutMeasure(
   const elementCount = measure.elements.length;
   if (elementCount === 0) return positions;
 
-  // 각 음표의 기본 폭 계산
+  // 자유 배치 여부: 하나라도 placedX가 있으면 자유 배치 모드
+  const hasPlacedX = measure.elements.some((el) => el.placedX != null);
+
+  if (hasPlacedX) {
+    // ── 자유 배치 모드: placedX 기준 배치 + 50% 겹침 제한 ──
+    // placedX가 없는 기존 요소는 순차 레이아웃 위치를 fallback으로 사용
+    // (자유 배치 이전에 추가된 음표들이 왼쪽으로 몰리는 regression 방지)
+    const widthsSeq = measure.elements.map((el) => NOTE_WIDTH[el.duration] ?? 24);
+    const totalNoteWidthSeq = widthsSeq.reduce((a, b) => a + b, 0);
+    const leftPadSeq = 8;
+    const extraPerNoteSeq = Math.max(
+      0,
+      (totalWidth - totalNoteWidthSeq - leftPadSeq * 2) / elementCount,
+    );
+    const seqLeftX = new Map<string, number>();
+    let seqX = startX + leftPadSeq;
+    for (let i = 0; i < measure.elements.length; i++) {
+      seqLeftX.set(measure.elements[i].id, seqX);
+      seqX += widthsSeq[i] + extraPerNoteSeq;
+    }
+
+    const leftPad = 8;
+    const getX = (el: (typeof measure.elements)[number]) => {
+      if (el.placedX != null) return el.placedX + startX;
+      return seqLeftX.get(el.id) ?? startX + leftPad;
+    };
+
+    const sortedByX = [...measure.elements].sort((a, b) => getX(a) - getX(b));
+
+    // 50% 겹침 제한: 50% 이상 겹치면 절반 겹친 위치에서 멈춤
+    let lastEnd = startX + leftPad;
+    for (const el of sortedByX) {
+      const w = NOTE_WIDTH[el.duration] ?? 24;
+      let rawX = getX(el);
+      // 앞 음표 너비의 50% 이상 겹치면 정확히 절반만 겹친 위치로 클램프
+      if (rawX < lastEnd - w * 0.5) {
+        rawX = lastEnd - w * 0.5;
+      }
+      let y = STAFF_HEIGHT / 2;
+      if (el.type === "note") {
+        y = pitchToY(el.pitch, clef);
+      }
+      positions.push({
+        elementId: el.id,
+        x: rawX + w / 2,
+        y,
+        width: w,
+      });
+      lastEnd = rawX + w;
+    }
+    return positions;
+  }
+
+  // ── 순차 레이아웃 모드 (기존 동작) ──
   const widths = measure.elements.map((el) =>
     NOTE_WIDTH[el.duration] ?? 24
   );
   const totalNoteWidth = widths.reduce((a, b) => a + b, 0);
 
-  // 남은 공간을 음표 개수로 균등 배분
   const leftPad = 8;
   const extraPerNote = Math.max(
     0,
@@ -276,7 +329,7 @@ export function layoutMeasure(
   for (let i = 0; i < measure.elements.length; i++) {
     const el = measure.elements[i];
     const w = widths[i];
-    let y = STAFF_HEIGHT / 2; // 기본값 (쉼표용)
+    let y = STAFF_HEIGHT / 2;
 
     if (el.type === "note") {
       y = pitchToY(el.pitch, clef);
@@ -284,7 +337,7 @@ export function layoutMeasure(
 
     positions.push({
       elementId: el.id,
-      x: x + w / 2, // 음표 중심 X
+      x: x + w / 2,
       y,
       width: w,
     });
@@ -318,6 +371,7 @@ export function calcBeamGroups(
       dur === "eighth" ||
       dur === "sixteenth" ||
       dur === "thirty_second" ||
+      dur === "thirty_second_dot" ||
       dur === "eighth_dot" ||
       dur === "sixteenth_dot";
 
@@ -366,6 +420,31 @@ export function computeScoreLayout(
   const measureCount = measures.length;
 
   const minWidths = measures.map((m) => measureMinWidth(m));
+  const rowHeight = SCORE_PART_HEIGHT * partCount + SCORE_ROW_MARGIN_BOTTOM;
+
+  // ── 줄당 마디 수 고정 모드 ─────────────────────────────────────
+  const measuresPerLine = doc.measuresPerLine;
+  if (measuresPerLine && measuresPerLine >= 1) {
+    const rows: ScoreRowLayout[] = [];
+    let y = SCORE_ROW_MARGIN_TOP;
+    for (let start = 0; start < measureCount; start += measuresPerLine) {
+      const chunk = Array.from(
+        { length: Math.min(measuresPerLine, measureCount - start) },
+        (_, k) => start + k,
+      );
+      const measureWidth = containerWidth / measuresPerLine;
+      rows.push({
+        measureIndices: chunk,
+        y,
+        measureWidths: chunk.map(() => measureWidth),
+        rowWidth: containerWidth,
+      });
+      y += rowHeight;
+    }
+    return { rows, totalHeight: (rows.length > 0 ? rows[rows.length - 1].y + rowHeight : SCORE_ROW_MARGIN_TOP) + SCORE_ROW_MARGIN_BOTTOM };
+  }
+
+  // ── 너비 기반 자동 줄 배치 (기존 동작) ────────────────────────
   const firstMeasureHeader =
     headerWidth(doc.parts[0]?.clef ?? "treble", true, doc.keySignature.sharps) + SCORE_FIRST_MEASURE_EXTRA;
 
@@ -382,7 +461,6 @@ export function computeScoreLayout(
         : 0;
 
     if (currentRow.length > 0 && currentRowWidth + mw + extraHeader > containerWidth) {
-      const rowHeight = SCORE_PART_HEIGHT * partCount + SCORE_ROW_MARGIN_BOTTOM;
       const equalWidth = containerWidth / currentRow.length;
       rows.push({
         measureIndices: [...currentRow],
@@ -400,7 +478,6 @@ export function computeScoreLayout(
   }
 
   if (currentRow.length > 0) {
-    const rowHeight = SCORE_PART_HEIGHT * partCount + SCORE_ROW_MARGIN_BOTTOM;
     const totalMin = currentRow.reduce(
       (sum, mi) => sum + Math.max(minWidths[mi], SCORE_DEFAULT_MEASURE_WIDTH),
       0,

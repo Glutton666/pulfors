@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   Animated,
   useWindowDimensions,
+  PanResponder,
 } from "react-native";
 import { captureRef } from "react-native-view-shot";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -40,6 +41,7 @@ import type {
   Accidental,
   ArticulationType,
   Dynamic,
+  ClefType,
 } from "@/lib/score-types";
 import { INSTRUMENTS } from "@/lib/score-types";
 import { ScoreCanvas } from "@/components/ScoreCanvas";
@@ -70,6 +72,9 @@ function makeNote(
   accidental?: Accidental | null,
   articulations?: ArticulationType[],
   dynamic?: Dynamic,
+  ornament?: import("@/lib/score-types").OrnamentType | null,
+  placedX?: number,
+  doubleDotted?: boolean,
 ): ScoreNote {
   const finalPitch: Pitch = accidental
     ? { ...pitch, accidental }
@@ -79,16 +84,20 @@ function makeNote(
     type: "note",
     pitch: finalPitch,
     duration,
+    doubleDotted: doubleDotted || undefined,
     articulations: articulations?.length ? articulations : undefined,
     dynamic: dynamic ?? undefined,
+    ornament: ornament ?? undefined,
+    placedX,
   };
 }
 
-function makeRest(duration: NoteDuration): ScoreRest {
+function makeRest(duration: NoteDuration, placedX?: number): ScoreRest {
   return {
     id: Crypto.randomUUID(),
     type: "rest",
     duration,
+    placedX,
   };
 }
 
@@ -161,7 +170,18 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   const [activeTool, setActiveTool] = useState<EditorTool>("note");
   const [activeDuration, setActiveDuration] = useState<NoteDuration>("quarter");
   const [isDotted, setIsDotted] = useState(false);
+  const [isDoubleDotted, setIsDoubleDotted] = useState(false);
+  const [selectedInstrumentSymbol, setSelectedInstrumentSymbol] = useState<string | null>(null);
+  const [selectedSlur, setSelectedSlur] = useState(false);
+  const [slurPendingStartId, setSlurPendingStartId] = useState<string | null>(null);
   const [accidental, setAccidental] = useState<Accidental | null>(null);
+  // 드래그-to-trash 상태
+  const [draggingMeasureIdx, setDraggingMeasureIdx] = useState<number | null>(null);
+  const [trashHovered, setTrashHovered] = useState(false);
+  // 마디 범위 선택 (linkedPracticeEntryId 일괄 설정용)
+  const [overviewRangeMode, setOverviewRangeMode] = useState(false);
+  const [overviewRangeStart, setOverviewRangeStart] = useState<number | null>(null);
+  const [overviewRangeEnd, setOverviewRangeEnd] = useState<number | null>(null);
   const [selectedArticulation, setSelectedArticulation] = useState<ArticulationType | null>(null);
   const [selectedDynamic, setSelectedDynamic] = useState<Dynamic | null>(null);
   const [selectedRepeatSign, setSelectedRepeatSign] = useState<RepeatSignId | null>(null);
@@ -177,7 +197,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   const [showMeasureEditModal, setShowMeasureEditModal] = useState(false);
   const [measureEditTarget, setMeasureEditTarget] = useState<{
     measureIdx: number;
-    field: "bpm" | "timeSig";
+    field: "bpm" | "timeSig" | "linkedEntry";
     value: string;
     label: string;
     hint: string;
@@ -201,11 +221,11 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   const [selectedMeasureIdx, setSelectedMeasureIdx] = useState<number | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
 
-  // ── 스텝 입력 커서 ────────────────────────────────────────────
-  // 음표/쉼표 입력 후 다음 삽입 위치를 가리키는 커서
-  // 에디터 열릴 때 첫 번째 마디로 초기화
-  const [cursorMeasureIdx, setCursorMeasureIdx] = useState<number | null>(0);
-  const [cursorInsertIdx, setCursorInsertIdx] = useState<number>(0);
+  // ── 꾸밈음 선택 ──────────────────────────────────────────────
+  const [selectedOrnament, setSelectedOrnament] = useState<import("@/lib/score-types").OrnamentType | null>(null);
+
+  // ── 마디 설정 드로어 ──────────────────────────────────────────
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // ── 재생 연동 ─────────────────────────────────────────────────
   const playback = useScorePlayback(doc);
@@ -417,7 +437,10 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
       const timeSig = m.timeSignature ?? doc.timeSignature;
       const beatsTotal = timeSig.numerator * (4 / timeSig.denominator);
       const beatsUsed = m.elements.reduce(
-        (sum, el) => sum + noteDurationToBeats(el.duration as NoteDuration),
+        (sum, el) => sum + noteDurationToBeats(
+          el.duration as NoteDuration,
+          el.type === "note" ? (el as { doubleDotted?: boolean }).doubleDotted : undefined,
+        ),
         0,
       );
       return { beatsUsed: Math.round(beatsUsed * 100) / 100, beatsTotal };
@@ -427,28 +450,32 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
 
   // ── 음표 추가 (터치 확정) ─────────────────────────────────────
   const handleNotePlaced = useCallback(
-    (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number) => {
-      const newElement = makeNote(
+    (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number) => {
+      let newElement = makeNote(
         pitch,
         duration,
         accidental,
         selectedArticulation ? [selectedArticulation] : [],
         selectedDynamic ?? undefined,
+        selectedOrnament ?? undefined,
+        placedX,
+        isDoubleDotted,
       );
-
-      const currentMeasures = doc.parts[selectedPartIdx]?.measures ?? [];
-      const curMeasure = currentMeasures[measureIdx];
-      const nextIdx = insertIdx + 1;
-      const isLastMeasure = measureIdx >= currentMeasures.length - 1;
-
-      // 박자 기반 마디 꽉 참 판정 (element 수가 아닌 beats 기준)
-      const timeSig = curMeasure?.timeSignature ?? doc.timeSignature;
-      const beatsTotal = timeSig.numerator * (4 / timeSig.denominator);
-      const oldBeats = (curMeasure?.elements ?? []).reduce(
-        (sum, el) => sum + noteDurationToBeats(el.duration as NoteDuration), 0,
-      );
-      const newBeats = oldBeats + noteDurationToBeats(duration);
-      const isMeasureFull = newBeats >= beatsTotal;
+      // sticky 악기 기호를 새로 놓인 음표에 자동 적용
+      const instrSym = _selectedInstrumentSymbolRef.current;
+      if (instrSym) {
+        const patch: Partial<ScoreNote> = {};
+        if (instrSym === "bowUp")          patch.bowUp = true;
+        else if (instrSym === "bowDown")   patch.bowDown = true;
+        else if (instrSym === "harmonic")  patch.harmonic = true;
+        else if (instrSym === "pizzicato") patch.pizzicato = true;
+        else if (instrSym === "arco")      patch.arco = true;
+        else if (instrSym === "pedal")     patch.pedal = true;
+        else if (instrSym === "pedalEnd")  patch.pedalEnd = true;
+        else if (instrSym === "ottava1")   patch.ottava = 1;
+        else if (instrSym === "arpeggio")  patch.arpeggio = true;
+        newElement = { ...newElement, ...patch };
+      }
 
       const newDoc: ScoreDocument = {
         ...doc,
@@ -460,48 +487,20 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             next.splice(insertIdx, 0, newElement);
             return { ...m, elements: next };
           });
-          // 마지막 마디가 꽉 찼으면 새 마디 자동 추가
-          if (isMeasureFull && isLastMeasure) {
-            newMeasures.push(createEmptyMeasure());
-          }
           return { ...p, measures: newMeasures };
         }),
       };
       applyDoc(newDoc);
       setSelectedElementId(newElement.id);
-
-      // 스텝 입력 커서: 마디가 꽉 차면 다음 마디로 이동
-      if (isMeasureFull) {
-        const nextMeasureIdx = measureIdx + 1;
-        setSelectedMeasureIdx(nextMeasureIdx);
-        setCursorMeasureIdx(nextMeasureIdx);
-        setCursorInsertIdx(0);
-      } else {
-        setSelectedMeasureIdx(measureIdx);
-        setCursorMeasureIdx(measureIdx);
-        setCursorInsertIdx(nextIdx);
-      }
+      setSelectedMeasureIdx(measureIdx);
     },
-    [doc, selectedPartIdx, accidental, selectedArticulation, selectedDynamic],
+    [doc, selectedPartIdx, accidental, selectedArticulation, selectedDynamic, selectedOrnament, isDoubleDotted],
   );
 
   // ── 쉼표 추가 ─────────────────────────────────────────────────
   const handleRestPlaced = useCallback(
-    (measureIdx: number, duration: NoteDuration, insertIdx: number) => {
-      const newElement = makeRest(duration);
-
-      const currentMeasures = doc.parts[selectedPartIdx]?.measures ?? [];
-      const curMeasure = currentMeasures[measureIdx];
-      const nextIdx = insertIdx + 1;
-      const isLastMeasure = measureIdx >= currentMeasures.length - 1;
-
-      const timeSig = curMeasure?.timeSignature ?? doc.timeSignature;
-      const beatsTotal = timeSig.numerator * (4 / timeSig.denominator);
-      const oldBeats = (curMeasure?.elements ?? []).reduce(
-        (sum, el) => sum + noteDurationToBeats(el.duration as NoteDuration), 0,
-      );
-      const newBeats = oldBeats + noteDurationToBeats(duration);
-      const isMeasureFull = newBeats >= beatsTotal;
+    (measureIdx: number, duration: NoteDuration, insertIdx: number, placedX: number) => {
+      const newElement = makeRest(duration, placedX);
 
       const newDoc: ScoreDocument = {
         ...doc,
@@ -513,27 +512,14 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             next.splice(insertIdx, 0, newElement);
             return { ...m, elements: next };
           });
-          if (isMeasureFull && isLastMeasure) {
-            newMeasures.push(createEmptyMeasure());
-          }
           return { ...p, measures: newMeasures };
         }),
       };
       applyDoc(newDoc);
       setSelectedElementId(newElement.id);
-
-      if (isMeasureFull) {
-        const nextMeasureIdx = measureIdx + 1;
-        setSelectedMeasureIdx(nextMeasureIdx);
-        setCursorMeasureIdx(nextMeasureIdx);
-        setCursorInsertIdx(0);
-      } else {
-        setSelectedMeasureIdx(measureIdx);
-        setCursorMeasureIdx(measureIdx);
-        setCursorInsertIdx(nextIdx);
-      }
+      setSelectedMeasureIdx(measureIdx);
     },
-    [doc, selectedPartIdx, selectedDynamic],
+    [doc, selectedPartIdx],
   );
 
   // ── 지우기 — hitTest로 찾은 정확한 요소 제거 ─────────────────
@@ -561,11 +547,202 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
     [doc, selectedPartIdx, selectedElementId],
   );
 
+  // ── 지우개 드래그 범위 일괄 삭제 ─────────────────────────────
+  const handleEraseMultiple = useCallback(
+    (elements: Array<{elementId: string; measureIdx: number}>) => {
+      const byMeasure = new Map<number, Set<string>>();
+      for (const { elementId, measureIdx } of elements) {
+        if (!byMeasure.has(measureIdx)) byMeasure.set(measureIdx, new Set());
+        byMeasure.get(measureIdx)!.add(elementId);
+      }
+      const newDoc: ScoreDocument = {
+        ...doc,
+        parts: doc.parts.map((p, pIdx) => {
+          if (pIdx !== selectedPartIdx) return p;
+          return {
+            ...p,
+            measures: p.measures.map((m, mi) => {
+              const toDelete = byMeasure.get(mi);
+              if (!toDelete) return m;
+              return { ...m, elements: m.elements.filter((el) => !toDelete.has(el.id)) };
+            }),
+          };
+        }),
+      };
+      applyDoc(newDoc);
+      const deletedIds = new Set(elements.map((e) => e.elementId));
+      if (selectedElementId && deletedIds.has(selectedElementId)) setSelectedElementId(null);
+    },
+    [doc, selectedPartIdx, selectedElementId],
+  );
+
   // ── 음표 탭 선택 ──────────────────────────────────────────────
+  // refs for sticky-removal in handleElementTap (no dep, always current)
+  const _docRef = useRef(doc);
+  _docRef.current = doc;
+  const _selectedPartIdxRef = useRef(selectedPartIdx);
+  _selectedPartIdxRef.current = selectedPartIdx;
+  const _selectedArticulationRef = useRef(selectedArticulation);
+  _selectedArticulationRef.current = selectedArticulation;
+  const _selectedOrnamentRef = useRef(selectedOrnament);
+  _selectedOrnamentRef.current = selectedOrnament;
+  const _selectedDynamicRef = useRef(selectedDynamic);
+  _selectedDynamicRef.current = selectedDynamic;
+  const _selectedInstrumentSymbolRef = useRef<string | null>(null);
+  _selectedInstrumentSymbolRef.current = selectedInstrumentSymbol;
+  const _selectedSlurRef = useRef(false);
+  _selectedSlurRef.current = selectedSlur;
+  const _slurPendingStartIdRef = useRef<string | null>(null);
+  _slurPendingStartIdRef.current = slurPendingStartId;
+  const _selectedCrescTypeRef = useRef<CrescType>(null);
+  _selectedCrescTypeRef.current = selectedCrescType;
+  const _applyDocRef = useRef(applyDoc);
+  _applyDocRef.current = applyDoc;
+
   const handleElementTap = useCallback(
     (elementId: string, measureIdx: number) => {
       setSelectedElementId((prev) => (prev === elementId ? null : elementId));
       setSelectedMeasureIdx(measureIdx);
+
+      const curDoc = _docRef.current;
+      const curPartIdx = _selectedPartIdxRef.current;
+      const applyFn = _applyDocRef.current;
+
+      // ── 슬러 두 번 탭 흐름 ──────────────────────────────────
+      if (_selectedSlurRef.current) {
+        const pending = _slurPendingStartIdRef.current;
+        if (pending === null) {
+          // 첫 번째 탭: slurStart 표시
+          applyFn({
+            ...curDoc,
+            parts: curDoc.parts.map((p, pIdx) => {
+              if (pIdx !== curPartIdx) return p;
+              return {
+                ...p,
+                measures: p.measures.map((m, mIdx) => {
+                  if (mIdx !== measureIdx) return m;
+                  return { ...m, elements: m.elements.map((el) => {
+                    if (el.id !== elementId || el.type !== "note") return el;
+                    return { ...el, slurStart: !el.slurStart, slurEnd: undefined, slurEndNoteId: undefined };
+                  })};
+                }),
+              };
+            }),
+          });
+          setSlurPendingStartId(elementId);
+        } else {
+          // 두 번째 탭: slurEnd 표시 + 슬러 시작 노트에 slurEndNoteId 저장 + 슬러 모드 종료
+          applyFn({
+            ...curDoc,
+            parts: curDoc.parts.map((p, pIdx) => {
+              if (pIdx !== curPartIdx) return p;
+              return {
+                ...p,
+                measures: p.measures.map((m, mIdx) => {
+                  return {
+                    ...m,
+                    elements: m.elements.map((el) => {
+                      if (el.type !== "note") return el;
+                      // 종료 노트: slurEnd 설정
+                      if (el.id === elementId) return { ...el, slurEnd: true };
+                      // 시작 노트: slurEndNoteId 기록 (어느 마디에 있든 탐색)
+                      if (el.id === pending) return { ...el, slurEndNoteId: elementId };
+                      return el;
+                    }),
+                  };
+                }),
+              };
+            }),
+          });
+          setSlurPendingStartId(null);
+          setSelectedSlur(false);
+        }
+        return;
+      }
+
+      // ── 크레셴도/데크레셴도 노트 앵커 탭 ────────────────────
+      const crescType = _selectedCrescTypeRef.current;
+      if (crescType) {
+        const isCrescent = crescType === "cresc";
+        // i <= measureIdx: 같은 마디 내 start→end도 허용
+        const hasStart = curDoc.parts[curPartIdx]?.measures.some(
+          (m, i) => i <= measureIdx && (isCrescent ? m.crescStart : m.decrescStart),
+        );
+        applyFn({
+          ...curDoc,
+          parts: curDoc.parts.map((p, pIdx) => {
+            if (pIdx !== curPartIdx) return p;
+            return {
+              ...p,
+              measures: p.measures.map((m, mIdx) => {
+                if (mIdx !== measureIdx) return m;
+                if (isCrescent) {
+                  if (hasStart) return { ...m, crescEnd: true, crescNoteEndId: elementId };
+                  return { ...m, crescStart: true, crescNoteStartId: elementId, decrescStart: undefined };
+                } else {
+                  if (hasStart) return { ...m, decrescEnd: true, decrescNoteEndId: elementId };
+                  return { ...m, decrescStart: true, decrescNoteStartId: elementId, crescStart: undefined };
+                }
+              }),
+            };
+          }),
+        });
+        if (hasStart) setSelectedCrescType(null);
+        return;
+      }
+
+      // ── 활성 sticky 기호가 있으면 탭한 노트에 즉시 적용/해제 ─
+      const art = _selectedArticulationRef.current;
+      const orn = _selectedOrnamentRef.current;
+      const dyn = _selectedDynamicRef.current;
+      const instrSym = _selectedInstrumentSymbolRef.current;
+      if (!art && !orn && !dyn && !instrSym) return;
+      const newDoc: ScoreDocument = {
+        ...curDoc,
+        parts: curDoc.parts.map((p, pIdx) => {
+          if (pIdx !== curPartIdx) return p;
+          return {
+            ...p,
+            measures: p.measures.map((m, mIdx) => {
+              if (mIdx !== measureIdx) return m;
+              return {
+                ...m,
+                elements: m.elements.map((el) => {
+                  if (el.id !== elementId || el.type !== "note") return el;
+                  let updated: typeof el = { ...el };
+                  if (art) {
+                    const existing = updated.articulations ?? [];
+                    const hasArt = existing.includes(art);
+                    const next = hasArt ? existing.filter((a) => a !== art) : [...existing, art];
+                    updated = { ...updated, articulations: next.length ? next : undefined };
+                  }
+                  if (orn) {
+                    updated = { ...updated, ornament: updated.ornament === orn ? undefined : orn };
+                  }
+                  // dynamic은 노트 레벨로 적용/해제 (note.dynamic)
+                  if (dyn) {
+                    updated = { ...updated, dynamic: updated.dynamic === dyn ? undefined : dyn };
+                  }
+                  // 악기 특수 기호 토글 (note 레벨)
+                  if (instrSym) {
+                    if (instrSym === "bowUp")     updated = { ...updated, bowUp:     updated.bowUp     ? undefined : true };
+                    else if (instrSym === "bowDown")   updated = { ...updated, bowDown:   updated.bowDown   ? undefined : true };
+                    else if (instrSym === "harmonic")  updated = { ...updated, harmonic:  updated.harmonic  ? undefined : true };
+                    else if (instrSym === "pizzicato") updated = { ...updated, pizzicato: updated.pizzicato ? undefined : true };
+                    else if (instrSym === "arco")      updated = { ...updated, arco:      updated.arco      ? undefined : true };
+                    else if (instrSym === "pedal")     updated = { ...updated, pedal:     updated.pedal     ? undefined : true };
+                    else if (instrSym === "pedalEnd")  updated = { ...updated, pedalEnd:  updated.pedalEnd  ? undefined : true };
+                    else if (instrSym === "ottava1")   updated = { ...updated, ottava:    updated.ottava === 1 ? undefined : 1 };
+                    else if (instrSym === "arpeggio")  updated = { ...updated, arpeggio:  updated.arpeggio  ? undefined : true };
+                  }
+                  return updated;
+                }),
+              };
+            }),
+          };
+        }),
+      };
+      applyFn(newDoc);
     },
     [],
   );
@@ -748,6 +925,34 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
         };
         applyDoc(newDoc);
       }
+    } else if (field === "linkedEntry") {
+      // 범위 내 모든 마디에 linkedPracticeEntryId 일괄 적용
+      const rangeMin = Math.min(
+        overviewRangeStart ?? measureIdx,
+        overviewRangeEnd ?? measureIdx,
+      );
+      const rangeMax = Math.max(
+        overviewRangeStart ?? measureIdx,
+        overviewRangeEnd ?? measureIdx,
+      );
+      const newDoc: ScoreDocument = {
+        ...doc,
+        parts: doc.parts.map((p, pIdx) => {
+          if (pIdx !== selectedPartIdx) return p;
+          return {
+            ...p,
+            measures: p.measures.map((m, mIdx) =>
+              mIdx >= rangeMin && mIdx <= rangeMax
+                ? { ...m, linkedPracticeEntryId: value.trim() || undefined }
+                : m,
+            ),
+          };
+        }),
+      };
+      applyDoc(newDoc);
+      setOverviewRangeMode(false);
+      setOverviewRangeStart(null);
+      setOverviewRangeEnd(null);
     }
     setShowMeasureEditModal(false);
     setMeasureEditTarget(null);
@@ -934,6 +1139,29 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
                   ? existing.filter((a) => a !== art)
                   : [...existing, art];
               return { ...el, articulations: next.length ? next : undefined };
+            }),
+          })),
+        };
+      }),
+    };
+    applyDoc(newDoc);
+  }
+
+  // ── 꾸밈음 선택 노트에 적용/해제 ─────────────────────────────
+  function handleApplyOrnamentToSelected(orn: import("@/lib/score-types").OrnamentType | null) {
+    if (!selectedElementId) return;
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
+        if (pIdx !== selectedPartIdx) return p;
+        return {
+          ...p,
+          measures: p.measures.map((m) => ({
+            ...m,
+            elements: m.elements.map((el) => {
+              if (el.id !== selectedElementId || el.type !== "note") return el;
+              const nextOrnament = el.ornament === orn ? undefined : (orn ?? undefined);
+              return { ...el, ornament: nextOrnament };
             }),
           })),
         };
@@ -1377,9 +1605,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
               onMeasureTap={handleMeasureTap}
               onMeasureLongPress={handleMeasureLongPress}
               onEraseElement={handleEraseElement}
+              onEraseMultiple={handleEraseMultiple}
               onNoteMoved={handleNoteMoved}
-              cursorMeasureIdx={cursorMeasureIdx}
-              cursorInsertIdx={cursorInsertIdx}
+              cursorMeasureIdx={null}
               isPlaying={playback.isPlaying}
               notePreviewEnabled={notePreviewEnabled}
               instrumentId={doc.parts[selectedPartIdx]?.instrumentId}
@@ -1432,34 +1660,73 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
 
         {/* ── 마디 관리 탭 ─────────────────────────────────────── */}
         {currentPart && (
+          <>
           <View style={[styles.measureTabsRow, { marginTop: 16 }]}>
-            {currentPart.measures.map((m, mIdx) => (
-              <Pressable
+            {currentPart.measures.map((m, mIdx) => {
+              const inRange =
+                overviewRangeMode && overviewRangeStart !== null
+                  ? overviewRangeEnd !== null
+                    ? mIdx >= Math.min(overviewRangeStart, overviewRangeEnd) &&
+                      mIdx <= Math.max(overviewRangeStart, overviewRangeEnd)
+                    : mIdx === overviewRangeStart
+                  : false;
+              const isDragging = draggingMeasureIdx === mIdx;
+              // PanResponder for drag-to-trash (created inline — not a hook)
+              const dragPR = PanResponder.create({
+                onStartShouldSetPanResponder: () => true,
+                onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 6 || Math.abs(gs.dy) > 6,
+                onPanResponderGrant: () => {
+                  setDraggingMeasureIdx(mIdx);
+                  setTrashHovered(false);
+                },
+                onPanResponderMove: (_, gs) => {
+                  // 오른쪽으로 충분히 드래그 시 trash zone 활성화
+                  setTrashHovered(gs.dx > 80);
+                },
+                onPanResponderRelease: (_, gs) => {
+                  if (gs.dx > 80) {
+                    // 트래시로 드래그 완료 → 마디 삭제
+                    handleDeleteMeasure(mIdx);
+                  } else if (Math.abs(gs.dx) < 6 && Math.abs(gs.dy) < 6) {
+                    // 탭으로 판정 (이동 없음)
+                    if (overviewRangeMode) {
+                      if (overviewRangeStart === null || overviewRangeEnd !== null) {
+                        setOverviewRangeStart(mIdx);
+                        setOverviewRangeEnd(null);
+                      } else {
+                        setOverviewRangeEnd(mIdx);
+                      }
+                    } else {
+                      setSelectedMeasureIdx(mIdx);
+                      setSelectedElementId(null);
+                    }
+                  }
+                  setDraggingMeasureIdx(null);
+                  setTrashHovered(false);
+                },
+                onPanResponderTerminate: () => {
+                  setDraggingMeasureIdx(null);
+                  setTrashHovered(false);
+                },
+              });
+              return (
+              <View
                 key={m.id}
-                style={({ pressed }) => [
+                {...dragPR.panHandlers}
+                style={[
                   styles.measureTab,
                   {
-                    borderColor: selectedMeasureIdx === mIdx ? C.accent : C.border,
-                    backgroundColor:
-                      selectedMeasureIdx === mIdx ? C.accent + "22" : C.surface,
+                    borderColor: isDragging && trashHovered ? "#ef4444"
+                      : inRange ? C.accent
+                      : selectedMeasureIdx === mIdx ? C.accent
+                      : C.border,
+                    backgroundColor: isDragging && trashHovered ? "#ef444422"
+                      : inRange ? C.accent + "33"
+                      : selectedMeasureIdx === mIdx ? C.accent + "22"
+                      : C.surface,
+                    opacity: isDragging ? 0.7 : 1,
                   },
-                  pressed && { opacity: 0.7 },
                 ]}
-                onPress={() => {
-                  setSelectedMeasureIdx(mIdx);
-                  setSelectedElementId(null);
-                  // 커서를 탭한 마디의 끝으로 이동
-                  const measureElements = currentPart.measures[mIdx]?.elements ?? [];
-                  setCursorMeasureIdx(mIdx);
-                  setCursorInsertIdx(measureElements.length);
-                }}
-                onLongPress={() => {
-                  confirmDestructive(t("scoreMode", "deleteMeasure"), {
-                    confirmText: t("scoreMode", "deleteMeasure"),
-                    cancelText: t("scoreMode", "cancel"),
-                    onConfirm: () => handleDeleteMeasure(mIdx),
-                  });
-                }}
                 testID={`score-editor-measure-${mIdx}`}
               >
                 {(() => {
@@ -1476,7 +1743,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
                       <Text
                         style={[
                           styles.measureTabNum,
-                          { color: cursorMeasureIdx === mIdx ? C.accent : selectedMeasureIdx === mIdx ? C.accent : C.textSecondary },
+                          { color: inRange ? C.accent : selectedMeasureIdx === mIdx ? C.accent : C.textSecondary },
                         ]}
                       >
                         {mIdx + 1}
@@ -1486,11 +1753,76 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
                           ? t("scoreMode", "measureEmpty")
                           : `${beatsUsed}/${beatsTotal}`}
                       </Text>
+                      {m.linkedPracticeEntryId && (
+                        <View style={[styles.measureTabLinked, { backgroundColor: C.accent }]} />
+                      )}
                     </>
                   );
                 })()}
+              </View>
+              );
+            })}
+
+            {/* 드래그-to-trash 표시기 (드래그 중일 때 glows) */}
+            <View
+              style={[
+                styles.trashZone,
+                {
+                  borderColor: trashHovered ? "#ef4444" : C.border,
+                  backgroundColor: trashHovered ? "#ef444433" : "transparent",
+                },
+              ]}
+            >
+              <Ionicons
+                name="trash-outline"
+                size={16}
+                color={trashHovered ? "#ef4444" : C.textSecondary}
+              />
+            </View>
+
+            {/* 범위 선택 토글 버튼 */}
+            <Pressable
+              style={[
+                styles.addMeasureBtn,
+                {
+                  borderColor: overviewRangeMode ? C.accent : C.border,
+                  backgroundColor: overviewRangeMode ? C.accent + "22" : "transparent",
+                },
+              ]}
+              onPress={() => {
+                setOverviewRangeMode((v) => !v);
+                setOverviewRangeStart(null);
+                setOverviewRangeEnd(null);
+              }}
+              testID="score-editor-range-toggle"
+            >
+              <Text style={[styles.addMeasureText, { color: overviewRangeMode ? C.accent : C.textSecondary }]}>
+                {t("scoreMode", "rangeSelect")}
+              </Text>
+            </Pressable>
+
+            {/* 범위가 선택된 경우 연습 항목 링크 버튼 */}
+            {overviewRangeMode && overviewRangeStart !== null && overviewRangeEnd !== null && (
+              <Pressable
+                style={[styles.addMeasureBtn, { borderColor: C.accent, backgroundColor: C.accent + "22" }]}
+                onPress={() => {
+                  const minIdx = Math.min(overviewRangeStart!, overviewRangeEnd!);
+                  setMeasureEditTarget({
+                    measureIdx: minIdx,
+                    field: "linkedEntry",
+                    value: currentPart.measures[minIdx]?.linkedPracticeEntryId ?? "",
+                    label: t("scoreMode", "drawerLinkEntry"),
+                    hint: "entry ID",
+                  });
+                  setShowMeasureEditModal(true);
+                }}
+                testID="score-editor-link-entry"
+              >
+                <Text style={[styles.addMeasureText, { color: C.accent }]}>
+                  {t("scoreMode", "linkToEntry")}
+                </Text>
               </Pressable>
-            ))}
+            )}
 
             {/* 마디 추가 버튼 */}
             <Pressable
@@ -1503,7 +1835,226 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
                 {t("scoreMode", "addMeasure")}
               </Text>
             </Pressable>
+
+            {/* 다음 마디 ▶ 버튼 */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.nextMeasureBtn,
+                { backgroundColor: C.accent, opacity: pressed ? 0.75 : 1 },
+              ]}
+              onPress={() => {
+                const total = currentPart?.measures.length ?? 0;
+                const current = selectedMeasureIdx ?? -1;
+                if (current < total - 1) {
+                  // 다음 기존 마디로 이동
+                  setSelectedMeasureIdx(current + 1);
+                  setSelectedElementId(null);
+                } else {
+                  // 마지막 마디 → 새 마디 추가 후 이동 (자동 전진 없음)
+                  const newDoc: ScoreDocument = {
+                    ...doc,
+                    parts: doc.parts.map((part) => ({
+                      ...part,
+                      measures: [...part.measures, createEmptyMeasure()],
+                    })),
+                  };
+                  applyDoc(newDoc);
+                  setSelectedMeasureIdx(total);
+                  setSelectedElementId(null);
+                }
+              }}
+              testID="score-editor-next-measure"
+            >
+              <Text style={styles.nextMeasureBtnText}>
+                {t("scoreMode", "nextMeasure")}
+              </Text>
+            </Pressable>
           </View>
+
+          {/* ── 마디 설정 드로어 ──────────────────────────── */}
+          {selectedMeasureIdx !== null && (
+            <View style={[styles.drawerContainer, { borderColor: C.border, backgroundColor: C.surface }]}>
+              <Pressable
+                style={[styles.drawerHeader, { borderBottomColor: drawerOpen ? C.border : "transparent" }]}
+                onPress={() => setDrawerOpen((v) => !v)}
+                testID="score-editor-drawer-toggle"
+              >
+                <Text style={[styles.drawerHeaderText, { color: C.text }]}>
+                  {t("scoreMode", "drawerMeasureSettings")} — {t("scoreMode", "addMeasure").replace("추가", "").replace("Add", "")} {selectedMeasureIdx + 1}
+                </Text>
+                <Ionicons
+                  name={drawerOpen ? "chevron-up" : "chevron-down"}
+                  size={14}
+                  color={C.textSecondary}
+                />
+              </Pressable>
+
+              {drawerOpen && (
+                <View style={styles.drawerContent}>
+                  {/* BPM 변경 */}
+                  <View style={styles.drawerRow}>
+                    <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
+                      {t("scoreMode", "drawerBpmLabel")}
+                    </Text>
+                    <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
+                      {currentPart?.measures[selectedMeasureIdx]?.bpm
+                        ? String(currentPart.measures[selectedMeasureIdx].bpm)
+                        : `${doc.bpm} (${t("scoreMode", "drawerClear")})`}
+                    </Text>
+                    <Pressable
+                      style={[styles.drawerApplyBtn, { backgroundColor: C.accent }]}
+                      onPress={() => {
+                        setDrawerOpen(false);
+                        handleMeasureBpmChange(selectedMeasureIdx);
+                      }}
+                      testID="score-drawer-bpm-apply"
+                    >
+                      <Text style={styles.drawerApplyBtnText}>{t("scoreMode", "drawerApply")}</Text>
+                    </Pressable>
+                  </View>
+
+                  {/* 박자표 변경 */}
+                  <View style={styles.drawerRow}>
+                    <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
+                      {t("scoreMode", "drawerTimeSigLabel")}
+                    </Text>
+                    <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
+                      {(() => {
+                        const sig = currentPart?.measures[selectedMeasureIdx]?.timeSignature ?? doc.timeSignature;
+                        return `${sig.numerator}/${sig.denominator}`;
+                      })()}
+                    </Text>
+                    <Pressable
+                      style={[styles.drawerApplyBtn, { backgroundColor: C.accent }]}
+                      onPress={() => {
+                        setDrawerOpen(false);
+                        handleMeasureTimeSigChange(selectedMeasureIdx);
+                      }}
+                      testID="score-drawer-timesig-apply"
+                    >
+                      <Text style={styles.drawerApplyBtnText}>{t("scoreMode", "drawerApply")}</Text>
+                    </Pressable>
+                  </View>
+
+                  {/* 음자리표 변경 (이 마디부터 적용) */}
+                  <View style={styles.drawerRow}>
+                    <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
+                      {t("scoreMode", "drawerClefLabel")}
+                    </Text>
+                    <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
+                      {(() => {
+                        const m = currentPart?.measures[selectedMeasureIdx];
+                        return m?.clef ?? currentPart?.clef ?? "treble";
+                      })()}
+                    </Text>
+                    <Pressable
+                      style={[styles.drawerApplyBtn, { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }]}
+                      onPress={() => {
+                        const cycle: ClefType[] = ["treble", "bass", "alto", "tenor", "percussion"];
+                        const m = currentPart?.measures[selectedMeasureIdx];
+                        const cur = m?.clef ?? currentPart?.clef ?? "treble";
+                        const next = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
+                        applyDoc({
+                          ...doc,
+                          parts: doc.parts.map((p, pIdx) => {
+                            if (pIdx !== selectedPartIdx) return p;
+                            return {
+                              ...p,
+                              measures: p.measures.map((mm, mIdx) =>
+                                mIdx === selectedMeasureIdx ? { ...mm, clef: next } : mm
+                              ),
+                            };
+                          }),
+                        });
+                      }}
+                      testID="score-drawer-clef-cycle"
+                    >
+                      <Text style={[styles.drawerApplyBtnText, { color: C.text }]}>
+                        {t("scoreMode", "drawerApply")}
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  {/* 조표 변경 (이 마디부터 적용) */}
+                  <View style={styles.drawerRow}>
+                    <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
+                      {t("scoreMode", "drawerKeyLabel")}
+                    </Text>
+                    <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
+                      {(() => {
+                        const m = currentPart?.measures[selectedMeasureIdx];
+                        const sharps = m?.keySignature?.sharps ?? doc.keySignature.sharps;
+                        return sharps === 0 ? "C" : sharps > 0 ? `${sharps}#` : `${Math.abs(sharps)}♭`;
+                      })()}
+                    </Text>
+                    <View style={{ flexDirection: "row", gap: 4 }}>
+                      {([-1, 1] as const).map((delta) => (
+                        <Pressable
+                          key={delta}
+                          style={[styles.drawerApplyBtn, { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }]}
+                          onPress={() => {
+                            const m = currentPart?.measures[selectedMeasureIdx];
+                            const cur = m?.keySignature?.sharps ?? doc.keySignature.sharps ?? 0;
+                            const next = Math.max(-7, Math.min(7, cur + delta));
+                            applyDoc({
+                              ...doc,
+                              parts: doc.parts.map((p, pIdx) => {
+                                if (pIdx !== selectedPartIdx) return p;
+                                return {
+                                  ...p,
+                                  measures: p.measures.map((mm, mIdx) =>
+                                    mIdx === selectedMeasureIdx
+                                      ? { ...mm, keySignature: { sharps: next } }
+                                      : mm
+                                  ),
+                                };
+                              }),
+                            });
+                          }}
+                          testID={`score-drawer-key-${delta > 0 ? "plus" : "minus"}`}
+                        >
+                          <Text style={[styles.drawerApplyBtnText, { color: C.text }]}>
+                            {delta > 0 ? "+1#" : "-1♭"}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* 줄당 마디 수 */}
+                  <View style={styles.drawerRow}>
+                    <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
+                      {t("scoreMode", "drawerMeasuresPerLine")}
+                    </Text>
+                    <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
+                      {doc.measuresPerLine
+                        ? String(doc.measuresPerLine)
+                        : t("scoreMode", "drawerMeasuresPerLineAuto")}
+                    </Text>
+                    <View style={{ flexDirection: "row", gap: 4 }}>
+                      {([-1, 1] as const).map((delta) => (
+                        <Pressable
+                          key={delta}
+                          style={[styles.drawerApplyBtn, { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }]}
+                          onPress={() => {
+                            const cur = doc.measuresPerLine ?? 0;
+                            const next = Math.max(0, Math.min(8, cur + delta));
+                            applyDoc({ ...doc, measuresPerLine: next === 0 ? undefined : next });
+                          }}
+                          testID={`score-drawer-mpl-${delta > 0 ? "plus" : "minus"}`}
+                        >
+                          <Text style={[styles.drawerApplyBtnText, { color: C.text }]}>
+                            {delta > 0 ? "+1" : "-1"}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+          </>
         )}
       </ScrollView>
 
@@ -1552,6 +2103,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           activeTool={activeTool}
           activeDuration={activeDuration}
           isDotted={isDotted}
+          isDoubleDotted={isDoubleDotted}
           accidental={accidental}
           selectedArticulation={selectedArticulation}
           selectedDynamic={selectedDynamic}
@@ -1563,7 +2115,8 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           enabledSymbols={currentPart?.enabledSymbols ?? {}}
           onToolChange={setActiveTool}
           onDurationChange={setActiveDuration}
-          onDottedChange={setIsDotted}
+          onDottedChange={(v) => { setIsDotted(v); if (v) setIsDoubleDotted(false); }}
+          onDoubleDottedChange={(v) => { setIsDoubleDotted(v); if (v) setIsDotted(false); }}
           onAccidentalChange={(acc) => {
             setAccidental(acc);
             if (selectedElementId) handleApplyAccidentalToSelected(acc);
@@ -1573,11 +2126,20 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
             if (selectedElementId) handleApplyArticulationToSelected(art);
           }}
           onDynamicSelect={setSelectedDynamic}
+          selectedOrnament={selectedOrnament}
+          onOrnamentSelect={(orn) => {
+            setSelectedOrnament((prev) => (prev === orn ? null : orn));
+            if (selectedElementId) handleApplyOrnamentToSelected(orn);
+          }}
           selectedRepeatSign={selectedRepeatSign}
           selectedCrescType={selectedCrescType}
           onRepeatSignSelect={setSelectedRepeatSign}
           onCrescTypeSelect={setSelectedCrescType}
+          selectedSlur={selectedSlur}
+          onSlurToggle={(v) => { setSelectedSlur(v); if (!v) setSlurPendingStartId(null); }}
           onTempoSelect={handleTempoSelect}
+          selectedInstrumentSymbol={selectedInstrumentSymbol}
+          onInstrumentSymbolSelect={setSelectedInstrumentSymbol}
           onSymbolToggle={handleSymbolToggle}
           isTieActive={selectedTieActive}
           onTieToggle={handleToggleTieOnSelected}
