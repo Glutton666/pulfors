@@ -374,6 +374,20 @@ function ArticulationMark({ art, noteX, noteY, direction, color, idx }: {
           <Circle cx={noteX} cy={y - 3} r={1.8} fill={color} />
         </G>
       );
+    case "snap_pizzicato":
+      return (
+        <G>
+          <Circle cx={noteX} cy={y - 3} r={4} stroke={color} strokeWidth={1.2} fill="none" />
+          <Circle cx={noteX} cy={y - 3} r={1.5} fill={color} />
+        </G>
+      );
+    case "left_hand_pizzicato":
+      return (
+        <G>
+          <Line x1={noteX - 5} y1={y} x2={noteX + 5} y2={y} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+          <Line x1={noteX} y1={y - 5} x2={noteX} y2={y + 5} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+        </G>
+      );
     default:
       return null;
   }
@@ -439,6 +453,38 @@ function OrnamentMark({ ornament, noteX, noteY, direction, color }: {
           gliss.
         </SvgText>
       );
+    case "arpeggio_up": {
+      const ax = noteX - 9;
+      const ay = noteY + 6;
+      return (
+        <G>
+          <Path
+            d={`M${ax},${ay} Q${ax - 3},${ay - 4} ${ax},${ay - 8} Q${ax + 3},${ay - 12} ${ax},${ay - 16} Q${ax - 3},${ay - 20} ${ax},${ay - 24}`}
+            stroke={color} strokeWidth={1.2} fill="none"
+          />
+          <Path
+            d={`M${ax - 3},${ay - 21} L${ax},${ay - 26} L${ax + 3},${ay - 21}`}
+            stroke={color} strokeWidth={1} fill="none" strokeLinejoin="round"
+          />
+        </G>
+      );
+    }
+    case "arpeggio_down": {
+      const ax = noteX - 9;
+      const ay = noteY - 6;
+      return (
+        <G>
+          <Path
+            d={`M${ax},${ay} Q${ax + 3},${ay + 4} ${ax},${ay + 8} Q${ax - 3},${ay + 12} ${ax},${ay + 16} Q${ax + 3},${ay + 20} ${ax},${ay + 24}`}
+            stroke={color} strokeWidth={1.2} fill="none"
+          />
+          <Path
+            d={`M${ax - 3},${ay + 21} L${ax},${ay + 26} L${ax + 3},${ay + 21}`}
+            stroke={color} strokeWidth={1} fill="none" strokeLinejoin="round"
+          />
+        </G>
+      );
+    }
     default:
       return null;
   }

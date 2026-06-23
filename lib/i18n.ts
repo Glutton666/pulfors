@@ -1117,6 +1117,11 @@ export const translations = {
     ornTremolo:             { ko: "트레몰로", en: "Tremolo" },
     ornGraceNote:           { ko: "꾸밈음표", en: "Grace Note" },
     ornGlissando:           { ko: "글리산도", en: "Glissando" },
+    ornArpeggioUp:          { ko: "아르페지오↑", en: "Arpeggio Up" },
+    ornArpeggioDown:        { ko: "아르페지오↓", en: "Arpeggio Down" },
+    articulPortato:         { ko: "포르타토", en: "Portato" },
+    articulSnapPizzicato:   { ko: "스냅 피치카토", en: "Snap Pizzicato" },
+    articulLeftHandPizz:    { ko: "왼손 피치카토", en: "L.H. Pizz." },
     // 마디 설정 드로어
     drawerMeasureSettings:  { ko: "마디 설정", en: "Measure Settings" },
     drawerBpmLabel:         { ko: "BPM 변경", en: "Change BPM" },

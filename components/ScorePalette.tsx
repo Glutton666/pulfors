@@ -32,12 +32,15 @@ const DURATIONS: Array<{ value: NoteDuration; symbol: string; labelKey: string }
 // ── 아티큘레이션 ──────────────────────────────────────────────
 
 const ARTICULATIONS: Array<{ id: ArticulationType; symbol: string; labelKey: string }> = [
-  { id: "staccato",      symbol: "·",  labelKey: "articulStaccato" },
-  { id: "tenuto",        symbol: "—",  labelKey: "articulTenuto" },
-  { id: "accent",        symbol: ">",  labelKey: "articulAccent" },
-  { id: "fermata",       symbol: "𝄐",  labelKey: "articulFermata" },
-  { id: "marcato",       symbol: "^",  labelKey: "articulMarcato" },
-  { id: "staccatissimo", symbol: "▼",  labelKey: "articulStaccatissimo" },
+  { id: "staccato",           symbol: "·",    labelKey: "articulStaccato" },
+  { id: "tenuto",             symbol: "—",    labelKey: "articulTenuto" },
+  { id: "accent",             symbol: ">",    labelKey: "articulAccent" },
+  { id: "fermata",            symbol: "𝄐",   labelKey: "articulFermata" },
+  { id: "marcato",            symbol: "^",    labelKey: "articulMarcato" },
+  { id: "staccatissimo",      symbol: "▼",    labelKey: "articulStaccatissimo" },
+  { id: "portato",            symbol: "—·",   labelKey: "articulPortato" },
+  { id: "snap_pizzicato",     symbol: "◎",    labelKey: "articulSnapPizzicato" },
+  { id: "left_hand_pizzicato", symbol: "+",   labelKey: "articulLeftHandPizz" },
 ];
 
 // ── 임시표 ────────────────────────────────────────────────────
@@ -102,12 +105,14 @@ const DYNAMICS: Array<{ id: Dynamic; symbol: string }> = [
 // ── 꾸밈음 ────────────────────────────────────────────────────
 
 const ORNAMENTS: Array<{ id: OrnamentType; symbol: string; labelKey: string }> = [
-  { id: "trill",        symbol: "tr~",  labelKey: "ornTrill" },
-  { id: "mordent",      symbol: "𝒎",   labelKey: "ornMordent" },
-  { id: "turn",         symbol: "𝒔",   labelKey: "ornTurn" },
-  { id: "tremolo",      symbol: "///",  labelKey: "ornTremolo" },
-  { id: "grace_note",   symbol: "𝅘♪",  labelKey: "ornGraceNote" },
-  { id: "glissando",    symbol: "gliss.", labelKey: "ornGlissando" },
+  { id: "trill",         symbol: "tr~",   labelKey: "ornTrill" },
+  { id: "mordent",       symbol: "𝒎",    labelKey: "ornMordent" },
+  { id: "turn",          symbol: "𝒔",    labelKey: "ornTurn" },
+  { id: "tremolo",       symbol: "///",   labelKey: "ornTremolo" },
+  { id: "grace_note",    symbol: "𝅘♪",   labelKey: "ornGraceNote" },
+  { id: "glissando",     symbol: "gliss.", labelKey: "ornGlissando" },
+  { id: "arpeggio_up",   symbol: "≀↑",   labelKey: "ornArpeggioUp" },
+  { id: "arpeggio_down", symbol: "≀↓",   labelKey: "ornArpeggioDown" },
 ];
 
 export type CrescType = "cresc" | "decresc" | null;

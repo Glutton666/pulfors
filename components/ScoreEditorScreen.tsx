@@ -721,7 +721,23 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       const orn = _selectedOrnamentRef.current;
       const dyn = _selectedDynamicRef.current;
       const instrSym = _selectedInstrumentSymbolRef.current;
-      if (!art && !orn && !dyn && !instrSym) return;
+      if (!art && !orn && !dyn && !instrSym) {
+        // #317: 팔레트에 선택된 기호 없이 노트를 탭하면
+        // 해당 노트의 현재 꾸밈음·아티큘레이션을 팔레트에 반영해
+        // 사용자가 즉시 수정하거나 제거할 수 있도록 한다
+        const part = curDoc.parts[curPartIdx];
+        if (part) {
+          for (const m of part.measures) {
+            const el = m.elements.find((e) => e.id === elementId);
+            if (el?.type === "note") {
+              setSelectedOrnament(el.ornament ?? null);
+              setSelectedArticulation(el.articulations?.[0] ?? null);
+              break;
+            }
+          }
+        }
+        return;
+      }
       const newDoc: ScoreDocument = {
         ...curDoc,
         parts: curDoc.parts.map((p, pIdx) => {
