@@ -83,6 +83,84 @@ export async function exportScoreAsJson(doc: ScoreDocument): Promise<boolean> {
 
 export const shareScore = exportScoreAsJson;
 
+// ── .score.json 공유 (외부 공유용, 에디터에서 바로 열 수 있음) ──
+
+export async function shareScoreAsScoreJson(doc: ScoreDocument): Promise<boolean> {
+  try {
+    const payload: PulforsFile = {
+      _type: PULFORS_MAGIC,
+      createdAt: new Date().toISOString(),
+      doc,
+    };
+    const json = JSON.stringify(payload);
+    const safeName = (doc.metadata.title || "score")
+      .replace(/[^a-zA-Z0-9가-힣_-]/g, "_")
+      .slice(0, 30);
+    const filename = `${safeName}.score.json`;
+
+    if (Platform.OS === "web") {
+      downloadJsonWeb(json, filename);
+      return true;
+    }
+
+    const fileUri = (FileSystem.cacheDirectory ?? "") + filename;
+    await writeStringToFile(fileUri, json);
+
+    const canShare = await Sharing.isAvailableAsync();
+    if (!canShare) {
+      logger.warn("[ScoreIO] Sharing not available");
+      return false;
+    }
+    await Sharing.shareAsync(fileUri, {
+      mimeType: "application/json",
+      dialogTitle: doc.metadata.title || "Score",
+      UTI: "public.json",
+    });
+    return true;
+  } catch (e) {
+    logger.warn("[ScoreIO] shareScoreAsScoreJson error:", e);
+    return false;
+  }
+}
+
+// ── PNG 내보내기 (captureRef 기반) ────────────────────────────
+
+export async function exportScoreAsPng(
+  viewRef: React.RefObject<unknown>,
+  doc: ScoreDocument,
+): Promise<boolean> {
+  try {
+    const uri: string = await captureRef(viewRef as any, {
+      format: "png",
+      quality: 1,
+    });
+    if (Platform.OS === "web") {
+      const a = document.createElement("a");
+      a.href = uri;
+      const safeName = (doc.metadata.title || "score")
+        .replace(/[^a-zA-Z0-9가-힣_-]/g, "_")
+        .slice(0, 30);
+      a.download = `${safeName}_${formatDateForFilename()}.png`;
+      a.click();
+      return true;
+    }
+    const canShare = await Sharing.isAvailableAsync();
+    if (canShare) {
+      await Sharing.shareAsync(uri, {
+        mimeType: "image/png",
+        dialogTitle: doc.metadata.title || "Score",
+        UTI: "public.png",
+      });
+      return true;
+    }
+    logger.warn("[ScoreIO] Sharing not available for PNG");
+    return false;
+  } catch (e) {
+    logger.warn("[ScoreIO] exportScoreAsPng error:", e);
+    return false;
+  }
+}
+
 // ── .pulfors 파일 불러오기 ────────────────────────────────────
 
 export interface ImportScoreResult {

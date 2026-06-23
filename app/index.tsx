@@ -242,6 +242,12 @@ export default function MetronomeScreen() {
   const [noteIsPlaying, setNoteIsPlaying] = useState(false);
   const noteIsPlayingRef = useRef(false);
   useEffect(() => { noteIsPlayingRef.current = noteIsPlaying; }, [noteIsPlaying]);
+  const [noteMeasureCount, setNoteMeasureCount] = useState(0);
+  const noteMeasureCountRef = useRef(0);
+  const noteFirstBeatFiredRef = useRef(false);
+  // 악보-마디 프리셋 전환: 연습장 캐시 + 버전 카운터(race 방지)
+  const scorePracticeBookRef = useRef<PracticeEntry[]>([]);
+  const linkedEntryVersionRef = useRef(0);
   const [noteBarEntries, setNoteBarEntries] = useState<PracticeEntry[]>([]);
   const [controlPadMapping, setControlPadMapping] = useState<ControlPadMapping>(createEmptyControlPadMapping);
   const controlPadDirtyRef = useRef(false);
@@ -1620,6 +1626,15 @@ export default function MetronomeScreen() {
       pendingAccent = isAccent;
       hasBeatUpdate = true;
       batcher.schedule();
+      // 노트모드 재생 중 마디 카운트 추적
+      if (noteModeRef.current && noteIsPlayingRef.current) {
+        const wasFirst = !noteFirstBeatFiredRef.current;
+        noteFirstBeatFiredRef.current = true;
+        if (beat === 0 && !wasFirst) {
+          noteMeasureCountRef.current += 1;
+          setNoteMeasureCount(noteMeasureCountRef.current);
+        }
+      }
     });
 
     engine.setOnSubBeat((_beat: number, subBeat: number) => {
@@ -3838,6 +3853,36 @@ export default function MetronomeScreen() {
     }
   }, [barMode, beatsPerMeasure, beatTypes, beatSubdivisions, noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, preloadNoteSampleSounds]);
 
+  const handleLinkedEntryChange = useCallback(async (
+    entryId: string | undefined,
+    scoreDefaults: { bpm: number; beatsPerMeasure: number },
+  ) => {
+    const version = ++linkedEntryVersionRef.current;
+    if (!entryId) {
+      // 연결 없는 마디: 악보 기본 설정 복원
+      const engine = engineRef.current;
+      if (engine) {
+        const clampedBpm = Math.max(20, Math.min(300, scoreDefaults.bpm));
+        setBpm(clampedBpm);
+        engine.setBpm(clampedBpm);
+        setBeatsPerMeasure(scoreDefaults.beatsPerMeasure);
+        engine.setBeatsPerMeasure(scoreDefaults.beatsPerMeasure);
+      }
+      return;
+    }
+    // 캐시된 연습장 우선 사용; 미스 시 로드 후 캐시 갱신
+    let book = scorePracticeBookRef.current;
+    if (book.length === 0) {
+      book = await loadPracticeBook();
+      scorePracticeBookRef.current = book;
+    }
+    if (version !== linkedEntryVersionRef.current) return; // stale
+    const entry = book.find((e) => e.id === entryId);
+    if (entry) {
+      applyEntryToEngine(entry);
+    }
+  }, [applyEntryToEngine]);
+
   const noteStartPlayingEntry = useCallback(async (index: number) => {
     const q = noteQueueRef.current;
     if (index < 0 || index >= q.length) return;
@@ -3853,6 +3898,9 @@ export default function MetronomeScreen() {
 
     setNoteCurrentIndex(index);
     noteCurrentIndexRef.current = index;
+    noteMeasureCountRef.current = 0;
+    noteFirstBeatFiredRef.current = false;
+    setNoteMeasureCount(0);
 
     const entrySamples = entry.noteSamples || {};
     const entryNames = entry.noteSampleNames || {};
@@ -4660,7 +4708,10 @@ export default function MetronomeScreen() {
             onBack={() => setScoreMode("list")}
             onSaved={(updatedDoc) => {
               setScoreEditorDoc(updatedDoc);
+              // 연습장 캐시 무효화 (저장된 연결 항목 반영)
+              scorePracticeBookRef.current = [];
             }}
+            onLinkedEntryChange={handleLinkedEntryChange}
           />
         </View>
       )}
@@ -5314,6 +5365,7 @@ export default function MetronomeScreen() {
             playMode={notePlayMode}
             currentIndex={noteCurrentIndex}
             isPlaying={noteIsPlaying}
+            playingBarIdx={noteMeasureCount}
             onAddToQueue={handleNoteAddToQueue}
             onRemoveFromQueue={handleNoteRemoveFromQueue}
             onReorderQueue={handleNoteReorderQueue}

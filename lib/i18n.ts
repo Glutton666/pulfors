@@ -683,6 +683,13 @@ export const translations = {
     quickAddRemove: { ko: "슬롯 비우기", en: "Remove from slot" },
     quickAddNoEntries: { ko: "먼저 바 모드 항목을 저장하세요", en: "Save a bar mode entry first" },
     hintAddToQueue:    { ko: "아래 항목을 탭해서 큐에 추가하고 순서를 조정하세요", en: "Tap items below to add to queue and reorder them" },
+    scorePreview:      { ko: "악보 미리보기", en: "Score Preview" },
+    scoreLoading:      { ko: "악보 불러오는 중…", en: "Loading score…" },
+    previewUnit:       { ko: "미리보기 단위", en: "Preview unit" },
+    previewMeasure:    { ko: "마디", en: "Measure" },
+    previewPhrase:     { ko: "악구", en: "Phrase" },
+    phraseSize:        { ko: "악구 크기", en: "Phrase size" },
+    phraseMeasures:    { ko: "마디", en: "meas." },
   },
   duration: {
     s: { ko: "초", en: "s" },
@@ -1123,6 +1130,9 @@ export const translations = {
     drawerMeasuresPerLine:  { ko: "줄당 마디 수", en: "Meas/Line" },
     drawerMeasuresPerLineAuto: { ko: "자동", en: "Auto" },
     newScoreHint:           { ko: "박자표·조표·악기는 편집 화면에서 설정할 수 있어요.", en: "Time sig, key & instruments can be set inside the editor." },
+    shareScoreTitle:        { ko: "악보 공유", en: "Share Score" },
+    linkedPresetActive:     { ko: "연결 프리셋:", en: "Linked Preset:" },
+    exportPng:              { ko: "PNG 이미지로 내보내기", en: "Export as PNG Image" },
   },
 } as const satisfies TranslationsShape;
 

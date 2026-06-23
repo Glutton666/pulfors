@@ -26,6 +26,9 @@ import type { BeatType } from "@/lib/metronome-engine";
 import { useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
 import { HintBanner } from "@/components/HintTooltip";
+import { loadScore } from "@/lib/score-storage";
+import type { ScoreDocument } from "@/lib/score-types";
+import { ScoreRenderer } from "@/components/ScoreRenderer";
 
 interface NoteModeViewProps {
   queue: PracticeEntry[];
@@ -33,6 +36,8 @@ interface NoteModeViewProps {
   playMode: "once" | "loop" | "random";
   currentIndex: number;
   isPlaying: boolean;
+  /** 현재 재생 중인 엔트리의 완료된 마디 수 (0-based) */
+  playingBarIdx?: number;
   onAddToQueue: (entry: PracticeEntry) => void;
   onRemoveFromQueue: (index: number) => void;
   onReorderQueue: (fromIndex: number, toIndex: number) => void;
@@ -82,6 +87,91 @@ function BeatDots({ beatTypes, size = 6 }: { beatTypes: BeatType[]; size?: numbe
   );
 }
 
+function MiniScorePreview({
+  scoreId,
+  currentMeasureIdx,
+  previewUnit = "measure",
+  phraseSize = 4,
+  width = 52,
+  height = 40,
+}: {
+  scoreId: string;
+  currentMeasureIdx?: number;
+  previewUnit?: "measure" | "phrase";
+  phraseSize?: number;
+  width?: number;
+  height?: number;
+}) {
+  const { colors: C } = useTheme();
+  const [scoreDoc, setScoreDoc] = useState<ScoreDocument | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    loadScore(scoreId).then((doc) => {
+      if (!cancelled) {
+        setScoreDoc(doc);
+        setLoading(false);
+      }
+    }).catch(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [scoreId]);
+
+  if (loading) {
+    return (
+      <View style={{ width, height, justifyContent: "center", alignItems: "center" }}>
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.textTertiary }} />
+      </View>
+    );
+  }
+
+  if (!scoreDoc) {
+    return (
+      <View style={{ width, height, justifyContent: "center", alignItems: "center" }}>
+        <Ionicons name="document-outline" size={14} color={C.textTertiary} />
+      </View>
+    );
+  }
+
+  // 악구 단위: 현재 마디가 속한 악구의 첫 마디를 강조
+  const effectiveMeasureIdx =
+    currentMeasureIdx === undefined
+      ? undefined
+      : previewUnit === "phrase"
+        ? Math.floor(currentMeasureIdx / Math.max(1, phraseSize)) * Math.max(1, phraseSize)
+        : currentMeasureIdx;
+
+  const renderWidth = width * 3;
+  const scale = width / renderWidth;
+  const shiftX = -(renderWidth * (1 - scale)) / 2;
+  const shiftY = -(height * 3 * (1 - scale)) / 2;
+  return (
+    <View style={{ width, height, overflow: "hidden", borderRadius: 2 }}>
+      <View
+        style={{
+          width: renderWidth,
+          transform: [
+            { translateX: shiftX },
+            { translateY: shiftY },
+            { scale },
+          ],
+        }}
+      >
+        <ScoreRenderer
+          doc={scoreDoc}
+          containerWidth={renderWidth}
+          playheadMeasureIdx={effectiveMeasureIdx}
+          showPlayhead={false}
+          showPartNames={false}
+        />
+      </View>
+    </View>
+  );
+}
+
 function QueueItem({
   entry,
   index,
@@ -93,6 +183,9 @@ function QueueItem({
   onMoveUp,
   onMoveDown,
   onImageChange,
+  currentMeasureIdx,
+  previewUnit,
+  phraseSize,
 }: {
   entry: PracticeEntry;
   index: number;
@@ -104,6 +197,9 @@ function QueueItem({
   onMoveUp: () => void;
   onMoveDown: () => void;
   onImageChange?: (imageUri: string | undefined) => void;
+  currentMeasureIdx?: number;
+  previewUnit?: "measure" | "phrase";
+  phraseSize?: number;
 }) {
   const { colors: C } = useTheme();
   const S = useScale();
@@ -138,8 +234,17 @@ function QueueItem({
           <Text style={[styles.queueIndexText, isCurrent && { color: accentColor }]}>{index + 1}</Text>
         )}
       </View>
-      <Pressable onPress={handlePickImage} style={styles.queueThumb}>
-        {entry.imageUri ? (
+      <Pressable onPress={entry.scoreId ? undefined : handlePickImage} style={styles.queueThumb}>
+        {entry.scoreId ? (
+          <MiniScorePreview
+            scoreId={entry.scoreId}
+            currentMeasureIdx={isCurrent ? currentMeasureIdx : undefined}
+            previewUnit={previewUnit}
+            phraseSize={phraseSize}
+            width={48}
+            height={38}
+          />
+        ) : entry.imageUri ? (
           <Image source={{ uri: entry.imageUri }} style={styles.queueThumbImg} />
         ) : (
           <Ionicons name="image-outline" size={S.ms(16, 0.4)} color={C.textTertiary} />
@@ -285,6 +390,7 @@ export function NoteModeView({
   playMode,
   currentIndex,
   isPlaying,
+  playingBarIdx,
   onAddToQueue,
   onRemoveFromQueue,
   onReorderQueue,
@@ -318,6 +424,9 @@ export function NoteModeView({
     }
   }, [onSave]);
   const [sourceCollapsed, setSourceCollapsed] = useState(false);
+  const [previewUnit, setPreviewUnit] = useState<"measure" | "phrase">("measure");
+  const [phraseSize, setPhraseSize] = useState(4);
+  const hasScoreItems = queue.some((e) => !!e.scoreId);
   const [padEnabled, setPadEnabled] = useState(false);
   const [assignSlot, setAssignSlot] = useState<number | null>(null);
   const [activePadTab, setActivePadTab] = useState<"pad" | "quick">("pad");
@@ -986,6 +1095,57 @@ export function NoteModeView({
         <Text style={[styles.sectionTitle, { color: C.text }, isLandscape && { fontSize: S.ms(11, 0.3) }]}>{t("noteMode", "queue")}</Text>
         <Text style={[styles.sectionCount, { color: C.textTertiary }, isLandscape && { fontSize: S.ms(10, 0.3) }]}>{queue.length} {t("noteMode", "items")}</Text>
       </View>
+      {hasScoreItems && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6, paddingHorizontal: 2 }}>
+          <Text style={{ fontSize: S.ms(11, 0.3), color: C.textTertiary }}>{t("noteMode", "previewUnit")}:</Text>
+          <Pressable
+            onPress={() => setPreviewUnit("measure")}
+            style={[{
+              paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10,
+              backgroundColor: previewUnit === "measure" ? C.accent + "30" : "transparent",
+              borderWidth: 1, borderColor: previewUnit === "measure" ? C.accent : C.border,
+            }]}
+          >
+            <Text style={{ fontSize: S.ms(11, 0.3), color: previewUnit === "measure" ? C.accent : C.textTertiary }}>
+              {t("noteMode", "previewMeasure")}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setPreviewUnit("phrase")}
+            style={[{
+              paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10,
+              backgroundColor: previewUnit === "phrase" ? C.accent + "30" : "transparent",
+              borderWidth: 1, borderColor: previewUnit === "phrase" ? C.accent : C.border,
+            }]}
+          >
+            <Text style={{ fontSize: S.ms(11, 0.3), color: previewUnit === "phrase" ? C.accent : C.textTertiary }}>
+              {t("noteMode", "previewPhrase")}
+            </Text>
+          </Pressable>
+          {previewUnit === "phrase" && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginLeft: 4 }}>
+              <Pressable
+                onPress={() => setPhraseSize((p) => Math.max(1, p - 1))}
+                hitSlop={8}
+                style={{ opacity: phraseSize <= 1 ? 0.4 : 1 }}
+              >
+                <Ionicons name="remove-circle-outline" size={S.ms(16, 0.4)} color={C.textSecondary} />
+              </Pressable>
+              <Text style={{ fontSize: S.ms(12, 0.3), color: C.text, minWidth: 14, textAlign: "center" as const }}>
+                {phraseSize}
+              </Text>
+              <Pressable
+                onPress={() => setPhraseSize((p) => Math.min(16, p + 1))}
+                hitSlop={8}
+                style={{ opacity: phraseSize >= 16 ? 0.4 : 1 }}
+              >
+                <Ionicons name="add-circle-outline" size={S.ms(16, 0.4)} color={C.textSecondary} />
+              </Pressable>
+              <Text style={{ fontSize: S.ms(11, 0.3), color: C.textTertiary }}>{t("noteMode", "phraseMeasures")}</Text>
+            </View>
+          )}
+        </View>
+      )}
       <View style={[styles.queueContainer, !isLandscape && sourceCollapsed && { flex: 2 }, isLandscape && { marginBottom: 0 }]}>
         {queue.length === 0 ? (
           <View style={styles.emptyQueue}>
@@ -1008,6 +1168,9 @@ export function NoteModeView({
                 onMoveUp={() => onReorderQueue(index, index - 1)}
                 onMoveDown={() => onReorderQueue(index, index + 1)}
                 onImageChange={(uri) => onQueueItemImageChange?.(index, uri)}
+                currentMeasureIdx={isPlaying && index === currentIndex ? playingBarIdx : undefined}
+                previewUnit={previewUnit}
+                phraseSize={phraseSize}
               />
             )}
             showsVerticalScrollIndicator={false}

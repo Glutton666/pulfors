@@ -29,6 +29,8 @@ export interface ScorePlaybackState {
   playheadFraction: number;
   /** 전체 재생 시간(ms) */
   totalMs: number;
+  /** 현재 마디에 연결된 연습 항목 ID (linkedPracticeEntryId), 없으면 undefined */
+  currentLinkedEntryId: string | undefined;
   play: () => void;
   pause: () => void;
   stop: () => void;
@@ -41,6 +43,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   const [currentMeasureIdx, setCurrentMeasureIdx] = useState(0);
   const [playheadFraction, setPlayheadFraction] = useState(0);
   const [totalMs, setTotalMs] = useState(0);
+  const [currentLinkedEntryId, setCurrentLinkedEntryId] = useState<string | undefined>(undefined);
 
   const timelineRef = useRef<PlayEvent[]>([]);
   const isPlayingRef = useRef(false);
@@ -67,6 +70,12 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     muteAudioRef.current = doc.playbackSettings?.muteAudio ?? false;
   }, [doc.playbackSettings?.muteAudio]);
 
+  // doc을 ref로 유지해 tick 클로저에서 최신 마디 정보 접근
+  const docRef = useRef(doc);
+  useEffect(() => {
+    docRef.current = doc;
+  }, [doc]);
+
   const tick = useCallback(() => {
     if (!isPlayingRef.current) return;
 
@@ -82,13 +91,14 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
       setIsPlaying(false);
       setCurrentMeasureIdx(0);
       setPlayheadFraction(0);
+      setCurrentLinkedEntryId(undefined);
       resumeOffsetRef.current = 0;
       return;
     }
 
     const { event, fraction } = findCurrentEvent(timeline, elapsed);
     if (event) {
-      // 새 마디 진입 감지 → 음표 스케줄링
+      // 새 마디 진입 감지 → 음표 스케줄링 + linkedPracticeEntryId 갱신
       if (event.seqIdx !== lastSeqIdxRef.current) {
         lastSeqIdxRef.current = event.seqIdx;
 
@@ -104,6 +114,11 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
             scheduleMeasureNotes(adjustedNotes, undefined, event.instrumentId);
           }
         }
+
+        // 현재 마디의 연결된 연습 항목 ID 추적
+        const measures = docRef.current.parts[0]?.measures;
+        const linkedId = measures?.[event.measureIdx]?.linkedPracticeEntryId ?? undefined;
+        setCurrentLinkedEntryId(linkedId || undefined);
       }
 
       setCurrentMeasureIdx(event.measureIdx);
@@ -214,6 +229,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     stopAllScoreNotes();
     lastSeqIdxRef.current = -1;
     setIsPlaying(false);
+    setCurrentLinkedEntryId(undefined);
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -234,6 +250,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     setIsPlaying(false);
     setCurrentMeasureIdx(0);
     setPlayheadFraction(0);
+    setCurrentLinkedEntryId(undefined);
     resumeOffsetRef.current = 0;
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
@@ -268,5 +285,5 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     };
   }, []);
 
-  return { isPlaying, isPreparing, prepareProgress, currentMeasureIdx, playheadFraction, totalMs, play, pause, stop };
+  return { isPlaying, isPreparing, prepareProgress, currentMeasureIdx, playheadFraction, totalMs, currentLinkedEntryId, play, pause, stop };
 }

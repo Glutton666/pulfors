@@ -181,6 +181,23 @@ export const makeStyles = (_C: any, _S: any) =>
       marginBottom: 4,
       letterSpacing: 0.5,
     },
+    linkedEntryBadge: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 3,
+      borderRadius: 6,
+      borderWidth: 1,
+      marginHorizontal: Spacing.md,
+      marginBottom: 4,
+    },
+    linkedEntryBadgeText: {
+      fontFamily: "SpaceGrotesk_400Regular",
+      fontSize: 10,
+      letterSpacing: 0.3,
+      flexShrink: 1,
+    },
     playbackSection: {
       borderBottomWidth: 1,
       paddingBottom: 8,

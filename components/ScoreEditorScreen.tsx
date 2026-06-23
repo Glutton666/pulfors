@@ -29,7 +29,7 @@ import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import { saveScore, createEmptyMeasure } from "@/lib/score-storage";
 import { stopAllScoreNotes, stopPreviewNote } from "@/lib/score-audio";
 import { noteDurationToBeats } from "@/lib/score-playback";
-import { exportScoreAsJson, exportScoreAsJpg, importScoreFromJson, importReferenceImage, extractParts } from "@/lib/score-io";
+import { exportScoreAsJson, exportScoreAsJpg, exportScoreAsPng, shareScoreAsScoreJson, importScoreFromJson, importReferenceImage, extractParts } from "@/lib/score-io";
 import { loadPracticeBook, savePracticeBook, createPracticeEntry } from "@/lib/storage";
 import type {
   ScoreDocument,
@@ -107,11 +107,12 @@ export interface ScoreEditorScreenProps {
   doc: ScoreDocument;
   onBack: () => void;
   onSaved: (doc: ScoreDocument) => void;
+  onLinkedEntryChange?: (entryId: string | undefined, scoreDefaults: { bpm: number; beatsPerMeasure: number }) => void;
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
 
-export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEditorScreenProps) {
+export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEntryChange }: ScoreEditorScreenProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -248,6 +249,15 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
       progressAnimRef.current.setValue(0);
     }
   }, [playback.isPreparing]);
+  // 마디 연결 프리셋 전환 콜백 (연결 없는 마디는 악보 기본 BPM/박자 전달)
+  useEffect(() => {
+    if (onLinkedEntryChange) {
+      onLinkedEntryChange(
+        playback.currentLinkedEntryId,
+        { bpm: doc.bpm, beatsPerMeasure: doc.timeSignature.numerator },
+      );
+    }
+  }, [playback.currentLinkedEntryId, onLinkedEntryChange, doc.bpm, doc.timeSignature.numerator]);
   // 에디터 언마운트 시 미리 듣기 사운드를 즉시 중지
   useEffect(() => {
     return () => { stopPreviewNote(); };
@@ -285,6 +295,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   // ── ⋯ 메뉴 ──────────────────────────────────────────────────
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
+  // ── 공유 단축 모달 ────────────────────────────────────────────
+  const [showShareModal, setShowShareModal] = useState(false);
+
   // ── 성부 분리 모달 ─────────────────────────────────────────────
   const [showExtractPartModal, setShowExtractPartModal] = useState(false);
   const [extractPartIndices, setExtractPartIndices] = useState<number[]>([]);
@@ -304,6 +317,12 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
     if (!ok) Alert.alert(t("scoreMode", "exportJpg"), t("scoreMode", "exportJpgFail"));
   }
 
+  async function handleExportPng() {
+    setShowMoreMenu(false);
+    const ok = await exportScoreAsPng(exportViewRef as React.RefObject<unknown>, doc);
+    if (!ok) Alert.alert(t("scoreMode", "exportPng"), t("scoreMode", "exportJpgFail"));
+  }
+
   async function handleExportJson() {
     setShowMoreMenu(false);
     await exportScoreAsJson(doc);
@@ -311,7 +330,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
 
   async function handleShareScore() {
     setShowMoreMenu(false);
-    await exportScoreAsJson(doc);
+    await shareScoreAsScoreJson(doc);
   }
 
   async function handleImportReferenceImageAction() {
@@ -366,8 +385,14 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
   async function handleImportJson() {
     setShowMoreMenu(false);
     const result = await importScoreFromJson();
-    if (result.success) {
-      onBack();
+    if (result.success && result.doc) {
+      // 가져온 악보를 에디터에 바로 열기 (이력 초기화)
+      applyDoc(result.doc, false);
+      historyRef.current = [result.doc];
+      histIdxRef.current = 0;
+      setCanUndo(false);
+      setCanRedo(false);
+      onSaved(result.doc);
     } else if (result.errorCode && result.errorCode !== "cancelled") {
       Alert.alert(t("scoreMode", "importJson"), t("scoreMode", "importFail"));
     }
@@ -1448,6 +1473,16 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           <Ionicons name="information-circle-outline" size={S.ms(20, 0.4)} color={C.text} />
         </Pressable>
 
+        {/* 공유 버튼 */}
+        <Pressable
+          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
+          onPress={() => setShowShareModal(true)}
+          hitSlop={8}
+          testID="score-editor-share"
+        >
+          <Ionicons name="share-social-outline" size={S.ms(20, 0.4)} color={C.text} />
+        </Pressable>
+
         {/* ⋯ 더 보기 메뉴 */}
         <Pressable
           style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
@@ -2058,6 +2093,16 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
         )}
       </ScrollView>
 
+      {/* ── 연결된 연습 항목 배지 (재생 중 linkedPracticeEntryId가 있을 때) */}
+      {playback.isPlaying && !!playback.currentLinkedEntryId && (
+        <View style={[styles.linkedEntryBadge, { backgroundColor: C.accent + "22", borderColor: C.accent }]}>
+          <Ionicons name="link" size={S.ms(11, 0.3)} color={C.accent} />
+          <Text style={[styles.linkedEntryBadgeText, { color: C.accent }]} numberOfLines={1}>
+            {t("scoreMode", "linkedPresetActive")} {playback.currentLinkedEntryId}
+          </Text>
+        </View>
+      )}
+
       {/* ── 확대 뷰 (재생 중 현재 마디) ────────────────────────── */}
       {playback.isPlaying && showZoomView && currentPart && (
         <View style={[styles.zoomViewWrapper, { backgroundColor: C.surface, borderTopColor: C.border }]}>
@@ -2186,6 +2231,94 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved }: ScoreEdi
           showPartNames
         />
       </View>
+
+      {/* ── 공유 단축 모달 ───────────────────────────────────────── */}
+      {showShareModal && (
+        <Pressable
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.45)" }}
+          onPress={() => setShowShareModal(false)}
+        >
+          <Pressable
+            style={[
+              {
+                position: "absolute",
+                bottom: 32,
+                left: 16,
+                right: 16,
+                backgroundColor: C.surface,
+                borderRadius: Radius.lg,
+                padding: Spacing.md,
+                borderWidth: 1,
+                borderColor: C.border,
+                gap: 8,
+              },
+            ]}
+            onPress={() => {}}
+          >
+            <Text style={{ fontSize: S.ms(14, 0.3), fontWeight: "600", color: C.text, marginBottom: 4 }}>
+              {t("scoreMode", "shareScoreTitle")}
+            </Text>
+            <Pressable
+              style={({ pressed }) => [
+                {
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: Spacing.sm,
+                  borderRadius: Radius.md,
+                  borderWidth: 1,
+                  borderColor: C.border,
+                  backgroundColor: pressed ? C.surfaceLight : "transparent",
+                },
+              ]}
+              onPress={async () => {
+                setShowShareModal(false);
+                await handleShareScore();
+              }}
+              testID="score-share-json"
+            >
+              <Ionicons name="document-text-outline" size={S.ms(20, 0.4)} color={C.text} />
+              <Text style={{ fontSize: S.ms(14, 0.3), color: C.text }}>{t("scoreMode", "exportJson")}</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                {
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: Spacing.sm,
+                  borderRadius: Radius.md,
+                  borderWidth: 1,
+                  borderColor: C.border,
+                  backgroundColor: pressed ? C.surfaceLight : "transparent",
+                },
+              ]}
+              onPress={async () => {
+                setShowShareModal(false);
+                await handleExportPng();
+              }}
+              testID="score-share-png"
+            >
+              <Ionicons name="image-outline" size={S.ms(20, 0.4)} color={C.text} />
+              <Text style={{ fontSize: S.ms(14, 0.3), color: C.text }}>{t("scoreMode", "exportPng")}</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                {
+                  marginTop: 4,
+                  padding: Spacing.sm,
+                  borderRadius: Radius.md,
+                  alignItems: "center",
+                  backgroundColor: pressed ? C.surfaceLight : "transparent",
+                },
+              ]}
+              onPress={() => setShowShareModal(false)}
+            >
+              <Text style={{ fontSize: S.ms(13, 0.3), color: C.textSecondary }}>{t("scoreMode", "cancel")}</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      )}
 
       {/* ── 모달 영역 (ScoreEditorModals.tsx로 분리) ──────────── */}
       <ScoreMoreMenuModal
