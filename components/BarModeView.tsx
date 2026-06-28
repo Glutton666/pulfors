@@ -13,7 +13,7 @@ import React, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   View, Text, ScrollView, Pressable, PanResponder,
-  Animated, TextInput, Platform, StyleSheet,
+  Animated, TextInput, Platform, StyleSheet, Modal,
   type ViewStyle, type StyleProp,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,7 +21,6 @@ import * as Haptics from "expo-haptics";
 
 import { LinearGradient } from "expo-linear-gradient";
 import { AnimatedModal } from "@/components/AnimatedModal";
-import { CustomSoundSetEditor } from "@/components/CustomSoundSetEditor";
 import { SubdivisionBar } from "./SubdivisionBar";
 import { BarPlayButton } from "./BarPlayButton";
 import { BeatStepperButton } from "./BeatStepperButton";
@@ -414,8 +413,7 @@ export function BarModeView({
   // ─── 상태 ────────────────────────────────────────────────────────────────
 
   const [symbolDrawerOpen, setSymbolDrawerOpen] = useState(false);
-  const [cseVisible, setCseVisible] = useState(false);
-  const [cseSlot, setCseSlot] = useState<string | null>(null);
+  const [soundSetPickerTarget, setSoundSetPickerTarget] = useState<{ isLayer: boolean; layerNum: number } | null>(null);
   const [placingSymbol, setPlacingSymbol] = useState<SymbolType | null>(null);
   const [blockSelectFirst, setBlockSelectFirst] = useState<number | null>(null);
   const [activeLayerTab, setActiveLayerTab] = useState(0);
@@ -1354,7 +1352,7 @@ export function BarModeView({
                 </Text>
               </View>
             )}
-            {/* 사운드셋 스와이프 선택 */}
+            {/* 사운드셋 선택 */}
             {(() => {
               const builtinOpts = SOUND_SET_OPTIONS.map(o => ({ key: o.key, label: t("barModeView", o.labelKey), isCustom: false }));
               const customOpts = Object.entries(customSoundSets).map(([k, cfg]) => ({ key: k, label: cfg.name, isCustom: true }));
@@ -1362,7 +1360,6 @@ export function BarModeView({
               const idx = allOpts.findIndex(o => o.key === soundSet);
               const safeIdx = idx >= 0 ? idx : 0;
               const cur = allOpts[safeIdx];
-              const canAddCustom = Object.keys(customSoundSets).length < 3;
               return (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8 }}>
                   <Pressable
@@ -1374,15 +1371,11 @@ export function BarModeView({
                   </Pressable>
                   <Pressable
                     style={{ flex: 1, alignItems: "center", paddingVertical: 5, paddingHorizontal: 8, backgroundColor: C.overlay08, borderRadius: 8 }}
-                    onPress={() => { const next = (safeIdx + 1) % allOpts.length; onSoundSetChange?.(allOpts[next].key); }}
-                    onLongPress={() => { if (cur?.isCustom) { setCseSlot(cur.key); setCseVisible(true); } }}
+                    onPress={() => setSoundSetPickerTarget({ isLayer: false, layerNum: 0 })}
                   >
                     <Text style={{ color: C.accent, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_600SemiBold" }}>
                       {cur?.label ?? soundSet}
                     </Text>
-                    {cur?.isCustom && (
-                      <Text style={{ color: C.textTertiary, fontSize: 8 }}>↑ {t("barModeView", "longPressEdit") as string || "길게 탭해서 편집"}</Text>
-                    )}
                   </Pressable>
                   <Pressable
                     onPress={() => { const next = (safeIdx + 1) % allOpts.length; onSoundSetChange?.(allOpts[next].key); }}
@@ -1391,19 +1384,6 @@ export function BarModeView({
                   >
                     <Ionicons name="chevron-forward" size={ms(14, 0.4)} color={C.textSecondary} />
                   </Pressable>
-                  {canAddCustom && onCustomSoundSetsChange && (
-                    <Pressable
-                      onPress={() => {
-                        const slots = ["custom1", "custom2", "custom3"];
-                        const slot = slots.find(s => !customSoundSets[s]) ?? null;
-                        if (slot) { setCseSlot(slot); setCseVisible(true); }
-                      }}
-                      hitSlop={8}
-                      style={{ padding: 4, backgroundColor: C.overlay08, borderRadius: 6 }}
-                    >
-                      <Ionicons name="add" size={ms(14, 0.4)} color={C.textTertiary} />
-                    </Pressable>
-                  )}
                 </View>
               );
             })()}
@@ -1426,7 +1406,7 @@ export function BarModeView({
                 onReset={() => updateLayerSubdivisions(layerIdx, null)}
                 isPlaying={isPlaying}
               />
-              {/* 레이어 사운드셋 스와이프 선택 */}
+              {/* 레이어 사운드셋 선택 */}
               {(() => {
                 const builtinOpts = [
                   { key: "", label: t("barModeView", "soundSetDefault"), isCustom: false },
@@ -1444,7 +1424,7 @@ export function BarModeView({
                       onPress={() => {
                         const prev = allOpts[(safeIdx - 1 + allOpts.length) % allOpts.length];
                         const updated = { ...layerSoundSets };
-                        if (!prev.key) { delete updated[layerNum]; } else { updated[layerNum] = prev.key; }
+                        if (!prev.key) { delete updated[layerNum]; } else { updated[layerNum] = prev.key as string; }
                         onLayerSoundSetsChange?.(updated);
                       }}
                       hitSlop={10} style={{ padding: 4 }}
@@ -1453,13 +1433,7 @@ export function BarModeView({
                     </Pressable>
                     <Pressable
                       style={{ flex: 1, alignItems: "center", paddingVertical: 5, paddingHorizontal: 8, backgroundColor: C.overlay08, borderRadius: 8 }}
-                      onPress={() => {
-                        const next = allOpts[(safeIdx + 1) % allOpts.length];
-                        const updated = { ...layerSoundSets };
-                        if (!next.key) { delete updated[layerNum]; } else { updated[layerNum] = next.key; }
-                        onLayerSoundSetsChange?.(updated);
-                      }}
-                      onLongPress={() => { if (cur?.isCustom) { setCseSlot(cur.key); setCseVisible(true); } }}
+                      onPress={() => setSoundSetPickerTarget({ isLayer: true, layerNum })}
                     >
                       <Text style={{ color: cur?.isCustom ? C.accent : C.textSecondary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_600SemiBold" }}>
                         {cur?.label ?? t("barModeView", "soundSetDefault")}
@@ -1469,7 +1443,7 @@ export function BarModeView({
                       onPress={() => {
                         const next = allOpts[(safeIdx + 1) % allOpts.length];
                         const updated = { ...layerSoundSets };
-                        if (!next.key) { delete updated[layerNum]; } else { updated[layerNum] = next.key; }
+                        if (!next.key) { delete updated[layerNum]; } else { updated[layerNum] = next.key as string; }
                         onLayerSoundSetsChange?.(updated);
                       }}
                       hitSlop={10} style={{ padding: 4 }}
@@ -1734,22 +1708,87 @@ export function BarModeView({
         </View>
       </AnimatedModal>
 
-      {/* 커스텀 사운드셋 에디터 모달 */}
-      <CustomSoundSetEditor
-        visible={cseVisible}
-        slot={cseSlot}
-        customSoundSets={customSoundSets}
-        onCustomSoundSetsChange={(configs) => {
-          onCustomSoundSetsChange?.(configs);
-          // 새 커스텀셋이면 자동으로 선택
-          if (cseSlot && !customSoundSets[cseSlot]) {
-            onSoundSetChange?.(cseSlot);
-          }
-        }}
-        currentSoundSet={soundSet}
-        onSoundSetChange={onSoundSetChange}
-        onClose={() => { setCseVisible(false); setCseSlot(null); }}
-      />
+      {/* 사운드셋 피커 모달 */}
+      <Modal
+        visible={soundSetPickerTarget !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSoundSetPickerTarget(null)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}
+          onPress={() => setSoundSetPickerTarget(null)}
+        >
+          <View style={{ flex: 1 }} />
+          <Pressable onPress={() => {}} style={{ backgroundColor: C.backgroundSecondary, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: insets.bottom + 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.overlay06 }}>
+              <Text style={{ color: C.text, fontSize: FontSize.body, fontFamily: "SpaceGrotesk_600SemiBold" }}>
+                {soundSetPickerTarget?.isLayer ? t("barModeView", "soundSetPickerLayer") : t("barModeView", "soundSetPickerTitle")}
+              </Text>
+              <Pressable onPress={() => setSoundSetPickerTarget(null)} hitSlop={8}>
+                <Ionicons name="close" size={ms(20, 0.4)} color={C.textSecondary} />
+              </Pressable>
+            </View>
+            <ScrollView style={{ maxHeight: 360 }}>
+              {soundSetPickerTarget?.isLayer && (
+                <Pressable
+                  style={{ flexDirection: "row", alignItems: "center", paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.overlay06 }}
+                  onPress={() => {
+                    if (!soundSetPickerTarget) return;
+                    const updated = { ...layerSoundSets };
+                    delete updated[soundSetPickerTarget.layerNum];
+                    onLayerSoundSetsChange?.(updated);
+                    setSoundSetPickerTarget(null);
+                    if (Platform.OS !== "web") Haptics.selectionAsync();
+                  }}
+                >
+                  <View style={{ width: 24, alignItems: "center" }}>
+                    {(layerSoundSets[soundSetPickerTarget?.layerNum ?? -1] ?? "") === "" && (
+                      <Ionicons name="checkmark" size={ms(16, 0.4)} color={C.accent} />
+                    )}
+                  </View>
+                  <Text style={{ color: C.textSecondary, fontSize: FontSize.small, flex: 1, marginLeft: 8 }}>
+                    {t("barModeView", "soundSetDefault")}
+                  </Text>
+                </Pressable>
+              )}
+              {[
+                ...SOUND_SET_OPTIONS.map(o => ({ key: o.key, label: t("barModeView", o.labelKey), isCustom: false })),
+                ...Object.entries(customSoundSets).map(([k, cfg]) => ({ key: k, label: cfg.name, isCustom: true })),
+              ].map(opt => {
+                const isSelected = soundSetPickerTarget?.isLayer
+                  ? (layerSoundSets[soundSetPickerTarget.layerNum] ?? "") === opt.key
+                  : soundSet === opt.key;
+                return (
+                  <Pressable
+                    key={opt.key}
+                    style={{ flexDirection: "row", alignItems: "center", paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.overlay06 }}
+                    onPress={() => {
+                      if (!soundSetPickerTarget) return;
+                      if (soundSetPickerTarget.isLayer) {
+                        const updated = { ...layerSoundSets, [soundSetPickerTarget.layerNum]: opt.key };
+                        onLayerSoundSetsChange?.(updated);
+                      } else {
+                        onSoundSetChange?.(opt.key);
+                      }
+                      setSoundSetPickerTarget(null);
+                      if (Platform.OS !== "web") Haptics.selectionAsync();
+                    }}
+                  >
+                    <View style={{ width: 24, alignItems: "center" }}>
+                      {isSelected && <Ionicons name="checkmark" size={ms(16, 0.4)} color={C.accent} />}
+                    </View>
+                    <Text style={{ color: opt.isCustom ? C.accent : C.text, fontSize: FontSize.small, flex: 1, marginLeft: 8 }}>
+                      {opt.label}
+                    </Text>
+                    {opt.isCustom && <Ionicons name="color-wand-outline" size={ms(12, 0.4)} color={C.textTertiary} />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }

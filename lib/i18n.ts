@@ -108,6 +108,9 @@ export const translations = {
     sampleVolume: { ko: "샘플 볼륨", en: "Sample Volume" },
     sampleVolumeWarning: { ko: "⚠️ 너무 큰 볼륨은 청력에 손상을 줄 수 있습니다", en: "⚠️ High volume may damage your hearing" },
     soundSet: { ko: "사운드 세트", en: "Sound Set" },
+    soundSetMain: { ko: "메인", en: "Main" },
+    soundSetAddNew: { ko: "새 사운드 세트 추가", en: "Add New Sound Set" },
+    soundSetLayerBadge: { ko: "레이어 %s", en: "Layer %s" },
     layerSoundSet: { ko: "레이어 사운드", en: "Layer Sound" },
     layerDefault: { ko: "기본 (메인과 동일)", en: "Default (same as main)" },
     audioOffset: { ko: "오디오 오프셋", en: "Audio Offset" },
@@ -865,6 +868,8 @@ export const translations = {
     repBpmAdd:           { ko: "+ BPM", en: "+ BPM" },
     longPressEdit:       { ko: "길게 탭해서 편집", en: "Long-press to edit" },
     hintLongPress:       { ko: "바를 길게 누르면 BPM·반복 옵션을 설정할 수 있습니다", en: "Long-press a bar to set BPM and repeat options" },
+    soundSetPickerTitle: { ko: "사운드 세트 선택", en: "Select Sound Set" },
+    soundSetPickerLayer: { ko: "레이어 사운드 선택", en: "Select Layer Sound" },
   },
   bpmDetect: {
     title:      { ko: "주변 BPM 감지", en: "Detect BPM" },

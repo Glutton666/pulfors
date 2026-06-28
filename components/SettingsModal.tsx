@@ -1558,6 +1558,71 @@ export function SettingsModal({
           <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "soundSet")}</Text>
         </View>
 
+        {!editingCustomSlot && (
+          <View style={{ marginTop: 8, gap: 2 }}>
+            {[
+              ...BUILTIN_SOUND_SETS.map(key => ({ key, label: t("soundSets", key as any), isCustom: false })),
+              ...Object.entries(customSoundSets).map(([k, cfg]) => ({ key: k, label: cfg.name, isCustom: true })),
+            ].map(opt => {
+              const isMain = soundSet === opt.key;
+              const usedInLayers = Object.entries(layerSoundSets)
+                .filter(([, v]) => v === opt.key)
+                .map(([k]) => Number(k))
+                .sort((a, b) => a - b);
+              return (
+                <Pressable
+                  key={opt.key}
+                  style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, backgroundColor: isMain ? C.accentDim : C.overlay08, gap: 8 }}
+                  onPress={() => { onSoundSetChange(opt.key as any); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
+                >
+                  <Ionicons
+                    name={isMain ? "checkmark-circle" : "ellipse-outline"}
+                    size={S.ms(16, 0.4)}
+                    color={isMain ? C.accent : C.textTertiary}
+                  />
+                  <Text style={{ flex: 1, color: isMain ? C.accent : C.text, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_600SemiBold" }}>
+                    {opt.label}
+                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    {isMain && (
+                      <View style={{ backgroundColor: C.accent, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                        <Text style={{ color: C.background, fontSize: 9, fontFamily: "SpaceGrotesk_600SemiBold" }}>{t("settings", "soundSetMain")}</Text>
+                      </View>
+                    )}
+                    {usedInLayers.map(ln => (
+                      <View key={ln} style={{ backgroundColor: C.overlay08, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border }}>
+                        <Text style={{ color: C.textSecondary, fontSize: 9 }}>{t("settings", "soundSetLayerBadge").replace("%s", String(ln))}</Text>
+                      </View>
+                    ))}
+                    {opt.isCustom && (
+                      <Pressable
+                        hitSlop={8}
+                        onPress={() => openCustomEditor(opt.key)}
+                        style={{ padding: 4 }}
+                      >
+                        <Ionicons name="pencil-outline" size={S.ms(14, 0.4)} color={C.textSecondary} />
+                      </Pressable>
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })}
+
+            {Object.keys(customSoundSets).length < 3 && (
+              <Pressable
+                style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, borderStyle: "dashed", marginTop: 4 }}
+                onPress={() => {
+                  const slot = getNextCustomSlot();
+                  if (slot) openCustomEditor(slot);
+                }}
+              >
+                <Ionicons name="add-circle-outline" size={S.ms(16, 0.4)} color={C.textSecondary} />
+                <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>{t("settings", "soundSetAddNew")}</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
         {editingCustomSlot && (
           <View style={csStyles.editorContainer}>
             <View style={csStyles.editorHeader}>
