@@ -21,6 +21,7 @@ import * as Haptics from "expo-haptics";
 
 import { LinearGradient } from "expo-linear-gradient";
 import { AnimatedModal } from "@/components/AnimatedModal";
+import { CustomSoundSetEditor } from "./CustomSoundSetEditor";
 import { SubdivisionBar } from "./SubdivisionBar";
 import { BarPlayButton } from "./BarPlayButton";
 import { BeatStepperButton } from "./BeatStepperButton";
@@ -415,6 +416,7 @@ export function BarModeView({
 
   const [symbolDrawerOpen, setSymbolDrawerOpen] = useState(false);
   const [soundSetPickerTarget, setSoundSetPickerTarget] = useState<{ isLayer: boolean; layerNum: number } | null>(null);
+  const [editingCustomSlot, setEditingCustomSlot] = useState<string | null>(null);
   const [placingSymbol, setPlacingSymbol] = useState<SymbolType | null>(null);
   const [blockSelectFirst, setBlockSelectFirst] = useState<number | null>(null);
   const [activeLayerTab, setActiveLayerTab] = useState(0);
@@ -629,6 +631,19 @@ export function BarModeView({
       saveFlashTimer.current = setTimeout(() => setSaveFlashVisible(false), 1500);
     }
   }, [onBarQuickSave]);
+
+  const getNextCustomSlot = useCallback((): string | null => {
+    const slots = ["custom1", "custom2", "custom3"];
+    for (const s of slots) {
+      if (!customSoundSets[s]) return s;
+    }
+    return null;
+  }, [customSoundSets]);
+
+  const openCustomEditor = useCallback((slot: string) => {
+    setSoundSetPickerTarget(null);
+    setEditingCustomSlot(slot);
+  }, []);
 
   const handleBarRowPress = useCallback((beat: number) => {
     if (isPlaying) return;
@@ -1373,6 +1388,16 @@ export function BarModeView({
                   <Pressable
                     style={{ flex: 1, alignItems: "center", paddingVertical: 5, paddingHorizontal: 8, backgroundColor: C.overlay08, borderRadius: 8 }}
                     onPress={() => setSoundSetPickerTarget({ isLayer: false, layerNum: 0 })}
+                    onLongPress={() => {
+                      if (cur?.isCustom) {
+                        openCustomEditor(cur.key);
+                      } else {
+                        const slot = getNextCustomSlot();
+                        if (slot) openCustomEditor(slot);
+                      }
+                      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    }}
+                    delayLongPress={400}
                   >
                     <Text style={{ color: C.accent, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_600SemiBold" }}>
                       {cur?.label ?? soundSet}
@@ -1436,6 +1461,16 @@ export function BarModeView({
                     <Pressable
                       style={{ flex: 1, alignItems: "center", paddingVertical: 5, paddingHorizontal: 8, backgroundColor: C.overlay08, borderRadius: 8 }}
                       onPress={() => setSoundSetPickerTarget({ isLayer: true, layerNum })}
+                      onLongPress={() => {
+                        if (cur?.isCustom) {
+                          openCustomEditor(cur.key);
+                        } else {
+                          const slot = getNextCustomSlot();
+                          if (slot) openCustomEditor(slot);
+                        }
+                        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      }}
+                      delayLongPress={400}
                     >
                       <Text style={{ color: cur?.isCustom ? C.accent : C.textSecondary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_600SemiBold" }}>
                         {cur?.label ?? t("barModeView", "soundSetDefault")}
@@ -1453,6 +1488,18 @@ export function BarModeView({
                     >
                       <Ionicons name="chevron-forward" size={ms(14, 0.4)} color={C.textSecondary} />
                     </Pressable>
+                    {Object.keys(customSoundSets).length < 3 && (
+                      <Pressable
+                        onPress={() => {
+                          const slot = getNextCustomSlot();
+                          if (slot) openCustomEditor(slot);
+                        }}
+                        hitSlop={8}
+                        style={{ padding: 4 }}
+                      >
+                        <Ionicons name="add-circle-outline" size={ms(14, 0.4)} color={C.textSecondary} />
+                      </Pressable>
+                    )}
                   </View>
                 );
               })()}
@@ -1792,6 +1839,18 @@ export function BarModeView({
           </Pressable>
         </Pressable>
       </Modal>
+
+      <CustomSoundSetEditor
+        visible={editingCustomSlot !== null}
+        slot={editingCustomSlot}
+        customSoundSets={customSoundSets}
+        onCustomSoundSetsChange={(configs) => {
+          onCustomSoundSetsChange?.(configs);
+        }}
+        currentSoundSet={soundSet}
+        onSoundSetChange={onSoundSetChange}
+        onClose={() => setEditingCustomSlot(null)}
+      />
     </View>
   );
 }
