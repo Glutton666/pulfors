@@ -1344,6 +1344,7 @@ export function BeatIndicator({
         cellOverlayOpacity={barCellOpacity}
         rowHeight={barRowHeight}
         onExitBarMode={() => onBarModeChange(false)}
+        onNoteRecordRequest={onNoteRecordRequest}
       />
     );
   }

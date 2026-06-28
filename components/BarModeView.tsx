@@ -139,6 +139,7 @@ export interface BarModeViewProps {
   cellOverlayOpacity?: number;
   rowHeight?: number;
   onExitBarMode?: () => void;
+  onNoteRecordRequest?: (beatIndex: number, subIndex: number) => void;
 }
 
 // ─── 상수 ────────────────────────────────────────────────────────────────────
@@ -404,6 +405,7 @@ export function BarModeView({
   cellOverlayOpacity,
   rowHeight,
   onExitBarMode,
+  onNoteRecordRequest,
 }: BarModeViewProps) {
 
   const { t } = useLanguage();
@@ -675,9 +677,9 @@ export function BarModeView({
 
   const handleBarRowLongPress = useCallback((beat: number) => {
     if (isPlaying) return;
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    onDeleteBar?.(beat);
-  }, [isPlaying, onDeleteBar]);
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onNoteRecordRequest?.(beat, 0);
+  }, [isPlaying, onNoteRecordRequest]);
 
   const handleSwipeLeft = useCallback((beat: number) => {
     // 복사: 해당 바를 새 바로 복사
