@@ -417,6 +417,7 @@ export function BarModeView({
   const [symbolDrawerOpen, setSymbolDrawerOpen] = useState(false);
   const [soundSetPickerTarget, setSoundSetPickerTarget] = useState<{ isLayer: boolean; layerNum: number } | null>(null);
   const [editingCustomSlot, setEditingCustomSlot] = useState<string | null>(null);
+  const soundSetDidLongPressRef = useRef(false);
   const [placingSymbol, setPlacingSymbol] = useState<SymbolType | null>(null);
   const [blockSelectFirst, setBlockSelectFirst] = useState<number | null>(null);
   const [activeLayerTab, setActiveLayerTab] = useState(0);
@@ -1387,8 +1388,12 @@ export function BarModeView({
                   </Pressable>
                   <Pressable
                     style={{ flex: 1, alignItems: "center", paddingVertical: 5, paddingHorizontal: 8, backgroundColor: C.overlay08, borderRadius: 8 }}
-                    onPress={() => setSoundSetPickerTarget({ isLayer: false, layerNum: 0 })}
+                    onPress={() => {
+                      if (soundSetDidLongPressRef.current) { soundSetDidLongPressRef.current = false; return; }
+                      setSoundSetPickerTarget({ isLayer: false, layerNum: 0 });
+                    }}
                     onLongPress={() => {
+                      soundSetDidLongPressRef.current = true;
                       if (cur?.isCustom) {
                         openCustomEditor(cur.key);
                         if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1400,6 +1405,7 @@ export function BarModeView({
                         }
                       }
                     }}
+                    onPressOut={() => { soundSetDidLongPressRef.current = false; }}
                     delayLongPress={400}
                   >
                     <Text style={{ color: C.accent, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_600SemiBold" }}>
@@ -1475,8 +1481,12 @@ export function BarModeView({
                     </Pressable>
                     <Pressable
                       style={{ flex: 1, alignItems: "center", paddingVertical: 5, paddingHorizontal: 8, backgroundColor: C.overlay08, borderRadius: 8 }}
-                      onPress={() => setSoundSetPickerTarget({ isLayer: true, layerNum })}
+                      onPress={() => {
+                        if (soundSetDidLongPressRef.current) { soundSetDidLongPressRef.current = false; return; }
+                        setSoundSetPickerTarget({ isLayer: true, layerNum });
+                      }}
                       onLongPress={() => {
+                        soundSetDidLongPressRef.current = true;
                         if (cur?.isCustom) {
                           openCustomEditor(cur.key);
                           if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1488,6 +1498,7 @@ export function BarModeView({
                           }
                         }
                       }}
+                      onPressOut={() => { soundSetDidLongPressRef.current = false; }}
                       delayLongPress={400}
                     >
                       <Text style={{ color: cur?.isCustom ? C.accent : C.textSecondary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_600SemiBold" }}>
