@@ -1393,17 +1393,10 @@ export function BarModeView({
                       setSoundSetPickerTarget({ isLayer: false, layerNum: 0 });
                     }}
                     onLongPress={() => {
+                      if (!cur?.isCustom) return;
                       soundSetDidLongPressRef.current = true;
-                      if (cur?.isCustom) {
-                        openCustomEditor(cur.key);
-                        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                      } else {
-                        const slot = getNextCustomSlot();
-                        if (slot) {
-                          openCustomEditor(slot);
-                          if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        }
-                      }
+                      openCustomEditor(cur.key);
+                      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                     }}
                     onPressOut={() => { soundSetDidLongPressRef.current = false; }}
                     delayLongPress={400}
@@ -1419,18 +1412,6 @@ export function BarModeView({
                   >
                     <Ionicons name="chevron-forward" size={ms(14, 0.4)} color={C.textSecondary} />
                   </Pressable>
-                  {Object.keys(customSoundSets).length < 3 && (
-                    <Pressable
-                      onPress={() => {
-                        const slot = getNextCustomSlot();
-                        if (slot) openCustomEditor(slot);
-                      }}
-                      hitSlop={8}
-                      style={{ padding: 4 }}
-                    >
-                      <Ionicons name="add-circle-outline" size={ms(14, 0.4)} color={C.textSecondary} />
-                    </Pressable>
-                  )}
                 </View>
               );
             })()}
@@ -1486,17 +1467,10 @@ export function BarModeView({
                         setSoundSetPickerTarget({ isLayer: true, layerNum });
                       }}
                       onLongPress={() => {
+                        if (!cur?.isCustom) return;
                         soundSetDidLongPressRef.current = true;
-                        if (cur?.isCustom) {
-                          openCustomEditor(cur.key);
-                          if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        } else {
-                          const slot = getNextCustomSlot();
-                          if (slot) {
-                            openCustomEditor(slot);
-                            if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                          }
-                        }
+                        openCustomEditor(cur.key);
+                        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       }}
                       onPressOut={() => { soundSetDidLongPressRef.current = false; }}
                       delayLongPress={400}
@@ -1517,18 +1491,6 @@ export function BarModeView({
                     >
                       <Ionicons name="chevron-forward" size={ms(14, 0.4)} color={C.textSecondary} />
                     </Pressable>
-                    {Object.keys(customSoundSets).length < 3 && (
-                      <Pressable
-                        onPress={() => {
-                          const slot = getNextCustomSlot();
-                          if (slot) openCustomEditor(slot);
-                        }}
-                        hitSlop={8}
-                        style={{ padding: 4 }}
-                      >
-                        <Ionicons name="add-circle-outline" size={ms(14, 0.4)} color={C.textSecondary} />
-                      </Pressable>
-                    )}
                   </View>
                 );
               })()}
