@@ -118,6 +118,7 @@ import {
   playWebRenderedLoop,
   getWebAudioContext,
   installAudioPlayInterruptHandler,
+  previewClickOnWeb,
 } from "@/lib/audio-renderer";
 import { syncStereoArtifact, releaseStereoArtifact, releaseAll as releaseAllStereoArtifacts } from "@/lib/sample-cache";
 import type { ClickPCMs, SamplePCMEntry, TickInfo, DecodedSample } from "@/lib/audio-renderer";
@@ -1816,6 +1817,25 @@ export default function MetronomeScreen() {
     [persistSettings, scheduleReRender]
   );
 
+  const previewSoundSet = useCallback((key: string) => {
+    if (engineRef.current?.getIsRunning()) return;
+    if (Platform.OS === "web") {
+      const soundSetDef = soundSets[key as keyof typeof soundSets];
+      if (soundSetDef) {
+        previewClickOnWeb(key, soundSetDef.strong).catch(() => {});
+      }
+    } else {
+      const customCfg = customSoundSetsRef.current[key];
+      const builtinKey: string = (customCfg?.strong?.sourceSet ?? key) || "classic";
+      const pool = (allPlayersRef.current as any)[builtinKey] || allPlayersRef.current.classic;
+      if (pool?.strongA) {
+        pool.strongA.seekTo(0).then(() => {
+          safePlay(pool.strongA, "preview.soundset");
+        }).catch(() => {});
+      }
+    }
+  }, []);
+
   const updateFlashMode = useCallback(
     (value: FlashMode) => {
       setFlashMode(value);
@@ -2215,7 +2235,6 @@ export default function MetronomeScreen() {
       engine.buildScheduleOnly();
 
       preparingCancelledRef.current = false;
-      setIsPreparing(true);
 
       try {
         if (Platform.OS === "web") {
@@ -2224,76 +2243,72 @@ export default function MetronomeScreen() {
             ctx.resume().catch(() => {});
           }
 
-          const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
-          await ensureWebClickBuffers(src as any);
-          webClickReadyRef.current = true;
-
-          if (ctx && ctx.state === "suspended") {
-            await ctx.resume();
-          }
-
-          if (preparingCancelledRef.current) {
-            setIsPreparing(false);
-            return;
-          }
+          // 즉시 시작 — per-tick 모드로 바로 재생, pre-render는 백그라운드 처리
           setIsPreparing(false);
-
-          if (webRenderedLoopRef.current) {
-            webRenderedLoopRef.current.stop();
-            webRenderedLoopRef.current = null;
-          }
-
-          try {
-            const scheduleInfo = engine.getScheduleInfo();
-            const ticks = scheduleInfo.ticks as TickInfo[];
-            const [clickPCMs, layerClickPCMs] = await Promise.all([
-              getClickPCMs(soundSetRef.current),
-              getLayerClickPCMsForSchedule(ticks),
-            ]);
-            const pcm = renderMeasure({
-              schedule: ticks,
-              measureDurationMs: scheduleInfo.durationMs,
-              clickPCMs,
-              samplePCMs: new Map(),
-              clickVolume: 1.0,
-              sampleVolume: 0,
-              metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
-              layerClickPCMs,
-            });
-            const loop = playWebRenderedLoop(pcm);
-            webRenderedLoopRef.current = loop;
-            engine.setPreRenderedAudio(true);
-          } catch (renderErr) {
-            captureBreadcrumb({ category: "metronome", message: "togglePlayPause: Web pre-render failed, using per-tick", level: "warning", data: { error: String(renderErr) } });
-            engine.setPreRenderedAudio(false);
-          }
-
           setIsPlaying(true);
           engine.start(startBeat ?? undefined);
-        } else {
-          const renderedPlayer = await buildRenderedPlayer();
-          if (preparingCancelledRef.current) {
-            if (renderedPlayer) { try { renderedPlayer.release(); } catch {} }
-            setIsPreparing(false);
-            return;
-          }
-          setIsPreparing(false);
 
-          if (renderedPlayer) {
+          // 백그라운드: 버퍼 로딩 후 pre-rendered loop으로 전환
+          ;(async () => {
+            try {
+              const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
+              const ready = await ensureWebClickBuffers(src as any);
+              if (!ready || !engineRef.current?.getIsRunning()) return;
+              webClickReadyRef.current = true;
+
+              if (ctx && ctx.state === "suspended") {
+                await ctx.resume();
+              }
+
+              if (webRenderedLoopRef.current) {
+                webRenderedLoopRef.current.stop();
+                webRenderedLoopRef.current = null;
+              }
+
+              try {
+                const scheduleInfo = engineRef.current.getScheduleInfo();
+                const ticks = scheduleInfo.ticks as TickInfo[];
+                const [clickPCMs, layerClickPCMs] = await Promise.all([
+                  getClickPCMs(soundSetRef.current),
+                  getLayerClickPCMsForSchedule(ticks),
+                ]);
+                if (!engineRef.current?.getIsRunning()) return;
+                const pcm = renderMeasure({
+                  schedule: ticks,
+                  measureDurationMs: scheduleInfo.durationMs,
+                  clickPCMs,
+                  samplePCMs: new Map(),
+                  clickVolume: 1.0,
+                  sampleVolume: 0,
+                  metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
+                  layerClickPCMs,
+                });
+                const loop = playWebRenderedLoop(pcm);
+                webRenderedLoopRef.current = loop;
+                engineRef.current?.setPreRenderedAudio(true);
+              } catch (renderErr) {
+                captureBreadcrumb({ category: "metronome", message: "togglePlayPause: Web pre-render failed, using per-tick", level: "warning", data: { error: String(renderErr) } });
+              }
+            } catch {}
+          })();
+        } else {
+          // 즉시 시작 — per-tick 모드로 바로 재생
+          setIsPreparing(false);
+          setIsPlaying(true);
+          engine.start(startBeat ?? undefined);
+
+          // 백그라운드: pre-render 완료 후 rendered player로 전환
+          buildRenderedPlayer().then(renderedPlayer => {
+            if (!renderedPlayer || !engineRef.current?.getIsRunning()) {
+              if (renderedPlayer) { try { renderedPlayer.release(); } catch {} }
+              return;
+            }
             stopRenderedAudio();
             renderedPlayerRef.current = renderedPlayer;
             renderedPlayer.volume = 1.0;
             engine.setPreRenderedAudio(true);
-          } else {
-            engine.setPreRenderedAudio(false);
-          }
-
-          setIsPlaying(true);
-          engine.start(startBeat ?? undefined);
-
-          if (renderedPlayer) {
-            safePlay(renderedPlayer, "metronome.start.web");
-          }
+            safePlay(renderedPlayer, "metronome.start.native");
+          }).catch(() => {});
         }
 
         if (barModeRef.current && barLoopModeRef.current === "once") {
@@ -5490,6 +5505,7 @@ export default function MetronomeScreen() {
             tempoLabel={tempoLabel}
             soundSet={soundSet}
             onSoundSetChange={(ss) => updateSoundSet(ss as SoundSet)}
+            onPreviewSoundSet={previewSoundSet}
             layerSoundSets={layerSoundSets as Record<number, string>}
             onLayerSoundSetsChange={(val) => {
               const typed = val as Record<number, SoundSet>;

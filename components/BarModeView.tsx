@@ -130,6 +130,7 @@ export interface BarModeViewProps {
   onSoundSetChange?: (ss: string) => void;
   layerSoundSets?: Record<number, string>;
   onLayerSoundSetsChange?: (val: Record<number, string>) => void;
+  onPreviewSoundSet?: (key: string) => void;
   customSoundSets?: Record<string, CustomSoundSetConfig>;
   onCustomSoundSetsChange?: (configs: Record<string, CustomSoundSetConfig>) => void;
   colors: BarModeColors;
@@ -396,7 +397,7 @@ export function BarModeView({
   subdivisionBarElement, onBarQuickSave, onResetFlash, onBarReset, onBarScrollOffset,
   onBarTimerExpired, onBarClockConfigChange, initialBarClockMode, initialBarTimerDuration,
   noteSamples, bpm, isLandscape, tempoLabel,
-  soundSet = "classic", onSoundSetChange, layerSoundSets = {} as Record<number, string>, onLayerSoundSetsChange,
+  soundSet = "classic", onSoundSetChange, layerSoundSets = {} as Record<number, string>, onLayerSoundSetsChange, onPreviewSoundSet,
   customSoundSets = {} as Record<string, CustomSoundSetConfig>, onCustomSoundSetsChange,
   colors: C, ms,
   cellOverlayOpacity,
@@ -1363,7 +1364,7 @@ export function BarModeView({
               return (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8 }}>
                   <Pressable
-                    onPress={() => { const prev = (safeIdx - 1 + allOpts.length) % allOpts.length; onSoundSetChange?.(allOpts[prev].key); }}
+                    onPress={() => { const prev = allOpts[(safeIdx - 1 + allOpts.length) % allOpts.length]; onSoundSetChange?.(prev.key); onPreviewSoundSet?.(prev.key); }}
                     hitSlop={10}
                     style={{ padding: 4 }}
                   >
@@ -1378,7 +1379,7 @@ export function BarModeView({
                     </Text>
                   </Pressable>
                   <Pressable
-                    onPress={() => { const next = (safeIdx + 1) % allOpts.length; onSoundSetChange?.(allOpts[next].key); }}
+                    onPress={() => { const next = allOpts[(safeIdx + 1) % allOpts.length]; onSoundSetChange?.(next.key); onPreviewSoundSet?.(next.key); }}
                     hitSlop={10}
                     style={{ padding: 4 }}
                   >
@@ -1426,6 +1427,7 @@ export function BarModeView({
                         const updated = { ...layerSoundSets };
                         if (!prev.key) { delete updated[layerNum]; } else { updated[layerNum] = prev.key as string; }
                         onLayerSoundSetsChange?.(updated);
+                        if (prev.key) onPreviewSoundSet?.(prev.key);
                       }}
                       hitSlop={10} style={{ padding: 4 }}
                     >
@@ -1445,6 +1447,7 @@ export function BarModeView({
                         const updated = { ...layerSoundSets };
                         if (!next.key) { delete updated[layerNum]; } else { updated[layerNum] = next.key as string; }
                         onLayerSoundSetsChange?.(updated);
+                        if (next.key) onPreviewSoundSet?.(next.key);
                       }}
                       hitSlop={10} style={{ padding: 4 }}
                     >

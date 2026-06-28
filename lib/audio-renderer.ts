@@ -647,6 +647,36 @@ export function clearWebClickBuffers(): void {
   webClickBuffers = null;
 }
 
+const previewAudioCache = new Map<string, AudioBuffer>();
+
+export async function previewClickOnWeb(
+  soundSetKey: string,
+  strongAsset: number | string,
+): Promise<void> {
+  if (Platform.OS !== "web") return;
+  const ctx = getSharedAudioContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") {
+    try { await ctx.resume(); } catch {}
+  }
+  let buf = previewAudioCache.get(soundSetKey);
+  if (!buf) {
+    try {
+      const url = resolveWebAssetUrl(strongAsset);
+      if (!url) return;
+      const resp = await fetch(url);
+      if (!resp.ok) return;
+      const ab = await resp.arrayBuffer();
+      buf = await ctx.decodeAudioData(ab.slice(0));
+      previewAudioCache.set(soundSetKey, buf);
+    } catch { return; }
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(ctx.destination);
+  src.start(0);
+}
+
 export function playWebRenderedLoop(
   pcm: Float32Array | StereoPCM,
   onEnded?: () => void,

@@ -128,6 +128,7 @@ interface BeatIndicatorProps {
   onSoundSetChange?: (ss: string) => void;
   layerSoundSets?: Record<number, string>;
   onLayerSoundSetsChange?: (val: Record<number, string>) => void;
+  onPreviewSoundSet?: (key: string) => void;
   customSoundSets?: Record<string, import("@/lib/storage").CustomSoundSetConfig>;
   onCustomSoundSetsChange?: (configs: Record<string, import("@/lib/storage").CustomSoundSetConfig>) => void;
   barCellOpacity?: number;
@@ -196,6 +197,7 @@ export function BeatIndicator({
   onSoundSetChange,
   layerSoundSets = {},
   onLayerSoundSetsChange,
+  onPreviewSoundSet,
   customSoundSets,
   onCustomSoundSetsChange,
   barCellOpacity,
@@ -1333,6 +1335,7 @@ export function BeatIndicator({
         }}
         soundSet={soundSet}
         onSoundSetChange={onSoundSetChange}
+        onPreviewSoundSet={onPreviewSoundSet}
         layerSoundSets={layerSoundSets}
         onLayerSoundSetsChange={onLayerSoundSetsChange}
         customSoundSets={customSoundSets}
