@@ -10,7 +10,6 @@ import {
   ScrollView,
   FlatList,
   useWindowDimensions,
-  Alert,
 } from "react-native";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import { logger } from "@/lib/logger";
@@ -19,15 +18,10 @@ import * as Haptics from "expo-haptics";
 import {
   AudioModule,
   createAudioPlayer,
-  IOSOutputFormat,
-  AudioQuality,
   type AudioPlayer,
-  type AudioRecorder,
-  type RecordingOptions,
 } from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
-import { safePlay, releaseRecorder } from "@/lib/audio-utils";
-import { acquireAudioSession, releaseAudioSession } from "@/lib/audio-session";
+import { safePlay } from "@/lib/audio-utils";
 import { ensurePermission } from "@/lib/permissions";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import Colors from "@/constants/colors";
@@ -38,41 +32,23 @@ import type { ScaleValues } from "@/lib/scale";
 import {
   WaveType,
   SignalGeneratorEngine,
-  generateToneDataUri,
   generateToneBase64,
 } from "@/lib/signal-generator-engine";
 import { TUNING_DATA } from "@/lib/tuning-data";
 import {
   NOTE_NAMES,
   base64ToBytes,
-  decodeWavBase64,
   realFFT,
-  analyzeWavLocally,
   frequencyToNote,
   fftPeakDetect,
   noteToFreq,
 } from "@/lib/signal-analysis";
+// react-native-audio-record는 네이티브 전용 — 웹에선 로드하지 않음
+const AudioRecord: typeof import("react-native-audio-record").default | null =
+  Platform.OS !== "web" ? require("react-native-audio-record").default : null;
 
 
 
-async function analyzeViaServer(base64: string, ext: string): Promise<{ frequency: number | null; note: string | null } | null> {
-  try {
-    const domain = process.env.EXPO_PUBLIC_DOMAIN;
-    if (!domain) return null;
-    const apiUrl = domain.startsWith("http") ? domain : `https://${domain}`;
-    const resp = await fetch(new URL("/api/analyze-audio", apiUrl).href, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ audio: base64, format: ext }),
-    });
-    if (resp.ok) return await resp.json();
-    logger.warn("[MicTuner] server analyze HTTP error:", resp.status);
-    return null;
-  } catch (e) {
-    logger.warn("[MicTuner] server analyze error:", e);
-    return null;
-  }
-}
 import { useLanguage } from "@/contexts/LanguageContext";
 
 const WAVE_CONFIGS: { type: WaveType; key: "sine" | "square" | "triangle" | "saw"; icon: string }[] = [
@@ -171,7 +147,7 @@ function Knob({ value, onChange, displayValue, displayUnit, accentColor, accentD
             longPressTimerRef.current = null;
           }
         }
-        const sensitivity = 0.0015;
+        const sensitivity = 0.0004;
         const delta = -gs.dy * sensitivity;
         const next = Math.max(0, Math.min(1, startValRef.current + delta));
         if (Math.abs(next - valRef.current) > 0.001) {
@@ -589,9 +565,6 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
 interface SignalGeneratorModalProps {
   visible: boolean;
   onClose: () => void;
-  onAndroidMicToggle?: (active: boolean) => void;
-  androidMicFrequency?: number | null;
-  androidMicNote?: string | null;
   /**
    * 앱 레벨에서 TuningGuideModal을 렌더링하도록 위임. 두 모달이 동시에
    * 활성화되어 입력이 한쪽에 묶이는 'ghost' 상태를 막기 위해 SignalGenerator
@@ -602,7 +575,7 @@ interface SignalGeneratorModalProps {
   onOpenTuningGuide: (currentFreq: number, onSelectFreq: (freq: number) => void) => void;
 }
 
-export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, androidMicFrequency, androidMicNote, onOpenTuningGuide }: SignalGeneratorModalProps) {
+export function SignalGeneratorModal({ visible, onClose, onOpenTuningGuide }: SignalGeneratorModalProps) {
   const { colors: C } = useTheme();
   const pickerStyles = make_pickerStyles(C);
   const tgStyles = make_tgStyles(C);
@@ -643,7 +616,10 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     setSelectedNote(note);
     pickerDrivenRef.current = true;
     const f = noteToFreq(note, selectedOctave);
-    if (f >= MIN_FREQ && f <= MAX_FREQ) setFrequency(f);
+    if (f >= MIN_FREQ && f <= MAX_FREQ) {
+      setFrequency(f);
+      setPitchTargetFreq(f);
+    }
     setTimeout(() => { pickerDrivenRef.current = false; }, 150);
   }, [selectedOctave]);
 
@@ -651,7 +627,10 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     setSelectedOctave(oct);
     pickerDrivenRef.current = true;
     const f = noteToFreq(selectedNote, oct);
-    if (f >= MIN_FREQ && f <= MAX_FREQ) setFrequency(f);
+    if (f >= MIN_FREQ && f <= MAX_FREQ) {
+      setFrequency(f);
+      setPitchTargetFreq(f);
+    }
     setTimeout(() => { pickerDrivenRef.current = false; }, 150);
   }, [selectedNote]);
 
@@ -673,9 +652,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const [micDetectedFreq, setMicDetectedFreq] = useState<number | null>(null);
   const [micDetectedNote, setMicDetectedNote] = useState<string | null>(null);
   const [micAnalyzed, setMicAnalyzed] = useState(false);
-  const micTargetFreqRef = useRef<number>(440);
-  const micHasTargetRef = useRef(false);
-  const [micHasTarget, setMicHasTarget] = useState(false);
+  const [pitchTargetFreq, setPitchTargetFreq] = useState<number | null>(null);
   const micDetectedFreqRef = useRef<number | null>(null);
   const micActiveRef = useRef(false);
   const micAudioCtxRef = useRef<any>(null);
@@ -686,11 +663,8 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
   const spectrumDataRef = useRef<Float32Array | null>(null);
   const spectrumPeakBinRef = useRef<number>(-1);
   const [spectrumTick, setSpectrumTick] = useState(0);
-  const micRecordingRef = useRef<AudioRecorder | null>(null);
-  const micMobileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const nativeFailCountRef = useRef(0);
-  const nativeFallenBackRef = useRef(false);
-  const [micWebViewActive, setMicWebViewActive] = useState(false);
+  const audioRecordSubRef = useRef<{ remove: () => void } | null>(null);
+  const pcmBufferRef = useRef<number[]>([]);
 
   const engineRef = useRef(new SignalGeneratorEngine());
   const isPlayingRef = useRef(false);
@@ -783,99 +757,33 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
       engineRef.current.stopWeb();
       stopNativeSound();
       micActiveRef.current = false;
-      setMicWebViewActive(false);
       if (micRafRef.current) cancelAnimationFrame(micRafRef.current);
-      if (micSourceRef.current) micSourceRef.current.disconnect();
-      if (micAudioCtxRef.current) micAudioCtxRef.current.close();
-      if (micStreamRef.current) micStreamRef.current.getTracks().forEach((t: any) => t.stop());
-      if (micMobileTimerRef.current) clearTimeout(micMobileTimerRef.current);
-      if (micRecordingRef.current) {
-        const rec = micRecordingRef.current;
-        micRecordingRef.current = null;
-        void releaseRecorder(rec, "mic.unmount");
-      }
-      // 모달이 강제로 닫히거나 언마운트되어도 오디오 세션이 회복되도록 보장.
-      void releaseAudioSession("signalGenMicMobile");
-      void releaseAudioSession("signalGenMicAndroid");
+      if (micSourceRef.current) { try { micSourceRef.current.disconnect(); } catch {} micSourceRef.current = null; }
+      if (micAudioCtxRef.current) { try { micAudioCtxRef.current.close(); } catch {} micAudioCtxRef.current = null; }
+      if (micStreamRef.current) { micStreamRef.current.getTracks().forEach((t: any) => t.stop()); micStreamRef.current = null; }
+      if (audioRecordSubRef.current) { audioRecordSubRef.current.remove(); audioRecordSubRef.current = null; }
+      if (Platform.OS !== "web") { try { AudioRecord!.stop(); } catch {} }
     };
   }, []);
 
 
-  const stopMicAndroid = useCallback(() => {
-    setMicWebViewActive(false);
-    onAndroidMicToggle?.(false);
-    releaseAudioSession("signalGenMicAndroid").catch(() => {});
-  }, [onAndroidMicToggle]);
-
-  const showMicPermissionAlert = useCallback(() => {
-    Alert.alert(
-      t("noteRecorder", "permissionRequired"),
-      t("noteRecorder", "micPermission"),
-    );
-  }, [t]);
-
-  const startMicAndroid = useCallback(async () => {
-    const ok = await ensurePermission("mic", t);
-    if (!ok) return;
-    await acquireAudioSession("signalGenMicAndroid", "mic");
-    try {
-      micActiveRef.current = true;
-      setMicListening(true);
-      setMicWebViewActive(true);
-      onAndroidMicToggle?.(true);
-    } catch (e) {
-      // 토글/상태 갱신 실패 시 세션 회복.
-      try { await releaseAudioSession("signalGenMicAndroid"); } catch {}
-      throw e;
-    }
-  }, [onAndroidMicToggle, t]);
-
-  const stopMobileMic = useCallback(async () => {
-    if (micMobileTimerRef.current) {
-      clearTimeout(micMobileTimerRef.current);
-      micMobileTimerRef.current = null;
-    }
-    if (micRecordingRef.current) {
-      const rec = micRecordingRef.current;
-      micRecordingRef.current = null;
-      await releaseRecorder(rec, "mic.stop");
-    }
-    try {
-      await releaseAudioSession("signalGenMicMobile");
-    } catch {}
-  }, []);
-
   const stopMic = useCallback(() => {
     micActiveRef.current = false;
     setMicListening(false);
-    if (Platform.OS === "android") {
-      stopMicAndroid();
-      stopMobileMic();
-      nativeFallenBackRef.current = false;
-    } else if (Platform.OS === "web") {
-      if (micRafRef.current) {
-        cancelAnimationFrame(micRafRef.current);
-        micRafRef.current = null;
-      }
-      if (micSourceRef.current) {
-        micSourceRef.current.disconnect();
-        micSourceRef.current = null;
-      }
-      if (micAudioCtxRef.current) {
-        micAudioCtxRef.current.close();
-        micAudioCtxRef.current = null;
-      }
-      if (micStreamRef.current) {
-        micStreamRef.current.getTracks().forEach((t: any) => t.stop());
-        micStreamRef.current = null;
-      }
+    if (Platform.OS === "web") {
+      if (micRafRef.current) { cancelAnimationFrame(micRafRef.current); micRafRef.current = null; }
+      if (micSourceRef.current) { try { micSourceRef.current.disconnect(); } catch {} micSourceRef.current = null; }
+      if (micAudioCtxRef.current) { try { micAudioCtxRef.current.close(); } catch {} micAudioCtxRef.current = null; }
+      if (micStreamRef.current) { micStreamRef.current.getTracks().forEach((t: any) => t.stop()); micStreamRef.current = null; }
     } else {
-      stopMobileMic();
+      if (audioRecordSubRef.current) { audioRecordSubRef.current.remove(); audioRecordSubRef.current = null; }
+      try { AudioRecord!.stop(); } catch {}
+      pcmBufferRef.current = [];
     }
     setMicAnalyzed(false);
     spectrumDataRef.current = null;
     spectrumPeakBinRef.current = -1;
-  }, [stopMobileMic, stopMicAndroid]);
+  }, []);
 
   const pickDominantFreq = useCallback((readings: number[]): number | null => {
     if (readings.length === 0) return null;
@@ -1014,181 +922,83 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
     }
   }, [pickDominantFreq]);
 
-  useEffect(() => {
-    if (!micWebViewActive || Platform.OS !== "android") return;
-    setMicAnalyzed(true);
-    if (androidMicFrequency) {
-      setMicDetectedFreq(androidMicFrequency);
-      setMicDetectedNote(androidMicNote ?? null);
-    } else {
-      setMicDetectedFreq(null);
-      setMicDetectedNote(null);
-    }
-  }, [micWebViewActive, androidMicFrequency, androidMicNote]);
-
-  const autoFallbackToWebView = useCallback(async () => {
-    if (Platform.OS !== "android" || nativeFallenBackRef.current) return;
-    nativeFallenBackRef.current = true;
-    captureBreadcrumb({ category: "micTuner", message: "Native decode failed, auto-falling back to WebView", level: "warning" });
-    stopMobileMic();
+  const startNativeMic = useCallback(async () => {
     const ok = await ensurePermission("mic", t);
-    if (!ok) {
-      micActiveRef.current = false;
-      setMicListening(false);
-      return;
-    }
-    await acquireAudioSession("signalGenMicAndroid", "mic");
+    if (!ok) return;
     try {
-      micActiveRef.current = true;
-      setMicListening(true);
-      setMicWebViewActive(true);
-      onAndroidMicToggle?.(true);
-    } catch (e) {
-      // 상태 토글 실패 시 acquire한 세션 롤백.
-      try { await releaseAudioSession("signalGenMicAndroid"); } catch {}
-      throw e;
-    }
-  }, [stopMobileMic, onAndroidMicToggle, t]);
+      AudioRecord!.init({
+        sampleRate: 44100,
+        channels: 1,
+        bitsPerSample: 16,
+        audioSource: 6, // VOICE_RECOGNITION — 마이크 직접 입력
+      });
 
-  const startMicMobile = useCallback(async () => {
-    nativeFailCountRef.current = 0;
-    nativeFallenBackRef.current = false;
-    try {
-      const ok = await ensurePermission("mic", t);
-      if (!ok) return;
+      const WINDOW_SIZE = 8192;
+      const SR = 44100;
+      pcmBufferRef.current = [];
 
-      await acquireAudioSession("signalGenMicMobile", "mic");
-
-      micActiveRef.current = true;
-      setMicListening(true);
-
-      const RECORD_MS = 600;
-      const SAMPLE_RATE = 48000;
-
-      const recordingOptions: RecordingOptions = {
-        extension: ".wav",
-        sampleRate: SAMPLE_RATE,
-        numberOfChannels: 1,
-        bitRate: 768000,
-        ios: {
-          extension: ".wav",
-          outputFormat: IOSOutputFormat.LINEARPCM,
-          audioQuality: AudioQuality.MAX,
-          sampleRate: SAMPLE_RATE,
-          linearPCMBitDepth: 16,
-          linearPCMIsBigEndian: false,
-          linearPCMIsFloat: false,
-        },
-        android: {
-          extension: ".m4a",
-          outputFormat: "mpeg4",
-          audioEncoder: "aac",
-          sampleRate: SAMPLE_RATE,
-        },
-        web: { mimeType: "audio/wav", bitsPerSecond: 768000 },
-      };
-
-      const recordAndAnalyze = async () => {
+      const sub = AudioRecord!.on("data", (data: string) => {
         if (!micActiveRef.current) return;
-        let rec: AudioRecorder | null = null;
-        try {
-          rec = new AudioModule.AudioRecorder(recordingOptions);
-          await rec.prepareToRecordAsync();
-          rec.record();
-          micRecordingRef.current = rec;
-
-          const startedRec = rec;
-          micMobileTimerRef.current = setTimeout(async () => {
-            if (!micActiveRef.current) {
-              micRecordingRef.current = null;
-              await releaseRecorder(startedRec, "mic.tick.cancelled");
-              return;
-            }
-            try {
-              await startedRec.stop();
-              const uri = startedRec.uri;
-              micRecordingRef.current = null;
-              try { (startedRec as any).remove?.(); } catch {}
-              if (uri) {
-                const base64 = await FileSystem.readAsStringAsync(uri, {
-                  encoding: FileSystem.EncodingType.Base64,
-                });
-                let analysisResult: { frequency: number | null; note: string | null };
-                if (Platform.OS === "android") {
-                  const serverResult = await analyzeViaServer(base64, ".m4a");
-                  analysisResult = serverResult ?? { frequency: null, note: null };
-                } else {
-                  // iOS: 서버 분석 우선 시도, 실패 시 로컬 분석 폴백
-                  const serverResult = await analyzeViaServer(base64, ".wav");
-                  analysisResult = serverResult ?? analyzeWavLocally(base64, SAMPLE_RATE);
-                }
-                setMicAnalyzed(true);
-                if (analysisResult.frequency) {
-                  nativeFailCountRef.current = 0;
-                  setMicDetectedFreq(analysisResult.frequency);
-                  setMicDetectedNote(analysisResult.note);
-                } else {
-                  nativeFailCountRef.current++;
-                  if (Platform.OS === "android" && nativeFailCountRef.current >= 3) {
-                    autoFallbackToWebView();
-                    try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
-                    return;
-                  }
-                  setMicDetectedFreq(null);
-                  setMicDetectedNote(null);
-                }
-                try { await FileSystem.deleteAsync(uri, { idempotent: true }); } catch {}
-              }
-            } catch (e) {
-              logger.warn("[MicTuner] native analyze error:", e);
-            }
-            if (micActiveRef.current) {
-              recordAndAnalyze();
-            }
-          }, RECORD_MS);
-        } catch (e) {
-          logger.warn("[MicTuner] native record error:", e);
-          micRecordingRef.current = null;
-          if (rec) await releaseRecorder(rec, "mic.tick.error");
-          if (Platform.OS === "android") {
-            autoFallbackToWebView();
-            return;
+        const bytes = base64ToBytes(data);
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const buf = pcmBufferRef.current;
+        for (let i = 0; i + 1 < bytes.length; i += 2) {
+          buf.push(view.getInt16(i, true) / 32768);
+        }
+        while (buf.length >= WINDOW_SIZE) {
+          const win = new Float32Array(buf.splice(0, WINDOW_SIZE));
+          let rms = 0;
+          for (let i = 0; i < win.length; i++) rms += win[i] * win[i];
+          rms = Math.sqrt(rms / win.length);
+          if (rms < 0.01) { setMicAnalyzed(true); continue; }
+          for (let i = 0; i < WINDOW_SIZE; i++) {
+            win[i] *= 0.5 * (1 - Math.cos(2 * Math.PI * i / (WINDOW_SIZE - 1)));
           }
-          if (micActiveRef.current) {
-            micMobileTimerRef.current = setTimeout(recordAndAnalyze, 500);
+          const mag = realFFT(win);
+          const result = fftPeakDetect(mag, SR, WINDOW_SIZE);
+          setMicAnalyzed(true);
+          if (result && result.freq > 20 && result.freq <= 4200) {
+            const freq = Math.round(result.freq * 10) / 10;
+            setMicDetectedFreq(freq);
+            const noteInfo = frequencyToNote(freq);
+            setMicDetectedNote(`${noteInfo.name}${noteInfo.octave}`);
+          } else {
+            setMicDetectedFreq(null);
+            setMicDetectedNote(null);
           }
         }
-      };
+      });
 
-      recordAndAnalyze();
+      audioRecordSubRef.current = sub;
+      micActiveRef.current = true;
+      setMicListening(true);
+      AudioRecord!.start();
     } catch (e) {
-      logger.warn("[MicTuner] Mobile start error:", e);
+      logger.warn("[NativeMic] Error starting:", e);
+      captureBreadcrumb({ category: "micTuner", message: "Native AudioRecord start error", level: "error" });
+      if (audioRecordSubRef.current) { audioRecordSubRef.current.remove(); audioRecordSubRef.current = null; }
+      try { AudioRecord!.stop(); } catch {}
       setMicListening(false);
       micActiveRef.current = false;
-      // 시작 실패 시에도 acquire한 세션은 반드시 회복.
-      try { await releaseAudioSession("signalGenMicMobile"); } catch {}
     }
-  }, [startMicAndroid, autoFallbackToWebView, showMicPermissionAlert]);
+  }, [t]);
 
   const startMic = useCallback(async () => {
     if (Platform.OS === "web") {
       startMicWeb();
     } else {
-      startMicMobile();
+      startNativeMic();
     }
-  }, [startMicWeb, startMicMobile]);
+  }, [startMicWeb, startNativeMic]);
 
   const toggleMic = useCallback(() => {
     hapticFeedback();
     if (micListening) {
       stopMic();
     } else {
-      micHasTargetRef.current = false;
-      setMicHasTarget(false);
-      micTargetFreqRef.current = frequency;
       startMic();
     }
-  }, [micListening, stopMic, startMic, hapticFeedback, frequency]);
+  }, [micListening, stopMic, startMic, hapticFeedback]);
 
   const handleClose = useCallback(() => {
     stopPlayback();
@@ -1208,32 +1018,20 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
 
   useEffect(() => { micDetectedFreqRef.current = micDetectedFreq; }, [micDetectedFreq]);
 
-  const prevFreqForMicRef = useRef(frequency);
-  useEffect(() => {
-    if (micListening && prevFreqForMicRef.current !== frequency) {
-      micHasTargetRef.current = true;
-      setMicHasTarget(true);
-      micTargetFreqRef.current = frequency;
-    }
-    prevFreqForMicRef.current = frequency;
-  }, [frequency, micListening]);
-
   const clearPitchTarget = useCallback(() => {
     hapticFeedback();
-    micHasTargetRef.current = false;
-    setMicHasTarget(false);
+    setPitchTargetFreq(null);
   }, [hapticFeedback]);
 
   const pitchComparison = useMemo(() => {
-    if (!micListening || !micDetectedFreq || !micHasTarget) return null;
-    const target = micTargetFreqRef.current;
-    const centsDiff = Math.round(1200 * Math.log2(micDetectedFreq / target));
-    const targetNote = frequencyToNote(target);
+    if (!micListening || !micDetectedFreq || pitchTargetFreq === null) return null;
+    const centsDiff = Math.round(1200 * Math.log2(micDetectedFreq / pitchTargetFreq));
+    const targetNote = frequencyToNote(pitchTargetFreq);
     const targetLabel = `${targetNote.name}${targetNote.octave}`;
     if (Math.abs(centsDiff) <= 5) return { status: "exact" as const, cents: centsDiff, targetLabel };
     if (centsDiff > 0) return { status: "high" as const, cents: centsDiff, targetLabel };
     return { status: "low" as const, cents: centsDiff, targetLabel };
-  }, [micListening, micDetectedFreq, micHasTarget]);
+  }, [micListening, micDetectedFreq, pitchTargetFreq]);
 
   const formatFreqDisplay = (f: number) => {
     if (f >= 1000) return (f / 1000).toFixed(f >= 10000 ? 1 : 2);
@@ -1334,25 +1132,21 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                   if (captured) {
                     hapticFeedback();
                     setFrequency(captured);
+                    setPitchTargetFreq(captured);
                   }
                 } : undefined}
                 noteLabel={currentNoteLabel}
                 knobSize={dynamicKnobSize}
               />
+            </View>
+            {/* 마이크 버튼 — 노브 아래 독립 행 */}
+            <View style={styles.micRow}>
               <Pressable
                 onPress={toggleMic}
                 style={[
                   styles.micEmoji,
                   micListening && styles.micEmojiActive,
-                  {
-                    position: "absolute" as const,
-                    bottom: isLandscape ? -6 : -8,
-                    right: isLandscape ? -10 : -14,
-                    width: micBtnSize,
-                    height: micBtnSize,
-                    borderRadius: micBtnSize / 2,
-                    zIndex: 10,
-                  },
+                  { width: micBtnSize, height: micBtnSize, borderRadius: micBtnSize / 2 },
                 ]}
                 hitSlop={8}
                 testID="signal-mic-toggle"
@@ -1364,6 +1158,18 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                   color={micListening ? C.danger : C.textSecondary}
                 />
               </Pressable>
+              {pitchTargetFreq !== null && (
+                <View style={styles.targetChip}>
+                  <MaterialCommunityIcons name="target" size={10} color={C.accent} />
+                  <Text style={styles.targetChipText}>
+                    {frequencyToNote(pitchTargetFreq).name}{frequencyToNote(pitchTargetFreq).octave}
+                    {" "}{Math.round(pitchTargetFreq)} {t("signalGenerator", "hzUnit")}
+                  </Text>
+                  <Pressable onPress={clearPitchTarget} hitSlop={6}>
+                    <Ionicons name="close-circle" size={12} color={C.textTertiary} />
+                  </Pressable>
+                </View>
+              )}
             </View>
             {(micDetectedFreq || micListening) && (
             <View style={[styles.micSection, isLandscape && { gap: Spacing.xs }]}>
@@ -1429,9 +1235,6 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                           ? `${t("signalGenerator", "pitchHigh")} +${pitchComparison.cents}¢`
                           : `${t("signalGenerator", "pitchLow")} ${pitchComparison.cents}¢`}
                       </Text>
-                      <Pressable onPress={clearPitchTarget} hitSlop={8} style={{ marginLeft: Spacing.xxs }}>
-                        <Ionicons name="close-circle" size={isLandscape ? 12 : 14} color={C.textTertiary} />
-                      </Pressable>
                     </View>
                   ) : null}
                 </View>
@@ -1503,6 +1306,7 @@ export function SignalGeneratorModal({ visible, onClose, onAndroidMicToggle, and
                 onOpenTuningGuide(capturedFreq, (selectedFreq) => {
                   if (preGuideFreqRef.current === null) preGuideFreqRef.current = capturedFreq;
                   setFrequency(selectedFreq);
+                  setPitchTargetFreq(selectedFreq);
                 });
               }}
               onLongPress={() => {
@@ -2221,6 +2025,29 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     alignItems: "center",
     gap: 6,
     width: "100%",
+  },
+  micRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    flexWrap: "wrap",
+  },
+  targetChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: C.accent + "60",
+    backgroundColor: C.accentDim,
+  },
+  targetChipText: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: FontSize.micro,
+    color: C.accent,
   },
   micEmoji: {
     width: 34,

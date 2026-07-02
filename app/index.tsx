@@ -64,7 +64,6 @@ import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer, type StopwatchTimerHandle } from "@/components/StopwatchTimer";
 import { SettingsModal } from "@/components/SettingsModal";
 import { SignalGeneratorModal, TuningGuideModal } from "@/components/SignalGeneratorModal";
-import { MicWebView, MicWebViewHandle } from "@/components/MicWebView";
 import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import PracticeStatsGraph from "@/components/PracticeStatsGraph";
@@ -330,10 +329,6 @@ export default function MetronomeScreen() {
   // 종료 직후 자동으로 SignalGen을 재오픈하기 위한 플래그.
   // 단일 활성 모달 보장(태스크 #70)을 위해 두 모달의 동시 visible=true를 금지한다.
   const reopenSignalGenAfterTuningGuideRef = useRef(false);
-  const [androidMicActive, setAndroidMicActive] = useState(false);
-  const [androidMicFreq, setAndroidMicFreq] = useState<number | null>(null);
-  const [androidMicNote, setAndroidMicNote] = useState<string | null>(null);
-  const androidMicRef = useRef<MicWebViewHandle | null>(null);
   const [loggingEnabled, setLoggingEnabled] = useState(false);
   const practiceStartRef = useRef<number | null>(null);
   const featureStartRef = useRef<{ name: string; start: number } | null>(null);
@@ -5083,8 +5078,6 @@ export default function MetronomeScreen() {
           // 사용자가 명시적으로 SignalGen을 닫으면 TG 재오픈 플래그도 클리어.
           reopenSignalGenAfterTuningGuideRef.current = false;
           tuningGuideOnSelectRef.current = null;
-          setAndroidMicActive(false);
-          if (androidMicRef.current) androidMicRef.current.stop();
           if (loggingEnabled && featureStartRef.current?.name === "signal_generator") {
             const dur = Math.round((Date.now() - featureStartRef.current.start) / 1000);
             if (dur >= 2) addActivityLog({ type: "feature_usage", data: { feature: "signal_generator", duration: dur } });
@@ -5092,12 +5085,6 @@ export default function MetronomeScreen() {
           }
           setActiveModal(null);
         }}
-        onAndroidMicToggle={(active) => {
-          setAndroidMicActive(active);
-          if (!active && androidMicRef.current) androidMicRef.current.stop();
-        }}
-        androidMicFrequency={androidMicFreq}
-        androidMicNote={androidMicNote}
         onOpenTuningGuide={(currentFreq, onSelectFreq) => {
           // activeModal 상태 머신: SignalGen → TuningGuide 전환.
           // openTuningGuideFromSignalGen 이 activeModal + 재오픈 플래그를 원자적으로 결정한다.
@@ -5110,15 +5097,6 @@ export default function MetronomeScreen() {
           setActiveModal(next.activeModal);
         }}
       />
-      {androidMicActive && Platform.OS === "android" && (
-        <MicWebView
-          ref={androidMicRef}
-          onFrequency={(freq, note) => {
-            setAndroidMicFreq(freq);
-            setAndroidMicNote(note);
-          }}
-        />
-      )}
 
       {recorderTarget !== null && (
       <NoteRecorderModal
