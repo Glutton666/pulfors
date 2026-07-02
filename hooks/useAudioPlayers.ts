@@ -81,6 +81,12 @@ export function useAudioPlayers(soundSet: SoundSet): AudioPlayersHook {
   const hihatLowB = useAudioPlayer(soundSets.hihat.low);
   const hihatStrongA = useAudioPlayer(soundSets.hihat.strong);
   const hihatStrongB = useAudioPlayer(soundSets.hihat.strong);
+  const jamblockHighA = useAudioPlayer(soundSets.jamblock.high);
+  const jamblockHighB = useAudioPlayer(soundSets.jamblock.high);
+  const jamblockLowA = useAudioPlayer(soundSets.jamblock.low);
+  const jamblockLowB = useAudioPlayer(soundSets.jamblock.low);
+  const jamblockStrongA = useAudioPlayer(soundSets.jamblock.strong);
+  const jamblockStrongB = useAudioPlayer(soundSets.jamblock.strong);
 
   const allPlayers = useMemo<BuiltinPlayers>(() => ({
     classic: { highA: classicHighA, highB: classicHighB, lowA: classicLowA, lowB: classicLowB, strongA: classicStrongA, strongB: classicStrongB },
@@ -90,7 +96,8 @@ export function useAudioPlayers(soundSet: SoundSet): AudioPlayersHook {
     rimshot: { highA: rimshotHighA, highB: rimshotHighB, lowA: rimshotLowA, lowB: rimshotLowB, strongA: rimshotStrongA, strongB: rimshotStrongB },
     triangle: { highA: triangleHighA, highB: triangleHighB, lowA: triangleLowA, lowB: triangleLowB, strongA: triangleStrongA, strongB: triangleStrongB },
     hihat: { highA: hihatHighA, highB: hihatHighB, lowA: hihatLowA, lowB: hihatLowB, strongA: hihatStrongA, strongB: hihatStrongB },
-  }), [classicHighA, classicHighB, classicLowA, classicLowB, classicStrongA, classicStrongB, woodblockHighA, woodblockHighB, woodblockLowA, woodblockLowB, woodblockStrongA, woodblockStrongB, cowbellHighA, cowbellHighB, cowbellLowA, cowbellLowB, cowbellStrongA, cowbellStrongB, digitalHighA, digitalHighB, digitalLowA, digitalLowB, digitalStrongA, digitalStrongB, rimshotHighA, rimshotHighB, rimshotLowA, rimshotLowB, rimshotStrongA, rimshotStrongB, triangleHighA, triangleHighB, triangleLowA, triangleLowB, triangleStrongA, triangleStrongB, hihatHighA, hihatHighB, hihatLowA, hihatLowB, hihatStrongA, hihatStrongB]);
+    jamblock: { highA: jamblockHighA, highB: jamblockHighB, lowA: jamblockLowA, lowB: jamblockLowB, strongA: jamblockStrongA, strongB: jamblockStrongB },
+  }), [classicHighA, classicHighB, classicLowA, classicLowB, classicStrongA, classicStrongB, woodblockHighA, woodblockHighB, woodblockLowA, woodblockLowB, woodblockStrongA, woodblockStrongB, cowbellHighA, cowbellHighB, cowbellLowA, cowbellLowB, cowbellStrongA, cowbellStrongB, digitalHighA, digitalHighB, digitalLowA, digitalLowB, digitalStrongA, digitalStrongB, rimshotHighA, rimshotHighB, rimshotLowA, rimshotLowB, rimshotStrongA, rimshotStrongB, triangleHighA, triangleHighB, triangleLowA, triangleLowB, triangleStrongA, triangleStrongB, hihatHighA, hihatHighB, hihatLowA, hihatLowB, hihatStrongA, hihatStrongB, jamblockHighA, jamblockHighB, jamblockLowA, jamblockLowB, jamblockStrongA, jamblockStrongB]);
 
   const highToggle = useRef(false);
   const lowToggle = useRef(false);

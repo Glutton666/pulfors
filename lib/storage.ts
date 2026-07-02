@@ -75,7 +75,7 @@ export async function saveFadeOutSettings(s: FadeOutSettings): Promise<void> {
 
 export type FlashMode = "all" | "accent" | "off";
 export type HapticMode = "all" | "accent" | "off";
-export type BuiltinSoundSet = "classic" | "woodblock" | "cowbell" | "digital" | "rimshot" | "triangle" | "hihat"
+export type BuiltinSoundSet = "classic" | "woodblock" | "cowbell" | "digital" | "rimshot" | "triangle" | "hihat" | "jamblock"
   | "kick" | "snare" | "clap" | "openhat" | "tom" | "crash";
 export type SoundSet = BuiltinSoundSet | "custom1" | "custom2" | "custom3";
 
@@ -175,7 +175,7 @@ export async function saveCustomSoundSets(configs: Record<string, CustomSoundSet
   }
 }
 
-export const BUILTIN_SOUND_SETS: BuiltinSoundSet[] = ["classic", "woodblock", "cowbell", "digital", "rimshot", "triangle", "hihat"];
+export const BUILTIN_SOUND_SETS: BuiltinSoundSet[] = ["classic", "woodblock", "cowbell", "digital", "rimshot", "triangle", "hihat", "jamblock"];
 export const CUSTOM_SOUND_SET_SLOTS: SoundSet[] = ["custom1", "custom2", "custom3"];
 
 export interface MetronomeSettings {

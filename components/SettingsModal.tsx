@@ -100,6 +100,9 @@ const SoundPreviewPlayers = React.forwardRef<
   const hihatStrong = useAudioPlayer(soundSets.hihat.strong);
   const hihatHigh = useAudioPlayer(soundSets.hihat.high);
   const hihatLow = useAudioPlayer(soundSets.hihat.low);
+  const jamblockStrong = useAudioPlayer(soundSets.jamblock.strong);
+  const jamblockHigh = useAudioPlayer(soundSets.jamblock.high);
+  const jamblockLow = useAudioPlayer(soundSets.jamblock.low);
   const previewIndexRef = useRef<Record<string, number>>({});
 
   type PlayerList = typeof classicStrong[];
@@ -111,6 +114,7 @@ const SoundPreviewPlayers = React.forwardRef<
     rimshot: [rimshotStrong, rimshotHigh, rimshotLow],
     triangle: [triangleStrong, triangleHigh, triangleLow],
     hihat: [hihatStrong, hihatHigh, hihatLow],
+    jamblock: [jamblockStrong, jamblockHigh, jamblockLow],
   };
 
   useImperativeHandle(ref, () => ({

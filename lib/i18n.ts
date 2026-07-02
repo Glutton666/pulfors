@@ -207,6 +207,7 @@ export const translations = {
     rimshot: { ko: "림샷", en: "Rimshot" },
     triangle: { ko: "트라이앵글", en: "Triangle" },
     hihat: { ko: "클로즈햇", en: "Closed Hat" },
+    jamblock: { ko: "잼 블럭", en: "Jam Block" },
     kick: { ko: "킥", en: "Kick" },
     snare: { ko: "스네어", en: "Snare" },
     clap: { ko: "클랩", en: "Clap" },

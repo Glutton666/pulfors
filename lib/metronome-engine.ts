@@ -55,6 +55,11 @@ export const soundSets = {
     low: require("@/assets/sounds/hihat-low.wav"),
     strong: require("@/assets/sounds/hihat-strong.wav"),
   },
+  jamblock: {
+    high: require("@/assets/sounds/jamblock-high.wav"),
+    low: require("@/assets/sounds/jamblock-low.wav"),
+    strong: require("@/assets/sounds/jamblock-strong.wav"),
+  },
 };
 
 /**
