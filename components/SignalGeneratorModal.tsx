@@ -42,7 +42,6 @@ import {
   frequencyToNote,
   fftPeakDetect,
   noteToFreq,
-  noteToSolfege,
 } from "@/lib/signal-analysis";
 // react-native-audio-record는 네이티브 전용 — 웹에선 로드하지 않음
 const AudioRecord: typeof import("react-native-audio-record").default | null =
@@ -398,8 +397,6 @@ export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentC
     setExpandedInstrument(null);
   };
 
-  const [noteMode, setNoteMode] = useState<"letter" | "solfege">("letter");
-
   return (
     <AnimatedModal visible={visible} transparent onRequestClose={handleClose} statusBarTranslucent>
       <View style={tgStyles.overlay}>
@@ -504,24 +501,6 @@ export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentC
           ) : (
             <ScrollView style={tgStyles.scrollBody} showsVerticalScrollIndicator={false}>
               <Text style={tgStyles.hint}>{t("signalGenerator", "tapToSet")}</Text>
-              <View style={[tgStyles.tabRow, { marginTop: 0, marginBottom: 8 }]}>
-                <Pressable
-                  onPress={() => setNoteMode("letter")}
-                  style={[tgStyles.tabBtn, noteMode === "letter" && { backgroundColor: accentColor }]}
-                >
-                  <Text style={[tgStyles.tabText, noteMode === "letter" && { color: "#fff" }, { fontSize: 11 }]}>
-                    {t("signalGenerator", "noteModeMajor")}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setNoteMode("solfege")}
-                  style={[tgStyles.tabBtn, noteMode === "solfege" && { backgroundColor: accentColor }]}
-                >
-                  <Text style={[tgStyles.tabText, noteMode === "solfege" && { color: "#fff" }, { fontSize: 11 }]}>
-                    {t("signalGenerator", "noteModeSolfege")}
-                  </Text>
-                </Pressable>
-              </View>
               {TUNING_DATA.map((cat) => (
                 <View key={cat.id}>
                   <Pressable
@@ -583,7 +562,7 @@ export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentC
                               ]}
                             >
                               <Text style={[tgStyles.stringNote, { color: accentColor }]}>
-                                {noteMode === "solfege" ? noteToSolfege(s.note) : s.note}{s.octave}
+                                {s.note}{s.octave}
                               </Text>
                               <Text style={tgStyles.stringLabel}>
                                 {s.label[lang]}

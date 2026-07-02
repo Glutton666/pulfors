@@ -2,20 +2,6 @@ import { logger } from "@/lib/logger";
 
 export const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
-export const SOLFEGE_KO: Record<string, string> = {
-  "C": "도", "C#": "도♯", "Db": "레♭",
-  "D": "레", "D#": "레♯", "Eb": "미♭",
-  "E": "미",
-  "F": "파", "F#": "파♯", "Gb": "솔♭",
-  "G": "솔", "G#": "솔♯", "Ab": "라♭",
-  "A": "라", "A#": "라♯", "Bb": "시♭",
-  "B": "시", "B♭": "시♭",
-};
-
-export function noteToSolfege(note: string): string {
-  return SOLFEGE_KO[note] ?? note;
-}
-
 export function base64ToBytes(base64: string): Uint8Array {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   const lookup = new Uint8Array(256);
