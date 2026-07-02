@@ -256,18 +256,31 @@ export function ScoreCanvas({
   const clefChangedAtCanvasRef = useRef(clefChangedAtCanvas);
   clefChangedAtCanvasRef.current = clefChangedAtCanvas;
 
+  const keySigChangedAtCanvas = useMemo(() => {
+    const changed = new Set<number>();
+    let prev = doc.keySignature?.sharps ?? 0;
+    for (const [mIdx, eff] of effectiveSharpsAtMeasure) {
+      if (eff !== prev) { changed.add(mIdx); prev = eff; }
+    }
+    return changed;
+  }, [effectiveSharpsAtMeasure, doc.keySignature?.sharps]);
+  const keySigChangedAtCanvasRef = useRef(keySigChangedAtCanvas);
+  keySigChangedAtCanvasRef.current = keySigChangedAtCanvas;
+
   // 헤더 폭 계산 — ScoreRenderer의 MeasureRender/PartRender와 완전히 동일한 로직
   const measureContentX = useCallback(
     (measureX: number, posInRow: number, mIdx?: number): number => {
       // 행 첫 마디이거나 이 마디에서 음자리표가 바뀐 경우 음자리표 표시
       const showClef = posInRow === 0 || (mIdx !== undefined && clefChangedAtCanvasRef.current.has(mIdx));
-      // ScoreRenderer.PartRender와 동일: posInRow===0이거나 박자표 변경 마디
-      const showTimeSig = posInRow === 0 || (mIdx !== undefined && timeSigChangedAtRef.current.has(mIdx));
+      // 박자표: 악보 첫 마디(mIdx===0)이거나 박자표 변경 마디 (매 행 반복 안 함)
+      const showTimeSig = mIdx === 0 || (mIdx !== undefined && timeSigChangedAtRef.current.has(mIdx));
+      // 조표: 행 첫 마디이거나 조표 변경 마디 (매 행 반복)
+      const showKeySig = posInRow === 0 || (mIdx !== undefined && keySigChangedAtCanvasRef.current.has(mIdx));
       const effClef = (mIdx !== undefined ? effectiveClefAtMeasureRef.current.get(mIdx) : undefined) ?? clefRef.current;
       const effSharps = (mIdx !== undefined ? effectiveSharpsAtMeasureRef.current.get(mIdx) : undefined) ?? (docRef.current.keySignature?.sharps ?? 0);
       let cx = measureX + 4;
       if (showClef) cx += CLEF_WIDTH[effClef] + 4;
-      if (Math.abs(effSharps) > 0) cx += Math.abs(effSharps) * KEY_SIG_ACCIDENTAL_WIDTH + 4;
+      if (showKeySig && Math.abs(effSharps) > 0) cx += Math.abs(effSharps) * KEY_SIG_ACCIDENTAL_WIDTH + 4;
       if (showTimeSig) cx += TIME_SIG_WIDTH + 4;
       return cx;
     },

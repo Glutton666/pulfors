@@ -422,6 +422,14 @@ export function computeScoreLayout(
   const minWidths = measures.map((m) => measureMinWidth(m));
   const rowHeight = SCORE_PART_HEIGHT * partCount + SCORE_ROW_MARGIN_BOTTOM;
 
+  const clef = doc.parts[0]?.clef ?? "treble";
+  const keySharps = doc.keySignature.sharps;
+  // 첫 행 헤더: 음자리표 + 조표 + 박자표 + 여유 공간
+  const firstRowHeaderW =
+    headerWidth(clef, true, keySharps) + SCORE_FIRST_MEASURE_EXTRA;
+  // 이후 행 헤더: 음자리표 + 조표 (박자표는 표준 기보법상 첫 행만 표시)
+  const subseqRowHeaderW = headerWidth(clef, false, keySharps);
+
   // ── 줄당 마디 수 고정 모드 ─────────────────────────────────────
   const measuresPerLine = doc.measuresPerLine;
   if (measuresPerLine && measuresPerLine >= 1) {
@@ -432,11 +440,13 @@ export function computeScoreLayout(
         { length: Math.min(measuresPerLine, measureCount - start) },
         (_, k) => start + k,
       );
-      const measureWidth = containerWidth / measuresPerLine;
+      const isFirstRow = start === 0;
+      const rh = isFirstRow ? firstRowHeaderW : subseqRowHeaderW;
+      const contentPerMeasure = Math.max(1, (containerWidth - rh) / measuresPerLine);
       rows.push({
         measureIndices: chunk,
         y,
-        measureWidths: chunk.map(() => measureWidth),
+        measureWidths: chunk.map((_, idx) => idx === 0 ? rh + contentPerMeasure : contentPerMeasure),
         rowWidth: containerWidth,
       });
       y += rowHeight;
@@ -444,51 +454,55 @@ export function computeScoreLayout(
     return { rows, totalHeight: (rows.length > 0 ? rows[rows.length - 1].y + rowHeight : SCORE_ROW_MARGIN_TOP) + SCORE_ROW_MARGIN_BOTTOM };
   }
 
-  // ── 너비 기반 자동 줄 배치 (기존 동작) ────────────────────────
-  const firstMeasureHeader =
-    headerWidth(doc.parts[0]?.clef ?? "treble", true, doc.keySignature.sharps) + SCORE_FIRST_MEASURE_EXTRA;
-
+  // ── 너비 기반 자동 줄 배치 ─────────────────────────────────────
+  // currentRowWidth = 현재 행에 쌓인 폭 (행 헤더 + 마디 합계)
   const rows: ScoreRowLayout[] = [];
   let currentRow: number[] = [];
-  let currentRowWidth = firstMeasureHeader;
+  let currentRowHeaderW = firstRowHeaderW;
+  let currentRowWidth = firstRowHeaderW;
   let y = SCORE_ROW_MARGIN_TOP;
 
   for (let i = 0; i < measureCount; i++) {
     const mw = Math.max(minWidths[i], SCORE_DEFAULT_MEASURE_WIDTH);
-    const extraHeader =
-      currentRow.length === 0 && i > 0
-        ? headerWidth(doc.parts[0]?.clef ?? "treble", false, 0)
-        : 0;
 
-    if (currentRow.length > 0 && currentRowWidth + mw + extraHeader > containerWidth) {
-      const equalWidth = containerWidth / currentRow.length;
+    if (currentRow.length > 0 && currentRowWidth + mw > containerWidth) {
+      // 현재 행 완성: 첫 마디에 헤더 폭 추가, 나머지는 균등 분배
+      const rh = currentRowHeaderW;
+      const availContent = Math.max(1, containerWidth - rh);
+      const cpm = availContent / currentRow.length;
       rows.push({
         measureIndices: [...currentRow],
         y,
-        measureWidths: currentRow.map(() => equalWidth),
+        measureWidths: currentRow.map((_, idx) => idx === 0 ? rh + cpm : cpm),
         rowWidth: containerWidth,
       });
       y += rowHeight;
+      // 다음 행 시작 (이후 행은 음자리표+조표만 표시)
+      currentRowHeaderW = subseqRowHeaderW;
       currentRow = [i];
-      currentRowWidth = mw;
+      currentRowWidth = subseqRowHeaderW + mw;
     } else {
       currentRow.push(i);
-      currentRowWidth += mw + extraHeader;
+      currentRowWidth += mw;
     }
   }
 
+  // 마지막 (불완전할 수 있는) 행 처리
   if (currentRow.length > 0) {
+    const rh = currentRowHeaderW;
+    const availContent = Math.max(1, containerWidth - rh);
     const totalMin = currentRow.reduce(
       (sum, mi) => sum + Math.max(minWidths[mi], SCORE_DEFAULT_MEASURE_WIDTH),
       0,
     );
-    const scale = Math.max(1, containerWidth / totalMin);
+    const scale = Math.max(1, availContent / totalMin);
     rows.push({
       measureIndices: [...currentRow],
       y,
-      measureWidths: currentRow.map(
-        (mi) => Math.max(minWidths[mi], SCORE_DEFAULT_MEASURE_WIDTH) * Math.min(scale, 2),
-      ),
+      measureWidths: currentRow.map((mi, idx) => {
+        const w = Math.max(minWidths[mi], SCORE_DEFAULT_MEASURE_WIDTH) * Math.min(scale, 2);
+        return idx === 0 ? rh + w : w;
+      }),
       rowWidth: containerWidth,
     });
     y += rowHeight;

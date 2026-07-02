@@ -679,6 +679,8 @@ interface MeasureRenderProps {
   isFinalMeasure?: boolean;
   // 다음 마디에서 박자표/조표/음자리표가 바뀌면 true → 이중 마디선
   isChangeBarline?: boolean;
+  // 이 마디에서 조표를 표시할지 여부 (행 첫 마디 또는 조표 변경 시)
+  showKeySig?: boolean;
 }
 
 function MeasureRender({
@@ -709,17 +711,18 @@ function MeasureRender({
   clefChanged,
   isFinalMeasure,
   isChangeBarline,
+  showKeySig = false,
 }: MeasureRenderProps) {
   const clef = effectiveClef ?? part.clef;
 
-  // 헤더 폭 계산
+  // 헤더 폭 계산 — showClef/showKeySig/showTimeSig에 따라 조건부 누산
   let headerX = x + 4;
   let contentX = x + 4;
 
   if (showClef) {
     contentX += CLEF_WIDTH[clef] + 4;
   }
-  if (Math.abs(sharps) > 0) {
+  if (showKeySig && Math.abs(sharps) > 0) {
     contentX += Math.abs(sharps) * KEY_SIG_ACCIDENTAL_WIDTH + 4;
   }
   if (showTimeSig) {
@@ -753,8 +756,8 @@ function MeasureRender({
       {showClef && clef === "percussion" && <PercClef x={headerX + CLEF_WIDTH[clef] / 2} y={staffY} color={color} />}
       {showClef && (() => { headerX += CLEF_WIDTH[clef] + 4; return null; })()}
 
-      {/* 조표 */}
-      {Math.abs(sharps) > 0 && (
+      {/* 조표 — 행 첫 마디이거나 조표 변경 시에만 표시 */}
+      {showKeySig && Math.abs(sharps) > 0 && (
         <KeySignatureSymbols x={headerX} y={staffY} sharps={sharps} clef={clef} color={color} />
       )}
 
@@ -1199,8 +1202,10 @@ function PartRender({
           const isFirst = mIdx === 0;
           // 행의 첫 마디이거나 이 마디에서 음자리표가 바뀐 경우 음자리표 표시
           const showClef = posInRow === 0 || clefChangedAt.has(mIdx);
-          // 박자표 표시: 첫 마디이거나 박자표가 변경된 마디
-          const showTimeSig = posInRow === 0 || timeSigChangedAt.has(mIdx);
+          // 박자표: 악보 첫 마디이거나 박자표가 변경된 마디에서만 표시 (표준 기보법: 매 행 반복 안 함)
+          const showTimeSig = mIdx === 0 || timeSigChangedAt.has(mIdx);
+          // 조표: 행 첫 마디이거나 조표가 변경된 마디에서 표시 (표준 기보법: 매 행 반복)
+          const showKeySig = posInRow === 0 || keySigChangedAt.has(mIdx);
           const x = row.measureWidths.slice(0, posInRow).reduce((a, b) => a + b, 0);
           const staffY = row.y + STAFF_PADDING_TOP;
           const isPlayheadMeasure = playheadMeasureIdx === mIdx;
@@ -1244,6 +1249,7 @@ function PartRender({
               clefChanged={clefChangedAt.has(mIdx)}
               isFinalMeasure={isFinalMeasure}
               isChangeBarline={isChangeBarline}
+              showKeySig={showKeySig}
             />
           );
         })
