@@ -1573,7 +1573,7 @@ export function SettingsModal({
                 <Pressable
                   key={opt.key}
                   style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, backgroundColor: isMain ? C.accentDim : C.overlay08, gap: 8 }}
-                  onPress={() => { onSoundSetChange(opt.key as any); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
+                  onPress={() => { onSoundSetChange(opt.key as any); playSoundPreview(opt.key as SoundSet); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
                 >
                   <Ionicons
                     name={isMain ? "checkmark-circle" : "ellipse-outline"}
