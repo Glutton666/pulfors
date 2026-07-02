@@ -1707,18 +1707,51 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
                     setSelectedElementId(null);
                   }}
                   onLongPress={() => {
-                    Alert.alert(
-                      t("scoreMode", "deleteMeasure"),
-                      t("scoreMode", "deleteMeasureConfirm"),
-                      [
-                        { text: t("scoreMode", "cancel"), style: "cancel" },
-                        {
-                          text: t("scoreMode", "delete"),
-                          style: "destructive",
-                          onPress: () => handleDeleteMeasure(mIdx),
+                    const buttons: Parameters<typeof Alert.alert>[2] = [
+                      {
+                        text: t("scoreMode", "editLinkEntry"),
+                        onPress: () => {
+                          setMeasureEditTarget({
+                            measureIdx: mIdx,
+                            field: "linkedEntry",
+                            value: m.linkedPracticeEntryId ?? "",
+                            label: t("scoreMode", "drawerLinkEntry"),
+                            hint: "entry ID",
+                          });
+                          setShowMeasureEditModal(true);
                         },
-                      ],
+                      },
+                    ];
+                    if (m.linkedPracticeEntryId) {
+                      buttons.push({
+                        text: t("scoreMode", "clearLink"),
+                        onPress: () => {
+                          applyDoc({
+                            ...doc,
+                            parts: doc.parts.map((p, pIdx) => {
+                              if (pIdx !== selectedPartIdx) return p;
+                              return {
+                                ...p,
+                                measures: p.measures.map((mes, mi) =>
+                                  mi === mIdx
+                                    ? { ...mes, linkedPracticeEntryId: undefined }
+                                    : mes,
+                                ),
+                              };
+                            }),
+                          });
+                        },
+                      });
+                    }
+                    buttons.push(
+                      {
+                        text: t("scoreMode", "delete"),
+                        style: "destructive",
+                        onPress: () => handleDeleteMeasure(mIdx),
+                      },
+                      { text: t("scoreMode", "cancel"), style: "cancel" },
                     );
+                    Alert.alert(`${mIdx + 1}`, undefined, buttons);
                   }}
                   delayLongPress={500}
                   style={[

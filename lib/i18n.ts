@@ -934,6 +934,7 @@ export const translations = {
     durationDot:        { ko: "점", en: "Dot" },
     durationDoubleDot:  { ko: "겹점", en: "Dbl Dot" },
     deleteMeasureConfirm: { ko: "이 마디를 삭제하시겠습니까?", en: "Delete this measure?" },
+    editLinkEntry:      { ko: "연습 항목 연결", en: "Link Practice Entry" },
     drawerLinkEntry:    { ko: "항목 ID", en: "Entry ID" },
     clearLink:          { ko: "연결 해제", en: "Unlink" },
     noPartsHint:        { ko: "성부가 없습니다", en: "No parts" },
