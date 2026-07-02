@@ -332,6 +332,28 @@ const make_pickerStyles = (C: typeof Colors) => StyleSheet.create({
   },
 });
 
+const _TG_LOG_MIN_HZ = 30;
+const _TG_LOG_MAX_HZ = 1000;
+const _TG_LOG_MIN = Math.log10(_TG_LOG_MIN_HZ);
+const _TG_LOG_RANGE = Math.log10(_TG_LOG_MAX_HZ) - _TG_LOG_MIN;
+function freqToBarPos(freq: number): number {
+  return (Math.log10(Math.max(freq, _TG_LOG_MIN_HZ)) - _TG_LOG_MIN) / _TG_LOG_RANGE;
+}
+const CAT_COLORS: Record<string, string> = {
+  guitar: "#FF7043",
+  ukulele: "#26C6DA",
+  orchestra: "#5C6BC0",
+  western_other: "#66BB6A",
+  asian_traditional: "#FFA726",
+  percussion: "#AB47BC",
+};
+const RULER_TICKS: { hz: number; label: string }[] = [
+  { hz: 30, label: "30" },
+  { hz: 100, label: "100" },
+  { hz: 300, label: "300" },
+  { hz: 1000, label: "1k" },
+];
+
 interface TuningGuideModalProps {
   visible: boolean;
   onClose: () => void;
@@ -345,7 +367,7 @@ export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentC
   const { colors: C } = useTheme();
   const S = useScale();
   const tgStyles = make_tgStyles(C);
-  const styles = make_styles(C);
+  const [activeTab, setActiveTab] = useState<"legend" | "list">("legend");
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [expandedInstrument, setExpandedInstrument] = useState<string | null>(null);
   const { t } = useLanguage();
@@ -356,11 +378,31 @@ export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentC
     onClose();
   }, [onClose]);
 
+  const catRanges = useMemo(
+    () =>
+      TUNING_DATA.map((cat) => {
+        const allFreqs = cat.instruments.flatMap((inst) => inst.strings.map((s) => s.freq));
+        const sorted = [...new Set(allFreqs)].sort((a, b) => a - b);
+        return { id: cat.id, min: sorted[0], max: sorted[sorted.length - 1], freqs: sorted };
+      }),
+    []
+  );
+
+  const BAR_W = 186;
+
+  const handleCatBarPress = (catId: string) => {
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActiveTab("list");
+    setExpandedCategory(catId);
+    setExpandedInstrument(null);
+  };
+
   return (
     <AnimatedModal visible={visible} transparent onRequestClose={handleClose} statusBarTranslucent>
       <View style={tgStyles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
         <View style={tgStyles.card}>
+          {/* Header */}
           <View style={tgStyles.header}>
             <MaterialCommunityIcons name="music-note-outline" size={S.ms(18, 0.4)} color={accentColor} />
             <Text style={[tgStyles.title, { color: accentColor }]}>{t("signalGenerator", "tuningGuide")}</Text>
@@ -368,86 +410,176 @@ export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentC
               <Ionicons name="close" size={S.ms(18, 0.4)} color={C.textSecondary} />
             </Pressable>
           </View>
-          <Text style={tgStyles.hint}>{t("signalGenerator", "tapToSet")}</Text>
+          {/* Tab switcher */}
+          <View style={tgStyles.tabRow}>
+            <Pressable
+              onPress={() => setActiveTab("legend")}
+              style={[tgStyles.tabBtn, activeTab === "legend" && { backgroundColor: accentColor }]}
+            >
+              <Text style={[tgStyles.tabText, activeTab === "legend" && { color: "#fff" }]}>
+                {t("signalGenerator", "rangeLegend")}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setActiveTab("list")}
+              style={[tgStyles.tabBtn, activeTab === "list" && { backgroundColor: accentColor }]}
+            >
+              <Text style={[tgStyles.tabText, activeTab === "list" && { color: "#fff" }]}>
+                {t("signalGenerator", "instrList")}
+              </Text>
+            </Pressable>
+          </View>
           <View style={tgStyles.divider} />
-          <ScrollView style={tgStyles.scrollBody} showsVerticalScrollIndicator={false}>
-            {TUNING_DATA.map((cat) => (
-              <View key={cat.id}>
-                <Pressable
-                  onPress={() => {
-                    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setExpandedCategory(expandedCategory === cat.id ? null : cat.id);
-                    setExpandedInstrument(null);
-                  }}
-                  style={[tgStyles.categoryRow, expandedCategory === cat.id && { backgroundColor: accentDim }]}
-                >
-                  <MaterialCommunityIcons
-                    name={cat.icon}
-                    size={S.ms(16, 0.4)}
-                    color={expandedCategory === cat.id ? accentColor : C.textSecondary}
-                  />
-                  <Text style={[tgStyles.categoryText, expandedCategory === cat.id && { color: accentColor }]}>
-                    {cat.name[lang]}
-                  </Text>
-                  <Ionicons
-                    name={expandedCategory === cat.id ? "chevron-up" : "chevron-forward"}
-                    size={S.ms(14, 0.4)}
-                    color={C.textTertiary}
-                  />
-                </Pressable>
 
-                {expandedCategory === cat.id && cat.instruments.map((inst) => (
-                  <View key={inst.id}>
-                    <Pressable
-                      onPress={() => {
-                        if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setExpandedInstrument(expandedInstrument === inst.id ? null : inst.id);
-                      }}
-                      style={[tgStyles.instrumentRow, expandedInstrument === inst.id && { backgroundColor: C.overlay05 }]}
-                    >
-                      <Text style={[tgStyles.instrumentText, expandedInstrument === inst.id && { color: accentColor }]}>
-                        {inst.name[lang]}
-                      </Text>
-                      <Ionicons
-                        name={expandedInstrument === inst.id ? "chevron-down" : "chevron-forward"}
-                        size={S.ms(12, 0.4)}
-                        color={C.textTertiary}
-                      />
-                    </Pressable>
-
-                    {expandedInstrument === inst.id && (
-                      <View style={tgStyles.stringList}>
-                        {inst.strings.map((s, i) => (
-                          <Pressable
-                            key={`${inst.id}-${i}`}
-                            onPress={() => {
-                              if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                              onSelectFreq(s.freq);
-                            }}
-                            hitSlop={8}
-                            style={({ pressed }) => [
-                              tgStyles.stringRow,
-                              pressed && { backgroundColor: accentDim },
-                            ]}
-                          >
-                            <Text style={[tgStyles.stringNote, { color: accentColor }]}>
-                              {s.note}{s.octave}
-                            </Text>
-                            <Text style={tgStyles.stringLabel}>
-                              {s.label[lang]}
-                            </Text>
-                            <Text style={tgStyles.stringFreq}>
-                              {s.freq} Hz
-                            </Text>
-                          </Pressable>
-                        ))}
+          {activeTab === "legend" ? (
+            <ScrollView style={tgStyles.scrollBody} showsVerticalScrollIndicator={false}>
+              <Text style={tgStyles.hint}>{t("signalGenerator", "tapBarHint")}</Text>
+              {/* Ruler labels */}
+              <View style={tgStyles.rulerRow}>
+                <View style={{ width: 66 }} />
+                <View style={{ width: BAR_W, position: "relative", height: 14 }}>
+                  {RULER_TICKS.map((tick) => {
+                    const pos = freqToBarPos(tick.hz) * BAR_W;
+                    return (
+                      <View key={tick.hz} style={{ position: "absolute", left: pos - 10, width: 20, alignItems: "center" }}>
+                        <Text style={tgStyles.rulerLabel}>{tick.label}</Text>
                       </View>
-                    )}
-                  </View>
-                ))}
+                    );
+                  })}
+                </View>
+                <Text style={[tgStyles.rulerLabel, { marginLeft: 4 }]}>Hz</Text>
               </View>
-            ))}
-          </ScrollView>
+              {/* Ruler tick marks */}
+              <View style={tgStyles.rulerRow}>
+                <View style={{ width: 66 }} />
+                <View style={{ width: BAR_W, position: "relative", height: 8 }}>
+                  {RULER_TICKS.map((tick) => {
+                    const pos = freqToBarPos(tick.hz) * BAR_W;
+                    return (
+                      <View
+                        key={tick.hz}
+                        style={{ position: "absolute", left: pos, width: 1, height: 8, backgroundColor: C.textTertiary + "60" }}
+                      />
+                    );
+                  })}
+                  <View style={{ position: "absolute", left: 0, right: 0, top: 7, height: 1, backgroundColor: C.textTertiary + "28" }} />
+                </View>
+              </View>
+              {/* Category bars */}
+              {TUNING_DATA.map((cat) => {
+                const range = catRanges.find((r) => r.id === cat.id)!;
+                const color = CAT_COLORS[cat.id] ?? accentColor;
+                const startX = freqToBarPos(range.min) * BAR_W;
+                const endX = freqToBarPos(range.max) * BAR_W;
+                const barWidth = Math.max(endX - startX, 6);
+                return (
+                  <Pressable
+                    key={cat.id}
+                    onPress={() => handleCatBarPress(cat.id)}
+                    style={({ pressed }) => [tgStyles.legendRow, pressed && { backgroundColor: C.overlay05 }]}
+                  >
+                    <Text style={tgStyles.legendLabel} numberOfLines={2}>{cat.name[lang]}</Text>
+                    <View style={{ width: BAR_W, height: 22, position: "relative" }}>
+                      {/* Track */}
+                      <View style={{ position: "absolute", left: 0, right: 0, height: 4, backgroundColor: C.overlay05, borderRadius: 2, top: 9 }} />
+                      {/* Range bar */}
+                      <View style={{ position: "absolute", left: startX, width: barWidth, height: 8, backgroundColor: color, borderRadius: 4, opacity: 0.75, top: 7 }} />
+                      {/* Note dots */}
+                      {range.freqs.map((f, idx) => (
+                        <View
+                          key={idx}
+                          style={{ position: "absolute", left: freqToBarPos(f) * BAR_W - 2, width: 4, height: 14, backgroundColor: color, borderRadius: 2, top: 4 }}
+                        />
+                      ))}
+                    </View>
+                    <Text style={tgStyles.legendFreq}>{Math.round(range.min)}{"\n"}{Math.round(range.max)}</Text>
+                    <Ionicons name="chevron-forward" size={10} color={C.textTertiary} />
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : (
+            <ScrollView style={tgStyles.scrollBody} showsVerticalScrollIndicator={false}>
+              <Text style={tgStyles.hint}>{t("signalGenerator", "tapToSet")}</Text>
+              {TUNING_DATA.map((cat) => (
+                <View key={cat.id}>
+                  <Pressable
+                    onPress={() => {
+                      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setExpandedCategory(expandedCategory === cat.id ? null : cat.id);
+                      setExpandedInstrument(null);
+                    }}
+                    style={[tgStyles.categoryRow, expandedCategory === cat.id && { backgroundColor: accentDim }]}
+                  >
+                    <View style={[tgStyles.catDot, { backgroundColor: CAT_COLORS[cat.id] ?? accentColor }]} />
+                    <MaterialCommunityIcons
+                      name={cat.icon}
+                      size={S.ms(16, 0.4)}
+                      color={expandedCategory === cat.id ? accentColor : C.textSecondary}
+                    />
+                    <Text style={[tgStyles.categoryText, expandedCategory === cat.id && { color: accentColor }]}>
+                      {cat.name[lang]}
+                    </Text>
+                    <Ionicons
+                      name={expandedCategory === cat.id ? "chevron-up" : "chevron-forward"}
+                      size={S.ms(14, 0.4)}
+                      color={C.textTertiary}
+                    />
+                  </Pressable>
+
+                  {expandedCategory === cat.id && cat.instruments.map((inst) => (
+                    <View key={inst.id}>
+                      <Pressable
+                        onPress={() => {
+                          if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setExpandedInstrument(expandedInstrument === inst.id ? null : inst.id);
+                        }}
+                        style={[tgStyles.instrumentRow, expandedInstrument === inst.id && { backgroundColor: C.overlay05 }]}
+                      >
+                        <Text style={[tgStyles.instrumentText, expandedInstrument === inst.id && { color: accentColor }]}>
+                          {inst.name[lang]}
+                        </Text>
+                        <Ionicons
+                          name={expandedInstrument === inst.id ? "chevron-down" : "chevron-forward"}
+                          size={S.ms(12, 0.4)}
+                          color={C.textTertiary}
+                        />
+                      </Pressable>
+
+                      {expandedInstrument === inst.id && (
+                        <View style={tgStyles.stringList}>
+                          {inst.strings.map((s, i) => (
+                            <Pressable
+                              key={`${inst.id}-${i}`}
+                              onPress={() => {
+                                if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                onSelectFreq(s.freq);
+                              }}
+                              hitSlop={8}
+                              style={({ pressed }) => [
+                                tgStyles.stringRow,
+                                pressed && { backgroundColor: accentDim },
+                              ]}
+                            >
+                              <Text style={[tgStyles.stringNote, { color: accentColor }]}>
+                                {s.note}{s.octave}
+                              </Text>
+                              <Text style={tgStyles.stringLabel}>
+                                {s.label[lang]}
+                              </Text>
+                              <Text style={tgStyles.stringFreq}>
+                                {s.freq} Hz
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              ))}
+            </ScrollView>
+          )}
         </View>
       </View>
     </AnimatedModal>
@@ -462,8 +594,8 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.6)",
   },
   card: {
-    width: 320,
-    maxHeight: "75%",
+    width: 338,
+    maxHeight: "83%",
     backgroundColor: C.surface,
     borderRadius: 16,
     padding: 16,
@@ -489,6 +621,24 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  tabRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 2,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: C.overlay05,
+    alignItems: "center",
+  },
+  tabText: {
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    fontSize: 13,
+    color: C.textSecondary,
+  },
   hint: {
     fontFamily: "SpaceGrotesk_400Regular",
     fontSize: FontSize.caption,
@@ -499,10 +649,49 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: C.border,
-    marginBottom: Spacing.sm,
+    marginTop: 8,
+    marginBottom: 8,
   },
   scrollBody: {
     flexGrow: 0,
+  },
+  rulerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  rulerLabel: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 9,
+    color: C.textTertiary,
+    textAlign: "center",
+  },
+  legendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  legendLabel: {
+    fontFamily: "SpaceGrotesk_500Medium",
+    fontSize: 10,
+    color: C.textSecondary,
+    width: 66,
+    lineHeight: 13,
+  },
+  legendFreq: {
+    fontFamily: "SpaceGrotesk_400Regular",
+    fontSize: 9,
+    color: C.textTertiary,
+    width: 30,
+    textAlign: "right",
+    lineHeight: 11,
+  },
+  catDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   categoryRow: {
     flexDirection: "row",
