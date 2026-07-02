@@ -482,6 +482,8 @@ export const translations = {
     rangeLegend: { ko: "범례", en: "Legend" },
     instrList: { ko: "목록", en: "List" },
     tapBarHint: { ko: "막대 탭 → 목록에서 악기 선택", en: "Tap bar → select instrument in list" },
+    noteModeMajor: { ko: "장조", en: "A/B/C" },
+    noteModeSolfege: { ko: "계이름", en: "Do/Re/Mi" },
     longPressToSet: { ko: "길게 눌러 주파수 설정", en: "Long press to set freq" },
     detectedFreqs: { ko: "감지된 주파수", en: "Detected Frequencies" },
     noteLabel: { ko: "음", en: "Note" },
