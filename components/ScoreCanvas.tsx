@@ -493,6 +493,8 @@ export function ScoreCanvas({
           if (hit && hit.elementId === selectedElementIdRef.current) {
             dragElementIdRef.current = hit.elementId;
             dragMeasureIdxRef.current = hit.measureIdx;
+            // 음표 드래그 시작 → 롱프레스 타이머 즉시 취소 (마디 설정창 오발동 방지)
+            clearLongPress();
             // 드래그 시 기존 accidental 보존 — 팔레트 accidental이 변경되더라도 유지
             const d = docRef.current;
             const pIdx = selectedPartIdxRef.current;

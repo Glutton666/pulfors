@@ -15,7 +15,6 @@ import {
   ActivityIndicator,
   Animated,
   useWindowDimensions,
-  PanResponder,
 } from "react-native";
 import { captureRef } from "react-native-view-shot";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -176,13 +175,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   const [selectedSlur, setSelectedSlur] = useState(false);
   const [slurPendingStartId, setSlurPendingStartId] = useState<string | null>(null);
   const [accidental, setAccidental] = useState<Accidental | null>(null);
-  // 드래그-to-trash 상태
-  const [draggingMeasureIdx, setDraggingMeasureIdx] = useState<number | null>(null);
-  const [trashHovered, setTrashHovered] = useState(false);
-  // 마디 범위 선택 (linkedPracticeEntryId 일괄 설정용)
-  const [overviewRangeMode, setOverviewRangeMode] = useState(false);
-  const [overviewRangeStart, setOverviewRangeStart] = useState<number | null>(null);
-  const [overviewRangeEnd, setOverviewRangeEnd] = useState<number | null>(null);
   const [selectedArticulation, setSelectedArticulation] = useState<ArticulationType | null>(null);
   const [selectedDynamic, setSelectedDynamic] = useState<Dynamic | null>(null);
   const [selectedRepeatSign, setSelectedRepeatSign] = useState<RepeatSignId | null>(null);
@@ -967,15 +959,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         applyDoc(newDoc);
       }
     } else if (field === "linkedEntry") {
-      // 범위 내 모든 마디에 linkedPracticeEntryId 일괄 적용
-      const rangeMin = Math.min(
-        overviewRangeStart ?? measureIdx,
-        overviewRangeEnd ?? measureIdx,
-      );
-      const rangeMax = Math.max(
-        overviewRangeStart ?? measureIdx,
-        overviewRangeEnd ?? measureIdx,
-      );
       const newDoc: ScoreDocument = {
         ...doc,
         parts: doc.parts.map((p, pIdx) => {
@@ -983,7 +966,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           return {
             ...p,
             measures: p.measures.map((m, mIdx) =>
-              mIdx >= rangeMin && mIdx <= rangeMax
+              mIdx === measureIdx
                 ? { ...m, linkedPracticeEntryId: value.trim() || undefined }
                 : m,
             ),
@@ -991,9 +974,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         }),
       };
       applyDoc(newDoc);
-      setOverviewRangeMode(false);
-      setOverviewRangeStart(null);
-      setOverviewRangeEnd(null);
     }
     setShowMeasureEditModal(false);
     setMeasureEditTarget(null);
@@ -1714,166 +1694,61 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           <>
           <View style={[styles.measureTabsRow, { marginTop: 16 }]}>
             {currentPart.measures.map((m, mIdx) => {
-              const inRange =
-                overviewRangeMode && overviewRangeStart !== null
-                  ? overviewRangeEnd !== null
-                    ? mIdx >= Math.min(overviewRangeStart, overviewRangeEnd) &&
-                      mIdx <= Math.max(overviewRangeStart, overviewRangeEnd)
-                    : mIdx === overviewRangeStart
-                  : false;
-              const isDragging = draggingMeasureIdx === mIdx;
-              // PanResponder for drag-to-trash (created inline — not a hook)
-              const dragPR = PanResponder.create({
-                onStartShouldSetPanResponder: () => true,
-                onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 6 || Math.abs(gs.dy) > 6,
-                onPanResponderGrant: () => {
-                  setDraggingMeasureIdx(mIdx);
-                  setTrashHovered(false);
-                },
-                onPanResponderMove: (_, gs) => {
-                  // 오른쪽으로 충분히 드래그 시 trash zone 활성화
-                  setTrashHovered(gs.dx > 80);
-                },
-                onPanResponderRelease: (_, gs) => {
-                  if (gs.dx > 80) {
-                    // 트래시로 드래그 완료 → 마디 삭제
-                    handleDeleteMeasure(mIdx);
-                  } else if (Math.abs(gs.dx) < 6 && Math.abs(gs.dy) < 6) {
-                    // 탭으로 판정 (이동 없음)
-                    if (overviewRangeMode) {
-                      if (overviewRangeStart === null || overviewRangeEnd !== null) {
-                        setOverviewRangeStart(mIdx);
-                        setOverviewRangeEnd(null);
-                      } else {
-                        setOverviewRangeEnd(mIdx);
-                      }
-                    } else {
-                      setSelectedMeasureIdx(mIdx);
-                      setSelectedElementId(null);
-                    }
-                  }
-                  setDraggingMeasureIdx(null);
-                  setTrashHovered(false);
-                },
-                onPanResponderTerminate: () => {
-                  setDraggingMeasureIdx(null);
-                  setTrashHovered(false);
-                },
-              });
+              const { beatsUsed, beatsTotal } = measureBeatsInfo(m, mIdx);
+              const isFull = beatsUsed >= beatsTotal;
+              const isOver = beatsUsed > beatsTotal;
+              const beatColor = isOver ? "#ef4444" : isFull ? C.accent : C.textSecondary;
+              const isSelected = selectedMeasureIdx === mIdx;
               return (
-              <View
-                key={m.id}
-                {...dragPR.panHandlers}
-                style={[
-                  styles.measureTab,
-                  {
-                    borderColor: isDragging && trashHovered ? "#ef4444"
-                      : inRange ? C.accent
-                      : selectedMeasureIdx === mIdx ? C.accent
-                      : C.border,
-                    backgroundColor: isDragging && trashHovered ? "#ef444422"
-                      : inRange ? C.accent + "33"
-                      : selectedMeasureIdx === mIdx ? C.accent + "22"
-                      : C.surface,
-                    opacity: isDragging ? 0.7 : 1,
-                  },
-                ]}
-                testID={`score-editor-measure-${mIdx}`}
-              >
-                {(() => {
-                  const { beatsUsed, beatsTotal } = measureBeatsInfo(m, mIdx);
-                  const isFull = beatsUsed >= beatsTotal;
-                  const isOver = beatsUsed > beatsTotal;
-                  const beatColor = isOver
-                    ? "#ef4444"
-                    : isFull
-                    ? C.accent
-                    : C.textSecondary;
-                  return (
-                    <>
-                      <Text
-                        style={[
-                          styles.measureTabNum,
-                          { color: inRange ? C.accent : selectedMeasureIdx === mIdx ? C.accent : C.textSecondary },
-                        ]}
-                      >
-                        {mIdx + 1}
-                      </Text>
-                      <Text style={[styles.measureTabCount, { color: beatColor }]}>
-                        {m.elements.length === 0
-                          ? t("scoreMode", "measureEmpty")
-                          : `${beatsUsed}/${beatsTotal}`}
-                      </Text>
-                      {m.linkedPracticeEntryId && (
-                        <View style={[styles.measureTabLinked, { backgroundColor: C.accent }]} />
-                      )}
-                    </>
-                  );
-                })()}
-              </View>
+                <Pressable
+                  key={m.id}
+                  onPress={() => {
+                    setSelectedMeasureIdx(mIdx);
+                    setSelectedElementId(null);
+                  }}
+                  onLongPress={() => {
+                    Alert.alert(
+                      t("scoreMode", "deleteMeasure"),
+                      t("scoreMode", "deleteMeasureConfirm"),
+                      [
+                        { text: t("scoreMode", "cancel"), style: "cancel" },
+                        {
+                          text: t("scoreMode", "delete"),
+                          style: "destructive",
+                          onPress: () => handleDeleteMeasure(mIdx),
+                        },
+                      ],
+                    );
+                  }}
+                  delayLongPress={500}
+                  style={[
+                    styles.measureTab,
+                    {
+                      borderColor: isSelected ? C.accent : C.border,
+                      backgroundColor: isSelected ? C.accent + "22" : C.surface,
+                    },
+                  ]}
+                  testID={`score-editor-measure-${mIdx}`}
+                >
+                  <Text
+                    style={[
+                      styles.measureTabNum,
+                      { color: isSelected ? C.accent : C.textSecondary },
+                    ]}
+                  >
+                    {mIdx + 1}
+                  </Text>
+                  <Text style={[styles.measureTabCount, { color: beatColor }]}>
+                    {m.elements.length === 0
+                      ? t("scoreMode", "measureEmpty")
+                      : `${beatsUsed}/${beatsTotal}`}
+                  </Text>
+                  {m.linkedPracticeEntryId && (
+                    <View style={[styles.measureTabLinked, { backgroundColor: C.accent }]} />
+                  )}
+                </Pressable>
               );
             })}
-
-            {/* 드래그-to-trash 표시기 (드래그 중일 때 glows) */}
-            <View
-              style={[
-                styles.trashZone,
-                {
-                  borderColor: trashHovered ? "#ef4444" : C.border,
-                  backgroundColor: trashHovered ? "#ef444433" : "transparent",
-                },
-              ]}
-            >
-              <Ionicons
-                name="trash-outline"
-                size={16}
-                color={trashHovered ? "#ef4444" : C.textSecondary}
-              />
-            </View>
-
-            {/* 범위 선택 토글 버튼 */}
-            <Pressable
-              style={[
-                styles.addMeasureBtn,
-                {
-                  borderColor: overviewRangeMode ? C.accent : C.border,
-                  backgroundColor: overviewRangeMode ? C.accent + "22" : "transparent",
-                },
-              ]}
-              onPress={() => {
-                setOverviewRangeMode((v) => !v);
-                setOverviewRangeStart(null);
-                setOverviewRangeEnd(null);
-              }}
-              testID="score-editor-range-toggle"
-            >
-              <Text style={[styles.addMeasureText, { color: overviewRangeMode ? C.accent : C.textSecondary }]}>
-                {t("scoreMode", "rangeSelect")}
-              </Text>
-            </Pressable>
-
-            {/* 범위가 선택된 경우 연습 항목 링크 버튼 */}
-            {overviewRangeMode && overviewRangeStart !== null && overviewRangeEnd !== null && (
-              <Pressable
-                style={[styles.addMeasureBtn, { borderColor: C.accent, backgroundColor: C.accent + "22" }]}
-                onPress={() => {
-                  const minIdx = Math.min(overviewRangeStart!, overviewRangeEnd!);
-                  setMeasureEditTarget({
-                    measureIdx: minIdx,
-                    field: "linkedEntry",
-                    value: currentPart.measures[minIdx]?.linkedPracticeEntryId ?? "",
-                    label: t("scoreMode", "drawerLinkEntry"),
-                    hint: "entry ID",
-                  });
-                  setShowMeasureEditModal(true);
-                }}
-                testID="score-editor-link-entry"
-              >
-                <Text style={[styles.addMeasureText, { color: C.accent }]}>
-                  {t("scoreMode", "linkToEntry")}
-                </Text>
-              </Pressable>
-            )}
 
             {/* 마디 추가 버튼 */}
             <Pressable
