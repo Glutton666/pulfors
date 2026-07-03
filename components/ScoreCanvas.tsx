@@ -98,6 +98,8 @@ export interface ScoreCanvasProps {
   cursorMeasureIdx?: number | null;
   /** 스텝 입력 커서 — 다음 음표가 삽입될 마디 내 요소 인덱스 */
   cursorInsertIdx?: number;
+  /** true이면 터치 입력(음표 배치/드래그/지우기 등)을 모두 무시합니다 — 마디 설정 메뉴 등 오버레이가 열려 있을 때 사용 */
+  disabled?: boolean;
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
@@ -129,9 +131,15 @@ export function ScoreCanvas({
   instrumentId,
   cursorMeasureIdx = null,
   cursorInsertIdx = 0,
+  disabled = false,
 }: ScoreCanvasProps) {
   const { colors: C } = useTheme();
   const [ghost, setGhost] = useState<GhostState | null>(null);
+
+  // 마디 설정 메뉴 등 오버레이가 열리면(disabled=true) 남아있는 고스트 미리보기를 즉시 제거
+  React.useEffect(() => {
+    if (disabled) setGhost(null);
+  }, [disabled]);
 
   // SVG 스케일 팩터: 물리 터치 좌표 ↔ 레이아웃 좌표 변환에 사용
   const sf = scoreScaleFactor(lineSpacing);
@@ -177,6 +185,9 @@ export function ScoreCanvas({
 
   const instrumentIdRef = useRef(instrumentId);
   instrumentIdRef.current = instrumentId;
+
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
 
   const dragElementIdRef = useRef<string | null>(null);
   const dragMeasureIdxRef = useRef<number>(-1);
@@ -465,12 +476,14 @@ export function ScoreCanvas({
 
     return PanResponder.create({
       // 모든 도구에서 터치 시작 시 캡처 — 단일 PanResponder 레이어로 탭/드래그 통합 처리
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      // disabled(마디 설정 메뉴 등 오버레이가 열려 있는 동안)일 때는 아예 응답하지 않음 → 음표 입력 차단
+      onStartShouldSetPanResponder: () => !disabledRef.current,
+      onMoveShouldSetPanResponder: () => !disabledRef.current,
       // 드래그 중이 아니면 ScrollView에 양보하여 스크롤 허용
       onPanResponderTerminationRequest: () => !dragElementIdRef.current,
 
       onPanResponderGrant: (e) => {
+        if (disabledRef.current) return;
         const { locationX: lx, locationY: ly } = e.nativeEvent;
         // 물리 터치 좌표 → 레이아웃 좌표 (LINE_SPACING=10 기반)
         const scale = sfRef.current;
@@ -520,6 +533,7 @@ export function ScoreCanvas({
       },
 
       onPanResponderMove: (e) => {
+        if (disabledRef.current) return;
         const { locationX: lx, locationY: ly } = e.nativeEvent;
         const scale = sfRef.current;
         const slx = lx / scale;
@@ -549,6 +563,15 @@ export function ScoreCanvas({
 
       onPanResponderRelease: (e) => {
         clearLongPress();
+        if (disabledRef.current) {
+          setGhost(null);
+          didLongPress = false;
+          dragElementIdRef.current = null;
+          dragMeasureIdxRef.current = -1;
+          eraseHitsList = [];
+          eraseHitIds.clear();
+          return;
+        }
         const { locationX: lx, locationY: ly } = e.nativeEvent;
         const scale = sfRef.current;
         const slx = lx / scale;

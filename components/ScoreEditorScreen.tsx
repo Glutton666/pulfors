@@ -1652,6 +1652,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               showPlayhead={showPlayhead}
               highlightColor={highlightColor}
               lineSpacing={lineSpacing}
+              disabled={!!measureContextMenu?.visible || showMeasureEditModal}
             />
             {/* 참조 이미지 오버레이 (편집 불가) */}
             {doc.referenceImageUri ? (
