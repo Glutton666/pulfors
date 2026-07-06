@@ -554,6 +554,20 @@ export function NoteRecorderModal({
     }
   }, [probeDurationSec, stopMetronomeClicks, detectBpmForCurrent]);
 
+  const stopPreview = useCallback(() => {
+    if (previewWatchRef.current) {
+      clearInterval(previewWatchRef.current);
+      previewWatchRef.current = null;
+    }
+    if (metronomeTimerRef.current) {
+      clearInterval(metronomeTimerRef.current);
+      metronomeTimerRef.current = null;
+    }
+    stopMetronomeClicks();
+    try { previewPlayerRef.current.pause(); } catch {}
+    setIsPlayingPreview(false);
+  }, [stopMetronomeClicks]);
+
   const playPreview = useCallback(async () => {
     if (!recordedUri || audioDuration === 0) return;
 
@@ -627,39 +641,31 @@ export function NoteRecorderModal({
           const ct = player.currentTime;
           const elapsed = Date.now() - startedAt;
           if ((typeof ct === "number" && ct >= endSec) || elapsed > expectedDurMs + 600) {
-            try { player.pause(); } catch {}
-            if (previewWatchRef.current) {
-              clearInterval(previewWatchRef.current);
-              previewWatchRef.current = null;
-            }
-            // 클릭도 같이 종료
-            if (metronomeTimerRef.current) {
-              clearInterval(metronomeTimerRef.current);
-              metronomeTimerRef.current = null;
-            }
-            setIsPlayingPreview(false);
+            stopPreview();
           }
         } catch {
-          if (previewWatchRef.current) {
-            clearInterval(previewWatchRef.current);
-            previewWatchRef.current = null;
-          }
-          if (metronomeTimerRef.current) {
-            clearInterval(metronomeTimerRef.current);
-            metronomeTimerRef.current = null;
-          }
-          setIsPlayingPreview(false);
+          stopPreview();
         }
       }, 50);
     } catch (e) {
       captureBreadcrumb({ category: "noteRecorder", message: "playPreview failed", level: "warning", data: { error: String(e) } });
-      stopMetronomeClicks();
-      setIsPlayingPreview(false);
+      stopPreview();
     }
-  }, [recordedUri, trimStart, trimEnd, audioDuration, channel, withClick, localBpm, beatsPerMeasure, playClick, stopMetronomeClicks]);
+  }, [recordedUri, trimStart, trimEnd, audioDuration, channel, withClick, localBpm, beatsPerMeasure, playClick, stopMetronomeClicks, stopPreview]);
 
   const playPreviewRef = useRef(playPreview);
   useEffect(() => { playPreviewRef.current = playPreview; }, [playPreview]);
+
+  const stopPreviewRef = useRef(stopPreview);
+  useEffect(() => { stopPreviewRef.current = stopPreview; }, [stopPreview]);
+
+  const togglePreview = useCallback(() => {
+    if (isPlayingPreview) {
+      stopPreviewRef.current();
+    } else {
+      void playPreviewRef.current();
+    }
+  }, [isPlayingPreview]);
 
   const handleSlideEnd = useCallback(() => {
     if (autoPreview) {
@@ -1042,7 +1048,7 @@ export function NoteRecorderModal({
               <View style={styles.trimActions}>
                 <Pressable
                   style={[styles.previewBtn, { borderColor: C.accent }]}
-                  onPress={playPreview}
+                  onPress={togglePreview}
                 >
                   <Ionicons
                     name={isPlayingPreview ? "pause" : "play"}
