@@ -62,6 +62,24 @@ export interface GhostState {
   insertIdx: number;
   /** 마디 content 영역 시작 기준 X (논리 px) — 자유 배치 placedX 저장용 */
   measureRelX: number;
+  /** 돋보기 미니뷰에 함께 그릴 주변(같은 마디) 기존 음표/쉼표 — 정확한 배치를 위한 참조용 */
+  nearbyElements: NearbyElement[];
+}
+
+interface NearbyElement {
+  x: number;
+  y: number;
+  type: "note" | "rest";
+  duration: NoteDuration;
+}
+
+function isOpenNoteHead(duration: NoteDuration): boolean {
+  return (
+    duration === "whole" ||
+    duration === "half" ||
+    duration === "whole_dot" ||
+    duration === "half_dot"
+  );
 }
 
 export interface ScoreCanvasProps {
@@ -379,7 +397,21 @@ export function ScoreCanvas({
             }
 
             const measureRelX = Math.max(0, lx - contentX);
-            return { x: lx, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx, insertIdx, measureRelX };
+            const nearbyElements: NearbyElement[] = measure
+              ? positions
+                  .map((pos): NearbyElement | null => {
+                    const el = measure.elements.find((e) => e.id === pos.elementId);
+                    if (!el) return null;
+                    return {
+                      x: contentX + pos.x,
+                      y: staffY + pos.y,
+                      type: el.type,
+                      duration: el.duration,
+                    };
+                  })
+                  .filter((v): v is NearbyElement => v != null)
+              : [];
+            return { x: lx, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx, insertIdx, measureRelX, nearbyElements };
           }
           accX += mWidth;
         }
@@ -763,12 +795,14 @@ export function ScoreCanvas({
         <View
           style={[styles.magnifier, { backgroundColor: C.surface, borderColor: C.accent }]}
           pointerEvents="none"
+          testID="score-magnifier"
         >
           <MagnifierView
             ghost={ghost}
             duration={dur}
             activeTool={activeTool}
             accentColor={C.accent}
+            noteColor={C.text}
           />
         </View>
       )}
@@ -876,11 +910,13 @@ function MagnifierView({
   duration,
   activeTool,
   accentColor,
+  noteColor,
 }: {
   ghost: GhostState;
   duration: NoteDuration;
   activeTool: EditorTool;
   accentColor: string;
+  noteColor: string;
 }) {
   // 터치 주변 30×30 픽셀 영역을 90×90에 표시 = 3배 확대
   const MAG_SIZE = 90;
@@ -930,6 +966,33 @@ function MagnifierView({
         strokeDasharray="1,1"
         opacity={0.4}
       />
+
+      {/* 이미 배치된 주변 음표/쉼표 — 정확한 위치 참조용 */}
+      {ghost.nearbyElements.map((el, i) =>
+        el.type === "note" ? (
+          <Ellipse
+            key={`nb-${i}`}
+            cx={el.x}
+            cy={el.y}
+            rx={NOTE_HEAD_RX}
+            ry={NOTE_HEAD_RY}
+            fill={isOpenNoteHead(el.duration) ? "none" : noteColor}
+            stroke={noteColor}
+            strokeWidth={0.7}
+            opacity={0.85}
+          />
+        ) : (
+          <Rect
+            key={`nb-${i}`}
+            x={el.x - 4}
+            y={el.y - 2}
+            width={8}
+            height={3}
+            fill={noteColor}
+            opacity={0.85}
+          />
+        )
+      )}
 
       {/* 음표 또는 쉼표 고스트 */}
       {activeTool === "note" ? (
