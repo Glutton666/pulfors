@@ -1124,6 +1124,9 @@ export const translations = {
     measureRepeatSign:      { ko: "반복/이동 부호 적용", en: "Apply Repeat Sign" },
     measureClearSigns:      { ko: "이 마디 부호 지우기", en: "Clear Measure Signs" },
     measureAddRehearsal:    { ko: "리허설 마크", en: "Rehearsal Mark" },
+    measureKeySigChange:    { ko: "조표 / 음자리표 변경", en: "Change Key Sig. / Clef" },
+    clearSymbolsBtn:        { ko: "기호 지우기", en: "Clear Symbols" },
+    currentArticulationLabel: { ko: "적용 중", en: "Applying" },
     rehearsalMarkLabel:     { ko: "리허설 마크 (A, B, 1 …)", en: "Rehearsal Mark (A, B, 1 …)" },
     hintInputNote:          { ko: "음표를 선택 후 악보를 탭하여 입력하세요. 길게 누르면 삭제됩니다", en: "Select a note then tap the score to insert. Long-press to delete" },
     // 자유 배치 입력

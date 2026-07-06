@@ -1,10 +1,10 @@
 ---
-name: Score editor ScrollView is locked while note/rest tool is active
-description: The main score ScrollView disables scrolling whenever activeTool is "note" or "rest" (so drags place notes instead of scrolling the page). Any bottom-of-page overlay opened while that tool is active becomes unreachable.
+name: Score editor scrolling vs. note/rest tap-to-place gestures
+description: The main score ScrollView previously disabled scrolling whenever activeTool was "note"/"rest" so single-finger drags would place notes instead of scrolling. This blocked all scrolling (mouse wheel, trackpad, touch drag) most of the time since "note" is the default tool.
 ---
 
-`components/ScoreEditorScreen.tsx`'s main vertical `ScrollView` sets `scrollEnabled={activeTool !== "note" && activeTool !== "rest"}` so that dragging on the canvas places notes instead of scrolling. Since "note" is the default/most-used tool, this scroll lock is active almost all the time.
+**Resolution (current):** `scrollEnabled` on the main ScrollView in `components/ScoreEditorScreen.tsx` is now always `true`. Instead, `components/ScoreCanvas.tsx`'s `PanResponder.onStartShouldSetPanResponder`/`onMoveShouldSetPanResponder` check `e.nativeEvent.touches.length <= 1` — multi-touch (2-finger) gestures are ignored by the canvas responder and fall through to native scroll, while single-finger/mouse taps still place notes as before. Mouse wheel scroll is unaffected by PanResponder entirely (it's not a touch gesture), so making `scrollEnabled` always-true was sufficient to fix wheel/trackpad scrolling without needing the touches-length guard for that case — the guard mainly protects two-finger touch-scroll on real mobile devices.
 
-**Why:** The "마디 설정" (measure settings) drawer renders inline at the bottom of the same scrollable content. When opened, its content grows downward; with scroll locked, users could not reach rows that no longer fit on screen (reported: "확장해도 아래로만 확장되고 안보임").
+**Why:** Locking scroll while the note tool was active (previously the common workaround for tap-vs-drag conflicts) made the "마디 설정" (measure settings) drawer and general page scrolling unreachable during normal note entry (reported: "스크롤이 안 됨").
 
-**How to apply:** Any UI element that is appended to the bottom of the score ScrollView's content (drawers, panels, etc.) must also add its own "open" state as an OR condition to `scrollEnabled` (e.g. `scrollEnabled={drawerOpen || (activeTool !== "note" && activeTool !== "rest")}`), and should generally also be added to `ScoreCanvas`'s `disabled` prop so canvas touch handling doesn't fight with scrolling while that panel is open.
+**How to apply:** If a future conflict arises between canvas gesture handling and page scroll, prefer gating on touch count (single vs. multi) rather than disabling `scrollEnabled` based on tool mode — that fix is coarser and blocks legitimate scroll input (mouse wheel, 2-finger trackpad/touch) for the entire time a tool is selected.

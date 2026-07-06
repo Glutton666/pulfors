@@ -954,6 +954,16 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     setShowMeasureEditModal(true);
   }
 
+  // ── 마디 컨텍스트 메뉴: 조표/음자리표 변경 → 마디 설정 드로어 열기 ──
+  function handleMeasureKeySigChange(measureIdx: number) {
+    setMeasureContextMenu(null);
+    setSelectedMeasureIdx(measureIdx);
+    setDrawerOpen(true);
+    setTimeout(() => {
+      scoreScrollRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+  }
+
   // ── 마디 컨텍스트 메뉴: 박자표 변경 ─────────────────────────
   function handleMeasureTimeSigChange(measureIdx: number) {
     setMeasureContextMenu(null);
@@ -1073,6 +1083,42 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         curMark,
       );
     }
+  }
+
+  // ── 선택된 음표의 기호(악기 기호/아티큘레이션/꾸밈음)만 지우기 (음표 자체는 유지) ──
+  function handleClearSymbolsOnSelected() {
+    if (!selectedElementId) return;
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
+        if (pIdx !== selectedPartIdx) return p;
+        return {
+          ...p,
+          measures: p.measures.map((m) => ({
+            ...m,
+            elements: m.elements.map((el) => {
+              if (el.id !== selectedElementId || el.type !== "note") return el;
+              return {
+                ...el,
+                articulations: undefined,
+                ornament: undefined,
+                dynamic: undefined,
+                bowUp: undefined,
+                bowDown: undefined,
+                harmonic: undefined,
+                pizzicato: undefined,
+                arco: undefined,
+                pedal: undefined,
+                pedalEnd: undefined,
+                ottava: undefined,
+                arpeggio: undefined,
+              };
+            }),
+          })),
+        };
+      }),
+    };
+    applyDoc(newDoc);
   }
 
   // ── 선택된 음표 삭제 ──────────────────────────────────────────
@@ -1606,6 +1652,39 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
 
           <View style={{ flex: 1 }} />
 
+          {/* 기호 지우기 (음표는 유지, 붙은 기호만 제거) */}
+          {(() => {
+            const part = doc.parts[selectedPartIdx];
+            const selNote = part?.measures
+              .flatMap((m) => m.elements)
+              .find((el) => el.id === selectedElementId);
+            if (!selNote || selNote.type !== "note") return null;
+            const hasSymbols = !!(
+              selNote.articulations?.length ||
+              selNote.ornament ||
+              selNote.dynamic ||
+              selNote.bowUp ||
+              selNote.bowDown ||
+              selNote.harmonic ||
+              selNote.pizzicato ||
+              selNote.arco ||
+              selNote.pedal ||
+              selNote.pedalEnd ||
+              selNote.ottava ||
+              selNote.arpeggio
+            );
+            if (!hasSymbols) return null;
+            return (
+              <Pressable
+                style={[styles.selBarBtn, { borderColor: C.border }]}
+                onPress={handleClearSymbolsOnSelected}
+                testID="score-editor-clear-symbols"
+              >
+                <Ionicons name="close-circle-outline" size={16} color={C.textSecondary} />
+              </Pressable>
+            );
+          })()}
+
           {/* 삭제 */}
           <Pressable
             style={[styles.selBarBtn, { borderColor: "#FF4444" }]}
@@ -1626,7 +1705,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           { paddingHorizontal: Spacing.lg, paddingBottom: bottomInset + 180 },
         ]}
         showsVerticalScrollIndicator={false}
-        scrollEnabled={drawerOpen || (activeTool !== "note" && activeTool !== "rest")}
+        scrollEnabled
       >
         {/* 악보 메타 — 탭하면 편집 모달 */}
         <Pressable
@@ -2212,6 +2291,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         onTimeSigChange={handleMeasureTimeSigChange}
         onAddRehearsal={handleAddRehearsalMark}
         onClearSigns={handleClearMeasureSigns}
+        onKeySigChange={handleMeasureKeySigChange}
         onAddMeasure={handleMeasureAddFromContext}
         onEditLink={handleMeasureEditLink}
         onClearLink={handleMeasureClearLink}

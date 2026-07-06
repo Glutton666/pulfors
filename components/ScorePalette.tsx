@@ -5,6 +5,7 @@
 
 import React, { useState } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet, TextInput } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Spacing, Radius } from "@/constants/tokens";
@@ -383,6 +384,59 @@ export function ScorePalette({
           );
         })}
       </ScrollView>
+
+      {/* ── 현재 적용중인 기호(아티큘레이션/꾸밈음/강약/악기 기호) 표시줄 ── */}
+      {tab === "notes" && (selectedArticulation || selectedOrnament || selectedDynamic || selectedInstrumentSymbol) && (
+        <View style={[styles.activeSymbolsRow, { borderBottomColor: C.border }]}>
+          <Text style={[styles.activeSymbolsLabel, { color: C.textSecondary }]}>
+            {t("scoreMode", "currentArticulationLabel")}:
+          </Text>
+          {selectedArticulation && (
+            <Pressable
+              style={[styles.activeSymbolChip, { borderColor: C.accent, backgroundColor: C.accent + "22" }]}
+              onPress={() => onArticulationSelect(null)}
+              testID="score-palette-active-articulation"
+            >
+              <Text style={[styles.activeSymbolChipText, { color: C.accent }]}>
+                {ARTICULATIONS.find((a) => a.id === selectedArticulation)?.symbol ?? ""}
+              </Text>
+              <Ionicons name="close" size={12} color={C.accent} />
+            </Pressable>
+          )}
+          {selectedOrnament && (
+            <Pressable
+              style={[styles.activeSymbolChip, { borderColor: C.accent, backgroundColor: C.accent + "22" }]}
+              onPress={() => onOrnamentSelect?.(null)}
+              testID="score-palette-active-ornament"
+            >
+              <Text style={[styles.activeSymbolChipText, { color: C.accent }]}>
+                {ORNAMENTS.find((o) => o.id === selectedOrnament)?.symbol ?? selectedOrnament}
+              </Text>
+              <Ionicons name="close" size={12} color={C.accent} />
+            </Pressable>
+          )}
+          {selectedDynamic && (
+            <Pressable
+              style={[styles.activeSymbolChip, { borderColor: C.accent, backgroundColor: C.accent + "22" }]}
+              onPress={() => onDynamicSelect(null)}
+              testID="score-palette-active-dynamic"
+            >
+              <Text style={[styles.activeSymbolChipText, { color: C.accent }]}>{selectedDynamic}</Text>
+              <Ionicons name="close" size={12} color={C.accent} />
+            </Pressable>
+          )}
+          {selectedInstrumentSymbol && (
+            <Pressable
+              style={[styles.activeSymbolChip, { borderColor: C.accent, backgroundColor: C.accent + "22" }]}
+              onPress={() => onInstrumentSymbolSelect?.(null)}
+              testID="score-palette-active-instr-symbol"
+            >
+              <Text style={[styles.activeSymbolChipText, { color: C.accent }]}>{selectedInstrumentSymbol}</Text>
+              <Ionicons name="close" size={12} color={C.accent} />
+            </Pressable>
+          )}
+        </View>
+      )}
 
       {/* ── 음표 / 쉼표 탭 ─────────────────────────────────────── */}
       {(tab === "notes" || tab === "rests") && (
@@ -847,6 +901,32 @@ const makeStyles = (C: any) =>
     tabLabel: {
       fontFamily: "SpaceGrotesk_500Medium",
       fontSize: 10,
+    },
+    activeSymbolsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 4,
+      gap: 6,
+      borderBottomWidth: 1,
+      flexWrap: "wrap",
+    },
+    activeSymbolsLabel: {
+      fontFamily: "SpaceGrotesk_500Medium",
+      fontSize: 10,
+    },
+    activeSymbolChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: Radius.pill ?? 999,
+      borderWidth: 1,
+    },
+    activeSymbolChipText: {
+      fontFamily: "SpaceGrotesk_500Medium",
+      fontSize: 12,
     },
     itemRow: {
       flexDirection: "row",

@@ -377,6 +377,7 @@ export interface ScoreMeasureContextMenuProps {
   onTimeSigChange: (mIdx: number) => void;
   onAddRehearsal: (mIdx: number) => void;
   onClearSigns: (mIdx: number) => void;
+  onKeySigChange: (mIdx: number) => void;
   onAddMeasure: (mIdx: number) => void;
   onEditLink: (mIdx: number) => void;
   onClearLink: (mIdx: number) => void;
@@ -392,6 +393,7 @@ export function ScoreMeasureContextMenu({
   onTimeSigChange,
   onAddRehearsal,
   onClearSigns,
+  onKeySigChange,
   onAddMeasure,
   onEditLink,
   onClearLink,
@@ -450,6 +452,16 @@ export function ScoreMeasureContextMenu({
             <Ionicons name="trash-outline" size={18} color="#FF453A" />
             <Text style={[styles.ctxMenuLabel, { color: "#FF453A" }]}>
               {t("scoreMode", "measureClearSigns")}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+            onPress={() => onKeySigChange(idx)}
+            testID="score-ctx-keysig-change"
+          >
+            <Ionicons name="key-outline" size={18} color={C.accent} />
+            <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
+              {t("scoreMode", "measureKeySigChange")}
             </Text>
           </Pressable>
           <Pressable

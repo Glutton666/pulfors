@@ -512,8 +512,9 @@ export function ScoreCanvas({
     return PanResponder.create({
       // 모든 도구에서 터치 시작 시 캡처 — 단일 PanResponder 레이어로 탭/드래그 통합 처리
       // disabled(마디 설정 메뉴 등 오버레이가 열려 있는 동안)일 때는 아예 응답하지 않음 → 음표 입력 차단
-      onStartShouldSetPanResponder: () => !disabledRef.current,
-      onMoveShouldSetPanResponder: () => !disabledRef.current,
+      // 2손가락 이상 터치는 스크롤 제스처로 간주하여 응답하지 않고 부모 ScrollView에 양보
+      onStartShouldSetPanResponder: (e) => !disabledRef.current && e.nativeEvent.touches.length <= 1,
+      onMoveShouldSetPanResponder: (e) => !disabledRef.current && e.nativeEvent.touches.length <= 1,
       // 드래그 중이 아니면 ScrollView에 양보하여 스크롤 허용
       onPanResponderTerminationRequest: () => !dragElementIdRef.current,
 
