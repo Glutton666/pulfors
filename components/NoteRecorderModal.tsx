@@ -20,6 +20,9 @@ import {
   useAudioPlayer,
   createAudioPlayer,
   RecordingPresets,
+  IOSOutputFormat,
+  AudioQuality,
+  type RecordingOptions,
 } from "expo-audio";
 import { acquireAudioSession, releaseAudioSession } from "@/lib/audio-session";
 import * as Haptics from "expo-haptics";
@@ -42,6 +45,8 @@ import { soundSets } from "@/lib/metronome-engine";
 import type { BuiltinSoundSet } from "@/lib/storage";
 import { safePlay } from "@/lib/audio-utils";
 import { captureBreadcrumb } from "@/lib/error-tracking";
+import { decodeSampleFile, getRenderSampleRate } from "@/lib/audio-renderer";
+import { detectBpmCandidatesOnDevice } from "@/lib/onset-bpm-detect";
 
 type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
 
@@ -64,6 +69,53 @@ interface NoteRecorderModalProps {
 
 const MAX_RECORD_SECONDS = 10;
 const COUNTDOWN_BEATS = 4;
+
+// iOS supports uncompressed linear-PCM (WAV) recording directly via expo-audio,
+// enabling fully on-device BPM analysis without a server round-trip.
+// Android's MediaRecorder API has no WAV/PCM container output option (only
+// 3gp/mpeg4/amr/aac/webm), so Android and web keep the compressed HIGH_QUALITY
+// preset and continue to use the server-side ffmpeg analysis path.
+const WAV_RECORDING_OPTIONS: RecordingOptions = {
+  extension: ".wav",
+  sampleRate: 44100,
+  numberOfChannels: 1,
+  bitRate: 44100 * 16,
+  android: {
+    outputFormat: "default",
+    audioEncoder: "default",
+  },
+  ios: {
+    extension: ".wav",
+    outputFormat: IOSOutputFormat.LINEARPCM,
+    audioQuality: AudioQuality.MAX,
+    linearPCMBitDepth: 16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
+  },
+  web: {
+    mimeType: "audio/webm",
+    bitsPerSecond: 128000,
+  },
+};
+
+const RECORDER_OPTIONS: RecordingOptions =
+  Platform.OS === "ios" ? WAV_RECORDING_OPTIONS : RecordingPresets.HIGH_QUALITY;
+
+function isWavUri(uri: string, mimeType?: string | null): boolean {
+  if (mimeType && mimeType.toLowerCase().includes("wav")) return true;
+  const lower = uri.toLowerCase().split("?")[0].split("#")[0];
+  return lower.endsWith(".wav") || lower.endsWith(".wave");
+}
+
+function mimeTypeToServerExt(mimeType?: string | null): string | null {
+  if (!mimeType) return null;
+  const m = mimeType.toLowerCase();
+  if (m.includes("wav")) return ".wav";
+  if (m.includes("mp4") || m.includes("m4a") || m.includes("aac")) return ".m4a";
+  if (m.includes("3gpp") || m.includes("3gp")) return ".3gp";
+  if (m.includes("webm")) return ".webm";
+  return null;
+}
 
 export function NoteRecorderModal({
   visible,
@@ -117,8 +169,14 @@ export function NoteRecorderModal({
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [suggestedBpms, setSuggestedBpms] = useState<number[]>([]);
   const [isFetchingBpm, setIsFetchingBpm] = useState(false);
+  const [bpmError, setBpmError] = useState<string | null>(null);
+  const bpmDetectTokenRef = useRef(0);
+  const userAdjustedBpmRef = useRef(false);
+  const importedMimeTypeRef = useRef<string | null>(null);
+  const lastDetectRangeRef = useRef<{ start: number; end: number } | null>(null);
+  const trimDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorder = useAudioRecorder(RECORDER_OPTIONS);
   const recorderRef = useRef(recorder);
   useEffect(() => { recorderRef.current = recorder; }, [recorder]);
 
@@ -162,20 +220,77 @@ export function NoteRecorderModal({
     try {
       await releaseAudioSession("noteRecorderModal");
     } catch {}
+    bpmDetectTokenRef.current += 1;
+    if (trimDebounceRef.current) {
+      clearTimeout(trimDebounceRef.current);
+      trimDebounceRef.current = null;
+    }
     setSuggestedBpms([]);
     setIsFetchingBpm(false);
+    setBpmError(null);
   }, []);
 
-  const fetchBpm = useCallback(async (audioUri: string) => {
-    try {
-      setSuggestedBpms([]);
-      setIsFetchingBpm(true);
+  const applyDetectionResult = useCallback((candidates: number[]) => {
+    setSuggestedBpms(candidates);
+    if (candidates.length > 0 && !userAdjustedBpmRef.current) {
+      setLocalBpm(candidates[0]);
+    }
+  }, []);
 
-      const MAX_SEND_BYTES = 3 * 1024 * 1024;
+  // On-device BPM detection for WAV audio (recorded on iOS, or any imported .wav file).
+  // Fully local: no network call, works from a trimmed slice of decoded PCM.
+  const runOnDeviceDetection = useCallback(async (uri: string, trimStartRatio: number, trimEndRatio: number) => {
+    const token = ++bpmDetectTokenRef.current;
+    setSuggestedBpms([]);
+    setBpmError(null);
+    setIsFetchingBpm(true);
+    try {
+      const pcm = await decodeSampleFile(uri);
+      if (token !== bpmDetectTokenRef.current) return;
+      if (!pcm || pcm.length === 0) {
+        setBpmError(t("noteRecorder", "bpmFailDecode"));
+        captureBreadcrumb({ category: "noteRecorder", message: "onDeviceBpm decode failed", level: "warning", data: { uri: uri.slice(0, 80) } });
+        return;
+      }
+      const sr = getRenderSampleRate();
+      const startIdx = Math.max(0, Math.floor(trimStartRatio * pcm.length));
+      const endIdx = Math.min(pcm.length, Math.floor(trimEndRatio * pcm.length));
+      const slice = pcm.subarray(startIdx, Math.max(startIdx + 1, endIdx));
+      const result = detectBpmCandidatesOnDevice(slice, sr);
+      if (token !== bpmDetectTokenRef.current) return;
+      if (result.candidates.length === 0) {
+        setBpmError(t("noteRecorder", "bpmNotDetected"));
+        captureBreadcrumb({ category: "noteRecorder", message: "onDeviceBpm no candidates", level: "info", data: { reason: result.failureReason ?? "unknown" } });
+        return;
+      }
+      applyDetectionResult(result.candidates);
+    } catch (e) {
+      if (token !== bpmDetectTokenRef.current) return;
+      setBpmError(t("noteRecorder", "bpmFailGeneric"));
+      captureBreadcrumb({ category: "noteRecorder", message: "onDeviceBpm exception", level: "error", data: { error: String(e) } });
+    } finally {
+      if (token === bpmDetectTokenRef.current) setIsFetchingBpm(false);
+    }
+  }, [applyDetectionResult, t]);
+
+  // Server-side BPM detection for compressed (non-WAV) imported audio. Sends the
+  // trim range so the server clips with ffmpeg instead of the client truncating
+  // the file before upload.
+  const runServerDetection = useCallback(async (audioUri: string, trimStartRatio: number, trimEndRatio: number, mimeType?: string | null) => {
+    const token = ++bpmDetectTokenRef.current;
+    setSuggestedBpms([]);
+    setBpmError(null);
+    setIsFetchingBpm(true);
+    try {
       const resp = await fetch(audioUri);
-      if (!resp.ok) return;
+      if (token !== bpmDetectTokenRef.current) return;
+      if (!resp.ok) {
+        setBpmError(t("noteRecorder", "bpmFailNetwork"));
+        captureBreadcrumb({ category: "noteRecorder", message: "fetchBpm audio fetch failed", level: "warning", data: { status: resp.status } });
+        return;
+      }
       const ab = await resp.arrayBuffer();
-      const bytes = new Uint8Array(ab.slice(0, MAX_SEND_BYTES));
+      const bytes = new Uint8Array(ab);
 
       let binary = "";
       const chunkSize = 8192;
@@ -184,30 +299,58 @@ export function NoteRecorderModal({
       }
       const base64Audio = btoa(binary);
 
-      const uriLower = audioUri.toLowerCase().split("?")[0];
+      const uriLower = audioUri.toLowerCase().split("?")[0].split("#")[0];
       const dotIdx = uriLower.lastIndexOf(".");
-      const rawExt = dotIdx >= 0 ? uriLower.slice(dotIdx) : ".wav";
+      const rawExt = dotIdx >= 0 ? uriLower.slice(dotIdx) : ".m4a";
       const ALLOWED_EXTS = [".wav", ".m4a", ".3gp", ".mp4", ".aac", ".webm"];
-      const format = ALLOWED_EXTS.includes(rawExt) ? rawExt : ".wav";
+      const mimeExt = mimeTypeToServerExt(mimeType);
+      const format = mimeExt ?? (ALLOWED_EXTS.includes(rawExt) ? rawExt : ".m4a");
+
+      const trimStartSec = audioDuration > 0 ? Math.max(0, trimStartRatio * audioDuration) : undefined;
+      const trimEndSec = audioDuration > 0 ? Math.max(0, trimEndRatio * audioDuration) : undefined;
 
       const apiUrl = new URL("/api/analyze-audio", getApiUrl()).toString();
       const apiResp = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ audio: base64Audio, format }),
+        body: JSON.stringify({
+          audio: base64Audio,
+          format,
+          trimStartSec,
+          trimEndSec,
+        }),
       });
-      if (!apiResp.ok) return;
-      const data = await apiResp.json() as { bpm?: number | null; bpmCandidates?: number[] };
+      if (token !== bpmDetectTokenRef.current) return;
+      if (!apiResp.ok) {
+        setBpmError(apiResp.status === 429 ? t("noteRecorder", "bpmFailRateLimit") : t("noteRecorder", "bpmFailServer"));
+        captureBreadcrumb({ category: "noteRecorder", message: "fetchBpm API failed", level: "warning", data: { status: apiResp.status } });
+        return;
+      }
+      const data = await apiResp.json() as { bpm?: number | null; bpmCandidates?: number[]; error?: string };
       const rawCandidates = Array.isArray(data.bpmCandidates) ? data.bpmCandidates : (typeof data.bpm === "number" ? [data.bpm] : []);
       const validCandidates = rawCandidates.filter((b) => typeof b === "number" && b >= 50 && b <= 250);
-      if (validCandidates.length > 0) {
-        setSuggestedBpms(validCandidates);
+      if (validCandidates.length === 0) {
+        setBpmError(t("noteRecorder", "bpmNotDetected"));
+        captureBreadcrumb({ category: "noteRecorder", message: "fetchBpm no candidates", level: "info" });
+        return;
       }
-    } catch {
+      applyDetectionResult(validCandidates);
+    } catch (e) {
+      if (token !== bpmDetectTokenRef.current) return;
+      setBpmError(t("noteRecorder", "bpmFailNetwork"));
+      captureBreadcrumb({ category: "noteRecorder", message: "fetchBpm exception", level: "error", data: { error: String(e) } });
     } finally {
-      setIsFetchingBpm(false);
+      if (token === bpmDetectTokenRef.current) setIsFetchingBpm(false);
     }
-  }, []);
+  }, [applyDetectionResult, t, audioDuration]);
+
+  const detectBpmForCurrent = useCallback((uri: string, trimStartRatio: number, trimEndRatio: number, mimeType?: string | null) => {
+    if (isWavUri(uri, mimeType)) {
+      void runOnDeviceDetection(uri, trimStartRatio, trimEndRatio);
+    } else {
+      void runServerDetection(uri, trimStartRatio, trimEndRatio, mimeType);
+    }
+  }, [runOnDeviceDetection, runServerDetection]);
 
   const playClick = useCallback(() => {
     try { clickPlayer.seekTo(0); } catch {}
@@ -393,7 +536,10 @@ export function NoteRecorderModal({
           setTrimEnd(1);
         }
         setPhase("trimming");
-        void fetchBpm(uri);
+        importedMimeTypeRef.current = null;
+        userAdjustedBpmRef.current = false;
+        lastDetectRangeRef.current = { start: 0, end: 1 };
+        detectBpmForCurrent(uri, 0, 1);
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
@@ -406,7 +552,7 @@ export function NoteRecorderModal({
       // 에러로 stop이 실패해도 세션은 반드시 회복.
       try { await releaseAudioSession("noteRecorderModal"); } catch {}
     }
-  }, [probeDurationSec, stopMetronomeClicks]);
+  }, [probeDurationSec, stopMetronomeClicks, detectBpmForCurrent]);
 
   const playPreview = useCallback(async () => {
     if (!recordedUri || audioDuration === 0) return;
@@ -599,7 +745,10 @@ export function NoteRecorderModal({
         setPhase("trimming");
         setLoadingMessage("");
         setLoadingProgress(0);
-        void fetchBpm(fileUri);
+        importedMimeTypeRef.current = asset.mimeType ?? null;
+        userAdjustedBpmRef.current = false;
+        lastDetectRangeRef.current = { start: 0, end: 1 };
+        detectBpmForCurrent(fileUri, 0, 1, asset.mimeType);
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
@@ -616,7 +765,7 @@ export function NoteRecorderModal({
       setLoadingMessage("");
       setLoadingProgress(0);
     }
-  }, []);
+  }, [t, probeDurationSec, detectBpmForCurrent]);
 
   const handleDelete = useCallback(() => {
     onDelete();
@@ -687,6 +836,29 @@ export function NoteRecorderModal({
     const ratio = Math.min(1, Math.max(parsed / audioDuration, trimStart + 0.01));
     setTrimEnd(ratio);
   }, [endTimeText, audioDuration, trimStart]);
+
+  // Recompute BPM candidates whenever the trim selection settles (debounced),
+  // for both recording and import flows.
+  useEffect(() => {
+    if (phase !== "trimming" || !recordedUri || audioDuration <= 0) return;
+    const range = { start: trimStart, end: trimEnd };
+    const last = lastDetectRangeRef.current;
+    if (last && last.start === range.start && last.end === range.end) return;
+
+    if (trimDebounceRef.current) clearTimeout(trimDebounceRef.current);
+    trimDebounceRef.current = setTimeout(() => {
+      trimDebounceRef.current = null;
+      lastDetectRangeRef.current = range;
+      detectBpmForCurrent(recordedUri, trimStart, trimEnd, importedMimeTypeRef.current);
+    }, 400);
+
+    return () => {
+      if (trimDebounceRef.current) {
+        clearTimeout(trimDebounceRef.current);
+        trimDebounceRef.current = null;
+      }
+    };
+  }, [phase, recordedUri, trimStart, trimEnd, audioDuration, detectBpmForCurrent]);
 
   const trimStartDisplay = (trimStart * audioDuration).toFixed(2);
   const trimEndDisplay = (trimEnd * audioDuration).toFixed(2);
@@ -918,8 +1090,8 @@ export function NoteRecorderModal({
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm, marginTop: Spacing.xs }}>
                   <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>{t("noteRecorder", "previewBpm")}</Text>
                   <Pressable
-                    onPress={() => setLocalBpm((v) => Math.max(30, v - 1))}
-                    onLongPress={() => setLocalBpm((v) => Math.max(30, v - 5))}
+                    onPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.max(30, v - 1)); }}
+                    onLongPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.max(30, v - 5)); }}
                     hitSlop={8}
                     style={{ width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: C.surfaceLight, alignItems: "center", justifyContent: "center" }}
                   >
@@ -927,8 +1099,8 @@ export function NoteRecorderModal({
                   </Pressable>
                   <Text style={{ color: C.text, fontSize: FontSize.body, fontWeight: "600" as const, minWidth: 36, textAlign: "center" }}>{localBpm}</Text>
                   <Pressable
-                    onPress={() => setLocalBpm((v) => Math.min(300, v + 1))}
-                    onLongPress={() => setLocalBpm((v) => Math.min(300, v + 5))}
+                    onPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.min(300, v + 1)); }}
+                    onLongPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.min(300, v + 5)); }}
                     hitSlop={8}
                     style={{ width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: C.surfaceLight, alignItems: "center", justifyContent: "center" }}
                   >
@@ -1028,6 +1200,8 @@ export function NoteRecorderModal({
                       <Pressable
                         key={bpm}
                         onPress={() => {
+                          userAdjustedBpmRef.current = true;
+                          setLocalBpm(bpm);
                           if (onSuggestBpm) onSuggestBpm(bpm);
                           setSuggestedBpms([]);
                         }}
@@ -1047,6 +1221,13 @@ export function NoteRecorderModal({
                       </Pressable>
                     ))}
                   </View>
+                </View>
+              )}
+              {!isFetchingBpm && bpmError && (
+                <View style={{ marginTop: Spacing.sm, alignItems: "center" }}>
+                  <Text style={{ color: "#E07070", fontSize: FontSize.small, textAlign: "center" }}>
+                    {bpmError}
+                  </Text>
                 </View>
               )}
 

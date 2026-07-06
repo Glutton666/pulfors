@@ -51,3 +51,63 @@ export function detectBpm(samples: Float32Array, sampleRate: number): number | n
   const bpm = Math.round((60 * hopRate) / bestLag);
   return bpm >= MIN_BPM && bpm <= MAX_BPM ? bpm : null;
 }
+
+/**
+ * Autocorrelation-based BPM candidate ranking from a precomputed onset-strength
+ * envelope (e.g. energy-diff onset or spectral-flux onset). Mirrors the
+ * scoring/tempo-bonus logic used by the server's detectBpmCandidatesFromSamples
+ * so on-device and server-side detection produce comparable results.
+ *
+ * Returns candidates sorted by descending confidence score, deduplicated,
+ * capped at 3 entries (best lag + half-tempo + double-tempo).
+ */
+export function detectBpmCandidatesFromOnset(onset: Float32Array, hopRate: number): number[] {
+  if (onset.length < 8) return [];
+
+  const lagMin = Math.max(1, Math.floor((hopRate * 60) / MAX_BPM));
+  const lagMax = Math.min(onset.length - 1, Math.ceil((hopRate * 60) / MIN_BPM));
+  if (lagMin >= lagMax) return [];
+
+  const acf = new Float32Array(lagMax + 1);
+  for (let lag = lagMin; lag <= lagMax; lag++) {
+    const count = onset.length - lag;
+    if (count <= 0) continue;
+    let corr = 0;
+    for (let i = 0; i < count; i++) corr += onset[i] * onset[i + lag];
+    acf[lag] = corr / count;
+  }
+
+  let bestLag = lagMin;
+  let bestCorr = 0;
+  for (let lag = lagMin; lag <= lagMax; lag++) {
+    if (acf[lag] > bestCorr) {
+      bestCorr = acf[lag];
+      bestLag = lag;
+    }
+  }
+  if (bestCorr <= 0) return [];
+
+  const candidates: { bpm: number; score: number }[] = [];
+  const addCandidate = (lag: number) => {
+    if (lag < lagMin || lag > lagMax) return;
+    const bpm = Math.round((hopRate * 60) / lag);
+    if (bpm < MIN_BPM || bpm > MAX_BPM) return;
+    const corr = acf[lag] ?? 0;
+    const tempoBonus = bpm >= 80 && bpm <= 160 ? 1.2 : 1.0;
+    candidates.push({ bpm, score: (corr / bestCorr) * tempoBonus });
+  };
+  addCandidate(bestLag);
+  addCandidate(Math.round(bestLag / 2));
+  addCandidate(bestLag * 2);
+  candidates.sort((a, b) => b.score - a.score);
+
+  const seen = new Set<number>();
+  const result: number[] = [];
+  for (const c of candidates) {
+    if (!seen.has(c.bpm)) {
+      seen.add(c.bpm);
+      result.push(c.bpm);
+    }
+  }
+  return result;
+}

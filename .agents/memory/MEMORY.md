@@ -2,3 +2,4 @@
 - [screenshot tool hits wrong port](screenshot-tool-wrong-port.md) — app_preview screenshot tool sometimes serves the Express landing page (port 5000) instead of the real Expo web app (port 8081); retry via runTest() instead of looping the screenshot tool.
 - [Score editor magnifier must render existing notes](score-magnifier-nearby-notes.md) — MagnifierView only draws staff+ghost by default; attach nearby element data to GhostState from touchToGhost, don't recompute layout inside the magnifier.
 - [Score editor scroll lock while note/rest tool active](score-editor-scroll-lock.md) — main ScrollView disables scrolling in note/rest tool mode; any new bottom-of-page panel must OR its own open-state into scrollEnabled or it becomes unreachable.
+- [Bar Mode "Add Bar" swipe gesture](bar-mode-add-bar-gesture.md) — "↑Add Bar" text is a hint, not a button; requires a swipe-up drag on the editor panel to actually add a bar.

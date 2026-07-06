@@ -422,19 +422,35 @@ function checkRateLimit(ip: string): boolean {
 // ---------------------------------------------------------------------------
 // ffmpeg helper
 // ---------------------------------------------------------------------------
-function ffmpegConvertToPcm(inputPath: string, outputPath: string): Promise<void> {
+function ffmpegConvertToPcm(
+  inputPath: string,
+  outputPath: string,
+  trimStartSec?: number,
+  trimEndSec?: number,
+): Promise<void> {
   if (activeFfmpegCount >= MAX_CONCURRENT_FFMPEG) {
     return Promise.reject(new Error("Server busy: too many concurrent audio conversions"));
   }
   activeFfmpegCount++;
+
+  const hasValidStart = typeof trimStartSec === "number" && Number.isFinite(trimStartSec) && trimStartSec > 0;
+  const hasValidEnd = typeof trimEndSec === "number" && Number.isFinite(trimEndSec) && trimEndSec > 0
+    && (!hasValidStart || trimEndSec > trimStartSec);
+  const clampedDuration = hasValidEnd
+    ? Math.min(MAX_ANALYSIS_SECONDS, trimEndSec - (hasValidStart ? trimStartSec : 0))
+    : MAX_ANALYSIS_SECONDS;
+
+  const args = ["-y"];
+  if (hasValidStart) {
+    args.push("-ss", String(trimStartSec));
+  }
+  args.push("-i", inputPath);
+  args.push("-t", String(clampedDuration));
+  args.push("-f", "s16le", "-acodec", "pcm_s16le", "-ar", String(FFMPEG_SAMPLE_RATE), "-ac", "1");
+  args.push(outputPath);
+
   return new Promise((resolve, reject) => {
-    execFile("ffmpeg", [
-      "-y", "-i", inputPath,
-      "-t", String(MAX_ANALYSIS_SECONDS),
-      "-f", "s16le", "-acodec", "pcm_s16le",
-      "-ar", String(FFMPEG_SAMPLE_RATE), "-ac", "1",
-      outputPath
-    ], { timeout: 10000 }, (err, _stdout, stderr) => {
+    execFile("ffmpeg", args, { timeout: 10000 }, (err, _stdout, stderr) => {
       activeFfmpegCount--;
       if (err) {
         reject(new Error(`FFmpeg error: ${stderr || err.message}`));
@@ -458,13 +474,20 @@ export async function analyzeAudioHandler(req: Request, res: Response) {
     return res.status(429).json({ error: "Too many requests. Please try again later." });
   }
 
-  const { audio, format } = req.body;
+  const { audio, format, trimStartSec: rawTrimStartSec, trimEndSec: rawTrimEndSec } = req.body;
   if (!audio || typeof audio !== "string") {
     return res.status(400).json({ error: "Missing audio data" });
   }
   if (audio.length > MAX_BASE64_AUDIO_CHARS) {
     return res.status(413).json({ error: "Audio data exceeds maximum allowed size" });
   }
+
+  const trimStartSec = typeof rawTrimStartSec === "number" && Number.isFinite(rawTrimStartSec) && rawTrimStartSec >= 0
+    ? rawTrimStartSec
+    : undefined;
+  const trimEndSec = typeof rawTrimEndSec === "number" && Number.isFinite(rawTrimEndSec) && rawTrimEndSec > 0
+    ? rawTrimEndSec
+    : undefined;
 
   const ALLOWED_EXTS = [".wav", ".m4a", ".3gp", ".mp4", ".aac", ".webm"];
   const rawExt = typeof format === "string" ? format.replace(/[^a-zA-Z0-9.]/g, "") : ".wav";
@@ -496,7 +519,7 @@ export async function analyzeAudioHandler(req: Request, res: Response) {
     const pcmPath = join(tmpDir, "output.pcm");
 
     await writeFile(inputPath, audioBuffer);
-    await ffmpegConvertToPcm(inputPath, pcmPath);
+    await ffmpegConvertToPcm(inputPath, pcmPath, trimStartSec, trimEndSec);
 
     const { readFile, stat } = await import("node:fs/promises");
     const pcmStat = await stat(pcmPath);

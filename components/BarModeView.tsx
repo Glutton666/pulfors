@@ -260,6 +260,7 @@ function SwipeableBarRow({
         {...panResponder.panHandlers}
       >
         <Pressable
+          testID={`bar-row-${beat}`}
           onPress={() => { if (!isPlaying) onPress(beat); }}
           onLongPress={() => { if (!isPlaying) onLongPress(beat); }}
           delayLongPress={500}

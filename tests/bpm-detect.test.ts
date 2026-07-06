@@ -473,3 +473,187 @@ describe("API 응답 타입 불변성: bpm/bpmCandidates 필드 형식", () => {
     }
   });
 });
+
+// ─── 온디바이스(FFT 기반) BPM 감지: detectBpmCandidatesOnDevice ───────────────
+//
+// components/NoteRecorderModal.tsx가 WAV(iOS 녹음/가져오기)에 대해 사용하는
+// 완전 온디바이스 경로. 네트워크 호출 없이 스펙트럼 온셋 → 자기상관 방식으로
+// BPM 후보를 추출한다.
+
+describe("detectBpmCandidatesOnDevice: 온디바이스 FFT 기반 BPM 감지", () => {
+  const { detectBpmCandidatesOnDevice, computeSpectralOnsetEnvelope } =
+    require("../lib/onset-bpm-detect") as {
+      detectBpmCandidatesOnDevice: (samples: Float32Array, sampleRate: number) => {
+        candidates: number[];
+        failureReason?: string;
+      };
+      computeSpectralOnsetEnvelope: (samples: Float32Array, sampleRate: number) => { onset: Float32Array; hopRate: number } | null;
+    };
+
+  function makeClickTrain(sampleRate: number, durationSec: number, bpm: number): Float32Array {
+    const numSamples = Math.floor(sampleRate * durationSec);
+    const samples = new Float32Array(numSamples);
+    const samplesPerBeat = Math.round((sampleRate * 60) / bpm);
+    // 클릭성 임펄스(광대역 스파이크)를 각 비트 위치에 삽입 — 실제 메트로놈 클릭과 유사.
+    for (let s = 0; s < numSamples; s += samplesPerBeat) {
+      for (let k = 0; k < 8 && s + k < numSamples; k++) {
+        samples[s + k] = k % 2 === 0 ? 0.9 : -0.9;
+      }
+    }
+    return samples;
+  }
+
+  test("데이터가 너무 짧으면 insufficient_data 실패 사유 반환", () => {
+    const tooShort = new Float32Array(100);
+    const result = detectBpmCandidatesOnDevice(tooShort, 44100);
+    assert.deepStrictEqual(result.candidates, []);
+    assert.strictEqual(result.failureReason, "insufficient_data");
+  });
+
+  test("무음 오디오 → no_signal 실패 사유 반환", () => {
+    const silence = new Float32Array(44100 * 3);
+    const result = detectBpmCandidatesOnDevice(silence, 44100);
+    assert.deepStrictEqual(result.candidates, []);
+    assert.strictEqual(result.failureReason, "no_signal");
+  });
+
+  test("120 BPM 클릭 트레인 → 후보 최소 1개, failureReason 없음", () => {
+    const samples = makeClickTrain(44100, 4, 120);
+    const result = detectBpmCandidatesOnDevice(samples, 44100);
+    assert.ok(result.candidates.length >= 1, `후보 없음: ${JSON.stringify(result)}`);
+    assert.strictEqual(result.failureReason, undefined);
+  });
+
+  test("120 BPM 클릭 트레인 → 후보에 120 근사값 또는 half/double 포함", () => {
+    const samples = makeClickTrain(44100, 4, 120);
+    const result = detectBpmCandidatesOnDevice(samples, 44100);
+    const hasExpected = result.candidates.some(
+      (b) => Math.abs(b - 120) <= 10 || Math.abs(b - 60) <= 5 || Math.abs(b - 240) <= 10,
+    );
+    assert.ok(hasExpected, `후보 ${JSON.stringify(result.candidates)}에 120 근사값 없음`);
+  });
+
+  test("모든 후보는 50~250 BPM 범위 내이며 정수", () => {
+    const samples = makeClickTrain(44100, 4, 90);
+    const result = detectBpmCandidatesOnDevice(samples, 44100);
+    for (const bpm of result.candidates) {
+      assert.ok(bpm >= 50 && bpm <= 250, `후보 ${bpm}이 범위 밖`);
+      assert.ok(Number.isInteger(bpm), `후보 ${bpm}이 정수가 아님`);
+    }
+  });
+
+  test("computeSpectralOnsetEnvelope: 짧은 샘플 → null 반환", () => {
+    const tooShort = new Float32Array(500);
+    assert.strictEqual(computeSpectralOnsetEnvelope(tooShort, 44100), null);
+  });
+
+  test("computeSpectralOnsetEnvelope: 충분한 샘플 → onset 배열과 hopRate 반환", () => {
+    const samples = makeClickTrain(44100, 2, 120);
+    const env = computeSpectralOnsetEnvelope(samples, 44100);
+    assert.ok(env, "onset envelope가 null이면 안 됨");
+    assert.ok(env!.onset.length > 8, "onset 프레임 수가 너무 적음");
+    assert.strictEqual(env!.hopRate, 44100 / 512);
+  });
+});
+
+// ─── 트리밍 변경 시 재감지: 트림 범위에 따라 다른 슬라이스가 분석되는지 검증 ───
+
+describe("트림 변경 시 재감지 시뮬레이션 (recompute on trim change)", () => {
+  const { detectBpmCandidatesOnDevice } = require("../lib/onset-bpm-detect") as {
+    detectBpmCandidatesOnDevice: (samples: Float32Array, sampleRate: number) => {
+      candidates: number[];
+      failureReason?: string;
+    };
+  };
+
+  function makeTwoTempoSamples(sampleRate: number): Float32Array {
+    // 앞 3초는 90 BPM, 뒤 3초는 150 BPM인 합성 오디오.
+    const durEach = 3;
+    const first = new Float32Array(sampleRate * durEach);
+    const second = new Float32Array(sampleRate * durEach);
+    const fillClicks = (arr: Float32Array, bpm: number) => {
+      const spb = Math.round((sampleRate * 60) / bpm);
+      for (let s = 0; s < arr.length; s += spb) {
+        for (let k = 0; k < 8 && s + k < arr.length; k++) {
+          arr[s + k] = k % 2 === 0 ? 0.9 : -0.9;
+        }
+      }
+    };
+    fillClicks(first, 90);
+    fillClicks(second, 150);
+    const combined = new Float32Array(first.length + second.length);
+    combined.set(first, 0);
+    combined.set(second, first.length);
+    return combined;
+  }
+
+  test("트림 범위를 앞/뒤로 바꾸면 서로 다른 BPM 후보 세트를 반환할 수 있음", () => {
+    const sampleRate = 44100;
+    const combined = makeTwoTempoSamples(sampleRate);
+    const half = Math.floor(combined.length / 2);
+
+    const frontSlice = combined.subarray(0, half);
+    const backSlice = combined.subarray(half);
+
+    const frontResult = detectBpmCandidatesOnDevice(frontSlice, sampleRate);
+    const backResult = detectBpmCandidatesOnDevice(backSlice, sampleRate);
+
+    assert.ok(frontResult.candidates.length >= 1, "앞부분 후보 없음");
+    assert.ok(backResult.candidates.length >= 1, "뒷부분 후보 없음");
+
+    const frontHas90 = frontResult.candidates.some((b) => Math.abs(b - 90) <= 10 || Math.abs(b - 45) <= 5 || Math.abs(b - 180) <= 10);
+    const backHas150 = backResult.candidates.some((b) => Math.abs(b - 150) <= 10 || Math.abs(b - 75) <= 5);
+    assert.ok(frontHas90, `앞부분 후보에 90 BPM 근사값 없음: ${JSON.stringify(frontResult.candidates)}`);
+    assert.ok(backHas150, `뒷부분 후보에 150 BPM 근사값 없음: ${JSON.stringify(backResult.candidates)}`);
+  });
+});
+
+// ─── 서버 ffmpeg 트림 파라미터: trimStartSec/trimEndSec 파싱 검증 ─────────────
+//
+// ffmpeg 자체 실행은 통합 테스트 영역이므로, 여기서는 analyzeAudioHandler가
+// trimStartSec/trimEndSec 필드를 안전하게 파싱/무시하며 기존 동작(413/400 등)을
+// 깨지 않는지만 검증한다.
+
+describe("/api/analyze-audio: trimStartSec/trimEndSec 파라미터 안전성", () => {
+  const { analyzeAudioHandler } = require("../server/routes") as {
+    analyzeAudioHandler: (req: any, res: any) => Promise<any>;
+  };
+
+  function makeRes() {
+    let statusCode = 200;
+    let body: unknown = null;
+    const res = {
+      status(code: number) { statusCode = code; return res; },
+      json(b: unknown) { body = b; return res; },
+      get statusCode() { return statusCode; },
+      get body() { return body; },
+    };
+    return res;
+  }
+
+  test("잘못된 타입(문자열)의 trimStartSec/trimEndSec → 무시되고 정상 동작(WAV 경로)", async () => {
+    const silence = new Float32Array(44100 * 2);
+    const wavBuf = buildWavBuffer(silence, 44100);
+    const audio = wavBuf.toString("base64");
+    const req = {
+      ip: "7.7.7.7",
+      body: { audio, format: ".wav", trimStartSec: "not-a-number", trimEndSec: "also-bad" },
+    };
+    const res = makeRes();
+    await analyzeAudioHandler(req, res);
+    assert.strictEqual(res.statusCode, 200);
+  });
+
+  test("음수 trimStartSec → 무시되고 400/413 없이 정상 응답", async () => {
+    const silence = new Float32Array(44100 * 2);
+    const wavBuf = buildWavBuffer(silence, 44100);
+    const audio = wavBuf.toString("base64");
+    const req = {
+      ip: "8.8.8.8",
+      body: { audio, format: ".wav", trimStartSec: -5, trimEndSec: 2 },
+    };
+    const res = makeRes();
+    await analyzeAudioHandler(req, res);
+    assert.strictEqual(res.statusCode, 200);
+  });
+});

@@ -532,6 +532,12 @@ export const translations = {
     bpmDetected: { ko: "감지된 BPM: {bpm}", en: "Detected BPM: {bpm}" },
     bpmCandidatesLabel: { ko: "감지된 BPM", en: "Detected BPM" },
     bpmApply: { ko: "적용", en: "Apply" },
+    bpmFailNetwork: { ko: "네트워크 오류로 BPM을 분석하지 못했습니다.", en: "Couldn't analyze BPM due to a network error." },
+    bpmFailServer: { ko: "서버 오류로 BPM을 분석하지 못했습니다.", en: "Couldn't analyze BPM due to a server error." },
+    bpmFailDecode: { ko: "오디오를 디코딩하지 못했습니다.", en: "Couldn't decode the audio." },
+    bpmNotDetected: { ko: "BPM을 감지하지 못했습니다.", en: "Couldn't detect a BPM." },
+    bpmFailGeneric: { ko: "BPM 분석에 실패했습니다.", en: "BPM analysis failed." },
+    bpmFailRateLimit: { ko: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.", en: "Too many requests. Please try again shortly." },
   },
   permissions: {
     title: { ko: "권한 필요", en: "Permission Required" },
