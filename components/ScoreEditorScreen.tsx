@@ -1626,7 +1626,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           { paddingHorizontal: Spacing.lg, paddingBottom: bottomInset + 180 },
         ]}
         showsVerticalScrollIndicator={false}
-        scrollEnabled={activeTool !== "note" && activeTool !== "rest"}
+        scrollEnabled={drawerOpen || (activeTool !== "note" && activeTool !== "rest")}
       >
         {/* 악보 메타 — 탭하면 편집 모달 */}
         <Pressable
@@ -1698,7 +1698,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               showPlayhead={showPlayhead}
               highlightColor={highlightColor}
               lineSpacing={lineSpacing}
-              disabled={!!measureContextMenu?.visible || showMeasureEditModal}
+              disabled={!!measureContextMenu?.visible || showMeasureEditModal || drawerOpen}
               measuresPerLineOverride={S.isLandscape ? 2 : 1}
             />
             {/* 참조 이미지 오버레이 (편집 불가) */}
