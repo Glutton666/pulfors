@@ -1271,6 +1271,8 @@ export interface ScoreRendererProps {
   showPartNames?: boolean;
   /** 화면 크기에 맞는 line spacing (px). 기본값 = 10. useScoreLineSpacing()으로 계산. */
   lineSpacing?: number;
+  /** 줄당 마디 수를 강제 지정 (예: 화면 방향에 따라 세로=1, 가로=2). 지정 시 doc.measuresPerLine보다 우선 적용됩니다. */
+  measuresPerLineOverride?: number;
 }
 
 
@@ -1284,6 +1286,7 @@ export function ScoreRenderer({
   highlightColor,
   showPartNames = true,
   lineSpacing = BASE_LINE_SPACING,
+  measuresPerLineOverride,
 }: ScoreRendererProps) {
   const { colors: C } = useTheme();
   const strokeColor = C.text;
@@ -1294,8 +1297,8 @@ export function ScoreRenderer({
   const layoutWidth = containerWidth / sf;
 
   const { rows, totalHeight } = useMemo(
-    () => computeScoreLayout(doc, layoutWidth),
-    [doc, layoutWidth],
+    () => computeScoreLayout(doc, layoutWidth, measuresPerLineOverride),
+    [doc, layoutWidth, measuresPerLineOverride],
   );
 
   if (!doc.parts.length) {

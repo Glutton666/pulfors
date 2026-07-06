@@ -675,6 +675,7 @@ export function ScoreCanvas({
         showPlayhead={showPlayhead}
         highlightColor={highlightColor}
         lineSpacing={lineSpacing}
+        measuresPerLineOverride={measuresPerLineOverride}
       />
 
       {/* 터치 + 가이드선 + 고스트 SVG 오버레이
