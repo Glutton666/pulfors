@@ -19,6 +19,7 @@ import { makeStyles } from "./ScoreEditorScreen.styles";
 import { ALL_INSTR_SYMBOLS } from "./ScorePalette";
 import type { ScoreDocument, ScorePart, ScoreMetadata } from "@/lib/score-types";
 import { KEY_SIGNATURES, getKeySignatureLabel } from "@/lib/score-types";
+import { ScoreRenderer } from "./ScoreRenderer";
 
 // ── 공통 훅 ──────────────────────────────────────────────────────
 function useEditorStyles() {
@@ -589,20 +590,29 @@ export function ScoreKeySigPickerModal({
 // ═══════════════════════════════════════════════════════════════════
 
 const PNG_EXPORT_MPL_OPTIONS = [undefined, 1, 2, 3, 4, 5, 6, 8] as const;
+const PNG_EXPORT_LPP_OPTIONS = [undefined, 1, 2, 3, 4, 5] as const;
 
 export interface ScorePngExportOptionsModalProps {
   visible: boolean;
   value: number | undefined;
+  linesPerPage: number | undefined;
+  previewPages: ScoreDocument[];
+  previewWidth: number;
   onClose: () => void;
   onChange: (mpl: number | undefined) => void;
+  onChangeLinesPerPage: (lpp: number | undefined) => void;
   onConfirm: () => void;
 }
 
 export function ScorePngExportOptionsModal({
   visible,
   value,
+  linesPerPage,
+  previewPages,
+  previewWidth,
   onClose,
   onChange,
+  onChangeLinesPerPage,
   onConfirm,
 }: ScorePngExportOptionsModalProps) {
   const { C, styles } = useEditorStyles();
@@ -617,7 +627,7 @@ export function ScorePngExportOptionsModal({
     >
       <Pressable style={styles.symbolModalBackdrop} onPress={onClose}>
         <Pressable
-          style={[styles.symbolModalCard, { backgroundColor: C.surface, borderColor: C.border }]}
+          style={[styles.symbolModalCard, { backgroundColor: C.surface, borderColor: C.border, maxHeight: "85%" }]}
           onPress={(e) => e.stopPropagation()}
         >
           <Text style={[styles.symbolModalTitle, { color: C.text }]}>
@@ -656,6 +666,78 @@ export function ScorePngExportOptionsModal({
               );
             })}
           </View>
+
+          <Text style={[styles.drawerFieldLabel, { color: C.textSecondary, marginBottom: 8 }]}>
+            {t("scoreMode", "pngExportLinesPerPageLabel")}
+          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+            {PNG_EXPORT_LPP_OPTIONS.map((opt) => {
+              const selected = opt === linesPerPage;
+              return (
+                <Pressable
+                  key={String(opt)}
+                  style={[
+                    styles.drawerApplyBtn,
+                    {
+                      backgroundColor: selected ? C.accent : C.surface,
+                      borderWidth: 1,
+                      borderColor: selected ? C.accent : C.border,
+                      minWidth: 44,
+                    },
+                  ]}
+                  onPress={() => onChangeLinesPerPage(opt)}
+                  testID={`score-png-export-lpp-${opt ?? "none"}`}
+                >
+                  <Text
+                    style={[
+                      styles.drawerApplyBtnText,
+                      { color: selected ? "#fff" : C.text },
+                    ]}
+                  >
+                    {opt ? String(opt) : t("scoreMode", "pngExportLinesPerPageNone")}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={[styles.drawerFieldLabel, { color: C.textSecondary, marginBottom: 4 }]}>
+            {t("scoreMode", "pngExportPreviewTitle")}
+          </Text>
+          <Text style={{ fontSize: 11, color: C.textSecondary, marginBottom: 8 }}>
+            {t("scoreMode", "pngExportPreviewHint")}
+          </Text>
+          <ScrollView
+            style={{ maxHeight: 320, borderWidth: 1, borderColor: C.border, borderRadius: 8, marginBottom: 12 }}
+            contentContainerStyle={{ padding: 8 }}
+            testID="score-png-export-preview-scroll"
+          >
+            {previewPages.map((pageDoc, idx) => (
+              <View
+                key={idx}
+                style={{
+                  marginBottom: idx < previewPages.length - 1 ? 16 : 0,
+                  borderWidth: 1,
+                  borderColor: C.border,
+                  borderRadius: 6,
+                  overflow: "hidden",
+                  backgroundColor: "#ffffff",
+                }}
+                testID={`score-png-export-preview-page-${idx}`}
+              >
+                {previewPages.length > 1 && (
+                  <View style={{ paddingVertical: 4, paddingHorizontal: 8, backgroundColor: C.surfaceLight }}>
+                    <Text style={{ fontSize: 11, color: C.text, textAlign: "center" }}>
+                      {t("scoreMode", "pngExportPreviewPageLabel")} {idx + 1} / {previewPages.length}
+                    </Text>
+                  </View>
+                )}
+
+                <ScoreRenderer doc={pageDoc} containerWidth={previewWidth} showPartNames />
+              </View>
+            ))}
+          </ScrollView>
+
           <Pressable
             style={[styles.symbolModalClose, { backgroundColor: C.accent }]}
             onPress={onConfirm}

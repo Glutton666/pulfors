@@ -291,6 +291,8 @@ export interface ScoreDocument {
   referenceImageOpacity?: number;
   /** 한 줄에 표시할 마디 수. undefined이면 컨테이너 너비 기반 자동 배치 */
   measuresPerLine?: number;
+  /** 내보내기 시 몇 줄마다 페이지를 나눌지. undefined/0이면 페이지 나누기 없이 한 장으로 내보냄 */
+  linesPerPage?: number;
 }
 
 // 악보 목록 아이템 (썸네일용 경량 정보)

@@ -161,6 +161,60 @@ export async function exportScoreAsPng(
   }
 }
 
+// ── PNG 내보내기 (여러 페이지) ────────────────────────────────
+
+export async function exportScorePagesAsPng(
+  pageRefs: React.RefObject<unknown>[],
+  doc: ScoreDocument,
+): Promise<boolean> {
+  try {
+    const refs = pageRefs.filter((r) => !!(r as any)?.current);
+    if (refs.length === 0) return false;
+    const safeName = (doc.metadata.title || "score")
+      .replace(/[^a-zA-Z0-9가-힣_-]/g, "_")
+      .slice(0, 30);
+    const dateStr = formatDateForFilename();
+    const multi = refs.length > 1;
+
+    const uris: string[] = [];
+    for (const ref of refs) {
+      const uri: string = await captureRef(ref as any, { format: "png", quality: 1 });
+      uris.push(uri);
+    }
+
+    if (Platform.OS === "web") {
+      uris.forEach((uri, i) => {
+        const a = document.createElement("a");
+        a.href = uri;
+        a.download = multi
+          ? `${safeName}_${dateStr}_p${i + 1}.png`
+          : `${safeName}_${dateStr}.png`;
+        a.click();
+      });
+      return true;
+    }
+
+    const canShare = await Sharing.isAvailableAsync();
+    if (!canShare) {
+      logger.warn("[ScoreIO] Sharing not available for PNG");
+      return false;
+    }
+    for (let i = 0; i < uris.length; i++) {
+      await Sharing.shareAsync(uris[i], {
+        mimeType: "image/png",
+        dialogTitle: multi
+          ? `${doc.metadata.title || "Score"} (${i + 1}/${uris.length})`
+          : doc.metadata.title || "Score",
+        UTI: "public.png",
+      });
+    }
+    return true;
+  } catch (e) {
+    logger.warn("[ScoreIO] exportScorePagesAsPng error:", e);
+    return false;
+  }
+}
+
 // ── .pulfors 파일 불러오기 ────────────────────────────────────
 
 export interface ImportScoreResult {

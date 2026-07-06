@@ -27,10 +27,12 @@ import { useScoreLineSpacing } from "@/lib/score-scale";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import { saveScore, createEmptyMeasure } from "@/lib/score-storage";
 import { stopAllScoreNotes, stopPreviewNote } from "@/lib/score-audio";
-import { exportScoreAsJson, exportScoreAsJpg, exportScoreAsPng, shareScoreAsScoreJson, importScoreFromJson, importReferenceImage, extractParts } from "@/lib/score-io";
+import { exportScoreAsJson, exportScoreAsJpg, exportScorePagesAsPng, shareScoreAsScoreJson, importScoreFromJson, importReferenceImage, extractParts } from "@/lib/score-io";
+import { paginateScoreDoc } from "@/lib/score-layout";
 import { loadPracticeBook, savePracticeBook, createPracticeEntry } from "@/lib/storage";
 import type {
   ScoreDocument,
+  ScoreMeasure,
   ScoreMetadata,
   ScoreNote,
   ScoreRest,
@@ -119,6 +121,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   const insets = useSafeAreaInsets();
   const S = useScale();
   const { width: windowWidth } = useWindowDimensions();
+  const containerWidth = windowWidth - Spacing.lg * 2;
   const lineSpacing = useScoreLineSpacing();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const topInset = insets.top || webTopInset;
@@ -223,8 +226,14 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   // ── 꾸밈음 선택 ──────────────────────────────────────────────
   const [selectedOrnament, setSelectedOrnament] = useState<import("@/lib/score-types").OrnamentType | null>(null);
 
-  // ── 마디 설정 드로어 ──────────────────────────────────────────
+  // ── 마디 설정 드로어 (오선보 위 고정, 마디 미선택 시 "다음에 추가할 마디" 설정) ──
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [draftMeasure, setDraftMeasure] = useState<{
+    bpm?: number;
+    timeSignature?: { numerator: number; denominator: number };
+    clef?: ClefType;
+    keySignature?: { sharps: number };
+  }>({});
 
   // ── 재생 연동 ─────────────────────────────────────────────────
   const playback = useScorePlayback(doc);
@@ -303,10 +312,22 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   // ── JPG 내보내기 전용 캡처 뷰 ref ───────────────────────────
   const exportViewRef = useRef<View>(null);
 
-  // ── PNG 내보내기 옵션 (줄당 마디 수) ─────────────────────────
+  // ── PNG 내보내기 옵션 (줄당 마디 수 + 페이지 나누기) ─────────
   const [showPngExportOptions, setShowPngExportOptions] = useState(false);
   const [pngExportMeasuresPerLine, setPngExportMeasuresPerLine] = useState<number | undefined>(doc.measuresPerLine);
+  const [pngExportLinesPerPage, setPngExportLinesPerPage] = useState<number | undefined>(doc.linesPerPage);
   const pendingPngExportRef = useRef(false);
+  const exportPageRefs = useRef<(View | null)[]>([]);
+
+  const pngExportPages = useMemo(
+    () => paginateScoreDoc(
+      pngExportMeasuresPerLine !== doc.measuresPerLine ? { ...doc, measuresPerLine: pngExportMeasuresPerLine } : doc,
+      containerWidth || 400,
+      pngExportMeasuresPerLine,
+      pngExportLinesPerPage,
+    ),
+    [doc, pngExportMeasuresPerLine, pngExportLinesPerPage, containerWidth],
+  );
 
   // ── 저장 ──────────────────────────────────────────────────────
   const [savedToast, setSavedToast] = useState(false);
@@ -323,6 +344,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   async function handleExportPng() {
     setShowMoreMenu(false);
     setPngExportMeasuresPerLine(doc.measuresPerLine);
+    setPngExportLinesPerPage(doc.linesPerPage);
     setShowPngExportOptions(true);
   }
 
@@ -335,12 +357,13 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     if (!pendingPngExportRef.current) return;
     pendingPngExportRef.current = false;
     const timer = setTimeout(async () => {
-      const ok = await exportScoreAsPng(exportViewRef as React.RefObject<unknown>, doc);
+      const refs = pngExportPages.map((_, i) => ({ current: exportPageRefs.current[i] })) as React.RefObject<unknown>[];
+      const ok = await exportScorePagesAsPng(refs, doc);
       if (!ok) Alert.alert(t("scoreMode", "exportPng"), t("scoreMode", "exportJpgFail"));
     }, 80);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pngExportMeasuresPerLine]);
+  }, [pngExportMeasuresPerLine, pngExportLinesPerPage]);
 
   async function handleExportJson() {
     setShowMoreMenu(false);
@@ -447,17 +470,36 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     }
   }, [doc, onSaved]);
 
-  // ── 마디 추가 ─────────────────────────────────────────────────
+  // ── 마디 추가 (마디 설정 드로어에 표시된 현재 설정값을 새 마디에 심는다) ──
+  // 선택된 마디가 있으면 그 마디의 실제 설정을, 없으면 draftMeasure(다음에 추가할 마디용 초안)를 사용.
+  // 이전 마지막 마디와 값이 다르면 ScoreRenderer가 자동으로 겹세로줄을 그린다.
   function handleAddMeasure() {
+    const selMeasure = selectedMeasureIdx !== null
+      ? doc.parts[selectedPartIdx]?.measures[selectedMeasureIdx]
+      : undefined;
+    const overrides: Partial<ScoreMeasure> = selMeasure
+      ? {
+          ...(selMeasure.bpm ? { bpm: selMeasure.bpm } : {}),
+          ...(selMeasure.timeSignature ? { timeSignature: selMeasure.timeSignature } : {}),
+          ...(selMeasure.clef ? { clef: selMeasure.clef } : {}),
+          ...(selMeasure.keySignature ? { keySignature: selMeasure.keySignature } : {}),
+        }
+      : {
+          ...(draftMeasure.bpm ? { bpm: draftMeasure.bpm } : {}),
+          ...(draftMeasure.timeSignature ? { timeSignature: draftMeasure.timeSignature } : {}),
+          ...(draftMeasure.clef ? { clef: draftMeasure.clef } : {}),
+          ...(draftMeasure.keySignature ? { keySignature: draftMeasure.keySignature } : {}),
+        };
     const newDoc: ScoreDocument = {
       ...doc,
       parts: doc.parts.map((part) => ({
         ...part,
-        measures: [...part.measures, createEmptyMeasure()],
+        measures: [...part.measures, { ...createEmptyMeasure(), ...overrides }],
       })),
     };
     applyDoc(newDoc);
     setSelectedMeasureIdx((doc.parts[selectedPartIdx]?.measures.length) ?? 0);
+    setDraftMeasure({});
   }
 
   // ── 마디 삭제 ─────────────────────────────────────────────────
@@ -897,13 +939,15 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     setMeasureContextMenu({ measureIdx, visible: true });
   }, []);
 
-  // ── 마디 컨텍스트 메뉴: BPM 변경 (크로스 플랫폼 모달) ───────
-  function handleMeasureBpmChange(measureIdx: number) {
+  // ── 마디 컨텍스트 메뉴 / 마디 드로어: BPM 변경 (크로스 플랫폼 모달) ───────
+  // measureIdx === null → 마디 미선택 상태의 draftMeasure(다음에 추가할 마디) 편집
+  function handleMeasureBpmChange(measureIdx: number | null) {
     setMeasureContextMenu(null);
-    const curMeasure = doc.parts[selectedPartIdx]?.measures[measureIdx];
-    const curBpm = curMeasure?.bpm ?? doc.bpm;
+    const curBpm = measureIdx !== null
+      ? (doc.parts[selectedPartIdx]?.measures[measureIdx]?.bpm ?? doc.bpm)
+      : (draftMeasure.bpm ?? doc.bpm);
     setMeasureEditTarget({
-      measureIdx,
+      measureIdx: measureIdx ?? -1,
       field: "bpm",
       value: String(curBpm),
       label: t("scoreMode", "measureBpmChange"),
@@ -912,13 +956,14 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     setShowMeasureEditModal(true);
   }
 
-  // ── 마디 컨텍스트 메뉴: 박자표 변경 ─────────────────────────
-  function handleMeasureTimeSigChange(measureIdx: number) {
+  // ── 마디 컨텍스트 메뉴 / 마디 드로어: 박자표 변경 ─────────────
+  function handleMeasureTimeSigChange(measureIdx: number | null) {
     setMeasureContextMenu(null);
-    const curMeasure = doc.parts[selectedPartIdx]?.measures[measureIdx];
-    const curSig = curMeasure?.timeSignature ?? doc.timeSignature;
+    const curSig = measureIdx !== null
+      ? (doc.parts[selectedPartIdx]?.measures[measureIdx]?.timeSignature ?? doc.timeSignature)
+      : (draftMeasure.timeSignature ?? doc.timeSignature);
     setMeasureEditTarget({
-      measureIdx,
+      measureIdx: measureIdx ?? -1,
       field: "timeSig",
       value: `${curSig.numerator}/${curSig.denominator}`,
       label: t("scoreMode", "measureTimeSigChange"),
@@ -941,41 +986,51 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   }
 
   // ── 마디 인라인 편집 저장 ─────────────────────────────────────
+  // measureIdx === -1 → draftMeasure(마디 미선택 시 "다음에 추가할 마디" 초안) 편집
   function handleMeasureEditSave() {
     if (!measureEditTarget) { setShowMeasureEditModal(false); return; }
     const { measureIdx, field, value } = measureEditTarget;
+    const isDraft = measureIdx === -1;
     if (field === "bpm") {
       const n = parseInt(value.trim(), 10);
       if (n >= 20 && n <= 300) {
-        const newDoc: ScoreDocument = {
-          ...doc,
-          parts: doc.parts.map((p, pIdx) => {
-            if (pIdx !== selectedPartIdx) return p;
-            return { ...p, measures: p.measures.map((m, mIdx) => mIdx !== measureIdx ? m : { ...m, bpm: n }) };
-          }),
-        };
-        applyDoc(newDoc);
+        if (isDraft) {
+          setDraftMeasure((d) => ({ ...d, bpm: n }));
+        } else {
+          const newDoc: ScoreDocument = {
+            ...doc,
+            parts: doc.parts.map((p, pIdx) => {
+              if (pIdx !== selectedPartIdx) return p;
+              return { ...p, measures: p.measures.map((m, mIdx) => mIdx !== measureIdx ? m : { ...m, bpm: n }) };
+            }),
+          };
+          applyDoc(newDoc);
+        }
       }
     } else if (field === "timeSig") {
       const parts = value.trim().split("/");
       const num = parseInt(parts[0] ?? "", 10);
       const den = parseInt(parts[1] ?? "", 10);
       if (num > 0 && den > 0) {
-        const newDoc: ScoreDocument = {
-          ...doc,
-          parts: doc.parts.map((p, pIdx) => {
-            if (pIdx !== selectedPartIdx) return p;
-            return {
-              ...p,
-              measures: p.measures.map((m, mIdx) =>
-                mIdx !== measureIdx ? m : { ...m, timeSignature: { numerator: num, denominator: den } },
-              ),
-            };
-          }),
-        };
-        applyDoc(newDoc);
+        if (isDraft) {
+          setDraftMeasure((d) => ({ ...d, timeSignature: { numerator: num, denominator: den } }));
+        } else {
+          const newDoc: ScoreDocument = {
+            ...doc,
+            parts: doc.parts.map((p, pIdx) => {
+              if (pIdx !== selectedPartIdx) return p;
+              return {
+                ...p,
+                measures: p.measures.map((m, mIdx) =>
+                  mIdx !== measureIdx ? m : { ...m, timeSignature: { numerator: num, denominator: den } },
+                ),
+              };
+            }),
+          };
+          applyDoc(newDoc);
+        }
       }
-    } else if (field === "linkedEntry") {
+    } else if (field === "linkedEntry" && !isDraft) {
       const newDoc: ScoreDocument = {
         ...doc,
         parts: doc.parts.map((p, pIdx) => {
@@ -1394,7 +1449,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     applyDoc(newDoc);
   }
 
-  const containerWidth = windowWidth - Spacing.lg * 2;
   const currentPart = doc.parts[selectedPartIdx];
 
   const styles = makeStyles(C, S);
@@ -1789,18 +1843,222 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           </Text>
         )}
 
-        {/* 마디 추가 (오선보 바로 위 고정 버튼 — 항상 마지막에 한 마디 추가) */}
+        {/* ── 마디 설정 드로어 (오선보 바로 위 고정 — 마디 선택 시 해당 마디 설정, 미선택 시 "다음에 추가할 마디" 초안 설정) ── */}
         {currentPart && (
-          <Pressable
-            style={[styles.addMeasureRow, { borderColor: C.accent }]}
-            onPress={handleAddMeasure}
-            testID="score-add-measure-btn"
-          >
-            <Ionicons name="add-circle-outline" size={16} color={C.accent} />
-            <Text style={[styles.addMeasureRowText, { color: C.accent }]}>
-              {t("scoreMode", "addMeasure")}
-            </Text>
-          </Pressable>
+          <View style={[styles.drawerContainer, { borderColor: C.border, backgroundColor: C.surface }]}>
+            <View style={[styles.drawerHeader, { borderBottomColor: drawerOpen ? C.border : "transparent" }]}>
+              <Pressable
+                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+                onPress={() => setDrawerOpen((v) => !v)}
+                testID="score-editor-drawer-toggle"
+              >
+                <Text style={[styles.drawerHeaderText, { color: C.text }]} numberOfLines={1}>
+                  {selectedMeasureIdx !== null
+                    ? `${t("scoreMode", "drawerMeasureSettings")} — ${selectedMeasureIdx + 1}`
+                    : t("scoreMode", "drawerNextMeasureSettings")}
+                </Text>
+                <Ionicons
+                  name={drawerOpen ? "chevron-up" : "chevron-down"}
+                  size={14}
+                  color={C.textSecondary}
+                />
+              </Pressable>
+              <Pressable
+                style={[styles.addMeasureRow, { borderColor: C.accent, marginBottom: 0, marginLeft: 8 }]}
+                onPress={handleAddMeasure}
+                testID="score-add-measure-btn"
+              >
+                <Ionicons name="add-circle-outline" size={16} color={C.accent} />
+                <Text style={[styles.addMeasureRowText, { color: C.accent }]}>
+                  {t("scoreMode", "addMeasure")}
+                </Text>
+              </Pressable>
+            </View>
+
+            {drawerOpen && (
+              <View style={styles.drawerContent}>
+                {/* BPM 변경 */}
+                <View style={styles.drawerRow}>
+                  <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
+                    {t("scoreMode", "drawerBpmLabel")}
+                  </Text>
+                  <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
+                    {(() => {
+                      const bpm = selectedMeasureIdx !== null
+                        ? currentPart?.measures[selectedMeasureIdx]?.bpm
+                        : draftMeasure.bpm;
+                      return bpm ? String(bpm) : `${doc.bpm} (${t("scoreMode", "drawerClear")})`;
+                    })()}
+                  </Text>
+                  <Pressable
+                    style={[styles.drawerApplyBtn, { backgroundColor: C.accent }]}
+                    onPress={() => {
+                      setDrawerOpen(false);
+                      handleMeasureBpmChange(selectedMeasureIdx);
+                    }}
+                    testID="score-drawer-bpm-apply"
+                  >
+                    <Text style={styles.drawerApplyBtnText}>{t("scoreMode", "drawerApply")}</Text>
+                  </Pressable>
+                </View>
+
+                {/* 박자표 변경 */}
+                <View style={styles.drawerRow}>
+                  <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
+                    {t("scoreMode", "drawerTimeSigLabel")}
+                  </Text>
+                  <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
+                    {(() => {
+                      const sig = (selectedMeasureIdx !== null
+                        ? currentPart?.measures[selectedMeasureIdx]?.timeSignature
+                        : draftMeasure.timeSignature) ?? doc.timeSignature;
+                      return `${sig.numerator}/${sig.denominator}`;
+                    })()}
+                  </Text>
+                  <Pressable
+                    style={[styles.drawerApplyBtn, { backgroundColor: C.accent }]}
+                    onPress={() => {
+                      setDrawerOpen(false);
+                      handleMeasureTimeSigChange(selectedMeasureIdx);
+                    }}
+                    testID="score-drawer-timesig-apply"
+                  >
+                    <Text style={styles.drawerApplyBtnText}>{t("scoreMode", "drawerApply")}</Text>
+                  </Pressable>
+                </View>
+
+                {/* 음자리표 변경 (이 마디부터 적용 / 초안이면 다음 마디부터) */}
+                <View style={styles.drawerRow}>
+                  <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
+                    {t("scoreMode", "drawerClefLabel")}
+                  </Text>
+                  <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
+                    {(() => {
+                      const clef = selectedMeasureIdx !== null
+                        ? currentPart?.measures[selectedMeasureIdx]?.clef
+                        : draftMeasure.clef;
+                      return clef ?? currentPart?.clef ?? "treble";
+                    })()}
+                  </Text>
+                  <Pressable
+                    style={[styles.drawerApplyBtn, { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }]}
+                    onPress={() => {
+                      const cycle: ClefType[] = ["treble", "bass", "alto", "tenor", "percussion"];
+                      if (selectedMeasureIdx !== null) {
+                        const m = currentPart?.measures[selectedMeasureIdx];
+                        const cur = m?.clef ?? currentPart?.clef ?? "treble";
+                        const next = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
+                        applyDoc({
+                          ...doc,
+                          parts: doc.parts.map((p, pIdx) => {
+                            if (pIdx !== selectedPartIdx) return p;
+                            return {
+                              ...p,
+                              measures: p.measures.map((mm, mIdx) =>
+                                mIdx === selectedMeasureIdx ? { ...mm, clef: next } : mm
+                              ),
+                            };
+                          }),
+                        });
+                      } else {
+                        const cur = draftMeasure.clef ?? currentPart?.clef ?? "treble";
+                        const next = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
+                        setDraftMeasure((d) => ({ ...d, clef: next }));
+                      }
+                    }}
+                    testID="score-drawer-clef-cycle"
+                  >
+                    <Text style={[styles.drawerApplyBtnText, { color: C.text }]}>
+                      {t("scoreMode", "drawerApply")}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {/* 조표 변경 (이 마디부터 적용 / 초안이면 다음 마디부터) */}
+                <View style={styles.drawerRow}>
+                  <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
+                    {t("scoreMode", "drawerKeyLabel")}
+                  </Text>
+                  <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
+                    {(() => {
+                      const sharps = (selectedMeasureIdx !== null
+                        ? currentPart?.measures[selectedMeasureIdx]?.keySignature?.sharps
+                        : draftMeasure.keySignature?.sharps) ?? doc.keySignature.sharps;
+                      return sharps === 0 ? "C" : sharps > 0 ? `${sharps}#` : `${Math.abs(sharps)}♭`;
+                    })()}
+                  </Text>
+                  <View style={{ flexDirection: "row", gap: 4 }}>
+                    {([-1, 1] as const).map((delta) => (
+                      <Pressable
+                        key={delta}
+                        style={[styles.drawerApplyBtn, { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }]}
+                        onPress={() => {
+                          if (selectedMeasureIdx !== null) {
+                            const m = currentPart?.measures[selectedMeasureIdx];
+                            const cur = m?.keySignature?.sharps ?? doc.keySignature.sharps ?? 0;
+                            const next = Math.max(-7, Math.min(7, cur + delta));
+                            applyDoc({
+                              ...doc,
+                              parts: doc.parts.map((p, pIdx) => {
+                                if (pIdx !== selectedPartIdx) return p;
+                                return {
+                                  ...p,
+                                  measures: p.measures.map((mm, mIdx) =>
+                                    mIdx === selectedMeasureIdx
+                                      ? { ...mm, keySignature: { sharps: next } }
+                                      : mm
+                                  ),
+                                };
+                              }),
+                            });
+                          } else {
+                            const cur = draftMeasure.keySignature?.sharps ?? doc.keySignature.sharps ?? 0;
+                            const next = Math.max(-7, Math.min(7, cur + delta));
+                            setDraftMeasure((d) => ({ ...d, keySignature: { sharps: next } }));
+                          }
+                        }}
+                        testID={`score-drawer-key-${delta > 0 ? "plus" : "minus"}`}
+                      >
+                        <Text style={[styles.drawerApplyBtnText, { color: C.text }]}>
+                          {delta > 0 ? "+1#" : "-1♭"}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+
+                {/* 줄당 마디 수 (PNG/JPG 내보내기 전용 — 편집 화면은 화면 방향에 따라 자동: 세로 1마디, 가로 2마디) */}
+                <View style={styles.drawerRow}>
+                  <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
+                    {t("scoreMode", "drawerMeasuresPerLine")}
+                  </Text>
+                  <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
+                    {doc.measuresPerLine
+                      ? String(doc.measuresPerLine)
+                      : t("scoreMode", "drawerMeasuresPerLineAuto")}
+                  </Text>
+                  <View style={{ flexDirection: "row", gap: 4 }}>
+                    {([-1, 1] as const).map((delta) => (
+                      <Pressable
+                        key={delta}
+                        style={[styles.drawerApplyBtn, { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }]}
+                        onPress={() => {
+                          const cur = doc.measuresPerLine ?? 0;
+                          const next = Math.max(0, Math.min(8, cur + delta));
+                          applyDoc({ ...doc, measuresPerLine: next === 0 ? undefined : next });
+                        }}
+                        testID={`score-drawer-mpl-${delta > 0 ? "plus" : "minus"}`}
+                      >
+                        <Text style={[styles.drawerApplyBtnText, { color: C.text }]}>
+                          {delta > 0 ? "+1" : "-1"}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            )}
+          </View>
         )}
 
         {/* 오선보 터치 캔버스 (참조 이미지 포함) */}
@@ -1811,6 +2069,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               containerWidth={containerWidth}
               selectedElementId={selectedElementId}
               multiSelectIds={multiSelectIds}
+              selectedMeasureIdx={selectedMeasureIdx}
               selectedPartIdx={0}
               activeTool={activeTool}
               activeDuration={activeDuration}
@@ -1877,189 +2136,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           </Text>
         )}
 
-        {/* ── 마디 설정 드로어 (마디는 오선지에서 탭/롱프레스로 선택) ── */}
-        {currentPart && selectedMeasureIdx !== null && (
-            <View style={[styles.drawerContainer, { borderColor: C.border, backgroundColor: C.surface }]}>
-              <Pressable
-                style={[styles.drawerHeader, { borderBottomColor: drawerOpen ? C.border : "transparent" }]}
-                onPress={() => setDrawerOpen((v) => !v)}
-                testID="score-editor-drawer-toggle"
-              >
-                <Text style={[styles.drawerHeaderText, { color: C.text }]}>
-                  {t("scoreMode", "drawerMeasureSettings")} — {t("scoreMode", "addMeasure").replace("추가", "").replace("Add", "")} {selectedMeasureIdx + 1}
-                </Text>
-                <Ionicons
-                  name={drawerOpen ? "chevron-up" : "chevron-down"}
-                  size={14}
-                  color={C.textSecondary}
-                />
-              </Pressable>
-
-              {drawerOpen && (
-                <View style={styles.drawerContent}>
-                  {/* BPM 변경 */}
-                  <View style={styles.drawerRow}>
-                    <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
-                      {t("scoreMode", "drawerBpmLabel")}
-                    </Text>
-                    <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
-                      {currentPart?.measures[selectedMeasureIdx]?.bpm
-                        ? String(currentPart.measures[selectedMeasureIdx].bpm)
-                        : `${doc.bpm} (${t("scoreMode", "drawerClear")})`}
-                    </Text>
-                    <Pressable
-                      style={[styles.drawerApplyBtn, { backgroundColor: C.accent }]}
-                      onPress={() => {
-                        setDrawerOpen(false);
-                        handleMeasureBpmChange(selectedMeasureIdx);
-                      }}
-                      testID="score-drawer-bpm-apply"
-                    >
-                      <Text style={styles.drawerApplyBtnText}>{t("scoreMode", "drawerApply")}</Text>
-                    </Pressable>
-                  </View>
-
-                  {/* 박자표 변경 */}
-                  <View style={styles.drawerRow}>
-                    <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
-                      {t("scoreMode", "drawerTimeSigLabel")}
-                    </Text>
-                    <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
-                      {(() => {
-                        const sig = currentPart?.measures[selectedMeasureIdx]?.timeSignature ?? doc.timeSignature;
-                        return `${sig.numerator}/${sig.denominator}`;
-                      })()}
-                    </Text>
-                    <Pressable
-                      style={[styles.drawerApplyBtn, { backgroundColor: C.accent }]}
-                      onPress={() => {
-                        setDrawerOpen(false);
-                        handleMeasureTimeSigChange(selectedMeasureIdx);
-                      }}
-                      testID="score-drawer-timesig-apply"
-                    >
-                      <Text style={styles.drawerApplyBtnText}>{t("scoreMode", "drawerApply")}</Text>
-                    </Pressable>
-                  </View>
-
-                  {/* 음자리표 변경 (이 마디부터 적용) */}
-                  <View style={styles.drawerRow}>
-                    <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
-                      {t("scoreMode", "drawerClefLabel")}
-                    </Text>
-                    <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
-                      {(() => {
-                        const m = currentPart?.measures[selectedMeasureIdx];
-                        return m?.clef ?? currentPart?.clef ?? "treble";
-                      })()}
-                    </Text>
-                    <Pressable
-                      style={[styles.drawerApplyBtn, { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }]}
-                      onPress={() => {
-                        const cycle: ClefType[] = ["treble", "bass", "alto", "tenor", "percussion"];
-                        const m = currentPart?.measures[selectedMeasureIdx];
-                        const cur = m?.clef ?? currentPart?.clef ?? "treble";
-                        const next = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
-                        applyDoc({
-                          ...doc,
-                          parts: doc.parts.map((p, pIdx) => {
-                            if (pIdx !== selectedPartIdx) return p;
-                            return {
-                              ...p,
-                              measures: p.measures.map((mm, mIdx) =>
-                                mIdx === selectedMeasureIdx ? { ...mm, clef: next } : mm
-                              ),
-                            };
-                          }),
-                        });
-                      }}
-                      testID="score-drawer-clef-cycle"
-                    >
-                      <Text style={[styles.drawerApplyBtnText, { color: C.text }]}>
-                        {t("scoreMode", "drawerApply")}
-                      </Text>
-                    </Pressable>
-                  </View>
-
-                  {/* 조표 변경 (이 마디부터 적용) */}
-                  <View style={styles.drawerRow}>
-                    <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
-                      {t("scoreMode", "drawerKeyLabel")}
-                    </Text>
-                    <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
-                      {(() => {
-                        const m = currentPart?.measures[selectedMeasureIdx];
-                        const sharps = m?.keySignature?.sharps ?? doc.keySignature.sharps;
-                        return sharps === 0 ? "C" : sharps > 0 ? `${sharps}#` : `${Math.abs(sharps)}♭`;
-                      })()}
-                    </Text>
-                    <View style={{ flexDirection: "row", gap: 4 }}>
-                      {([-1, 1] as const).map((delta) => (
-                        <Pressable
-                          key={delta}
-                          style={[styles.drawerApplyBtn, { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }]}
-                          onPress={() => {
-                            const m = currentPart?.measures[selectedMeasureIdx];
-                            const cur = m?.keySignature?.sharps ?? doc.keySignature.sharps ?? 0;
-                            const next = Math.max(-7, Math.min(7, cur + delta));
-                            applyDoc({
-                              ...doc,
-                              parts: doc.parts.map((p, pIdx) => {
-                                if (pIdx !== selectedPartIdx) return p;
-                                return {
-                                  ...p,
-                                  measures: p.measures.map((mm, mIdx) =>
-                                    mIdx === selectedMeasureIdx
-                                      ? { ...mm, keySignature: { sharps: next } }
-                                      : mm
-                                  ),
-                                };
-                              }),
-                            });
-                          }}
-                          testID={`score-drawer-key-${delta > 0 ? "plus" : "minus"}`}
-                        >
-                          <Text style={[styles.drawerApplyBtnText, { color: C.text }]}>
-                            {delta > 0 ? "+1#" : "-1♭"}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </View>
-
-                  {/* 줄당 마디 수 (PNG/JPG 내보내기 전용 — 편집 화면은 화면 방향에 따라 자동: 세로 1마디, 가로 2마디) */}
-                  <View style={styles.drawerRow}>
-                    <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
-                      {t("scoreMode", "drawerMeasuresPerLine")}
-                    </Text>
-                    <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
-                      {doc.measuresPerLine
-                        ? String(doc.measuresPerLine)
-                        : t("scoreMode", "drawerMeasuresPerLineAuto")}
-                    </Text>
-                    <View style={{ flexDirection: "row", gap: 4 }}>
-                      {([-1, 1] as const).map((delta) => (
-                        <Pressable
-                          key={delta}
-                          style={[styles.drawerApplyBtn, { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }]}
-                          onPress={() => {
-                            const cur = doc.measuresPerLine ?? 0;
-                            const next = Math.max(0, Math.min(8, cur + delta));
-                            applyDoc({ ...doc, measuresPerLine: next === 0 ? undefined : next });
-                          }}
-                          testID={`score-drawer-mpl-${delta > 0 ? "plus" : "minus"}`}
-                        >
-                          <Text style={[styles.drawerApplyBtnText, { color: C.text }]}>
-                            {delta > 0 ? "+1" : "-1"}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </View>
-                </View>
-              )}
-            </View>
-        )}
       </ScrollView>
 
       {/* ── 연결된 연습 항목 배지 (재생 중 linkedPracticeEntryId가 있을 때) */}
@@ -2127,7 +2203,15 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               : undefined
           }
           enabledSymbols={currentPart?.enabledSymbols ?? {}}
-          onToolChange={setActiveTool}
+          onToolChange={(tool) => {
+            setActiveTool(tool);
+            // "select"에서 다른 도구(특히 "erase")로 바꿀 때 남은 다중 선택을 정리한다.
+            // 정리하지 않으면 activeTool="erase" 상태에서 이전 multiSelectIds가 남아
+            // ScoreCanvas의 erase 브랜치가 onElementTap을 호출하지 않는 것과 상호작용해 오작동한다.
+            if (tool !== "select") {
+              setMultiSelectIds([]);
+            }
+          }}
           onDurationChange={setActiveDuration}
           onDottedChange={(v) => { setIsDotted(v); if (v) setIsDoubleDotted(false); }}
           onDoubleDottedChange={(v) => { setIsDoubleDotted(v); if (v) setIsDotted(false); }}
@@ -2201,15 +2285,66 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         />
       </View>
 
-      {/* ── PNG 내보내기 옵션 모달 (줄당 마디 수 선택) ─────────── */}
+      {/* ── PNG 내보내기 전용 캡처 뷰 (페이지별, 화면 바깥에 렌더링) ── */}
+      {pngExportPages.map((pageDoc, idx) => (
+        <View
+          key={idx}
+          ref={(el) => { exportPageRefs.current[idx] = el; }}
+          collapsable={false}
+          style={{
+            position: "absolute",
+            left: -9999,
+            top: 0,
+            width: containerWidth || 400,
+            backgroundColor: "#ffffff",
+          }}
+          pointerEvents="none"
+        >
+          {idx === 0 && (
+            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: "#e0e0e0" }}>
+              <Text style={{ fontSize: 20, fontWeight: "700", color: "#000", textAlign: "center" }}>
+                {doc.metadata.title || t("scoreMode", "untitled")}
+              </Text>
+              {doc.metadata.composer ? (
+                <Text style={{ fontSize: 13, color: "#444", textAlign: "center", marginTop: 4 }}>
+                  {doc.metadata.composer}
+                </Text>
+              ) : null}
+              {doc.metadata.arranger ? (
+                <Text style={{ fontSize: 12, color: "#666", textAlign: "center" }}>
+                  Arr. {doc.metadata.arranger}
+                </Text>
+              ) : null}
+              {doc.metadata.copyright ? (
+                <Text style={{ fontSize: 11, color: "#888", textAlign: "center" }}>
+                  © {doc.metadata.copyright}
+                </Text>
+              ) : null}
+            </View>
+          )}
+          {pngExportPages.length > 1 && (
+            <Text style={{ fontSize: 11, color: "#888", textAlign: "center", paddingTop: 8 }}>
+              {t("scoreMode", "pngExportPreviewPageLabel")} {idx + 1} / {pngExportPages.length}
+            </Text>
+          )}
+          <ScoreRenderer doc={pageDoc} containerWidth={containerWidth || 400} showPartNames />
+        </View>
+      ))}
+
+      {/* ── PNG 내보내기 옵션 모달 (줄당 마디 수 + 페이지 나누기 + 미리보기) ── */}
       <ScorePngExportOptionsModal
         visible={showPngExportOptions}
         value={pngExportMeasuresPerLine}
+        linesPerPage={pngExportLinesPerPage}
+        previewPages={pngExportPages}
+        previewWidth={Math.min(containerWidth || 400, 300)}
         onClose={() => {
           setShowPngExportOptions(false);
           setPngExportMeasuresPerLine(doc.measuresPerLine);
+          setPngExportLinesPerPage(doc.linesPerPage);
         }}
         onChange={setPngExportMeasuresPerLine}
+        onChangeLinesPerPage={setPngExportLinesPerPage}
         onConfirm={handleConfirmPngExport}
       />
 

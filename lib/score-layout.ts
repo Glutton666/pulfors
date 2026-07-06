@@ -528,6 +528,42 @@ export function computeScoreLayout(
   return { rows, totalHeight: y + SCORE_ROW_MARGIN_BOTTOM };
 }
 
+// ── 내보내기 페이지 나누기 ────────────────────────────────────
+
+/**
+ * linesPerPage(몇 줄마다 페이지 나눌지) 설정에 따라 doc을 여러 페이지용 부분 문서로 분할.
+ * 각 페이지는 원본 doc과 동일한 메타데이터/설정을 갖되, parts[*].measures만 해당 페이지에
+ * 속한 마디 구간으로 잘라낸다. linesPerPage가 없거나 전체 줄 수보다 크면 페이지는 1개(원본 그대로).
+ */
+export function paginateScoreDoc(
+  doc: ScoreDocument,
+  containerWidth: number,
+  measuresPerLineOverride: number | undefined,
+  linesPerPage: number | undefined,
+): ScoreDocument[] {
+  if (!doc.parts.length) return [doc];
+  const { rows } = computeScoreLayout(doc, containerWidth, measuresPerLineOverride);
+  if (!linesPerPage || linesPerPage < 1 || rows.length <= linesPerPage) {
+    return [doc];
+  }
+
+  const pages: ScoreDocument[] = [];
+  for (let start = 0; start < rows.length; start += linesPerPage) {
+    const end = Math.min(start + linesPerPage, rows.length) - 1;
+    const firstMeasureIdx = rows[start].measureIndices[0];
+    const lastRow = rows[end];
+    const lastMeasureIdx = lastRow.measureIndices[lastRow.measureIndices.length - 1];
+    pages.push({
+      ...doc,
+      parts: doc.parts.map((p) => ({
+        ...p,
+        measures: p.measures.slice(firstMeasureIdx, lastMeasureIdx + 1),
+      })),
+    });
+  }
+  return pages;
+}
+
 // ── 조표 배치 ─────────────────────────────────────────────────
 // 각 음자리표별 샤프/플랫 기호의 Y 좌표 배열
 // 순서: F, C, G, D, A, E, B (샤프) / B, E, A, D, G, C, F (플랫)

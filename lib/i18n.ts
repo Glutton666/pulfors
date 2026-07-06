@@ -1153,6 +1153,7 @@ export const translations = {
     articulLeftHandPizz:    { ko: "왼손 피치카토", en: "L.H. Pizz." },
     // 마디 설정 드로어
     drawerMeasureSettings:  { ko: "마디 설정", en: "Measure Settings" },
+    drawerNextMeasureSettings: { ko: "다음 마디 설정", en: "Next Measure Settings" },
     drawerBpmLabel:         { ko: "BPM 변경", en: "Change BPM" },
     drawerTimeSigLabel:     { ko: "박자표 변경", en: "Change Time Sig" },
     drawerApply:            { ko: "적용", en: "Apply" },
@@ -1170,6 +1171,11 @@ export const translations = {
     pngExportOptionsTitle:  { ko: "PNG 내보내기 설정", en: "PNG Export Options" },
     pngExportPerLineLabel:  { ko: "줄당 마디 수", en: "Measures per line" },
     pngExportConfirm:       { ko: "내보내기", en: "Export" },
+    pngExportLinesPerPageLabel: { ko: "몇 줄마다 페이지 나누기", en: "Split page every N lines" },
+    pngExportLinesPerPageNone: { ko: "안 함", en: "None" },
+    pngExportPreviewTitle: { ko: "미리보기", en: "Preview" },
+    pngExportPreviewPageLabel: { ko: "페이지", en: "Page" },
+    pngExportPreviewHint: { ko: "내보내질 이미지를 미리 확인하세요", en: "Preview the images that will be exported" },
   },
 } as const satisfies TranslationsShape;
 
