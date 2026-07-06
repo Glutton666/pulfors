@@ -253,7 +253,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   // 2개 이상의 음표를 묶어(타이/슬러) 적용하기 위한 다중 선택 목록.
   // 항상 selectedElementId와 동기화된다: 0개→null, 1개→해당 id, 2개 이상→null(단일 액션바 숨김)
   const [multiSelectIds, setMultiSelectIds] = useState<string[]>([]);
-  const [showTupletPicker, setShowTupletPicker] = useState(false);
 
   // ── 꾸밈음 선택 ──────────────────────────────────────────────
   const [selectedOrnament, setSelectedOrnament] = useState<import("@/lib/score-types").OrnamentType | null>(null);
@@ -1303,10 +1302,15 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   }, [multiSelectSortedElements]);
 
   // ── 연속 선택된 요소를 N연음 잇단음표로 지정 ──────────────────
-  function handleApplyTupletToSelected(count: number) {
+  // N(count)은 항상 선택된 요소 개수와 같다 — 튜플렛은 정의상 "N개의 음표/쉼표를
+  // normalCount박자 안에 채워 연주"하는 표기이므로, 선택 개수와 별개로 count를
+  // 고를 수 있게 하면 표기·타이밍이 실제 요소 개수와 어긋나는 버그가 된다.
+  // 따라서 별도 개수 선택 UI 없이 선택한 요소 수 그대로가 곧 "임의 개수"의 N연음이 된다.
+  function handleApplyTupletToSelected() {
     if (!multiSelectCanTuplet) return;
     const measureIdx = multiSelectSortedElements[0].measureIdx;
     const elementIds = multiSelectSortedElements.map((e) => e.id);
+    const count = elementIds.length;
     const newDoc: ScoreDocument = {
       ...doc,
       parts: doc.parts.map((p, pIdx) => {
@@ -1322,7 +1326,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     applyDoc(newDoc);
     setMultiSelectIds([]);
     setSelectedElementId(null);
-    setShowTupletPicker(false);
   }
 
   // ── 선택된 단일 음표/쉼표가 속한 잇단음표 그룹 해제 ────────────
@@ -2014,12 +2017,13 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               styles.selBarBtn,
               { borderColor: multiSelectCanTuplet ? C.accent : C.border, opacity: multiSelectCanTuplet ? 1 : 0.4 },
             ]}
-            onPress={() => setShowTupletPicker(true)}
+            onPress={handleApplyTupletToSelected}
             disabled={!multiSelectCanTuplet}
             testID="score-editor-group-tuplet"
           >
             <Text style={[styles.selBarBtnText, { color: multiSelectCanTuplet ? C.accent : C.textSecondary, fontSize: 16 }]}>
               ⋮⋮ {t("scoreMode", "groupBarTupletButton")}
+              {multiSelectCanTuplet ? ` (${multiSelectSortedElements.length})` : ""}
             </Text>
           </Pressable>
 
@@ -2030,36 +2034,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           >
             <Ionicons name="close-circle-outline" size={16} color={C.textSecondary} />
           </Pressable>
-        </View>
-      )}
-
-      {/* ── 잇단음표 개수(N연음) 선택 모달 ─────────────────────── */}
-      {showTupletPicker && (
-        <View style={styles.tupletPickerOverlay} testID="score-editor-tuplet-picker">
-          <View style={[styles.tupletPickerCard, { backgroundColor: C.surface, borderColor: C.border }]}>
-            <Text style={[styles.tupletPickerTitle, { color: C.text }]}>
-              {t("scoreMode", "tupletPickerTitle")}
-            </Text>
-            <View style={styles.tupletPickerGrid}>
-              {[2, 3, 4, 5, 6, 7, 9].map((n) => (
-                <Pressable
-                  key={n}
-                  style={[styles.tupletPickerBtn, { borderColor: C.accent }]}
-                  onPress={() => handleApplyTupletToSelected(n)}
-                  testID={`score-editor-tuplet-count-${n}`}
-                >
-                  <Text style={[styles.tupletPickerBtnText, { color: C.accent }]}>{n}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <Pressable
-              style={[styles.tupletPickerCancel, { borderColor: C.border }]}
-              onPress={() => setShowTupletPicker(false)}
-              testID="score-editor-tuplet-picker-cancel"
-            >
-              <Text style={{ color: C.textSecondary }}>{t("scoreMode", "tupletPickerCancel")}</Text>
-            </Pressable>
-          </View>
         </View>
       )}
 

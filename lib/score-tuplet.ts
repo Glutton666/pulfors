@@ -35,7 +35,10 @@ export function createTupletGroup(
   elementIds: string[],
   count: number,
 ): ScoreMeasure {
-  if (elementIds.length < 2 || count < 2) return measure;
+  if (elementIds.length < 2) return measure;
+  // 불변식: count는 항상 실제로 묶인 요소 개수와 같아야 한다(N연음은 N개의 음표/쉼표로 구성됨).
+  // 호출부에서 다른 값을 전달하더라도 여기서 강제로 맞춰 데이터 무결성을 보장한다.
+  const effectiveCount = elementIds.length;
   const idSet = new Set(elementIds);
   const remainingGroups = (measure.tuplets ?? []).filter(
     (g) => !g.elementIds.some((id) => idSet.has(id)),
@@ -43,8 +46,8 @@ export function createTupletGroup(
   const newGroup: TupletGroup = {
     id: Crypto.randomUUID(),
     elementIds: [...elementIds],
-    count,
-    normalCount: getTupletNormalCount(count),
+    count: effectiveCount,
+    normalCount: getTupletNormalCount(effectiveCount),
   };
   return { ...measure, tuplets: [...remainingGroups, newGroup] };
 }
@@ -68,7 +71,16 @@ export function removeElementFromTuplets(measure: ScoreMeasure, elementId: strin
     }
     const remainingIds = g.elementIds.filter((id) => id !== elementId);
     if (remainingIds.length >= 2) {
-      next.push({ ...g, elementIds: remainingIds });
+      // 요소가 빠지면 남은 개수에 맞춰 count/normalCount를 재계산한다.
+      // (예: 5연음 중 1개 삭제 → 4개가 남으면 4연음이 되어야 하며,
+      //  원래의 count=5를 그대로 유지하면 표기·타이밍이 실제 요소 개수와 어긋난다.)
+      const newCount = remainingIds.length;
+      next.push({
+        ...g,
+        elementIds: remainingIds,
+        count: newCount,
+        normalCount: getTupletNormalCount(newCount),
+      });
     }
     // 1개 이하로 줄면 튜플렛 그룹 자체를 해제한다.
   }

@@ -101,6 +101,32 @@ test("removeElementFromTuplets: 요소 삭제 시 그룹에서 제거, 1개 이�
   assert.equal(afterTwoRemoved.tuplets, undefined);
 });
 
+// ── 불변식: count === elementIds.length (표기/타이밍이 실제 요소 개수와 일치해야 함) ──
+
+test("createTupletGroup: count 인자가 elementIds.length와 달라도 실제 개수로 강제된다", () => {
+  const m = measure([note("a"), note("b")]);
+  // 2개만 선택했는데 count=7을 전달해도, 실제 그룹 개수(2)로 강제되어야 한다.
+  const next = createTupletGroup(m, ["a", "b"], 7);
+  const g = next.tuplets![0];
+  assert.equal(g.count, 2);
+  assert.equal(g.normalCount, getTupletNormalCount(2));
+});
+
+test("removeElementFromTuplets: 요소 삭제 후 남은 개수에 맞춰 count/normalCount가 재계산된다", () => {
+  const m = measure([note("a"), note("b"), note("c"), note("d"), note("e")]);
+  const withGroup = createTupletGroup(m, ["a", "b", "c", "d", "e"], 5);
+  assert.equal(withGroup.tuplets![0].count, 5);
+  assert.equal(withGroup.tuplets![0].normalCount, 4);
+
+  // 5연음 중 1개 삭제 → 남은 4개는 4연음이 되어야 한다 (5연음 표기/타이밍을 그대로 유지하면 안 됨).
+  const afterRemoved = removeElementFromTuplets(withGroup, "e");
+  const g = afterRemoved.tuplets![0];
+  assert.equal(g.elementIds.length, 4);
+  assert.equal(g.count, 4);
+  assert.equal(g.normalCount, getTupletNormalCount(4));
+  assert.equal(getElementBeatScale(afterRemoved, "a"), getTupletBeatScale(4, 2));
+});
+
 // ── remapTupletsWithIdMap (마디 복사/붙여넣기) ──
 
 test("remapTupletsWithIdMap: idMap 기준으로 elementIds를 재작성한다", () => {

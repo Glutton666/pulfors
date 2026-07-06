@@ -1024,8 +1024,6 @@ export const translations = {
     groupBarTieButton:      { ko: "타이로 묶기", en: "Tie" },
     groupBarSlurButton:     { ko: "슬러로 묶기", en: "Slur" },
     groupBarTupletButton:   { ko: "잇단음표", en: "Tuplet" },
-    tupletPickerTitle:      { ko: "몇 잇단음표로 지정할까요?", en: "Choose tuplet count" },
-    tupletPickerCancel:     { ko: "취소", en: "Cancel" },
     groupBarClear:          { ko: "선택 해제", en: "Clear" },
     zoomViewLabel:          { ko: "현재 마디 확대", en: "Current Measure" },
     instrumentSymbolsLabel: { ko: "악기별 기호", en: "Instrument Symbols" },
