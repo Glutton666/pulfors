@@ -27,7 +27,6 @@ import { useScoreLineSpacing } from "@/lib/score-scale";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import { saveScore, createEmptyMeasure } from "@/lib/score-storage";
 import { stopAllScoreNotes, stopPreviewNote } from "@/lib/score-audio";
-import { noteDurationToBeats } from "@/lib/score-playback";
 import { exportScoreAsJson, exportScoreAsJpg, exportScoreAsPng, shareScoreAsScoreJson, importScoreFromJson, importReferenceImage, extractParts } from "@/lib/score-io";
 import { loadPracticeBook, savePracticeBook, createPracticeEntry } from "@/lib/storage";
 import type {
@@ -51,6 +50,7 @@ import type { RepeatSignId, CrescType } from "@/components/ScorePalette";
 import { useScorePlayback } from "@/hooks/useScorePlayback";
 import { makeStyles } from "@/components/ScoreEditorScreen.styles";
 import { confirmDestructive } from "@/lib/confirm";
+import { buildMeasureLongPressButtons, deleteMeasureFromDoc } from "@/lib/score-measure-actions";
 import {
   ScoreMoreMenuModal,
   ScoreExtractPartModal,
@@ -438,35 +438,11 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
 
   // ── 마디 삭제 ─────────────────────────────────────────────────
   function handleDeleteMeasure(mIdx: number) {
-    const part = doc.parts[selectedPartIdx];
-    if (!part || part.measures.length <= 1) return;
-    const newDoc: ScoreDocument = {
-      ...doc,
-      parts: doc.parts.map((p) => ({
-        ...p,
-        measures: p.measures.filter((_, i) => i !== mIdx),
-      })),
-    };
+    const newDoc = deleteMeasureFromDoc(doc, selectedPartIdx, mIdx);
+    if (newDoc === doc) return;
     applyDoc(newDoc);
     if (selectedMeasureIdx === mIdx) setSelectedMeasureIdx(null);
   }
-
-  // ── 마디 박자 용량 계산 (beats used / beats total) ───────────
-  const measureBeatsInfo = useCallback(
-    (m: typeof doc.parts[0]["measures"][0], mIdx: number) => {
-      const timeSig = m.timeSignature ?? doc.timeSignature;
-      const beatsTotal = timeSig.numerator * (4 / timeSig.denominator);
-      const beatsUsed = m.elements.reduce(
-        (sum, el) => sum + noteDurationToBeats(
-          el.duration as NoteDuration,
-          el.type === "note" ? (el as { doubleDotted?: boolean }).doubleDotted : undefined,
-        ),
-        0,
-      );
-      return { beatsUsed: Math.round(beatsUsed * 100) / 100, beatsTotal };
-    },
-    [doc.timeSignature],
-  );
 
   // ── 마디 리듬 미리보기 (음표 길이를 간단 기호로 요약) ─────────
   const measureRhythmPreview = useCallback((m: typeof doc.parts[0]["measures"][0]) => {
@@ -1733,51 +1709,44 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
                       setSelectedElementId(null);
                     }}
                     onLongPress={() => {
-                      const buttons: Parameters<typeof Alert.alert>[2] = [
-                        {
-                          text: t("scoreMode", "editLinkEntry"),
-                          onPress: () => {
-                            setMeasureEditTarget({
-                              measureIdx: mIdx,
-                              field: "linkedEntry",
-                              value: m.linkedPracticeEntryId ?? "",
-                              label: t("scoreMode", "drawerLinkEntry"),
-                              hint: "entry ID",
-                            });
-                            setShowMeasureEditModal(true);
-                          },
+                      const buttons = buildMeasureLongPressButtons({
+                        measure: m,
+                        measureIdx: mIdx,
+                        labels: {
+                          editLinkEntry: t("scoreMode", "editLinkEntry"),
+                          clearLink: t("scoreMode", "clearLink"),
+                          delete: t("scoreMode", "delete"),
+                          cancel: t("scoreMode", "cancel"),
                         },
-                      ];
-                      if (m.linkedPracticeEntryId) {
-                        buttons.push({
-                          text: t("scoreMode", "clearLink"),
-                          onPress: () => {
-                            applyDoc({
-                              ...doc,
-                              parts: doc.parts.map((p, pIdx) => {
-                                if (pIdx !== selectedPartIdx) return p;
-                                return {
-                                  ...p,
-                                  measures: p.measures.map((mes, mi) =>
-                                    mi === mIdx
-                                      ? { ...mes, linkedPracticeEntryId: undefined }
-                                      : mes,
-                                  ),
-                                };
-                              }),
-                            });
-                          },
-                        });
-                      }
-                      buttons.push(
-                        {
-                          text: t("scoreMode", "delete"),
-                          style: "destructive",
-                          onPress: () => handleDeleteMeasure(mIdx),
+                        onEditLinkEntry: (measureIdx, measure) => {
+                          setMeasureEditTarget({
+                            measureIdx,
+                            field: "linkedEntry",
+                            value: measure.linkedPracticeEntryId ?? "",
+                            label: t("scoreMode", "drawerLinkEntry"),
+                            hint: "entry ID",
+                          });
+                          setShowMeasureEditModal(true);
                         },
-                        { text: t("scoreMode", "cancel"), style: "cancel" },
-                      );
-                      Alert.alert(`${mIdx + 1}`, undefined, buttons);
+                        onClearLink: (measureIdx) => {
+                          applyDoc({
+                            ...doc,
+                            parts: doc.parts.map((p, pIdx) => {
+                              if (pIdx !== selectedPartIdx) return p;
+                              return {
+                                ...p,
+                                measures: p.measures.map((mes, mi) =>
+                                  mi === measureIdx
+                                    ? { ...mes, linkedPracticeEntryId: undefined }
+                                    : mes,
+                                ),
+                              };
+                            }),
+                          });
+                        },
+                        onDelete: (measureIdx) => handleDeleteMeasure(measureIdx),
+                      });
+                      Alert.alert(`${mIdx + 1}`, undefined, buttons as Parameters<typeof Alert.alert>[2]);
                     }}
                     delayLongPress={500}
                     style={[
