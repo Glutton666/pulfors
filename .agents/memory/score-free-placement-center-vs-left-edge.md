@@ -22,3 +22,21 @@ that come from different producers.
 running the shared overlap-clamp math; only the true left-edge fallback values should be used as-is.
 Verify with a direct `layoutMeasure()` unit call (not just e2e) — feed a single placed element and
 assert the returned `x` equals the input `placedX` exactly.
+
+## Follow-up: the overlap-clamp itself was pitch-agnostic
+
+A second, related bug: the 50%-overlap horizontal clamp compared X positions only, ignoring Y
+(pitch). Two notes placed at (nearly) the same X but on different staff lines/spaces — i.e. a
+chord-like vertical stack, which is normal notation — got shoved apart horizontally as if they were
+sequential notes on the same beat-line. There is no chord data model here (`ScoreNote` has a single
+`pitch`), so "stacking" is purely visual: two separate elements placed at the same X with different Y.
+
+**Why:** the clamp loop tracked a single running `lastEnd` in X only; it never checked whether the
+previous note was vertically far enough away to visually avoid collision.
+
+**How to apply:** only apply the X overlap clamp between two elements when their Y distance is less
+than `NOTE_HEAD_RY * 2` (notehead diameter, ~8px at default `LINE_SPACING=10`). Compare each new
+element against all previously-placed ones (small n per measure, so O(n²) pairwise is fine), not just
+the immediately-preceding one in X-sorted order. Verify with a direct `layoutMeasure()` call: two
+notes with very different pitch and the same `placedX` should return equal `x`; two notes with the
+same/near pitch and the same `placedX` should still get clamped apart.

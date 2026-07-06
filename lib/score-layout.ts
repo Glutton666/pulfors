@@ -292,20 +292,29 @@ export function layoutMeasure(
 
     const sortedByX = [...measure.elements].sort((a, b) => getX(a) - getX(b));
 
-    // 50% 겹침 제한: 50% 이상 겹치면 절반 겹친 위치에서 멈춤
-    let lastEnd = startX + leftPad;
+    // 음표머리가 세로로 겹치지 않을 만큼 음높이가 떨어져 있으면(예: 화음처럼 다른 줄에
+    // 놓은 경우) 가로로 밀어내지 않는다. 음표머리 지름(NOTE_HEAD_RY*2)보다 음높이 차이가
+    // 작을 때만 "같은 줄/공간 근처"로 보고 겹침 방지 로직을 적용한다.
+    const Y_OVERLAP_THRESHOLD = NOTE_HEAD_RY * 2;
+
+    // 50% 겹침 제한: 세로로 가까운(=시각적으로 겹칠 수 있는) 음표끼리만, 50% 이상
+    // 겹치면 절반 겹친 위치에서 멈춘다. 세로로 충분히 떨어진 음표(다른 줄/칸)는
+    // 화음처럼 같은 X를 공유해도 된다.
+    const placedSoFar: { x: number; y: number; w: number }[] = [];
     for (const el of sortedByX) {
       const w = NOTE_WIDTH[el.duration] ?? 24;
       // placedX는 중심 좌표이므로 왼쪽 끝(left edge) 계산 시 폭의 절반을 빼야 함.
       // fallback(seqLeftX)은 이미 왼쪽 끝 기준이므로 그대로 사용.
       let rawX = el.placedX != null ? getX(el) - w / 2 : getX(el);
-      // 앞 음표 너비의 50% 이상 겹치면 정확히 절반만 겹친 위치로 클램프
-      if (rawX < lastEnd - w * 0.5) {
-        rawX = lastEnd - w * 0.5;
-      }
       let y = STAFF_HEIGHT / 2;
       if (el.type === "note") {
         y = pitchToY(el.pitch, clef);
+      }
+      // 앞서 배치된 음표 중 세로로 가까운 것에 대해서만 겹침 제한 적용
+      for (const p of placedSoFar) {
+        if (Math.abs(y - p.y) >= Y_OVERLAP_THRESHOLD) continue;
+        const minX = p.x + p.w - w * 0.5;
+        if (rawX < minX) rawX = minX;
       }
       positions.push({
         elementId: el.id,
@@ -313,7 +322,7 @@ export function layoutMeasure(
         y,
         width: w,
       });
-      lastEnd = rawX + w;
+      placedSoFar.push({ x: rawX, y, w });
     }
     return positions;
   }
