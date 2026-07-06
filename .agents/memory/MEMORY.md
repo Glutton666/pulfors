@@ -1,1 +1,2 @@
 - [Alert.alert no-op on web](alert-web-noop.md) — react-native-web's Alert.alert is a stub that does nothing; long-press context menus using Alert.alert can't be verified via web/Playwright e2e tests.
+- [screenshot tool hits wrong port](screenshot-tool-wrong-port.md) — app_preview screenshot tool sometimes serves the Express landing page (port 5000) instead of the real Expo web app (port 8081); retry via runTest() instead of looping the screenshot tool.

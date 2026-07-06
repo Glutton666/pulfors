@@ -58,6 +58,7 @@ import {
   ScoreMeasureContextMenu,
   ScoreMetaModal,
   ScoreMeasureEditModal,
+  ScorePngExportOptionsModal,
 } from "@/components/ScoreEditorModals";
 import { HintBanner } from "@/components/HintTooltip";
 
@@ -297,6 +298,11 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   // ── JPG 내보내기 전용 캡처 뷰 ref ───────────────────────────
   const exportViewRef = useRef<View>(null);
 
+  // ── PNG 내보내기 옵션 (줄당 마디 수) ─────────────────────────
+  const [showPngExportOptions, setShowPngExportOptions] = useState(false);
+  const [pngExportMeasuresPerLine, setPngExportMeasuresPerLine] = useState<number | undefined>(doc.measuresPerLine);
+  const pendingPngExportRef = useRef(false);
+
   // ── 저장 ──────────────────────────────────────────────────────
   const [savedToast, setSavedToast] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -311,9 +317,25 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
 
   async function handleExportPng() {
     setShowMoreMenu(false);
-    const ok = await exportScoreAsPng(exportViewRef as React.RefObject<unknown>, doc);
-    if (!ok) Alert.alert(t("scoreMode", "exportPng"), t("scoreMode", "exportJpgFail"));
+    setPngExportMeasuresPerLine(doc.measuresPerLine);
+    setShowPngExportOptions(true);
   }
+
+  function handleConfirmPngExport() {
+    setShowPngExportOptions(false);
+    pendingPngExportRef.current = true;
+  }
+
+  useEffect(() => {
+    if (!pendingPngExportRef.current) return;
+    pendingPngExportRef.current = false;
+    const timer = setTimeout(async () => {
+      const ok = await exportScoreAsPng(exportViewRef as React.RefObject<unknown>, doc);
+      if (!ok) Alert.alert(t("scoreMode", "exportPng"), t("scoreMode", "exportJpgFail"));
+    }, 80);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pngExportMeasuresPerLine]);
 
   async function handleExportJson() {
     setShowMoreMenu(false);
@@ -1677,6 +1699,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               highlightColor={highlightColor}
               lineSpacing={lineSpacing}
               disabled={!!measureContextMenu?.visible || showMeasureEditModal}
+              measuresPerLineOverride={S.isLandscape ? 2 : 1}
             />
             {/* 참조 이미지 오버레이 (편집 불가) */}
             {doc.referenceImageUri ? (
@@ -1864,7 +1887,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
                     </View>
                   </View>
 
-                  {/* 줄당 마디 수 */}
+                  {/* 줄당 마디 수 (PNG/JPG 내보내기 전용 — 편집 화면은 화면 방향에 따라 자동: 세로 1마디, 가로 2마디) */}
                   <View style={styles.drawerRow}>
                     <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
                       {t("scoreMode", "drawerMeasuresPerLine")}
@@ -2032,11 +2055,27 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           ) : null}
         </View>
         <ScoreRenderer
-          doc={doc}
+          doc={
+            pngExportMeasuresPerLine !== doc.measuresPerLine
+              ? { ...doc, measuresPerLine: pngExportMeasuresPerLine }
+              : doc
+          }
           containerWidth={containerWidth || 400}
           showPartNames
         />
       </View>
+
+      {/* ── PNG 내보내기 옵션 모달 (줄당 마디 수 선택) ─────────── */}
+      <ScorePngExportOptionsModal
+        visible={showPngExportOptions}
+        value={pngExportMeasuresPerLine}
+        onClose={() => {
+          setShowPngExportOptions(false);
+          setPngExportMeasuresPerLine(doc.measuresPerLine);
+        }}
+        onChange={setPngExportMeasuresPerLine}
+        onConfirm={handleConfirmPngExport}
+      />
 
       {/* ── 공유 단축 모달 ───────────────────────────────────────── */}
       {showShareModal && (

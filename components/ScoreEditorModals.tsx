@@ -509,6 +509,93 @@ export function ScoreMeasureContextMenu({
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// 4-1. PNG 내보내기 옵션 모달 (줄당 마디 수 선택)
+// ═══════════════════════════════════════════════════════════════════
+
+const PNG_EXPORT_MPL_OPTIONS = [undefined, 1, 2, 3, 4, 5, 6, 8] as const;
+
+export interface ScorePngExportOptionsModalProps {
+  visible: boolean;
+  value: number | undefined;
+  onClose: () => void;
+  onChange: (mpl: number | undefined) => void;
+  onConfirm: () => void;
+}
+
+export function ScorePngExportOptionsModal({
+  visible,
+  value,
+  onClose,
+  onChange,
+  onConfirm,
+}: ScorePngExportOptionsModalProps) {
+  const { C, styles } = useEditorStyles();
+  const { t } = useLanguage();
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable style={styles.symbolModalBackdrop} onPress={onClose}>
+        <Pressable
+          style={[styles.symbolModalCard, { backgroundColor: C.surface, borderColor: C.border }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <Text style={[styles.symbolModalTitle, { color: C.text }]}>
+            {t("scoreMode", "pngExportOptionsTitle")}
+          </Text>
+          <Text style={[styles.drawerFieldLabel, { color: C.textSecondary, marginBottom: 8 }]}>
+            {t("scoreMode", "pngExportPerLineLabel")}
+          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+            {PNG_EXPORT_MPL_OPTIONS.map((opt) => {
+              const selected = opt === value;
+              return (
+                <Pressable
+                  key={String(opt)}
+                  style={[
+                    styles.drawerApplyBtn,
+                    {
+                      backgroundColor: selected ? C.accent : C.surface,
+                      borderWidth: 1,
+                      borderColor: selected ? C.accent : C.border,
+                      minWidth: 44,
+                    },
+                  ]}
+                  onPress={() => onChange(opt)}
+                  testID={`score-png-export-mpl-${opt ?? "auto"}`}
+                >
+                  <Text
+                    style={[
+                      styles.drawerApplyBtnText,
+                      { color: selected ? "#fff" : C.text },
+                    ]}
+                  >
+                    {opt ? String(opt) : t("scoreMode", "drawerMeasuresPerLineAuto")}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Pressable
+            style={[styles.symbolModalClose, { backgroundColor: C.accent }]}
+            onPress={onConfirm}
+            testID="score-png-export-confirm"
+          >
+            <Text style={[styles.symbolModalCloseText, { color: "#fff" }]}>
+              {t("scoreMode", "pngExportConfirm")}
+            </Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // 5. 악보 메타데이터 편집 모달
 // ═══════════════════════════════════════════════════════════════════
 

@@ -100,6 +100,8 @@ export interface ScoreCanvasProps {
   cursorInsertIdx?: number;
   /** true이면 터치 입력(음표 배치/드래그/지우기 등)을 모두 무시합니다 — 마디 설정 메뉴 등 오버레이가 열려 있을 때 사용 */
   disabled?: boolean;
+  /** 줄당 마디 수를 강제 지정 (예: 화면 방향에 따라 세로=1, 가로=2). 지정 시 doc.measuresPerLine보다 우선 적용됩니다. */
+  measuresPerLineOverride?: number;
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
@@ -132,6 +134,7 @@ export function ScoreCanvas({
   cursorMeasureIdx = null,
   cursorInsertIdx = 0,
   disabled = false,
+  measuresPerLineOverride,
 }: ScoreCanvasProps) {
   const { colors: C } = useTheme();
   const [ghost, setGhost] = useState<GhostState | null>(null);
@@ -195,8 +198,8 @@ export function ScoreCanvas({
   const dragOriginalAccidentalRef = useRef<Accidental | null | undefined>(undefined);
 
   const { rows, totalHeight } = useMemo(
-    () => computeScoreLayout(doc, layoutWidth),
-    [doc, layoutWidth],
+    () => computeScoreLayout(doc, layoutWidth, measuresPerLineOverride),
+    [doc, layoutWidth, measuresPerLineOverride],
   );
 
   const clef = doc.parts[selectedPartIdx]?.clef ?? "treble";

@@ -412,6 +412,7 @@ export const SCORE_FIRST_MEASURE_EXTRA   = Math.round(LINE_SPACING * 6);  // 60
 export function computeScoreLayout(
   doc: ScoreDocument,
   containerWidth: number,
+  overrideMeasuresPerLine?: number,
 ): { rows: ScoreRowLayout[]; totalHeight: number } {
   if (!doc.parts.length) return { rows: [], totalHeight: 100 };
 
@@ -431,7 +432,9 @@ export function computeScoreLayout(
   const subseqRowHeaderW = headerWidth(clef, false, keySharps);
 
   // ── 줄당 마디 수 고정 모드 ─────────────────────────────────────
-  const measuresPerLine = doc.measuresPerLine;
+  // overrideMeasuresPerLine이 주어지면 doc.measuresPerLine(내보내기 설정)보다 우선한다.
+  // (예: 편집 화면 실시간 표시는 화면 방향에 따라 강제되고, doc.measuresPerLine은 PNG/JPG 내보내기 전용)
+  const measuresPerLine = overrideMeasuresPerLine ?? doc.measuresPerLine;
   if (measuresPerLine && measuresPerLine >= 1) {
     const rows: ScoreRowLayout[] = [];
     let y = SCORE_ROW_MARGIN_TOP;

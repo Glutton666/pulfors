@@ -1145,6 +1145,9 @@ export const translations = {
     shareScoreTitle:        { ko: "악보 공유", en: "Share Score" },
     linkedPresetActive:     { ko: "연결 프리셋:", en: "Linked Preset:" },
     exportPng:              { ko: "PNG 이미지로 내보내기", en: "Export as PNG Image" },
+    pngExportOptionsTitle:  { ko: "PNG 내보내기 설정", en: "PNG Export Options" },
+    pngExportPerLineLabel:  { ko: "줄당 마디 수", en: "Measures per line" },
+    pngExportConfirm:       { ko: "내보내기", en: "Export" },
   },
 } as const satisfies TranslationsShape;
 
