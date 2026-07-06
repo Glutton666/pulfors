@@ -3,7 +3,7 @@ import { File, Paths } from "expo-file-system";
 import { Asset } from "expo-asset";
 import type { BeatType } from "./metronome-engine";
 import { logger } from "./logger";
-import type { SampleChannel } from "./stereo-channel";
+import type { SampleChannel, MetroChannel } from "./stereo-channel";
 
 const RENDER_SR = 44100;
 
@@ -342,6 +342,7 @@ export function renderMeasure(params: {
   metronomeChannel?: SampleChannel;
   sampleChannels?: Record<string, SampleChannel>;
   layerClickPCMs?: Map<string, ClickPCMs>;
+  metroChannelsByBeat?: Record<string, MetroChannel>;
 }): Float32Array | { left: Float32Array; right: Float32Array } {
   const {
     schedule,
@@ -353,10 +354,14 @@ export function renderMeasure(params: {
     metronomeChannel = "both",
     sampleChannels = {},
     layerClickPCMs,
+    metroChannelsByBeat,
   } = params;
   const stereoMode =
     metronomeChannel !== "both" ||
-    Object.values(sampleChannels).some((c) => c !== "both");
+    Object.values(sampleChannels).some((c) => c !== "both") ||
+    (metroChannelsByBeat
+      ? Object.values(metroChannelsByBeat).some((c) => c !== "both")
+      : false);
 
   const COPIES = 2;
   const measureSamples = Math.ceil((measureDurationMs / 1000) * RENDER_SR);
@@ -403,14 +408,18 @@ export function renderMeasure(params: {
           effectiveClickPCMs = bySet ?? byIdx ?? clickPCMs;
         }
 
-        let clickPCM: Float32Array;
-        if (tick.type === "strong") clickPCM = effectiveClickPCMs.strong;
-        else if (tick.type === "accent") clickPCM = effectiveClickPCMs.high;
-        else clickPCM = effectiveClickPCMs.low;
-        if (right) {
-          mixToChannel(left, right, clickPCM, offsetSamples, clickVolume, metronomeChannel);
-        } else {
-          mixInto(left, clickPCM, offsetSamples, clickVolume);
+        const effectiveMetroChannel: MetroChannel =
+          metroChannelsByBeat?.[String(tick.beat)] ?? metronomeChannel;
+        if (effectiveMetroChannel !== "off") {
+          let clickPCM: Float32Array;
+          if (tick.type === "strong") clickPCM = effectiveClickPCMs.strong;
+          else if (tick.type === "accent") clickPCM = effectiveClickPCMs.high;
+          else clickPCM = effectiveClickPCMs.low;
+          if (right) {
+            mixToChannel(left, right, clickPCM, offsetSamples, clickVolume, effectiveMetroChannel as SampleChannel);
+          } else {
+            mixInto(left, clickPCM, offsetSamples, clickVolume);
+          }
         }
 
         if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0 && samplePCMs.has(key)) {
@@ -621,8 +630,9 @@ export async function ensureWebClickBuffers(
 
 export function playWebClick(
   role: "strong" | "high" | "low",
-  channel: SampleChannel = "both",
+  channel: MetroChannel = "both",
 ): void {
+  if (channel === "off") return;
   if (Platform.OS !== "web" || !webClickBuffers) return;
   const ctx = getSharedAudioContext();
   if (!ctx) return;

@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { normalizeSampleChannel, type SampleChannel } from "./stereo-channel";
+import { normalizeSampleChannel, normalizeMetroChannel, type SampleChannel, type MetroChannel } from "./stereo-channel";
 import { createDebouncedPersister } from "./persist";
 
 const STORAGE_KEY = "@note_samples";
@@ -75,7 +75,7 @@ export type NoteSampleNameMap = Record<string, string>;
 export type SampleSource = "recording" | "import";
 export type NoteSampleSourceMap = Record<string, SampleSource>;
 export type NoteSampleChannelMap = Record<string, SampleChannel>;
-export type NoteSampleMetroChannelMap = Record<string, SampleChannel>;
+export type NoteSampleMetroChannelMap = Record<string, MetroChannel>;
 
 function sampleKey(beatIndex: number, subIndex: number): string {
   return `${beatIndex}-${subIndex}`;
@@ -272,7 +272,7 @@ export async function loadNoteSampleMetroChannels(): Promise<NoteSampleMetroChan
       const out: NoteSampleMetroChannelMap = {};
       if (parsed && typeof parsed === "object") {
         for (const [k, v] of Object.entries(parsed)) {
-          out[k] = normalizeSampleChannel(v);
+          out[k] = normalizeMetroChannel(v);
         }
       }
       return out;
@@ -289,7 +289,7 @@ export async function saveNoteSampleMetroChannels(channels: NoteSampleMetroChann
 
 export async function setNoteSampleMetroChannel(
   beatIndex: number,
-  channel: SampleChannel,
+  channel: MetroChannel,
   existing: NoteSampleMetroChannelMap,
 ): Promise<NoteSampleMetroChannelMap> {
   const key = String(beatIndex);

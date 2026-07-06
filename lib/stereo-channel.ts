@@ -1,4 +1,5 @@
 export type SampleChannel = "both" | "left" | "right";
+export type MetroChannel = SampleChannel | "off";
 
 export function isSampleChannel(v: unknown): v is SampleChannel {
   return v === "both" || v === "left" || v === "right";
@@ -6,6 +7,14 @@ export function isSampleChannel(v: unknown): v is SampleChannel {
 
 export function normalizeSampleChannel(v: unknown): SampleChannel {
   return isSampleChannel(v) ? v : "both";
+}
+
+export function isMetroChannel(v: unknown): v is MetroChannel {
+  return v === "both" || v === "left" || v === "right" || v === "off";
+}
+
+export function normalizeMetroChannel(v: unknown): MetroChannel {
+  return isMetroChannel(v) ? v : "both";
 }
 
 function writeStr(v: DataView, off: number, s: string) {

@@ -4,3 +4,4 @@
 - [Score editor scroll lock while note/rest tool active](score-editor-scroll-lock.md) — main ScrollView disables scrolling in note/rest tool mode; any new bottom-of-page panel must OR its own open-state into scrollEnabled or it becomes unreachable.
 - [Bar Mode "Add Bar" swipe gesture](bar-mode-add-bar-gesture.md) — "↑Add Bar" text is a hint, not a button; requires a swipe-up drag on the editor panel to actually add a bar.
 - [Score free-placement center vs. left-edge](score-free-placement-center-vs-left-edge.md) — placedX is a note-center coord; layoutMeasure's overlap-clamp math must convert it to a left edge before use, or placed notes render half a notehead-width off.
+- [Gesture flows resist Playwright e2e](gesture-flows-resist-e2e.md) — swipe-up-to-add-bar + long-press-to-open-recorder chained together reliably stall the testing subagent; verify via TS compile + unit tests + manual trace instead of forcing e2e.

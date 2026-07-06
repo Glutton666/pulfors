@@ -100,7 +100,7 @@ import type { PracticeEntry } from "@/lib/storage";
 import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
 import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource, loadNoteSampleChannels, saveNoteSampleChannels, setNoteSampleChannel, removeNoteSampleChannel, loadNoteSampleMetroChannels, saveNoteSampleMetroChannels, setNoteSampleMetroChannel, removeNoteSampleMetroChannel } from "@/lib/note-samples";
 import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap, NoteSampleMetroChannelMap, SampleSource } from "@/lib/note-samples";
-import type { SampleChannel } from "@/lib/stereo-channel";
+import type { SampleChannel, MetroChannel } from "@/lib/stereo-channel";
 import { NoteRecorderModal } from "@/components/NoteRecorderModal";
 import { NoteModeView } from "@/components/NoteModeView";
 import { AudioModule, createAudioPlayer } from "expo-audio";
@@ -1201,6 +1201,7 @@ export default function MetronomeScreen() {
         clickVolume: 1.0,
         sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current * 10.0 : 0,
         metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
+        metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
         layerClickPCMs,
       });
 
@@ -1327,6 +1328,7 @@ export default function MetronomeScreen() {
             clickVolume: 1.0,
             sampleVolume: 0,
             metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
+            metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
             layerClickPCMs,
           });
           engine.setPendingMeasureStartAction(() => {
@@ -1384,7 +1386,7 @@ export default function MetronomeScreen() {
     setRecorderTarget({ beat: beatIndex, sub: subIndex });
   }, []);
 
-  const handleNoteRecordSave = useCallback(async (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: SampleChannel) => {
+  const handleNoteRecordSave = useCallback(async (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: MetroChannel) => {
     if (!recorderTarget) return;
     const key = `${recorderTarget.beat}-${recorderTarget.sub}`;
     invalidateSamplePCMCache(key);
@@ -2276,6 +2278,7 @@ export default function MetronomeScreen() {
                   clickVolume: 1.0,
                   sampleVolume: 0,
                   metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
+                  metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
                   layerClickPCMs,
                 });
                 const loop = playWebRenderedLoop(pcm);
@@ -3079,6 +3082,7 @@ export default function MetronomeScreen() {
             clickVolume: 1.0,
             sampleVolume: 0,
             metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
+            metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
             layerClickPCMs,
           });
           const loop = playWebRenderedLoop(pcm);
@@ -5110,7 +5114,7 @@ export default function MetronomeScreen() {
         hasExisting={recorderTarget ? hasNoteSample(recorderTarget.beat, recorderTarget.sub, noteSamples) : false}
         existingName={recorderTarget ? (noteSampleNames[`${recorderTarget.beat}-${recorderTarget.sub}`] || "") : ""}
         existingChannel={recorderTarget ? (noteSampleChannels[`${recorderTarget.beat}-${recorderTarget.sub}`] ?? "both") : "both"}
-        existingMetronomeChannel={barMode ? (noteSampleMetroChannels[String(recorderTarget?.beat ?? 0)] ?? "both") : undefined}
+        existingMetronomeChannel={noteSampleMetroChannels[String(recorderTarget?.beat ?? 0)] ?? "both"}
         bpm={bpm}
         beatsPerMeasure={beatsPerMeasure}
         soundSet={soundSet.startsWith("custom") ? "classic" : soundSet as any}

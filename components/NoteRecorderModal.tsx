@@ -38,7 +38,7 @@ import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { SampleSource } from "@/lib/note-samples";
-import type { SampleChannel } from "@/lib/stereo-channel";
+import type { SampleChannel, MetroChannel } from "@/lib/stereo-channel";
 import { buildPreviewUri } from "@/lib/note-preview";
 import { getApiUrl } from "@/lib/query-client";
 import { soundSets } from "@/lib/metronome-engine";
@@ -53,14 +53,14 @@ type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
 interface NoteRecorderModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: SampleChannel) => void;
+  onSave: (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: MetroChannel) => void;
   onDelete: () => void;
   beatIndex: number;
   subIndex: number;
   hasExisting: boolean;
   existingName?: string;
   existingChannel?: SampleChannel;
-  existingMetronomeChannel?: SampleChannel;
+  existingMetronomeChannel?: MetroChannel;
   bpm: number;
   beatsPerMeasure?: number;
   soundSet?: BuiltinSoundSet;
@@ -145,7 +145,7 @@ export function NoteRecorderModal({
   const [sampleName, setSampleName] = useState("");
   const sourceTypeRef = useRef<SampleSource>("recording");
   const [channel, setChannel] = useState<SampleChannel>(existingChannel);
-  const [metronomeChannel, setMetronomeChannel] = useState<SampleChannel>(existingMetronomeChannel ?? "both");
+  const [metronomeChannel, setMetronomeChannel] = useState<MetroChannel>(existingMetronomeChannel ?? "both");
 
   useEffect(() => {
     if (visible) {
@@ -161,7 +161,8 @@ export function NoteRecorderModal({
   const [audioDuration, setAudioDuration] = useState(0);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const [autoPreview, setAutoPreview] = useState(true);
-  const [withClick, setWithClick] = useState(true);
+  const [pressToast, setPressToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 채널별로 미리듣기용 stereo wav uri를 캐시. recordedUri 변경 시 무효화.
   const previewStereoCacheRef = useRef<{ left?: string; right?: string }>({});
   const previewTokenRef = useRef(0);
@@ -225,9 +226,14 @@ export function NoteRecorderModal({
       clearTimeout(trimDebounceRef.current);
       trimDebounceRef.current = null;
     }
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
     setSuggestedBpms([]);
     setIsFetchingBpm(false);
     setBpmError(null);
+    setPressToast(null);
   }, []);
 
   const applyDetectionResult = useCallback((candidates: number[]) => {
@@ -625,8 +631,8 @@ export function NoteRecorderModal({
       setIsPlayingPreview(true);
       safePlay(player, "noteRecorder.preview");
 
-      // 1/1 클릭: 미리듣기 시작과 동시에 한 마디 간격으로 클릭
-      if (withClick) {
+      // 1/1 클릭: 미리듣기 시작과 동시에 한 마디 간격으로 클릭 (메트로놈 채널이 off가 아닐 때만)
+      if (metronomeChannel !== "off") {
         playClick();
         const measureMs = Math.round((60000 / localBpm) * beatsPerMeasure);
         metronomeTimerRef.current = setInterval(() => {
@@ -651,7 +657,7 @@ export function NoteRecorderModal({
       captureBreadcrumb({ category: "noteRecorder", message: "playPreview failed", level: "warning", data: { error: String(e) } });
       stopPreview();
     }
-  }, [recordedUri, trimStart, trimEnd, audioDuration, channel, withClick, localBpm, beatsPerMeasure, playClick, stopMetronomeClicks, stopPreview]);
+  }, [recordedUri, trimStart, trimEnd, audioDuration, channel, metronomeChannel, localBpm, beatsPerMeasure, playClick, stopMetronomeClicks, stopPreview]);
 
   const playPreviewRef = useRef(playPreview);
   useEffect(() => { playPreviewRef.current = playPreview; }, [playPreview]);
@@ -673,17 +679,42 @@ export function NoteRecorderModal({
     }
   }, [autoPreview]);
 
-  const handleSave = useCallback(async () => {
+  const doSave = useCallback((finalMetronomeChannel: MetroChannel) => {
     if (!recordedUri) return;
-
     if (audioDuration > 0) {
       const startMs = Math.floor(trimStart * audioDuration * 1000);
       const endMs = Math.floor(trimEnd * audioDuration * 1000);
-      onSave(`${recordedUri}#t=${startMs},${endMs}`, sampleName, sourceTypeRef.current, channel, metronomeChannel);
+      onSave(`${recordedUri}#t=${startMs},${endMs}`, sampleName, sourceTypeRef.current, channel, finalMetronomeChannel);
     } else {
-      onSave(recordedUri, sampleName, sourceTypeRef.current, channel, metronomeChannel);
+      onSave(recordedUri, sampleName, sourceTypeRef.current, channel, finalMetronomeChannel);
     }
-  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave, sampleName, channel, metronomeChannel]);
+  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave, sampleName, channel]);
+
+  const handleSave = useCallback(() => {
+    if (!recordedUri) return;
+
+    const existing = existingMetronomeChannel ?? "both";
+    if (metronomeChannel === existing) {
+      doSave(metronomeChannel);
+      return;
+    }
+
+    const title = t("noteRecorder", "syncMetroChannelTitle");
+    const message = t("noteRecorder", "syncMetroChannelMsg");
+    const applyText = t("noteRecorder", "syncMetroChannelApply");
+    const keepText = t("noteRecorder", "syncMetroChannelKeep");
+
+    if (Platform.OS === "web") {
+      const applyChange = window.confirm(`${title}\n\n${message}`);
+      doSave(applyChange ? metronomeChannel : existing);
+      return;
+    }
+
+    Alert.alert(title, message, [
+      { text: keepText, style: "cancel", onPress: () => doSave(existing) },
+      { text: applyText, onPress: () => doSave(metronomeChannel) },
+    ]);
+  }, [recordedUri, metronomeChannel, existingMetronomeChannel, doSave, t]);
 
   const MAX_DURATION_SEC = 600;
   const MAX_FILE_SIZE_MB = 50;
@@ -1045,76 +1076,6 @@ export function NoteRecorderModal({
                 </View>
               </View>
 
-              <View style={styles.trimActions}>
-                <Pressable
-                  style={[styles.previewBtn, { borderColor: C.accent }]}
-                  onPress={togglePreview}
-                >
-                  <Ionicons
-                    name={isPlayingPreview ? "pause" : "play"}
-                    size={18}
-                    color={C.accent}
-                  />
-                  <Text style={[styles.previewBtnText, { color: C.accent }]}>
-                    {isPlayingPreview ? t("noteRecorder", "playing") : t("noteRecorder", "previewBtn")}
-                  </Text>
-                </Pressable>
-              </View>
-
-              <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", gap: Spacing.xl, marginTop: Spacing.xs, alignSelf: "stretch" }}>
-                <Pressable
-                  onPress={() => setAutoPreview((v) => !v)}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-                  hitSlop={8}
-                >
-                  <Ionicons
-                    name={autoPreview ? "checkbox" : "square-outline"}
-                    size={18}
-                    color={autoPreview ? C.accent : C.textSecondary}
-                  />
-                  <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>
-                    {t("noteRecorder", "autoPreview")}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setWithClick((v) => !v)}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-                  hitSlop={8}
-                >
-                  <Ionicons
-                    name={withClick ? "checkbox" : "square-outline"}
-                    size={18}
-                    color={withClick ? C.accent : C.textSecondary}
-                  />
-                  <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>
-                    {t("noteRecorder", "previewWithClick")}
-                  </Text>
-                </Pressable>
-              </View>
-
-              {withClick && (
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm, marginTop: Spacing.xs }}>
-                  <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>{t("noteRecorder", "previewBpm")}</Text>
-                  <Pressable
-                    onPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.max(30, v - 1)); }}
-                    onLongPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.max(30, v - 5)); }}
-                    hitSlop={8}
-                    style={{ width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: C.surfaceLight, alignItems: "center", justifyContent: "center" }}
-                  >
-                    <Ionicons name="remove" size={16} color={C.text} />
-                  </Pressable>
-                  <Text style={{ color: C.text, fontSize: FontSize.body, fontWeight: "600" as const, minWidth: 36, textAlign: "center" }}>{localBpm}</Text>
-                  <Pressable
-                    onPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.min(300, v + 1)); }}
-                    onLongPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.min(300, v + 5)); }}
-                    hitSlop={8}
-                    style={{ width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: C.surfaceLight, alignItems: "center", justifyContent: "center" }}
-                  >
-                    <Ionicons name="add" size={16} color={C.text} />
-                  </Pressable>
-                </View>
-              )}
-
               <View style={{ flexDirection: "row", justifyContent: "center", gap: Spacing.xs, marginTop: Spacing.sm, alignSelf: "stretch" }}>
                 {(["both", "left", "right"] as const).map((opt) => {
                   const active = channel === opt;
@@ -1139,43 +1100,158 @@ export function NoteRecorderModal({
                 })}
               </View>
 
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: Spacing.xs }}>
+              <View style={styles.trimActions}>
+                <Pressable
+                  style={[styles.previewBtn, { borderColor: autoPreview ? C.accent : C.textSecondary }]}
+                  onPress={togglePreview}
+                  onLongPress={() => {
+                    setAutoPreview((prev) => {
+                      const next = !prev;
+                      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+                      setPressToast(t("noteRecorder", next ? "autoPreviewOnToast" : "autoPreviewOffToast"));
+                      toastTimerRef.current = setTimeout(() => setPressToast(null), 1800);
+                      if (Platform.OS !== "web") {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }
+                      return next;
+                    });
+                  }}
+                  delayLongPress={400}
+                >
+                  <Ionicons
+                    name={isPlayingPreview ? "pause" : "play"}
+                    size={18}
+                    color={autoPreview ? C.accent : C.textSecondary}
+                  />
+                  <Text style={[styles.previewBtnText, { color: autoPreview ? C.accent : C.textSecondary }]}>
+                    {isPlayingPreview ? t("noteRecorder", "playing") : t("noteRecorder", "previewBtn")}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {pressToast && (
+                <View style={{ alignItems: "center", marginTop: 2 }}>
+                  <Text style={{ color: C.accent, fontSize: FontSize.caption }}>{pressToast}</Text>
+                </View>
+              )}
+              {!pressToast && (
+                <Text style={{ color: C.textTertiary, fontSize: FontSize.caption, textAlign: "center", marginTop: 2 }}>
+                  {t("noteRecorder", "autoPreviewLongPressHint")}
+                </Text>
+              )}
+
+              <View style={{ marginTop: Spacing.sm }}>
+                <Text style={{ color: C.textSecondary, fontSize: FontSize.small, marginBottom: Spacing.xs, textAlign: "center" }}>
+                  {t("noteRecorder", "metronomeChannel")}
+                </Text>
+                <View style={{ flexDirection: "row", justifyContent: "center", gap: Spacing.xs, alignSelf: "stretch" }}>
+                  {(["both", "left", "right"] as const).map((opt) => {
+                    const active = metronomeChannel === opt;
+                    const label = opt === "left" ? t("noteRecorder", "channel_left") : opt === "right" ? t("noteRecorder", "channel_right") : t("noteRecorder", "channel_both");
+                    return (
+                      <Pressable
+                        key={opt}
+                        onPress={() => setMetronomeChannel((prev) => (prev === opt ? "off" : opt))}
+                        style={{
+                          flex: 1,
+                          paddingVertical: Spacing.sm,
+                          borderRadius: Radius.md,
+                          borderWidth: 1,
+                          borderColor: active ? C.accent : C.border,
+                          backgroundColor: active ? C.accentDim : C.surface,
+                          alignItems: "center",
+                        }}
+                      >
+                        <Text style={{ color: active ? C.accent : C.textSecondary, fontSize: FontSize.small }}>{label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {metronomeChannel === "off" && (
+                  <Text style={{ color: C.textTertiary, fontSize: FontSize.caption, textAlign: "center", marginTop: 4 }}>
+                    {t("noteRecorder", "channel_off")}
+                  </Text>
+                )}
+              </View>
+
+              {metronomeChannel !== "off" && (
+                <>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm, marginTop: Spacing.sm }}>
+                    <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>{t("noteRecorder", "previewBpm")}</Text>
+                    <Pressable
+                      onPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.max(30, v - 1)); }}
+                      onLongPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.max(30, v - 5)); }}
+                      hitSlop={8}
+                      style={{ width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: C.surfaceLight, alignItems: "center", justifyContent: "center" }}
+                    >
+                      <Ionicons name="remove" size={16} color={C.text} />
+                    </Pressable>
+                    <Text style={{ color: C.text, fontSize: FontSize.body, fontWeight: "600" as const, minWidth: 36, textAlign: "center" }}>{localBpm}</Text>
+                    <Pressable
+                      onPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.min(300, v + 1)); }}
+                      onLongPress={() => { userAdjustedBpmRef.current = true; setLocalBpm((v) => Math.min(300, v + 5)); }}
+                      hitSlop={8}
+                      style={{ width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: C.surfaceLight, alignItems: "center", justifyContent: "center" }}
+                    >
+                      <Ionicons name="add" size={16} color={C.text} />
+                    </Pressable>
+                  </View>
+
+                  {isFetchingBpm && (
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: Spacing.sm }}>
+                      <ActivityIndicator size="small" color={C.accent} />
+                      <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>{t("noteRecorder", "bpmDetecting")}</Text>
+                    </View>
+                  )}
+                  {!isFetchingBpm && suggestedBpms.length > 0 && (
+                    <View style={{ marginTop: Spacing.sm, alignItems: "center", gap: 6 }}>
+                      <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>
+                        {t("noteRecorder", "bpmCandidatesLabel")}
+                      </Text>
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6 }}>
+                        {suggestedBpms.map((bpm) => (
+                          <Pressable
+                            key={bpm}
+                            onPress={() => {
+                              userAdjustedBpmRef.current = true;
+                              setLocalBpm(bpm);
+                              if (onSuggestBpm) onSuggestBpm(bpm);
+                              setSuggestedBpms([]);
+                            }}
+                            style={{
+                              paddingHorizontal: Spacing.sm,
+                              paddingVertical: 4,
+                              borderRadius: Radius.sm,
+                              backgroundColor: C.accentDim,
+                              borderWidth: 1,
+                              borderColor: C.accent,
+                            }}
+                            hitSlop={8}
+                          >
+                            <Text style={{ color: C.accent, fontSize: FontSize.small, fontWeight: "600" as const }}>
+                              {bpm} BPM
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                  {!isFetchingBpm && bpmError && (
+                    <View style={{ marginTop: Spacing.sm, alignItems: "center" }}>
+                      <Text style={{ color: "#E07070", fontSize: FontSize.small, textAlign: "center" }}>
+                        {bpmError}
+                      </Text>
+                    </View>
+                  )}
+                </>
+              )}
+
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: Spacing.sm }}>
                 <Ionicons name="headset-outline" size={14} color={C.textTertiary} />
                 <Text style={{ color: C.textTertiary, fontSize: FontSize.caption }}>
                   {t("noteRecorder", "headphonesHint")}
                 </Text>
               </View>
-
-              {existingMetronomeChannel !== undefined && (
-                <View style={{ marginTop: Spacing.sm }}>
-                  <Text style={{ color: C.textSecondary, fontSize: FontSize.small, marginBottom: Spacing.xs, textAlign: "center" }}>
-                    {t("noteRecorder", "metronomeChannel")}
-                  </Text>
-                  <View style={{ flexDirection: "row", justifyContent: "center", gap: Spacing.xs, alignSelf: "stretch" }}>
-                    {(["both", "left", "right"] as const).map((opt) => {
-                      const active = metronomeChannel === opt;
-                      const label = opt === "left" ? t("noteRecorder", "channel_left") : opt === "right" ? t("noteRecorder", "channel_right") : t("noteRecorder", "channel_both");
-                      return (
-                        <Pressable
-                          key={opt}
-                          onPress={() => setMetronomeChannel(opt)}
-                          style={{
-                            flex: 1,
-                            paddingVertical: Spacing.sm,
-                            borderRadius: Radius.md,
-                            borderWidth: 1,
-                            borderColor: active ? C.accent : C.border,
-                            backgroundColor: active ? C.accentDim : C.surface,
-                            alignItems: "center",
-                          }}
-                        >
-                          <Text style={{ color: active ? C.accent : C.textSecondary, fontSize: FontSize.small }}>{label}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              )}
 
               <View style={styles.nameInputRow}>
                 <Ionicons name="pricetag-outline" size={14} color={C.textSecondary} />
@@ -1189,53 +1265,6 @@ export function NoteRecorderModal({
                   maxLength={30}
                 />
               </View>
-
-              {isFetchingBpm && (
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: Spacing.sm }}>
-                  <ActivityIndicator size="small" color={C.accent} />
-                  <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>{t("noteRecorder", "bpmDetecting")}</Text>
-                </View>
-              )}
-              {!isFetchingBpm && suggestedBpms.length > 0 && (
-                <View style={{ marginTop: Spacing.sm, alignItems: "center", gap: 6 }}>
-                  <Text style={{ color: C.textSecondary, fontSize: FontSize.small }}>
-                    {t("noteRecorder", "bpmCandidatesLabel")}
-                  </Text>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6 }}>
-                    {suggestedBpms.map((bpm) => (
-                      <Pressable
-                        key={bpm}
-                        onPress={() => {
-                          userAdjustedBpmRef.current = true;
-                          setLocalBpm(bpm);
-                          if (onSuggestBpm) onSuggestBpm(bpm);
-                          setSuggestedBpms([]);
-                        }}
-                        style={{
-                          paddingHorizontal: Spacing.sm,
-                          paddingVertical: 4,
-                          borderRadius: Radius.sm,
-                          backgroundColor: C.accentDim,
-                          borderWidth: 1,
-                          borderColor: C.accent,
-                        }}
-                        hitSlop={8}
-                      >
-                        <Text style={{ color: C.accent, fontSize: FontSize.small, fontWeight: "600" as const }}>
-                          {bpm} BPM
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-              )}
-              {!isFetchingBpm && bpmError && (
-                <View style={{ marginTop: Spacing.sm, alignItems: "center" }}>
-                  <Text style={{ color: "#E07070", fontSize: FontSize.small, textAlign: "center" }}>
-                    {bpmError}
-                  </Text>
-                </View>
-              )}
 
               <View style={styles.saveRow}>
                 <Pressable style={styles.cancelBtn} onPress={handleClose}>
