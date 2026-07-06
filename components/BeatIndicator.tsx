@@ -640,7 +640,8 @@ export function BeatIndicator({
     transform: [{ scale: 1 + centerGlow.value * 0.3 }],
   }));
 
-  const isAccentBeat = isPlaying && currentBeat === 0;
+  const currentBeatTypeForGlow = isPlaying && currentBeat >= 0 ? (beatTypes[currentBeat] || "normal") : "normal";
+  const isAccentBeat = isPlaying && (currentBeatTypeForGlow === "strong" || currentBeatTypeForGlow === "accent");
 
   const nativePanHandlers =
     Platform.OS !== "web" && panResponder ? panResponder.panHandlers : {};

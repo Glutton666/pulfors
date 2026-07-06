@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   defaultBeatTypes,
+  isCompoundMeterBeatCount,
+  getCompoundGroupStarts,
   isSafeNoteSampleUri,
   createInitialDialConfig,
   createInitialBarConfig,
@@ -102,6 +104,48 @@ test("defaultBeatTypes: 7-beat measure", () => {
   assert.equal(r.length, 7);
   assert.equal(r[0], "accent");
   assert.equal(r[6], "normal");
+});
+
+test("isCompoundMeterBeatCount: only 6, 9, 12 are compound", () => {
+  assert.equal(isCompoundMeterBeatCount(6), true);
+  assert.equal(isCompoundMeterBeatCount(9), true);
+  assert.equal(isCompoundMeterBeatCount(12), true);
+  assert.equal(isCompoundMeterBeatCount(3), false);
+  assert.equal(isCompoundMeterBeatCount(4), false);
+  assert.equal(isCompoundMeterBeatCount(8), false);
+  assert.equal(isCompoundMeterBeatCount(15), false);
+});
+
+test("getCompoundGroupStarts: groups of 3 for compound counts", () => {
+  assert.deepEqual(getCompoundGroupStarts(6), [0, 3]);
+  assert.deepEqual(getCompoundGroupStarts(9), [0, 3, 6]);
+  assert.deepEqual(getCompoundGroupStarts(12), [0, 3, 6, 9]);
+  assert.deepEqual(getCompoundGroupStarts(4), []);
+});
+
+test("defaultBeatTypes: 6/8 groups into 2 dotted-quarter beats (strong, accent)", () => {
+  assert.deepEqual(defaultBeatTypes(6), ["strong", "normal", "normal", "accent", "normal", "normal"]);
+});
+
+test("defaultBeatTypes: 9/8 groups into 3 dotted-quarter beats", () => {
+  assert.deepEqual(defaultBeatTypes(9), [
+    "strong", "normal", "normal",
+    "accent", "normal", "normal",
+    "accent", "normal", "normal",
+  ]);
+});
+
+test("defaultBeatTypes: 12/8 groups into 4 dotted-quarter beats", () => {
+  assert.deepEqual(defaultBeatTypes(12), [
+    "strong", "normal", "normal",
+    "accent", "normal", "normal",
+    "accent", "normal", "normal",
+    "accent", "normal", "normal",
+  ]);
+});
+
+test("defaultBeatTypes: simple meters with beat count divisible by 3 stay unaffected unless 6/9/12 (e.g. 3-beat)", () => {
+  assert.deepEqual(defaultBeatTypes(3), ["accent", "normal", "normal"]);
 });
 
 test("isSafeNoteSampleUri: rejects http/https (SSRF prevention)", () => {

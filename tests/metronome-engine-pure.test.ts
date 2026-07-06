@@ -96,6 +96,27 @@ test("pureGetSubPattern: accent 비트는 첫 normal을 accent로 승격", () =>
   assert.deepEqual(r, ["accent", "normal"]);
 });
 
+test("pureGetSubPattern: 6/8 복합박자 스케줄 - 그룹 시작(0,3)만 강세, 나머지는 그대로", () => {
+  const beatTypes: BeatType[] = ["strong", "normal", "normal", "accent", "normal", "normal"];
+  const empty = new Map<number, BeatType[]>();
+  const schedule = beatTypes.map((_, beat) => pureGetSubPattern(beatTypes, empty, beat));
+  assert.deepEqual(schedule, [
+    ["strong"], ["normal"], ["normal"],
+    ["accent"], ["normal"], ["normal"],
+  ]);
+});
+
+test("pureGetSubPattern: 9/8 복합박자 스케줄 - 세 그룹(0,3,6) 모두 강세 반영", () => {
+  const beatTypes: BeatType[] = [
+    "strong", "normal", "normal",
+    "accent", "normal", "normal",
+    "accent", "normal", "normal",
+  ];
+  const empty = new Map<number, BeatType[]>();
+  const schedule = beatTypes.map((_, beat) => pureGetSubPattern(beatTypes, empty, beat));
+  assert.deepEqual(schedule, beatTypes.map((t) => [t]));
+});
+
 test("pureFindInnerBlock: layer 블록은 무시", () => {
   const sorted: LoopBlockData[] = [
     { startBeat: 0, endBeat: 3, type: "count", value: 1 },

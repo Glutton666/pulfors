@@ -44,7 +44,33 @@ export function computeLandscapeStats(
   return { todayTotal, todayBeat, todayBar, weekTotal };
 }
 
+/**
+ * 표준 복합박자(6/8, 9/8, 12/8)에 해당하는 총 박(서브비트) 수인지 판별.
+ * 이 앱은 별도의 분자/분모 시간표기 UI가 없고 beatsPerMeasure(총 8분음표 개수)만
+ * 다루므로, 6·9·12는 항상 "점4분음표 단위로 3개씩 묶이는 복합박자"로 간주한다.
+ */
+export function isCompoundMeterBeatCount(beats: number): boolean {
+  return beats === 6 || beats === 9 || beats === 12;
+}
+
+/**
+ * 복합박자에서 큰 박(그룹)이 시작되는 인덱스 목록(3개 단위)을 반환.
+ * 예) 6 → [0, 3] (2개 그룹), 9 → [0, 3, 6] (3개 그룹), 12 → [0, 3, 6, 9] (4개 그룹)
+ */
+export function getCompoundGroupStarts(beats: number): number[] {
+  if (!isCompoundMeterBeatCount(beats)) return [];
+  const starts: number[] = [];
+  for (let i = 0; i < beats; i += 3) starts.push(i);
+  return starts;
+}
+
 export function defaultBeatTypes(beats: number): BeatType[] {
+  if (isCompoundMeterBeatCount(beats)) {
+    const groupStarts = new Set(getCompoundGroupStarts(beats));
+    return Array.from({ length: beats }, (_, i) =>
+      i === 0 ? "strong" : groupStarts.has(i) ? "accent" : "normal"
+    );
+  }
   return Array.from({ length: beats }, (_, i) =>
     i === 0 ? "accent" : "normal"
   );

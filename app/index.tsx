@@ -69,7 +69,7 @@ import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import PracticeStatsGraph from "@/components/PracticeStatsGraph";
 import { useDeepLink } from "@/contexts/DeepLinkContext";
 import { make_styles } from "./index.styles";
-import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks, applyLoopBlocksChange } from "./index.helpers";
+import { defaultBeatTypes, isCompoundMeterBeatCount, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks, applyLoopBlocksChange } from "./index.helpers";
 import {
   type ActiveModal,
   type SgTgState,
@@ -2066,7 +2066,7 @@ export default function MetronomeScreen() {
       const isAdding = beats > oldBeats;
 
       let newTypes: BeatType[];
-      if (isAdding) {
+      if (isAdding && !isCompoundMeterBeatCount(beats)) {
         newTypes = [...oldTypes];
         for (let i = oldTypes.length; i < beats; i++) {
           newTypes.push("normal");
