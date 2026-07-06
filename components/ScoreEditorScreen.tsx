@@ -174,8 +174,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   const [isDotted, setIsDotted] = useState(false);
   const [isDoubleDotted, setIsDoubleDotted] = useState(false);
   const [selectedInstrumentSymbol, setSelectedInstrumentSymbol] = useState<string | null>(null);
-  const [selectedSlur, setSelectedSlur] = useState(false);
-  const [slurPendingStartId, setSlurPendingStartId] = useState<string | null>(null);
   const [accidental, setAccidental] = useState<Accidental | null>(null);
   const [selectedArticulation, setSelectedArticulation] = useState<ArticulationType | null>(null);
   const [selectedDynamic, setSelectedDynamic] = useState<Dynamic | null>(null);
@@ -218,6 +216,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   const [selectedPartIdx, setSelectedPartIdx] = useState(0);
   const [selectedMeasureIdx, setSelectedMeasureIdx] = useState<number | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  // 2개 이상의 음표를 묶어(타이/슬러) 적용하기 위한 다중 선택 목록.
+  // 항상 selectedElementId와 동기화된다: 0개→null, 1개→해당 id, 2개 이상→null(단일 액션바 숨김)
+  const [multiSelectIds, setMultiSelectIds] = useState<string[]>([]);
 
   // ── 꾸밈음 선택 ──────────────────────────────────────────────
   const [selectedOrnament, setSelectedOrnament] = useState<import("@/lib/score-types").OrnamentType | null>(null);
@@ -610,6 +611,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       };
       applyDoc(newDoc);
       if (selectedElementId === elementId) setSelectedElementId(null);
+      setMultiSelectIds((prev) => (prev.includes(elementId) ? prev.filter((id) => id !== elementId) : prev));
     },
     [doc, selectedPartIdx, selectedElementId],
   );
@@ -639,6 +641,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       applyDoc(newDoc);
       const deletedIds = new Set(elements.map((e) => e.elementId));
       if (selectedElementId && deletedIds.has(selectedElementId)) setSelectedElementId(null);
+      setMultiSelectIds((prev) => prev.filter((id) => !deletedIds.has(id)));
     },
     [doc, selectedPartIdx, selectedElementId],
   );
@@ -657,75 +660,32 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   _selectedDynamicRef.current = selectedDynamic;
   const _selectedInstrumentSymbolRef = useRef<string | null>(null);
   _selectedInstrumentSymbolRef.current = selectedInstrumentSymbol;
-  const _selectedSlurRef = useRef(false);
-  _selectedSlurRef.current = selectedSlur;
-  const _slurPendingStartIdRef = useRef<string | null>(null);
-  _slurPendingStartIdRef.current = slurPendingStartId;
   const _selectedCrescTypeRef = useRef<CrescType>(null);
   _selectedCrescTypeRef.current = selectedCrescType;
   const _applyDocRef = useRef(applyDoc);
   _applyDocRef.current = applyDoc;
+  const _multiSelectIdsRef = useRef<string[]>([]);
+  _multiSelectIdsRef.current = multiSelectIds;
+
+  // ── 음표 탭 시 다중 선택 목록 토글 (2개 이상 선택 시 묶기 바 노출용) ──
+  const toggleMultiSelect = useCallback((elementId: string) => {
+    setMultiSelectIds((prev) => {
+      const next = prev.includes(elementId)
+        ? prev.filter((id) => id !== elementId)
+        : [...prev, elementId];
+      setSelectedElementId(next.length === 1 ? next[0] : null);
+      return next;
+    });
+  }, []);
 
   const handleElementTap = useCallback(
     (elementId: string, measureIdx: number) => {
-      setSelectedElementId((prev) => (prev === elementId ? null : elementId));
+      toggleMultiSelect(elementId);
       setSelectedMeasureIdx(measureIdx);
 
       const curDoc = _docRef.current;
       const curPartIdx = _selectedPartIdxRef.current;
       const applyFn = _applyDocRef.current;
-
-      // ── 슬러 두 번 탭 흐름 ──────────────────────────────────
-      if (_selectedSlurRef.current) {
-        const pending = _slurPendingStartIdRef.current;
-        if (pending === null) {
-          // 첫 번째 탭: slurStart 표시
-          applyFn({
-            ...curDoc,
-            parts: curDoc.parts.map((p, pIdx) => {
-              if (pIdx !== curPartIdx) return p;
-              return {
-                ...p,
-                measures: p.measures.map((m, mIdx) => {
-                  if (mIdx !== measureIdx) return m;
-                  return { ...m, elements: m.elements.map((el) => {
-                    if (el.id !== elementId || el.type !== "note") return el;
-                    return { ...el, slurStart: !el.slurStart, slurEnd: undefined, slurEndNoteId: undefined };
-                  })};
-                }),
-              };
-            }),
-          });
-          setSlurPendingStartId(elementId);
-        } else {
-          // 두 번째 탭: slurEnd 표시 + 슬러 시작 노트에 slurEndNoteId 저장 + 슬러 모드 종료
-          applyFn({
-            ...curDoc,
-            parts: curDoc.parts.map((p, pIdx) => {
-              if (pIdx !== curPartIdx) return p;
-              return {
-                ...p,
-                measures: p.measures.map((m, mIdx) => {
-                  return {
-                    ...m,
-                    elements: m.elements.map((el) => {
-                      if (el.type !== "note") return el;
-                      // 종료 노트: slurEnd 설정
-                      if (el.id === elementId) return { ...el, slurEnd: true };
-                      // 시작 노트: slurEndNoteId 기록 (어느 마디에 있든 탐색)
-                      if (el.id === pending) return { ...el, slurEndNoteId: elementId };
-                      return el;
-                    }),
-                  };
-                }),
-              };
-            }),
-          });
-          setSlurPendingStartId(null);
-          setSelectedSlur(false);
-        }
-        return;
-      }
 
       // ── 크레셴도/데크레셴도 노트 앵커 탭 ────────────────────
       const crescType = _selectedCrescTypeRef.current;
@@ -958,16 +918,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     setShowMeasureEditModal(true);
   }
 
-  // ── 마디 컨텍스트 메뉴: 조표/음자리표 변경 → 마디 설정 드로어 열기 ──
-  function handleMeasureKeySigChange(measureIdx: number) {
-    setMeasureContextMenu(null);
-    setSelectedMeasureIdx(measureIdx);
-    setDrawerOpen(true);
-    setTimeout(() => {
-      scoreScrollRef.current?.scrollToEnd({ animated: true });
-    }, 50);
-  }
-
   // ── 마디 컨텍스트 메뉴: 박자표 변경 ─────────────────────────
   function handleMeasureTimeSigChange(measureIdx: number) {
     setMeasureContextMenu(null);
@@ -1158,33 +1108,44 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     setSelectedElementId(null);
   }
 
-  // ── 선택된 음표에 타이 토글 ───────────────────────────────────
-  function handleToggleTieOnSelected() {
-    if (!selectedElementId) return;
+  // ── 다중 선택된 음표: 문서 순서(마디→요소 인덱스)로 정렬 ──────
+  const multiSelectSortedNotes = useMemo(() => {
     const part = doc.parts[selectedPartIdx];
-    if (!part) return;
-
-    // 선택된 음표의 마디/인덱스 탐색
-    let selMeasureIdx = -1;
-    let selElemIdx = -1;
-    for (let mi = 0; mi < part.measures.length; mi++) {
-      const idx = part.measures[mi].elements.findIndex((e) => e.id === selectedElementId);
-      if (idx >= 0) { selMeasureIdx = mi; selElemIdx = idx; break; }
+    if (!part) return [] as Array<{ id: string; measureIdx: number; elemIdx: number; note: ScoreNote }>;
+    const found: Array<{ id: string; measureIdx: number; elemIdx: number; note: ScoreNote }> = [];
+    for (const id of multiSelectIds) {
+      for (let mi = 0; mi < part.measures.length; mi++) {
+        const ei = part.measures[mi].elements.findIndex((e) => e.id === id);
+        if (ei >= 0) {
+          const el = part.measures[mi].elements[ei];
+          if (el.type === "note") found.push({ id, measureIdx: mi, elemIdx: ei, note: el });
+          break;
+        }
+      }
     }
-    if (selMeasureIdx < 0) return;
-    const selNote = part.measures[selMeasureIdx].elements[selElemIdx];
-    if (!selNote || selNote.type !== "note") return;
+    found.sort((a, b) => a.measureIdx - b.measureIdx || a.elemIdx - b.elemIdx);
+    return found;
+  }, [doc, selectedPartIdx, multiSelectIds]);
 
-    const newTie = !selNote.tieStart;
-
-    // 다음 음표(같은 마디 또는 다음 마디 첫 번째) 탐색
-    let nextMeasureIdx = selMeasureIdx;
-    let nextElemIdx = selElemIdx + 1;
-    if (nextElemIdx >= part.measures[selMeasureIdx].elements.length) {
-      nextMeasureIdx = selMeasureIdx + 1;
-      nextElemIdx = 0;
+  // 타이는 정확히 인접한 2개 음표에만 적용 가능 (렌더러가 "바로 다음 요소"에 tieEnd를 건다고 가정)
+  const multiSelectCanTie = useMemo(() => {
+    if (multiSelectSortedNotes.length !== 2) return false;
+    const [a, b] = multiSelectSortedNotes;
+    const part = doc.parts[selectedPartIdx];
+    if (!part) return false;
+    if (a.measureIdx === b.measureIdx) return b.elemIdx === a.elemIdx + 1;
+    if (b.measureIdx === a.measureIdx + 1) {
+      return (
+        a.elemIdx === part.measures[a.measureIdx].elements.length - 1 && b.elemIdx === 0
+      );
     }
+    return false;
+  }, [multiSelectSortedNotes, doc, selectedPartIdx]);
 
+  // ── 다중 선택된 음표를 타이로 묶기 (인접한 2개 음표 전용) ──────
+  function handleTieMultiSelected() {
+    if (!multiSelectCanTie) return;
+    const [a, b] = multiSelectSortedNotes;
     const newDoc: ScoreDocument = {
       ...doc,
       parts: doc.parts.map((p, pIdx) => {
@@ -1194,11 +1155,11 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           measures: p.measures.map((m, mi) => ({
             ...m,
             elements: m.elements.map((el, ei) => {
-              if (mi === selMeasureIdx && ei === selElemIdx && el.type === "note") {
-                return { ...el, tieStart: newTie };
+              if (mi === a.measureIdx && ei === a.elemIdx && el.type === "note") {
+                return { ...el, tieStart: true };
               }
-              if (mi === nextMeasureIdx && ei === nextElemIdx && el.type === "note") {
-                return { ...el, tieEnd: newTie };
+              if (mi === b.measureIdx && ei === b.elemIdx && el.type === "note") {
+                return { ...el, tieEnd: true };
               }
               return el;
             }),
@@ -1207,19 +1168,47 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       }),
     };
     applyDoc(newDoc);
+    setMultiSelectIds([]);
+    setSelectedElementId(null);
   }
 
-  // 선택된 음표의 tieStart 상태 (팔레트 버튼 활성화용)
-  const selectedTieActive = useMemo(() => {
-    if (!selectedElementId) return false;
-    for (const p of doc.parts) {
-      for (const m of p.measures) {
-        const el = m.elements.find((e) => e.id === selectedElementId);
-        if (el?.type === "note") return !!el.tieStart;
-      }
-    }
-    return false;
-  }, [selectedElementId, doc]);
+  // ── 다중 선택된 음표를 슬러로 묶기 (첫/마지막 음표에 slurStart/slurEnd 적용) ──
+  function handleSlurMultiSelected() {
+    if (multiSelectSortedNotes.length < 2) return;
+    const first = multiSelectSortedNotes[0];
+    const last = multiSelectSortedNotes[multiSelectSortedNotes.length - 1];
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
+        if (pIdx !== selectedPartIdx) return p;
+        return {
+          ...p,
+          measures: p.measures.map((m) => ({
+            ...m,
+            elements: m.elements.map((el) => {
+              if (el.type !== "note") return el;
+              if (el.id === first.id) {
+                return { ...el, slurStart: true, slurEnd: undefined, slurEndNoteId: last.id };
+              }
+              if (el.id === last.id) {
+                return { ...el, slurEnd: true, slurStart: undefined };
+              }
+              return el;
+            }),
+          })),
+        };
+      }),
+    };
+    applyDoc(newDoc);
+    setMultiSelectIds([]);
+    setSelectedElementId(null);
+  }
+
+  // ── 다중 선택 해제 ─────────────────────────────────────────────
+  function handleClearMultiSelect() {
+    setMultiSelectIds([]);
+    setSelectedElementId(null);
+  }
 
   // ── 선택된 음표에 임시표 적용 ─────────────────────────────────
   function handleApplyAccidentalToSelected(acc: Accidental | null) {
@@ -1713,6 +1702,52 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         </View>
       )}
 
+      {/* ── 다중 선택(2개 이상) 묶기 액션 바: 타이/슬러 ─────────── */}
+      {multiSelectIds.length >= 2 && (
+        <View
+          style={[styles.selectionBar, { backgroundColor: C.surface, borderBottomColor: C.border }]}
+          testID="score-editor-group-bar"
+        >
+          <Text style={[styles.selectionLabel, { color: C.textSecondary }]}>
+            {multiSelectIds.length}{t("scoreMode", "groupBarSelectedCount")}
+          </Text>
+
+          <View style={{ flex: 1 }} />
+
+          <Pressable
+            style={[
+              styles.selBarBtn,
+              { borderColor: multiSelectCanTie ? C.accent : C.border, opacity: multiSelectCanTie ? 1 : 0.4 },
+            ]}
+            onPress={handleTieMultiSelected}
+            disabled={!multiSelectCanTie}
+            testID="score-editor-group-tie"
+          >
+            <Text style={[styles.selBarBtnText, { color: multiSelectCanTie ? C.accent : C.textSecondary, fontSize: 16 }]}>
+              ⌣ {t("scoreMode", "groupBarTieButton")}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.selBarBtn, { borderColor: C.accent }]}
+            onPress={handleSlurMultiSelected}
+            testID="score-editor-group-slur"
+          >
+            <Text style={[styles.selBarBtnText, { color: C.accent, fontSize: 16 }]}>
+              ⌢ {t("scoreMode", "groupBarSlurButton")}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.selBarBtn, { borderColor: C.border }]}
+            onPress={handleClearMultiSelect}
+            testID="score-editor-group-clear"
+          >
+            <Ionicons name="close-circle-outline" size={16} color={C.textSecondary} />
+          </Pressable>
+        </View>
+      )}
+
       {/* ── 악보 스크롤 영역 ───────────────────────────────────── */}
       <ScrollView
         ref={scoreScrollRef}
@@ -1767,6 +1802,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               doc={{ ...doc, parts: [currentPart] }}
               containerWidth={containerWidth}
               selectedElementId={selectedElementId}
+              multiSelectIds={multiSelectIds}
               selectedPartIdx={0}
               activeTool={activeTool}
               activeDuration={activeDuration}
@@ -2105,14 +2141,10 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           selectedCrescType={selectedCrescType}
           onRepeatSignSelect={setSelectedRepeatSign}
           onCrescTypeSelect={setSelectedCrescType}
-          selectedSlur={selectedSlur}
-          onSlurToggle={(v) => { setSelectedSlur(v); if (!v) setSlurPendingStartId(null); }}
           onTempoSelect={handleTempoSelect}
           selectedInstrumentSymbol={selectedInstrumentSymbol}
           onInstrumentSymbolSelect={setSelectedInstrumentSymbol}
           onSymbolToggle={handleSymbolToggle}
-          isTieActive={selectedTieActive}
-          onTieToggle={handleToggleTieOnSelected}
         />
       </View>
 
@@ -2309,7 +2341,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         onKeySigChange={handleMeasureKeySigChange}
         onAddRehearsal={handleAddRehearsalMark}
         onClearSigns={handleClearMeasureSigns}
-        onKeySigChange={handleMeasureKeySigChange}
         onAddMeasure={handleMeasureAddFromContext}
         onEditLink={handleMeasureEditLink}
         onClearLink={handleMeasureClearLink}

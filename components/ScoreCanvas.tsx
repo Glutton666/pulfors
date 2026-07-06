@@ -86,6 +86,7 @@ export interface ScoreCanvasProps {
   doc: ScoreDocument;
   containerWidth: number;
   selectedElementId: string | null;
+  multiSelectIds?: string[];
   selectedPartIdx: number;
   activeTool: EditorTool;
   activeDuration: NoteDuration;
@@ -128,6 +129,7 @@ export function ScoreCanvas({
   doc,
   containerWidth,
   selectedElementId,
+  multiSelectIds,
   selectedPartIdx,
   activeTool,
   activeDuration,
@@ -703,6 +705,7 @@ export function ScoreCanvas({
         doc={doc}
         containerWidth={containerWidth}
         selectedElementId={selectedElementId}
+        multiSelectIds={multiSelectIds}
         playheadMeasureIdx={playheadMeasureIdx}
         playheadFraction={playheadFraction}
         showPlayhead={showPlayhead}

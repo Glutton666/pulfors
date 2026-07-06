@@ -659,6 +659,7 @@ interface MeasureRenderProps {
   timeNumerator: number;
   timeDenominator: number;
   selectedElementId?: string | null;
+  multiSelectIds?: string[];
   isPlayheadMeasure?: boolean;
   playheadFraction?: number;
   highlightColor?: string;
@@ -697,6 +698,7 @@ function MeasureRender({
   timeNumerator,
   timeDenominator,
   selectedElementId,
+  multiSelectIds,
   isPlayheadMeasure = false,
   playheadFraction = 0,
   highlightColor = "rgba(100,180,255,0.18)",
@@ -789,7 +791,7 @@ function MeasureRender({
               staffY={staffY}
               clef={clef}
               color={color}
-              isSelected={el.id === selectedElementId}
+              isSelected={el.id === selectedElementId || !!multiSelectIds?.includes(el.id)}
             />
           );
         } else {
@@ -1096,6 +1098,7 @@ interface PartRenderProps {
   doc: ScoreDocument;
   color: string;
   selectedElementId?: string | null;
+  multiSelectIds?: string[];
   playheadMeasureIdx?: number;
   playheadFraction?: number;
   highlightColor?: string;
@@ -1109,6 +1112,7 @@ function PartRender({
   doc,
   color,
   selectedElementId,
+  multiSelectIds,
   playheadMeasureIdx,
   playheadFraction = 0,
   highlightColor,
@@ -1235,6 +1239,7 @@ function PartRender({
               timeNumerator={meta.timeNum}
               timeDenominator={meta.timeDen}
               selectedElementId={selectedElementId}
+              multiSelectIds={multiSelectIds}
               isPlayheadMeasure={isPlayheadMeasure}
               playheadFraction={isPlayheadMeasure ? playheadFraction : 0}
               highlightColor={highlightColor}
@@ -1264,6 +1269,7 @@ export interface ScoreRendererProps {
   doc: ScoreDocument;
   containerWidth: number;
   selectedElementId?: string | null;
+  multiSelectIds?: string[];
   playheadMeasureIdx?: number;
   playheadFraction?: number;
   showPlayhead?: boolean;
@@ -1280,6 +1286,7 @@ export function ScoreRenderer({
   doc,
   containerWidth,
   selectedElementId,
+  multiSelectIds,
   playheadMeasureIdx,
   playheadFraction = 0,
   showPlayhead = true,
@@ -1344,6 +1351,7 @@ export function ScoreRenderer({
               doc={doc}
               color={strokeColor}
               selectedElementId={selectedElementId}
+              multiSelectIds={multiSelectIds}
               playheadMeasureIdx={playheadMeasureIdx}
               playheadFraction={playheadFraction}
               showPlayhead={showPlayhead}

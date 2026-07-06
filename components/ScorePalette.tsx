@@ -236,8 +236,6 @@ export interface ScorePaletteProps {
   selectedInstrumentSymbol?: string | null;
   onInstrumentSymbolSelect?: (id: string | null) => void;
   selectedCrescType?: CrescType;
-  selectedSlur?: boolean;
-  onSlurToggle?: (v: boolean) => void;
   instrumentCategory?: InstrumentCategory;
   enabledSymbols?: Record<string, boolean>;
   onToolChange: (tool: EditorTool) => void;
@@ -252,10 +250,6 @@ export interface ScorePaletteProps {
   onCrescTypeSelect?: (type: CrescType) => void;
   onTempoSelect?: (text: string, bpm: number) => void;
   onSymbolToggle?: (id: string, enabled: boolean) => void;
-  /** 선택된 음표의 tieStart 활성 여부 */
-  isTieActive?: boolean;
-  /** 선택된 음표에 타이 토글 */
-  onTieToggle?: () => void;
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
@@ -271,8 +265,6 @@ export function ScorePalette({
   selectedOrnament,
   selectedRepeatSign,
   selectedCrescType,
-  selectedSlur = false,
-  onSlurToggle,
   selectedInstrumentSymbol = null,
   onInstrumentSymbolSelect,
   instrumentCategory,
@@ -289,8 +281,6 @@ export function ScorePalette({
   onCrescTypeSelect,
   onTempoSelect,
   onSymbolToggle,
-  isTieActive = false,
-  onTieToggle,
 }: ScorePaletteProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -589,50 +579,6 @@ export function ScorePalette({
               </Pressable>
             );
           })}
-
-          <View style={[styles.divider, { backgroundColor: C.border }]} />
-
-          {/* 타이 버튼 */}
-          <Pressable
-            style={[
-              styles.signBtn,
-              {
-                backgroundColor: isTieActive ? C.accent + "33" : "transparent",
-                borderColor: isTieActive ? C.accent : C.border,
-                minWidth: 44,
-              },
-            ]}
-            onPress={onTieToggle}
-            testID="score-palette-tie"
-          >
-            <Text style={[styles.artSymbol, { color: isTieActive ? C.accent : C.text, fontSize: 18 }]}>
-              ⌒
-            </Text>
-            <Text style={[styles.durLabel, { color: isTieActive ? C.accent : C.textSecondary }]}>
-              {t("scoreMode", "tieLabel" as any)}
-            </Text>
-          </Pressable>
-
-          {/* 슬러 버튼 */}
-          <Pressable
-            style={[
-              styles.signBtn,
-              {
-                backgroundColor: selectedSlur ? C.accent + "33" : "transparent",
-                borderColor: selectedSlur ? C.accent : C.border,
-                minWidth: 44,
-              },
-            ]}
-            onPress={() => onSlurToggle?.(!selectedSlur)}
-            testID="score-palette-slur"
-          >
-            <Text style={[styles.artSymbol, { color: selectedSlur ? C.accent : C.text, fontSize: 18 }]}>
-              ⌢
-            </Text>
-            <Text style={[styles.durLabel, { color: selectedSlur ? C.accent : C.textSecondary }]}>
-              {t("scoreMode", "slurLabel")}
-            </Text>
-          </Pressable>
 
           <View style={[styles.divider, { backgroundColor: C.border }]} />
 
