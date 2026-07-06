@@ -282,6 +282,9 @@ export function layoutMeasure(
     }
 
     const leftPad = 8;
+    // getX: placedX가 있으면 사용자가 실제로 터치한 "중심(center)" 좌표를 의미함
+    // (ScoreCanvas의 ghost.x/measureRelX는 항상 음표 중심 기준으로 계산됨).
+    // placedX가 없는 fallback 값(seqLeftX)은 왼쪽 끝(left edge) 기준.
     const getX = (el: (typeof measure.elements)[number]) => {
       if (el.placedX != null) return el.placedX + startX;
       return seqLeftX.get(el.id) ?? startX + leftPad;
@@ -293,7 +296,9 @@ export function layoutMeasure(
     let lastEnd = startX + leftPad;
     for (const el of sortedByX) {
       const w = NOTE_WIDTH[el.duration] ?? 24;
-      let rawX = getX(el);
+      // placedX는 중심 좌표이므로 왼쪽 끝(left edge) 계산 시 폭의 절반을 빼야 함.
+      // fallback(seqLeftX)은 이미 왼쪽 끝 기준이므로 그대로 사용.
+      let rawX = el.placedX != null ? getX(el) - w / 2 : getX(el);
       // 앞 음표 너비의 50% 이상 겹치면 정확히 절반만 겹친 위치로 클램프
       if (rawX < lastEnd - w * 0.5) {
         rawX = lastEnd - w * 0.5;
