@@ -754,6 +754,9 @@ export const translations = {
     bpmSliderHint: { ko: "좌우로 드래그해 BPM을 조절하세요. 두 번 탭하면 탭 템포가 활성화됩니다.", en: "Drag horizontally to change BPM. Double-tap to use tap tempo." },
     bpmHalfTime: { ko: "절반 템포", en: "half-time" },
     playButton: { ko: "재생 또는 일시정지", en: "Play or pause" },
+    openNoteMode: { ko: "노트 모드 열기", en: "Open note mode" },
+    openBarMode: { ko: "바 모드 열기", en: "Open bar mode" },
+    closeModal: { ko: "닫기", en: "Close" },
   },
   voice: {
     title: { ko: "음성 어시스턴트", en: "Voice Assistant" },

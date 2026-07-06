@@ -5371,6 +5371,8 @@ export default function MetronomeScreen() {
                 style={styles.modeHandle}
                 testID="open-note-mode"
                 hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+                accessibilityRole="button"
+                accessibilityLabel={t("a11y", "openNoteMode")}
               >
                 <Ionicons name="musical-notes-outline" size={S.ms(18, 0.5)} color={C.textTertiary} />
               </Pressable>
@@ -5379,6 +5381,8 @@ export default function MetronomeScreen() {
                 style={styles.modeHandle}
                 testID="open-bar-mode"
                 hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+                accessibilityRole="button"
+                accessibilityLabel={t("a11y", "openBarMode")}
               >
                 <Ionicons name="reorder-three" size={S.ms(22, 0.5)} color={C.textTertiary} />
               </Pressable>

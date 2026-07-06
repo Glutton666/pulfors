@@ -697,7 +697,7 @@ export function PracticeBookModal({
                 color={C.accent}
               />
             </Pressable>
-            <Pressable onPress={onClose} hitSlop={10}>
+            <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel={t("a11y", "closeModal")}>
               <Ionicons name="close" size={S.ms(24, 0.4)} color={C.textSecondary} />
             </Pressable>
           </View>

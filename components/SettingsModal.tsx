@@ -2494,7 +2494,7 @@ export function SettingsModal({
                 <View style={{ width: 120 }}>
                   <View style={[styles.header, { marginBottom: 12 }]}>
                     <Text style={[styles.title, { color: C.text }]}>{t("settings", "title")}</Text>
-                    <Pressable onPress={onClose} hitSlop={12} testID="settings-close">
+                    <Pressable onPress={onClose} hitSlop={12} testID="settings-close" accessibilityRole="button" accessibilityLabel={t("a11y", "closeModal")}>
                       <Ionicons name="close" size={S.ms(22, 0.4)} color={C.textSecondary} />
                     </Pressable>
                   </View>
@@ -2504,6 +2504,9 @@ export function SettingsModal({
                         key={tab.key}
                         style={[styles.sidebarTab, { borderColor: activeTab === tab.key ? C.accent : C.border, backgroundColor: activeTab === tab.key ? C.accentDim : C.surfaceLight }]}
                         onPress={() => switchTab(tab.key)}
+                        accessibilityRole="button"
+                        accessibilityLabel={tab.label}
+                        accessibilityState={{ selected: activeTab === tab.key }}
                       >
                         <Ionicons name={tab.icon as any} size={S.ms(16, 0.4)} color={activeTab === tab.key ? C.accent : C.textSecondary} />
                         <Text style={[styles.tabBtnText, { color: activeTab === tab.key ? C.accent : C.textSecondary }]}>{tab.label}</Text>
@@ -2527,7 +2530,7 @@ export function SettingsModal({
               <>
                 <View style={styles.header}>
                   <Text style={[styles.title, { color: C.text }]}>{t("settings", "title")}</Text>
-                  <Pressable onPress={onClose} hitSlop={12} testID="settings-close">
+                  <Pressable onPress={onClose} hitSlop={12} testID="settings-close" accessibilityRole="button" accessibilityLabel={t("a11y", "closeModal")}>
                     <Ionicons name="close" size={S.ms(22, 0.4)} color={C.textSecondary} />
                   </Pressable>
                 </View>
@@ -2537,6 +2540,9 @@ export function SettingsModal({
                       key={tab.key}
                       style={[styles.tabBtn, activeTab === tab.key && [styles.tabBtnActive, { borderColor: C.accent }]]}
                       onPress={() => switchTab(tab.key)}
+                      accessibilityRole="button"
+                      accessibilityLabel={tab.label}
+                      accessibilityState={{ selected: activeTab === tab.key }}
                     >
                       <Ionicons
                         name={tab.icon as any}

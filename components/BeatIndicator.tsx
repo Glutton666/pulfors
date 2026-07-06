@@ -1443,6 +1443,9 @@ export function BeatIndicator({
             ]}
             testID="play-button"
             disabled={isPreparing}
+            accessibilityRole="button"
+            accessibilityLabel={t("a11y", "playButton")}
+            accessibilityState={{ selected: isPlaying, disabled: isPreparing }}
           >
             {isPreparing ? (
               <ActivityIndicator size="large" color={C.accent} />

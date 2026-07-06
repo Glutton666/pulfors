@@ -984,6 +984,9 @@ export function NoteModeView({
               <Pressable
                 style={[styles.playButton, { backgroundColor: C.danger, width: S.ms(36, 0.4), height: S.ms(36, 0.4), borderRadius: S.ms(18, 0.4) }]}
                 onPress={onTogglePlay}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                accessibilityRole="button"
+                accessibilityLabel={t("a11y", "playButton")}
               >
                 <Ionicons name="stop" size={S.ms(20, 0.4)} color="#fff" />
               </Pressable>
@@ -993,6 +996,9 @@ export function NoteModeView({
                   onPress={onManualNext}
                   onLongPress={onManualNextImmediate}
                   delayLongPress={500}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("noteMode", "nextBeat")}
                 >
                   <Ionicons name="play-skip-forward" size={S.ms(14, 0.3)} color={C.accent} />
                   <Text style={[styles.nextButtonText, { color: C.accent, fontSize: S.ms(9, 0.3) }]}>
@@ -1065,6 +1071,8 @@ export function NoteModeView({
             <Pressable
               style={[styles.playButton, { backgroundColor: C.danger }]}
               onPress={onTogglePlay}
+              accessibilityRole="button"
+              accessibilityLabel={t("a11y", "playButton")}
             >
               <Ionicons name="stop" size={S.ms(28, 0.4)} color="#fff" />
             </Pressable>
@@ -1074,6 +1082,8 @@ export function NoteModeView({
                 onPress={onManualNext}
                 onLongPress={onManualNextImmediate}
                 delayLongPress={500}
+                accessibilityRole="button"
+                accessibilityLabel={t("noteMode", "nextBeat")}
               >
                 <Ionicons name="play-skip-forward" size={S.ms(18, 0.4)} color={C.accent} />
                 <Text style={[styles.nextButtonText, { color: C.accent }]}>
@@ -1268,6 +1278,10 @@ export function NoteModeView({
           ]}
           onPress={onTogglePlay}
           disabled={queue.length === 0}
+          hitSlop={isLandscape ? { top: 8, bottom: 8, left: 4, right: 4 } : undefined}
+          accessibilityRole="button"
+          accessibilityLabel={t("a11y", "playButton")}
+          accessibilityState={{ selected: isPlaying, disabled: queue.length === 0 }}
         >
           <Ionicons name={isPlaying ? "stop" : "play"} size={isLandscape ? 24 : 28} color="#fff" />
         </Pressable>
@@ -1280,6 +1294,8 @@ export function NoteModeView({
             onPress={onManualNext}
             onLongPress={onManualNextImmediate}
             delayLongPress={500}
+            hitSlop={isLandscape ? { top: 8, bottom: 8, left: 4, right: 4 } : undefined}
+            accessibilityRole="button"
             accessibilityLabel={t("noteMode", "nextBeatHint")}
           >
             <Ionicons name="play-skip-forward" size={isLandscape ? 16 : 18} color={C.accent} />

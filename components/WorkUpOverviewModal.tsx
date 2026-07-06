@@ -702,11 +702,11 @@ export function WorkUpOverviewModal({
               <Text style={[s.title, { color: C.text }]}>{t("workUp", "title")}</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                 {loggingEnabled && (
-                  <Pressable onPress={() => setShowShareModal(true)} hitSlop={12}>
+                  <Pressable onPress={() => setShowShareModal(true)} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("workUp", "share")}>
                     <Ionicons name="share-outline" size={20} color={C.accent} />
                   </Pressable>
                 )}
-                <Pressable onPress={onClose} hitSlop={12}>
+                <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("a11y", "closeModal")}>
                   <Ionicons name="close" size={22} color={C.textSecondary} />
                 </Pressable>
               </View>
