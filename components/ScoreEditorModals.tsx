@@ -374,10 +374,14 @@ export interface ScoreMeasureContextMenuProps {
   measureIdx: number | null;
   visible: boolean;
   hasLink: boolean;
+  /** 복사/이동 대상이 되는 선택된 마디 개수 (0 또는 1이면 현재 마디만 대상) */
+  selectionCount: number;
+  /** 붙여넣을 클립보드 내용이 있는지 여부 */
+  hasClipboard: boolean;
   onClose: () => void;
-  onBpmChange: (mIdx: number) => void;
-  onTimeSigChange: (mIdx: number) => void;
-  onKeySigChange: (mIdx: number) => void;
+  onCopy: (mIdx: number) => void;
+  onCut: (mIdx: number) => void;
+  onPaste: (mIdx: number) => void;
   onAddRehearsal: (mIdx: number) => void;
   onClearSigns: (mIdx: number) => void;
   onEditLink: (mIdx: number) => void;
@@ -389,10 +393,12 @@ export function ScoreMeasureContextMenu({
   measureIdx,
   visible,
   hasLink,
+  selectionCount,
+  hasClipboard,
   onClose,
-  onBpmChange,
-  onTimeSigChange,
-  onKeySigChange,
+  onCopy,
+  onCut,
+  onPaste,
   onAddRehearsal,
   onClearSigns,
   onEditLink,
@@ -402,6 +408,7 @@ export function ScoreMeasureContextMenu({
   const { C, styles } = useEditorStyles();
   const { t } = useLanguage();
   const idx = measureIdx ?? 0;
+  const count = Math.max(selectionCount, 1);
 
   return (
     <Modal
@@ -417,33 +424,37 @@ export function ScoreMeasureContextMenu({
         >
           <Text style={[styles.symbolModalTitle, { color: C.text }]}>
             {t("scoreMode", "measureOptions")} #{idx + 1}
+            {count > 1 ? ` (${count}${t("scoreMode", "groupBarSelectedCount")})` : ""}
           </Text>
           <Pressable
             style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-            onPress={() => onBpmChange(idx)}
+            onPress={() => onCopy(idx)}
+            testID="score-ctx-copy-measure"
           >
-            <Ionicons name="musical-note" size={18} color={C.accent} />
+            <Ionicons name="copy-outline" size={18} color={C.accent} />
             <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
-              {t("scoreMode", "measureBpmChange")}
+              {t("scoreMode", "measureCopyAction")}
             </Text>
           </Pressable>
           <Pressable
             style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-            onPress={() => onTimeSigChange(idx)}
+            onPress={() => onCut(idx)}
+            testID="score-ctx-move-measure"
           >
-            <Ionicons name="time-outline" size={18} color={C.accent} />
+            <Ionicons name="cut-outline" size={18} color={C.accent} />
             <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
-              {t("scoreMode", "measureTimeSigChange")}
+              {t("scoreMode", "measureMoveAction")}
             </Text>
           </Pressable>
           <Pressable
-            style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
-            onPress={() => onKeySigChange(idx)}
-            testID="score-ctx-keysig-change"
+            style={[styles.ctxMenuItem, { borderBottomColor: C.border, opacity: hasClipboard ? 1 : 0.4 }]}
+            onPress={() => hasClipboard && onPaste(idx)}
+            disabled={!hasClipboard}
+            testID="score-ctx-paste-measure"
           >
-            <Ionicons name="key-outline" size={18} color={C.accent} />
+            <Ionicons name="clipboard-outline" size={18} color={C.accent} />
             <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
-              {t("scoreMode", "measureKeySigChange")}
+              {t("scoreMode", "measurePasteAction")}
             </Text>
           </Pressable>
           <Pressable

@@ -53,7 +53,13 @@ import type { RepeatSignId, CrescType } from "@/components/ScorePalette";
 import { useScorePlayback } from "@/hooks/useScorePlayback";
 import { makeStyles } from "@/components/ScoreEditorScreen.styles";
 import { confirmDestructive } from "@/lib/confirm";
-import { deleteMeasureFromDoc, setMeasureKeySignature } from "@/lib/score-measure-actions";
+import {
+  deleteMeasureFromDoc,
+  copyMeasuresFromDoc,
+  cutMeasuresFromDoc,
+  pasteMeasuresIntoDoc,
+} from "@/lib/score-measure-actions";
+import type { MeasureClipboardEntry } from "@/lib/score-measure-actions";
 import {
   ScoreMoreMenuModal,
   ScoreExtractPartModal,
@@ -61,7 +67,6 @@ import {
   ScoreMeasureContextMenu,
   ScoreMetaModal,
   ScoreMeasureEditModal,
-  ScoreKeySigPickerModal,
   ScorePngExportOptionsModal,
 } from "@/components/ScoreEditorModals";
 import { HintBanner } from "@/components/HintTooltip";
@@ -221,9 +226,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     hint: string;
   } | null>(null);
 
-  // ── 마디 조표(키시그니처) 선택 모달 ───────────────────────────
-  const [keySigPicker, setKeySigPicker] = useState<{ measureIdx: number } | null>(null);
-
   // ── 악보 메타데이터 편집 모달 ─────────────────────────────────
   const [showMetaModal, setShowMetaModal] = useState(false);
   const [metaDraft, setMetaDraft] = useState<{
@@ -241,6 +243,12 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   const [selectedPartIdx, setSelectedPartIdx] = useState(0);
   const [selectedMeasureIdx, setSelectedMeasureIdx] = useState<number | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  // ── 마디 다중 선택(복사/이동 대상) — 마디를 탭할 때마다 토글되는 인덱스 목록.
+  // 파트 간 마디는 인덱스로 정렬되어 있으므로(동일 인덱스=동일 마디) 인덱스 기반으로 관리한다.
+  const [measureMultiSelectIndices, setMeasureMultiSelectIndices] = useState<number[]>([]);
+  // ── 마디 복사/붙여넣기 클립보드 (같은 파트 세트 내 이동/복사만 지원, 다른 파트/악보로의 복사는 out of scope)
+  const measureClipboardRef = useRef<MeasureClipboardEntry[] | null>(null);
+  const [hasMeasureClipboard, setHasMeasureClipboard] = useState(false);
   // 2개 이상의 음표를 묶어(타이/슬러) 적용하기 위한 다중 선택 목록.
   // 항상 selectedElementId와 동기화된다: 0개→null, 1개→해당 id, 2개 이상→null(단일 액션바 숨김)
   const [multiSelectIds, setMultiSelectIds] = useState<string[]>([]);
@@ -572,6 +580,44 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       cancelText: t("scoreMode", "cancel"),
       onConfirm: () => handleDeleteMeasure(mIdx),
     });
+  }
+
+  // ── 마디 복사/이동/붙여넣기 ───────────────────────────────────
+  // 다중 선택이 있으면 그 인덱스들을, 없으면 컨텍스트 메뉴를 연 마디(fallbackIdx) 하나만 대상으로 한다.
+  function resolveMeasureSelection(fallbackIdx: number): number[] {
+    return measureMultiSelectIndices.length > 0 ? measureMultiSelectIndices : [fallbackIdx];
+  }
+
+  function handleCopyMeasures(fallbackIdx: number) {
+    setMeasureContextMenu(null);
+    const indices = resolveMeasureSelection(fallbackIdx);
+    const clip = copyMeasuresFromDoc(doc, indices);
+    if (clip.length === 0) return;
+    measureClipboardRef.current = clip;
+    setHasMeasureClipboard(true);
+    setMeasureMultiSelectIndices([]);
+  }
+
+  function handleCutMeasures(fallbackIdx: number) {
+    setMeasureContextMenu(null);
+    const indices = resolveMeasureSelection(fallbackIdx);
+    const result = cutMeasuresFromDoc(doc, indices);
+    if (!result) return; // 마지막 남은 마디는 이동(삭제)할 수 없음
+    measureClipboardRef.current = result.clip;
+    setHasMeasureClipboard(true);
+    applyDoc(result.doc);
+    setMeasureMultiSelectIndices([]);
+    setSelectedMeasureIdx(null);
+  }
+
+  function handleMeasurePaste(targetIdx: number) {
+    setMeasureContextMenu(null);
+    const clip = measureClipboardRef.current;
+    if (!clip || clip.length === 0) return;
+    const newDoc = pasteMeasuresIntoDoc(doc, targetIdx, clip);
+    if (newDoc === doc) return;
+    applyDoc(newDoc);
+    setMeasureMultiSelectIndices([]);
   }
 
   // ── 음표 추가 (터치 확정) ─────────────────────────────────────
@@ -971,7 +1017,11 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       if (hasStart) setSelectedCrescType(null);
       return;
     }
-    // 4) 기본 동작: 마디 선택
+    // 4) 기본 동작: 마디 선택 + 다중 선택 토글 (note multiSelectIds와 동일한 조작감:
+    // 탭할 때마다 선택/해제 토글, 마지막으로 탭한 마디를 selectedMeasureIdx로 표시)
+    setMeasureMultiSelectIndices((prev) =>
+      prev.includes(measureIdx) ? prev.filter((i) => i !== measureIdx) : [...prev, measureIdx],
+    );
     setSelectedMeasureIdx(measureIdx);
     setSelectedElementId(null);
   }, [selectedRepeatSign, selectedDynamic, selectedCrescType, selectedPartIdx, doc, handleRepeatSignApply, applyDoc]);
@@ -1012,19 +1062,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       hint: "e.g. 3/4  6/8  5/4",
     });
     setShowMeasureEditModal(true);
-  }
-
-  // ── 마디 컨텍스트 메뉴: 조표(키시그니처) 변경 ────────────────
-  function handleMeasureKeySigChange(measureIdx: number) {
-    setMeasureContextMenu(null);
-    setKeySigPicker({ measureIdx });
-  }
-
-  function handleKeySigSelect(sharps: number) {
-    if (!keySigPicker) return;
-    const newDoc = setMeasureKeySignature(doc, selectedPartIdx, keySigPicker.measureIdx, sharps);
-    applyDoc(newDoc);
-    setKeySigPicker(null);
   }
 
   // ── 마디 인라인 편집 저장 ─────────────────────────────────────
@@ -1792,6 +1829,50 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         </View>
       )}
 
+      {/* ── 마디 다중 선택 액션 바: 복사/이동 ─────────────────── */}
+      {measureMultiSelectIndices.length >= 2 && (
+        <View
+          style={[styles.selectionBar, { backgroundColor: C.surface, borderBottomColor: C.border }]}
+          testID="score-editor-measure-group-bar"
+        >
+          <Text style={[styles.selectionLabel, { color: C.textSecondary }]}>
+            {measureMultiSelectIndices.length}{t("scoreMode", "groupBarSelectedCount")}
+          </Text>
+
+          <View style={{ flex: 1 }} />
+
+          <Pressable
+            style={[styles.selBarBtn, { borderColor: C.accent }]}
+            onPress={() => handleCopyMeasures(measureMultiSelectIndices[measureMultiSelectIndices.length - 1])}
+            testID="score-editor-measure-copy"
+          >
+            <Ionicons name="copy-outline" size={16} color={C.accent} />
+            <Text style={[styles.selBarBtnText, { color: C.accent }]}>
+              {t("scoreMode", "measureCopyAction")}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.selBarBtn, { borderColor: C.accent }]}
+            onPress={() => handleCutMeasures(measureMultiSelectIndices[measureMultiSelectIndices.length - 1])}
+            testID="score-editor-measure-cut"
+          >
+            <Ionicons name="cut-outline" size={16} color={C.accent} />
+            <Text style={[styles.selBarBtnText, { color: C.accent }]}>
+              {t("scoreMode", "measureMoveAction")}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.selBarBtn, { borderColor: "#FF4444" }]}
+            onPress={() => setMeasureMultiSelectIndices([])}
+            testID="score-editor-measure-clear-selection"
+          >
+            <Ionicons name="close-outline" size={16} color="#FF4444" />
+          </Pressable>
+        </View>
+      )}
+
       {/* ── 다중 선택(2개 이상) 묶기 액션 바: 타이/슬러 ─────────── */}
       {multiSelectIds.length >= 2 && (
         <View
@@ -2112,6 +2193,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               selectedElementId={selectedElementId}
               multiSelectIds={multiSelectIds}
               selectedMeasureIdx={selectedMeasureIdx}
+              multiSelectMeasureIndices={measureMultiSelectIndices}
               selectedPartIdx={0}
               activeTool={activeTool}
               activeDuration={activeDuration}
@@ -2520,10 +2602,12 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         measureIdx={measureContextMenu?.measureIdx ?? null}
         visible={!!measureContextMenu?.visible}
         hasLink={!!(measureContextMenu?.measureIdx != null && currentPart?.measures[measureContextMenu.measureIdx]?.linkedPracticeEntryId)}
+        selectionCount={measureMultiSelectIndices.length}
+        hasClipboard={hasMeasureClipboard}
         onClose={() => setMeasureContextMenu(null)}
-        onBpmChange={handleMeasureBpmChange}
-        onTimeSigChange={handleMeasureTimeSigChange}
-        onKeySigChange={handleMeasureKeySigChange}
+        onCopy={handleCopyMeasures}
+        onCut={handleCutMeasures}
+        onPaste={handleMeasurePaste}
         onAddRehearsal={handleAddRehearsalMark}
         onClearSigns={handleClearMeasureSigns}
         onEditLink={handleMeasureEditLink}
@@ -2543,16 +2627,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         onClose={() => { setShowMeasureEditModal(false); setMeasureEditTarget(null); }}
         onChangeTarget={setMeasureEditTarget}
         onSave={handleMeasureEditSave}
-      />
-      <ScoreKeySigPickerModal
-        visible={!!keySigPicker}
-        value={
-          keySigPicker
-            ? currentPart?.measures[keySigPicker.measureIdx]?.keySignature?.sharps ?? doc.keySignature.sharps
-            : doc.keySignature.sharps
-        }
-        onClose={() => setKeySigPicker(null)}
-        onSelect={handleKeySigSelect}
       />
     </View>
   );

@@ -662,6 +662,8 @@ interface MeasureRenderProps {
   multiSelectIds?: string[];
   /** 이 마디가 마디 설정 드로어에서 현재 선택된 마디인지 여부 */
   isSelectedMeasure?: boolean;
+  /** 이 마디가 복사/이동용 다중 선택에 포함되었는지 여부 */
+  isMultiSelectedMeasure?: boolean;
   isPlayheadMeasure?: boolean;
   playheadFraction?: number;
   highlightColor?: string;
@@ -704,6 +706,7 @@ function MeasureRender({
   selectedElementId,
   multiSelectIds,
   isSelectedMeasure = false,
+  isMultiSelectedMeasure = false,
   isPlayheadMeasure = false,
   playheadFraction = 0,
   highlightColor = "rgba(100,180,255,0.18)",
@@ -766,6 +769,20 @@ function MeasureRender({
           stroke="#FF9F43"
           strokeWidth={2}
           strokeDasharray="4,3"
+          rx={4}
+        />
+      )}
+
+      {/* 복사/이동용 다중 선택 하이라이트 — 채우기로 표시해 단일 선택 테두리와 구분 */}
+      {isMultiSelectedMeasure && (
+        <Rect
+          x={x + 1}
+          y={staffY - STAFF_PADDING_TOP + 5}
+          width={Math.max(width - 2, 0)}
+          height={STAFF_PADDING_TOP + STAFF_HEIGHT + STAFF_PADDING_BOTTOM - 10}
+          fill="rgba(255,159,67,0.16)"
+          stroke="#FF9F43"
+          strokeWidth={1.5}
           rx={4}
         />
       )}
@@ -1121,6 +1138,7 @@ interface PartRenderProps {
   selectedElementId?: string | null;
   multiSelectIds?: string[];
   selectedMeasureIdx?: number | null;
+  multiSelectMeasureIndices?: number[];
   playheadMeasureIdx?: number;
   playheadFraction?: number;
   highlightColor?: string;
@@ -1136,6 +1154,7 @@ function PartRender({
   selectedElementId,
   multiSelectIds,
   selectedMeasureIdx = null,
+  multiSelectMeasureIndices,
   playheadMeasureIdx,
   playheadFraction = 0,
   highlightColor,
@@ -1264,6 +1283,7 @@ function PartRender({
               selectedElementId={selectedElementId}
               multiSelectIds={multiSelectIds}
               isSelectedMeasure={selectedMeasureIdx === mIdx}
+              isMultiSelectedMeasure={!!multiSelectMeasureIndices?.includes(mIdx)}
               isPlayheadMeasure={isPlayheadMeasure}
               playheadFraction={isPlayheadMeasure ? playheadFraction : 0}
               highlightColor={highlightColor}
@@ -1297,6 +1317,8 @@ export interface ScoreRendererProps {
   multiSelectIds?: string[];
   /** 현재 선택된 마디 인덱스 — 선택된 마디를 시각적으로 하이라이트 (null이면 선택 없음) */
   selectedMeasureIdx?: number | null;
+  /** 복사/이동용으로 다중 선택된 마디 인덱스 목록 */
+  multiSelectMeasureIndices?: number[];
   playheadMeasureIdx?: number;
   playheadFraction?: number;
   showPlayhead?: boolean;
@@ -1315,6 +1337,7 @@ export function ScoreRenderer({
   selectedElementId,
   multiSelectIds,
   selectedMeasureIdx = null,
+  multiSelectMeasureIndices,
   playheadMeasureIdx,
   playheadFraction = 0,
   showPlayhead = true,
@@ -1381,6 +1404,7 @@ export function ScoreRenderer({
               selectedElementId={selectedElementId}
               multiSelectIds={multiSelectIds}
               selectedMeasureIdx={selectedMeasureIdx}
+              multiSelectMeasureIndices={multiSelectMeasureIndices}
               playheadMeasureIdx={playheadMeasureIdx}
               playheadFraction={playheadFraction}
               showPlayhead={showPlayhead}

@@ -90,6 +90,8 @@ export interface ScoreCanvasProps {
   selectedPartIdx: number;
   /** 현재 선택된 마디 인덱스 — 선택된 마디를 시각적으로 하이라이트하는 데 사용 (null이면 선택 없음) */
   selectedMeasureIdx?: number | null;
+  /** 다중 선택된 마디 인덱스 목록 — 복사/이동 등 배치 작업 대상 하이라이트에 사용 */
+  multiSelectMeasureIndices?: number[];
   activeTool: EditorTool;
   activeDuration: NoteDuration;
   isDotted: boolean;
@@ -134,6 +136,7 @@ export function ScoreCanvas({
   multiSelectIds,
   selectedPartIdx,
   selectedMeasureIdx = null,
+  multiSelectMeasureIndices,
   activeTool,
   activeDuration,
   isDotted,
@@ -712,6 +715,7 @@ export function ScoreCanvas({
         selectedElementId={selectedElementId}
         multiSelectIds={multiSelectIds}
         selectedMeasureIdx={selectedMeasureIdx}
+        multiSelectMeasureIndices={multiSelectMeasureIndices}
         playheadMeasureIdx={playheadMeasureIdx}
         playheadFraction={playheadFraction}
         showPlayhead={showPlayhead}
