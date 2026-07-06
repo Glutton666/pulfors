@@ -371,21 +371,31 @@ export function ScoreSymbolSettingsModal({
 export interface ScoreMeasureContextMenuProps {
   measureIdx: number | null;
   visible: boolean;
+  hasLink: boolean;
   onClose: () => void;
   onBpmChange: (mIdx: number) => void;
   onTimeSigChange: (mIdx: number) => void;
   onAddRehearsal: (mIdx: number) => void;
   onClearSigns: (mIdx: number) => void;
+  onAddMeasure: (mIdx: number) => void;
+  onEditLink: (mIdx: number) => void;
+  onClearLink: (mIdx: number) => void;
+  onDelete: (mIdx: number) => void;
 }
 
 export function ScoreMeasureContextMenu({
   measureIdx,
   visible,
+  hasLink,
   onClose,
   onBpmChange,
   onTimeSigChange,
   onAddRehearsal,
   onClearSigns,
+  onAddMeasure,
+  onEditLink,
+  onClearLink,
+  onDelete,
 }: ScoreMeasureContextMenuProps) {
   const { C, styles } = useEditorStyles();
   const { t } = useLanguage();
@@ -440,6 +450,48 @@ export function ScoreMeasureContextMenu({
             <Ionicons name="trash-outline" size={18} color="#FF453A" />
             <Text style={[styles.ctxMenuLabel, { color: "#FF453A" }]}>
               {t("scoreMode", "measureClearSigns")}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+            onPress={() => onAddMeasure(idx)}
+            testID="score-ctx-add-measure"
+          >
+            <Ionicons name="add-circle-outline" size={18} color={C.accent} />
+            <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
+              {t("scoreMode", "addMeasure")}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+            onPress={() => onEditLink(idx)}
+            testID="score-ctx-edit-link"
+          >
+            <Ionicons name="link-outline" size={18} color={C.accent} />
+            <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
+              {t("scoreMode", "editLinkEntry")}
+            </Text>
+          </Pressable>
+          {hasLink && (
+            <Pressable
+              style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+              onPress={() => onClearLink(idx)}
+              testID="score-ctx-clear-link"
+            >
+              <Ionicons name="unlink-outline" size={18} color={C.accent} />
+              <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
+                {t("scoreMode", "clearLink")}
+              </Text>
+            </Pressable>
+          )}
+          <Pressable
+            style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+            onPress={() => onDelete(idx)}
+            testID="score-ctx-delete-measure"
+          >
+            <Ionicons name="trash-outline" size={18} color="#FF453A" />
+            <Text style={[styles.ctxMenuLabel, { color: "#FF453A" }]}>
+              {t("scoreMode", "deleteMeasure")}
             </Text>
           </Pressable>
           <Pressable

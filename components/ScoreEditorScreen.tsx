@@ -50,7 +50,7 @@ import type { RepeatSignId, CrescType } from "@/components/ScorePalette";
 import { useScorePlayback } from "@/hooks/useScorePlayback";
 import { makeStyles } from "@/components/ScoreEditorScreen.styles";
 import { confirmDestructive } from "@/lib/confirm";
-import { buildMeasureLongPressButtons, deleteMeasureFromDoc } from "@/lib/score-measure-actions";
+import { deleteMeasureFromDoc } from "@/lib/score-measure-actions";
 import {
   ScoreMoreMenuModal,
   ScoreExtractPartModal,
@@ -431,9 +431,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     };
     applyDoc(newDoc);
     setSelectedMeasureIdx((doc.parts[selectedPartIdx]?.measures.length) ?? 0);
-    requestAnimationFrame(() => {
-      measureListScrollRef.current?.scrollToEnd({ animated: true });
-    });
   }
 
   // ── 마디 삭제 ─────────────────────────────────────────────────
@@ -444,23 +441,53 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     if (selectedMeasureIdx === mIdx) setSelectedMeasureIdx(null);
   }
 
-  // ── 마디 리듬 미리보기 (음표 길이를 간단 기호로 요약) ─────────
-  const measureRhythmPreview = useCallback((m: typeof doc.parts[0]["measures"][0]) => {
-    if (m.elements.length === 0) return null;
-    const denomLabel: Record<string, string> = {
-      whole: "1", half: "2", quarter: "4", eighth: "8",
-      sixteenth: "16", thirty_second: "32",
-    };
-    return m.elements
-      .map((el) => {
-        const base = el.duration.replace("_dot", "");
-        const label = `${denomLabel[base] ?? "4"}${el.duration.endsWith("_dot") ? "." : ""}`;
-        return el.type === "rest" ? `(${label})` : label;
-      })
-      .join(" ");
-  }, []);
+  // ── 마디 컨텍스트 메뉴: 마디 추가 ───────────────────────────
+  function handleMeasureAddFromContext(_mIdx: number) {
+    setMeasureContextMenu(null);
+    handleAddMeasure();
+  }
 
-  const measureListScrollRef = useRef<ScrollView>(null);
+  // ── 마디 컨텍스트 메뉴: 연결 항목 편집 ───────────────────────
+  function handleMeasureEditLink(mIdx: number) {
+    setMeasureContextMenu(null);
+    const curMeasure = doc.parts[selectedPartIdx]?.measures[mIdx];
+    setMeasureEditTarget({
+      measureIdx: mIdx,
+      field: "linkedEntry",
+      value: curMeasure?.linkedPracticeEntryId ?? "",
+      label: t("scoreMode", "drawerLinkEntry"),
+      hint: "entry ID",
+    });
+    setShowMeasureEditModal(true);
+  }
+
+  // ── 마디 컨텍스트 메뉴: 연결 해제 ─────────────────────────────
+  function handleMeasureClearLink(mIdx: number) {
+    setMeasureContextMenu(null);
+    applyDoc({
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
+        if (pIdx !== selectedPartIdx) return p;
+        return {
+          ...p,
+          measures: p.measures.map((mes, mi) =>
+            mi === mIdx ? { ...mes, linkedPracticeEntryId: undefined } : mes,
+          ),
+        };
+      }),
+    });
+  }
+
+  // ── 마디 컨텍스트 메뉴: 마디 삭제 (확인 후 삭제) ─────────────
+  function handleMeasureDeleteFromContext(mIdx: number) {
+    setMeasureContextMenu(null);
+    confirmDestructive(t("scoreMode", "deleteMeasureConfirm"), {
+      title: t("scoreMode", "deleteMeasure"),
+      confirmText: t("scoreMode", "delete"),
+      cancelText: t("scoreMode", "cancel"),
+      onConfirm: () => handleDeleteMeasure(mIdx),
+    });
+  }
 
   // ── 음표 추가 (터치 확정) ─────────────────────────────────────
   const handleNotePlaced = useCallback(
@@ -1687,140 +1714,8 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           </Text>
         )}
 
-        {/* ── 마디 관리 목록 (세로 스크롤) ───────────────────────── */}
-        {currentPart && (
-          <>
-          <View style={[styles.measureListContainer, { marginTop: 16, borderColor: C.border }]}>
-            <ScrollView
-              ref={measureListScrollRef}
-              style={styles.measureListScroll}
-              showsVerticalScrollIndicator={true}
-              nestedScrollEnabled
-            >
-              {currentPart.measures.map((m, mIdx) => {
-                const timeSig = m.timeSignature ?? doc.timeSignature;
-                const isSelected = selectedMeasureIdx === mIdx;
-                const rhythm = measureRhythmPreview(m);
-                return (
-                  <Pressable
-                    key={m.id}
-                    onPress={() => {
-                      setSelectedMeasureIdx(mIdx);
-                      setSelectedElementId(null);
-                    }}
-                    onLongPress={() => {
-                      const buttons = buildMeasureLongPressButtons({
-                        measure: m,
-                        measureIdx: mIdx,
-                        labels: {
-                          editLinkEntry: t("scoreMode", "editLinkEntry"),
-                          clearLink: t("scoreMode", "clearLink"),
-                          delete: t("scoreMode", "delete"),
-                          cancel: t("scoreMode", "cancel"),
-                        },
-                        onEditLinkEntry: (measureIdx, measure) => {
-                          setMeasureEditTarget({
-                            measureIdx,
-                            field: "linkedEntry",
-                            value: measure.linkedPracticeEntryId ?? "",
-                            label: t("scoreMode", "drawerLinkEntry"),
-                            hint: "entry ID",
-                          });
-                          setShowMeasureEditModal(true);
-                        },
-                        onClearLink: (measureIdx) => {
-                          applyDoc({
-                            ...doc,
-                            parts: doc.parts.map((p, pIdx) => {
-                              if (pIdx !== selectedPartIdx) return p;
-                              return {
-                                ...p,
-                                measures: p.measures.map((mes, mi) =>
-                                  mi === measureIdx
-                                    ? { ...mes, linkedPracticeEntryId: undefined }
-                                    : mes,
-                                ),
-                              };
-                            }),
-                          });
-                        },
-                        onDelete: (measureIdx) => handleDeleteMeasure(measureIdx),
-                      });
-                      Alert.alert(`${mIdx + 1}`, undefined, buttons as Parameters<typeof Alert.alert>[2]);
-                    }}
-                    delayLongPress={500}
-                    style={[
-                      styles.measureRow,
-                      {
-                        borderBottomColor: C.border,
-                        backgroundColor: isSelected ? C.accent + "1c" : "transparent",
-                      },
-                    ]}
-                    testID={`score-editor-measure-${mIdx}`}
-                  >
-                    <Text
-                      style={[
-                        styles.measureRowNum,
-                        { color: isSelected ? C.accent : C.textSecondary },
-                      ]}
-                    >
-                      {mIdx + 1}
-                    </Text>
-                    <Text style={[styles.measureRowTimeSig, { color: C.textSecondary }]}>
-                      {timeSig.numerator}/{timeSig.denominator}
-                    </Text>
-                    <Text
-                      style={[styles.measureRowRhythm, { color: isSelected ? C.text : C.textSecondary }]}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                    >
-                      {rhythm ?? t("scoreMode", "measureEmpty")}
-                    </Text>
-                    {m.linkedPracticeEntryId && (
-                      <Text style={{ fontSize: 12 }}>🔗</Text>
-                    )}
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.nextMeasureBtn,
-                        { backgroundColor: C.accent, opacity: pressed ? 0.75 : 1 },
-                      ]}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        const total = currentPart?.measures.length ?? 0;
-                        if (mIdx < total - 1) {
-                          // 다음 기존 마디로 이동
-                          setSelectedMeasureIdx(mIdx + 1);
-                          setSelectedElementId(null);
-                        } else {
-                          // 마지막 마디 → 새 마디 추가 후 이동
-                          handleAddMeasure();
-                        }
-                      }}
-                      testID={`score-editor-next-measure-${mIdx}`}
-                      hitSlop={6}
-                    >
-                      <Ionicons name="chevron-forward" size={13} color="#fff" />
-                    </Pressable>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            {/* 마디 추가 버튼 (목록 하단 고정) */}
-            <Pressable
-              style={[styles.measureListFooter, { borderTopColor: C.border }]}
-              onPress={handleAddMeasure}
-              testID="score-editor-add-measure"
-            >
-              <Ionicons name="add" size={16} color={C.textSecondary} />
-              <Text style={[styles.addMeasureText, { color: C.textSecondary }]}>
-                {t("scoreMode", "addMeasure")}
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* ── 마디 설정 드로어 ──────────────────────────── */}
-          {selectedMeasureIdx !== null && (
+        {/* ── 마디 설정 드로어 (마디는 오선지에서 탭/롱프레스로 선택) ── */}
+        {currentPart && selectedMeasureIdx !== null && (
             <View style={[styles.drawerContainer, { borderColor: C.border, backgroundColor: C.surface }]}>
               <Pressable
                 style={[styles.drawerHeader, { borderBottomColor: drawerOpen ? C.border : "transparent" }]}
@@ -2001,8 +1896,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
                 </View>
               )}
             </View>
-          )}
-          </>
         )}
       </ScrollView>
 
@@ -2274,11 +2167,16 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       <ScoreMeasureContextMenu
         measureIdx={measureContextMenu?.measureIdx ?? null}
         visible={!!measureContextMenu?.visible}
+        hasLink={!!(measureContextMenu?.measureIdx != null && currentPart?.measures[measureContextMenu.measureIdx]?.linkedPracticeEntryId)}
         onClose={() => setMeasureContextMenu(null)}
         onBpmChange={handleMeasureBpmChange}
         onTimeSigChange={handleMeasureTimeSigChange}
         onAddRehearsal={handleAddRehearsalMark}
         onClearSigns={handleClearMeasureSigns}
+        onAddMeasure={handleMeasureAddFromContext}
+        onEditLink={handleMeasureEditLink}
+        onClearLink={handleMeasureClearLink}
+        onDelete={handleMeasureDeleteFromContext}
       />
       <ScoreMetaModal
         visible={showMetaModal}
