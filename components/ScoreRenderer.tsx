@@ -684,6 +684,8 @@ interface MeasureRenderProps {
   isChangeBarline?: boolean;
   // 이 마디에서 조표를 표시할지 여부 (행 첫 마디 또는 조표 변경 시)
   showKeySig?: boolean;
+  /** 이 마디의 자유 배치 X 좌표 오버라이드 (elementId → x) */
+  layoutOverrides?: Record<string, number>;
 }
 
 function MeasureRender({
@@ -717,6 +719,7 @@ function MeasureRender({
   isFinalMeasure,
   isChangeBarline,
   showKeySig = false,
+  layoutOverrides,
 }: MeasureRenderProps) {
   const clef = effectiveClef ?? part.clef;
 
@@ -736,7 +739,7 @@ function MeasureRender({
 
   // 음표 레이아웃
   const contentWidth = width - (contentX - x);
-  const positions = layoutMeasure(measure, 0, clef, contentWidth);
+  const positions = layoutMeasure(measure, 0, clef, contentWidth, layoutOverrides);
 
   return (
     <G>
@@ -1276,6 +1279,7 @@ function PartRender({
               isFinalMeasure={isFinalMeasure}
               isChangeBarline={isChangeBarline}
               showKeySig={showKeySig}
+              layoutOverrides={doc.layoutOverrides?.[measure.id]}
             />
           );
         })

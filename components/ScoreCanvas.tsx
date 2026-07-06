@@ -60,7 +60,7 @@ export interface GhostState {
   pitch: Pitch;
   measureIdx: number;
   insertIdx: number;
-  /** 마디 content 영역 시작 기준 X (논리 px) — 자유 배치 placedX 저장용 */
+  /** 마디 content 영역 시작 기준 X (논리 px) — 자유 배치 레이아웃 오버라이드 저장용 */
   measureRelX: number;
   /** 돋보기 미니뷰에 함께 그릴 주변(같은 마디) 기존 음표/쉼표 — 정확한 배치를 위한 참조용 */
   nearbyElements: NearbyElement[];
@@ -336,7 +336,9 @@ export function ScoreCanvas({
           const cx = measureContentX(accX, i, mIdx);
           const measure = doc.parts[selectedPartIdx]?.measures[mIdx];
           const cw = Math.max(mWidth - (cx - accX), 1);
-          const positions = measure ? layoutMeasure(measure, 0, clef, cw) : [];
+          const positions = measure
+            ? layoutMeasure(measure, 0, clef, cw, docRef.current.layoutOverrides?.[measure.id])
+            : [];
           let cxPos: number;
           if (positions[cursorInsertIdx]) {
             cxPos = cx + positions[cursorInsertIdx].x;
@@ -386,7 +388,7 @@ export function ScoreCanvas({
             const contentX = measureContentX(accX, i, mIdx);
             const contentWidth = Math.max(mWidth - (contentX - accX), 1);
             const positions = measure
-              ? layoutMeasure(measure, 0, effClefGhost, contentWidth)
+              ? layoutMeasure(measure, 0, effClefGhost, contentWidth, docRef.current.layoutOverrides?.[measure.id])
               : [];
             const nElements = measure?.elements.length ?? 0;
 
@@ -450,7 +452,7 @@ export function ScoreCanvas({
             const contentWidth = Math.max(mWidth - (contentX - accX), 1);
             // ScoreRenderer와 동일한 layoutMeasure 결과로 실제 음표 x 위치 계산
             const effClefHit = effectiveClefAtMeasureRef.current.get(mIdx) ?? clefRef.current;
-            const positions = layoutMeasure(measure, 0, effClefHit, contentWidth);
+            const positions = layoutMeasure(measure, 0, effClefHit, contentWidth, docRef.current.layoutOverrides?.[measure.id]);
 
             let bestDist = HIT_RADIUS;
             let bestId: string | null = null;

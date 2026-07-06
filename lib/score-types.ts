@@ -157,8 +157,6 @@ export interface ScoreNote {
   noteHead?: NoteHeadType;
   ornament?: OrnamentType;
   lyric?: string; // 성악 가사
-  /** 자유 배치 X 좌표 (마디 content 영역 시작 기준, 논리 px). 렌더링 위치로 직접 사용. */
-  placedX?: number;
   // 현악기 특수
   bowUp?: boolean;    // 활 방향 위
   bowDown?: boolean;  // 활 방향 아래
@@ -178,11 +176,50 @@ export interface ScoreRest {
   type: "rest";
   duration: RestDuration;
   dotted?: boolean;
-  /** 자유 배치 X 좌표 (마디 content 영역 시작 기준, 논리 px). */
-  placedX?: number;
 }
 
+/**
+ * 자유 배치 레이아웃 오버라이드 — 음악 데이터(ScoreNote/ScoreRest)와 분리된 화면 배치 정보.
+ * measureId → (elementId → X 좌표). X는 마디 content 영역 시작 기준, 사용자가 터치한
+ * 음표 "중심(center)" 좌표(논리 px)를 의미한다. 오버라이드가 없는 요소는 순차 레이아웃으로
+ * fallback 배치된다.
+ */
+export type ScoreLayoutOverrides = Record<string, Record<string, number>>;
+
 export type ScoreElement = ScoreNote | ScoreRest;
+
+/**
+ * 레거시 마이그레이션: 예전 버전에서 ScoreNote/ScoreRest에 직접 저장되던
+ * `placedX` 필드를 새로운 `ScoreDocument.layoutOverrides`로 이동시킨다.
+ * 이미 마이그레이션된(또는 애초에 placedX가 없는) 문서는 원본을 그대로 반환한다.
+ * 저장(loadScore)·가져오기(parsePulforsJson) 등 외부/영속 데이터를 읽는 모든
+ * 경로에서 호출되어야 한다.
+ */
+export function migrateLegacyLayoutOverrides(doc: ScoreDocument): ScoreDocument {
+  let overrides: ScoreLayoutOverrides | undefined = doc.layoutOverrides;
+  let changed = false;
+
+  const parts = doc.parts.map((part) => {
+    const measures = part.measures.map((measure) => {
+      const elements = measure.elements.map((el) => {
+        const legacyX = (el as ScoreElement & { placedX?: number }).placedX;
+        if (typeof legacyX !== "number") return el;
+        changed = true;
+        overrides = {
+          ...overrides,
+          [measure.id]: { ...overrides?.[measure.id], [el.id]: legacyX },
+        };
+        const { placedX: _placedX, ...rest } = el as ScoreElement & { placedX?: number };
+        return rest as ScoreElement;
+      });
+      return elements === measure.elements ? measure : { ...measure, elements };
+    });
+    return measures === part.measures ? part : { ...part, measures };
+  });
+
+  if (!changed) return doc;
+  return { ...doc, parts, layoutOverrides: overrides };
+}
 
 // 반복/이동 부호
 export type RepeatSign =
@@ -293,6 +330,8 @@ export interface ScoreDocument {
   measuresPerLine?: number;
   /** 내보내기 시 몇 줄마다 페이지를 나눌지. undefined/0이면 페이지 나누기 없이 한 장으로 내보냄 */
   linesPerPage?: number;
+  /** 자유 배치된 음표/쉼표의 화면 X 좌표 오버라이드 (measureId → elementId → x). 음악 데이터와 분리된 순수 레이아웃 정보. */
+  layoutOverrides?: ScoreLayoutOverrides;
 }
 
 // 악보 목록 아이템 (썸네일용 경량 정보)

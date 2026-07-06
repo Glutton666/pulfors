@@ -5,7 +5,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
 import type { ScoreDocument, ScoreListItem, ScorePart, ScoreMeasure } from "./score-types";
-import { INSTRUMENTS } from "./score-types";
+import { INSTRUMENTS, migrateLegacyLayoutOverrides } from "./score-types";
 
 const SCORES_INDEX_KEY = "metronome_scores_v1";
 const SCORE_PREFIX = "metronome_score_";
@@ -99,7 +99,7 @@ export async function saveScore(doc: ScoreDocument): Promise<void> {
 export async function loadScore(id: string): Promise<ScoreDocument | null> {
   try {
     const data = await AsyncStorage.getItem(scoreKey(id));
-    if (data) return JSON.parse(data) as ScoreDocument;
+    if (data) return migrateLegacyLayoutOverrides(JSON.parse(data) as ScoreDocument);
   } catch {}
   return null;
 }

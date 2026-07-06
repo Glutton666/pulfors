@@ -12,6 +12,7 @@ import { Platform } from "react-native";
 import { logger } from "./logger";
 import { saveScore } from "./score-storage";
 import type { ScoreDocument, ScorePart } from "./score-types";
+import { migrateLegacyLayoutOverrides } from "./score-types";
 import {
   formatDateForFilename,
   downloadJsonWeb,
@@ -266,11 +267,11 @@ async function parsePulforsJson(json: string): Promise<ImportScoreResult> {
       return { success: false, errorCode: "invalid" };
     }
     const now = Date.now();
-    const doc: ScoreDocument = {
+    const doc: ScoreDocument = migrateLegacyLayoutOverrides({
       ...rawDoc,
       id: Crypto.randomUUID(),
       metadata: { ...rawDoc.metadata, updatedAt: now },
-    };
+    });
     await saveScore(doc);
     return { success: true, doc };
   } catch (e) {

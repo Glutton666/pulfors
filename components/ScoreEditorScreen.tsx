@@ -42,6 +42,7 @@ import type {
   ArticulationType,
   Dynamic,
   ClefType,
+  ScoreLayoutOverrides,
 } from "@/lib/score-types";
 import { INSTRUMENTS } from "@/lib/score-types";
 import { ScoreCanvas } from "@/components/ScoreCanvas";
@@ -76,7 +77,6 @@ function makeNote(
   articulations?: ArticulationType[],
   dynamic?: Dynamic,
   ornament?: import("@/lib/score-types").OrnamentType | null,
-  placedX?: number,
   doubleDotted?: boolean,
 ): ScoreNote {
   const finalPitch: Pitch = accidental
@@ -91,17 +91,39 @@ function makeNote(
     articulations: articulations?.length ? articulations : undefined,
     dynamic: dynamic ?? undefined,
     ornament: ornament ?? undefined,
-    placedX,
   };
 }
 
-function makeRest(duration: NoteDuration, placedX?: number): ScoreRest {
+function makeRest(duration: NoteDuration): ScoreRest {
   return {
     id: Crypto.randomUUID(),
     type: "rest",
     duration,
-    placedX,
   };
+}
+
+/** 마디의 레이아웃 오버라이드 맵에 elementId → x 항목을 추가한 새 오버라이드 객체를 반환 */
+function withLayoutOverride(
+  overrides: ScoreLayoutOverrides | undefined,
+  measureId: string,
+  elementId: string,
+  x: number,
+): ScoreLayoutOverrides {
+  return {
+    ...overrides,
+    [measureId]: { ...overrides?.[measureId], [elementId]: x },
+  };
+}
+
+/** 마디의 레이아웃 오버라이드 맵에서 elementId 항목을 제거한 새 오버라이드 객체를 반환 */
+function withoutLayoutOverride(
+  overrides: ScoreLayoutOverrides | undefined,
+  measureId: string,
+  elementId: string,
+): ScoreLayoutOverrides | undefined {
+  if (overrides?.[measureId]?.[elementId] === undefined) return overrides;
+  const { [elementId]: _removed, ...restForMeasure } = overrides[measureId];
+  return { ...overrides, [measureId]: restForMeasure };
 }
 
 // ── Props ─────────────────────────────────────────────────────
@@ -562,7 +584,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         selectedArticulation ? [selectedArticulation] : [],
         selectedDynamic ?? undefined,
         selectedOrnament ?? undefined,
-        placedX,
         isDoubleDotted,
       );
       // sticky 악기 기호를 새로 놓인 음표에 자동 적용
@@ -581,6 +602,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         newElement = { ...newElement, ...patch };
       }
 
+      const measureId = doc.parts[selectedPartIdx]?.measures[measureIdx]?.id;
       const newDoc: ScoreDocument = {
         ...doc,
         parts: doc.parts.map((p, pIdx) => {
@@ -593,6 +615,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           });
           return { ...p, measures: newMeasures };
         }),
+        layoutOverrides: measureId
+          ? withLayoutOverride(doc.layoutOverrides, measureId, newElement.id, placedX)
+          : doc.layoutOverrides,
       };
       applyDoc(newDoc);
       setSelectedElementId(newElement.id);
@@ -604,8 +629,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   // ── 쉼표 추가 ─────────────────────────────────────────────────
   const handleRestPlaced = useCallback(
     (measureIdx: number, duration: NoteDuration, insertIdx: number, placedX: number) => {
-      const newElement = makeRest(duration, placedX);
+      const newElement = makeRest(duration);
 
+      const measureId = doc.parts[selectedPartIdx]?.measures[measureIdx]?.id;
       const newDoc: ScoreDocument = {
         ...doc,
         parts: doc.parts.map((p, pIdx) => {
@@ -618,6 +644,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           });
           return { ...p, measures: newMeasures };
         }),
+        layoutOverrides: measureId
+          ? withLayoutOverride(doc.layoutOverrides, measureId, newElement.id, placedX)
+          : doc.layoutOverrides,
       };
       applyDoc(newDoc);
       setSelectedElementId(newElement.id);
@@ -629,6 +658,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   // ── 지우기 — hitTest로 찾은 정확한 요소 제거 ─────────────────
   const handleEraseElement = useCallback(
     (elementId: string, measureIdx: number) => {
+      const measureId = doc.parts[selectedPartIdx]?.measures[measureIdx]?.id;
       const newDoc: ScoreDocument = {
         ...doc,
         parts: doc.parts.map((p, pIdx) => {
@@ -644,6 +674,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             }),
           };
         }),
+        layoutOverrides: measureId
+          ? withoutLayoutOverride(doc.layoutOverrides, measureId, elementId)
+          : doc.layoutOverrides,
       };
       applyDoc(newDoc);
       if (selectedElementId === elementId) setSelectedElementId(null);
@@ -660,6 +693,14 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         if (!byMeasure.has(measureIdx)) byMeasure.set(measureIdx, new Set());
         byMeasure.get(measureIdx)!.add(elementId);
       }
+      let nextOverrides = doc.layoutOverrides;
+      for (const [mi, ids] of byMeasure) {
+        const measureId = doc.parts[selectedPartIdx]?.measures[mi]?.id;
+        if (!measureId) continue;
+        for (const id of ids) {
+          nextOverrides = withoutLayoutOverride(nextOverrides, measureId, id);
+        }
+      }
       const newDoc: ScoreDocument = {
         ...doc,
         parts: doc.parts.map((p, pIdx) => {
@@ -673,6 +714,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             }),
           };
         }),
+        layoutOverrides: nextOverrides,
       };
       applyDoc(newDoc);
       const deletedIds = new Set(elements.map((e) => e.elementId));

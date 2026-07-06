@@ -255,17 +255,18 @@ export function layoutMeasure(
   startX: number,
   clef: ClefType,
   totalWidth: number,
+  overrides?: Record<string, number>,
 ): NotePosition[] {
   const positions: NotePosition[] = [];
   const elementCount = measure.elements.length;
   if (elementCount === 0) return positions;
 
-  // 자유 배치 여부: 하나라도 placedX가 있으면 자유 배치 모드
-  const hasPlacedX = measure.elements.some((el) => el.placedX != null);
+  // 자유 배치 여부: 하나라도 레이아웃 오버라이드가 있으면 자유 배치 모드
+  const hasOverride = measure.elements.some((el) => overrides?.[el.id] != null);
 
-  if (hasPlacedX) {
-    // ── 자유 배치 모드: placedX 기준 배치 + 50% 겹침 제한 ──
-    // placedX가 없는 기존 요소는 순차 레이아웃 위치를 fallback으로 사용
+  if (hasOverride) {
+    // ── 자유 배치 모드: 오버라이드 X 좌표를 그대로 사용 (겹침 방지 없음) ──
+    // 오버라이드가 없는 기존 요소는 순차 레이아웃 위치를 fallback으로 사용
     // (자유 배치 이전에 추가된 음표들이 왼쪽으로 몰리는 regression 방지)
     const widthsSeq = measure.elements.map((el) => NOTE_WIDTH[el.duration] ?? 24);
     const totalNoteWidthSeq = widthsSeq.reduce((a, b) => a + b, 0);
@@ -282,47 +283,25 @@ export function layoutMeasure(
     }
 
     const leftPad = 8;
-    // getX: placedX가 있으면 사용자가 실제로 터치한 "중심(center)" 좌표를 의미함
-    // (ScoreCanvas의 ghost.x/measureRelX는 항상 음표 중심 기준으로 계산됨).
-    // placedX가 없는 fallback 값(seqLeftX)은 왼쪽 끝(left edge) 기준.
-    const getX = (el: (typeof measure.elements)[number]) => {
-      if (el.placedX != null) return el.placedX + startX;
-      return seqLeftX.get(el.id) ?? startX + leftPad;
-    };
-
-    const sortedByX = [...measure.elements].sort((a, b) => getX(a) - getX(b));
-
-    // 음표머리가 세로로 겹치지 않을 만큼 음높이가 떨어져 있으면(예: 화음처럼 다른 줄에
-    // 놓은 경우) 가로로 밀어내지 않는다. 음표머리 지름(NOTE_HEAD_RY*2)보다 음높이 차이가
-    // 작을 때만 "같은 줄/공간 근처"로 보고 겹침 방지 로직을 적용한다.
-    const Y_OVERLAP_THRESHOLD = NOTE_HEAD_RY * 2;
-
-    // 50% 겹침 제한: 세로로 가까운(=시각적으로 겹칠 수 있는) 음표끼리만, 50% 이상
-    // 겹치면 절반 겹친 위치에서 멈춘다. 세로로 충분히 떨어진 음표(다른 줄/칸)는
-    // 화음처럼 같은 X를 공유해도 된다.
-    const placedSoFar: { x: number; y: number; w: number }[] = [];
-    for (const el of sortedByX) {
+    for (const el of measure.elements) {
       const w = NOTE_WIDTH[el.duration] ?? 24;
-      // placedX는 중심 좌표이므로 왼쪽 끝(left edge) 계산 시 폭의 절반을 빼야 함.
-      // fallback(seqLeftX)은 이미 왼쪽 끝 기준이므로 그대로 사용.
-      let rawX = el.placedX != null ? getX(el) - w / 2 : getX(el);
       let y = STAFF_HEIGHT / 2;
       if (el.type === "note") {
         y = pitchToY(el.pitch, clef);
       }
-      // 앞서 배치된 음표 중 세로로 가까운 것에 대해서만 겹침 제한 적용
-      for (const p of placedSoFar) {
-        if (Math.abs(y - p.y) >= Y_OVERLAP_THRESHOLD) continue;
-        const minX = p.x + p.w - w * 0.5;
-        if (rawX < minX) rawX = minX;
-      }
+      // 오버라이드 값은 사용자가 실제로 터치한 "중심(center)" 좌표를 의미함
+      // (ScoreCanvas의 ghost.x/measureRelX는 항상 음표 중심 기준으로 계산됨).
+      // 오버라이드가 없는 fallback 값(seqLeftX)은 왼쪽 끝(left edge) 기준이므로 폭의 절반을 더해 중심으로 변환.
+      const ov = overrides?.[el.id];
+      const x = ov != null
+        ? startX + ov
+        : (seqLeftX.get(el.id) ?? startX + leftPad) + w / 2;
       positions.push({
         elementId: el.id,
-        x: rawX + w / 2,
+        x,
         y,
         width: w,
       });
-      placedSoFar.push({ x: rawX, y, w });
     }
     return positions;
   }
