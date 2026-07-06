@@ -431,6 +431,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     };
     applyDoc(newDoc);
     setSelectedMeasureIdx((doc.parts[selectedPartIdx]?.measures.length) ?? 0);
+    requestAnimationFrame(() => {
+      measureListScrollRef.current?.scrollToEnd({ animated: true });
+    });
   }
 
   // ── 마디 삭제 ─────────────────────────────────────────────────
@@ -464,6 +467,24 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     },
     [doc.timeSignature],
   );
+
+  // ── 마디 리듬 미리보기 (음표 길이를 간단 기호로 요약) ─────────
+  const measureRhythmPreview = useCallback((m: typeof doc.parts[0]["measures"][0]) => {
+    if (m.elements.length === 0) return null;
+    const denomLabel: Record<string, string> = {
+      whole: "1", half: "2", quarter: "4", eighth: "8",
+      sixteenth: "16", thirty_second: "32",
+    };
+    return m.elements
+      .map((el) => {
+        const base = el.duration.replace("_dot", "");
+        const label = `${denomLabel[base] ?? "4"}${el.duration.endsWith("_dot") ? "." : ""}`;
+        return el.type === "rest" ? `(${label})` : label;
+      })
+      .join(" ");
+  }, []);
+
+  const measureListScrollRef = useRef<ScrollView>(null);
 
   // ── 음표 추가 (터치 확정) ─────────────────────────────────────
   const handleNotePlaced = useCallback(
@@ -1690,143 +1711,141 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           </Text>
         )}
 
-        {/* ── 마디 관리 탭 ─────────────────────────────────────── */}
+        {/* ── 마디 관리 목록 (세로 스크롤) ───────────────────────── */}
         {currentPart && (
           <>
-          <View style={[styles.measureTabsRow, { marginTop: 16 }]}>
-            {currentPart.measures.map((m, mIdx) => {
-              const { beatsUsed, beatsTotal } = measureBeatsInfo(m, mIdx);
-              const isFull = beatsUsed >= beatsTotal;
-              const isOver = beatsUsed > beatsTotal;
-              const beatColor = isOver ? "#ef4444" : isFull ? C.accent : C.textSecondary;
-              const isSelected = selectedMeasureIdx === mIdx;
-              return (
-                <Pressable
-                  key={m.id}
-                  onPress={() => {
-                    setSelectedMeasureIdx(mIdx);
-                    setSelectedElementId(null);
-                  }}
-                  onLongPress={() => {
-                    const buttons: Parameters<typeof Alert.alert>[2] = [
-                      {
-                        text: t("scoreMode", "editLinkEntry"),
-                        onPress: () => {
-                          setMeasureEditTarget({
-                            measureIdx: mIdx,
-                            field: "linkedEntry",
-                            value: m.linkedPracticeEntryId ?? "",
-                            label: t("scoreMode", "drawerLinkEntry"),
-                            hint: "entry ID",
-                          });
-                          setShowMeasureEditModal(true);
+          <View style={[styles.measureListContainer, { marginTop: 16, borderColor: C.border }]}>
+            <ScrollView
+              ref={measureListScrollRef}
+              style={styles.measureListScroll}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled
+            >
+              {currentPart.measures.map((m, mIdx) => {
+                const timeSig = m.timeSignature ?? doc.timeSignature;
+                const isSelected = selectedMeasureIdx === mIdx;
+                const rhythm = measureRhythmPreview(m);
+                return (
+                  <Pressable
+                    key={m.id}
+                    onPress={() => {
+                      setSelectedMeasureIdx(mIdx);
+                      setSelectedElementId(null);
+                    }}
+                    onLongPress={() => {
+                      const buttons: Parameters<typeof Alert.alert>[2] = [
+                        {
+                          text: t("scoreMode", "editLinkEntry"),
+                          onPress: () => {
+                            setMeasureEditTarget({
+                              measureIdx: mIdx,
+                              field: "linkedEntry",
+                              value: m.linkedPracticeEntryId ?? "",
+                              label: t("scoreMode", "drawerLinkEntry"),
+                              hint: "entry ID",
+                            });
+                            setShowMeasureEditModal(true);
+                          },
                         },
-                      },
-                    ];
-                    if (m.linkedPracticeEntryId) {
-                      buttons.push({
-                        text: t("scoreMode", "clearLink"),
-                        onPress: () => {
-                          applyDoc({
-                            ...doc,
-                            parts: doc.parts.map((p, pIdx) => {
-                              if (pIdx !== selectedPartIdx) return p;
-                              return {
-                                ...p,
-                                measures: p.measures.map((mes, mi) =>
-                                  mi === mIdx
-                                    ? { ...mes, linkedPracticeEntryId: undefined }
-                                    : mes,
-                                ),
-                              };
-                            }),
-                          });
+                      ];
+                      if (m.linkedPracticeEntryId) {
+                        buttons.push({
+                          text: t("scoreMode", "clearLink"),
+                          onPress: () => {
+                            applyDoc({
+                              ...doc,
+                              parts: doc.parts.map((p, pIdx) => {
+                                if (pIdx !== selectedPartIdx) return p;
+                                return {
+                                  ...p,
+                                  measures: p.measures.map((mes, mi) =>
+                                    mi === mIdx
+                                      ? { ...mes, linkedPracticeEntryId: undefined }
+                                      : mes,
+                                  ),
+                                };
+                              }),
+                            });
+                          },
+                        });
+                      }
+                      buttons.push(
+                        {
+                          text: t("scoreMode", "delete"),
+                          style: "destructive",
+                          onPress: () => handleDeleteMeasure(mIdx),
                         },
-                      });
-                    }
-                    buttons.push(
-                      {
-                        text: t("scoreMode", "delete"),
-                        style: "destructive",
-                        onPress: () => handleDeleteMeasure(mIdx),
-                      },
-                      { text: t("scoreMode", "cancel"), style: "cancel" },
-                    );
-                    Alert.alert(`${mIdx + 1}`, undefined, buttons);
-                  }}
-                  delayLongPress={500}
-                  style={[
-                    styles.measureTab,
-                    {
-                      borderColor: isSelected ? C.accent : C.border,
-                      backgroundColor: isSelected ? C.accent + "22" : C.surface,
-                    },
-                  ]}
-                  testID={`score-editor-measure-${mIdx}`}
-                >
-                  <Text
+                        { text: t("scoreMode", "cancel"), style: "cancel" },
+                      );
+                      Alert.alert(`${mIdx + 1}`, undefined, buttons);
+                    }}
+                    delayLongPress={500}
                     style={[
-                      styles.measureTabNum,
-                      { color: isSelected ? C.accent : C.textSecondary },
+                      styles.measureRow,
+                      {
+                        borderBottomColor: C.border,
+                        backgroundColor: isSelected ? C.accent + "1c" : "transparent",
+                      },
                     ]}
+                    testID={`score-editor-measure-${mIdx}`}
                   >
-                    {mIdx + 1}
-                  </Text>
-                  <Text style={[styles.measureTabCount, { color: beatColor }]}>
-                    {m.elements.length === 0
-                      ? t("scoreMode", "measureEmpty")
-                      : `${beatsUsed}/${beatsTotal}`}
-                  </Text>
-                  {m.linkedPracticeEntryId && (
-                    <View style={[styles.measureTabLinked, { backgroundColor: C.accent }]} />
-                  )}
-                </Pressable>
-              );
-            })}
+                    <Text
+                      style={[
+                        styles.measureRowNum,
+                        { color: isSelected ? C.accent : C.textSecondary },
+                      ]}
+                    >
+                      {mIdx + 1}
+                    </Text>
+                    <Text style={[styles.measureRowTimeSig, { color: C.textSecondary }]}>
+                      {timeSig.numerator}/{timeSig.denominator}
+                    </Text>
+                    <Text
+                      style={[styles.measureRowRhythm, { color: isSelected ? C.text : C.textSecondary }]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {rhythm ?? t("scoreMode", "measureEmpty")}
+                    </Text>
+                    {m.linkedPracticeEntryId && (
+                      <Text style={{ fontSize: 12 }}>🔗</Text>
+                    )}
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.nextMeasureBtn,
+                        { backgroundColor: C.accent, opacity: pressed ? 0.75 : 1 },
+                      ]}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        const total = currentPart?.measures.length ?? 0;
+                        if (mIdx < total - 1) {
+                          // 다음 기존 마디로 이동
+                          setSelectedMeasureIdx(mIdx + 1);
+                          setSelectedElementId(null);
+                        } else {
+                          // 마지막 마디 → 새 마디 추가 후 이동
+                          handleAddMeasure();
+                        }
+                      }}
+                      testID={`score-editor-next-measure-${mIdx}`}
+                      hitSlop={6}
+                    >
+                      <Ionicons name="chevron-forward" size={13} color="#fff" />
+                    </Pressable>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
 
-            {/* 마디 추가 버튼 */}
+            {/* 마디 추가 버튼 (목록 하단 고정) */}
             <Pressable
-              style={[styles.addMeasureBtn, { borderColor: C.border }]}
+              style={[styles.measureListFooter, { borderTopColor: C.border }]}
               onPress={handleAddMeasure}
               testID="score-editor-add-measure"
             >
               <Ionicons name="add" size={16} color={C.textSecondary} />
               <Text style={[styles.addMeasureText, { color: C.textSecondary }]}>
                 {t("scoreMode", "addMeasure")}
-              </Text>
-            </Pressable>
-
-            {/* 다음 마디 ▶ 버튼 */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.nextMeasureBtn,
-                { backgroundColor: C.accent, opacity: pressed ? 0.75 : 1 },
-              ]}
-              onPress={() => {
-                const total = currentPart?.measures.length ?? 0;
-                const current = selectedMeasureIdx ?? -1;
-                if (current < total - 1) {
-                  // 다음 기존 마디로 이동
-                  setSelectedMeasureIdx(current + 1);
-                  setSelectedElementId(null);
-                } else {
-                  // 마지막 마디 → 새 마디 추가 후 이동 (자동 전진 없음)
-                  const newDoc: ScoreDocument = {
-                    ...doc,
-                    parts: doc.parts.map((part) => ({
-                      ...part,
-                      measures: [...part.measures, createEmptyMeasure()],
-                    })),
-                  };
-                  applyDoc(newDoc);
-                  setSelectedMeasureIdx(total);
-                  setSelectedElementId(null);
-                }
-              }}
-              testID="score-editor-next-measure"
-            >
-              <Text style={styles.nextMeasureBtnText}>
-                {t("scoreMode", "nextMeasure")}
               </Text>
             </Pressable>
           </View>

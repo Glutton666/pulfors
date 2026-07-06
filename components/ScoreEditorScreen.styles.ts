@@ -117,34 +117,51 @@ export const makeStyles = (_C: any, _S: any) =>
       marginBottom: 8,
       opacity: 0.7,
     },
-    measureTabsRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 6,
-    },
-    measureTab: {
+    measureListContainer: {
       borderWidth: 1,
-      borderRadius: Radius.sm,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      alignItems: "center",
-      minWidth: 44,
+      borderRadius: Radius.md,
+      overflow: "hidden",
     },
-    measureTabNum: {
+    measureListScroll: {
+      maxHeight: 280,
+    },
+    measureRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      gap: 8,
+    },
+    measureRowNum: {
+      width: 22,
+      textAlign: "center",
       fontFamily: "SpaceGrotesk_600SemiBold",
       fontSize: FontSize.small,
     },
-    measureTabCount: {
-      fontFamily: "SpaceGrotesk_400Regular",
-      fontSize: 10,
+    measureRowTimeSig: {
+      width: 34,
+      textAlign: "center",
+      fontFamily: "SpaceGrotesk_500Medium",
+      fontSize: 11,
     },
-    measureTabLinked: {
-      position: "absolute",
-      top: 3,
-      right: 3,
-      width: 5,
-      height: 5,
-      borderRadius: 2.5,
+    measureRowRhythm: {
+      flex: 1,
+      fontFamily: "SpaceGrotesk_400Regular",
+      fontSize: 11,
+    },
+    measureRowLinkDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    measureListFooter: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
+      paddingVertical: 10,
+      borderTopWidth: 1,
     },
     trashZone: {
       width: 36,
@@ -154,16 +171,6 @@ export const makeStyles = (_C: any, _S: any) =>
       alignItems: "center",
       justifyContent: "center",
       marginLeft: 4,
-    },
-    addMeasureBtn: {
-      borderWidth: 1,
-      borderStyle: "dashed",
-      borderRadius: Radius.sm,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
     },
     addMeasureText: {
       fontFamily: "SpaceGrotesk_400Regular",
