@@ -715,9 +715,10 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             ...p,
             measures: p.measures.map((m, mi) => {
               if (mi !== measureIdx) return m;
+              const cleaned = removeElementFromTuplets(m, elementId);
               return {
-                ...m,
-                elements: m.elements.filter((el) => el.id !== elementId),
+                ...cleaned,
+                elements: cleaned.elements.filter((el) => el.id !== elementId),
               };
             }),
           };
@@ -758,7 +759,11 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             measures: p.measures.map((m, mi) => {
               const toDelete = byMeasure.get(mi);
               if (!toDelete) return m;
-              return { ...m, elements: m.elements.filter((el) => !toDelete.has(el.id)) };
+              let cleaned = m;
+              for (const id of toDelete) {
+                cleaned = removeElementFromTuplets(cleaned, id);
+              }
+              return { ...cleaned, elements: cleaned.elements.filter((el) => !toDelete.has(el.id)) };
             }),
           };
         }),
@@ -802,6 +807,12 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       setSelectedElementId(next.length === 1 ? next[0] : null);
       return next;
     });
+  }, []);
+
+  // 잇단음표 브래킷/숫자 탭 — 그룹 전체를 다중 선택 상태로 전환
+  const handleTupletBracketTap = useCallback((elementIds: string[]) => {
+    setSelectedElementId(null);
+    setMultiSelectIds(elementIds);
   }, []);
 
   const handleElementTap = useCallback(
@@ -2340,6 +2351,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               onEraseElement={handleEraseElement}
               onEraseMultiple={handleEraseMultiple}
               onNoteMoved={handleNoteMoved}
+              onTupletBracketTap={handleTupletBracketTap}
               cursorMeasureIdx={null}
               isPlaying={playback.isPlaying}
               notePreviewEnabled={notePreviewEnabled}

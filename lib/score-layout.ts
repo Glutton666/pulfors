@@ -216,7 +216,9 @@ export function getStemDirection(noteY: number): "up" | "down" {
 export function getElementDisplayWidth(measure: ScoreMeasure, el: ScoreElement): number {
   const base = NOTE_WIDTH[el.duration] ?? 24;
   const scale = getElementBeatScale(measure, el.id);
-  return Math.max(base * scale, base * 0.55);
+  // 최소 폭 바닥은 튜플렛 비율(최소 1/2, 2연음 케이스)보다 작거나 같게 유지해
+  // 시맨틱 스케일과 시각 폭이 항상 일치하도록 한다(0.5 초과 케이스는 절대 클램프되지 않음).
+  return Math.max(base * scale, base * 0.5);
 }
 
 /**

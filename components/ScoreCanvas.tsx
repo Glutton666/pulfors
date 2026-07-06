@@ -104,6 +104,8 @@ export interface ScoreCanvasProps {
   onEraseElement: (elementId: string, measureIdx: number) => void;
   onEraseMultiple?: (elements: Array<{elementId: string; measureIdx: number}>) => void;
   onNoteMoved?: (elementId: string, measureIdx: number, newPitch: Pitch) => void;
+  /** 잇단음표 브래킷/숫자를 탭했을 때 호출 — 그룹 전체 elementIds를 전달 (다중 선택용) */
+  onTupletBracketTap?: (elementIds: string[]) => void;
   // 재생 연동
   playheadMeasureIdx?: number;
   playheadFraction?: number;
@@ -149,6 +151,7 @@ export function ScoreCanvas({
   onEraseElement,
   onEraseMultiple,
   onNoteMoved,
+  onTupletBracketTap,
   playheadMeasureIdx,
   playheadFraction = 0,
   showPlayhead = true,
@@ -186,6 +189,7 @@ export function ScoreCanvas({
   const onNoteMoveRef = useRef(onNoteMoved);
   const onMeasureLongPressRef = useRef(onMeasureLongPress);
   const onEraseMultipleRef = useRef(onEraseMultiple);
+  const onTupletBracketTapRef = useRef(onTupletBracketTap);
   const docRef = useRef(doc);
   const selectedPartIdxRef = useRef(selectedPartIdx);
   activeToolRef.current = activeTool;
@@ -196,6 +200,7 @@ export function ScoreCanvas({
   onNoteMoveRef.current = onNoteMoved;
   onMeasureLongPressRef.current = onMeasureLongPress;
   onEraseMultipleRef.current = onEraseMultiple;
+  onTupletBracketTapRef.current = onTupletBracketTap;
   docRef.current = doc;
   selectedPartIdxRef.current = selectedPartIdx;
 
@@ -485,6 +490,57 @@ export function ScoreCanvas({
     [measureContentX, onMeasureTap],
   );
 
+  // 잇단음표 브래킷/숫자 hitTest — 탭 시 그룹 전체를 다중 선택 (ScoreRenderer의 브래킷 렌더링과 동일 좌표)
+  const hitTestTupletBracket = useCallback(
+    (lx: number, ly: number): string[] | null => {
+      const TUPLET_HIT_PAD = 10;
+      for (const row of rowsRef.current) {
+        const rowBottom = row.y + SCORE_PART_HEIGHT;
+        if (ly < row.y || ly > rowBottom) continue;
+
+        let accX = 0;
+        for (let i = 0; i < row.measureIndices.length; i++) {
+          const mIdx = row.measureIndices[i];
+          const mWidth = row.measureWidths[i] ?? 0;
+          if (lx >= accX && lx <= accX + mWidth) {
+            const measure = docRef.current.parts[selectedPartIdxRef.current]?.measures[mIdx];
+            if (!measure?.tuplets?.length) return null;
+            const staffY = row.y + SCORE_STAFF_PADDING_TOP;
+            const contentX = measureContentX(accX, i, mIdx);
+            const contentWidth = Math.max(mWidth - (contentX - accX), 1);
+            const effClefHit = effectiveClefAtMeasureRef.current.get(mIdx) ?? clefRef.current;
+            const positions = layoutMeasure(measure, 0, effClefHit, contentWidth, docRef.current.layoutOverrides?.[measure.id]);
+
+            for (const group of measure.tuplets) {
+              const groupPositions = group.elementIds
+                .map((id) => positions.find((p) => p.elementId === id))
+                .filter((p): p is NonNullable<typeof p> => !!p);
+              if (groupPositions.length < 2) continue;
+              const first = groupPositions[0];
+              const last = groupPositions[groupPositions.length - 1];
+              const minRelY = Math.min(...groupPositions.map((p) => p.y));
+              const bracketY = staffY + minRelY - 14;
+              const x1 = contentX + first.x - first.width / 2 + 2;
+              const x2 = contentX + last.x + last.width / 2 - 2;
+              if (
+                lx >= x1 - TUPLET_HIT_PAD &&
+                lx <= x2 + TUPLET_HIT_PAD &&
+                ly >= bracketY - TUPLET_HIT_PAD &&
+                ly <= bracketY + TUPLET_HIT_PAD
+              ) {
+                return group.elementIds;
+              }
+            }
+            return null;
+          }
+          accX += mWidth;
+        }
+      }
+      return null;
+    },
+    [measureContentX],
+  );
+
   // 마디 인덱스만 찾는 hitTest (롱프레스용)
   const hitTestMeasure = useCallback(
     (lx: number, ly: number): number | null => {
@@ -680,7 +736,12 @@ export function ScoreCanvas({
             dragOriginalAccidentalRef.current = undefined;
           } else if (!isMoving) {
             const hit = hitTestElement(slx, sly);
-            if (hit) onElementTap(hit.elementId, hit.measureIdx);
+            if (hit) {
+              onElementTap(hit.elementId, hit.measureIdx);
+            } else {
+              const tupletHit = hitTestTupletBracket(slx, sly);
+              if (tupletHit) onTupletBracketTapRef.current?.(tupletHit);
+            }
           }
         }
       },
@@ -694,7 +755,7 @@ export function ScoreCanvas({
         eraseHitIds.clear();
       },
     });
-  }, [touchToGhost, hitTestElement, hitTestMeasure, onNotePlaced, onRestPlaced, onEraseElement, onElementTap]);
+  }, [touchToGhost, hitTestElement, hitTestMeasure, hitTestTupletBracket, onNotePlaced, onRestPlaced, onEraseElement, onElementTap]);
 
   const dur = isDotted
     ? (`${activeDuration}_dot` as NoteDuration)
