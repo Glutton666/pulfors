@@ -17,6 +17,7 @@ import {
   startAndroidFocusProbe,
   stopAndroidFocusProbe,
   _resetAndroidFocusForTests,
+  PROBE_PROGRESS_UPDATE_INTERVAL_MS,
 } from "../lib/android-audio-focus";
 
 // ── MockSound 타입 (expo-av 스텁과 일치) ──────────────────────────────────
@@ -27,8 +28,9 @@ interface MockSound {
   unloadAsync(): Promise<void>;
 }
 
-// expo-av 스텁의 createAsync 를 패치해 마지막 생성된 Sound 를 캡처한다.
+// expo-av 스텁의 createAsync 를 패치해 마지막 생성된 Sound 와 opts 를 캡처한다.
 let lastSound: MockSound | null = null;
+let lastCreateOpts: Record<string, unknown> | null = null;
 const origCreateAsync = (Audio.Sound as unknown as { createAsync: (
   src: unknown,
   opts: Record<string, unknown>,
@@ -42,6 +44,7 @@ const origCreateAsync = (Audio.Sound as unknown as { createAsync: (
 ) => {
   const result = await origCreateAsync(src, opts, cb);
   lastSound = result.sound;
+  lastCreateOpts = opts;
   return result;
 };
 
@@ -51,6 +54,7 @@ const origCreateAsync = (Audio.Sound as unknown as { createAsync: (
 function resetAll(os: "android" | "ios") {
   (Platform as unknown as Record<string, unknown>).OS = os;
   lastSound = null;
+  lastCreateOpts = null;
   _resetAndroidFocusForTests();
 }
 
@@ -76,6 +80,23 @@ test("Android 에서 startAndroidFocusProbe 가 Sound 를 생성한다", async (
   initAndroidFocusCallbacks(() => {}, () => {});
   await startAndroidFocusProbe();
   assert.ok(lastSound !== null, "Sound 가 생성돼야 한다");
+  await stopAndroidFocusProbe();
+});
+
+test("expo-av 프로브는 300ms 미만 인터럽트를 놓치지 않도록 촘촘한 폴링 간격을 사용한다", async () => {
+  resetAll("android");
+  initAndroidFocusCallbacks(() => {}, () => {});
+  await startAndroidFocusProbe();
+  assert.ok(lastCreateOpts, "createAsync 가 opts 와 함께 호출돼야 한다");
+  assert.equal(
+    lastCreateOpts!.progressUpdateIntervalMillis,
+    PROBE_PROGRESS_UPDATE_INTERVAL_MS,
+    "progressUpdateIntervalMillis 는 PROBE_PROGRESS_UPDATE_INTERVAL_MS 상수를 사용해야 한다",
+  );
+  assert.ok(
+    PROBE_PROGRESS_UPDATE_INTERVAL_MS < 300,
+    "폴링 간격은 기존 300ms 보다 짧아야 짧은 인터럽트를 놓치지 않는다",
+  );
   await stopAndroidFocusProbe();
 });
 

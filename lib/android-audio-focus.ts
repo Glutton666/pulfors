@@ -38,6 +38,23 @@ import { logger } from "@/lib/logger";
  * 2. 현재는 expo-av 폴백으로 동작한다.
  */
 
+/**
+ * expo-av 프로브의 상태 폴링 간격 (ms).
+ *
+ * expo-av 의 `progressUpdateIntervalMillis` 는 순수 폴링(고정 주기 타이머)이며,
+ * isPlaying 전환이 발생해도 즉시 콜백이 오지 않는다 — 다음 예정된 폴링 시점에만
+ * 상태를 확인한다. 따라서 이 값보다 짧게 시작하고 끝나는 인터럽트(짧은 알림음 등)는
+ * onFocusLoss/onFocusGain 이 아예 호출되지 않을 수 있다.
+ *
+ * 폴링은 고정 위상(fixed-phase)으로 스케줄링되므로, 지속 시간이 이 값 이상인
+ * 인터럽트는 반드시 폴링 시점 하나 이상을 포함한다 (pigeonhole 보장) → 놓치지 않는다.
+ * 즉, 이 상수 값이 "확실히 감지 가능한 최소 인터럽트 길이"다.
+ *
+ * 300ms → 50ms 로 낮춰 감지 지연을 크게 줄인다. 무음 볼륨 프로브의 상태
+ * 콜백은 단순 Bundle 읽기 수준이라 50ms 주기로도 배터리/성능 영향은 미미하다.
+ */
+export const PROBE_PROGRESS_UPDATE_INTERVAL_MS = 50;
+
 type FocusCallback = () => void;
 
 interface ProbeState {
@@ -186,7 +203,7 @@ export async function startAndroidFocusProbe(): Promise<void> {
         shouldPlay: true,
         isLooping: true,
         volume: 0,
-        progressUpdateIntervalMillis: 300,
+        progressUpdateIntervalMillis: PROBE_PROGRESS_UPDATE_INTERVAL_MS,
       },
       handlePlaybackStatus,
     );
