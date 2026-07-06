@@ -3155,10 +3155,37 @@ export default function MetronomeScreen() {
   const handlePatternChange = useCallback(
     (pattern: BeatType[]) => {
       setSubdivisionPattern(pattern);
-      persistSettings({ subdivisionPattern: pattern });
+      if (barModeRef.current && barStartBeatRef.current !== null) {
+        const target = barStartBeatRef.current;
+        const newSubs = { ...beatSubdivisions };
+        newSubs[String(target)] = [...pattern];
+        setBeatSubdivisions(newSubs);
+        engineRef.current?.setBeatSubdivision(target, pattern);
+        barConfigRef.current.beatSubdivisions = newSubs;
+      } else {
+        persistSettings({ subdivisionPattern: pattern });
+      }
     },
-    [persistSettings]
+    [persistSettings, beatSubdivisions]
   );
+
+  // 바 선택(barStartBeat) 변경 시, 드로어의 서브디비전 패턴을 그 마디에 저장된
+  // 패턴(beatSubdivisions[beatIndex])으로 동기화. 없으면 beatTypes[beatIndex] 기반
+  // 단일 셀로 대체하고, 선택 해제(null) 시에는 이전 마디의 패턴이 남지 않도록 초기화한다.
+  useEffect(() => {
+    if (!barMode) return;
+    if (barStartBeat === null) {
+      setSubdivisionPattern(["normal"]);
+      return;
+    }
+    const stored = beatSubdivisions[String(barStartBeat)];
+    if (stored && stored.length > 0) {
+      setSubdivisionPattern([...stored]);
+    } else {
+      const bt = beatTypes[barStartBeat] ?? "normal";
+      setSubdivisionPattern([bt]);
+    }
+  }, [barMode, barStartBeat]);
 
   const handleReset = useCallback(() => {
     setSubdivisionPattern(["accent"]);
