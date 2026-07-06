@@ -54,7 +54,7 @@ import {
   soundSets,
 } from "@/lib/metronome-engine";
 import type { BeatType, ProgressInfo } from "@/lib/metronome-engine";
-import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, loadControlPadMapping, saveControlPadMapping, createEmptyControlPadMapping, loadQuickAddList, saveQuickAddList, type ControlPadMapping, type MetronomeSettings } from "@/lib/storage";
+import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, type ControlPadMapping, type MetronomeSettings } from "@/lib/storage";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample } from "@/lib/storage";
 import { BeatIndicator } from "@/components/BeatIndicator";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
@@ -81,6 +81,12 @@ import { useAudioPlayers, type BuiltinPlayers } from "@/hooks/useAudioPlayers";
 import { useNoteSamples } from "@/hooks/useNoteSamples";
 import { useBarConfig, useDialConfig } from "@/hooks/useBarDialConfig";
 import { useMetronomeEngine } from "@/hooks/useMetronomeEngine";
+import { useEasterEggQuiz } from "@/hooks/useEasterEggQuiz";
+import { useFadeOutSession } from "@/hooks/useFadeOutSession";
+import { useGoalPopups } from "@/hooks/useGoalPopups";
+import { usePracticeRoomTracking } from "@/hooks/usePracticeRoomTracking";
+import { useControlPadMapping } from "@/hooks/useControlPadMapping";
+import { useQuickAddList } from "@/hooks/useQuickAddList";
 import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist";
 import { createRafBatcher } from "@/lib/raf-batcher";
 import { OnboardingModal } from "@/components/OnboardingModal";
@@ -121,14 +127,7 @@ import {
 } from "@/lib/audio-renderer";
 import { syncStereoArtifact, releaseStereoArtifact, releaseAll as releaseAllStereoArtifacts } from "@/lib/sample-cache";
 import type { ClickPCMs, SamplePCMEntry, TickInfo, DecodedSample } from "@/lib/audio-renderer";
-import type { ActivityLog, Goal, PracticeSessionData, PracticeRoomVisitData } from "@/lib/activity-log";
-import {
-  loadPracticeRooms,
-  getCurrentLocation,
-  requestLocationPermission,
-  findNearbyRoom,
-  type PracticeRoom,
-} from "@/lib/practice-room";
+import type { ActivityLog, Goal } from "@/lib/activity-log";
 import {
   loadKeyBindings,
   saveKeyBindings,
@@ -155,16 +154,14 @@ export default function MetronomeScreen() {
   useEffect(() => { languageRef.current = language; }, [language]);
 
   const [bpm, setBpm] = useState(120);
-  const [easterEggActive, setEasterEggActive] = useState(false);
-
-  const [easterEggShakeCount, setEasterEggShakeCount] = useState(0);
-  const [easterEggSuccessCount, setEasterEggSuccessCount] = useState(0);
-  const [easterEggRevealBpm, setEasterEggRevealBpm] = useState<number | null>(null);
-  const [easterEggGiveUpMode, setEasterEggGiveUpMode] = useState(false);
-  const easterEggPrevBpmRef = useRef(120);
-  const easterEggActualBpmRef = useRef(120);
-  const easterEggActiveRef = useRef(false);
-  useEffect(() => { easterEggActiveRef.current = easterEggActive; }, [easterEggActive]);
+  const {
+    easterEggActive, setEasterEggActive,
+    easterEggShakeCount, setEasterEggShakeCount,
+    easterEggSuccessCount, setEasterEggSuccessCount,
+    easterEggRevealBpm, setEasterEggRevealBpm,
+    easterEggGiveUpMode, setEasterEggGiveUpMode,
+    easterEggPrevBpmRef, easterEggActualBpmRef, easterEggActiveRef,
+  } = useEasterEggQuiz();
   const [halfTime, setHalfTime] = useState(false);
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
@@ -249,39 +246,11 @@ export default function MetronomeScreen() {
   const scorePracticeBookRef = useRef<PracticeEntry[]>([]);
   const linkedEntryVersionRef = useRef(0);
   const [noteBarEntries, setNoteBarEntries] = useState<PracticeEntry[]>([]);
-  const [controlPadMapping, setControlPadMapping] = useState<ControlPadMapping>(createEmptyControlPadMapping);
-  const controlPadDirtyRef = useRef(false);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const m = await loadControlPadMapping();
-      if (cancelled) return;
-      if (!controlPadDirtyRef.current) {
-        setControlPadMapping(m);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-  const handleControlPadMappingChange = useCallback((m: ControlPadMapping) => {
-    controlPadDirtyRef.current = true;
-    setControlPadMapping(m);
-    saveControlPadMapping(m).catch(() => {});
-  }, []);
+  const { controlPadMapping, handleControlPadMappingChange } = useControlPadMapping();
   const noteAdvanceQueueRef = useRef<() => void>(() => {});
   const quickAddNoteRef = useRef<(entry: PracticeEntry) => void>(() => {});
 
-  const [quickAddList, setQuickAddList] = useState<PracticeEntry[]>([]);
-  const quickAddListRef = useRef<PracticeEntry[]>([]);
-  useEffect(() => { quickAddListRef.current = quickAddList; }, [quickAddList]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const list = await loadQuickAddList();
-      if (!cancelled) setQuickAddList(list);
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  const { quickAddList, quickAddListRef, handleQuickAddListChange } = useQuickAddList();
   const noteShuffledIndicesRef = useRef<number[]>([]);
   const noteShuffledPosRef = useRef(0);
 
@@ -333,30 +302,18 @@ export default function MetronomeScreen() {
   const practiceStartRef = useRef<number | null>(null);
   const featureStartRef = useRef<{ name: string; start: number } | null>(null);
   const loadedPracticeNoteRef = useRef<{ id: string; label: string } | null>(null);
-  const roomTrackRef = useRef<{ roomId: string; roomName: string; start: number } | null>(null);
-  const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [roomTrackingActive, setRoomTrackingActive] = useState(false);
-  const [trackingRoomName, setTrackingRoomName] = useState<string | null>(null);
-  const [completedGoalPopups, setCompletedGoalPopups] = useState<Goal[]>([]);
-  const dismissedGoalIdsRef = useRef<Set<string>>(new Set());
+  const { completedGoalPopups, checkCompletedGoals, dismissGoalPopup } = useGoalPopups();
+  const {
+    roomTrackingActive, setRoomTrackingActive,
+    trackingRoomName, setTrackingRoomName,
+    startRoomTracking, stopRoomTracking,
+  } = usePracticeRoomTracking(checkCompletedGoals);
   const [showReboot, setShowReboot] = useState(false);
-  const fadeOutSessionRef = useRef<{ N: number; M: number; K: number } | null>(null);
-  const fadeOutMutedRef = useRef(false);
-  const [fadeOutPhase, setFadeOutPhase] = useState<"audible1" | "muted" | "audible2" | null>(null);
-  const [fadeOutMeasureInPhase, setFadeOutMeasureInPhase] = useState(0);
-  const fadeOutMeasureCountRef = useRef(0);
-  const clearFadeOutSession = useCallback(() => {
-    fadeOutSessionRef.current = null;
-    fadeOutMutedRef.current = false;
-    fadeOutMeasureCountRef.current = 0;
-    setFadeOutPhase(null);
-    setFadeOutMeasureInPhase(0);
-  }, []);
-  useEffect(() => {
-    if (!isPlaying && fadeOutSessionRef.current) {
-      clearFadeOutSession();
-    }
-  }, [isPlaying, clearFadeOutSession]);
+  const {
+    fadeOutSessionRef, fadeOutMutedRef, fadeOutPhase, setFadeOutPhase,
+    fadeOutMeasureInPhase, setFadeOutMeasureInPhase, fadeOutMeasureCountRef,
+    clearFadeOutSession, fadeOutStatusText,
+  } = useFadeOutSession(isPlaying, t);
 
   const [tempoQuizPhase, setTempoQuizPhase] = useState<TempoQuizPhase>("ready");
   const [tempoQuizMeasureProgress, setTempoQuizMeasureProgress] = useState(0);
@@ -411,18 +368,6 @@ export default function MetronomeScreen() {
     }
     setActiveModal(modal);
   }, [closeTempoQuiz]);
-  const fadeOutStatusText = useMemo(() => {
-    const sess = fadeOutSessionRef.current;
-    if (!sess || !fadeOutPhase) return null;
-    const cur = fadeOutMeasureInPhase + 1;
-    if (fadeOutPhase === "audible1") {
-      return t("fadeOut", "statusAudible1").replace("%cur", String(cur)).replace("%n", String(sess.N));
-    }
-    if (fadeOutPhase === "muted") {
-      return t("fadeOut", "statusMuted").replace("%cur", String(cur)).replace("%m", String(sess.M));
-    }
-    return t("fadeOut", "statusAudible2").replace("%cur", String(cur)).replace("%k", String(sess.K));
-  }, [fadeOutPhase, fadeOutMeasureInPhase, t]);
   const [customSoundSets, setCustomSoundSets] = useState<Record<string, CustomSoundSetConfig>>({});
   const customSoundSetsRef = useRef<Record<string, CustomSoundSetConfig>>({});
   useEffect(() => { customSoundSetsRef.current = customSoundSets; }, [customSoundSets]);
@@ -1446,125 +1391,6 @@ export default function MetronomeScreen() {
     scheduleReRender();
     setRecorderTarget(null);
   }, [recorderTarget, invalidateSamplePCMCache, scheduleReRender]);
-
-  const checkCompletedGoals = useCallback(async () => {
-    try {
-      const [allGoals, allLogs] = await Promise.all([loadGoals(), loadActivityLogs()]);
-      if (allGoals.length === 0) return;
-
-      const now = new Date();
-      const dayStart = new Date(now);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayStartMs = dayStart.getTime();
-
-      const todayLogs = allLogs.filter((l) => l.timestamp >= dayStartMs);
-      const todaySessions = todayLogs.filter((l) => l.type === "practice_session");
-      const todayTotalTime = todaySessions.reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0) / 60;
-      const todayBeatTime = todaySessions.filter((l) => (l.data as PracticeSessionData).mode === "dial").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0) / 60;
-      const todayBarTime = todaySessions.filter((l) => (l.data as PracticeSessionData).mode === "bar").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0) / 60;
-      const todayRoomTime = todayLogs.filter((l) => l.type === "practice_room_visit").reduce((s, l) => s + ((l.data as PracticeRoomVisitData).duration || 0), 0) / 60;
-
-      const newlyCompleted = allGoals.filter((g) => {
-        if (dismissedGoalIdsRef.current.has(g.id)) return false;
-        let progress = 0;
-        switch (g.type) {
-          case "total_play_time": progress = todayTotalTime; break;
-          case "beat_mode_time": progress = todayBeatTime; break;
-          case "bar_mode_time": progress = todayBarTime; break;
-          case "room_time": progress = todayRoomTime; break;
-          case "session_goal": {
-            progress = todaySessions
-              .filter((l) => {
-                const d = l.data as PracticeSessionData;
-                return d.mode === "bar" && d.practiceNoteId === g.practiceNoteId;
-              })
-              .reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0) / 60;
-            break;
-          }
-        }
-        return progress >= g.target;
-      });
-
-      if (newlyCompleted.length > 0) {
-        setCompletedGoalPopups((prev) => {
-          const existingIds = new Set(prev.map((p) => p.id));
-          const fresh = newlyCompleted.filter((g) => !existingIds.has(g.id));
-          return fresh.length > 0 ? [...prev, ...fresh] : prev;
-        });
-      }
-    } catch (e) {
-      captureBreadcrumb({ category: "goals", message: "Failed to check goals", level: "warning", data: { error: String(e) } });
-    }
-  }, []);
-
-  const dismissGoalPopup = useCallback(async (id: string) => {
-    dismissedGoalIdsRef.current.add(id);
-    setCompletedGoalPopups((prev) => prev.filter((g) => g.id !== id));
-    const allGoals = await loadGoals();
-    const updated = allGoals.filter((g) => g.id !== id);
-    await saveGoals(updated);
-  }, []);
-
-  const startRoomTracking = useCallback(async (room: { id: string; name: string }) => {
-    const granted = await requestLocationPermission();
-    if (!granted) return;
-    roomTrackRef.current = { roomId: room.id, roomName: room.name, start: Date.now() };
-    setRoomTrackingActive(true);
-    setTrackingRoomName(room.name);
-
-    if (locationIntervalRef.current) clearInterval(locationIntervalRef.current);
-    locationIntervalRef.current = setInterval(async () => {
-      try {
-        const loc = await getCurrentLocation();
-        if (!loc || !roomTrackRef.current) return;
-        const rooms = await loadPracticeRooms();
-        const trackedRoom = rooms.find(r => r.id === roomTrackRef.current!.roomId);
-        if (!trackedRoom) return;
-        const dist = findNearbyRoom(loc.coords.latitude, loc.coords.longitude, [trackedRoom], 20);
-        if (!dist) {
-          const dur = Math.round((Date.now() - roomTrackRef.current.start) / 1000);
-          if (dur >= 10) {
-            addActivityLog({
-              type: "practice_room_visit",
-              data: { roomId: roomTrackRef.current.roomId, roomName: roomTrackRef.current.roomName, duration: dur },
-            }).then(() => checkCompletedGoals());
-          }
-          roomTrackRef.current = null;
-          setRoomTrackingActive(false);
-          setTrackingRoomName(null);
-          if (locationIntervalRef.current) {
-            clearInterval(locationIntervalRef.current);
-            locationIntervalRef.current = null;
-          }
-        }
-      } catch (e) {}
-    }, 15000);
-  }, []);
-
-  const stopRoomTracking = useCallback(() => {
-    if (locationIntervalRef.current) {
-      clearInterval(locationIntervalRef.current);
-      locationIntervalRef.current = null;
-    }
-    if (roomTrackRef.current) {
-      const dur = Math.round((Date.now() - roomTrackRef.current.start) / 1000);
-      if (dur >= 10) {
-        addActivityLog({
-          type: "practice_room_visit",
-          data: { roomId: roomTrackRef.current.roomId, roomName: roomTrackRef.current.roomName, duration: dur },
-        }).then(() => checkCompletedGoals());
-      }
-      roomTrackRef.current = null;
-    }
-    setRoomTrackingActive(false);
-    setTrackingRoomName(null);
-  }, [checkCompletedGoals]);
-
-  useEffect(() => {
-    return () => {
-      stopRoomTracking();
-    };
-  }, []);
 
   const flashModeRef = useRef(flashMode);
   useEffect(() => { flashModeRef.current = flashMode; }, [flashMode]);
@@ -4100,12 +3926,6 @@ export default function MetronomeScreen() {
   }, []);
 
   useEffect(() => { quickAddNoteRef.current = handleNoteAddToQueue; }, [handleNoteAddToQueue]);
-
-  const handleQuickAddListChange = useCallback((list: PracticeEntry[]) => {
-    setQuickAddList(list);
-    quickAddListRef.current = list;
-    saveQuickAddList(list).catch(() => {});
-  }, []);
 
   const handleNoteRemoveFromQueue = useCallback((index: number) => {
     const curIdx = noteCurrentIndexRef.current;
