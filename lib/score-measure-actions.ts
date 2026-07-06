@@ -8,6 +8,7 @@
 
 import * as Crypto from "expo-crypto";
 import type { ScoreDocument, ScoreMeasure } from "@/lib/score-types";
+import { remapTupletsWithIdMap } from "@/lib/score-tuplet";
 
 /**
  * 특정 파트의 특정 마디부터 적용되는 조표(키시그니처)를 변경합니다.
@@ -263,6 +264,7 @@ export function pasteMeasuresIntoDoc(
         ...crescPatch,
         id: newMeasureId,
         elements: remappedElements,
+        tuplets: remapTupletsWithIdMap(partEntry.measure.tuplets, idMap),
       };
       newMeasuresByPart[partIdx].push(newMeasure);
 

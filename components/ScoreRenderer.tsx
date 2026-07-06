@@ -36,7 +36,7 @@ import {
   computeScoreLayout,
 } from "@/lib/score-layout";
 import { BASE_LINE_SPACING, scoreScaleFactor } from "@/lib/score-scale";
-import type { ScoreRowLayout } from "@/lib/score-layout";
+import type { ScoreRowLayout, NotePosition } from "@/lib/score-layout";
 import type { ScoreDocument, ScorePart, ScoreMeasure, ScoreNote, ScoreRest, ClefType, NoteDuration, ArticulationType, OrnamentType } from "@/lib/score-types";
 
 // ── 상수 ─────────────────────────────────────────────────────
@@ -917,6 +917,43 @@ function MeasureRender({
             y2={noteY2 - 2}
             color={color}
           />
+        );
+      })}
+
+      {/* 잇단음표(튜플렛) 브래킷 + 숫자 */}
+      {measure.tuplets?.map((group) => {
+        const groupPositions = group.elementIds
+          .map((id) => positions.find((p) => p.elementId === id))
+          .filter((p): p is NotePosition => !!p);
+        if (groupPositions.length < 2) return null;
+        const first = groupPositions[0];
+        const last = groupPositions[groupPositions.length - 1];
+        const minRelY = Math.min(...groupPositions.map((p) => p.y));
+        const bracketY = staffY + minRelY - 14;
+        const x1 = contentX + first.x - first.width / 2 + 2;
+        const x2 = contentX + last.x + last.width / 2 - 2;
+        const midX = (x1 + x2) / 2;
+        const tickH = 5;
+        return (
+          <G key={`tuplet-${group.id}`}>
+            <Path
+              d={`M${x1},${bracketY + tickH} L${x1},${bracketY} L${x2},${bracketY} L${x2},${bracketY + tickH}`}
+              stroke={color}
+              strokeWidth={1}
+              fill="none"
+            />
+            <Rect x={midX - 7} y={bracketY - 8} width={14} height={11} fill="#000" opacity={0} />
+            <SvgText
+              x={midX}
+              y={bracketY - 2}
+              fontSize={9}
+              fill={color}
+              fontFamily="SpaceGrotesk_600SemiBold"
+              textAnchor="middle"
+            >
+              {group.count}
+            </SvgText>
+          </G>
         );
       })}
 

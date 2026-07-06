@@ -189,6 +189,41 @@ export type ScoreLayoutOverrides = Record<string, Record<string, number>>;
 export type ScoreElement = ScoreNote | ScoreRest;
 
 /**
+ * 잇단음표(튜플렛) 그룹 — 마디 내부 로컬 개념. 음표/쉼표 묶음(elementIds)을
+ * count개를 normalCount박자(개) 시간 안에 채워 연주하도록 지정한다.
+ * 예: count=3, normalCount=2 → 3연음(triplet, 3:2). 중첩 튜플렛은 지원하지 않는다(out of scope).
+ * 이 비율 정보는 시맨틱 모델에만 저장되며, 레이아웃/렌더러/재생 로직은 이 값을 읽기만 한다.
+ */
+export interface TupletGroup {
+  id: string;
+  /** 그룹에 속한 음표/쉼표 elementId 목록 (마디 내 순서대로, 연속되어야 함) */
+  elementIds: string[];
+  /** 실제로 연주되는 음표 개수 (N연음) */
+  count: number;
+  /** count개가 채워야 할 "정상" 박자 개수 — 표준 표기 관례에 따라 자동 계산됨 */
+  normalCount: number;
+}
+
+/**
+ * 잇단음표 개수(N)에 대해 표준 표기 관례에 따른 normalCount를 계산한다.
+ * 규칙: N보다 작은 2의 거듭제곱 중 가장 큰 값을 사용한다.
+ * 예: 3→2(3:2, 셋잇단음표), 5→4(5:4, 다섯잇단음표), 6→4(6:4), 7→4(7:4, 일곱잇단음표), 9→8.
+ * 사용자가 임의 비율을 직접 지정하는 것은 out of scope — 이 자동 규칙만 지원한다.
+ */
+export function getTupletNormalCount(count: number): number {
+  if (count < 2) return Math.max(1, count);
+  let p = 1;
+  while (p * 2 < count) p *= 2;
+  return p;
+}
+
+/** count/normalCount로부터 음표 하나가 실제로 차지하는 박자 스케일 계수를 계산한다. */
+export function getTupletBeatScale(count: number, normalCount: number): number {
+  if (count <= 0) return 1;
+  return normalCount / count;
+}
+
+/**
  * 레거시 마이그레이션: 예전 버전에서 ScoreNote/ScoreRest에 직접 저장되던
  * `placedX` 필드를 새로운 `ScoreDocument.layoutOverrides`로 이동시킨다.
  * 이미 마이그레이션된(또는 애초에 placedX가 없는) 문서는 원본을 그대로 반환한다.
@@ -279,6 +314,9 @@ export interface ScoreMeasure {
 
   // 연결된 연주 항목 ID (연주 노트·Practice Entry 연동)
   linkedPracticeEntryId?: string;
+
+  /** 이 마디 내 잇단음표(튜플렛) 그룹 목록. 중첩 그룹은 지원하지 않는다. */
+  tuplets?: TupletGroup[];
 }
 
 // 성부(파트)

@@ -2,7 +2,8 @@
 // 악보 SVG 레이아웃 계산 엔진 (순수 함수)
 // ============================================================
 
-import type { ClefType, NoteDuration, Pitch, ScoreMeasure, ScoreDocument } from "./score-types";
+import type { ClefType, NoteDuration, Pitch, ScoreMeasure, ScoreDocument, ScoreElement } from "./score-types";
+import { getElementBeatScale } from "./score-tuplet";
 
 // ── 오선보 기본 상수 ───────────────────────────────────────────
 // LINE_SPACING을 변경하면 모든 파생 상수가 자동으로 스케일링됩니다.
@@ -208,13 +209,24 @@ export function getStemDirection(noteY: number): "up" | "down" {
 // ── 마디 폭 계산 ──────────────────────────────────────────────
 
 /**
+ * 음표/쉼표 하나의 화면 표시 폭. 튜플렛에 속한 요소는 실제 연주 박자(스케일)만큼
+ * 폭을 줄여, 그룹 전체가 "정상" 박자 개수만큼의 공간을 차지하도록 한다.
+ * (예: 셋잇단음표 8분음표 3개는 8분음표 2개 분량의 공간을 차지)
+ */
+export function getElementDisplayWidth(measure: ScoreMeasure, el: ScoreElement): number {
+  const base = NOTE_WIDTH[el.duration] ?? 24;
+  const scale = getElementBeatScale(measure, el.id);
+  return Math.max(base * scale, base * 0.55);
+}
+
+/**
  * 마디의 최소 필요 폭 계산 (음표 폭 합계 + 여백)
  */
 export function measureMinWidth(measure: ScoreMeasure): number {
   let totalWidth = 8; // 시작 여백
   for (const el of measure.elements) {
     if (el.type === "note" || el.type === "rest") {
-      totalWidth += NOTE_WIDTH[el.duration] ?? 24;
+      totalWidth += getElementDisplayWidth(measure, el);
     }
   }
   return Math.max(totalWidth + 8, 60); // 최소 60px
@@ -268,7 +280,7 @@ export function layoutMeasure(
     // ── 자유 배치 모드: 오버라이드 X 좌표를 그대로 사용 (겹침 방지 없음) ──
     // 오버라이드가 없는 기존 요소는 순차 레이아웃 위치를 fallback으로 사용
     // (자유 배치 이전에 추가된 음표들이 왼쪽으로 몰리는 regression 방지)
-    const widthsSeq = measure.elements.map((el) => NOTE_WIDTH[el.duration] ?? 24);
+    const widthsSeq = measure.elements.map((el) => getElementDisplayWidth(measure, el));
     const totalNoteWidthSeq = widthsSeq.reduce((a, b) => a + b, 0);
     const leftPadSeq = 8;
     const extraPerNoteSeq = Math.max(
@@ -284,7 +296,7 @@ export function layoutMeasure(
 
     const leftPad = 8;
     for (const el of measure.elements) {
-      const w = NOTE_WIDTH[el.duration] ?? 24;
+      const w = getElementDisplayWidth(measure, el);
       let y = STAFF_HEIGHT / 2;
       if (el.type === "note") {
         y = pitchToY(el.pitch, clef);
@@ -308,7 +320,7 @@ export function layoutMeasure(
 
   // ── 순차 레이아웃 모드 (기존 동작) ──
   const widths = measure.elements.map((el) =>
-    NOTE_WIDTH[el.duration] ?? 24
+    getElementDisplayWidth(measure, el)
   );
   const totalNoteWidth = widths.reduce((a, b) => a + b, 0);
 

@@ -4,6 +4,7 @@
 
 import type { ScoreDocument, ScoreMeasure, NoteDuration } from "./score-types";
 import { pitchToMidi } from "./score-layout";
+import { getElementBeatScale } from "./score-tuplet";
 
 // ── 마디 내 단일 음표 재생 이벤트 ────────────────────────────
 
@@ -203,7 +204,9 @@ function buildMeasureNotes(
   const msPerBeat = 60000 / Math.max(1, startBpm);
 
   for (const el of measure.elements) {
-    const beats = noteDurationToBeats(el.duration as NoteDuration, el.type === "note" ? el.doubleDotted : undefined);
+    const baseBeats = noteDurationToBeats(el.duration as NoteDuration, el.type === "note" ? el.doubleDotted : undefined);
+    const tupletScale = getElementBeatScale(measure, el.id);
+    const beats = baseBeats * tupletScale;
     const elDurMs = beats * msPerBeat;
 
     if (el.type === "note" && !el.tieEnd) {

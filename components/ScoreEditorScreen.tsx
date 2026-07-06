@@ -29,6 +29,7 @@ import { saveScore, createEmptyMeasure } from "@/lib/score-storage";
 import { stopAllScoreNotes, stopPreviewNote } from "@/lib/score-audio";
 import { exportScoreAsJson, exportScoreAsJpg, exportScorePagesAsPng, shareScoreAsScoreJson, importScoreFromJson, importReferenceImage, extractParts } from "@/lib/score-io";
 import { paginateScoreDoc } from "@/lib/score-layout";
+import { createTupletGroup, removeTupletGroup, findTupletForElement, removeElementFromTuplets } from "@/lib/score-tuplet";
 import { loadPracticeBook, savePracticeBook, createPracticeEntry } from "@/lib/storage";
 import type {
   ScoreDocument,
@@ -252,6 +253,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   // 2개 이상의 음표를 묶어(타이/슬러) 적용하기 위한 다중 선택 목록.
   // 항상 selectedElementId와 동기화된다: 0개→null, 1개→해당 id, 2개 이상→null(단일 액션바 숨김)
   const [multiSelectIds, setMultiSelectIds] = useState<string[]>([]);
+  const [showTupletPicker, setShowTupletPicker] = useState(false);
 
   // ── 꾸밈음 선택 ──────────────────────────────────────────────
   const [selectedOrnament, setSelectedOrnament] = useState<import("@/lib/score-types").OrnamentType | null>(null);
@@ -1225,10 +1227,13 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         if (pIdx !== selectedPartIdx) return p;
         return {
           ...p,
-          measures: p.measures.map((m) => ({
-            ...m,
-            elements: m.elements.filter((el) => el.id !== selectedElementId),
-          })),
+          measures: p.measures.map((m) => {
+            const cleaned = removeElementFromTuplets(m, selectedElementId);
+            return {
+              ...cleaned,
+              elements: cleaned.elements.filter((el) => el.id !== selectedElementId),
+            };
+          }),
         };
       }),
     };
@@ -1254,6 +1259,90 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     found.sort((a, b) => a.measureIdx - b.measureIdx || a.elemIdx - b.elemIdx);
     return found;
   }, [doc, selectedPartIdx, multiSelectIds]);
+
+  // ── 다중 선택된 요소(음표+쉼표): 잇단음표 지정용 — 문서 순서로 정렬 ──
+  const multiSelectSortedElements = useMemo(() => {
+    const part = doc.parts[selectedPartIdx];
+    if (!part) return [] as Array<{ id: string; measureIdx: number; elemIdx: number }>;
+    const found: Array<{ id: string; measureIdx: number; elemIdx: number }> = [];
+    for (const id of multiSelectIds) {
+      for (let mi = 0; mi < part.measures.length; mi++) {
+        const ei = part.measures[mi].elements.findIndex((e) => e.id === id);
+        if (ei >= 0) {
+          found.push({ id, measureIdx: mi, elemIdx: ei });
+          break;
+        }
+      }
+    }
+    found.sort((a, b) => a.measureIdx - b.measureIdx || a.elemIdx - b.elemIdx);
+    return found;
+  }, [doc, selectedPartIdx, multiSelectIds]);
+
+  // 잇단음표는 같은 마디 내 "연속된" 2개 이상 요소(음표+쉼표)에만 적용 가능
+  const multiSelectCanTuplet = useMemo(() => {
+    if (multiSelectSortedElements.length < 2) return false;
+    const measureIdx = multiSelectSortedElements[0].measureIdx;
+    if (!multiSelectSortedElements.every((e) => e.measureIdx === measureIdx)) return false;
+    for (let i = 1; i < multiSelectSortedElements.length; i++) {
+      if (multiSelectSortedElements[i].elemIdx !== multiSelectSortedElements[i - 1].elemIdx + 1) {
+        return false;
+      }
+    }
+    return true;
+  }, [multiSelectSortedElements]);
+
+  // ── 연속 선택된 요소를 N연음 잇단음표로 지정 ──────────────────
+  function handleApplyTupletToSelected(count: number) {
+    if (!multiSelectCanTuplet) return;
+    const measureIdx = multiSelectSortedElements[0].measureIdx;
+    const elementIds = multiSelectSortedElements.map((e) => e.id);
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
+        if (pIdx !== selectedPartIdx) return p;
+        return {
+          ...p,
+          measures: p.measures.map((m, mi) =>
+            mi === measureIdx ? createTupletGroup(m, elementIds, count) : m
+          ),
+        };
+      }),
+    };
+    applyDoc(newDoc);
+    setMultiSelectIds([]);
+    setSelectedElementId(null);
+    setShowTupletPicker(false);
+  }
+
+  // ── 선택된 단일 음표/쉼표가 속한 잇단음표 그룹 해제 ────────────
+  function handleRemoveTupletFromSelected(elementId: string) {
+    const part = doc.parts[selectedPartIdx];
+    if (!part) return;
+    let measureIdx = -1;
+    let groupId: string | undefined;
+    for (let mi = 0; mi < part.measures.length; mi++) {
+      const group = findTupletForElement(part.measures[mi], elementId);
+      if (group) {
+        measureIdx = mi;
+        groupId = group.id;
+        break;
+      }
+    }
+    if (measureIdx === -1 || !groupId) return;
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
+        if (pIdx !== selectedPartIdx) return p;
+        return {
+          ...p,
+          measures: p.measures.map((m, mi) =>
+            mi === measureIdx ? removeTupletGroup(m, groupId as string) : m
+          ),
+        };
+      }),
+    };
+    applyDoc(newDoc);
+  }
 
   // 타이는 정확히 인접한 2개 음표에만 적용 가능 (렌더러가 "바로 다음 요소"에 tieEnd를 건다고 가정)
   const multiSelectCanTie = useMemo(() => {
@@ -1910,12 +1999,56 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           </Pressable>
 
           <Pressable
+            style={[
+              styles.selBarBtn,
+              { borderColor: multiSelectCanTuplet ? C.accent : C.border, opacity: multiSelectCanTuplet ? 1 : 0.4 },
+            ]}
+            onPress={() => setShowTupletPicker(true)}
+            disabled={!multiSelectCanTuplet}
+            testID="score-editor-group-tuplet"
+          >
+            <Text style={[styles.selBarBtnText, { color: multiSelectCanTuplet ? C.accent : C.textSecondary, fontSize: 16 }]}>
+              ⋮⋮ {t("scoreMode", "groupBarTupletButton")}
+            </Text>
+          </Pressable>
+
+          <Pressable
             style={[styles.selBarBtn, { borderColor: C.border }]}
             onPress={handleClearMultiSelect}
             testID="score-editor-group-clear"
           >
             <Ionicons name="close-circle-outline" size={16} color={C.textSecondary} />
           </Pressable>
+        </View>
+      )}
+
+      {/* ── 잇단음표 개수(N연음) 선택 모달 ─────────────────────── */}
+      {showTupletPicker && (
+        <View style={styles.tupletPickerOverlay} testID="score-editor-tuplet-picker">
+          <View style={[styles.tupletPickerCard, { backgroundColor: C.surface, borderColor: C.border }]}>
+            <Text style={[styles.tupletPickerTitle, { color: C.text }]}>
+              {t("scoreMode", "tupletPickerTitle")}
+            </Text>
+            <View style={styles.tupletPickerGrid}>
+              {[2, 3, 4, 5, 6, 7, 9].map((n) => (
+                <Pressable
+                  key={n}
+                  style={[styles.tupletPickerBtn, { borderColor: C.accent }]}
+                  onPress={() => handleApplyTupletToSelected(n)}
+                  testID={`score-editor-tuplet-count-${n}`}
+                >
+                  <Text style={[styles.tupletPickerBtnText, { color: C.accent }]}>{n}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable
+              style={[styles.tupletPickerCancel, { borderColor: C.border }]}
+              onPress={() => setShowTupletPicker(false)}
+              testID="score-editor-tuplet-picker-cancel"
+            >
+              <Text style={{ color: C.textSecondary }}>{t("scoreMode", "tupletPickerCancel")}</Text>
+            </Pressable>
+          </View>
         </View>
       )}
 
