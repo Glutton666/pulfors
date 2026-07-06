@@ -468,12 +468,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     if (selectedMeasureIdx === mIdx) setSelectedMeasureIdx(null);
   }
 
-  // ── 마디 컨텍스트 메뉴: 마디 추가 ───────────────────────────
-  function handleMeasureAddFromContext(_mIdx: number) {
-    setMeasureContextMenu(null);
-    handleAddMeasure();
-  }
-
   // ── 마디 컨텍스트 메뉴: 연결 항목 편집 ───────────────────────
   function handleMeasureEditLink(mIdx: number) {
     setMeasureContextMenu(null);
@@ -1795,6 +1789,20 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           </Text>
         )}
 
+        {/* 마디 추가 (오선보 바로 위 고정 버튼 — 항상 마지막에 한 마디 추가) */}
+        {currentPart && (
+          <Pressable
+            style={[styles.addMeasureRow, { borderColor: C.accent }]}
+            onPress={handleAddMeasure}
+            testID="score-add-measure-btn"
+          >
+            <Ionicons name="add-circle-outline" size={16} color={C.accent} />
+            <Text style={[styles.addMeasureRowText, { color: C.accent }]}>
+              {t("scoreMode", "addMeasure")}
+            </Text>
+          </Pressable>
+        )}
+
         {/* 오선보 터치 캔버스 (참조 이미지 포함) */}
         {currentPart ? (
           <View style={{ position: "relative" }}>
@@ -2341,7 +2349,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         onKeySigChange={handleMeasureKeySigChange}
         onAddRehearsal={handleAddRehearsalMark}
         onClearSigns={handleClearMeasureSigns}
-        onAddMeasure={handleMeasureAddFromContext}
         onEditLink={handleMeasureEditLink}
         onClearLink={handleMeasureClearLink}
         onDelete={handleMeasureDeleteFromContext}

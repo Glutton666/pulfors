@@ -117,6 +117,23 @@ export const makeStyles = (_C: any, _S: any) =>
       marginBottom: 8,
       opacity: 0.7,
     },
+    addMeasureRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      alignSelf: "center",
+      gap: 6,
+      paddingVertical: 6,
+      paddingHorizontal: Spacing.md,
+      borderWidth: 1,
+      borderRadius: Radius.sm,
+      borderStyle: "dashed",
+      marginBottom: 8,
+    },
+    addMeasureRowText: {
+      fontFamily: "SpaceGrotesk_500Medium",
+      fontSize: FontSize.small,
+    },
     trashZone: {
       width: 36,
       height: 44,
