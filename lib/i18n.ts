@@ -1121,6 +1121,7 @@ export const translations = {
     measureOptions:         { ko: "마디 설정", en: "Measure Options" },
     measureBpmChange:       { ko: "이 마디부터 BPM 변경", en: "Change BPM from here" },
     measureTimeSigChange:   { ko: "이 마디부터 박자표 변경", en: "Change time signature" },
+    measureKeySigChange:    { ko: "이 마디부터 조표 변경", en: "Change key signature from here" },
     measureRepeatSign:      { ko: "반복/이동 부호 적용", en: "Apply Repeat Sign" },
     measureClearSigns:      { ko: "이 마디 부호 지우기", en: "Clear Measure Signs" },
     measureAddRehearsal:    { ko: "리허설 마크", en: "Rehearsal Mark" },

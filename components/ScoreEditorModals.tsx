@@ -18,6 +18,7 @@ import { useScale } from "@/lib/scale";
 import { makeStyles } from "./ScoreEditorScreen.styles";
 import { ALL_INSTR_SYMBOLS } from "./ScorePalette";
 import type { ScoreDocument, ScorePart, ScoreMetadata } from "@/lib/score-types";
+import { KEY_SIGNATURES, getKeySignatureLabel } from "@/lib/score-types";
 
 // ── 공통 훅 ──────────────────────────────────────────────────────
 function useEditorStyles() {
@@ -375,6 +376,7 @@ export interface ScoreMeasureContextMenuProps {
   onClose: () => void;
   onBpmChange: (mIdx: number) => void;
   onTimeSigChange: (mIdx: number) => void;
+  onKeySigChange: (mIdx: number) => void;
   onAddRehearsal: (mIdx: number) => void;
   onClearSigns: (mIdx: number) => void;
   onKeySigChange: (mIdx: number) => void;
@@ -391,6 +393,7 @@ export function ScoreMeasureContextMenu({
   onClose,
   onBpmChange,
   onTimeSigChange,
+  onKeySigChange,
   onAddRehearsal,
   onClearSigns,
   onKeySigChange,
@@ -434,6 +437,16 @@ export function ScoreMeasureContextMenu({
             <Ionicons name="time-outline" size={18} color={C.accent} />
             <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
               {t("scoreMode", "measureTimeSigChange")}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+            onPress={() => onKeySigChange(idx)}
+            testID="score-ctx-keysig-change"
+          >
+            <Ionicons name="key-outline" size={18} color={C.accent} />
+            <Text style={[styles.ctxMenuLabel, { color: C.text }]}>
+              {t("scoreMode", "measureKeySigChange")}
             </Text>
           </Pressable>
           <Pressable
@@ -509,6 +522,81 @@ export function ScoreMeasureContextMenu({
           <Pressable
             style={[styles.symbolModalClose, { backgroundColor: C.border }]}
             onPress={onClose}
+          >
+            <Text style={[styles.symbolModalCloseText, { color: C.text }]}>
+              {t("scoreMode", "done")}
+            </Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 4-0. 마디별 조표(키시그니처) 선택 모달
+// ═══════════════════════════════════════════════════════════════════
+
+export interface ScoreKeySigPickerModalProps {
+  visible: boolean;
+  value: number;
+  onClose: () => void;
+  onSelect: (sharps: number) => void;
+}
+
+export function ScoreKeySigPickerModal({
+  visible,
+  value,
+  onClose,
+  onSelect,
+}: ScoreKeySigPickerModalProps) {
+  const { C, styles } = useEditorStyles();
+  const { t } = useLanguage();
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable style={styles.symbolModalBackdrop} onPress={onClose}>
+        <Pressable
+          style={[styles.symbolModalCard, { backgroundColor: C.surface, borderColor: C.border }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <Text style={[styles.symbolModalTitle, { color: C.text }]}>
+            {t("scoreMode", "measureKeySigChange")}
+          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8, marginBottom: 12 }}>
+            {KEY_SIGNATURES.map(({ sharps }) => {
+              const selected = sharps === value;
+              return (
+                <Pressable
+                  key={sharps}
+                  style={[
+                    styles.drawerApplyBtn,
+                    {
+                      backgroundColor: selected ? C.accent : C.surface,
+                      borderWidth: 1,
+                      borderColor: selected ? C.accent : C.border,
+                      minWidth: 64,
+                    },
+                  ]}
+                  onPress={() => onSelect(sharps)}
+                  testID={`score-keysig-option-${sharps}`}
+                >
+                  <Text style={[styles.drawerApplyBtnText, { color: selected ? undefined : C.text }]}>
+                    {getKeySignatureLabel(sharps)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Pressable
+            style={[styles.symbolModalClose, { backgroundColor: C.border }]}
+            onPress={onClose}
+            testID="score-keysig-picker-done"
           >
             <Text style={[styles.symbolModalCloseText, { color: C.text }]}>
               {t("scoreMode", "done")}

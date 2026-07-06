@@ -50,7 +50,7 @@ import type { RepeatSignId, CrescType } from "@/components/ScorePalette";
 import { useScorePlayback } from "@/hooks/useScorePlayback";
 import { makeStyles } from "@/components/ScoreEditorScreen.styles";
 import { confirmDestructive } from "@/lib/confirm";
-import { deleteMeasureFromDoc } from "@/lib/score-measure-actions";
+import { deleteMeasureFromDoc, setMeasureKeySignature } from "@/lib/score-measure-actions";
 import {
   ScoreMoreMenuModal,
   ScoreExtractPartModal,
@@ -58,6 +58,7 @@ import {
   ScoreMeasureContextMenu,
   ScoreMetaModal,
   ScoreMeasureEditModal,
+  ScoreKeySigPickerModal,
   ScorePngExportOptionsModal,
 } from "@/components/ScoreEditorModals";
 import { HintBanner } from "@/components/HintTooltip";
@@ -196,6 +197,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     label: string;
     hint: string;
   } | null>(null);
+
+  // ── 마디 조표(키시그니처) 선택 모달 ───────────────────────────
+  const [keySigPicker, setKeySigPicker] = useState<{ measureIdx: number } | null>(null);
 
   // ── 악보 메타데이터 편집 모달 ─────────────────────────────────
   const [showMetaModal, setShowMetaModal] = useState(false);
@@ -977,6 +981,19 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       hint: "e.g. 3/4  6/8  5/4",
     });
     setShowMeasureEditModal(true);
+  }
+
+  // ── 마디 컨텍스트 메뉴: 조표(키시그니처) 변경 ────────────────
+  function handleMeasureKeySigChange(measureIdx: number) {
+    setMeasureContextMenu(null);
+    setKeySigPicker({ measureIdx });
+  }
+
+  function handleKeySigSelect(sharps: number) {
+    if (!keySigPicker) return;
+    const newDoc = setMeasureKeySignature(doc, selectedPartIdx, keySigPicker.measureIdx, sharps);
+    applyDoc(newDoc);
+    setKeySigPicker(null);
   }
 
   // ── 마디 인라인 편집 저장 ─────────────────────────────────────
@@ -2289,6 +2306,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         onClose={() => setMeasureContextMenu(null)}
         onBpmChange={handleMeasureBpmChange}
         onTimeSigChange={handleMeasureTimeSigChange}
+        onKeySigChange={handleMeasureKeySigChange}
         onAddRehearsal={handleAddRehearsalMark}
         onClearSigns={handleClearMeasureSigns}
         onKeySigChange={handleMeasureKeySigChange}
@@ -2310,6 +2328,16 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         onClose={() => { setShowMeasureEditModal(false); setMeasureEditTarget(null); }}
         onChangeTarget={setMeasureEditTarget}
         onSave={handleMeasureEditSave}
+      />
+      <ScoreKeySigPickerModal
+        visible={!!keySigPicker}
+        value={
+          keySigPicker
+            ? currentPart?.measures[keySigPicker.measureIdx]?.keySignature?.sharps ?? doc.keySignature.sharps
+            : doc.keySignature.sharps
+        }
+        onClose={() => setKeySigPicker(null)}
+        onSelect={handleKeySigSelect}
       />
     </View>
   );

@@ -8,6 +8,33 @@
 
 import type { ScoreDocument, ScoreMeasure } from "@/lib/score-types";
 
+/**
+ * 특정 파트의 특정 마디부터 적용되는 조표(키시그니처)를 변경합니다.
+ * 대상 파트/마디가 없으면 원본 doc을 그대로 반환합니다.
+ */
+export function setMeasureKeySignature(
+  doc: ScoreDocument,
+  partIdx: number,
+  measureIdx: number,
+  sharps: number,
+): ScoreDocument {
+  const part = doc.parts[partIdx];
+  if (!part || !part.measures[measureIdx]) return doc;
+
+  return {
+    ...doc,
+    parts: doc.parts.map((p, pIdx) => {
+      if (pIdx !== partIdx) return p;
+      return {
+        ...p,
+        measures: p.measures.map((m, mIdx) =>
+          mIdx !== measureIdx ? m : { ...m, keySignature: { sharps } },
+        ),
+      };
+    }),
+  };
+}
+
 export interface MeasureAlertButton {
   text: string;
   style?: "default" | "cancel" | "destructive";

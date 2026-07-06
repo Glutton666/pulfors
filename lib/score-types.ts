@@ -114,6 +114,24 @@ export const KEY_SIGNATURES: KeySignature[] = [
   { sharps: 5 }, { sharps: 6 }, { sharps: 7 },
 ];
 
+// 조표 sharps 값 -> 장조 이름 (샤프/플랫 개수별 표기)
+const MAJOR_KEY_NAMES: Record<number, string> = {
+  [-7]: "C♭", [-6]: "G♭", [-5]: "D♭", [-4]: "A♭",
+  [-3]: "E♭", [-2]: "B♭", [-1]: "F",
+  [0]: "C",
+  [1]: "G", [2]: "D", [3]: "A", [4]: "E",
+  [5]: "B", [6]: "F♯", [7]: "C♯",
+};
+
+/** 조표 sharps 값을 표시용 라벨로 변환. 예: 0 -> "C", 2 -> "D (2♯)", -3 -> "E♭ (3♭)" */
+export function getKeySignatureLabel(sharps: number): string {
+  const name = MAJOR_KEY_NAMES[sharps] ?? "C";
+  if (sharps === 0) return name;
+  const count = Math.abs(sharps);
+  const symbol = sharps > 0 ? "♯" : "♭";
+  return `${name} (${count}${symbol})`;
+}
+
 // 음높이 (C4 = 중간 C, MIDI note 60)
 export interface Pitch {
   step: "C" | "D" | "E" | "F" | "G" | "A" | "B";

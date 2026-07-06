@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildMeasureLongPressButtons,
   deleteMeasureFromDoc,
+  setMeasureKeySignature,
   type MeasureAlertButton,
 } from "../lib/score-measure-actions";
 import type { ScoreDocument, ScoreMeasure, ScorePart } from "../lib/score-types";
@@ -181,6 +182,44 @@ test("통합: 롱프레스 → 삭제 선택 → 실제 문서에서 마디가 �
 
   assert.equal(currentDoc.parts[0]!.measures.length, 2);
   assert.deepEqual(currentDoc.parts[0]!.measures.map((m) => m.id), ["m0", "m2"]);
+});
+
+// ── setMeasureKeySignature: 마디별 조표 변경 ─────────────────────
+
+test("setMeasureKeySignature: 지정한 마디의 keySignature가 설정됨", () => {
+  const d = doc([part("p1", [measure("m0"), measure("m1"), measure("m2")])]);
+  const result = setMeasureKeySignature(d, 0, 1, 2);
+  assert.deepEqual(result.parts[0]!.measures[1]!.keySignature, { sharps: 2 });
+  assert.equal(result.parts[0]!.measures[0]!.keySignature, undefined);
+  assert.equal(result.parts[0]!.measures[2]!.keySignature, undefined);
+});
+
+test("setMeasureKeySignature: 다른 파트는 영향받지 않음", () => {
+  const d = doc([
+    part("p1", [measure("a0"), measure("a1")]),
+    part("p2", [measure("b0"), measure("b1")]),
+  ]);
+  const result = setMeasureKeySignature(d, 0, 0, -3);
+  assert.deepEqual(result.parts[0]!.measures[0]!.keySignature, { sharps: -3 });
+  assert.equal(result.parts[1]!.measures[0]!.keySignature, undefined);
+});
+
+test("setMeasureKeySignature: 기존 조표를 새 값으로 덮어씀", () => {
+  const d = doc([part("p1", [{ ...measure("m0"), keySignature: { sharps: 1 } }])]);
+  const result = setMeasureKeySignature(d, 0, 0, -5);
+  assert.deepEqual(result.parts[0]!.measures[0]!.keySignature, { sharps: -5 });
+});
+
+test("setMeasureKeySignature: 존재하지 않는 파트 인덱스면 원본 doc 그대로 반환", () => {
+  const d = doc([part("p1", [measure("m0")])]);
+  const result = setMeasureKeySignature(d, 5, 0, 3);
+  assert.equal(result, d);
+});
+
+test("setMeasureKeySignature: 존재하지 않는 마디 인덱스면 원본 doc 그대로 반환", () => {
+  const d = doc([part("p1", [measure("m0")])]);
+  const result = setMeasureKeySignature(d, 0, 9, 3);
+  assert.equal(result, d);
 });
 
 test("통합: 롱프레스 → 취소 선택 → 문서가 그대로 유지됨", () => {
