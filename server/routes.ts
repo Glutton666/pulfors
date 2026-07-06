@@ -9,6 +9,12 @@ import { Worker } from "node:worker_threads";
 // ---------------------------------------------------------------------------
 // Audio-analysis worker code (plain JS, runs off the main event loop)
 // ---------------------------------------------------------------------------
+// autoCorrelate is defined once below (single source of truth, main-thread
+// TypeScript implementation) and its compiled function body is injected
+// verbatim into the worker script via .toString(). This keeps the worker
+// thread's eval'd JS context (which cannot `require()` this module directly
+// once esbuild-bundled for production) in lockstep with the main-thread
+// implementation used by the ffmpeg path, without hand-copying the algorithm.
 const WAV_WORKER_CODE = `
 const { workerData, parentPort } = require('worker_threads');
 
@@ -17,47 +23,7 @@ const FFMPEG_SAMPLE_RATE = 48000;
 const MAX_AUDIO_SAMPLES = MAX_ANALYSIS_SECONDS * FFMPEG_SAMPLE_RATE;
 const MAX_ANALYSIS_WINDOWS = 5;
 
-function autoCorrelate(buffer, sampleRate, rmsThreshold) {
-  if (rmsThreshold === undefined) rmsThreshold = 0.03;
-  const SIZE = buffer.length;
-  let rms = 0;
-  for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
-  rms = Math.sqrt(rms / SIZE);
-  if (rms < rmsThreshold) return -1;
-  let r1 = 0;
-  let r2 = SIZE - 1;
-  const thresh = 0.2;
-  for (let i = 0; i < SIZE / 2; i++) {
-    if (Math.abs(buffer[i]) < thresh) { r1 = i; break; }
-  }
-  for (let i = 1; i < SIZE / 2; i++) {
-    if (Math.abs(buffer[SIZE - i]) < thresh) { r2 = SIZE - i; break; }
-  }
-  const buf = buffer.slice(r1, r2);
-  if (buf.length < 2) return -1;
-  const c = new Float32Array(buf.length);
-  for (let i = 0; i < buf.length; i++) {
-    for (let j = 0; j < buf.length - i; j++) c[i] += buf[j] * buf[j + i];
-  }
-  let d = 0;
-  while (d < buf.length - 1 && c[d] > c[d + 1]) d++;
-  let maxval = -1;
-  let maxpos = -1;
-  for (let i = d; i < buf.length; i++) {
-    if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
-  }
-  if (maxpos < 0 || maxval < 0) return -1;
-  const clarity = c[0] > 0 ? maxval / c[0] : 0;
-  if (clarity < 0.5) return -1;
-  let T0 = maxpos;
-  const x1 = c[T0 - 1] ?? 0;
-  const x2 = c[T0];
-  const x3 = c[T0 + 1] ?? 0;
-  const a = (x1 + x3 - 2 * x2) / 2;
-  const b = (x3 - x1) / 2;
-  if (a) T0 = T0 - b / (2 * a);
-  return sampleRate / T0;
-}
+${autoCorrelate.toString()}
 
 function frequencyToNote(freq) {
   const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
