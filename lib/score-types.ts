@@ -47,6 +47,47 @@ export type OrnamentType =
 
 export type NoteHeadType = "normal" | "cross" | "diamond" | "triangle" | "slash";
 
+// ── 드럼(타악기) 종류 ────────────────────────────────────────────
+// 표준 드럼 표기법을 단순화한 매핑: 킥/스네어/하이햇(오픈·클로즈드)/크래시/라이드/탐탐(하이·미드·로우)
+export type DrumType =
+  | "crash"
+  | "ride"
+  | "hihat_open"
+  | "hihat_closed"
+  | "tom_high"
+  | "tom_mid"
+  | "snare"
+  | "tom_low"
+  | "kick";
+
+export interface DrumMapEntry {
+  /**
+   * 오선 위치 — 맨 위 선(0)을 기준으로 한 half-line-step 개수(1 step = LINE_SPACING/2 px).
+   * 음수 = 오선 위 스페이스(덧줄 필요), 8 = 맨 아래 선.
+   */
+  staffStep: number;
+  noteHead: NoteHeadType;
+  labelKey: string;
+}
+
+// 표준 드럼 표기법에 기반한 단순화된 오선 위치 매핑 (위→아래로 음높이가 높은 악기부터 배치)
+export const DRUM_MAP: Record<DrumType, DrumMapEntry> = {
+  crash:        { staffStep: -2, noteHead: "cross",    labelKey: "drumCrash" },
+  ride:         { staffStep: -1, noteHead: "cross",    labelKey: "drumRide" },
+  hihat_open:   { staffStep: 0,  noteHead: "triangle", labelKey: "drumHihatOpen" },
+  hihat_closed: { staffStep: 0,  noteHead: "cross",    labelKey: "drumHihatClosed" },
+  tom_high:     { staffStep: 1,  noteHead: "normal",   labelKey: "drumTomHigh" },
+  tom_mid:      { staffStep: 3,  noteHead: "normal",   labelKey: "drumTomMid" },
+  snare:        { staffStep: 4,  noteHead: "normal",   labelKey: "drumSnare" },
+  tom_low:      { staffStep: 6,  noteHead: "normal",   labelKey: "drumTomLow" },
+  kick:         { staffStep: 8,  noteHead: "normal",   labelKey: "drumKick" },
+};
+
+export const DRUM_TYPES: DrumType[] = [
+  "crash", "ride", "hihat_open", "hihat_closed",
+  "tom_high", "tom_mid", "snare", "tom_low", "kick",
+];
+
 // 악기 카테고리
 export type InstrumentCategory =
   | "strings"
@@ -155,6 +196,9 @@ export interface ScoreNote {
   articulations?: ArticulationType[];
   dynamic?: Dynamic;
   noteHead?: NoteHeadType;
+  /** 타악기(percussion) 파트에서 이 음표가 나타내는 드럼 종류. 설정 시 pitch는 무시되고
+   *  표준 오선 위치·음표머리·재생 사운드가 모두 drumType에서 파생됩니다. */
+  drumType?: DrumType;
   ornament?: OrnamentType;
   lyric?: string; // 성악 가사
   // 현악기 특수

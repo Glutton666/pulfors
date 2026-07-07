@@ -84,6 +84,7 @@ function makeNote(
   dynamic?: Dynamic,
   ornament?: import("@/lib/score-types").OrnamentType | null,
   doubleDotted?: boolean,
+  drumType?: import("@/lib/score-types").DrumType,
 ): ScoreNote {
   const finalPitch: Pitch = accidental
     ? { ...pitch, accidental }
@@ -97,6 +98,7 @@ function makeNote(
     articulations: articulations?.length ? articulations : undefined,
     dynamic: dynamic ?? undefined,
     ornament: ornament ?? undefined,
+    drumType: drumType ?? undefined,
   };
 }
 
@@ -210,6 +212,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   const [selectedDynamic, setSelectedDynamic] = useState<Dynamic | null>(null);
   const [selectedRepeatSign, setSelectedRepeatSign] = useState<RepeatSignId | null>(null);
   const [selectedCrescType, setSelectedCrescType] = useState<CrescType>(null);
+  const [selectedDrumType, setSelectedDrumType] = useState<import("@/lib/score-types").DrumType>("snare");
 
   // ── 마디 컨텍스트 메뉴 state ──────────────────────────────────
   const [measureContextMenu, setMeasureContextMenu] = useState<{
@@ -623,7 +626,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
 
   // ── 음표 추가 (터치 확정) ─────────────────────────────────────
   const handleNotePlaced = useCallback(
-    (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number) => {
+    (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number, drumType?: import("@/lib/score-types").DrumType) => {
       let newElement = makeNote(
         pitch,
         duration,
@@ -632,6 +635,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         selectedDynamic ?? undefined,
         selectedOrnament ?? undefined,
         isDoubleDotted,
+        drumType,
       );
       // sticky 악기 기호를 새로 놓인 음표에 자동 적용
       const instrSym = _selectedInstrumentSymbolRef.current;
@@ -1633,6 +1637,15 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
 
   const currentPart = doc.parts[selectedPartIdx];
 
+  // 현재 편집 대상(선택된 마디, 없으면 다음 추가될 마디 초안)의 실효 클레프.
+  // 드로어의 클레프 순환 버튼은 마디별/초안 clef만 바꾸므로, 타악기 UI 활성화 여부도
+  // 반드시 동일한 우선순위(선택 마디 > 초안 > 파트 기본값)로 판단해야 한다.
+  const effectiveClef: ClefType =
+    (selectedMeasureIdx !== null
+      ? currentPart?.measures[selectedMeasureIdx]?.clef
+      : draftMeasure.clef) ?? currentPart?.clef ?? "treble";
+  const isPercussionPart = effectiveClef === "percussion";
+
   const styles = makeStyles(C, S);
 
   return (
@@ -2318,6 +2331,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               isDotted={isDotted}
               accidental={accidental}
               onNotePlaced={handleNotePlaced}
+              selectedDrumType={isPercussionPart ? selectedDrumType : undefined}
               onRestPlaced={handleRestPlaced}
               onElementTap={handleElementTap}
               onMeasureTap={handleMeasureTap}
@@ -2480,6 +2494,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           selectedInstrumentSymbol={selectedInstrumentSymbol}
           onInstrumentSymbolSelect={setSelectedInstrumentSymbol}
           onSymbolToggle={handleSymbolToggle}
+          isPercussionPart={isPercussionPart}
+          selectedDrumType={selectedDrumType}
+          onDrumTypeSelect={setSelectedDrumType}
         />
       </View>
 

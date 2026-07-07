@@ -6,10 +6,11 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Platform } from "react-native";
 import { buildPlayTimeline, findCurrentEvent, totalTimelineMs } from "@/lib/score-playback";
 import type { PlayEvent } from "@/lib/score-playback";
-import type { ScoreDocument } from "@/lib/score-types";
+import type { ScoreDocument, DrumType } from "@/lib/score-types";
 import {
   getPrepareBatchSize,
   prepareScoreAudio,
+  prepareDrumAudio,
   scheduleMeasureNotes,
   stopAllScoreNotes,
 } from "@/lib/score-audio";
@@ -56,7 +57,10 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   // 악기 변경 시 재준비를 위한 보조 refs
   // - prepareParamsRef: 준비 중일 때 non-null (음표-악기 쌍 목록 보관)
   // - startRafRef: 준비 완료 후 호출할 startRaf 함수
-  const prepareParamsRef = useRef<{ noteInstrumentPairs: Array<{ midi: number; instrumentId: string }> } | null>(null);
+  const prepareParamsRef = useRef<{
+    noteInstrumentPairs: Array<{ midi: number; instrumentId: string }>;
+    drumTypes: DrumType[];
+  } | null>(null);
   const startRafRef = useRef<(() => void) | null>(null);
   // prepare 완료 후 true — pause→play 시 재준비 건너뜀. stop()/doc 변경 시 리셋.
   const isAudioReadyRef = useRef(false);
@@ -131,6 +135,7 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
   /** 내부 prepare 헬퍼 — play()와 악기 변경 effect 양쪽에서 호출 */
   const _runPrepare = useCallback((
     noteInstrumentPairs: Array<{ midi: number; instrumentId: string }>,
+    drumTypes: DrumType[],
   ) => {
     const sessionId = ++prepareSessionRef.current;
     // Compute unique valid MIDI count for the initial progress display.
@@ -141,18 +146,21 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     const total = [...new Set(allMidi)].filter((m) => m >= 21 && m <= 108).length;
     setIsPreparing(true);
     setPrepareProgress({ done: 0, total });
-    prepareParamsRef.current = { noteInstrumentPairs };
+    prepareParamsRef.current = { noteInstrumentPairs, drumTypes };
 
-    prepareScoreAudio(
-      [],
-      (done, tot) => {
-        if (prepareSessionRef.current !== sessionId) return;
-        setPrepareProgress({ done, total: tot });
-      },
-      getPrepareBatchSize(),
-      undefined,
-      noteInstrumentPairs,
-    )
+    Promise.all([
+      prepareScoreAudio(
+        [],
+        (done, tot) => {
+          if (prepareSessionRef.current !== sessionId) return;
+          setPrepareProgress({ done, total: tot });
+        },
+        getPrepareBatchSize(),
+        undefined,
+        noteInstrumentPairs,
+      ),
+      prepareDrumAudio(drumTypes),
+    ])
       .catch(() => {})
       .finally(() => {
         if (prepareSessionRef.current !== sessionId) return;
@@ -185,14 +193,19 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
       // (pause→play 재개 시에는 isAudioReadyRef가 true → 재준비 건너뜀)
       // 다악기 악보를 지원하기 위해 각 음표를 해당 파트 악기와 함께 수집합니다.
       const noteInstrumentPairs: Array<{ midi: number; instrumentId: string }> = [];
+      const drumTypes: DrumType[] = [];
       for (const ev of timeline) {
         for (const n of ev.notes) {
+          if (n.drumType) {
+            drumTypes.push(n.drumType);
+            continue;
+          }
           // 다악기 악보: n.instrumentId(파트별 태깅) 우선 사용
           noteInstrumentPairs.push({ midi: n.midiNote, instrumentId: n.instrumentId ?? ev.instrumentId });
         }
       }
-      if (noteInstrumentPairs.length > 0 && !isAudioReadyRef.current) {
-        _runPrepare(noteInstrumentPairs);
+      if ((noteInstrumentPairs.length > 0 || drumTypes.length > 0) && !isAudioReadyRef.current) {
+        _runPrepare(noteInstrumentPairs, drumTypes);
         return;
       }
     }
@@ -213,12 +226,17 @@ export function useScorePlayback(doc: ScoreDocument): ScorePlaybackState {
     // (stale prepareParamsRef 재사용 시 이전 악기 ID가 그대로 남는 버그 수정)
     const freshTimeline = buildPlayTimeline(doc);
     const freshPairs: Array<{ midi: number; instrumentId: string }> = [];
+    const freshDrumTypes: DrumType[] = [];
     for (const ev of freshTimeline) {
       for (const n of ev.notes) {
+        if (n.drumType) {
+          freshDrumTypes.push(n.drumType);
+          continue;
+        }
         freshPairs.push({ midi: n.midiNote, instrumentId: n.instrumentId ?? ev.instrumentId });
       }
     }
-    _runPrepare(freshPairs);
+    _runPrepare(freshPairs, freshDrumTypes);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partInstrumentId]);
 

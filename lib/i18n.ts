@@ -954,6 +954,16 @@ export const translations = {
     clearLink:          { ko: "연결 해제", en: "Unlink" },
     noPartsHint:        { ko: "성부가 없습니다", en: "No parts" },
     measureEmpty:       { ko: "(빈 마디)", en: "(empty measure)" },
+    // 드럼 종류
+    drumCrash:          { ko: "크래시", en: "Crash" },
+    drumRide:           { ko: "라이드", en: "Ride" },
+    drumHihatOpen:      { ko: "오픈 하이햇", en: "Open Hi-Hat" },
+    drumHihatClosed:    { ko: "클로즈드 하이햇", en: "Closed Hi-Hat" },
+    drumTomHigh:        { ko: "하이 탐탐", en: "High Tom" },
+    drumTomMid:         { ko: "미드 탐탐", en: "Mid Tom" },
+    drumSnare:          { ko: "스네어", en: "Snare" },
+    drumTomLow:         { ko: "로우 탐탐", en: "Low Tom" },
+    drumKick:           { ko: "킥", en: "Kick" },
     // 악기 이름
     instrViolin:        { ko: "바이올린", en: "Violin" },
     instrViola:         { ko: "비올라", en: "Viola" },

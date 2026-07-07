@@ -2,14 +2,14 @@
 // 악보 재생 타임라인 계산 (순수 함수)
 // ============================================================
 
-import type { ScoreDocument, ScoreMeasure, NoteDuration } from "./score-types";
+import type { ScoreDocument, ScoreMeasure, NoteDuration, DrumType } from "./score-types";
 import { pitchToMidi } from "./score-layout";
 import { getElementBeatScale } from "./score-tuplet";
 
 // ── 마디 내 단일 음표 재생 이벤트 ────────────────────────────
 
 export interface PlayNoteEvent {
-  /** MIDI 번호 (21–108) */
+  /** MIDI 번호 (21–108). 드럼 노트(drumType 있음)에서는 사용되지 않는다. */
   midiNote: number;
   /** 발음 지속 시간(ms) — 이론 길이의 82% */
   durationMs: number;
@@ -20,6 +20,8 @@ export interface PlayNoteEvent {
    * 단일 파트 악보에서는 PlayEvent.instrumentId와 동일하다.
    */
   instrumentId?: string;
+  /** 타악기(percussion) 파트의 드럼 종류. 설정 시 midiNote 대신 드럼 사운드로 재생한다. */
+  drumType?: DrumType;
 }
 
 // ── 재생 이벤트 ────────────────────────────────────────────────
@@ -212,10 +214,11 @@ function buildMeasureNotes(
     if (el.type === "note" && !el.tieEnd) {
       const soundDurMs = Math.max(40, elDurMs * 0.82); // 18% 간격
       noteEvents.push({
-        midiNote: pitchToMidi(el.pitch),
+        midiNote: el.drumType ? 0 : pitchToMidi(el.pitch),
         durationMs: soundDurMs,
         startOffsetMs: offsetMs,
         instrumentId,
+        drumType: el.drumType,
       });
     }
     offsetMs += elDurMs;
@@ -257,11 +260,9 @@ export function buildPlayTimeline(doc: ScoreDocument): PlayEvent[] {
     );
 
     // 모든 파트의 음표를 하나의 배열로 병합합니다.
-    // 타악기 파트는 음높이 음표가 없으므로 건너뜁니다.
+    // 타악기 파트는 drumType이 태깅된 노트 이벤트로 포함됩니다.
     const notes: PlayNoteEvent[] = [];
     for (const part of doc.parts) {
-      const isPartPercussion = (part.clef ?? "treble") === "percussion";
-      if (isPartPercussion) continue;
       const partMeasure = part.measures[mIdx];
       if (!partMeasure) continue;
       const partInstrumentId = part.instrumentId ?? "";

@@ -7,7 +7,7 @@
 import { Platform } from "react-native";
 import { getWebAudioContext } from "./audio-renderer";
 import type { PlayNoteEvent } from "./score-playback";
-import { INSTRUMENTS } from "./score-types";
+import { INSTRUMENTS, type DrumType } from "./score-types";
 import { safePlay } from "./audio-utils";
 
 // ── MIDI → 주파수 ─────────────────────────────────────────────
@@ -49,9 +49,34 @@ export function instrumentToWaveform(instrumentId: string): WaveformType {
   }
 }
 
+// ── 드럼 사운드 파라미터 (노이즈 기반 합성) ──────────────────
+
+interface DrumSoundParams {
+  /** 노이즈(0~1) 대 톤(0~1) 혼합 비율. 1이면 순수 노이즈, 0이면 순수 톤 */
+  noiseMix: number;
+  /** 톤 성분 기본 주파수(Hz) — 킥/탐탐류의 몸통음 */
+  toneFreq: number;
+  /** 발음 지속 시간(초) */
+  decayS: number;
+  /** 밴드패스/로우패스 필터 컷오프(Hz, 웹 전용 근사) */
+  filterHz: number;
+}
+
+const DRUM_SOUND_PARAMS: Record<DrumType, DrumSoundParams> = {
+  kick:         { noiseMix: 0.15, toneFreq: 60,  decayS: 0.35, filterHz: 200 },
+  snare:        { noiseMix: 0.75, toneFreq: 180, decayS: 0.18, filterHz: 2500 },
+  hihat_closed: { noiseMix: 0.95, toneFreq: 800, decayS: 0.06, filterHz: 9000 },
+  hihat_open:   { noiseMix: 0.95, toneFreq: 800, decayS: 0.35, filterHz: 9000 },
+  crash:        { noiseMix: 0.9,  toneFreq: 500, decayS: 1.2,  filterHz: 7000 },
+  ride:         { noiseMix: 0.7,  toneFreq: 600, decayS: 0.8,  filterHz: 6000 },
+  tom_high:     { noiseMix: 0.2,  toneFreq: 260, decayS: 0.28, filterHz: 500 },
+  tom_mid:      { noiseMix: 0.2,  toneFreq: 180, decayS: 0.3,  filterHz: 400 },
+  tom_low:      { noiseMix: 0.2,  toneFreq: 110, decayS: 0.32, filterHz: 300 },
+};
+
 // ── 네이티브: WAV 파일 캐시 ──────────────────────────────────
 
-// 캐시 키: `${midiNote}_${waveform}` (악기별로 별도 파일)
+// 캐시 키: `${midiNote}_${waveform}` (악기별로 별도 파일), 드럼은 `drum_${drumType}`
 const _fileCache = new Map<string, string>();
 
 const NOTE_SR = 22050;          // 샘플링 레이트
@@ -91,6 +116,50 @@ function _generatePCM(midi: number, durationS: number, sr: number, waveform: Wav
     pcm[i] = sample * env;
   }
   return pcm;
+}
+
+/** 드럼 노이즈+톤 혼합 PCM 생성 (attack/decay envelope 포함) */
+function _generateDrumPCM(drumType: DrumType, sr: number): Float32Array {
+  const params = DRUM_SOUND_PARAMS[drumType];
+  const durationS = Math.min(NOTE_FILE_DUR_S, params.decayS + 0.05);
+  const n = Math.floor(sr * durationS);
+  const pcm = new Float32Array(n);
+  const attackSamples = Math.max(1, Math.floor(sr * 0.002)); // 2ms attack (타격감)
+  // 단순 1차 저역통과 필터 상태 (노이즈를 filterHz 근처로 성형)
+  let filtered = 0;
+  const rc = 1 / (2 * Math.PI * params.filterHz);
+  const dt = 1 / sr;
+  const alpha = dt / (rc + dt);
+  for (let i = 0; i < n; i++) {
+    const tSec = i / sr;
+    let env: number;
+    if (i < attackSamples) {
+      env = i / attackSamples;
+    } else {
+      env = Math.exp(-tSec / (params.decayS / 4));
+    }
+    const noise = Math.random() * 2 - 1;
+    filtered += alpha * (noise - filtered);
+    const tone = Math.sin(2 * Math.PI * params.toneFreq * tSec) * Math.exp(-tSec / (params.decayS / 3));
+    const sample = params.noiseMix * filtered + (1 - params.noiseMix) * tone;
+    pcm[i] = sample * env * 0.9;
+  }
+  return pcm;
+}
+
+/** 네이티브: 특정 드럼 종류의 WAV 파일 생성 및 캐시 */
+async function _ensureDrumFile(drumType: DrumType): Promise<void> {
+  const cacheKey = `drum_${drumType}`;
+  if (_fileCache.has(cacheKey)) return;
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { encodeWav } = require("./audio-renderer") as typeof import("./audio-renderer");
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { File, Paths } = require("expo-file-system") as typeof import("expo-file-system");
+  const pcm = _generateDrumPCM(drumType, NOTE_SR);
+  const wav = encodeWav(pcm, NOTE_SR);
+  const file = new File(Paths.cache, `score_drum_${drumType}.wav`);
+  file.write(new Uint8Array(wav));
+  _fileCache.set(cacheKey, file.uri);
 }
 
 /** 네이티브: 특정 MIDI 음표 + 파형용 WAV 파일 생성 및 캐시 */
@@ -161,6 +230,110 @@ function _playWebNote(midi: number, durationMs: number, volume: number, oscType:
     setTimeout(() => {
       try { osc.disconnect(); gain.disconnect(); } catch {}
     }, 50);
+  };
+}
+
+// ── 웹: AudioContext 노이즈 버퍼 기반 드럼 발음 ──────────────
+
+function _playWebDrum(drumType: DrumType, volume: number): () => void {
+  const ctx = getWebAudioContext();
+  if (!ctx) return () => {};
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+  const params = DRUM_SOUND_PARAMS[drumType];
+  const t = ctx.currentTime;
+  const dur = params.decayS;
+
+  const bufferSize = Math.floor(ctx.sampleRate * dur);
+  const buffer = ctx.createBuffer(1, Math.max(1, bufferSize), ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+
+  const noiseSrc = ctx.createBufferSource();
+  noiseSrc.buffer = buffer;
+  const noiseFilter = ctx.createBiquadFilter();
+  noiseFilter.type = params.toneFreq < 300 ? "lowpass" : "bandpass";
+  noiseFilter.frequency.value = params.filterHz;
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.setValueAtTime(volume * params.noiseMix, t);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+
+  noiseSrc.connect(noiseFilter);
+  noiseFilter.connect(noiseGain);
+  noiseGain.connect(ctx.destination);
+  noiseSrc.start(t);
+  noiseSrc.stop(t + dur + 0.02);
+
+  let osc: OscillatorNode | null = null;
+  let oscGain: GainNode | null = null;
+  if (params.noiseMix < 1) {
+    osc = ctx.createOscillator();
+    oscGain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(params.toneFreq, t);
+    oscGain.gain.setValueAtTime(volume * (1 - params.noiseMix), t);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.connect(oscGain);
+    oscGain.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + dur + 0.02);
+  }
+
+  let stopped = false;
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    try {
+      const now = ctx.currentTime;
+      noiseGain.gain.cancelScheduledValues(now);
+      noiseGain.gain.setValueAtTime(noiseGain.gain.value, now);
+      noiseGain.gain.linearRampToValueAtTime(0, now + 0.02);
+      noiseSrc.stop(now + 0.02);
+      if (osc && oscGain) {
+        oscGain.gain.cancelScheduledValues(now);
+        oscGain.gain.setValueAtTime(oscGain.gain.value, now);
+        oscGain.gain.linearRampToValueAtTime(0, now + 0.02);
+        osc.stop(now + 0.02);
+      }
+    } catch {}
+    setTimeout(() => {
+      try {
+        noiseSrc.disconnect(); noiseFilter.disconnect(); noiseGain.disconnect();
+        osc?.disconnect(); oscGain?.disconnect();
+      } catch {}
+    }, 50);
+  };
+}
+
+// ── 네이티브: 드럼 WAV 파일 기반 발음 ────────────────────────
+
+async function _playNativeDrum(drumType: DrumType, volume: number): Promise<() => void> {
+  const cacheKey = `drum_${drumType}`;
+  const uri = _fileCache.get(cacheKey);
+  if (!uri) return () => {};
+
+  let player: any;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { createAudioPlayer } = require("expo-audio") as typeof import("expo-audio");
+    player = createAudioPlayer({ uri });
+    player.volume = Math.max(0, Math.min(1, volume));
+    safePlay(player, "score-audio.play-drum");
+  } catch {
+    return () => {};
+  }
+
+  const durationMs = DRUM_SOUND_PARAMS[drumType].decayS * 1000;
+  const stopTid = setTimeout(() => {
+    try { player.pause(); } catch {}
+  }, durationMs + 50);
+
+  let stopped = false;
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    clearTimeout(stopTid);
+    try { player.pause(); } catch {}
   };
 }
 
@@ -311,6 +484,16 @@ export async function prepareScoreAudio(
 }
 
 /**
+ * 악보 재생 전 필요한 드럼 WAV 파일을 미리 준비합니다 (네이티브 전용).
+ * 웹: no-op (AudioContext 노이즈 버퍼는 지연 생성)
+ */
+export async function prepareDrumAudio(drumTypes: DrumType[]): Promise<void> {
+  if (Platform.OS === "web") return;
+  const unique = [...new Set(drumTypes)];
+  await Promise.all(unique.map((dt) => _ensureDrumFile(dt)));
+}
+
+/**
  * 마디 내 음표들을 setTimeout으로 스케줄링합니다.
  * 이전 마디의 예약이 남아 있으면 먼저 취소합니다.
  * 반환된 함수를 호출하면 예약 취소 + 발음 중인 음표 즉시 정지.
@@ -333,8 +516,10 @@ export function scheduleMeasureNotes(
   let cancelled = false;
 
   for (const note of notes) {
-    if (note.midiNote < 21 || note.midiNote > 108) continue;
+    if (!note.drumType && (note.midiNote < 21 || note.midiNote > 108)) continue;
     if (note.durationMs <= 0) continue;
+
+    const drumType = note.drumType;
 
     // 다악기 악보: 음표별 instrumentId → waveform 결정
     // 단일 파트 악보(note.instrumentId 없음): top-level instrumentId 폴백
@@ -346,10 +531,15 @@ export function scheduleMeasureNotes(
       if (idx >= 0) myTids.splice(idx, 1);
 
       if (Platform.OS === "web") {
-        const stop = _playWebNote(note.midiNote, note.durationMs, volume, noteWaveform);
+        const stop = drumType
+          ? _playWebDrum(drumType, volume)
+          : _playWebNote(note.midiNote, note.durationMs, volume, noteWaveform);
         myStopFns.push(stop);
       } else {
-        _playNativeNote(note.midiNote, note.durationMs, volume, noteWaveform).then((stop) => {
+        const playPromise = drumType
+          ? _playNativeDrum(drumType, volume)
+          : _playNativeNote(note.midiNote, note.durationMs, volume, noteWaveform);
+        playPromise.then((stop) => {
           if (cancelled) {
             stop();
           } else {
@@ -409,6 +599,37 @@ export function previewScoreNote(midi: number, instrumentId?: string): void {
     _ensureNoteFile(midi, waveform).then(async () => {
       if ((token as any).__cancelled) return;
       const stop = await _playNativeNote(midi, PREVIEW_MS, PREVIEW_VOL, waveform);
+      if ((token as any).__cancelled) {
+        stop();
+      } else {
+        _currentPreviewStop = stop;
+      }
+    }).catch(() => {});
+  }
+}
+
+/**
+ * 드럼 노트 입력 즉시 미리 듣기 (드럼 종류별 decayS 길이, 볼륨 0.6)
+ * 이전 미리 듣기가 아직 재생 중이면 먼저 취소합니다.
+ */
+export function previewScoreDrum(drumType: DrumType): void {
+  if (_currentPreviewStop) {
+    _currentPreviewStop();
+    _currentPreviewStop = null;
+  }
+
+  const PREVIEW_VOL = 0.6;
+
+  if (Platform.OS === "web") {
+    const stop = _playWebDrum(drumType, PREVIEW_VOL);
+    _currentPreviewStop = stop;
+  } else {
+    const token = {};
+    _currentPreviewStop = () => { (token as any).__cancelled = true; };
+
+    _ensureDrumFile(drumType).then(async () => {
+      if ((token as any).__cancelled) return;
+      const stop = await _playNativeDrum(drumType, PREVIEW_VOL);
       if ((token as any).__cancelled) {
         stop();
       } else {

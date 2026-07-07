@@ -16,7 +16,9 @@ import type {
   Dynamic,
   InstrumentCategory,
   OrnamentType,
+  DrumType,
 } from "@/lib/score-types";
+import { DRUM_TYPES, DRUM_MAP } from "@/lib/score-types";
 import type { EditorTool } from "@/components/ScoreCanvas";
 
 // ── 음표 길이 ─────────────────────────────────────────────────
@@ -250,6 +252,10 @@ export interface ScorePaletteProps {
   onCrescTypeSelect?: (type: CrescType) => void;
   onTempoSelect?: (text: string, bpm: number) => void;
   onSymbolToggle?: (id: string, enabled: boolean) => void;
+  /** true이면 현재 활성 파트가 타악기(percussion) 오선이며 드럼 종류 선택 UI를 표시합니다 */
+  isPercussionPart?: boolean;
+  selectedDrumType?: DrumType;
+  onDrumTypeSelect?: (drumType: DrumType) => void;
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
@@ -281,6 +287,9 @@ export function ScorePalette({
   onCrescTypeSelect,
   onTempoSelect,
   onSymbolToggle,
+  isPercussionPart = false,
+  selectedDrumType,
+  onDrumTypeSelect,
 }: ScorePaletteProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -492,6 +501,41 @@ export function ScorePalette({
               {t("scoreMode", "durationDoubleDot")}
             </Text>
           </Pressable>
+        </ScrollView>
+      )}
+
+      {/* ── 타악기 파트: 드럼 종류 선택 (notes 탭 하단) ────────── */}
+      {tab === "notes" && isPercussionPart && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.itemRow}
+        >
+          {DRUM_TYPES.map((dt) => {
+            const isActive = selectedDrumType === dt;
+            const entry = DRUM_MAP[dt];
+            return (
+              <Pressable
+                key={dt}
+                style={[
+                  styles.durBtn,
+                  {
+                    backgroundColor: isActive ? C.accent + "33" : "transparent",
+                    borderColor: isActive ? C.accent : C.border,
+                  },
+                ]}
+                onPress={() => onDrumTypeSelect?.(dt)}
+                testID={`score-palette-drum-${dt}`}
+              >
+                <Text style={[styles.durSymbol, { color: isActive ? C.accent : C.text }]}>
+                  {entry.noteHead === "cross" ? "✕" : entry.noteHead === "triangle" ? "▲" : entry.noteHead === "diamond" ? "◆" : "●"}
+                </Text>
+                <Text style={[styles.durLabel, { color: isActive ? C.accent : C.textSecondary }]}>
+                  {t("scoreMode", entry.labelKey as any)}
+                </Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
       )}
 

@@ -2,7 +2,8 @@
 // 악보 SVG 레이아웃 계산 엔진 (순수 함수)
 // ============================================================
 
-import type { ClefType, NoteDuration, Pitch, ScoreMeasure, ScoreDocument, ScoreElement } from "./score-types";
+import type { ClefType, NoteDuration, Pitch, ScoreMeasure, ScoreDocument, ScoreElement, ScoreNote, DrumType } from "./score-types";
+import { DRUM_MAP, DRUM_TYPES } from "./score-types";
 import { getElementBeatScale } from "./score-tuplet";
 
 // ── 오선보 기본 상수 ───────────────────────────────────────────
@@ -141,6 +142,41 @@ export function yToPitch(y: number, clef: ClefType): Pitch {
   const step = STEP_ORDER[stepPos] as Pitch["step"];
 
   return { step, octave: Math.max(0, Math.min(8, octave)) };
+}
+
+/**
+ * 드럼 종류 → 오선 Y 좌표 (표준 표기법 기반 단순화 매핑, DRUM_MAP 참고)
+ */
+export function drumTypeToY(drumType: DrumType): number {
+  return DRUM_MAP[drumType].staffStep * (LINE_SPACING / 2);
+}
+
+/**
+ * Y 좌표 → 가장 가까운 드럼 종류 (타악기 파트 터치 입력용)
+ */
+export function yToDrumType(y: number): DrumType {
+  const step = Math.round(y / (LINE_SPACING / 2));
+  let closest: DrumType = "snare";
+  let minDist = Infinity;
+  for (const dt of DRUM_TYPES) {
+    const dist = Math.abs(DRUM_MAP[dt].staffStep - step);
+    if (dist < minDist) {
+      minDist = dist;
+      closest = dt;
+    }
+  }
+  return closest;
+}
+
+/**
+ * 음표의 오선 Y 좌표를 계산합니다. 타악기 파트에서 drumType이 지정된 경우 표준 드럼
+ * 오선 위치를 사용하고, 그렇지 않으면 기존 pitch 기반 위치(pitchToY)를 사용합니다.
+ */
+export function noteStaffY(note: ScoreNote, clef: ClefType): number {
+  if (clef === "percussion" && note.drumType) {
+    return drumTypeToY(note.drumType);
+  }
+  return pitchToY(note.pitch, clef);
 }
 
 /**
@@ -301,7 +337,7 @@ export function layoutMeasure(
       const w = getElementDisplayWidth(measure, el);
       let y = STAFF_HEIGHT / 2;
       if (el.type === "note") {
-        y = pitchToY(el.pitch, clef);
+        y = noteStaffY(el, clef);
       }
       // 오버라이드 값은 사용자가 실제로 터치한 "중심(center)" 좌표를 의미함
       // (ScoreCanvas의 ghost.x/measureRelX는 항상 음표 중심 기준으로 계산됨).
@@ -339,7 +375,7 @@ export function layoutMeasure(
     let y = STAFF_HEIGHT / 2;
 
     if (el.type === "note") {
-      y = pitchToY(el.pitch, clef);
+      y = noteStaffY(el, clef);
     }
 
     positions.push({

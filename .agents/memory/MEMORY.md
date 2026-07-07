@@ -9,3 +9,4 @@
 - [Jest pre-existing failures unrelated to change](jest-preexisting-failures.md) — ~22 suites (53 tests) fail in this repo's Jest run due to `expo/virtual/env.js` ESM parsing and Playwright e2e specs; this is a stable baseline, not a regression signal.
 - [Score note/rest elements lack DOM testID](score-note-elements-no-testid.md) — react-native-svg glyphs in ScoreRenderer aren't reachable via `[data-testid=...]` in Playwright; verify score-editor selection flows via code review + unit tests instead.
 - [ScoreDocument fields serialize generically](score-document-generic-serialization.md) — save/load/backup/deep-link modules pass ScoreDocument through as a whole; new top-level fields usually need no changes there.
+- [Score editor clef resolution priority](score-editor-clef-resolution-priority.md) — per-measure clef must be checked before part-level default clef everywhere; checking only `part.clef` misses measure-level overrides (found via e2e, not tsc).

@@ -26,7 +26,7 @@ import {
   STEM_HEIGHT,
   NOTE_WIDTH,
   LEDGER_LINE_WIDTH,
-  pitchToY,
+  noteStaffY,
   getLedgerLines,
   getStemDirection,
   layoutMeasure,
@@ -37,7 +37,8 @@ import {
 } from "@/lib/score-layout";
 import { BASE_LINE_SPACING, scoreScaleFactor } from "@/lib/score-scale";
 import type { ScoreRowLayout, NotePosition } from "@/lib/score-layout";
-import type { ScoreDocument, ScorePart, ScoreMeasure, ScoreNote, ScoreRest, ClefType, NoteDuration, ArticulationType, OrnamentType } from "@/lib/score-types";
+import type { ScoreDocument, ScorePart, ScoreMeasure, ScoreNote, ScoreRest, ClefType, NoteDuration, ArticulationType, OrnamentType, NoteHeadType } from "@/lib/score-types";
+import { DRUM_MAP } from "@/lib/score-types";
 
 // ── 상수 ─────────────────────────────────────────────────────
 const PART_GAP = 32;            // 성부 간 간격
@@ -206,14 +207,44 @@ function KeySignatureSymbols({ x, y, sharps, clef, color }: {
 
 // ── 음표 머리 ─────────────────────────────────────────────────
 
-function NoteHead({ x, y, duration, color, filled }: {
+function NoteHead({ x, y, duration, color, filled, noteHead = "normal" }: {
   x: number;
   y: number;
   duration: NoteDuration;
   color: string;
   filled: boolean;
+  noteHead?: NoteHeadType;
 }) {
   const isOpen = duration === "whole" || duration === "half" || duration === "whole_dot" || duration === "half_dot";
+
+  if (noteHead === "cross") {
+    // X자 모양 (심벌/하이햇 등 타악기 표준 표기)
+    const r = NOTE_HEAD_RX;
+    return (
+      <G>
+        <Line x1={x - r} y1={y - r} x2={x + r} y2={y + r} stroke={color} strokeWidth={1.6} />
+        <Line x1={x - r} y1={y + r} x2={x + r} y2={y - r} stroke={color} strokeWidth={1.6} />
+      </G>
+    );
+  }
+  if (noteHead === "triangle") {
+    // 삼각형 (오픈 하이햇 등)
+    const r = NOTE_HEAD_RX;
+    const h = NOTE_HEAD_RY * 1.3;
+    const d = `M${x},${y - h} L${x + r},${y + h * 0.6} L${x - r},${y + h * 0.6} Z`;
+    return <Path d={d} fill={isOpen ? "none" : color} stroke={color} strokeWidth={1.2} />;
+  }
+  if (noteHead === "diamond") {
+    const rx = NOTE_HEAD_RX;
+    const ry = NOTE_HEAD_RY * 1.3;
+    const d = `M${x},${y - ry} L${x + rx},${y} L${x},${y + ry} L${x - rx},${y} Z`;
+    return <Path d={d} fill={isOpen ? "none" : color} stroke={color} strokeWidth={1.2} />;
+  }
+  if (noteHead === "slash") {
+    const r = NOTE_HEAD_RX * 1.1;
+    return <Line x1={x - r} y1={y + r * 0.7} x2={x + r} y2={y - r * 0.7} stroke={color} strokeWidth={2.2} />;
+  }
+
   return (
     <Ellipse
       cx={x}
@@ -522,10 +553,12 @@ function NoteElement({ note, x, staffY, clef, color, isSelected }: {
   color: string;
   isSelected: boolean;
 }) {
-  const noteY = staffY + pitchToY(note.pitch, clef);
+  const relY = noteStaffY(note, clef);
+  const noteY = staffY + relY;
   const dur = note.duration;
   const needsStem = dur !== "whole" && dur !== "whole_dot";
-  const direction = getStemDirection(pitchToY(note.pitch, clef));
+  const direction = getStemDirection(relY);
+  const drumEntry = note.drumType ? DRUM_MAP[note.drumType] : undefined;
 
   const flagCount =
     dur === "eighth" || dur === "eighth_dot" ? 1 :
@@ -541,8 +574,8 @@ function NoteElement({ note, x, staffY, clef, color, isSelected }: {
 
   return (
     <G>
-      <LedgerLines cx={x} noteY={pitchToY(note.pitch, clef)} staffY={staffY} color={highlightColor} />
-      <NoteHead x={x} y={noteY} duration={dur} color={highlightColor} filled />
+      <LedgerLines cx={x} noteY={relY} staffY={staffY} color={highlightColor} />
+      <NoteHead x={x} y={noteY} duration={dur} color={highlightColor} filled noteHead={drumEntry?.noteHead ?? note.noteHead} />
       {needsStem && <Stem x={x} y={noteY} direction={direction} color={highlightColor} />}
       {flagCount > 0 && <Flag x={x} y={noteY} direction={direction} count={flagCount} color={highlightColor} />}
       {dotted && <DotSymbol x={x} y={noteY} color={highlightColor} />}
@@ -850,7 +883,7 @@ function MeasureRender({
         const el = measure.elements.find((e) => e.id === pos.elementId);
         if (!el || el.type !== "note" || !el.tieStart) return null;
         const x1 = contentX + pos.x;
-        const noteY1 = staffY + pitchToY(el.pitch, clef);
+        const noteY1 = staffY + noteStaffY(el, clef);
         const nextPos = positions[pi + 1];
         if (!nextPos) {
           // 마디 끝 — 다음 마디 첫 음표까지 이어지는 타이: 마디 오른쪽 끝으로만 그림
@@ -866,7 +899,7 @@ function MeasureRender({
           );
         }
         const elNext = measure.elements.find((e) => e.id === nextPos.elementId);
-        const noteY2 = elNext?.type === "note" ? staffY + pitchToY(elNext.pitch, clef) : noteY1;
+        const noteY2 = elNext?.type === "note" ? staffY + noteStaffY(elNext, clef) : noteY1;
         return (
           <TieArc
             key={`tie-${el.id}`}
@@ -884,7 +917,7 @@ function MeasureRender({
         const el = measure.elements.find((e) => e.id === pos.elementId);
         if (!el || el.type !== "note" || !el.slurStart) return null;
         const x1 = contentX + pos.x;
-        const noteY1 = staffY + pitchToY(el.pitch, clef);
+        const noteY1 = staffY + noteStaffY(el, clef);
         // slurEndNoteId로 정밀 탐색 (같은 마디 내)
         const endNoteId = el.slurEndNoteId;
         const endElPos = endNoteId ? positions.find((p2) => p2.elementId === endNoteId) : undefined;
@@ -907,7 +940,7 @@ function MeasureRender({
             />
           );
         }
-        const noteY2 = endEl.type === "note" ? staffY + pitchToY(endEl.pitch, clef) : noteY1;
+        const noteY2 = endEl.type === "note" ? staffY + noteStaffY(endEl, clef) : noteY1;
         return (
           <TieArc
             key={`slur-${el.id}`}
