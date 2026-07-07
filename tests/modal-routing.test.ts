@@ -726,13 +726,18 @@ test("source: MoreMenuModal onXxx 핸들러 목록과 app/index.tsx openExclusiv
     "MoreMenuModalProps 인터페이스를 찾을 수 없다 — components/MoreMenuModal.tsx 에 export interface MoreMenuModalProps { … } 가 있어야 한다",
   );
 
-  // onXxx: () => void 형태의 핸들러 prop 이름 추출 (onClose 제외)
+  // onXxx: () => void 형태의 핸들러 prop 이름 추출
+  // 제외 목록: openExclusive 를 거치지 않고 별도 메커니즘으로 동작하는 핸들러
+  //   - onClose: 닫기 전용, ActiveModal 항목 아님
+  //   - onScoreMode: 악보 모드는 setScoreMode 상태로 직접 전환 (ActiveModal 미사용)
+  //   - onStageMode: 무대 모드는 ActiveModal 시스템 외부에서 관리되는 전용 오버레이
+  const NON_EXCLUSIVE_HANDLERS = new Set(["Close", "ScoreMode", "StageMode"]);
   const handlerRe = /\bon([A-Z][a-zA-Z]+)\s*:\s*\(\)\s*=>/g;
   const handlerKeys: string[] = [];
   let m: RegExpExecArray | null;
   while ((m = handlerRe.exec(interfaceMatch[1])) !== null) {
     const pascal = m[1]; // e.g. "ScheduledStart"
-    if (pascal === "Close") continue; // onClose 는 항목 핸들러가 아님
+    if (NON_EXCLUSIVE_HANDLERS.has(pascal)) continue;
     handlerKeys.push(pascal.charAt(0).toLowerCase() + pascal.slice(1));
   }
   handlerKeys.sort();

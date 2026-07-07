@@ -1191,6 +1191,18 @@ export const translations = {
     pngExportPreviewPageLabel: { ko: "페이지", en: "Page" },
     pngExportPreviewHint: { ko: "내보내질 이미지를 미리 확인하세요", en: "Preview the images that will be exported" },
   },
+  stageMode: {
+    title:       { ko: "무대 모드", en: "Stage Mode" },
+    menuHint:    { ko: "라이브 전용 잠금 화면 — 큰 BPM 표시, 볼륨 버튼 BPM 조절", en: "Live locked screen — large BPM display, volume button BPM control" },
+    exitTitle:   { ko: "무대 모드 종료", en: "Exit Stage Mode" },
+    exitMessage: { ko: "무대 모드를 종료하시겠습니까?", en: "Exit stage mode?" },
+    exitConfirm: { ko: "종료", en: "Exit" },
+    exitCancel:  { ko: "취소", en: "Cancel" },
+    exitButton:  { ko: "무대 모드 종료", en: "Exit Stage Mode" },
+    tapAgain:    { ko: "한 번 더 탭하면 종료", en: "Tap again to exit" },
+    bpmLabel:    { ko: "BPM", en: "BPM" },
+    volumeHint:  { ko: "볼륨 버튼 또는 탭으로 조절", en: "Volume buttons or tap to adjust" },
+  },
 } as const satisfies TranslationsShape;
 
 type TranslationKeys = typeof translations;

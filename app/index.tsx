@@ -87,6 +87,8 @@ import { useGoalPopups } from "@/hooks/useGoalPopups";
 import { usePracticeRoomTracking } from "@/hooks/usePracticeRoomTracking";
 import { useControlPadMapping } from "@/hooks/useControlPadMapping";
 import { useQuickAddList } from "@/hooks/useQuickAddList";
+import { useStageMode } from "@/hooks/useStageMode";
+import { StageModeOverlay } from "@/components/StageModeOverlay";
 import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist";
 import { createRafBatcher } from "@/lib/raf-batcher";
 import { OnboardingModal } from "@/components/OnboardingModal";
@@ -2162,6 +2164,9 @@ export default function MetronomeScreen() {
   useEffect(() => { updateBpmRef.current = updateBpm; }, [updateBpm]);
   const bpmRef = useRef(bpm);
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
+
+  const { stageModeActive, enterStageMode, exitStageMode } = useStageMode(bpmRef, updateBpm);
+
   const updateTimeSignatureRef = useRef(updateTimeSignature);
   useEffect(() => { updateTimeSignatureRef.current = updateTimeSignature; }, [updateTimeSignature]);
   const beatsPerMeasureRef = useRef(beatsPerMeasure);
@@ -4754,6 +4759,10 @@ export default function MetronomeScreen() {
         onClose={() => setActiveModal(null)}
         onScheduledStart={() => openExclusive("scheduledStart")}
         onFadeOut={() => openExclusive("fadeOut")}
+        onStageMode={() => {
+          setActiveModal(null);
+          void enterStageMode();
+        }}
         onDrumKit={() => {
           const engine = engineRef.current;
           if (engine?.getIsRunning()) engine.stop();
@@ -5673,6 +5682,14 @@ export default function MetronomeScreen() {
           bindings={keyBindings}
         />
       )}
+
+      <StageModeOverlay
+        visible={stageModeActive}
+        bpm={bpm}
+        flashOpacity={flashOpacity}
+        onExit={() => void exitStageMode()}
+        onBpmChange={updateBpm}
+      />
     </KbView>
   );
 }
