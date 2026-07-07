@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -76,9 +76,53 @@ export function StageModeOverlay({
     return () => handler.remove();
   }, [visible, triggerExit]);
 
-  const adjustBpm = useCallback((delta: number) => {
-    onBpmChange(Math.min(300, Math.max(20, bpm + delta)));
-  }, [bpm, onBpmChange]);
+  // 최신 BPM을 interval 콜백 안에서도 stale 없이 읽기 위한 ref
+  const bpmRef = useRef(bpm);
+  useEffect(() => { bpmRef.current = bpm; }, [bpm]);
+
+  const onBpmChangeRef = useRef(onBpmChange);
+  useEffect(() => { onBpmChangeRef.current = onBpmChange; }, [onBpmChange]);
+
+  const clampBpm = (v: number) => Math.min(300, Math.max(20, v));
+
+  // hold-repeat 상태
+  const holdActiveRef = useRef(false);           // 롱프레스 반복 모드 진입 여부
+  const holdDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopHold = useCallback(() => {
+    if (holdDelayRef.current) { clearTimeout(holdDelayRef.current); holdDelayRef.current = null; }
+    if (holdIntervalRef.current) { clearInterval(holdIntervalRef.current); holdIntervalRef.current = null; }
+  }, []);
+
+  // 언마운트 시 타이머 정리
+  useEffect(() => () => stopHold(), [stopHold]);
+
+  /** PressIn: 300ms 후 반복 모드 돌입, 그 뒤 150ms 간격으로 ±10 반복 */
+  const handlePressIn = useCallback((delta: number) => {
+    holdActiveRef.current = false;
+    holdDelayRef.current = setTimeout(() => {
+      holdActiveRef.current = true;
+      onBpmChangeRef.current(clampBpm(bpmRef.current + delta * 10));
+      holdIntervalRef.current = setInterval(() => {
+        onBpmChangeRef.current(clampBpm(bpmRef.current + delta * 10));
+      }, 150);
+    }, 300);
+  }, []);
+
+  /** PressOut: 타이머 정리 (onPress가 이후에 발동) */
+  const handlePressOut = useCallback(() => {
+    stopHold();
+  }, [stopHold]);
+
+  /** Press(탭): 반복 모드가 아니었으면 ±1 적용 */
+  const handlePress = useCallback((delta: number) => {
+    if (holdActiveRef.current) {
+      holdActiveRef.current = false; // 플래그 초기화
+      return;
+    }
+    onBpmChangeRef.current(clampBpm(bpmRef.current + delta));
+  }, []);
 
   if (!visible) return null;
 
@@ -101,13 +145,13 @@ export function StageModeOverlay({
         <Text style={styles.volumeHint}>{t("stageMode", "volumeHint")}</Text>
       </View>
 
-      {/* BPM 조절 버튼 */}
+      {/* BPM 조절 버튼 — 탭: ±1 / 홀드(300ms 후 150ms 간격 반복): ±10 */}
       <View style={styles.bpmButtons}>
         <Pressable
           style={({ pressed }) => [styles.bpmBtn, pressed && styles.bpmBtnPressed]}
-          onPress={() => adjustBpm(-1)}
-          onLongPress={() => adjustBpm(-10)}
-          delayLongPress={300}
+          onPress={() => handlePress(-1)}
+          onPressIn={() => handlePressIn(-1)}
+          onPressOut={handlePressOut}
           testID="stage-mode-bpm-minus"
           accessibilityLabel="BPM −1 / −10"
         >
@@ -117,9 +161,9 @@ export function StageModeOverlay({
 
         <Pressable
           style={({ pressed }) => [styles.bpmBtn, pressed && styles.bpmBtnPressed]}
-          onPress={() => adjustBpm(1)}
-          onLongPress={() => adjustBpm(10)}
-          delayLongPress={300}
+          onPress={() => handlePress(1)}
+          onPressIn={() => handlePressIn(1)}
+          onPressOut={handlePressOut}
           testID="stage-mode-bpm-plus"
           accessibilityLabel="BPM +1 / +10"
         >
