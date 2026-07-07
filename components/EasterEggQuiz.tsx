@@ -27,6 +27,7 @@ interface EasterEggQuizProps {
   isGiveUp?: boolean;
   shakeCount?: number;
   successCount?: number;
+  hintDirection?: "up" | "down" | null;
   isLandscape?: boolean;
 }
 
@@ -36,6 +37,7 @@ export function EasterEggQuiz({
   isGiveUp = false,
   shakeCount = 0,
   successCount = 0,
+  hintDirection = null,
   isLandscape = false,
 }: EasterEggQuizProps) {
   const { colors: C } = useTheme();
@@ -60,6 +62,7 @@ export function EasterEggQuiz({
 
   const offsetX = useSharedValue(0);
   const flash = useSharedValue(0);
+  const hintOpacity = useSharedValue(0);
 
   const prevShakeRef = useRef(0);
   useEffect(() => {
@@ -89,12 +92,28 @@ export function EasterEggQuiz({
     }
   }, [successCount, flash]);
 
+  useEffect(() => {
+    if (hintDirection != null) {
+      hintOpacity.value = 0;
+      hintOpacity.value = withTiming(1, { duration: 350, easing: Easing.out(Easing.quad) });
+    } else {
+      hintOpacity.value = withTiming(0, { duration: 200 });
+    }
+  }, [hintDirection, hintOpacity]);
+
   const bodyStyle = useAnimatedStyle(() => ({ transform: [{ translateX: offsetX.value }] }));
   const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
+  const hintStyle = useAnimatedStyle(() => ({ opacity: hintOpacity.value }));
 
   const accentLabel = revealBpm != null
     ? (isGiveUp ? t("main", "eggRevealGiveUp") : t("main", "eggRevealCorrect"))
     : "BPM ?";
+
+  const hintText = hintDirection === "up"
+    ? t("main", "eggHintUp")
+    : hintDirection === "down"
+    ? t("main", "eggHintDown")
+    : "";
 
   return (
     <View style={styles.wrapper}>
@@ -153,6 +172,19 @@ export function EasterEggQuiz({
           >
             {accentLabel}
           </Text>
+          {revealBpm == null && (
+            <Animated.Text
+              style={[
+                styles.hintDirection,
+                { color: hintDirection === "up" ? C.accent : C.textSecondary },
+                isLandscape && { fontSize: S.ms(11, 0.3) },
+                hintStyle,
+              ]}
+              testID="bpm-easter-egg-hint"
+            >
+              {hintText}
+            </Animated.Text>
+          )}
         </View>
 
         <View style={styles.ticks} pointerEvents="none">
@@ -217,6 +249,12 @@ const make_styles = (C: typeof Colors, S: ScaleValues) =>
       fontSize: S.ms(13, 0.3),
       letterSpacing: 4,
       marginTop: -4,
+    },
+    hintDirection: {
+      fontFamily: "SpaceGrotesk_600SemiBold",
+      fontSize: S.ms(13, 0.3),
+      letterSpacing: 1,
+      marginTop: S.ms(6, 0.3),
     },
     ticks: {
       flexDirection: "row",

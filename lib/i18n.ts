@@ -606,6 +606,8 @@ export const translations = {
     eggGiveUp: { ko: "포기", en: "Give Up" },
     eggRevealCorrect: { ko: "정답!", en: "Correct!" },
     eggRevealGiveUp: { ko: "정답은", en: "Answer:" },
+    eggHintUp: { ko: "↑ 더 높게", en: "↑ Go Higher" },
+    eggHintDown: { ko: "↓ 더 낮게", en: "↓ Go Lower" },
     eggConfirmTitle: { ko: "BPM 퀴즈 시작?", en: "Start BPM Quiz?" },
     eggConfirmStart: { ko: "시작", en: "Start" },
     eggConfirmCancel: { ko: "취소", en: "Cancel" },

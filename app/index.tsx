@@ -162,6 +162,7 @@ export default function MetronomeScreen() {
     easterEggSuccessCount, setEasterEggSuccessCount,
     easterEggRevealBpm, setEasterEggRevealBpm,
     easterEggGiveUpMode, setEasterEggGiveUpMode,
+    easterEggHintDirection, setEasterEggHintDirection,
     easterEggPrevBpmRef, easterEggActualBpmRef, easterEggActiveRef,
   } = useEasterEggQuiz();
   const [halfTime, setHalfTime] = useState(false);
@@ -1839,23 +1840,27 @@ export default function MetronomeScreen() {
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setEasterEggSuccessCount(c => c + 1);
       setEasterEggGiveUpMode(false);
+      setEasterEggHintDirection(null);
       setEasterEggRevealBpm(actual);
       setTimeout(() => {
         engineRef.current?.setBpm(easterEggPrevBpmRef.current);
         setEasterEggActive(false);
         setEasterEggRevealBpm(null);
         setEasterEggGiveUpMode(false);
+        setEasterEggHintDirection(null);
       }, 2000);
     } else {
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setEasterEggShakeCount(c => c + 1);
+      setEasterEggHintDirection(guess < actual ? "up" : "down");
     }
-  }, []);
+  }, [setEasterEggHintDirection]);
 
   const handleEasterEggGiveUp = useCallback((stopEngine = false) => {
     const actual = easterEggActualBpmRef.current;
     if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     setEasterEggGiveUpMode(true);
+    setEasterEggHintDirection(null);
     setEasterEggRevealBpm(actual);
     if (stopEngine) {
       engineRef.current?.stop();
@@ -1870,8 +1875,9 @@ export default function MetronomeScreen() {
       setEasterEggActive(false);
       setEasterEggRevealBpm(null);
       setEasterEggGiveUpMode(false);
+      setEasterEggHintDirection(null);
     }, 2000);
-  }, [stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals]);
+  }, [stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals, setEasterEggHintDirection]);
 
   const handleEasterEggGiveUpRef = useRef(handleEasterEggGiveUp);
   useEffect(() => { handleEasterEggGiveUpRef.current = handleEasterEggGiveUp; }, [handleEasterEggGiveUp]);
@@ -5325,6 +5331,7 @@ export default function MetronomeScreen() {
                   isGiveUp={easterEggGiveUpMode}
                   shakeCount={easterEggShakeCount}
                   successCount={easterEggSuccessCount}
+                  hintDirection={easterEggHintDirection}
                   isLandscape={true}
                 />
               ) : (
@@ -5607,6 +5614,7 @@ export default function MetronomeScreen() {
                 isGiveUp={easterEggGiveUpMode}
                 shakeCount={easterEggShakeCount}
                 successCount={easterEggSuccessCount}
+                hintDirection={easterEggHintDirection}
                 isLandscape={true}
               />
             ) : (
@@ -5630,6 +5638,7 @@ export default function MetronomeScreen() {
               isGiveUp={easterEggGiveUpMode}
               shakeCount={easterEggShakeCount}
               successCount={easterEggSuccessCount}
+              hintDirection={easterEggHintDirection}
               isLandscape={false}
             />
           ) : (
