@@ -50,14 +50,15 @@ Preferred communication style: Simple, everyday language.
 ### Backend (Express)
 - **Framework**: Express 5 with TypeScript.
 - **API Structure**: Routes defined in `server/routes.ts`, prefixed with `/api`.
-- **Storage Layer**: Abstracted `IStorage` interface with an in-memory `MemStorage` implementation, designed for database integration.
-- **Deployment**: Serves static web build of the Expo app in production; proxies to Expo dev server in development.
+- **Active endpoints**:
+  - `GET /` — serves the landing page (`server/templates/landing-page.html`) or the Expo OTA manifest when an `expo-platform` header is present.
+  - `GET /manifest` — same Expo manifest routing as `/`.
+  - `POST /api/analyze-audio` — accepts a base64-encoded audio clip, detects dominant frequency/note and BPM candidates. WAV files are analyzed in a Node.js worker thread; other formats (m4a, webm, etc.) are converted via `ffmpeg`. Includes per-IP rate limiting (20 req/60 s) and concurrency caps.
+- **No database**: All user data (settings, practice entries, sound sets, etc.) is stored on-device via AsyncStorage. The server holds no persistent state.
+- **Deployment**: Serves the static Expo web build from `static-build/` in production; in development the Expo dev server runs separately on port 8081.
 
 ### Database
-- **ORM**: Drizzle ORM with PostgreSQL dialect.
-- **Schema**: `shared/schema.ts` defines a `users` table.
-- **Migrations**: Managed via `drizzle-kit`.
-- **Note**: Currently uses in-memory storage for core functionality; database is set up for future server-side persistence.
+- **Not implemented**: There is no active database connection. The server is stateless — no ORM, no schema, no migrations. If server-side persistence is needed in the future (e.g. user accounts, cloud sync), add Drizzle ORM + PostgreSQL at that point.
 
 ### Build & Deployment
 - **Development**: Separate processes for client (`expo:dev`) and server (`server:dev`).
@@ -66,7 +67,6 @@ Preferred communication style: Simple, everyday language.
 
 ## External Dependencies
 
-- **PostgreSQL**: Used for database schema and potential future server-side user data.
 - **Replit Environment**: Utilizes Replit-specific environment variables for CORS, proxying, and deployment.
 - **Google Fonts**: Space Grotesk font loaded via `@expo-google-fonts/space-grotesk`.
 - **expo-location**: For GPS-based practice room tracking.
