@@ -215,8 +215,46 @@ function fillMeasureL1(totalSlots: number, density: number): Array<ScoreNote | S
   return elements;
 }
 
-// ─── Measure Fill: Level 2 (eighth-note based, with syncopation) ──
+// ─── Measure Fill: Level 2 — Hemiola cross-accent pattern ────
+// 6/4 (12 slots): 헤미올라 — 4×♩. (3+3+3+3) 대신 6×♩ (2+2+2+2+2+2)
+// 4/4 (8 slots): 3+3+2 cross-accent (Samba/Tresillo feel)
+function fillMeasureHemiola(
+  totalSlots: number,
+  density: number,
+): Array<ScoreNote | ScoreRest> {
+  const elements: Array<ScoreNote | ScoreRest> = [];
+
+  if (totalSlots === 12) {
+    // 6/4 헤미올라: 6×quarter (slots=2 each) 대 원래 4×quarter_dot (slots=3)
+    for (let i = 0; i < 6; i++) {
+      elements.push(
+        Math.random() < density ? makeNote("quarter", 2, i) : makeRest("quarter"),
+      );
+    }
+  } else {
+    // 4/4 또는 기타: 3+3+2 tresillo 패턴 (8 slots: ♩.♩.♩♩ → 3+3+2)
+    const pattern: NoteDuration[] = ["quarter_dot", "quarter_dot", "quarter"];
+    let idx = 0;
+    for (const d of pattern) {
+      const slots = durationToSlots(d, 2) ?? 2;
+      if (elements.reduce((acc, el) => acc + (durationToSlots(el.duration, 2) ?? 0), 0) + slots > totalSlots) {
+        elements.push(Math.random() < density ? makeNote("eighth", 2, idx) : makeRest("eighth"));
+      } else {
+        elements.push(Math.random() < density ? makeNote(d, 2, idx) : makeRest(d));
+      }
+      idx++;
+    }
+  }
+  return elements;
+}
+
+// ─── Measure Fill: Level 2 (eighth-note based, syncopation + hemiola) ──
 function fillMeasureL2(totalSlots: number, density: number): Array<ScoreNote | ScoreRest> {
+  // 30% chance: use hemiola cross-accent pattern (only for meters that support it)
+  if (Math.random() < 0.30 && (totalSlots === 12 || totalSlots === 8)) {
+    return fillMeasureHemiola(totalSlots, density);
+  }
+
   const elements: Array<ScoreNote | ScoreRest> = [];
   let remaining = totalSlots;
   let noteIndex = 0;

@@ -103,9 +103,10 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
     }
   }, []);
 
-  // 클릭음 재생 (beat 0 = 강박 → high, 나머지 → low)
-  const playCountinClick = useCallback((beat: number) => {
-    const isStrong = beat === 0;
+  // 클릭음 재생
+  // round 기반 강박 판정: beat < round+1 → round 0: 강약약약, 1: 강강약약, 2: 강강강약, 3: 강강강강
+  const playCountinClick = useCallback((beat: number, round: number) => {
+    const isStrong = beat < round + 1;
     try {
       const player = isStrong ? clickHigh : clickLow;
       player.seekTo(0);
@@ -146,8 +147,8 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
     let round = 0;
     let beat = 0;
 
-    // 첫 박자 즉시 재생
-    playCountinClick(0);
+    // 첫 박자 즉시 재생 (round=0, beat=0 → 강박)
+    playCountinClick(0, 0);
 
     timerRef.current = setInterval(() => {
       beat += 1;
@@ -164,7 +165,8 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
         setCountinRound(round);
       }
       setActiveBeat(beat);
-      playCountinClick(beat);
+      // round를 함께 전달해 강박 범위가 라운드마다 확장되도록 함
+      playCountinClick(beat, round);
     }, beatMs);
 
     return clearTimer;
@@ -249,7 +251,7 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
                   ]}
                 >
                   <Text style={[styles.beatLabel, isActive && styles.beatLabelActive]}>
-                    {i === 0 ? "강" : "약"}
+                    {i < strongCount ? "강" : "약"}
                   </Text>
                 </View>
               );
