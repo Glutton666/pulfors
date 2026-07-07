@@ -77,7 +77,7 @@ import {
   openTuningGuideFromSignalGen,
   closeTuningGuide,
 } from "@/lib/modal-routing";
-import { useAudioPlayers, type BuiltinPlayers } from "@/hooks/useAudioPlayers";
+import { useAudioPlayers, BUILTIN_POOL_SIZE, type BuiltinPlayers, type SoundSetPlayers } from "@/hooks/useAudioPlayers";
 import { useNoteSamples } from "@/hooks/useNoteSamples";
 import { useBarConfig, useDialConfig } from "@/hooks/useBarDialConfig";
 import { useMetronomeEngine } from "@/hooks/useMetronomeEngine";
@@ -568,32 +568,32 @@ export default function MetronomeScreen() {
       } catch (e) {}
     };
 
-    const getCustomPlayer = (role: "high" | "low" | "strong", toggle: boolean) => {
+    const pickSlot = (p: SoundSetPlayers, role: "high" | "low" | "strong", idx: number) => {
+      const i = idx % BUILTIN_POOL_SIZE;
+      if (role === "strong") return i === 0 ? p.strongA : i === 1 ? p.strongB : i === 2 ? p.strongC : p.strongD;
+      if (role === "high") return i === 0 ? p.highA : i === 1 ? p.highB : i === 2 ? p.highC : p.highD;
+      return i === 0 ? p.lowA : i === 1 ? p.lowB : i === 2 ? p.lowC : p.lowD;
+    };
+
+    const getCustomPlayer = (role: "high" | "low" | "strong", idx: number) => {
       const set = soundSetRef.current;
       const customs = customSoundSetsRef.current;
       const customCfg = customs[set];
       if (customCfg) {
         const mapping = role === "strong" ? customCfg.strong : role === "high" ? customCfg.accent : customCfg.normal;
         if (mapping.type === "custom" && mapping.sampleUri) {
-          const fallbackPlayers = allPlayersRef.current.classic;
-          if (role === "strong") return toggle ? fallbackPlayers.strongB : fallbackPlayers.strongA;
-          if (role === "high") return toggle ? fallbackPlayers.highB : fallbackPlayers.highA;
-          return toggle ? fallbackPlayers.lowB : fallbackPlayers.lowA;
+          return pickSlot(allPlayersRef.current.classic, role, idx);
         }
         const srcSet = mapping.sourceSet || "classic";
         const srcPlayers = allPlayersRef.current[srcSet as keyof BuiltinPlayers] || allPlayersRef.current.classic;
         if (!allPlayersRef.current[srcSet as keyof BuiltinPlayers]) {
           notifyAudioPoolFallback("custom-mapping-missing-source", { role, soundSet: set, requestedSourceSet: srcSet });
         }
-        const r = mapping.sourceRole || "strong";
-        if (r === "strong") return toggle ? srcPlayers.strongB : srcPlayers.strongA;
-        if (r === "high") return toggle ? srcPlayers.highB : srcPlayers.highA;
-        return toggle ? srcPlayers.lowB : srcPlayers.lowA;
+        const r = (mapping.sourceRole || "strong") as "high" | "low" | "strong";
+        return pickSlot(srcPlayers, r, idx);
       }
       const players = allPlayersRef.current[set as keyof typeof allPlayersRef.current] || allPlayersRef.current.classic;
-      if (role === "strong") return toggle ? players.strongB : players.strongA;
-      if (role === "high") return toggle ? players.highB : players.highA;
-      return toggle ? players.lowB : players.lowA;
+      return pickSlot(players, role, idx);
     };
 
     engine.setAudioCallbacks(
@@ -608,7 +608,7 @@ export default function MetronomeScreen() {
         }
         try {
           const active = getCustomPlayer("high", highToggle.current);
-          highToggle.current = !highToggle.current;
+          highToggle.current = (highToggle.current + 1) % BUILTIN_POOL_SIZE;
           restartPlayer(active);
         } catch (e) {}
       },
@@ -623,7 +623,7 @@ export default function MetronomeScreen() {
         }
         try {
           const active = getCustomPlayer("low", lowToggle.current);
-          lowToggle.current = !lowToggle.current;
+          lowToggle.current = (lowToggle.current + 1) % BUILTIN_POOL_SIZE;
           restartPlayer(active);
         } catch (e) {}
       },
@@ -638,19 +638,19 @@ export default function MetronomeScreen() {
         }
         try {
           const active = getCustomPlayer("strong", strongToggle.current);
-          strongToggle.current = !strongToggle.current;
+          strongToggle.current = (strongToggle.current + 1) % BUILTIN_POOL_SIZE;
           restartPlayer(active);
         } catch (e) {}
       }
     );
 
-    const layerToggle: Record<string, boolean> = {};
+    const layerToggle: Record<string, number> = {};
     engine.setLayerAudioCallback((layerIndex: number, role: "high" | "low" | "strong", soundSet?: string) => {
       if (fadeOutMutedRef.current) return;
       const layerSet = soundSet || layerSoundSetsRef.current[layerIndex] || soundSetRef.current;
       const toggleKey = `${layerIndex}-${role}`;
-      const toggle = !!layerToggle[toggleKey];
-      layerToggle[toggleKey] = !toggle;
+      const toggle = layerToggle[toggleKey] ?? 0;
+      layerToggle[toggleKey] = (toggle + 1) % BUILTIN_POOL_SIZE;
 
       if (Platform.OS === "web" && webClickReadyRef.current) {
         const ch = barModeRef.current
@@ -663,34 +663,32 @@ export default function MetronomeScreen() {
       try {
         const customs = customSoundSetsRef.current;
         const customCfg = customs[layerSet];
-        let players: any;
+        let players: SoundSetPlayers;
         if (customCfg) {
           const mapping = role === "strong" ? customCfg.strong : role === "high" ? customCfg.accent : customCfg.normal;
           if (mapping.type === "builtin") {
             const srcSet = mapping.sourceSet || "classic";
             players = allPlayersRef.current[srcSet as keyof BuiltinPlayers] || allPlayersRef.current.classic;
-            const r = mapping.sourceRole || "strong";
-            const active = r === "strong" ? (toggle ? players.strongB : players.strongA) : r === "high" ? (toggle ? players.highB : players.highA) : (toggle ? players.lowB : players.lowA);
-            restartPlayer(active);
+            const r = (mapping.sourceRole || "strong") as "high" | "low" | "strong";
+            restartPlayer(pickSlot(players, r, toggle));
             return;
           }
           players = allPlayersRef.current.classic;
         } else {
           players = allPlayersRef.current[layerSet as keyof typeof allPlayersRef.current] || allPlayersRef.current.classic;
         }
-        const active = role === "strong" ? (toggle ? players.strongB : players.strongA) : role === "high" ? (toggle ? players.highB : players.highA) : (toggle ? players.lowB : players.lowA);
-        restartPlayer(active);
+        restartPlayer(pickSlot(players, role, toggle));
       } catch (e) {}
     });
 
-    const blockToggle: Record<string, boolean> = {};
+    const blockToggle: Record<string, number> = {};
     engine.setBlockAudioCallback((blockIndex: number, role: "high" | "low" | "strong") => {
       if (fadeOutMutedRef.current) return;
       const block = barConfigRef.current.loopBlocks[blockIndex];
       const blockSet = block?.soundSet || soundSetRef.current;
       const toggleKey = `blk-${blockIndex}-${role}`;
-      const toggle = !!blockToggle[toggleKey];
-      blockToggle[toggleKey] = !toggle;
+      const toggle = blockToggle[toggleKey] ?? 0;
+      blockToggle[toggleKey] = (toggle + 1) % BUILTIN_POOL_SIZE;
 
       if (Platform.OS === "web" && webClickReadyRef.current) {
         const ch = barModeRef.current
@@ -703,23 +701,21 @@ export default function MetronomeScreen() {
       try {
         const customs = customSoundSetsRef.current;
         const customCfg = customs[blockSet];
-        let players: any;
+        let players: SoundSetPlayers;
         if (customCfg) {
           const mapping = role === "strong" ? customCfg.strong : role === "high" ? customCfg.accent : customCfg.normal;
           if (mapping.type === "builtin") {
             const srcSet = mapping.sourceSet || "classic";
             players = allPlayersRef.current[srcSet as keyof BuiltinPlayers] || allPlayersRef.current.classic;
-            const r = mapping.sourceRole || "strong";
-            const active = r === "strong" ? (toggle ? players.strongB : players.strongA) : r === "high" ? (toggle ? players.highB : players.highA) : (toggle ? players.lowB : players.lowA);
-            restartPlayer(active);
+            const r = (mapping.sourceRole || "strong") as "high" | "low" | "strong";
+            restartPlayer(pickSlot(players, r, toggle));
             return;
           }
           players = allPlayersRef.current.classic;
         } else {
           players = allPlayersRef.current[blockSet as keyof typeof allPlayersRef.current] || allPlayersRef.current.classic;
         }
-        const active = role === "strong" ? (toggle ? players.strongB : players.strongA) : role === "high" ? (toggle ? players.highB : players.highA) : (toggle ? players.lowB : players.lowA);
-        restartPlayer(active);
+        restartPlayer(pickSlot(players, role, toggle));
       } catch (e) {}
     });
 
@@ -1179,7 +1175,7 @@ export default function MetronomeScreen() {
         notifyAudioPoolFallback("warmup-missing-set", { requestedSet: String(builtinSet) });
       }
       const players = pool || allPlayersRef.current.classic;
-      const toWarm = [players.highA, players.highB, players.lowA, players.lowB, players.strongA, players.strongB];
+      const toWarm = [players.highA, players.highB, players.highC, players.highD, players.lowA, players.lowB, players.lowC, players.lowD, players.strongA, players.strongB, players.strongC, players.strongD];
       const savedVolumes = toWarm.map(p => p.volume);
       toWarm.forEach(p => { p.volume = 0; });
       await Promise.all(toWarm.map(async (p) => {
@@ -1517,10 +1513,16 @@ export default function MetronomeScreen() {
         const v = volume * MAX_VOLUME;
         set.highA.volume = v;
         set.highB.volume = v;
+        set.highC.volume = v;
+        set.highD.volume = v;
         set.lowA.volume = v;
         set.lowB.volume = v;
+        set.lowC.volume = v;
+        set.lowD.volume = v;
         set.strongA.volume = v;
         set.strongB.volume = v;
+        set.strongC.volume = v;
+        set.strongD.volume = v;
       });
     } catch (e) {}
   }, [volume, allPlayers]);
