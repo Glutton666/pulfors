@@ -19,6 +19,14 @@ import {
   sanitizePracticeEntry,
   writeStringToFile,
 } from "./shared";
+import { PracticeShareFileSchema, formatZodError } from "./schema";
+
+export interface ImportPracticeResult {
+  success: boolean;
+  entry?: PracticeEntry;
+  /** Zod가 파싱 단계에서 감지한 필드별 오류 설명. 사용자에게 표시 가능. */
+  validationDetail?: string;
+}
 
 export async function sharePracticeEntry(entry: PracticeEntry): Promise<boolean> {
   try {
@@ -79,7 +87,7 @@ export async function sharePracticeEntry(entry: PracticeEntry): Promise<boolean>
   }
 }
 
-export async function importPracticeEntry(): Promise<{ success: boolean; entry?: PracticeEntry }> {
+export async function importPracticeEntry(): Promise<ImportPracticeResult> {
   try {
     if (Platform.OS === "web") {
       return pickFileWeb(
@@ -127,22 +135,33 @@ export async function importPracticeEntry(): Promise<{ success: boolean; entry?:
 
 async function parsePracticeJson(
   json: string,
-): Promise<{ success: boolean; entry?: PracticeEntry }> {
+): Promise<ImportPracticeResult> {
   try {
     if (typeof json !== "string" || json.length > MAX_IMPORT_JSON_CHARS) {
       logger.warn("[Backup] Practice JSON too large:", json?.length);
       return { success: false };
     }
-    const data: PracticeShareFile = JSON.parse(json);
-    if (!data._meta || data._meta.app !== "metronome" || data._meta.type !== "practice_entry" || !data.entry) {
+    let rawData: unknown;
+    try {
+      rawData = JSON.parse(json);
+    } catch (e) {
+      logger.warn("[Backup] Practice JSON parse failed:", e);
       return { success: false };
     }
-
-    const entry = data.entry;
-
-    if (!entry.bpm || !entry.beatsPerMeasure || !entry.beatTypes) {
-      return { success: false };
+    const parseResult = PracticeShareFileSchema.safeParse(rawData);
+    if (!parseResult.success) {
+      const detail = formatZodError(parseResult.error);
+      logger.warn("[Backup] Practice file structure invalid:", detail);
+      captureBreadcrumb({
+        category: "backup.practice.import",
+        message: "Zod validation failed",
+        level: "warning",
+        data: { detail },
+      });
+      return { success: false, validationDetail: detail };
     }
+    const data = parseResult.data;
+    const entry = data.entry as unknown as PracticeEntry;
 
     const sanitized = sanitizePracticeEntry(entry);
     if (sanitized === null) {

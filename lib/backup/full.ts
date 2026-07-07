@@ -23,6 +23,7 @@ import {
   writeStringToFile,
 } from "./shared";
 import { CURRENT_SCHEMA_VERSION, migrateBackup, UnsupportedBackupVersionError } from "./migrations";
+import { BackupFileSchema, formatZodError } from "./schema";
 
 export type ImportBackupErrorCode = "unsupported_version" | "invalid" | "io";
 
@@ -30,6 +31,8 @@ export interface ImportBackupResult {
   success: boolean;
   keyCount: number;
   errorCode?: ImportBackupErrorCode;
+  /** Zod가 파싱 단계에서 감지한 필드별 오류 설명. 사용자에게 표시 가능. */
+  validationDetail?: string;
 }
 
 /** score 인덱스에서 모든 개별 악보 키를 동적으로 수집한다 */
@@ -179,23 +182,26 @@ async function restoreFromJsonInternal(
       logger.warn("[Backup] Import JSON too large:", json?.length);
       return { success: false, keyCount: 0, errorCode: "invalid" };
     }
-    let backup: BackupFile;
+    let rawData: unknown;
     try {
-      backup = JSON.parse(json);
+      rawData = JSON.parse(json);
     } catch (e) {
       logger.warn("[Backup] JSON parse failed:", e);
       return { success: false, keyCount: 0, errorCode: "invalid" };
     }
-    if (
-      !backup ||
-      typeof backup !== "object" ||
-      Array.isArray(backup) ||
-      !backup._meta ||
-      backup._meta.app !== "metronome" ||
-      !backup.data
-    ) {
-      return { success: false, keyCount: 0, errorCode: "invalid" };
+    const parseResult = BackupFileSchema.safeParse(rawData);
+    if (!parseResult.success) {
+      const detail = formatZodError(parseResult.error);
+      logger.warn("[Backup] Backup file structure invalid:", detail);
+      captureBreadcrumb({
+        category: "backup.restore",
+        message: "Zod validation failed",
+        level: "warning",
+        data: { detail },
+      });
+      return { success: false, keyCount: 0, errorCode: "invalid", validationDetail: detail };
     }
+    const backup = parseResult.data;
 
     let data: Record<string, string | null>;
     try {

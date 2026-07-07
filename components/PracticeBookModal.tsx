@@ -616,7 +616,10 @@ export function PracticeBookModal({
         const fresh = await loadPracticeBook();
         setEntries(fresh);
       } else {
-        Alert.alert(t("practiceBook", "importEntry"), t("practiceBook", "importFail"));
+        const detail = result.validationDetail
+          ? `\n\n${t("practiceBook", "importInvalidDetail")}: ${result.validationDetail}`
+          : "";
+        Alert.alert(t("practiceBook", "importEntry"), t("practiceBook", "importFail") + detail);
       }
     } catch (_) {
       Alert.alert(t("practiceBook", "importEntry"), t("practiceBook", "importFail"));

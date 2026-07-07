@@ -2165,7 +2165,10 @@ export function SettingsModal({
                         const msgKey = result.errorCode === "unsupported_version"
                           ? "restoreUnsupportedVersion"
                           : "restoreFail";
-                        Alert.alert(t("settings", "error"), t("settings", msgKey));
+                        const detail = result.validationDetail
+                          ? `\n\n${t("settings", "restoreInvalidDetail")}: ${result.validationDetail}`
+                          : "";
+                        Alert.alert(t("settings", "error"), t("settings", msgKey) + detail);
                       }
                     },
                   },
