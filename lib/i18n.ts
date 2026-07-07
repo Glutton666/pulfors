@@ -194,6 +194,11 @@ export const translations = {
     permissionLocationMsg: { ko: "연습실을 등록하려면 위치 권한이 필요합니다.", en: "Location permission is required to register a practice room." },
     error: { ko: "오류", en: "Error" },
     locationError: { ko: "현재 위치를 가져올 수 없습니다. 다시 시도해주세요.", en: "Could not get current location. Please try again." },
+    webVersionLink: { ko: "웹 버전", en: "Web Version" },
+    webVersionLinkHint: { ko: "브라우저에서 메트로놈을 사용할 수 있습니다", en: "Use the metronome in your browser" },
+    webVersionOpen: { ko: "브라우저로 열기", en: "Open in Browser" },
+    webVersionCopy: { ko: "링크 복사", en: "Copy Link" },
+    webVersionCopied: { ko: "복사됨!", en: "Copied!" },
   },
   tripleOptions: {
     all: { ko: "전체", en: "All" },

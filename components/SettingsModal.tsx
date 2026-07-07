@@ -15,7 +15,9 @@ import {
   ActivityIndicator,
   Animated,
   useWindowDimensions,
+  Linking,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import { logger } from "@/lib/logger";
 import { confirmDestructive } from "@/lib/confirm";
@@ -337,6 +339,8 @@ export function SettingsModal({
   const [rebindConflict, setRebindConflict] = useState<string | null>(null);
   const [kbSavedToast, setKbSavedToast] = useState(false);
   const kbSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [webUrlCopied, setWebUrlCopied] = useState(false);
+  const webUrlCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showKbSaved = useCallback(() => {
     setKbSavedToast(true);
     if (kbSavedTimerRef.current) clearTimeout(kbSavedTimerRef.current);
@@ -344,6 +348,7 @@ export function SettingsModal({
   }, []);
   useEffect(() => () => {
     if (kbSavedTimerRef.current) clearTimeout(kbSavedTimerRef.current);
+    if (webUrlCopiedTimerRef.current) clearTimeout(webUrlCopiedTimerRef.current);
   }, []);
   useEffect(() => {
     if (keyBindingsProp) setLocalKeyBindings(keyBindingsProp);
@@ -2183,6 +2188,44 @@ export function SettingsModal({
       </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
+
+      {!!process.env.EXPO_PUBLIC_DOMAIN && (
+        <>
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="globe-outline" size={S.ms(18, 0.4)} color={C.accent} />
+              <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "webVersionLink")}</Text>
+            </View>
+            <Text style={[styles.offsetHint, { color: C.textSecondary, marginBottom: 8 }]} numberOfLines={1}>
+              {`https://${process.env.EXPO_PUBLIC_DOMAIN}`}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Pressable
+                style={[styles.addRoomBtn, { borderColor: C.accentDim, flex: 1 }]}
+                onPress={() => Linking.openURL(`https://${process.env.EXPO_PUBLIC_DOMAIN}`)}
+              >
+                <Ionicons name="open-outline" size={S.ms(15, 0.4)} color={C.accent} />
+                <Text style={[styles.addRoomBtnText, { color: C.accent }]}>{t("settings", "webVersionOpen")}</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.addRoomBtn, { borderColor: webUrlCopied ? C.accent : C.accentDim, flex: 1 }]}
+                onPress={async () => {
+                  await Clipboard.setStringAsync(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+                  setWebUrlCopied(true);
+                  if (webUrlCopiedTimerRef.current) clearTimeout(webUrlCopiedTimerRef.current);
+                  webUrlCopiedTimerRef.current = setTimeout(() => setWebUrlCopied(false), 2000);
+                }}
+              >
+                <Ionicons name={webUrlCopied ? "checkmark-outline" : "copy-outline"} size={S.ms(15, 0.4)} color={C.accent} />
+                <Text style={[styles.addRoomBtnText, { color: C.accent }]}>
+                  {webUrlCopied ? t("settings", "webVersionCopied") : t("settings", "webVersionCopy")}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+          <View style={[styles.divider, { backgroundColor: C.border }]} />
+        </>
+      )}
 
       {onShowOnboarding && (
         <Pressable
