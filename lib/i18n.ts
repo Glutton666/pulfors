@@ -1210,6 +1210,21 @@ export const translations = {
     bpmLabel:    { ko: "BPM", en: "BPM" },
     volumeHint:  { ko: "볼륨 버튼 또는 탭으로 조절", en: "Volume buttons or tap to adjust" },
   },
+  challenge: {
+    level:        { ko: "레벨", en: "Level" },
+    countIn:      { ko: "카운트인", en: "Count In" },
+    preview:      { ko: "악보 미리보기", en: "Score Preview" },
+    bpmLabel:     { ko: "BPM", en: "BPM" },
+    level1Title:  { ko: "기초로 돌아가기", en: "Pack to Basic" },
+    level2Title:  { ko: "강하게 훈련하기", en: "Train Hard" },
+    level3Title:  { ko: "러시? 드래그?", en: "Rushin' or Drugin'?" },
+    done:         { ko: "완료", en: "Done" },
+    preparing:    { ko: "준비 중", en: "Preparing" },
+    complete:     { ko: "훌륭해요!", en: "Well Done!" },
+    close:        { ko: "닫기", en: "Close" },
+    play:         { ko: "재생", en: "Play" },
+    pause:        { ko: "일시정지", en: "Pause" },
+  },
 } as const satisfies TranslationsShape;
 
 type TranslationKeys = typeof translations;

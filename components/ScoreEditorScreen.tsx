@@ -52,6 +52,9 @@ import { ScoreRenderer } from "@/components/ScoreRenderer";
 import { ScorePalette } from "@/components/ScorePalette";
 import type { RepeatSignId, CrescType } from "@/components/ScorePalette";
 import { useScorePlayback } from "@/hooks/useScorePlayback";
+import { detectChallengeLevel, generateChallengeScore } from "@/lib/session-challenge";
+import type { ChallengeLevel } from "@/lib/session-challenge";
+import { SessionChallengeModal } from "@/components/SessionChallengeModal";
 import { makeStyles } from "@/components/ScoreEditorScreen.styles";
 import { confirmDestructive } from "@/lib/confirm";
 import {
@@ -159,6 +162,8 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
 
   // ── 악보 상태 ────────────────────────────────────────────────
   const [doc, setDocRaw] = useState<ScoreDocument>(initialDoc);
+  const [challengeLevel, setChallengeLevel] = useState<ChallengeLevel | null>(null);
+  const [challengeDoc, setChallengeDoc] = useState<ScoreDocument | null>(null);
 
   // ── undo/redo 스택 ────────────────────────────────────────────
   const historyRef = useRef<ScoreDocument[]>([initialDoc]);
@@ -499,6 +504,11 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
       setSavedToast(true);
       toastTimerRef.current = setTimeout(() => setSavedToast(false), 1800);
+      const lvl = detectChallengeLevel(doc.metadata.title);
+      if (lvl !== null) {
+        setChallengeLevel(lvl);
+        setChallengeDoc(generateChallengeScore(lvl));
+      }
     } catch {
       Alert.alert("Error", "Could not save score.");
     }
@@ -2764,6 +2774,14 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         onChangeTarget={setMeasureEditTarget}
         onSave={handleMeasureEditSave}
       />
+      {challengeLevel !== null && challengeDoc !== null && (
+        <SessionChallengeModal
+          visible
+          level={challengeLevel}
+          doc={challengeDoc}
+          onClose={() => { setChallengeLevel(null); setChallengeDoc(null); }}
+        />
+      )}
     </View>
   );
 }
