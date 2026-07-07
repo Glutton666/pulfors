@@ -1,9 +1,9 @@
 // ============================================================
 // SessionChallengeModal — 악보 이스터에그 랜덤 세션 챌린지 모달
-// 카운트인(4라운드) → 챌린지(악보 재생) → 완료 3단계 흐름
+// 카운트인(4박 고정, 4라운드) → 챌린지(금관악기 선택 + 재생) → 완료
 // ============================================================
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -28,6 +28,14 @@ import { safePlay } from "@/lib/audio-utils";
 
 type Phase = "countin" | "challenge" | "complete";
 
+// 금관악기 옵션: treble clef (trumpet, horn) / bass clef (trombone, tuba)
+const BRASS_OPTIONS: { id: string; clef: "treble" | "bass"; label: string }[] = [
+  { id: "trumpet",  clef: "treble", label: "Trumpet" },
+  { id: "horn",     clef: "treble", label: "Horn" },
+  { id: "trombone", clef: "bass",   label: "Trombone" },
+  { id: "tuba",     clef: "bass",   label: "Tuba" },
+];
+
 interface Props {
   visible: boolean;
   level: ChallengeLevel;
@@ -41,6 +49,11 @@ const LEVEL_COLORS: Record<ChallengeLevel, string> = {
   3: "#F44336",
 };
 
+// 카운트인: 항상 4박, 4라운드 진행
+// Round 0: 강약약약  Round 1: 강강약약  Round 2: 강강강약  Round 3: 강강강강
+const COUNTIN_BEATS = 4;
+const COUNTIN_ROUNDS = 4;
+
 export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
   const { t } = useLanguage();
   const { colors: C } = useTheme();
@@ -48,22 +61,37 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
   const { width: windowWidth } = useWindowDimensions();
 
   const [phase, setPhase] = useState<Phase>("countin");
+  // 카운트인: round(0-3)과 activeBeat(0-3)는 항상 4박 기준
   const [countinRound, setCountinRound] = useState(0);
   const [activeBeat, setActiveBeat] = useState(0);
+
+  // 금관악기 선택
+  const [brassIdx, setBrassIdx] = useState(0);
+  const selectedBrass = BRASS_OPTIONS[brassIdx];
+
+  // 선택된 악기로 doc을 파생 (ScoreRenderer + 재생용)
+  const playbackDoc = useMemo<ScoreDocument>(() => ({
+    ...doc,
+    parts: doc.parts.map((p) => ({
+      ...p,
+      instrumentId: selectedBrass.id,
+      clef: selectedBrass.clef,
+    })),
+  }), [doc, selectedBrass]);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 카운트인 클릭 사운드
   const clickHigh = useAudioPlayer(require("@/assets/sounds/click-high.wav"));
   const clickLow  = useAudioPlayer(require("@/assets/sounds/click-low.wav"));
 
-  const playback = useScorePlayback(doc);
+  const playback = useScorePlayback(playbackDoc);
 
-  // 재생 완료 감지용 refs
+  // 재생 완료 자동 감지용 refs
   const playbackStartedRef = useRef(false);
-  const userPausedRef = useRef(false);
-  const prevIsPlayingRef = useRef(false);
+  const userPausedRef       = useRef(false);
+  const prevIsPlayingRef    = useRef(false);
 
-  const beatsPerMeasure = doc.timeSignature.numerator;
   const beatMs = Math.round(60000 / doc.bpm);
   const levelColor = LEVEL_COLORS[level];
   const containerWidth = Math.min(windowWidth, 640) - 32;
@@ -75,17 +103,13 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
     }
   }, []);
 
-  // 클릭음 재생 헬퍼
-  const playCountinClick = useCallback((beatIdx: number) => {
-    const isStrong = beatIdx === 0;
+  // 클릭음 재생 (beat 0 = 강박 → high, 나머지 → low)
+  const playCountinClick = useCallback((beat: number) => {
+    const isStrong = beat === 0;
     try {
-      if (isStrong) {
-        clickHigh.seekTo(0);
-        safePlay(clickHigh, "challenge.click.high");
-      } else {
-        clickLow.seekTo(0);
-        safePlay(clickLow, "challenge.click.low");
-      }
+      const player = isStrong ? clickHigh : clickLow;
+      player.seekTo(0);
+      safePlay(player, isStrong ? "challenge.click.high" : "challenge.click.low");
     } catch {}
     try {
       Haptics.impactAsync(
@@ -102,13 +126,13 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
       setPhase("countin");
       setCountinRound(0);
       setActiveBeat(0);
-      playbackStartedRef.current = false;
-      userPausedRef.current = false;
-      prevIsPlayingRef.current = false;
+      playbackStartedRef.current  = false;
+      userPausedRef.current       = false;
+      prevIsPlayingRef.current    = false;
     }
   }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 카운트인 시작 (모달이 보일 때)
+  // 카운트인 시작 (visible 변경 시)
   useEffect(() => {
     if (!visible) return;
 
@@ -116,8 +140,8 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
     setCountinRound(0);
     setActiveBeat(0);
     playbackStartedRef.current = false;
-    userPausedRef.current = false;
-    prevIsPlayingRef.current = false;
+    userPausedRef.current      = false;
+    prevIsPlayingRef.current   = false;
 
     let round = 0;
     let beat = 0;
@@ -126,10 +150,12 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
     playCountinClick(0);
 
     timerRef.current = setInterval(() => {
-      beat = (beat + 1) % beatsPerMeasure;
-      if (beat === 0) {
-        round++;
-        if (round >= 4) {
+      beat += 1;
+      if (beat >= COUNTIN_BEATS) {
+        // 다음 라운드
+        beat = 0;
+        round += 1;
+        if (round >= COUNTIN_ROUNDS) {
           clearTimer();
           setActiveBeat(-1);
           setPhase("challenge");
@@ -148,8 +174,8 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
   useEffect(() => {
     if (phase === "challenge" && visible) {
       playbackStartedRef.current = false;
-      userPausedRef.current = false;
-      prevIsPlayingRef.current = false;
+      userPausedRef.current      = false;
+      prevIsPlayingRef.current   = false;
       playback.play();
     }
     if (phase !== "challenge") {
@@ -157,18 +183,15 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
     }
   }, [phase, visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 재생 완료 자동 감지 (악보 끝까지 재생 → complete 단계)
+  // 재생 완료 자동 감지: playback 끝 → complete 단계
   useEffect(() => {
     if (phase !== "challenge") {
       prevIsPlayingRef.current = playback.isPlaying;
       return;
     }
-
     if (playback.isPlaying) {
       playbackStartedRef.current = true;
     }
-
-    // 재생 중이었다가 멈췄고, 사용자가 일시정지를 누른 게 아니면 완료
     if (
       prevIsPlayingRef.current &&
       !playback.isPlaying &&
@@ -178,7 +201,6 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
     ) {
       setPhase("complete");
     }
-
     prevIsPlayingRef.current = playback.isPlaying;
   }, [playback.isPlaying, playback.isPreparing, phase]);
 
@@ -186,14 +208,13 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
 
   // ── 카운트인 단계 ─────────────────────────────────────────
   if (phase === "countin") {
-    const strongCount = Math.min(countinRound + 1, beatsPerMeasure);
-    const circleSize = beatsPerMeasure > 6 ? 36 : 52;
-    const gap = beatsPerMeasure > 6 ? 6 : 10;
+    // 강박 개수 = round+1 (라운드 0→1강, 1→2강, 2→3강, 3→4강)
+    const strongCount = countinRound + 1;
 
     return (
       <Modal visible animationType="fade" statusBarTranslucent>
         <View style={styles.root}>
-          {/* 상단: 레벨 배지 + 카운트인 제목 */}
+          {/* 레벨 배지 + 카운트인 제목 */}
           <View style={[styles.countinHeader, { paddingTop: insets.top + 16 }]}>
             <View style={[styles.levelBadge, { borderColor: levelColor }]}>
               <Text style={[styles.levelBadgeText, { color: levelColor }]}>
@@ -212,9 +233,9 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
             </Text>
           </View>
 
-          {/* 비트 인디케이터 */}
-          <View style={[styles.beatRow, { gap }]}>
-            {Array.from({ length: beatsPerMeasure }, (_, i) => {
+          {/* 카운트인 비트 인디케이터 — 항상 4박 */}
+          <View style={[styles.beatRow, { gap: 10 }]}>
+            {Array.from({ length: COUNTIN_BEATS }, (_, i) => {
               const isStrong = i < strongCount;
               const isActive = i === activeBeat;
               return (
@@ -222,23 +243,12 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
                   key={i}
                   style={[
                     styles.beatCircle,
-                    {
-                      width: circleSize,
-                      height: circleSize,
-                      borderRadius: circleSize / 2,
-                    },
                     isStrong && { borderColor: levelColor, borderWidth: 2 },
                     isActive && { backgroundColor: levelColor },
                     !isStrong && !isActive && styles.beatCircleWeak,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.beatLabel,
-                      { fontSize: beatsPerMeasure > 6 ? 10 : 13 },
-                      isActive && styles.beatLabelActive,
-                    ]}
-                  >
+                  <Text style={[styles.beatLabel, isActive && styles.beatLabelActive]}>
                     {i === 0 ? "강" : "약"}
                   </Text>
                 </View>
@@ -248,14 +258,33 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
 
           {/* 라운드 진행 점 */}
           <View style={styles.roundRow}>
-            {[0, 1, 2, 3].map((r) => (
+            {Array.from({ length: COUNTIN_ROUNDS }, (_, r) => (
               <View
                 key={r}
-                style={[
-                  styles.roundDot,
-                  r <= countinRound && { backgroundColor: levelColor },
-                ]}
+                style={[styles.roundDot, r <= countinRound && { backgroundColor: levelColor }]}
               />
+            ))}
+          </View>
+
+          {/* 금관악기 선택 */}
+          <View style={styles.instrumentRow}>
+            {BRASS_OPTIONS.map((opt, idx) => (
+              <Pressable
+                key={opt.id}
+                onPress={() => setBrassIdx(idx)}
+                style={[
+                  styles.instrumentPill,
+                  brassIdx === idx && { backgroundColor: levelColor, borderColor: levelColor },
+                  brassIdx !== idx && { borderColor: "#444" },
+                ]}
+              >
+                <Text style={[
+                  styles.instrumentPillText,
+                  { color: brassIdx === idx ? "white" : "#888" },
+                ]}>
+                  {opt.label}
+                </Text>
+              </Pressable>
             ))}
           </View>
 
@@ -264,7 +293,7 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
             <Text style={styles.previewLabel}>{t("challenge", "preview")}</Text>
             <ScrollView showsVerticalScrollIndicator={false}>
               <ScoreRenderer
-                doc={doc}
+                doc={playbackDoc}
                 containerWidth={containerWidth}
                 showPartNames={false}
                 showPlayhead={false}
@@ -289,14 +318,12 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
               </Text>
               <Text style={[styles.challengeSubtitle, { color: C.textSecondary }]}>
                 {doc.bpm} BPM · {doc.timeSignature.numerator}/{doc.timeSignature.denominator}
+                {"  ·  "}{selectedBrass.label}
               </Text>
             </View>
-            {/* 수동 완료 버튼 (체크 아이콘) */}
+            {/* 수동 완료 버튼 */}
             <Pressable
-              onPress={() => {
-                playback.stop();
-                setPhase("complete");
-              }}
+              onPress={() => { playback.stop(); setPhase("complete"); }}
               style={[styles.doneBtn, { borderColor: levelColor }]}
               accessibilityLabel={t("challenge", "done")}
             >
@@ -314,7 +341,7 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
             showsVerticalScrollIndicator={false}
           >
             <ScoreRenderer
-              doc={doc}
+              doc={playbackDoc}
               containerWidth={containerWidth}
               showPartNames={false}
               showPlayhead={playback.isPlaying}
@@ -390,6 +417,8 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
   );
 }
 
+const CIRCLE_SIZE = 52;
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -446,11 +475,13 @@ const styles = StyleSheet.create({
   beatRow: {
     flexDirection: "row",
     justifyContent: "center",
-    flexWrap: "wrap",
     paddingHorizontal: 16,
     marginBottom: 16,
   },
   beatCircle: {
+    width: CIRCLE_SIZE,
+    height: CIRCLE_SIZE,
+    borderRadius: CIRCLE_SIZE / 2,
     borderWidth: 1,
     borderColor: "#444",
     backgroundColor: "#1a1a1a",
@@ -462,6 +493,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#111",
   },
   beatLabel: {
+    fontSize: 13,
     fontWeight: "700",
     color: "#666",
   },
@@ -472,7 +504,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   roundDot: {
     width: 8,
@@ -480,6 +512,26 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: "#2a2a2a",
   },
+  // ── 악기 선택 ─────────────────────────────────────────────
+  instrumentRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: 8,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  instrumentPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1.5,
+  },
+  instrumentPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  // ── 악보 미리보기 ─────────────────────────────────────────
   scorePreviewBox: {
     flex: 1,
     marginHorizontal: 16,

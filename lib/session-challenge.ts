@@ -300,8 +300,8 @@ export function generateChallengeScore(level: ChallengeLevel): ScoreDocument {
   const measureCount = randInt(params.measureCountRange[0], params.measureCountRange[1]);
   const sharps = randInt(params.keyRange[0], params.keyRange[1]);
 
-  // Note density: L1=0.75 (more notes), L2=0.65, L3=0.72
-  const density = level === 1 ? 0.75 : level === 2 ? 0.65 : 0.72;
+  // Note density: L1=0.75, L2=0.65, L3=0.78 (≈1.2×L2 as spec'd)
+  const density = level === 1 ? 0.75 : level === 2 ? 0.65 : 0.78;
 
   const measures: ScoreMeasure[] = Array.from({ length: measureCount }, (_, i) =>
     buildMeasure(timeSig, level, density, i),
