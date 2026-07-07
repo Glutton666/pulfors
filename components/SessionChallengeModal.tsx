@@ -16,12 +16,15 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useAudioPlayer } from "expo-audio";
+import * as Haptics from "expo-haptics";
 import type { ScoreDocument } from "@/lib/score-types";
 import type { ChallengeLevel } from "@/lib/session-challenge";
 import { ScoreRenderer } from "@/components/ScoreRenderer";
 import { useScorePlayback } from "@/hooks/useScorePlayback";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { safePlay } from "@/lib/audio-utils";
 
 type Phase = "countin" | "challenge" | "complete";
 
@@ -49,8 +52,16 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
   const [activeBeat, setActiveBeat] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // 카운트인 클릭 사운드
+  const clickHigh = useAudioPlayer(require("@/assets/sounds/click-high.wav"));
+  const clickLow  = useAudioPlayer(require("@/assets/sounds/click-low.wav"));
+
   const playback = useScorePlayback(doc);
-  const playbackEverPlayedRef = useRef(false);
+
+  // 재생 완료 감지용 refs
+  const playbackStartedRef = useRef(false);
+  const userPausedRef = useRef(false);
+  const prevIsPlayingRef = useRef(false);
 
   const beatsPerMeasure = doc.timeSignature.numerator;
   const beatMs = Math.round(60000 / doc.bpm);
@@ -64,6 +75,25 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
     }
   }, []);
 
+  // 클릭음 재생 헬퍼
+  const playCountinClick = useCallback((beatIdx: number) => {
+    const isStrong = beatIdx === 0;
+    try {
+      if (isStrong) {
+        clickHigh.seekTo(0);
+        safePlay(clickHigh, "challenge.click.high");
+      } else {
+        clickLow.seekTo(0);
+        safePlay(clickLow, "challenge.click.low");
+      }
+    } catch {}
+    try {
+      Haptics.impactAsync(
+        isStrong ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Light,
+      );
+    } catch {}
+  }, [clickHigh, clickLow]);
+
   // 모달 닫힐 때 정리
   useEffect(() => {
     if (!visible) {
@@ -72,20 +102,28 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
       setPhase("countin");
       setCountinRound(0);
       setActiveBeat(0);
-      playbackEverPlayedRef.current = false;
+      playbackStartedRef.current = false;
+      userPausedRef.current = false;
+      prevIsPlayingRef.current = false;
     }
   }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 카운트인 시작
+  // 카운트인 시작 (모달이 보일 때)
   useEffect(() => {
     if (!visible) return;
 
     setPhase("countin");
     setCountinRound(0);
     setActiveBeat(0);
+    playbackStartedRef.current = false;
+    userPausedRef.current = false;
+    prevIsPlayingRef.current = false;
 
     let round = 0;
     let beat = 0;
+
+    // 첫 박자 즉시 재생
+    playCountinClick(0);
 
     timerRef.current = setInterval(() => {
       beat = (beat + 1) % beatsPerMeasure;
@@ -100,6 +138,7 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
         setCountinRound(round);
       }
       setActiveBeat(beat);
+      playCountinClick(beat);
     }, beatMs);
 
     return clearTimer;
@@ -108,7 +147,9 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
   // 챌린지 단계 진입 시 재생 시작
   useEffect(() => {
     if (phase === "challenge" && visible) {
-      playbackEverPlayedRef.current = false;
+      playbackStartedRef.current = false;
+      userPausedRef.current = false;
+      prevIsPlayingRef.current = false;
       playback.play();
     }
     if (phase !== "challenge") {
@@ -116,19 +157,37 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
     }
   }, [phase, visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 재생 시작 추적 (일시정지와 완료 구분)
+  // 재생 완료 자동 감지 (악보 끝까지 재생 → complete 단계)
   useEffect(() => {
-    if (playback.isPlaying && phase === "challenge") {
-      playbackEverPlayedRef.current = true;
+    if (phase !== "challenge") {
+      prevIsPlayingRef.current = playback.isPlaying;
+      return;
     }
-  }, [playback.isPlaying, phase]);
+
+    if (playback.isPlaying) {
+      playbackStartedRef.current = true;
+    }
+
+    // 재생 중이었다가 멈췄고, 사용자가 일시정지를 누른 게 아니면 완료
+    if (
+      prevIsPlayingRef.current &&
+      !playback.isPlaying &&
+      !playback.isPreparing &&
+      playbackStartedRef.current &&
+      !userPausedRef.current
+    ) {
+      setPhase("complete");
+    }
+
+    prevIsPlayingRef.current = playback.isPlaying;
+  }, [playback.isPlaying, playback.isPreparing, phase]);
 
   if (!visible) return null;
 
   // ── 카운트인 단계 ─────────────────────────────────────────
   if (phase === "countin") {
     const strongCount = Math.min(countinRound + 1, beatsPerMeasure);
-    const circleSize = beatsPerMeasure > 6 ? 38 : 52;
+    const circleSize = beatsPerMeasure > 6 ? 36 : 52;
     const gap = beatsPerMeasure > 6 ? 6 : 10;
 
     return (
@@ -232,6 +291,7 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
                 {doc.bpm} BPM · {doc.timeSignature.numerator}/{doc.timeSignature.denominator}
               </Text>
             </View>
+            {/* 수동 완료 버튼 (체크 아이콘) */}
             <Pressable
               onPress={() => {
                 playback.stop();
@@ -240,6 +300,7 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
               style={[styles.doneBtn, { borderColor: levelColor }]}
               accessibilityLabel={t("challenge", "done")}
             >
+              <Ionicons name="checkmark" size={18} color={levelColor} />
               <Text style={[styles.doneBtnText, { color: levelColor }]}>
                 {t("challenge", "done")}
               </Text>
@@ -277,8 +338,13 @@ export function SessionChallengeModal({ visible, level, doc, onClose }: Props) {
             ) : (
               <Pressable
                 onPress={() => {
-                  if (playback.isPlaying) playback.pause();
-                  else playback.play();
+                  if (playback.isPlaying) {
+                    userPausedRef.current = true;
+                    playback.pause();
+                  } else {
+                    userPausedRef.current = false;
+                    playback.play();
+                  }
                 }}
                 style={[styles.playBtn, { backgroundColor: levelColor }]}
                 accessibilityLabel={playback.isPlaying ? t("challenge", "pause") : t("challenge", "play")}
@@ -449,7 +515,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   doneBtn: {
-    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1.5,
