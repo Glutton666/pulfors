@@ -1337,7 +1337,7 @@ export function BarModeView({
                 delayLongPress={500}
                 disabled={isPlaying}
                 hitSlop={8}
-                style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 2, paddingRight: 12 }}
+                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingVertical: 2 }}
               >
                 <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(28, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
                   {editingSubdivisionCount}
