@@ -764,10 +764,12 @@ export function BarModeView({
     setEditingCustomSlot(slot);
   }, []);
 
+  const handleSymbolPlacementRef = useRef<(beat: number) => void>(() => {});
+
   const handleBarRowPress = useCallback((beat: number) => {
     if (isPlaying) return;
     if (placingSymbol) {
-      handleSymbolPlacement(beat);
+      handleSymbolPlacementRef.current(beat);
       return;
     }
     // 이 바가 loopBlock의 startBeat 또는 endBeat이면 해당 블록 편집 모달 열기
@@ -973,6 +975,9 @@ export function BarModeView({
       return;
     }
   }, [placingSymbol, blockSelectFirst, loopBlocks, onLoopBlocksChange, barRepeats, onBarRepeatChange, onBarStartBeatSelect]);
+
+  // 항상 최신 handleSymbolPlacement를 참조하도록 ref 업데이트
+  handleSymbolPlacementRef.current = handleSymbolPlacement;
 
   const saveVolta = useCallback(() => {
     if (voltaBeat === null) return;
