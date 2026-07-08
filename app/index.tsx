@@ -2975,11 +2975,11 @@ export default function MetronomeScreen() {
     setBeatTypes(defaultBeatTypes(1));
     engineRef.current?.setBeatsPerMeasure(1);
     engineRef.current?.setBeatTypes(defaultBeatTypes(1));
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    setEasterEggActive(true);
     if (!engineRef.current?.getIsRunning()) {
       try { await startMetronome(); } catch (_) {}
     }
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    setEasterEggActive(true);
   }, [startMetronome]);
 
   useEffect(() => {
