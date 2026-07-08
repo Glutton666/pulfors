@@ -529,6 +529,32 @@ export default function MetronomeScreen() {
   const audioPlayersHook = useAudioPlayers(soundSet);
   const { allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle } = audioPlayersHook;
 
+  // ── 웹 AudioContext 잠금 해제 (audio unlock) ─────────────────────────────
+  // Chrome의 Autoplay Policy: AudioContext는 사용자 제스처 이후에만 resume 가능.
+  // 첫 번째 포인터/터치/키보드 이벤트에서 즉시 ctx.resume()을 호출해두면
+  // 이스터에그 트리거·재생 버튼 등 모든 오디오 경로에서 컨텍스트가 이미 실행 중임이 보장된다.
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    let unlocked = false;
+    const unlock = () => {
+      if (unlocked) return;
+      unlocked = true;
+      const ctx = getWebAudioContext();
+      if (ctx && ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
+      // 이벤트 리스너 제거 (1회만 실행)
+      window.removeEventListener("pointerdown", unlock, true);
+      window.removeEventListener("keydown", unlock, true);
+    };
+    window.addEventListener("pointerdown", unlock, true);
+    window.addEventListener("keydown", unlock, true);
+    return () => {
+      window.removeEventListener("pointerdown", unlock, true);
+      window.removeEventListener("keydown", unlock, true);
+    };
+  }, []);
+
   // ── 웹 클릭 버퍼 사전 로드 ──────────────────────────────────────────────────
   // 마운트 직후 + soundSet 변경 시 버퍼를 미리 디코딩해두면
   // 사용자가 재생을 누를 때 webClickReadyRef = true 상태가 돼
