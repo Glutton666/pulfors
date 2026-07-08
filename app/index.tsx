@@ -1988,14 +1988,17 @@ export default function MetronomeScreen() {
   const handleBeatDenominatorCycle = useCallback(() => {
     setBeatDenominator((prev) => {
       const next: 2 | 4 | 8 = prev === 4 ? 8 : prev === 8 ? 2 : 4;
-      persistSettings({ beatDenominator: next });
+      const newBpm = Math.round(Math.min(300, Math.max(20, bpm * (prev / next))));
+      setBpm(newBpm);
+      engineRef.current?.setBpm(newBpm);
+      persistSettings({ beatDenominator: next, bpm: newBpm });
       halfTimeFlash.value = withSequence(
         withTiming(0.25, { duration: 80 }),
         withTiming(0, { duration: 600, easing: Easing.out(Easing.quad) })
       );
       return next;
     });
-  }, [persistSettings]);
+  }, [bpm, persistSettings]);
 
   const updateTimeSignature = useCallback(
     (beats: number) => {
