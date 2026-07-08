@@ -1334,13 +1334,14 @@ export function BarModeView({
                 delayLongPress={500}
                 disabled={isPlaying}
                 hitSlop={8}
-                style={{ flexDirection: "row", alignItems: "baseline", gap: 1 }}
+                style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 2 }}
               >
-                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(20, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
+                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(30, 0.4), color: isPlaying ? C.textTertiary : C.accent, lineHeight: ms(34, 0.4) }}>
                   {beatsPerMeasure}
                 </Text>
-                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(11, 0.3), color: C.textTertiary }}>
-                  /{beatDenominator}
+                <View style={{ width: ms(28, 0.4), height: 1.5, backgroundColor: isPlaying ? C.textTertiary : C.accent, marginVertical: 1 }} />
+                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(18, 0.3), color: C.textTertiary, lineHeight: ms(22, 0.3) }}>
+                  {beatDenominator}
                 </Text>
               </Pressable>
               {repBpm !== null ? (
