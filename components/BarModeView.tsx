@@ -1325,7 +1325,24 @@ export function BarModeView({
               )}
             </View>
             {/* BPM 입력 — 별도 행으로 분리 */}
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Pressable
+                onLongPress={() => {
+                  if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                  onDenominatorCycle?.();
+                }}
+                delayLongPress={500}
+                disabled={isPlaying}
+                hitSlop={8}
+                style={{ flexDirection: "row", alignItems: "baseline", gap: 1 }}
+              >
+                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(20, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
+                  {beatsPerMeasure}
+                </Text>
+                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(11, 0.3), color: C.textTertiary }}>
+                  /{beatDenominator}
+                </Text>
+              </Pressable>
               {repBpm !== null ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Pressable onPress={() => { if (!isPlaying) { const v = Math.max(20, repBpm - 5); setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
@@ -1524,23 +1541,6 @@ export function BarModeView({
             size={ms(18, 0.4)}
             color={saveFlashVisible ? "#4CAF50" : C.accent}
           />
-        </Pressable>
-
-        <Pressable
-          onLongPress={() => {
-            if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            onDenominatorCycle?.();
-          }}
-          delayLongPress={500}
-          style={{ alignItems: "center", justifyContent: "center", padding: Spacing.sm, minWidth: 52 }}
-          hitSlop={8}
-        >
-          <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(18, 0.4), color: C.accent, lineHeight: ms(22, 0.4) }}>
-            {beatsPerMeasure}
-          </Text>
-          <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(10, 0.3), color: C.textTertiary, letterSpacing: 0.5 }}>
-            /{beatDenominator}
-          </Text>
         </Pressable>
 
         <View style={styles.clockArea} {...barClockSwipePan.panHandlers}>
