@@ -134,72 +134,85 @@ export function EasterEggQuiz({
 
         <View style={styles.content} pointerEvents="box-none">
           {revealBpm != null ? (
-            <Text
-              style={[
-                styles.bpmValue,
-                { color: isGiveUp ? C.textSecondary : C.accent },
-                isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) },
-              ]}
-              testID="bpm-easter-egg-reveal"
-            >
-              {revealBpm}
-            </Text>
-          ) : (
-            <TextInput
-              ref={inputRef}
-              style={[
-                styles.bpmValue,
-                styles.eggInput,
-                { color: C.accent, borderBottomColor: C.accent },
-                isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) },
-              ]}
-              value={input}
-              onChangeText={setInput}
-              keyboardType="numeric"
-              placeholder="000"
-              placeholderTextColor={C.textTertiary}
-              returnKeyType="done"
-              onSubmitEditing={handleSubmit}
-              maxLength={3}
-              testID="bpm-easter-egg-input"
-            />
-          )}
-          <Text
-            style={[
-              styles.label,
-              {
-                color: revealBpm != null
-                  ? (isGiveUp ? C.textSecondary : C.accent)
-                  : C.accent,
-              },
-              isLandscape && { fontSize: S.ms(10, 0.3), marginTop: -2 },
-            ]}
-          >
-            {accentLabel}
-          </Text>
-          {revealBpm == null && (
-            <Animated.Text
-              style={[
-                styles.hintDirection,
-                { color: hintDirection === "up" ? C.accent : C.textSecondary },
-                isLandscape && { fontSize: S.ms(11, 0.3) },
-                hintStyle,
-              ]}
-              testID="bpm-easter-egg-hint"
-            >
-              {hintText}
-            </Animated.Text>
-          )}
-          {revealBpm != null && onToggleApplyBpm && (
-            <TouchableOpacity
-              onPress={onToggleApplyBpm}
-              activeOpacity={0.6}
-              testID="bpm-easter-egg-apply"
-            >
-              <Text style={[styles.applyText, { color: applyBpmSelected ? C.accent : C.textTertiary }]}>
-                {applyBpmSelected ? "✓ 비트모드에 적용" : "비트모드에 적용"}
+            <>
+              <Text
+                style={[
+                  styles.label,
+                  { color: isGiveUp ? C.textSecondary : C.accent },
+                  isLandscape && { fontSize: S.ms(10, 0.3), marginTop: -2 },
+                ]}
+              >
+                {accentLabel}
               </Text>
-            </TouchableOpacity>
+              <Text
+                style={[
+                  styles.bpmValue,
+                  { color: isGiveUp ? C.textSecondary : C.accent },
+                  isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) },
+                ]}
+                testID="bpm-easter-egg-reveal"
+              >
+                {revealBpm}
+              </Text>
+              {onToggleApplyBpm && (
+                <TouchableOpacity
+                  onPress={onToggleApplyBpm}
+                  activeOpacity={0.6}
+                  testID="bpm-easter-egg-apply"
+                >
+                  <Text
+                    style={[
+                      styles.label,
+                      { color: applyBpmSelected ? C.accent : C.textTertiary },
+                      isLandscape && { fontSize: S.ms(10, 0.3), marginTop: -2 },
+                    ]}
+                  >
+                    {applyBpmSelected ? "✓ 비트모드에 적용" : "비트모드에 적용"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </>
+          ) : (
+            <>
+              <TextInput
+                ref={inputRef}
+                style={[
+                  styles.bpmValue,
+                  styles.eggInput,
+                  { color: C.accent, borderBottomColor: C.accent },
+                  isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) },
+                ]}
+                value={input}
+                onChangeText={setInput}
+                keyboardType="numeric"
+                placeholder="000"
+                placeholderTextColor={C.textTertiary}
+                returnKeyType="done"
+                onSubmitEditing={handleSubmit}
+                maxLength={3}
+                testID="bpm-easter-egg-input"
+              />
+              <Text
+                style={[
+                  styles.label,
+                  { color: C.accent },
+                  isLandscape && { fontSize: S.ms(10, 0.3), marginTop: -2 },
+                ]}
+              >
+                {accentLabel}
+              </Text>
+              <Animated.Text
+                style={[
+                  styles.hintDirection,
+                  { color: hintDirection === "up" ? C.accent : C.textSecondary },
+                  isLandscape && { fontSize: S.ms(11, 0.3) },
+                  hintStyle,
+                ]}
+                testID="bpm-easter-egg-hint"
+              >
+                {hintText}
+              </Animated.Text>
+            </>
           )}
         </View>
 
@@ -271,13 +284,6 @@ const make_styles = (C: typeof Colors, S: ScaleValues) =>
       fontSize: S.ms(13, 0.3),
       letterSpacing: 1,
       marginTop: S.ms(6, 0.3),
-    },
-    applyText: {
-      fontFamily: "SpaceGrotesk_500Medium",
-      fontSize: S.ms(11, 0.3),
-      letterSpacing: 1,
-      marginTop: S.ms(8, 0.3),
-      opacity: 0.85,
     },
     ticks: {
       flexDirection: "row",
