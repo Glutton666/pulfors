@@ -1416,10 +1416,10 @@ export function BarModeView({
                   onPressOut={() => clearBpmTimers()}
                   style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
                 >
-                  <Ionicons name="remove" size={ms(13, 0.4)} color={repBpm !== null ? C.accent : C.textTertiary} />
+                  <Ionicons name="remove" size={ms(13, 0.4)} color={C.accent} />
                 </Pressable>
                 <TextInput
-                  style={[styles.bpmInput, { color: repBpm !== null ? C.accent : C.textTertiary, borderBottomColor: repBpm !== null ? C.accent : C.textTertiary + "60" }]}
+                  style={[styles.bpmInput, { color: C.accent, borderBottomColor: C.accent }]}
                   value={String(repBpm ?? bpm ?? 120)}
                   keyboardType="number-pad"
                   editable={!isPlaying}
@@ -1437,7 +1437,7 @@ export function BarModeView({
                   onPressOut={() => clearBpmTimers()}
                   style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
                 >
-                  <Ionicons name="add" size={ms(13, 0.4)} color={repBpm !== null ? C.accent : C.textTertiary} />
+                  <Ionicons name="add" size={ms(13, 0.4)} color={C.accent} />
                 </Pressable>
               </View>
             </View>
