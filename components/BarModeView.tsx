@@ -444,6 +444,28 @@ export function BarModeView({
   const [repSec, setRepSec] = useState(30);
   const [repBpm, setRepBpm] = useState<number | null>(null);
 
+  // BPM 스와이프/롱프레스 refs
+  const repBpmRef = useRef<number | null>(null);
+  useEffect(() => { repBpmRef.current = repBpm; }, [repBpm]);
+  const repTypeRef = useRef<"count" | "duration">("count");
+  useEffect(() => { repTypeRef.current = repType; }, [repType]);
+  const repCountRef = useRef(1);
+  useEffect(() => { repCountRef.current = repCount; }, [repCount]);
+  const repMinRef = useRef(0);
+  useEffect(() => { repMinRef.current = repMin; }, [repMin]);
+  const repSecRef = useRef(30);
+  useEffect(() => { repSecRef.current = repSec; }, [repSec]);
+  const bpmPropRef = useRef(bpm);
+  useEffect(() => { bpmPropRef.current = bpm; }, [bpm]);
+  const bpmPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bpmPressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const bpmHoldFired = useRef(false);
+  const clearBpmTimers = useCallback(() => {
+    if (bpmPressTimer.current) { clearTimeout(bpmPressTimer.current); bpmPressTimer.current = null; }
+    if (bpmPressInterval.current) { clearInterval(bpmPressInterval.current); bpmPressInterval.current = null; }
+    bpmHoldFired.current = false;
+  }, []);
+
   // 바 미선택 상태에서 "다음 추가할 바"의 레이어 draft
   const [draftLayers, setDraftLayers] = useState<BarLayer[]>([]);
 
@@ -948,6 +970,49 @@ export function BarModeView({
     onBarRepeatChange(editingBeat, rep);
   }, [editingBeat, isPlaying, barRepeats, onBarRepeatChange]);
 
+  // BPM 스와이프/롱프레스 핸들러 refs (stale closure 방지)
+  const commitRepeatRef = useRef(commitRepeat);
+  useEffect(() => { commitRepeatRef.current = commitRepeat; }, [commitRepeat]);
+  const editingBeatRef = useRef(editingBeat);
+  useEffect(() => { editingBeatRef.current = editingBeat; }, [editingBeat]);
+
+  const applyRepBpm = useCallback((newBpm: number) => {
+    setRepBpm(newBpm);
+    if (editingBeatRef.current !== null) {
+      commitRepeatRef.current(repTypeRef.current, repCountRef.current, repMinRef.current, repSecRef.current, newBpm);
+    }
+  }, []);
+
+  const startBpmHold = useCallback((dir: 1 | -1) => {
+    clearBpmTimers();
+    bpmPressTimer.current = setTimeout(() => {
+      bpmHoldFired.current = true;
+      const step = () => {
+        const cur = repBpmRef.current ?? bpmPropRef.current ?? 120;
+        applyRepBpm(Math.min(300, Math.max(20, cur + dir * 10)));
+      };
+      step();
+      bpmPressInterval.current = setInterval(step, 150);
+    }, 400);
+  }, [clearBpmTimers, applyRepBpm]);
+
+  const bpmSwipePan = useMemo(() => {
+    let startBpm = 0;
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+      onPanResponderGrant: () => {
+        startBpm = repBpmRef.current ?? bpmPropRef.current ?? 120;
+      },
+      onPanResponderMove: (_, gs) => {
+        const newBpm = Math.min(300, Math.max(20, Math.round(startBpm - gs.dx / 3)));
+        applyRepBpm(newBpm);
+      },
+      onPanResponderRelease: () => {},
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const clearRepeat = useCallback(() => {
     if (isPlaying) return;
     if (editingBeat === null) {
@@ -1321,11 +1386,6 @@ export function BarModeView({
                   </Pressable>
                 </>
               )}
-              {(editingRepeat || (editingBeat === null && (repCount > 1 || repType === "duration" || repBpm))) && !isPlaying && (
-                <Pressable onPress={clearRepeat} hitSlop={8}>
-                  <Ionicons name="close-circle" size={ms(14, 0.4)} color={C.textTertiary} />
-                </Pressable>
-              )}
             </View>
             {/* BPM 입력 — 별도 행으로 분리 */}
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -1349,8 +1409,13 @@ export function BarModeView({
                   {beatDenominator}
                 </Text>
               </Pressable>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <Pressable onPress={() => { if (!isPlaying) { const cur = repBpm ?? bpm ?? 120; const v = Math.max(20, cur - 5); setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }} {...bpmSwipePan.panHandlers}>
+                <Pressable
+                  onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.max(20, (repBpm ?? bpm ?? 120) - 5)); } }}
+                  onPressIn={() => { if (!isPlaying) startBpmHold(-1); }}
+                  onPressOut={() => clearBpmTimers()}
+                  style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
+                >
                   <Ionicons name="remove" size={ms(13, 0.4)} color={repBpm !== null ? C.accent : C.textTertiary} />
                 </Pressable>
                 <TextInput
@@ -1361,19 +1426,19 @@ export function BarModeView({
                   onEndEditing={e => {
                     if (isPlaying) return;
                     const v = parseInt(e.nativeEvent.text, 10);
-                    if (!isNaN(v) && v >= 20 && v <= 300) { setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); }
+                    if (!isNaN(v) && v >= 20 && v <= 300) { applyRepBpm(v); }
                     else if (!e.nativeEvent.text) { setRepBpm(null); commitRepeat(repType, repCount, repMin, repSec, null); }
                   }}
                   selectTextOnFocus
                 />
-                <Pressable onPress={() => { if (!isPlaying) { const cur = repBpm ?? bpm ?? 120; const v = Math.min(300, cur + 5); setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                <Pressable
+                  onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.min(300, (repBpm ?? bpm ?? 120) + 5)); } }}
+                  onPressIn={() => { if (!isPlaying) startBpmHold(1); }}
+                  onPressOut={() => clearBpmTimers()}
+                  style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
+                >
                   <Ionicons name="add" size={ms(13, 0.4)} color={repBpm !== null ? C.accent : C.textTertiary} />
                 </Pressable>
-                {repBpm !== null && (
-                  <Pressable onPress={() => { if (!isPlaying) { setRepBpm(null); commitRepeat(repType, repCount, repMin, repSec, null); } }} hitSlop={8}>
-                    <Ionicons name="close-circle" size={ms(14, 0.4)} color={C.textTertiary} />
-                  </Pressable>
-                )}
               </View>
             </View>
           </View>
