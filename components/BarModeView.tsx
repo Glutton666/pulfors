@@ -209,7 +209,6 @@ interface SwipeableBarRowProps {
   progressTotal?: number;
   bpm: number;
   beatsPerMeasure: number;
-  onAddBarRight: () => void;
   onPress: (beat: number) => void;
   onSwipeLeft: (beat: number) => void;
   onSwipeRight: (beat: number) => void;
@@ -229,7 +228,7 @@ interface SwipeableBarRowProps {
 function SwipeableBarRow({
   beat, beatType, subdivisions, repeat, isCurrentBeat, isEditingBeat,
   blockDepth, blockStart, blockEnd, symbolBadges, isPlaying, progressCurrent,
-  progressTotal, bpm, beatsPerMeasure, onAddBarRight, onPress, onSwipeLeft, onSwipeRight, onLongPress,
+  progressTotal, bpm, beatsPerMeasure, onPress, onSwipeLeft, onSwipeRight, onLongPress,
   onDragStart, onDragMove, onDragEnd, isDragging, showDropLineAbove, dragTranslateY,
   colors: C, ms,
   rowHeight, cellOverlayOpacity,
@@ -289,7 +288,7 @@ function SwipeableBarRow({
   }), [isPlaying, beat, onDragStart, onDragMove, onDragEnd, onPress]);
 
   const cells: BeatType[] = subdivisions.length > 0 ? subdivisions : [beatType];
-  const leftPad = blockDepth * BLOCK_DEPTH_INDENT + (blockStart || blockEnd ? 12 : 0);
+  const leftPad = blockDepth * BLOCK_DEPTH_INDENT + (blockStart || blockEnd ? 14 : 0);
 
   const rowTransform = dragTranslateY
     ? [{ translateX }, { translateY: dragTranslateY }]
@@ -333,35 +332,35 @@ function SwipeableBarRow({
             },
           ]}
         >
-          {blockDepth > 0 && (
-            <View style={{
-              position: "absolute",
-              left: blockDepth * BLOCK_DEPTH_INDENT - 2,
-              top: blockStart ? (rowHeight ?? BAR_ROW_H) / 2 : 0,
-              bottom: blockEnd ? (rowHeight ?? BAR_ROW_H) / 2 : 0,
-              width: 2,
-              backgroundColor: C.accent + "60",
-            }} />
-          )}
           {blockStart && (
-            <View style={{
+            <Text style={{
               position: "absolute",
-              left: blockDepth * BLOCK_DEPTH_INDENT - 2,
-              top: (rowHeight ?? BAR_ROW_H) / 2,
-              width: 6,
-              height: 2,
-              backgroundColor: C.accent + "60",
-            }} />
+              left: blockDepth * BLOCK_DEPTH_INDENT,
+              top: 0,
+              bottom: 0,
+              textAlignVertical: "center",
+              includeFontPadding: false,
+              lineHeight: rowHeight ?? BAR_ROW_H,
+              fontSize: ms(15, 0.5),
+              color: C.accent,
+              fontFamily: "SpaceGrotesk_700Bold",
+              opacity: 0.75,
+            }}>{"["}</Text>
           )}
           {blockEnd && (
-            <View style={{
+            <Text style={{
               position: "absolute",
-              left: blockDepth * BLOCK_DEPTH_INDENT - 2,
-              bottom: (rowHeight ?? BAR_ROW_H) / 2,
-              width: 6,
-              height: 2,
-              backgroundColor: C.accent + "60",
-            }} />
+              right: ms(28, 0.5),
+              top: 0,
+              bottom: 0,
+              textAlignVertical: "center",
+              includeFontPadding: false,
+              lineHeight: rowHeight ?? BAR_ROW_H,
+              fontSize: ms(15, 0.5),
+              color: C.accent,
+              fontFamily: "SpaceGrotesk_700Bold",
+              opacity: 0.75,
+            }}>{"]"}</Text>
           )}
 
           <View
@@ -439,16 +438,8 @@ function SwipeableBarRow({
             </View>
           </View>
 
-          {/* 오른쪽: 추가 버튼 */}
-          {!isPlaying && (
-            <Pressable
-              onPress={onAddBarRight}
-              style={[styles.barAddRightBtn, { width: ms(28, 0.5) }]}
-              hitSlop={8}
-            >
-              <Ionicons name="add" size={ms(15, 0.45)} color={C.accent + "70"} />
-            </Pressable>
-          )}
+          {/* 오른쪽: 블록 끝 표시가 없을 때 여백 유지 */}
+          <View style={{ width: ms(28, 0.5) }} />
         </Pressable>
       </Animated.View>
     </View>
@@ -811,16 +802,16 @@ export function BarModeView({
   }, [isPlaying, onNoteRecordRequest]);
 
   const handleSwipeLeft = useCallback((beat: number) => {
-    // 복사: 해당 바를 새 바로 복사
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onCopyBar?.(beat);
-  }, [onCopyBar]);
+    // 삭제: 해당 바를 삭제
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onDeleteBar?.(beat);
+  }, [onDeleteBar]);
 
   const handleSwipeRight = useCallback((beat: number) => {
-    // 수정: 해당 바를 편집기에 로드
-    onBarStartBeatSelect(beat);
-    setActiveLayerTab(0);
-  }, [onBarStartBeatSelect]);
+    // 복사 삽입: 해당 바와 같은 설정의 바를 바로 아래에 삽입
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onInsertBarAfter?.(beat);
+  }, [onInsertBarAfter]);
 
   const handleAddBar = useCallback(() => {
     if (isPlaying) return;
@@ -1362,7 +1353,6 @@ export function BarModeView({
               progressTotal={progressInfo?.beat === beat ? progressInfo.barRepeatTotal : undefined}
               bpm={bpm ?? 120}
               beatsPerMeasure={beatsPerMeasure}
-              onAddBarRight={() => onInsertBarAfter?.(beat)}
               onPress={handleBarRowPress}
               onSwipeLeft={handleSwipeLeft}
               onSwipeRight={handleSwipeRight}
