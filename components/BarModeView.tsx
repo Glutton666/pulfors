@@ -142,6 +142,7 @@ export interface BarModeViewProps {
   rowHeight?: number;
   onExitBarMode?: () => void;
   onNoteRecordRequest?: (beatIndex: number, subIndex: number) => void;
+  onReorderBar?: (fromIndex: number, toIndex: number) => void;
 }
 
 // ─── 상수 ────────────────────────────────────────────────────────────────────
@@ -212,6 +213,12 @@ interface SwipeableBarRowProps {
   onSwipeLeft: (beat: number) => void;
   onSwipeRight: (beat: number) => void;
   onLongPress: (beat: number) => void;
+  onDragStart?: (beat: number) => void;
+  onDragMove?: (beat: number, dy: number) => void;
+  onDragEnd?: (beat: number, dy: number) => void;
+  isDragging?: boolean;
+  showDropLineAbove?: boolean;
+  dragTranslateY?: Animated.Value;
   colors: BarModeColors;
   ms: (size: number, factor?: number) => number;
   rowHeight?: number;
@@ -221,7 +228,9 @@ interface SwipeableBarRowProps {
 function SwipeableBarRow({
   beat, beatType, subdivisions, repeat, isCurrentBeat, isEditingBeat,
   blockDepth, blockStart, blockEnd, symbolBadges, isPlaying, progressCurrent,
-  progressTotal, bpm, beatsPerMeasure, onAddBarRight, onPress, onSwipeLeft, onSwipeRight, onLongPress, colors: C, ms,
+  progressTotal, bpm, beatsPerMeasure, onAddBarRight, onPress, onSwipeLeft, onSwipeRight, onLongPress,
+  onDragStart, onDragMove, onDragEnd, isDragging, showDropLineAbove, dragTranslateY,
+  colors: C, ms,
   rowHeight, cellOverlayOpacity,
 }: SwipeableBarRowProps) {
   const translateX = useRef(new Animated.Value(0)).current;
@@ -252,13 +261,41 @@ function SwipeableBarRow({
     },
   }), [isPlaying, beat, onSwipeLeft, onSwipeRight]);
 
+  const beatNumPan = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_e, g) =>
+      !isPlaying && Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
+    onPanResponderGrant: () => { onDragStart?.(beat); },
+    onPanResponderMove: (_e, g) => { onDragMove?.(beat, g.dy); },
+    onPanResponderRelease: (_e, g) => { onDragEnd?.(beat, g.dy); },
+    onPanResponderTerminate: (_e, g) => { onDragEnd?.(beat, g.dy ?? 0); },
+  }), [isPlaying, beat, onDragStart, onDragMove, onDragEnd]);
+
   const cells: BeatType[] = subdivisions.length > 0 ? subdivisions : [beatType];
   const leftPad = blockDepth * BLOCK_DEPTH_INDENT + (blockStart || blockEnd ? 12 : 0);
 
+  const rowTransform = dragTranslateY
+    ? [{ translateX }, { translateY: dragTranslateY }]
+    : [{ translateX }];
+
   return (
-    <View style={{ position: "relative", overflow: "hidden" }}>
+    <View style={{ position: "relative", overflow: isDragging ? "visible" : "hidden" }}>
+      {showDropLineAbove && (
+        <View style={{ height: 2, backgroundColor: "#5b9cf6", borderRadius: 1, marginHorizontal: 4 }} />
+      )}
       <Animated.View
-        style={{ transform: [{ translateX }] }}
+        style={[
+          { transform: rowTransform },
+          isDragging && {
+            zIndex: 20,
+            shadowColor: "#000",
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 4 },
+            elevation: 10,
+            opacity: 0.92,
+          },
+        ]}
         {...panResponder.panHandlers}
       >
         <Pressable
@@ -310,23 +347,33 @@ function SwipeableBarRow({
             }} />
           )}
 
-          <View style={[styles.barRowNumber, { paddingLeft: leftPad + 4, width: ms(28, 0.5) }]}>
+          <View
+            style={[styles.barRowNumber, { paddingLeft: leftPad + 4, width: ms(34, 0.5) }]}
+            {...beatNumPan.panHandlers}
+          >
             <Text style={[
               styles.barRowNumberText,
               {
                 fontSize: ms(13, 0.45),
-                color: isCurrentBeat
+                color: isDragging
+                  ? "#5b9cf6"
+                  : isCurrentBeat
                   ? C.accent
                   : beatType === "strong" ? C.accent
                   : beatType === "accent" ? C.accentMuted
                   : beatType === "mute" ? C.textTertiary
                   : C.textSecondary,
-                fontFamily: isCurrentBeat ? "SpaceGrotesk_700Bold" : "SpaceGrotesk_500Medium",
-                opacity: 0.2,
+                fontFamily: isDragging || isCurrentBeat ? "SpaceGrotesk_700Bold" : "SpaceGrotesk_500Medium",
+                opacity: isDragging ? 0.9 : 0.2,
               },
             ]}>
               {beat + 1}
             </Text>
+            <View style={{ flexDirection: "column", gap: 2, marginLeft: 1, opacity: isDragging ? 0.7 : 0.2 }}>
+              {[0, 1, 2].map(i => (
+                <View key={i} style={{ width: 10, height: 1.5, borderRadius: 1, backgroundColor: isDragging ? "#5b9cf6" : C.textTertiary }} />
+              ))}
+            </View>
           </View>
 
           {/* 중앙: 비트 셀 (info overlay 포함) */}
@@ -409,6 +456,7 @@ export function BarModeView({
   rowHeight,
   onExitBarMode,
   onNoteRecordRequest,
+  onReorderBar,
 }: BarModeViewProps) {
 
   const { t } = useLanguage();
@@ -416,6 +464,44 @@ export function BarModeView({
   const insets = useSafeAreaInsets();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const topInset = insets.top || webTopInset;
+
+  // ─── 드래그 재정렬 상태 ──────────────────────────────────────────────────
+
+  const [draggingBeat, setDraggingBeat] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const draggingDyAnim = useRef(new Animated.Value(0)).current;
+  const draggingBeatRef = useRef<number | null>(null);
+
+  const rowH = rowHeight ?? BAR_ROW_H;
+
+  const handleDragStart = useCallback((beat: number) => {
+    if (isPlaying) return;
+    draggingBeatRef.current = beat;
+    setDraggingBeat(beat);
+    setDropIndex(beat);
+    draggingDyAnim.setValue(0);
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [isPlaying, draggingDyAnim]);
+
+  const handleDragMove = useCallback((beat: number, dy: number) => {
+    draggingDyAnim.setValue(dy);
+    const n = beatsPerMeasure;
+    const newDrop = Math.max(0, Math.min(n - 1, beat + Math.round(dy / rowH)));
+    setDropIndex(prev => prev !== newDrop ? newDrop : prev);
+  }, [beatsPerMeasure, rowH, draggingDyAnim]);
+
+  const handleDragEnd = useCallback((beat: number, dy: number) => {
+    const n = beatsPerMeasure;
+    const finalDrop = Math.max(0, Math.min(n - 1, beat + Math.round(dy / rowH)));
+    draggingBeatRef.current = null;
+    setDraggingBeat(null);
+    setDropIndex(null);
+    draggingDyAnim.setValue(0);
+    if (finalDrop !== beat) {
+      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      onReorderBar?.(beat, finalDrop);
+    }
+  }, [beatsPerMeasure, rowH, draggingDyAnim, onReorderBar]);
 
   // ─── 상태 ────────────────────────────────────────────────────────────────
 
@@ -1222,7 +1308,7 @@ export function BarModeView({
         style={[styles.barList, S.isTablet && { paddingHorizontal: S.ms(16, 0.5) }]}
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
-        scrollEnabled={!isPlaying}
+        scrollEnabled={!isPlaying && draggingBeat === null}
         onLayout={e => setBarContainerHeight(e.nativeEvent.layout.height)}
         onScroll={e => {
           barScrollYRef.current = e.nativeEvent.contentOffset.y;
@@ -1241,6 +1327,13 @@ export function BarModeView({
           const badges = getSymbolBadges(beat);
           const isCurrent = isPlaying && currentBeat === beat;
           const isEditing = barStartBeat === beat && !isPlaying;
+          const isDragging = draggingBeat === beat;
+          const showDropLineAbove = (
+            draggingBeat !== null &&
+            dropIndex !== null &&
+            beat !== draggingBeat &&
+            beat === dropIndex
+          );
 
           return (
             <SwipeableBarRow
@@ -1265,6 +1358,12 @@ export function BarModeView({
               onSwipeLeft={handleSwipeLeft}
               onSwipeRight={handleSwipeRight}
               onLongPress={handleBarRowLongPress}
+              onDragStart={handleDragStart}
+              onDragMove={handleDragMove}
+              onDragEnd={handleDragEnd}
+              isDragging={isDragging}
+              showDropLineAbove={showDropLineAbove}
+              dragTranslateY={isDragging ? draggingDyAnim : undefined}
               colors={C}
               ms={ms}
               rowHeight={rowHeight}
