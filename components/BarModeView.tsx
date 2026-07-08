@@ -264,9 +264,10 @@ function SwipeableBarRow({
   const beatNumDragStarted = useRef(false);
   const beatNumPan = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => !isPlaying,
+    onPanResponderTerminationRequest: () => false,
     onPanResponderGrant: () => { beatNumDragStarted.current = false; },
     onPanResponderMove: (_e, g) => {
-      if (!beatNumDragStarted.current && Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5) {
+      if (!beatNumDragStarted.current && Math.abs(g.dy) > 8) {
         beatNumDragStarted.current = true;
         onDragStart?.(beat);
       }
@@ -1438,6 +1439,16 @@ export function BarModeView({
           )}
 
           <View style={{ flex: 1 }} />
+
+          {editingBeat !== null && !isPlaying && (
+            <Pressable
+              onPress={() => { onDeleteBar?.(editingBeat); onBarStartBeatSelect(null); }}
+              hitSlop={10}
+              style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+            >
+              <Ionicons name="trash-outline" size={ms(13, 0.4)} color={C.danger} />
+            </Pressable>
+          )}
 
           <Pressable onPress={() => setEditorCollapsed(v => !v)} hitSlop={10} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
             <Ionicons name={editorCollapsed ? "chevron-up" : "chevron-down"} size={ms(13, 0.4)} color={C.textTertiary + "99"} />
