@@ -2859,10 +2859,7 @@ export default function MetronomeScreen() {
 
   const startMetronome = useCallback(async () => {
     const engine = engineRef.current;
-    if (!engine || isPlayingRef.current || isPreparingRef.current) {
-      console.log('[SM] early return — engine:', !!engine, 'isPlayingRef:', isPlayingRef.current, 'isPreparingRef:', isPreparingRef.current);
-      return;
-    }
+    if (!engine || isPlayingRef.current || isPreparingRef.current) return;
 
     resetPlaybackVisuals();
     clearSamplePlayStates();
@@ -2890,7 +2887,6 @@ export default function MetronomeScreen() {
     try {
       if (Platform.OS === "web") {
         const ctx = getWebAudioContext();
-        console.log('[SM] web path — ctx.state:', ctx?.state);
         if (ctx && ctx.state === "suspended") {
           ctx.resume().catch(() => {});
         }
@@ -2904,7 +2900,6 @@ export default function MetronomeScreen() {
         }
 
         if (preparingCancelledRef.current) {
-          console.log('[SM] cancelled after ensureWebClickBuffers');
           setIsPreparing(false);
           return;
         }
@@ -2918,12 +2913,10 @@ export default function MetronomeScreen() {
         try {
           const scheduleInfo = engine.getScheduleInfo();
           const ticks = scheduleInfo.ticks as TickInfo[];
-          console.log('[SM] schedule ticks:', ticks.length, 'durationMs:', scheduleInfo.durationMs, 'ctx.state now:', ctx?.state);
           const [clickPCMs, layerClickPCMs] = await Promise.all([
             getClickPCMs(soundSetRef.current),
             getLayerClickPCMsForSchedule(ticks),
           ]);
-          console.log('[SM] clickPCMs strong len:', clickPCMs?.strong?.length, 'high len:', clickPCMs?.high?.length);
           const pcm = renderMeasure({
             schedule: ticks,
             measureDurationMs: scheduleInfo.durationMs,
@@ -2935,21 +2928,16 @@ export default function MetronomeScreen() {
             metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
             layerClickPCMs,
           });
-          const pcmLen = ArrayBuffer.isView(pcm) ? (pcm as Float32Array).length : (pcm as any).left?.length;
-          console.log('[SM] rendered pcm length:', pcmLen);
           const loop = playWebRenderedLoop(pcm);
           webRenderedLoopRef.current = loop;
           engine.setPreRenderedAudio(true);
-          console.log('[SM] loop started, ctx.state final:', ctx?.state);
         } catch (renderErr) {
-          console.error('[SM] render/play failed:', renderErr);
           captureBreadcrumb({ category: "metronome", message: "startMetronome: Web pre-render failed, using per-tick", level: "warning", data: { error: String(renderErr) } });
           engine.setPreRenderedAudio(false);
         }
 
         setIsPlaying(true);
         engine.start();
-        console.log('[SM] engine started');
       } else {
         const renderedPlayer = await buildRenderedPlayer();
         if (preparingCancelledRef.current) {
@@ -2983,40 +2971,68 @@ export default function MetronomeScreen() {
 
   const handleEasterEggTrigger = useCallback(async () => {
     if (barModeRef.current) return;
+
+    const engine = engineRef.current;
+    if (!engine) return;
+
     easterEggPrevBpmRef.current = bpmRef.current;
     const randomBpm = Math.floor(Math.random() * (220 - 40 + 1)) + 40;
     easterEggActualBpmRef.current = randomBpm;
     const eggBeatTypes = defaultBeatTypes(1);
-    console.log('[EGG] trigger — randomBpm:', randomBpm, 'eggBeatTypes:', eggBeatTypes,
-      'wasRunning:', engineRef.current?.getIsRunning(),
-      'isPlayingRef:', isPlayingRef.current, 'isPreparingRef:', isPreparingRef.current);
-    engineRef.current?.setBpm(randomBpm);
+
+    // ① 기존 재생/준비 중단 — startMetronome 우회하여 직접 제어
+    preparingCancelledRef.current = true;
+    if (engine.getIsRunning()) engine.stop();
+    stopRenderedAudio();
+    setIsPreparing(false);
+    isPreparingRef.current = false;
+    setIsPlaying(false);
+    isPlayingRef.current = false;
+
+    // ② 새 BPM / 박자 설정
+    engine.setBpm(randomBpm);
+    engine.setBeatsPerMeasure(1);
+    engine.setBeatTypes(eggBeatTypes);
+    engine.setAllBeatSubdivisions({});
     setBeatsPerMeasure(1);
     setBeatTypes(eggBeatTypes);
-    engineRef.current?.setBeatsPerMeasure(1);
-    engineRef.current?.setBeatTypes(eggBeatTypes);
     dialConfigRef.current = {
       ...dialConfigRef.current,
       beatTypes: eggBeatTypes,
       beatSubdivisions: {},
     };
+
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setEasterEggActive(true);
-    if (engineRef.current?.getIsRunning()) {
-      engineRef.current.stop();
-      stopRenderedAudio();
-      setIsPlaying(false);
-      isPlayingRef.current = false;
-      console.log('[EGG] stopped existing playback');
-    }
-    preparingCancelledRef.current = true;
-    setIsPreparing(false);
-    isPreparingRef.current = false;
+    resetPlaybackVisuals();
+    clearSamplePlayStates();
+
+    // ③ 오디오 준비 — web은 click buffer 로드 후 per-tick 경로로 직접 시작
     preparingCancelledRef.current = false;
-    console.log('[EGG] calling startMetronome — isPlayingRef:', isPlayingRef.current, 'isPreparingRef:', isPreparingRef.current);
-    try { await startMetronome(); } catch (e) { console.error('[EGG] startMetronome threw:', e); }
-    console.log('[EGG] startMetronome returned — isPlayingRef now:', isPlayingRef.current);
-  }, [startMetronome, stopRenderedAudio]);
+    if (Platform.OS === "web") {
+      try {
+        const ctx = getWebAudioContext();
+        if (ctx && ctx.state === "suspended") {
+          await ctx.resume().catch(() => {});
+        }
+        const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
+        await ensureWebClickBuffers(src as any);
+        webClickReadyRef.current = true;
+        if (ctx && ctx.state === "suspended") {
+          await ctx.resume().catch(() => {});
+        }
+      } catch (_) {}
+    }
+
+    if (preparingCancelledRef.current) return;
+
+    // ④ pre-rendered loop 없이 per-tick으로 즉시 시작 (AudioContext 상태에 무관)
+    engine.setPreRenderedAudio(false);
+    engine.buildScheduleOnly();
+    setIsPlaying(true);
+    isPlayingRef.current = true;
+    engine.start();
+  }, [stopRenderedAudio, resetPlaybackVisuals, clearSamplePlayStates]);
 
   useEffect(() => {
     const engine = engineRef.current;
