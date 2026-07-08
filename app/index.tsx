@@ -529,6 +529,18 @@ export default function MetronomeScreen() {
   const audioPlayersHook = useAudioPlayers(soundSet);
   const { allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle } = audioPlayersHook;
 
+  // ── 웹 클릭 버퍼 사전 로드 ──────────────────────────────────────────────────
+  // 마운트 직후 + soundSet 변경 시 버퍼를 미리 디코딩해두면
+  // 사용자가 재생을 누를 때 webClickReadyRef = true 상태가 돼
+  // 엔진 시작 즉시 per-tick 오디오가 발화된다.
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const src = soundSets[soundSet as keyof typeof soundSets] || soundSets.classic;
+    ensureWebClickBuffers(src as any)
+      .then((ok) => { if (ok) webClickReadyRef.current = true; })
+      .catch(() => {});
+  }, [soundSet]);
+
   // 재생 시작 1회만 풀 cut-off 위험 측정 (관측 전용).
   // prev 게이트로 false→true edge에서만 통과. 재생 중 bpm/분할 변경 시 effect는
   // 재실행되지만 wasPlaying=true이므로 즉시 반환 → notify 스팸 없음.
@@ -1656,6 +1668,8 @@ export default function MetronomeScreen() {
   const updateSoundSet = useCallback(
     (value: SoundSet) => {
       delete clickPCMCacheRef.current[value];
+      clearWebClickBuffers();           // 캐시 초기화 → preload effect가 새 셋으로 재로드
+      webClickReadyRef.current = false;
       setSoundSet(value);
       persistSettings({ soundSet: value });
       scheduleReRender();
