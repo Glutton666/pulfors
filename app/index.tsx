@@ -2892,7 +2892,10 @@ export default function MetronomeScreen() {
         webClickReadyRef.current = true;
 
         if (ctx && ctx.state === "suspended") {
-          await ctx.resume();
+          await Promise.race([
+            ctx.resume(),
+            new Promise<void>((resolve) => setTimeout(resolve, 800)),
+          ]);
         }
 
         if (preparingCancelledRef.current) {
@@ -2986,6 +2989,9 @@ export default function MetronomeScreen() {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setEasterEggActive(true);
     if (!engineRef.current?.getIsRunning()) {
+      preparingCancelledRef.current = true;
+      setIsPreparing(false);
+      preparingCancelledRef.current = false;
       try { await startMetronome(); } catch (_) {}
     }
   }, [startMetronome]);
