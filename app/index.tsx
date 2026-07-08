@@ -650,12 +650,11 @@ export default function MetronomeScreen() {
     engine.setAudioCallbacks(
       () => {
         if (fadeOutMutedRef.current) return;
-        if (Platform.OS === "web" && webClickReadyRef.current) {
+        if (Platform.OS === "web") {
           const ch = barModeRef.current
             ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
             : "both";
-          playWebClick("high", ch);
-          lastAudioFireRef.current = Date.now();
+          if (playWebClick("high", ch)) lastAudioFireRef.current = Date.now();
           return;
         }
         try {
@@ -667,12 +666,11 @@ export default function MetronomeScreen() {
       },
       () => {
         if (fadeOutMutedRef.current) return;
-        if (Platform.OS === "web" && webClickReadyRef.current) {
+        if (Platform.OS === "web") {
           const ch = barModeRef.current
             ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
             : "both";
-          playWebClick("low", ch);
-          lastAudioFireRef.current = Date.now();
+          if (playWebClick("low", ch)) lastAudioFireRef.current = Date.now();
           return;
         }
         try {
@@ -684,12 +682,11 @@ export default function MetronomeScreen() {
       },
       () => {
         if (fadeOutMutedRef.current) return;
-        if (Platform.OS === "web" && webClickReadyRef.current) {
+        if (Platform.OS === "web") {
           const ch = barModeRef.current
             ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
             : "both";
-          playWebClick("strong", ch);
-          lastAudioFireRef.current = Date.now();
+          if (playWebClick("strong", ch)) lastAudioFireRef.current = Date.now();
           return;
         }
         try {
@@ -709,7 +706,7 @@ export default function MetronomeScreen() {
       const toggle = layerToggle[toggleKey] ?? 0;
       layerToggle[toggleKey] = (toggle + 1) % BUILTIN_POOL_SIZE;
 
-      if (Platform.OS === "web" && webClickReadyRef.current) {
+      if (Platform.OS === "web") {
         const ch = barModeRef.current
           ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
           : "both";
@@ -747,7 +744,7 @@ export default function MetronomeScreen() {
       const toggle = blockToggle[toggleKey] ?? 0;
       blockToggle[toggleKey] = (toggle + 1) % BUILTIN_POOL_SIZE;
 
-      if (Platform.OS === "web" && webClickReadyRef.current) {
+      if (Platform.OS === "web") {
         const ch = barModeRef.current
           ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
           : "both";
@@ -3179,8 +3176,8 @@ export default function MetronomeScreen() {
           await ctx.resume().catch(() => {});
         }
         const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
-        await ensureWebClickBuffers(src as any);
-        webClickReadyRef.current = true;
+        const webReady = await ensureWebClickBuffers(src as any);
+        if (webReady) webClickReadyRef.current = true;
         if (ctx && ctx.state === "suspended") {
           await ctx.resume().catch(() => {});
         }

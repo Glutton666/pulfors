@@ -631,11 +631,11 @@ export async function ensureWebClickBuffers(
 export function playWebClick(
   role: "strong" | "high" | "low",
   channel: MetroChannel = "both",
-): void {
-  if (channel === "off") return;
-  if (Platform.OS !== "web" || !webClickBuffers) return;
+): boolean {
+  if (channel === "off") return false;
+  if (Platform.OS !== "web" || !webClickBuffers) return false;
   const ctx = getSharedAudioContext();
-  if (!ctx) return;
+  if (!ctx) return false;
   if (ctx.state === "suspended") {
     ctx.resume().catch(() => {});
   }
@@ -651,6 +651,7 @@ export function playWebClick(
     source.connect(ctx.destination);
   }
   source.start(0);
+  return true;
 }
 
 export function clearWebClickBuffers(): void {
