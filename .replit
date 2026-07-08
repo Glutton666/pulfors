@@ -82,3 +82,8 @@ waitForPort = 8081
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 120000
+
+[userenv]
+
+[userenv.development]
+EXPO_OFFLINE = "1"
