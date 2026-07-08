@@ -897,6 +897,9 @@ export function BarModeView({
 
   const editingBeat = barStartBeat;
   const editingRepeat = editingBeat !== null ? barRepeats[editingBeat] : null;
+  const editingSubdivisionCount = editingBeat !== null
+    ? (beatSubdivisions[String(editingBeat)]?.length || 1)
+    : 1;
 
   // 선택된 바 변경 시 반복 로컬 상태 동기화 (barRepeats는 의도적 제외 — 값 변경마다 리셋 방지)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1334,13 +1337,15 @@ export function BarModeView({
                 delayLongPress={500}
                 disabled={isPlaying}
                 hitSlop={8}
-                style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 2 }}
+                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 2 }}
               >
-                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(30, 0.4), color: isPlaying ? C.textTertiary : C.accent, lineHeight: ms(34, 0.4) }}>
-                  {beatsPerMeasure}
+                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(28, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
+                  {editingSubdivisionCount}
                 </Text>
-                <View style={{ width: ms(28, 0.4), height: 1.5, backgroundColor: isPlaying ? C.textTertiary : C.accent, marginVertical: 1 }} />
-                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(18, 0.3), color: C.textTertiary, lineHeight: ms(22, 0.3) }}>
+                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(28, 0.4), color: C.textTertiary }}>
+                  /
+                </Text>
+                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(28, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
                   {beatDenominator}
                 </Text>
               </Pressable>
