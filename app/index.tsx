@@ -5556,6 +5556,7 @@ export default function MetronomeScreen() {
             onResetFlash={handleResetFlash}
             halfTime={halfTime}
             beatDenominator={beatDenominator}
+            onDenominatorCycle={handleBeatDenominatorCycle}
             isLandscape={isLandscape}
             beatDirection={beatDirection}
             subdivisionBarElement={barMode ? (

@@ -125,6 +125,8 @@ export interface BarModeViewProps {
   noteSampleSources?: Record<string, string>;
   bpm?: number;
   halfTime?: boolean;
+  beatDenominator?: 2 | 4 | 8;
+  onDenominatorCycle?: () => void;
   isLandscape?: boolean;
   tempoLabel?: string;
   soundSet?: string;
@@ -399,7 +401,7 @@ export function BarModeView({
   measureCount = 0, barStartBeat, onBarStartBeatSelect, onAddBar, onDeleteBar, onCopyBar,
   subdivisionBarElement, onBarQuickSave, onResetFlash, onBarReset, onBarScrollOffset,
   onBarTimerExpired, onBarClockConfigChange, initialBarClockMode, initialBarTimerDuration,
-  noteSamples, bpm, isLandscape, tempoLabel,
+  noteSamples, bpm, beatDenominator = 4, onDenominatorCycle, isLandscape, tempoLabel,
   soundSet = "classic", onSoundSetChange, layerSoundSets = {} as Record<number, string>, onLayerSoundSetsChange, onPreviewSoundSet,
   customSoundSets = {} as Record<string, CustomSoundSetConfig>, onCustomSoundSetsChange,
   colors: C, ms,
@@ -1522,6 +1524,23 @@ export function BarModeView({
             size={ms(18, 0.4)}
             color={saveFlashVisible ? "#4CAF50" : C.accent}
           />
+        </Pressable>
+
+        <Pressable
+          onLongPress={() => {
+            if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            onDenominatorCycle?.();
+          }}
+          delayLongPress={500}
+          style={{ alignItems: "center", justifyContent: "center", padding: Spacing.sm, minWidth: 52 }}
+          hitSlop={8}
+        >
+          <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(18, 0.4), color: C.accent, lineHeight: ms(22, 0.4) }}>
+            {beatsPerMeasure}
+          </Text>
+          <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(10, 0.3), color: C.textTertiary, letterSpacing: 0.5 }}>
+            /{beatDenominator}
+          </Text>
         </Pressable>
 
         <View style={styles.clockArea} {...barClockSwipePan.panHandlers}>

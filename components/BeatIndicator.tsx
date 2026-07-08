@@ -110,6 +110,7 @@ interface BeatIndicatorProps {
   noteSampleSources?: Record<string, string>;
   onNoteRecordRequest?: (beatIndex: number, subIndex: number) => void;
   bpm?: number;
+  onDenominatorCycle?: () => void;
   barStartBeat?: number | null;
   onBarStartBeatSelect?: (beat: number | null) => void;
   progressInfo?: ProgressInfo | null;
@@ -180,6 +181,7 @@ export function BeatIndicator({
   noteSampleSources,
   onNoteRecordRequest,
   bpm,
+  onDenominatorCycle,
   barStartBeat,
   onBarStartBeatSelect,
   progressInfo,
@@ -1321,6 +1323,8 @@ export function BeatIndicator({
         noteSampleSources={noteSampleSources}
         bpm={bpm}
         halfTime={halfTime}
+        beatDenominator={beatDenominator}
+        onDenominatorCycle={onDenominatorCycle}
         isLandscape={isLandscape}
         tempoLabel={tempoLabel}
         colors={{
