@@ -1416,11 +1416,17 @@ export function BeatIndicator({
             );
           })()}
 
-          <View style={styles.signatureRow} pointerEvents="none">
-            <Text style={[styles.digitalSignature, { color: C.textTertiary, opacity: 0.2 }]}>
-              {beatsPerMeasure}/{beatDenominator}
-            </Text>
-          </View>
+          {(() => {
+            const sigText = `${beatsPerMeasure}/${beatDenominator}`;
+            const sigFontSize = Math.floor((S.dialSize * 0.55) / (sigText.length * 0.62));
+            return (
+              <View style={styles.signatureRow} pointerEvents="none">
+                <Text style={[styles.digitalSignature, { color: C.textTertiary, opacity: 0.2, fontSize: sigFontSize }]}>
+                  {sigText}
+                </Text>
+              </View>
+            );
+          })()}
 
           <Animated.View
             style={[
