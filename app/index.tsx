@@ -2859,7 +2859,10 @@ export default function MetronomeScreen() {
 
   const startMetronome = useCallback(async () => {
     const engine = engineRef.current;
-    if (!engine || isPlayingRef.current || isPreparingRef.current) return;
+    if (!engine || isPlayingRef.current || isPreparingRef.current) {
+      console.log('[SM] early return — engine:', !!engine, 'isPlayingRef:', isPlayingRef.current, 'isPreparingRef:', isPreparingRef.current);
+      return;
+    }
 
     resetPlaybackVisuals();
     clearSamplePlayStates();
@@ -2887,6 +2890,7 @@ export default function MetronomeScreen() {
     try {
       if (Platform.OS === "web") {
         const ctx = getWebAudioContext();
+        console.log('[SM] web path — ctx.state:', ctx?.state);
         if (ctx && ctx.state === "suspended") {
           ctx.resume().catch(() => {});
         }
@@ -2900,6 +2904,7 @@ export default function MetronomeScreen() {
         }
 
         if (preparingCancelledRef.current) {
+          console.log('[SM] cancelled after ensureWebClickBuffers');
           setIsPreparing(false);
           return;
         }
@@ -2913,10 +2918,12 @@ export default function MetronomeScreen() {
         try {
           const scheduleInfo = engine.getScheduleInfo();
           const ticks = scheduleInfo.ticks as TickInfo[];
+          console.log('[SM] schedule ticks:', ticks.length, 'durationMs:', scheduleInfo.durationMs, 'ctx.state now:', ctx?.state);
           const [clickPCMs, layerClickPCMs] = await Promise.all([
             getClickPCMs(soundSetRef.current),
             getLayerClickPCMsForSchedule(ticks),
           ]);
+          console.log('[SM] clickPCMs strong len:', clickPCMs?.strong?.length, 'high len:', clickPCMs?.high?.length);
           const pcm = renderMeasure({
             schedule: ticks,
             measureDurationMs: scheduleInfo.durationMs,
@@ -2928,16 +2935,21 @@ export default function MetronomeScreen() {
             metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
             layerClickPCMs,
           });
+          const pcmLen = ArrayBuffer.isView(pcm) ? (pcm as Float32Array).length : (pcm as any).left?.length;
+          console.log('[SM] rendered pcm length:', pcmLen);
           const loop = playWebRenderedLoop(pcm);
           webRenderedLoopRef.current = loop;
           engine.setPreRenderedAudio(true);
+          console.log('[SM] loop started, ctx.state final:', ctx?.state);
         } catch (renderErr) {
+          console.error('[SM] render/play failed:', renderErr);
           captureBreadcrumb({ category: "metronome", message: "startMetronome: Web pre-render failed, using per-tick", level: "warning", data: { error: String(renderErr) } });
           engine.setPreRenderedAudio(false);
         }
 
         setIsPlaying(true);
         engine.start();
+        console.log('[SM] engine started');
       } else {
         const renderedPlayer = await buildRenderedPlayer();
         if (preparingCancelledRef.current) {
@@ -2975,13 +2987,14 @@ export default function MetronomeScreen() {
     const randomBpm = Math.floor(Math.random() * (220 - 40 + 1)) + 40;
     easterEggActualBpmRef.current = randomBpm;
     const eggBeatTypes = defaultBeatTypes(1);
+    console.log('[EGG] trigger — randomBpm:', randomBpm, 'eggBeatTypes:', eggBeatTypes,
+      'wasRunning:', engineRef.current?.getIsRunning(),
+      'isPlayingRef:', isPlayingRef.current, 'isPreparingRef:', isPreparingRef.current);
     engineRef.current?.setBpm(randomBpm);
     setBeatsPerMeasure(1);
     setBeatTypes(eggBeatTypes);
     engineRef.current?.setBeatsPerMeasure(1);
     engineRef.current?.setBeatTypes(eggBeatTypes);
-    // Update dialConfigRef so startMetronome builds the schedule with the
-    // 1-beat override instead of re-applying the previous beat configuration.
     dialConfigRef.current = {
       ...dialConfigRef.current,
       beatTypes: eggBeatTypes,
@@ -2989,21 +3002,20 @@ export default function MetronomeScreen() {
     };
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setEasterEggActive(true);
-    // Always stop existing playback and restart with the new 1-beat random BPM.
-    // This ensures the pre-rendered audio loop is rebuilt for the new tempo
-    // even when the metronome was already running before the trigger.
     if (engineRef.current?.getIsRunning()) {
       engineRef.current.stop();
       stopRenderedAudio();
       setIsPlaying(false);
       isPlayingRef.current = false;
+      console.log('[EGG] stopped existing playback');
     }
-    // Cancel any stuck in-progress prepare and reset refs so the guard passes.
     preparingCancelledRef.current = true;
     setIsPreparing(false);
     isPreparingRef.current = false;
     preparingCancelledRef.current = false;
-    try { await startMetronome(); } catch (_) {}
+    console.log('[EGG] calling startMetronome — isPlayingRef:', isPlayingRef.current, 'isPreparingRef:', isPreparingRef.current);
+    try { await startMetronome(); } catch (e) { console.error('[EGG] startMetronome threw:', e); }
+    console.log('[EGG] startMetronome returned — isPlayingRef now:', isPlayingRef.current);
   }, [startMetronome, stopRenderedAudio]);
 
   useEffect(() => {
