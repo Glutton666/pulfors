@@ -156,6 +156,7 @@ export default function MetronomeScreen() {
   useEffect(() => { languageRef.current = language; }, [language]);
 
   const [bpm, setBpm] = useState(120);
+  const baseBpmRef = useRef(120); // /4 기준 BPM (분모 순환과 무관하게 유지)
   const {
     easterEggActive, setEasterEggActive,
     easterEggShakeCount, setEasterEggShakeCount,
@@ -801,6 +802,8 @@ export default function MetronomeScreen() {
 
     loadSettings().then((settings) => {
       setBpm(settings.bpm);
+      const loadedDenom = settings.beatDenominator ?? 4;
+      baseBpmRef.current = Math.round(settings.bpm * (loadedDenom / 4));
       setBeatsPerMeasure(settings.beatsPerMeasure);
       if (settings.beatDenominator) {
         setBeatDenominator(settings.beatDenominator);
@@ -1888,10 +1891,12 @@ export default function MetronomeScreen() {
       const clampedBpm = Math.max(20, Math.min(300, newBpm));
       setBpm(clampedBpm);
       engineRef.current?.setBpm(clampedBpm);
+      // 수동 BPM 변경 시 /4 기준값도 갱신
+      baseBpmRef.current = Math.round(clampedBpm * (beatDenominator / 4));
       persistSettings({ bpm: clampedBpm });
       scheduleReRender();
     },
-    [persistSettings, scheduleReRender]
+    [beatDenominator, persistSettings, scheduleReRender]
   );
 
   const handleEasterEggGuess = useCallback((guess: number) => {
@@ -1988,7 +1993,8 @@ export default function MetronomeScreen() {
   const handleBeatDenominatorCycle = useCallback(() => {
     setBeatDenominator((prev) => {
       const next: 2 | 4 | 8 = prev === 4 ? 8 : prev === 8 ? 2 : 4;
-      const newBpm = Math.round(Math.min(300, Math.max(20, bpm * (prev / next))));
+      // baseBpmRef는 항상 /4 기준값 → newBpm = base × (4 / next)
+      const newBpm = Math.round(Math.min(300, Math.max(20, baseBpmRef.current * (4 / next))));
       setBpm(newBpm);
       engineRef.current?.setBpm(newBpm);
       persistSettings({ beatDenominator: next, bpm: newBpm });
