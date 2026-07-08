@@ -261,15 +261,30 @@ function SwipeableBarRow({
     },
   }), [isPlaying, beat, onSwipeLeft, onSwipeRight]);
 
+  const beatNumDragStarted = useRef(false);
   const beatNumPan = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => false,
-    onMoveShouldSetPanResponder: (_e, g) =>
-      !isPlaying && Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
-    onPanResponderGrant: () => { onDragStart?.(beat); },
-    onPanResponderMove: (_e, g) => { onDragMove?.(beat, g.dy); },
-    onPanResponderRelease: (_e, g) => { onDragEnd?.(beat, g.dy); },
-    onPanResponderTerminate: (_e, g) => { onDragEnd?.(beat, g.dy ?? 0); },
-  }), [isPlaying, beat, onDragStart, onDragMove, onDragEnd]);
+    onStartShouldSetPanResponder: () => !isPlaying,
+    onPanResponderGrant: () => { beatNumDragStarted.current = false; },
+    onPanResponderMove: (_e, g) => {
+      if (!beatNumDragStarted.current && Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5) {
+        beatNumDragStarted.current = true;
+        onDragStart?.(beat);
+      }
+      if (beatNumDragStarted.current) { onDragMove?.(beat, g.dy); }
+    },
+    onPanResponderRelease: (_e, g) => {
+      if (beatNumDragStarted.current) {
+        onDragEnd?.(beat, g.dy);
+      } else if (Math.abs(g.dx) < 8 && Math.abs(g.dy) < 8) {
+        onPress?.(beat);
+      }
+      beatNumDragStarted.current = false;
+    },
+    onPanResponderTerminate: (_e, g) => {
+      if (beatNumDragStarted.current) { onDragEnd?.(beat, g.dy ?? 0); }
+      beatNumDragStarted.current = false;
+    },
+  }), [isPlaying, beat, onDragStart, onDragMove, onDragEnd, onPress]);
 
   const cells: BeatType[] = subdivisions.length > 0 ? subdivisions : [beatType];
   const leftPad = blockDepth * BLOCK_DEPTH_INDENT + (blockStart || blockEnd ? 12 : 0);
@@ -981,7 +996,8 @@ export function BarModeView({
   const editorSwipeAnim = useRef(new Animated.Value(0)).current;
   const editorSwipePan = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => false,
-    onMoveShouldSetPanResponder: (_e, g) => !isPlaying && g.dy < -15 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
+    onMoveShouldSetPanResponder: (_e, g) =>
+      !isPlaying && draggingBeatRef.current === null && g.dy < -15 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
     onPanResponderMove: (_e, g) => {
       if (g.dy < 0) editorSwipeAnim.setValue(Math.max(-60, g.dy * 0.5));
     },
