@@ -3785,7 +3785,6 @@ export default function MetronomeScreen() {
           return { type: "count", value: 1, layers: srcLayers.length ? srcLayers.map(l => ({ ...l })) : [] };
         })();
     setBarRepeats(prev => ({ ...prev, [newBeat]: newRepeat }));
-    setBarStartBeat(newBeat);
     barConfigRef.current.beatsPerMeasure = newBeats;
     barConfigRef.current.beatTypes = newTypes;
     barConfigRef.current.beatSubdivisions = newSubs;
@@ -3878,7 +3877,6 @@ export default function MetronomeScreen() {
     setBeatSubdivisions(newSubs);
     setBarRepeats(newRepeats);
     setLoopBlocks(newBlocks);
-    setBarStartBeat(insertAt);
     engineRef.current?.setBeatsPerMeasure(newBeats);
     engineRef.current?.setBeatTypes(newTypes);
     engineRef.current?.setAllBeatSubdivisions(newSubs);
