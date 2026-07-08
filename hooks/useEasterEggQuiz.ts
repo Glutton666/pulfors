@@ -12,10 +12,13 @@ export function useEasterEggQuiz() {
   const [easterEggRevealBpm, setEasterEggRevealBpm] = useState<number | null>(null);
   const [easterEggGiveUpMode, setEasterEggGiveUpMode] = useState(false);
   const [easterEggHintDirection, setEasterEggHintDirection] = useState<"up" | "down" | null>(null);
+  const [easterEggApplyBpm, setEasterEggApplyBpm] = useState(false);
   const easterEggPrevBpmRef = useRef(120);
   const easterEggActualBpmRef = useRef(120);
   const easterEggActiveRef = useRef(false);
+  const easterEggApplyBpmRef = useRef(false);
   useEffect(() => { easterEggActiveRef.current = easterEggActive; }, [easterEggActive]);
+  useEffect(() => { easterEggApplyBpmRef.current = easterEggApplyBpm; }, [easterEggApplyBpm]);
 
   return {
     easterEggActive,
@@ -30,6 +33,9 @@ export function useEasterEggQuiz() {
     setEasterEggGiveUpMode,
     easterEggHintDirection,
     setEasterEggHintDirection,
+    easterEggApplyBpm,
+    setEasterEggApplyBpm,
+    easterEggApplyBpmRef,
     easterEggPrevBpmRef,
     easterEggActualBpmRef,
     easterEggActiveRef,

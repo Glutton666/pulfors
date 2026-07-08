@@ -133,7 +133,7 @@ interface BeatIndicatorProps {
   onCustomSoundSetsChange?: (configs: Record<string, import("@/lib/storage").CustomSoundSetConfig>) => void;
   barCellOpacity?: number;
   barRowHeight?: number;
-  onEasterEggTrigger?: () => void;
+  onEasterEggTrigger?: (isHighRange: boolean) => void;
 }
 
 // BlockPill 컴포넌트는 components/BlockPill.tsx 로 분리되었습니다.
@@ -440,10 +440,11 @@ export function BeatIndicator({
         totalRotationRef.current = delta;
       }
       if (Math.abs(totalRotationRef.current) >= EASTER_EGG_THRESHOLD) {
+        const isHighRange = Math.abs(totalRotationRef.current) >= EASTER_EGG_THRESHOLD * 1.5;
         totalRotationRef.current = 0;
         easterEggLockRef.current = true;
         setTimeout(() => { easterEggLockRef.current = false; }, 3000);
-        onEasterEggTriggerRef.current?.();
+        onEasterEggTriggerRef.current?.(isHighRange);
       }
     }
 

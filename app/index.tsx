@@ -163,6 +163,7 @@ export default function MetronomeScreen() {
     easterEggRevealBpm, setEasterEggRevealBpm,
     easterEggGiveUpMode, setEasterEggGiveUpMode,
     easterEggHintDirection, setEasterEggHintDirection,
+    easterEggApplyBpm, setEasterEggApplyBpm, easterEggApplyBpmRef,
     easterEggPrevBpmRef, easterEggActualBpmRef, easterEggActiveRef,
   } = useEasterEggQuiz();
   // 이스터에그 발동 직전 재생 상태 보존 → 종료 시 원상복구
@@ -1898,7 +1899,11 @@ export default function MetronomeScreen() {
       setEasterEggHintDirection(null);
       setEasterEggRevealBpm(actual);
       setTimeout(() => {
-        engineRef.current?.setBpm(easterEggPrevBpmRef.current);
+        if (easterEggApplyBpmRef.current) {
+          updateBpm(actual);
+        } else {
+          engineRef.current?.setBpm(easterEggPrevBpmRef.current);
+        }
         // 이스터에그 발동 전 재생 중이 아니었으면 엔진 정지
         if (!easterEggWasPlayingRef.current) {
           engineRef.current?.stop();
@@ -1911,13 +1916,14 @@ export default function MetronomeScreen() {
         setEasterEggRevealBpm(null);
         setEasterEggGiveUpMode(false);
         setEasterEggHintDirection(null);
+        setEasterEggApplyBpm(false);
       }, 2000);
     } else {
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setEasterEggShakeCount(c => c + 1);
       setEasterEggHintDirection(guess < actual ? "up" : "down");
     }
-  }, [stopRenderedAudio, resetPlaybackVisuals, setEasterEggHintDirection]);
+  }, [stopRenderedAudio, resetPlaybackVisuals, setEasterEggHintDirection, updateBpm, easterEggApplyBpmRef, setEasterEggApplyBpm]);
 
   const handleEasterEggGiveUp = useCallback((stopEngine = false) => {
     const actual = easterEggActualBpmRef.current;
@@ -1935,7 +1941,11 @@ export default function MetronomeScreen() {
       resetPlaybackVisuals();
     }
     setTimeout(() => {
-      engineRef.current?.setBpm(easterEggPrevBpmRef.current);
+      if (easterEggApplyBpmRef.current) {
+        updateBpm(actual);
+      } else {
+        engineRef.current?.setBpm(easterEggPrevBpmRef.current);
+      }
       // 이스터에그 발동 전 재생 중이 아니었으면 엔진 정지
       if (!easterEggWasPlayingRef.current) {
         engineRef.current?.stop();
@@ -1948,11 +1958,16 @@ export default function MetronomeScreen() {
       setEasterEggRevealBpm(null);
       setEasterEggGiveUpMode(false);
       setEasterEggHintDirection(null);
+      setEasterEggApplyBpm(false);
     }, 2000);
-  }, [stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals, setEasterEggHintDirection]);
+  }, [stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals, setEasterEggHintDirection, updateBpm, easterEggApplyBpmRef, setEasterEggApplyBpm]);
 
   const handleEasterEggGiveUpRef = useRef(handleEasterEggGiveUp);
   useEffect(() => { handleEasterEggGiveUpRef.current = handleEasterEggGiveUp; }, [handleEasterEggGiveUp]);
+
+  const handleEasterEggToggleApplyBpm = useCallback(() => {
+    setEasterEggApplyBpm(prev => !prev);
+  }, [setEasterEggApplyBpm]);
 
   const toggleHalfTime = useCallback(() => {
     setHalfTime((prev) => {
@@ -3122,7 +3137,7 @@ export default function MetronomeScreen() {
     }
   }, [buildRenderedPlayer, stopRenderedAudio, getClickPCMs, getLayerClickPCMsForSchedule]);
 
-  const handleEasterEggTrigger = useCallback(async () => {
+  const handleEasterEggTrigger = useCallback(async (isHighRange: boolean) => {
     if (barModeRef.current) return;
 
     const engine = engineRef.current;
@@ -3131,8 +3146,11 @@ export default function MetronomeScreen() {
     // 발동 직전 재생 상태 저장 (종료 시 복원용)
     easterEggWasPlayingRef.current = isPlayingRef.current;
     easterEggPrevBpmRef.current = bpmRef.current;
-    const randomBpm = Math.floor(Math.random() * (220 - 40 + 1)) + 40;
+    const randomBpm = isHighRange
+      ? Math.floor(Math.random() * (200 - 100 + 1)) + 100
+      : Math.floor(Math.random() * (100 - 30 + 1)) + 30;
     easterEggActualBpmRef.current = randomBpm;
+    setEasterEggApplyBpm(false);
     const eggBeatTypes = defaultBeatTypes(1);
 
     // ① 기존 재생/준비 중단 — startMetronome 우회하여 직접 제어
@@ -3193,7 +3211,7 @@ export default function MetronomeScreen() {
     isPlayingRef.current = true;
     engine.start();
     armAudioWatchdogRef.current();
-  }, [stopRenderedAudio, resetPlaybackVisuals, clearSamplePlayStates]);
+  }, [stopRenderedAudio, resetPlaybackVisuals, clearSamplePlayStates, setEasterEggApplyBpm]);
 
   useEffect(() => {
     const engine = engineRef.current;
