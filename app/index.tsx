@@ -514,6 +514,12 @@ export default function MetronomeScreen() {
   const renderedUrlRef = useRef<string | null>(null);
   const webRenderedLoopRef = useRef<{ stop: () => void } | null>(null);
   const webClickReadyRef = useRef(false);
+  // 재생 복구 watchdog용 — 오디오 콜백이 실제로 발화할 때마다 갱신
+  const lastAudioFireRef = useRef(0);
+  const audioWatchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioRetryCountRef = useRef(0);
+  const armAudioWatchdogRef = useRef<() => void>(() => {});
+  const clearAudioWatchdogRef = useRef<() => void>(() => {});
 
   const { engineRef } = useMetronomeEngine();
   const tapTimesRef = useRef<number[]>([]);
@@ -611,12 +617,14 @@ export default function MetronomeScreen() {
             ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
             : "both";
           playWebClick("high", ch);
+          lastAudioFireRef.current = Date.now();
           return;
         }
         try {
           const active = getCustomPlayer("high", highToggle.current);
           highToggle.current = (highToggle.current + 1) % BUILTIN_POOL_SIZE;
           restartPlayer(active);
+          lastAudioFireRef.current = Date.now();
         } catch (e) {}
       },
       () => {
@@ -626,12 +634,14 @@ export default function MetronomeScreen() {
             ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
             : "both";
           playWebClick("low", ch);
+          lastAudioFireRef.current = Date.now();
           return;
         }
         try {
           const active = getCustomPlayer("low", lowToggle.current);
           lowToggle.current = (lowToggle.current + 1) % BUILTIN_POOL_SIZE;
           restartPlayer(active);
+          lastAudioFireRef.current = Date.now();
         } catch (e) {}
       },
       () => {
@@ -641,12 +651,14 @@ export default function MetronomeScreen() {
             ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
             : "both";
           playWebClick("strong", ch);
+          lastAudioFireRef.current = Date.now();
           return;
         }
         try {
           const active = getCustomPlayer("strong", strongToggle.current);
           strongToggle.current = (strongToggle.current + 1) % BUILTIN_POOL_SIZE;
           restartPlayer(active);
+          lastAudioFireRef.current = Date.now();
         } catch (e) {}
       }
     );
@@ -2039,6 +2051,7 @@ export default function MetronomeScreen() {
 
     const modeLabel = barModeRef.current ? "Bar" : "Dial";
     if (isPlaying) {
+      clearAudioWatchdogRef.current();
       engine.stop();
       stopRenderedAudio();
       clearSamplePlayStates();
@@ -2096,13 +2109,15 @@ export default function MetronomeScreen() {
         if (Platform.OS === "web") {
           const ctx = getWebAudioContext();
           if (ctx && ctx.state === "suspended") {
-            ctx.resume().catch(() => {});
+            await ctx.resume().catch(() => {});
           }
 
           // 즉시 시작 — per-tick 모드로 바로 재생, pre-render는 백그라운드 처리
           setIsPreparing(false);
           setIsPlaying(true);
+          isPlayingRef.current = true;
           engine.start(startBeat ?? undefined);
+          armAudioWatchdogRef.current();
 
           // 백그라운드: 버퍼 로딩 후 pre-rendered loop으로 전환
           ;(async () => {
@@ -2152,7 +2167,9 @@ export default function MetronomeScreen() {
           // 즉시 시작 — per-tick 모드로 바로 재생
           setIsPreparing(false);
           setIsPlaying(true);
+          isPlayingRef.current = true;
           engine.start(startBeat ?? undefined);
+          armAudioWatchdogRef.current();
 
           // 백그라운드: pre-render 완료 후 rendered player로 전환
           buildRenderedPlayer().then(renderedPlayer => {
@@ -2179,6 +2196,84 @@ export default function MetronomeScreen() {
 
   const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
+
+  // ─── 재생 복구 watchdog ───────────────────────────────────────────────────
+  const armTimeRef = useRef<number | null>(null);
+  const showRecoveryToastRef = useRef(showRecoveryToast);
+  useEffect(() => { showRecoveryToastRef.current = showRecoveryToast; }, [showRecoveryToast]);
+
+  const clearAudioWatchdog = useCallback(() => {
+    if (audioWatchdogTimerRef.current) {
+      clearTimeout(audioWatchdogTimerRef.current);
+      audioWatchdogTimerRef.current = null;
+    }
+  }, []);
+
+  const armAudioWatchdog = useCallback(() => {
+    clearAudioWatchdog();
+    audioRetryCountRef.current = 0;
+    lastAudioFireRef.current = 0;
+
+    const runCheck = () => {
+      const engine = engineRef.current;
+      if (!engine?.getIsRunning() || !isPlayingRef.current) {
+        audioWatchdogTimerRef.current = null;
+        return;
+      }
+
+      const bpmNow = bpmRef.current;
+      const beatMs = 60000 / Math.max(bpmNow, 20);
+      const threshold = Math.max(3500, 5 * beatMs);
+      const timeSinceFire = lastAudioFireRef.current > 0
+        ? Date.now() - lastAudioFireRef.current
+        : Date.now() - (armTimeRef.current ?? Date.now());
+
+      // web: AudioContext가 suspended이면 무조건 stuck
+      const webCtxSuspended = Platform.OS === "web"
+        && (getWebAudioContext()?.state === "suspended");
+
+      const isStuck = webCtxSuspended || timeSinceFire > threshold;
+
+      if (!isStuck) {
+        audioWatchdogTimerRef.current = setTimeout(runCheck, 3000);
+        return;
+      }
+
+      if (audioRetryCountRef.current < 2) {
+        audioRetryCountRef.current += 1;
+
+        if (Platform.OS === "web") {
+          const ctx = getWebAudioContext();
+          if (ctx?.state === "suspended") {
+            ctx.resume().catch(() => {});
+          }
+          if (!webClickReadyRef.current) {
+            const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
+            ensureWebClickBuffers(src as any).then((ok) => {
+              if (ok) webClickReadyRef.current = true;
+            }).catch(() => {});
+          }
+        }
+        // pre-rendered 모드가 막혀있을 수 있으므로 per-tick으로 강제 전환
+        engine.setPreRenderedAudio(false);
+        lastAudioFireRef.current = Date.now();
+        showRecoveryToastRef.current(t("main", "audioRecoveryRetry"));
+        audioWatchdogTimerRef.current = setTimeout(runCheck, 3500);
+      } else {
+        showRecoveryToastRef.current(t("main", "audioRecoveryFailed"));
+        audioWatchdogTimerRef.current = null;
+      }
+    };
+
+    armTimeRef.current = Date.now();
+    audioWatchdogTimerRef.current = setTimeout(runCheck, 4000);
+  }, [clearAudioWatchdog, t]);
+
+  useEffect(() => {
+    armAudioWatchdogRef.current = armAudioWatchdog;
+    clearAudioWatchdogRef.current = clearAudioWatchdog;
+  }, [armAudioWatchdog, clearAudioWatchdog]);
+  // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     registerMetronomeBridge({
       isRunning: () => engineRef.current?.getIsRunning() ?? false,
@@ -2957,6 +3052,7 @@ export default function MetronomeScreen() {
 
         setIsPlaying(true);
         engine.start();
+        armAudioWatchdogRef.current();
       } else {
         const renderedPlayer = await buildRenderedPlayer();
         if (preparingCancelledRef.current) {
@@ -2977,6 +3073,7 @@ export default function MetronomeScreen() {
 
         setIsPlaying(true);
         engine.start();
+        armAudioWatchdogRef.current();
 
         if (renderedPlayer) {
           safePlay(renderedPlayer, "metronome.start.fallback");
@@ -3058,6 +3155,7 @@ export default function MetronomeScreen() {
     setIsPlaying(true);
     isPlayingRef.current = true;
     engine.start();
+    armAudioWatchdogRef.current();
   }, [stopRenderedAudio, resetPlaybackVisuals, clearSamplePlayStates]);
 
   useEffect(() => {

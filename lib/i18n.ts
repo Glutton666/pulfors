@@ -611,6 +611,8 @@ export const translations = {
     eggConfirmTitle: { ko: "BPM 퀴즈 시작?", en: "Start BPM Quiz?" },
     eggConfirmStart: { ko: "시작", en: "Start" },
     eggConfirmCancel: { ko: "취소", en: "Cancel" },
+    audioRecoveryRetry: { ko: "재생 복구 중…", en: "Recovering audio…" },
+    audioRecoveryFailed: { ko: "소리가 안 나오면 정지 후 다시 눌러보세요", en: "No sound? Stop and press play again" },
   },
   scheduledStart: {
     title: { ko: "동시 시작", en: "Scheduled Start" },
