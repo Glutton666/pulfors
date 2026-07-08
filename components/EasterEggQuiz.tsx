@@ -4,6 +4,7 @@ import {
   View,
   Text,
   TextInput,
+  TouchableOpacity,
   StyleSheet,
   Platform,
 } from "react-native";
@@ -29,6 +30,8 @@ interface EasterEggQuizProps {
   successCount?: number;
   hintDirection?: "up" | "down" | null;
   isLandscape?: boolean;
+  applyBpmSelected?: boolean;
+  onToggleApplyBpm?: () => void;
 }
 
 export function EasterEggQuiz({
@@ -39,6 +42,8 @@ export function EasterEggQuiz({
   successCount = 0,
   hintDirection = null,
   isLandscape = false,
+  applyBpmSelected = false,
+  onToggleApplyBpm,
 }: EasterEggQuizProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -151,7 +156,7 @@ export function EasterEggQuiz({
               value={input}
               onChangeText={setInput}
               keyboardType="numeric"
-              placeholder="?"
+              placeholder="000"
               placeholderTextColor={C.textTertiary}
               returnKeyType="done"
               onSubmitEditing={handleSubmit}
@@ -184,6 +189,24 @@ export function EasterEggQuiz({
             >
               {hintText}
             </Animated.Text>
+          )}
+          {revealBpm != null && onToggleApplyBpm && (
+            <TouchableOpacity
+              style={[
+                styles.applyButton,
+                {
+                  backgroundColor: applyBpmSelected ? C.accent : "transparent",
+                  borderColor: C.accent,
+                },
+              ]}
+              onPress={onToggleApplyBpm}
+              activeOpacity={0.75}
+              testID="bpm-easter-egg-apply"
+            >
+              <Text style={[styles.applyButtonText, { color: applyBpmSelected ? C.surface : C.accent }]}>
+                {applyBpmSelected ? "✓ 비트모드에 적용" : "비트모드에 적용"}
+              </Text>
+            </TouchableOpacity>
           )}
         </View>
 
@@ -255,6 +278,18 @@ const make_styles = (C: typeof Colors, S: ScaleValues) =>
       fontSize: S.ms(13, 0.3),
       letterSpacing: 1,
       marginTop: S.ms(6, 0.3),
+    },
+    applyButton: {
+      marginTop: S.ms(10, 0.3),
+      paddingHorizontal: S.ms(18, 0.3),
+      paddingVertical: S.ms(7, 0.3),
+      borderRadius: S.ms(20, 0.3),
+      borderWidth: 1.5,
+    },
+    applyButtonText: {
+      fontFamily: "SpaceGrotesk_600SemiBold",
+      fontSize: S.ms(12, 0.3),
+      letterSpacing: 1,
     },
     ticks: {
       flexDirection: "row",

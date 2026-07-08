@@ -5564,6 +5564,8 @@ export default function MetronomeScreen() {
                   successCount={easterEggSuccessCount}
                   hintDirection={easterEggHintDirection}
                   isLandscape={true}
+                  applyBpmSelected={easterEggApplyBpm}
+                  onToggleApplyBpm={handleEasterEggToggleApplyBpm}
                 />
               ) : (
                 <BpmSlider
@@ -5847,6 +5849,8 @@ export default function MetronomeScreen() {
                 successCount={easterEggSuccessCount}
                 hintDirection={easterEggHintDirection}
                 isLandscape={true}
+                applyBpmSelected={easterEggApplyBpm}
+                onToggleApplyBpm={handleEasterEggToggleApplyBpm}
               />
             ) : (
               <BpmSlider
@@ -5871,6 +5875,8 @@ export default function MetronomeScreen() {
               successCount={easterEggSuccessCount}
               hintDirection={easterEggHintDirection}
               isLandscape={false}
+              applyBpmSelected={easterEggApplyBpm}
+              onToggleApplyBpm={handleEasterEggToggleApplyBpm}
             />
           ) : (
             <BpmSlider
