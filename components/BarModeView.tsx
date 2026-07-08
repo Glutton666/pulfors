@@ -199,6 +199,7 @@ interface SwipeableBarRowProps {
   blockDepth: number;
   blockStart: boolean;
   blockEnd: boolean;
+  blockRepeatText?: string | null;
   symbolBadges: string[];
   isPlaying: boolean;
   progressCurrent?: number;
@@ -223,7 +224,7 @@ interface SwipeableBarRowProps {
 
 function SwipeableBarRow({
   beat, beatType, subdivisions, repeat, isCurrentBeat, isEditingBeat,
-  blockDepth, blockStart, blockEnd, symbolBadges, isPlaying, progressCurrent,
+  blockDepth, blockStart, blockEnd, blockRepeatText, symbolBadges, isPlaying, progressCurrent,
   progressTotal, bpm, beatsPerMeasure, onPress, onSwipeLeft, onSwipeRight, onLongPress,
   onDragStart, onDragMove, onDragEnd, isDragging, showDropLineAbove, dragTranslateY,
   colors: C, ms,
@@ -284,7 +285,7 @@ function SwipeableBarRow({
   }), [isPlaying, beat, onDragStart, onDragMove, onDragEnd, onPress]);
 
   const cells: BeatType[] = subdivisions.length > 0 ? subdivisions : [beatType];
-  const leftPad = blockDepth * BLOCK_DEPTH_INDENT + (blockStart || blockEnd ? 14 : 0);
+  const BRACKET_COL_W = 16;
 
   const rowTransform = dragTranslateY
     ? [{ translateX }, { translateY: dragTranslateY }]
@@ -328,57 +329,45 @@ function SwipeableBarRow({
             },
           ]}
         >
-          {blockStart && (
-            <Text style={{
-              position: "absolute",
-              left: blockDepth * BLOCK_DEPTH_INDENT,
-              top: 0,
-              bottom: 0,
-              textAlignVertical: "center",
-              includeFontPadding: false,
-              lineHeight: rowHeight ?? BAR_ROW_H,
-              fontSize: ms(15, 0.5),
-              color: C.accent,
-              fontFamily: "SpaceGrotesk_700Bold",
-              opacity: 0.75,
-            }}>{"["}</Text>
-          )}
-          {blockEnd && (
-            <Text style={{
-              position: "absolute",
-              right: ms(28, 0.5),
-              top: 0,
-              bottom: 0,
-              textAlignVertical: "center",
-              includeFontPadding: false,
-              lineHeight: rowHeight ?? BAR_ROW_H,
-              fontSize: ms(15, 0.5),
-              color: C.accent,
-              fontFamily: "SpaceGrotesk_700Bold",
-              opacity: 0.75,
-            }}>{"]"}</Text>
-          )}
+          {/* 좌측 블록 시작 괄호 컬럼 */}
+          <View style={{ width: BRACKET_COL_W, alignItems: "center", justifyContent: "center" }}>
+            {blockStart && (
+              <Text style={{
+                fontSize: ms(15, 0.5),
+                color: C.accent,
+                fontFamily: "SpaceGrotesk_700Bold",
+                opacity: 0.8,
+                includeFontPadding: false,
+              }}>{"["}</Text>
+            )}
+          </View>
 
+          {/* 바 번호 + 드래그 핸들 */}
           <View
-            style={[styles.barRowNumber, { paddingLeft: leftPad + 4, width: ms(34, 0.5) }]}
+            style={[styles.barRowNumber, { width: ms(32, 0.5), paddingHorizontal: 2 }]}
             {...beatNumPan.panHandlers}
           >
-            <Text style={[
-              styles.barRowNumberText,
-              {
-                fontSize: ms(13, 0.45),
-                color: isDragging
-                  ? "#5b9cf6"
-                  : isCurrentBeat
-                  ? C.accent
-                  : beatType === "strong" ? C.accent
-                  : beatType === "accent" ? C.accentMuted
-                  : beatType === "mute" ? C.textTertiary
-                  : C.textSecondary,
-                fontFamily: isDragging || isCurrentBeat ? "SpaceGrotesk_700Bold" : "SpaceGrotesk_500Medium",
-                opacity: isDragging ? 0.9 : 0.2,
-              },
-            ]}>
+            <Text
+              style={[
+                styles.barRowNumberText,
+                {
+                  fontSize: ms(13, 0.45),
+                  color: isDragging
+                    ? "#5b9cf6"
+                    : isCurrentBeat
+                    ? C.accent
+                    : beatType === "strong" ? C.accent
+                    : beatType === "accent" ? C.accentMuted
+                    : beatType === "mute" ? C.textTertiary
+                    : C.textSecondary,
+                  fontFamily: isDragging || isCurrentBeat ? "SpaceGrotesk_700Bold" : "SpaceGrotesk_500Medium",
+                  opacity: isDragging ? 0.9 : 0.2,
+                },
+              ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            >
               {beat + 1}
             </Text>
             <View style={{ flexDirection: "column", gap: 2, marginLeft: 1, opacity: isDragging ? 0.7 : 0.2 }}>
@@ -429,13 +418,24 @@ function SwipeableBarRow({
                   ? `${formatBarCenterInfo(repeat, bpm, beatsPerMeasure) ?? String(Math.round(bpm))} [${progressCurrent + 1}/${progressTotal}]`
                   : (formatBarCenterInfo(repeat, bpm, beatsPerMeasure) ?? String(Math.round(bpm)))
                 }
+                {blockRepeatText ? `  ${blockRepeatText}` : ""}
                 {symbolBadges.length > 0 ? `  ${symbolBadges.join(" ")}` : ""}
               </Text>
             </View>
           </View>
 
-          {/* 오른쪽: 블록 끝 표시가 없을 때 여백 유지 */}
-          <View style={{ width: ms(28, 0.5) }} />
+          {/* 우측 블록 끝 괄호 컬럼 */}
+          <View style={{ width: BRACKET_COL_W, alignItems: "center", justifyContent: "center" }}>
+            {blockEnd && (
+              <Text style={{
+                fontSize: ms(15, 0.5),
+                color: C.accent,
+                fontFamily: "SpaceGrotesk_700Bold",
+                opacity: 0.8,
+                includeFontPadding: false,
+              }}>{"]"}</Text>
+            )}
+          </View>
         </Pressable>
       </Animated.View>
     </View>
@@ -1391,6 +1391,15 @@ export function BarModeView({
           const maxDepth = blockEntries.length > 0 ? Math.max(...blockEntries.map(e => e.depth)) : 0;
           const blockStart = blockEntries.some(e => e.isStart);
           const blockEnd = blockEntries.some(e => e.isEnd);
+          const startEntry = blockEntries.find(e => e.isStart);
+          const blockRepeatText = startEntry
+            ? (() => {
+                const lb = loopBlocks[startEntry.blockIdx];
+                if (!lb) return null;
+                if (lb.type === "count" && lb.value > 1) return `×${lb.value}`;
+                return null;
+              })()
+            : null;
           const badges = getSymbolBadges(beat);
           const isCurrent = isPlaying && currentBeat === beat;
           const isEditing = barStartBeat === beat && !isPlaying;
@@ -1414,6 +1423,7 @@ export function BarModeView({
               blockDepth={maxDepth}
               blockStart={blockStart}
               blockEnd={blockEnd}
+              blockRepeatText={blockRepeatText}
               symbolBadges={badges}
               isPlaying={isPlaying}
               progressCurrent={progressInfo?.beat === beat ? progressInfo.barRepeatCurrent : undefined}
