@@ -2970,11 +2970,19 @@ export default function MetronomeScreen() {
     easterEggPrevBpmRef.current = bpmRef.current;
     const randomBpm = Math.floor(Math.random() * (220 - 40 + 1)) + 40;
     easterEggActualBpmRef.current = randomBpm;
+    const eggBeatTypes = defaultBeatTypes(1);
     engineRef.current?.setBpm(randomBpm);
     setBeatsPerMeasure(1);
-    setBeatTypes(defaultBeatTypes(1));
+    setBeatTypes(eggBeatTypes);
     engineRef.current?.setBeatsPerMeasure(1);
-    engineRef.current?.setBeatTypes(defaultBeatTypes(1));
+    engineRef.current?.setBeatTypes(eggBeatTypes);
+    // Update dialConfigRef so startMetronome builds the schedule with the
+    // 1-beat override instead of re-applying the previous beat configuration.
+    dialConfigRef.current = {
+      ...dialConfigRef.current,
+      beatTypes: eggBeatTypes,
+      beatSubdivisions: {},
+    };
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setEasterEggActive(true);
     if (!engineRef.current?.getIsRunning()) {
