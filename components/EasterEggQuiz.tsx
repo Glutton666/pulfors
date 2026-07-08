@@ -167,7 +167,7 @@ export function EasterEggQuiz({
                       isLandscape && { fontSize: S.ms(10, 0.3), marginTop: -2 },
                     ]}
                   >
-                    {applyBpmSelected ? "✓ 비트모드에 적용" : "비트모드에 적용"}
+                    {applyBpmSelected ? "✓ 비트모드에 적용" : "클릭시 비트모드에 적용"}
                   </Text>
                 </TouchableOpacity>
               )}
