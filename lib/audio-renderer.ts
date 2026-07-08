@@ -42,11 +42,18 @@ if (Platform.OS === "web" && typeof window !== "undefined") {
       if (result && typeof result.then === "function") {
         return result.catch((e: unknown) => {
           const msg: string = (e as any)?.message ?? "";
+          const name: string = (e as any)?.name ?? "";
           if (
             msg.includes("interrupted by a call to pause") ||
-            msg.includes("interrupted by a new load request")
+            msg.includes("interrupted by a new load request") ||
+            msg.includes("can only be initiated by a user gesture") ||
+            name === "NotAllowedError"
           ) {
-            // Benign race — silently swallow and resume the AudioContext.
+            // Benign — these come from expo-audio's pooled <audio> elements
+            // (used only on native; on web all click audio goes through the
+            // Web Audio API in playWebClick()). Swallow silently so an
+            // unhandled rejection doesn't propagate to expo's global error
+            // reporting and inadvertently suspend the shared AudioContext.
             if (sharedAudioCtx && sharedAudioCtx.state === "suspended") {
               sharedAudioCtx.resume().catch(() => {});
             }
