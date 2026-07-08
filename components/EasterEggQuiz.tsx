@@ -192,18 +192,11 @@ export function EasterEggQuiz({
           )}
           {revealBpm != null && onToggleApplyBpm && (
             <TouchableOpacity
-              style={[
-                styles.applyButton,
-                {
-                  backgroundColor: applyBpmSelected ? C.accent : "transparent",
-                  borderColor: C.accent,
-                },
-              ]}
               onPress={onToggleApplyBpm}
-              activeOpacity={0.75}
+              activeOpacity={0.6}
               testID="bpm-easter-egg-apply"
             >
-              <Text style={[styles.applyButtonText, { color: applyBpmSelected ? C.surface : C.accent }]}>
+              <Text style={[styles.applyText, { color: applyBpmSelected ? C.accent : C.textTertiary }]}>
                 {applyBpmSelected ? "✓ 비트모드에 적용" : "비트모드에 적용"}
               </Text>
             </TouchableOpacity>
@@ -279,17 +272,12 @@ const make_styles = (C: typeof Colors, S: ScaleValues) =>
       letterSpacing: 1,
       marginTop: S.ms(6, 0.3),
     },
-    applyButton: {
-      marginTop: S.ms(10, 0.3),
-      paddingHorizontal: S.ms(18, 0.3),
-      paddingVertical: S.ms(7, 0.3),
-      borderRadius: S.ms(20, 0.3),
-      borderWidth: 1.5,
-    },
-    applyButtonText: {
-      fontFamily: "SpaceGrotesk_600SemiBold",
-      fontSize: S.ms(12, 0.3),
+    applyText: {
+      fontFamily: "SpaceGrotesk_500Medium",
+      fontSize: S.ms(11, 0.3),
       letterSpacing: 1,
+      marginTop: S.ms(8, 0.3),
+      opacity: 0.85,
     },
     ticks: {
       flexDirection: "row",
