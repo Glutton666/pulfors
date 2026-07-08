@@ -1349,39 +1349,32 @@ export function BarModeView({
                   {beatDenominator}
                 </Text>
               </Pressable>
-              {repBpm !== null ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <Pressable onPress={() => { if (!isPlaying) { const v = Math.max(20, repBpm - 5); setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
-                    <Ionicons name="remove" size={ms(13, 0.4)} color={C.accent} />
-                  </Pressable>
-                  <TextInput
-                    style={[styles.bpmInput, { color: C.accent, borderBottomColor: C.accent }]}
-                    value={String(repBpm)}
-                    keyboardType="number-pad"
-                    editable={!isPlaying}
-                    onEndEditing={e => {
-                      if (isPlaying) return;
-                      const v = parseInt(e.nativeEvent.text, 10);
-                      if (!isNaN(v) && v >= 20 && v <= 300) { setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); }
-                      else if (!e.nativeEvent.text) { setRepBpm(null); commitRepeat(repType, repCount, repMin, repSec, null); }
-                    }}
-                    selectTextOnFocus
-                  />
-                  <Pressable onPress={() => { if (!isPlaying) { const v = Math.min(300, repBpm + 5); setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
-                    <Ionicons name="add" size={ms(13, 0.4)} color={C.accent} />
-                  </Pressable>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Pressable onPress={() => { if (!isPlaying) { const cur = repBpm ?? bpm ?? 120; const v = Math.max(20, cur - 5); setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                  <Ionicons name="remove" size={ms(13, 0.4)} color={repBpm !== null ? C.accent : C.textTertiary} />
+                </Pressable>
+                <TextInput
+                  style={[styles.bpmInput, { color: repBpm !== null ? C.accent : C.textTertiary, borderBottomColor: repBpm !== null ? C.accent : C.textTertiary + "60" }]}
+                  value={String(repBpm ?? bpm ?? 120)}
+                  keyboardType="number-pad"
+                  editable={!isPlaying}
+                  onEndEditing={e => {
+                    if (isPlaying) return;
+                    const v = parseInt(e.nativeEvent.text, 10);
+                    if (!isNaN(v) && v >= 20 && v <= 300) { setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); }
+                    else if (!e.nativeEvent.text) { setRepBpm(null); commitRepeat(repType, repCount, repMin, repSec, null); }
+                  }}
+                  selectTextOnFocus
+                />
+                <Pressable onPress={() => { if (!isPlaying) { const cur = repBpm ?? bpm ?? 120; const v = Math.min(300, cur + 5); setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                  <Ionicons name="add" size={ms(13, 0.4)} color={repBpm !== null ? C.accent : C.textTertiary} />
+                </Pressable>
+                {repBpm !== null && (
                   <Pressable onPress={() => { if (!isPlaying) { setRepBpm(null); commitRepeat(repType, repCount, repMin, repSec, null); } }} hitSlop={8}>
                     <Ionicons name="close-circle" size={ms(14, 0.4)} color={C.textTertiary} />
                   </Pressable>
-                </View>
-              ) : (
-                <Pressable
-                  onPress={() => { if (!isPlaying) { const v = bpm ?? 120; setRepBpm(v); commitRepeat(repType, repCount, repMin, repSec, v); } }}
-                  style={[styles.typeToggle, { backgroundColor: C.overlay08, paddingHorizontal: 10, paddingVertical: 4 }]}
-                >
-                  <Text style={{ color: C.textTertiary, fontSize: FontSize.micro }}>{t("barModeView", "repBpmAdd")}</Text>
-                </Pressable>
-              )}
+                )}
+              </View>
             </View>
           </View>
         )}
