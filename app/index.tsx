@@ -165,6 +165,8 @@ export default function MetronomeScreen() {
     easterEggHintDirection, setEasterEggHintDirection,
     easterEggPrevBpmRef, easterEggActualBpmRef, easterEggActiveRef,
   } = useEasterEggQuiz();
+  // 이스터에그 발동 직전 재생 상태 보존 → 종료 시 원상복구
+  const easterEggWasPlayingRef = useRef(false);
   const [halfTime, setHalfTime] = useState(false);
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
@@ -1848,6 +1850,14 @@ export default function MetronomeScreen() {
       setEasterEggRevealBpm(actual);
       setTimeout(() => {
         engineRef.current?.setBpm(easterEggPrevBpmRef.current);
+        // 이스터에그 발동 전 재생 중이 아니었으면 엔진 정지
+        if (!easterEggWasPlayingRef.current) {
+          engineRef.current?.stop();
+          stopRenderedAudio();
+          setIsPlaying(false);
+          isPlayingRef.current = false;
+          resetPlaybackVisuals();
+        }
         setEasterEggActive(false);
         setEasterEggRevealBpm(null);
         setEasterEggGiveUpMode(false);
@@ -1858,7 +1868,7 @@ export default function MetronomeScreen() {
       setEasterEggShakeCount(c => c + 1);
       setEasterEggHintDirection(guess < actual ? "up" : "down");
     }
-  }, [setEasterEggHintDirection]);
+  }, [stopRenderedAudio, resetPlaybackVisuals, setEasterEggHintDirection]);
 
   const handleEasterEggGiveUp = useCallback((stopEngine = false) => {
     const actual = easterEggActualBpmRef.current;
@@ -1871,11 +1881,20 @@ export default function MetronomeScreen() {
       stopRenderedAudio();
       clearSamplePlayStates();
       setIsPlaying(false);
+      isPlayingRef.current = false;
       setIsPreparing(false);
       resetPlaybackVisuals();
     }
     setTimeout(() => {
       engineRef.current?.setBpm(easterEggPrevBpmRef.current);
+      // 이스터에그 발동 전 재생 중이 아니었으면 엔진 정지
+      if (!easterEggWasPlayingRef.current) {
+        engineRef.current?.stop();
+        stopRenderedAudio();
+        setIsPlaying(false);
+        isPlayingRef.current = false;
+        resetPlaybackVisuals();
+      }
       setEasterEggActive(false);
       setEasterEggRevealBpm(null);
       setEasterEggGiveUpMode(false);
@@ -2975,6 +2994,8 @@ export default function MetronomeScreen() {
     const engine = engineRef.current;
     if (!engine) return;
 
+    // 발동 직전 재생 상태 저장 (종료 시 복원용)
+    easterEggWasPlayingRef.current = isPlayingRef.current;
     easterEggPrevBpmRef.current = bpmRef.current;
     const randomBpm = Math.floor(Math.random() * (220 - 40 + 1)) + 40;
     easterEggActualBpmRef.current = randomBpm;
@@ -3003,6 +3024,11 @@ export default function MetronomeScreen() {
     };
 
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    // 이전 라운드 잔여 상태 초기화 (2초 타이머가 아직 살아있어도 클린 상태로 시작)
+    setEasterEggRevealBpm(null);
+    setEasterEggGiveUpMode(false);
+    setEasterEggHintDirection(null);
+    setEasterEggShakeCount(0);
     setEasterEggActive(true);
     resetPlaybackVisuals();
     clearSamplePlayStates();
