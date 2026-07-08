@@ -983,6 +983,50 @@ export function BarModeView({
 
   // ─── 편집기 위로 스와이프하여 바 추가 ────────────────────────────────────
 
+  // ─── 선택된 바에 적용된 심볼 계산 ─────────────────────────────────────────
+
+  const selectedBarApplied = useMemo<Set<SymbolType>>(() => {
+    const s = new Set<SymbolType>();
+    if (barStartBeat === null) return s;
+    const rep = barRepeats[barStartBeat];
+    if (rep?.jumpFromId !== undefined) s.add("jump_from");
+    if (rep?.jumpToId !== undefined) s.add("jump_to");
+    if (rep?.voltaMax !== undefined) s.add("volta");
+    if (rep?.isEnd) s.add("end");
+    if (loopBlocks.some(b => b.layerOf === undefined && (b.startBeat === barStartBeat || b.endBeat === barStartBeat))) {
+      s.add("block");
+    }
+    return s;
+  }, [barStartBeat, barRepeats, loopBlocks]);
+
+  const handleRemoveSymbol = useCallback((sym: SymbolType, beat: number) => {
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (sym === "block") {
+      const newBlocks = loopBlocks.filter(b =>
+        !(b.layerOf === undefined && (b.startBeat === beat || b.endBeat === beat))
+      );
+      onLoopBlocksChange(newBlocks);
+      return;
+    }
+    const existing = barRepeats[beat];
+    if (!existing) return;
+    if (sym === "jump_from") {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { jumpFromId: _jf, ...updated } = existing;
+      onBarRepeatChange(beat, updated as BarRepeat);
+    } else if (sym === "jump_to") {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { jumpToId: _jt, ...updated } = existing;
+      onBarRepeatChange(beat, updated as BarRepeat);
+    } else if (sym === "volta") {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { voltaMax: _vm, ...updated } = existing;
+      onBarRepeatChange(beat, updated as BarRepeat);
+    } else if (sym === "end") {
+      onBarRepeatChange(beat, { ...existing, isEnd: false });
+    }
+  }, [loopBlocks, onLoopBlocksChange, barRepeats, onBarRepeatChange]);
+
   const editorSwipeAnim = useRef(new Animated.Value(0)).current;
   const editorSwipePan = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => false,
@@ -1271,25 +1315,47 @@ export function BarModeView({
         <View style={[styles.symbolDrawerInner, { borderBottomColor: C.overlay08 }]}>
           {(Object.keys(SYMBOL_INFO) as SymbolType[]).map((sym) => {
             const info = SYMBOL_INFO[sym];
-            const isActive = placingSymbol === sym;
+            const isPlacing = placingSymbol === sym;
+            const isApplied = !placingSymbol && selectedBarApplied.has(sym);
             const col = info.color(C);
+            const showActive = isPlacing || isApplied;
             return (
               <Pressable
                 key={sym}
                 onPress={() => {
-                  if (isActive) { setPlacingSymbol(null); setBlockSelectFirst(null); }
-                  else { setPlacingSymbol(sym); setBlockSelectFirst(null); }
+                  if (isPlacing) {
+                    setPlacingSymbol(null); setBlockSelectFirst(null);
+                  } else if (isApplied && barStartBeat !== null) {
+                    handleRemoveSymbol(sym, barStartBeat);
+                  } else {
+                    setPlacingSymbol(sym); setBlockSelectFirst(null);
+                  }
                 }}
                 style={[
                   styles.symbolBtn,
                   {
-                    backgroundColor: isActive ? col + "30" : C.backgroundSecondary,
-                    borderColor: isActive ? col : "transparent",
+                    backgroundColor: showActive ? col + "30" : C.backgroundSecondary,
+                    borderColor: showActive ? col : "transparent",
                   },
                 ]}
               >
-                <Ionicons name={info.icon} size={ms(14, 0.4)} color={isActive ? col : C.textSecondary} />
-                <Text style={{ color: isActive ? col : C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", marginTop: 2 }}>
+                <View style={{ position: "relative" }}>
+                  <Ionicons name={info.icon} size={ms(14, 0.4)} color={showActive ? col : C.textSecondary} />
+                  {isApplied && (
+                    <View style={{
+                      position: "absolute",
+                      top: -4, right: -5,
+                      width: 10, height: 10,
+                      borderRadius: 5,
+                      backgroundColor: C.danger,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}>
+                      <Text style={{ color: "#fff", fontSize: 7, fontFamily: "SpaceGrotesk_700Bold", lineHeight: 10 }}>×</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={{ color: showActive ? col : C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_500Medium", marginTop: 2 }}>
                   {t("barModeView", info.labelKey)}
                 </Text>
               </Pressable>
