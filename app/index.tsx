@@ -169,6 +169,8 @@ export default function MetronomeScreen() {
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
   const [isPlaying, setIsPlaying] = useState(false);
+  const isPlayingRef = useRef(false);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
   const [currentBeat, setCurrentBeat] = useState(-1);
   const [measureCount, setMeasureCount] = useState(0);
   const [activeSubNote, setActiveSubNote] = useState(-1);
@@ -262,6 +264,8 @@ export default function MetronomeScreen() {
   const [dropTargetBeat, setDropTargetBeat] = useState<number | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
+  const isPreparingRef = useRef(false);
+  useEffect(() => { isPreparingRef.current = isPreparing; }, [isPreparing]);
   const preparingCancelledRef = useRef(false);
   const [volume, setVolume] = useState(0.75);
   const [sampleVolume, setSampleVolume] = useState(0.8);
@@ -2855,7 +2859,7 @@ export default function MetronomeScreen() {
 
   const startMetronome = useCallback(async () => {
     const engine = engineRef.current;
-    if (!engine || isPlaying || isPreparing) return;
+    if (!engine || isPlayingRef.current || isPreparingRef.current) return;
 
     resetPlaybackVisuals();
     clearSamplePlayStates();
@@ -2892,10 +2896,7 @@ export default function MetronomeScreen() {
         webClickReadyRef.current = true;
 
         if (ctx && ctx.state === "suspended") {
-          await Promise.race([
-            ctx.resume(),
-            new Promise<void>((resolve) => setTimeout(resolve, 800)),
-          ]);
+          ctx.resume().catch(() => {});
         }
 
         if (preparingCancelledRef.current) {
@@ -2966,7 +2967,7 @@ export default function MetronomeScreen() {
       captureBreadcrumb({ category: "metronome", message: "startMetronome error", level: "error", data: { error: String(e) } });
       setIsPreparing(false);
     }
-  }, [isPlaying, isPreparing, buildRenderedPlayer, stopRenderedAudio, getClickPCMs, getLayerClickPCMsForSchedule]);
+  }, [buildRenderedPlayer, stopRenderedAudio, getClickPCMs, getLayerClickPCMsForSchedule]);
 
   const handleEasterEggTrigger = useCallback(async () => {
     if (barModeRef.current) return;
@@ -2988,13 +2989,22 @@ export default function MetronomeScreen() {
     };
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setEasterEggActive(true);
-    if (!engineRef.current?.getIsRunning()) {
-      preparingCancelledRef.current = true;
-      setIsPreparing(false);
-      preparingCancelledRef.current = false;
-      try { await startMetronome(); } catch (_) {}
+    // Always stop existing playback and restart with the new 1-beat random BPM.
+    // This ensures the pre-rendered audio loop is rebuilt for the new tempo
+    // even when the metronome was already running before the trigger.
+    if (engineRef.current?.getIsRunning()) {
+      engineRef.current.stop();
+      stopRenderedAudio();
+      setIsPlaying(false);
+      isPlayingRef.current = false;
     }
-  }, [startMetronome]);
+    // Cancel any stuck in-progress prepare and reset refs so the guard passes.
+    preparingCancelledRef.current = true;
+    setIsPreparing(false);
+    isPreparingRef.current = false;
+    preparingCancelledRef.current = false;
+    try { await startMetronome(); } catch (_) {}
+  }, [startMetronome, stopRenderedAudio]);
 
   useEffect(() => {
     const engine = engineRef.current;
