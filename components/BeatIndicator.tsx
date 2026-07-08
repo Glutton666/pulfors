@@ -127,6 +127,7 @@ interface BeatIndicatorProps {
   onDeleteBar?: (beatIndex: number) => void;
   onCopyBar?: (beat: number) => void;
   onReorderBar?: (fromIndex: number, toIndex: number) => void;
+  onInsertBarAfter?: (beatIndex: number) => void;
   soundSet?: string;
   onSoundSetChange?: (ss: string) => void;
   layerSoundSets?: Record<number, string>;
@@ -199,6 +200,7 @@ export function BeatIndicator({
   onDeleteBar,
   onCopyBar,
   onReorderBar,
+  onInsertBarAfter,
   soundSet,
   onSoundSetChange,
   layerSoundSets = {},
@@ -1312,6 +1314,7 @@ export function BeatIndicator({
         onDeleteBar={onDeleteBar}
         onCopyBar={onCopyBar}
         onReorderBar={onReorderBar}
+        onInsertBarAfter={onInsertBarAfter}
         subdivisionBarElement={subdivisionBarElement}
         onBarQuickSave={onBarQuickSave}
         onResetFlash={onResetFlash}

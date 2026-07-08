@@ -143,6 +143,7 @@ export interface BarModeViewProps {
   onExitBarMode?: () => void;
   onNoteRecordRequest?: (beatIndex: number, subIndex: number) => void;
   onReorderBar?: (fromIndex: number, toIndex: number) => void;
+  onInsertBarAfter?: (beatIndex: number) => void;
 }
 
 // ─── 상수 ────────────────────────────────────────────────────────────────────
@@ -473,6 +474,7 @@ export function BarModeView({
   onExitBarMode,
   onNoteRecordRequest,
   onReorderBar,
+  onInsertBarAfter,
 }: BarModeViewProps) {
 
   const { t } = useLanguage();
@@ -999,23 +1001,13 @@ export function BarModeView({
     onStartShouldSetPanResponder: () => false,
     onMoveShouldSetPanResponder: (_e, g) =>
       !isPlaying && draggingBeatRef.current === null && g.dy < -15 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
-    onPanResponderMove: (_e, g) => {
-      if (g.dy < 0) editorSwipeAnim.setValue(Math.max(-60, g.dy * 0.5));
-    },
+    onPanResponderMove: () => {},
     onPanResponderRelease: (_e, g) => {
       if (g.dy < -50) {
-        Animated.sequence([
-          Animated.timing(editorSwipeAnim, { toValue: -30, duration: 80, useNativeDriver: true }),
-          Animated.timing(editorSwipeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
-        ]).start();
         handleAddBar();
-      } else {
-        Animated.spring(editorSwipeAnim, { toValue: 0, useNativeDriver: true }).start();
       }
     },
-    onPanResponderTerminate: () => {
-      Animated.spring(editorSwipeAnim, { toValue: 0, useNativeDriver: true }).start();
-    },
+    onPanResponderTerminate: () => {},
   }), [isPlaying, handleAddBar]);
 
   // ─── 레이어 관련 ─────────────────────────────────────────────────────────
@@ -1370,7 +1362,7 @@ export function BarModeView({
               progressTotal={progressInfo?.beat === beat ? progressInfo.barRepeatTotal : undefined}
               bpm={bpm ?? 120}
               beatsPerMeasure={beatsPerMeasure}
-              onAddBarRight={handleAddBar}
+              onAddBarRight={() => onInsertBarAfter?.(beat)}
               onPress={handleBarRowPress}
               onSwipeLeft={handleSwipeLeft}
               onSwipeRight={handleSwipeRight}

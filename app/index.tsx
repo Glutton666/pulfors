@@ -3824,6 +3824,74 @@ export default function MetronomeScreen() {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [isPlaying, beatTypes, beatSubdivisions, beatsPerMeasure, barRepeats]);
 
+  const handleInsertBarAfter = useCallback((beatIndex: number) => {
+    if (isPlaying) return;
+    if (beatsPerMeasure >= 16) return;
+    const insertAt = beatIndex + 1;
+    const srcType = beatTypes[beatIndex] ?? "normal";
+    const srcSub = beatSubdivisions[String(beatIndex)] ?? [];
+    const srcRepeat = barRepeats[beatIndex];
+
+    const newTypes = [...beatTypes.slice(0, insertAt), srcType, ...beatTypes.slice(insertAt)];
+
+    const newSubs: Record<string, BeatType[]> = {};
+    for (const [k, v] of Object.entries(beatSubdivisions)) {
+      const ki = Number(k);
+      if (ki < insertAt) newSubs[String(ki)] = v;
+      else newSubs[String(ki + 1)] = v;
+    }
+    if (srcSub.length > 0) newSubs[String(insertAt)] = [...srcSub];
+
+    const newRepeats: Record<number, BarRepeat> = {};
+    for (const [k, v] of Object.entries(barRepeats)) {
+      const ki = Number(k);
+      if (ki < insertAt) newRepeats[ki] = v;
+      else newRepeats[ki + 1] = v;
+    }
+    if (srcRepeat) newRepeats[insertAt] = {
+      ...srcRepeat,
+      layers: srcRepeat.layers ? srcRepeat.layers.map(l => ({ ...l })) : undefined,
+    };
+
+    const shiftUp = (b: number) => b >= insertAt ? b + 1 : b;
+    const newBlocks = loopBlocks.map(lb => {
+      const newOwnBeatTypes: Record<number, BeatType> = {};
+      for (const [k, v] of Object.entries(lb.ownBeatTypes ?? {})) {
+        newOwnBeatTypes[shiftUp(Number(k))] = v as BeatType;
+      }
+      const newOwnSubdivisions: Record<string, BeatType[]> = {};
+      for (const [k, v] of Object.entries(lb.ownSubdivisions ?? {})) {
+        newOwnSubdivisions[String(shiftUp(Number(k)))] = v as BeatType[];
+      }
+      return {
+        ...lb,
+        startBeat: shiftUp(lb.startBeat),
+        endBeat: shiftUp(lb.endBeat),
+        ownBeatTypes: newOwnBeatTypes,
+        ownSubdivisions: newOwnSubdivisions,
+      };
+    });
+
+    const newBeats = beatsPerMeasure + 1;
+    setBeatsPerMeasure(newBeats);
+    setBeatTypes(newTypes);
+    setBeatSubdivisions(newSubs);
+    setBarRepeats(newRepeats);
+    setLoopBlocks(newBlocks);
+    setBarStartBeat(insertAt);
+    engineRef.current?.setBeatsPerMeasure(newBeats);
+    engineRef.current?.setBeatTypes(newTypes);
+    engineRef.current?.setAllBeatSubdivisions(newSubs);
+    engineRef.current?.setAllBarRepeats(newRepeats);
+    engineRef.current?.setLoopBlocks(newBlocks);
+    barConfigRef.current.beatsPerMeasure = newBeats;
+    barConfigRef.current.beatTypes = newTypes;
+    barConfigRef.current.beatSubdivisions = newSubs;
+    barConfigRef.current.barRepeats = newRepeats;
+    barConfigRef.current.loopBlocks = newBlocks;
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [isPlaying, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks]);
+
   const handleDeleteBar = useCallback((beatIndex: number) => {
     if (beatsPerMeasure <= 1) return;
     const newBeats = beatsPerMeasure - 1;
@@ -5670,6 +5738,7 @@ export default function MetronomeScreen() {
             onDeleteBar={handleDeleteBar}
             onCopyBar={handleCopyBar}
             onReorderBar={handleReorderBar}
+            onInsertBarAfter={handleInsertBarAfter}
             tempoLabel={tempoLabel}
             soundSet={soundSet}
             onSoundSetChange={(ss) => updateSoundSet(ss as SoundSet)}
