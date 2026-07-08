@@ -2047,20 +2047,9 @@ export default function MetronomeScreen() {
     // 모달 닫힐 때 우리가 무심코 자동 resume하지 않도록 한다.
     notifyUserMetronomeToggle();
 
-    // BPM 퀴즈 이스터에그 활성 중: 재생 버튼은 퀴즈를 종료하지 않고
-    // AudioContext를 깨워 소리가 나오게만 한다 (web 자동재생 정책 우회)
+    // BPM 퀴즈 이스터에그 활성 중 정지 → 정답 공개 후 비트모드로 복귀
     if (easterEggActiveRef.current) {
-      if (Platform.OS === "web") {
-        const ctx = getWebAudioContext();
-        if (ctx && ctx.state === "suspended") {
-          ctx.resume().catch(() => {});
-        }
-        // 엔진이 멈춰있으면(오디오 컨텍스트 문제로) 재시작
-        if (!engineRef.current?.getIsRunning()) {
-          engineRef.current?.start();
-          armAudioWatchdogRef.current();
-        }
-      }
+      handleEasterEggGiveUpRef.current(true);
       return;
     }
 
