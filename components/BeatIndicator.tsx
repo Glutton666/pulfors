@@ -117,6 +117,7 @@ interface BeatIndicatorProps {
   measureCount?: number;
   onBarReset?: () => void;
   halfTime?: boolean;
+  beatDenominator?: 4 | 8 | 16;
   isLandscape?: boolean;
   beatDirection?: "cw" | "ccw";
   onEnterNoteMode?: () => void;
@@ -186,6 +187,7 @@ export function BeatIndicator({
   measureCount = 0,
   onBarReset,
   halfTime,
+  beatDenominator = 4,
   isLandscape = false,
   beatDirection = "cw",
   onEnterNoteMode,
@@ -1415,8 +1417,8 @@ export function BeatIndicator({
           })()}
 
           <View style={styles.signatureRow} pointerEvents="none">
-            <Text style={[styles.digitalSignature, { color: halfTime ? C.accent : C.textTertiary, opacity: halfTime ? 0.25 : 0.15 }]} numberOfLines={1} adjustsFontSizeToFit>
-              {halfTime ? "1/2" : "1/1"}
+            <Text style={[styles.digitalSignature, { color: C.textTertiary, opacity: 0.2 }]} numberOfLines={1} adjustsFontSizeToFit>
+              {beatsPerMeasure}/{beatDenominator}
             </Text>
           </View>
 

@@ -169,6 +169,7 @@ export default function MetronomeScreen() {
   // 이스터에그 발동 직전 재생 상태 보존 → 종료 시 원상복구
   const easterEggWasPlayingRef = useRef(false);
   const [halfTime, setHalfTime] = useState(false);
+  const [beatDenominator, setBeatDenominator] = useState<4 | 8 | 16>(4);
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
   const [isPlaying, setIsPlaying] = useState(false);
@@ -801,6 +802,9 @@ export default function MetronomeScreen() {
     loadSettings().then((settings) => {
       setBpm(settings.bpm);
       setBeatsPerMeasure(settings.beatsPerMeasure);
+      if (settings.beatDenominator) {
+        setBeatDenominator(settings.beatDenominator);
+      }
       engine.setBpm(settings.bpm);
       engine.setBeatsPerMeasure(settings.beatsPerMeasure);
 
@@ -1980,6 +1984,18 @@ export default function MetronomeScreen() {
       return next;
     });
   }, []);
+
+  const handleBeatDenominatorCycle = useCallback(() => {
+    setBeatDenominator((prev) => {
+      const next: 4 | 8 | 16 = prev === 4 ? 8 : prev === 8 ? 16 : 4;
+      persistSettings({ beatDenominator: next });
+      halfTimeFlash.value = withSequence(
+        withTiming(0.25, { duration: 80 }),
+        withTiming(0, { duration: 600, easing: Easing.out(Easing.quad) })
+      );
+      return next;
+    });
+  }, [persistSettings]);
 
   const updateTimeSignature = useCallback(
     (beats: number) => {
@@ -4891,7 +4907,7 @@ export default function MetronomeScreen() {
         style={[
           StyleSheet.absoluteFill,
           {
-            backgroundColor: halfTime ? C.accent : C.text,
+            backgroundColor: C.accent,
             pointerEvents: "none" as const,
             zIndex: 9999,
             alignItems: "center",
@@ -4906,7 +4922,7 @@ export default function MetronomeScreen() {
           color: C.background,
           letterSpacing: 4,
         }}>
-          {halfTime ? "1/2" : "1/1"}
+          {beatsPerMeasure}/{beatDenominator}
         </Text>
       </Animated.View>
 
@@ -5539,6 +5555,7 @@ export default function MetronomeScreen() {
             onBarQuickSave={handleBarQuickSave}
             onResetFlash={handleResetFlash}
             halfTime={halfTime}
+            beatDenominator={beatDenominator}
             isLandscape={isLandscape}
             beatDirection={beatDirection}
             subdivisionBarElement={barMode ? (
@@ -5572,8 +5589,7 @@ export default function MetronomeScreen() {
                   bpm={bpm}
                   onBpmChange={updateBpm}
                   onTapTempo={handleTapTempo}
-                  halfTime={halfTime}
-                  onHalfTimeToggle={toggleHalfTime}
+                  onDenominatorCycle={handleBeatDenominatorCycle}
                   isLandscape={true}
                 />
               )
@@ -5857,8 +5873,7 @@ export default function MetronomeScreen() {
                 bpm={bpm}
                 onBpmChange={updateBpm}
                 onTapTempo={handleTapTempo}
-                halfTime={halfTime}
-                onHalfTimeToggle={toggleHalfTime}
+                onDenominatorCycle={handleBeatDenominatorCycle}
                 isLandscape={true}
               />
             )}
@@ -5883,8 +5898,7 @@ export default function MetronomeScreen() {
               bpm={bpm}
               onBpmChange={updateBpm}
               onTapTempo={handleTapTempo}
-              halfTime={halfTime}
-              onHalfTimeToggle={toggleHalfTime}
+              onDenominatorCycle={handleBeatDenominatorCycle}
               isLandscape={false}
             />
           )}

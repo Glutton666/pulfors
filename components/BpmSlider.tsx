@@ -28,14 +28,13 @@ interface BpmSliderProps {
   bpm: number;
   onBpmChange: (bpm: number) => void;
   onTapTempo: () => void;
-  halfTime?: boolean;
-  onHalfTimeToggle?: () => void;
+  onDenominatorCycle?: () => void;
   isLandscape?: boolean;
 }
 
 type Zone = "left" | "center" | "right";
 
-export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeToggle, isLandscape = false }: BpmSliderProps) {
+export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, isLandscape = false }: BpmSliderProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
@@ -56,8 +55,8 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
   useEffect(() => { onBpmChangeRef.current = onBpmChange; }, [onBpmChange]);
   useEffect(() => { onTapTempoRef.current = onTapTempo; }, [onTapTempo]);
-  const onHalfTimeToggleRef = useRef(onHalfTimeToggle);
-  useEffect(() => { onHalfTimeToggleRef.current = onHalfTimeToggle; }, [onHalfTimeToggle]);
+  const onDenominatorCycleRef = useRef(onDenominatorCycle);
+  useEffect(() => { onDenominatorCycleRef.current = onDenominatorCycle; }, [onDenominatorCycle]);
 
   const offsetX = useSharedValue(0);
   const flash = useSharedValue(0);
@@ -135,7 +134,7 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
           longPressTimer.current = setTimeout(() => {
             longPressFired.current = true;
             if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            onHalfTimeToggleRef.current?.();
+            onDenominatorCycleRef.current?.();
           }, 500);
         }
       },
@@ -215,12 +214,12 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
         onLayout={() => measureLayout()}
         accessible
         accessibilityRole="adjustable"
-        accessibilityLabel={`BPM ${bpm}${halfTime ? `, ${t("a11y", "bpmHalfTime")}` : ""}`}
+        accessibilityLabel={`BPM ${bpm}`}
         accessibilityHint={t("a11y", "bpmSliderHint")}
         accessibilityValue={{ min: 20, max: 300, now: bpm }}
         {...panResponder.panHandlers}
       >
-        <Animated.View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }, bodyStyle, halfTime && { borderColor: C.accent + "80" }, isLandscape && { paddingTop: S.ms(8, 0.3), paddingBottom: S.ms(6, 0.3) }]} testID="bpm-slider">
+        <Animated.View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }, bodyStyle, isLandscape && { paddingTop: S.ms(8, 0.3), paddingBottom: S.ms(6, 0.3) }]} testID="bpm-slider">
           <Animated.View style={[styles.flashOverlay, flashStyle, { backgroundColor: C.accent }]} />
           <Animated.View style={[styles.glowLeft, leftGlowStyle]}>
             <LinearGradient
@@ -248,8 +247,8 @@ export function BpmSlider({ bpm, onBpmChange, onTapTempo, halfTime, onHalfTimeTo
             <Feather name="minus" size={isLandscape ? S.ms(18, 0.4) : S.ms(24, 0.4)} color={C.textSecondary} style={styles.bpmIcon} />
             <View style={styles.bpmContent}>
               <Text style={[styles.bpmValue, { color: C.text }, isLandscape && { fontSize: S.ms(40, 0.4), lineHeight: S.ms(46, 0.4) }]} testID="bpm-display">{bpm}</Text>
-              <Text style={[styles.bpmUnit, { color: halfTime ? C.accent : C.textTertiary }, isLandscape && { fontSize: S.ms(10, 0.3), marginTop: -2 }]}>
-                {halfTime ? "½× BPM" : "BPM"}
+              <Text style={[styles.bpmUnit, { color: C.textTertiary }, isLandscape && { fontSize: S.ms(10, 0.3), marginTop: -2 }]}>
+                BPM
               </Text>
             </View>
             <Feather name="plus" size={isLandscape ? S.ms(18, 0.4) : S.ms(24, 0.4)} color={C.textSecondary} style={styles.bpmIcon} />
