@@ -50,17 +50,13 @@ function formatBarCenterInfo(
     return `${bpmStr}`;
   }
 
+  const barMm = Math.floor(measureSec / 60).toString().padStart(2, "0");
+  const barSs = Math.round(measureSec % 60).toString().padStart(2, "0");
   if (repeat.type === "count") {
-    const totalSec = repeat.value * measureSec;
-    const mm = Math.floor(totalSec / 60).toString().padStart(2, "0");
-    const ss = Math.round(totalSec % 60).toString().padStart(2, "0");
-    return `${bpmStr} / ×${repeat.value}(${mm}:${ss})`;
+    return `${bpmStr} / ×${repeat.value}(${barMm}:${barSs})`;
   } else {
-    const totalSec = repeat.value;
-    const mm = Math.floor(totalSec / 60).toString().padStart(2, "0");
-    const ss = (totalSec % 60).toString().padStart(2, "0");
-    const count = measureSec > 0 ? Math.round(totalSec / measureSec) : 0;
-    return `${bpmStr} / ×${count}(${mm}:${ss})`;
+    const count = measureSec > 0 ? Math.round(repeat.value / measureSec) : 0;
+    return `${bpmStr} / ×${count}(${barMm}:${barSs})`;
   }
 }
 

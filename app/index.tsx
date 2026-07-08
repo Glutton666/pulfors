@@ -3893,7 +3893,6 @@ export default function MetronomeScreen() {
   }, [isPlaying, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks]);
 
   const handleDeleteBar = useCallback((beatIndex: number) => {
-    if (beatsPerMeasure <= 1) return;
     const newBeats = beatsPerMeasure - 1;
     const newTypes = beatTypes.filter((_, i) => i !== beatIndex);
     const newSubs: Record<string, BeatType[]> = {};
