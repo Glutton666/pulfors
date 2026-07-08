@@ -86,4 +86,3 @@ timeoutMs = 120000
 [userenv]
 
 [userenv.development]
-EXPO_OFFLINE = "1"
