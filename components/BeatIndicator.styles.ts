@@ -35,15 +35,15 @@ const _make_styles_inner = (C: typeof Colors, S: ScaleValues) => StyleSheet.crea
   },
   signatureRow: {
     position: "absolute",
-    width: S.ms(160),
-    height: S.ms(160),
+    width: S.dialSize * 0.6,
+    height: S.dialSize * 0.6,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
   },
   digitalSignature: {
     fontFamily: "SpaceGrotesk_700Bold",
-    fontSize: S.ms(116, 0.4),
+    fontSize: S.dialSize * 0.1,
     color: C.text,
     opacity: 0.15,
   },
