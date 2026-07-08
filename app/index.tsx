@@ -169,7 +169,7 @@ export default function MetronomeScreen() {
   // 이스터에그 발동 직전 재생 상태 보존 → 종료 시 원상복구
   const easterEggWasPlayingRef = useRef(false);
   const [halfTime, setHalfTime] = useState(false);
-  const [beatDenominator, setBeatDenominator] = useState<4 | 8 | 16>(4);
+  const [beatDenominator, setBeatDenominator] = useState<2 | 4 | 8>(4);
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1987,7 +1987,7 @@ export default function MetronomeScreen() {
 
   const handleBeatDenominatorCycle = useCallback(() => {
     setBeatDenominator((prev) => {
-      const next: 4 | 8 | 16 = prev === 4 ? 8 : prev === 8 ? 16 : 4;
+      const next: 2 | 4 | 8 = prev === 4 ? 8 : prev === 8 ? 2 : 4;
       persistSettings({ beatDenominator: next });
       halfTimeFlash.value = withSequence(
         withTiming(0.25, { duration: 80 }),

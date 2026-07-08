@@ -117,7 +117,7 @@ interface BeatIndicatorProps {
   measureCount?: number;
   onBarReset?: () => void;
   halfTime?: boolean;
-  beatDenominator?: 4 | 8 | 16;
+  beatDenominator?: 2 | 4 | 8;
   isLandscape?: boolean;
   beatDirection?: "cw" | "ccw";
   onEnterNoteMode?: () => void;

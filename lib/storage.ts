@@ -203,7 +203,7 @@ export interface MetronomeSettings {
   autoResumeAfterInterruption?: boolean;
   barCellOpacity?: number;
   barRowHeight?: number;
-  beatDenominator?: 4 | 8 | 16;
+  beatDenominator?: 2 | 4 | 8;
 }
 
 const DEFAULT_SETTINGS: MetronomeSettings = {
