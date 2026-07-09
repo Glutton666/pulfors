@@ -705,9 +705,11 @@ interface SignalGeneratorModalProps {
    * 강제한다.
    */
   onOpenTuningGuide: (currentFreq: number, onSelectFreq: (freq: number) => void) => void;
+  /** 주변 BPM 감지 모달을 앱 레벨에서 열도록 위임한다. */
+  onOpenBpmDetect: () => void;
 }
 
-export function SignalGeneratorModal({ visible, onClose, onOpenTuningGuide }: SignalGeneratorModalProps) {
+export function SignalGeneratorModal({ visible, onClose, onOpenTuningGuide, onOpenBpmDetect }: SignalGeneratorModalProps) {
   const { colors: C } = useTheme();
   const pickerStyles = make_pickerStyles(C);
   const tgStyles = make_tgStyles(C);
@@ -1454,6 +1456,17 @@ export function SignalGeneratorModal({ visible, onClose, onOpenTuningGuide }: Si
               <MaterialCommunityIcons name="music-note-outline" size={S.ms(14, 0.4)} color={C.textTertiary} />
               <Text style={styles.tuningGuideToggleText}>
                 {t("signalGenerator", "tuningGuide")}
+              </Text>
+              <Ionicons name="chevron-forward" size={S.ms(14, 0.4)} color={C.textTertiary} />
+            </Pressable>
+
+            <Pressable
+              onPress={() => { hapticFeedback(); onOpenBpmDetect(); }}
+              style={[styles.tuningGuideToggle]}
+            >
+              <Ionicons name="mic-outline" size={S.ms(14, 0.4)} color={C.textTertiary} />
+              <Text style={styles.tuningGuideToggleText}>
+                {t("bpmDetect", "title")}
               </Text>
               <Ionicons name="chevron-forward" size={S.ms(14, 0.4)} color={C.textTertiary} />
             </Pressable>

@@ -102,7 +102,6 @@ import { DrumKitModal } from "@/components/DrumKitModal";
 import { ScheduledStartModal } from "@/components/ScheduledStartModal";
 import { FadeOutModal } from "@/components/FadeOutModal";
 import type { FadeOutSettings } from "@/lib/storage";
-import { TempoQuizModal, type TempoQuizPhase } from "@/components/TempoQuizModal";
 import type { OnboardingResult } from "@/components/OnboardingModal";
 import { GoalCompletePopup } from "@/components/GoalCompletePopup";
 import type { PracticeEntry } from "@/lib/storage";
@@ -293,7 +292,6 @@ export default function MetronomeScreen() {
     showDrumKit,
     showScheduledStart,
     showFadeOut,
-    showTempoQuiz,
     showBpmDetect,
     showStemSep,
   } = deriveModalFlags(activeModal);
@@ -332,59 +330,18 @@ export default function MetronomeScreen() {
     clearFadeOutSession, fadeOutStatusText,
   } = useFadeOutSession(isPlaying, t);
 
-  const [tempoQuizPhase, setTempoQuizPhase] = useState<TempoQuizPhase>("ready");
-  const [tempoQuizMeasureProgress, setTempoQuizMeasureProgress] = useState(0);
-  const tempoQuizSessionRef = useRef<{
-    measures: number;
-    elapsed: number;
-    restore: {
-      bpm: number;
-      beatsPerMeasure: number;
-      beatTypes: BeatType[];
-      beatSubdivisions: Record<string, BeatType[]>;
-      loopBlocks: ReturnType<NonNullable<typeof engineRef.current>["getLoopBlocks"]>;
-      blockPlayMode: "sequential" | "loop" | "random";
-      barRepeats: Record<number, { type: "count" | "duration"; value: number }>;
-      barBpmOverrides: Record<number, number>;
-      halfTime: boolean;
-    } | null;
-  } | null>(null);
-  const teardownTempoQuizRef = useRef<() => void>(() => {});
-  // TempoQuiz는 teardown 부수효과(엔진 정지/시각 리셋)가 있으므로 ref로 최신 상태를 추적한다.
-  const showTempoQuizRef = useRef(false);
-  useEffect(() => { showTempoQuizRef.current = activeModal === "tempoQuiz"; }, [activeModal]);
-  const closeTempoQuiz = useCallback(() => {
-    teardownTempoQuizRef.current();
-    setActiveModal(null);
-  }, []);
 
-  /**
-   * 단일 활성 모달 보장: activeModal을 null로 설정해 현재 모달을 닫는다.
-   * TempoQuiz는 teardown 부수효과가 있으므로 closeTempoQuiz를 별도로 호출한다.
-   */
   const closeAllModals = useCallback(() => {
     tuningGuideOnSelectRef.current = null;
-    if (showTempoQuizRef.current) {
-      closeTempoQuiz();
-    } else {
-      setActiveModal(null);
-    }
+    setActiveModal(null);
     setLandscapeImageModalVisible(false);
     setRecorderTarget(null);
-  }, [closeTempoQuiz]);
+  }, []);
 
-  /**
-   * 모달 진입을 단일 게이트로 강제하는 공용 헬퍼.
-   * activeModal 상태 머신을 이용해 한 React 렌더 사이클 안에서 이전 모달을 닫고
-   * 새 모달을 열어 50ms 공백(깜빡임)을 완전히 제거한다.
-   */
   const openExclusive = useCallback((modal: ActiveModal) => {
     tuningGuideOnSelectRef.current = null;
-    if (showTempoQuizRef.current) {
-      closeTempoQuiz();
-    }
     setActiveModal(modal);
-  }, [closeTempoQuiz]);
+  }, []);
   const [customSoundSets, setCustomSoundSets] = useState<Record<string, CustomSoundSetConfig>>({});
   const customSoundSetsRef = useRef<Record<string, CustomSoundSetConfig>>({});
   useEffect(() => { customSoundSetsRef.current = customSoundSets; }, [customSoundSets]);
@@ -412,7 +369,6 @@ export default function MetronomeScreen() {
       }
       if (showPracticeBook) { setActiveModal(null); return true; }
       if (showWorkUp) { setActiveModal(null); return true; }
-      if (showTempoQuiz) { closeTempoQuiz(); return true; }
       if (showFadeOut) { setActiveModal(null); return true; }
       if (showScheduledStart) { setActiveModal(null); return true; }
       if (showDrumKit) { setActiveModal(null); return true; }
@@ -430,7 +386,7 @@ export default function MetronomeScreen() {
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
     return () => sub.remove();
-  }, [activeModal, showReboot, closeTempoQuiz]);
+  }, [activeModal, showReboot]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -1277,40 +1233,6 @@ export default function MetronomeScreen() {
     if (engine) engine.setPreRenderedAudio(false);
   }, []);
 
-  useEffect(() => {
-    teardownTempoQuizRef.current = () => {
-      const engine = engineRef.current;
-      const sess = tempoQuizSessionRef.current;
-      if (engine) {
-        if (engine.getIsRunning()) engine.stop();
-        stopRenderedAudio();
-        clearSamplePlayStates();
-        if (sess?.restore) {
-          const r = sess.restore;
-          engine.setBpm(r.bpm);
-          engine.setBeatsPerMeasure(r.beatsPerMeasure);
-          engine.setBeatTypes(r.beatTypes);
-          engine.setAllBeatSubdivisions(r.beatSubdivisions);
-          engine.setLoopBlocks(r.loopBlocks);
-          engine.setBlockPlayMode(r.blockPlayMode);
-          engine.setAllBarRepeats(r.barRepeats);
-          engine.setAllBarBpmOverrides(r.barBpmOverrides);
-          engine.setHalfTime(r.halfTime);
-        }
-      }
-      tempoQuizSessionRef.current = null;
-      setTempoQuizMeasureProgress(0);
-      setTempoQuizPhase("ready");
-      setIsPreparing(false);
-      setIsPlaying(false);
-      resetPlaybackVisuals();
-    };
-  }, [stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals]);
-  useEffect(() => {
-    if (!showTempoQuiz && tempoQuizSessionRef.current) {
-      teardownTempoQuizRef.current();
-    }
-  }, [showTempoQuiz]);
 
   const reRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleReRender = useCallback(() => {
@@ -3250,24 +3172,6 @@ export default function MetronomeScreen() {
     if (!engine) return;
     engine.setOnMeasureComplete(() => {
       setMeasureCount(c => c + 1);
-      const qSess = tempoQuizSessionRef.current;
-      if (qSess) {
-        qSess.elapsed += 1;
-        setTempoQuizMeasureProgress(qSess.elapsed);
-        if (qSess.elapsed >= qSess.measures) {
-          setTimeout(() => {
-            const eng = engineRef.current;
-            if (eng) eng.stop();
-            setIsPreparing(false);
-            setIsPlaying(false);
-            resetPlaybackVisuals();
-          }, 0);
-          tempoQuizSessionRef.current = { ...qSess, elapsed: 0 };
-          setTempoQuizPhase("answer");
-          return;
-        }
-        return;
-      }
       const sess = fadeOutSessionRef.current;
       if (sess) {
         const elapsed = fadeOutMeasureCountRef.current + 1;
@@ -5171,40 +5075,10 @@ export default function MetronomeScreen() {
           setIsPlaying(false);
           openExclusive("drumKit");
         }}
-        onBpmDetect={() => openExclusive("bpmDetect")}
         onStemSep={() => openExclusive("stemSep")}
         onScoreMode={() => {
           setActiveModal(null);
           setScoreMode("list");
-        }}
-        onTempoQuiz={() => {
-          const engine = engineRef.current;
-          if (engine?.getIsRunning()) engine.stop();
-          stopRenderedAudio();
-          clearSamplePlayStates();
-          resetPlaybackVisuals();
-          setIsPreparing(false);
-          setIsPlaying(false);
-          if (engine) {
-            tempoQuizSessionRef.current = {
-              measures: 0,
-              elapsed: 0,
-              restore: {
-                bpm: bpmRef.current,
-                beatsPerMeasure,
-                beatTypes: [...beatTypes],
-                beatSubdivisions: engine.getAllBeatSubdivisions(),
-                loopBlocks: engine.getLoopBlocks(),
-                blockPlayMode: engine.getBlockPlayMode(),
-                barRepeats: engine.getAllBarRepeats(),
-                barBpmOverrides: engine.getBarBpmOverrides(),
-                halfTime: engine.getHalfTime(),
-              },
-            };
-          }
-          setTempoQuizMeasureProgress(0);
-          setTempoQuizPhase("ready");
-          openExclusive("tempoQuiz");
         }}
       />
 
@@ -5250,49 +5124,6 @@ export default function MetronomeScreen() {
         }}
       />
 
-      <TempoQuizModal
-        visible={showTempoQuiz}
-        phase={tempoQuizPhase}
-        setPhase={setTempoQuizPhase}
-        measureProgress={tempoQuizMeasureProgress}
-        onPlayBpm={(targetBpm: number, measures: number) => {
-          const engine = engineRef.current;
-          if (!engine) return;
-          if (engine.getIsRunning()) engine.stop();
-          stopRenderedAudio();
-          clearSamplePlayStates();
-          resetPlaybackVisuals();
-          const prev = tempoQuizSessionRef.current;
-          const restore = prev?.restore ?? {
-            bpm: bpmRef.current,
-            beatsPerMeasure,
-            beatTypes: [...beatTypes],
-            beatSubdivisions: engine.getAllBeatSubdivisions(),
-            loopBlocks: engine.getLoopBlocks(),
-            blockPlayMode: engine.getBlockPlayMode(),
-            barRepeats: engine.getAllBarRepeats(),
-            barBpmOverrides: engine.getBarBpmOverrides(),
-            halfTime: engine.getHalfTime(),
-          };
-          tempoQuizSessionRef.current = { measures, elapsed: 0, restore };
-          setTempoQuizMeasureProgress(0);
-          const quizBeatTypes = defaultBeatTypes(4);
-          engine.setHalfTime(false);
-          engine.clearLoopBlocks();
-          engine.setBlockPlayMode("loop");
-          engine.setAllBarRepeats({});
-          engine.setAllBarBpmOverrides({});
-          engine.setAllBeatSubdivisions({});
-          engine.setBpm(targetBpm);
-          engine.setBeatsPerMeasure(4);
-          engine.setBeatTypes(quizBeatTypes);
-          practiceStartRef.current = null;
-          setIsPlaying(true);
-          engine.start();
-        }}
-        onStop={() => {}}
-        onClose={closeTempoQuiz}
-      />
 
       <FadeOutModal
         visible={showFadeOut}
@@ -5373,8 +5204,6 @@ export default function MetronomeScreen() {
           setActiveModal(null);
         }}
         onOpenTuningGuide={(currentFreq, onSelectFreq) => {
-          // activeModal 상태 머신: SignalGen → TuningGuide 전환.
-          // openTuningGuideFromSignalGen 이 activeModal + 재오픈 플래그를 원자적으로 결정한다.
           tuningGuideOnSelectRef.current = onSelectFreq;
           const next = openTuningGuideFromSignalGen({
             activeModal,
@@ -5383,6 +5212,7 @@ export default function MetronomeScreen() {
           reopenSignalGenAfterTuningGuideRef.current = next.reopenSignalGenAfterTuningGuide;
           setActiveModal(next.activeModal);
         }}
+        onOpenBpmDetect={() => openExclusive("bpmDetect")}
       />
 
       {recorderTarget !== null && (
@@ -5794,6 +5624,7 @@ export default function MetronomeScreen() {
                 if (key.startsWith("custom")) delete clickPCMCacheRef.current[key];
               }
             }}
+            onOpenStemSep={() => openExclusive("stemSep")}
             barCellOpacity={barCellOpacity}
             barRowHeight={barRowHeight}
             onEasterEggTrigger={handleEasterEggTrigger}

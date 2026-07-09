@@ -128,6 +128,7 @@ interface BeatIndicatorProps {
   onCopyBar?: (beat: number) => void;
   onReorderBar?: (fromIndex: number, toIndex: number) => void;
   onInsertBarAfter?: (beatIndex: number) => void;
+  onOpenStemSep?: () => void;
   soundSet?: string;
   onSoundSetChange?: (ss: string) => void;
   layerSoundSets?: Record<number, string>;
@@ -201,6 +202,7 @@ export function BeatIndicator({
   onCopyBar,
   onReorderBar,
   onInsertBarAfter,
+  onOpenStemSep,
   soundSet,
   onSoundSetChange,
   layerSoundSets = {},
@@ -1315,6 +1317,7 @@ export function BeatIndicator({
         onCopyBar={onCopyBar}
         onReorderBar={onReorderBar}
         onInsertBarAfter={onInsertBarAfter}
+        onOpenStemSep={onOpenStemSep}
         subdivisionBarElement={subdivisionBarElement}
         onBarQuickSave={onBarQuickSave}
         onResetFlash={onResetFlash}

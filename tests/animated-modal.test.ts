@@ -366,7 +366,7 @@ describe("deriveModalFlags — activeModal → visible 파생", () => {
     const modals: ActiveModal[] = [
       "settings", "menu", "signalGen", "tuningGuide",
       "practiceBook", "workUp", "onboarding", "moreMenu",
-      "drumKit", "scheduledStart", "fadeOut", "tempoQuiz",
+      "drumKit", "scheduledStart", "fadeOut",
     ];
     for (const modal of modals) {
       const flags = deriveModalFlags(modal);
@@ -387,7 +387,7 @@ describe("모달 라우팅 — 단일 활성 모달 보장", () => {
     const allValues: ActiveModal[] = [
       "settings", "menu", "signalGen", "tuningGuide",
       "practiceBook", "workUp", "onboarding", "moreMenu",
-      "drumKit", "scheduledStart", "fadeOut", "tempoQuiz",
+      "drumKit", "scheduledStart", "fadeOut",
     ];
     for (const v of allValues) {
       assert.equal(countVisibleModals(deriveModalFlags(v)), 1, `${v} → 1 modal`);

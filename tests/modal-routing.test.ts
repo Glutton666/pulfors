@@ -37,7 +37,7 @@ test("modal-routing: activeModal=null 이면 visible 모달이 0개", () => {
 test("modal-routing: 어떤 activeModal 값이든 visible 모달은 최대 1개", () => {
   const allValues: ActiveModal[] = [
     "settings", "menu", "signalGen", "tuningGuide", "practiceBook", "workUp",
-    "onboarding", "moreMenu", "drumKit", "scheduledStart", "fadeOut", "tempoQuiz",
+    "onboarding", "moreMenu", "drumKit", "scheduledStart", "fadeOut",
     "bpmDetect", "stemSep",
     null,
   ];
@@ -63,7 +63,6 @@ test("modal-routing: 각 activeModal 값은 정확히 해당 show* 플래그만 
     ["drumKit",        "showDrumKit"],
     ["scheduledStart", "showScheduledStart"],
     ["fadeOut",        "showFadeOut"],
-    ["tempoQuiz",      "showTempoQuiz"],
     ["bpmDetect",      "showBpmDetect"],
     ["stemSep",        "showStemSep"],
   ];
@@ -105,8 +104,6 @@ const MORE_MENU_ITEMS: Array<[ActiveModal, keyof ReturnType<typeof deriveModalFl
   ["scheduledStart", "showScheduledStart"],
   ["fadeOut",        "showFadeOut"],
   ["drumKit",        "showDrumKit"],
-  ["tempoQuiz",      "showTempoQuiz"],
-  ["bpmDetect",      "showBpmDetect"],
   ["stemSep",        "showStemSep"],
 ];
 
@@ -543,12 +540,12 @@ test("source: MoreMenuModal — 닫기 Pressable에 testID=\"more-menu-close\" �
 });
 
 // ────────────────────────────────────────────────────────────────
-// 6. 소스 구조 테스트 — DrumKit·TempoQuiz 핸들러 내부 구조 검증
+// 6. 소스 구조 테스트 — DrumKit 핸들러 내부 구조 검증
 //
-//    onDrumKit / onTempoQuiz 핸들러는 엔진 정지·상태 초기화 코드를 포함해
-//    단순 람다가 아니다. 그럼에도 openExclusive("drumKit") /
-//    openExclusive("tempoQuiz") 를 반드시 경유해야 하며,
-//    setActiveModal 을 직접 호출해 openExclusive 를 우회해선 안 된다.
+//    onDrumKit 핸들러는 엔진 정지·상태 초기화 코드를 포함해
+//    단순 람다가 아니다. 그럼에도 openExclusive("drumKit") 를
+//    반드시 경유해야 하며, setActiveModal 을 직접 호출해
+//    openExclusive 를 우회해선 안 된다.
 // ────────────────────────────────────────────────────────────────
 
 /**
@@ -602,15 +599,6 @@ test("source: onDrumKit 핸들러가 openExclusive(\"drumKit\")를 호출한다"
   );
 });
 
-test("source: onTempoQuiz 핸들러가 openExclusive(\"tempoQuiz\")를 호출한다", () => {
-  const body = extractMoreMenuHandlerBody("onTempoQuiz");
-  assert.ok(
-    /openExclusive\(["']tempoQuiz["']\)/.test(body),
-    `onTempoQuiz 핸들러 본문에 openExclusive("tempoQuiz") 호출이 없다 — ` +
-    `핸들러 내부에서 모달 전환은 반드시 openExclusive 를 경유해야 한다:\n${body}`,
-  );
-});
-
 test("source: onDrumKit 핸들러가 setActiveModal을 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
   const body = extractMoreMenuHandlerBody("onDrumKit");
   assert.ok(
@@ -620,14 +608,6 @@ test("source: onDrumKit 핸들러가 setActiveModal을 직접 호출하지 않�
   );
 });
 
-test("source: onTempoQuiz 핸들러가 setActiveModal을 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
-  const body = extractMoreMenuHandlerBody("onTempoQuiz");
-  assert.ok(
-    !body.includes("setActiveModal("),
-    `onTempoQuiz 핸들러 본문에서 setActiveModal 직접 호출이 발견됐다 — ` +
-    `openExclusive 를 우회하면 mutual exclusion 보장이 깨진다:\n${body}`,
-  );
-});
 
 // ────────────────────────────────────────────────────────────────
 // 6b. 소스 구조 테스트 — ScheduledStart·FadeOut 핸들러 구조 검증
@@ -771,7 +751,7 @@ test("source: MoreMenuModal onXxx 핸들러 목록과 app/index.tsx openExclusiv
 //           → 복귀 후 activeModal 은 background 진입 전과 동일하게 유지된다.
 //
 //      B) BackHandler "hardwareBackPress" 핸들러:
-//           useEffect 의존 배열: [activeModal, showReboot, closeTempoQuiz]
+//           useEffect 의존 배열: [activeModal, showReboot]
 //           → stale closure 없이 항상 최신 activeModal 을 참조한다.
 //           → if (showXxx) { setActiveModal(null); return true; } 패턴으로
 //             정확히 하나의 모달만 닫는다.
@@ -829,7 +809,6 @@ function simulateBackPress(
     showSignalGen,
     showPracticeBook,
     showWorkUp,
-    showTempoQuiz,
     showFadeOut,
     showScheduledStart,
     showDrumKit,
@@ -848,7 +827,6 @@ function simulateBackPress(
   if (showSignalGen)     return { nextActiveModal: null,          consumed: true };
   if (showPracticeBook)  return { nextActiveModal: null,          consumed: true };
   if (showWorkUp)        return { nextActiveModal: null,          consumed: true };
-  if (showTempoQuiz)     return { nextActiveModal: null,          consumed: true }; // closeTempoQuiz() → null
   if (showFadeOut)       return { nextActiveModal: null,          consumed: true };
   if (showScheduledStart)return { nextActiveModal: null,          consumed: true };
   if (showDrumKit)       return { nextActiveModal: null,          consumed: true };
@@ -917,7 +895,7 @@ test("android-appstate: 모든 모달 상태에서 foreground 복귀 → back-pr
   const allModals: ActiveModal[] = [
     "settings", "menu", "signalGen", "tuningGuide",
     "practiceBook", "workUp", "moreMenu", "drumKit",
-    "scheduledStart", "fadeOut", "tempoQuiz", "onboarding",
+    "scheduledStart", "fadeOut", "onboarding",
     "bpmDetect", "stemSep",
     null,
   ];

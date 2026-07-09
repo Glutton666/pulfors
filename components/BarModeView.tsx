@@ -142,6 +142,7 @@ export interface BarModeViewProps {
   onNoteRecordRequest?: (beatIndex: number, subIndex: number) => void;
   onReorderBar?: (fromIndex: number, toIndex: number) => void;
   onInsertBarAfter?: (beatIndex: number) => void;
+  onOpenStemSep?: () => void;
 }
 
 // ─── 상수 ────────────────────────────────────────────────────────────────────
@@ -466,6 +467,7 @@ export function BarModeView({
   onNoteRecordRequest,
   onReorderBar,
   onInsertBarAfter,
+  onOpenStemSep,
 }: BarModeViewProps) {
 
   const { t } = useLanguage();
@@ -2046,6 +2048,17 @@ export function BarModeView({
                 );
               })}
             </ScrollView>
+            {onOpenStemSep && (
+              <Pressable
+                onPress={() => { setSoundSetPickerTarget(null); onOpenStemSep(); }}
+                style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.overlay06 }}
+              >
+                <Ionicons name="musical-notes-outline" size={ms(13, 0.4)} color={C.accent} style={{ marginRight: 6 }} />
+                <Text style={{ color: C.accent, fontSize: FontSize.small }}>
+                  {t("barModeView", "soundSetPickerStemSep")}
+                </Text>
+              </Pressable>
+            )}
           </Pressable>
         </Pressable>
       </Modal>

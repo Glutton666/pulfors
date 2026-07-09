@@ -20,7 +20,6 @@ export type ActiveModal =
   | "drumKit"
   | "scheduledStart"
   | "fadeOut"
-  | "tempoQuiz"
   | "bpmDetect"
   | "stemSep"
   | null;
@@ -39,7 +38,6 @@ export function deriveModalFlags(activeModal: ActiveModal) {
     showDrumKit:        activeModal === "drumKit",
     showScheduledStart: activeModal === "scheduledStart",
     showFadeOut:        activeModal === "fadeOut",
-    showTempoQuiz:      activeModal === "tempoQuiz",
     showBpmDetect:      activeModal === "bpmDetect",
     showStemSep:        activeModal === "stemSep",
   };
