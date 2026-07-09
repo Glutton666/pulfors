@@ -693,28 +693,58 @@ export function NoteRecorderModal({
   const handleSave = useCallback(() => {
     if (!recordedUri) return;
 
-    const existing = existingMetronomeChannel ?? "both";
-    if (metronomeChannel === existing) {
-      doSave(metronomeChannel);
+    const proceedWithChannel = () => {
+      const existing = existingMetronomeChannel ?? "both";
+      if (metronomeChannel === existing) {
+        doSave(metronomeChannel);
+        return;
+      }
+
+      const title = t("noteRecorder", "syncMetroChannelTitle");
+      const message = t("noteRecorder", "syncMetroChannelMsg");
+      const applyText = t("noteRecorder", "syncMetroChannelApply");
+      const keepText = t("noteRecorder", "syncMetroChannelKeep");
+
+      if (Platform.OS === "web") {
+        const applyChange = window.confirm(`${title}\n\n${message}`);
+        doSave(applyChange ? metronomeChannel : existing);
+        return;
+      }
+
+      Alert.alert(title, message, [
+        { text: keepText, style: "cancel", onPress: () => doSave(existing) },
+        { text: applyText, onPress: () => doSave(metronomeChannel) },
+      ]);
+    };
+
+    if (localBpm !== bpm) {
+      const bpmTitle = t("noteRecorder", "applyPreviewBpmTitle");
+      const bpmMsg = t("noteRecorder", "applyPreviewBpmMsg").replace("{bpm}", String(localBpm));
+      const applyText = t("noteRecorder", "syncMetroChannelApply");
+      const keepText = t("noteRecorder", "syncMetroChannelKeep");
+
+      if (Platform.OS === "web") {
+        const apply = window.confirm(`${bpmTitle}\n\n${bpmMsg}`);
+        if (apply && onSuggestBpm) onSuggestBpm(localBpm);
+        proceedWithChannel();
+        return;
+      }
+
+      Alert.alert(bpmTitle, bpmMsg, [
+        { text: keepText, style: "cancel", onPress: () => proceedWithChannel() },
+        {
+          text: applyText,
+          onPress: () => {
+            if (onSuggestBpm) onSuggestBpm(localBpm);
+            proceedWithChannel();
+          },
+        },
+      ]);
       return;
     }
 
-    const title = t("noteRecorder", "syncMetroChannelTitle");
-    const message = t("noteRecorder", "syncMetroChannelMsg");
-    const applyText = t("noteRecorder", "syncMetroChannelApply");
-    const keepText = t("noteRecorder", "syncMetroChannelKeep");
-
-    if (Platform.OS === "web") {
-      const applyChange = window.confirm(`${title}\n\n${message}`);
-      doSave(applyChange ? metronomeChannel : existing);
-      return;
-    }
-
-    Alert.alert(title, message, [
-      { text: keepText, style: "cancel", onPress: () => doSave(existing) },
-      { text: applyText, onPress: () => doSave(metronomeChannel) },
-    ]);
-  }, [recordedUri, metronomeChannel, existingMetronomeChannel, doSave, t]);
+    proceedWithChannel();
+  }, [recordedUri, metronomeChannel, existingMetronomeChannel, doSave, t, localBpm, bpm, onSuggestBpm]);
 
   const MAX_DURATION_SEC = 600;
   const MAX_FILE_SIZE_MB = 50;

@@ -551,6 +551,8 @@ export const translations = {
     bpmNotDetected: { ko: "BPM을 감지하지 못했습니다.", en: "Couldn't detect a BPM." },
     bpmFailGeneric: { ko: "BPM 분석에 실패했습니다.", en: "BPM analysis failed." },
     bpmFailRateLimit: { ko: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.", en: "Too many requests. Please try again shortly." },
+    applyPreviewBpmTitle: { ko: "미리듣기 템포 적용", en: "Apply Preview Tempo" },
+    applyPreviewBpmMsg: { ko: "미리듣기에서 사용한 템포({bpm} BPM)를 현재 바에 적용하시겠습니까?", en: "Apply the preview tempo ({bpm} BPM) to the current bar?" },
   },
   permissions: {
     title: { ko: "권한 필요", en: "Permission Required" },
