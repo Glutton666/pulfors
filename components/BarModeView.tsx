@@ -1035,10 +1035,10 @@ export function BarModeView({
       bpmHoldFired.current = true;
       const step = () => {
         const cur = repBpmRef.current ?? bpmPropRef.current ?? 120;
-        applyRepBpm(Math.min(300, Math.max(20, cur + dir * 10)));
+        applyRepBpm(Math.min(300, Math.max(20, cur + dir * 5)));
       };
       step();
-      bpmPressInterval.current = setInterval(step, 150);
+      bpmPressInterval.current = setInterval(step, 250);
     }, 400);
   }, [clearBpmTimers, applyRepBpm]);
 
@@ -1587,7 +1587,7 @@ export function BarModeView({
               </Pressable>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }} {...bpmSwipePan.panHandlers}>
                 <Pressable
-                  onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.max(20, (repBpm ?? bpm ?? 120) - 5)); } }}
+                  onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.max(20, (repBpm ?? bpm ?? 120) - 1)); } }}
                   onPressIn={() => { if (!isPlaying) startBpmHold(-1); }}
                   onPressOut={() => clearBpmTimers()}
                   style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
@@ -1608,7 +1608,7 @@ export function BarModeView({
                   selectTextOnFocus
                 />
                 <Pressable
-                  onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.min(300, (repBpm ?? bpm ?? 120) + 5)); } }}
+                  onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.min(300, (repBpm ?? bpm ?? 120) + 1)); } }}
                   onPressIn={() => { if (!isPlaying) startBpmHold(1); }}
                   onPressOut={() => clearBpmTimers()}
                   style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
