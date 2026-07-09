@@ -648,9 +648,9 @@ export function BarModeView({
   }, [loopBlocks, beatsPerMeasure]);
 
   const totalDurationDisplay = useMemo(() => {
-    if (!bpm || bpm <= 0 || measureCount <= 0) return null;
+    if (!bpm || bpm <= 0 || beatsPerMeasure <= 0) return null;
     let totalSec = 0;
-    for (let i = 0; i < measureCount; i++) {
+    for (let i = 0; i < beatsPerMeasure; i++) {
       const rep = barRepeats[i];
       const effectiveBpm = (rep?.bpm && rep.bpm > 0) ? rep.bpm : bpm;
       const barSec = (beatsPerMeasure / effectiveBpm) * 60;
@@ -663,7 +663,7 @@ export function BarModeView({
     const mm = Math.floor(totalSec / 60);
     const ss = Math.round(totalSec % 60);
     return `${mm}:${String(ss).padStart(2, "0")}`;
-  }, [bpm, beatsPerMeasure, measureCount, barRepeats]);
+  }, [bpm, beatsPerMeasure, barRepeats]);
 
   const getSymbolBadges = useCallback((beat: number): string[] => {
     const badges: string[] = [];
@@ -1212,9 +1212,9 @@ export function BarModeView({
                 })()}
                 {totalDurationDisplay ? ` / ${totalDurationDisplay}` : ""}
               </Text>
-              {measureCount > 0 && (
+              {beatsPerMeasure > 0 && (
                 <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_400Regular" }}>
-                  {measureCount}{t("barModeView", "barsDisplay")}
+                  {beatsPerMeasure}{t("barModeView", "barsDisplay")}
                 </Text>
               )}
             </>
@@ -1223,9 +1223,9 @@ export function BarModeView({
               <Text style={{ color: C.accent, fontSize: ms(14, 0.4), fontFamily: "SpaceGrotesk_700Bold" }}>
                 {totalDurationDisplay ?? "—"}
               </Text>
-              {measureCount > 0 && (
+              {beatsPerMeasure > 0 && (
                 <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_400Regular" }}>
-                  {measureCount}{t("barModeView", "barsDisplay")}
+                  {beatsPerMeasure}{t("barModeView", "barsDisplay")}
                 </Text>
               )}
             </>
