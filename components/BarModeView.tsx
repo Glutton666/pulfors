@@ -50,13 +50,18 @@ function formatBarCenterInfo(
     return `${bpmStr}`;
   }
 
-  const barMm = Math.floor(measureSec / 60).toString().padStart(2, "0");
-  const barSs = Math.round(measureSec % 60).toString().padStart(2, "0");
   if (repeat.type === "count") {
-    return `${bpmStr} / ×${repeat.value}(${barMm}:${barSs})`;
+    // 총 시간 = 바 1개 시간 × 반복 횟수
+    const totalSec = measureSec * Math.max(1, repeat.value);
+    const totalMm = Math.floor(totalSec / 60).toString().padStart(2, "0");
+    const totalSs = Math.round(totalSec % 60).toString().padStart(2, "0");
+    return `${bpmStr} / ×${repeat.value}(${totalMm}:${totalSs})`;
   } else {
+    // duration 타입: 설정 시간이 총 시간, 횟수는 그 안에 몇 번 들어가는지
     const count = measureSec > 0 ? Math.round(repeat.value / measureSec) : 0;
-    return `${bpmStr} / ×${count}(${barMm}:${barSs})`;
+    const totalMm = Math.floor(repeat.value / 60).toString().padStart(2, "0");
+    const totalSs = Math.round(repeat.value % 60).toString().padStart(2, "0");
+    return `${bpmStr} / ×${count}(${totalMm}:${totalSs})`;
   }
 }
 
