@@ -1198,8 +1198,8 @@ export function BarModeView({
           )}
         </Pressable>
 
-        {/* 중앙: 총 시간 + 바 개수 (또는 재생 중 경과/총) */}
-        <View style={{ flex: 1, alignItems: "center" }}>
+        {/* 중앙: 총 시간 + 바 개수 — 절대 위치로 정확히 가운데 고정 */}
+        <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center", pointerEvents: "none" }}>
           {isPlaying ? (
             <>
               <Text style={{ color: C.accent, fontSize: ms(14, 0.4), fontFamily: "SpaceGrotesk_700Bold" }}>
@@ -1229,6 +1229,9 @@ export function BarModeView({
             </>
           )}
         </View>
+
+        {/* 스페이서 (닫기 버튼을 오른쪽으로 밀기) */}
+        <View style={{ flex: 1 }} />
 
         {/* 우: 닫기 버튼 */}
         {onExitBarMode && (
@@ -2008,7 +2011,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.sm,
     paddingVertical: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    justifyContent: "space-between",
   },
   drawerToggleBtn: {
     paddingRight: 8,
