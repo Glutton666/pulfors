@@ -1598,7 +1598,16 @@ export function BarModeView({
                 {beatDenominator}
               </Text>
             </Pressable>
-            {/* 재생 버튼 */}
+            {/* 저장 버튼 */}
+            <Pressable onPress={handleSaveTap} hitSlop={10} testID="bar-save-reset" disabled={isPlaying} style={{ padding: 4 }}>
+              <Ionicons
+                name={saveFlashVisible ? "checkmark-circle" : "bookmark-outline"}
+                size={ms(20, 0.4)}
+                color={saveFlashVisible ? "#4CAF50" : isPlaying ? C.textTertiary : C.accent}
+              />
+            </Pressable>
+            <View style={{ flex: 1 }} />
+            {/* 재생 버튼 — 중앙 */}
             <BarPlayButton
               isPlaying={isPlaying}
               isPreparing={isPreparing}
@@ -1615,14 +1624,6 @@ export function BarModeView({
               badgeIconSize={ms(10, 0.4)}
               t={t}
             />
-            {/* 저장 버튼 */}
-            <Pressable onPress={handleSaveTap} hitSlop={10} testID="bar-save-reset" disabled={isPlaying} style={{ padding: 4 }}>
-              <Ionicons
-                name={saveFlashVisible ? "checkmark-circle" : "bookmark-outline"}
-                size={ms(20, 0.4)}
-                color={saveFlashVisible ? "#4CAF50" : isPlaying ? C.textTertiary : C.accent}
-              />
-            </Pressable>
             <View style={{ flex: 1 }} />
             {/* BPM 스테퍼 */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 3, opacity: isPlaying ? 0.5 : 1 }} {...bpmSwipePan.panHandlers}>
