@@ -1166,40 +1166,42 @@ export function BarModeView({
 
       {/* ── 심볼 드로어 (바 목록 위) ── */}
       <View style={[styles.drawerToggleRow, { borderBottomColor: C.overlay06, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-        {/* 좌: 드로어 토글 */}
-        <Pressable
-          onPress={() => {
-            if (placingSymbol) { setPlacingSymbol(null); setBlockSelectFirst(null); return; }
-            setSymbolDrawerOpen(v => !v);
-          }}
-          style={styles.drawerToggleBtn}
-          hitSlop={10}
-        >
-          {placingSymbol ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Ionicons name="close-circle" size={ms(14, 0.4)} color={SYMBOL_INFO[placingSymbol].color(C)} />
-              <Text style={{ color: SYMBOL_INFO[placingSymbol].color(C), fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_600SemiBold" }}>
-                {placingSymbol === "block" && blockSelectFirst !== null
-                  ? t("barModeView", "blockSelectStarted").replace("{{n}}", String(blockSelectFirst + 1))
-                  : `${t("barModeView", SYMBOL_INFO[placingSymbol].labelKey)} ${t("barModeView", "blockSelectPrompt")}`}
-              </Text>
-            </View>
-          ) : (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Ionicons
-                name={symbolDrawerOpen ? "chevron-up" : "chevron-down"}
-                size={ms(14, 0.4)}
-                color={C.textTertiary}
-              />
-              <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium" }}>
-                {symbolDrawerOpen ? t("barModeView", "symbolDrawerClose") : t("barModeView", "symbolDrawerLabel")}
-              </Text>
-            </View>
-          )}
-        </Pressable>
+        {/* 좌: flex:1 — 드로어 토글 왼쪽 정렬 */}
+        <View style={{ flex: 1 }}>
+          <Pressable
+            onPress={() => {
+              if (placingSymbol) { setPlacingSymbol(null); setBlockSelectFirst(null); return; }
+              setSymbolDrawerOpen(v => !v);
+            }}
+            style={styles.drawerToggleBtn}
+            hitSlop={10}
+          >
+            {placingSymbol ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Ionicons name="close-circle" size={ms(14, 0.4)} color={SYMBOL_INFO[placingSymbol].color(C)} />
+                <Text style={{ color: SYMBOL_INFO[placingSymbol].color(C), fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_600SemiBold" }}>
+                  {placingSymbol === "block" && blockSelectFirst !== null
+                    ? t("barModeView", "blockSelectStarted").replace("{{n}}", String(blockSelectFirst + 1))
+                    : `${t("barModeView", SYMBOL_INFO[placingSymbol].labelKey)} ${t("barModeView", "blockSelectPrompt")}`}
+                </Text>
+              </View>
+            ) : (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Ionicons
+                  name={symbolDrawerOpen ? "chevron-up" : "chevron-down"}
+                  size={ms(14, 0.4)}
+                  color={C.textTertiary}
+                />
+                <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium" }}>
+                  {symbolDrawerOpen ? t("barModeView", "symbolDrawerClose") : t("barModeView", "symbolDrawerLabel")}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
 
-        {/* 중앙: 총 시간 + 바 개수 — 절대 위치로 정확히 가운데 고정 */}
-        <View style={{ position: "absolute", left: 0, right: 0, alignItems: "center", pointerEvents: "none" }}>
+        {/* 중앙: 총 시간 + 바 개수 — 양쪽 flex:1 사이에서 자동으로 정중앙 */}
+        <View style={{ alignItems: "center" }}>
           {isPlaying ? (
             <>
               <Text style={{ color: C.accent, fontSize: ms(14, 0.4), fontFamily: "SpaceGrotesk_700Bold" }}>
@@ -1230,19 +1232,18 @@ export function BarModeView({
           )}
         </View>
 
-        {/* 스페이서 (닫기 버튼을 오른쪽으로 밀기) */}
-        <View style={{ flex: 1 }} />
-
-        {/* 우: 닫기 버튼 */}
-        {onExitBarMode && (
-          <Pressable
-            onPress={onExitBarMode}
-            hitSlop={10}
-            style={[styles.stpBtn, { backgroundColor: C.overlay08 }]}
-          >
-            <Ionicons name="close" size={ms(14, 0.4)} color={C.textSecondary} />
-          </Pressable>
-        )}
+        {/* 우: flex:1 — 닫기 버튼 오른쪽 정렬 */}
+        <View style={{ flex: 1, alignItems: "flex-end" }}>
+          {onExitBarMode && (
+            <Pressable
+              onPress={onExitBarMode}
+              hitSlop={10}
+              style={[styles.stpBtn, { backgroundColor: C.overlay08 }]}
+            >
+              <Ionicons name="close" size={ms(14, 0.4)} color={C.textSecondary} />
+            </Pressable>
+          )}
+        </View>
       </View>
 
       <Animated.View style={[styles.symbolDrawer, { height: drawerHeight, overflow: "hidden" }]}>
