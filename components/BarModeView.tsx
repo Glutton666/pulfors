@@ -112,10 +112,6 @@ export interface BarModeViewProps {
   onResetFlash?: () => void;
   onBarReset?: () => void;
   onBarScrollOffset?: (offset: number) => void;
-  onBarTimerExpired?: () => void;
-  onBarClockConfigChange?: (mode: "stopwatch" | "timer", duration: number) => void;
-  initialBarClockMode?: "stopwatch" | "timer";
-  initialBarTimerDuration?: number;
   noteSamples?: Record<string, string>;
   noteSampleNames?: Record<string, string>;
   noteSampleSources?: Record<string, string>;
@@ -451,7 +447,6 @@ export function BarModeView({
   onBarLoopModeChange, blockPlayMode, onBlockPlayModeChange, progressInfo, layerProgressMap,
   measureCount = 0, barStartBeat, onBarStartBeatSelect, onAddBar, onDeleteBar, onCopyBar,
   subdivisionBarElement, onBarQuickSave, onResetFlash, onBarReset, onBarScrollOffset,
-  onBarTimerExpired, onBarClockConfigChange, initialBarClockMode, initialBarTimerDuration,
   noteSamples, bpm, beatDenominator = 4, onDenominatorCycle, isLandscape, tempoLabel,
   soundSet = "classic", onSoundSetChange, layerSoundSets = {} as Record<number, string>, onLayerSoundSetsChange, onPreviewSoundSet,
   customSoundSets = {} as Record<string, CustomSoundSetConfig>, onCustomSoundSetsChange,
@@ -560,14 +555,8 @@ export function BarModeView({
   // 바 미선택 상태에서 "다음 추가할 바"의 레이어 draft
   const [draftLayers, setDraftLayers] = useState<BarLayer[]>([]);
 
-  // 바 클럭 (stopwatch/timer)
-  const [barClockMode, setBarClockModeRaw] = useState<"stopwatch" | "timer">(initialBarClockMode || "stopwatch");
-  const [barTimerDuration, setBarTimerDurationRaw] = useState(initialBarTimerDuration || 180);
-  const [barTimerRemaining, setBarTimerRemaining] = useState(initialBarTimerDuration || 180);
+  // 재생 경과 시간
   const [barElapsedSec, setBarElapsedSec] = useState(0);
-  const [barTimerEditing, setBarTimerEditing] = useState(false);
-  const [barTimerInput, setBarTimerInput] = useState("");
-  const barTimerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const barStartTimeRef = useRef(0);
 
   const [saveFlashVisible, setSaveFlashVisible] = useState(false);
@@ -594,74 +583,24 @@ export function BarModeView({
 
   // ─── 초기화 효과 ──────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    if (initialBarClockMode) setBarClockModeRaw(initialBarClockMode);
-    if (initialBarTimerDuration != null) {
-      setBarTimerDurationRaw(initialBarTimerDuration);
-      setBarTimerRemaining(initialBarTimerDuration);
-    }
-  }, [initialBarClockMode, initialBarTimerDuration]);
-
-  const setBarClockMode = useCallback((mode: "stopwatch" | "timer") => {
-    setBarClockModeRaw(mode);
-    onBarClockConfigChange?.(mode, barTimerDuration);
-  }, [barTimerDuration, onBarClockConfigChange]);
-
-  const setBarTimerDuration = useCallback((dur: number) => {
-    setBarTimerDurationRaw(dur);
-    onBarClockConfigChange?.(barClockMode, dur);
-  }, [barClockMode, onBarClockConfigChange]);
-
-  // 타이머/스탑워치 효과
+  // 재생 경과 시간 카운트
   useEffect(() => {
     if (isPlaying) {
       barStartTimeRef.current = Date.now();
       setBarElapsedSec(0);
-      if (barClockMode === "stopwatch") {
-        const iv = setInterval(() => {
-          setBarElapsedSec(Math.floor((Date.now() - barStartTimeRef.current) / 1000));
-        }, 1000);
-        return () => clearInterval(iv);
-      } else {
-        setBarTimerRemaining(barTimerDuration);
-        const startTime = Date.now();
-        barTimerIntervalRef.current = setInterval(() => {
-          const elapsed = Math.floor((Date.now() - startTime) / 1000);
-          const left = Math.max(0, barTimerDuration - elapsed);
-          setBarTimerRemaining(left);
-          setBarElapsedSec(elapsed);
-          if (left <= 0) {
-            if (barTimerIntervalRef.current) clearInterval(barTimerIntervalRef.current);
-            barTimerIntervalRef.current = null;
-            onBarTimerExpired?.();
-          }
-        }, 250);
-        return () => {
-          if (barTimerIntervalRef.current) { clearInterval(barTimerIntervalRef.current); barTimerIntervalRef.current = null; }
-        };
-      }
+      const iv = setInterval(() => {
+        setBarElapsedSec(Math.floor((Date.now() - barStartTimeRef.current) / 1000));
+      }, 1000);
+      return () => clearInterval(iv);
     } else {
       setBarElapsedSec(0);
-      setBarTimerRemaining(barTimerDuration);
-      if (barTimerIntervalRef.current) { clearInterval(barTimerIntervalRef.current); barTimerIntervalRef.current = null; }
     }
     return undefined;
-  }, [isPlaying, barClockMode, barTimerDuration, onBarTimerExpired]);
+  }, [isPlaying]);
 
   useEffect(() => {
     return () => { if (saveFlashTimer.current) clearTimeout(saveFlashTimer.current); };
   }, []);
-
-  // 시간 표시
-  const barTimeDisplay = useMemo(() => {
-    if (barClockMode === "timer") {
-      const t = isPlaying ? barTimerRemaining : barTimerDuration;
-      const m = Math.floor(t / 60); const s = t % 60;
-      return `${m}:${s.toString().padStart(2, "0")}`;
-    }
-    const m = Math.floor(barElapsedSec / 60); const s = barElapsedSec % 60;
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  }, [barClockMode, barElapsedSec, barTimerRemaining, barTimerDuration, isPlaying]);
 
   // ─── 재생 중 자동 스크롤 ──────────────────────────────────────────────────
 
@@ -830,45 +769,6 @@ export function BarModeView({
   const handleBeatsDecrement = useCallback(() => {
     if (beatsPerMeasure > MIN_BEATS) onBeatsChange(beatsPerMeasure - 1);
   }, [beatsPerMeasure, onBeatsChange]);
-
-  const handleBarClockTap = useCallback(() => {
-    if (isPlaying) return;
-    if (barClockMode === "timer") {
-      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setBarTimerEditing(true);
-      const m = Math.floor(barTimerDuration / 60);
-      const s = barTimerDuration % 60;
-      setBarTimerInput(m > 0 ? `${m}:${s.toString().padStart(2, "0")}` : `${s}`);
-    }
-  }, [isPlaying, barClockMode, barTimerDuration]);
-
-  const commitBarTimerInput = useCallback(() => {
-    setBarTimerEditing(false);
-    const trimmed = barTimerInput.trim();
-    if (!trimmed) return;
-    let total = 0;
-    if (trimmed.includes(":")) {
-      const parts = trimmed.split(":");
-      total = (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
-    } else {
-      const v = parseInt(trimmed, 10) || 0;
-      total = v < 10 ? v * 60 : v;
-    }
-    total = Math.max(1, Math.min(total, 5999));
-    setBarTimerDuration(total);
-    setBarTimerRemaining(total);
-  }, [barTimerInput, setBarTimerDuration]);
-
-  const barClockSwipePan = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => false,
-    onMoveShouldSetPanResponder: (_e, g) => !isPlaying && Math.abs(g.dx) > 10 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
-    onPanResponderRelease: (_e, g) => {
-      if (Math.abs(g.dx) < 20) return;
-      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      if (g.dx < 0 && barClockMode === "stopwatch") setBarClockMode("timer");
-      else if (g.dx > 0 && barClockMode === "timer") { setBarClockMode("stopwatch"); setBarTimerEditing(false); }
-    },
-  }), [isPlaying, barClockMode, setBarClockMode]);
 
   const saveBlock = useCallback(() => {
     if (blockEditingIdx === null) return;
@@ -1792,19 +1692,29 @@ export function BarModeView({
           />
         </Pressable>
 
-        <View style={styles.clockArea} {...barClockSwipePan.panHandlers}>
-          <Pressable onPress={handleBarClockTap} style={{ alignItems: "center" }}>
-            <Text style={[styles.clockText, { color: barClockMode === "timer" ? C.danger : C.accent }]}>
-              {barTimeDisplay}
+        <View style={styles.clockArea}>
+          <View style={{ alignItems: "center" }}>
+            <Text style={[styles.clockText, { color: C.accent }]}>
+              {isPlaying
+                ? (() => {
+                    const em = Math.floor(barElapsedSec / 60);
+                    const es = barElapsedSec % 60;
+                    return `${em}:${String(es).padStart(2, "0")}`;
+                  })()
+                : (totalDurationDisplay ?? "—")
+              }
             </Text>
-            <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_400Regular" }}>
-              {beatsPerMeasure} {t("barModeView", "barsDisplay")}
-            </Text>
-            <View style={{ flexDirection: "row", gap: 3, marginTop: 2 }}>
-              <View style={[styles.clockDot, { backgroundColor: barClockMode === "stopwatch" ? C.accent : C.overlay08 }]} />
-              <View style={[styles.clockDot, { backgroundColor: barClockMode === "timer" ? C.danger : C.overlay08 }]} />
-            </View>
-          </Pressable>
+            {isPlaying && totalDurationDisplay && (
+              <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_400Regular" }}>
+                {"/ "}{totalDurationDisplay}
+              </Text>
+            )}
+            {!isPlaying && (
+              <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_400Regular" }}>
+                {beatsPerMeasure} {t("barModeView", "barsDisplay")}
+              </Text>
+            )}
+          </View>
         </View>
 
         <BarPlayButton
@@ -1825,38 +1735,6 @@ export function BarModeView({
         />
       </View>
 
-      {/* ── 타이머 편집 모달 ── */}
-      <AnimatedModal visible={barTimerEditing} transparent onRequestClose={() => setBarTimerEditing(false)}>
-        <View style={styles.modalOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setBarTimerEditing(false)} />
-          <View style={[styles.modalCard, { backgroundColor: C.backgroundSecondary }]} dataSet={{ capturesKeys: "true" }}>
-            <View style={[styles.modalHeader, { borderBottomColor: C.overlay08 }]}>
-              <Ionicons name="timer-outline" size={ms(16, 0.4)} color={C.danger} />
-              <Text style={{ color: C.danger, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_700Bold" }}>{t("barModeView", "timerModalTitle")}</Text>
-            </View>
-            <TextInput
-              style={[styles.timerInput, { borderBottomColor: C.accent, color: C.accent }]}
-              value={barTimerInput}
-              onChangeText={setBarTimerInput}
-              onSubmitEditing={commitBarTimerInput}
-              keyboardType="numbers-and-punctuation"
-              autoFocus
-              selectTextOnFocus
-              placeholder="M:SS"
-              placeholderTextColor={C.textTertiary}
-            />
-            <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, textAlign: "center", marginBottom: 12 }}>
-              {t("barModeView", "timerHint")}
-            </Text>
-            <Pressable
-              onPress={commitBarTimerInput}
-              style={[styles.timerSetBtn, { backgroundColor: C.danger }]}
-            >
-              <Text style={{ color: C.white, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_700Bold" }}>{t("barModeView", "timerSet")}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </AnimatedModal>
 
       {/* ── N회(볼타) 편집 모달 ── */}
       <AnimatedModal visible={voltaBeat !== null} transparent onRequestClose={() => setVoltaBeat(null)}>

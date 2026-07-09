@@ -1320,10 +1320,6 @@ export function BeatIndicator({
         onResetFlash={onResetFlash}
         onBarReset={onBarReset}
         onBarScrollOffset={onBarScrollOffset}
-        onBarTimerExpired={onBarTimerExpired}
-        onBarClockConfigChange={onBarClockConfigChange}
-        initialBarClockMode={initialBarClockMode}
-        initialBarTimerDuration={initialBarTimerDuration}
         noteSamples={noteSamples ?? {}}
         noteSampleNames={noteSampleNames}
         noteSampleSources={noteSampleSources}

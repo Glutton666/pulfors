@@ -5710,13 +5710,6 @@ export default function MetronomeScreen() {
             blockPlayMode={blockPlayMode}
             onBlockPlayModeChange={setBlockPlayMode}
             onBarScrollOffset={(offset) => { barScrollOffsetRef.current = offset; }}
-            onBarTimerExpired={handleTimerExpired}
-            onBarClockConfigChange={(mode, dur) => {
-              barConfigRef.current.barClockMode = mode;
-              barConfigRef.current.barTimerDuration = dur;
-            }}
-            initialBarClockMode={barConfigRef.current.barClockMode}
-            initialBarTimerDuration={barConfigRef.current.barTimerDuration}
             noteSamples={noteSamples}
             noteSampleNames={noteSampleNames}
             noteSampleSources={noteSampleSources}
