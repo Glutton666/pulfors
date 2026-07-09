@@ -1635,7 +1635,7 @@ export function BarModeView({
                 <Ionicons name="remove" size={ms(11, 0.4)} color={C.accent} />
               </Pressable>
               <TextInput
-                style={{ fontSize: 13, fontFamily: "SpaceGrotesk_700Bold", minWidth: 36, textAlign: "center", borderBottomWidth: 1.5, paddingVertical: 1, color: C.accent, borderBottomColor: C.accent }}
+                style={{ fontSize: 13, fontFamily: "SpaceGrotesk_700Bold", width: 36, textAlign: "center", borderBottomWidth: 1.5, paddingVertical: 1, color: C.accent, borderBottomColor: C.accent }}
                 value={String(repBpm ?? bpm ?? 120)}
                 keyboardType="number-pad"
                 editable={!isPlaying}
