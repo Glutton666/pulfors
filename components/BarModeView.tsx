@@ -561,6 +561,15 @@ export function BarModeView({
     bpmHoldFired.current = false;
   }, []);
 
+  const secHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const secHoldInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const secHoldFired = useRef(false);
+  const clearSecTimers = useCallback(() => {
+    if (secHoldTimer.current) { clearTimeout(secHoldTimer.current); secHoldTimer.current = null; }
+    if (secHoldInterval.current) { clearInterval(secHoldInterval.current); secHoldInterval.current = null; }
+    secHoldFired.current = false;
+  }, []);
+
   // 바 미선택 상태에서 "다음 추가할 바"의 레이어 draft
   const [draftLayers, setDraftLayers] = useState<BarLayer[]>([]);
 
@@ -1035,12 +1044,36 @@ export function BarModeView({
       bpmHoldFired.current = true;
       const step = () => {
         const cur = repBpmRef.current ?? bpmPropRef.current ?? 120;
-        applyRepBpm(Math.min(300, Math.max(20, cur + dir * 5)));
+        let next: number;
+        if (dir === -1) {
+          const t = Math.floor(cur / 10) * 10;
+          next = Math.max(20, cur === t ? cur - 10 : t);
+        } else {
+          const t = Math.ceil(cur / 10) * 10;
+          next = Math.min(300, cur === t ? cur + 10 : t);
+        }
+        applyRepBpm(next);
       };
       step();
-      bpmPressInterval.current = setInterval(step, 250);
-    }, 400);
+      bpmPressInterval.current = setInterval(step, 350);
+    }, 500);
   }, [clearBpmTimers, applyRepBpm]);
+
+  const startSecHold = useCallback((dir: 1 | -1, repMinVal: number, repSecVal: number, commitFn: (m: number, s: number) => void) => {
+    clearSecTimers();
+    secHoldTimer.current = setTimeout(() => {
+      secHoldFired.current = true;
+      const step = () => {
+        const totalSec = repMinRef.current * 60 + repSecRef.current;
+        const next = Math.max(0, Math.min(3599, totalSec + dir * 10));
+        const m = Math.floor(next / 60);
+        const s = next % 60;
+        commitFn(m, s);
+      };
+      step();
+      secHoldInterval.current = setInterval(step, 250);
+    }, 400);
+  }, [clearSecTimers]);
 
   const bpmSwipePan = useMemo(() => {
     let startBpm = 0;
@@ -1518,11 +1551,21 @@ export function BarModeView({
                   <Pressable onPress={() => { if (!isPlaying) { const m = Math.min(59, repMin + 1); setRepMin(m); commitRepeat(repType, repCount, m, repSec, repBpm); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
                     <Ionicons name="add" size={ms(12, 0.4)} color={C.textSecondary} />
                   </Pressable>
-                  <Pressable onPress={() => { if (!isPlaying) { const s = Math.max(0, repSec - 5); setRepSec(s); commitRepeat(repType, repCount, repMin, s, repBpm); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                  <Pressable
+                    onPress={() => { if (!isPlaying && !secHoldFired.current) { const total = Math.max(0, repMin * 60 + repSec - 1); const m = Math.floor(total / 60); const s = total % 60; setRepMin(m); setRepSec(s); commitRepeat(repType, repCount, m, s, repBpm); } }}
+                    onPressIn={() => { if (!isPlaying) startSecHold(-1, repMin, repSec, (m, s) => { setRepMin(m); setRepSec(s); commitRepeat(repTypeRef.current, repCountRef.current, m, s, repBpmRef.current); }); }}
+                    onPressOut={() => clearSecTimers()}
+                    style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
+                  >
                     <Ionicons name="remove" size={ms(12, 0.4)} color={C.textSecondary} />
                   </Pressable>
                   <Text style={{ color: C.text, fontSize: 14, fontFamily: "SpaceGrotesk_700Bold", minWidth: 24, textAlign: "center" }}>{repSec}{t("barModeView", "secondSuffix")}</Text>
-                  <Pressable onPress={() => { if (!isPlaying) { const s = Math.min(59, repSec + 5); setRepSec(s); commitRepeat(repType, repCount, repMin, s, repBpm); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                  <Pressable
+                    onPress={() => { if (!isPlaying && !secHoldFired.current) { const total = Math.min(3599, repMin * 60 + repSec + 1); const m = Math.floor(total / 60); const s = total % 60; setRepMin(m); setRepSec(s); commitRepeat(repType, repCount, m, s, repBpm); } }}
+                    onPressIn={() => { if (!isPlaying) startSecHold(1, repMin, repSec, (m, s) => { setRepMin(m); setRepSec(s); commitRepeat(repTypeRef.current, repCountRef.current, m, s, repBpmRef.current); }); }}
+                    onPressOut={() => clearSecTimers()}
+                    style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
+                  >
                     <Ionicons name="add" size={ms(12, 0.4)} color={C.textSecondary} />
                   </Pressable>
                 </>
