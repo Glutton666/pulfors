@@ -1582,17 +1582,17 @@ export function BarModeView({
             </Pressable>
             <View style={{ flex: 1 }} />
             {/* BPM 스테퍼 */}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, opacity: isPlaying ? 0.5 : 1 }} {...bpmSwipePan.panHandlers}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 3, opacity: isPlaying ? 0.5 : 1 }} {...bpmSwipePan.panHandlers}>
               <Pressable
                 onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.max(20, (repBpm ?? bpm ?? 120) - 1)); } }}
                 onPressIn={() => { if (!isPlaying) startBpmHold(-1); }}
                 onPressOut={() => clearBpmTimers()}
-                style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
+                style={{ width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: C.overlay10 }}
               >
-                <Ionicons name="remove" size={ms(13, 0.4)} color={C.accent} />
+                <Ionicons name="remove" size={ms(11, 0.4)} color={C.accent} />
               </Pressable>
               <TextInput
-                style={[styles.bpmInput, { color: C.accent, borderBottomColor: C.accent }]}
+                style={{ fontSize: 13, fontFamily: "SpaceGrotesk_700Bold", minWidth: 36, textAlign: "center", borderBottomWidth: 1.5, paddingVertical: 1, color: C.accent, borderBottomColor: C.accent }}
                 value={String(repBpm ?? bpm ?? 120)}
                 keyboardType="number-pad"
                 editable={!isPlaying}
@@ -1608,9 +1608,9 @@ export function BarModeView({
                 onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.min(300, (repBpm ?? bpm ?? 120) + 1)); } }}
                 onPressIn={() => { if (!isPlaying) startBpmHold(1); }}
                 onPressOut={() => clearBpmTimers()}
-                style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
+                style={{ width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: C.overlay10 }}
               >
-                <Ionicons name="add" size={ms(13, 0.4)} color={C.accent} />
+                <Ionicons name="add" size={ms(11, 0.4)} color={C.accent} />
               </Pressable>
             </View>
           </View>
