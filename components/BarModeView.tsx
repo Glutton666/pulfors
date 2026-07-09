@@ -1166,6 +1166,7 @@ export function BarModeView({
 
       {/* ── 심볼 드로어 (바 목록 위) ── */}
       <View style={[styles.drawerToggleRow, { borderBottomColor: C.overlay06, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+        {/* 좌: 드로어 토글 */}
         <Pressable
           onPress={() => {
             if (placingSymbol) { setPlacingSymbol(null); setBlockSelectFirst(null); return; }
@@ -1197,23 +1198,48 @@ export function BarModeView({
           )}
         </Pressable>
 
-        <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
-          {measureCount > 0 && (
-            <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium" }}>
-              {measureCount}{t("barModeView", "barsDisplay")}
-              {totalDurationDisplay ? `  ${totalDurationDisplay}` : ""}
-            </Text>
-          )}
-          {onExitBarMode && (
-            <Pressable
-              onPress={onExitBarMode}
-              hitSlop={10}
-              style={[styles.stpBtn, { backgroundColor: C.overlay08 }]}
-            >
-              <Ionicons name="close" size={ms(14, 0.4)} color={C.textSecondary} />
-            </Pressable>
+        {/* 중앙: 총 시간 + 바 개수 (또는 재생 중 경과/총) */}
+        <View style={{ flex: 1, alignItems: "center" }}>
+          {isPlaying ? (
+            <>
+              <Text style={{ color: C.accent, fontSize: ms(14, 0.4), fontFamily: "SpaceGrotesk_700Bold" }}>
+                {(() => {
+                  const em = Math.floor(barElapsedSec / 60);
+                  const es = barElapsedSec % 60;
+                  return `${em}:${String(es).padStart(2, "0")}`;
+                })()}
+                {totalDurationDisplay ? ` / ${totalDurationDisplay}` : ""}
+              </Text>
+              {measureCount > 0 && (
+                <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_400Regular" }}>
+                  {measureCount}{t("barModeView", "barsDisplay")}
+                </Text>
+              )}
+            </>
+          ) : (
+            <>
+              <Text style={{ color: C.accent, fontSize: ms(14, 0.4), fontFamily: "SpaceGrotesk_700Bold" }}>
+                {totalDurationDisplay ?? "—"}
+              </Text>
+              {measureCount > 0 && (
+                <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_400Regular" }}>
+                  {measureCount}{t("barModeView", "barsDisplay")}
+                </Text>
+              )}
+            </>
           )}
         </View>
+
+        {/* 우: 닫기 버튼 */}
+        {onExitBarMode && (
+          <Pressable
+            onPress={onExitBarMode}
+            hitSlop={10}
+            style={[styles.stpBtn, { backgroundColor: C.overlay08 }]}
+          >
+            <Ionicons name="close" size={ms(14, 0.4)} color={C.textSecondary} />
+          </Pressable>
+        )}
       </View>
 
       <Animated.View style={[styles.symbolDrawer, { height: drawerHeight, overflow: "hidden" }]}>
@@ -1692,31 +1718,6 @@ export function BarModeView({
           />
         </Pressable>
 
-        <View style={styles.clockArea}>
-          <View style={{ alignItems: "center" }}>
-            <Text style={[styles.clockText, { color: C.accent }]}>
-              {isPlaying
-                ? (() => {
-                    const em = Math.floor(barElapsedSec / 60);
-                    const es = barElapsedSec % 60;
-                    return `${em}:${String(es).padStart(2, "0")}`;
-                  })()
-                : (totalDurationDisplay ?? "—")
-              }
-            </Text>
-            {isPlaying && totalDurationDisplay && (
-              <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_400Regular" }}>
-                {"/ "}{totalDurationDisplay}
-              </Text>
-            )}
-            {!isPlaying && (
-              <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_400Regular" }}>
-                {beatsPerMeasure} {t("barModeView", "barsDisplay")}
-              </Text>
-            )}
-          </View>
-        </View>
-
         <BarPlayButton
           isPlaying={isPlaying}
           isPreparing={isPreparing}
@@ -2010,7 +2011,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   drawerToggleBtn: {
-    flex: 1,
     paddingRight: 8,
   },
   stpBtn: {
