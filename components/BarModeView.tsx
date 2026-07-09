@@ -414,35 +414,22 @@ function SwipeableBarRow({
                   ? `${formatBarCenterInfo(repeat, bpm, beatsPerMeasure) ?? String(Math.round(bpm))} [${progressCurrent + 1}/${progressTotal}]`
                   : (formatBarCenterInfo(repeat, bpm, beatsPerMeasure) ?? String(Math.round(bpm)))
                 }
+                {blockRepeatText ? `  ${blockRepeatText}` : ""}
                 {symbolBadges.length > 0 ? `  ${symbolBadges.join(" ")}` : ""}
               </Text>
             </View>
           </View>
 
-          {/* 우측: 블록 끝 괄호 + 반복 횟수 */}
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <View style={{ width: BRACKET_COL_W, alignItems: "center", justifyContent: "center" }}>
-              {blockEnd && (
-                <Text style={{
-                  fontSize: ms(15, 0.5),
-                  color: C.accent,
-                  fontFamily: "SpaceGrotesk_700Bold",
-                  opacity: 0.8,
-                  includeFontPadding: false,
-                }}>{"]"}</Text>
-              )}
-            </View>
-            {blockRepeatText ? (
+          {/* 우측 블록 끝 괄호 컬럼 */}
+          <View style={{ width: BRACKET_COL_W, alignItems: "center", justifyContent: "center" }}>
+            {blockEnd && (
               <Text style={{
-                fontSize: ms(10, 0.4),
+                fontSize: ms(15, 0.5),
                 color: C.accent,
                 fontFamily: "SpaceGrotesk_700Bold",
-                opacity: 0.85,
-                minWidth: 28,
-                textAlign: "left",
-              }}>{blockRepeatText}</Text>
-            ) : (
-              <View style={{ width: 28 }} />
+                opacity: 0.8,
+                includeFontPadding: false,
+              }}>{"]"}</Text>
             )}
           </View>
         </Pressable>
