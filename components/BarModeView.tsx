@@ -1477,10 +1477,10 @@ export function BarModeView({
           </Pressable>
         </View>
 
-        {/* ① 타입 토글 행 */}
+        {/* ① 타입 토글 + ×N 스테퍼 행 */}
         {!editorCollapsed && (
-          <View style={[styles.inlineRepeatPanel, { borderBottomWidth: 0, opacity: isPlaying ? 0.5 : 1 }]}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <View style={[styles.inlineRepeatPanel, { borderBottomWidth: 0, flexDirection: "row", alignItems: "center", opacity: isPlaying ? 0.5 : 1 }]}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
               <Ionicons
                 name={editingRepeat ? "repeat" : "repeat-outline"}
                 size={ms(12, 0.4)}
@@ -1498,37 +1498,7 @@ export function BarModeView({
                 </Pressable>
               ))}
             </View>
-          </View>
-        )}
-
-        {/* ② 저장/재생 + 횟수/시간 스테퍼 행 (박자 기호 위) */}
-        {!editorCollapsed && (
-          <View style={[styles.inlineRepeatPanel, { borderBottomWidth: 0, flexDirection: "row", alignItems: "center", gap: 6 }]}>
-            <Pressable onPress={handleSaveTap} hitSlop={10} testID="bar-save-reset" disabled={isPlaying} style={{ padding: 4 }}>
-              <Ionicons
-                name={saveFlashVisible ? "checkmark-circle" : "bookmark-outline"}
-                size={ms(18, 0.4)}
-                color={saveFlashVisible ? "#4CAF50" : isPlaying ? C.textTertiary : C.accent}
-              />
-            </Pressable>
-            <BarPlayButton
-              isPlaying={isPlaying}
-              isPreparing={isPreparing}
-              barLoopMode={barLoopMode}
-              onTogglePlay={onTogglePlay}
-              onBarLoopModeChange={onBarLoopModeChange}
-              blockPlayMode={blockPlayMode}
-              onBlockPlayModeChange={onBlockPlayModeChange}
-              baseStyle={[styles.playBtn, { backgroundColor: C.backgroundSecondary }]}
-              accentColor={C.accent}
-              dangerColor={C.danger}
-              backgroundColor={C.background}
-              iconSize={ms(22, 0.4)}
-              badgeIconSize={ms(9, 0.4)}
-              t={t}
-            />
-            <View style={{ flex: 1 }} />
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, opacity: isPlaying ? 0.5 : 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
               {repType === "count" ? (
                 <>
                   <Pressable onPress={() => { if (!isPlaying) { const c = Math.max(1, repCount - 1); setRepCount(c); commitRepeat(repType, c, repMin, repSec, repBpm); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
@@ -1561,61 +1531,87 @@ export function BarModeView({
           </View>
         )}
 
-        {/* ③ BPM + 박자기호 행 */}
+        {/* ② 박자기호 N/4 + 재생 + 저장 + BPM 스테퍼 행 */}
         {!editorCollapsed && (
-          <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, opacity: isPlaying ? 0.5 : 1 }]}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, flexDirection: "row", alignItems: "center", gap: 6 }]}>
+            {/* N/4 박자기호 */}
+            <Pressable
+              onLongPress={() => {
+                if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                onDenominatorCycle?.();
+              }}
+              delayLongPress={500}
+              disabled={isPlaying}
+              hitSlop={8}
+              style={{ flexDirection: "row", alignItems: "center", gap: 2, paddingVertical: 2 }}
+            >
+              <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(28, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
+                {editingSubdivisionCount}
+              </Text>
+              <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(28, 0.4), color: C.textTertiary }}>
+                /
+              </Text>
+              <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(28, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
+                {beatDenominator}
+              </Text>
+            </Pressable>
+            {/* 재생 버튼 */}
+            <BarPlayButton
+              isPlaying={isPlaying}
+              isPreparing={isPreparing}
+              barLoopMode={barLoopMode}
+              onTogglePlay={onTogglePlay}
+              onBarLoopModeChange={onBarLoopModeChange}
+              blockPlayMode={blockPlayMode}
+              onBlockPlayModeChange={onBlockPlayModeChange}
+              baseStyle={[styles.playBtn, { backgroundColor: C.backgroundSecondary }]}
+              accentColor={C.accent}
+              dangerColor={C.danger}
+              backgroundColor={C.background}
+              iconSize={ms(26, 0.4)}
+              badgeIconSize={ms(10, 0.4)}
+              t={t}
+            />
+            {/* 저장 버튼 */}
+            <Pressable onPress={handleSaveTap} hitSlop={10} testID="bar-save-reset" disabled={isPlaying} style={{ padding: 4 }}>
+              <Ionicons
+                name={saveFlashVisible ? "checkmark-circle" : "bookmark-outline"}
+                size={ms(20, 0.4)}
+                color={saveFlashVisible ? "#4CAF50" : isPlaying ? C.textTertiary : C.accent}
+              />
+            </Pressable>
+            <View style={{ flex: 1 }} />
+            {/* BPM 스테퍼 */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, opacity: isPlaying ? 0.5 : 1 }} {...bpmSwipePan.panHandlers}>
               <Pressable
-                onLongPress={() => {
-                  if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                  onDenominatorCycle?.();
-                }}
-                delayLongPress={500}
-                disabled={isPlaying}
-                hitSlop={8}
-                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingVertical: 2 }}
+                onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.max(20, (repBpm ?? bpm ?? 120) - 1)); } }}
+                onPressIn={() => { if (!isPlaying) startBpmHold(-1); }}
+                onPressOut={() => clearBpmTimers()}
+                style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
               >
-                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(28, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
-                  {editingSubdivisionCount}
-                </Text>
-                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(28, 0.4), color: C.textTertiary }}>
-                  /
-                </Text>
-                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(28, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
-                  {beatDenominator}
-                </Text>
+                <Ionicons name="remove" size={ms(13, 0.4)} color={C.accent} />
               </Pressable>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }} {...bpmSwipePan.panHandlers}>
-                <Pressable
-                  onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.max(20, (repBpm ?? bpm ?? 120) - 1)); } }}
-                  onPressIn={() => { if (!isPlaying) startBpmHold(-1); }}
-                  onPressOut={() => clearBpmTimers()}
-                  style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
-                >
-                  <Ionicons name="remove" size={ms(13, 0.4)} color={C.accent} />
-                </Pressable>
-                <TextInput
-                  style={[styles.bpmInput, { color: C.accent, borderBottomColor: C.accent }]}
-                  value={String(repBpm ?? bpm ?? 120)}
-                  keyboardType="number-pad"
-                  editable={!isPlaying}
-                  onEndEditing={e => {
-                    if (isPlaying) return;
-                    const v = parseInt(e.nativeEvent.text, 10);
-                    if (!isNaN(v) && v >= 20 && v <= 300) { applyRepBpm(v); }
-                    else if (!e.nativeEvent.text) { setRepBpm(null); commitRepeat(repType, repCount, repMin, repSec, null); }
-                  }}
-                  selectTextOnFocus
-                />
-                <Pressable
-                  onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.min(300, (repBpm ?? bpm ?? 120) + 1)); } }}
-                  onPressIn={() => { if (!isPlaying) startBpmHold(1); }}
-                  onPressOut={() => clearBpmTimers()}
-                  style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
-                >
-                  <Ionicons name="add" size={ms(13, 0.4)} color={C.accent} />
-                </Pressable>
-              </View>
+              <TextInput
+                style={[styles.bpmInput, { color: C.accent, borderBottomColor: C.accent }]}
+                value={String(repBpm ?? bpm ?? 120)}
+                keyboardType="number-pad"
+                editable={!isPlaying}
+                onEndEditing={e => {
+                  if (isPlaying) return;
+                  const v = parseInt(e.nativeEvent.text, 10);
+                  if (!isNaN(v) && v >= 20 && v <= 300) { applyRepBpm(v); }
+                  else if (!e.nativeEvent.text) { setRepBpm(null); commitRepeat(repType, repCount, repMin, repSec, null); }
+                }}
+                selectTextOnFocus
+              />
+              <Pressable
+                onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.min(300, (repBpm ?? bpm ?? 120) + 1)); } }}
+                onPressIn={() => { if (!isPlaying) startBpmHold(1); }}
+                onPressOut={() => clearBpmTimers()}
+                style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
+              >
+                <Ionicons name="add" size={ms(13, 0.4)} color={C.accent} />
+              </Pressable>
             </View>
           </View>
         )}
@@ -2237,9 +2233,9 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
   },
   playBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     alignItems: "center",
     justifyContent: "center",
   },
