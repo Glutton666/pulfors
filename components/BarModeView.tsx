@@ -1331,14 +1331,28 @@ export function BarModeView({
           const blockStart = blockEntries.some(e => e.isStart);
           const blockEnd = blockEntries.some(e => e.isEnd);
           const startEntry = blockEntries.find(e => e.isStart);
-          const blockRepeatText = startEntry
-            ? (() => {
-                const lb = loopBlocks[startEntry.blockIdx];
-                if (!lb) return null;
-                if (lb.type === "count" && lb.value > 1) return `×${lb.value}`;
-                return null;
-              })()
-            : null;
+          const blockRepeatText = (() => {
+            // 재생 중 활성 블록: 끝 바(])에 카운트다운 표시
+            if (isPlaying && progressInfo && progressInfo.blockIndex >= 0) {
+              const activeEndEntry = blockEntries.find(
+                e => e.isEnd && e.blockIdx === progressInfo.blockIndex,
+              );
+              if (activeEndEntry) {
+                const lb = loopBlocks[activeEndEntry.blockIdx];
+                if (lb?.type === "count" && lb.value > 1) {
+                  const remaining =
+                    progressInfo.blockRepeatTotal - progressInfo.blockRepeatCurrent;
+                  return remaining > 0 ? `×${remaining}` : null;
+                }
+              }
+            }
+            // 정지 중 or 다른 블록 활성: 시작 바([)에 정적 표시
+            if (startEntry) {
+              const lb = loopBlocks[startEntry.blockIdx];
+              if (lb?.type === "count" && lb.value > 1) return `×${lb.value}`;
+            }
+            return null;
+          })();
           const badges = getSymbolBadges(beat);
           const isCurrent = isPlaying && currentBeat === beat;
           const isEditing = barStartBeat === beat && !isPlaying;
