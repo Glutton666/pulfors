@@ -1088,15 +1088,19 @@ export function BarModeView({
     ? (editingRepeat?.layers ?? [])
     : draftLayers;
 
+  const MAX_LAYERS = 6;
+
   const addLayer = useCallback(() => {
     if (editingBeat === null) {
       // draft 모드
+      if (draftLayers.length >= MAX_LAYERS) return;
       const layers = [...draftLayers, { beatType: "normal" as BeatType }];
       setDraftLayers(layers);
       setActiveLayerTab(layers.length);
       return;
     }
     const existing = barRepeats[editingBeat] ?? { type: "count" as const, value: 1 };
+    if ((existing.layers ?? []).length >= MAX_LAYERS) return;
     const layers = [...(existing.layers ?? []), { beatType: "normal" as BeatType }];
     onBarRepeatChange(editingBeat, { ...existing, layers });
     setActiveLayerTab(layers.length);
@@ -1450,7 +1454,7 @@ export function BarModeView({
               </Text>
             </Pressable>
           ))}
-          {!isPlaying && (
+          {!isPlaying && editingLayers.length < MAX_LAYERS && (
             <Pressable onPress={addLayer} style={styles.layerTab} hitSlop={8}>
               <Text style={{ color: C.textTertiary, fontSize: FontSize.micro }}>+</Text>
             </Pressable>
