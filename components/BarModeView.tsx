@@ -1759,11 +1759,6 @@ export function BarModeView({
           );
         })())}
 
-        {tempoLabel ? (
-          <Text style={{ color: C.accentMuted, fontSize: ms(10, 0.3), textAlign: "center", paddingVertical: 2 }}>
-            {tempoLabel}
-          </Text>
-        ) : null}
       </Animated.View>
 
 
