@@ -40,10 +40,11 @@ type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 function formatBarCenterInfo(
   repeat: BarRepeat | null,
   bpm: number,
-  beatsPerMeasure: number,
+  _beatsPerMeasure: number,
 ): string | null {
   const effectiveBpm = (repeat?.bpm && repeat.bpm > 0) ? repeat.bpm : bpm;
-  const measureSec = beatsPerMeasure * 60 / Math.max(1, effectiveBpm);
+  // 1바 = 엔진 1비트 = 60 / BPM 초
+  const barSec = 60 / Math.max(1, effectiveBpm);
   const bpmStr = String(Math.round(effectiveBpm));
 
   if (!repeat || (repeat.type === "count" && repeat.value <= 1 && !repeat.bpm)) {
@@ -51,14 +52,14 @@ function formatBarCenterInfo(
   }
 
   if (repeat.type === "count") {
-    // 총 시간 = 바 1개 시간 × 반복 횟수
-    const totalSec = measureSec * Math.max(1, repeat.value);
+    // 총 시간 = 1바 시간 × 반복 횟수
+    const totalSec = barSec * Math.max(1, repeat.value);
     const totalMm = Math.floor(totalSec / 60).toString().padStart(2, "0");
     const totalSs = Math.round(totalSec % 60).toString().padStart(2, "0");
     return `${bpmStr} / ×${repeat.value}(${totalMm}:${totalSs})`;
   } else {
-    // duration 타입: 설정 시간이 총 시간, 횟수는 그 안에 몇 번 들어가는지
-    const count = measureSec > 0 ? Math.round(repeat.value / measureSec) : 0;
+    // duration 타입: 설정 시간이 총 시간, 그 안에 몇 바 들어가는지
+    const count = barSec > 0 ? Math.round(repeat.value / barSec) : 0;
     const totalMm = Math.floor(repeat.value / 60).toString().padStart(2, "0");
     const totalSs = Math.round(repeat.value % 60).toString().padStart(2, "0");
     return `${bpmStr} / ×${count}(${totalMm}:${totalSs})`;
@@ -661,7 +662,7 @@ export function BarModeView({
     for (let i = 0; i < beatsPerMeasure; i++) {
       const rep = barRepeats[i];
       const effectiveBpm = (rep?.bpm && rep.bpm > 0) ? rep.bpm : bpm;
-      const barSec = (beatsPerMeasure / effectiveBpm) * 60;
+      const barSec = 60 / effectiveBpm; // 1바 = 엔진 1비트 = 60/BPM 초
       if (!rep || rep.type === "count") {
         totalSec += barSec * (rep?.value ?? 1);
       } else {
