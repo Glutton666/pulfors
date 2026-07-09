@@ -325,19 +325,6 @@ function SwipeableBarRow({
             },
           ]}
         >
-          {/* 좌측 블록 시작 괄호 컬럼 */}
-          <View style={{ width: BRACKET_COL_W, alignItems: "center", justifyContent: "center" }}>
-            {blockStart && (
-              <Text style={{
-                fontSize: ms(15, 0.5),
-                color: C.accent,
-                fontFamily: "SpaceGrotesk_700Bold",
-                opacity: 0.8,
-                includeFontPadding: false,
-              }}>{"["}</Text>
-            )}
-          </View>
-
           {/* 바 번호 + 드래그 핸들 */}
           <View
             style={[styles.barRowNumber, { width: ms(32, 0.5), paddingHorizontal: 2 }]}
@@ -371,6 +358,19 @@ function SwipeableBarRow({
                 <View key={i} style={{ width: 10, height: 1.5, borderRadius: 1, backgroundColor: isDragging ? "#5b9cf6" : C.textTertiary }} />
               ))}
             </View>
+          </View>
+
+          {/* 좌측 블록 시작 괄호 컬럼 — 바 번호 바깥, 바 내용 안쪽 */}
+          <View style={{ width: BRACKET_COL_W, alignItems: "center", justifyContent: "center" }}>
+            {blockStart && (
+              <Text style={{
+                fontSize: ms(15, 0.5),
+                color: C.accent,
+                fontFamily: "SpaceGrotesk_700Bold",
+                opacity: 0.8,
+                includeFontPadding: false,
+              }}>{"["}</Text>
+            )}
           </View>
 
           {/* 중앙: 비트 셀 (info overlay 포함) */}
