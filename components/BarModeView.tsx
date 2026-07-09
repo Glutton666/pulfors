@@ -360,20 +360,7 @@ function SwipeableBarRow({
             </View>
           </View>
 
-          {/* 좌측 블록 시작 괄호 컬럼 — 바 번호 바깥, 바 내용 안쪽 */}
-          <View style={{ width: BRACKET_COL_W, alignItems: "center", justifyContent: "center" }}>
-            {blockStart && (
-              <Text style={{
-                fontSize: ms(15, 0.5),
-                color: C.accent,
-                fontFamily: "SpaceGrotesk_700Bold",
-                opacity: 0.8,
-                includeFontPadding: false,
-              }}>{"["}</Text>
-            )}
-          </View>
-
-          {/* 중앙: 비트 셀 (info overlay 포함) */}
+          {/* 중앙: 비트 셀 (info overlay + 브래킷 절대 오버레이 포함) */}
           <View style={[styles.barRowCells, { height: rowHeight != null ? Math.max(20, rowHeight - 16) : 28 }]}>
             {cells.map((ct, ci) => {
               const isLast = ci === cells.length - 1;
@@ -398,7 +385,7 @@ function SwipeableBarRow({
               );
             })}
 
-            {/* 비트 셀 위 info overlay — 오버레이 제거, 텍스트 그림자로 가독성 확보 */}
+            {/* 비트 셀 위 info overlay */}
             <View style={[styles.barCellOverlay, { backgroundColor: "transparent" }]} pointerEvents="none">
               <Text
                 style={[styles.barCenterInfo, {
@@ -414,22 +401,38 @@ function SwipeableBarRow({
                   ? `${formatBarCenterInfo(repeat, bpm, beatsPerMeasure) ?? String(Math.round(bpm))} [${progressCurrent + 1}/${progressTotal}]`
                   : (formatBarCenterInfo(repeat, bpm, beatsPerMeasure) ?? String(Math.round(bpm)))
                 }
-                {blockRepeatText ? `  ${blockRepeatText}` : ""}
                 {symbolBadges.length > 0 ? `  ${symbolBadges.join(" ")}` : ""}
               </Text>
             </View>
-          </View>
 
-          {/* 우측 블록 끝 괄호 컬럼 */}
-          <View style={{ width: BRACKET_COL_W, alignItems: "center", justifyContent: "center" }}>
+            {/* 좌측 블록 시작 괄호 — 셀 왼쪽 테두리에 붙는 절대 오버레이 */}
+            {blockStart && (
+              <View
+                style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 10, alignItems: "center", justifyContent: "center" }}
+                pointerEvents="none"
+              >
+                <Text style={{ fontSize: ms(14, 0.5), color: C.accent, fontFamily: "SpaceGrotesk_700Bold", opacity: 0.85, includeFontPadding: false }}>{"["}</Text>
+              </View>
+            )}
+
+            {/* 우측 블록 끝 괄호 + 반복 횟수 뱃지 — 셀 오른쪽 테두리에 붙는 절대 오버레이 */}
             {blockEnd && (
-              <Text style={{
-                fontSize: ms(15, 0.5),
-                color: C.accent,
-                fontFamily: "SpaceGrotesk_700Bold",
-                opacity: 0.8,
-                includeFontPadding: false,
-              }}>{"]"}</Text>
+              <View
+                style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 10, alignItems: "center", justifyContent: "center" }}
+                pointerEvents="none"
+              >
+                <Text style={{ fontSize: ms(14, 0.5), color: C.accent, fontFamily: "SpaceGrotesk_700Bold", opacity: 0.85, includeFontPadding: false }}>{"]"}</Text>
+              </View>
+            )}
+
+            {/* 반복 횟수 뱃지 (×N) — 오른쪽 끝 상단 */}
+            {blockRepeatText && (
+              <View
+                style={{ position: "absolute", right: blockEnd ? 10 : 4, top: 2 }}
+                pointerEvents="none"
+              >
+                <Text style={{ fontSize: ms(9, 0.4), color: C.accent, fontFamily: "SpaceGrotesk_700Bold", opacity: 0.9 }}>{blockRepeatText}</Text>
+              </View>
             )}
           </View>
         </Pressable>
@@ -769,6 +772,12 @@ export function BarModeView({
   const handleBeatsDecrement = useCallback(() => {
     if (beatsPerMeasure > MIN_BEATS) onBeatsChange(beatsPerMeasure - 1);
   }, [beatsPerMeasure, onBeatsChange]);
+
+  const deleteBlock = useCallback(() => {
+    if (blockEditingIdx === null) return;
+    onLoopBlocksChange(loopBlocks.filter((_, i) => i !== blockEditingIdx));
+    setBlockEditingIdx(null);
+  }, [blockEditingIdx, loopBlocks, onLoopBlocksChange]);
 
   const saveBlock = useCallback(() => {
     if (blockEditingIdx === null) return;
@@ -1789,6 +1798,9 @@ export function BarModeView({
                 {t("barModeView", "blockEditTitle").replace("{{n}}", String((blockEditingIdx ?? 0) + 1))}
               </Text>
               <View style={{ flex: 1 }} />
+              <Pressable onPress={deleteBlock} hitSlop={8} style={{ marginRight: 6 }}>
+                <Ionicons name="trash-outline" size={ms(15, 0.4)} color="#e05c5c" />
+              </Pressable>
               <Pressable onPress={() => setBlockEditingIdx(null)} hitSlop={8}>
                 <Ionicons name="close" size={ms(14, 0.4)} color={C.textSecondary} />
               </Pressable>
