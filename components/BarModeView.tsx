@@ -1505,6 +1505,14 @@ export function BarModeView({
             </Pressable>
           )}
 
+          <Pressable onPress={handleSaveTap} hitSlop={10} testID="bar-save-reset" disabled={isPlaying} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
+            <Ionicons
+              name={saveFlashVisible ? "checkmark-circle" : "bookmark-outline"}
+              size={ms(13, 0.4)}
+              color={saveFlashVisible ? "#4CAF50" : isPlaying ? C.textTertiary : C.accent}
+            />
+          </Pressable>
+
           <Pressable onPress={() => setEditorCollapsed(v => !v)} hitSlop={10} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
             <Ionicons name={editorCollapsed ? "chevron-up" : "chevron-down"} size={ms(13, 0.4)} color={C.textTertiary + "99"} />
           </Pressable>
@@ -1598,14 +1606,6 @@ export function BarModeView({
                 {beatDenominator}
               </Text>
             </Pressable>
-            {/* 저장 버튼 */}
-            <Pressable onPress={handleSaveTap} hitSlop={10} testID="bar-save-reset" disabled={isPlaying} style={{ padding: 4 }}>
-              <Ionicons
-                name={saveFlashVisible ? "checkmark-circle" : "bookmark-outline"}
-                size={ms(20, 0.4)}
-                color={saveFlashVisible ? "#4CAF50" : isPlaying ? C.textTertiary : C.accent}
-              />
-            </Pressable>
             <View style={{ flex: 1 }} />
             {/* 재생 버튼 — 중앙 */}
             <BarPlayButton
@@ -1625,18 +1625,18 @@ export function BarModeView({
               t={t}
             />
             <View style={{ flex: 1 }} />
-            {/* BPM 스테퍼 */}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 3, opacity: isPlaying ? 0.5 : 1 }} {...bpmSwipePan.panHandlers}>
+            {/* BPM 스테퍼 — N/4 동일 폰트 크기 */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, opacity: isPlaying ? 0.5 : 1 }} {...bpmSwipePan.panHandlers}>
               <Pressable
                 onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.max(20, (repBpm ?? bpm ?? 120) - 1)); } }}
                 onPressIn={() => { if (!isPlaying) startBpmHold(-1); }}
                 onPressOut={() => clearBpmTimers()}
-                style={{ width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: C.overlay10 }}
+                style={{ width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: C.overlay10 }}
               >
-                <Ionicons name="remove" size={ms(11, 0.4)} color={C.accent} />
+                <Ionicons name="remove" size={ms(13, 0.4)} color={C.accent} />
               </Pressable>
               <TextInput
-                style={{ fontSize: 13, fontFamily: "SpaceGrotesk_700Bold", width: 36, textAlign: "center", borderBottomWidth: 1.5, paddingVertical: 1, color: C.accent, borderBottomColor: C.accent }}
+                style={{ fontSize: ms(28, 0.4), fontFamily: "SpaceGrotesk_700Bold", width: 56, textAlign: "center", borderBottomWidth: 1.5, paddingVertical: 1, color: C.accent, borderBottomColor: C.accent }}
                 value={String(repBpm ?? bpm ?? 120)}
                 keyboardType="number-pad"
                 editable={!isPlaying}
@@ -1652,9 +1652,9 @@ export function BarModeView({
                 onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.min(300, (repBpm ?? bpm ?? 120) + 1)); } }}
                 onPressIn={() => { if (!isPlaying) startBpmHold(1); }}
                 onPressOut={() => clearBpmTimers()}
-                style={{ width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: C.overlay10 }}
+                style={{ width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: C.overlay10 }}
               >
-                <Ionicons name="add" size={ms(11, 0.4)} color={C.accent} />
+                <Ionicons name="add" size={ms(13, 0.4)} color={C.accent} />
               </Pressable>
             </View>
           </View>
