@@ -5231,6 +5231,10 @@ export default function MetronomeScreen() {
         bpm={bpm}
         beatsPerMeasure={beatsPerMeasure}
         soundSet={soundSet.startsWith("custom") ? "classic" : soundSet as any}
+        onOpenStemSep={() => {
+          setRecorderTarget(null);
+          setTimeout(() => openExclusive("stemSep"), 50);
+        }}
       />
       )}
 
@@ -5624,7 +5628,6 @@ export default function MetronomeScreen() {
                 if (key.startsWith("custom")) delete clickPCMCacheRef.current[key];
               }
             }}
-            onOpenStemSep={() => openExclusive("stemSep")}
             barCellOpacity={barCellOpacity}
             barRowHeight={barRowHeight}
             onEasterEggTrigger={handleEasterEggTrigger}

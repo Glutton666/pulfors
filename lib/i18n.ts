@@ -514,6 +514,7 @@ export const translations = {
     beatNote: { ko: "비트 {0}, 노트 {1}", en: "Beat {0}, Note {1}" },
     record: { ko: "녹음", en: "Record" },
     import: { ko: "불러오기", en: "Import" },
+    stemSep: { ko: "음원 분리", en: "Stem Separation" },
     removeSample: { ko: "샘플 삭제", en: "Remove Sample" },
     getReady: { ko: "준비...", en: "Get ready..." },
     maxSeconds: { ko: "최대 {0}초", en: "Max {0}s" },
@@ -878,7 +879,6 @@ export const translations = {
     hintLongPress:       { ko: "바를 길게 누르면 BPM·반복 옵션을 설정할 수 있습니다", en: "Long-press a bar to set BPM and repeat options" },
     soundSetPickerTitle: { ko: "사운드 세트 선택", en: "Select Sound Set" },
     soundSetPickerLayer: { ko: "레이어 사운드 선택", en: "Select Layer Sound" },
-    soundSetPickerStemSep: { ko: "음원 분리로 샘플 만들기 →", en: "Create Samples via Stem Separation →" },
   },
   bpmDetect: {
     title:      { ko: "주변 BPM 감지", en: "Detect BPM" },
