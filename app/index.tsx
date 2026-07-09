@@ -1999,7 +1999,8 @@ export default function MetronomeScreen() {
   const handleBeatDenominatorCycle = useCallback(() => {
     setBeatDenominator((prev) => {
       const next: 2 | 4 | 8 = prev === 4 ? 8 : prev === 8 ? 2 : 4;
-      // baseBpmRef는 항상 /4 기준값 → newBpm = base × (4 / next)
+      // 현재 BPM과 현재 분모로 /4 기준값을 재계산 (stale ref 방지)
+      baseBpmRef.current = Math.round(bpm * (prev / 4));
       const newBpm = Math.round(Math.min(300, Math.max(20, baseBpmRef.current * (4 / next))));
       setBpm(newBpm);
       engineRef.current?.setBpm(newBpm);
@@ -3432,16 +3433,17 @@ export default function MetronomeScreen() {
       setSubdivisionPattern(pattern);
       if (barModeRef.current && barStartBeatRef.current !== null) {
         const target = barStartBeatRef.current;
-        const newSubs = { ...beatSubdivisions };
-        newSubs[String(target)] = [...pattern];
-        setBeatSubdivisions(newSubs);
+        setBeatSubdivisions((prev) => {
+          const newSubs = { ...prev, [String(target)]: [...pattern] };
+          barConfigRef.current.beatSubdivisions = newSubs;
+          return newSubs;
+        });
         engineRef.current?.setBeatSubdivision(target, pattern);
-        barConfigRef.current.beatSubdivisions = newSubs;
       } else {
         persistSettings({ subdivisionPattern: pattern });
       }
     },
-    [persistSettings, beatSubdivisions]
+    [persistSettings]
   );
 
   // 바 선택(barStartBeat) 변경 시, 드로어의 서브디비전 패턴을 그 마디에 저장된
