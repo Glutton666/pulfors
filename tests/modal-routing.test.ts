@@ -38,6 +38,7 @@ test("modal-routing: 어떤 activeModal 값이든 visible 모달은 최대 1개"
   const allValues: ActiveModal[] = [
     "settings", "menu", "signalGen", "tuningGuide", "practiceBook", "workUp",
     "onboarding", "moreMenu", "drumKit", "scheduledStart", "fadeOut", "tempoQuiz",
+    "bpmDetect", "stemSep",
     null,
   ];
   for (const modal of allValues) {
@@ -63,6 +64,8 @@ test("modal-routing: 각 activeModal 값은 정확히 해당 show* 플래그만 
     ["scheduledStart", "showScheduledStart"],
     ["fadeOut",        "showFadeOut"],
     ["tempoQuiz",      "showTempoQuiz"],
+    ["bpmDetect",      "showBpmDetect"],
+    ["stemSep",        "showStemSep"],
   ];
   for (const [modal, expectedKey] of cases) {
     const flags = deriveModalFlags(modal);
@@ -104,6 +107,7 @@ const MORE_MENU_ITEMS: Array<[ActiveModal, keyof ReturnType<typeof deriveModalFl
   ["drumKit",        "showDrumKit"],
   ["tempoQuiz",      "showTempoQuiz"],
   ["bpmDetect",      "showBpmDetect"],
+  ["stemSep",        "showStemSep"],
 ];
 
 for (const [item, flagKey] of MORE_MENU_ITEMS) {
@@ -914,6 +918,7 @@ test("android-appstate: 모든 모달 상태에서 foreground 복귀 → back-pr
     "settings", "menu", "signalGen", "tuningGuide",
     "practiceBook", "workUp", "moreMenu", "drumKit",
     "scheduledStart", "fadeOut", "tempoQuiz", "onboarding",
+    "bpmDetect", "stemSep",
     null,
   ];
 

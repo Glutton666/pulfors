@@ -38,9 +38,10 @@ export interface MoreMenuModalProps {
   onBpmDetect: () => void;
   onScoreMode: () => void;
   onStageMode: () => void;
+  onStemSep: () => void;
 }
 
-export function MoreMenuModal({ visible, onClose, onScheduledStart, onFadeOut, onTempoQuiz, onDrumKit, onBpmDetect, onScoreMode, onStageMode }: MoreMenuModalProps) {
+export function MoreMenuModal({ visible, onClose, onScheduledStart, onFadeOut, onTempoQuiz, onDrumKit, onBpmDetect, onScoreMode, onStageMode, onStemSep }: MoreMenuModalProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -163,6 +164,21 @@ export function MoreMenuModal({ visible, onClose, onScheduledStart, onFadeOut, o
             <View style={{ flex: 1 }}>
               <Text style={[styles.itemTitle, { color: C.text }]}>{t("stageMode", "title")}</Text>
               <Text style={[styles.itemHint, { color: C.textSecondary }]}>{t("stageMode", "menuHint")}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={S.ms(18, 0.3)} color={C.textSecondary} />
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.item, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
+            onPress={onStemSep}
+            accessibilityRole="button"
+            accessibilityLabel={t("stemSep", "title")}
+            testID="more-menu-stemSep"
+          >
+            <MaterialCommunityIcons name="layers-triple-outline" size={S.ms(22, 0.4)} color={C.accent} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.itemTitle, { color: C.text }]}>{t("stemSep", "title")}</Text>
+              <Text style={[styles.itemHint, { color: C.textSecondary }]}>{t("stemSep", "menuHint")}</Text>
             </View>
             <Ionicons name="chevron-forward" size={S.ms(18, 0.3)} color={C.textSecondary} />
           </Pressable>

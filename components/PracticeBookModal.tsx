@@ -39,6 +39,8 @@ interface PracticeBookModalProps {
   currentConfig: Omit<PracticeEntry, "id" | "label" | "createdAt"> | null;
   username?: string;
   onOpenScore?: (scoreId: string) => void;
+  /** Opens the stem-separation modal pre-loaded with a note-sample URI */
+  onStemSep?: (uri: string, name: string) => void;
 }
 
 const BEAT_COLORS: Record<BeatType, string> = {
@@ -95,6 +97,7 @@ function SwipeableEntry({
   onShare,
   onExport,
   onSetGoal,
+  onStemSep,
   accentColor,
   openItemId,
   setOpenItemId,
@@ -112,6 +115,7 @@ function SwipeableEntry({
   onShare: (entry: PracticeEntry) => void;
   onExport: (entry: PracticeEntry) => void;
   onSetGoal?: (entry: PracticeEntry) => void;
+  onStemSep?: (entry: PracticeEntry) => void;
   accentColor: string;
   openItemId: string | null;
   setOpenItemId: (id: string | null) => void;
@@ -244,6 +248,20 @@ function SwipeableEntry({
           >
             <Ionicons name="flag-outline" size={S.ms(18, 0.4)} color="#fff" />
             <Text style={styles.swipeActionText}>{t("practiceBook", "goalSet")}</Text>
+          </Pressable>
+        )}
+        {onStemSep && (item.mode === "note") && Object.keys(item.noteSamples ?? {}).length > 0 && (
+          <Pressable
+            style={[styles.swipeAction, { backgroundColor: "#0EA5E9" }]}
+            onPress={() => {
+              Animated.spring(translateX, { toValue: 0, useNativeDriver: true, friction: 8 }).start();
+              isOpenRef.current = false;
+              setOpenItemId(null);
+              onStemSep(item);
+            }}
+          >
+            <MaterialCommunityIcons name="layers-triple-outline" size={S.ms(18, 0.4)} color="#fff" />
+            <Text style={styles.swipeActionText}>{t("stemSep", "title")}</Text>
           </Pressable>
         )}
         <Pressable
@@ -493,6 +511,7 @@ export function PracticeBookModal({
   currentConfig,
   username,
   onOpenScore,
+  onStemSep,
 }: PracticeBookModalProps) {
   const insets = useSafeAreaInsets();
   const { colors: C } = useTheme();
@@ -656,6 +675,11 @@ export function PracticeBookModal({
       onSetGoal={onSetGoal ? (entry) => {
         setGoalEntry(entry);
         setGoalMinutes("10");
+      } : undefined}
+      onStemSep={onStemSep ? (entry) => {
+        const samples = entry.noteSamples ?? {};
+        const firstKey = Object.keys(samples)[0];
+        if (firstKey) onStemSep(samples[firstKey], entry.label || firstKey);
       } : undefined}
       accentColor={C.accent}
       openItemId={openItemId}
