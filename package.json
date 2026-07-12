@@ -15,8 +15,7 @@
     "server:build": "tsc --project tsconfig.server.json",
     "server:prod": "node dist/server/index.js",
     "expo:dev": "expo start --tunnel",
-    "expo:static:build": "expo export --platform web",
-    "eas-build-pre-install": "npm install -g npm@latest"
+    "expo:static:build": "expo export --platform web"
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
