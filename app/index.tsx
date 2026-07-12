@@ -1779,6 +1779,7 @@ export default function MetronomeScreen() {
       };
 
       setVolume(0.5);
+      volumeRef.current = 0.5;
       setSampleVolume(0.8);
       sampleVolumeRef.current = 0.8;
       setBackgroundPlay(false);
