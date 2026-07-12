@@ -16,6 +16,13 @@
     "production": {
       "node": "20.19.4",
       "autoIncrement": true
+    },
+    "production-apk": {
+      "node": "20.19.4",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {
