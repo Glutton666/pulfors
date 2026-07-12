@@ -754,7 +754,7 @@ export default function MetronomeScreen() {
           const result = await syncStereoArtifact(key, uri, channel);
           const isFileUri = result.uri.startsWith("file://");
           const player = createAudioPlayer(result.uri, { downloadFirst: isFileUri });
-          player.volume = sampleVolumeRef.current * 10.0;
+          player.volume = Math.max(0, Math.min(1, sampleVolumeRef.current));
           noteSampleSoundsRef.current[key] = player;
         } catch (e) {
           captureBreadcrumb({ category: "sample.preload", message: "Failed to preload", level: "warning", data: { key, error: String(e) } });
@@ -994,7 +994,7 @@ export default function MetronomeScreen() {
         try {
           const isFileUri = result.uri.startsWith("file://");
           const player = createAudioPlayer(result.uri, { downloadFirst: isFileUri });
-          player.volume = sampleVolumeRef.current * 10.0;
+          player.volume = Math.max(0, Math.min(1, sampleVolumeRef.current));
           newPlayers[key] = player;
         } catch (e) {
           captureBreadcrumb({ category: "sample.preload", message: "Failed", level: "warning", data: { key, error: String(e) } });
@@ -1590,9 +1590,8 @@ export default function MetronomeScreen() {
     (newVol: number) => {
       setSampleVolume(newVol);
       sampleVolumeRef.current = newVol;
-      const MAX_SAMPLE_VOL = 10.0;
       for (const player of Object.values(noteSampleSoundsRef.current)) {
-        try { player.volume = newVol * MAX_SAMPLE_VOL; } catch {}
+        try { player.volume = Math.max(0, Math.min(1, newVol)); } catch {}
       }
       persistSettings({ sampleVolume: newVol });
       scheduleReRender();
@@ -1601,9 +1600,8 @@ export default function MetronomeScreen() {
   );
 
   useEffect(() => {
-    const MAX_SAMPLE_VOL = 10.0;
     for (const player of Object.values(noteSampleSoundsRef.current)) {
-      try { player.volume = sampleVolume * MAX_SAMPLE_VOL; } catch {}
+      try { player.volume = Math.max(0, Math.min(1, sampleVolume)); } catch {}
     }
   }, [sampleVolume]);
 
