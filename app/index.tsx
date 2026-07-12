@@ -118,6 +118,7 @@ import {
   loadAssetPCM,
   parseTrimInfo,
   renderMeasure,
+  applySoftClip,
   saveRenderedWav,
   ensureWebClickBuffers,
   playWebClick,
@@ -276,6 +277,7 @@ export default function MetronomeScreen() {
   useEffect(() => { isPreparingRef.current = isPreparing; }, [isPreparing]);
   const preparingCancelledRef = useRef(false);
   const [volume, setVolume] = useState(0.75);
+  const volumeRef = useRef(0.75);
   const [sampleVolume, setSampleVolume] = useState(0.8);
   const sampleVolumeRef = useRef(0.8);
   // 단일 활성 모달 상태 머신: null = 모달 없음. openExclusive로만 전환해 mutual exclusion 보장.
@@ -782,6 +784,7 @@ export default function MetronomeScreen() {
       }
       if (settings.volume !== undefined) {
         setVolume(settings.volume);
+        volumeRef.current = settings.volume;
       }
       if (settings.sampleVolume !== undefined) {
         setSampleVolume(settings.sampleVolume);
@@ -1165,12 +1168,20 @@ export default function MetronomeScreen() {
         measureDurationMs: scheduleInfo.durationMs,
         clickPCMs,
         samplePCMs,
-        clickVolume: 1.0,
-        sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current * 10.0 : 0,
+        clickVolume: Math.max(1.0, volumeRef.current),
+        sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current : 0,
         metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
         metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
         layerClickPCMs,
       });
+      if (volumeRef.current > 1.0) {
+        if (pcm instanceof Float32Array) {
+          applySoftClip(pcm);
+        } else {
+          applySoftClip(pcm.left);
+          applySoftClip(pcm.right);
+        }
+      }
 
       const wavUri = await saveRenderedWav(pcm);
 
@@ -1258,12 +1269,16 @@ export default function MetronomeScreen() {
             measureDurationMs: scheduleInfo.durationMs,
             clickPCMs,
             samplePCMs: new Map(),
-            clickVolume: 1.0,
+            clickVolume: Math.max(1.0, volumeRef.current),
             sampleVolume: 0,
             metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
             metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
             layerClickPCMs,
           });
+          if (volumeRef.current > 1.0) {
+            if (pcm instanceof Float32Array) { applySoftClip(pcm); }
+            else { applySoftClip(pcm.left); applySoftClip(pcm.right); }
+          }
           engine.setPendingMeasureStartAction(() => {
             if (!engine.getIsRunning()) return;
             if (webRenderedLoopRef.current) {
@@ -1580,9 +1595,11 @@ export default function MetronomeScreen() {
   const updateVolume = useCallback(
     (newVolume: number) => {
       setVolume(newVolume);
+      volumeRef.current = newVolume;
       persistSettings({ volume: newVolume });
+      scheduleReRender();
     },
-    [persistSettings]
+    [persistSettings, scheduleReRender]
   );
 
   const updateSampleVolume = useCallback(
@@ -2152,12 +2169,16 @@ export default function MetronomeScreen() {
                   measureDurationMs: scheduleInfo.durationMs,
                   clickPCMs,
                   samplePCMs: new Map(),
-                  clickVolume: 1.0,
+                  clickVolume: Math.max(1.0, volumeRef.current),
                   sampleVolume: 0,
                   metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
                   metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
                   layerClickPCMs,
                 });
+                if (volumeRef.current > 1.0) {
+                  if (pcm instanceof Float32Array) { applySoftClip(pcm); }
+                  else { applySoftClip(pcm.left); applySoftClip(pcm.right); }
+                }
                 const loop = playWebRenderedLoop(pcm);
                 webRenderedLoopRef.current = loop;
                 engineRef.current?.setPreRenderedAudio(true);
@@ -3039,12 +3060,16 @@ export default function MetronomeScreen() {
             measureDurationMs: scheduleInfo.durationMs,
             clickPCMs,
             samplePCMs: new Map(),
-            clickVolume: 1.0,
+            clickVolume: Math.max(1.0, volumeRef.current),
             sampleVolume: 0,
             metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
             metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
             layerClickPCMs,
           });
+          if (volumeRef.current > 1.0) {
+            if (pcm instanceof Float32Array) { applySoftClip(pcm); }
+            else { applySoftClip(pcm.left); applySoftClip(pcm.right); }
+          }
           const loop = playWebRenderedLoop(pcm);
           webRenderedLoopRef.current = loop;
           engine.setPreRenderedAudio(true);

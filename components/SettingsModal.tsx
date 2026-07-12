@@ -562,15 +562,15 @@ export function SettingsModal({
       const w = trackWidthRef.current;
       if (w <= 0) return;
       const relX = pageX - trackLeftRef.current;
-      const newVol = Math.max(0, Math.min(1, relX / w));
+      const newVol = Math.max(0, Math.min(2, (relX / w) * 2));
       const rounded = Math.round(newVol * 100) / 100;
 
-      const step = Math.round(rounded * 20);
-      const lastStep = Math.round(lastHapticRef.current * 20);
+      const step = Math.round(rounded * 10);
+      const lastStep = Math.round(lastHapticRef.current * 10);
       if (step !== lastStep) {
         lastHapticRef.current = rounded;
         if (Platform.OS !== "web") {
-          if (rounded === 0 || rounded === 1) {
+          if (rounded === 0 || rounded === 1 || rounded === 2) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           } else {
             Haptics.selectionAsync();
@@ -838,9 +838,9 @@ export function SettingsModal({
   const volumeIcon =
     volume === 0
       ? "volume-off"
-      : volume < 0.3
+      : volume < 0.15
         ? "volume-low"
-        : volume < 0.7
+        : volume < 0.5
           ? "volume-medium"
           : "volume-high";
 
@@ -1508,19 +1508,32 @@ export function SettingsModal({
             <View
               style={[
                 styles.sliderFill,
-                { width: `${volume * 100}%` as any, backgroundColor: volume >= 0.8 ? "#FF6B35" : C.accent },
+                {
+                  width: `${volume * 50}%` as any,
+                  backgroundColor: volume > 1.0 ? "#FF4444" : volume >= 0.8 ? "#FF6B35" : C.accent,
+                },
               ]}
             />
           </View>
+          <View style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1.5, backgroundColor: C.textSecondary, opacity: 0.35 }} />
           <View
             style={[
               styles.sliderThumb,
-              { left: `${volume * 100}%` as any, backgroundColor: volume >= 0.8 ? "#FF6B35" : C.accent },
+              {
+                left: `${volume * 50}%` as any,
+                backgroundColor: volume > 1.0 ? "#FF4444" : volume >= 0.8 ? "#FF6B35" : C.accent,
+              },
             ]}
           />
         </View>
-        {volume >= 0.8 && (
+        {volume >= 0.8 && volume <= 1.0 && (
           <Text style={[styles.volumeWarning]}>{t("settings", "volumeWarning")}</Text>
+        )}
+        {volume > 1.0 && (
+          <>
+            <Text style={[styles.volumeWarning]}>{t("settings", "volumeWarning")}</Text>
+            <Text style={[styles.volumeWarning, { color: "#FF4444" }]}>{t("settings", "volumeBoostWarning")}</Text>
+          </>
         )}
       </View>
 

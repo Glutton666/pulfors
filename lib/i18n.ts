@@ -105,6 +105,7 @@ export const translations = {
     loggingHint: { ko: "연습 기록을 분석하여 실력 향상을 도와줍니다", en: "Analyze practice records to help improve your skills" },
     volume: { ko: "볼륨", en: "Volume" },
     volumeWarning: { ko: "⚠️ 너무 큰 볼륨은 청력에 손상을 줄 수 있습니다", en: "⚠️ High volume may damage your hearing" },
+    volumeBoostWarning: { ko: "⚠️ 100% 초과 구간에서 음원 클리핑이 발생할 수 있습니다", en: "⚠️ Audio clipping may occur above 100% — use with care" },
     sampleVolume: { ko: "샘플 볼륨", en: "Sample Volume" },
     sampleVolumeWarning: { ko: "⚠️ 너무 큰 볼륨은 청력에 손상을 줄 수 있습니다", en: "⚠️ High volume may damage your hearing" },
     soundSet: { ko: "사운드 세트", en: "Sound Set" },

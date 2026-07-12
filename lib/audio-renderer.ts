@@ -153,6 +153,12 @@ export function parseWav(buf: ArrayBuffer): {
   return { pcm, sampleRate: sr };
 }
 
+export function applySoftClip(pcm: Float32Array): void {
+  for (let i = 0; i < pcm.length; i++) {
+    pcm[i] = Math.tanh(pcm[i]);
+  }
+}
+
 export function encodeWav(pcm: Float32Array, sr: number, preClamped = false): ArrayBuffer {
   const n = pcm.length;
   const buf = new ArrayBuffer(44 + n * 2);
