@@ -153,7 +153,7 @@ function normalizeStemResult(raw: unknown): StemResult | null {
     return {
       name: typeof st.name === "string" ? st.name : "track",
       uri: typeof st.uri === "string" ? st.uri : "",
-      volume: typeof st.volume === "number" ? st.volume : 1.0,
+      volume: typeof st.volume === "number" ? Math.max(0, Math.min(1, st.volume)) : 1.0,
       isMuted: !!st.isMuted,
       isSolo: !!st.isSolo,
     };

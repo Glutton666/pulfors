@@ -201,7 +201,7 @@ export function StemSeparationModal({
       const p = stemPlayers[idx];
       if (!p) return;
       const silent = stem.isMuted || (hasSolo && !stem.isSolo);
-      p.volume = silent ? 0 : stem.volume;
+      p.volume = silent ? 0 : Math.max(0, Math.min(1, stem.volume));
       p.muted = silent;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -344,7 +344,7 @@ export function StemSeparationModal({
       if (!p) return;
       try {
         p.replace({ uri: stem.uri });
-        p.volume = stem.volume;
+        p.volume = Math.max(0, Math.min(1, stem.volume));
         p.muted = stem.isMuted;
       } catch {}
     });
