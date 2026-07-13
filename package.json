@@ -15,7 +15,7 @@
     "server:build": "tsc --project tsconfig.server.json",
     "server:prod": "node dist/server/index.js",
     "expo:dev": "expo start --tunnel",
-    "expo:static:build": "expo export --platform web"
+    "expo:static:build": "expo export --platform web --output-dir static-build"
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
