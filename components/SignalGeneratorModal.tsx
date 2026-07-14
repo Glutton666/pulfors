@@ -43,9 +43,16 @@ import {
   fftPeakDetect,
   noteToFreq,
 } from "@/lib/signal-analysis";
-// react-native-audio-record는 네이티브 전용 — 웹에선 로드하지 않음
-const AudioRecord: typeof import("react-native-audio-record").default | null =
-  Platform.OS !== "web" ? require("react-native-audio-record").default : null;
+// react-native-audio-record는 네이티브 전용 — 웹이나 Expo Go에선 없을 수 있음
+let AudioRecord: typeof import("react-native-audio-record").default | null = null;
+if (Platform.OS !== "web") {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    AudioRecord = require("react-native-audio-record").default;
+  } catch {
+    // Expo Go 또는 네이티브 모듈 미설치 환경 — 마이크 분석 기능 비활성화
+  }
+}
 
 
 
