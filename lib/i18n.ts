@@ -1195,6 +1195,10 @@ export const translations = {
     tapAgain:    { ko: "한 번 더 탭하면 종료", en: "Tap again to exit" },
     bpmLabel:    { ko: "BPM", en: "BPM" },
     volumeHint:  { ko: "볼륨 버튼 또는 탭으로 조절", en: "Volume buttons or tap to adjust" },
+    play:        { ko: "재생", en: "Play" },
+    pause:       { ko: "일시정지", en: "Pause" },
+    setList:     { ko: "셋 리스트", en: "Set List" },
+    setListEmpty: { ko: "저장된 연습 없음", en: "No saved practices" },
   },
   challenge: {
     level:        { ko: "레벨", en: "Level" },

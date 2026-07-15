@@ -6,6 +6,7 @@ import {
   Alert,
   Platform,
   Pressable,
+  FlatList,
   BackHandler,
 } from "react-native";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
@@ -13,36 +14,56 @@ import type { SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { StageBeatArc } from "@/components/StageBeatArc";
+import type { PracticeEntry } from "@/lib/storage";
 
 interface StageModeOverlayProps {
   visible: boolean;
   bpm: number;
   flashOpacity: SharedValue<number>;
+  /** 비트 진행률 SharedValue (0→1 per beat). 아크 애니메이션 구동. */
+  beatProgress: SharedValue<number>;
+  /** 현재 메트로놈 재생 중 여부 */
+  isPlaying: boolean;
+  /** 재생/정지 토글 콜백 */
+  onPlayPause: () => void;
   onExit: () => void;
   onBpmChange: (bpm: number) => void;
+  /** 셋 리스트로 표시할 연습 항목 목록 */
+  practiceEntries?: PracticeEntry[];
+  /** 현재 활성(하이라이트) 항목 ID */
+  activeEntryId?: string;
+  /** 셋 리스트 항목 선택 — 엔진 재시작 없이 즉시 전환 */
+  onSelectEntry?: (entry: PracticeEntry) => void;
 }
 
 /**
  * 무대 모드 전용 풀스크린 오버레이.
- * - 검은 배경에 큰 BPM 숫자
- * - 박자에 맞는 흰색 플래시 (flashOpacity shared value 재활용)
- * - 하단: BPM ±1/±10 버튼 (온스크린 대체 컨트롤 + 볼륨 버튼 힌트)
- * - 하단: 종료 버튼 — Alert 확인 (네이티브) 또는 인라인 확인 UI (웹)
+ * - 검은 배경에 큰 BPM 숫자 + 비트 아크 애니메이션
+ * - 재생/정지 버튼
+ * - 박자에 맞는 흰색 플래시
+ * - BPM ±1/±10 버튼 (탭: ±1, 홀드: ±10 반복)
+ * - 가로 스크롤 셋 리스트 (연습 항목 빠른 전환)
+ * - 종료 버튼 — Alert(네이티브) 또는 인라인 확인(웹)
  */
 export function StageModeOverlay({
   visible,
   bpm,
   flashOpacity,
+  beatProgress,
+  isPlaying,
+  onPlayPause,
   onExit,
   onBpmChange,
+  practiceEntries = [],
+  activeEntryId,
+  onSelectEntry,
 }: StageModeOverlayProps) {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
 
-  // 웹: Alert.alert이 no-op이므로 인라인 확인 상태 사용
   const [confirmingExit, setConfirmingExit] = useState(false);
 
-  // 오버레이가 닫힐 때 확인 상태 초기화
   useEffect(() => {
     if (!visible) setConfirmingExit(false);
   }, [visible]);
@@ -66,7 +87,6 @@ export function StageModeOverlay({
     );
   }, [onExit, t]);
 
-  // Android 하드웨어 백 버튼 처리
   useEffect(() => {
     if (!visible || Platform.OS !== "android") return;
     const handler = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -76,7 +96,6 @@ export function StageModeOverlay({
     return () => handler.remove();
   }, [visible, triggerExit]);
 
-  // 최신 BPM을 interval 콜백 안에서도 stale 없이 읽기 위한 ref
   const bpmRef = useRef(bpm);
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
 
@@ -85,8 +104,7 @@ export function StageModeOverlay({
 
   const clampBpm = (v: number) => Math.min(300, Math.max(20, v));
 
-  // hold-repeat 상태
-  const holdActiveRef = useRef(false);           // 롱프레스 반복 모드 진입 여부
+  const holdActiveRef = useRef(false);
   const holdDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -95,10 +113,8 @@ export function StageModeOverlay({
     if (holdIntervalRef.current) { clearInterval(holdIntervalRef.current); holdIntervalRef.current = null; }
   }, []);
 
-  // 언마운트 시 타이머 정리
   useEffect(() => () => stopHold(), [stopHold]);
 
-  /** PressIn: 300ms 후 반복 모드 돌입, 그 뒤 150ms 간격으로 ±10 반복 */
   const handlePressIn = useCallback((delta: number) => {
     holdActiveRef.current = false;
     holdDelayRef.current = setTimeout(() => {
@@ -110,17 +126,10 @@ export function StageModeOverlay({
     }, 300);
   }, []);
 
-  /** PressOut: 타이머 정리 (onPress가 이후에 발동) */
-  const handlePressOut = useCallback(() => {
-    stopHold();
-  }, [stopHold]);
+  const handlePressOut = useCallback(() => { stopHold(); }, [stopHold]);
 
-  /** Press(탭): 반복 모드가 아니었으면 ±1 적용 */
   const handlePress = useCallback((delta: number) => {
-    if (holdActiveRef.current) {
-      holdActiveRef.current = false; // 플래그 초기화
-      return;
-    }
+    if (holdActiveRef.current) { holdActiveRef.current = false; return; }
     onBpmChangeRef.current(clampBpm(bpmRef.current + delta));
   }, []);
 
@@ -128,24 +137,37 @@ export function StageModeOverlay({
 
   const webTop = Platform.OS === "web" ? 67 : 0;
   const topPad = (insets.top || webTop) + 16;
-  const bottomPad = (insets.bottom || (Platform.OS === "web" ? 34 : 0)) + 24;
+  const bottomPad = (insets.bottom || (Platform.OS === "web" ? 34 : 0)) + 16;
 
   return (
     <View style={styles.container} testID="stage-mode-overlay">
       {/* 박자 플래시 */}
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.flashLayer, flashStyle]}
-      />
+      <Animated.View pointerEvents="none" style={[styles.flashLayer, flashStyle]} />
 
-      {/* BPM 디스플레이 */}
+      {/* BPM 디스플레이 + 비트 아크 */}
       <View style={[styles.bpmArea, { paddingTop: topPad }]}>
         <Text style={styles.bpmLabel}>{t("stageMode", "bpmLabel")}</Text>
         <Text style={styles.bpmNumber} testID="stage-mode-bpm">{bpm}</Text>
+        <StageBeatArc beatProgress={beatProgress} size={90} />
         <Text style={styles.volumeHint}>{t("stageMode", "volumeHint")}</Text>
       </View>
 
-      {/* BPM 조절 버튼 — 탭: ±1 / 홀드(300ms 후 150ms 간격 반복): ±10 */}
+      {/* 재생/정지 버튼 */}
+      <Pressable
+        style={({ pressed }) => [styles.playPauseBtn, pressed && styles.playPauseBtnPressed]}
+        onPress={onPlayPause}
+        testID="stage-mode-play-pause"
+        accessibilityRole="button"
+        accessibilityLabel={isPlaying ? t("stageMode", "pause") : t("stageMode", "play")}
+      >
+        <Ionicons
+          name={isPlaying ? "pause-circle" : "play-circle"}
+          size={72}
+          color="#ffffff"
+        />
+      </Pressable>
+
+      {/* BPM 조절 버튼 */}
       <View style={styles.bpmButtons}>
         <Pressable
           style={({ pressed }) => [styles.bpmBtn, pressed && styles.bpmBtnPressed]}
@@ -170,6 +192,43 @@ export function StageModeOverlay({
           <Ionicons name="add" size={28} color="#fff" />
           <Text style={styles.bpmBtnDelta}>+1 / +10</Text>
         </Pressable>
+      </View>
+
+      {/* 셋 리스트 */}
+      <View style={styles.setListContainer}>
+        <Text style={styles.setListLabel}>{t("stageMode", "setList")}</Text>
+        {practiceEntries.length > 0 ? (
+          <FlatList
+            data={practiceEntries}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.setListContent}
+            renderItem={({ item }) => {
+              const isActive = item.id === activeEntryId;
+              return (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.setCard,
+                    isActive && styles.setCardActive,
+                    pressed && styles.setCardPressed,
+                  ]}
+                  onPress={() => onSelectEntry?.(item)}
+                  testID={`stage-set-entry-${item.id}`}
+                >
+                  <Text style={[styles.setCardLabel, isActive && styles.setCardLabelActive]} numberOfLines={1}>
+                    {item.label}
+                  </Text>
+                  <Text style={[styles.setCardBpm, isActive && styles.setCardBpmActive]}>
+                    {item.bpm} BPM
+                  </Text>
+                </Pressable>
+              );
+            }}
+          />
+        ) : (
+          <Text style={styles.setListEmpty}>{t("stageMode", "setListEmpty")}</Text>
+        )}
       </View>
 
       {/* 종료 버튼 / 확인 UI */}
@@ -228,6 +287,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 10,
   },
   bpmLabel: {
     color: "rgba(255,255,255,0.45)",
@@ -235,30 +295,38 @@ const styles = StyleSheet.create({
     fontFamily: "SpaceGrotesk_400Regular",
     letterSpacing: 6,
     textTransform: "uppercase",
-    marginBottom: 4,
   },
   bpmNumber: {
     color: "#ffffff",
-    fontSize: 112,
+    fontSize: 100,
     fontFamily: "SpaceGrotesk_700Bold",
-    lineHeight: 120,
+    lineHeight: 108,
     letterSpacing: -2,
   },
   volumeHint: {
     color: "rgba(255,255,255,0.3)",
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: "SpaceGrotesk_400Regular",
-    marginTop: 12,
   },
+  // Play/Pause
+  playPauseBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    borderRadius: 50,
+  },
+  playPauseBtnPressed: {
+    opacity: 0.6,
+  },
+  // BPM buttons
   bpmButtons: {
     flexDirection: "row",
     gap: 20,
     paddingHorizontal: 24,
-    paddingBottom: 16,
+    paddingVertical: 8,
   },
   bpmBtn: {
     flex: 1,
-    height: 72,
+    height: 68,
     backgroundColor: "rgba(255,255,255,0.10)",
     borderRadius: 14,
     borderWidth: 1,
@@ -275,10 +343,72 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "SpaceGrotesk_400Regular",
   },
+  // Set list
+  setListContainer: {
+    width: "100%",
+    paddingTop: 4,
+    paddingBottom: 4,
+  },
+  setListLabel: {
+    color: "rgba(255,255,255,0.3)",
+    fontSize: 10,
+    fontFamily: "SpaceGrotesk_500Medium",
+    letterSpacing: 4,
+    textTransform: "uppercase",
+    paddingHorizontal: 24,
+    marginBottom: 8,
+  },
+  setListContent: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  setListEmpty: {
+    color: "rgba(255,255,255,0.2)",
+    fontSize: 13,
+    fontFamily: "SpaceGrotesk_400Regular",
+    paddingHorizontal: 24,
+    paddingVertical: 4,
+  },
+  setCard: {
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    minWidth: 100,
+    maxWidth: 150,
+  },
+  setCardActive: {
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderColor: "rgba(255,255,255,0.5)",
+  },
+  setCardPressed: {
+    opacity: 0.65,
+  },
+  setCardLabel: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 12,
+    fontFamily: "SpaceGrotesk_500Medium",
+    marginBottom: 2,
+  },
+  setCardLabelActive: {
+    color: "#ffffff",
+  },
+  setCardBpm: {
+    color: "rgba(255,255,255,0.4)",
+    fontSize: 11,
+    fontFamily: "SpaceGrotesk_400Regular",
+  },
+  setCardBpmActive: {
+    color: "rgba(255,255,255,0.8)",
+  },
+  // Exit area
   exitArea: {
     width: "100%",
     alignItems: "center",
     paddingHorizontal: 24,
+    paddingTop: 8,
   },
   exitBtn: {
     flexDirection: "row",

@@ -562,6 +562,8 @@ export default function MetronomeScreen() {
 
   const flashOpacity = useSharedValue(0);
   const halfTimeFlash = useSharedValue(0);
+  /** 비트 진행률: 각 비트 시작 시 0 → 다음 비트까지 1 로 sweep. StageBeatArc 구동. */
+  const beatProgress = useSharedValue(0);
 
   const flashStyle = useAnimatedStyle(() => ({
     opacity: flashOpacity.value,
@@ -1429,6 +1431,9 @@ export default function MetronomeScreen() {
             withTiming(0, { duration: 250, easing: Easing.out(Easing.quad) })
           );
         }
+        // 비트 아크: 현재 비트에서 다음 비트까지 0→1 sweep (무대 모드 StageBeatArc 구동)
+        beatProgress.value = 0;
+        beatProgress.value = withTiming(1, { duration: Math.round(60000 / (bpmRef.current || 120)) });
       }
       if (hasSubBeatUpdate) {
         hasSubBeatUpdate = false;
@@ -2314,6 +2319,10 @@ export default function MetronomeScreen() {
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
 
   const { stageModeActive, enterStageMode, exitStageMode } = useStageMode(bpmRef, updateBpm);
+  /** 무대 모드 셋 리스트 — 진입 시 연습장에서 로드 */
+  const [stagePracticeEntries, setStagePracticeEntries] = useState<PracticeEntry[]>([]);
+  /** 셋 리스트에서 현재 선택/적용된 항목 ID */
+  const [activeStagePracticeEntryId, setActiveStagePracticeEntryId] = useState<string | undefined>(undefined);
 
   const updateTimeSignatureRef = useRef(updateTimeSignature);
   useEffect(() => { updateTimeSignatureRef.current = updateTimeSignature; }, [updateTimeSignature]);
@@ -5083,7 +5092,13 @@ export default function MetronomeScreen() {
         onFadeOut={() => openExclusive("fadeOut")}
         onStageMode={() => {
           setActiveModal(null);
+          // 메트로놈이 멈춰 있으면 무대 모드 진입 시 자동 시작
+          if (!isPlayingRef.current) {
+            void togglePlayPauseRef.current?.();
+          }
           void enterStageMode();
+          // 셋 리스트 로드
+          loadPracticeBook().then(setStagePracticeEntries).catch(() => {});
         }}
         onDrumKit={() => {
           const engine = engineRef.current;
@@ -5960,8 +5975,17 @@ export default function MetronomeScreen() {
         visible={stageModeActive}
         bpm={bpm}
         flashOpacity={flashOpacity}
+        beatProgress={beatProgress}
+        isPlaying={isPlaying}
+        onPlayPause={() => void togglePlayPauseRef.current?.()}
         onExit={() => void exitStageMode()}
         onBpmChange={updateBpm}
+        practiceEntries={stagePracticeEntries}
+        activeEntryId={activeStagePracticeEntryId}
+        onSelectEntry={(entry) => {
+          applyEntryToEngine(entry);
+          setActiveStagePracticeEntryId(entry.id);
+        }}
       />
     </KbView>
   );
