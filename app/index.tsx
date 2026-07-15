@@ -5976,6 +5976,10 @@ export default function MetronomeScreen() {
         bpm={bpm}
         flashOpacity={flashOpacity}
         beatProgress={beatProgress}
+        currentBeat={currentBeat}
+        beatsPerMeasure={beatsPerMeasure}
+        subdivisionCount={Math.max(1, subdivisionPattern?.length ?? 1)}
+        beatTypes={beatTypes}
         isPlaying={isPlaying}
         onPlayPause={() => void togglePlayPauseRef.current?.()}
         onExit={() => void exitStageMode()}

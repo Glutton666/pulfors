@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { StageBeatArc } from "@/components/StageBeatArc";
 import type { PracticeEntry } from "@/lib/storage";
+import type { BeatType } from "@/lib/metronome-engine";
 
 interface StageModeOverlayProps {
   visible: boolean;
@@ -23,13 +24,21 @@ interface StageModeOverlayProps {
   flashOpacity: SharedValue<number>;
   /** 비트 진행률 SharedValue (0→1 per beat). 아크 애니메이션 구동. */
   beatProgress: SharedValue<number>;
+  /** 현재 비트 (1-indexed). 멈춤이면 -1. */
+  currentBeat: number;
+  /** 박자당 비트 수 (StageBeatArc 슬롯 계산 및 박자표 표시용) */
+  beatsPerMeasure: number;
+  /** 비트당 서브디비전 수 */
+  subdivisionCount?: number;
+  /** 비트별 타입 배열 ("mute" 이면 StageBeatArc에서 특수 렌더링) */
+  beatTypes?: BeatType[];
   /** 현재 메트로놈 재생 중 여부 */
   isPlaying: boolean;
   /** 재생/정지 토글 콜백 */
   onPlayPause: () => void;
   onExit: () => void;
   onBpmChange: (bpm: number) => void;
-  /** 셋 리스트로 표시할 연습 항목 목록 */
+  /** 셋 리스트 후보 — 내부에서 beat-mode 필터 적용 */
   practiceEntries?: PracticeEntry[];
   /** 현재 활성(하이라이트) 항목 ID */
   activeEntryId?: string;
@@ -51,6 +60,10 @@ export function StageModeOverlay({
   bpm,
   flashOpacity,
   beatProgress,
+  currentBeat,
+  beatsPerMeasure,
+  subdivisionCount = 1,
+  beatTypes,
   isPlaying,
   onPlayPause,
   onExit,
@@ -59,6 +72,10 @@ export function StageModeOverlay({
   activeEntryId,
   onSelectEntry,
 }: StageModeOverlayProps) {
+  // beat-mode 항목만 셋 리스트에 표시 (bar / note 모드 항목 제외)
+  const beatEntries = practiceEntries.filter(
+    (e) => e.mode !== "bar" && e.mode !== "note"
+  );
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
 
@@ -148,7 +165,13 @@ export function StageModeOverlay({
       <View style={[styles.bpmArea, { paddingTop: topPad }]}>
         <Text style={styles.bpmLabel}>{t("stageMode", "bpmLabel")}</Text>
         <Text style={styles.bpmNumber} testID="stage-mode-bpm">{bpm}</Text>
-        <StageBeatArc beatProgress={beatProgress} size={90} />
+        <StageBeatArc
+          beatProgress={beatProgress}
+          currentBeat={currentBeat}
+          beatsPerMeasure={beatsPerMeasure}
+          subdivisionCount={subdivisionCount}
+          beatTypes={beatTypes}
+        />
         <Text style={styles.volumeHint}>{t("stageMode", "volumeHint")}</Text>
       </View>
 
@@ -194,18 +217,20 @@ export function StageModeOverlay({
         </Pressable>
       </View>
 
-      {/* 셋 리스트 */}
-      <View style={styles.setListContainer}>
-        <Text style={styles.setListLabel}>{t("stageMode", "setList")}</Text>
-        {practiceEntries.length > 0 ? (
+      {/* 셋 리스트 — beat-mode 항목이 있을 때만 표시 */}
+      {beatEntries.length > 0 && (
+        <View style={styles.setListContainer}>
+          <Text style={styles.setListLabel}>{t("stageMode", "setList")}</Text>
           <FlatList
-            data={practiceEntries}
+            data={beatEntries}
             horizontal
             showsHorizontalScrollIndicator={false}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.setListContent}
             renderItem={({ item }) => {
               const isActive = item.id === activeEntryId;
+              // 박자표: beatsPerMeasure/4 (denominator 기본 4)
+              const timeSig = `${item.beatsPerMeasure}/4`;
               return (
                 <Pressable
                   style={({ pressed }) => [
@@ -216,20 +241,21 @@ export function StageModeOverlay({
                   onPress={() => onSelectEntry?.(item)}
                   testID={`stage-set-entry-${item.id}`}
                 >
-                  <Text style={[styles.setCardLabel, isActive && styles.setCardLabelActive]} numberOfLines={1}>
+                  <Text
+                    style={[styles.setCardLabel, isActive && styles.setCardLabelActive]}
+                    numberOfLines={1}
+                  >
                     {item.label}
                   </Text>
-                  <Text style={[styles.setCardBpm, isActive && styles.setCardBpmActive]}>
-                    {item.bpm} BPM
+                  <Text style={[styles.setCardMeta, isActive && styles.setCardMetaActive]}>
+                    {item.bpm} BPM · {timeSig}
                   </Text>
                 </Pressable>
               );
             }}
           />
-        ) : (
-          <Text style={styles.setListEmpty}>{t("stageMode", "setListEmpty")}</Text>
-        )}
-      </View>
+        </View>
+      )}
 
       {/* 종료 버튼 / 확인 UI */}
       <View style={[styles.exitArea, { paddingBottom: bottomPad }]}>
@@ -395,12 +421,12 @@ const styles = StyleSheet.create({
   setCardLabelActive: {
     color: "#ffffff",
   },
-  setCardBpm: {
+  setCardMeta: {
     color: "rgba(255,255,255,0.4)",
     fontSize: 11,
     fontFamily: "SpaceGrotesk_400Regular",
   },
-  setCardBpmActive: {
+  setCardMetaActive: {
     color: "rgba(255,255,255,0.8)",
   },
   // Exit area
