@@ -5998,7 +5998,20 @@ export default function MetronomeScreen() {
         practiceEntries={stagePracticeEntries}
         activeEntryId={activeStagePracticeEntryId}
         onSelectEntry={(entry) => {
-          applyEntryToEngine(entry);
+          const engine = engineRef.current;
+          if (!engine) return;
+          // 비트 모드 전용 적용 — barMode 전환 없음, 엔진 재시작 없음
+          updateBpmRef.current(entry.bpm);
+          setBeatsPerMeasure(entry.beatsPerMeasure);
+          setBeatTypes([...entry.beatTypes]);
+          setBeatSubdivisions({ ...entry.beatSubdivisions });
+          if (entry.subdivisionPattern && entry.subdivisionPattern.length > 0) {
+            setSubdivisionPattern([...entry.subdivisionPattern]);
+          }
+          // 엔진에 즉시 반영 (stop/start 없이 끊김 없는 전환)
+          applyEntryToEngineCore(engine, entry);
+          // 오디오 프리렌더 버퍼 즉시 재생성
+          scheduleReRender();
           setActiveStagePracticeEntryId(entry.id);
         }}
       />
