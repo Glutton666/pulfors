@@ -5098,7 +5098,17 @@ export default function MetronomeScreen() {
           }
           void enterStageMode();
           // 셋 리스트 로드
-          loadPracticeBook().then(setStagePracticeEntries).catch(() => {});
+          loadPracticeBook().then((entries) => {
+            setStagePracticeEntries(entries);
+            // beat-mode 항목만 후보로 (bar/note 제외)
+            const beatOnes = entries.filter(
+              (e) => e.mode !== "bar" && e.mode !== "note"
+            );
+            // 현재 BPM 과 일치하는 항목 우선, 없으면 첫 번째 항목
+            const match =
+              beatOnes.find((e) => e.bpm === bpmRef.current) ?? beatOnes[0];
+            if (match) setActiveStagePracticeEntryId(match.id);
+          }).catch(() => {});
         }}
         onDrumKit={() => {
           const engine = engineRef.current;
@@ -5980,6 +5990,7 @@ export default function MetronomeScreen() {
         beatsPerMeasure={beatsPerMeasure}
         subdivisionCount={Math.max(1, subdivisionPattern?.length ?? 1)}
         beatTypes={beatTypes}
+        beatSubdivisions={beatSubdivisions}
         isPlaying={isPlaying}
         onPlayPause={() => void togglePlayPauseRef.current?.()}
         onExit={() => void exitStageMode()}

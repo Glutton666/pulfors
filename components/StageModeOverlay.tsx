@@ -32,6 +32,8 @@ interface StageModeOverlayProps {
   subdivisionCount?: number;
   /** 비트별 타입 배열 ("mute" 이면 StageBeatArc에서 특수 렌더링) */
   beatTypes?: BeatType[];
+  /** 비트별 서브디비전 패턴 (키 = String(1-indexed beat)) */
+  beatSubdivisions?: Record<string, BeatType[]>;
   /** 현재 메트로놈 재생 중 여부 */
   isPlaying: boolean;
   /** 재생/정지 토글 콜백 */
@@ -64,6 +66,7 @@ export function StageModeOverlay({
   beatsPerMeasure,
   subdivisionCount = 1,
   beatTypes,
+  beatSubdivisions,
   isPlaying,
   onPlayPause,
   onExit,
@@ -171,6 +174,7 @@ export function StageModeOverlay({
           beatsPerMeasure={beatsPerMeasure}
           subdivisionCount={subdivisionCount}
           beatTypes={beatTypes}
+          beatSubdivisions={beatSubdivisions}
         />
         <Text style={styles.volumeHint}>{t("stageMode", "volumeHint")}</Text>
       </View>
