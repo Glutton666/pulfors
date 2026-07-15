@@ -22,10 +22,11 @@
       "buildNumber": "1",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "마이크를 사용하여 악기 음정을 감지하고 튜닝합니다.",
+        "NSLocationWhenInUseUsageDescription": "연습실 위치를 저장하고 가까운 연습실을 찾기 위해 위치를 사용합니다.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "연습실 위치를 저장하고 가까운 연습실을 찾기 위해 위치를 사용합니다.",
+        "NSPhotoLibraryUsageDescription": "프로필 사진과 이미지를 선택하기 위해 사진 라이브러리에 접근합니다.",
+        "NSCameraUsageDescription": "프로필 사진을 촬영하기 위해 카메라를 사용합니다.",
         "UIBackgroundModes": [
-          "fetch",
-          "remote-notification",
-          "audio",
           "fetch",
           "remote-notification",
           "audio"
@@ -41,7 +42,11 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES"
       ],
       "intentFilters": [
         {
@@ -83,6 +88,20 @@
           "icon": "./assets/images/android-icon-monochrome.png",
           "color": "#0D1117",
           "sounds": []
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "연습실 위치를 저장하고 가까운 연습실을 찾기 위해 위치를 사용합니다.",
+          "locationAlwaysAndWhenInUsePermission": "연습실 위치를 저장하고 가까운 연습실을 찾기 위해 위치를 사용합니다."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "프로필 사진과 이미지를 선택하기 위해 사진 라이브러리에 접근합니다.",
+          "cameraPermission": "프로필 사진을 촬영하기 위해 카메라를 사용합니다."
         }
       ]
     ],
