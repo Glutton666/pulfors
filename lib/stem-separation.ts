@@ -92,12 +92,12 @@ export interface SeparationFailure {
 // ORT type definitions (onnxruntime-react-native shape)
 // ---------------------------------------------------------------------------
 
-interface OrtTensor {
+export interface OrtTensor {
   data: Float32Array;
   dims: readonly number[];
   type: string;
 }
-interface OrtSession {
+export interface OrtSession {
   /** Input tensor names as exported from the model graph */
   inputNames: string[];
   /** Output tensor names as exported from the model graph */
@@ -105,14 +105,14 @@ interface OrtSession {
   run(feeds: Record<string, OrtTensor>): Promise<Record<string, OrtTensor>>;
   release(): Promise<void>;
 }
-interface OrtLib {
+export interface OrtLib {
   InferenceSession: {
     create(
       modelPathOrBuffer: string | ArrayBuffer,
       options?: { executionProviders?: string[]; graphOptimizationLevel?: string },
     ): Promise<OrtSession>;
   };
-  Tensor: new (type: "float32", data: Float32Array, dims: [number, number, number]) => OrtTensor;
+  Tensor: new (type: string, data: Float32Array, dims: number[]) => OrtTensor;
 }
 
 // ---------------------------------------------------------------------------
@@ -1027,17 +1027,21 @@ export async function runStemSeparation(
   config: StemSeparationConfig,
   onProgress: (p: SeparationProgress) => void,
   signal?: AbortSignal,
+  ortOverride?: OrtLib,
 ): Promise<SeparationResult | SeparationFailure> {
-  if (!isOnnxRuntimeAvailable()) {
+  let ort: OrtLib;
+  if (ortOverride) {
+    ort = ortOverride;
+  } else if (isOnnxRuntimeAvailable()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    ort = require("onnxruntime-react-native") as OrtLib;
+  } else {
     return {
       ok: false,
       error: "model_unavailable",
-      message: "onnxruntime-react-native 네이티브 모듈이 없습니다. 커스텀 개발 클라이언트 빌드가 필요합니다.",
+      message: "onnxruntime-react-native 네이티브 모듈이 없습니다.",
     };
   }
-
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const ort = require("onnxruntime-react-native") as OrtLib;
   const resultId = Crypto.randomUUID();
 
   let demucsSession: OrtSession | null = null;

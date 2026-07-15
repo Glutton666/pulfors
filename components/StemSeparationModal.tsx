@@ -13,6 +13,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { StemWebView, type StemWebViewHandle } from "@/components/StemWebView";
 import {
   Alert,
   Modal,
@@ -151,7 +152,9 @@ export function StemSeparationModal({
   const [stemTracks, setStemTracks] = useState<StemTrack[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  const onnxAvailable = isOnnxRuntimeAvailable();
+  const stemWebViewRef = useRef<StemWebViewHandle>(null);
+  // WebView WASM 방식이 있으면 사용, 없으면 네이티브 ORT 시도
+  const onnxAvailable = Platform.OS === "android" || isOnnxRuntimeAvailable();
 
   // Pre-create 6 players (max stems). useAudioPlayer hooks must be
   // called unconditionally at the top level — one slot per stem track.
@@ -299,12 +302,23 @@ export function StemSeparationModal({
     setPhase("progress");
     setProgress({ phase: "decoding", pct: 0 });
 
+    // Android: WebView WASM 브리지 사용; 그 외: 네이티브 ORT (또는 없으면 실패)
+    let ortOverride: Parameters<typeof runStemSeparation>[5] = undefined;
+    if (Platform.OS === "android" && stemWebViewRef.current) {
+      try {
+        ortOverride = await stemWebViewRef.current.waitForOrtLib() as Parameters<typeof runStemSeparation>[5];
+      } catch {
+        // WebView 준비 실패 → 네이티브 ORT 로 폴백
+      }
+    }
+
     const outcome = await runStemSeparation(
       pendingUri,
       pendingName,
       { model: selectedModel, noiseRemoval },
       (p) => { setProgress(p); },
       ctrl.signal,
+      ortOverride,
     );
 
     if (ctrl.signal.aborted) {
@@ -412,6 +426,8 @@ export function StemSeparationModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+      {/* 숨긴 WebView — Android 에서 onnxruntime-web WASM 실행용 */}
+      <StemWebView ref={stemWebViewRef} />
       <View style={[styles.overlay]}>
         <View style={[styles.sheet, { paddingTop: topPad, paddingBottom: botPad }]}>
 

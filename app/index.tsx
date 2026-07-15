@@ -177,9 +177,6 @@ export default function MetronomeScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const isPlayingRef = useRef(false);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
-  // State for DrumKit → StemSep handoff (passes selected pad URI directly)
-  const [stemSepInitUri, setStemSepInitUri] = useState<string | undefined>();
-  const [stemSepInitName, setStemSepInitName] = useState<string | undefined>();
   const [currentBeat, setCurrentBeat] = useState(-1);
   const [measureCount, setMeasureCount] = useState(0);
   const [activeSubNote, setActiveSubNote] = useState(-1);
@@ -5098,22 +5095,19 @@ export default function MetronomeScreen() {
           setIsPlaying(false);
           openExclusive("drumKit");
         }}
-        onStemSep={() => openExclusive("stemSep")}
         onScoreMode={() => {
           setActiveModal(null);
           setScoreMode("list");
+        }}
+        onStemSep={() => {
+          setActiveModal(null);
+          setTimeout(() => openExclusive("stemSep"), 50);
         }}
       />
 
       <DrumKitModal
         visible={showDrumKit}
         onClose={() => setActiveModal(null)}
-        onStemSep={(uri, name) => {
-          setStemSepInitUri(uri);
-          setStemSepInitName(name);
-          setActiveModal(null);
-          setTimeout(() => openExclusive("stemSep"), 50);
-        }}
       />
 
       <BpmDetectModal
@@ -5129,12 +5123,8 @@ export default function MetronomeScreen() {
         visible={showStemSep}
         onClose={() => {
           setActiveModal(null);
-          setStemSepInitUri(undefined);
-          setStemSepInitName(undefined);
         }}
         onSetBpm={updateBpm}
-        initialUri={stemSepInitUri}
-        initialName={stemSepInitName}
         onStartMetronome={() => {
           if (!engineRef.current?.getIsRunning()) {
             void togglePlayPauseRef.current?.();
@@ -5254,10 +5244,6 @@ export default function MetronomeScreen() {
         bpm={bpm}
         beatsPerMeasure={beatsPerMeasure}
         soundSet={soundSet.startsWith("custom") ? "classic" : soundSet as any}
-        onOpenStemSep={() => {
-          setRecorderTarget(null);
-          setTimeout(() => openExclusive("stemSep"), 50);
-        }}
       />
       )}
 
@@ -5318,12 +5304,6 @@ export default function MetronomeScreen() {
               }
             });
           });
-        }}
-        onStemSep={(uri, name) => {
-          setActiveModal(null);
-          setStemSepInitUri(uri);
-          setStemSepInitName(name);
-          setTimeout(() => openExclusive("stemSep"), 50);
         }}
       />
       )}

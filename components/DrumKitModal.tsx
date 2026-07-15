@@ -51,8 +51,6 @@ import {
 export interface DrumKitModalProps {
   visible: boolean;
   onClose: () => void;
-  /** Called when user selects "음원 분리" on a pad that has an imported audio file */
-  onStemSep?: (uri: string, name: string) => void;
 }
 
 interface DrumPadHandle {
@@ -153,7 +151,7 @@ const DrumPad = React.memo(React.forwardRef<DrumPadHandle, DrumPadProps>(functio
   );
 }));
 
-export function DrumKitModal({ visible, onClose, onStemSep }: DrumKitModalProps) {
+export function DrumKitModal({ visible, onClose }: DrumKitModalProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -430,22 +428,6 @@ export function DrumKitModal({ visible, onClose, onStemSep }: DrumKitModalProps)
                   >
                     <Ionicons name="mic-outline" size={S.ms(20, 0.4)} color={C.accent} />
                     <Text style={[styles.assignItemText, { color: C.text }]}>{t("drumKit", "sourceRecord")}</Text>
-                  </Pressable>
-                )}
-                {assignSlot !== null && mapping[assignSlot]?.source.type === "import" && onStemSep && (
-                  <Pressable
-                    onPress={() => {
-                      const cfg = mapping[assignSlot];
-                      if (cfg?.source.type === "import") {
-                        onStemSep(cfg.source.uri, cfg.source.name);
-                        setAssignSlot(null);
-                      }
-                    }}
-                    style={[styles.assignItem, { borderColor: C.accent }]}
-                    testID="assign-stem-sep"
-                  >
-                    <MaterialCommunityIcons name="layers-triple-outline" size={S.ms(20, 0.4)} color={C.accent} />
-                    <Text style={[styles.assignItemText, { color: C.accent }]}>{t("stemSep", "title")}</Text>
                   </Pressable>
                 )}
                 {assignSlot !== null && mapping[assignSlot] && (

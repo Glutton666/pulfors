@@ -65,7 +65,6 @@ interface NoteRecorderModalProps {
   beatsPerMeasure?: number;
   soundSet?: BuiltinSoundSet;
   onSuggestBpm?: (bpm: number) => void;
-  onOpenStemSep?: () => void;
 }
 
 const MAX_RECORD_SECONDS = 10;
@@ -133,7 +132,6 @@ export function NoteRecorderModal({
   beatsPerMeasure = 4,
   soundSet = "classic",
   onSuggestBpm,
-  onOpenStemSep,
 }: NoteRecorderModalProps) {
   const { colors: C } = useTheme();
   const styles = make_styles(C);
@@ -965,15 +963,6 @@ export function NoteRecorderModal({
                   <Text style={[styles.sourceButtonText, { color: C.text }]}>{t("noteRecorder", "import")}</Text>
                 </Pressable>
               </View>
-              {onOpenStemSep && (
-                <Pressable
-                  style={[styles.sourceButton, { backgroundColor: C.surfaceLight, width: "100%", marginTop: 8 }]}
-                  onPress={onOpenStemSep}
-                >
-                  <Ionicons name="git-branch-outline" size={22} color={C.text} />
-                  <Text style={[styles.sourceButtonText, { color: C.text }]}>{t("noteRecorder", "stemSep")}</Text>
-                </Pressable>
-              )}
               {hasExisting && (
                 <Pressable style={styles.deleteButton} onPress={handleDelete}>
                   <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
