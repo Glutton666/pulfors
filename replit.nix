@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.android-tools
     pkgs.atk
     pkgs.alsa-lib
     pkgs.udev
