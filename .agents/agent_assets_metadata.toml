@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "80Tsa_3l8_Xtw9y6lqFig"
+uri = "file://.local/prioritized-review-rerank.md"
+type = "text"
+title = "Pulfors 잔여 작업 단일 우선순위 (37개)"

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="#0a0a0f"/>
+  
+  <g transform="translate(512, 512)">
+    <g transform="translate(0, -20)">
+      <text x="0" y="0" text-anchor="middle" dominant-baseline="central"
+            font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="180"
+            fill="white" letter-spacing="-2">
+        <tspan>Pu</tspan>
+      </text>
+      
+      <text x="0" y="0" text-anchor="middle" dominant-baseline="central"
+            font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="180"
+            fill="white" letter-spacing="-2">
+        <tspan dx="20">ors</tspan>
+      </text>
+    </g>
+    
+    <line x1="0" y1="-120" x2="0" y2="80" stroke="#00b4ff" stroke-width="8" stroke-linecap="round"/>
+    <line x1="0" y1="-120" x2="60" y2="-120" stroke="#00b4ff" stroke-width="8" stroke-linecap="round"/>
+    <line x1="0" y1="-80" x2="45" y2="-80" stroke="#00b4ff" stroke-width="7" stroke-linecap="round"/>
+  </g>
+</svg>

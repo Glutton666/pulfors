@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#88bbff;stop-opacity:1"/>
+    </linearGradient>
+  </defs>
+  
+  <rect width="1024" height="1024" rx="200" fill="#111125"/>
+  
+  <g transform="translate(80, 280) scale(0.9)" fill="none" stroke="url(#grad2)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="60" y1="30" x2="60" y2="430"/>
+    <path d="M60,30 L170,30 Q250,30 250,110 Q250,190 170,190 L60,190"/>
+    <path d="M310,190 L310,350 Q310,430 385,430 Q460,430 460,350 L460,190"/>
+    <line x1="530" y1="30" x2="530" y2="430"/>
+    <line x1="530" y1="30" x2="670" y2="30"/>
+    <line x1="530" y1="190" x2="640" y2="190"/>
+    <ellipse cx="760" cy="310" rx="70" ry="120"/>
+    <line x1="880" y1="190" x2="880" y2="430"/>
+    <path d="M880,260 Q880,190 940,190"/>
+    <path d="M1020,230 Q1020,190 990,190 L980,190 Q950,190 950,245 Q950,300 980,300 L990,300 Q1020,300 1020,355 Q1020,430 990,430 L980,430 Q950,430 950,390"/>
+  </g>
+</svg>

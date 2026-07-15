@@ -1,0 +1,21 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["./*"],
+      "@shared/*": ["./shared/*"],
+      "react-native": ["./tests/_stubs/react-native.js"],
+      "expo-haptics": ["./tests/_stubs/expo-haptics.js"]
+    },
+    "moduleResolution": "node",
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "allowJs": true
+  },
+  "include": [
+    "./**/*.ts",
+    "./_stubs/**/*.js",
+    "../lib/**/*.ts"
+  ]
+}
