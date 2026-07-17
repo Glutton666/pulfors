@@ -205,10 +205,12 @@ export function StageModeOverlay({
     if (!visible) return;
     loadStageSettings().then(setSettings).catch(() => {});
     loadStageSetlist().then((saved) => {
-      if (saved.length > 0) {
-        setSetlist(saved);
-      } else {
-        setSetlist(practiceBook.slice(0, 8));
+      const list = saved.length > 0 ? saved : practiceBook.slice(0, 8);
+      setSetlist(list);
+      // 활성 항목이 없으면 첫 번째 항목 자동 선택
+      const hasActive = activeEntryId && list.some((e) => e.id === activeEntryId);
+      if (!hasActive && list.length > 0) {
+        onSelectEntry?.(list[0]!);
       }
     }).catch(() => {});
     setConfirmExit(false);
@@ -464,6 +466,7 @@ export function StageModeOverlay({
     <View style={styles.bpmReadOnly}>
       <Text style={[styles.bpmReadOnlyLabel, { color: faint }]}>{t("stageMode", "bpmLabel")}</Text>
       <Text style={[styles.bpmReadOnlyNumber, { color: text }]}>{bpm}</Text>
+      <Text style={[styles.bpmReadOnlyTimeSig, { color: faint }]}>{beatsPerMeasure}/{beatDenominator}</Text>
     </View>
   ) : (
     <View style={styles.bpmSliderWrap}>
@@ -473,6 +476,26 @@ export function StageModeOverlay({
         onTapTempo={onTapTempo}
         onDenominatorCycle={onBeatDenominatorCycle}
       />
+      {/* 박자 수 조절 (− beats +) */}
+      <View style={styles.beatCountRow}>
+        <Pressable
+          style={({ pressed }) => [styles.beatCountBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" }]}
+          onPress={() => onBeatsPerMeasureChange(Math.max(1, beatsPerMeasure - 1))}
+          accessibilityLabel="Beats minus one"
+        >
+          <Ionicons name="remove" size={16} color={text} />
+        </Pressable>
+        <Text style={[styles.beatCountText, { color: text }]}>
+          {beatsPerMeasure} {t("stageMode", "beats")}
+        </Text>
+        <Pressable
+          style={({ pressed }) => [styles.beatCountBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" }]}
+          onPress={() => onBeatsPerMeasureChange(Math.min(16, beatsPerMeasure + 1))}
+          accessibilityLabel="Beats plus one"
+        >
+          <Ionicons name="add" size={16} color={text} />
+        </Pressable>
+      </View>
     </View>
   );
 
@@ -736,8 +759,16 @@ export function StageModeOverlay({
               >
                 {/* 드래그 핸들 + 상단 뱃지 */}
                 <View style={styles.setCardTop}>
-                  <View style={[styles.modeBadge, { backgroundColor: badge.color + "33" }]}>
-                    <Text style={[styles.modeBadgeText, { color: badge.color }]}>{badge.label}</Text>
+                  <View style={styles.setCardBadgeRow}>
+                    <View style={[styles.modeBadge, { backgroundColor: badge.color + "33" }]}>
+                      <Text style={[styles.modeBadgeText, { color: badge.color }]}>{badge.label}</Text>
+                    </View>
+                    {/* 샘플 뱃지: 노트 샘플 보유 시 */}
+                    {!!item.noteSamples && Object.keys(item.noteSamples).length > 0 && (
+                      <View style={styles.sampleBadge}>
+                        <Ionicons name="musical-note" size={8} color="#A29BFE" />
+                      </View>
+                    )}
                   </View>
                   <View style={styles.setCardTopRight}>
                     {/* 드래그 핸들 아이콘 */}
@@ -1258,6 +1289,32 @@ const styles = StyleSheet.create({
     width: "100%",
     marginVertical: 4,
   },
+  bpmReadOnlyTimeSig: {
+    fontSize: 13,
+    fontFamily: "SpaceGrotesk_400Regular",
+    letterSpacing: 1,
+    marginTop: 4,
+  },
+  beatCountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    marginTop: 6,
+  },
+  beatCountBtn: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  beatCountText: {
+    fontSize: 15,
+    fontFamily: "SpaceGrotesk_500Medium",
+    minWidth: 80,
+    textAlign: "center",
+  },
 
   // ── 재생/정지 ────────────────────────────────────────────────────
   playPauseBtn: {
@@ -1327,6 +1384,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+  },
+  setCardBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  sampleBadge: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: "rgba(162,155,254,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   ctxBtns: {
     flexDirection: "row",
