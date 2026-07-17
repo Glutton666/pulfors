@@ -1419,6 +1419,10 @@ export class MetronomeEngine {
   }
 
   private playTickAudio(beat: number, subBeat: number, isStrong: boolean, isAccent: boolean, isMute: boolean, layerIndex: number = 0, blockIndex: number = -1, layerSoundSet?: string) {
+    // scheduleOffsetCallback에서 지연 발화될 때 preRenderedAudio가 이미 true로
+    // 전환됐을 수 있다. 이 경우 rendered 오디오가 동일한 클릭을 재생하므로
+    // per-tick 발화를 건너뛰어 이중 재생(double-play)을 방지한다.
+    if (this.preRenderedAudio) return;
     if (!isMute) {
       try {
         if (layerIndex > 0 && this.playLayerClick) {

@@ -2278,7 +2278,10 @@ export default function MetronomeScreen() {
           }
         }
         // pre-rendered 모드가 막혀있을 수 있으므로 per-tick으로 강제 전환
-        engine.setPreRenderedAudio(false);
+        // stopRenderedAudio()를 먼저 호출해 재생 중인 rendered 루프/플레이어를
+        // 완전히 정지한 뒤 per-tick을 활성화한다.
+        // (순서를 지키지 않으면 rendered 오디오와 per-tick 클릭이 동시에 발화됨)
+        stopRenderedAudio();
         lastAudioFireRef.current = Date.now();
         showRecoveryToastRef.current(t("main", "audioRecoveryRetry"));
         audioWatchdogTimerRef.current = setTimeout(runCheck, 3500);
@@ -2290,7 +2293,7 @@ export default function MetronomeScreen() {
 
     armTimeRef.current = Date.now();
     audioWatchdogTimerRef.current = setTimeout(runCheck, 4000);
-  }, [clearAudioWatchdog, t]);
+  }, [clearAudioWatchdog, stopRenderedAudio, t]);
 
   useEffect(() => {
     armAudioWatchdogRef.current = armAudioWatchdog;
