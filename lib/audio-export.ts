@@ -21,6 +21,8 @@ import {
   clampFadeOutSec as _clampFadeOutSec,
   repeatAndFadeMono as _repeatAndFadeMono,
   encodeMp3Mono as _encodeMp3Mono,
+  encodeMp3MonoChunked as _encodeMp3MonoChunked,
+  encodeWavMonoChunked as _encodeWavMonoChunked,
   safeFilename as _safeFilename,
 } from "./audio-export-pure";
 
@@ -28,6 +30,8 @@ const clampRepeats = _clampRepeats;
 const clampFadeOutSec = _clampFadeOutSec;
 const repeatAndFadeMono = _repeatAndFadeMono;
 const encodeMp3Mono = _encodeMp3Mono;
+const encodeMp3MonoChunked = _encodeMp3MonoChunked;
+const encodeWavMonoChunked = _encodeWavMonoChunked;
 const safeFilename = _safeFilename;
 
 export {
@@ -258,11 +262,7 @@ export async function exportPracticeEntry(
   if (pcm.length === 0) {
     throw new Error("EMPTY_RENDER");
   }
-  onProgress?.(0.55);
-  await new Promise((r) => setTimeout(r, 0));
-
-  const tiled = repeatAndFadeMono(pcm, repeats, fadeOutSec, SR);
-  onProgress?.(0.7);
+  onProgress?.(0.6);
   await new Promise((r) => setTimeout(r, 0));
 
   const base = safeFilename(entry.label);
@@ -270,11 +270,11 @@ export async function exportPracticeEntry(
   let filename: string;
   let mime: string;
   if (format === "mp3") {
-    bytes = await encodeMp3Mono(tiled, SR, 128);
+    bytes = await encodeMp3MonoChunked(pcm, repeats, fadeOutSec, SR, 128);
     filename = `${base}_x${repeats}.mp3`;
     mime = "audio/mpeg";
   } else {
-    bytes = encodeWavMonoBytes(tiled, SR);
+    bytes = encodeWavMonoChunked(pcm, repeats, fadeOutSec, SR);
     filename = `${base}_x${repeats}.wav`;
     mime = "audio/wav";
   }
