@@ -1208,6 +1208,7 @@ export const translations = {
     flash:                 { ko: "화면 플래시", en: "Screen Flash" },
     flashAccent:           { ko: "강세", en: "Accent" },
     flashAll:              { ko: "전체", en: "All" },
+    flashBoth:             { ko: "둘 다", en: "Both" },
     flashOff:              { ko: "끄기", en: "Off" },
     haptic:                { ko: "햅틱 피드백", en: "Haptic Feedback" },
     autoAdvance:           { ko: "자동 진행", en: "Auto-advance" },

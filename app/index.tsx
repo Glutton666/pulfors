@@ -1424,7 +1424,7 @@ export default function MetronomeScreen() {
         hasBeatUpdate = false;
         setCurrentBeat(pendingBeat);
         const fm = flashModeRef.current;
-        const shouldFlash = fm === "all" || (fm === "accent" && pendingAccent);
+        const shouldFlash = fm === "all" || fm === "both" || (fm === "accent" && pendingAccent);
         if (shouldFlash) {
           flashOpacity.value = withSequence(
             withTiming(0.12, { duration: 50 }),

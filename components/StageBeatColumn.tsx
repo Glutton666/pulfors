@@ -40,16 +40,19 @@ function getBeatType(beat0: number, types?: BeatType[]): BeatType {
 }
 
 export interface StageBeatColumnProps {
-  currentBeat:     number;
-  beatsPerMeasure: number;
-  beatTypes?:      BeatType[];
-  theme?:          "dark" | "light";
+  currentBeat:      number;
+  beatsPerMeasure:  number;
+  beatTypes?:       BeatType[];
+  /** 현재 비트의 서브디비전 타입 (바 모드에서 전달) */
+  subdivisionTypes?: BeatType[];
+  theme?:           "dark" | "light";
 }
 
 export function StageBeatColumn({
   currentBeat,
   beatsPerMeasure,
   beatTypes,
+  subdivisionTypes,
   theme = "dark",
 }: StageBeatColumnProps) {
   const total     = Math.max(1, beatsPerMeasure);
@@ -115,6 +118,29 @@ export function StageBeatColumn({
           </View>
         )}
 
+        {/* 서브디비전 타입 표시 (바 모드) */}
+        {!stopped && subdivisionTypes && subdivisionTypes.length > 1 && (
+          <View style={styles.subdivRow}>
+            {subdivisionTypes.map((subType, si) => {
+              const subColor =
+                subType === "accent" ? (theme === "dark" ? "#FFD54F" : "#B8860B")
+                : subType === "mute"   ? dotInactive
+                : subType === "strong" ? (theme === "dark" ? "#ffffff" : "#111111")
+                : dotInactive;
+              return (
+                <View
+                  key={si}
+                  style={[
+                    styles.subdivDot,
+                    si === 0 && styles.subdivDotFirst,
+                    { backgroundColor: subColor },
+                  ]}
+                />
+              );
+            })}
+          </View>
+        )}
+
         {/* Next beat — small & faint */}
         {!stopped && (
           <Text style={[styles.nextNum, { color: nextColor }]}>
@@ -170,5 +196,24 @@ const styles = StyleSheet.create({
     textAlign: "center",
     includeFontPadding: false,
     marginTop: 4,
+  },
+  subdivRow: {
+    flexDirection: "row",
+    gap: 5,
+    justifyContent: "center",
+    marginTop: 8,
+    marginBottom: 2,
+  },
+  subdivDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    opacity: 0.85,
+  },
+  subdivDotFirst: {
+    width: 12,
+    height: 8,
+    borderRadius: 4,
+    opacity: 1,
   },
 });

@@ -73,7 +73,7 @@ export async function saveFadeOutSettings(s: FadeOutSettings): Promise<void> {
   }
 }
 
-export type FlashMode = "all" | "accent" | "off";
+export type FlashMode = "all" | "accent" | "both" | "off";
 export type HapticMode = "all" | "accent" | "off";
 export type BuiltinSoundSet = "classic" | "woodblock" | "cowbell" | "digital" | "rimshot" | "triangle" | "hihat" | "jamblock"
   | "kick" | "snare" | "clap" | "openhat" | "tom" | "crash";

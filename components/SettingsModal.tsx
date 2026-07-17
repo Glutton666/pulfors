@@ -1443,7 +1443,7 @@ export function SettingsModal({
             message={t("settings", "screenFlashHelp")}
           />
         </View>
-        <TripleSelector value={flashMode} onChange={onFlashModeChange} accentColor={C.accent} accentDimColor={C.accentDim} options={TRIPLE_OPTS} />
+        <TripleSelector value={flashMode as import("@/components/SettingsModal.helpers").TripleValue} onChange={onFlashModeChange as (v: import("@/components/SettingsModal.helpers").TripleValue) => void} accentColor={C.accent} accentDimColor={C.accentDim} options={TRIPLE_OPTS} />
       </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
