@@ -4,11 +4,14 @@
  *
  * 구조:
  *  - 상단 바: 종료 버튼(좌), 설정 버튼(우)
- *  - 중앙: StageBeatColumn (현재/다음 비트 수직 표시)
- *  - BPM 컨트롤러: 탭 탬포 영역 + 박자표 + ±1/±5 버튼 (일시정지 시 활성)
+ *  - 메인 영역: 모드별 분기
+ *      beat/bar  → StageBeatColumn + BPM 컨트롤러
+ *      score     → ScoreRenderer 전체화면 + 하단 미니바
+ *      note(사진) → Image 전체화면 + 하단 미니바
+ *  - BPM 컨트롤러: 재생 중에는 BPM 숫자만 표시 (컨트롤 비활성)
  *  - 재생/정지 버튼
- *  - 셋 리스트: + 추가 버튼 + 가로 스크롤 카드 (전 모드 지원)
- *  - 설정 패널: 우측에서 슬라이드-인 (플래시/햅틱/카운트다운/자동진행/테마)
+ *  - 셋 리스트: + 추가 버튼 + 가로 스크롤 카드 (전 모드 지원, 롱프레스 이동/삭제)
+ *  - 설정 패널: 우측에서 슬라이드-인
  */
 
 import React, { useCallback, useState, useEffect, useRef } from "react";
@@ -23,6 +26,8 @@ import {
   ScrollView,
   Switch,
   BackHandler,
+  Image,
+  useWindowDimensions,
 } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -36,6 +41,9 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { StageBeatColumn } from "@/components/StageBeatColumn";
+import { ScoreRenderer } from "@/components/ScoreRenderer";
+import { loadScore } from "@/lib/score-storage";
+import type { ScoreDocument } from "@/lib/score-types";
 import type { PracticeEntry, FlashMode, HapticMode } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
 
@@ -128,6 +136,11 @@ export interface StageModeOverlayProps {
   activeEntryId?: string;
   /** 셋 리스트 항목 선택 — 엔진 재시작 없이 즉시 전환 */
   onSelectEntry?: (entry: PracticeEntry) => void;
+  /**
+   * 루프 카운터 — 박자가 한 바퀴 돌 때마다 증가.
+   * autoAdvance 가 켜져 있으면 here 1 이상이 되었을 때 다음 항목으로 자동 전환.
+   */
+  loopCount?: number;
 }
 
 // ─── 메인 컴포넌트 ─────────────────────────────────────────────────────
@@ -156,9 +169,11 @@ export function StageModeOverlay({
   practiceBook = [],
   activeEntryId,
   onSelectEntry,
+  loopCount = 0,
 }: StageModeOverlayProps) {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
+  const { width: winWidth } = useWindowDimensions();
 
   // ── 설정 & 셋 리스트 상태 ──────────────────────────────────────────
   const [settings, setSettings]       = useState<StageSettings>(DEFAULT_STAGE_SETTINGS);
@@ -166,8 +181,12 @@ export function StageModeOverlay({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pickerOpen,   setPickerOpen]   = useState(false);
   const [confirmExit,  setConfirmExit]  = useState(false);
-  const settingsRef = useRef(settings);
-  useEffect(() => { settingsRef.current = settings; }, [settings]);
+  /** 롱프레스로 선택된 셋 리스트 항목 ID (이동/삭제 컨텍스트 메뉴) */
+  const [contextEntryId, setContextEntryId] = useState<string | null>(null);
+
+  // ── 악보 문서 로드 ────────────────────────────────────────────────
+  const [scoreDoc, setScoreDoc] = useState<ScoreDocument | null>(null);
+  const scoreIdRef = useRef<string | undefined>(undefined);
 
   // ── 마운트 시 로드 ────────────────────────────────────────────────
   useEffect(() => {
@@ -177,14 +196,33 @@ export function StageModeOverlay({
       if (saved.length > 0) {
         setSetlist(saved);
       } else {
-        // 셋 리스트 비어있으면 연습장에서 자동 채우기
         setSetlist(practiceBook.slice(0, 8));
       }
     }).catch(() => {});
     setConfirmExit(false);
     setSettingsOpen(false);
     setPickerOpen(false);
+    setContextEntryId(null);
   }, [visible]);
+
+  // ── keep-awake 연동 ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!visible) return;
+    if (settings.keepAwake) {
+      import("expo-keep-awake")
+        .then((m) => m.activateKeepAwakeAsync("stage-mode"))
+        .catch(() => {});
+    } else {
+      import("expo-keep-awake")
+        .then((m) => m.deactivateKeepAwake("stage-mode"))
+        .catch(() => {});
+    }
+    return () => {
+      import("expo-keep-awake")
+        .then((m) => m.deactivateKeepAwake("stage-mode"))
+        .catch(() => {});
+    };
+  }, [visible, settings.keepAwake]);
 
   const updateSettings = useCallback((patch: Partial<StageSettings>) => {
     setSettings((prev) => {
@@ -256,14 +294,40 @@ export function StageModeOverlay({
     const handler = BackHandler.addEventListener("hardwareBackPress", () => {
       if (settingsOpen) { setSettingsOpen(false); return true; }
       if (pickerOpen)   { setPickerOpen(false);   return true; }
+      if (contextEntryId) { setContextEntryId(null); return true; }
       setConfirmExit(true);
       return true;
     });
     return () => handler.remove();
-  }, [visible, settingsOpen, pickerOpen]);
+  }, [visible, settingsOpen, pickerOpen, contextEntryId]);
 
-  // ── 활성 항목 ────────────────────────────────────────────────────
+  // ── 활성 항목 & 모드 결정 ────────────────────────────────────────
   const activeEntry = setlist.find((e) => e.id === activeEntryId) ?? null;
+  const activeMode  = activeEntry ? getEntryMode(activeEntry) : "beat";
+  // 악보 모드 또는 사진이 있는 노트 모드 → 전체화면 컨텐츠 표시
+  const hasPhoto    = activeMode === "note" && !!activeEntry?.imageUri;
+  const isFullscreen = activeMode === "score" || hasPhoto;
+
+  // ── 악보 문서 로드 ────────────────────────────────────────────────
+  useEffect(() => {
+    const sid = activeEntry?.scoreId;
+    if (sid && sid !== scoreIdRef.current) {
+      scoreIdRef.current = sid;
+      loadScore(sid).then(setScoreDoc).catch(() => setScoreDoc(null));
+    } else if (!sid) {
+      scoreIdRef.current = undefined;
+      setScoreDoc(null);
+    }
+  }, [activeEntry?.scoreId]);
+
+  // ── 악보 현재 마디 계산 (loopCount → measureIdx) ─────────────────
+  const measureCount = scoreDoc?.parts[0]?.measures?.length ?? 1;
+  const currentMeasureIdx = loopCount % Math.max(1, measureCount);
+  const scoreHighlightColor = settings.scoreHighlight === "top"
+    ? "rgba(74,158,255,0.22)"
+    : settings.scoreHighlight === "bottom"
+    ? "rgba(255,159,67,0.22)"
+    : "rgba(85,239,196,0.22)";
 
   // ── 셋 리스트 조작 ───────────────────────────────────────────────
   const addToSetlist = useCallback((entry: PracticeEntry) => {
@@ -281,6 +345,20 @@ export function StageModeOverlay({
       saveStageSetlist(next).catch(() => {});
       return next;
     });
+    setContextEntryId(null);
+  }, []);
+
+  const moveInSetlist = useCallback((id: string, dir: -1 | 1) => {
+    setSetlist((prev) => {
+      const idx = prev.findIndex((e) => e.id === id);
+      if (idx < 0) return prev;
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[newIdx]] = [next[newIdx]!, next[idx]!];
+      saveStageSetlist(next).catch(() => {});
+      return next;
+    });
   }, []);
 
   // ── 다음 항목으로 이동 ────────────────────────────────────────────
@@ -291,6 +369,20 @@ export function StageModeOverlay({
     const next = setlist[nextIdx];
     if (next) onSelectEntry?.(next);
   }, [setlist, activeEntryId, onSelectEntry]);
+
+  // ── autoAdvance: loopCount 변화 시 자동 다음 항목 ────────────────
+  const prevLoopCountRef = useRef(loopCount);
+  useEffect(() => {
+    if (
+      settings.autoAdvance &&
+      isPlaying &&
+      loopCount > 0 &&
+      loopCount !== prevLoopCountRef.current
+    ) {
+      advanceSetlist();
+    }
+    prevLoopCountRef.current = loopCount;
+  }, [loopCount, settings.autoAdvance, isPlaying, advanceSetlist]);
 
   // ── 레이아웃 ────────────────────────────────────────────────────
   const webTop    = Platform.OS === "web" ? 67 : 0;
@@ -313,6 +405,89 @@ export function StageModeOverlay({
 
   // ── 피커에서 추가 가능한 항목 ─────────────────────────────────────
   const availableEntries = practiceBook.filter((e) => !setlist.find((s) => s.id === e.id));
+
+  // ─ 롱프레스 컨텍스트 항목 ─
+  const ctxEntry = contextEntryId ? setlist.find((e) => e.id === contextEntryId) : null;
+  const ctxIdx   = contextEntryId ? setlist.findIndex((e) => e.id === contextEntryId) : -1;
+
+  // ─ BPM 컨트롤러: 재생 중에는 BPM 숫자만 ─────────────────────────
+  const BpmController = isPlaying ? (
+    <View style={styles.bpmReadOnly}>
+      <Text style={[styles.bpmReadOnlyLabel, { color: faint }]}>{t("stageMode", "bpmLabel")}</Text>
+      <Text style={[styles.bpmReadOnlyNumber, { color: text }]}>{bpm}</Text>
+    </View>
+  ) : (
+    <>
+      <View style={styles.bpmController}>
+        {/* 박자표 버튼 */}
+        <Pressable
+          style={({ pressed }) => [styles.timeSigBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" }]}
+          onPress={onBeatDenominatorCycle}
+          accessibilityLabel="Time signature"
+        >
+          <Text style={[styles.timeSigText, { color: text }]}>{timeSigText}</Text>
+        </Pressable>
+
+        {/* 탭 탬포 */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.bpmTapArea,
+            { backgroundColor: pressed ? (isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)") : cardBg, borderColor: cardBdr },
+          ]}
+          onPress={onTapTempo}
+          accessibilityLabel="Tap tempo"
+          testID="stage-mode-bpm"
+        >
+          <Text style={[styles.bpmTapLabel, { color: faint }]}>{t("stageMode", "bpmLabel")}</Text>
+          <Text style={[styles.bpmTapNumber, { color: text }]}>{bpm}</Text>
+          <Text style={[styles.bpmTapHint, { color: faint }]}>{t("stageMode", "tapTempo")}</Text>
+        </Pressable>
+
+        {/* 비트 수 −1 */}
+        <Pressable
+          style={({ pressed }) => [styles.timeSigBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" }]}
+          onPress={() => onBeatsPerMeasureChange(Math.max(1, beatsPerMeasure - 1))}
+          accessibilityLabel="Beats −1"
+        >
+          <Ionicons name="remove" size={16} color={text} />
+          <Text style={[styles.timeSigSmall, { color: text }]}>{t("stageMode", "beats")}</Text>
+        </Pressable>
+      </View>
+
+      {/* BPM ±1/±5 버튼 */}
+      <View style={styles.bpmButtons}>
+        {([-5, -1, 1, 5] as const).map((delta) => (
+          <Pressable
+            key={delta}
+            style={({ pressed }) => [styles.bpmBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : cardBg }]}
+            onPress={() => handleBpmPress(delta)}
+            onPressIn={() => startHold(delta)}
+            onPressOut={stopHold}
+            testID={`stage-mode-bpm-${delta > 0 ? "plus" : "minus"}${Math.abs(delta) === 5 ? "5" : ""}`}
+          >
+            <Text style={[styles.bpmBtnText, { color: text }]}>{delta > 0 ? "+" : ""}{delta}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </>
+  );
+
+  // ─ 재생/정지 버튼 ───────────────────────────────────────────────
+  const PlayPauseBtn = (
+    <Pressable
+      style={({ pressed }) => [styles.playPauseBtn, pressed && { opacity: 0.6 }]}
+      onPress={onPlayPause}
+      testID="stage-mode-play-pause"
+      accessibilityRole="button"
+      accessibilityLabel={isPlaying ? t("stageMode", "pause") : t("stageMode", "play")}
+    >
+      <Ionicons
+        name={isPlaying ? "pause-circle" : "play-circle"}
+        size={76}
+        color={text}
+      />
+    </Pressable>
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: bg }]} testID="stage-mode-overlay">
@@ -356,123 +531,108 @@ export function StageModeOverlay({
         </Pressable>
       </View>
 
-      {/* ── 메인 컨텐츠 ─────────────────────────────────────────── */}
-      <View style={styles.mainContent}>
-        {/* 비트 컬럼 */}
-        <StageBeatColumn
-          currentBeat={currentBeat}
-          beatsPerMeasure={beatsPerMeasure}
-          beatTypes={beatTypes}
-          theme={settings.theme}
-        />
+      {/* ── 메인 컨텐츠: 모드별 분기 ───────────────────────────── */}
+      {isFullscreen ? (
+        /* ─ 전체화면 모드 (악보 / 사진) + 하단 미니바 ─ */
+        <View style={styles.fullscreenLayout}>
+          {/* 전체화면 컨텐츠 영역 */}
+          <View style={styles.fullscreenContent}>
+            {activeMode === "score" && scoreDoc ? (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingVertical: 12 }}
+              >
+                <ScoreRenderer
+                  doc={scoreDoc}
+                  containerWidth={winWidth}
+                  showPlayhead={false}
+                  selectedMeasureIdx={currentMeasureIdx}
+                  highlightColor={scoreHighlightColor}
+                  showPartNames={false}
+                />
+              </ScrollView>
+            ) : activeMode === "score" && !scoreDoc ? (
+              /* 악보 로딩 중 */
+              <View style={styles.fullscreenPlaceholder}>
+                <Ionicons name="musical-notes-outline" size={48} color={faint} />
+                <Text style={[styles.fullscreenPlaceholderText, { color: faint }]}>
+                  {activeEntry?.label ?? "Score"}
+                </Text>
+              </View>
+            ) : hasPhoto && activeEntry?.imageUri ? (
+              /* 사진 노트 */
+              <Image
+                source={{ uri: activeEntry.imageUri }}
+                style={styles.notePhoto}
+                resizeMode="contain"
+              />
+            ) : null}
+          </View>
 
-        {/* BPM 컨트롤러 */}
-        <View style={styles.bpmController}>
-          {/* 박자표 버튼 */}
-          <Pressable
-            style={({ pressed }) => [styles.timeSigBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" }]}
-            onPress={onBeatDenominatorCycle}
-            disabled={isPlaying}
-            accessibilityLabel="Time signature"
-          >
-            <Text style={[styles.timeSigText, { color: isPlaying ? faint : text, opacity: isPlaying ? 0.5 : 1 }]}>
-              {timeSigText}
-            </Text>
-          </Pressable>
+          {/* 하단 미니바 */}
+          <View style={[styles.miniBar, { backgroundColor: isDark ? "rgba(0,0,0,0.85)" : "rgba(240,240,240,0.92)" }]}>
+            <View style={styles.miniBarRow}>
+              {/* 비트 숫자 */}
+              <Text style={[styles.miniBeat, { color: text }]}>
+                {currentBeat < 0 ? "—" : String(currentBeat + 1)}
+                <Text style={[styles.miniTotal, { color: faint }]}>/{beatsPerMeasure}</Text>
+              </Text>
 
-          {/* 탭 탬포 / BPM 표시 */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.bpmTapArea,
-              { backgroundColor: pressed ? (isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)") : cardBg, borderColor: cardBdr },
-            ]}
-            onPress={onTapTempo}
-            accessibilityLabel="Tap tempo"
-            testID="stage-mode-bpm"
-          >
-            <Text style={[styles.bpmTapLabel, { color: faint }]}>{t("stageMode", "bpmLabel")}</Text>
-            <Text style={[styles.bpmTapNumber, { color: text }]}>{bpm}</Text>
-            <Text style={[styles.bpmTapHint, { color: faint }]}>{t("stageMode", "tapTempo")}</Text>
-          </Pressable>
+              {/* BPM (재생 중: 읽기 전용, 정지 중: 탭 템포) */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.miniBpmArea,
+                  { backgroundColor: (!isPlaying && pressed) ? btnBg : "transparent" },
+                ]}
+                onPress={isPlaying ? undefined : onTapTempo}
+                disabled={isPlaying}
+              >
+                <Text style={[styles.miniBpm, { color: isPlaying ? faint : text }]}>{bpm}</Text>
+                <Text style={[styles.miniBpmUnit, { color: faint }]}>BPM</Text>
+              </Pressable>
 
-          {/* 비트 수 ±1 */}
-          <Pressable
-            style={({ pressed }) => [styles.timeSigBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" }]}
-            onPress={() => onBeatsPerMeasureChange(Math.max(1, beatsPerMeasure - 1))}
-            onLongPress={() => {}}
-            disabled={isPlaying}
-            accessibilityLabel="Beats −1"
-          >
-            <Ionicons name="remove" size={16} color={isPlaying ? faint : text} style={{ opacity: isPlaying ? 0.4 : 1 }} />
-            <Text style={[styles.timeSigSmall, { color: isPlaying ? faint : text, opacity: isPlaying ? 0.4 : 1 }]}>
-              {t("stageMode", "beats")}
-            </Text>
-          </Pressable>
+              {/* 재생/정지 */}
+              <Pressable
+                style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+                onPress={onPlayPause}
+                testID="stage-mode-play-pause"
+              >
+                <Ionicons
+                  name={isPlaying ? "pause-circle" : "play-circle"}
+                  size={48}
+                  color={text}
+                />
+              </Pressable>
+            </View>
+          </View>
         </View>
-
-        {/* BPM ±1/±5 버튼 */}
-        <View style={styles.bpmButtons}>
-          <Pressable
-            style={({ pressed }) => [styles.bpmBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : cardBg }]}
-            onPress={() => handleBpmPress(-5)}
-            onPressIn={() => startHold(-5)}
-            onPressOut={stopHold}
-            testID="stage-mode-bpm-minus5"
-          >
-            <Text style={[styles.bpmBtnText, { color: text }]}>−5</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.bpmBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : cardBg }]}
-            onPress={() => handleBpmPress(-1)}
-            onPressIn={() => startHold(-1)}
-            onPressOut={stopHold}
-            testID="stage-mode-bpm-minus"
-          >
-            <Text style={[styles.bpmBtnText, { color: text }]}>−1</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.bpmBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : cardBg }]}
-            onPress={() => handleBpmPress(1)}
-            onPressIn={() => startHold(1)}
-            onPressOut={stopHold}
-            testID="stage-mode-bpm-plus"
-          >
-            <Text style={[styles.bpmBtnText, { color: text }]}>+1</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.bpmBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : cardBg }]}
-            onPress={() => handleBpmPress(5)}
-            onPressIn={() => startHold(5)}
-            onPressOut={stopHold}
-            testID="stage-mode-bpm-plus5"
-          >
-            <Text style={[styles.bpmBtnText, { color: text }]}>+5</Text>
-          </Pressable>
-        </View>
-
-        {/* 재생/정지 버튼 */}
-        <Pressable
-          style={({ pressed }) => [styles.playPauseBtn, pressed && { opacity: 0.6 }]}
-          onPress={onPlayPause}
-          testID="stage-mode-play-pause"
-          accessibilityRole="button"
-          accessibilityLabel={isPlaying ? t("stageMode", "pause") : t("stageMode", "play")}
-        >
-          <Ionicons
-            name={isPlaying ? "pause-circle" : "play-circle"}
-            size={76}
-            color={text}
+      ) : (
+        /* ─ 기본 모드 (비트 / 바) ─────────────────────────────── */
+        <View style={styles.mainContent}>
+          {/* 비트 컬럼 */}
+          <StageBeatColumn
+            currentBeat={currentBeat}
+            beatsPerMeasure={beatsPerMeasure}
+            beatTypes={beatTypes}
+            theme={settings.theme}
           />
-        </Pressable>
-      </View>
 
-      {/* 셋 리스트 */}
+          {/* BPM 컨트롤러 (재생 중: 읽기 전용 숫자, 정지 중: 풀 컨트롤러) */}
+          {BpmController}
+
+          {/* 재생/정지 버튼 */}
+          {PlayPauseBtn}
+        </View>
+      )}
+
+      {/* ── 셋 리스트 ───────────────────────────────────────────── */}
       <View style={styles.setlistSection}>
         <View style={styles.setlistHeader}>
           <Text style={[styles.setlistLabel, { color: faint }]}>
             {t("stageMode", "setList")}
           </Text>
-          {isPlaying && (
+          {/* 재생 중에는 항상 "다음 →" 버튼 표시 */}
+          {isPlaying && setlist.length > 1 && (
             <Pressable
               style={({ pressed }) => [
                 styles.nextBtn,
@@ -506,26 +666,63 @@ export function StageModeOverlay({
           renderItem={({ item }) => {
             const isActive = item.id === activeEntryId;
             const mode     = getEntryMode(item);
-            const badge    = MODE_BADGE[mode] ?? MODE_BADGE["beat"];
+            const badge    = MODE_BADGE[mode] ?? MODE_BADGE["beat"]!;
+            const isCtx    = item.id === contextEntryId;
             return (
               <Pressable
                 style={({ pressed }) => [
                   styles.setCard,
-                  { backgroundColor: isActive ? (isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)") : cardBg,
-                    borderColor: isActive ? (isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.3)") : cardBdr },
+                  {
+                    backgroundColor: isActive
+                      ? (isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)")
+                      : cardBg,
+                    borderColor: isCtx
+                      ? badge.color
+                      : isActive
+                      ? (isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.3)")
+                      : cardBdr,
+                  },
                   pressed && { opacity: 0.65 },
                 ]}
-                onPress={() => onSelectEntry?.(item)}
-                onLongPress={() => removeFromSetlist(item.id)}
-                delayLongPress={600}
+                onPress={() => {
+                  if (contextEntryId) {
+                    setContextEntryId(null);
+                    return;
+                  }
+                  onSelectEntry?.(item);
+                }}
+                onLongPress={() => setContextEntryId(isCtx ? null : item.id)}
+                delayLongPress={500}
                 testID={`stage-set-entry-${item.id}`}
               >
                 <View style={styles.setCardTop}>
                   <View style={[styles.modeBadge, { backgroundColor: badge.color + "33" }]}>
                     <Text style={[styles.modeBadgeText, { color: badge.color }]}>{badge.label}</Text>
                   </View>
-                  {isActive && (
+                  {isActive && !isCtx && (
                     <Ionicons name="radio-button-on" size={10} color={badge.color} />
+                  )}
+                  {/* 컨텍스트 메뉴 */}
+                  {isCtx && (
+                    <View style={styles.ctxBtns}>
+                      <Pressable
+                        onPress={() => moveInSetlist(item.id, -1)}
+                        hitSlop={6}
+                        disabled={ctxIdx === 0}
+                      >
+                        <Ionicons name="chevron-back" size={14} color={ctxIdx === 0 ? faint : text} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => moveInSetlist(item.id, 1)}
+                        hitSlop={6}
+                        disabled={ctxIdx >= setlist.length - 1}
+                      >
+                        <Ionicons name="chevron-forward" size={14} color={ctxIdx >= setlist.length - 1 ? faint : text} />
+                      </Pressable>
+                      <Pressable onPress={() => removeFromSetlist(item.id)} hitSlop={6}>
+                        <Ionicons name="trash-outline" size={14} color="#FF6B6B" />
+                      </Pressable>
+                    </View>
                   )}
                 </View>
                 <Text
@@ -617,6 +814,16 @@ export function StageModeOverlay({
             />
           </SettingRow>
 
+          {/* 화면 꺼짐 방지 */}
+          <SettingRow label={t("stageMode", "keepAwake")} textColor={text} faintColor={faint}>
+            <Switch
+              value={settings.keepAwake}
+              onValueChange={(v) => updateSettings({ keepAwake: v })}
+              trackColor={{ false: isDark ? "#333" : "#ccc", true: "#4A9EFF" }}
+              thumbColor="#fff"
+            />
+          </SettingRow>
+
           {/* 자동 진행 */}
           <SettingRow label={t("stageMode", "autoAdvance")} textColor={text} faintColor={faint}
             hint={t("stageMode", "autoAdvanceHint")}>
@@ -698,7 +905,7 @@ export function StageModeOverlay({
                 contentContainerStyle={styles.pickerList}
                 renderItem={({ item }) => {
                   const mode  = getEntryMode(item);
-                  const badge = MODE_BADGE[mode] ?? MODE_BADGE["beat"];
+                  const badge = MODE_BADGE[mode] ?? MODE_BADGE["beat"]!;
                   return (
                     <Pressable
                       style={({ pressed }) => [
@@ -823,7 +1030,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
 
-  // ── 메인 컨텐츠 ─────────────────────────────────────────────────
+  // ── 기본 메인 컨텐츠 (비트/바 모드) ─────────────────────────────
   mainContent: {
     flex: 1,
     alignItems: "center",
@@ -831,6 +1038,88 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 20,
     zIndex: 2,
+  },
+
+  // ── 전체화면 레이아웃 (악보/사진 모드) ──────────────────────────
+  fullscreenLayout: {
+    flex: 1,
+    zIndex: 2,
+  },
+  fullscreenContent: {
+    flex: 1,
+    overflow: "hidden",
+  },
+  fullscreenPlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  fullscreenPlaceholderText: {
+    fontSize: 16,
+    fontFamily: "SpaceGrotesk_500Medium",
+  },
+  notePhoto: {
+    flex: 1,
+    width: "100%",
+  },
+
+  // ── 미니바 (전체화면 모드 하단) ─────────────────────────────────
+  miniBar: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(128,128,128,0.2)",
+  },
+  miniBarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  miniBeat: {
+    fontSize: 28,
+    fontFamily: "SpaceGrotesk_700Bold",
+    minWidth: 60,
+  },
+  miniTotal: {
+    fontSize: 16,
+    fontFamily: "SpaceGrotesk_400Regular",
+  },
+  miniBpmArea: {
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  miniBpm: {
+    fontSize: 28,
+    fontFamily: "SpaceGrotesk_700Bold",
+  },
+  miniBpmUnit: {
+    fontSize: 10,
+    fontFamily: "SpaceGrotesk_400Regular",
+    letterSpacing: 2,
+    textTransform: "uppercase",
+  },
+
+  // ── BPM 읽기 전용 (재생 중) ─────────────────────────────────────
+  bpmReadOnly: {
+    alignItems: "center",
+    paddingVertical: 16,
+    width: "100%",
+  },
+  bpmReadOnlyLabel: {
+    fontSize: 10,
+    fontFamily: "SpaceGrotesk_400Regular",
+    letterSpacing: 3,
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  bpmReadOnlyNumber: {
+    fontSize: 56,
+    fontFamily: "SpaceGrotesk_700Bold",
+    lineHeight: 60,
+    includeFontPadding: false,
   },
 
   // ── BPM 컨트롤러 ────────────────────────────────────────────────
@@ -966,6 +1255,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  ctxBtns: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   modeBadge: {
     borderRadius: 4,
