@@ -54,7 +54,7 @@ import {
   soundSets,
 } from "@/lib/metronome-engine";
 import type { BeatType, ProgressInfo } from "@/lib/metronome-engine";
-import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, type ControlPadMapping, type MetronomeSettings } from "@/lib/storage";
+import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, runStorageMigrations, type MetronomeSettings } from "@/lib/storage";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample } from "@/lib/storage";
 import { BeatIndicator } from "@/components/BeatIndicator";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
@@ -85,8 +85,6 @@ import { useEasterEggQuiz } from "@/hooks/useEasterEggQuiz";
 import { useFadeOutSession } from "@/hooks/useFadeOutSession";
 import { useGoalPopups } from "@/hooks/useGoalPopups";
 import { usePracticeRoomTracking } from "@/hooks/usePracticeRoomTracking";
-import { useControlPadMapping } from "@/hooks/useControlPadMapping";
-import { useQuickAddList } from "@/hooks/useQuickAddList";
 import { useStageMode } from "@/hooks/useStageMode";
 import { StageModeOverlay } from "@/components/StageModeOverlay";
 import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist";
@@ -257,11 +255,7 @@ export default function MetronomeScreen() {
   const scorePracticeBookRef = useRef<PracticeEntry[]>([]);
   const linkedEntryVersionRef = useRef(0);
   const [noteBarEntries, setNoteBarEntries] = useState<PracticeEntry[]>([]);
-  const { controlPadMapping, handleControlPadMappingChange } = useControlPadMapping();
   const noteAdvanceQueueRef = useRef<() => void>(() => {});
-  const quickAddNoteRef = useRef<(entry: PracticeEntry) => void>(() => {});
-
-  const { quickAddList, quickAddListRef, handleQuickAddListChange } = useQuickAddList();
   const noteShuffledIndicesRef = useRef<number[]>([]);
   const noteShuffledPosRef = useRef(0);
 
@@ -573,6 +567,8 @@ export default function MetronomeScreen() {
   }));
 
   useEffect(() => {
+    runStorageMigrations().catch(() => {});
+
     const engine = new MetronomeEngine();
     engineRef.current = engine;
 
@@ -2504,17 +2500,6 @@ export default function MetronomeScreen() {
         return;
       }
 
-      // 노트 모드 빠른 추가: 1~9 숫자 키 (재생 중일 때만 큐 추가)
-      if (inNoteMode && /^Digit[1-9]$/.test(e.code)) {
-        const idx = parseInt(e.code.slice(5), 10) - 1;
-        const entry = quickAddListRef.current[idx];
-        if (entry && noteIsPlayingRef.current) {
-          e.preventDefault();
-          quickAddNoteRef.current(entry);
-        }
-        return;
-      }
-
       // 노트 모드에서는 Space 외 단축키 비활성
       if (inNoteMode) return;
 
@@ -4288,7 +4273,6 @@ export default function MetronomeScreen() {
     });
   }, []);
 
-  useEffect(() => { quickAddNoteRef.current = handleNoteAddToQueue; }, [handleNoteAddToQueue]);
 
   const handleNoteRemoveFromQueue = useCallback((index: number) => {
     const curIdx = noteCurrentIndexRef.current;
@@ -5514,14 +5498,10 @@ export default function MetronomeScreen() {
             onTogglePlay={handleNoteTogglePlay}
             onManualNext={handleNoteManualNext}
             onManualNextImmediate={handleNoteManualNextImmediate}
-            quickAddList={quickAddList}
-            onQuickAddListChange={handleQuickAddListChange}
             onSave={handleNoteSave}
             onReset={handleNoteReset}
             onExitNoteMode={handleExitNoteMode}
             onQueueItemImageChange={handleNoteQueueItemImageChange}
-            padMapping={controlPadMapping}
-            onPadMappingChange={handleControlPadMappingChange}
           />
         ) : (
         <>

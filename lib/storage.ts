@@ -436,6 +436,13 @@ export async function savePracticeBook(entries: PracticeEntry[]): Promise<void> 
   }
 }
 
+export async function runStorageMigrations(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(CONTROL_PAD_MAPPING_KEY);
+    await AsyncStorage.removeItem(QUICK_ADD_KEY);
+  } catch {}
+}
+
 export function createPracticeEntry(
   label: string,
   config: Omit<PracticeEntry, "id" | "label" | "createdAt">,
