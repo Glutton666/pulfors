@@ -196,6 +196,14 @@ export function StageModeOverlay({
     prevBeatRef2.current = currentBeat;
   }, [currentBeat, isPlaying]);
 
+  // ── 항목 전환 시 루프 카운터 초기화 ─────────────────────────────
+  // prevBeatRef2 를 리셋하지 않으면 이전 항목 마지막 비트 위치가 남아
+  // 새 항목 첫 비트(0)에서 internalLoopCount 가 잘못 증가한다.
+  useEffect(() => {
+    setInternalLoopCount(0);
+    prevBeatRef2.current = -1;
+  }, [activeEntryId]);
+
   // ── 마운트 시 로드 ────────────────────────────────────────────────
   useEffect(() => {
     if (!visible) return;
@@ -400,8 +408,10 @@ export function StageModeOverlay({
 
   // ── 다음 항목으로 이동 ────────────────────────────────────────────
   const advanceSetlist = useCallback(() => {
-    if (setlist.length === 0) return;
+    // 항목이 1개 이하면 이동 불필요 (같은 항목 재선택 방지)
+    if (setlist.length <= 1) return;
     const idx = setlist.findIndex((e) => e.id === activeEntryId);
+    // 마지막 항목이면 첫 번째 항목으로 순환
     const nextIdx = (idx + 1) % setlist.length;
     const next = setlist[nextIdx];
     if (next) onSelectEntry?.(next);
