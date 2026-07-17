@@ -5097,17 +5097,9 @@ export default function MetronomeScreen() {
             void togglePlayPauseRef.current?.();
           }
           void enterStageMode();
-          // 셋 리스트 로드
+          // 연습장 전체를 피커용으로 로드
           loadPracticeBook().then((entries) => {
             setStagePracticeEntries(entries);
-            // beat-mode 항목만 후보로 (bar/note 제외)
-            const beatOnes = entries.filter(
-              (e) => e.mode !== "bar" && e.mode !== "note"
-            );
-            // 현재 BPM 과 일치하는 항목 우선, 없으면 첫 번째 항목
-            const match =
-              beatOnes.find((e) => e.bpm === bpmRef.current) ?? beatOnes[0];
-            if (match) setActiveStagePracticeEntryId(match.id);
           }).catch(() => {});
         }}
         onDrumKit={() => {
@@ -5988,19 +5980,36 @@ export default function MetronomeScreen() {
         beatProgress={beatProgress}
         currentBeat={currentBeat}
         beatsPerMeasure={beatsPerMeasure}
+        beatDenominator={beatDenominator}
         subdivisionCount={Math.max(1, subdivisionPattern?.length ?? 1)}
         beatTypes={beatTypes}
         beatSubdivisions={beatSubdivisions}
         isPlaying={isPlaying}
+        flashMode={flashMode}
+        hapticMode={hapticMode}
         onPlayPause={() => void togglePlayPauseRef.current?.()}
         onExit={() => void exitStageMode()}
         onBpmChange={updateBpm}
-        practiceEntries={stagePracticeEntries}
+        onTapTempo={handleTapTempo}
+        onBeatsPerMeasureChange={(n) => {
+          setBeatsPerMeasure(n);
+          engineRef.current?.setBeatsPerMeasure(n);
+        }}
+        onBeatDenominatorCycle={handleBeatDenominatorCycle}
+        onFlashModeChange={(m) => {
+          setFlashMode(m);
+          persistSettings({ flashMode: m });
+        }}
+        onHapticModeChange={(m) => {
+          setHapticMode(m);
+          engineRef.current?.setHapticMode(m);
+          persistSettings({ hapticMode: m });
+        }}
+        practiceBook={stagePracticeEntries}
         activeEntryId={activeStagePracticeEntryId}
         onSelectEntry={(entry) => {
           const engine = engineRef.current;
           if (!engine) return;
-          // 비트 모드 전용 적용 — barMode 전환 없음, 엔진 재시작 없음
           updateBpmRef.current(entry.bpm);
           setBeatsPerMeasure(entry.beatsPerMeasure);
           setBeatTypes([...entry.beatTypes]);
@@ -6008,9 +6017,7 @@ export default function MetronomeScreen() {
           if (entry.subdivisionPattern && entry.subdivisionPattern.length > 0) {
             setSubdivisionPattern([...entry.subdivisionPattern]);
           }
-          // 엔진에 즉시 반영 (stop/start 없이 끊김 없는 전환)
           applyEntryToEngineCore(engine, entry);
-          // 오디오 프리렌더 버퍼 즉시 재생성
           scheduleReRender();
           setActiveStagePracticeEntryId(entry.id);
         }}
