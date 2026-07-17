@@ -27,7 +27,6 @@ import {
   Switch,
   BackHandler,
   Image,
-  PanResponder,
   useWindowDimensions,
 } from "react-native";
 import Animated, {
@@ -181,9 +180,6 @@ export function StageModeOverlay({
   const [confirmExit,  setConfirmExit]  = useState(false);
   /** 롱프레스로 선택된 셋 리스트 항목 ID (이동/삭제 컨텍스트 메뉴) */
   const [contextEntryId, setContextEntryId] = useState<string | null>(null);
-  /** 드래그 중인 카드 ID */
-  const [dragId, setDragId] = useState<string | null>(null);
-  const dragXRef = useRef(0);
 
   // ── 악보 문서 로드 ────────────────────────────────────────────────
   const [scoreDoc, setScoreDoc] = useState<ScoreDocument | null>(null);
@@ -205,7 +201,7 @@ export function StageModeOverlay({
     if (!visible) return;
     loadStageSettings().then(setSettings).catch(() => {});
     loadStageSetlist().then((saved) => {
-      const list = saved.length > 0 ? saved : practiceBook.slice(0, 8);
+      const list = saved.length > 0 ? saved : [];
       setSetlist(list);
       // 활성 항목이 없으면 첫 번째 항목 자동 선택
       const hasActive = activeEntryId && list.some((e) => e.id === activeEntryId);
@@ -466,7 +462,14 @@ export function StageModeOverlay({
     <View style={styles.bpmReadOnly}>
       <Text style={[styles.bpmReadOnlyLabel, { color: faint }]}>{t("stageMode", "bpmLabel")}</Text>
       <Text style={[styles.bpmReadOnlyNumber, { color: text }]}>{bpm}</Text>
-      <Text style={[styles.bpmReadOnlyTimeSig, { color: faint }]}>{beatsPerMeasure}/{beatDenominator}</Text>
+      <Pressable
+        onLongPress={onBeatDenominatorCycle}
+        delayLongPress={500}
+        accessibilityLabel="Beat denominator cycle"
+        hitSlop={10}
+      >
+        <Text style={[styles.bpmReadOnlyTimeSig, { color: faint }]}>{beatsPerMeasure}/{beatDenominator}</Text>
+      </Pressable>
     </View>
   ) : (
     <View style={styles.bpmSliderWrap}>
@@ -637,6 +640,9 @@ export function StageModeOverlay({
       ) : (
         /* ─ 기본 모드 (비트 / 바) ─────────────────────────────── */
         <View style={styles.mainContent}>
+          {/* 재생/정지 버튼 — StageBeatColumn 바로 위 */}
+          {PlayPauseBtn}
+
           {/* 비트 컬럼 */}
           <StageBeatColumn
             currentBeat={currentBeat}
@@ -652,156 +658,59 @@ export function StageModeOverlay({
 
           {/* BPM 컨트롤러 (재생 중: 읽기 전용 숫자, 정지 중: 풀 컨트롤러) */}
           {BpmController}
-
-          {/* 재생/정지 버튼 */}
-          {PlayPauseBtn}
         </View>
       )}
 
       {/* ── 셋 리스트 ───────────────────────────────────────────── */}
-      <View style={styles.setlistSection}>
-        <View style={styles.setlistHeader}>
-          <Text style={[styles.setlistLabel, { color: faint }]}>
-            {t("stageMode", "setList")}
-          </Text>
-          {/* 재생 중에는 항상 "다음 →" 버튼 표시 */}
-          {isPlaying && setlist.length > 1 && (
+      {isPlaying ? (
+        /* 재생 중: "다음 →" 버튼만 표시 (셋리스트 2개 이상일 때) */
+        setlist.length > 1 ? (
+          <View style={styles.setlistPlayingBar}>
             <Pressable
               style={({ pressed }) => [
-                styles.nextBtn,
+                styles.nextBtnLarge,
                 { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" },
               ]}
               onPress={advanceSetlist}
             >
               <Text style={[styles.nextBtnText, { color: text }]}>{t("stageMode", "next")} →</Text>
             </Pressable>
-          )}
-        </View>
+          </View>
+        ) : null
+      ) : (
+        /* 정지 중: 셋리스트 전체 표시 */
+        <View style={styles.setlistSection}>
+          <View style={styles.setlistHeader}>
+            <Text style={[styles.setlistLabel, { color: faint }]}>
+              {t("stageMode", "setList")}
+            </Text>
+          </View>
 
-        <FlatList
-          data={setlist}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.setlistContent}
-          ListHeaderComponent={() => (
-            <Pressable
-              style={({ pressed }) => [
-                styles.addBtn,
-                { borderColor: cardBdr, backgroundColor: pressed ? btnBg : cardBg },
-              ]}
-              onPress={() => setPickerOpen(true)}
-              testID="stage-setlist-add"
-            >
-              <Ionicons name="add" size={22} color={faint} />
-            </Pressable>
-          )}
-          renderItem={({ item, index }) => {
-            const isActive  = item.id === activeEntryId;
-            const mode      = getEntryMode(item);
-            const badge     = MODE_BADGE[mode] ?? MODE_BADGE["beat"]!;
-            const isCtx     = item.id === contextEntryId;
-            const isDragging = item.id === dragId;
-
-            // ── 드래그-리오더 PanResponder ─────────────────────────
-            const CARD_W = 128;
-            const panResponder = PanResponder.create({
-              onStartShouldSetPanResponder: () => false,
-              onMoveShouldSetPanResponder: (_, g) =>
-                Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy),
-              onPanResponderGrant: () => {
-                setDragId(item.id);
-                dragXRef.current = 0;
-                setContextEntryId(null);
-              },
-              onPanResponderMove: (_, g) => {
-                dragXRef.current = g.dx;
-              },
-              onPanResponderRelease: (_, g) => {
-                const steps = Math.round(g.dx / CARD_W);
-                if (steps !== 0) {
-                  const dir = steps > 0 ? 1 : -1;
-                  const count = Math.abs(steps);
-                  for (let s = 0; s < count; s++) {
-                    moveInSetlist(item.id, dir);
-                  }
-                }
-                setDragId(null);
-                dragXRef.current = 0;
-              },
-              onPanResponderTerminate: () => {
-                setDragId(null);
-                dragXRef.current = 0;
-              },
-            });
-
-            return (
-              <View
-                {...panResponder.panHandlers}
-                style={[
-                  styles.setCard,
-                  {
-                    backgroundColor: isActive
-                      ? (isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)")
-                      : cardBg,
-                    borderColor: isCtx
-                      ? badge.color
-                      : isActive
-                      ? (isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.3)")
-                      : cardBdr,
-                    opacity: isDragging ? 0.6 : 1,
-                    transform: isDragging
-                      ? [{ scale: 1.05 }]
-                      : [],
-                  },
+          <FlatList
+            data={setlist}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.setlistContent}
+            ListHeaderComponent={() => (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.addBtn,
+                  { borderColor: cardBdr, backgroundColor: pressed ? btnBg : cardBg },
                 ]}
-                testID={`stage-set-entry-${item.id}`}
+                onPress={() => setPickerOpen(true)}
+                testID="stage-setlist-add"
               >
-                {/* 드래그 핸들 + 상단 뱃지 */}
-                <View style={styles.setCardTop}>
-                  <View style={styles.setCardBadgeRow}>
-                    <View style={[styles.modeBadge, { backgroundColor: badge.color + "33" }]}>
-                      <Text style={[styles.modeBadgeText, { color: badge.color }]}>{badge.label}</Text>
-                    </View>
-                    {/* 샘플 뱃지: 노트 샘플 보유 시 */}
-                    {!!item.noteSamples && Object.keys(item.noteSamples).length > 0 && (
-                      <View style={styles.sampleBadge}>
-                        <Ionicons name="musical-note" size={8} color="#A29BFE" />
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.setCardTopRight}>
-                    {/* 드래그 핸들 아이콘 */}
-                    <Ionicons name="reorder-three-outline" size={14} color={faint} />
-                    {isActive && !isCtx && (
-                      <Ionicons name="radio-button-on" size={10} color={badge.color} />
-                    )}
-                  </View>
-                </View>
+                <Ionicons name="add" size={22} color={faint} />
+              </Pressable>
+            )}
+            renderItem={({ item, index }) => {
+              const isActive = item.id === activeEntryId;
+              const mode     = getEntryMode(item);
+              const badge    = MODE_BADGE[mode] ?? MODE_BADGE["beat"]!;
+              const isCtx    = item.id === contextEntryId;
 
-                {/* 컨텍스트 메뉴 (롱프레스) */}
-                {isCtx && (
-                  <View style={styles.ctxBtns}>
-                    <Pressable
-                      onPress={() => moveInSetlist(item.id, -1)}
-                      hitSlop={6}
-                      disabled={index === 0}
-                    >
-                      <Ionicons name="chevron-back" size={14} color={index === 0 ? faint : text} />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => moveInSetlist(item.id, 1)}
-                      hitSlop={6}
-                      disabled={index >= setlist.length - 1}
-                    >
-                      <Ionicons name="chevron-forward" size={14} color={index >= setlist.length - 1 ? faint : text} />
-                    </Pressable>
-                    <Pressable onPress={() => removeFromSetlist(item.id)} hitSlop={6}>
-                      <Ionicons name="trash-outline" size={14} color="#FF6B6B" />
-                    </Pressable>
-                  </View>
-                )}
-
+              return (
                 <Pressable
                   onPress={() => {
                     if (contextEntryId) {
@@ -811,33 +720,103 @@ export function StageModeOverlay({
                     onSelectEntry?.(item);
                   }}
                   onLongPress={() => setContextEntryId(isCtx ? null : item.id)}
-                  delayLongPress={500}
+                  delayLongPress={400}
+                  style={[
+                    styles.setCard,
+                    {
+                      backgroundColor: isActive
+                        ? (isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)")
+                        : cardBg,
+                      borderColor: isCtx
+                        ? badge.color
+                        : isActive
+                        ? (isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.3)")
+                        : cardBdr,
+                    },
+                  ]}
+                  testID={`stage-set-entry-${item.id}`}
                 >
-                  <Text
-                    style={[styles.setCardLabel, { color: isActive ? text : faint }]}
-                    numberOfLines={1}
-                  >
-                    {item.label}
-                  </Text>
-                  <Text style={[styles.setCardMeta, { color: faint }]}>
-                    {item.bpm} BPM · {item.beatsPerMeasure}/{beatDenominator}
-                  </Text>
+                  {/* 상단 뱃지 행 */}
+                  <View style={styles.setCardTop}>
+                    <View style={styles.setCardBadgeRow}>
+                      <View style={[styles.modeBadge, { backgroundColor: badge.color + "33" }]}>
+                        <Text style={[styles.modeBadgeText, { color: badge.color }]}>{badge.label}</Text>
+                      </View>
+                      {!!item.noteSamples && Object.keys(item.noteSamples).length > 0 && (
+                        <View style={styles.sampleBadge}>
+                          <Ionicons name="musical-note" size={8} color="#A29BFE" />
+                        </View>
+                      )}
+                    </View>
+                    {isActive && !isCtx && (
+                      <Ionicons name="radio-button-on" size={10} color={badge.color} />
+                    )}
+                  </View>
+
+                  {/* 컨텍스트 메뉴 (롱프레스) — 큰 터치 영역 */}
+                  {isCtx ? (
+                    <View style={styles.ctxBtns}>
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.ctxBtn,
+                          { backgroundColor: pressed ? btnBg : "transparent" },
+                          index === 0 && { opacity: 0.3 },
+                        ]}
+                        onPress={() => { if (index > 0) moveInSetlist(item.id, -1); }}
+                        disabled={index === 0}
+                      >
+                        <Ionicons name="arrow-back" size={18} color={text} />
+                      </Pressable>
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.ctxBtn,
+                          { backgroundColor: pressed ? btnBg : "transparent" },
+                          index >= setlist.length - 1 && { opacity: 0.3 },
+                        ]}
+                        onPress={() => { if (index < setlist.length - 1) moveInSetlist(item.id, 1); }}
+                        disabled={index >= setlist.length - 1}
+                      >
+                        <Ionicons name="arrow-forward" size={18} color={text} />
+                      </Pressable>
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.ctxBtn,
+                          { backgroundColor: pressed ? "rgba(255,107,107,0.15)" : "transparent" },
+                        ]}
+                        onPress={() => removeFromSetlist(item.id)}
+                      >
+                        <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <>
+                      <Text
+                        style={[styles.setCardLabel, { color: isActive ? text : faint }]}
+                        numberOfLines={1}
+                      >
+                        {item.label}
+                      </Text>
+                      <Text style={[styles.setCardMeta, { color: faint }]}>
+                        {item.bpm} BPM · {item.beatsPerMeasure}/{beatDenominator}
+                      </Text>
+                    </>
+                  )}
                 </Pressable>
-              </View>
-            );
-          }}
-          ListEmptyComponent={() => (
-            <Pressable
-              style={[styles.emptySetlist, { borderColor: cardBdr }]}
-              onPress={() => setPickerOpen(true)}
-            >
-              <Text style={[styles.emptySetlistText, { color: faint }]}>
-                {t("stageMode", "setlistEmpty")}
-              </Text>
-            </Pressable>
-          )}
-        />
-      </View>
+              );
+            }}
+            ListEmptyComponent={() => (
+              <Pressable
+                style={[styles.emptySetlist, { borderColor: cardBdr }]}
+                onPress={() => setPickerOpen(true)}
+              >
+                <Text style={[styles.emptySetlistText, { color: faint }]}>
+                  {t("stageMode", "setlistEmpty")}
+                </Text>
+              </Pressable>
+            )}
+          />
+        </View>
+      )}
 
       {/* 하단 패딩 */}
       <View style={{ height: bottomPad }} />
@@ -1398,10 +1377,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  // ── 재생 중 셋리스트 영역 ───────────────────────────────────────
+  setlistPlayingBar: {
+    width: "100%",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+  },
+  nextBtnLarge: {
+    borderWidth: 1,
+    borderRadius: 24,
+    paddingVertical: 10,
+    paddingHorizontal: 28,
+  },
+
+  // ── 컨텍스트 메뉴 버튼 ───────────────────────────────────────────
   ctxBtns: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    justifyContent: "space-around",
+    flex: 1,
+  },
+  ctxBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   modeBadge: {
     borderRadius: 4,

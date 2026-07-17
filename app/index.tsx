@@ -5076,10 +5076,6 @@ export default function MetronomeScreen() {
         onFadeOut={() => openExclusive("fadeOut")}
         onStageMode={() => {
           setActiveModal(null);
-          // 메트로놈이 멈춰 있으면 무대 모드 진입 시 자동 시작
-          if (!isPlayingRef.current) {
-            void togglePlayPauseRef.current?.();
-          }
           void enterStageMode();
           // 연습장 전체를 피커용으로 로드
           loadPracticeBook().then((entries) => {
