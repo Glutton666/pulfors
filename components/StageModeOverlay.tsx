@@ -43,6 +43,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { StageBeatColumn } from "@/components/StageBeatColumn";
 import { ScoreRenderer } from "@/components/ScoreRenderer";
 import { loadScore } from "@/lib/score-storage";
+import { computeScoreLayout } from "@/lib/score-layout";
+import { scoreScaleFactor, BASE_LINE_SPACING } from "@/lib/score-scale";
 import type { ScoreDocument } from "@/lib/score-types";
 import type { PracticeEntry, FlashMode, HapticMode } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
@@ -136,11 +138,6 @@ export interface StageModeOverlayProps {
   activeEntryId?: string;
   /** 셋 리스트 항목 선택 — 엔진 재시작 없이 즉시 전환 */
   onSelectEntry?: (entry: PracticeEntry) => void;
-  /**
-   * 루프 카운터 — 박자가 한 바퀴 돌 때마다 증가.
-   * autoAdvance 가 켜져 있으면 here 1 이상이 되었을 때 다음 항목으로 자동 전환.
-   */
-  loopCount?: number;
 }
 
 // ─── 메인 컴포넌트 ─────────────────────────────────────────────────────
@@ -169,7 +166,6 @@ export function StageModeOverlay({
   practiceBook = [],
   activeEntryId,
   onSelectEntry,
-  loopCount = 0,
 }: StageModeOverlayProps) {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -187,6 +183,17 @@ export function StageModeOverlay({
   // ── 악보 문서 로드 ────────────────────────────────────────────────
   const [scoreDoc, setScoreDoc] = useState<ScoreDocument | null>(null);
   const scoreIdRef = useRef<string | undefined>(undefined);
+  const scoreScrollRef = useRef<ScrollView>(null);
+
+  // ── 내부 루프 카운터 (currentBeat 순환 감지) ─────────────────────
+  const [internalLoopCount, setInternalLoopCount] = useState(0);
+  const prevBeatRef2 = useRef(-1);
+  useEffect(() => {
+    if (isPlaying && currentBeat === 0 && prevBeatRef2.current > 0) {
+      setInternalLoopCount((c) => c + 1);
+    }
+    prevBeatRef2.current = currentBeat;
+  }, [currentBeat, isPlaying]);
 
   // ── 마운트 시 로드 ────────────────────────────────────────────────
   useEffect(() => {
@@ -303,6 +310,8 @@ export function StageModeOverlay({
 
   // ── 활성 항목 & 모드 결정 ────────────────────────────────────────
   const activeEntry = setlist.find((e) => e.id === activeEntryId) ?? null;
+  // autoAdvance 용 ref 동기화
+  useEffect(() => { activeEntryRef.current = activeEntry; }, [activeEntry]);
   const activeMode  = activeEntry ? getEntryMode(activeEntry) : "beat";
   // 악보 모드 또는 사진이 있는 노트 모드 → 전체화면 컨텐츠 표시
   const hasPhoto    = activeMode === "note" && !!activeEntry?.imageUri;
@@ -313,21 +322,46 @@ export function StageModeOverlay({
     const sid = activeEntry?.scoreId;
     if (sid && sid !== scoreIdRef.current) {
       scoreIdRef.current = sid;
-      loadScore(sid).then(setScoreDoc).catch(() => setScoreDoc(null));
+      loadScore(sid).then((doc) => {
+        setScoreDoc(doc);
+        setInternalLoopCount(0);
+      }).catch(() => setScoreDoc(null));
     } else if (!sid) {
       scoreIdRef.current = undefined;
       setScoreDoc(null);
     }
   }, [activeEntry?.scoreId]);
 
-  // ── 악보 현재 마디 계산 (loopCount → measureIdx) ─────────────────
-  const measureCount = scoreDoc?.parts[0]?.measures?.length ?? 1;
-  const currentMeasureIdx = loopCount % Math.max(1, measureCount);
-  const scoreHighlightColor = settings.scoreHighlight === "top"
-    ? "rgba(74,158,255,0.22)"
-    : settings.scoreHighlight === "bottom"
-    ? "rgba(255,159,67,0.22)"
-    : "rgba(85,239,196,0.22)";
+  // ── 악보 현재 마디 계산 (내부 루프 카운터 → measureIdx) ──────────
+  const scoreMeasureCount = scoreDoc?.parts[0]?.measures?.length ?? 1;
+  const currentMeasureIdx = internalLoopCount % Math.max(1, scoreMeasureCount);
+  const SCORE_HIGHLIGHT_COLOR = "rgba(74,158,255,0.25)";
+
+  // ── 악보 하이라이트 수직 위치 제어 (scoreHighlight 설정) ─────────
+  // computeScoreLayout 으로 row Y 좌표를 구한 뒤 ScrollView 를 스크롤.
+  useEffect(() => {
+    if (!scoreDoc || !scoreScrollRef.current) return;
+    const sf  = scoreScaleFactor(BASE_LINE_SPACING);
+    const { rows } = computeScoreLayout(scoreDoc, winWidth / sf);
+    // 현재 마디가 속한 row 의 Y 좌표 (스케일 적용)
+    const rowWithMeasure = rows.find((r) => r.measureIndices.includes(currentMeasureIdx));
+    if (!rowWithMeasure) return;
+    const measureY = rowWithMeasure.y * sf;
+    // scoreHighlight 에 따라 오프셋 조정
+    // "top"    → 마디가 화면 상단 근처
+    // "center" → 마디가 화면 중앙
+    // "bottom" → 마디가 화면 하단 근처
+    // ScrollView 높이를 모르므로 대략적인 뷰포트 높이로 추정
+    const approxViewportH = 400;
+    let offset = 0;
+    if (settings.scoreHighlight === "center") {
+      offset = approxViewportH / 2;
+    } else if (settings.scoreHighlight === "bottom") {
+      offset = approxViewportH - 80;
+    }
+    const scrollY = Math.max(0, measureY - offset);
+    scoreScrollRef.current.scrollTo({ y: scrollY, animated: true });
+  }, [currentMeasureIdx, scoreDoc, settings.scoreHighlight, winWidth]);
 
   // ── 셋 리스트 조작 ───────────────────────────────────────────────
   const addToSetlist = useCallback((entry: PracticeEntry) => {
@@ -370,19 +404,29 @@ export function StageModeOverlay({
     if (next) onSelectEntry?.(next);
   }, [setlist, activeEntryId, onSelectEntry]);
 
-  // ── autoAdvance: loopCount 변화 시 자동 다음 항목 ────────────────
-  const prevLoopCountRef = useRef(loopCount);
+  // ── autoAdvance: "once" 항목이 재생 완료(isPlaying false)되면 다음으로 ─
+  // barLoopMode==="once" 또는 notePlayMode==="once" 항목만 자동 전환.
+  // "loop" 항목은 수동 Next 전용.
+  const settingsRef = useRef(settings);
+  const activeEntryRef = useRef<PracticeEntry | null>(null);
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
+
+  const wasPlayingRef = useRef(isPlaying);
   useEffect(() => {
-    if (
-      settings.autoAdvance &&
-      isPlaying &&
-      loopCount > 0 &&
-      loopCount !== prevLoopCountRef.current
-    ) {
-      advanceSetlist();
+    const wasPlaying = wasPlayingRef.current;
+    wasPlayingRef.current = isPlaying;
+    if (wasPlaying && !isPlaying && settingsRef.current.autoAdvance) {
+      const entry = activeEntryRef.current;
+      if (!entry) return;
+      const entryMode = getEntryMode(entry);
+      const isOnce =
+        (entryMode === "bar"  && entry.barLoopMode === "once") ||
+        (entryMode === "note" && entry.notePlayMode === "once");
+      if (isOnce) {
+        advanceSetlist();
+      }
     }
-    prevLoopCountRef.current = loopCount;
-  }, [loopCount, settings.autoAdvance, isPlaying, advanceSetlist]);
+  }, [isPlaying, advanceSetlist]);
 
   // ── 레이아웃 ────────────────────────────────────────────────────
   const webTop    = Platform.OS === "web" ? 67 : 0;
@@ -539,6 +583,7 @@ export function StageModeOverlay({
           <View style={styles.fullscreenContent}>
             {activeMode === "score" && scoreDoc ? (
               <ScrollView
+                ref={scoreScrollRef}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingVertical: 12 }}
               >
@@ -547,7 +592,7 @@ export function StageModeOverlay({
                   containerWidth={winWidth}
                   showPlayhead={false}
                   selectedMeasureIdx={currentMeasureIdx}
-                  highlightColor={scoreHighlightColor}
+                  highlightColor={SCORE_HIGHLIGHT_COLOR}
                   showPartNames={false}
                 />
               </ScrollView>
