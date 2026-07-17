@@ -461,15 +461,15 @@ export function StageModeOverlay({
   const BpmController = isPlaying ? (
     <View style={styles.bpmReadOnly}>
       <Text style={[styles.bpmReadOnlyLabel, { color: faint }]}>{t("stageMode", "bpmLabel")}</Text>
-      <Text style={[styles.bpmReadOnlyNumber, { color: text }]}>{bpm}</Text>
       <Pressable
         onLongPress={onBeatDenominatorCycle}
         delayLongPress={500}
         accessibilityLabel="Beat denominator cycle"
-        hitSlop={10}
+        hitSlop={12}
       >
-        <Text style={[styles.bpmReadOnlyTimeSig, { color: faint }]}>{beatsPerMeasure}/{beatDenominator}</Text>
+        <Text style={[styles.bpmReadOnlyNumber, { color: text }]}>{bpm}</Text>
       </Pressable>
+      <Text style={[styles.bpmReadOnlyTimeSig, { color: faint }]}>{beatsPerMeasure}/{beatDenominator}</Text>
     </View>
   ) : (
     <View style={styles.bpmSliderWrap}>
