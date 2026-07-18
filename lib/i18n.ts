@@ -1191,6 +1191,7 @@ export const translations = {
     tapTempo:              { ko: "탭 탬포", en: "Tap Tempo" },
     beats:                 { ko: "박자", en: "Beats" },
     next:                  { ko: "다음", en: "Next" },
+    prev:                  { ko: "이전", en: "Prev" },
     flash:                 { ko: "화면 플래시", en: "Screen Flash" },
     flashAccent:           { ko: "강세", en: "Accent" },
     flashAll:              { ko: "전체", en: "All" },

@@ -13,7 +13,7 @@
  */
 
 import React, { useEffect, useRef } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, PanResponder } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -85,6 +85,10 @@ export interface StageBeatColumnProps {
   /** 다음 비트의 서브디비전 타입 */
   nextSubdivisionTypes?: BeatType[];
   theme?:               "dark" | "light";
+  /** 왼쪽 스와이프 → 다음 항목 */
+  onSwipeLeft?:         () => void;
+  /** 오른쪽 스와이프 → 이전 항목 */
+  onSwipeRight?:        () => void;
 }
 
 export function StageBeatColumn({
@@ -94,11 +98,40 @@ export function StageBeatColumn({
   subdivisionTypes,
   nextSubdivisionTypes,
   theme = "dark",
+  onSwipeLeft,
+  onSwipeRight,
 }: StageBeatColumnProps) {
   const total     = Math.max(1, beatsPerMeasure);
   const stopped   = currentBeat < 0;
   const slideY    = useSharedValue(0);
   const prevRef   = useRef(currentBeat);
+
+  // ── 스와이프 제스처 (좌: 다음 항목, 우: 이전 항목) ────────────────
+  const onSwipeLeftRef  = useRef(onSwipeLeft);
+  const onSwipeRightRef = useRef(onSwipeRight);
+  useEffect(() => { onSwipeLeftRef.current  = onSwipeLeft;  }, [onSwipeLeft]);
+  useEffect(() => { onSwipeRightRef.current = onSwipeRight; }, [onSwipeRight]);
+
+  const swipeFiredRef = useRef(false);
+  const swipePR = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.2,
+      onPanResponderGrant: () => { swipeFiredRef.current = false; },
+      onPanResponderMove: (_, gs) => {
+        if (swipeFiredRef.current) return;
+        if (gs.dx < -50) {
+          swipeFiredRef.current = true;
+          onSwipeLeftRef.current?.();
+        } else if (gs.dx > 50) {
+          swipeFiredRef.current = true;
+          onSwipeRightRef.current?.();
+        }
+      },
+      onPanResponderRelease: () => { swipeFiredRef.current = false; },
+    })
+  ).current;
 
   useEffect(() => {
     if (!stopped && currentBeat !== prevRef.current) {
@@ -138,7 +171,7 @@ export function StageBeatColumn({
   const maxDots = Math.min(total, 16);
 
   return (
-    <View style={styles.root}>
+    <View style={styles.root} {...swipePR.panHandlers}>
       <Animated.View style={[styles.inner, slideStyle]}>
 
         {stopped ? (

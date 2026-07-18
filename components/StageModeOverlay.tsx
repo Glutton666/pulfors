@@ -635,27 +635,16 @@ export function StageModeOverlay({
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, [setlist, activeEntryId, onSelectEntry]);
 
-  // ── 비트 컬럼 스와이프 → 다음 항목 ──────────────────────────────────
-  const advanceSetlistRef = useRef(advanceSetlist);
-  useEffect(() => { advanceSetlistRef.current = advanceSetlist; }, [advanceSetlist]);
-
-  const swipeToAdvanceFired = useRef(false);
-  const swipeToAdvancePR = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gs) =>
-        Math.abs(gs.dx) > 10 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
-      onPanResponderGrant: () => { swipeToAdvanceFired.current = false; },
-      onPanResponderMove: (_, gs) => {
-        if (swipeToAdvanceFired.current) return;
-        if (gs.dx < -60) {
-          swipeToAdvanceFired.current = true;
-          advanceSetlistRef.current();
-        }
-      },
-      onPanResponderRelease: () => { swipeToAdvanceFired.current = false; },
-    })
-  ).current;
+  // ── 이전 항목으로 이동 ────────────────────────────────────────────
+  const goToPrevSetlist = useCallback(() => {
+    if (setlist.length <= 1) return;
+    const idx = setlist.findIndex((e) => e.id === activeEntryId);
+    const prevIdx = idx - 1;
+    if (prevIdx < 0) return;
+    const prev = setlist[prevIdx];
+    if (prev) onSelectEntry?.(prev);
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, [setlist, activeEntryId, onSelectEntry]);
 
   // ── autoAdvance: 유한 항목이 재생 완료(isPlaying false)되면 다음으로 ─
   // barLoopMode!=="loop" 또는 notePlayMode==="once" 항목 자동 전환.
@@ -923,10 +912,7 @@ export function StageModeOverlay({
           {setlist.length === 0 && !isPlaying && noSetlistContent
             ? <View style={{ flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center" }}>{noSetlistContent}</View>
             : (
-              <View
-                style={{ flex: 1, alignSelf: "stretch" }}
-                {...(isPlaying && setlist.length > 1 ? swipeToAdvancePR.panHandlers : {})}
-              >
+              <View style={{ flex: 1, alignSelf: "stretch" }}>
                 <StageBeatColumn
                   currentBeat={currentBeat}
                   beatsPerMeasure={beatsPerMeasure}
@@ -942,6 +928,8 @@ export function StageModeOverlay({
                       ? beatSubdivisions[String((currentBeat + 1) % Math.max(1, beatsPerMeasure))]
                       : undefined
                   }
+                  onSwipeLeft={isPlaying && setlist.length > 1 ? advanceSetlist : undefined}
+                  onSwipeRight={isPlaying && setlist.length > 1 ? goToPrevSetlist : undefined}
                 />
               </View>
             )
@@ -960,13 +948,18 @@ export function StageModeOverlay({
         /* 재생 중: 마지막 항목이 아닐 때 스와이프 힌트 표시 */
         (() => {
           const curIdx = setlist.findIndex((e) => e.id === activeEntryId);
-          return setlist.length > 1 && curIdx < setlist.length - 1 ? (
+          if (setlist.length <= 1) return null;
+          const hasPrev = curIdx > 0;
+          const hasNext = curIdx < setlist.length - 1;
+          if (!hasPrev && !hasNext) return null;
+          return (
             <View style={styles.setlistPlayingBar}>
               <Text style={[styles.swipeHintText, { color: faint }]}>
-                ← {t("stageMode", "next")}
+                {hasPrev ? `→ ${t("stageMode", "prev")}  ` : ""}
+                {hasNext ? `← ${t("stageMode", "next")}` : ""}
               </Text>
             </View>
-          ) : null;
+          );
         })()
       ) : (
         /* 정지 중: 셋리스트 전체 표시 */
