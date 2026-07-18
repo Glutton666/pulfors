@@ -632,11 +632,34 @@ export function StageModeOverlay({
     if (nextIdx >= setlist.length) return;
     const next = setlist[nextIdx];
     if (next) onSelectEntry?.(next);
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, [setlist, activeEntryId, onSelectEntry]);
 
-  // ── autoAdvance: "once" 항목이 재생 완료(isPlaying false)되면 다음으로 ─
-  // barLoopMode==="once" 또는 notePlayMode==="once" 항목만 자동 전환.
-  // "loop" 항목은 수동 Next 전용.
+  // ── 비트 컬럼 스와이프 → 다음 항목 ──────────────────────────────────
+  const advanceSetlistRef = useRef(advanceSetlist);
+  useEffect(() => { advanceSetlistRef.current = advanceSetlist; }, [advanceSetlist]);
+
+  const swipeToAdvanceFired = useRef(false);
+  const swipeToAdvancePR = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dx) > 10 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+      onPanResponderGrant: () => { swipeToAdvanceFired.current = false; },
+      onPanResponderMove: (_, gs) => {
+        if (swipeToAdvanceFired.current) return;
+        if (gs.dx < -60) {
+          swipeToAdvanceFired.current = true;
+          advanceSetlistRef.current();
+        }
+      },
+      onPanResponderRelease: () => { swipeToAdvanceFired.current = false; },
+    })
+  ).current;
+
+  // ── autoAdvance: 유한 항목이 재생 완료(isPlaying false)되면 다음으로 ─
+  // barLoopMode!=="loop" 또는 notePlayMode==="once" 항목 자동 전환.
+  // "loop" 항목은 스와이프 전용.
   const settingsRef = useRef(settings);
   const activeEntryRef = useRef<PracticeEntry | null>(null);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
@@ -661,7 +684,7 @@ export function StageModeOverlay({
         if (!entry) return;
         const entryMode = getEntryMode(entry);
         const isOnce =
-          (entryMode === "bar"  && entry.barLoopMode === "once") ||
+          (entryMode === "bar"  && entry.barLoopMode !== "loop") ||
           (entryMode === "note" && entry.notePlayMode === "once");
         if (isOnce) {
           advanceSetlist();
@@ -900,7 +923,10 @@ export function StageModeOverlay({
           {setlist.length === 0 && !isPlaying && noSetlistContent
             ? <View style={{ flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center" }}>{noSetlistContent}</View>
             : (
-              <View style={{ flex: 1, alignSelf: "stretch" }}>
+              <View
+                style={{ flex: 1, alignSelf: "stretch" }}
+                {...(isPlaying && setlist.length > 1 ? swipeToAdvancePR.panHandlers : {})}
+              >
                 <StageBeatColumn
                   currentBeat={currentBeat}
                   beatsPerMeasure={beatsPerMeasure}
@@ -931,20 +957,14 @@ export function StageModeOverlay({
 
       {/* ── 셋 리스트 ───────────────────────────────────────────── */}
       {isPlaying ? (
-        /* 재생 중: 마지막 항목이 아닐 때만 "다음 →" 버튼 표시 */
+        /* 재생 중: 마지막 항목이 아닐 때 스와이프 힌트 표시 */
         (() => {
           const curIdx = setlist.findIndex((e) => e.id === activeEntryId);
           return setlist.length > 1 && curIdx < setlist.length - 1 ? (
             <View style={styles.setlistPlayingBar}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.nextBtnLarge,
-                  { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" },
-                ]}
-                onPress={advanceSetlist}
-              >
-                <Text style={[styles.nextBtnText, { color: text }]}>{t("stageMode", "next")} →</Text>
-              </Pressable>
+              <Text style={[styles.swipeHintText, { color: faint }]}>
+                ← {t("stageMode", "next")}
+              </Text>
             </View>
           ) : null;
         })()
@@ -1745,6 +1765,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingVertical: 4,
     paddingHorizontal: 12,
+  },
+  swipeHintText: {
+    fontSize: 14,
+    fontFamily: "SpaceGrotesk_400Regular",
+    opacity: 0.6,
+    textAlign: "center",
   },
   nextBtnText: {
     fontSize: 12,
