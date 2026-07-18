@@ -156,7 +156,8 @@ export default function MetronomeScreen() {
   useEffect(() => { languageRef.current = language; }, [language]);
 
   const [bpm, setBpm] = useState(120);
-  const baseBpmRef = useRef(120); // /4 기준 BPM (분모 순환과 무관하게 유지)
+  const baseBpmRef = useRef(120);
+  const beatDenominatorRef = useRef<2 | 4 | 8>(4);
   const {
     easterEggActive, setEasterEggActive,
     easterEggShakeCount, setEasterEggShakeCount,
@@ -171,6 +172,7 @@ export default function MetronomeScreen() {
   const easterEggWasPlayingRef = useRef(false);
   const [halfTime, setHalfTime] = useState(false);
   const [beatDenominator, setBeatDenominator] = useState<2 | 4 | 8>(4);
+  useEffect(() => { beatDenominatorRef.current = beatDenominator; }, [beatDenominator]);
   const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
   const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
   const [isPlaying, setIsPlaying] = useState(false);
@@ -768,7 +770,8 @@ export default function MetronomeScreen() {
       if (settings.beatDenominator) {
         setBeatDenominator(settings.beatDenominator);
       }
-      engine.setBpm(settings.bpm);
+      // 분모에 따라 실제 엔진 속도 조정 (표시 BPM은 그대로 유지)
+      engine.setBpm(settings.bpm * (4 / loadedDenom));
       engine.setBeatsPerMeasure(settings.beatsPerMeasure);
 
       if (settings.subdivisionPattern && settings.subdivisionPattern.length > 0) {
@@ -1357,7 +1360,7 @@ export default function MetronomeScreen() {
   const handleNoteRecordSuggestBpm = useCallback((detectedBpm: number) => {
     const clamped = Math.max(20, Math.min(300, Math.round(detectedBpm)));
     setBpm(clamped);
-    engineRef.current?.setBpm(clamped);
+    engineRef.current?.setBpm(clamped * (4 / beatDenominatorRef.current));
   }, []);
 
   const handleNoteRecordDelete = useCallback(async () => {
@@ -1832,9 +1835,8 @@ export default function MetronomeScreen() {
     (newBpm: number) => {
       const clampedBpm = Math.max(20, Math.min(300, newBpm));
       setBpm(clampedBpm);
-      engineRef.current?.setBpm(clampedBpm);
-      // 수동 BPM 변경 시 /4 기준값도 갱신
-      baseBpmRef.current = Math.round(clampedBpm * (beatDenominator / 4));
+      // 엔진은 분모 반영 속도로 실행 (표시 BPM은 clampedBpm 그대로)
+      engineRef.current?.setBpm(clampedBpm * (4 / beatDenominator));
       persistSettings({ bpm: clampedBpm });
       scheduleReRender();
     },
@@ -1935,7 +1937,8 @@ export default function MetronomeScreen() {
   const handleBeatDenominatorCycle = useCallback(() => {
     setBeatDenominator((prev) => {
       const next: 2 | 4 | 8 = prev === 4 ? 8 : prev === 8 ? 2 : 4;
-      // 분모만 바꾸고 BPM은 유지
+      // 표시 BPM 변경 없이 분모에 따른 엔진 속도 갱신
+      engineRef.current?.setBpm(bpm * (4 / next));
       persistSettings({ beatDenominator: next });
       halfTimeFlash.value = withSequence(
         withTiming(0.25, { duration: 80 }),
@@ -1943,7 +1946,7 @@ export default function MetronomeScreen() {
       );
       return next;
     });
-  }, [persistSettings]);
+  }, [bpm, persistSettings]);
 
   const updateTimeSignature = useCallback(
     (beats: number) => {
@@ -4027,7 +4030,7 @@ export default function MetronomeScreen() {
       preloadNoteSampleSounds(entrySamples);
     }
 
-    applyEntryToEngineCore(engine, entry);
+    applyEntryToEngineCore(engine, entry, beatDenominatorRef.current);
 
     barConfigRef.current = entryToBarConfig(entry);
 
@@ -4127,7 +4130,7 @@ export default function MetronomeScreen() {
     setNoteSampleChannels({ ...(entry.noteSampleChannels || {}) });
     noteSampleChannelsRef.current = { ...(entry.noteSampleChannels || {}) };
 
-    applyEntryToEngineCore(engine, entry);
+    applyEntryToEngineCore(engine, entry, beatDenominatorRef.current);
     engine.buildScheduleOnly();
 
     resetPlaybackVisuals();
@@ -4593,7 +4596,7 @@ export default function MetronomeScreen() {
         preloadNoteSampleSounds(entrySamples);
       }
 
-      engine.setBpm(entry.bpm);
+      engine.setBpm(entry.bpm * (4 / beatDenominatorRef.current));
       engine.setBeatsPerMeasure(entry.beatsPerMeasure);
       engine.setBeatTypes([...entry.beatTypes]);
       engine.setAllBeatSubdivisions(entry.beatSubdivisions);
@@ -4642,7 +4645,7 @@ export default function MetronomeScreen() {
         preloadNoteSampleSounds(barSamples);
       }
 
-      engine.setBpm(entry.bpm);
+      engine.setBpm(entry.bpm * (4 / beatDenominatorRef.current));
       engine.setBeatsPerMeasure(entry.beatsPerMeasure);
       engine.setBeatTypes([...entry.beatTypes]);
       engine.setAllBeatSubdivisions(entry.beatSubdivisions);
@@ -6043,7 +6046,7 @@ export default function MetronomeScreen() {
           if (entry.subdivisionPattern && entry.subdivisionPattern.length > 0) {
             setSubdivisionPattern([...entry.subdivisionPattern]);
           }
-          applyEntryToEngineCore(engine, entry);
+          applyEntryToEngineCore(engine, entry, beatDenominatorRef.current);
           scheduleReRender();
           setActiveStagePracticeEntryId(entry.id);
         }}
