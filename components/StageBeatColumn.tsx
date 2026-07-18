@@ -142,40 +142,36 @@ export function StageBeatColumn({
       <Animated.View style={[styles.inner, slideStyle]}>
 
         {/* ── 현재 비트 ── */}
-        <Text style={[styles.beatNum, { color: curColor }]}>
-          {stopped ? "—" : String(cur0 + 1)}
-        </Text>
-
-        {/* 현재 비트 서브디비전 */}
-        {!stopped && subdivisionTypes && subdivisionTypes.length > 1 && (
-          <SubdivDots types={subdivisionTypes} theme={theme} size={10} />
-        )}
-
-        {/* 마디 진행 도트 */}
-        {!stopped && (
-          <View style={styles.dotsRow}>
-            {Array.from({ length: maxDots }, (_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  i === cur0
-                    ? [styles.dotActive, { backgroundColor: dotActive }]
-                    : { backgroundColor: dotInactive },
-                ]}
-              />
-            ))}
-          </View>
-        )}
-
-        {/* 구분선 */}
-        {!stopped && (
-          <View style={[styles.divider, { backgroundColor: dividerColor }]} />
-        )}
-
-        {/* ── 다음 비트 ── */}
         {!stopped && (
           <>
+            <Text style={[styles.beatNum, { color: curColor }]}>
+              {String(cur0 + 1)}
+            </Text>
+
+            {/* 현재 비트 서브디비전 */}
+            {subdivisionTypes && subdivisionTypes.length > 1 && (
+              <SubdivDots types={subdivisionTypes} theme={theme} size={10} />
+            )}
+
+            {/* 마디 진행 도트 */}
+            <View style={styles.dotsRow}>
+              {Array.from({ length: maxDots }, (_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.dot,
+                    i === cur0
+                      ? [styles.dotActive, { backgroundColor: dotActive }]
+                      : { backgroundColor: dotInactive },
+                  ]}
+                />
+              ))}
+            </View>
+
+            {/* 구분선 */}
+            <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+
+            {/* ── 다음 비트 ── */}
             <Text style={[styles.beatNum, { color: nextColor }]}>
               {String(next0 + 1)}
             </Text>
