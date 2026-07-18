@@ -42,6 +42,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLanguage } from "@/contexts/LanguageContext";
+import * as Haptics from "expo-haptics";
 import { StageBeatColumn } from "@/components/StageBeatColumn";
 import { BpmSlider } from "@/components/BpmSlider";
 import { ScoreRenderer } from "@/components/ScoreRenderer";
@@ -154,10 +155,18 @@ function StageBeatEditor({
         if (swipeFired.current) return;
         if (gs.dx > 40) {
           swipeFired.current = true;
-          onBeatsRef.current(Math.min(16, beatsRef.current + 1));
+          const next = Math.min(16, beatsRef.current + 1);
+          if (next !== beatsRef.current) {
+            if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          }
+          onBeatsRef.current(next);
         } else if (gs.dx < -40) {
           swipeFired.current = true;
-          onBeatsRef.current(Math.max(1, beatsRef.current - 1));
+          const next = Math.max(1, beatsRef.current - 1);
+          if (next !== beatsRef.current) {
+            if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          }
+          onBeatsRef.current(next);
         }
       },
       onPanResponderRelease: () => { swipeFired.current = false; },
