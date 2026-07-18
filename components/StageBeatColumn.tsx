@@ -2,8 +2,9 @@
 /**
  * StageBeatColumn — 수직 비트 디스플레이 (무대 모드 전용).
  *
- * 현재 비트를 크고 밝게, 다음 비트를 작고 흐리게 아래에 표시한다.
- * 비트가 바뀔 때마다 위로 슬라이드-업 애니메이션이 발생한다.
+ * 현재 비트와 다음 비트를 동일한 크기로 표시한다.
+ * 둘 다 서브디비전 도트를 표시한다.
+ * 비트가 바뀔 때마다 슬라이드-업 애니메이션이 발생한다.
  *
  * currentBeat: 0-based (엔진 기준). -1 = 멈춤.
  * beatsPerMeasure: 전체 마디 내 비트 수.
@@ -39,13 +40,51 @@ function getBeatType(beat0: number, types?: BeatType[]): BeatType {
   return types[beat0 % types.length] ?? "normal";
 }
 
+function SubdivDots({
+  types,
+  theme,
+  size = 10,
+}: {
+  types: BeatType[];
+  theme: "dark" | "light";
+  size?: number;
+}) {
+  if (types.length <= 1) return null;
+  const dotInactive = theme === "dark" ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)";
+  return (
+    <View style={[styles.subdivRow, { gap: size * 0.6 }]}>
+      {types.map((t, i) => {
+        const color =
+          t === "accent" ? (theme === "dark" ? "#FFD54F" : "#B8860B")
+          : t === "mute"   ? dotInactive
+          : t === "strong" ? (theme === "dark" ? "#ffffff" : "#111111")
+          : dotInactive;
+        return (
+          <View
+            key={i}
+            style={{
+              width: i === 0 ? size * 1.5 : size,
+              height: size,
+              borderRadius: size / 2,
+              backgroundColor: color,
+              opacity: i === 0 ? 1 : 0.85,
+            }}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
 export interface StageBeatColumnProps {
-  currentBeat:      number;
-  beatsPerMeasure:  number;
-  beatTypes?:       BeatType[];
-  /** 현재 비트의 서브디비전 타입 (바 모드에서 전달) */
-  subdivisionTypes?: BeatType[];
-  theme?:           "dark" | "light";
+  currentBeat:          number;
+  beatsPerMeasure:      number;
+  beatTypes?:           BeatType[];
+  /** 현재 비트의 서브디비전 타입 */
+  subdivisionTypes?:    BeatType[];
+  /** 다음 비트의 서브디비전 타입 */
+  nextSubdivisionTypes?: BeatType[];
+  theme?:               "dark" | "light";
 }
 
 export function StageBeatColumn({
@@ -53,6 +92,7 @@ export function StageBeatColumn({
   beatsPerMeasure,
   beatTypes,
   subdivisionTypes,
+  nextSubdivisionTypes,
   theme = "dark",
 }: StageBeatColumnProps) {
   const total     = Math.max(1, beatsPerMeasure);
@@ -62,7 +102,7 @@ export function StageBeatColumn({
 
   useEffect(() => {
     if (!stopped && currentBeat !== prevRef.current) {
-      slideY.value = 64;
+      slideY.value = 80;
       slideY.value = withTiming(0, {
         duration: 180,
         easing: Easing.out(Easing.cubic),
@@ -83,25 +123,35 @@ export function StageBeatColumn({
   const curType  = getBeatType(cur0,  beatTypes);
   const nextType = getBeatType(next0, beatTypes);
 
-  const curColor  = stopped ? (theme === "dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)") : colorMap[curType];
-  const nextColor = theme === "dark"
-    ? (nextType === "accent" ? "rgba(255,213,79,0.28)" : "rgba(255,255,255,0.22)")
-    : (nextType === "accent" ? "rgba(184,134,11,0.3)" : "rgba(0,0,0,0.16)");
+  const curColor  = stopped
+    ? (theme === "dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)")
+    : colorMap[curType];
 
-  const dotActive = theme === "dark" ? "#ffffff" : "#222222";
+  const nextColor = theme === "dark"
+    ? (nextType === "accent" ? "rgba(255,213,79,0.38)" : "rgba(255,255,255,0.28)")
+    : (nextType === "accent" ? "rgba(184,134,11,0.36)" : "rgba(0,0,0,0.22)");
+
+  const dotActive   = theme === "dark" ? "#ffffff" : "#222222";
   const dotInactive = theme === "dark" ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)";
+  const dividerColor = theme === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)";
 
   const maxDots = Math.min(total, 16);
 
   return (
     <View style={styles.root}>
       <Animated.View style={[styles.inner, slideStyle]}>
-        {/* Current beat — large & bright */}
-        <Text style={[styles.currentNum, { color: curColor }]}>
+
+        {/* ── 현재 비트 ── */}
+        <Text style={[styles.beatNum, { color: curColor }]}>
           {stopped ? "—" : String(cur0 + 1)}
         </Text>
 
-        {/* Measure progress dots */}
+        {/* 현재 비트 서브디비전 */}
+        {!stopped && subdivisionTypes && subdivisionTypes.length > 1 && (
+          <SubdivDots types={subdivisionTypes} theme={theme} size={10} />
+        )}
+
+        {/* 마디 진행 도트 */}
         {!stopped && (
           <View style={styles.dotsRow}>
             {Array.from({ length: maxDots }, (_, i) => (
@@ -111,42 +161,30 @@ export function StageBeatColumn({
                   styles.dot,
                   i === cur0
                     ? [styles.dotActive, { backgroundColor: dotActive }]
-                    : [{ backgroundColor: dotInactive }],
+                    : { backgroundColor: dotInactive },
                 ]}
               />
             ))}
           </View>
         )}
 
-        {/* 서브디비전 타입 표시 (바 모드) */}
-        {!stopped && subdivisionTypes && subdivisionTypes.length > 1 && (
-          <View style={styles.subdivRow}>
-            {subdivisionTypes.map((subType, si) => {
-              const subColor =
-                subType === "accent" ? (theme === "dark" ? "#FFD54F" : "#B8860B")
-                : subType === "mute"   ? dotInactive
-                : subType === "strong" ? (theme === "dark" ? "#ffffff" : "#111111")
-                : dotInactive;
-              return (
-                <View
-                  key={si}
-                  style={[
-                    styles.subdivDot,
-                    si === 0 && styles.subdivDotFirst,
-                    { backgroundColor: subColor },
-                  ]}
-                />
-              );
-            })}
-          </View>
+        {/* 구분선 */}
+        {!stopped && (
+          <View style={[styles.divider, { backgroundColor: dividerColor }]} />
         )}
 
-        {/* Next beat — small & faint */}
+        {/* ── 다음 비트 ── */}
         {!stopped && (
-          <Text style={[styles.nextNum, { color: nextColor }]}>
-            {String(next0 + 1)}
-          </Text>
+          <>
+            <Text style={[styles.beatNum, { color: nextColor }]}>
+              {String(next0 + 1)}
+            </Text>
+            {nextSubdivisionTypes && nextSubdivisionTypes.length > 1 && (
+              <SubdivDots types={nextSubdivisionTypes} theme={theme} size={10} />
+            )}
+          </>
         )}
+
       </Animated.View>
     </View>
   );
@@ -154,66 +192,52 @@ export function StageBeatColumn({
 
 const styles = StyleSheet.create({
   root: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
-    height: 200,
     width: "100%",
   },
   inner: {
     alignItems: "center",
+    width: "100%",
   },
-  currentNum: {
-    fontSize: 112,
+  beatNum: {
+    fontSize: 148,
     fontFamily: "SpaceGrotesk_700Bold",
-    lineHeight: 120,
+    lineHeight: 156,
     textAlign: "center",
     includeFontPadding: false,
   },
   dotsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 7,
+    gap: 8,
     justifyContent: "center",
     marginTop: 6,
-    marginBottom: 2,
-    maxWidth: 300,
+    marginBottom: 4,
+    maxWidth: 320,
   },
   dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   dotActive: {
-    width: 20,
-    height: 6,
-    borderRadius: 3,
+    width: 22,
+    height: 7,
+    borderRadius: 3.5,
   },
-  nextNum: {
-    fontSize: 48,
-    fontFamily: "SpaceGrotesk_400Regular",
-    lineHeight: 56,
-    textAlign: "center",
-    includeFontPadding: false,
-    marginTop: 4,
+  divider: {
+    width: 48,
+    height: 1,
+    borderRadius: 1,
+    marginVertical: 14,
   },
   subdivRow: {
     flexDirection: "row",
-    gap: 5,
     justifyContent: "center",
-    marginTop: 8,
+    marginTop: 6,
     marginBottom: 2,
-  },
-  subdivDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    opacity: 0.85,
-  },
-  subdivDotFirst: {
-    width: 12,
-    height: 8,
-    borderRadius: 4,
-    opacity: 1,
   },
 });

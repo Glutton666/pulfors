@@ -914,17 +914,24 @@ export function StageModeOverlay({
           {setlist.length === 0 && !isPlaying && noSetlistContent
             ? <View style={{ flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center" }}>{noSetlistContent}</View>
             : (
-              <StageBeatColumn
-                currentBeat={currentBeat}
-                beatsPerMeasure={beatsPerMeasure}
-                beatTypes={beatTypes}
-                theme={settings.theme}
-                subdivisionTypes={
-                  beatSubdivisions && currentBeat >= 0
-                    ? beatSubdivisions[String(currentBeat)]
-                    : undefined
-                }
-              />
+              <View style={{ flex: 1, alignSelf: "stretch" }}>
+                <StageBeatColumn
+                  currentBeat={currentBeat}
+                  beatsPerMeasure={beatsPerMeasure}
+                  beatTypes={beatTypes}
+                  theme={settings.theme}
+                  subdivisionTypes={
+                    beatSubdivisions && currentBeat >= 0
+                      ? beatSubdivisions[String(currentBeat)]
+                      : undefined
+                  }
+                  nextSubdivisionTypes={
+                    beatSubdivisions && currentBeat >= 0
+                      ? beatSubdivisions[String((currentBeat + 1) % Math.max(1, beatsPerMeasure))]
+                      : undefined
+                  }
+                />
+              </View>
             )
           }
 
