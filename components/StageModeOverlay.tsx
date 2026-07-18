@@ -28,6 +28,7 @@ import {
   BackHandler,
   Image,
   TextInput,
+  PanResponder,
   useWindowDimensions,
 } from "react-native";
 import Animated, {
@@ -114,6 +115,151 @@ function getEntryMode(e: PracticeEntry): string {
   return e.mode ?? "beat";
 }
 
+// ─── 빈 셋리스트 전용 비트 편집기 ─────────────────────────────────────
+const BEAT_TYPE_ORDER: BeatType[] = ["strong", "accent", "normal", "mute"];
+
+function StageBeatEditor({
+  beatTypes,
+  onBeatTypesChange,
+  beatsPerMeasure,
+  onBeatsPerMeasureChange,
+  text,
+  faint,
+  accent,
+}: {
+  beatTypes: BeatType[];
+  onBeatTypesChange: (types: BeatType[]) => void;
+  beatsPerMeasure: number;
+  onBeatsPerMeasureChange: (n: number) => void;
+  text: string;
+  faint: string;
+  accent: string;
+}) {
+  const beatsRef = useRef(beatsPerMeasure);
+  const onBeatsRef = useRef(onBeatsPerMeasureChange);
+  useEffect(() => { beatsRef.current = beatsPerMeasure; }, [beatsPerMeasure]);
+  useEffect(() => { onBeatsRef.current = onBeatsPerMeasureChange; }, [onBeatsPerMeasureChange]);
+
+  const swipeFired = useRef(false);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dx) > 12 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+      onPanResponderGrant: () => {
+        swipeFired.current = false;
+      },
+      onPanResponderMove: (_, gs) => {
+        if (swipeFired.current) return;
+        if (gs.dx > 40) {
+          swipeFired.current = true;
+          onBeatsRef.current(Math.min(16, beatsRef.current + 1));
+        } else if (gs.dx < -40) {
+          swipeFired.current = true;
+          onBeatsRef.current(Math.max(1, beatsRef.current - 1));
+        }
+      },
+      onPanResponderRelease: () => { swipeFired.current = false; },
+    })
+  ).current;
+
+  const cycleType = (idx: number) => {
+    const cur = beatTypes[idx] ?? "normal";
+    const next = BEAT_TYPE_ORDER[(BEAT_TYPE_ORDER.indexOf(cur) + 1) % BEAT_TYPE_ORDER.length];
+    const newTypes = [...beatTypes];
+    newTypes[idx] = next;
+    onBeatTypesChange(newTypes);
+  };
+
+  const dotColor = (type: BeatType) => {
+    if (type === "strong") return accent;
+    if (type === "accent") return text;
+    if (type === "normal") return text + "88";
+    return faint;
+  };
+
+  const dotSize = Math.max(18, Math.min(36, Math.floor(280 / Math.max(beatsPerMeasure, 1)) - 8));
+
+  return (
+    <View {...panResponder.panHandlers} style={stageBeatEditorStyle.wrap}>
+      {Array.from({ length: beatsPerMeasure }).map((_, i) => {
+        const type = beatTypes[i] ?? "normal";
+        const isStrong = type === "strong";
+        return (
+          <Pressable
+            key={i}
+            onPress={() => cycleType(i)}
+            hitSlop={6}
+            style={stageBeatEditorStyle.dotBtn}
+          >
+            <View
+              style={[
+                stageBeatEditorStyle.dot,
+                {
+                  width: dotSize,
+                  height: dotSize,
+                  borderRadius: dotSize / 2,
+                  backgroundColor: dotColor(type),
+                  borderWidth: isStrong ? 0 : 1.5,
+                  borderColor: text + "44",
+                  transform: [{ scale: isStrong ? 1.15 : 1 }],
+                },
+              ]}
+            />
+            {i === 0 && (
+              <View style={[stageBeatEditorStyle.badge, { backgroundColor: accent }]}>
+                <Text style={[stageBeatEditorStyle.badgeText, { color: "#000" }]}>1</Text>
+              </View>
+            )}
+          </Pressable>
+        );
+      })}
+      <Text style={[stageBeatEditorStyle.hint, { color: faint }]}>← →</Text>
+    </View>
+  );
+}
+
+const stageBeatEditorStyle = StyleSheet.create({
+  wrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    minHeight: 52,
+  },
+  dotBtn: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dot: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeText: {
+    fontSize: 7,
+    fontWeight: "700",
+  },
+  hint: {
+    fontSize: 10,
+    marginLeft: 4,
+    opacity: 0.5,
+  },
+});
+
 // ─── Props ────────────────────────────────────────────────────────────
 export interface StageModeOverlayProps {
   visible:           boolean;
@@ -137,6 +283,7 @@ export interface StageModeOverlayProps {
   onBeatDenominatorCycle:  () => void;
   onFlashModeChange?:  (m: FlashMode) => void;
   onHapticModeChange?: (m: HapticMode) => void;
+  onBeatTypesChange?:  (types: BeatType[]) => void;
   /** 연습장 전체 목록 (셋 리스트 추가 피커에서 사용) */
   practiceBook?: PracticeEntry[];
   /** 현재 활성(하이라이트) 셋 리스트 항목 ID */
@@ -168,6 +315,7 @@ export function StageModeOverlay({
   onBeatDenominatorCycle,
   onFlashModeChange,
   onHapticModeChange,
+  onBeatTypesChange,
   practiceBook = [],
   activeEntryId,
   onSelectEntry,
@@ -534,14 +682,15 @@ export function StageModeOverlay({
   const bottomPad = (insets.bottom || (Platform.OS === "web" ? 34 : 0)) + 8;
 
   const isDark = settings.theme === "dark";
-  const bg      = isDark ? "#0a0a0a" : "#f0f0f0";
-  const text    = isDark ? "#ffffff" : "#111111";
-  const faint   = isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)";
-  const cardBg  = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)";
-  const cardBdr = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)";
-  const btnBg   = isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)";
-  const btnBdr  = isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)";
-  const panelBg = isDark ? "#181818" : "#e8e8e8";
+  const bg          = isDark ? "#0a0a0a" : "#f0f0f0";
+  const text        = isDark ? "#ffffff" : "#111111";
+  const faint       = isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)";
+  const cardBg      = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)";
+  const cardBdr     = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)";
+  const btnBg       = isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)";
+  const btnBdr      = isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)";
+  const panelBg     = isDark ? "#181818" : "#e8e8e8";
+  const accentColor = isDark ? "#5B9EFF" : "#2563EB";
 
   if (!visible) return null;
 
@@ -575,27 +724,41 @@ export function StageModeOverlay({
         onBpmChange={onBpmChange}
         onTapTempo={onTapTempo}
         onDenominatorCycle={onBeatDenominatorCycle}
+        isDark={isDark}
       />
-      {/* 박자 수 조절 (− beats +) */}
-      <View style={styles.beatCountRow}>
-        <Pressable
-          style={({ pressed }) => [styles.beatCountBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" }]}
-          onPress={() => onBeatsPerMeasureChange(Math.max(1, beatsPerMeasure - 1))}
-          accessibilityLabel="Beats minus one"
-        >
-          <Ionicons name="remove" size={16} color={text} />
-        </Pressable>
-        <Text style={[styles.beatCountText, { color: text }]}>
-          {beatsPerMeasure} {t("stageMode", "beats")}
-        </Text>
-        <Pressable
-          style={({ pressed }) => [styles.beatCountBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" }]}
-          onPress={() => onBeatsPerMeasureChange(Math.min(16, beatsPerMeasure + 1))}
-          accessibilityLabel="Beats plus one"
-        >
-          <Ionicons name="add" size={16} color={text} />
-        </Pressable>
-      </View>
+      {/* 셋리스트가 비어있을 때: 비트 편집기 / 셋리스트 있을 때: − beats + 버튼 */}
+      {setlist.length === 0 && onBeatTypesChange ? (
+        <StageBeatEditor
+          beatTypes={beatTypes ?? []}
+          onBeatTypesChange={onBeatTypesChange}
+          beatsPerMeasure={beatsPerMeasure}
+          onBeatsPerMeasureChange={onBeatsPerMeasureChange}
+          text={text}
+          faint={faint}
+          accent={accentColor}
+        />
+      ) : (
+        /* 박자 수 조절 (− beats +) */
+        <View style={styles.beatCountRow}>
+          <Pressable
+            style={({ pressed }) => [styles.beatCountBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" }]}
+            onPress={() => onBeatsPerMeasureChange(Math.max(1, beatsPerMeasure - 1))}
+            accessibilityLabel="Beats minus one"
+          >
+            <Ionicons name="remove" size={16} color={text} />
+          </Pressable>
+          <Text style={[styles.beatCountText, { color: text }]}>
+            {beatsPerMeasure} {t("stageMode", "beats")}
+          </Text>
+          <Pressable
+            style={({ pressed }) => [styles.beatCountBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" }]}
+            onPress={() => onBeatsPerMeasureChange(Math.min(16, beatsPerMeasure + 1))}
+            accessibilityLabel="Beats plus one"
+          >
+            <Ionicons name="add" size={16} color={text} />
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 

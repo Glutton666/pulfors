@@ -5974,6 +5974,10 @@ export default function MetronomeScreen() {
           setBeatsPerMeasure(n);
           engineRef.current?.setBeatsPerMeasure(n);
         }}
+        onBeatTypesChange={(types) => {
+          setBeatTypes(types);
+          engineRef.current?.setBeatTypes(types);
+        }}
         onBeatDenominatorCycle={handleBeatDenominatorCycle}
         onFlashModeChange={(m) => {
           setFlashMode(m);
