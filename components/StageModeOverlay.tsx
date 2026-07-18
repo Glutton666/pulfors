@@ -383,13 +383,17 @@ export function StageModeOverlay({
     prevBeatRef2.current = -1;
   }, [activeEntryId]);
 
+  // 슬롯 ID에서 원본 entry ID 추출 (중복 허용 포맷: "origId__slot__ts_rand")
+  const getOriginalEntryId = (id: string) =>
+    id.includes("__slot__") ? id.split("__slot__")[0]! : id;
+
   // ── practiceBook 변경 시 셋리스트 재검증 ────────────────────────
   // book이 비어 있으면 아직 로딩 중이므로 건너뜀 (visible 효과에서 이미 defer 처리)
   useEffect(() => {
     if (!visible || practiceBook.length === 0) return;
     const current = setlistRef.current;
     if (current.length === 0) return;
-    const filtered = current.filter((e) => practiceBook.some((b) => b.id === e.id));
+    const filtered = current.filter((e) => practiceBook.some((b) => b.id === getOriginalEntryId(e.id)));
     if (filtered.length !== current.length) {
       setSetlist(filtered);
       saveStageSetlist(filtered).catch(() => {});
@@ -406,7 +410,7 @@ export function StageModeOverlay({
       // 나중에 practiceBook이 로드되면 아래 revalidation 효과가 자동으로 정리
       const book = practiceBookRef.current;
       const list = book.length > 0
-        ? saved.filter((e) => book.some((b) => b.id === e.id))
+        ? saved.filter((e) => book.some((b) => b.id === getOriginalEntryId(e.id)))
         : saved;
       if (book.length > 0 && list.length !== saved.length) {
         saveStageSetlist(list).catch(() => {});
@@ -576,10 +580,12 @@ export function StageModeOverlay({
   }, [currentMeasureIdx, scoreDoc, settings.scoreHighlight, winWidth]);
 
   // ── 셋 리스트 조작 ───────────────────────────────────────────────
+  // 슬롯 ID = "originalId__slot__timestamp_random" — 같은 항목 중복 추가 허용
   const addToSetlist = useCallback((entry: PracticeEntry) => {
     setSetlist((prev) => {
-      if (prev.find((e) => e.id === entry.id)) return prev;
-      const next = [...prev, entry];
+      const slotId = `${entry.id}__slot__${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const slot: PracticeEntry = { ...entry, id: slotId };
+      const next = [...prev, slot];
       saveStageSetlist(next).catch(() => {});
       return next;
     });
@@ -709,7 +715,7 @@ export function StageModeOverlay({
   const timeSigText = `${beatsPerMeasure}/${beatDenominator}`;
 
   // ── 피커에서 추가 가능한 항목 ─────────────────────────────────────
-  const availableEntries = practiceBook.filter((e) => !setlist.find((s) => s.id === e.id));
+  const availableEntries = practiceBook;
 
   // ─ 롱프레스 컨텍스트 항목 ─
   const ctxEntry = contextEntryId ? setlist.find((e) => e.id === contextEntryId) : null;
@@ -952,13 +958,28 @@ export function StageModeOverlay({
             </Text>
           </View>
 
+          {setlist.length === 0 ? (
+            /* 셋리스트 비어있을 때: + 버튼 가운데 정렬 */
+            <View style={styles.emptySetlistCenter}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.addBtn,
+                  { borderColor: cardBdr, backgroundColor: pressed ? btnBg : cardBg },
+                ]}
+                onPress={() => setPickerOpen(true)}
+                testID="stage-setlist-add"
+              >
+                <Ionicons name="add" size={22} color={faint} />
+              </Pressable>
+            </View>
+          ) : (
           <FlatList
             data={setlist}
             horizontal
             showsHorizontalScrollIndicator={false}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.setlistContent}
-            ListHeaderComponent={() => (
+            ListFooterComponent={() => (
               <Pressable
                 style={({ pressed }) => [
                   styles.addBtn,
@@ -975,6 +996,7 @@ export function StageModeOverlay({
               const mode     = getEntryMode(item);
               const badge    = MODE_BADGE[mode] ?? MODE_BADGE["beat"]!;
               const isCtx    = item.id === contextEntryId;
+              const seqNum   = index + 1;
 
               return (
                 <Pressable
@@ -1005,6 +1027,10 @@ export function StageModeOverlay({
                   {/* 상단 뱃지 행 */}
                   <View style={styles.setCardTop}>
                     <View style={styles.setCardBadgeRow}>
+                      {/* 순서 번호 */}
+                      <View style={styles.seqBadge}>
+                        <Text style={[styles.seqBadgeText, { color: faint }]}>{seqNum}</Text>
+                      </View>
                       <View style={[styles.modeBadge, { backgroundColor: badge.color + "33" }]}>
                         <Text style={[styles.modeBadgeText, { color: badge.color }]}>{badge.label}</Text>
                       </View>
@@ -1082,17 +1108,8 @@ export function StageModeOverlay({
                 </Pressable>
               );
             }}
-            ListEmptyComponent={() => (
-              <Pressable
-                style={[styles.emptySetlist, { borderColor: cardBdr }]}
-                onPress={() => setPickerOpen(true)}
-              >
-                <Text style={[styles.emptySetlistText, { color: faint }]}>
-                  {t("stageMode", "setlistEmpty")}
-                </Text>
-              </Pressable>
-            )}
           />
+          )}
         </View>
       )}
 
@@ -1747,6 +1764,24 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+  },
+  emptySetlistCenter: {
+    alignItems: "center",
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+  },
+  seqBadge: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: "rgba(128,128,128,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  seqBadgeText: {
+    fontSize: 8,
+    fontFamily: "SpaceGrotesk_700Bold",
+    lineHeight: 10,
   },
   setCard: {
     borderWidth: 1,
