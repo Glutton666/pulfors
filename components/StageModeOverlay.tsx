@@ -722,7 +722,8 @@ export function StageModeOverlay({
   const ctxIdx   = contextEntryId ? setlist.findIndex((e) => e.id === contextEntryId) : -1;
 
   // ─ BPM 컨트롤러: 재생 중에는 BPM 숫자만, 정지 중에는 BpmSlider ──
-  const BpmController = isPlaying ? (
+  // 셋리스트가 있거나 재생 중이면 읽기전용, 없을 때만 편집 가능
+  const BpmController = (isPlaying || setlist.length > 0) ? (
     <View style={styles.bpmReadOnly}>
       <Text style={[styles.bpmReadOnlyLabel, { color: faint }]}>{t("stageMode", "bpmLabel")}</Text>
       <Pressable
@@ -744,28 +745,6 @@ export function StageModeOverlay({
         onDenominatorCycle={onBeatDenominatorCycle}
         isDark={isDark}
       />
-      {/* 셋리스트 있을 때만 − beats + 표시 (없을 때는 noSetlistContent 슬롯에서 편집) */}
-      {setlist.length > 0 && (
-        <View style={styles.beatCountRow}>
-          <Pressable
-            style={({ pressed }) => [styles.beatCountBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" }]}
-            onPress={() => onBeatsPerMeasureChange(Math.max(1, beatsPerMeasure - 1))}
-            accessibilityLabel="Beats minus one"
-          >
-            <Ionicons name="remove" size={16} color={text} />
-          </Pressable>
-          <Text style={[styles.beatCountText, { color: text }]}>
-            {beatsPerMeasure} {t("stageMode", "beats")}
-          </Text>
-          <Pressable
-            style={({ pressed }) => [styles.beatCountBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" }]}
-            onPress={() => onBeatsPerMeasureChange(Math.min(16, beatsPerMeasure + 1))}
-            accessibilityLabel="Beats plus one"
-          >
-            <Ionicons name="add" size={16} color={text} />
-          </Pressable>
-        </View>
-      )}
     </View>
   );
 
@@ -780,7 +759,7 @@ export function StageModeOverlay({
     >
       <Ionicons
         name={isPlaying ? "pause-circle" : "play-circle"}
-        size={76}
+        size={100}
         color={text}
       />
     </Pressable>
@@ -907,9 +886,6 @@ export function StageModeOverlay({
       ) : (
         /* ─ 기본 모드 (비트 / 바) ─────────────────────────────── */
         <View style={styles.mainContent}>
-          {/* 재생/정지 버튼 — BeatIndicator 슬롯 없을 때만 표시 (슬롯이 자체 토글 포함) */}
-          {!(setlist.length === 0 && !isPlaying && noSetlistContent) && PlayPauseBtn}
-
           {/* 비트 컬럼: 정지 + 셋리스트 없을 때 → noSetlistContent(BeatIndicator), 나머지 → StageBeatColumn(큰 숫자) */}
           {setlist.length === 0 && !isPlaying && noSetlistContent
             ? <View style={{ flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center" }}>{noSetlistContent}</View>
@@ -935,7 +911,10 @@ export function StageModeOverlay({
             )
           }
 
-          {/* BPM 컨트롤러 (재생 중: 읽기 전용 숫자, 정지 중: 풀 컨트롤러) */}
+          {/* 재생/정지 버튼 — 비트 컬럼 아래, BeatIndicator 슬롯 없을 때만 표시 */}
+          {!(setlist.length === 0 && !isPlaying && noSetlistContent) && PlayPauseBtn}
+
+          {/* BPM 컨트롤러 (재생 중 / 셋리스트 있을 때: 읽기 전용 숫자, 없을 때: 풀 컨트롤러) */}
           {BpmController}
         </View>
       )}
@@ -1725,9 +1704,9 @@ const styles = StyleSheet.create({
 
   // ── 재생/정지 ────────────────────────────────────────────────────
   playPauseBtn: {
-    marginTop: 4,
-    padding: 4,
-    borderRadius: 50,
+    marginVertical: 8,
+    padding: 10,
+    borderRadius: 60,
   },
 
   // ── 셋 리스트 ────────────────────────────────────────────────────
