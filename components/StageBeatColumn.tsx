@@ -164,18 +164,9 @@ export function StageBeatColumn({
             )}
           </>
         ) : (
-          /* 재생 중: 현재 비트 + 다음 비트 모두 표시 */
+          /* 재생 중: 마디 도트 + 구분선 → 현재 비트 → 다음 비트 → 서브디비전 */
           <>
-            <Text style={[styles.beatNum, { color: curColor }]}>
-              {String(cur0 + 1)}
-            </Text>
-
-            {/* 현재 비트 서브디비전 */}
-            {subdivisionTypes && subdivisionTypes.length > 1 && (
-              <SubdivDots types={subdivisionTypes} theme={theme} size={10} />
-            )}
-
-            {/* 마디 진행 도트 */}
+            {/* 마디 진행 도트 (현재 비트 위) */}
             <View style={styles.dotsRow}>
               {Array.from({ length: maxDots }, (_, i) => (
                 <View
@@ -190,13 +181,23 @@ export function StageBeatColumn({
               ))}
             </View>
 
-            {/* 구분선 */}
+            {/* 구분선 (현재 비트 위) */}
             <View style={[styles.divider, { backgroundColor: dividerColor }]} />
 
-            {/* ── 다음 비트 ── */}
+            {/* 현재 비트 */}
+            <Text style={[styles.beatNum, { color: curColor }]}>
+              {String(cur0 + 1)}
+            </Text>
+
+            {/* 다음 비트 */}
             <Text style={[styles.beatNum, { color: nextColor }]}>
               {String(next0 + 1)}
             </Text>
+
+            {/* 서브디비전 — 현재 + 다음, 아래에만 */}
+            {subdivisionTypes && subdivisionTypes.length > 1 && (
+              <SubdivDots types={subdivisionTypes} theme={theme} size={10} />
+            )}
             {nextSubdivisionTypes && nextSubdivisionTypes.length > 1 && (
               <SubdivDots types={nextSubdivisionTypes} theme={theme} size={10} />
             )}

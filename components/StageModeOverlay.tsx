@@ -528,6 +528,16 @@ export function StageModeOverlay({
   const activeEntry = setlist.find((e) => e.id === activeEntryId) ?? null;
   // autoAdvance 용 ref 동기화
   useEffect(() => { activeEntryRef.current = activeEntry; }, [activeEntry]);
+
+  // ── 셋리스트 변경 시 자동 선택: 활성 항목 없으면 첫 항목 적용 ────
+  // addToSetlist 등으로 항목이 추가될 때도 엔진에 즉시 설정 반영
+  useEffect(() => {
+    if (!visible || setlist.length === 0) return;
+    const hasActive = activeEntryId && setlist.some((e) => e.id === activeEntryId);
+    if (!hasActive) {
+      onSelectEntryRef.current?.(setlist[0]!);
+    }
+  }, [setlist, visible, activeEntryId]);
   const activeMode  = activeEntry ? getEntryMode(activeEntry) : "beat";
   // 악보 모드 또는 사진이 있는 노트 모드 → 전체화면 컨텐츠 표시
   const hasPhoto    = activeMode === "note" && !!activeEntry?.imageUri;
