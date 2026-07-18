@@ -27,6 +27,7 @@ import {
   Switch,
   BackHandler,
   Image,
+  TextInput,
   useWindowDimensions,
 } from "react-native";
 import Animated, {
@@ -223,8 +224,9 @@ export function StageModeOverlay({
   }, [activeEntryId]);
 
   // ── practiceBook 변경 시 셋리스트 재검증 ────────────────────────
+  // practiceBook이 비어 있을 때도 실행: 빈 book → 모든 항목이 유효하지 않으므로 []로 정리
   useEffect(() => {
-    if (!visible || practiceBook.length === 0) return;
+    if (!visible) return;
     const current = setlistRef.current;
     if (current.length === 0) return;
     const filtered = current.filter((e) => practiceBook.some((b) => b.id === e.id));
@@ -239,20 +241,18 @@ export function StageModeOverlay({
     if (!visible) return;
     loadStageSettings().then(setSettings).catch(() => {});
     loadStageSetlist().then((saved) => {
-      // 방어: practiceBook에 없는 ID를 가진 항목 제거 (비정상 데이터 정리)
+      // 방어: practiceBook에 없는 ID 항목 항상 제거
+      // book이 비어 있을 때도 필터링 → 모든 항목이 유효하지 않으면 []로 정리
       const book = practiceBookRef.current;
-      const filtered = book.length > 0
-        ? saved.filter((e) => book.some((b) => b.id === e.id))
-        : saved;
-      const list = filtered.length > 0 ? filtered : [];
+      const filtered = saved.filter((e) => book.some((b) => b.id === e.id));
       if (filtered.length !== saved.length) {
-        saveStageSetlist(list).catch(() => {});
+        saveStageSetlist(filtered).catch(() => {});
       }
-      setSetlist(list);
+      setSetlist(filtered);
       // 활성 항목이 없으면 첫 번째 항목 자동 선택
-      const hasActive = activeEntryId && list.some((e) => e.id === activeEntryId);
-      if (!hasActive && list.length > 0) {
-        onSelectEntry?.(list[0]!);
+      const hasActive = activeEntryId && filtered.some((e) => e.id === activeEntryId);
+      if (!hasActive && filtered.length > 0) {
+        onSelectEntry?.(filtered[0]!);
       }
     }).catch(() => {});
     setConfirmExit(false);
@@ -1154,6 +1154,24 @@ export function StageModeOverlay({
           </View>
         </View>
       </Modal>
+
+      {/* ── 네이티브 숨겨진 TextInput: 블루투스 키보드 1~0 캡처 ────── */}
+      {Platform.OS !== "web" && (
+        <TextInput
+          style={{ position: "absolute", opacity: 0, width: 1, height: 1, left: -9999 }}
+          autoFocus
+          blurOnSubmit={false}
+          onKeyPress={({ nativeEvent }) => {
+            const key = nativeEvent.key;
+            if (/^[0-9]$/.test(key)) {
+              const entryId = (settingsRef.current.keyMappings ?? {})[key];
+              if (!entryId) return;
+              const entry = practiceBookRef.current.find((e) => e.id === entryId);
+              if (entry) addToSetlist(entry);
+            }
+          }}
+        />
+      )}
 
       {/* ── 예약 점프 토스트 (Ctrl+숫자) ─────────────────────────── */}
       {pendingJumpIdx !== null && (
