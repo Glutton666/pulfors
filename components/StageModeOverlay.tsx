@@ -735,8 +735,8 @@ export function StageModeOverlay({
         onDenominatorCycle={onBeatDenominatorCycle}
         isDark={isDark}
       />
-      {/* 셋리스트가 비어있을 때: 비트 편집기 / 셋리스트 있을 때: − beats + 버튼 */}
-      {setlist.length === 0 && onBeatTypesChange ? (
+      {/* beat 모드(셋리스트 없거나 활성 항목이 beat)이면 비트 편집기, 나머지는 − beats + */}
+      {(activeMode === "beat" || setlist.length === 0) && onBeatTypesChange ? (
         <StageBeatEditor
           beatTypes={beatTypes ?? []}
           onBeatTypesChange={onBeatTypesChange}
