@@ -299,8 +299,6 @@ export interface StageModeOverlayProps {
   activeEntryId?: string;
   /** 셋 리스트 항목 선택 — 엔진 재시작 없이 즉시 전환 */
   onSelectEntry?: (entry: PracticeEntry) => void;
-  /** 셋리스트 없는 비트 모드에서 BPM 슬라이더 아래 표시할 서브디비전 편집 슬롯 */
-  subdivisionBarElement?: React.ReactNode;
 }
 
 // ─── 메인 컴포넌트 ─────────────────────────────────────────────────────
@@ -330,7 +328,6 @@ export function StageModeOverlay({
   practiceBook = [],
   activeEntryId,
   onSelectEntry,
-  subdivisionBarElement,
 }: StageModeOverlayProps) {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -738,20 +735,17 @@ export function StageModeOverlay({
         onDenominatorCycle={onBeatDenominatorCycle}
         isDark={isDark}
       />
-      {/* beat 모드(셋리스트 없을 때만)이면 비트 편집기 + 서브디비전 바, 나머지는 − beats + */}
-      {setlist.length === 0 && onBeatTypesChange ? (
-        <>
-          <StageBeatEditor
-            beatTypes={beatTypes ?? []}
-            onBeatTypesChange={onBeatTypesChange}
-            beatsPerMeasure={beatsPerMeasure}
-            onBeatsPerMeasureChange={onBeatsPerMeasureChange}
-            text={text}
-            faint={faint}
-            accent={accentColor}
-          />
-          {subdivisionBarElement}
-        </>
+      {/* beat 모드(셋리스트 없거나 활성 항목이 beat)이면 비트 편집기, 나머지는 − beats + */}
+      {(activeMode === "beat" || setlist.length === 0) && onBeatTypesChange ? (
+        <StageBeatEditor
+          beatTypes={beatTypes ?? []}
+          onBeatTypesChange={onBeatTypesChange}
+          beatsPerMeasure={beatsPerMeasure}
+          onBeatsPerMeasureChange={onBeatsPerMeasureChange}
+          text={text}
+          faint={faint}
+          accent={accentColor}
+        />
       ) : (
         /* 박자 수 조절 (− beats +) */
         <View style={styles.beatCountRow}>
@@ -1523,6 +1517,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     zIndex: 2,
   },
+
   // ── 전체화면 레이아웃 (악보/사진 모드) ──────────────────────────
   fullscreenLayout: {
     flex: 1,

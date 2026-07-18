@@ -5993,19 +5993,6 @@ export default function MetronomeScreen() {
           engineRef.current?.setHapticMode(m);
           persistSettings({ hapticMode: m });
         }}
-        subdivisionBarElement={
-          <SubdivisionBar
-            pattern={subdivisionPattern}
-            onPatternChange={handlePatternChange}
-            onDragStart={handleDragStart}
-            onDragMove={handleDragMove}
-            onDragEnd={handleDragEnd}
-            onReset={handleReset}
-            isPlaying={isPlaying}
-            activeSubNote={activeSubNote}
-            activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
-          />
-        }
         practiceBook={stagePracticeEntries}
         activeEntryId={activeStagePracticeEntryId}
         onSelectEntry={(entry) => {
