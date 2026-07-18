@@ -196,6 +196,8 @@ export function StageModeOverlay({
   useEffect(() => { setlistRef.current = setlist; }, [setlist]);
   const onSelectEntryRef = useRef(onSelectEntry);
   useEffect(() => { onSelectEntryRef.current = onSelectEntry; }, [onSelectEntry]);
+  const isPlayingRef = useRef(isPlaying);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
 
   // ── 악보 문서 로드 ────────────────────────────────────────────────
   const [scoreDoc, setScoreDoc] = useState<ScoreDocument | null>(null);
@@ -219,6 +221,18 @@ export function StageModeOverlay({
     setInternalLoopCount(0);
     prevBeatRef2.current = -1;
   }, [activeEntryId]);
+
+  // ── practiceBook 변경 시 셋리스트 재검증 ────────────────────────
+  useEffect(() => {
+    if (!visible || practiceBook.length === 0) return;
+    const current = setlistRef.current;
+    if (current.length === 0) return;
+    const filtered = current.filter((e) => practiceBook.some((b) => b.id === e.id));
+    if (filtered.length !== current.length) {
+      setSetlist(filtered);
+      saveStageSetlist(filtered).catch(() => {});
+    }
+  }, [practiceBook, visible]);
 
   // ── 마운트 시 로드 ────────────────────────────────────────────────
   useEffect(() => {
@@ -489,7 +503,17 @@ export function StageModeOverlay({
       if (evt.ctrlKey || evt.metaKey) {
         evt.preventDefault();
         const pos = key === "0" ? 9 : parseInt(key, 10) - 1;
-        setPendingJumpIdx(pos);
+        const currentSetlist = setlistRef.current;
+        // 범위 초과는 즉시 무시
+        if (pos < 0 || pos >= currentSetlist.length) return;
+        if (!isPlayingRef.current) {
+          // 정지 중이면 즉시 이동
+          const target = currentSetlist[pos];
+          if (target) onSelectEntryRef.current?.(target);
+        } else {
+          // 재생 중이면 현재 항목 종료 시까지 예약
+          setPendingJumpIdx(pos);
+        }
       } else if (!evt.altKey && !evt.shiftKey) {
         const entryId = (settingsRef.current.keyMappings ?? {})[key];
         if (!entryId) return;
