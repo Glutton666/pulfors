@@ -1935,19 +1935,15 @@ export default function MetronomeScreen() {
   const handleBeatDenominatorCycle = useCallback(() => {
     setBeatDenominator((prev) => {
       const next: 2 | 4 | 8 = prev === 4 ? 8 : prev === 8 ? 2 : 4;
-      // 현재 BPM과 현재 분모로 /4 기준값을 재계산 (stale ref 방지)
-      baseBpmRef.current = Math.round(bpm * (prev / 4));
-      const newBpm = Math.round(Math.min(300, Math.max(20, baseBpmRef.current * (4 / next))));
-      setBpm(newBpm);
-      engineRef.current?.setBpm(newBpm);
-      persistSettings({ beatDenominator: next, bpm: newBpm });
+      // 분모만 바꾸고 BPM은 유지
+      persistSettings({ beatDenominator: next });
       halfTimeFlash.value = withSequence(
         withTiming(0.25, { duration: 80 }),
         withTiming(0, { duration: 600, easing: Easing.out(Easing.quad) })
       );
       return next;
     });
-  }, [bpm, persistSettings]);
+  }, [persistSettings]);
 
   const updateTimeSignature = useCallback(
     (beats: number) => {
