@@ -141,8 +141,30 @@ export function StageBeatColumn({
     <View style={styles.root}>
       <Animated.View style={[styles.inner, slideStyle]}>
 
-        {/* ── 현재 비트 ── */}
-        {!stopped && (
+        {stopped ? (
+          /* 정지 상태: 첫 비트를 매우 흐리게 표시 (재생 전 미리보기) */
+          <>
+            <Text style={[styles.beatNum, { color: theme === "dark" ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.13)" }]}>
+              1
+            </Text>
+            {total > 1 && (
+              <View style={styles.dotsRow}>
+                {Array.from({ length: maxDots }, (_, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.dot,
+                      i === 0
+                        ? [styles.dotActive, { backgroundColor: dotInactive }]
+                        : { backgroundColor: dotInactive },
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
+          </>
+        ) : (
+          /* 재생 중: 현재 비트 + 다음 비트 모두 표시 */
           <>
             <Text style={[styles.beatNum, { color: curColor }]}>
               {String(cur0 + 1)}

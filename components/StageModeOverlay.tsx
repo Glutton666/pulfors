@@ -416,10 +416,10 @@ export function StageModeOverlay({
         saveStageSetlist(list).catch(() => {});
       }
       setSetlist(list);
-      // 활성 항목이 없으면 첫 번째 항목 자동 선택
-      const hasActive = activeEntryId && list.some((e) => e.id === activeEntryId);
-      if (!hasActive && list.length > 0) {
-        onSelectEntry?.(list[0]!);
+      // 활성 항목이 있으면 재-선택(BPM 재적용), 없으면 첫 항목 선택
+      if (list.length > 0) {
+        const activeInList = activeEntryId ? list.find((e) => e.id === activeEntryId) : null;
+        onSelectEntry?.(activeInList ?? list[0]!);
       }
     }).catch(() => {});
     setConfirmExit(false);
@@ -615,11 +615,11 @@ export function StageModeOverlay({
 
   // ── 다음 항목으로 이동 ────────────────────────────────────────────
   const advanceSetlist = useCallback(() => {
-    // 항목이 1개 이하면 이동 불필요 (같은 항목 재선택 방지)
     if (setlist.length <= 1) return;
     const idx = setlist.findIndex((e) => e.id === activeEntryId);
-    // 마지막 항목이면 첫 번째 항목으로 순환
-    const nextIdx = (idx + 1) % setlist.length;
+    const nextIdx = idx + 1;
+    // 마지막 항목이면 순환하지 않음 (1회 재생)
+    if (nextIdx >= setlist.length) return;
     const next = setlist[nextIdx];
     if (next) onSelectEntry?.(next);
   }, [setlist, activeEntryId, onSelectEntry]);
@@ -921,20 +921,23 @@ export function StageModeOverlay({
 
       {/* ── 셋 리스트 ───────────────────────────────────────────── */}
       {isPlaying ? (
-        /* 재생 중: "다음 →" 버튼만 표시 (셋리스트 2개 이상일 때) */
-        setlist.length > 1 ? (
-          <View style={styles.setlistPlayingBar}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.nextBtnLarge,
-                { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" },
-              ]}
-              onPress={advanceSetlist}
-            >
-              <Text style={[styles.nextBtnText, { color: text }]}>{t("stageMode", "next")} →</Text>
-            </Pressable>
-          </View>
-        ) : null
+        /* 재생 중: 마지막 항목이 아닐 때만 "다음 →" 버튼 표시 */
+        (() => {
+          const curIdx = setlist.findIndex((e) => e.id === activeEntryId);
+          return setlist.length > 1 && curIdx < setlist.length - 1 ? (
+            <View style={styles.setlistPlayingBar}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.nextBtnLarge,
+                  { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" },
+                ]}
+                onPress={advanceSetlist}
+              >
+                <Text style={[styles.nextBtnText, { color: text }]}>{t("stageMode", "next")} →</Text>
+              </Pressable>
+            </View>
+          ) : null;
+        })()
       ) : (
         /* 정지 중: 셋리스트 전체 표시 */
         <View style={styles.setlistSection}>
