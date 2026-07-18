@@ -5993,6 +5993,62 @@ export default function MetronomeScreen() {
           engineRef.current?.setHapticMode(m);
           persistSettings({ hapticMode: m });
         }}
+        noSetlistContent={
+          <BeatIndicator
+            beatsPerMeasure={beatsPerMeasure}
+            currentBeat={currentBeat}
+            isPlaying={isPlaying}
+            isPreparing={isPreparing}
+            onBeatsChange={updateTimeSignature}
+            onTogglePlay={() => void togglePlayPauseRef.current?.()}
+            beatTypes={beatTypes}
+            onBeatTypeChange={handleBeatTypeChange}
+            dropTargetBeat={null}
+            beatSubdivisionCounts={beatSubdivisionCounts}
+            barMode={false}
+            onBarModeChange={() => {}}
+            beatSubdivisions={beatSubdivisions}
+            onBeatSubdivisionChange={handleBeatSubdivisionChange}
+            activeSubNote={activeSubNote}
+            barRepeats={barRepeats}
+            onBarRepeatChange={handleBarRepeatChange}
+            loopBlocks={loopBlocks}
+            onLoopBlocksChange={handleLoopBlocksChange}
+            barLoopMode={barLoopMode}
+            onBarLoopModeChange={setBarLoopMode}
+            blockPlayMode={blockPlayMode}
+            onBlockPlayModeChange={setBlockPlayMode}
+            bpm={bpm}
+            beatDenominator={beatDenominator}
+            onDenominatorCycle={handleBeatDenominatorCycle}
+            tempoLabel={tempoLabel}
+            soundSet={soundSet}
+            onSoundSetChange={(ss) => updateSoundSet(ss as SoundSet)}
+            onPreviewSoundSet={previewSoundSet}
+            layerSoundSets={layerSoundSets as Record<number, string>}
+            onLayerSoundSetsChange={(val) => {
+              const typed = val as Record<number, SoundSet>;
+              for (const ss of Object.values(typed)) {
+                delete clickPCMCacheRef.current[ss];
+              }
+              setLayerSoundSets(typed);
+              layerSoundSetsRef.current = typed;
+              persistSettings({ layerSoundSets: typed });
+              scheduleReRender();
+            }}
+            customSoundSets={customSoundSets}
+            onCustomSoundSetsChange={(configs) => {
+              setCustomSoundSets(configs);
+              for (const key of Object.keys(clickPCMCacheRef.current)) {
+                if (key.startsWith("custom")) delete clickPCMCacheRef.current[key];
+              }
+            }}
+            progressInfo={progressInfo}
+            layerProgressMap={layerProgressMap}
+            measureCount={measureCount}
+            onEasterEggTrigger={handleEasterEggTrigger}
+          />
+        }
         practiceBook={stagePracticeEntries}
         activeEntryId={activeStagePracticeEntryId}
         onSelectEntry={(entry) => {
