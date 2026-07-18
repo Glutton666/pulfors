@@ -6046,6 +6046,13 @@ export default function MetronomeScreen() {
           if (entry.subdivisionPattern && entry.subdivisionPattern.length > 0) {
             setSubdivisionPattern([...entry.subdivisionPattern]);
           }
+          // bar mode React state 동기화 — 이게 없으면 barModeRef.current가 false로 남아
+          // requestStopAfterMeasure()가 호출되지 않아 유한 바모드 항목이 자동 전환 안 됨
+          const entryIsBar = entry.mode === "bar";
+          setBarMode(entryIsBar);
+          setBarLoopMode(entry.barLoopMode || "once");
+          setBarRepeats({ ...(entry.barRepeats || {}) });
+          setLoopBlocks([...(entry.loopBlocks || [])]);
           applyEntryToEngineCore(engine, entry, beatDenominatorRef.current);
           scheduleReRender();
           setActiveStagePracticeEntryId(entry.id);
