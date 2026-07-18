@@ -5994,46 +5994,46 @@ export default function MetronomeScreen() {
           persistSettings({ hapticMode: m });
         }}
         noSetlistContent={
-          <BeatIndicator
-            beatsPerMeasure={beatsPerMeasure}
-            currentBeat={currentBeat}
-            isPlaying={isPlaying}
-            isPreparing={isPreparing}
-            onBeatsChange={updateTimeSignature}
-            onTogglePlay={togglePlayPause}
-            beatTypes={beatTypes}
-            onBeatTypeChange={handleBeatTypeChange}
-            dropTargetBeat={dropTargetBeat}
-            beatSubdivisionCounts={beatSubdivisionCounts}
-            barMode={false}
-            onBarModeChange={handleBarModeChange}
-            beatSubdivisions={beatSubdivisions}
-            onBeatSubdivisionChange={handleBeatSubdivisionChange}
-            activeSubNote={activeSubNote}
-            barRepeats={barRepeats}
-            onBarRepeatChange={handleBarRepeatChange}
-            loopBlocks={loopBlocks}
-            onLoopBlocksChange={handleLoopBlocksChange}
-            barLoopMode={barLoopMode}
-            onBarLoopModeChange={setBarLoopMode}
-            blockPlayMode={blockPlayMode}
-            onBlockPlayModeChange={setBlockPlayMode}
-            beatDenominator={beatDenominator}
-            halfTime={halfTime}
-            subdivisionBarElement={
-              <SubdivisionBar
-                pattern={subdivisionPattern}
-                onPatternChange={handlePatternChange}
-                onDragStart={handleDragStart}
-                onDragMove={handleDragMove}
-                onDragEnd={handleDragEnd}
-                onReset={handleReset}
-                isPlaying={isPlaying}
-                activeSubNote={activeSubNote}
-                activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
-              />
-            }
-          />
+          <>
+            <BeatIndicator
+              beatsPerMeasure={beatsPerMeasure}
+              currentBeat={currentBeat}
+              isPlaying={isPlaying}
+              isPreparing={isPreparing}
+              onBeatsChange={updateTimeSignature}
+              onTogglePlay={togglePlayPause}
+              beatTypes={beatTypes}
+              onBeatTypeChange={handleBeatTypeChange}
+              dropTargetBeat={dropTargetBeat}
+              beatSubdivisionCounts={beatSubdivisionCounts}
+              barMode={false}
+              onBarModeChange={handleBarModeChange}
+              beatSubdivisions={beatSubdivisions}
+              onBeatSubdivisionChange={handleBeatSubdivisionChange}
+              activeSubNote={activeSubNote}
+              barRepeats={barRepeats}
+              onBarRepeatChange={handleBarRepeatChange}
+              loopBlocks={loopBlocks}
+              onLoopBlocksChange={handleLoopBlocksChange}
+              barLoopMode={barLoopMode}
+              onBarLoopModeChange={setBarLoopMode}
+              blockPlayMode={blockPlayMode}
+              onBlockPlayModeChange={setBlockPlayMode}
+              beatDenominator={beatDenominator}
+              halfTime={halfTime}
+            />
+            <SubdivisionBar
+              pattern={subdivisionPattern}
+              onPatternChange={handlePatternChange}
+              onDragStart={handleDragStart}
+              onDragMove={handleDragMove}
+              onDragEnd={handleDragEnd}
+              onReset={handleReset}
+              isPlaying={isPlaying}
+              activeSubNote={activeSubNote}
+              activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
+            />
+          </>
         }
         practiceBook={stagePracticeEntries}
         activeEntryId={activeStagePracticeEntryId}
