@@ -299,8 +299,8 @@ export interface StageModeOverlayProps {
   activeEntryId?: string;
   /** 셋 리스트 항목 선택 — 엔진 재시작 없이 즉시 전환 */
   onSelectEntry?: (entry: PracticeEntry) => void;
-  /** 셋리스트 없을 때 BPM 편집기 아래에 표시할 서브디비전 바 슬롯 */
-  subdivisionBarElement?: React.ReactNode;
+  /** 셋리스트 없을 때 StageBeatColumn 자리에 표시할 컨텐츠 슬롯 (BeatIndicator + SubdivisionBar 등) */
+  noSetlistContent?: React.ReactNode;
 }
 
 // ─── 메인 컴포넌트 ─────────────────────────────────────────────────────
@@ -330,7 +330,7 @@ export function StageModeOverlay({
   practiceBook = [],
   activeEntryId,
   onSelectEntry,
-  subdivisionBarElement,
+  noSetlistContent,
 }: StageModeOverlayProps) {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -738,22 +738,8 @@ export function StageModeOverlay({
         onDenominatorCycle={onBeatDenominatorCycle}
         isDark={isDark}
       />
-      {/* 셋리스트 없을 때: 비트 편집기 + 서브디비전 바 / 있을 때: − beats + */}
-      {setlist.length === 0 && onBeatTypesChange ? (
-        <>
-          <StageBeatEditor
-            beatTypes={beatTypes ?? []}
-            onBeatTypesChange={onBeatTypesChange}
-            beatsPerMeasure={beatsPerMeasure}
-            onBeatsPerMeasureChange={onBeatsPerMeasureChange}
-            text={text}
-            faint={faint}
-            accent={accentColor}
-          />
-          {subdivisionBarElement}
-        </>
-      ) : (
-        /* 박자 수 조절 (− beats +) */
+      {/* 셋리스트 있을 때만 − beats + 표시 (없을 때는 noSetlistContent 슬롯에서 편집) */}
+      {setlist.length > 0 && (
         <View style={styles.beatCountRow}>
           <Pressable
             style={({ pressed }) => [styles.beatCountBtn, { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent" }]}
@@ -918,18 +904,23 @@ export function StageModeOverlay({
           {/* 재생/정지 버튼 — StageBeatColumn 바로 위 */}
           {PlayPauseBtn}
 
-          {/* 비트 컬럼 */}
-          <StageBeatColumn
-            currentBeat={currentBeat}
-            beatsPerMeasure={beatsPerMeasure}
-            beatTypes={beatTypes}
-            theme={settings.theme}
-            subdivisionTypes={
-              beatSubdivisions && currentBeat >= 0
-                ? beatSubdivisions[String(currentBeat)]
-                : undefined
-            }
-          />
+          {/* 비트 컬럼: 정지 + 셋리스트 없을 때 → noSetlistContent(BeatIndicator), 나머지 → StageBeatColumn(큰 숫자) */}
+          {setlist.length === 0 && !isPlaying && noSetlistContent
+            ? <View style={{ flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center" }}>{noSetlistContent}</View>
+            : (
+              <StageBeatColumn
+                currentBeat={currentBeat}
+                beatsPerMeasure={beatsPerMeasure}
+                beatTypes={beatTypes}
+                theme={settings.theme}
+                subdivisionTypes={
+                  beatSubdivisions && currentBeat >= 0
+                    ? beatSubdivisions[String(currentBeat)]
+                    : undefined
+                }
+              />
+            )
+          }
 
           {/* BPM 컨트롤러 (재생 중: 읽기 전용 숫자, 정지 중: 풀 컨트롤러) */}
           {BpmController}
