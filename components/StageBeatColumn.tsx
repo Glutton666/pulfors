@@ -185,12 +185,12 @@ export function StageBeatColumn({
             <View style={[styles.divider, { backgroundColor: dividerColor }]} />
 
             {/* 현재 비트 */}
-            <Text style={[styles.beatNum, { color: curColor }]}>
+            <Text style={[styles.beatNum, { color: curColor, fontSize: 172, lineHeight: 180 }]}>
               {String(cur0 + 1)}
             </Text>
 
             {/* 다음 비트 */}
-            <Text style={[styles.beatNum, { color: nextColor }]}>
+            <Text style={[styles.beatNum, { color: nextColor, fontSize: 108, lineHeight: 116 }]}>
               {String(next0 + 1)}
             </Text>
 
