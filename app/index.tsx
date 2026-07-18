@@ -68,6 +68,7 @@ import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import PracticeStatsGraph from "@/components/PracticeStatsGraph";
 import { useDeepLink } from "@/contexts/DeepLinkContext";
+import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { make_styles } from "./index.styles";
 import { defaultBeatTypes, isCompoundMeterBeatCount, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks, applyLoopBlocksChange } from "./index.helpers";
 import {
@@ -2076,6 +2077,7 @@ export default function MetronomeScreen() {
       clearSamplePlayStates();
       setIsPreparing(false);
       setIsPlaying(false);
+      notifyVoicePlayState(false);
       resetPlaybackVisuals();
       showPausedNotification(bpm, modeLabel, languageRef.current);
       if (loggingEnabled && practiceStartRef.current) {
@@ -2134,6 +2136,7 @@ export default function MetronomeScreen() {
           // 즉시 시작 — per-tick 모드로 바로 재생, pre-render는 백그라운드 처리
           setIsPreparing(false);
           setIsPlaying(true);
+          notifyVoicePlayState(true);
           isPlayingRef.current = true;
           engine.start(startBeat ?? undefined);
           armAudioWatchdogRef.current();
@@ -2190,6 +2193,7 @@ export default function MetronomeScreen() {
           // 즉시 시작 — per-tick 모드로 바로 재생
           setIsPreparing(false);
           setIsPlaying(true);
+          notifyVoicePlayState(true);
           isPlayingRef.current = true;
           engine.start(startBeat ?? undefined);
           armAudioWatchdogRef.current();
@@ -2334,6 +2338,7 @@ export default function MetronomeScreen() {
 
   // 딥링크 명령 핸들러 등록
   const { setCommandHandler } = useDeepLink();
+  const { notifyPlayState: notifyVoicePlayState } = useVoiceAssistant();
   useEffect(() => {
     const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
     setCommandHandler((cmd) => {

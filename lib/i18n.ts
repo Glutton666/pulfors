@@ -200,6 +200,11 @@ export const translations = {
     webVersionOpen: { ko: "브라우저로 열기", en: "Open in Browser" },
     webVersionCopy: { ko: "링크 복사", en: "Copy Link" },
     webVersionCopied: { ko: "복사됨!", en: "Copied!" },
+    voiceAssistant: { ko: "음성 어시스턴트", en: "Voice Assistant" },
+    voiceAssistantHint: { ko: "말로 메트로놈을 제어합니다 (Android·웹 지원)", en: "Control the metronome by voice (Android & web)" },
+    voiceAssistantEnabled: { ko: "음성 인식 활성화", en: "Enable Voice Recognition" },
+    voiceAssistantListening: { ko: "듣는 중…", en: "Listening…" },
+    voiceAssistantIosHint: { ko: "iOS에서는 아래 Siri 단축어를 이용해 주세요", en: "On iOS, use the Siri shortcuts below" },
   },
   tripleOptions: {
     all: { ko: "전체", en: "All" },

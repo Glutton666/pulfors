@@ -42,6 +42,7 @@ import Colors, { accentFromHex, type ThemeColor } from "@/constants/colors";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { PRESET_COLORS, HUE_COLORS } from "@/constants/color-presets";
 import { useTheme, type BeatTypeKey } from "@/contexts/ThemeContext";
+import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, SoundRole, CustomSoundSetConfig, CustomSoundSample } from "@/lib/storage";
 import { loadCustomSoundSets, saveCustomSoundSets, BUILTIN_SOUND_SETS } from "@/lib/storage";
 import { soundSets } from "@/lib/metronome-engine";
@@ -314,6 +315,7 @@ export function SettingsModal({
   const styles = make_styles(C);
   const csStyles = make_csStyles(C);
   const { language, setLanguage, t } = useLanguage();
+  const { isSupported: voiceSupported, isEnabled: voiceEnabled, isListening: voiceListening, setEnabled: setVoiceEnabled } = useVoiceAssistant();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
   const [showCustomPicker, setShowCustomPicker] = useState(themeColor === "custom");
@@ -2292,6 +2294,47 @@ export function SettingsModal({
           </View>
         </View>
       )}
+
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="mic-outline" size={S.ms(18, 0.4)} color={C.accent} />
+          <Text style={[styles.sectionLabel, { color: C.text }]}>
+            {t("settings", "voiceAssistant")}
+          </Text>
+        </View>
+        <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "Inter_400Regular", marginBottom: Spacing.sm }}>
+          {t("settings", "voiceAssistantHint")}
+        </Text>
+        {voiceSupported ? (
+          <Pressable
+            onPress={() => setVoiceEnabled(!voiceEnabled)}
+            style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.overlay10 }}
+          >
+            <Text style={{ color: C.text, fontSize: 14, fontFamily: "Inter_500Medium" }}>
+              {t("settings", "voiceAssistantEnabled")}
+            </Text>
+            <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: Spacing.xs }}>
+              {voiceEnabled && voiceListening && (
+                <Text style={{ color: C.accent, fontSize: FontSize.caption, fontFamily: "Inter_400Regular" }}>
+                  {t("settings", "voiceAssistantListening")}
+                </Text>
+              )}
+              <Switch
+                value={voiceEnabled}
+                onValueChange={setVoiceEnabled}
+                trackColor={{ true: C.accent }}
+                thumbColor={C.surface}
+              />
+            </View>
+          </Pressable>
+        ) : (
+          <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "Inter_400Regular", paddingVertical: 8, borderTopWidth: 1, borderTopColor: C.overlay10 }}>
+            {t("settings", "voiceAssistantIosHint")}
+          </Text>
+        )}
+      </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
 
