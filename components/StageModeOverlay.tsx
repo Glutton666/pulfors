@@ -224,9 +224,9 @@ export function StageModeOverlay({
   }, [activeEntryId]);
 
   // ── practiceBook 변경 시 셋리스트 재검증 ────────────────────────
-  // practiceBook이 비어 있을 때도 실행: 빈 book → 모든 항목이 유효하지 않으므로 []로 정리
+  // book이 비어 있으면 아직 로딩 중이므로 건너뜀 (visible 효과에서 이미 defer 처리)
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || practiceBook.length === 0) return;
     const current = setlistRef.current;
     if (current.length === 0) return;
     const filtered = current.filter((e) => practiceBook.some((b) => b.id === e.id));
@@ -241,18 +241,21 @@ export function StageModeOverlay({
     if (!visible) return;
     loadStageSettings().then(setSettings).catch(() => {});
     loadStageSetlist().then((saved) => {
-      // 방어: practiceBook에 없는 ID 항목 항상 제거
-      // book이 비어 있을 때도 필터링 → 모든 항목이 유효하지 않으면 []로 정리
+      // 방어: practiceBook에 없는 ID 항목 제거
+      // book이 비어 있으면 아직 비동기 로딩 중이므로 필터링/저장 건너뜀 (데이터 유실 방지)
+      // 나중에 practiceBook이 로드되면 아래 revalidation 효과가 자동으로 정리
       const book = practiceBookRef.current;
-      const filtered = saved.filter((e) => book.some((b) => b.id === e.id));
-      if (filtered.length !== saved.length) {
-        saveStageSetlist(filtered).catch(() => {});
+      const list = book.length > 0
+        ? saved.filter((e) => book.some((b) => b.id === e.id))
+        : saved;
+      if (book.length > 0 && list.length !== saved.length) {
+        saveStageSetlist(list).catch(() => {});
       }
-      setSetlist(filtered);
+      setSetlist(list);
       // 활성 항목이 없으면 첫 번째 항목 자동 선택
-      const hasActive = activeEntryId && filtered.some((e) => e.id === activeEntryId);
-      if (!hasActive && filtered.length > 0) {
-        onSelectEntry?.(filtered[0]!);
+      const hasActive = activeEntryId && list.some((e) => e.id === activeEntryId);
+      if (!hasActive && list.length > 0) {
+        onSelectEntry?.(list[0]!);
       }
     }).catch(() => {});
     setConfirmExit(false);
