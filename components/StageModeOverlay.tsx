@@ -901,8 +901,8 @@ export function StageModeOverlay({
       ) : (
         /* ─ 기본 모드 (비트 / 바) ─────────────────────────────── */
         <View style={styles.mainContent}>
-          {/* 재생/정지 버튼 — StageBeatColumn 바로 위 */}
-          {PlayPauseBtn}
+          {/* 재생/정지 버튼 — BeatIndicator 슬롯 없을 때만 표시 (슬롯이 자체 토글 포함) */}
+          {!(setlist.length === 0 && !isPlaying && noSetlistContent) && PlayPauseBtn}
 
           {/* 비트 컬럼: 정지 + 셋리스트 없을 때 → noSetlistContent(BeatIndicator), 나머지 → StageBeatColumn(큰 숫자) */}
           {setlist.length === 0 && !isPlaying && noSetlistContent
