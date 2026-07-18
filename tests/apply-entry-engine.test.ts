@@ -324,6 +324,27 @@ test("[apply-engine] layers: applyEntryToState도 동일하게 layers 보존", (
   assert.equal(r1.layers![0].soundSet, "hihat", "soundSet 보존");
 });
 
+test("[apply-engine] 루프 부호 필드: voltaMax/isEnd/jumpFromId/jumpToId 가 setAllBarRepeats에 보존", () => {
+  const entry: PracticeEntry = {
+    ...emptyEntry,
+    barRepeats: {
+      0: { type: "count", value: 2, jumpToId: 5 } as BarRepeat,
+      1: { type: "count", value: 3, voltaMax: 2 } as BarRepeat,
+      2: { type: "count", value: 1, isEnd: true, voltaMax: 3 } as BarRepeat,
+      3: { type: "count", value: 1, jumpFromId: 5 } as BarRepeat,
+    },
+  };
+  const fake = createFakeEngine();
+  applyEntryToEngine(fake, entry);
+  assertCanonicalSequence(fake.calls);
+  const reps = fake.state.barRepeats!;
+  assert.equal((reps[0] as BarRepeat).jumpToId, 5, "beat 0 jumpToId 보존");
+  assert.equal((reps[1] as BarRepeat).voltaMax, 2, "beat 1 voltaMax 보존");
+  assert.equal((reps[2] as BarRepeat).isEnd, true, "beat 2 isEnd 보존");
+  assert.equal((reps[2] as BarRepeat).voltaMax, 3, "beat 2 voltaMax 보존");
+  assert.equal((reps[3] as BarRepeat).jumpFromId, 5, "beat 3 jumpFromId 보존");
+});
+
 test("[apply-engine] blockPlayMode 누락 시 'loop' 폴백, barRepeats 누락 시 빈 객체", () => {
   const noBlocksEntry: PracticeEntry = {
     ...emptyEntry,
