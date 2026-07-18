@@ -299,8 +299,8 @@ export interface StageModeOverlayProps {
   activeEntryId?: string;
   /** 셋 리스트 항목 선택 — 엔진 재시작 없이 즉시 전환 */
   onSelectEntry?: (entry: PracticeEntry) => void;
-  /** 셋리스트가 비어있을 때 기본 레이아웃 대신 렌더링할 슬롯 (ex: BeatIndicator) */
-  noSetlistContent?: React.ReactNode;
+  /** 셋리스트 없는 비트 모드에서 BPM 슬라이더 아래 표시할 서브디비전 편집 슬롯 */
+  subdivisionBarElement?: React.ReactNode;
 }
 
 // ─── 메인 컴포넌트 ─────────────────────────────────────────────────────
@@ -330,7 +330,7 @@ export function StageModeOverlay({
   practiceBook = [],
   activeEntryId,
   onSelectEntry,
-  noSetlistContent,
+  subdivisionBarElement,
 }: StageModeOverlayProps) {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -738,17 +738,20 @@ export function StageModeOverlay({
         onDenominatorCycle={onBeatDenominatorCycle}
         isDark={isDark}
       />
-      {/* beat 모드(셋리스트 없을 때만)이면 비트 편집기, 나머지는 − beats + */}
+      {/* beat 모드(셋리스트 없을 때만)이면 비트 편집기 + 서브디비전 바, 나머지는 − beats + */}
       {setlist.length === 0 && onBeatTypesChange ? (
-        <StageBeatEditor
-          beatTypes={beatTypes ?? []}
-          onBeatTypesChange={onBeatTypesChange}
-          beatsPerMeasure={beatsPerMeasure}
-          onBeatsPerMeasureChange={onBeatsPerMeasureChange}
-          text={text}
-          faint={faint}
-          accent={accentColor}
-        />
+        <>
+          <StageBeatEditor
+            beatTypes={beatTypes ?? []}
+            onBeatTypesChange={onBeatTypesChange}
+            beatsPerMeasure={beatsPerMeasure}
+            onBeatsPerMeasureChange={onBeatsPerMeasureChange}
+            text={text}
+            faint={faint}
+            accent={accentColor}
+          />
+          {subdivisionBarElement}
+        </>
       ) : (
         /* 박자 수 조절 (− beats +) */
         <View style={styles.beatCountRow}>
@@ -834,10 +837,7 @@ export function StageModeOverlay({
       </View>
 
       {/* ── 메인 컨텐츠: 모드별 분기 ───────────────────────────── */}
-      {setlist.length === 0 && noSetlistContent ? (
-        /* ─ 셋리스트 없음: BeatIndicator 슬롯 (비트모드 동일 UI) ─ */
-        <View style={styles.noSetlistSlot}>{noSetlistContent}</View>
-      ) : isFullscreen ? (
+      {isFullscreen ? (
         /* ─ 전체화면 모드 (악보 / 사진) + 하단 미니바 ─ */
         <View style={styles.fullscreenLayout}>
           {/* 전체화면 컨텐츠 영역 */}
@@ -1523,12 +1523,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     zIndex: 2,
   },
-  noSetlistSlot: {
-    flex: 1,
-    overflow: "hidden" as const,
-    zIndex: 2,
-  },
-
   // ── 전체화면 레이아웃 (악보/사진 모드) ──────────────────────────
   fullscreenLayout: {
     flex: 1,
