@@ -60,6 +60,8 @@ interface StageSettings {
   autoAdvance:      boolean;
   keepAwake:        boolean;
   scoreHighlight:   "top" | "center" | "bottom";
+  /** 블루투스 키보드 키(1~0) → practiceEntry.id 매핑 */
+  keyMappings:      Partial<Record<string, string>>;
 }
 
 const DEFAULT_STAGE_SETTINGS: StageSettings = {
@@ -68,6 +70,7 @@ const DEFAULT_STAGE_SETTINGS: StageSettings = {
   autoAdvance:    true,
   keepAwake:      true,
   scoreHighlight: "center",
+  keyMappings:    {},
 };
 
 async function loadStageSettings(): Promise<StageSettings> {
@@ -180,6 +183,19 @@ export function StageModeOverlay({
   const [confirmExit,  setConfirmExit]  = useState(false);
   /** 롱프레스로 선택된 셋 리스트 항목 ID (이동/삭제 컨텍스트 메뉴) */
   const [contextEntryId, setContextEntryId] = useState<string | null>(null);
+  /** Ctrl+숫자로 예약된 점프 인덱스 (0-based) — 현재 항목 종료 시 이동 */
+  const [pendingJumpIdx, setPendingJumpIdx] = useState<number | null>(null);
+  const pendingJumpIdxRef = useRef<number | null>(null);
+  useEffect(() => { pendingJumpIdxRef.current = pendingJumpIdx; }, [pendingJumpIdx]);
+  /** 키보드 단축키 설정 중 선택 중인 키 ("1"~"0") */
+  const [keyPickerTarget, setKeyPickerTarget] = useState<string | null>(null);
+
+  const practiceBookRef = useRef<PracticeEntry[]>([]);
+  useEffect(() => { practiceBookRef.current = practiceBook; }, [practiceBook]);
+  const setlistRef = useRef<PracticeEntry[]>([]);
+  useEffect(() => { setlistRef.current = setlist; }, [setlist]);
+  const onSelectEntryRef = useRef(onSelectEntry);
+  useEffect(() => { onSelectEntryRef.current = onSelectEntry; }, [onSelectEntry]);
 
   // ── 악보 문서 로드 ────────────────────────────────────────────────
   const [scoreDoc, setScoreDoc] = useState<ScoreDocument | null>(null);
@@ -209,7 +225,15 @@ export function StageModeOverlay({
     if (!visible) return;
     loadStageSettings().then(setSettings).catch(() => {});
     loadStageSetlist().then((saved) => {
-      const list = saved.length > 0 ? saved : [];
+      // 방어: practiceBook에 없는 ID를 가진 항목 제거 (비정상 데이터 정리)
+      const book = practiceBookRef.current;
+      const filtered = book.length > 0
+        ? saved.filter((e) => book.some((b) => b.id === e.id))
+        : saved;
+      const list = filtered.length > 0 ? filtered : [];
+      if (filtered.length !== saved.length) {
+        saveStageSetlist(list).catch(() => {});
+      }
       setSetlist(list);
       // 활성 항목이 없으면 첫 번째 항목 자동 선택
       const hasActive = activeEntryId && list.some((e) => e.id === activeEntryId);
@@ -428,18 +452,54 @@ export function StageModeOverlay({
   useEffect(() => {
     const wasPlaying = wasPlayingRef.current;
     wasPlayingRef.current = isPlaying;
-    if (wasPlaying && !isPlaying && settingsRef.current.autoAdvance) {
-      const entry = activeEntryRef.current;
-      if (!entry) return;
-      const entryMode = getEntryMode(entry);
-      const isOnce =
-        (entryMode === "bar"  && entry.barLoopMode === "once") ||
-        (entryMode === "note" && entry.notePlayMode === "once");
-      if (isOnce) {
-        advanceSetlist();
+    if (wasPlaying && !isPlaying) {
+      // Ctrl+숫자 예약 점프가 있으면 autoAdvance보다 우선
+      const jumpIdx = pendingJumpIdxRef.current;
+      if (jumpIdx !== null) {
+        const target = setlistRef.current[jumpIdx];
+        setPendingJumpIdx(null);
+        if (target) {
+          onSelectEntryRef.current?.(target);
+          return;
+        }
+      }
+      if (settingsRef.current.autoAdvance) {
+        const entry = activeEntryRef.current;
+        if (!entry) return;
+        const entryMode = getEntryMode(entry);
+        const isOnce =
+          (entryMode === "bar"  && entry.barLoopMode === "once") ||
+          (entryMode === "note" && entry.notePlayMode === "once");
+        if (isOnce) {
+          advanceSetlist();
+        }
       }
     }
   }, [isPlaying, advanceSetlist]);
+
+  // ── 블루투스 키보드 이벤트 (web) ─────────────────────────────────
+  useEffect(() => {
+    if (!visible || Platform.OS !== "web") return;
+    const handler = (evt: globalThis.KeyboardEvent) => {
+      const target = evt.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      const key = evt.key;
+      const isDigit = /^[0-9]$/.test(key);
+      if (!isDigit) return;
+      if (evt.ctrlKey || evt.metaKey) {
+        evt.preventDefault();
+        const pos = key === "0" ? 9 : parseInt(key, 10) - 1;
+        setPendingJumpIdx(pos);
+      } else if (!evt.altKey && !evt.shiftKey) {
+        const entryId = (settingsRef.current.keyMappings ?? {})[key];
+        if (!entryId) return;
+        const entry = practiceBookRef.current.find((e) => e.id === entryId);
+        if (entry) addToSetlist(entry);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [visible, addToSetlist]);
 
   // ── 레이아웃 ────────────────────────────────────────────────────
   const webTop    = Platform.OS === "web" ? 67 : 0;
@@ -758,9 +818,21 @@ export function StageModeOverlay({
                         </View>
                       )}
                     </View>
-                    {isActive && !isCtx && (
-                      <Ionicons name="radio-button-on" size={10} color={badge.color} />
-                    )}
+                    <View style={styles.setCardTopRight}>
+                      {isActive && !isCtx && (
+                        <Ionicons name="radio-button-on" size={10} color={badge.color} />
+                      )}
+                      {!isCtx && (
+                        <Pressable
+                          onPress={(e) => { e.stopPropagation?.(); removeFromSetlist(item.id); }}
+                          hitSlop={8}
+                          style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}
+                          accessibilityLabel="Remove from setlist"
+                        >
+                          <Ionicons name="close" size={13} color={faint} />
+                        </Pressable>
+                      )}
+                    </View>
                   </View>
 
                   {/* 컨텍스트 메뉴 (롱프레스) — 큰 터치 영역 */}
@@ -959,6 +1031,46 @@ export function StageModeOverlay({
               ))}
             </View>
           </SettingRow>
+
+          {/* 키보드 단축키 */}
+          <View style={srow.row}>
+            <Text style={[srow.label, { color: text }]}>{t("stageMode", "keyShortcuts")}</Text>
+            <Text style={[srow.hint, { color: faint }]}>{t("stageMode", "keyShortcutsHint")}</Text>
+          </View>
+          {["1","2","3","4","5","6","7","8","9","0"].map((k) => {
+            const mappedId = (settings.keyMappings ?? {})[k];
+            const mappedEntry = mappedId ? practiceBook.find((e) => e.id === mappedId) : null;
+            return (
+              <View key={k} style={[srow.row, { flexDirection: "row", alignItems: "center" }]}>
+                <View style={styles.keyBadge}>
+                  <Text style={[styles.keyBadgeText, { color: text }]}>{k}</Text>
+                </View>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.keyMappingBtn,
+                    { borderColor: btnBdr, backgroundColor: pressed ? btnBg : "transparent", flex: 1 },
+                  ]}
+                  onPress={() => setKeyPickerTarget(k)}
+                >
+                  <Text style={[styles.keyMappingBtnText, { color: mappedEntry ? text : faint }]} numberOfLines={1}>
+                    {mappedEntry ? mappedEntry.label : t("stageMode", "keyNone")}
+                  </Text>
+                </Pressable>
+                {mappedEntry && (
+                  <Pressable
+                    hitSlop={8}
+                    onPress={() => {
+                      const next = { ...(settings.keyMappings ?? {}) };
+                      delete next[k];
+                      updateSettings({ keyMappings: next });
+                    }}
+                  >
+                    <Ionicons name="close-circle" size={18} color={faint} />
+                  </Pressable>
+                )}
+              </View>
+            );
+          })}
         </ScrollView>
       </Animated.View>
 
@@ -1015,6 +1127,74 @@ export function StageModeOverlay({
                 }}
               />
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── 예약 점프 토스트 (Ctrl+숫자) ─────────────────────────── */}
+      {pendingJumpIdx !== null && (
+        <View style={styles.pendingJumpToast} pointerEvents="none">
+          <Text style={styles.pendingJumpToastText}>
+            → #{pendingJumpIdx + 1}
+          </Text>
+        </View>
+      )}
+
+      {/* ── 키 매핑 피커 모달 ────────────────────────────────────── */}
+      <Modal
+        visible={keyPickerTarget !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setKeyPickerTarget(null)}
+      >
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerSheet, { backgroundColor: panelBg }]}>
+            <View style={styles.pickerHeader}>
+              <Text style={[styles.pickerTitle, { color: text }]}>
+                {t("stageMode", "keyPickerTitle")} [{keyPickerTarget}]
+              </Text>
+              <Pressable onPress={() => setKeyPickerTarget(null)}>
+                <Ionicons name="close" size={24} color={faint} />
+              </Pressable>
+            </View>
+            <FlatList
+              data={practiceBook}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.pickerList}
+              renderItem={({ item }) => {
+                const mode  = getEntryMode(item);
+                const badge = MODE_BADGE[mode] ?? MODE_BADGE["beat"]!;
+                const isMapped = keyPickerTarget !== null &&
+                  (settings.keyMappings ?? {})[keyPickerTarget] === item.id;
+                return (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.pickerItem,
+                      { borderColor: isMapped ? badge.color : cardBdr, backgroundColor: pressed ? cardBg : "transparent" },
+                    ]}
+                    onPress={() => {
+                      if (keyPickerTarget) {
+                        updateSettings({ keyMappings: { ...(settings.keyMappings ?? {}), [keyPickerTarget]: item.id } });
+                        setKeyPickerTarget(null);
+                      }
+                    }}
+                  >
+                    <View style={[styles.modeBadge, { backgroundColor: badge.color + "33" }]}>
+                      <Text style={[styles.modeBadgeText, { color: badge.color }]}>{badge.label}</Text>
+                    </View>
+                    <View style={styles.pickerItemText}>
+                      <Text style={[styles.pickerItemLabel, { color: text }]} numberOfLines={1}>
+                        {item.label}
+                      </Text>
+                      <Text style={[styles.pickerItemMeta, { color: faint }]}>
+                        {item.bpm} BPM · {item.beatsPerMeasure}/{beatDenominator}
+                      </Text>
+                    </View>
+                    {isMapped && <Ionicons name="checkmark-circle" size={20} color={badge.color} />}
+                  </Pressable>
+                );
+              }}
+            />
           </View>
         </View>
       </Modal>
@@ -1583,6 +1763,52 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
   },
+
+  // ── 키보드 단축키 설정 ─────────────────────────────────────────────
+  keyBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+  },
+  keyBadgeText: {
+    fontSize: 12,
+    fontFamily: "SpaceGrotesk_700Bold",
+  },
+  keyMappingBtn: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    marginRight: 6,
+  },
+  keyMappingBtnText: {
+    fontSize: 12,
+    fontFamily: "SpaceGrotesk_400Regular",
+  },
+
+  // ── 예약 점프 토스트 ────────────────────────────────────────────────
+  pendingJumpToast: {
+    position: "absolute",
+    bottom: 100,
+    alignSelf: "center",
+    backgroundColor: "rgba(0,0,0,0.75)",
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    zIndex: 50,
+  },
+  pendingJumpToastText: {
+    fontSize: 14,
+    fontFamily: "SpaceGrotesk_700Bold",
+    color: "#55EFC4",
+    letterSpacing: 1,
+  },
+
   confirmBtnText: {
     fontSize: 15,
     fontFamily: "SpaceGrotesk_500Medium",

@@ -1210,6 +1210,11 @@ export const translations = {
     modeBar:               { ko: "바", en: "Bar" },
     modeNote:              { ko: "노트", en: "Note" },
     modeScore:             { ko: "악보", en: "Score" },
+    keyShortcuts:          { ko: "키보드 단축키", en: "Keyboard Shortcuts" },
+    keyShortcutsHint:      { ko: "블루투스 키보드 1~0 키에 연습장 항목 할당 · Ctrl+숫자: 예약 점프", en: "Assign entries to BT keyboard keys 1–0 · Ctrl+number: reserve jump" },
+    keyNone:               { ko: "없음", en: "None" },
+    keyPickerTitle:        { ko: "키에 할당할 항목 선택", en: "Assign Entry to Key" },
+    pendingJump:           { ko: "→ #%s로 예약됨", en: "→ Jump to #%s reserved" },
   },
   challenge: {
     level:        { ko: "레벨", en: "Level" },
