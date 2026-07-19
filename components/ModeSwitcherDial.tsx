@@ -33,7 +33,7 @@ const Z_HANDLE  = 100002;
 // ── Geometry ──────────────────────────────────────────────────────────────────
 const HANDLE_R    = 38;   // collapsed D-tab half-circle radius (larger = more room for mini arc)
 const FAN_R       = 220;  // expanded fan diameter; radius = FAN_R/2 = 110
-const ICON_R      = 64;   // expanded icon arc radius; outer edge = 64+20=84 ≤ 110 ✓
+const ICON_R      = 82;   // expanded icon arc radius; outer edge = 82+20=102 ≤ 110 ✓
 const ICON_S      = 40;   // expanded icon slot size
 const MINI_R        = 19;   // = HANDLE_R/2 → icon sits at D-tab visual centre
 const MINI_DOT      = 5;    // mini arc neighbour dot size
@@ -305,7 +305,10 @@ export function ModeSwitcherDial({
 
   const fanSwipePR = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      // Don't claim on start — lets Pressable children receive taps
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder:  (_, gs) =>
+        Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
       onPanResponderGrant: (e) => {
         const { axis } = SWIPE_CFG[wallRef.current];
         swipeStart.current = {
@@ -450,11 +453,15 @@ export function ModeSwitcherDial({
             }}
           />
 
-          {/* Rotary dial icons — visual only */}
-          {iconSlots.map(({ mode, dx, dy, isCtr, opacity: op, scale: sc }) => (
-            <View
+          {/* Rotary dial icons — tappable to select */}
+          {iconSlots.map(({ mode, i, dx, dy, isCtr, opacity: op, scale: sc }) => (
+            <Pressable
               key={mode}
-              pointerEvents="none"
+              onPress={() => {
+                scrollPosRef.current = i;
+                setScrollPos(i);
+                confirmSelection();
+              }}
               style={{
                 position: "absolute",
                 left: dx - ICON_S / 2, top: dy - ICON_S / 2,
@@ -484,13 +491,13 @@ export function ModeSwitcherDial({
                   {t("switcher", mode as "beat"|"bar"|"score"|"note"|"stage"|"menu")}
                 </Text>
               )}
-            </View>
+            </Pressable>
           ))}
         </Animated.View>
       )}
 
-      {/* Handle — only shown when fan is closed */}
-      {!isOpen && <View
+      {/* Handle — always rendered; when fan open, transparent but still tappable to close */}
+      <View
         {...handlePR.panHandlers}
         style={{
           position: "absolute",
@@ -498,7 +505,7 @@ export function ModeSwitcherDial({
           left: anchor.x, top: anchor.y,
           width: 0, height: 0,
           overflow: "visible" as const,
-          opacity: isDragging ? 0.5 : 1,
+          opacity: isOpen ? 0 : (isDragging ? 0.5 : 1),
         }}
       >
         {/* D-tab background + current mode label */}
@@ -560,7 +567,7 @@ export function ModeSwitcherDial({
           )
         )}
 
-      </View>}
+      </View>
     </>
   );
 }
