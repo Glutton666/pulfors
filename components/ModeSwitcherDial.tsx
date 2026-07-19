@@ -142,7 +142,8 @@ export function ModeSwitcherDial({
   }, [isPlaying, doClose]);
 
   // ── dial swipe PanResponder ──
-  const slotWidth = winW / MODES.length;
+  // NOTE: slotWidth is intentionally NOT captured here; handlers read winWRef.current
+  // at gesture time so rotation changes are always reflected correctly.
   const swipeStartIdxRef = useRef(MODES.indexOf(currentMode));
 
   const dialPanResponder = useRef(
@@ -153,13 +154,15 @@ export function ModeSwitcherDial({
         swipeStartIdxRef.current = highlightIndexRef.current;
       },
       onPanResponderMove: (_, gs) => {
-        const delta = -Math.round(gs.dx / slotWidth);
+        const sw = winWRef.current / MODES.length;
+        const delta = -Math.round(gs.dx / sw);
         const idx = Math.max(0, Math.min(MODES.length - 1, swipeStartIdxRef.current + delta));
         setHighlightIndex(idx);
         highlightIndexRef.current = idx;
       },
       onPanResponderRelease: (_, gs) => {
-        const delta = -Math.round(gs.dx / slotWidth);
+        const sw = winWRef.current / MODES.length;
+        const delta = -Math.round(gs.dx / sw);
         const idx = Math.max(0, Math.min(MODES.length - 1, swipeStartIdxRef.current + delta));
         setHighlightIndex(idx);
         highlightIndexRef.current = idx;
@@ -169,7 +172,7 @@ export function ModeSwitcherDial({
         setTimeout(() => {
           setIsOpen(false);
           isOpenRef.current = false;
-          onSelectMode(MODES[idx]);
+          onSelectModeRef.current(MODES[idx]);
         }, 160);
       },
     })
