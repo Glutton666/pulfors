@@ -42,6 +42,8 @@ const MINI_A_STEP   = 55;   // wider step so dots clear the centre icon at MINI_
 const ANGLE_STEP    = 34;   // degrees between adjacent mode slots; arc dist=45px > ICON_S=40 ✓
 const PX_PER_STEP = 36;   // pixels of swipe per one mode step
 const N_MODES     = MODES.length; // 6 — used for circular wrapping
+const RIM_COLOR   = "#6B5A1E";   // dark olive-gold rim colour
+const RIM_INSET   = 6;           // inner ring inset from rim edge
 
 // Circular wrap: keeps scrollPos in [0, N_MODES)
 function wrapScroll(v: number): number { return ((v % N_MODES) + N_MODES) % N_MODES; }
@@ -358,6 +360,14 @@ export function ModeSwitcherDial({
   const bgCorner               = fanBgCorners(wall);
   const hLayout                = handleLayout(wall);
 
+  // Inner ring corner radii (rim inset by RIM_INSET)
+  const innerHCorners  = Object.fromEntries(
+    Object.entries(hLayout.corners).map(([k, v]) => [k, Math.max(0, (v as number) - RIM_INSET)]),
+  );
+  const innerBgCorners = Object.fromEntries(
+    Object.entries(bgCorner).map(([k, v]) => [k, Math.max(0, (v as number) - RIM_INSET)]),
+  );
+
   // Expanded rotary slots: position = centAng + (i - scrollPos) × ANGLE_STEP
   const iconSlots = MODES.map((mode, i) => {
     // Circular shortest-path offset so wrapping works smoothly
@@ -427,7 +437,7 @@ export function ModeSwitcherDial({
             fanStyle,
           ]}
         >
-          {/* Solid semicircle background */}
+          {/* Fan background — double rim */}
           <View
             style={{
               position: "absolute",
@@ -435,13 +445,29 @@ export function ModeSwitcherDial({
               width: bgLayout.w,   height: bgLayout.h,
               backgroundColor: C.surface,
               ...bgCorner,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: 0.45, shadowRadius: 16,
+              borderWidth: 3,
+              borderColor: RIM_COLOR,
+              shadowColor: RIM_COLOR,
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0.5, shadowRadius: 12,
               elevation: 14,
+              overflow: "hidden" as const,
               pointerEvents: "none" as const,
             }}
-          />
+          >
+            {/* Inner ring */}
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                top: RIM_INSET, bottom: RIM_INSET,
+                left: RIM_INSET, right: RIM_INSET,
+                ...innerBgCorners,
+                borderWidth: 1.5,
+                borderColor: RIM_COLOR + "70",
+              }}
+            />
+          </View>
 
           {/* Swipe-capture layer */}
           <View
@@ -508,7 +534,7 @@ export function ModeSwitcherDial({
           opacity: isOpen ? 0 : (isDragging ? 0.5 : 1),
         }}
       >
-        {/* D-tab background + current mode label */}
+        {/* D-tab background + double rim */}
         <View
           style={{
             position: "absolute",
@@ -516,18 +542,29 @@ export function ModeSwitcherDial({
             width: hLayout.w,   height: hLayout.h,
             backgroundColor: C.surface,
             ...hLayout.corners,
-            borderWidth: 1,
-            borderColor: C.border,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.22, shadowRadius: 4,
-            elevation: 4,
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 2,
+            borderWidth: 3,
+            borderColor: RIM_COLOR,
+            shadowColor: RIM_COLOR,
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.55, shadowRadius: 6,
+            elevation: 6,
+            overflow: "hidden" as const,
           }}
           testID="mode-switcher-button"
-        />
+        >
+          {/* Inner ring */}
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: RIM_INSET, bottom: RIM_INSET,
+              left: RIM_INSET, right: RIM_INSET,
+              ...innerHCorners,
+              borderWidth: 1.5,
+              borderColor: RIM_COLOR + "70",
+            }}
+          />
+        </View>
 
         {/* Mini arc: current mode = icon, neighbours = dots */}
         {miniSlots.map(({ mode, offset, dx, dy, isCurrent, opacity: op }) =>
