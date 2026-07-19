@@ -34,10 +34,10 @@ const Z_HANDLE  = 100002;
 const HANDLE_R    = 38;   // collapsed D-tab half-circle radius (larger = more room for mini arc)
 const FAN_R       = 180;  // expanded fan diameter; radius = FAN_R/2 = 90
 const ICON_R      = 76;   // expanded icon arc radius (≤ FAN_R/2)
-const ICON_S      = 32;   // expanded icon slot size
+const ICON_S      = 42;   // expanded icon slot size
 const MINI_R        = 30;   // mini arc radius inside collapsed tab
 const MINI_DOT      = 5;    // mini arc neighbour dot size
-const MINI_ICON_S   = 16;   // icon size for current-mode slot in mini arc
+const MINI_ICON_S   = 22;   // icon size for current-mode slot in mini arc
 const MINI_A_STEP   = 36;   // degrees between mini arc slots (wider than expanded)
 const ANGLE_STEP    = 22;   // degrees between adjacent mode slots (expanded fan)
 const PX_PER_STEP = 36;   // pixels of swipe per one mode step
@@ -435,7 +435,7 @@ export function ModeSwitcherDial({
             >
               <ModeIcon
                 mode={mode}
-                size={S.ms(13, 0.3)}
+                size={S.ms(20, 0.3)}
                 color={isCtr ? "#fff" : C.textSecondary}
               />
               {isCtr && (
