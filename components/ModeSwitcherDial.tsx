@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
-  Pressable,
   PanResponder,
   useWindowDimensions,
 } from "react-native";
@@ -26,66 +25,61 @@ type WallPos = { wall: Wall; t: number };
 const MODES: ModeSlot[] = ["beat", "bar", "score", "note", "stage", "menu"];
 const WALL_KEY = "metronome_dial_wall_v2";
 
-const Z_OVERLAY = 100000;
-const Z_FAN     = 100001;
-const Z_HANDLE  = 100002;
+const Z_FAN    = 100001;
+const Z_HANDLE = 100002;
 
-// ── Geometry constants ────────────────────────────────────────────────────────
-const HANDLE_R   = 26;   // collapsed D-tab: half-circle radius
-const FAN_R      = 180;  // expanded fan: full diameter (radius = FAN_R/2 = 90)
-const ICON_R     = 76;   // icon placement radius inside fan (must be ≤ FAN_R/2)
-const ICON_S     = 32;   // icon slot circle diameter
-const ANGLE_STEP = 22;   // degrees between adjacent mode slots on the rotary dial
-const PX_PER_STEP = 36;  // pixels of swipe per one step
+// ── Geometry ──────────────────────────────────────────────────────────────────
+const HANDLE_R    = 38;   // collapsed D-tab half-circle radius (larger = more room for mini arc)
+const FAN_R       = 180;  // expanded fan diameter; radius = FAN_R/2 = 90
+const ICON_R      = 76;   // expanded icon arc radius (≤ FAN_R/2)
+const ICON_S      = 32;   // expanded icon slot size
+const MINI_R      = 24;   // mini arc radius inside collapsed tab
+const MINI_DOT    = 7;    // mini arc dot size
+const ANGLE_STEP  = 22;   // degrees between adjacent mode slots
+const PX_PER_STEP = 36;   // pixels of swipe per one mode step
 
-// Center angle = direction the fan opens (perpendicular inward from wall)
+// Inward direction for each wall (degrees, math coords: right=0°, down=90°)
 const CENTER_ANGLE: Record<Wall, number> = {
   top: 90, right: 180, bottom: 270, left: 0,
 };
 
-// Which axis and sign to use for swipe → scroll direction
+// Full arc extent for each wall: 120° spread centred on CENTER_ANGLE
+function arcAngles(wall: Wall) {
+  const c = CENTER_ANGLE[wall];
+  return { start: c - 60, end: c + 60 };
+}
+
+// Swipe axis and sign (flipped from natural so "up = prev, down = next" on right wall)
 const SWIPE_CFG: Record<Wall, { axis: "x" | "y"; sign: 1 | -1 }> = {
-  top:    { axis: "x", sign: -1 },  // swipe right → lower index (mode 0 is at left end)
-  right:  { axis: "y", sign:  1 },  // swipe down  → higher index
-  bottom: { axis: "x", sign:  1 },
-  left:   { axis: "y", sign:  1 },
+  top:    { axis: "x", sign:  1 },
+  right:  { axis: "y", sign: -1 },
+  bottom: { axis: "x", sign: -1 },
+  left:   { axis: "y", sign: -1 },
 };
 
-// ── Anchor position: exactly ON the wall edge ─────────────────────────────────
-// The anchor sits at the screen boundary; natural clipping reveals only the
-// inward-facing half of any shape centred here.
-function anchorPos(
-  wp: WallPos, winW: number, winH: number, topInset: number,
-): { x: number; y: number } {
+// ── Anchor: exactly on the wall edge ─────────────────────────────────────────
+function anchorPos(wp: WallPos, winW: number, winH: number, topInset: number) {
   switch (wp.wall) {
     case "top":    return { x: Math.max(0, Math.min(winW, wp.t * winW)), y: topInset };
     case "bottom": return { x: Math.max(0, Math.min(winW, wp.t * winW)), y: winH };
-    case "left":   return { x: 0,     y: Math.max(topInset, Math.min(winH, topInset + wp.t * (winH - topInset))) };
-    case "right":  return { x: winW,  y: Math.max(topInset, Math.min(winH, topInset + wp.t * (winH - topInset))) };
+    case "left":   return { x: 0,    y: Math.max(topInset, Math.min(winH, topInset + wp.t * (winH - topInset))) };
+    case "right":  return { x: winW, y: Math.max(topInset, Math.min(winH, topInset + wp.t * (winH - topInset))) };
   }
 }
 
-// ── Collapsed D-tab layout (relative to anchor at wall edge) ──────────────────
-// Each wall: a rectangle whose "open" side faces inward, rounded on that side.
-// The flat edge is flush with the wall; screen clipping makes it look like a half-circle tab.
-function handleLayout(wall: Wall): {
-  left: number; top: number; w: number; h: number; corners: object;
-} {
+// ── Collapsed D-tab: rect + corner radii relative to anchor ──────────────────
+function handleLayout(wall: Wall) {
   const r = HANDLE_R;
   switch (wall) {
-    case "top":
-      return { left: -r, top:  0, w: r*2, h: r, corners: { borderBottomLeftRadius: r, borderBottomRightRadius: r } };
-    case "right":
-      return { left: -r, top: -r, w: r,   h: r*2, corners: { borderTopLeftRadius: r, borderBottomLeftRadius: r } };
-    case "bottom":
-      return { left: -r, top: -r, w: r*2, h: r, corners: { borderTopLeftRadius: r, borderTopRightRadius: r } };
-    case "left":
-      return { left:  0, top: -r, w: r,   h: r*2, corners: { borderTopRightRadius: r, borderBottomRightRadius: r } };
+    case "top":    return { left: -r, top:  0, w: r*2, h: r, corners: { borderBottomLeftRadius: r, borderBottomRightRadius: r } };
+    case "right":  return { left: -r, top: -r, w: r,   h: r*2, corners: { borderTopLeftRadius: r, borderBottomLeftRadius: r } };
+    case "bottom": return { left: -r, top: -r, w: r*2, h: r, corners: { borderTopLeftRadius: r, borderTopRightRadius: r } };
+    case "left":   return { left:  0, top: -r, w: r,   h: r*2, corners: { borderTopRightRadius: r, borderBottomRightRadius: r } };
   }
 }
 
-// ── Expanded fan layout (relative to anchor at wall edge) ─────────────────────
-function fanBgLayout(wall: Wall): { left: number; top: number; w: number; h: number } {
+// ── Expanded fan background: semicircle relative to anchor ────────────────────
+function fanBgLayout(wall: Wall) {
   const r = FAN_R / 2;
   switch (wall) {
     case "top":    return { left: -r, top:  0, w: FAN_R, h: r };
@@ -104,10 +98,8 @@ function fanBgCorners(wall: Wall): object {
   }
 }
 
-// ── Snap drag release to nearest wall ─────────────────────────────────────────
-function snapToWall(
-  tx: number, ty: number, winW: number, winH: number, topInset: number,
-): WallPos {
+// ── Snap to nearest wall ──────────────────────────────────────────────────────
+function snapToWall(tx: number, ty: number, winW: number, winH: number, topInset: number): WallPos {
   const dT = ty - topInset, dB = winH - ty, dL = tx, dR = winW - tx;
   const m  = Math.min(dT, dB, dL, dR);
   const cl = (v: number) => Math.min(1, Math.max(0, v));
@@ -170,7 +162,6 @@ export function ModeSwitcherDial({
   // ── Animation shared values ───────────────────────────────────────────────
   const fanScale   = useSharedValue(0.05);
   const fanOpacity = useSharedValue(0);
-  const overlayOp  = useSharedValue(0);
 
   // ── Open / close ─────────────────────────────────────────────────────────
   const [isOpen, setIsOpen] = useState(false);
@@ -178,49 +169,44 @@ export function ModeSwitcherDial({
   useEffect(() => { isOpenRef.current = isOpen; }, [isOpen]);
 
   // ── Rotary scroll position ───────────────────────────────────────────────
-  // Continuous float: the mode at Math.round(scrollPos) is centred in the arc.
   const initIdx = Math.max(0, MODES.indexOf(currentMode));
   const [scrollPos, setScrollPos] = useState<number>(initIdx);
   const scrollPosRef = useRef<number>(initIdx);
 
   const doOpen = useCallback(() => {
-    // Reset scroll to current mode every time fan opens
     const idx = Math.max(0, MODES.indexOf(currentMode));
     scrollPosRef.current = idx;
     setScrollPos(idx);
     setIsOpen(true);
     isOpenRef.current = true;
-    fanScale.value   = withTiming(1,   { duration: 230, easing: Easing.out(Easing.cubic) });
-    fanOpacity.value = withTiming(1,   { duration: 190 });
-    overlayOp.value  = withTiming(0.5, { duration: 190 });
-  }, [currentMode, fanScale, fanOpacity, overlayOp]);
+    fanScale.value   = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
+    fanOpacity.value = withTiming(1, { duration: 180 });
+  }, [currentMode, fanScale, fanOpacity]);
 
   const doClose = useCallback(() => {
     fanScale.value   = withTiming(0.05, { duration: 180, easing: Easing.in(Easing.cubic) });
-    fanOpacity.value = withTiming(0,    { duration: 160 });
-    overlayOp.value  = withTiming(0,    { duration: 160 });
-    setTimeout(() => { setIsOpen(false); isOpenRef.current = false; }, 190);
-  }, [fanScale, fanOpacity, overlayOp]);
+    fanOpacity.value = withTiming(0,    { duration: 150 });
+    setTimeout(() => { setIsOpen(false); isOpenRef.current = false; }, 185);
+  }, [fanScale, fanOpacity]);
 
   const onSelectModeRef = useRef(onSelectMode);
   useEffect(() => { onSelectModeRef.current = onSelectMode; }, [onSelectMode]);
 
-  // ── Drag-to-reposition state ─────────────────────────────────────────────
+  // ── Drag state ───────────────────────────────────────────────────────────
   const [isDragging, setIsDragging] = useState(false);
   const isDraggingRef = useRef(false);
 
-  // ── Live refs for PanResponder handlers ──────────────────────────────────
-  const winWRef     = useRef(winW);
-  const winHRef     = useRef(winH);
-  const topInRef    = useRef(topInset);
-  const wallRef     = useRef<Wall>(wallPos.wall);
-  useEffect(() => { winWRef.current = winW; },         [winW]);
-  useEffect(() => { winHRef.current = winH; },         [winH]);
-  useEffect(() => { topInRef.current = topInset; },    [topInset]);
+  // ── Live refs for PanResponder stale-closure safety ──────────────────────
+  const winWRef  = useRef(winW);
+  const winHRef  = useRef(winH);
+  const topInRef = useRef(topInset);
+  const wallRef  = useRef<Wall>(wallPos.wall);
+  useEffect(() => { winWRef.current  = winW; },         [winW]);
+  useEffect(() => { winHRef.current  = winH; },         [winH]);
+  useEffect(() => { topInRef.current = topInset; },     [topInset]);
   useEffect(() => { wallRef.current  = wallPos.wall; }, [wallPos.wall]);
 
-  // ── Collapsed handle PanResponder ─────────────────────────────────────────
-  // Short tap → open fan. Long-press/drag → reposition to new wall.
+  // ── Handle PanResponder (tap = toggle; drag = reposition) ─────────────────
   const longRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handlePR = useRef(
@@ -254,7 +240,8 @@ export function ModeSwitcherDial({
           setWallPos(newWP);
           AsyncStorage.setItem(WALL_KEY, JSON.stringify(newWP));
         } else {
-          doOpen();
+          // Toggle open / close
+          if (isOpenRef.current) doClose(); else doOpen();
         }
       },
       onPanResponderTerminate: () => {
@@ -266,7 +253,6 @@ export function ModeSwitcherDial({
   ).current;
 
   // ── Fan swipe PanResponder (rotary dial) ──────────────────────────────────
-  // Swipe along the wall direction → the entire arc rotates, centre stays fixed.
   const swipeStart = useRef({ coord: 0, startScroll: 0 });
 
   const fanSwipePR = useRef(
@@ -291,32 +277,31 @@ export function ModeSwitcherDial({
         const snapped = Math.max(0, Math.min(MODES.length - 1, Math.round(scrollPosRef.current)));
         scrollPosRef.current = snapped;
         setScrollPos(snapped);
-        const mode = MODES[snapped];
         doClose();
-        setTimeout(() => onSelectModeRef.current(mode), 175);
+        setTimeout(() => onSelectModeRef.current(MODES[snapped]), 175);
       },
       onPanResponderTerminate: () => { doClose(); },
     })
   ).current;
 
   // ── Animated styles ───────────────────────────────────────────────────────
-  const overlayStyle = useAnimatedStyle(() => ({ opacity: overlayOp.value }));
-  const fanStyle     = useAnimatedStyle(() => ({
+  const fanStyle = useAnimatedStyle(() => ({
     opacity:   fanOpacity.value,
     transform: [{ scale: fanScale.value }],
   }));
 
-  // ── Geometry (update refs in render — safe for refs) ─────────────────────
+  // ── Geometry (sync refs synchronously in render) ──────────────────────────
   const anchor = anchorPos(wallPos, winW, winH, topInset);
-  wallRef.current = wallPos.wall; // keep in sync for PanResponder
+  wallRef.current = wallPos.wall;
 
   const wall     = wallPos.wall;
   const centAng  = CENTER_ANGLE[wall];
   const bgLayout = fanBgLayout(wall);
   const bgCorner = fanBgCorners(wall);
   const hLayout  = handleLayout(wall);
+  const { start: arcStart, end: arcEnd } = arcAngles(wall);
 
-  // Rotary icon slots: position based on (i - scrollPos) × ANGLE_STEP from centre
+  // Expanded rotary slots: position = centAng + (i - scrollPos) × ANGLE_STEP
   const iconSlots = MODES.map((mode, i) => {
     const offset = i - scrollPos;
     const deg    = centAng + offset * ANGLE_STEP;
@@ -324,38 +309,31 @@ export function ModeSwitcherDial({
     const dist   = Math.abs(offset);
     return {
       mode, i,
-      dx:       Math.cos(rad) * ICON_R,
-      dy:       Math.sin(rad) * ICON_R,
-      isCentre: Math.round(scrollPos) === i,
-      opacity:  Math.max(0, 1 - dist * 0.28),
-      scale:    Math.max(0.55, 1 - dist * 0.12),
+      dx:      Math.cos(rad) * ICON_R,
+      dy:      Math.sin(rad) * ICON_R,
+      isCtr:   Math.round(scrollPos) === i,
+      opacity: Math.max(0, 1 - dist * 0.28),
+      scale:   Math.max(0.55, 1 - dist * 0.12),
+    };
+  });
+
+  // Collapsed mini-arc: static positions, all 6 modes evenly spaced
+  const currentIdx = MODES.indexOf(currentMode);
+  const miniSlots = MODES.map((mode, i) => {
+    const deg = arcStart + ((arcEnd - arcStart) / (MODES.length - 1)) * i;
+    const rad = (deg * Math.PI) / 180;
+    return {
+      mode, i,
+      dx: Math.cos(rad) * MINI_R,
+      dy: Math.sin(rad) * MINI_R,
+      isCurrent: i === currentIdx,
     };
   });
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* Dim overlay — tap outside fan to close */}
-      {isOpen && (
-        <Animated.View
-          style={[
-            {
-              position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-              zIndex: Z_OVERLAY, backgroundColor: "#000",
-              pointerEvents: "box-none" as const,
-            },
-            overlayStyle,
-          ]}
-        >
-          <Pressable style={{ flex: 1 }} onPress={doClose} testID="mode-dial-overlay" />
-        </Animated.View>
-      )}
-
-      {/*
-        Fan — anchor 0×0 View placed exactly at the wall edge.
-        scale: fan grows outward from the wall.
-        overflow:visible so children extend inward on-screen.
-      */}
+      {/* Expanded fan — anchor at wall edge, grows inward */}
       {isOpen && (
         <Animated.View
           style={[
@@ -386,7 +364,7 @@ export function ModeSwitcherDial({
             }}
           />
 
-          {/* Swipe-capture layer — same bounds as background */}
+          {/* Swipe-capture layer */}
           <View
             {...fanSwipePR.panHandlers}
             style={{
@@ -396,18 +374,17 @@ export function ModeSwitcherDial({
             }}
           />
 
-          {/* Rotary dial icons — visual only, touch handled by swipe layer */}
-          {iconSlots.map(({ mode, dx, dy, isCentre, opacity: op, scale: sc }) => (
+          {/* Rotary dial icons — visual only */}
+          {iconSlots.map(({ mode, dx, dy, isCtr, opacity: op, scale: sc }) => (
             <View
               key={mode}
               pointerEvents="none"
               style={{
                 position: "absolute",
-                left: dx - ICON_S / 2,
-                top:  dy - ICON_S / 2,
+                left: dx - ICON_S / 2, top: dy - ICON_S / 2,
                 width: ICON_S, height: ICON_S,
                 borderRadius: ICON_S / 2,
-                backgroundColor: isCentre ? C.accent : "transparent",
+                backgroundColor: isCtr ? C.accent : "transparent",
                 alignItems: "center", justifyContent: "center",
                 opacity: op,
                 transform: [{ scale: sc }],
@@ -416,9 +393,9 @@ export function ModeSwitcherDial({
               <ModeIcon
                 mode={mode}
                 size={S.ms(13, 0.3)}
-                color={isCentre ? "#fff" : C.textSecondary}
+                color={isCtr ? "#fff" : C.textSecondary}
               />
-              {isCentre && (
+              {isCtr && (
                 <Text
                   style={{
                     fontSize: 7, lineHeight: 9,
@@ -437,48 +414,76 @@ export function ModeSwitcherDial({
       )}
 
       {/*
-        Collapsed D-tab — anchored exactly at wall edge.
-        The flat side is flush with the wall; screen boundary clips the
-        outward half, leaving a D-shaped (half-circle) tab visible.
+        Handle — always visible; acts as open/close toggle.
+        Collapsed: shows mini arc with mode dots.
+        Open: shows a slim version to indicate "tap to close".
+        Anchor at wall edge; screen clipping makes it a D-shape.
       */}
-      {!isOpen && (
+      <View
+        {...handlePR.panHandlers}
+        style={{
+          position: "absolute",
+          zIndex: Z_HANDLE,
+          left: anchor.x, top: anchor.y,
+          width: 0, height: 0,
+          overflow: "visible" as const,
+          opacity: isDragging ? 0.5 : 1,
+        }}
+      >
+        {/* D-tab background */}
         <View
-          {...handlePR.panHandlers}
           style={{
             position: "absolute",
-            zIndex: Z_HANDLE,
-            left: anchor.x, top: anchor.y,
-            width: 0, height: 0,
-            overflow: "visible" as const,
-            opacity: isDragging ? 0.5 : 1,
+            left: hLayout.left, top: hLayout.top,
+            width: hLayout.w,   height: hLayout.h,
+            backgroundColor: C.surface,
+            ...hLayout.corners,
+            borderWidth: 1,
+            borderColor: isOpen ? C.accent + "66" : C.border,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.22, shadowRadius: 4,
+            elevation: 4,
           }}
-        >
+          testID="mode-switcher-button"
+        />
+
+        {/* Mini arc dots when collapsed */}
+        {!isOpen && miniSlots.map(({ mode, dx, dy, isCurrent }) => (
           <View
+            key={mode}
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: dx - (isCurrent ? MINI_DOT + 1 : MINI_DOT - 1) / 2,
+              top:  dy - (isCurrent ? MINI_DOT + 1 : MINI_DOT - 1) / 2,
+              width:  isCurrent ? MINI_DOT + 1 : MINI_DOT - 1,
+              height: isCurrent ? MINI_DOT + 1 : MINI_DOT - 1,
+              borderRadius: 99,
+              backgroundColor: isCurrent ? C.accent : C.textTertiary + "88",
+            }}
+          />
+        ))}
+
+        {/* When open: tiny current-mode icon in centre of tab */}
+        {isOpen && (
+          <View
+            pointerEvents="none"
             style={{
               position: "absolute",
               left: hLayout.left, top: hLayout.top,
               width: hLayout.w,   height: hLayout.h,
-              backgroundColor: C.surface,
-              ...hLayout.corners,
-              borderWidth: 1,
-              borderColor: C.border,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.22, shadowRadius: 4,
-              elevation: 4,
-              alignItems: "center",
-              justifyContent: "center",
+              alignItems: "center", justifyContent: "center",
             }}
-            testID="mode-switcher-button"
           >
             <ModeIcon
               mode={currentMode}
-              size={S.ms(13, 0.3)}
-              color={C.textSecondary}
+              size={S.ms(11, 0.3)}
+              color={C.accent + "aa"}
             />
           </View>
-        </View>
-      )}
+        )}
+      </View>
     </>
   );
 }
