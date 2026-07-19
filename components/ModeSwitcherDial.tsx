@@ -32,14 +32,14 @@ const Z_HANDLE  = 100002;
 
 // ── Geometry ──────────────────────────────────────────────────────────────────
 const HANDLE_R    = 38;   // collapsed D-tab half-circle radius (larger = more room for mini arc)
-const FAN_R       = 210;  // expanded fan diameter; radius = FAN_R/2 = 105
-const ICON_R      = 90;   // expanded icon arc radius (center-to-icon distance)
-const ICON_S      = 44;   // expanded icon slot size
+const FAN_R       = 220;  // expanded fan diameter; radius = FAN_R/2 = 110
+const ICON_R      = 76;   // expanded icon arc radius; outer edge = 76+20=96 ≤ 110 ✓
+const ICON_S      = 40;   // expanded icon slot size
 const MINI_R        = 30;   // mini arc radius inside collapsed tab
 const MINI_DOT      = 5;    // mini arc neighbour dot size
 const MINI_ICON_S   = 22;   // icon size for current-mode slot in mini arc
 const MINI_A_STEP   = 36;   // degrees between mini arc slots (wider than expanded)
-const ANGLE_STEP    = 32;   // degrees between adjacent mode slots (arc dist ≈ 50px > ICON_S=44)
+const ANGLE_STEP    = 34;   // degrees between adjacent mode slots; arc dist=45px > ICON_S=40 ✓
 const PX_PER_STEP = 36;   // pixels of swipe per one mode step
 
 // Front-camera safe zone: top/bottom wall t must stay outside [0.28, 0.72].
@@ -461,7 +461,7 @@ export function ModeSwitcherDial({
             >
               <ModeIcon
                 mode={mode}
-                size={S.ms(24, 0.3)}
+                size={S.ms(20, 0.3)}
                 color={isCtr ? "#fff" : C.textSecondary}
               />
               {isCtr && (
