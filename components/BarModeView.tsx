@@ -166,9 +166,13 @@ const SOUND_SET_OPTIONS: { key: string; labelKey: BarModeViewKey }[] = [
   { key: "woodblock", labelKey: "ssWoodblock" },
   { key: "cowbell",   labelKey: "ssCowbell" },
   { key: "digital",   labelKey: "ssDigital" },
-  { key: "rimshot",   labelKey: "ssRimshot" },
-  { key: "triangle",  labelKey: "ssTriangle" },
-  { key: "hihat",     labelKey: "ssHihat" },
+  { key: "jamblock",  labelKey: "ssJamblock" },
+  { key: "sine",      labelKey: "ssSine" },
+  { key: "blip",      labelKey: "ssBlip" },
+  { key: "clave",     labelKey: "ssClave" },
+  { key: "cajon",     labelKey: "ssCajon" },
+  { key: "marimba",   labelKey: "ssMarimba" },
+  { key: "stick",     labelKey: "ssStick" },
 ];
 
 // ─── 헬퍼 ────────────────────────────────────────────────────────────────────

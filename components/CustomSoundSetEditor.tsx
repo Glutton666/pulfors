@@ -93,24 +93,40 @@ export function CustomSoundSetEditor({
   const digitalStrong = useAudioPlayer(soundSets.digital.strong);
   const digitalHigh   = useAudioPlayer(soundSets.digital.high);
   const digitalLow    = useAudioPlayer(soundSets.digital.low);
-  const rimshotStrong = useAudioPlayer(soundSets.rimshot.strong);
-  const rimshotHigh   = useAudioPlayer(soundSets.rimshot.high);
-  const rimshotLow    = useAudioPlayer(soundSets.rimshot.low);
-  const triangleStrong = useAudioPlayer(soundSets.triangle.strong);
-  const triangleHigh   = useAudioPlayer(soundSets.triangle.high);
-  const triangleLow    = useAudioPlayer(soundSets.triangle.low);
-  const hihatStrong = useAudioPlayer(soundSets.hihat.strong);
-  const hihatHigh   = useAudioPlayer(soundSets.hihat.high);
-  const hihatLow    = useAudioPlayer(soundSets.hihat.low);
+  const jamblockStrong = useAudioPlayer(soundSets.jamblock.strong);
+  const jamblockHigh   = useAudioPlayer(soundSets.jamblock.high);
+  const jamblockLow    = useAudioPlayer(soundSets.jamblock.low);
+  const sineStrong = useAudioPlayer(soundSets.sine.strong);
+  const sineHigh   = useAudioPlayer(soundSets.sine.high);
+  const sineLow    = useAudioPlayer(soundSets.sine.low);
+  const blipStrong = useAudioPlayer(soundSets.blip.strong);
+  const blipHigh   = useAudioPlayer(soundSets.blip.high);
+  const blipLow    = useAudioPlayer(soundSets.blip.low);
+  const claveStrong = useAudioPlayer(soundSets.clave.strong);
+  const claveHigh   = useAudioPlayer(soundSets.clave.high);
+  const claveLow    = useAudioPlayer(soundSets.clave.low);
+  const cajonStrong = useAudioPlayer(soundSets.cajon.strong);
+  const cajonHigh   = useAudioPlayer(soundSets.cajon.high);
+  const cajonLow    = useAudioPlayer(soundSets.cajon.low);
+  const marimbaStrong = useAudioPlayer(soundSets.marimba.strong);
+  const marimbaHigh   = useAudioPlayer(soundSets.marimba.high);
+  const marimbaLow    = useAudioPlayer(soundSets.marimba.low);
+  const stickStrong = useAudioPlayer(soundSets.stick.strong);
+  const stickHigh   = useAudioPlayer(soundSets.stick.high);
+  const stickLow    = useAudioPlayer(soundSets.stick.low);
 
   const previewPlayers: Partial<Record<BuiltinSoundSet, typeof classicStrong[]>> = {
     classic:   [classicStrong, classicHigh, classicLow],
     woodblock: [woodblockStrong, woodblockHigh, woodblockLow],
     cowbell:   [cowbellStrong, cowbellHigh, cowbellLow],
     digital:   [digitalStrong, digitalHigh, digitalLow],
-    rimshot:   [rimshotStrong, rimshotHigh, rimshotLow],
-    triangle:  [triangleStrong, triangleHigh, triangleLow],
-    hihat:     [hihatStrong, hihatHigh, hihatLow],
+    jamblock:  [jamblockStrong, jamblockHigh, jamblockLow],
+    sine:      [sineStrong, sineHigh, sineLow],
+    blip:      [blipStrong, blipHigh, blipLow],
+    clave:     [claveStrong, claveHigh, claveLow],
+    cajon:     [cajonStrong, cajonHigh, cajonLow],
+    marimba:   [marimbaStrong, marimbaHigh, marimbaLow],
+    stick:     [stickStrong, stickHigh, stickLow],
   };
 
   const sampleRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -386,7 +402,7 @@ export function CustomSoundSetEditor({
                               if (Platform.OS !== "web") Haptics.selectionAsync();
                             }}
                           >
-                            <Text style={[styles.chipText, active && { color: C.accent }]}>{t("soundSets", bs)}</Text>
+                            <Text style={[styles.chipText, active && { color: C.accent }]}>{t("soundSets", bs as Parameters<typeof t>[1])}</Text>
                           </Pressable>
                         );
                       })}

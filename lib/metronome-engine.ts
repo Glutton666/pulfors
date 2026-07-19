@@ -40,25 +40,40 @@ export const soundSets = {
     low: require("@/assets/sounds/digital-low.wav"),
     strong: require("@/assets/sounds/digital-strong.wav"),
   },
-  rimshot: {
-    high: require("@/assets/sounds/rimshot-high.wav"),
-    low: require("@/assets/sounds/rimshot-low.wav"),
-    strong: require("@/assets/sounds/rimshot-strong.wav"),
-  },
-  triangle: {
-    high: require("@/assets/sounds/triangle-high.wav"),
-    low: require("@/assets/sounds/triangle-low.wav"),
-    strong: require("@/assets/sounds/triangle-strong.wav"),
-  },
-  hihat: {
-    high: require("@/assets/sounds/hihat-high.wav"),
-    low: require("@/assets/sounds/hihat-low.wav"),
-    strong: require("@/assets/sounds/hihat-strong.wav"),
-  },
   jamblock: {
     high: require("@/assets/sounds/jamblock-high.wav"),
     low: require("@/assets/sounds/jamblock-low.wav"),
     strong: require("@/assets/sounds/jamblock-strong.wav"),
+  },
+  sine: {
+    high: require("@/assets/sounds/sine-high.wav"),
+    low: require("@/assets/sounds/sine-low.wav"),
+    strong: require("@/assets/sounds/sine-strong.wav"),
+  },
+  blip: {
+    high: require("@/assets/sounds/blip-high.wav"),
+    low: require("@/assets/sounds/blip-low.wav"),
+    strong: require("@/assets/sounds/blip-strong.wav"),
+  },
+  clave: {
+    high: require("@/assets/sounds/clave-high.wav"),
+    low: require("@/assets/sounds/clave-low.wav"),
+    strong: require("@/assets/sounds/clave-strong.wav"),
+  },
+  cajon: {
+    high: require("@/assets/sounds/cajon-high.wav"),
+    low: require("@/assets/sounds/cajon-low.wav"),
+    strong: require("@/assets/sounds/cajon-strong.wav"),
+  },
+  marimba: {
+    high: require("@/assets/sounds/marimba-high.wav"),
+    low: require("@/assets/sounds/marimba-low.wav"),
+    strong: require("@/assets/sounds/marimba-strong.wav"),
+  },
+  stick: {
+    high: require("@/assets/sounds/stick-high.wav"),
+    low: require("@/assets/sounds/stick-low.wav"),
+    strong: require("@/assets/sounds/stick-strong.wav"),
   },
 };
 
@@ -96,6 +111,21 @@ export const drumPadSounds = {
     strong: require("@/assets/sounds/crash-strong.wav"),
     high: require("@/assets/sounds/crash-high.wav"),
     low: require("@/assets/sounds/crash-low.wav"),
+  },
+  rimshot: {
+    strong: require("@/assets/sounds/rimshot-strong.wav"),
+    high: require("@/assets/sounds/rimshot-high.wav"),
+    low: require("@/assets/sounds/rimshot-low.wav"),
+  },
+  triangle: {
+    strong: require("@/assets/sounds/triangle-strong.wav"),
+    high: require("@/assets/sounds/triangle-high.wav"),
+    low: require("@/assets/sounds/triangle-low.wav"),
+  },
+  hihat: {
+    strong: require("@/assets/sounds/hihat-strong.wav"),
+    high: require("@/assets/sounds/hihat-high.wav"),
+    low: require("@/assets/sounds/hihat-low.wav"),
   },
 };
 

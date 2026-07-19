@@ -15,7 +15,7 @@ export function getSoundSetOptions(t: TranslationFn): SoundSetOption[] {
     { value: "classic", label: t("soundSets", "classic"), icon: "music-note" },
     { value: "woodblock", label: t("soundSets", "woodblock"), icon: "music-box" },
     { value: "digital", label: t("soundSets", "digital"), icon: "sine-wave" },
-    { value: "rimshot", label: t("soundSets", "rimshot"), icon: "music-circle-outline" },
+    { value: "jamblock", label: t("soundSets", "jamblock"), icon: "music-circle-outline" },
   ];
 }
 
