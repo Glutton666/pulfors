@@ -776,9 +776,6 @@ export function NoteModeView({
   if (isLandscape) {
     return (
       <View style={[styles.container, { flexDirection: "row" as const, gap: S.ms(8, 0.3) }, S.isTablet && { maxWidth: 900, alignSelf: "center" as const, width: "100%" as const }]}>
-        <Pressable onPress={onExitNoteMode} hitSlop={8} style={{ position: "absolute" as const, top: S.ms(6, 0.3), right: S.ms(8, 0.3), zIndex: 10 }}>
-          <Ionicons name="close" size={S.ms(22, 0.3)} color={C.textSecondary} />
-        </Pressable>
         <View style={{ flex: 2 }}>
           <View style={[styles.header, { marginBottom: S.ms(2, 0.3), gap: S.ms(8, 0.3) }]}>
             <Text style={[styles.title, { color: C.accent, fontSize: S.ms(14, 0.3) }]}>{t("noteMode", "title")}</Text>
@@ -803,10 +800,6 @@ export function NoteModeView({
 
   return (
     <View style={[styles.container, S.isTablet && { maxWidth: 720, alignSelf: "center" as const, width: "100%" as const }]}>
-      <Pressable onPress={onExitNoteMode} hitSlop={12} style={styles.closeButtonCenter}>
-        <Ionicons name="close" size={S.ms(28, 0.4)} color={C.textSecondary} />
-      </Pressable>
-
       <View style={styles.header}>
         <View style={{ width: 22 }} />
         <Text style={[styles.title, { color: C.accent }]}>{t("noteMode", "title")}</Text>

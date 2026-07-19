@@ -1284,18 +1284,7 @@ export function BarModeView({
           )}
         </View>
 
-        {/* 우: flex:1 — 닫기 버튼 오른쪽 정렬 */}
-        <View style={{ flex: 1, alignItems: "flex-end" }}>
-          {onExitBarMode && (
-            <Pressable
-              onPress={onExitBarMode}
-              hitSlop={10}
-              style={[styles.stpBtn, { backgroundColor: C.overlay08 }]}
-            >
-              <Ionicons name="close" size={ms(14, 0.4)} color={C.textSecondary} />
-            </Pressable>
-          )}
-        </View>
+        <View style={{ flex: 1 }} />
       </View>
 
       <Animated.View style={[styles.symbolDrawer, { height: drawerHeight, overflow: "hidden" }]}>

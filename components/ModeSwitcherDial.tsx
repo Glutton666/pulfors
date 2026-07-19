@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
+  Pressable,
   PanResponder,
   useWindowDimensions,
 } from "react-native";
@@ -25,18 +26,20 @@ type WallPos = { wall: Wall; t: number };
 const MODES: ModeSlot[] = ["beat", "bar", "score", "note", "stage", "menu"];
 const WALL_KEY = "metronome_dial_wall_v2";
 
-const Z_FAN    = 100001;
-const Z_HANDLE = 100002;
+const Z_OVERLAY = 100000;
+const Z_FAN     = 100001;
+const Z_HANDLE  = 100002;
 
 // ── Geometry ──────────────────────────────────────────────────────────────────
 const HANDLE_R    = 38;   // collapsed D-tab half-circle radius (larger = more room for mini arc)
 const FAN_R       = 180;  // expanded fan diameter; radius = FAN_R/2 = 90
 const ICON_R      = 76;   // expanded icon arc radius (≤ FAN_R/2)
 const ICON_S      = 32;   // expanded icon slot size
-const MINI_R      = 24;   // mini arc radius inside collapsed tab
-const MINI_DOT    = 7;    // mini arc dot size
-const MINI_ICON_S = 16;   // icon size for current-mode slot in mini arc
-const ANGLE_STEP  = 22;   // degrees between adjacent mode slots
+const MINI_R        = 30;   // mini arc radius inside collapsed tab
+const MINI_DOT      = 5;    // mini arc neighbour dot size
+const MINI_ICON_S   = 16;   // icon size for current-mode slot in mini arc
+const MINI_A_STEP   = 36;   // degrees between mini arc slots (wider than expanded)
+const ANGLE_STEP    = 22;   // degrees between adjacent mode slots (expanded fan)
 const PX_PER_STEP = 36;   // pixels of swipe per one mode step
 
 // Front-camera safe zone: top/bottom wall t must stay outside [0.28, 0.72].
@@ -173,6 +176,7 @@ export function ModeSwitcherDial({
   // ── Animation shared values ───────────────────────────────────────────────
   const fanScale   = useSharedValue(0.05);
   const fanOpacity = useSharedValue(0);
+  const overlayOp  = useSharedValue(0);
 
   // ── Open / close ─────────────────────────────────────────────────────────
   const [isOpen, setIsOpen] = useState(false);
@@ -190,15 +194,17 @@ export function ModeSwitcherDial({
     setScrollPos(idx);
     setIsOpen(true);
     isOpenRef.current = true;
-    fanScale.value   = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
-    fanOpacity.value = withTiming(1, { duration: 180 });
-  }, [currentMode, fanScale, fanOpacity]);
+    fanScale.value   = withTiming(1,   { duration: 220, easing: Easing.out(Easing.cubic) });
+    fanOpacity.value = withTiming(1,   { duration: 180 });
+    overlayOp.value  = withTiming(0.5, { duration: 200 });
+  }, [currentMode, fanScale, fanOpacity, overlayOp]);
 
   const doClose = useCallback(() => {
     fanScale.value   = withTiming(0.05, { duration: 180, easing: Easing.in(Easing.cubic) });
     fanOpacity.value = withTiming(0,    { duration: 150 });
+    overlayOp.value  = withTiming(0,    { duration: 160 });
     setTimeout(() => { setIsOpen(false); isOpenRef.current = false; }, 185);
-  }, [fanScale, fanOpacity]);
+  }, [fanScale, fanOpacity, overlayOp]);
 
   const onSelectModeRef = useRef(onSelectMode);
   useEffect(() => { onSelectModeRef.current = onSelectMode; }, [onSelectMode]);
@@ -285,21 +291,28 @@ export function ModeSwitcherDial({
         setScrollPos(next);
       },
       onPanResponderRelease: () => {
+        // Snap to nearest — fan stays open; user taps overlay to confirm
         const snapped = Math.max(0, Math.min(MODES.length - 1, Math.round(scrollPosRef.current)));
         scrollPosRef.current = snapped;
         setScrollPos(snapped);
-        doClose();
-        setTimeout(() => onSelectModeRef.current(MODES[snapped]), 200);
       },
       onPanResponderTerminate: () => { doClose(); },
     })
   ).current;
 
   // ── Animated styles ───────────────────────────────────────────────────────
-  const fanStyle = useAnimatedStyle(() => ({
+  const overlayStyle = useAnimatedStyle(() => ({ opacity: overlayOp.value }));
+  const fanStyle     = useAnimatedStyle(() => ({
     opacity:   fanOpacity.value,
     transform: [{ scale: fanScale.value }],
   }));
+
+  // Confirm the highlighted mode and close the fan
+  const confirmSelection = useCallback(() => {
+    const snapped = Math.max(0, Math.min(MODES.length - 1, Math.round(scrollPosRef.current)));
+    doClose();
+    setTimeout(() => onSelectModeRef.current(MODES[snapped]), 200);
+  }, [doClose]);
 
   // ── Geometry (sync refs synchronously in render) ──────────────────────────
   const anchor = anchorPos(wallPos, winW, winH, topInset);
@@ -328,29 +341,41 @@ export function ModeSwitcherDial({
     };
   });
 
-  // Collapsed mini-arc: current mode centred, ±2 neighbours visible
+  // Collapsed mini-arc: current mode (icon) centred, ±1 neighbour dots
   const currentIdx = MODES.indexOf(currentMode);
-  const MINI_OFFSETS = [-2, -1, 0, 1, 2];
-  const miniSlots = MINI_OFFSETS.map((offset) => {
+  const miniSlots = [-1, 0, 1].map((offset) => {
     const idx  = currentIdx + offset;
     const mode = MODES[idx] as ModeSlot | undefined;
-    const deg  = centAng + offset * ANGLE_STEP;
+    const deg  = centAng + offset * MINI_A_STEP;
     const rad  = (deg * Math.PI) / 180;
-    const dist = Math.abs(offset);
     return {
-      mode, idx, offset,
+      mode, offset,
       dx:        Math.cos(rad) * MINI_R,
       dy:        Math.sin(rad) * MINI_R,
       isCurrent: offset === 0,
-      // fade out-of-range slots instead of showing garbage
-      opacity:   mode === undefined ? 0 : dist === 0 ? 1 : dist === 1 ? 0.55 : 0.25,
-      size:      dist === 0 ? MINI_DOT + 2 : dist === 1 ? MINI_DOT - 1 : MINI_DOT - 2,
+      opacity:   mode === undefined ? 0 : offset === 0 ? 1 : 0.5,
     };
   });
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
+      {/* Dim overlay — tap to CONFIRM the highlighted mode */}
+      {isOpen && (
+        <Animated.View
+          style={[
+            {
+              position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+              zIndex: Z_OVERLAY, backgroundColor: "#000",
+              pointerEvents: "box-none" as const,
+            },
+            overlayStyle,
+          ]}
+        >
+          <Pressable style={{ flex: 1 }} onPress={confirmSelection} />
+        </Animated.View>
+      )}
+
       {/* Expanded fan — anchor at wall edge, grows inward */}
       {isOpen && (
         <Animated.View
@@ -465,9 +490,9 @@ export function ModeSwitcherDial({
         />
 
         {/* Mini arc: current mode = icon, neighbours = dots */}
-        {miniSlots.map(({ mode, offset, dx, dy, isCurrent, opacity: op, size: sz }) =>
+        {miniSlots.map(({ mode, offset, dx, dy, isCurrent, opacity: op }) =>
           isCurrent && mode !== undefined ? (
-            // Current mode: show icon at arc centre position
+            // Current mode: icon circle at arc centre
             <View
               key={offset}
               pointerEvents="none"
@@ -491,9 +516,9 @@ export function ModeSwitcherDial({
               pointerEvents="none"
               style={{
                 position: "absolute",
-                left: dx - sz / 2,
-                top:  dy - sz / 2,
-                width: sz, height: sz,
+                left: dx - MINI_DOT / 2,
+                top:  dy - MINI_DOT / 2,
+                width: MINI_DOT, height: MINI_DOT,
                 borderRadius: 99,
                 opacity: op,
                 backgroundColor: C.textTertiary + "88",
