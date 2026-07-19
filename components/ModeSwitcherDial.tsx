@@ -325,9 +325,13 @@ export function ModeSwitcherDial({
 
   const fanSwipePR = useRef(
     PanResponder.create({
-      // Don't claim on start — lets Pressable children receive taps
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder:  (_, gs) =>
+      // Start: don't claim — lets Pressable children receive taps
+      onStartShouldSetPanResponder:        () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      // Move: capture-phase so we steal drags even from Pressable children
+      onMoveShouldSetPanResponder:        (_, gs) =>
+        Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
+      onMoveShouldSetPanResponderCapture: (_, gs) =>
         Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
       onPanResponderGrant: (e) => {
         const { axis } = SWIPE_CFG[wallRef.current];
@@ -488,56 +492,58 @@ export function ModeSwitcherDial({
             />
           </View>
 
-          {/* Swipe-capture layer */}
+          {/* Swipe-capture wrapper — parent of icons so capture-phase PR steals drags */}
           <View
             {...fanSwipePR.panHandlers}
             style={{
               position: "absolute",
               left: bgLayout.left, top: bgLayout.top,
               width: bgLayout.w,   height: bgLayout.h,
+              overflow: "visible" as const,
             }}
-          />
-
-          {/* Rotary dial icons — tappable to select */}
-          {iconSlots.map(({ mode, i, dx, dy, isCtr, opacity: op, scale: sc }) => (
-            <Pressable
-              key={mode}
-              onPress={() => {
-                scrollPosRef.current = i;
-                setScrollPos(i);
-                confirmSelection();
-              }}
-              style={{
-                position: "absolute",
-                left: dx - ICON_S / 2, top: dy - ICON_S / 2,
-                width: ICON_S, height: ICON_S,
-                borderRadius: ICON_S / 2,
-                backgroundColor: isCtr ? C.accent : "transparent",
-                alignItems: "center", justifyContent: "center",
-                opacity: op,
-                transform: [{ scale: sc }],
-              }}
-            >
-              <ModeIcon
-                mode={mode}
-                size={S.ms(20, 0.3)}
-                color={isCtr ? "#fff" : C.textSecondary}
-              />
-              {isCtr && (
-                <Text
-                  style={{
-                    fontSize: 7, lineHeight: 9,
-                    color: "#fff",
-                    fontFamily: "SpaceGrotesk_500Medium",
-                    letterSpacing: 0.3,
-                  }}
-                  numberOfLines={1}
-                >
-                  {t("switcher", mode as "beat"|"bar"|"score"|"note"|"stage"|"menu")}
-                </Text>
-              )}
-            </Pressable>
-          ))}
+          >
+            {/* Rotary dial icons — tap to select, drag parent to swipe */}
+            {iconSlots.map(({ mode, i, dx, dy, isCtr, opacity: op, scale: sc }) => (
+              <Pressable
+                key={mode}
+                onPress={() => {
+                  scrollPosRef.current = i;
+                  setScrollPos(i);
+                  confirmSelection();
+                }}
+                style={{
+                  position: "absolute",
+                  left: dx - bgLayout.left - ICON_S / 2,
+                  top:  dy - bgLayout.top  - ICON_S / 2,
+                  width: ICON_S, height: ICON_S,
+                  borderRadius: ICON_S / 2,
+                  backgroundColor: isCtr ? C.accent : "transparent",
+                  alignItems: "center", justifyContent: "center",
+                  opacity: op,
+                  transform: [{ scale: sc }],
+                }}
+              >
+                <ModeIcon
+                  mode={mode}
+                  size={S.ms(20, 0.3)}
+                  color={isCtr ? "#fff" : C.textSecondary}
+                />
+                {isCtr && (
+                  <Text
+                    style={{
+                      fontSize: 7, lineHeight: 9,
+                      color: "#fff",
+                      fontFamily: "SpaceGrotesk_500Medium",
+                      letterSpacing: 0.3,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {t("switcher", mode as "beat"|"bar"|"score"|"note"|"stage"|"menu")}
+                  </Text>
+                )}
+              </Pressable>
+            ))}
+          </View>
         </Animated.View>
       )}
 
