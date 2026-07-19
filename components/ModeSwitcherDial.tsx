@@ -32,14 +32,14 @@ const Z_HANDLE  = 100002;
 
 // ── Geometry ──────────────────────────────────────────────────────────────────
 const HANDLE_R    = 38;   // collapsed D-tab half-circle radius (larger = more room for mini arc)
-const FAN_R       = 180;  // expanded fan diameter; radius = FAN_R/2 = 90
-const ICON_R      = 76;   // expanded icon arc radius (≤ FAN_R/2)
-const ICON_S      = 42;   // expanded icon slot size
+const FAN_R       = 260;  // expanded fan diameter; radius = FAN_R/2 = 130
+const ICON_R      = 115;  // expanded icon arc radius (center-to-icon distance)
+const ICON_S      = 36;   // expanded icon slot size
 const MINI_R        = 30;   // mini arc radius inside collapsed tab
 const MINI_DOT      = 5;    // mini arc neighbour dot size
 const MINI_ICON_S   = 22;   // icon size for current-mode slot in mini arc
 const MINI_A_STEP   = 36;   // degrees between mini arc slots (wider than expanded)
-const ANGLE_STEP    = 22;   // degrees between adjacent mode slots (expanded fan)
+const ANGLE_STEP    = 30;   // degrees between adjacent mode slots (arc dist ≈ 60px > ICON_S)
 const PX_PER_STEP = 36;   // pixels of swipe per one mode step
 
 // Front-camera safe zone: top/bottom wall t must stay outside [0.28, 0.72].
