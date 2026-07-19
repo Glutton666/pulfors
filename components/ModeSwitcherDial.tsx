@@ -378,7 +378,14 @@ export function ModeSwitcherDial({
           setScrollPos(snapped);
         }
       },
-      onPanResponderTerminate: () => { doClose(); },
+      // Don't surrender gesture to parent ScrollViews
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderTerminate: () => {
+        // Snap gracefully — do NOT close (terminate ≠ user intent to dismiss)
+        const snapped = snapWrap(scrollPosRef.current);
+        scrollPosRef.current = snapped;
+        setScrollPos(snapped);
+      },
     })
   ).current;
 
