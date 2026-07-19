@@ -5046,6 +5046,7 @@ export default function MetronomeScreen() {
         onSelectMode={switchToMode}
         topInset={insets.top || webTopInset}
         isLandscape={isLandscape}
+        isPlaying={isPlaying}
       />
 
       {showMenu && (

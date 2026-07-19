@@ -33,6 +33,7 @@ interface ModeSwitcherDialProps {
   onSelectMode: (mode: ModeSlot) => void;
   topInset: number;
   isLandscape: boolean;
+  isPlaying?: boolean;
 }
 
 function ModeIcon({ mode, size, color }: { mode: ModeSlot; size: number; color: string }) {
@@ -51,6 +52,7 @@ export function ModeSwitcherDial({
   onSelectMode,
   topInset,
   isLandscape,
+  isPlaying = false,
 }: ModeSwitcherDialProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -131,6 +133,13 @@ export function ModeSwitcherDial({
     const idx = MODES.indexOf(currentMode);
     if (idx >= 0) { setHighlightIndex(idx); highlightIndexRef.current = idx; }
   }, [currentMode]);
+
+  // 재생 시작 시 다이얼 닫기
+  useEffect(() => {
+    if (isPlaying && isOpenRef.current) {
+      doClose();
+    }
+  }, [isPlaying, doClose]);
 
   // ── dial swipe PanResponder ──
   const slotWidth = winW / MODES.length;
@@ -346,7 +355,7 @@ export function ModeSwitcherDial({
         </Animated.View>
       )}
 
-      {/* Floating button — always on top */}
+      {/* Floating button — hidden while playing */}
       <Animated.View
         accessible
         accessibilityRole="button"
@@ -361,6 +370,7 @@ export function ModeSwitcherDial({
           width: BTN_SIZE,
           height: BTN_SIZE,
           opacity: isDragging ? 0.7 : 1,
+          display: isPlaying ? "none" : "flex",
         }}
         {...buttonPanResponder.panHandlers}
       >
