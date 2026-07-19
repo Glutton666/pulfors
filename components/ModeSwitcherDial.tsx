@@ -212,10 +212,6 @@ export function ModeSwitcherDial({
     setTimeout(() => { setIsOpen(false); isOpenRef.current = false; }, 190);
   }, [fanScale, fanOpacity, overlayOp]);
 
-  // Close when playback starts
-  useEffect(() => {
-    if (isPlaying && isOpenRef.current) doClose();
-  }, [isPlaying, doClose]);
 
   // Keep onSelectMode stable across renders
   const onSelectModeRef = useRef(onSelectMode);
@@ -432,7 +428,6 @@ export function ModeSwitcherDial({
           width:  BTN_SIZE,
           height: BTN_SIZE,
           opacity: isDragging ? 0.5 : 1,
-          display: isPlaying ? "none" : "flex",
         }}
         {...buttonPR.panHandlers}
       >
