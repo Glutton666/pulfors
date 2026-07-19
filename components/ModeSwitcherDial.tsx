@@ -239,6 +239,10 @@ export function ModeSwitcherDial({
   const [scrollPos, setScrollPos] = useState<number>(initIdx);
   const scrollPosRef = useRef<number>(initIdx);
 
+  // Refs for PanResponder tap-detection (updated each render)
+  const anchorRef    = useRef({ x: 0, y: 0 });
+  const iconSlotsRef = useRef<{ i: number; dx: number; dy: number }[]>([]);
+
   const doOpen = useCallback(() => {
     const idx = Math.max(0, MODES.indexOf(currentMode));
     scrollPosRef.current = idx;
@@ -321,38 +325,58 @@ export function ModeSwitcherDial({
   ).current;
 
   // ── Fan swipe PanResponder (rotary dial) ──────────────────────────────────
-  const swipeStart = useRef({ coord: 0, startScroll: 0 });
+  // Claims ALL starts so the overlay below can never steal the touch on web.
+  // Tap vs swipe is distinguished by movement distance on release.
+  const swipeStart = useRef({ coord: 0, startScroll: 0, moved: false,
+                               pageX: 0, pageY: 0 });
 
   const fanSwipePR = useRef(
     PanResponder.create({
-      // Start: don't claim — lets Pressable children receive taps
-      onStartShouldSetPanResponder:        () => false,
-      onStartShouldSetPanResponderCapture: () => false,
-      // Move: capture-phase so we steal drags even from Pressable children
-      onMoveShouldSetPanResponder:        (_, gs) =>
-        Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
-      onMoveShouldSetPanResponderCapture: (_, gs) =>
-        Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
+      onStartShouldSetPanResponder: () => true,   // always claim — blocks overlay
       onPanResponderGrant: (e) => {
         const { axis } = SWIPE_CFG[wallRef.current];
         swipeStart.current = {
           coord:       axis === "x" ? e.nativeEvent.pageX : e.nativeEvent.pageY,
           startScroll: scrollPosRef.current,
+          moved:       false,
+          pageX:       e.nativeEvent.pageX,
+          pageY:       e.nativeEvent.pageY,
         };
       },
-      onPanResponderMove: (e) => {
-        const { axis, sign } = SWIPE_CFG[wallRef.current];
-        const coord = axis === "x" ? e.nativeEvent.pageX : e.nativeEvent.pageY;
-        const delta = (coord - swipeStart.current.coord) / PX_PER_STEP * sign;
-        const next  = wrapScroll(swipeStart.current.startScroll + delta);
-        scrollPosRef.current = next;
-        setScrollPos(next);
+      onPanResponderMove: (e, gs) => {
+        if (Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5) {
+          swipeStart.current.moved = true;
+          const { axis, sign } = SWIPE_CFG[wallRef.current];
+          const coord = axis === "x" ? e.nativeEvent.pageX : e.nativeEvent.pageY;
+          const delta = (coord - swipeStart.current.coord) / PX_PER_STEP * sign;
+          const next  = wrapScroll(swipeStart.current.startScroll + delta);
+          scrollPosRef.current = next;
+          setScrollPos(next);
+        }
       },
-      onPanResponderRelease: () => {
-        // Snap to nearest (circular) — fan stays open; user taps overlay to confirm
-        const snapped = snapWrap(scrollPosRef.current);
-        scrollPosRef.current = snapped;
-        setScrollPos(snapped);
+      onPanResponderRelease: (e) => {
+        if (!swipeStart.current.moved) {
+          // TAP — find icon closest to tap position in anchor-space
+          const anch   = anchorRef.current;
+          const ax     = e.nativeEvent.pageX - anch.x;
+          const ay     = e.nativeEvent.pageY - anch.y;
+          const slots  = iconSlotsRef.current;
+          let best = -1, bestDist = Infinity;
+          slots.forEach(({ i, dx, dy }) => {
+            const d = Math.hypot(dx - ax, dy - ay);
+            if (d < bestDist) { bestDist = d; best = i; }
+          });
+          if (best >= 0 && bestDist <= ICON_S) {
+            scrollPosRef.current = best;
+            setScrollPos(best);
+          }
+          // else: tap on empty bg — do nothing (keep current selection)
+        } else {
+          // SWIPE — snap to nearest; fan stays open for overlay-tap to confirm
+          const snapped = snapWrap(scrollPosRef.current);
+          scrollPosRef.current = snapped;
+          setScrollPos(snapped);
+        }
       },
       onPanResponderTerminate: () => { doClose(); },
     })
@@ -374,7 +398,8 @@ export function ModeSwitcherDial({
 
   // ── Geometry (sync refs synchronously in render) ──────────────────────────
   const anchor = anchorPos(wallPos, winW, winH, topInset);
-  wallRef.current = wallPos.wall;
+  wallRef.current    = wallPos.wall;
+  anchorRef.current  = anchor;
 
   const wall                   = wallPos.wall;
   const { centAng, halfSpan }  = effectiveArcParams(wall, wallPos.t);
@@ -408,6 +433,8 @@ export function ModeSwitcherDial({
       scale:   Math.max(0.55, 1 - dist * 0.12),
     };
   });
+  // Keep ref in sync for PanResponder tap-detection (runs synchronously in render)
+  iconSlotsRef.current = iconSlots.map(({ i, dx, dy }) => ({ i, dx, dy }));
 
   // Collapsed mini-arc: current mode (icon) centred, ±1 neighbour dots
   const currentIdx = MODES.indexOf(currentMode);
@@ -492,7 +519,7 @@ export function ModeSwitcherDial({
             />
           </View>
 
-          {/* Swipe-capture wrapper — parent of icons so capture-phase PR steals drags */}
+          {/* Swipe-capture wrapper — claims all touches; tap/swipe detected on release */}
           <View
             {...fanSwipePR.panHandlers}
             style={{
@@ -502,46 +529,42 @@ export function ModeSwitcherDial({
               overflow: "visible" as const,
             }}
           >
-            {/* Rotary dial icons — tap to select, drag parent to swipe */}
+            {/* Rotary dial icons — visual only; gesture handled by parent wrapper */}
             {iconSlots.map(({ mode, i, dx, dy, isCtr, opacity: op, scale: sc }) => (
-              <Pressable
-                key={mode}
-                onPress={() => {
-                  // Tap = scroll to this mode (highlight), not yet enter
-                  scrollPosRef.current = i;
-                  setScrollPos(i);
-                }}
-                style={{
-                  position: "absolute",
-                  left: dx - bgLayout.left - ICON_S / 2,
-                  top:  dy - bgLayout.top  - ICON_S / 2,
-                  width: ICON_S, height: ICON_S,
-                  borderRadius: ICON_S / 2,
-                  backgroundColor: isCtr ? C.accent : "transparent",
-                  alignItems: "center", justifyContent: "center",
-                  opacity: op,
-                  transform: [{ scale: sc }],
-                }}
-              >
-                <ModeIcon
-                  mode={mode}
-                  size={S.ms(20, 0.3)}
-                  color={isCtr ? "#fff" : C.textSecondary}
-                />
-                {isCtr && (
-                  <Text
-                    style={{
-                      fontSize: 7, lineHeight: 9,
-                      color: "#fff",
-                      fontFamily: "SpaceGrotesk_500Medium",
-                      letterSpacing: 0.3,
-                    }}
-                    numberOfLines={1}
-                  >
-                    {t("switcher", mode as "beat"|"bar"|"score"|"note"|"stage"|"menu")}
-                  </Text>
-                )}
-              </Pressable>
+                <View
+                  key={mode}
+                  pointerEvents="none"
+                  style={{
+                    position: "absolute",
+                    left: dx - bgLayout.left - ICON_S / 2,
+                    top:  dy - bgLayout.top  - ICON_S / 2,
+                    width: ICON_S, height: ICON_S,
+                    borderRadius: ICON_S / 2,
+                    backgroundColor: isCtr ? C.accent : "transparent",
+                    alignItems: "center", justifyContent: "center",
+                    opacity: op,
+                    transform: [{ scale: sc }],
+                  }}
+                >
+                  <ModeIcon
+                    mode={mode}
+                    size={S.ms(20, 0.3)}
+                    color={isCtr ? "#fff" : C.textSecondary}
+                  />
+                  {isCtr && (
+                    <Text
+                      style={{
+                        fontSize: 7, lineHeight: 9,
+                        color: "#fff",
+                        fontFamily: "SpaceGrotesk_500Medium",
+                        letterSpacing: 0.3,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {t("switcher", mode as "beat"|"bar"|"score"|"note"|"stage"|"menu")}
+                    </Text>
+                  )}
+                </View>
             ))}
           </View>
         </Animated.View>
