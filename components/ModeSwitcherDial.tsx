@@ -35,8 +35,18 @@ const ICON_R      = 76;   // expanded icon arc radius (≤ FAN_R/2)
 const ICON_S      = 32;   // expanded icon slot size
 const MINI_R      = 24;   // mini arc radius inside collapsed tab
 const MINI_DOT    = 7;    // mini arc dot size
+const MINI_ICON_S = 16;   // icon size for current-mode slot in mini arc
 const ANGLE_STEP  = 22;   // degrees between adjacent mode slots
 const PX_PER_STEP = 36;   // pixels of swipe per one mode step
+
+// Front-camera safe zone: top/bottom wall t must stay outside [0.28, 0.72].
+// Covers iPhone Dynamic Island / notch and Galaxy punch-hole.
+function safeT(wall: Wall, t: number): number {
+  if (wall === "top" || wall === "bottom") {
+    if (t > 0.28 && t < 0.72) return t < 0.5 ? 0.25 : 0.75;
+  }
+  return t;
+}
 
 // Inward direction for each wall (degrees, math coords: right=0°, down=90°)
 const CENTER_ANGLE: Record<Wall, number> = {
@@ -57,13 +67,14 @@ const SWIPE_CFG: Record<Wall, { axis: "x" | "y"; sign: 1 | -1 }> = {
   left:   { axis: "y", sign: -1 },
 };
 
-// ── Anchor: exactly on the wall edge ─────────────────────────────────────────
+// ── Anchor: exactly on the wall edge (camera-safe) ───────────────────────────
 function anchorPos(wp: WallPos, winW: number, winH: number, topInset: number) {
+  const t = safeT(wp.wall, wp.t);
   switch (wp.wall) {
-    case "top":    return { x: Math.max(0, Math.min(winW, wp.t * winW)), y: topInset };
-    case "bottom": return { x: Math.max(0, Math.min(winW, wp.t * winW)), y: winH };
-    case "left":   return { x: 0,    y: Math.max(topInset, Math.min(winH, topInset + wp.t * (winH - topInset))) };
-    case "right":  return { x: winW, y: Math.max(topInset, Math.min(winH, topInset + wp.t * (winH - topInset))) };
+    case "top":    return { x: Math.max(0, Math.min(winW, t * winW)), y: topInset };
+    case "bottom": return { x: Math.max(0, Math.min(winW, t * winW)), y: winH };
+    case "left":   return { x: 0,    y: Math.max(topInset, Math.min(winH, topInset + t * (winH - topInset))) };
+    case "right":  return { x: winW, y: Math.max(topInset, Math.min(winH, topInset + t * (winH - topInset))) };
   }
 }
 
@@ -98,15 +109,15 @@ function fanBgCorners(wall: Wall): object {
   }
 }
 
-// ── Snap to nearest wall ──────────────────────────────────────────────────────
+// ── Snap to nearest wall (camera-safe) ───────────────────────────────────────
 function snapToWall(tx: number, ty: number, winW: number, winH: number, topInset: number): WallPos {
   const dT = ty - topInset, dB = winH - ty, dL = tx, dR = winW - tx;
   const m  = Math.min(dT, dB, dL, dR);
   const cl = (v: number) => Math.min(1, Math.max(0, v));
-  if (m === dT) return { wall: "top",    t: cl(tx / winW) };
-  if (m === dB) return { wall: "bottom", t: cl(tx / winW) };
-  if (m === dL) return { wall: "left",   t: cl((ty - topInset) / (winH - topInset)) };
-  return               { wall: "right",  t: cl((ty - topInset) / (winH - topInset)) };
+  if (m === dT) { const wall: Wall = "top";    return { wall, t: safeT(wall, cl(tx / winW)) }; }
+  if (m === dB) { const wall: Wall = "bottom"; return { wall, t: safeT(wall, cl(tx / winW)) }; }
+  if (m === dL) return { wall: "left",  t: cl((ty - topInset) / (winH - topInset)) };
+  return               { wall: "right", t: cl((ty - topInset) / (winH - topInset)) };
 }
 
 // ── Mode icon ─────────────────────────────────────────────────────────────────
@@ -451,26 +462,45 @@ export function ModeSwitcherDial({
             gap: 2,
           }}
           testID="mode-switcher-button"
-        >
-          <ModeIcon mode={currentMode} size={S.ms(14, 0.3)} color={C.accent} />
-        </View>
+        />
 
-        {/* Mini arc: current mode centred, ±2 neighbours */}
-        {miniSlots.map(({ mode, offset, dx, dy, isCurrent, opacity: op, size: sz }) => (
-          <View
-            key={offset}
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              left: dx - sz / 2,
-              top:  dy - sz / 2,
-              width: sz, height: sz,
-              borderRadius: 99,
-              opacity: op,
-              backgroundColor: isCurrent ? C.accent : C.textTertiary + "88",
-            }}
-          />
-        ))}
+        {/* Mini arc: current mode = icon, neighbours = dots */}
+        {miniSlots.map(({ mode, offset, dx, dy, isCurrent, opacity: op, size: sz }) =>
+          isCurrent && mode !== undefined ? (
+            // Current mode: show icon at arc centre position
+            <View
+              key={offset}
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                left: dx - MINI_ICON_S / 2,
+                top:  dy - MINI_ICON_S / 2,
+                width: MINI_ICON_S, height: MINI_ICON_S,
+                borderRadius: MINI_ICON_S / 2,
+                backgroundColor: C.accent,
+                alignItems: "center", justifyContent: "center",
+                opacity: op,
+              }}
+            >
+              <ModeIcon mode={mode} size={MINI_ICON_S - 4} color="#fff" />
+            </View>
+          ) : (
+            // Neighbour: plain dot
+            <View
+              key={offset}
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                left: dx - sz / 2,
+                top:  dy - sz / 2,
+                width: sz, height: sz,
+                borderRadius: 99,
+                opacity: op,
+                backgroundColor: C.textTertiary + "88",
+              }}
+            />
+          )
+        )}
 
       </View>}
     </>
