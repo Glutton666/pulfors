@@ -413,13 +413,8 @@ export function ModeSwitcherDial({
         </Animated.View>
       )}
 
-      {/*
-        Handle — always visible; acts as open/close toggle.
-        Collapsed: shows mini arc with mode dots.
-        Open: shows a slim version to indicate "tap to close".
-        Anchor at wall edge; screen clipping makes it a D-shape.
-      */}
-      <View
+      {/* Handle — only shown when fan is closed */}
+      {!isOpen && <View
         {...handlePR.panHandlers}
         style={{
           position: "absolute",
@@ -465,25 +460,7 @@ export function ModeSwitcherDial({
           />
         ))}
 
-        {/* When open: tiny current-mode icon in centre of tab */}
-        {isOpen && (
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              left: hLayout.left, top: hLayout.top,
-              width: hLayout.w,   height: hLayout.h,
-              alignItems: "center", justifyContent: "center",
-            }}
-          >
-            <ModeIcon
-              mode={currentMode}
-              size={S.ms(11, 0.3)}
-              color={C.accent + "aa"}
-            />
-          </View>
-        )}
-      </View>
+      </View>}
     </>
   );
 }
