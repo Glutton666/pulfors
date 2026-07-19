@@ -59,8 +59,8 @@ export function ModeSwitcherDial({
   const S = useScale();
   const { width: winW, height: winH } = useWindowDimensions();
 
-  const BTN_SIZE = S.ms(40, 0.5);
-  const DIAL_HEIGHT = S.ms(72, 0.4);
+  const BTN_SIZE = S.ms(38, 0.5);
+  const DIAL_HEIGHT = S.ms(50, 0.3);
 
   const defaultBtnTop = topInset + 12;
 
@@ -259,7 +259,12 @@ export function ModeSwitcherDial({
   const btnLeft = isLandscape && btnPos ? btnPos.x : undefined;
   const btnRight = isLandscape && btnPos ? undefined : S.ms(20, 0.3);
   const btnTop = isLandscape && btnPos ? btnPos.y : defaultBtnTop;
-  const dialTop = btnTop + BTN_SIZE + 8;
+  const dialTop = btnTop + BTN_SIZE + 6;
+
+  // cord center X — for the hanging-lamp wire
+  const cordCenterX = isLandscape && btnPos
+    ? btnPos.x + BTN_SIZE / 2
+    : winW - S.ms(20, 0.3) - BTN_SIZE / 2;
 
   return (
     <>
@@ -268,7 +273,7 @@ export function ModeSwitcherDial({
         <Animated.View
           pointerEvents="box-none"
           style={[
-            { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: Z_OVERLAY, backgroundColor: "rgba(0,0,0,0.62)" },
+            { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: Z_OVERLAY, backgroundColor: "rgba(0,0,0,0.55)" },
             overlayStyle,
           ]}
         >
@@ -276,7 +281,7 @@ export function ModeSwitcherDial({
         </Animated.View>
       )}
 
-      {/* Mode slots bar */}
+      {/* Camera dial strip */}
       {isOpen && (
         <Animated.View
           style={[
@@ -287,24 +292,28 @@ export function ModeSwitcherDial({
               top: dialTop,
               height: DIAL_HEIGHT,
               backgroundColor: C.surface,
-              borderTopWidth: 1,
-              borderBottomWidth: 1,
-              borderColor: C.border,
               zIndex: Z_DIAL,
               flexDirection: "row",
               shadowColor: "#000",
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.25,
-              shadowRadius: 8,
-              elevation: 8,
+              shadowOffset: { width: 0, height: 5 },
+              shadowOpacity: 0.4,
+              shadowRadius: 10,
+              elevation: 12,
+              overflow: "hidden",
             },
             dialAnimStyle,
           ]}
           {...dialPanResponder.panHandlers}
         >
+          {/* top edge highlight — simulates convex dial surface */}
+          <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, backgroundColor: "rgba(255,255,255,0.12)", zIndex: 1 }} />
+          {/* bottom edge shadow */}
+          <View pointerEvents="none" style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 1, backgroundColor: "rgba(0,0,0,0.35)", zIndex: 1 }} />
+
           {MODES.map((mode, idx) => {
             const isHighlighted = idx === highlightIndex;
             const isCurrent = mode === currentMode;
+            const isLast = idx === MODES.length - 1;
             return (
               <Pressable
                 key={mode}
@@ -312,9 +321,15 @@ export function ModeSwitcherDial({
                   flex: 1,
                   alignItems: "center" as const,
                   justifyContent: "center" as const,
-                  gap: 3,
-                  backgroundColor: isHighlighted ? C.accent + "1A" : pressed ? C.surfaceLight : "transparent",
-                  paddingVertical: 6,
+                  gap: 2,
+                  backgroundColor: isHighlighted
+                    ? C.accent + "18"
+                    : pressed
+                    ? "rgba(255,255,255,0.04)"
+                    : "transparent",
+                  borderRightWidth: isLast ? 0 : 0.5,
+                  borderRightColor: C.border,
+                  paddingVertical: 5,
                 })}
                 onPress={() => {
                   setHighlightIndex(idx);
@@ -324,38 +339,60 @@ export function ModeSwitcherDial({
                 }}
                 testID={`mode-slot-${mode}`}
               >
+                {/* Tick / selector mark at top edge */}
+                <View style={{
+                  position: "absolute",
+                  top: 0,
+                  alignSelf: "center",
+                  width: isHighlighted || isCurrent ? 3 : 1,
+                  height: isHighlighted || isCurrent ? 5 : 3,
+                  backgroundColor: isHighlighted
+                    ? C.accent
+                    : isCurrent
+                    ? C.accent + "99"
+                    : C.border,
+                  borderBottomLeftRadius: 1,
+                  borderBottomRightRadius: 1,
+                }} />
+
                 <ModeIcon
                   mode={mode}
-                  size={S.ms(20, 0.4)}
-                  color={isHighlighted || isCurrent ? C.accent : C.textSecondary}
+                  size={S.ms(16, 0.3)}
+                  color={isHighlighted || isCurrent ? C.accent : C.textTertiary}
                 />
                 <Text
                   style={{
-                    fontSize: S.ms(10, 0.3),
+                    fontSize: S.ms(8, 0.2),
                     color: isHighlighted || isCurrent ? C.accent : C.textTertiary,
                     fontFamily: "SpaceGrotesk_500Medium",
-                    letterSpacing: 0.2,
+                    letterSpacing: 0.6,
+                    textTransform: "uppercase" as const,
                   }}
                   numberOfLines={1}
                 >
                   {t("switcher", mode)}
                 </Text>
-                {isCurrent && (
-                  <View
-                    style={{
-                      position: "absolute",
-                      bottom: 5,
-                      width: 4,
-                      height: 4,
-                      borderRadius: 2,
-                      backgroundColor: C.accent,
-                    }}
-                  />
-                )}
               </Pressable>
             );
           })}
         </Animated.View>
+      )}
+
+      {/* Hanging-lamp cord — portrait only, not playing */}
+      {!isPlaying && !isLandscape && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            zIndex: Z_BUTTON - 1,
+            left: cordCenterX - 0.75,
+            top: 0,
+            width: 1.5,
+            height: btnTop,
+            backgroundColor: isOpen ? C.accent : C.border,
+            opacity: isOpen ? 0.7 : 0.35,
+          }}
+        />
       )}
 
       {/* Floating button — hidden while playing */}
@@ -387,17 +424,17 @@ export function ModeSwitcherDial({
             borderColor: isOpen ? C.accent : C.border,
             alignItems: "center",
             justifyContent: "center",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.2,
-            shadowRadius: 4,
-            elevation: 4,
+            shadowColor: isOpen ? C.accent : "#000",
+            shadowOffset: { width: 0, height: isOpen ? 0 : 2 },
+            shadowOpacity: isOpen ? 0.5 : 0.25,
+            shadowRadius: isOpen ? 10 : 4,
+            elevation: isOpen ? 8 : 4,
           }}
           testID="mode-switcher-button"
         >
           <ModeIcon
             mode={currentMode}
-            size={S.ms(20, 0.5)}
+            size={S.ms(18, 0.4)}
             color={isOpen ? "#fff" : C.textSecondary}
           />
         </View>
