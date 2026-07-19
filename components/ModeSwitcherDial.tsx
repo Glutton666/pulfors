@@ -278,7 +278,7 @@ export function ModeSwitcherDial({
         scrollPosRef.current = snapped;
         setScrollPos(snapped);
         doClose();
-        setTimeout(() => onSelectModeRef.current(MODES[snapped]), 175);
+        setTimeout(() => onSelectModeRef.current(MODES[snapped]), 200);
       },
       onPanResponderTerminate: () => { doClose(); },
     })
@@ -452,19 +452,7 @@ export function ModeSwitcherDial({
           }}
           testID="mode-switcher-button"
         >
-          <ModeIcon mode={currentMode} size={S.ms(13, 0.3)} color={C.accent} />
-          <Text
-            style={{
-              fontSize: 7,
-              lineHeight: 9,
-              color: C.accent,
-              fontFamily: "SpaceGrotesk_500Medium",
-              letterSpacing: 0.2,
-            }}
-            numberOfLines={1}
-          >
-            {t("switcher", currentMode as "beat"|"bar"|"score"|"note"|"stage"|"menu")}
-          </Text>
+          <ModeIcon mode={currentMode} size={S.ms(14, 0.3)} color={C.accent} />
         </View>
 
         {/* Mini arc: current mode centred, ±2 neighbours */}
