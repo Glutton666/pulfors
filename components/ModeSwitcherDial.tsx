@@ -317,16 +317,23 @@ export function ModeSwitcherDial({
     };
   });
 
-  // Collapsed mini-arc: static positions, all 6 modes evenly spaced
+  // Collapsed mini-arc: current mode centred, ±2 neighbours visible
   const currentIdx = MODES.indexOf(currentMode);
-  const miniSlots = MODES.map((mode, i) => {
-    const deg = arcStart + ((arcEnd - arcStart) / (MODES.length - 1)) * i;
-    const rad = (deg * Math.PI) / 180;
+  const MINI_OFFSETS = [-2, -1, 0, 1, 2];
+  const miniSlots = MINI_OFFSETS.map((offset) => {
+    const idx  = currentIdx + offset;
+    const mode = MODES[idx] as ModeSlot | undefined;
+    const deg  = centAng + offset * ANGLE_STEP;
+    const rad  = (deg * Math.PI) / 180;
+    const dist = Math.abs(offset);
     return {
-      mode, i,
-      dx: Math.cos(rad) * MINI_R,
-      dy: Math.sin(rad) * MINI_R,
-      isCurrent: i === currentIdx,
+      mode, idx, offset,
+      dx:        Math.cos(rad) * MINI_R,
+      dy:        Math.sin(rad) * MINI_R,
+      isCurrent: offset === 0,
+      // fade out-of-range slots instead of showing garbage
+      opacity:   mode === undefined ? 0 : dist === 0 ? 1 : dist === 1 ? 0.55 : 0.25,
+      size:      dist === 0 ? MINI_DOT + 2 : dist === 1 ? MINI_DOT - 1 : MINI_DOT - 2,
     };
   });
 
@@ -443,18 +450,18 @@ export function ModeSwitcherDial({
           testID="mode-switcher-button"
         />
 
-        {/* Mini arc dots when collapsed */}
-        {!isOpen && miniSlots.map(({ mode, dx, dy, isCurrent }) => (
+        {/* Mini arc: current mode centred, ±2 neighbours */}
+        {miniSlots.map(({ mode, offset, dx, dy, isCurrent, opacity: op, size: sz }) => (
           <View
-            key={mode}
+            key={offset}
             pointerEvents="none"
             style={{
               position: "absolute",
-              left: dx - (isCurrent ? MINI_DOT + 1 : MINI_DOT - 1) / 2,
-              top:  dy - (isCurrent ? MINI_DOT + 1 : MINI_DOT - 1) / 2,
-              width:  isCurrent ? MINI_DOT + 1 : MINI_DOT - 1,
-              height: isCurrent ? MINI_DOT + 1 : MINI_DOT - 1,
+              left: dx - sz / 2,
+              top:  dy - sz / 2,
+              width: sz, height: sz,
               borderRadius: 99,
+              opacity: op,
               backgroundColor: isCurrent ? C.accent : C.textTertiary + "88",
             }}
           />
