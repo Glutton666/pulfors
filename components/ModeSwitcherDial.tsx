@@ -507,9 +507,9 @@ export function ModeSwitcherDial({
               <Pressable
                 key={mode}
                 onPress={() => {
+                  // Tap = scroll to this mode (highlight), not yet enter
                   scrollPosRef.current = i;
                   setScrollPos(i);
-                  confirmSelection();
                 }}
                 style={{
                   position: "absolute",
