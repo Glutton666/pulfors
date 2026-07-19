@@ -33,14 +33,19 @@ const Z_HANDLE  = 100002;
 // ── Geometry ──────────────────────────────────────────────────────────────────
 const HANDLE_R    = 38;   // collapsed D-tab half-circle radius (larger = more room for mini arc)
 const FAN_R       = 220;  // expanded fan diameter; radius = FAN_R/2 = 110
-const ICON_R      = 76;   // expanded icon arc radius; outer edge = 76+20=96 ≤ 110 ✓
+const ICON_R      = 64;   // expanded icon arc radius; outer edge = 64+20=84 ≤ 110 ✓
 const ICON_S      = 40;   // expanded icon slot size
-const MINI_R        = 30;   // mini arc radius inside collapsed tab
+const MINI_R        = 19;   // = HANDLE_R/2 → icon sits at D-tab visual centre
 const MINI_DOT      = 5;    // mini arc neighbour dot size
 const MINI_ICON_S   = 22;   // icon size for current-mode slot in mini arc
-const MINI_A_STEP   = 36;   // degrees between mini arc slots (wider than expanded)
+const MINI_A_STEP   = 55;   // wider step so dots clear the centre icon at MINI_R=19
 const ANGLE_STEP    = 34;   // degrees between adjacent mode slots; arc dist=45px > ICON_S=40 ✓
 const PX_PER_STEP = 36;   // pixels of swipe per one mode step
+const N_MODES     = MODES.length; // 6 — used for circular wrapping
+
+// Circular wrap: keeps scrollPos in [0, N_MODES)
+function wrapScroll(v: number): number { return ((v % N_MODES) + N_MODES) % N_MODES; }
+function snapWrap(v: number): number { return ((Math.round(wrapScroll(v)) % N_MODES) + N_MODES) % N_MODES; }
 
 // Front-camera safe zone: top/bottom wall t must stay outside [0.28, 0.72].
 // Covers iPhone Dynamic Island / notch and Galaxy punch-hole.
@@ -312,13 +317,13 @@ export function ModeSwitcherDial({
         const { axis, sign } = SWIPE_CFG[wallRef.current];
         const coord = axis === "x" ? e.nativeEvent.pageX : e.nativeEvent.pageY;
         const delta = (coord - swipeStart.current.coord) / PX_PER_STEP * sign;
-        const next  = Math.max(0, Math.min(MODES.length - 1, swipeStart.current.startScroll + delta));
+        const next  = wrapScroll(swipeStart.current.startScroll + delta);
         scrollPosRef.current = next;
         setScrollPos(next);
       },
       onPanResponderRelease: () => {
-        // Snap to nearest — fan stays open; user taps overlay to confirm
-        const snapped = Math.max(0, Math.min(MODES.length - 1, Math.round(scrollPosRef.current)));
+        // Snap to nearest (circular) — fan stays open; user taps overlay to confirm
+        const snapped = snapWrap(scrollPosRef.current);
         scrollPosRef.current = snapped;
         setScrollPos(snapped);
       },
@@ -335,7 +340,7 @@ export function ModeSwitcherDial({
 
   // Confirm the highlighted mode and close the fan
   const confirmSelection = useCallback(() => {
-    const snapped = Math.max(0, Math.min(MODES.length - 1, Math.round(scrollPosRef.current)));
+    const snapped = snapWrap(scrollPosRef.current);
     doClose();
     setTimeout(() => onSelectModeRef.current(MODES[snapped]), 200);
   }, [doClose]);
@@ -352,7 +357,9 @@ export function ModeSwitcherDial({
 
   // Expanded rotary slots: position = centAng + (i - scrollPos) × ANGLE_STEP
   const iconSlots = MODES.map((mode, i) => {
-    const offset         = i - scrollPos;
+    // Circular shortest-path offset so wrapping works smoothly
+    const rawOff         = i - scrollPos;
+    const offset         = rawOff - Math.round(rawOff / N_MODES) * N_MODES;
     const deg            = centAng + offset * ANGLE_STEP;
     const rad            = (deg * Math.PI) / 180;
     const dist           = Math.abs(offset);
