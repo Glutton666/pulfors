@@ -66,6 +66,16 @@ function wallEdgeBorder(wall: Wall): object {
        :                     { borderBottomWidth: 0 };
 }
 
+// Inner ring inset: zero on the wall-facing side so the inner line reaches the edge
+function innerRingInset(wall: Wall): object {
+  return {
+    top:    wall === "top"    ? 0 : RIM_INSET,
+    bottom: wall === "bottom" ? 0 : RIM_INSET,
+    left:   wall === "left"   ? 0 : RIM_INSET,
+    right:  wall === "right"  ? 0 : RIM_INSET,
+  };
+}
+
 // Inward direction for each wall (degrees: right=0°, down=90°, left=180°, up=270°)
 const CENTER_ANGLE: Record<Wall, number> = {
   top: 90, right: 180, bottom: 270, left: 0,
@@ -469,8 +479,7 @@ export function ModeSwitcherDial({
               pointerEvents="none"
               style={{
                 position: "absolute",
-                top: RIM_INSET, bottom: RIM_INSET,
-                left: RIM_INSET, right: RIM_INSET,
+                ...innerRingInset(wall),
                 ...innerBgCorners,
                 borderWidth: 1.5,
                 borderColor: RIM_COLOR + "70",
@@ -568,8 +577,7 @@ export function ModeSwitcherDial({
             pointerEvents="none"
             style={{
               position: "absolute",
-              top: RIM_INSET, bottom: RIM_INSET,
-              left: RIM_INSET, right: RIM_INSET,
+              ...innerRingInset(wall),
               ...innerHCorners,
               borderWidth: 1.5,
               borderColor: RIM_COLOR + "70",
