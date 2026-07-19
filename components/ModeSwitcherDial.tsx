@@ -432,7 +432,7 @@ export function ModeSwitcherDial({
           opacity: isDragging ? 0.5 : 1,
         }}
       >
-        {/* D-tab background */}
+        {/* D-tab background + current mode label */}
         <View
           style={{
             position: "absolute",
@@ -441,14 +441,31 @@ export function ModeSwitcherDial({
             backgroundColor: C.surface,
             ...hLayout.corners,
             borderWidth: 1,
-            borderColor: isOpen ? C.accent + "66" : C.border,
+            borderColor: C.border,
             shadowColor: "#000",
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.22, shadowRadius: 4,
             elevation: 4,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 2,
           }}
           testID="mode-switcher-button"
-        />
+        >
+          <ModeIcon mode={currentMode} size={S.ms(13, 0.3)} color={C.accent} />
+          <Text
+            style={{
+              fontSize: 7,
+              lineHeight: 9,
+              color: C.accent,
+              fontFamily: "SpaceGrotesk_500Medium",
+              letterSpacing: 0.2,
+            }}
+            numberOfLines={1}
+          >
+            {t("switcher", currentMode as "beat"|"bar"|"score"|"note"|"stage"|"menu")}
+          </Text>
+        </View>
 
         {/* Mini arc: current mode centred, ±2 neighbours */}
         {miniSlots.map(({ mode, offset, dx, dy, isCurrent, opacity: op, size: sz }) => (
