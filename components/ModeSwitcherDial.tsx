@@ -163,6 +163,26 @@ function fanBgCorners(wall: Wall): object {
   }
 }
 
+// ── Safe D-tab position per mode ─────────────────────────────────────────────
+// Returns true if the current wallPos overlaps a known button cluster for that mode.
+// "top-right" corner (wall=right, t≤0.25) is the most congested spot (menu, save, back buttons).
+type ConflictZone = { wall: Wall; tMin: number; tMax: number };
+const MODE_CONFLICT_ZONES: Record<ModeSlot, ConflictZone[]> = {
+  beat:  [{ wall: "right", tMin: 0, tMax: 0.18 }],                        // top-right menu button
+  bar:   [{ wall: "right", tMin: 0, tMax: 0.25 }],                        // top-right controls
+  score: [{ wall: "right", tMin: 0, tMax: 0.30 }, { wall: "right", tMin: 0.75, tMax: 1 }], // save + FAB
+  note:  [{ wall: "right", tMin: 0, tMax: 0.30 }],                        // save/reset header
+  stage: [{ wall: "right", tMin: 0, tMax: 0.20 }, { wall: "top", tMin: 0.7, tMax: 1 }],
+  menu:  [],                                                               // full-screen overlay, no conflict
+};
+const SAFE_FALLBACK: WallPos = { wall: "top", t: 0.15 };
+
+function hasConflict(wp: WallPos, mode: ModeSlot): boolean {
+  return MODE_CONFLICT_ZONES[mode].some(
+    z => z.wall === wp.wall && wp.t >= z.tMin && wp.t <= z.tMax,
+  );
+}
+
 // ── Snap to nearest wall (camera-safe) ───────────────────────────────────────
 function snapToWall(tx: number, ty: number, winW: number, winH: number, topInset: number): WallPos {
   const dT = ty - topInset, dB = winH - ty, dL = tx, dR = winW - tx;
@@ -224,6 +244,20 @@ export function ModeSwitcherDial({
     });
   }, []);
 
+  // ── Auto-relocation: move D-tab away from mode buttons on mode entry ─────
+  // Per-mode override set: once the user manually drags in a mode, auto-move is suppressed for that mode.
+  const userOverrodeRef = useRef<Set<ModeSlot>>(new Set());
+
+  useEffect(() => {
+    if (userOverrodeRef.current.has(currentMode)) return;   // user already overrode this mode
+    setWallPos(prev => {
+      if (!hasConflict(prev, currentMode)) return prev;     // no conflict — keep position
+      AsyncStorage.setItem(WALL_KEY, JSON.stringify(SAFE_FALLBACK));
+      return SAFE_FALLBACK;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMode]);
+
   // ── Animation shared values ───────────────────────────────────────────────
   const fanScale   = useSharedValue(0.05);
   const fanOpacity = useSharedValue(0);
@@ -269,14 +303,16 @@ export function ModeSwitcherDial({
   const isDraggingRef = useRef(false);
 
   // ── Live refs for PanResponder stale-closure safety ──────────────────────
-  const winWRef  = useRef(winW);
-  const winHRef  = useRef(winH);
-  const topInRef = useRef(topInset);
-  const wallRef  = useRef<Wall>(wallPos.wall);
-  useEffect(() => { winWRef.current  = winW; },         [winW]);
-  useEffect(() => { winHRef.current  = winH; },         [winH]);
-  useEffect(() => { topInRef.current = topInset; },     [topInset]);
-  useEffect(() => { wallRef.current  = wallPos.wall; }, [wallPos.wall]);
+  const winWRef       = useRef(winW);
+  const winHRef       = useRef(winH);
+  const topInRef      = useRef(topInset);
+  const wallRef       = useRef<Wall>(wallPos.wall);
+  const currentModeRef = useRef<ModeSlot>(currentMode);
+  useEffect(() => { winWRef.current       = winW; },           [winW]);
+  useEffect(() => { winHRef.current       = winH; },           [winH]);
+  useEffect(() => { topInRef.current      = topInset; },       [topInset]);
+  useEffect(() => { wallRef.current       = wallPos.wall; },   [wallPos.wall]);
+  useEffect(() => { currentModeRef.current = currentMode; },   [currentMode]);
 
   // ── Handle PanResponder (tap = toggle; drag = reposition) ─────────────────
   const longRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -311,6 +347,8 @@ export function ModeSwitcherDial({
           );
           setWallPos(newWP);
           AsyncStorage.setItem(WALL_KEY, JSON.stringify(newWP));
+          // User manually placed the dial — suppress auto-move for this mode
+          userOverrodeRef.current.add(currentModeRef.current);
         } else {
           // Toggle open / close
           if (isOpenRef.current) doClose(); else doOpen();
