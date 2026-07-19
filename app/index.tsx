@@ -337,6 +337,9 @@ export default function MetronomeScreen() {
     setRecorderTarget(null);
   }, []);
 
+  // Tracks which modal opened settings, so we can return there on close
+  const settingsReturnModalRef = useRef<ActiveModal>(null);
+
   const openExclusive = useCallback((modal: ActiveModal) => {
     tuningGuideOnSelectRef.current = null;
     setActiveModal(modal);
@@ -5053,7 +5056,10 @@ export default function MetronomeScreen() {
         <MenuScreen
           topInset={insets.top || webTopInset}
           onClose={() => setActiveModal(null)}
-          onSettings={() => openExclusive("settings")}
+          onSettings={() => {
+            settingsReturnModalRef.current = "menu";
+            openExclusive("settings");
+          }}
           onSignalGen={() => {
             if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
             openExclusive("signalGen");
@@ -5358,7 +5364,11 @@ export default function MetronomeScreen() {
       {showSettings && (
       <SettingsModal
         visible={showSettings}
-        onClose={() => setActiveModal(null)}
+        onClose={() => {
+          const returnTo = settingsReturnModalRef.current;
+          settingsReturnModalRef.current = null;
+          setActiveModal(returnTo);
+        }}
         volume={volume}
         onVolumeChange={updateVolume}
         sampleVolume={sampleVolume}
