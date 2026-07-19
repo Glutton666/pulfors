@@ -94,6 +94,9 @@ import { OnboardingModal } from "@/components/OnboardingModal";
 import { MoreMenuModal } from "@/components/MoreMenuModal";
 import { ScoreListScreen } from "@/components/ScoreListScreen";
 import { ScoreEditorScreen } from "@/components/ScoreEditorScreen";
+import { ModeSwitcherDial } from "@/components/ModeSwitcherDial";
+import type { ModeSlot } from "@/components/ModeSwitcherDial";
+import { MenuScreen } from "@/components/MenuScreen";
 import type { ScoreDocument } from "@/lib/score-types";
 import { BpmDetectModal } from "@/components/BpmDetectModal";
 import { StemSeparationModal } from "@/components/StemSeparationModal";
@@ -4258,6 +4261,51 @@ export default function MetronomeScreen() {
     setNoteBarEntries([]);
   }, [isPlaying]);
 
+  const currentMode: ModeSlot = stageModeActive
+    ? "stage"
+    : showMenu
+    ? "menu"
+    : noteMode
+    ? "note"
+    : barMode
+    ? "bar"
+    : scoreMode !== null
+    ? "score"
+    : "beat";
+
+  const switchToMode = useCallback(async (mode: ModeSlot) => {
+    if (mode !== "menu" && mode === currentMode) return;
+    // Exit whatever is currently active before entering the new mode
+    if (noteMode) handleExitNoteMode();
+    else if (barMode) handleBarModeChange(false);
+    else if (scoreMode !== null) setScoreMode(null);
+    else if (stageModeActive) exitStageMode();
+    else if (showMenu) setActiveModal(null);
+
+    switch (mode) {
+      case "beat":
+        break;
+      case "bar":
+        handleBarModeChange(true);
+        break;
+      case "score":
+        setScoreMode("list");
+        break;
+      case "note":
+        await handleEnterNoteMode();
+        break;
+      case "stage":
+        void enterStageMode();
+        loadPracticeBook().then((entries) => {
+          setStagePracticeEntries(entries);
+        }).catch(() => {});
+        break;
+      case "menu":
+        setActiveModal(activeModal === "menu" ? null : "menu");
+        break;
+    }
+  }, [currentMode, noteMode, barMode, scoreMode, stageModeActive, showMenu, handleExitNoteMode, handleBarModeChange, handleEnterNoteMode, enterStageMode, exitStageMode, activeModal]);
+
   const handleNoteAddToQueue = useCallback((entry: PracticeEntry, insertAt?: number) => {
     setNoteQueue(prev => {
       const pos = (typeof insertAt === "number") ? insertAt : prev.length;
@@ -4993,88 +5041,30 @@ export default function MetronomeScreen() {
         </Text>
       </Animated.View>
 
-      {!noteMode && !barMode && (
-      <Pressable
-        style={[
-          styles.menuButton,
-          { backgroundColor: C.surface, borderColor: C.border },
-          isLandscape
-            ? { left: 20, right: "auto" as any, top: (insets.top || webTopInset) }
-            : { right: S.ms(20, 0.3), top: (insets.top || webTopInset) + 12 },
-        ]}
-        onPress={() => setActiveModal(activeModal === "menu" ? null : "menu")}
-        hitSlop={8}
-        testID="menu-button"
-        accessibilityRole="button"
-        accessibilityLabel={t("a11y", "menuButton")}
-        accessibilityState={{ expanded: showMenu }}
-      >
-        <Ionicons name="menu" size={S.ms(22, 0.5)} color={C.textSecondary} />
-      </Pressable>
-      )}
+      <ModeSwitcherDial
+        currentMode={currentMode}
+        onSelectMode={switchToMode}
+        topInset={insets.top || webTopInset}
+        isLandscape={isLandscape}
+      />
 
-      <AnimatedModal transparent visible={showMenu} onRequestClose={() => setActiveModal(null)}>
-        <Pressable style={styles.menuOverlay} onPress={() => setActiveModal(null)} testID="menu-overlay">
-          <View style={[styles.menuDropdown, { backgroundColor: C.surface, borderColor: C.border }, isLandscape ? { left: S.ms(20, 0.3), right: "auto" as any, top: (insets.top || webTopInset) + S.ms(40, 0.3) } : { top: (insets.top || webTopInset) + 52 }]}>
-            <Pressable
-              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-              onPress={() => openExclusive("settings")}
-              accessibilityRole="menuitem"
-              accessibilityLabel={t("a11y", "menuSettings")}
-            >
-              <Ionicons name="settings-outline" size={S.ms(18, 0.3)} color={C.textSecondary} />
-              <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuSettings")}</Text>
-            </Pressable>
-            <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
-            <Pressable
-              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-              onPress={() => {
-                if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
-                openExclusive("signalGen");
-              }}
-              accessibilityRole="menuitem"
-              accessibilityLabel={t("a11y", "menuSignalGenerator")}
-            >
-              <MaterialCommunityIcons name="waveform" size={S.ms(18, 0.3)} color={C.accent} />
-              <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuSignalGenerator")}</Text>
-            </Pressable>
-            <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
-            <Pressable
-              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-              onPress={() => openExclusive("workUp")}
-              accessibilityRole="menuitem"
-              accessibilityLabel={t("a11y", "menuWorkUp")}
-            >
-              <MaterialCommunityIcons name="chart-line" size={S.ms(18, 0.3)} color={C.accent} />
-              <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuWorkUp")}</Text>
-            </Pressable>
-            <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
-            <Pressable
-              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-              onPress={() => {
-                if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
-                openExclusive("practiceBook");
-              }}
-              accessibilityRole="menuitem"
-              accessibilityLabel={t("a11y", "menuPracticeBook")}
-            >
-              <MaterialCommunityIcons name="notebook-outline" size={S.ms(18, 0.3)} color={C.accent} />
-              <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuPracticeNote")}</Text>
-            </Pressable>
-            <View style={[styles.menuDivider, { backgroundColor: C.border }]} />
-            <Pressable
-              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-              onPress={() => openExclusive("moreMenu")}
-              accessibilityRole="menuitem"
-              accessibilityLabel={t("main", "menuMore")}
-              testID="menu-more"
-            >
-              <Ionicons name="ellipsis-horizontal" size={S.ms(18, 0.3)} color={C.accent} />
-              <Text style={[styles.menuItemText, { color: C.text }]}>{t("main", "menuMore")}</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </AnimatedModal>
+      {showMenu && (
+        <MenuScreen
+          topInset={insets.top || webTopInset}
+          onClose={() => setActiveModal(null)}
+          onSettings={() => openExclusive("settings")}
+          onSignalGen={() => {
+            if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
+            openExclusive("signalGen");
+          }}
+          onWorkUp={() => openExclusive("workUp")}
+          onPracticeBook={() => {
+            if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
+            openExclusive("practiceBook");
+          }}
+          onMoreMenu={() => openExclusive("moreMenu")}
+        />
+      )}
 
       <MoreMenuModal
         visible={showMoreMenu}
@@ -5643,28 +5633,6 @@ export default function MetronomeScreen() {
 
         {!isLandscape && !barMode && (
           <View style={{ alignItems: "center", gap: S.ms(6, 0.3) }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: S.ms(24, 0.4) }}>
-              <Pressable
-                onPress={handleEnterNoteMode}
-                style={styles.modeHandle}
-                testID="open-note-mode"
-                hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
-                accessibilityRole="button"
-                accessibilityLabel={t("a11y", "openNoteMode")}
-              >
-                <Ionicons name="musical-notes-outline" size={S.ms(18, 0.5)} color={C.textTertiary} />
-              </Pressable>
-              <Pressable
-                onPress={() => handleBarModeChange(true)}
-                style={styles.modeHandle}
-                testID="open-bar-mode"
-                hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
-                accessibilityRole="button"
-                accessibilityLabel={t("a11y", "openBarMode")}
-              >
-                <Ionicons name="reorder-three" size={S.ms(22, 0.5)} color={C.textTertiary} />
-              </Pressable>
-            </View>
             <SubdivisionBar
               pattern={subdivisionPattern}
               onPatternChange={handlePatternChange}

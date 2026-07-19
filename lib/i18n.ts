@@ -1298,6 +1298,15 @@ export const translations = {
     syncBpm:          { ko: "메트로놈에 BPM 적용", en: "Apply BPM to Metronome" },
     syncBpmHint:      { ko: "검출된 BPM: {{bpm}}", en: "Detected BPM: {{bpm}}" },
   },
+  switcher: {
+    beat:     { ko: "비트",  en: "Beat"  },
+    bar:      { ko: "바",    en: "Bar"   },
+    score:    { ko: "악보",  en: "Score" },
+    note:     { ko: "노트",  en: "Note"  },
+    stage:    { ko: "무대",  en: "Stage" },
+    menu:     { ko: "메뉴",  en: "Menu"  },
+    openDial: { ko: "모드 전환 다이얼 열기", en: "Open mode switcher dial" },
+  },
 } as const satisfies TranslationsShape;
 
 type TranslationKeys = typeof translations;
