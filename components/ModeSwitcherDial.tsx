@@ -58,6 +58,14 @@ function safeT(wall: Wall, t: number): number {
   return t;
 }
 
+// Hide the border on the side that hugs the screen edge (flat face of the D/fan)
+function wallEdgeBorder(wall: Wall): object {
+  return wall === "right"  ? { borderRightWidth:  0 }
+       : wall === "left"   ? { borderLeftWidth:   0 }
+       : wall === "top"    ? { borderTopWidth:    0 }
+       :                     { borderBottomWidth: 0 };
+}
+
 // Inward direction for each wall (degrees: right=0°, down=90°, left=180°, up=270°)
 const CENTER_ANGLE: Record<Wall, number> = {
   top: 90, right: 180, bottom: 270, left: 0,
@@ -447,6 +455,7 @@ export function ModeSwitcherDial({
               ...bgCorner,
               borderWidth: 3,
               borderColor: RIM_COLOR,
+              ...wallEdgeBorder(wall),
               shadowColor: RIM_COLOR,
               shadowOffset: { width: 0, height: 0 },
               shadowOpacity: 0.5, shadowRadius: 12,
@@ -465,6 +474,7 @@ export function ModeSwitcherDial({
                 ...innerBgCorners,
                 borderWidth: 1.5,
                 borderColor: RIM_COLOR + "70",
+                ...wallEdgeBorder(wall),
               }}
             />
           </View>
@@ -544,6 +554,7 @@ export function ModeSwitcherDial({
             ...hLayout.corners,
             borderWidth: 3,
             borderColor: RIM_COLOR,
+            ...wallEdgeBorder(wall),
             shadowColor: RIM_COLOR,
             shadowOffset: { width: 0, height: 0 },
             shadowOpacity: 0.55, shadowRadius: 6,
@@ -562,6 +573,7 @@ export function ModeSwitcherDial({
               ...innerHCorners,
               borderWidth: 1.5,
               borderColor: RIM_COLOR + "70",
+              ...wallEdgeBorder(wall),
             }}
           />
         </View>
