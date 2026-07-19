@@ -32,14 +32,14 @@ const Z_HANDLE  = 100002;
 
 // ── Geometry ──────────────────────────────────────────────────────────────────
 const HANDLE_R    = 38;   // collapsed D-tab half-circle radius (larger = more room for mini arc)
-const FAN_R       = 260;  // expanded fan diameter; radius = FAN_R/2 = 130
-const ICON_R      = 115;  // expanded icon arc radius (center-to-icon distance)
-const ICON_S      = 36;   // expanded icon slot size
+const FAN_R       = 210;  // expanded fan diameter; radius = FAN_R/2 = 105
+const ICON_R      = 90;   // expanded icon arc radius (center-to-icon distance)
+const ICON_S      = 44;   // expanded icon slot size
 const MINI_R        = 30;   // mini arc radius inside collapsed tab
 const MINI_DOT      = 5;    // mini arc neighbour dot size
 const MINI_ICON_S   = 22;   // icon size for current-mode slot in mini arc
 const MINI_A_STEP   = 36;   // degrees between mini arc slots (wider than expanded)
-const ANGLE_STEP    = 30;   // degrees between adjacent mode slots (arc dist ≈ 60px > ICON_S)
+const ANGLE_STEP    = 32;   // degrees between adjacent mode slots (arc dist ≈ 50px > ICON_S=44)
 const PX_PER_STEP = 36;   // pixels of swipe per one mode step
 
 // Front-camera safe zone: top/bottom wall t must stay outside [0.28, 0.72].
@@ -51,15 +51,41 @@ function safeT(wall: Wall, t: number): number {
   return t;
 }
 
-// Inward direction for each wall (degrees, math coords: right=0°, down=90°)
+// Inward direction for each wall (degrees: right=0°, down=90°, left=180°, up=270°)
 const CENTER_ANGLE: Record<Wall, number> = {
   top: 90, right: 180, bottom: 270, left: 0,
 };
 
-// Full arc extent for each wall: 120° spread centred on CENTER_ANGLE
-function arcAngles(wall: Wall) {
-  const c = CENTER_ANGLE[wall];
-  return { start: c - 60, end: c + 60 };
+// Diagonal target angle for each wall-end corner: [t=0 corner, t=1 corner]
+const CORNER_DIAG: Record<Wall, [number, number]> = {
+  top:    [45,  135],  // top-left → top-right
+  right:  [135, 225],  // top-right → bottom-right
+  bottom: [315, 225],  // bottom-left → bottom-right
+  left:   [45,  315],  // top-left → bottom-left
+};
+
+// How far from each wall-end (0–1) the corner blend starts
+const CORNER_THRESH = 0.20;
+
+// Shortest-path angle lerp
+function interpolateAngle(a: number, b: number, t: number): number {
+  const diff = ((b - a + 540) % 360) - 180;
+  return (a + diff * t + 360) % 360;
+}
+
+// Returns centAng + halfSpan blended toward the nearest corner diagonal.
+// halfSpan shrinks 60°→45° so the arc stays inside the available quadrant.
+function effectiveArcParams(wall: Wall, t: number): { centAng: number; halfSpan: number } {
+  const base = CENTER_ANGLE[wall];
+  const [diagStart, diagEnd] = CORNER_DIAG[wall];
+  const cStart   = Math.max(0, Math.min(1, (CORNER_THRESH - t) / CORNER_THRESH));
+  const cEnd     = Math.max(0, Math.min(1, (t - (1 - CORNER_THRESH)) / CORNER_THRESH));
+  const c        = Math.max(cStart, cEnd);
+  const diagGoal = cStart >= cEnd ? diagStart : diagEnd;
+  return {
+    centAng:  interpolateAngle(base, diagGoal, c),
+    halfSpan: 60 - c * 15,   // 60° at wall centre → 45° at exact corner
+  };
 }
 
 // Swipe axis and sign (flipped from natural so "up = prev, down = next" on right wall)
@@ -318,25 +344,25 @@ export function ModeSwitcherDial({
   const anchor = anchorPos(wallPos, winW, winH, topInset);
   wallRef.current = wallPos.wall;
 
-  const wall     = wallPos.wall;
-  const centAng  = CENTER_ANGLE[wall];
-  const bgLayout = fanBgLayout(wall);
-  const bgCorner = fanBgCorners(wall);
-  const hLayout  = handleLayout(wall);
-  const { start: arcStart, end: arcEnd } = arcAngles(wall);
+  const wall                   = wallPos.wall;
+  const { centAng, halfSpan }  = effectiveArcParams(wall, wallPos.t);
+  const bgLayout               = fanBgLayout(wall);
+  const bgCorner               = fanBgCorners(wall);
+  const hLayout                = handleLayout(wall);
 
   // Expanded rotary slots: position = centAng + (i - scrollPos) × ANGLE_STEP
   const iconSlots = MODES.map((mode, i) => {
-    const offset = i - scrollPos;
-    const deg    = centAng + offset * ANGLE_STEP;
-    const rad    = (deg * Math.PI) / 180;
-    const dist   = Math.abs(offset);
+    const offset         = i - scrollPos;
+    const deg            = centAng + offset * ANGLE_STEP;
+    const rad            = (deg * Math.PI) / 180;
+    const dist           = Math.abs(offset);
+    const outOfArc       = Math.abs(offset * ANGLE_STEP) > halfSpan;
     return {
       mode, i,
       dx:      Math.cos(rad) * ICON_R,
       dy:      Math.sin(rad) * ICON_R,
       isCtr:   Math.round(scrollPos) === i,
-      opacity: Math.max(0, 1 - dist * 0.28),
+      opacity: outOfArc ? Math.max(0, 0.35 - dist * 0.1) : Math.max(0, 1 - dist * 0.28),
       scale:   Math.max(0.55, 1 - dist * 0.12),
     };
   });
@@ -435,7 +461,7 @@ export function ModeSwitcherDial({
             >
               <ModeIcon
                 mode={mode}
-                size={S.ms(20, 0.3)}
+                size={S.ms(24, 0.3)}
                 color={isCtr ? "#fff" : C.textSecondary}
               />
               {isCtr && (
