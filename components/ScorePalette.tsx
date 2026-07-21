@@ -21,6 +21,13 @@ import type {
 import { DRUM_TYPES, DRUM_MAP } from "@/lib/score-types";
 import type { EditorTool } from "@/components/ScoreCanvas";
 
+// ── 타악기 카테고리 그룹 ────────────────────────────────────────
+const DRUM_GROUPS: Array<{ labelKey: string; types: DrumType[] }> = [
+  { labelKey: "drumCatCymbal", types: ["crash", "ride", "hihat_open", "hihat_closed"] },
+  { labelKey: "drumCatTom",    types: ["tom_high", "tom_mid", "tom_low"] },
+  { labelKey: "drumCatOther",  types: ["snare", "kick"] },
+];
+
 // ── 음표 길이 ─────────────────────────────────────────────────
 
 const DURATIONS: Array<{ value: NoteDuration; symbol: string; labelKey: string }> = [
@@ -509,33 +516,41 @@ export function ScorePalette({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.itemRow}
+          contentContainerStyle={[styles.itemRow, { alignItems: "flex-start" }]}
         >
-          {DRUM_TYPES.map((dt) => {
-            const isActive = selectedDrumType === dt;
-            const entry = DRUM_MAP[dt];
-            return (
-              <Pressable
-                key={dt}
-                style={[
-                  styles.durBtn,
-                  {
-                    backgroundColor: isActive ? C.accent + "33" : "transparent",
-                    borderColor: isActive ? C.accent : C.border,
-                  },
-                ]}
-                onPress={() => onDrumTypeSelect?.(dt)}
-                testID={`score-palette-drum-${dt}`}
-              >
-                <Text style={[styles.durSymbol, { color: isActive ? C.accent : C.text }]}>
-                  {entry.noteHead === "cross" ? "✕" : entry.noteHead === "triangle" ? "▲" : entry.noteHead === "diamond" ? "◆" : "●"}
-                </Text>
-                <Text style={[styles.durLabel, { color: isActive ? C.accent : C.textSecondary }]}>
-                  {t("scoreMode", entry.labelKey as any)}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {DRUM_GROUPS.map((group, gi) => (
+            <View key={group.labelKey} style={{ flexDirection: "row", alignItems: "flex-start" }}>
+              {/* 그룹 구분선 (첫 그룹 제외) */}
+              {gi > 0 && (
+                <View style={{ width: 1, backgroundColor: C.border, height: 36, marginHorizontal: 4, alignSelf: "center" }} />
+              )}
+              {group.types.map((dt) => {
+                const isActive = selectedDrumType === dt;
+                const entry = DRUM_MAP[dt];
+                return (
+                  <Pressable
+                    key={dt}
+                    style={[
+                      styles.durBtn,
+                      {
+                        backgroundColor: isActive ? C.accent + "33" : "transparent",
+                        borderColor: isActive ? C.accent : C.border,
+                      },
+                    ]}
+                    onPress={() => onDrumTypeSelect?.(dt)}
+                    testID={`score-palette-drum-${dt}`}
+                  >
+                    <Text style={[styles.durSymbol, { color: isActive ? C.accent : C.text }]}>
+                      {entry.noteHead === "cross" ? "✕" : entry.noteHead === "triangle" ? "▲" : entry.noteHead === "diamond" ? "◆" : "●"}
+                    </Text>
+                    <Text style={[styles.durLabel, { color: isActive ? C.accent : C.textSecondary }]}>
+                      {t("scoreMode", entry.labelKey as any)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ))}
         </ScrollView>
       )}
 

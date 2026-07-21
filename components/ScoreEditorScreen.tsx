@@ -14,6 +14,7 @@ import {
   Image,
   ActivityIndicator,
   Animated,
+  PanResponder,
   useWindowDimensions,
 } from "react-native";
 import { captureRef } from "react-native-view-shot";
@@ -1265,6 +1266,34 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     setSelectedElementId(null);
   }
 
+  // ── 선택 음표 이전/다음 이동 ──────────────────────────────────
+  const navigateElementRef = useRef<(dir: "prev" | "next") => void>(() => {});
+  const handleNavigateElement = useCallback((dir: "prev" | "next") => {
+    if (!selectedElementId) return;
+    const part = doc.parts[selectedPartIdx];
+    if (!part) return;
+    const allEls = part.measures.flatMap((m) => m.elements);
+    const idx = allEls.findIndex((el) => el.id === selectedElementId);
+    if (idx === -1) return;
+    const nextIdx = dir === "prev" ? idx - 1 : idx + 1;
+    if (nextIdx >= 0 && nextIdx < allEls.length) {
+      setSelectedElementId(allEls[nextIdx].id);
+    }
+  }, [selectedElementId, doc, selectedPartIdx]);
+  navigateElementRef.current = handleNavigateElement;
+
+  // 선택 바 수평 스와이프 → 이전/다음 음표
+  const selectionBarPan = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, gs) =>
+      Math.abs(gs.dx) > 12 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+    onPanResponderRelease: (_, gs) => {
+      if (Math.abs(gs.dx) > 35) {
+        navigateElementRef.current(gs.dx < 0 ? "next" : "prev");
+      }
+    },
+  }), []);
+
   // ── 다중 선택된 음표: 문서 순서(마디→요소 인덱스)로 정렬 ──────
   const multiSelectSortedNotes = useMemo(() => {
     const part = doc.parts[selectedPartIdx];
@@ -1890,10 +1919,29 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
 
       {/* ── 선택된 음표 액션 바 ────────────────────────────────── */}
       {selectedElementId && (
-        <View style={[styles.selectionBar, { backgroundColor: C.surface, borderBottomColor: C.border }]}>
+        <View
+          style={[styles.selectionBar, { backgroundColor: C.surface, borderBottomColor: C.border }]}
+          {...selectionBarPan.panHandlers}
+        >
           <Text style={[styles.selectionLabel, { color: C.textSecondary }]}>
             {t("scoreMode", "toolSelect")} ·
           </Text>
+
+          {/* 이전/다음 음표 내비게이션 버튼 */}
+          <Pressable
+            style={[styles.selBarBtn, { borderColor: C.border }]}
+            onPress={() => handleNavigateElement("prev")}
+            testID="score-editor-nav-prev"
+          >
+            <Ionicons name="chevron-back" size={14} color={C.text} />
+          </Pressable>
+          <Pressable
+            style={[styles.selBarBtn, { borderColor: C.border }]}
+            onPress={() => handleNavigateElement("next")}
+            testID="score-editor-nav-next"
+          >
+            <Ionicons name="chevron-forward" size={14} color={C.text} />
+          </Pressable>
 
           <View style={{ flex: 1 }} />
 
