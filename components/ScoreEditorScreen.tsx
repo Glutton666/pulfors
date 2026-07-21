@@ -2374,35 +2374,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
                   </View>
                 </View>
 
-                {/* 줄당 마디 수 (PNG/JPG 내보내기 전용 — 편집 화면은 화면 방향에 따라 자동: 세로 1마디, 가로 2마디) */}
-                <View style={styles.drawerRow}>
-                  <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
-                    {t("scoreMode", "drawerMeasuresPerLine")}
-                  </Text>
-                  <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
-                    {doc.measuresPerLine
-                      ? String(doc.measuresPerLine)
-                      : t("scoreMode", "drawerMeasuresPerLineAuto")}
-                  </Text>
-                  <View style={{ flexDirection: "row", gap: 4 }}>
-                    {([-1, 1] as const).map((delta) => (
-                      <Pressable
-                        key={delta}
-                        style={[styles.drawerApplyBtn, { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }]}
-                        onPress={() => {
-                          const cur = doc.measuresPerLine ?? 0;
-                          const next = Math.max(0, Math.min(8, cur + delta));
-                          applyDoc({ ...doc, measuresPerLine: next === 0 ? undefined : next });
-                        }}
-                        testID={`score-drawer-mpl-${delta > 0 ? "plus" : "minus"}`}
-                      >
-                        <Text style={[styles.drawerApplyBtnText, { color: C.text }]}>
-                          {delta > 0 ? "+1" : "-1"}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
               </View>
             )}
           </View>
