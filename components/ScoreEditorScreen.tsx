@@ -45,6 +45,7 @@ import type {
   Dynamic,
   ClefType,
   ScoreLayoutOverrides,
+  getKeySignatureLabel,
 } from "@/lib/score-types";
 import { INSTRUMENTS } from "@/lib/score-types";
 import { ScoreCanvas } from "@/components/ScoreCanvas";
@@ -2254,12 +2255,12 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
                   const measure = selectedMeasureIdx !== null ? currentPart.measures[selectedMeasureIdx] : null;
                   const sig = measure?.timeSignature ?? doc.timeSignature;
                   const sharps = measure?.keySignature?.sharps ?? doc.keySignature.sharps ?? 0;
-                  const keyStr = sharps === 0 ? "C" : sharps > 0 ? `${sharps}#` : `${Math.abs(sharps)}♭`;
+                  const keyName = getKeySignatureLabel(sharps).split(" ")[0];
                   const clef = measure?.clef ?? currentPart.clef ?? "treble";
                   const bpm = measure?.bpm;
-                  const parts = [`${sig.numerator}/${sig.denominator}`, keyStr];
-                  if (clef !== "treble") parts.push(clef.charAt(0).toUpperCase() + clef.slice(1));
-                  if (bpm) parts.push(`♩=${bpm}`);
+                  const parts = [`${sig.numerator}/${sig.denominator}`, `${keyName}장조`];
+                  if (clef !== "treble") parts.push(clef === "bass" ? "낮은음" : clef === "alto" ? "알토" : clef === "tenor" ? "테너" : clef === "percussion" ? "타악기" : clef);
+                  if (bpm) parts.push(`BPM${bpm}`);
                   return (
                     <Text style={[styles.drawerStatusText, { color: C.textSecondary }]} numberOfLines={1}>
                       {parts.join(" · ")}
