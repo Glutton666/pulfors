@@ -212,10 +212,8 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   const [activeDuration, setActiveDuration] = useState<NoteDuration>("quarter");
   const [isDotted, setIsDotted] = useState(false);
   const [isDoubleDotted, setIsDoubleDotted] = useState(false);
-  const [selectedInstrumentSymbol, setSelectedInstrumentSymbol] = useState<string | null>(null);
   const [accidental, setAccidental] = useState<Accidental | null>(null);
   const [selectedArticulation, setSelectedArticulation] = useState<ArticulationType | null>(null);
-  const [selectedDynamic, setSelectedDynamic] = useState<Dynamic | null>(null);
   const [selectedRepeatSign, setSelectedRepeatSign] = useState<RepeatSignId | null>(null);
   const [selectedCrescType, setSelectedCrescType] = useState<CrescType>(null);
   const [selectedDrumType, setSelectedDrumType] = useState<import("@/lib/score-types").DrumType>("snare");
@@ -336,9 +334,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
 
   // 하이라이트 색상
   const highlightColor = C.accent + "28"; // ~16% opacity
-
-  // ── 악기 기호 설정 모달 ──────────────────────────────────────
-  const [showSymbolSettings, setShowSymbolSettings] = useState(false);
 
   // ── ⋯ 메뉴 ──────────────────────────────────────────────────
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -644,27 +639,11 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         duration,
         accidental,
         selectedArticulation ? [selectedArticulation] : [],
-        selectedDynamic ?? undefined,
+        undefined,
         selectedOrnament ?? undefined,
         isDoubleDotted,
         drumType,
       );
-      // sticky 악기 기호를 새로 놓인 음표에 자동 적용
-      const instrSym = _selectedInstrumentSymbolRef.current;
-      if (instrSym) {
-        const patch: Partial<ScoreNote> = {};
-        if (instrSym === "bowUp")          patch.bowUp = true;
-        else if (instrSym === "bowDown")   patch.bowDown = true;
-        else if (instrSym === "harmonic")  patch.harmonic = true;
-        else if (instrSym === "pizzicato") patch.pizzicato = true;
-        else if (instrSym === "arco")      patch.arco = true;
-        else if (instrSym === "pedal")     patch.pedal = true;
-        else if (instrSym === "pedalEnd")  patch.pedalEnd = true;
-        else if (instrSym === "ottava1")   patch.ottava = 1;
-        else if (instrSym === "arpeggio")  patch.arpeggio = true;
-        newElement = { ...newElement, ...patch };
-      }
-
       const measureId = doc.parts[selectedPartIdx]?.measures[measureIdx]?.id;
       const newDoc: ScoreDocument = {
         ...doc,
@@ -686,7 +665,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       setSelectedElementId(newElement.id);
       setSelectedMeasureIdx(measureIdx);
     },
-    [doc, selectedPartIdx, accidental, selectedArticulation, selectedDynamic, selectedOrnament, isDoubleDotted],
+    [doc, selectedPartIdx, accidental, selectedArticulation, selectedOrnament, isDoubleDotted],
   );
 
   // ── 쉼표 추가 ─────────────────────────────────────────────────
@@ -802,10 +781,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   _selectedArticulationRef.current = selectedArticulation;
   const _selectedOrnamentRef = useRef(selectedOrnament);
   _selectedOrnamentRef.current = selectedOrnament;
-  const _selectedDynamicRef = useRef(selectedDynamic);
-  _selectedDynamicRef.current = selectedDynamic;
-  const _selectedInstrumentSymbolRef = useRef<string | null>(null);
-  _selectedInstrumentSymbolRef.current = selectedInstrumentSymbol;
   const _selectedCrescTypeRef = useRef<CrescType>(null);
   _selectedCrescTypeRef.current = selectedCrescType;
   const _applyDocRef = useRef(applyDoc);
@@ -873,9 +848,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       // ── 활성 sticky 기호가 있으면 탭한 노트에 즉시 적용/해제 ─
       const art = _selectedArticulationRef.current;
       const orn = _selectedOrnamentRef.current;
-      const dyn = _selectedDynamicRef.current;
-      const instrSym = _selectedInstrumentSymbolRef.current;
-      if (!art && !orn && !dyn && !instrSym) {
+      if (!art && !orn) {
         // #317: 팔레트에 선택된 기호 없이 노트를 탭하면
         // 해당 노트의 현재 꾸밈음·아티큘레이션을 팔레트에 반영해
         // 사용자가 즉시 수정하거나 제거할 수 있도록 한다
@@ -913,22 +886,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
                   }
                   if (orn) {
                     updated = { ...updated, ornament: updated.ornament === orn ? undefined : orn };
-                  }
-                  // dynamic은 노트 레벨로 적용/해제 (note.dynamic)
-                  if (dyn) {
-                    updated = { ...updated, dynamic: updated.dynamic === dyn ? undefined : dyn };
-                  }
-                  // 악기 특수 기호 토글 (note 레벨)
-                  if (instrSym) {
-                    if (instrSym === "bowUp")     updated = { ...updated, bowUp:     updated.bowUp     ? undefined : true };
-                    else if (instrSym === "bowDown")   updated = { ...updated, bowDown:   updated.bowDown   ? undefined : true };
-                    else if (instrSym === "harmonic")  updated = { ...updated, harmonic:  updated.harmonic  ? undefined : true };
-                    else if (instrSym === "pizzicato") updated = { ...updated, pizzicato: updated.pizzicato ? undefined : true };
-                    else if (instrSym === "arco")      updated = { ...updated, arco:      updated.arco      ? undefined : true };
-                    else if (instrSym === "pedal")     updated = { ...updated, pedal:     updated.pedal     ? undefined : true };
-                    else if (instrSym === "pedalEnd")  updated = { ...updated, pedalEnd:  updated.pedalEnd  ? undefined : true };
-                    else if (instrSym === "ottava1")   updated = { ...updated, ottava:    updated.ottava === 1 ? undefined : 1 };
-                    else if (instrSym === "arpeggio")  updated = { ...updated, arpeggio:  updated.arpeggio  ? undefined : true };
                   }
                   return updated;
                 }),
@@ -995,24 +952,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       handleRepeatSignApply(measureIdx, selectedRepeatSign);
       return;
     }
-    // 2) 강약 기호 선택 중 → 마디에 dynamic 적용
-    if (selectedDynamic) {
-      const newDoc: ScoreDocument = {
-        ...doc,
-        parts: doc.parts.map((p, pIdx) => {
-          if (pIdx !== selectedPartIdx) return p;
-          return {
-            ...p,
-            measures: p.measures.map((m, mIdx) =>
-              mIdx !== measureIdx ? m : { ...m, dynamic: selectedDynamic },
-            ),
-          };
-        }),
-      };
-      applyDoc(newDoc);
-      return;
-    }
-    // 3) cresc/decresc 선택 중 → 마디에 크레셴도 헤어핀 적용
+    // 2) cresc/decresc 선택 중 → 마디에 크레셴도 헤어핀 적용
     if (selectedCrescType) {
       const curMeasure = doc.parts[selectedPartIdx]?.measures[measureIdx];
       const isCrescent = selectedCrescType === "cresc";
@@ -1045,14 +985,14 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       if (hasStart) setSelectedCrescType(null);
       return;
     }
-    // 4) 기본 동작: 마디 선택 + 다중 선택 토글 (note multiSelectIds와 동일한 조작감:
+    // 3) 기본 동작: 마디 선택 + 다중 선택 토글 (note multiSelectIds와 동일한 조작감:
     // 탭할 때마다 선택/해제 토글, 마지막으로 탭한 마디를 selectedMeasureIdx로 표시)
     setMeasureMultiSelectIndices((prev) =>
       prev.includes(measureIdx) ? prev.filter((i) => i !== measureIdx) : [...prev, measureIdx],
     );
     setSelectedMeasureIdx(measureIdx);
     setSelectedElementId(null);
-  }, [selectedRepeatSign, selectedDynamic, selectedCrescType, selectedPartIdx, doc, handleRepeatSignApply, applyDoc]);
+  }, [selectedRepeatSign, selectedCrescType, selectedPartIdx, doc, handleRepeatSignApply, applyDoc]);
 
   // ── 마디 롱프레스 → 컨텍스트 메뉴 ───────────────────────────
   const handleMeasureLongPress = useCallback((measureIdx: number) => {
@@ -1625,22 +1565,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               }),
             };
           }),
-        };
-      }),
-    };
-    applyDoc(newDoc);
-  }
-
-  // ── 악기별 기호 ON/OFF 토글 ─────────────────────────────────
-  function handleSymbolToggle(symId: string, enabled: boolean) {
-    const newDoc: ScoreDocument = {
-      ...doc,
-      parts: doc.parts.map((p, pIdx) => {
-        if (pIdx !== selectedPartIdx) return p;
-        const prevEnabled = p.enabledSymbols ?? {};
-        return {
-          ...p,
-          enabledSymbols: { ...prevEnabled, [symId]: enabled },
         };
       }),
     };
@@ -2537,13 +2461,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           isDoubleDotted={isDoubleDotted}
           accidental={accidental}
           selectedArticulation={selectedArticulation}
-          selectedDynamic={selectedDynamic}
-          instrumentCategory={
-            currentPart
-              ? (INSTRUMENTS[currentPart.instrumentId]?.category ?? undefined)
-              : undefined
-          }
-          enabledSymbols={currentPart?.enabledSymbols ?? {}}
           onToolChange={(tool) => {
             setActiveTool(tool);
             // "select"에서 다른 도구로 바꿀 때 남은 선택을 모두 정리한다.
@@ -2563,7 +2480,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             setSelectedArticulation(art);
             if (selectedElementId) handleApplyArticulationToSelected(art);
           }}
-          onDynamicSelect={setSelectedDynamic}
           selectedOrnament={selectedOrnament}
           onOrnamentSelect={(orn) => {
             setSelectedOrnament((prev) => (prev === orn ? null : orn));
@@ -2574,9 +2490,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           onRepeatSignSelect={setSelectedRepeatSign}
           onCrescTypeSelect={setSelectedCrescType}
           onTempoSelect={handleTempoSelect}
-          selectedInstrumentSymbol={selectedInstrumentSymbol}
-          onInstrumentSymbolSelect={setSelectedInstrumentSymbol}
-          onSymbolToggle={handleSymbolToggle}
           isPercussionPart={isPercussionPart}
           selectedDrumType={selectedDrumType}
           onDrumTypeSelect={setSelectedDrumType}
@@ -2793,7 +2706,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         onClearReferenceImage={handleClearReferenceImage}
         onAddToPractice={handleAddToPractice}
         onExtractPart={handleExtractPartOpen}
-        onOpenSymbolSettings={() => { setShowMoreMenu(false); setShowSymbolSettings(true); }}
+        onOpenSymbolSettings={() => { setShowMoreMenu(false); }}
       />
       <ScoreExtractPartModal
         visible={showExtractPartModal}
@@ -2808,14 +2721,14 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         onConfirm={handleExtractConfirm}
       />
       <ScoreSymbolSettingsModal
-        visible={showSymbolSettings}
-        onClose={() => setShowSymbolSettings(false)}
+        visible={false}
+        onClose={() => {}}
         currentPart={currentPart}
         showPlayhead={showPlayhead}
         showZoomView={showZoomView}
         notePreviewEnabled={notePreviewEnabled}
         onUpdatePlaybackSettings={updatePlaybackSettings}
-        onSymbolToggle={handleSymbolToggle}
+        onSymbolToggle={() => {}}
       />
       <ScoreMeasureContextMenu
         measureIdx={measureContextMenu?.measureIdx ?? null}
