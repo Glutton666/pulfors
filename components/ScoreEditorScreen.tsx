@@ -2249,7 +2249,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
                     : t("scoreMode", "drawerNextMeasureSettings")}
                 </Text>
                 <Ionicons
-                  name={drawerOpen ? "chevron-up" : "chevron-down"}
+                  name={drawerOpen ? "chevron-down" : "chevron-up"}
                   size={14}
                   color={C.textSecondary}
                 />

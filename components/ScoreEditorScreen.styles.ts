@@ -280,8 +280,8 @@ export const makeStyles = (_C: any, _S: any) =>
     },
     drawerContent: {
       paddingHorizontal: Spacing.md,
-      paddingVertical: 8,
-      gap: 8,
+      paddingVertical: 4,
+      gap: 4,
     },
     drawerRow: {
       flexDirection: "row" as const,
