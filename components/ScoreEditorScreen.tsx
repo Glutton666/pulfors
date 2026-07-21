@@ -268,6 +268,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
 
   // ── 마디 설정 드로어 (오선보 위 고정, 마디 미선택 시 "다음에 추가할 마디" 설정) ──
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [topBarHeight, setTopBarHeight] = useState(0);
   const [draftMeasure, setDraftMeasure] = useState<{
     bpm?: number;
     timeSignature?: { numerator: number; denominator: number };
@@ -1700,6 +1701,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           styles.topBar,
           { paddingTop: topInset + 4, borderBottomColor: C.border, backgroundColor: C.surface },
         ]}
+        onLayout={(e) => setTopBarHeight(e.nativeEvent.layout.height)}
       >
         {/* 뒤로가기 */}
         <Pressable
@@ -2236,10 +2238,10 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
 
         {/* ── 마디 설정 드로어 (오선보 바로 위 고정 — 마디 선택 시 해당 마디 설정, 미선택 시 "다음에 추가할 마디" 초안 설정) ── */}
         {currentPart && (
-          <View style={[styles.drawerContainer, { borderColor: C.border, backgroundColor: C.surface, marginTop: 0, paddingBottom: bottomInset, borderLeftWidth: 0, borderRightWidth: 0, borderBottomWidth: 0 }]}>
+          <View style={[styles.drawerContainer, { borderColor: C.border, backgroundColor: C.surface, borderRadius: 0, marginTop: 0, paddingBottom: bottomInset, borderLeftWidth: 0, borderRightWidth: 0, borderBottomWidth: 0 }]}>
             <View style={[styles.drawerHeader, { borderBottomColor: drawerOpen ? C.border : "transparent" }]}>
               <Pressable
-                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6 }}
                 onPress={() => setDrawerOpen((v) => !v)}
                 testID="score-editor-drawer-toggle"
               >
@@ -2248,6 +2250,22 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
                     ? `${t("scoreMode", "drawerMeasureSettings")} — ${selectedMeasureIdx + 1}`
                     : t("scoreMode", "drawerNextMeasureSettings")}
                 </Text>
+                {!drawerOpen && (() => {
+                  const measure = selectedMeasureIdx !== null ? currentPart.measures[selectedMeasureIdx] : null;
+                  const sig = measure?.timeSignature ?? doc.timeSignature;
+                  const sharps = measure?.keySignature?.sharps ?? doc.keySignature.sharps ?? 0;
+                  const keyStr = sharps === 0 ? "C" : sharps > 0 ? `${sharps}#` : `${Math.abs(sharps)}♭`;
+                  const clef = measure?.clef ?? currentPart.clef ?? "treble";
+                  const bpm = measure?.bpm;
+                  const parts = [`${sig.numerator}/${sig.denominator}`, keyStr];
+                  if (clef !== "treble") parts.push(clef.charAt(0).toUpperCase() + clef.slice(1));
+                  if (bpm) parts.push(`♩=${bpm}`);
+                  return (
+                    <Text style={[styles.drawerStatusText, { color: C.textSecondary }]} numberOfLines={1}>
+                      {parts.join(" · ")}
+                    </Text>
+                  );
+                })()}
                 <Ionicons
                   name={drawerOpen ? "chevron-down" : "chevron-up"}
                   size={14}
@@ -2451,6 +2469,39 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               lineSpacing={lineSpacing}
             />
           </ScrollView>
+        </View>
+      )}
+
+      {/* ── 선택 / 지우기 플로팅 버튼 — 우측 상단 저장 버튼 아래 ── */}
+      {topBarHeight > 0 && (
+        <View style={[styles.floatingToolPanel, { top: topBarHeight + 6 }]}>
+          {(["select", "erase"] as const).map((tool) => {
+            const isActive = activeTool === tool;
+            const icon = tool === "select" ? "hand-right-outline" : "backspace-outline";
+            return (
+              <Pressable
+                key={tool}
+                style={[
+                  styles.floatingToolBtn,
+                  {
+                    backgroundColor: isActive ? C.accent : C.surface,
+                    borderColor: isActive ? C.accent : C.border,
+                  },
+                ]}
+                onPress={() => {
+                  const next = isActive ? "note" : tool;
+                  setActiveTool(next);
+                  if (next !== "select") {
+                    setMultiSelectIds([]);
+                    setSelectedElementId(null);
+                  }
+                }}
+                testID={`score-float-tool-${tool}`}
+              >
+                <Ionicons name={icon} size={16} color={isActive ? "#fff" : C.text} />
+              </Pressable>
+            );
+          })}
         </View>
       )}
 
