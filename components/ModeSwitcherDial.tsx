@@ -32,6 +32,7 @@ const Z_HANDLE  = 100002;
 
 // ── Geometry ──────────────────────────────────────────────────────────────────
 const HANDLE_R    = 38;   // collapsed D-tab half-circle radius (larger = more room for mini arc)
+const HOLE_R      = HANDLE_R + 16; // donut inner-hole radius (between handle edge and icons)
 const FAN_R       = 220;  // expanded fan diameter; radius = FAN_R/2 = 110
 const ICON_R      = 82;   // expanded icon arc radius; outer edge = 82+20=102 ≤ 110 ✓
 const ICON_S      = 40;   // expanded icon slot size
@@ -571,6 +572,20 @@ export function ModeSwitcherDial({
               }}
             />
           </View>
+
+          {/* Donut hole — background circle that punches the centre out of the fan */}
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: -HOLE_R, top: -HOLE_R,
+              width: HOLE_R * 2, height: HOLE_R * 2,
+              borderRadius: HOLE_R,
+              backgroundColor: C.background,
+              borderWidth: 2.5,
+              borderColor: RIM_COLOR,
+            }}
+          />
 
           {/* Swipe-capture wrapper — claims all touches; tap/swipe detected on release */}
           <View
