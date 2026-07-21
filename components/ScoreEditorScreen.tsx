@@ -2127,16 +2127,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
                   color={C.textSecondary}
                 />
               </Pressable>
-              <Pressable
-                style={[styles.addMeasureRow, { borderColor: C.accent, marginBottom: 0, marginLeft: 8 }]}
-                onPress={handleAddMeasure}
-                testID="score-add-measure-btn"
-              >
-                <Ionicons name="add-circle-outline" size={16} color={C.accent} />
-                <Text style={[styles.addMeasureRowText, { color: C.accent }]}>
-                  {t("scoreMode", "addMeasure")}
-                </Text>
-              </Pressable>
             </View>
 
             {drawerOpen && (
@@ -2401,6 +2391,19 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           <Text style={{ color: C.textSecondary, marginTop: 24 }}>
             {t("scoreMode", "noPartsHint")}
           </Text>
+        )}
+
+        {currentPart && (
+          <Pressable
+            style={[styles.addMeasureRow, { borderColor: C.accent, marginTop: 16, marginBottom: 8, alignSelf: "center" }]}
+            onPress={handleAddMeasure}
+            testID="score-add-measure-btn"
+          >
+            <Ionicons name="add-circle-outline" size={16} color={C.accent} />
+            <Text style={[styles.addMeasureRowText, { color: C.accent }]}>
+              {t("scoreMode", "addMeasure")}
+            </Text>
+          </Pressable>
         )}
 
       </ScrollView>
