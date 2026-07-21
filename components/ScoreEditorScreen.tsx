@@ -2066,7 +2066,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         style={styles.scoreScroll}
         contentContainerStyle={[
           styles.scoreContent,
-          { paddingHorizontal: Spacing.lg, paddingBottom: bottomInset + 180 },
+          { paddingHorizontal: Spacing.lg, paddingBottom: 40 },
         ]}
         showsVerticalScrollIndicator={false}
         scrollEnabled
@@ -2107,9 +2107,102 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           </Text>
         )}
 
+        {/* 오선보 터치 캔버스 (참조 이미지 포함) */}
+        {currentPart ? (
+          <View style={{ position: "relative" }}>
+            <ScoreCanvas
+              doc={{ ...doc, parts: [currentPart] }}
+              containerWidth={containerWidth}
+              selectedElementId={selectedElementId}
+              multiSelectIds={multiSelectIds}
+              selectedMeasureIdx={selectedMeasureIdx}
+              multiSelectMeasureIndices={measureMultiSelectIndices}
+              selectedPartIdx={0}
+              activeTool={activeTool}
+              activeDuration={activeDuration}
+              isDotted={isDotted}
+              accidental={accidental}
+              onNotePlaced={handleNotePlaced}
+              selectedDrumType={isPercussionPart ? selectedDrumType : undefined}
+              onRestPlaced={handleRestPlaced}
+              onElementTap={handleElementTap}
+              onMeasureTap={handleMeasureTap}
+              onMeasureLongPress={handleMeasureLongPress}
+              onEraseElement={handleEraseElement}
+              onEraseMultiple={handleEraseMultiple}
+              onNoteMoved={handleNoteMoved}
+              onTupletBracketTap={handleTupletBracketTap}
+              cursorMeasureIdx={null}
+              isPlaying={playback.isPlaying}
+              notePreviewEnabled={notePreviewEnabled}
+              instrumentId={doc.parts[selectedPartIdx]?.instrumentId}
+              playheadMeasureIdx={
+                playback.isPlaying &&
+                playback.currentMeasureIdx < (doc.parts[selectedPartIdx]?.measures.length ?? 0)
+                  ? playback.currentMeasureIdx
+                  : undefined
+              }
+              playheadFraction={playback.playheadFraction}
+              showPlayhead={showPlayhead}
+              highlightColor={highlightColor}
+              lineSpacing={lineSpacing}
+              disabled={!!measureContextMenu?.visible || showMeasureEditModal || drawerOpen}
+              measuresPerLineOverride={S.isLandscape ? 2 : 1}
+            />
+            {/* 참조 이미지 오버레이 (편집 불가) */}
+            {doc.referenceImageUri ? (
+              <>
+                <View
+                  style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+                  pointerEvents="none"
+                >
+                  <Image
+                    source={{ uri: doc.referenceImageUri }}
+                    style={{
+                      position: "absolute",
+                      top: 0, left: 0, right: 0, bottom: 0,
+                      opacity: doc.referenceImageOpacity ?? 0.4,
+                      resizeMode: "contain",
+                    }}
+                  />
+                </View>
+                <Pressable
+                  style={[styles.refOpacityBtn, { backgroundColor: C.surface + "CC", borderColor: C.border }]}
+                  onPress={handleReferenceOpacityToggle}
+                  hitSlop={8}
+                  testID="score-ref-opacity-btn"
+                >
+                  <Text style={[styles.refOpacityLabel, { color: C.text }]}>
+                    {Math.round((doc.referenceImageOpacity ?? 0.4) * 100)}%
+                  </Text>
+                </Pressable>
+              </>
+            ) : null}
+          </View>
+        ) : (
+          <Text style={{ color: C.textSecondary, marginTop: 24 }}>
+            {t("scoreMode", "noPartsHint")}
+          </Text>
+        )}
+
+        {currentPart && (
+          <Pressable
+            style={[styles.addMeasureRow, { borderColor: C.accent, marginTop: 16, marginBottom: 8, alignSelf: "center" }]}
+            onPress={handleAddMeasure}
+            testID="score-add-measure-btn"
+          >
+            <Ionicons name="add-circle-outline" size={16} color={C.accent} />
+            <Text style={[styles.addMeasureRowText, { color: C.accent }]}>
+              {t("scoreMode", "addMeasure")}
+            </Text>
+          </Pressable>
+        )}
+
+      </ScrollView>
+
         {/* ── 마디 설정 드로어 (오선보 바로 위 고정 — 마디 선택 시 해당 마디 설정, 미선택 시 "다음에 추가할 마디" 초안 설정) ── */}
         {currentPart && (
-          <View style={[styles.drawerContainer, { borderColor: C.border, backgroundColor: C.surface }]}>
+          <View style={[styles.drawerContainer, { borderColor: C.border, backgroundColor: C.surface, marginTop: 0, paddingBottom: bottomInset, borderLeftWidth: 0, borderRightWidth: 0, borderBottomWidth: 0 }]}>
             <View style={[styles.drawerHeader, { borderBottomColor: drawerOpen ? C.border : "transparent" }]}>
               <Pressable
                 style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
@@ -2314,99 +2407,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             )}
           </View>
         )}
-
-        {/* 오선보 터치 캔버스 (참조 이미지 포함) */}
-        {currentPart ? (
-          <View style={{ position: "relative" }}>
-            <ScoreCanvas
-              doc={{ ...doc, parts: [currentPart] }}
-              containerWidth={containerWidth}
-              selectedElementId={selectedElementId}
-              multiSelectIds={multiSelectIds}
-              selectedMeasureIdx={selectedMeasureIdx}
-              multiSelectMeasureIndices={measureMultiSelectIndices}
-              selectedPartIdx={0}
-              activeTool={activeTool}
-              activeDuration={activeDuration}
-              isDotted={isDotted}
-              accidental={accidental}
-              onNotePlaced={handleNotePlaced}
-              selectedDrumType={isPercussionPart ? selectedDrumType : undefined}
-              onRestPlaced={handleRestPlaced}
-              onElementTap={handleElementTap}
-              onMeasureTap={handleMeasureTap}
-              onMeasureLongPress={handleMeasureLongPress}
-              onEraseElement={handleEraseElement}
-              onEraseMultiple={handleEraseMultiple}
-              onNoteMoved={handleNoteMoved}
-              onTupletBracketTap={handleTupletBracketTap}
-              cursorMeasureIdx={null}
-              isPlaying={playback.isPlaying}
-              notePreviewEnabled={notePreviewEnabled}
-              instrumentId={doc.parts[selectedPartIdx]?.instrumentId}
-              playheadMeasureIdx={
-                playback.isPlaying &&
-                playback.currentMeasureIdx < (doc.parts[selectedPartIdx]?.measures.length ?? 0)
-                  ? playback.currentMeasureIdx
-                  : undefined
-              }
-              playheadFraction={playback.playheadFraction}
-              showPlayhead={showPlayhead}
-              highlightColor={highlightColor}
-              lineSpacing={lineSpacing}
-              disabled={!!measureContextMenu?.visible || showMeasureEditModal || drawerOpen}
-              measuresPerLineOverride={S.isLandscape ? 2 : 1}
-            />
-            {/* 참조 이미지 오버레이 (편집 불가) */}
-            {doc.referenceImageUri ? (
-              <>
-                <View
-                  style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-                  pointerEvents="none"
-                >
-                  <Image
-                    source={{ uri: doc.referenceImageUri }}
-                    style={{
-                      position: "absolute",
-                      top: 0, left: 0, right: 0, bottom: 0,
-                      opacity: doc.referenceImageOpacity ?? 0.4,
-                      resizeMode: "contain",
-                    }}
-                  />
-                </View>
-                <Pressable
-                  style={[styles.refOpacityBtn, { backgroundColor: C.surface + "CC", borderColor: C.border }]}
-                  onPress={handleReferenceOpacityToggle}
-                  hitSlop={8}
-                  testID="score-ref-opacity-btn"
-                >
-                  <Text style={[styles.refOpacityLabel, { color: C.text }]}>
-                    {Math.round((doc.referenceImageOpacity ?? 0.4) * 100)}%
-                  </Text>
-                </Pressable>
-              </>
-            ) : null}
-          </View>
-        ) : (
-          <Text style={{ color: C.textSecondary, marginTop: 24 }}>
-            {t("scoreMode", "noPartsHint")}
-          </Text>
-        )}
-
-        {currentPart && (
-          <Pressable
-            style={[styles.addMeasureRow, { borderColor: C.accent, marginTop: 16, marginBottom: 8, alignSelf: "center" }]}
-            onPress={handleAddMeasure}
-            testID="score-add-measure-btn"
-          >
-            <Ionicons name="add-circle-outline" size={16} color={C.accent} />
-            <Text style={[styles.addMeasureRowText, { color: C.accent }]}>
-              {t("scoreMode", "addMeasure")}
-            </Text>
-          </Pressable>
-        )}
-
-      </ScrollView>
 
       {/* ── 연결된 연습 항목 배지 (재생 중 linkedPracticeEntryId가 있을 때) */}
       {playback.isPlaying && !!playback.currentLinkedEntryId && (
