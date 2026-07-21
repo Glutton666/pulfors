@@ -839,7 +839,11 @@ function MeasureRender({
     const extremeRelY = stemDir === "up"
       ? Math.min(...notePosOnly.map((p) => p.y))
       : Math.max(...notePosOnly.map((p) => p.y));
-    const beamAbsY = staffY + extremeRelY + (stemDir === "up" ? -STEM_HEIGHT : STEM_HEIGHT);
+    const rawBeamAbsY = staffY + extremeRelY + (stemDir === "up" ? -STEM_HEIGHT : STEM_HEIGHT);
+    // 행 여백 안으로 클램프: 빔/숫자가 SVG 밖으로 벗어나지 않게 한다
+    const beamAbsY = stemDir === "up"
+      ? Math.max(staffY - STAFF_PADDING_TOP + 6, rawBeamAbsY)
+      : Math.min(staffY + STAFF_HEIGHT + STAFF_PADDING_BOTTOM - 6, rawBeamAbsY);
 
     // 음표별 기둥 정보: stemX는 Stem 컴포넌트와 동일 공식 사용
     const noteStems = groupPos
