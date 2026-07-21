@@ -1895,20 +1895,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             {t("scoreMode", "toolSelect")} ·
           </Text>
 
-          {/* 임시표 빠른 적용 */}
-          {(["♯", "♭", "♮"] as const).map((sym, i) => {
-            const accVal: Array<Accidental | null> = ["sharp", "flat", null];
-            return (
-              <Pressable
-                key={sym}
-                style={[styles.selBarBtn, { borderColor: C.border }]}
-                onPress={() => handleApplyAccidentalToSelected(accVal[i] ?? null)}
-              >
-                <Text style={[styles.selBarBtnText, { color: C.text }]}>{sym}</Text>
-              </Pressable>
-            );
-          })}
-
           <View style={{ flex: 1 }} />
 
           {/* 기호 지우기 (음표는 유지, 붙은 기호만 제거) */}
