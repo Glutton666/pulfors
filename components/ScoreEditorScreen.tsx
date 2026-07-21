@@ -1687,6 +1687,21 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       : draftMeasure.clef) ?? currentPart?.clef ?? "treble";
   const isPercussionPart = effectiveClef === "percussion";
 
+  // 드로어 헤더 상태 요약 (닫혀있을 때 표시)
+  const drawerMeasureStatus = (() => {
+    if (!currentPart) return "";
+    const measure = selectedMeasureIdx !== null ? currentPart.measures[selectedMeasureIdx] : null;
+    const sig = measure?.timeSignature ?? doc.timeSignature;
+    const sharps = measure?.keySignature?.sharps ?? doc.keySignature.sharps ?? 0;
+    const keyName = getKeySignatureLabel(sharps).split(" ")[0];
+    const clef = measure?.clef ?? currentPart.clef ?? "treble";
+    const bpm = measure?.bpm;
+    const items: string[] = [`${sig.numerator}/${sig.denominator}`, `${keyName}장조`];
+    if (clef !== "treble") items.push(clef === "bass" ? "낮은음" : clef === "alto" ? "알토" : clef === "tenor" ? "테너" : clef === "percussion" ? "타악기" : clef);
+    if (bpm) items.push(`BPM${bpm}`);
+    return items.join(" · ");
+  })();
+
   const styles = makeStyles(C, S);
 
   return (
@@ -2251,22 +2266,11 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
                     ? `${t("scoreMode", "drawerMeasureSettings")} — ${selectedMeasureIdx + 1}`
                     : t("scoreMode", "drawerNextMeasureSettings")}
                 </Text>
-                {!drawerOpen && (() => {
-                  const measure = selectedMeasureIdx !== null ? currentPart.measures[selectedMeasureIdx] : null;
-                  const sig = measure?.timeSignature ?? doc.timeSignature;
-                  const sharps = measure?.keySignature?.sharps ?? doc.keySignature.sharps ?? 0;
-                  const keyName = getKeySignatureLabel(sharps).split(" ")[0];
-                  const clef = measure?.clef ?? currentPart.clef ?? "treble";
-                  const bpm = measure?.bpm;
-                  const parts = [`${sig.numerator}/${sig.denominator}`, `${keyName}장조`];
-                  if (clef !== "treble") parts.push(clef === "bass" ? "낮은음" : clef === "alto" ? "알토" : clef === "tenor" ? "테너" : clef === "percussion" ? "타악기" : clef);
-                  if (bpm) parts.push(`BPM${bpm}`);
-                  return (
-                    <Text style={[styles.drawerStatusText, { color: C.textSecondary }]} numberOfLines={1}>
-                      {parts.join(" · ")}
-                    </Text>
-                  );
-                })()}
+                {!drawerOpen && drawerMeasureStatus ? (
+                  <Text style={[styles.drawerStatusText, { color: C.textSecondary }]} numberOfLines={1}>
+                    {drawerMeasureStatus}
+                  </Text>
+                ) : null}
                 <Ionicons
                   name={drawerOpen ? "chevron-down" : "chevron-up"}
                   size={14}
