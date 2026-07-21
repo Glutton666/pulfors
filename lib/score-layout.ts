@@ -295,6 +295,8 @@ export interface NotePosition {
   x: number;
   y: number;
   width: number;
+  /** 이 요소가 속한 잇단음표 그룹 ID (없으면 undefined) */
+  tupletGroupId?: string;
 }
 
 /**
@@ -368,6 +370,14 @@ export function layoutMeasure(
     (totalWidth - totalNoteWidth - leftPad * 2) / elementCount
   );
 
+  // 요소 → 잇단음표 그룹 ID 매핑 (빠른 조회용)
+  const elementTupletMap = new Map<string, string>();
+  for (const group of (measure.tuplets ?? [])) {
+    for (const id of group.elementIds) {
+      elementTupletMap.set(id, group.id);
+    }
+  }
+
   let x = startX + leftPad;
   for (let i = 0; i < measure.elements.length; i++) {
     const el = measure.elements[i];
@@ -383,9 +393,27 @@ export function layoutMeasure(
       x: x + w / 2,
       y,
       width: w,
+      tupletGroupId: elementTupletMap.get(el.id),
     });
     x += w + extraPerNote;
   }
+
+  // ── 잇단음표 그룹 내 균등 간격 후처리 ──────────────────────────
+  // 잇단음표 그룹의 첫 번째·마지막 요소 x는 고정하고,
+  // 중간 요소들을 x_i = x_first + (x_last - x_first) * i / (n-1) 으로 재배치한다.
+  for (const group of (measure.tuplets ?? [])) {
+    const groupPos = group.elementIds
+      .map((id) => positions.find((p) => p.elementId === id))
+      .filter((p): p is NotePosition => !!p);
+    if (groupPos.length < 2) continue;
+    const x0 = groupPos[0].x;
+    const xN = groupPos[groupPos.length - 1].x;
+    const n = groupPos.length;
+    for (let i = 1; i < n - 1; i++) {
+      groupPos[i].x = x0 + (xN - x0) * i / (n - 1);
+    }
+  }
+
   return positions;
 }
 
