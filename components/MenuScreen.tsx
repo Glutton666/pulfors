@@ -102,16 +102,6 @@ export function MenuScreen({
         >
           {t("switcher", "menu")}
         </Text>
-        <Pressable
-          onPress={onClose}
-          hitSlop={12}
-          style={{ padding: Spacing.xs }}
-          accessibilityRole="button"
-          accessibilityLabel={t("main", "cancel")}
-          testID="menu-screen-close"
-        >
-          <Ionicons name="close" size={S.ms(24, 0.4)} color={C.textSecondary} />
-        </Pressable>
       </View>
 
       <ScrollView
