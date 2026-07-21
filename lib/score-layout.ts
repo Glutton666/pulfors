@@ -423,9 +423,10 @@ export function layoutMeasure(
       positions.push({ elementId: el.id, x: x + w / 2, y, width: w });
       x += w + extraPerBlock;
     } else {
-      // 잇단음표 그룹 블록: 그룹 총 폭을 멤버 수로 균등 분할
+      // 잇단음표 그룹 블록: 그룹에 할당된 전체 폭(raw 폭 + 블록 간격)을 멤버 수로 균등 분할
+      // extraPerBlock을 그룹 내부에도 배분해야 notes가 마디 전체에 고르게 퍼진다.
       const n = block.elementIndices.length;
-      const stepWidth = block.totalWidth / n;
+      const stepWidth = (block.totalWidth + extraPerBlock) / n;
       let gx = x;
       for (let k = 0; k < n; k++) {
         const idx = block.elementIndices[k];
