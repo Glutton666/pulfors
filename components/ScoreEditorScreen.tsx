@@ -2109,7 +2109,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               isDotted={isDotted}
               accidental={accidental}
               onNotePlaced={handleNotePlaced}
-              selectedDrumType={isPercussionPart ? selectedDrumType : undefined}
+              selectedDrumType={selectedDrumType}
               onRestPlaced={handleRestPlaced}
               onElementTap={handleElementTap}
               onMeasureTap={handleMeasureTap}

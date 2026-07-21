@@ -409,18 +409,20 @@ export function ScoreCanvas({
             const staffRelY = ly - staffY;
             const effClefGhost = effectiveClefAtMeasureRef.current.get(mIdx) ?? clefRef.current;
             const isPercussionGhost = effClefGhost === "percussion";
-            const ghostDrumType = isPercussionGhost
-              ? (selectedDrumTypeRef.current ?? yToDrumType(staffRelY))
-              : undefined;
-            const pitch = isPercussionGhost
-              ? yToPitch(ghostDrumType ? drumTypeToY(ghostDrumType) : staffRelY, effClefGhost)
+            const ghostDrumType = selectedDrumTypeRef.current != null
+              ? selectedDrumTypeRef.current
+              : isPercussionGhost
+                ? yToDrumType(staffRelY)
+                : undefined;
+            const pitch = ghostDrumType
+              ? yToPitch(drumTypeToY(ghostDrumType), effClefGhost)
               : yToPitch(staffRelY, effClefGhost);
             const acc = accidentalRef.current;
             const finalPitch: Pitch =
               acc != null && acc !== "natural"
                 ? { ...pitch, accidental: acc }
                 : pitch;
-            const noteY = isPercussionGhost && ghostDrumType
+            const noteY = ghostDrumType
               ? staffY + drumTypeToY(ghostDrumType)
               : staffY + pitchToY(finalPitch, effClefGhost);
 

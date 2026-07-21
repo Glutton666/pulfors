@@ -433,8 +433,8 @@ export function ScorePalette({
         </ScrollView>
       )}
 
-      {/* ── 타악기 파트: 드럼 종류 선택 (notes 탭 하단) ────────── */}
-      {tab === "notes" && isPercussionPart && (
+      {/* ── 타악기: 드럼 종류 선택 (notes 탭 하단, 항상 표시) ─── */}
+      {tab === "notes" && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
