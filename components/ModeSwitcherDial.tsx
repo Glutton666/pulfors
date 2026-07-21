@@ -656,7 +656,7 @@ export function ModeSwitcherDial({
             position: "absolute",
             left: hLayout.left, top: hLayout.top,
             width: hLayout.w,   height: hLayout.h,
-            backgroundColor: C.surface,
+            backgroundColor: C.surface + "B8",
             ...hLayout.corners,
             borderWidth: 3,
             borderColor: RIM_COLOR,
