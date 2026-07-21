@@ -88,8 +88,8 @@ export const makeStyles = (_C: any, _S: any) =>
       minWidth: 32,
     },
     selBarBtnText: {
-      fontSize: 16,
-      fontFamily: "serif",
+      fontSize: 14,
+      fontFamily: "SpaceGrotesk_600SemiBold",
     },
     scoreScroll: {
       flex: 1,

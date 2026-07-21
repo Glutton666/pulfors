@@ -1031,6 +1031,8 @@ export const translations = {
     groupBarSlurButton:     { ko: "슬러로 묶기", en: "Slur" },
     groupBarTupletButton:   { ko: "잇단음표", en: "Tuplet" },
     groupBarClear:          { ko: "선택 해제", en: "Clear" },
+    deselect:               { ko: "선택 해제", en: "Deselect" },
+    deleteAction:           { ko: "지우기", en: "Delete" },
     zoomViewLabel:          { ko: "현재 마디 확대", en: "Current Measure" },
     instrumentSymbolsLabel: { ko: "악기별 기호", en: "Instrument Symbols" },
     deleteSelected:         { ko: "선택 삭제", en: "Delete Selected" },

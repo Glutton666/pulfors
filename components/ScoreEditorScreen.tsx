@@ -1207,6 +1207,33 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     setSelectedElementId(null);
   }
 
+  // ── 다중 선택 음표 일괄 삭제 ──────────────────────────────────
+  function handleDeleteMultiSelected() {
+    if (multiSelectIds.length === 0) return;
+    const idsToDelete = new Set(multiSelectIds);
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
+        if (pIdx !== selectedPartIdx) return p;
+        return {
+          ...p,
+          measures: p.measures.map((m) => {
+            let cleaned = m;
+            for (const id of idsToDelete) {
+              cleaned = removeElementFromTuplets(cleaned, id);
+            }
+            return {
+              ...cleaned,
+              elements: cleaned.elements.filter((el) => !idsToDelete.has(el.id)),
+            };
+          }),
+        };
+      }),
+    };
+    applyDoc(newDoc);
+    handleClearMultiSelect();
+  }
+
   // ── 선택 음표 이전/다음 이동 ──────────────────────────────────
   const navigateElementRef = useRef<(dir: "prev" | "next") => void>(() => {});
   const handleNavigateElement = useCallback((dir: "prev" | "next") => {
@@ -1954,6 +1981,16 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           <View style={{ flex: 1 }} />
 
           <Pressable
+            style={[styles.selBarBtn, { borderColor: C.border }]}
+            onPress={() => setMeasureMultiSelectIndices([])}
+            testID="score-editor-measure-deselect"
+          >
+            <Text style={[styles.selBarBtnText, { color: C.textSecondary }]}>
+              {t("scoreMode", "deselect")}
+            </Text>
+          </Pressable>
+
+          <Pressable
             style={[styles.selBarBtn, { borderColor: C.accent }]}
             onPress={() => handleCopyMeasures(measureMultiSelectIndices[measureMultiSelectIndices.length - 1])}
             testID="score-editor-measure-copy"
@@ -1972,6 +2009,25 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             <Ionicons name="cut-outline" size={16} color={C.accent} />
             <Text style={[styles.selBarBtnText, { color: C.accent }]}>
               {t("scoreMode", "measureMoveAction")}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.selBarBtn, { borderColor: "#FF4444" }]}
+            onPress={() => {
+              const sorted = [...measureMultiSelectIndices].sort((a, b) => b - a);
+              let working = doc;
+              for (const idx of sorted) {
+                const next = deleteMeasureFromDoc(working, selectedPartIdx, idx);
+                if (next !== working) working = next;
+              }
+              applyDoc(working);
+              setMeasureMultiSelectIndices([]);
+            }}
+            testID="score-editor-measure-delete"
+          >
+            <Text style={[styles.selBarBtnText, { color: "#FF4444" }]}>
+              {t("scoreMode", "deleteAction")}
             </Text>
           </Pressable>
 
@@ -1998,6 +2054,16 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           <View style={{ flex: 1 }} />
 
           <Pressable
+            style={[styles.selBarBtn, { borderColor: C.border }]}
+            onPress={handleClearMultiSelect}
+            testID="score-editor-group-deselect"
+          >
+            <Text style={[styles.selBarBtnText, { color: C.textSecondary }]}>
+              {t("scoreMode", "deselect")}
+            </Text>
+          </Pressable>
+
+          <Pressable
             style={[
               styles.selBarBtn,
               { borderColor: multiSelectCanTie ? C.accent : C.border, opacity: multiSelectCanTie ? 1 : 0.4 },
@@ -2006,7 +2072,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             disabled={!multiSelectCanTie}
             testID="score-editor-group-tie"
           >
-            <Text style={[styles.selBarBtnText, { color: multiSelectCanTie ? C.accent : C.textSecondary, fontSize: 16 }]}>
+            <Text style={[styles.selBarBtnText, { color: multiSelectCanTie ? C.accent : C.textSecondary }]}>
               ⌣ {t("scoreMode", "groupBarTieButton")}
             </Text>
           </Pressable>
@@ -2016,7 +2082,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             onPress={handleSlurMultiSelected}
             testID="score-editor-group-slur"
           >
-            <Text style={[styles.selBarBtnText, { color: C.accent, fontSize: 16 }]}>
+            <Text style={[styles.selBarBtnText, { color: C.accent }]}>
               ⌢ {t("scoreMode", "groupBarSlurButton")}
             </Text>
           </Pressable>
@@ -2030,9 +2096,19 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             disabled={!multiSelectCanTuplet}
             testID="score-editor-group-tuplet"
           >
-            <Text style={[styles.selBarBtnText, { color: multiSelectCanTuplet ? C.accent : C.textSecondary, fontSize: 16 }]}>
+            <Text style={[styles.selBarBtnText, { color: multiSelectCanTuplet ? C.accent : C.textSecondary }]}>
               ⋮⋮ {t("scoreMode", "groupBarTupletButton")}
               {multiSelectCanTuplet ? ` (${multiSelectSortedElements.length})` : ""}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.selBarBtn, { borderColor: "#FF4444" }]}
+            onPress={handleDeleteMultiSelected}
+            testID="score-editor-group-delete"
+          >
+            <Text style={[styles.selBarBtnText, { color: "#FF4444" }]}>
+              {t("scoreMode", "deleteAction")}
             </Text>
           </Pressable>
 
