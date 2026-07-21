@@ -358,16 +358,9 @@ export function layoutMeasure(
     return positions;
   }
 
-  // ── 순차 레이아웃 모드 (기존 동작) ──
+  // ── 순차 레이아웃 모드 ──────────────────────────────────────────
   const widths = measure.elements.map((el) =>
     getElementDisplayWidth(measure, el)
-  );
-  const totalNoteWidth = widths.reduce((a, b) => a + b, 0);
-
-  const leftPad = 8;
-  const extraPerNote = Math.max(
-    0,
-    (totalWidth - totalNoteWidth - leftPad * 2) / elementCount
   );
 
   // 요소 → 잇단음표 그룹 ID 매핑 (빠른 조회용)
@@ -378,39 +371,77 @@ export function layoutMeasure(
     }
   }
 
-  let x = startX + leftPad;
-  for (let i = 0; i < measure.elements.length; i++) {
-    const el = measure.elements[i];
-    const w = widths[i];
-    let y = STAFF_HEIGHT / 2;
-
-    if (el.type === "note") {
-      y = noteStaffY(el, clef);
+  // ── 블록 기반 레이아웃: extraPerBlock을 잇단음표 그룹 내부에 새지 않게 한다 ──
+  // "블록"은 단독 요소 1개 또는 잇단음표 그룹 전체이며, 블록 단위로 여백을 배분한다.
+  // 잇단음표 그룹 내 요소들은 그룹이 확보한 폭(총 요소 폭) 안에서 균등 배치된다.
+  interface LayoutBlock {
+    groupId?: string;          // 잇단음표 그룹 ID (단독 요소면 없음)
+    elementIndices: number[];  // 이 블록에 속한 요소 인덱스 배열
+    totalWidth: number;        // 블록 전체 너비 = 멤버 widths 합계
+  }
+  const blocks: LayoutBlock[] = [];
+  {
+    let i = 0;
+    while (i < measure.elements.length) {
+      const groupId = elementTupletMap.get(measure.elements[i].id);
+      if (groupId) {
+        // 같은 그룹의 모든 요소를 하나의 블록으로 묶는다
+        const group = (measure.tuplets ?? []).find((g) => g.id === groupId);
+        const idSet = new Set(group?.elementIds ?? []);
+        const indices: number[] = [];
+        for (let j = 0; j < measure.elements.length; j++) {
+          if (idSet.has(measure.elements[j].id)) indices.push(j);
+        }
+        const blockWidth = indices.reduce((s, idx) => s + widths[idx], 0);
+        blocks.push({ groupId, elementIndices: indices, totalWidth: blockWidth });
+        // 다음 반복은 그룹 마지막 요소 다음부터
+        i = (indices[indices.length - 1] ?? i) + 1;
+      } else {
+        blocks.push({ elementIndices: [i], totalWidth: widths[i] });
+        i++;
+      }
     }
-
-    positions.push({
-      elementId: el.id,
-      x: x + w / 2,
-      y,
-      width: w,
-      tupletGroupId: elementTupletMap.get(el.id),
-    });
-    x += w + extraPerNote;
   }
 
-  // ── 잇단음표 그룹 내 균등 간격 후처리 ──────────────────────────
-  // 잇단음표 그룹의 첫 번째·마지막 요소 x는 고정하고,
-  // 중간 요소들을 x_i = x_first + (x_last - x_first) * i / (n-1) 으로 재배치한다.
-  for (const group of (measure.tuplets ?? [])) {
-    const groupPos = group.elementIds
-      .map((id) => positions.find((p) => p.elementId === id))
-      .filter((p): p is NotePosition => !!p);
-    if (groupPos.length < 2) continue;
-    const x0 = groupPos[0].x;
-    const xN = groupPos[groupPos.length - 1].x;
-    const n = groupPos.length;
-    for (let i = 1; i < n - 1; i++) {
-      groupPos[i].x = x0 + (xN - x0) * i / (n - 1);
+  const totalNoteWidth = widths.reduce((a, b) => a + b, 0);
+  const leftPad = 8;
+  // 여백을 블록 수 기준으로 배분 (잇단음표 내부에는 별도 여백 없음)
+  const extraPerBlock = Math.max(
+    0,
+    (totalWidth - totalNoteWidth - leftPad * 2) / blocks.length,
+  );
+
+  let x = startX + leftPad;
+  for (const block of blocks) {
+    if (!block.groupId) {
+      // 단독 요소 블록
+      const idx = block.elementIndices[0];
+      const el = measure.elements[idx];
+      const w = widths[idx];
+      let y = STAFF_HEIGHT / 2;
+      if (el.type === "note") y = noteStaffY(el, clef);
+      positions.push({ elementId: el.id, x: x + w / 2, y, width: w });
+      x += w + extraPerBlock;
+    } else {
+      // 잇단음표 그룹 블록: 그룹 총 폭을 멤버 수로 균등 분할
+      const n = block.elementIndices.length;
+      const stepWidth = block.totalWidth / n;
+      let gx = x;
+      for (let k = 0; k < n; k++) {
+        const idx = block.elementIndices[k];
+        const el = measure.elements[idx];
+        let y = STAFF_HEIGHT / 2;
+        if (el.type === "note") y = noteStaffY(el, clef);
+        positions.push({
+          elementId: el.id,
+          x: gx + stepWidth / 2,
+          y,
+          width: widths[idx],
+          tupletGroupId: block.groupId,
+        });
+        gx += stepWidth;
+      }
+      x += block.totalWidth + extraPerBlock;
     }
   }
 

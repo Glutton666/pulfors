@@ -545,7 +545,7 @@ function TieArc({ x1, y1, x2, y2, color }: {
 
 // ── 음표 렌더링 ───────────────────────────────────────────────
 
-function NoteElement({ note, x, staffY, clef, color, isSelected, suppressFlag }: {
+function NoteElement({ note, x, staffY, clef, color, isSelected, suppressFlag, suppressStem, forcedStemDir }: {
   note: ScoreNote;
   x: number;
   staffY: number;
@@ -553,12 +553,16 @@ function NoteElement({ note, x, staffY, clef, color, isSelected, suppressFlag }:
   color: string;
   isSelected: boolean;
   suppressFlag?: boolean;
+  /** true のとき個別 Stem を描かない (빔 렌더 섹션で共通 stem を別途描く) */
+  suppressStem?: boolean;
+  /** 잇단음표 그룹 기둥 방향 강제 (지정 시 getStemDirection 대신 사용) */
+  forcedStemDir?: "up" | "down";
 }) {
   const relY = noteStaffY(note, clef);
   const noteY = staffY + relY;
   const dur = note.duration;
   const needsStem = dur !== "whole" && dur !== "whole_dot";
-  const direction = getStemDirection(relY);
+  const direction = forcedStemDir ?? getStemDirection(relY);
   const drumEntry = note.drumType ? DRUM_MAP[note.drumType] : undefined;
 
   const flagCount =
@@ -578,7 +582,7 @@ function NoteElement({ note, x, staffY, clef, color, isSelected, suppressFlag }:
     <G>
       <LedgerLines cx={x} noteY={relY} staffY={staffY} color={highlightColor} />
       <NoteHead x={x} y={noteY} duration={dur} color={highlightColor} filled noteHead={drumEntry?.noteHead ?? note.noteHead} />
-      {needsStem && <Stem x={x} y={noteY} direction={direction} color={highlightColor} />}
+      {needsStem && !suppressStem && <Stem x={x} y={noteY} direction={direction} color={highlightColor} />}
       {flagCount > 0 && <Flag x={x} y={noteY} direction={direction} count={flagCount} color={highlightColor} />}
       {dotted && <DotSymbol x={x} y={noteY} color={highlightColor} />}
       {articulations.map((art, i) => (
@@ -780,7 +784,7 @@ function MeasureRender({
   const positions = layoutMeasure(measure, 0, clef, contentWidth, layoutOverrides);
 
   // ── 잇단음표 빔 계산 ─────────────────────────────────────────
-  // beamable duration 체크 헬퍼
+  // beamable duration 체크 (음표 전용 — 쉼표는 빔 연결 불가)
   const BEAMABLE_DURS = new Set<string>(["eighth", "eighth_dot", "sixteenth", "sixteenth_dot", "thirty_second", "thirty_second_dot"]);
   function beamLevelForDur(dur: string): number {
     if (dur === "thirty_second" || dur === "thirty_second_dot") return 3;
@@ -790,15 +794,16 @@ function MeasureRender({
 
   // 각 잇단음표 그룹에 대해 빔 여부와 빔 정보를 미리 계산한다
   interface TupletBeamInfo {
-    isBeamed: boolean;         // 그룹 전체가 빔으로 묶일 수 있으면 true
-    beamLevel: number;         // 최대 빔 단수
-    stemDir: "up" | "down";   // 그룹 내 평균 y로 결정한 기둥 방향
-    beamAbsY: number;          // 빔 선의 절대 Y
-    stemX1: number;            // 첫 음표 기둥 X (절대)
-    stemX2: number;            // 마지막 음표 기둥 X (절대)
+    isBeamed: boolean;        // 그룹 전체가 빔으로 묶일 수 있으면 true
+    beamLevel: number;        // 최대 빔 단수
+    stemDir: "up" | "down";  // 그룹 내 평균 noteY로 결정한 공통 기둥 방향
+    beamAbsY: number;         // 빔 선의 절대 Y
+    /** 빔 그룹에 속한 음표(note)별 기둥 좌표: {stemX, noteAbsY} */
+    noteStems: Array<{ id: string; stemX: number; noteAbsY: number }>;
   }
   const tupletBeamInfoMap = new Map<string, TupletBeamInfo>();
-  const flagSuppressSet = new Set<string>(); // 꼬리를 그리지 않을 elementId 집합
+  const flagSuppressSet = new Set<string>();  // 꼬리를 그리지 않을 elementId
+  const stemSuppressSet = new Set<string>();  // 개별 Stem을 그리지 않을 elementId
 
   for (const group of (measure.tuplets ?? [])) {
     const groupEls = group.elementIds
@@ -810,45 +815,61 @@ function MeasureRender({
 
     if (groupPos.length < 2) continue;
 
-    // 모든 요소(음표/쉼표)의 duration이 beamable해야 빔으로 묶는다
-    const allBeamable = groupEls.length === group.elementIds.length &&
-      groupEls.every((el) => BEAMABLE_DURS.has(el.duration));
+    // 빔 가능 조건: 모든 멤버가 음표(note)이며 beamable duration을 가져야 한다.
+    // 쉼표가 하나라도 포함되면 빔 불가 → 브래킷 표시.
+    const allBeamable =
+      groupEls.length === group.elementIds.length &&
+      groupEls.every((el) => el.type === "note" && BEAMABLE_DURS.has(el.duration));
     const maxBeamLevel = allBeamable
       ? Math.max(...groupEls.map((el) => beamLevelForDur(el.duration)))
       : 0;
 
-    const avgRelY = groupPos.reduce((s, p) => s + p.y, 0) / groupPos.length;
+    // 음표 포지션만 추출해 공통 기둥 방향 계산 (쉼표는 중앙값을 왜곡할 수 있으므로 제외)
+    const notePosOnly = groupPos.filter((p) => {
+      const el = measure.elements.find((e) => e.id === p.elementId);
+      return el?.type === "note";
+    });
+    const avgRelY = notePosOnly.length > 0
+      ? notePosOnly.reduce((s, p) => s + p.y, 0) / notePosOnly.length
+      : groupPos.reduce((s, p) => s + p.y, 0) / groupPos.length;
     const stemDir: "up" | "down" = avgRelY > STAFF_HEIGHT / 2 ? "up" : "down";
 
-    // 빔 Y: 기둥 방향에서 가장 멀리 있는 음표(극단 pitch) 기준으로 설정
-    const beamRelY = stemDir === "up"
-      ? Math.min(...groupPos.map((p) => p.y)) - STEM_HEIGHT
-      : Math.max(...groupPos.map((p) => p.y)) + STEM_HEIGHT;
-    const beamAbsY = staffY + beamRelY;
+    // 빔 Y: 극단 pitch 음표의 기둥 끝 좌표
+    // (up → 가장 높은 음표 = 최소 y → 해당 음표 기둥 끝이 빔 위치가 됨)
+    const extremeRelY = stemDir === "up"
+      ? Math.min(...notePosOnly.map((p) => p.y))
+      : Math.max(...notePosOnly.map((p) => p.y));
+    const beamAbsY = staffY + extremeRelY + (stemDir === "up" ? -STEM_HEIGHT : STEM_HEIGHT);
 
-    // 기둥 X: Stem 컴포넌트와 동일 (up → noteCenterX + NOTE_HEAD_RX - 1)
-    const first = groupPos[0];
-    const last = groupPos[groupPos.length - 1];
-    const stemX1 = stemDir === "up"
-      ? contentX + first.x + NOTE_HEAD_RX - 1
-      : contentX + first.x - NOTE_HEAD_RX + 1;
-    const stemX2 = stemDir === "up"
-      ? contentX + last.x + NOTE_HEAD_RX - 1
-      : contentX + last.x - NOTE_HEAD_RX + 1;
+    // 음표별 기둥 정보: stemX는 Stem 컴포넌트와 동일 공식 사용
+    const noteStems = groupPos
+      .filter((p) => {
+        const el = measure.elements.find((e) => e.id === p.elementId);
+        return el?.type === "note";
+      })
+      .map((p) => ({
+        id: p.elementId,
+        stemX: stemDir === "up"
+          ? contentX + p.x + NOTE_HEAD_RX - 1
+          : contentX + p.x - NOTE_HEAD_RX + 1,
+        noteAbsY: staffY + p.y,
+      }));
 
     tupletBeamInfoMap.set(group.id, {
       isBeamed: allBeamable,
       beamLevel: maxBeamLevel,
       stemDir,
       beamAbsY,
-      stemX1,
-      stemX2,
+      noteStems,
     });
 
     if (allBeamable) {
       for (const id of group.elementIds) {
         const el = measure.elements.find((e) => e.id === id);
-        if (el?.type === "note") flagSuppressSet.add(id);
+        if (el?.type === "note") {
+          flagSuppressSet.add(id);
+          stemSuppressSet.add(id);
+        }
       }
     }
   }
@@ -930,6 +951,10 @@ function MeasureRender({
         if (!el) return null;
         const absX = contentX + pos.x;
         if (el.type === "note") {
+          // 잇단음표 빔 그룹 내 음표면 공통 기둥 방향을 주입한다
+          const elTupletGroupId = pos.tupletGroupId;
+          const beamInfo = elTupletGroupId ? tupletBeamInfoMap.get(elTupletGroupId) : undefined;
+          const inBeamedGroup = !!(beamInfo?.isBeamed && stemSuppressSet.has(el.id));
           return (
             <NoteElement
               key={el.id}
@@ -940,6 +965,8 @@ function MeasureRender({
               color={color}
               isSelected={el.id === selectedElementId || !!multiSelectIds?.includes(el.id)}
               suppressFlag={flagSuppressSet.has(el.id)}
+              suppressStem={inBeamedGroup}
+              forcedStemDir={inBeamedGroup ? beamInfo?.stemDir : undefined}
             />
           );
         } else {
@@ -1030,27 +1057,46 @@ function MeasureRender({
         );
       })}
 
-      {/* 잇단음표 빔 선 (beamable 그룹만) */}
+      {/* 잇단음표 빔 선 + 음표별 기둥 (beamable 그룹만) */}
       {measure.tuplets?.map((group) => {
         const info = tupletBeamInfoMap.get(group.id);
-        if (!info || !info.isBeamed) return null;
-        const beamSpacing = 4; // 빔 선 간격(px)
-        const lines = [];
+        if (!info || !info.isBeamed || info.noteStems.length < 2) return null;
+
+        const beamSpacing = 4;
+        const stemX1 = info.noteStems[0].stemX;
+        const stemX2 = info.noteStems[info.noteStems.length - 1].stemX;
+
+        // 음표별 기둥: noteAbsY → beamAbsY (공통 방향)
+        const stemLines = info.noteStems.map((ns) => (
+          <Line
+            key={`stem-${ns.id}`}
+            x1={ns.stemX}
+            y1={ns.noteAbsY}
+            x2={ns.stemX}
+            y2={info.beamAbsY}
+            stroke={color}
+            strokeWidth={1.2}
+          />
+        ));
+
+        // 수평 빔 선 (duration에 따라 1~3단)
+        const beamLines = [];
         for (let lvl = 0; lvl < info.beamLevel; lvl++) {
           const offsetY = info.stemDir === "up" ? lvl * beamSpacing : -(lvl * beamSpacing);
-          lines.push(
+          beamLines.push(
             <Line
-              key={lvl}
-              x1={info.stemX1}
+              key={`bm-${lvl}`}
+              x1={stemX1}
               y1={info.beamAbsY + offsetY}
-              x2={info.stemX2}
+              x2={stemX2}
               y2={info.beamAbsY + offsetY}
               stroke={color}
               strokeWidth={2.5}
             />
           );
         }
-        return <G key={`beam-${group.id}`}>{lines}</G>;
+
+        return <G key={`beam-${group.id}`}>{stemLines}{beamLines}</G>;
       })}
 
       {/* 잇단음표(튜플렛) 브래킷 + 숫자 */}
