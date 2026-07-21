@@ -295,8 +295,16 @@ export function ModeSwitcherDial({
     setTimeout(() => { setIsOpen(false); isOpenRef.current = false; }, 185);
   }, [fanScale, fanOpacity, overlayOp]);
 
+  // Sync refs so stale PanResponder closures always call the latest version
+  useEffect(() => { doOpenRef.current  = doOpen;  }, [doOpen]);
+  useEffect(() => { doCloseRef.current = doClose; }, [doClose]);
+
   const onSelectModeRef = useRef(onSelectMode);
   useEffect(() => { onSelectModeRef.current = onSelectMode; }, [onSelectMode]);
+
+  // Keep latest doOpen/doClose accessible from stale PanResponder closures
+  const doOpenRef  = useRef<() => void>(() => {});
+  const doCloseRef = useRef<() => void>(() => {});
 
   // ── Drag state ───────────────────────────────────────────────────────────
   const [isDragging, setIsDragging] = useState(false);
@@ -350,8 +358,8 @@ export function ModeSwitcherDial({
           // User manually placed the dial — suppress auto-move for this mode
           userOverrodeRef.current.add(currentModeRef.current);
         } else {
-          // Toggle open / close
-          if (isOpenRef.current) doClose(); else doOpen();
+          // Toggle open / close (use refs to avoid stale closure)
+          if (isOpenRef.current) doCloseRef.current(); else doOpenRef.current();
         }
       },
       onPanResponderTerminate: () => {
