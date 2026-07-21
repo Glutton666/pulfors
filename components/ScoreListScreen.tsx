@@ -198,14 +198,7 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor }: ScoreList
     <View style={[styles.container, { backgroundColor: C.background }]}>
       {/* 헤더 */}
       <View style={[styles.header, { paddingTop: topInset + 8, borderBottomColor: C.border }]}>
-        <Pressable
-          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
-          onPress={onClose}
-          hitSlop={12}
-          testID="score-list-back"
-        >
-          <Ionicons name="chevron-back" size={S.ms(24, 0.4)} color={C.text} />
-        </Pressable>
+        <View style={styles.backBtn} />
         <Text style={[styles.headerTitle, { color: C.text }]}>{t("scoreMode", "title")}</Text>
         <Pressable
           style={({ pressed }) => [styles.importBtn, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
