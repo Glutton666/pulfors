@@ -347,7 +347,7 @@ export function ScorePalette({
                 styles.tabBtn,
                 { borderBottomColor: isActive ? C.accent : "transparent" },
               ]}
-              onPress={() => onToolChange(tool)}
+              onPress={() => isActive ? onToolChange("note") : onToolChange(tool)}
               testID={`score-palette-tool-${tool}`}
             >
               <Text style={[styles.tabLabel, { color: isActive ? C.accent : C.textSecondary }]}>

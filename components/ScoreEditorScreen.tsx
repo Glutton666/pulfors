@@ -2480,11 +2480,10 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           enabledSymbols={currentPart?.enabledSymbols ?? {}}
           onToolChange={(tool) => {
             setActiveTool(tool);
-            // "select"에서 다른 도구(특히 "erase")로 바꿀 때 남은 다중 선택을 정리한다.
-            // 정리하지 않으면 activeTool="erase" 상태에서 이전 multiSelectIds가 남아
-            // ScoreCanvas의 erase 브랜치가 onElementTap을 호출하지 않는 것과 상호작용해 오작동한다.
+            // "select"에서 다른 도구로 바꿀 때 남은 선택을 모두 정리한다.
             if (tool !== "select") {
               setMultiSelectIds([]);
+              setSelectedElementId(null);
             }
           }}
           onDurationChange={setActiveDuration}
