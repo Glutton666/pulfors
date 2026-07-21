@@ -1687,20 +1687,31 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       : draftMeasure.clef) ?? currentPart?.clef ?? "treble";
   const isPercussionPart = effectiveClef === "percussion";
 
-  // 드로어 헤더 상태 요약 (닫혀있을 때 표시)
-  const drawerMeasureStatus = (() => {
-    if (!currentPart) return "";
-    const measure = selectedMeasureIdx !== null ? currentPart.measures[selectedMeasureIdx] : null;
-    const sig = measure?.timeSignature ?? doc.timeSignature;
-    const sharps = measure?.keySignature?.sharps ?? doc.keySignature.sharps ?? 0;
-    const keyName = getKeySignatureLabel(sharps).split(" ")[0];
-    const clef = measure?.clef ?? currentPart.clef ?? "treble";
-    const bpm = measure?.bpm;
-    const items: string[] = [`${sig.numerator}/${sig.denominator}`, `${keyName}장조`];
-    if (clef !== "treble") items.push(clef === "bass" ? "낮은음" : clef === "alto" ? "알토" : clef === "tenor" ? "테너" : clef === "percussion" ? "타악기" : clef);
-    if (bpm) items.push(`BPM${bpm}`);
-    return items.join(" · ");
-  })();
+  // 드로어 헤더 상태 요약 (닫혀있을 때 표시) — IIFE 사용 금지(React Compiler 비호환)
+  let drawerMeasureStatus = "";
+  if (currentPart) {
+    const _dms_measure = selectedMeasureIdx !== null ? currentPart.measures[selectedMeasureIdx] : null;
+    const _dms_sig = _dms_measure?.timeSignature ?? doc.timeSignature;
+    const _dms_sharps = _dms_measure?.keySignature?.sharps ?? doc.keySignature?.sharps ?? 0;
+    const _dms_keyName = getKeySignatureLabel(_dms_sharps).split(" ")[0];
+    const _dms_clef = _dms_measure?.clef ?? currentPart.clef ?? "treble";
+    const _dms_bpm = _dms_measure?.bpm;
+    const _dms_items: string[] = [
+      `${_dms_sig?.numerator ?? 4}/${_dms_sig?.denominator ?? 4}`,
+      `${_dms_keyName}장조`,
+    ];
+    if (_dms_clef !== "treble") {
+      _dms_items.push(
+        _dms_clef === "bass" ? "낮은음"
+        : _dms_clef === "alto" ? "알토"
+        : _dms_clef === "tenor" ? "테너"
+        : _dms_clef === "percussion" ? "타악기"
+        : _dms_clef
+      );
+    }
+    if (_dms_bpm) _dms_items.push(`BPM${_dms_bpm}`);
+    drawerMeasureStatus = _dms_items.join(" · ");
+  }
 
   const styles = makeStyles(C, S);
 
