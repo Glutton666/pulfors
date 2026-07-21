@@ -7,7 +7,7 @@ import React, { useMemo, useRef, useCallback, useState } from "react";
 import { View, PanResponder, StyleSheet } from "react-native";
 import Svg, { Line, Ellipse, G, Rect, Text as SvgText } from "react-native-svg";
 import { useTheme } from "@/contexts/ThemeContext";
-import { previewScoreNote } from "@/lib/score-audio";
+import { previewScoreNote, previewScoreDrum } from "@/lib/score-audio";
 import { applyNotePreviewOnRelease } from "@/lib/score-canvas-helpers";
 import { pitchToMidi } from "@/lib/score-layout";
 import { ScoreRenderer } from "@/components/ScoreRenderer";
@@ -36,6 +36,7 @@ import type {
   NoteDuration,
   ClefType,
   Accidental,
+  NoteHeadType,
 } from "@/lib/score-types";
 
 // ── 음이름 변환 ───────────────────────────────────────────────
@@ -65,6 +66,8 @@ export interface GhostState {
   measureRelX: number;
   /** 돋보기 미니뷰에 함께 그릴 주변(같은 마디) 기존 음표/쉼표 — 정확한 배치를 위한 참조용 */
   nearbyElements: NearbyElement[];
+  /** 해당 마디가 퍼커션 클레프인지 여부 — 오디오 미리보기 및 noteHead 게이트에 사용 */
+  isPercussionClef: boolean;
 }
 
 interface NearbyElement {
@@ -97,7 +100,9 @@ export interface ScoreCanvasProps {
   activeDuration: NoteDuration;
   isDotted: boolean;
   accidental: Accidental | null;
-  onNotePlaced: (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number) => void;
+  onNotePlaced: (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number, noteHead?: NoteHeadType | null) => void;
+  /** 퍼커션 클레프에서 사용할 음표머리 — ScoreCanvas가 onNotePlaced에 noteHead로 전달 */
+  selectedNoteHead?: NoteHeadType | null;
   onRestPlaced: (measureIdx: number, duration: NoteDuration, insertIdx: number, placedX: number) => void;
   onElementTap: (elementId: string, measureIdx: number) => void;
   onMeasureTap: (measureIdx: number) => void;
@@ -145,6 +150,7 @@ export function ScoreCanvas({
   isDotted,
   accidental,
   onNotePlaced,
+  selectedNoteHead,
   onRestPlaced,
   onElementTap,
   onMeasureTap,
@@ -193,6 +199,8 @@ export function ScoreCanvas({
   const onTupletBracketTapRef = useRef(onTupletBracketTap);
   const docRef = useRef(doc);
   const selectedPartIdxRef = useRef(selectedPartIdx);
+  const selectedNoteHeadRef = useRef(selectedNoteHead);
+  selectedNoteHeadRef.current = selectedNoteHead;
   activeToolRef.current = activeTool;
   activeDurationRef.current = activeDuration;
   isDottedRef.current = isDotted;
@@ -427,7 +435,7 @@ export function ScoreCanvas({
                   })
                   .filter((v): v is NearbyElement => v != null)
               : [];
-            return { x: lx, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx, insertIdx, measureRelX, nearbyElements };
+            return { x: lx, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx, insertIdx, measureRelX, nearbyElements, isPercussionClef: effClefGhost === "percussion" };
           }
           accX += mWidth;
         }
@@ -699,9 +707,14 @@ export function ScoreCanvas({
           const info = touchToGhost(slx, sly);
           if (info) {
             if (notePreviewEnabledRef.current && !isPlayingRef.current) {
-              applyNotePreviewOnRelease(isPlayingRef.current, pitchToMidi(info.pitch), previewScoreNote, instrumentIdRef.current);
+              if (info.isPercussionClef) {
+                previewScoreDrum("snare");
+              } else {
+                applyNotePreviewOnRelease(isPlayingRef.current, pitchToMidi(info.pitch), previewScoreNote, instrumentIdRef.current);
+              }
             }
-            onNotePlaced(info.measureIdx, info.pitch, dur, info.insertIdx, info.measureRelX);
+            const noteHead = info.isPercussionClef ? selectedNoteHeadRef.current : null;
+            onNotePlaced(info.measureIdx, info.pitch, dur, info.insertIdx, info.measureRelX, noteHead);
           }
         } else if (tool === "rest") {
           const info = touchToGhost(slx, sly);

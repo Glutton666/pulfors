@@ -23,7 +23,7 @@ const NOTE_HEAD_OPTIONS: Array<{ value: NoteHeadType; symbol: string; labelKey: 
   { value: "normal",     symbol: "●", labelKey: "noteHeadNormal" },
   { value: "cross",      symbol: "✕", labelKey: "noteHeadCross" },
   { value: "cross_open", symbol: "✕°", labelKey: "noteHeadCrossOpen" },
-  { value: "diamond",    symbol: "◇", labelKey: "noteHeadDiamond" },
+  { value: "open_circle", symbol: "○", labelKey: "noteHeadOpenCircle" },
   { value: "slash",      symbol: "/", labelKey: "noteHeadSlash" },
 ];
 

@@ -240,6 +240,20 @@ function NoteHead({ x, y, duration, color, filled, noteHead = "normal" }: {
     const d = `M${x},${y - ry} L${x + rx},${y} L${x},${y + ry} L${x - rx},${y} Z`;
     return <Path d={d} fill={isOpen ? "none" : color} stroke={color} strokeWidth={1.2} />;
   }
+  if (noteHead === "open_circle") {
+    // 항상 비어있는 원형 (하모닉·오픈 사운드 표기)
+    return (
+      <Ellipse
+        cx={x}
+        cy={y}
+        rx={NOTE_HEAD_RX * 1.05}
+        ry={NOTE_HEAD_RY * 1.05}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.4}
+      />
+    );
+  }
   if (noteHead === "cross_open") {
     // X자 + 위쪽에 작은 원 (오픈 크로스: 오픈 하이햇 등 변형 표기)
     const r = NOTE_HEAD_RX;

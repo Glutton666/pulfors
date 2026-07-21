@@ -217,8 +217,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   const [selectedRepeatSign, setSelectedRepeatSign] = useState<RepeatSignId | null>(null);
   const [selectedCrescType, setSelectedCrescType] = useState<CrescType>(null);
   const [selectedNoteHead, setSelectedNoteHead] = useState<import("@/lib/score-types").NoteHeadType | null>(null);
-  /** 퍼커션 클레프 여부를 handleNotePlaced 클로저에서 읽기 위한 ref — 렌더마다 갱신 */
-  const isPercussionPartRef = useRef(false);
 
   // ── 마디 컨텍스트 메뉴 state ──────────────────────────────────
   const [measureContextMenu, setMeasureContextMenu] = useState<{
@@ -635,7 +633,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
 
   // ── 음표 추가 (터치 확정) ─────────────────────────────────────
   const handleNotePlaced = useCallback(
-    (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number) => {
+    (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number, noteHead?: import("@/lib/score-types").NoteHeadType | null) => {
       let newElement = makeNote(
         pitch,
         duration,
@@ -644,7 +642,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         undefined,
         selectedOrnament ?? undefined,
         isDoubleDotted,
-        isPercussionPartRef.current ? selectedNoteHead : null,
+        noteHead ?? null,
       );
       const measureId = doc.parts[selectedPartIdx]?.measures[measureIdx]?.id;
       const newDoc: ScoreDocument = {
@@ -667,7 +665,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       setSelectedElementId(newElement.id);
       setSelectedMeasureIdx(measureIdx);
     },
-    [doc, selectedPartIdx, accidental, selectedArticulation, selectedOrnament, isDoubleDotted, selectedNoteHead],
+    [doc, selectedPartIdx, accidental, selectedArticulation, selectedOrnament, isDoubleDotted],
   );
 
   // ── 쉼표 추가 ─────────────────────────────────────────────────
@@ -1611,7 +1609,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       ? currentPart?.measures[selectedMeasureIdx]?.clef
       : draftMeasure.clef) ?? currentPart?.clef ?? "treble";
   const isPercussionPart = effectiveClef === "percussion";
-  isPercussionPartRef.current = isPercussionPart;
 
   // 드로어 헤더 상태 요약 (닫혀있을 때 표시) — IIFE 사용 금지(React Compiler 비호환)
   let drawerMeasureStatus = "";
@@ -2112,6 +2109,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               isDotted={isDotted}
               accidental={accidental}
               onNotePlaced={handleNotePlaced}
+              selectedNoteHead={selectedNoteHead}
               onRestPlaced={handleRestPlaced}
               onElementTap={handleElementTap}
               onMeasureTap={handleMeasureTap}

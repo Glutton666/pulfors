@@ -958,7 +958,7 @@ export const translations = {
     noteHeadNormal:     { ko: "●일반", en: "Normal" },
     noteHeadCross:      { ko: "✕크로스", en: "Cross" },
     noteHeadCrossOpen:  { ko: "✕°오픈X", en: "Open X" },
-    noteHeadDiamond:    { ko: "◆다이아", en: "Diamond" },
+    noteHeadOpenCircle: { ko: "○오픈", en: "Open ○" },
     noteHeadSlash:      { ko: "/슬래시", en: "Slash" },
     // 악기 이름
     instrViolin:        { ko: "바이올린", en: "Violin" },
