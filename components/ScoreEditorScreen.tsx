@@ -88,7 +88,7 @@ function makeNote(
   dynamic?: Dynamic,
   ornament?: import("@/lib/score-types").OrnamentType | null,
   doubleDotted?: boolean,
-  drumType?: import("@/lib/score-types").DrumType,
+  noteHead?: import("@/lib/score-types").NoteHeadType | null,
 ): ScoreNote {
   const finalPitch: Pitch = accidental
     ? { ...pitch, accidental }
@@ -102,7 +102,7 @@ function makeNote(
     articulations: articulations?.length ? articulations : undefined,
     dynamic: dynamic ?? undefined,
     ornament: ornament ?? undefined,
-    drumType: drumType ?? undefined,
+    noteHead: noteHead ?? undefined,
   };
 }
 
@@ -216,7 +216,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   const [selectedArticulation, setSelectedArticulation] = useState<ArticulationType | null>(null);
   const [selectedRepeatSign, setSelectedRepeatSign] = useState<RepeatSignId | null>(null);
   const [selectedCrescType, setSelectedCrescType] = useState<CrescType>(null);
-  const [selectedDrumType, setSelectedDrumType] = useState<import("@/lib/score-types").DrumType>("snare");
+  const [selectedNoteHead, setSelectedNoteHead] = useState<import("@/lib/score-types").NoteHeadType | null>(null);
 
   // ── 마디 컨텍스트 메뉴 state ──────────────────────────────────
   const [measureContextMenu, setMeasureContextMenu] = useState<{
@@ -633,7 +633,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
 
   // ── 음표 추가 (터치 확정) ─────────────────────────────────────
   const handleNotePlaced = useCallback(
-    (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number, drumType?: import("@/lib/score-types").DrumType) => {
+    (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number) => {
       let newElement = makeNote(
         pitch,
         duration,
@@ -642,7 +642,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         undefined,
         selectedOrnament ?? undefined,
         isDoubleDotted,
-        drumType,
+        selectedNoteHead,
       );
       const measureId = doc.parts[selectedPartIdx]?.measures[measureIdx]?.id;
       const newDoc: ScoreDocument = {
@@ -665,7 +665,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       setSelectedElementId(newElement.id);
       setSelectedMeasureIdx(measureIdx);
     },
-    [doc, selectedPartIdx, accidental, selectedArticulation, selectedOrnament, isDoubleDotted],
+    [doc, selectedPartIdx, accidental, selectedArticulation, selectedOrnament, isDoubleDotted, selectedNoteHead],
   );
 
   // ── 쉼표 추가 ─────────────────────────────────────────────────
@@ -2109,7 +2109,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               isDotted={isDotted}
               accidental={accidental}
               onNotePlaced={handleNotePlaced}
-              selectedDrumType={selectedDrumType}
               onRestPlaced={handleRestPlaced}
               onElementTap={handleElementTap}
               onMeasureTap={handleMeasureTap}
@@ -2491,8 +2490,8 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           onCrescTypeSelect={setSelectedCrescType}
           onTempoSelect={handleTempoSelect}
           isPercussionPart={isPercussionPart}
-          selectedDrumType={selectedDrumType}
-          onDrumTypeSelect={setSelectedDrumType}
+          selectedNoteHead={selectedNoteHead}
+          onNoteHeadSelect={setSelectedNoteHead}
         />
       </View>
 

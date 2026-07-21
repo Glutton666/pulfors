@@ -45,7 +45,7 @@ export type OrnamentType =
   | "arpeggio_up"
   | "arpeggio_down";
 
-export type NoteHeadType = "normal" | "cross" | "diamond" | "triangle" | "slash";
+export type NoteHeadType = "normal" | "cross" | "cross_open" | "diamond" | "triangle" | "slash";
 
 // ── 드럼(타악기) 종류 ────────────────────────────────────────────
 // 표준 드럼 표기법을 단순화한 매핑: 킥/스네어/하이햇(오픈·클로즈드)/크래시/라이드/탐탐(하이·미드·로우)

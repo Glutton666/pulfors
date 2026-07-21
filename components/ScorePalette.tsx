@@ -14,16 +14,17 @@ import type {
   Accidental,
   ArticulationType,
   OrnamentType,
-  DrumType,
+  NoteHeadType,
 } from "@/lib/score-types";
-import { DRUM_TYPES, DRUM_MAP } from "@/lib/score-types";
 import type { EditorTool } from "@/components/ScoreCanvas";
 
-// ── 타악기 카테고리 그룹 ────────────────────────────────────────
-const DRUM_GROUPS: Array<{ labelKey: string; types: DrumType[] }> = [
-  { labelKey: "drumCatCymbal", types: ["crash", "ride", "hihat_open", "hihat_closed"] },
-  { labelKey: "drumCatTom",    types: ["tom_high", "tom_mid", "tom_low"] },
-  { labelKey: "drumCatOther",  types: ["snare", "kick"] },
+// ── 음표 머리 선택 항목 (퍼커션 클레프 전용) ───────────────────
+const NOTE_HEAD_OPTIONS: Array<{ value: NoteHeadType; symbol: string; labelKey: string }> = [
+  { value: "normal",     symbol: "●", labelKey: "noteHeadNormal" },
+  { value: "cross",      symbol: "✕", labelKey: "noteHeadCross" },
+  { value: "cross_open", symbol: "✕°", labelKey: "noteHeadCrossOpen" },
+  { value: "diamond",    symbol: "◆", labelKey: "noteHeadDiamond" },
+  { value: "slash",      symbol: "/", labelKey: "noteHeadSlash" },
 ];
 
 // ── 음표 길이 ─────────────────────────────────────────────────
@@ -236,10 +237,10 @@ export interface ScorePaletteProps {
   onRepeatSignSelect?: (id: RepeatSignId | null) => void;
   onCrescTypeSelect?: (type: CrescType) => void;
   onTempoSelect?: (text: string, bpm: number) => void;
-  /** true이면 현재 활성 파트가 타악기(percussion) 오선이며 드럼 종류 선택 UI를 표시합니다 */
+  /** true이면 현재 활성 파트가 타악기(percussion) 오선이며 음표머리 선택 UI를 표시합니다 */
   isPercussionPart?: boolean;
-  selectedDrumType?: DrumType;
-  onDrumTypeSelect?: (drumType: DrumType) => void;
+  selectedNoteHead?: NoteHeadType | null;
+  onNoteHeadSelect?: (noteHead: NoteHeadType | null) => void;
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
@@ -265,8 +266,8 @@ export function ScorePalette({
   onCrescTypeSelect,
   onTempoSelect,
   isPercussionPart = false,
-  selectedDrumType,
-  onDrumTypeSelect,
+  selectedNoteHead,
+  onNoteHeadSelect,
 }: ScorePaletteProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -433,46 +434,56 @@ export function ScorePalette({
         </ScrollView>
       )}
 
-      {/* ── 타악기: 드럼 종류 선택 (notes 탭 하단, 항상 표시) ─── */}
-      {tab === "notes" && (
+      {/* ── 퍼커션 클레프: 음표머리 선택 행 ───────────────────────── */}
+      {tab === "notes" && isPercussionPart && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[styles.itemRow, { alignItems: "flex-start" }]}
+          contentContainerStyle={styles.itemRow}
         >
-          {DRUM_GROUPS.map((group, gi) => (
-            <View key={group.labelKey} style={{ flexDirection: "row", alignItems: "flex-start" }}>
-              {/* 그룹 구분선 (첫 그룹 제외) */}
-              {gi > 0 && (
-                <View style={{ width: 1, backgroundColor: C.border, height: 36, marginHorizontal: 4, alignSelf: "center" }} />
-              )}
-              {group.types.map((dt) => {
-                const isActive = selectedDrumType === dt;
-                const entry = DRUM_MAP[dt];
-                return (
-                  <Pressable
-                    key={dt}
-                    style={[
-                      styles.durBtn,
-                      {
-                        backgroundColor: isActive ? C.accent + "33" : "transparent",
-                        borderColor: isActive ? C.accent : C.border,
-                      },
-                    ]}
-                    onPress={() => onDrumTypeSelect?.(dt)}
-                    testID={`score-palette-drum-${dt}`}
-                  >
-                    <Text style={[styles.durSymbol, { color: isActive ? C.accent : C.text }]}>
-                      {entry.noteHead === "cross" ? "✕" : entry.noteHead === "triangle" ? "▲" : entry.noteHead === "diamond" ? "◆" : "●"}
-                    </Text>
-                    <Text style={[styles.durLabel, { color: isActive ? C.accent : C.textSecondary }]}>
-                      {t("scoreMode", entry.labelKey as any)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          ))}
+          {/* null 선택 = 기본 음표머리 사용 */}
+          <Pressable
+            style={[
+              styles.durBtn,
+              {
+                backgroundColor: selectedNoteHead == null ? C.accent + "33" : "transparent",
+                borderColor: selectedNoteHead == null ? C.accent : C.border,
+              },
+            ]}
+            onPress={() => onNoteHeadSelect?.(null)}
+            testID="score-palette-notehead-default"
+          >
+            <Text style={[styles.durSymbol, { color: selectedNoteHead == null ? C.accent : C.text }]}>
+              —
+            </Text>
+            <Text style={[styles.durLabel, { color: selectedNoteHead == null ? C.accent : C.textSecondary }]}>
+              {t("scoreMode", "noteHeadDefault" as any)}
+            </Text>
+          </Pressable>
+          {NOTE_HEAD_OPTIONS.map((nh) => {
+            const isActive = selectedNoteHead === nh.value;
+            return (
+              <Pressable
+                key={nh.value}
+                style={[
+                  styles.durBtn,
+                  {
+                    backgroundColor: isActive ? C.accent + "33" : "transparent",
+                    borderColor: isActive ? C.accent : C.border,
+                  },
+                ]}
+                onPress={() => onNoteHeadSelect?.(nh.value)}
+                testID={`score-palette-notehead-${nh.value}`}
+              >
+                <Text style={[styles.durSymbol, { color: isActive ? C.accent : C.text }]}>
+                  {nh.symbol}
+                </Text>
+                <Text style={[styles.durLabel, { color: isActive ? C.accent : C.textSecondary }]}>
+                  {t("scoreMode", nh.labelKey as any)}
+                </Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
       )}
 

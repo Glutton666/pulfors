@@ -953,6 +953,13 @@ export const translations = {
     drumSnare:          { ko: "스네어", en: "Snare" },
     drumTomLow:         { ko: "로우 탐탐", en: "Low Tom" },
     drumKick:           { ko: "킥", en: "Kick" },
+    // 음표머리 종류 (퍼커션 클레프 팔레트)
+    noteHeadDefault:    { ko: "기본", en: "Default" },
+    noteHeadNormal:     { ko: "●일반", en: "Normal" },
+    noteHeadCross:      { ko: "✕크로스", en: "Cross" },
+    noteHeadCrossOpen:  { ko: "✕°오픈X", en: "Open X" },
+    noteHeadDiamond:    { ko: "◆다이아", en: "Diamond" },
+    noteHeadSlash:      { ko: "/슬래시", en: "Slash" },
     // 악기 이름
     instrViolin:        { ko: "바이올린", en: "Violin" },
     instrViola:         { ko: "비올라", en: "Viola" },

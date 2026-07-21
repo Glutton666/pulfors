@@ -240,6 +240,18 @@ function NoteHead({ x, y, duration, color, filled, noteHead = "normal" }: {
     const d = `M${x},${y - ry} L${x + rx},${y} L${x},${y + ry} L${x - rx},${y} Z`;
     return <Path d={d} fill={isOpen ? "none" : color} stroke={color} strokeWidth={1.2} />;
   }
+  if (noteHead === "cross_open") {
+    // X자 + 위쪽에 작은 원 (오픈 크로스: 오픈 하이햇 등 변형 표기)
+    const r = NOTE_HEAD_RX;
+    const circleR = r * 0.55;
+    return (
+      <G>
+        <Line x1={x - r} y1={y - r} x2={x + r} y2={y + r} stroke={color} strokeWidth={1.6} />
+        <Line x1={x - r} y1={y + r} x2={x + r} y2={y - r} stroke={color} strokeWidth={1.6} />
+        <Circle cx={x} cy={y - r - circleR - 1} r={circleR} stroke={color} strokeWidth={1.2} fill="none" />
+      </G>
+    );
+  }
   if (noteHead === "slash") {
     const r = NOTE_HEAD_RX * 1.1;
     return <Line x1={x - r} y1={y + r * 0.7} x2={x + r} y2={y - r * 0.7} stroke={color} strokeWidth={2.2} />;
@@ -581,7 +593,7 @@ function NoteElement({ note, x, staffY, clef, color, isSelected, suppressFlag, s
   return (
     <G>
       <LedgerLines cx={x} noteY={relY} staffY={staffY} color={highlightColor} />
-      <NoteHead x={x} y={noteY} duration={dur} color={highlightColor} filled noteHead={drumEntry?.noteHead ?? note.noteHead} />
+      <NoteHead x={x} y={noteY} duration={dur} color={highlightColor} filled noteHead={note.noteHead ?? drumEntry?.noteHead} />
       {needsStem && !suppressStem && <Stem x={x} y={noteY} direction={direction} color={highlightColor} />}
       {flagCount > 0 && <Flag x={x} y={noteY} direction={direction} count={flagCount} color={highlightColor} />}
       {dotted && <DotSymbol x={x} y={noteY} color={highlightColor} />}
