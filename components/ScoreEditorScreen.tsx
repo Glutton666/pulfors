@@ -45,9 +45,8 @@ import type {
   Dynamic,
   ClefType,
   ScoreLayoutOverrides,
-  getKeySignatureLabel,
 } from "@/lib/score-types";
-import { INSTRUMENTS } from "@/lib/score-types";
+import { INSTRUMENTS, getKeySignatureLabel } from "@/lib/score-types";
 import { ScoreCanvas } from "@/components/ScoreCanvas";
 import type { EditorTool } from "@/components/ScoreCanvas";
 import { ScoreRenderer } from "@/components/ScoreRenderer";
