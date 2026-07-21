@@ -335,39 +335,8 @@ export function ScorePalette({
   return (
     <View style={[styles.container, { borderTopColor: C.border, backgroundColor: C.surface }]}>
       {/* ── 탭 헤더 ────────────────────────────────────────────── */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabRow}
-      >
-        {TAB_DEFS.map((td) => {
-          const isTabActive = tab === td.id;
-          return (
-            <Pressable
-              key={td.id}
-              style={[
-                styles.tabBtn,
-                { borderBottomColor: isTabActive ? C.accent : "transparent" },
-              ]}
-              onPress={() => {
-                setTab(td.id);
-                if (td.tool) onToolChange(td.tool);
-              }}
-              testID={`score-palette-tab-${td.id}`}
-            >
-              <Text
-                style={[
-                  styles.tabLabel,
-                  { color: isTabActive ? C.accent : C.textSecondary },
-                ]}
-              >
-                {t("scoreMode", td.labelKey as any)}
-              </Text>
-            </Pressable>
-          );
-        })}
-
-        {/* 선택 / 지우기 도구 */}
+      <View style={styles.tabHeader}>
+        {/* 선택 / 지우기 도구 — 왼쪽 고정 */}
         {(["select", "erase"] as EditorTool[]).map((tool) => {
           const key = tool === "select" ? "toolSelect" : "toolErase";
           const isActive = activeTool === tool;
@@ -381,15 +350,51 @@ export function ScorePalette({
               onPress={() => onToolChange(tool)}
               testID={`score-palette-tool-${tool}`}
             >
-              <Text
-                style={[styles.tabLabel, { color: isActive ? C.accent : C.textSecondary }]}
-              >
+              <Text style={[styles.tabLabel, { color: isActive ? C.accent : C.textSecondary }]}>
                 {t("scoreMode", key as any)}
               </Text>
             </Pressable>
           );
         })}
-      </ScrollView>
+
+        {/* 구분선 */}
+        <View style={[styles.tabDivider, { backgroundColor: C.border }]} />
+
+        {/* 탭 목록 — 수평 스크롤 */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabRow}
+          style={{ flex: 1 }}
+        >
+          {TAB_DEFS.map((td) => {
+            const isTabActive = tab === td.id;
+            return (
+              <Pressable
+                key={td.id}
+                style={[
+                  styles.tabBtn,
+                  { borderBottomColor: isTabActive ? C.accent : "transparent" },
+                ]}
+                onPress={() => {
+                  setTab(td.id);
+                  if (td.tool) onToolChange(td.tool);
+                }}
+                testID={`score-palette-tab-${td.id}`}
+              >
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    { color: isTabActive ? C.accent : C.textSecondary },
+                  ]}
+                >
+                  {t("scoreMode", td.labelKey as any)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {/* ── 현재 적용중인 기호(아티큘레이션/꾸밈음/강약/악기 기호) 표시줄 ── */}
       {tab === "notes" && (selectedArticulation || selectedOrnament || selectedDynamic || selectedInstrumentSymbol) && (
@@ -890,6 +895,14 @@ const makeStyles = (C: any) =>
     container: {
       borderTopWidth: 1,
       paddingTop: 4,
+    },
+    tabHeader: {
+      flexDirection: "row" as const,
+      alignItems: "stretch" as const,
+    },
+    tabDivider: {
+      width: 1,
+      marginVertical: 6,
     },
     tabRow: {
       flexDirection: "row",
