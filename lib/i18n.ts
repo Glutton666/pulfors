@@ -1209,6 +1209,7 @@ export const translations = {
     volumeHint:            { ko: "볼륨 버튼 또는 탭으로 조절", en: "Volume buttons or tap to adjust" },
     play:                  { ko: "재생", en: "Play" },
     pause:                 { ko: "일시정지", en: "Pause" },
+    longPressHint:         { ko: "길게 눌러 동시 시작 설정", en: "Long press to set synchronized start" },
     setList:               { ko: "셋 리스트", en: "Set List" },
     setListEmpty:          { ko: "저장된 연습 없음", en: "No saved practices" },
     setlistEmpty:          { ko: "+ 버튼으로 추가하세요", en: "Tap + to add items" },

@@ -301,6 +301,8 @@ export interface StageModeOverlayProps {
   onSelectEntry?: (entry: PracticeEntry) => void;
   /** 셋리스트 없을 때 StageBeatColumn 자리에 표시할 컨텐츠 슬롯 (BeatIndicator + SubdivisionBar 등) */
   noSetlistContent?: React.ReactNode;
+  /** 재생 버튼 길게 누르기 → 동시 시작 모달 열기 */
+  onOpenScheduledStart?: () => void;
 }
 
 // ─── 메인 컴포넌트 ─────────────────────────────────────────────────────
@@ -331,6 +333,7 @@ export function StageModeOverlay({
   activeEntryId,
   onSelectEntry,
   noSetlistContent,
+  onOpenScheduledStart,
 }: StageModeOverlayProps) {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -775,9 +778,17 @@ export function StageModeOverlay({
     <Pressable
       style={({ pressed }) => [styles.playPauseBtn, pressed && { opacity: 0.6 }]}
       onPress={onPlayPause}
+      onLongPress={() => {
+        if (Platform.OS !== "web") {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        }
+        onOpenScheduledStart?.();
+      }}
+      delayLongPress={500}
       testID="stage-mode-play-pause"
       accessibilityRole="button"
       accessibilityLabel={isPlaying ? t("stageMode", "pause") : t("stageMode", "play")}
+      accessibilityHint={t("stageMode", "longPressHint")}
     >
       <Ionicons
         name={isPlaying ? "pause-circle" : "play-circle"}

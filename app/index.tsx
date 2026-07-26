@@ -6015,6 +6015,7 @@ export default function MetronomeScreen() {
         }
         practiceBook={stagePracticeEntries}
         activeEntryId={activeStagePracticeEntryId}
+        onOpenScheduledStart={() => openExclusive("scheduledStart")}
         onSelectEntry={(entry) => {
           const engine = engineRef.current;
           if (!engine) return;
