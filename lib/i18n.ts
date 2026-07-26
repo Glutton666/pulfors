@@ -1332,7 +1332,8 @@ export const translations = {
     note:     { ko: "노트",  en: "Note"  },
     stage:    { ko: "무대",  en: "Stage" },
     menu:     { ko: "메뉴",  en: "Menu"  },
-    openDial: { ko: "모드 전환 다이얼 열기", en: "Open mode switcher dial" },
+    openDial:  { ko: "모드 전환 다이얼 열기", en: "Open mode switcher dial" },
+    cycleTap:  { ko: "탭하여 다음 모드로 전환", en: "Tap to switch to next mode" },
   },
 } as const satisfies TranslationsShape;
 

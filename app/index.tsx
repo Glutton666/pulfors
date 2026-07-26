@@ -567,12 +567,17 @@ export default function MetronomeScreen() {
   const halfTimeFlash = useSharedValue(0);
   /** 비트 진행률: 각 비트 시작 시 0 → 다음 비트까지 1 로 sweep. StageBeatArc 구동. */
   const beatProgress = useSharedValue(0);
+  /** 모드 전환 슬라이드 애니메이션: 새 모드가 오른쪽에서 진입. */
+  const modeSlideX = useSharedValue(0);
 
   const flashStyle = useAnimatedStyle(() => ({
     opacity: flashOpacity.value,
   }));
   const halfTimeFlashStyle = useAnimatedStyle(() => ({
     opacity: halfTimeFlash.value,
+  }));
+  const modeSlideStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: modeSlideX.value }],
   }));
 
   useEffect(() => {
@@ -4266,8 +4271,6 @@ export default function MetronomeScreen() {
 
   const currentMode: ModeSlot = stageModeActive
     ? "stage"
-    : showMenu
-    ? "menu"
     : noteMode
     ? "note"
     : barMode
@@ -4308,6 +4311,25 @@ export default function MetronomeScreen() {
         break;
     }
   }, [currentMode, noteMode, barMode, scoreMode, stageModeActive, showMenu, handleExitNoteMode, handleBarModeChange, handleEnterNoteMode, enterStageMode, exitStageMode, activeModal]);
+
+  // ── 상단 중앙 레이블 탭 → 다음 모드 순환 (beat→bar→score→note→stage→beat) ──
+  const MODE_CYCLE: ModeSlot[] = ["beat", "bar", "score", "note", "stage"];
+  const cycleToNextMode = useCallback(() => {
+    const idx = MODE_CYCLE.indexOf(currentMode as typeof MODE_CYCLE[number]);
+    const nextMode = MODE_CYCLE[(idx + 1) % MODE_CYCLE.length];
+    void switchToMode(nextMode);
+  }, [currentMode, switchToMode]);
+
+  // 모드가 바뀔 때 슬라이드 인(오른쪽 → 중앙) 애니메이션
+  const prevModeRef = useRef<ModeSlot>(currentMode);
+  useEffect(() => {
+    if (prevModeRef.current !== currentMode) {
+      prevModeRef.current = currentMode;
+      modeSlideX.value = windowWidth * 0.25;
+      modeSlideX.value = withTiming(0, { duration: 270, easing: Easing.out(Easing.cubic) });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMode]);
 
   const handleNoteAddToQueue = useCallback((entry: PracticeEntry, insertAt?: number) => {
     setNoteQueue(prev => {
@@ -5044,12 +5066,42 @@ export default function MetronomeScreen() {
         </Text>
       </Animated.View>
 
+      {/* 상단 중앙 고정 모드 레이블 — 탭 시 다음 모드로 순환 */}
+      {!stageModeActive && (
+        <Pressable
+          onPress={cycleToNextMode}
+          style={{
+            position: "absolute",
+            top: (insets.top || webTopInset) + 4,
+            alignSelf: "center" as const,
+            zIndex: 600,
+            paddingHorizontal: 18,
+            paddingVertical: 6,
+            borderRadius: 20,
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={t("switcher", "cycleTap")}
+          testID="mode-cycle-label"
+        >
+          <Text
+            style={{
+              fontFamily: "SpaceGrotesk_600SemiBold",
+              fontSize: S.ms(12, 0.3),
+              color: C.textSecondary,
+              letterSpacing: 1.8,
+              textTransform: "uppercase" as const,
+            }}
+          >
+            {t("switcher", currentMode as "beat" | "bar" | "score" | "note" | "stage")}
+          </Text>
+        </Pressable>
+      )}
+
       <ModeSwitcherDial
-        currentMode={currentMode}
-        onSelectMode={switchToMode}
+        isMenuOpen={showMenu}
+        onMenuToggle={() => setActiveModal(showMenu ? null : "menu")}
         topInset={insets.top || webTopInset}
         isLandscape={isLandscape}
-        isPlaying={isPlaying}
       />
 
       {showMenu && (
@@ -5466,7 +5518,7 @@ export default function MetronomeScreen() {
         />
       )}
 
-      <View
+      <Animated.View
         style={[
           isLandscape
             ? styles.contentLandscape
@@ -5484,6 +5536,7 @@ export default function MetronomeScreen() {
           isLandscape && noteMode && { paddingHorizontal: Spacing.sm },
           noteMode && { justifyContent: "flex-start" as const },
           S.contentMaxWidth != null && { maxWidth: S.contentMaxWidth, alignSelf: "center" as const, width: "100%" as const },
+          modeSlideStyle,
         ]}
       >
         {noteMode ? (
@@ -5897,7 +5950,7 @@ export default function MetronomeScreen() {
         </View>
         </>
         )}
-      </View>
+      </Animated.View>
 
       {!barMode && !noteMode && !isLandscape && (
         <StopwatchTimer
