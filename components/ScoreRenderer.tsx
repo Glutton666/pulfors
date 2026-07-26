@@ -712,6 +712,42 @@ function RepeatDots({ x, y, isStart, color }: { x: number; y: number; isStart: b
 
 // ── 마디 하나 렌더링 ──────────────────────────────────────────
 
+// ── 마디 경계 타이·슬러 헬퍼 ─────────────────────────────────
+
+/**
+ * 마디의 마지막 음표에 tieStart가 있으면 true — 다음 마디로 타이가 넘어감.
+ */
+function measureHasOpenEndingTie(measure: ScoreMeasure): boolean {
+  for (let i = measure.elements.length - 1; i >= 0; i--) {
+    const el = measure.elements[i];
+    if (el.type === "note") return !!(el as ScoreNote).tieStart;
+  }
+  return false;
+}
+
+/**
+ * 마디에 같은 마디 안에서 닫히지 않은 slurStart가 있으면 true — 다음 마디로 슬러가 넘어감.
+ */
+function measureHasOpenEndingSlur(measure: ScoreMeasure): boolean {
+  for (const el of measure.elements) {
+    if (el.type !== "note") continue;
+    const note = el as ScoreNote;
+    if (!note.slurStart) continue;
+    if (note.slurEndNoteId) {
+      // 명시적 slurEnd 가 이 마디 안에 있는지 확인
+      if (measure.elements.some((e) => e.id === note.slurEndNoteId)) continue;
+      return true; // slurEnd 가 다음 마디에 있음
+    }
+    // slurEndNoteId 없이 slurStart만 있는 경우: 같은 마디 내 slurEnd 탐색
+    const idx = measure.elements.indexOf(el);
+    const hasEndInMeasure = measure.elements
+      .slice(idx + 1)
+      .some((e) => e.type === "note" && (e as ScoreNote).slurEnd);
+    if (!hasEndInMeasure) return true;
+  }
+  return false;
+}
+
 interface MeasureRenderProps {
   measure: ScoreMeasure;
   part: ScorePart;
@@ -755,6 +791,16 @@ interface MeasureRenderProps {
   showKeySig?: boolean;
   /** 이 마디의 자유 배치 X 좌표 오버라이드 (elementId → x) */
   layoutOverrides?: Record<string, number>;
+  /**
+   * 이전 마디의 마지막 음표에 tieStart가 있어 이 마디로 타이가 넘어온 경우 true.
+   * MeasureRender는 이 마디의 첫 tieEnd 음표 위치까지 "연결 꼬리" 호를 그린다.
+   */
+  prevMeasureHadOpenTie?: boolean;
+  /**
+   * 이전 마디에서 닫히지 않은 slurStart가 이 마디로 넘어온 경우 true.
+   * MeasureRender는 이 마디의 첫 slurEnd 음표 위치까지 "연결 꼬리" 호를 그린다.
+   */
+  prevMeasureHadOpenSlur?: boolean;
 }
 
 function MeasureRender({
@@ -790,6 +836,8 @@ function MeasureRender({
   isChangeBarline,
   showKeySig = false,
   layoutOverrides,
+  prevMeasureHadOpenTie = false,
+  prevMeasureHadOpenSlur = false,
 }: MeasureRenderProps) {
   const clef = effectiveClef ?? part.clef;
 
@@ -1150,6 +1198,49 @@ function MeasureRender({
           />
         );
       })}
+
+      {/* 타이 연결 꼬리 — 이전 마디에서 넘어온 타이가 이 마디의 tieEnd 음표까지 이어짐 */}
+      {prevMeasureHadOpenTie && (() => {
+        // tieEnd가 true인 첫 번째 음표를 찾는다 (없으면 첫 번째 음표로 폴백)
+        const withEl = positions
+          .map((p) => ({ pos: p, el: measure.elements.find((e) => e.id === p.elementId) }))
+          .filter(({ el }) => el?.type === "note");
+        const target =
+          withEl.find(({ el }) => (el as ScoreNote).tieEnd) ?? withEl[0];
+        if (!target) return null;
+        const noteY = staffY + noteStaffY(target.el as ScoreNote, clef);
+        return (
+          <TieArc
+            key="tie-incoming"
+            x1={x + 4}
+            y1={noteY}
+            x2={contentX + target.pos.x}
+            y2={noteY}
+            color={color}
+          />
+        );
+      })()}
+
+      {/* 슬러 연결 꼬리 — 이전 마디에서 넘어온 슬러가 이 마디의 slurEnd 음표까지 이어짐 */}
+      {prevMeasureHadOpenSlur && (() => {
+        const withEl = positions
+          .map((p) => ({ pos: p, el: measure.elements.find((e) => e.id === p.elementId) }))
+          .filter(({ el }) => el?.type === "note");
+        const target =
+          withEl.find(({ el }) => (el as ScoreNote).slurEnd) ?? withEl[0];
+        if (!target) return null;
+        const noteY = staffY + noteStaffY(target.el as ScoreNote, clef);
+        return (
+          <TieArc
+            key="slur-incoming"
+            x1={x + 4}
+            y1={noteY - 2}
+            x2={contentX + target.pos.x}
+            y2={noteY - 2}
+            color={color}
+          />
+        );
+      })()}
 
       {/* 잇단음표 빔 선 + 음표별 기둥 (beamable 그룹만) */}
       {measure.tuplets?.map((group) => {
@@ -1694,12 +1785,18 @@ function PartRender({
           // 최종 마디 판정 (전체 measures 배열 기준)
           const isFinalMeasure = mIdx === measures.length - 1;
           // 다음 마디에서 박자표/조표/음자리표가 바뀌면 이중 마디선
-          const nextMIdx = allMeasureIndices[allMeasureIndices.indexOf(mIdx) + 1];
+          const allMIdx = allMeasureIndices.indexOf(mIdx);
+          const nextMIdx = allMeasureIndices[allMIdx + 1];
           const isChangeBarline = nextMIdx !== undefined && (
             timeSigChangedAt.has(nextMIdx) ||
             clefChangedAt.has(nextMIdx) ||
             keySigChangedAt.has(nextMIdx)
           );
+          // 이전 마디에서 넘어온 타이·슬러 연결 꼬리 여부
+          const prevMIdx = allMeasureIndices[allMIdx - 1];
+          const prevMeasure = prevMIdx !== undefined ? measures[prevMIdx] : undefined;
+          const prevMeasureHadOpenTie = prevMeasure ? measureHasOpenEndingTie(prevMeasure) : false;
+          const prevMeasureHadOpenSlur = prevMeasure ? measureHasOpenEndingSlur(prevMeasure) : false;
 
           return (
             <MeasureRender
@@ -1736,6 +1833,8 @@ function PartRender({
               isChangeBarline={isChangeBarline}
               showKeySig={showKeySig}
               layoutOverrides={doc.layoutOverrides?.[measure.id]}
+              prevMeasureHadOpenTie={prevMeasureHadOpenTie}
+              prevMeasureHadOpenSlur={prevMeasureHadOpenSlur}
             />
           );
         })
