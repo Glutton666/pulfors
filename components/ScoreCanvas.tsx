@@ -41,6 +41,26 @@ import type {
   DrumType,
 } from "@/lib/score-types";
 
+// ── 조표 자동 임시표 ─────────────────────────────────────────
+/** 샤프 조표 적용 음이름 순서 (1개: F, 2개: F+C, …) */
+const KEY_SIG_SHARP_STEPS = ["F", "C", "G", "D", "A", "E", "B"] as const;
+/** 플랫 조표 적용 음이름 순서 (1개: B, 2개: B+E, …) */
+const KEY_SIG_FLAT_STEPS  = ["B", "E", "A", "D", "G", "C", "F"] as const;
+
+/**
+ * 조표(effSharps)와 음이름(step)을 받아 자동 임시표를 반환한다.
+ * 조표 범위 밖의 음이름이면 null 반환.
+ */
+function keySigAccidentalFor(step: string, effSharps: number): Accidental | null {
+  if (effSharps > 0 && KEY_SIG_SHARP_STEPS.slice(0, effSharps).includes(step as typeof KEY_SIG_SHARP_STEPS[number])) {
+    return "sharp";
+  }
+  if (effSharps < 0 && KEY_SIG_FLAT_STEPS.slice(0, -effSharps).includes(step as typeof KEY_SIG_FLAT_STEPS[number])) {
+    return "flat";
+  }
+  return null;
+}
+
 // ── 음이름 변환 ───────────────────────────────────────────────
 
 function pitchLabel(pitch: Pitch): string {
@@ -402,10 +422,23 @@ export function ScoreCanvas({
             const effClefGhost = effectiveClefAtMeasureRef.current.get(mIdx) ?? clefRef.current;
             const pitch = yToPitch(staffRelY, effClefGhost);
             const acc = accidentalRef.current;
-            const finalPitch: Pitch =
-              acc != null && acc !== "natural"
-                ? { ...pitch, accidental: acc }
-                : pitch;
+            let finalPitch: Pitch;
+            if (acc != null && acc !== "natural") {
+              // 팔레트에서 명시적으로 임시표 선택 — 그대로 사용
+              finalPitch = { ...pitch, accidental: acc };
+            } else if (acc === "natural") {
+              // 내추럴(♮) 선택 — 조표 자동 반음을 재정의하고 임시표 없이 배치
+              finalPitch = pitch;
+            } else {
+              // 미선택 — 현재 마디의 조표에서 자동 임시표 결정
+              const effSharps =
+                effectiveSharpsAtMeasureRef.current.get(mIdx) ??
+                (docRef.current.keySignature?.sharps ?? 0);
+              const keySigAcc = effClefGhost !== "percussion"
+                ? keySigAccidentalFor(pitch.step, effSharps)
+                : null;
+              finalPitch = keySigAcc ? { ...pitch, accidental: keySigAcc } : pitch;
+            }
             const noteY = staffY + pitchToY(finalPitch, effClefGhost);
 
             const measure = docRef.current.parts[selectedPartIdxRef.current]?.measures[mIdx];
