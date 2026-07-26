@@ -42,8 +42,8 @@ import { DRUM_MAP } from "@/lib/score-types";
 
 // ── 상수 ─────────────────────────────────────────────────────
 const PART_GAP = 32;            // 성부 간 간격
-const STAFF_PADDING_TOP = 24;   // 오선 위 여백 (덧줄/기호 공간)
-const STAFF_PADDING_BOTTOM = 28; // 오선 아래 여백
+const STAFF_PADDING_TOP = 20;   // 오선 위 여백 (덧줄/기호 공간)
+const STAFF_PADDING_BOTTOM = 22; // 오선 아래 여백
 const PART_HEIGHT = STAFF_PADDING_TOP + STAFF_HEIGHT + STAFF_PADDING_BOTTOM;
 
 // ── 음자리표 SVG Path ─────────────────────────────────────────

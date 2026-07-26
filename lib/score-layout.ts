@@ -500,11 +500,11 @@ export interface ScoreRowLayout {
 }
 
 // ScoreRenderer와 동일한 레이아웃 상수 (LINE_SPACING 기반)
-export const SCORE_STAFF_PADDING_TOP    = Math.round(LINE_SPACING * 2.4); // 24
-export const SCORE_STAFF_PADDING_BOTTOM = Math.round(LINE_SPACING * 2.8); // 28
-export const SCORE_PART_HEIGHT = SCORE_STAFF_PADDING_TOP + STAFF_HEIGHT + SCORE_STAFF_PADDING_BOTTOM; // 92
-export const SCORE_ROW_MARGIN_TOP    = Math.round(LINE_SPACING * 1.6); // 16
-export const SCORE_ROW_MARGIN_BOTTOM = Math.round(LINE_SPACING * 0.8); // 8
+export const SCORE_STAFF_PADDING_TOP    = Math.round(LINE_SPACING * 2.0); // 20
+export const SCORE_STAFF_PADDING_BOTTOM = Math.round(LINE_SPACING * 2.2); // 22
+export const SCORE_PART_HEIGHT = SCORE_STAFF_PADDING_TOP + STAFF_HEIGHT + SCORE_STAFF_PADDING_BOTTOM; // 82
+export const SCORE_ROW_MARGIN_TOP    = Math.round(LINE_SPACING * 0.8); // 8
+export const SCORE_ROW_MARGIN_BOTTOM = Math.round(LINE_SPACING * 0.4); // 4
 export const SCORE_DEFAULT_MEASURE_WIDTH = Math.round(LINE_SPACING * 12); // 120
 export const SCORE_FIRST_MEASURE_EXTRA   = Math.round(LINE_SPACING * 6);  // 60
 
