@@ -63,15 +63,20 @@ interface DrumSoundParams {
 }
 
 const DRUM_SOUND_PARAMS: Record<DrumType, DrumSoundParams> = {
-  kick:         { noiseMix: 0.15, toneFreq: 60,  decayS: 0.35, filterHz: 200 },
-  snare:        { noiseMix: 0.75, toneFreq: 180, decayS: 0.18, filterHz: 2500 },
-  hihat_closed: { noiseMix: 0.95, toneFreq: 800, decayS: 0.06, filterHz: 9000 },
-  hihat_open:   { noiseMix: 0.95, toneFreq: 800, decayS: 0.35, filterHz: 9000 },
-  crash:        { noiseMix: 0.9,  toneFreq: 500, decayS: 1.2,  filterHz: 7000 },
-  ride:         { noiseMix: 0.7,  toneFreq: 600, decayS: 0.8,  filterHz: 6000 },
-  tom_high:     { noiseMix: 0.2,  toneFreq: 260, decayS: 0.28, filterHz: 500 },
-  tom_mid:      { noiseMix: 0.2,  toneFreq: 180, decayS: 0.3,  filterHz: 400 },
-  tom_low:      { noiseMix: 0.2,  toneFreq: 110, decayS: 0.32, filterHz: 300 },
+  kick:            { noiseMix: 0.15, toneFreq: 60,  decayS: 0.35, filterHz: 200 },
+  snare:           { noiseMix: 0.75, toneFreq: 180, decayS: 0.18, filterHz: 2500 },
+  rimshot:         { noiseMix: 0.8,  toneFreq: 220, decayS: 0.14, filterHz: 3500 },
+  side_stick:      { noiseMix: 0.85, toneFreq: 300, decayS: 0.10, filterHz: 4000 },
+  hihat_closed:    { noiseMix: 0.95, toneFreq: 800, decayS: 0.06, filterHz: 9000 },
+  hihat_open:      { noiseMix: 0.95, toneFreq: 800, decayS: 0.35, filterHz: 9000 },
+  foot_hihat:      { noiseMix: 0.95, toneFreq: 700, decayS: 0.08, filterHz: 8000 },
+  foot_hihat_open: { noiseMix: 0.95, toneFreq: 700, decayS: 0.30, filterHz: 8000 },
+  crash:           { noiseMix: 0.9,  toneFreq: 500, decayS: 1.2,  filterHz: 7000 },
+  ride:            { noiseMix: 0.7,  toneFreq: 600, decayS: 0.8,  filterHz: 6000 },
+  ride_bell:       { noiseMix: 0.4,  toneFreq: 700, decayS: 0.5,  filterHz: 7000 },
+  tom_high:        { noiseMix: 0.2,  toneFreq: 260, decayS: 0.28, filterHz: 500 },
+  tom_mid:         { noiseMix: 0.2,  toneFreq: 180, decayS: 0.3,  filterHz: 400 },
+  tom_low:         { noiseMix: 0.2,  toneFreq: 110, decayS: 0.32, filterHz: 300 },
 };
 
 // ── 네이티브: WAV 파일 캐시 ──────────────────────────────────

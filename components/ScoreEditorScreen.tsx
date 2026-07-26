@@ -47,7 +47,7 @@ import type {
   ClefType,
   ScoreLayoutOverrides,
 } from "@/lib/score-types";
-import { INSTRUMENTS, getKeySignatureLabel } from "@/lib/score-types";
+import { INSTRUMENTS, getKeySignatureLabel, DRUM_MAP } from "@/lib/score-types";
 import { ScoreCanvas } from "@/components/ScoreCanvas";
 import type { EditorTool } from "@/components/ScoreCanvas";
 import { ScoreRenderer } from "@/components/ScoreRenderer";
@@ -90,6 +90,7 @@ function makeNote(
   ornament?: import("@/lib/score-types").OrnamentType | null,
   doubleDotted?: boolean,
   noteHead?: import("@/lib/score-types").NoteHeadType | null,
+  drumType?: import("@/lib/score-types").DrumType,
 ): ScoreNote {
   const finalPitch: Pitch = accidental
     ? { ...pitch, accidental }
@@ -104,6 +105,7 @@ function makeNote(
     dynamic: dynamic ?? undefined,
     ornament: ornament ?? undefined,
     noteHead: noteHead ?? undefined,
+    drumType: drumType ?? undefined,
   };
 }
 
@@ -637,7 +639,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
 
   // ── 음표 추가 (터치 확정) ─────────────────────────────────────
   const handleNotePlaced = useCallback(
-    (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number, noteHead?: import("@/lib/score-types").NoteHeadType | null) => {
+    (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number, noteHead?: import("@/lib/score-types").NoteHeadType | null, drumType?: import("@/lib/score-types").DrumType) => {
       let newElement = makeNote(
         pitch,
         duration,
@@ -647,6 +649,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         selectedOrnament ?? undefined,
         isDoubleDotted,
         noteHead ?? null,
+        drumType,
       );
       const measureId = doc.parts[selectedPartIdx]?.measures[measureIdx]?.id;
       const newDoc: ScoreDocument = {
@@ -1606,7 +1609,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   }
 
   // ── 음표 드래그 이동 (선택 모드에서 위아래 드래그 → 음높이 변경) ──
-  function handleNoteMoved(elementId: string, measureIdx: number, newPitch: Pitch) {
+  function handleNoteMoved(elementId: string, measureIdx: number, newPitch: Pitch, newDrumType?: import("@/lib/score-types").DrumType) {
     const newDoc: ScoreDocument = {
       ...doc,
       parts: doc.parts.map((p, pIdx) => {
@@ -1619,7 +1622,13 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               ...m,
               elements: m.elements.map((el) => {
                 if (el.id !== elementId || el.type !== "note") return el;
-                return { ...el, pitch: newPitch };
+                const updated = { ...el, pitch: newPitch };
+                if (newDrumType !== undefined) {
+                  // 퍼커션 드래그: drumType 및 음표머리를 새 위치에 맞게 갱신
+                  updated.drumType = newDrumType;
+                  updated.noteHead = DRUM_MAP[newDrumType].noteHead;
+                }
+                return updated;
               }),
             };
           }),

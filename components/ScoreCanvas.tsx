@@ -28,6 +28,7 @@ import {
   TIME_SIG_WIDTH,
   KEY_SIG_ACCIDENTAL_WIDTH,
   layoutMeasure,
+  yToDrumType,
 } from "@/lib/score-layout";
 import { BASE_LINE_SPACING, scoreScaleFactor } from "@/lib/score-scale";
 import type {
@@ -37,6 +38,7 @@ import type {
   ClefType,
   Accidental,
   NoteHeadType,
+  DrumType,
 } from "@/lib/score-types";
 
 // ── 음이름 변환 ───────────────────────────────────────────────
@@ -100,7 +102,7 @@ export interface ScoreCanvasProps {
   activeDuration: NoteDuration;
   isDotted: boolean;
   accidental: Accidental | null;
-  onNotePlaced: (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number, noteHead?: NoteHeadType | null) => void;
+  onNotePlaced: (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number, noteHead?: NoteHeadType | null, drumType?: DrumType) => void;
   /** 퍼커션 클레프에서 사용할 음표머리 — ScoreCanvas가 onNotePlaced에 noteHead로 전달 */
   selectedNoteHead?: NoteHeadType | null;
   onRestPlaced: (measureIdx: number, duration: NoteDuration, insertIdx: number, placedX: number) => void;
@@ -109,7 +111,7 @@ export interface ScoreCanvasProps {
   onMeasureLongPress?: (measureIdx: number) => void;
   onEraseElement: (elementId: string, measureIdx: number) => void;
   onEraseMultiple?: (elements: Array<{elementId: string; measureIdx: number}>) => void;
-  onNoteMoved?: (elementId: string, measureIdx: number, newPitch: Pitch) => void;
+  onNoteMoved?: (elementId: string, measureIdx: number, newPitch: Pitch, drumType?: DrumType) => void;
   /** 잇단음표 브래킷/숫자를 탭했을 때 호출 — 그룹 전체 elementIds를 전달 (다중 선택용) */
   onTupletBracketTap?: (elementIds: string[]) => void;
   // 재생 연동
@@ -711,15 +713,20 @@ export function ScoreCanvas({
         if (tool === "note") {
           const info = touchToGhost(slx, sly);
           if (info) {
+            // 퍼커션 파트: 터치 Y + 선택 음표머리로 DrumType 결정
+            const noteHead = info.isPercussionClef ? selectedNoteHeadRef.current : null;
+            const staffRelY = info.y - info.staffY;
+            const drumType: DrumType | undefined = info.isPercussionClef
+              ? yToDrumType(staffRelY, noteHead ?? undefined)
+              : undefined;
             if (notePreviewEnabledRef.current && !isPlayingRef.current) {
-              if (info.isPercussionClef) {
-                previewScoreDrum("snare");
-              } else {
+              if (info.isPercussionClef && drumType) {
+                previewScoreDrum(drumType);
+              } else if (!info.isPercussionClef) {
                 applyNotePreviewOnRelease(isPlayingRef.current, pitchToMidi(info.pitch), previewScoreNote, instrumentIdRef.current);
               }
             }
-            const noteHead = info.isPercussionClef ? selectedNoteHeadRef.current : null;
-            onNotePlaced(info.measureIdx, info.pitch, dur, info.insertIdx, info.measureRelX, noteHead);
+            onNotePlaced(info.measureIdx, info.pitch, dur, info.insertIdx, info.measureRelX, noteHead, drumType);
           }
         } else if (tool === "rest") {
           const info = touchToGhost(slx, sly);
@@ -744,10 +751,15 @@ export function ScoreCanvas({
                 origAcc !== undefined
                   ? { ...info.pitch, accidental: origAcc ?? undefined }
                   : { ...info.pitch, accidental: undefined };
+              // 퍼커션 파트: 드래그 목표 위치에서 새 DrumType 계산
+              const movedDrumType: DrumType | undefined = info.isPercussionClef
+                ? yToDrumType(info.y - info.staffY, selectedNoteHeadRef.current ?? undefined)
+                : undefined;
               onNoteMoveRef.current?.(
                 dragElementIdRef.current,
                 dragMeasureIdxRef.current,
                 finalPitch,
+                movedDrumType,
               );
             }
             dragElementIdRef.current = null;

@@ -2,7 +2,7 @@
 // 악보 SVG 레이아웃 계산 엔진 (순수 함수)
 // ============================================================
 
-import type { ClefType, NoteDuration, Pitch, ScoreMeasure, ScoreDocument, ScoreElement, ScoreNote, DrumType } from "./score-types";
+import type { ClefType, NoteDuration, Pitch, ScoreMeasure, ScoreDocument, ScoreElement, ScoreNote, DrumType, NoteHeadType } from "./score-types";
 import { DRUM_MAP, DRUM_TYPES } from "./score-types";
 import { getElementBeatScale } from "./score-tuplet";
 
@@ -152,10 +152,31 @@ export function drumTypeToY(drumType: DrumType): number {
 }
 
 /**
- * Y 좌표 → 가장 가까운 드럼 종류 (타악기 파트 터치 입력용)
+ * Y 좌표 → 가장 가까운 드럼 종류 (타악기 파트 터치 입력용).
+ *
+ * 같은 staffStep에 여러 DrumType이 있으면 `selectedNoteHead`로 우선 판별한다.
+ * noteHead가 없거나 일치하는 항목이 없을 때는 DRUM_TYPES 배열 순서 기준으로
+ * 가장 먼저 나오는 항목(= 기본값)을 반환한다.
  */
-export function yToDrumType(y: number): DrumType {
+export function yToDrumType(y: number, selectedNoteHead?: NoteHeadType): DrumType {
   const step = Math.round(y / (LINE_SPACING / 2));
+
+  // 1) 정확히 같은 staffStep 후보 모두 수집
+  const exact: DrumType[] = DRUM_TYPES.filter((dt) => DRUM_MAP[dt].staffStep === step);
+
+  if (exact.length === 1) return exact[0];
+
+  if (exact.length > 1) {
+    // noteHead 인자로 우선 판별
+    if (selectedNoteHead) {
+      const byHead = exact.find((dt) => DRUM_MAP[dt].noteHead === selectedNoteHead);
+      if (byHead) return byHead;
+    }
+    // 기본값: DRUM_TYPES 순서 기준 첫 번째 (= hihat_closed > ride 등)
+    return exact[0];
+  }
+
+  // 2) 정확 매칭 없음 → 가장 가까운 항목
   let closest: DrumType = "snare";
   let minDist = Infinity;
   for (const dt of DRUM_TYPES) {

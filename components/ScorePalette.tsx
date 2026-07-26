@@ -20,11 +20,12 @@ import type { EditorTool } from "@/components/ScoreCanvas";
 
 // ── 음표 머리 선택 항목 (퍼커션 클레프 전용) ───────────────────
 const NOTE_HEAD_OPTIONS: Array<{ value: NoteHeadType; symbol: string; labelKey: string }> = [
-  { value: "normal",     symbol: "●", labelKey: "noteHeadNormal" },
-  { value: "cross",      symbol: "✕", labelKey: "noteHeadCross" },
-  { value: "cross_open", symbol: "✕°", labelKey: "noteHeadCrossOpen" },
-  { value: "open_circle", symbol: "○", labelKey: "noteHeadOpenCircle" },
-  { value: "slash",      symbol: "/", labelKey: "noteHeadSlash" },
+  { value: "normal",      symbol: "●",  labelKey: "noteHeadNormal" },
+  { value: "cross",       symbol: "✕",  labelKey: "noteHeadCross" },
+  { value: "cross_open",  symbol: "✕°", labelKey: "noteHeadCrossOpen" },
+  { value: "open_circle", symbol: "○",  labelKey: "noteHeadOpenCircle" },
+  { value: "diamond",     symbol: "◆",  labelKey: "noteHeadDiamond" },
+  { value: "slash",       symbol: "/",  labelKey: "noteHeadSlash" },
 ];
 
 // ── 음표 길이 ─────────────────────────────────────────────────
