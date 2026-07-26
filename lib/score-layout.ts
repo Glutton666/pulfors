@@ -457,34 +457,52 @@ export interface BeamGroup {
   beamLevel: number; // 1 = 8분음표 빔, 2 = 16분음표 빔
 }
 
+/** 음표 음길이에서 빔 단수를 반환한다 (8분음표=1, 16분=2, 32분=3) */
+export function beamLevelForDur(dur: string): number {
+  if (dur === "thirty_second" || dur === "thirty_second_dot") return 3;
+  if (dur === "sixteenth" || dur === "sixteenth_dot") return 2;
+  return 1;
+}
+
+const _BEAMABLE_DURS = new Set<string>([
+  "eighth", "eighth_dot",
+  "sixteenth", "sixteenth_dot",
+  "thirty_second", "thirty_second_dot",
+]);
+
 /**
- * 8분음표 이상을 빔으로 묶는 그룹 계산
+ * 마디 요소 배열에서 일반(잇단음표 외) 빔 그룹을 계산한다.
+ * - 쉼표, 잇단음표 멤버는 그룹 경계로 작용한다.
+ * - 2개 이상의 연속 beamable note가 있어야 그룹이 생성된다.
+ * - beamLevel: 그룹 내 최단 음표 기준 최대 단수 (8분=1, 16분=2, 32분=3)
  */
 export function calcBeamGroups(
-  durations: NoteDuration[],
-  beatsPerMeasure: number,
-  denominator: number,
+  elements: ScoreElement[],
+  tupletMemberIds: Set<string> = new Set(),
 ): BeamGroup[] {
   const groups: BeamGroup[] = [];
-  // 간단한 구현: 인접한 8분/16분음표를 묶음
   let start = -1;
-  for (let i = 0; i <= durations.length; i++) {
-    const dur = durations[i];
+  let maxLevel = 1;
+
+  for (let i = 0; i <= elements.length; i++) {
+    const el = elements[i];
     const beamable =
-      dur === "eighth" ||
-      dur === "sixteenth" ||
-      dur === "thirty_second" ||
-      dur === "thirty_second_dot" ||
-      dur === "eighth_dot" ||
-      dur === "sixteenth_dot";
+      !!el &&
+      el.type === "note" &&
+      _BEAMABLE_DURS.has(el.duration) &&
+      !tupletMemberIds.has(el.id);
 
     if (beamable && start === -1) {
       start = i;
+      maxLevel = beamLevelForDur(el.duration);
+    } else if (beamable) {
+      maxLevel = Math.max(maxLevel, beamLevelForDur(el.duration));
     } else if (!beamable && start !== -1) {
       if (i - start >= 2) {
-        groups.push({ startIdx: start, endIdx: i - 1, beamLevel: 1 });
+        groups.push({ startIdx: start, endIdx: i - 1, beamLevel: maxLevel });
       }
       start = -1;
+      maxLevel = 1;
     }
   }
   return groups;

@@ -34,9 +34,11 @@ import {
   headerWidth,
   KEY_SIG_POSITIONS,
   computeScoreLayout,
+  calcBeamGroups,
+  beamLevelForDur,
 } from "@/lib/score-layout";
 import { BASE_LINE_SPACING, scoreScaleFactor } from "@/lib/score-scale";
-import type { ScoreRowLayout, NotePosition } from "@/lib/score-layout";
+import type { ScoreRowLayout, NotePosition, BeamGroup } from "@/lib/score-layout";
 import type { ScoreDocument, ScorePart, ScoreMeasure, ScoreNote, ScoreRest, ClefType, NoteDuration, ArticulationType, OrnamentType, NoteHeadType } from "@/lib/score-types";
 import { DRUM_MAP } from "@/lib/score-types";
 
@@ -812,11 +814,7 @@ function MeasureRender({
   // ── 잇단음표 빔 계산 ─────────────────────────────────────────
   // beamable duration 체크 (음표 전용 — 쉼표는 빔 연결 불가)
   const BEAMABLE_DURS = new Set<string>(["eighth", "eighth_dot", "sixteenth", "sixteenth_dot", "thirty_second", "thirty_second_dot"]);
-  function beamLevelForDur(dur: string): number {
-    if (dur === "thirty_second" || dur === "thirty_second_dot") return 3;
-    if (dur === "sixteenth" || dur === "sixteenth_dot") return 2;
-    return 1;
-  }
+  // beamLevelForDur: score-layout에서 import
 
   // 각 잇단음표 그룹에 대해 빔 여부와 빔 정보를 미리 계산한다
   interface TupletBeamInfo {
@@ -904,6 +902,67 @@ function MeasureRender({
     }
   }
 
+  // ── 일반 빔 그룹 계산 (잇단음표에 속하지 않는 연속 beamable 음표) ─
+  interface RegularBeamInfo {
+    beamLevel: number;
+    stemDir: "up" | "down";
+    beamAbsY: number;
+    noteStems: Array<{ id: string; stemX: number; noteAbsY: number }>;
+  }
+  const regularBeamGroups: RegularBeamInfo[] = [];
+  const regularStemDirMap = new Map<string, "up" | "down">();
+
+  const tupletMemberIds = new Set<string>(
+    (measure.tuplets ?? []).flatMap((g) => g.elementIds),
+  );
+
+  for (const group of calcBeamGroups(measure.elements, tupletMemberIds)) {
+    // startIdx~endIdx 범위 내 note 요소만 추출
+    const groupEls = measure.elements
+      .slice(group.startIdx, group.endIdx + 1)
+      .filter((el) => el.type === "note");
+    const groupPos = groupEls
+      .map((el) => positions.find((p) => p.elementId === el.id))
+      .filter((p): p is (typeof positions)[number] => !!p);
+
+    if (groupPos.length < 2) continue;
+
+    // 평균 noteY로 공통 기둥 방향 결정
+    const avgRelY = groupPos.reduce((s, p) => s + p.y, 0) / groupPos.length;
+    const stemDir: "up" | "down" = avgRelY > STAFF_HEIGHT / 2 ? "up" : "down";
+
+    // 빔 Y: 극단 음높이 기준 기둥 끝 좌표 + 여백 클램프
+    const extremeRelY =
+      stemDir === "up"
+        ? Math.min(...groupPos.map((p) => p.y))
+        : Math.max(...groupPos.map((p) => p.y));
+    const rawBeamAbsY =
+      staffY + extremeRelY + (stemDir === "up" ? -STEM_HEIGHT : STEM_HEIGHT);
+    const beamAbsY =
+      stemDir === "up"
+        ? Math.max(staffY - STAFF_PADDING_TOP + 6, rawBeamAbsY)
+        : Math.min(staffY + STAFF_HEIGHT + STAFF_PADDING_BOTTOM - 6, rawBeamAbsY);
+
+    // 음표별 기둥 좌표 (Stem 컴포넌트와 동일 공식)
+    const noteStems = groupPos.map((p) => ({
+      id: p.elementId,
+      stemX:
+        stemDir === "up"
+          ? contentX + p.x + NOTE_HEAD_RX - 1
+          : contentX + p.x - NOTE_HEAD_RX + 1,
+      noteAbsY: staffY + p.y,
+    }));
+
+    regularBeamGroups.push({ beamLevel: group.beamLevel, stemDir, beamAbsY, noteStems });
+
+    // 빔 그룹 멤버의 Flag + 개별 Stem 억제
+    for (const el of groupEls) {
+      flagSuppressSet.add(el.id);
+      stemSuppressSet.add(el.id);
+      regularStemDirMap.set(el.id, stemDir);
+    }
+  }
+
   return (
     <G>
       {/* 현재 마디 하이라이트 (재생 헤드) */}
@@ -984,7 +1043,8 @@ function MeasureRender({
           // 잇단음표 빔 그룹 내 음표면 공통 기둥 방향을 주입한다
           const elTupletGroupId = pos.tupletGroupId;
           const beamInfo = elTupletGroupId ? tupletBeamInfoMap.get(elTupletGroupId) : undefined;
-          const inBeamedGroup = !!(beamInfo?.isBeamed && stemSuppressSet.has(el.id));
+          const inTupletBeam = !!(beamInfo?.isBeamed && stemSuppressSet.has(el.id));
+          const inRegularBeam = !inTupletBeam && stemSuppressSet.has(el.id);
           return (
             <NoteElement
               key={el.id}
@@ -995,8 +1055,12 @@ function MeasureRender({
               color={color}
               isSelected={el.id === selectedElementId || !!multiSelectIds?.includes(el.id)}
               suppressFlag={flagSuppressSet.has(el.id)}
-              suppressStem={inBeamedGroup}
-              forcedStemDir={inBeamedGroup ? beamInfo?.stemDir : undefined}
+              suppressStem={inTupletBeam || inRegularBeam}
+              forcedStemDir={
+                inTupletBeam ? beamInfo?.stemDir
+                  : inRegularBeam ? regularStemDirMap.get(el.id)
+                  : undefined
+              }
             />
           );
         } else {
@@ -1127,6 +1191,93 @@ function MeasureRender({
         }
 
         return <G key={`beam-${group.id}`}>{stemLines}{beamLines}</G>;
+      })}
+
+      {/* 일반 빔 선 + 음표별 기둥 (잇단음표 외 연속 beamable 음표) */}
+      {regularBeamGroups.map((info, gi) => {
+        const beamSpacing = 4;
+        const stemX1 = info.noteStems[0].stemX;
+        const stemX2 = info.noteStems[info.noteStems.length - 1].stemX;
+
+        // 각 음표: noteAbsY → beamAbsY 기둥 선
+        const stemLines = info.noteStems.map((ns) => (
+          <Line
+            key={`rs-${ns.id}`}
+            x1={ns.stemX}
+            y1={ns.noteAbsY}
+            x2={ns.stemX}
+            y2={info.beamAbsY}
+            stroke={color}
+            strokeWidth={1.2}
+          />
+        ));
+
+        // 수평 빔 막대 (beamLevel에 따라 1~3단)
+        // 1단: 전체 span, 2단 이상: 연속된 같은-레벨 음표 사이만 그음
+        const beamRects: React.ReactNode[] = [];
+        for (let lvl = 0; lvl < info.beamLevel; lvl++) {
+          const offsetY = info.stemDir === "up" ? lvl * beamSpacing : -(lvl * beamSpacing);
+          if (lvl === 0) {
+            // 1단 빔: 항상 그룹 전체 span
+            beamRects.push(
+              <Line
+                key={`rb-0`}
+                x1={stemX1}
+                y1={info.beamAbsY + offsetY}
+                x2={stemX2}
+                y2={info.beamAbsY + offsetY}
+                stroke={color}
+                strokeWidth={2.5}
+              />,
+            );
+          } else {
+            // 2단+ 빔: 해당 레벨 이상의 음표가 연속되는 구간만 그린다
+            let segStart: number | null = null;
+            for (let ni = 0; ni <= info.noteStems.length; ni++) {
+              const ns = info.noteStems[ni];
+              const nsEl = ns ? measure.elements.find((e) => e.id === ns.id) : undefined;
+              const hasLevel = !!(nsEl && beamLevelForDur(nsEl.duration) > lvl);
+              if (hasLevel && segStart === null) {
+                segStart = ni;
+              } else if (!hasLevel && segStart !== null) {
+                if (ni - segStart >= 2) {
+                  const sx = info.noteStems[segStart].stemX;
+                  const ex = info.noteStems[ni - 1].stemX;
+                  beamRects.push(
+                    <Line
+                      key={`rb-${lvl}-${segStart}`}
+                      x1={sx}
+                      y1={info.beamAbsY + offsetY}
+                      x2={ex}
+                      y2={info.beamAbsY + offsetY}
+                      stroke={color}
+                      strokeWidth={2.5}
+                    />,
+                  );
+                } else if (ni - segStart === 1) {
+                  // 단독 16분음표 — 다음 음표 방향으로 절반짜리 부분 빔
+                  const sx = info.noteStems[segStart].stemX;
+                  const halfW = 6;
+                  const dir = segStart < info.noteStems.length - 1 ? 1 : -1;
+                  beamRects.push(
+                    <Line
+                      key={`rb-${lvl}-${segStart}-h`}
+                      x1={sx}
+                      y1={info.beamAbsY + offsetY}
+                      x2={sx + halfW * dir}
+                      y2={info.beamAbsY + offsetY}
+                      stroke={color}
+                      strokeWidth={2.5}
+                    />,
+                  );
+                }
+                segStart = null;
+              }
+            }
+          }
+        }
+
+        return <G key={`rbeam-${gi}`}>{stemLines}{beamRects}</G>;
       })}
 
       {/* 잇단음표(튜플렛) 브래킷 + 숫자 */}
