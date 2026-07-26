@@ -905,6 +905,7 @@ export const translations = {
     back:               { ko: "목록", en: "List" },
     save:               { ko: "저장", en: "Save" },
     saved:              { ko: "저장됨", en: "Saved" },
+    beatOverflowToast:  { ko: "마디 박자가 초과됐습니다", en: "Measure beat count exceeded" },
     measures:           { ko: "마디", en: "measures" },
     parts:              { ko: "성부", en: "parts" },
     bpmLabel:           { ko: "BPM", en: "BPM" },

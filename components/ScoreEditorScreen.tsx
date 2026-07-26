@@ -30,6 +30,7 @@ import { saveScore, createEmptyMeasure } from "@/lib/score-storage";
 import { stopAllScoreNotes, stopPreviewNote } from "@/lib/score-audio";
 import { exportScoreAsJson, exportScoreAsJpg, exportScorePagesAsPng, shareScoreAsScoreJson, importScoreFromJson, importReferenceImage, extractParts } from "@/lib/score-io";
 import { paginateScoreDoc } from "@/lib/score-layout";
+import { measureBeatTotal } from "@/lib/score-playback";
 import { createTupletGroup, removeTupletGroup, findTupletForElement, removeElementFromTuplets } from "@/lib/score-tuplet";
 import { loadPracticeBook, savePracticeBook, createPracticeEntry } from "@/lib/storage";
 import type {
@@ -368,6 +369,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   // ── 저장 ──────────────────────────────────────────────────────
   const [savedToast, setSavedToast] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── 박자 초과 경고 토스트 ─────────────────────────────────────
+  const [beatOverflowToast, setBeatOverflowToast] = useState(false);
+  const beatOverflowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── IO 핸들러 ─────────────────────────────────────────────────
 
@@ -662,6 +666,16 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           : doc.layoutOverrides,
       };
       applyDoc(newDoc);
+      // 박자 초과 경고
+      const updatedMeasure = newDoc.parts[selectedPartIdx]?.measures[measureIdx];
+      if (updatedMeasure) {
+        const effectiveSig = updatedMeasure.timeSignature ?? newDoc.timeSignature;
+        if (measureBeatTotal(updatedMeasure, effectiveSig).overflow) {
+          if (beatOverflowTimerRef.current) clearTimeout(beatOverflowTimerRef.current);
+          setBeatOverflowToast(true);
+          beatOverflowTimerRef.current = setTimeout(() => setBeatOverflowToast(false), 2500);
+        }
+      }
       setSelectedElementId(newElement.id);
       setSelectedMeasureIdx(measureIdx);
     },
@@ -691,6 +705,16 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           : doc.layoutOverrides,
       };
       applyDoc(newDoc);
+      // 박자 초과 경고
+      const updatedMeasureR = newDoc.parts[selectedPartIdx]?.measures[measureIdx];
+      if (updatedMeasureR) {
+        const effectiveSigR = updatedMeasureR.timeSignature ?? newDoc.timeSignature;
+        if (measureBeatTotal(updatedMeasureR, effectiveSigR).overflow) {
+          if (beatOverflowTimerRef.current) clearTimeout(beatOverflowTimerRef.current);
+          setBeatOverflowToast(true);
+          beatOverflowTimerRef.current = setTimeout(() => setBeatOverflowToast(false), 2500);
+        }
+      }
       setSelectedElementId(newElement.id);
       setSelectedMeasureIdx(measureIdx);
     },
@@ -1645,6 +1669,28 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   const isPercussionPart = effectiveClef === "percussion";
 
   // 드로어 헤더 상태 요약 (닫혀있을 때 표시) — IIFE 사용 금지(React Compiler 비호환)
+  // ── 선택 마디 박자 잔여/초과 상태 ───────────────────────────
+  // React Compiler 호환: IIFE 대신 let + if 블록 사용
+  let beatStatusText = "";
+  let beatIsOverflow = false;
+  if (currentPart && selectedMeasureIdx !== null) {
+    const _bsm = currentPart.measures[selectedMeasureIdx];
+    if (_bsm) {
+      const _bsig = _bsm.timeSignature ?? doc.timeSignature;
+      const _bst = measureBeatTotal(_bsm, _bsig);
+      const _bfmt = (b: number) => {
+        const v = Math.round(b * 1000) / 1000;
+        return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/\.?0+$/, "");
+      };
+      if (_bst.overflow) {
+        beatIsOverflow = true;
+        beatStatusText = `+${_bfmt(Math.abs(_bst.remaining))}박 초과`;
+      } else if (_bst.remaining > 1e-9) {
+        beatStatusText = `잔여 ${_bfmt(_bst.remaining)}박`;
+      }
+    }
+  }
+
   let drawerMeasureStatus = "";
   if (currentPart) {
     const _dms_measure = selectedMeasureIdx !== null ? currentPart.measures[selectedMeasureIdx] : null;
@@ -1705,6 +1751,11 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         {savedToast && (
           <Text style={[styles.savedToast, { color: C.accent }]}>
             {t("scoreMode", "saved")}
+          </Text>
+        )}
+        {beatOverflowToast && (
+          <Text style={[styles.savedToast, { color: "#FF8C42" }]}>
+            {t("scoreMode", "beatOverflowToast")}
           </Text>
         )}
 
@@ -2284,6 +2335,15 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
                     ? `${t("scoreMode", "drawerMeasureSettings")} — ${selectedMeasureIdx + 1}`
                     : t("scoreMode", "drawerNextMeasureSettings")}
                 </Text>
+                {beatStatusText ? (
+                  <Text
+                    style={[styles.drawerStatusText, { color: beatIsOverflow ? "#FF8C42" : C.textSecondary }]}
+                    numberOfLines={1}
+                    testID="score-editor-beat-status"
+                  >
+                    {beatStatusText}
+                  </Text>
+                ) : null}
                 {!drawerOpen && drawerMeasureStatus ? (
                   <Text style={[styles.drawerStatusText, { color: C.textSecondary }]} numberOfLines={1}>
                     {drawerMeasureStatus}

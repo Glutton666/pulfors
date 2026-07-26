@@ -72,6 +72,48 @@ export function noteDurationToBeats(dur: NoteDuration, doubleDotted?: boolean): 
   return base;
 }
 
+// ── 마디 박자 합산 ────────────────────────────────────────────
+
+/** 마디 박자 합산 결과 */
+export interface MeasureBeatStatus {
+  /** 마디 내 전체 요소의 박자 합 (4분음표 단위) */
+  total: number;
+  /** 박자표 기준 총 박자 용량 (4분음표 단위) */
+  capacity: number;
+  /** 초과 여부 */
+  overflow: boolean;
+  /** 잔여 박자 (음수이면 초과 상태) */
+  remaining: number;
+}
+
+/**
+ * 마디 전체 요소의 박자 합산 및 박자표 대비 과/부족 상태를 반환한다.
+ * 잇단음표 스케일을 포함한 실제 박자 합을 계산한다.
+ */
+export function measureBeatTotal(
+  measure: ScoreMeasure,
+  timeSignature: { numerator: number; denominator: number },
+): MeasureBeatStatus {
+  let total = 0;
+  for (const el of measure.elements) {
+    const baseBeats = noteDurationToBeats(
+      el.duration as NoteDuration,
+      el.type === "note" ? el.doubleDotted : undefined,
+    );
+    const scale = getElementBeatScale(measure, el.id);
+    total += baseBeats * scale;
+  }
+  // 박자 용량: 분자 × (4분음표 환산 분모) = 분자 × (4 / 분모)
+  // 예) 4/4 → 4×1=4박, 6/8 → 6×0.5=3박, 3/4 → 3×1=3박
+  const capacity = timeSignature.numerator * (4 / timeSignature.denominator);
+  return {
+    total,
+    capacity,
+    overflow: total > capacity + 1e-9,
+    remaining: capacity - total,
+  };
+}
+
 // ── 반복 부호에 따른 재생 순서 계산 ──────────────────────────
 
 /**
