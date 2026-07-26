@@ -161,7 +161,10 @@ function serveLandingPage({
   res.status(200).send(html);
 }
 
-function configureExpoAndLanding(app: express.Application) {
+function configureExpoAndLanding(app: express.Application): {
+  landingPageTemplate: string;
+  appName: string;
+} {
   const templatePath = path.resolve(
     process.cwd(),
     "server",
@@ -188,6 +191,14 @@ function configureExpoAndLanding(app: express.Application) {
     }
 
     if (req.path === "/") {
+      const staticIndexPath = path.resolve(
+        process.cwd(),
+        "static-build",
+        "index.html",
+      );
+      if (fs.existsSync(staticIndexPath)) {
+        return res.sendFile(staticIndexPath);
+      }
       return serveLandingPage({
         req,
         res,
@@ -203,6 +214,8 @@ function configureExpoAndLanding(app: express.Application) {
   app.use(express.static(path.resolve(process.cwd(), "static-build")));
 
   log("Expo routing: Checking expo-platform header on / and /manifest");
+
+  return { landingPageTemplate, appName };
 }
 
 function setupErrorHandler(app: express.Application) {
@@ -232,9 +245,29 @@ function setupErrorHandler(app: express.Application) {
   setupBodyParsing(app);
   setupRequestLogging(app);
 
-  configureExpoAndLanding(app);
+  const { landingPageTemplate, appName } = configureExpoAndLanding(app);
 
   const server = await registerRoutes(app);
+
+  // SPA catch-all: serve static-build/index.html for any non-API path that
+  // wasn't handled above (client-side routing, hard refresh, bookmarks).
+  // Falls back to the landing page when static-build hasn't been built yet.
+  app.use((req: Request, res: Response) => {
+    if (req.path.startsWith("/api")) {
+      res.status(404).json({ message: "Not found" });
+      return;
+    }
+    const staticIndexPath = path.resolve(
+      process.cwd(),
+      "static-build",
+      "index.html",
+    );
+    if (fs.existsSync(staticIndexPath)) {
+      res.sendFile(staticIndexPath);
+      return;
+    }
+    serveLandingPage({ req, res, landingPageTemplate, appName });
+  });
 
   setupErrorHandler(app);
 
