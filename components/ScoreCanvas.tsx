@@ -131,6 +131,8 @@ export interface ScoreCanvasProps {
   cursorInsertIdx?: number;
   /** true이면 터치 입력(음표 배치/드래그/지우기 등)을 모두 무시합니다 — 마디 설정 메뉴 등 오버레이가 열려 있을 때 사용 */
   disabled?: boolean;
+  /** 선택 도구에서 빈 공간을 탭해 아무것도 선택되지 않았을 때 호출 — 기존 선택을 초기화할 때 사용 */
+  onClearSelection?: () => void;
   /** 줄당 마디 수를 강제 지정 (예: 화면 방향에 따라 세로=1, 가로=2). 지정 시 doc.measuresPerLine보다 우선 적용됩니다. */
   measuresPerLineOverride?: number;
 }
@@ -171,6 +173,7 @@ export function ScoreCanvas({
   cursorInsertIdx = 0,
   disabled = false,
   measuresPerLineOverride,
+  onClearSelection,
 }: ScoreCanvasProps) {
   const { colors: C } = useTheme();
   const [ghost, setGhost] = useState<GhostState | null>(null);
@@ -197,6 +200,7 @@ export function ScoreCanvas({
   const onMeasureLongPressRef = useRef(onMeasureLongPress);
   const onEraseMultipleRef = useRef(onEraseMultiple);
   const onTupletBracketTapRef = useRef(onTupletBracketTap);
+  const onClearSelectionRef = useRef(onClearSelection);
   const docRef = useRef(doc);
   const selectedPartIdxRef = useRef(selectedPartIdx);
   const selectedNoteHeadRef = useRef(selectedNoteHead);
@@ -210,6 +214,7 @@ export function ScoreCanvas({
   onMeasureLongPressRef.current = onMeasureLongPress;
   onEraseMultipleRef.current = onEraseMultiple;
   onTupletBracketTapRef.current = onTupletBracketTap;
+  onClearSelectionRef.current = onClearSelection;
   docRef.current = doc;
   selectedPartIdxRef.current = selectedPartIdx;
 
@@ -754,7 +759,12 @@ export function ScoreCanvas({
               onElementTap(hit.elementId, hit.measureIdx);
             } else {
               const tupletHit = hitTestTupletBracket(slx, sly);
-              if (tupletHit) onTupletBracketTapRef.current?.(tupletHit);
+              if (tupletHit) {
+                onTupletBracketTapRef.current?.(tupletHit);
+              } else {
+                // 빈 공간 탭 — 기존 선택 초기화
+                onClearSelectionRef.current?.();
+              }
             }
           }
         }

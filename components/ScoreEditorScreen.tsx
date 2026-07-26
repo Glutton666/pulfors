@@ -945,6 +945,13 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     setSelectedRepeatSign(null); // 적용 후 선택 해제
   }, [doc, selectedPartIdx, applyDoc]);
 
+  // ── 선택 초기화 (빈 공간 탭) ─────────────────────────────────
+  const handleClearSelection = useCallback(() => {
+    setSelectedElementId(null);
+    setSelectedMeasureIdx(null);
+    setMeasureMultiSelectIndices([]);
+  }, []);
+
   // ── 마디 탭 ──────────────────────────────────────────────────
   const handleMeasureTap = useCallback((measureIdx: number) => {
     // 1) 반복부호 선택 중 → 부호 적용
@@ -2189,6 +2196,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               onRestPlaced={handleRestPlaced}
               onElementTap={handleElementTap}
               onMeasureTap={handleMeasureTap}
+              onClearSelection={handleClearSelection}
               onMeasureLongPress={handleMeasureLongPress}
               onEraseElement={handleEraseElement}
               onEraseMultiple={handleEraseMultiple}
