@@ -1633,6 +1633,11 @@ export class MetronomeEngine {
     return this.measureDurationMs;
   }
 
+  /** stop() 후에도 보존되는 현재 마디 시작 시각 (performance.now 기준) */
+  getMeasureStartTime(): number {
+    return this.measureStartTime;
+  }
+
   private loop = () => {
     if (!this.isRunning) return;
 
@@ -1717,15 +1722,17 @@ export class MetronomeEngine {
     }
   }
 
-  start(arg?: number | { startFromBeat?: number; startAtPerformanceTime?: number }) {
+  start(arg?: number | { startFromBeat?: number; startAtPerformanceTime?: number; measureStartAt?: number }) {
     if (this.isRunning) return;
     let startFromBeat: number | undefined;
     let startAtPerformanceTime: number | undefined;
+    let measureStartAt: number | undefined;
     if (typeof arg === "number") {
       startFromBeat = arg;
     } else if (arg && typeof arg === "object") {
       startFromBeat = arg.startFromBeat;
       startAtPerformanceTime = arg.startAtPerformanceTime;
+      measureStartAt = arg.measureStartAt;
     }
 
     if (
@@ -1775,7 +1782,12 @@ export class MetronomeEngine {
       this.currentBeat = 0;
       this.currentSubBeat = 0;
       this.scheduleIndex = 0;
-      this.measureStartTime = performance.now();
+      // measureStartAt이 주어지면 그 시각을 마디 기준점으로 사용.
+      // 이 값이 미래라면 loop()의 elapsed < 0 → 모든 tick이 대기 상태가 되어
+      // 정확한 wall-clock 시각에 비트 1이 발화된다 (seamless 전환용).
+      this.measureStartTime = (typeof measureStartAt === "number" && Number.isFinite(measureStartAt))
+        ? measureStartAt
+        : performance.now();
     }
     // 절대 기준선 anchor 초기화. 이후 매 마디 시작 시각은
     // anchorWallTime + (measureCount - anchorMeasureCount) * anchorMeasureDurationMs

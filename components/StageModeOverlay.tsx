@@ -303,6 +303,12 @@ export interface StageModeOverlayProps {
   noSetlistContent?: React.ReactNode;
   /** 재생 버튼 길게 누르기 → 동시 시작 모달 열기 */
   onOpenScheduledStart?: () => void;
+  /**
+   * 현재 항목이 유한(bar-once / note-once)이고 autoAdvance가 켜져 있을 때
+   * 다음 항목을 seamless 전환용으로 등록/해제한다.
+   * 부모는 onMeasureComplete에서 이 항목을 즉시 적용해 gap 없이 재시작한다.
+   */
+  onQueueSeamlessNext?: (entry: PracticeEntry | null) => void;
 }
 
 // ─── 메인 컴포넌트 ─────────────────────────────────────────────────────
@@ -334,6 +340,7 @@ export function StageModeOverlay({
   onSelectEntry,
   noSetlistContent,
   onOpenScheduledStart,
+  onQueueSeamlessNext,
 }: StageModeOverlayProps) {
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -362,6 +369,8 @@ export function StageModeOverlay({
   useEffect(() => { onSelectEntryRef.current = onSelectEntry; }, [onSelectEntry]);
   const onPlayPauseRef = useRef(onPlayPause);
   useEffect(() => { onPlayPauseRef.current = onPlayPause; }, [onPlayPause]);
+  const onQueueSeamlessNextRef = useRef(onQueueSeamlessNext);
+  useEffect(() => { onQueueSeamlessNextRef.current = onQueueSeamlessNext; }, [onQueueSeamlessNext]);
   const isPlayingRef = useRef(isPlaying);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
 
@@ -684,52 +693,48 @@ export function StageModeOverlay({
   const activeEntryRef = useRef<PracticeEntry | null>(null);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
 
+  // ── Seamless advance 등록: 재생 중 finite 항목이면 다음 항목을 부모에 예약 ──
+  // isPlaying 또는 activeEntry가 바뀔 때마다 재평가한다.
+  // 부모(app/index.tsx)는 onMeasureComplete에서 즉시 적용해 gap 없이 전환한다.
+  // (activeEntry는 line 542에서 이미 선언됨)
+  useEffect(() => {
+    if (!isPlaying || !settingsRef.current.autoAdvance) {
+      onQueueSeamlessNextRef.current?.(null);
+      return;
+    }
+    const entry = activeEntryRef.current;
+    if (!entry) { onQueueSeamlessNextRef.current?.(null); return; }
+    const entryMode = getEntryMode(entry);
+    const isFinite =
+      (entryMode === "bar"  && entry.barLoopMode !== "loop") ||
+      (entryMode === "note" && entry.notePlayMode === "once");
+    if (!isFinite) { onQueueSeamlessNextRef.current?.(null); return; }
+    const curSetlist = setlistRef.current;
+    const curIdx = curSetlist.findIndex((e) => e.id === entry.id);
+    const nextEntry = curSetlist[curIdx + 1] ?? null;
+    onQueueSeamlessNextRef.current?.(nextEntry);
+  }, [isPlaying, activeEntry]);
+
+  // ── 정지 감지 (fallback) — seamless가 실패했거나 마지막 항목 종료 시 처리 ──
   const wasPlayingRef = useRef(isPlaying);
   useEffect(() => {
     const wasPlaying = wasPlayingRef.current;
     wasPlayingRef.current = isPlaying;
     if (wasPlaying && !isPlaying) {
-      // 수동 전환으로 인한 정지는 무시 (suppressAutoAdvanceRef가 true인 경우)
+      // 수동 전환으로 인한 정지는 무시
       if (suppressAutoAdvanceRef.current) return;
 
-      // Ctrl+숫자 예약 점프가 있으면 autoAdvance보다 우선
+      // Ctrl+숫자 예약 점프 처리
       const jumpIdx = pendingJumpIdxRef.current;
       if (jumpIdx !== null) {
         const target = setlistRef.current[jumpIdx];
         setPendingJumpIdx(null);
-        if (target) {
-          onSelectEntryRef.current?.(target);
-          return;
-        }
+        if (target) { onSelectEntryRef.current?.(target); return; }
       }
-      if (settingsRef.current.autoAdvance) {
-        const entry = activeEntryRef.current;
-        if (!entry) return;
-        const entryMode = getEntryMode(entry);
-        const isOnce =
-          (entryMode === "bar"  && entry.barLoopMode !== "loop") ||
-          (entryMode === "note" && entry.notePlayMode === "once");
-        if (isOnce) {
-          // 다음 항목 ID를 미리 계산 — 타이머 발동 시 수동 이동 여부 검증에 사용
-          const curSetlist = setlistRef.current;
-          const curIdx = curSetlist.findIndex((e) => e.id === entry.id);
-          const nextEntry = curSetlist[curIdx + 1];
-          // autoAdvance는 onSelectEntry를 직접 호출 (switchToEntry 경유 불필요:
-          // 이미 정지 상태이므로 suppress 처리 불필요)
-          if (nextEntry) onSelectEntryRef.current?.(nextEntry);
-          if (nextEntry) {
-            // 재시작 전 대기 시간: 마지막 비트 오디오 버퍼가 완전히 소진될 때까지 대기.
-            // 1비트 길이 + 여유 200ms — BPM이 낮을수록 길어지며 최소 600ms 보장.
-            const beatMs = 60000 / Math.max(20, entry.bpm);
-            const restartDelay = Math.max(600, beatMs + 200);
-            setTimeout(() => {
-              if (!isPlayingRef.current && activeEntryRef.current?.id === nextEntry.id) {
-                onPlayPauseRef.current?.();
-              }
-            }, restartDelay);
-          }
-        }
-      }
+      // seamless가 작동했다면 isPlaying은 false가 되지 않으므로 여기는
+      // 마지막 항목이 끝난 경우 or seamless 미지원 fallback만 처리된다.
+      // → 다음 항목이 있으면 onSelectEntry만 호출 (재시작 없음: 마지막이 아닌 경우
+      //   부모의 seamless가 이미 엔진을 재시작했을 것이므로)
     }
   }, [isPlaying]);
 

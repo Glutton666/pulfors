@@ -2052,6 +2052,8 @@ export default function MetronomeScreen() {
   useEffect(() => { barStartBeatRef.current = barStartBeat; }, [barStartBeat]);
   const barLoopModeRef = useRef(barLoopMode);
   useEffect(() => { barLoopModeRef.current = barLoopMode; }, [barLoopMode]);
+  /** 셋리스트 seamless 전환 시 onMeasureComplete에서 즉시 적용할 다음 항목 */
+  const seamlessNextEntryRef = useRef<PracticeEntry | null>(null);
   const blockPlayModeRef = useRef(blockPlayMode);
   useEffect(() => { blockPlayModeRef.current = blockPlayMode; }, [blockPlayMode]);
 
@@ -2081,6 +2083,7 @@ export default function MetronomeScreen() {
 
     const modeLabel = barModeRef.current ? "Bar" : "Dial";
     if (isPlaying) {
+      seamlessNextEntryRef.current = null; // 수동 정지 시 예약된 seamless 취소
       clearAudioWatchdogRef.current();
       engine.stop();
       stopRenderedAudio();
@@ -3245,6 +3248,58 @@ export default function MetronomeScreen() {
         }
       }
       if (!engine.getIsRunning()) {
+        // ── Seamless setlist advance ──────────────────────────────────
+        // 다음 항목이 예약돼 있으면 엔진을 즉시 재시작 (정지 없음 = gap 없음).
+        const seamlessNext = seamlessNextEntryRef.current;
+        if (seamlessNext) {
+          seamlessNextEntryRef.current = null;
+          const entryIsBar = seamlessNext.mode === "bar";
+          // ref를 동기적으로 갱신 (togglePlayPause와 동일한 순서)
+          barModeRef.current    = entryIsBar;
+          barLoopModeRef.current = (seamlessNext.barLoopMode || "once") as "loop" | "once";
+          barConfigRef.current  = {
+            ...barConfigRef.current,
+            beatsPerMeasure:  seamlessNext.beatsPerMeasure,
+            beatTypes:        [...seamlessNext.beatTypes],
+            beatSubdivisions: { ...seamlessNext.beatSubdivisions },
+            barRepeats:       { ...(seamlessNext.barRepeats  || {}) },
+            loopBlocks:       [...(seamlessNext.loopBlocks   || [])],
+            barLoopMode:      (seamlessNext.barLoopMode  || "once") as "loop" | "once",
+            blockPlayMode:    (seamlessNext.blockPlayMode || "loop") as "sequential" | "loop" | "random",
+          };
+          dialConfigRef.current = {
+            ...dialConfigRef.current,
+            beatsPerMeasure:  seamlessNext.beatsPerMeasure,
+            beatTypes:        [...seamlessNext.beatTypes],
+            beatSubdivisions: { ...seamlessNext.beatSubdivisions },
+          };
+          // 현재 마디의 정확한 다음 마디 시작 시각을 캡처
+          // (applyEntryToEngineCore 전에 캡처 — 그 함수가 measureDurationMs를 변경할 수 있음)
+          const nextMeasureStart =
+            engine.getMeasureStartTime() + engine.getMeasureDurationMs();
+          // 엔진 설정 적용 → 스케줄 재구성 → 다음 마디 경계에서 정확히 시작
+          applyEntryToEngineCore(engine, seamlessNext, beatDenominatorRef.current);
+          engine.buildScheduleOnly();
+          // measureStartAt = 이전 마디 끝 시각 → 비트 1이 그 순간에 발화됨 (1비트 gap 없음)
+          engine.start({ measureStartAt: nextMeasureStart });
+          // 새 항목도 유한(once)이면 마디 끝에 정지 예약 → 다음 seamless 트리거
+          if (barModeRef.current && barLoopModeRef.current === "once") {
+            engine.requestStopAfterMeasure();
+          }
+          // React 상태 비동기 갱신 (UI 업데이트용, 엔진은 이미 재시작됨)
+          updateBpmRef.current(seamlessNext.bpm);
+          setBeatsPerMeasure(seamlessNext.beatsPerMeasure);
+          setBeatTypes([...seamlessNext.beatTypes]);
+          setBeatSubdivisions({ ...seamlessNext.beatSubdivisions });
+          setBarMode(entryIsBar);
+          setBarLoopMode(seamlessNext.barLoopMode || "once");
+          setBarRepeats({ ...(seamlessNext.barRepeats  || {}) });
+          setLoopBlocks([...(seamlessNext.loopBlocks   || [])]);
+          setActiveStagePracticeEntryId(seamlessNext.id);
+          scheduleReRender();
+          return; // 일반 정지 로직 스킵
+        }
+        // ── 일반 정지 ─────────────────────────────────────────────────
         if (noteModeRef.current && noteIsPlayingRef.current) {
           const lastBeatMs = Math.round(60000 / (bpmRef.current || 120));
           setTimeout(() => {
@@ -6067,7 +6122,9 @@ export default function MetronomeScreen() {
         practiceBook={stagePracticeEntries}
         activeEntryId={activeStagePracticeEntryId}
         onOpenScheduledStart={() => openExclusive("scheduledStart")}
+        onQueueSeamlessNext={(next) => { seamlessNextEntryRef.current = next; }}
         onSelectEntry={(entry) => {
+          seamlessNextEntryRef.current = null; // 수동 전환 시 예약된 seamless 취소
           const engine = engineRef.current;
           if (!engine) return;
           updateBpmRef.current(entry.bpm);
