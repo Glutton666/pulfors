@@ -681,13 +681,20 @@ export function StageModeOverlay({
           (entryMode === "bar"  && entry.barLoopMode !== "loop") ||
           (entryMode === "note" && entry.notePlayMode === "once");
         if (isOnce) {
+          // 다음 항목 ID를 미리 계산 — 타이머 발동 시 수동 이동 여부 검증에 사용
+          const curSetlist = setlistRef.current;
+          const curIdx = curSetlist.findIndex((e) => e.id === entry.id);
+          const nextEntry = curSetlist[curIdx + 1];
           advanceSetlist();
-          // 다음 항목 설정이 완료된 후 재생 재시작 (state 배치 처리 대기)
-          setTimeout(() => {
-            if (!isPlayingRef.current) {
-              onPlayPauseRef.current?.();
-            }
-          }, 120);
+          if (nextEntry) {
+            // 타이머가 발동될 때 activeEntry가 nextEntry와 같아야만 재생 시작.
+            // 사용자가 수동으로 이전/다른 항목으로 이동했다면 ID가 다르므로 재생 안 함.
+            setTimeout(() => {
+              if (!isPlayingRef.current && activeEntryRef.current?.id === nextEntry.id) {
+                onPlayPauseRef.current?.();
+              }
+            }, 120);
+          }
         }
       }
     }
