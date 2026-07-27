@@ -718,12 +718,15 @@ export function StageModeOverlay({
           // 이미 정지 상태이므로 suppress 처리 불필요)
           if (nextEntry) onSelectEntryRef.current?.(nextEntry);
           if (nextEntry) {
-            // 타이머 발동 시 activeEntry가 nextEntry와 일치해야만 재시작
+            // 재시작 전 대기 시간: 마지막 비트 오디오 버퍼가 완전히 소진될 때까지 대기.
+            // 1비트 길이 + 여유 200ms — BPM이 낮을수록 길어지며 최소 600ms 보장.
+            const beatMs = 60000 / Math.max(20, entry.bpm);
+            const restartDelay = Math.max(600, beatMs + 200);
             setTimeout(() => {
               if (!isPlayingRef.current && activeEntryRef.current?.id === nextEntry.id) {
                 onPlayPauseRef.current?.();
               }
-            }, 150);
+            }, restartDelay);
           }
         }
       }
