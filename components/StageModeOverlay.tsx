@@ -360,6 +360,8 @@ export function StageModeOverlay({
   useEffect(() => { setlistRef.current = setlist; }, [setlist]);
   const onSelectEntryRef = useRef(onSelectEntry);
   useEffect(() => { onSelectEntryRef.current = onSelectEntry; }, [onSelectEntry]);
+  const onPlayPauseRef = useRef(onPlayPause);
+  useEffect(() => { onPlayPauseRef.current = onPlayPause; }, [onPlayPause]);
   const isPlayingRef = useRef(isPlaying);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
 
@@ -680,6 +682,12 @@ export function StageModeOverlay({
           (entryMode === "note" && entry.notePlayMode === "once");
         if (isOnce) {
           advanceSetlist();
+          // 다음 항목 설정이 완료된 후 재생 재시작 (state 배치 처리 대기)
+          setTimeout(() => {
+            if (!isPlayingRef.current) {
+              onPlayPauseRef.current?.();
+            }
+          }, 120);
         }
       }
     }
@@ -956,7 +964,7 @@ export function StageModeOverlay({
 
       {/* ── 셋 리스트 ───────────────────────────────────────────── */}
       {isPlaying ? (
-        /* 재생 중: 마지막 항목이 아닐 때 스와이프 힌트 표시 */
+        /* 재생 중: 이전/다음 버튼 표시 */
         (() => {
           const curIdx = setlist.findIndex((e) => e.id === activeEntryId);
           if (setlist.length <= 1) return null;
@@ -964,11 +972,27 @@ export function StageModeOverlay({
           const hasNext = curIdx < setlist.length - 1;
           if (!hasPrev && !hasNext) return null;
           return (
-            <View style={styles.setlistPlayingBar}>
-              <Text style={[styles.swipeHintText, { color: faint }]}>
-                {hasPrev ? `→ ${t("stageMode", "prev")}  ` : ""}
-                {hasNext ? `← ${t("stageMode", "next")}` : ""}
-              </Text>
+            <View style={[styles.setlistPlayingBar, { flexDirection: "row" as const, gap: 12, justifyContent: "center" as const }]}>
+              {hasPrev && (
+                <Pressable
+                  onPress={goToPrevSetlist}
+                  style={({ pressed }) => [styles.nextBtnLarge, { borderColor: faint, opacity: pressed ? 0.6 : 1 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("stageMode", "prev")}
+                >
+                  <Text style={[styles.nextBtnText, { color: faint }]}>◀ {t("stageMode", "prev")}</Text>
+                </Pressable>
+              )}
+              {hasNext && (
+                <Pressable
+                  onPress={advanceSetlist}
+                  style={({ pressed }) => [styles.nextBtnLarge, { borderColor: faint, opacity: pressed ? 0.6 : 1 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("stageMode", "next")}
+                >
+                  <Text style={[styles.nextBtnText, { color: faint }]}>{t("stageMode", "next")} ▶</Text>
+                </Pressable>
+              )}
             </View>
           );
         })()

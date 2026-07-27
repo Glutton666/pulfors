@@ -5066,36 +5066,34 @@ export default function MetronomeScreen() {
         </Text>
       </Animated.View>
 
-      {/* 상단 중앙 고정 모드 레이블 — 탭 시 다음 모드로 순환 */}
-      {!stageModeActive && (
-        <Pressable
-          onPress={cycleToNextMode}
+      {/* 상단 중앙 고정 모드 레이블 — 탭 시 다음 모드로 순환 (모든 모드에서 항상 표시) */}
+      <Pressable
+        onPress={cycleToNextMode}
+        style={{
+          position: "absolute",
+          top: (insets.top || webTopInset) + 4,
+          alignSelf: "center" as const,
+          zIndex: 99999,   // StageModeOverlay(99998) 위에 표시되도록
+          paddingHorizontal: 18,
+          paddingVertical: 6,
+          borderRadius: 20,
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={t("switcher", "cycleTap")}
+        testID="mode-cycle-label"
+      >
+        <Text
           style={{
-            position: "absolute",
-            top: (insets.top || webTopInset) + 4,
-            alignSelf: "center" as const,
-            zIndex: 600,
-            paddingHorizontal: 18,
-            paddingVertical: 6,
-            borderRadius: 20,
+            fontFamily: "SpaceGrotesk_600SemiBold",
+            fontSize: S.ms(12, 0.3),
+            color: stageModeActive ? "rgba(255,255,255,0.5)" : C.textSecondary,
+            letterSpacing: 1.8,
+            textTransform: "uppercase" as const,
           }}
-          accessibilityRole="button"
-          accessibilityLabel={t("switcher", "cycleTap")}
-          testID="mode-cycle-label"
         >
-          <Text
-            style={{
-              fontFamily: "SpaceGrotesk_600SemiBold",
-              fontSize: S.ms(12, 0.3),
-              color: C.textSecondary,
-              letterSpacing: 1.8,
-              textTransform: "uppercase" as const,
-            }}
-          >
-            {t("switcher", currentMode as "beat" | "bar" | "score" | "note" | "stage")}
-          </Text>
-        </Pressable>
-      )}
+          {t("switcher", currentMode as "beat" | "bar" | "score" | "note" | "stage")}
+        </Text>
+      </Pressable>
 
       <ModeSwitcherDial
         isMenuOpen={showMenu}
@@ -6079,13 +6077,14 @@ export default function MetronomeScreen() {
           if (entry.subdivisionPattern && entry.subdivisionPattern.length > 0) {
             setSubdivisionPattern([...entry.subdivisionPattern]);
           }
-          // bar mode React state 동기화 — 이게 없으면 barModeRef.current가 false로 남아
-          // requestStopAfterMeasure()가 호출되지 않아 유한 바모드 항목이 자동 전환 안 됨
           const entryIsBar = entry.mode === "bar";
+          // barModeRef를 동기적으로 먼저 갱신해야 applyEntryToEngineCore 내부에서
+          // 바 모드 정지 로직(requestStopAfterMeasure)이 올바르게 활성화된다.
+          barModeRef.current = entryIsBar;
           setBarMode(entryIsBar);
           setBarLoopMode(entry.barLoopMode || "once");
           setBarRepeats({ ...(entry.barRepeats || {}) });
-          setLoopBlocks([...(entry.loopBlocks || [])]);
+          setLoopBlocks([...(entry.loopBlocks || []) ]);
           applyEntryToEngineCore(engine, entry, beatDenominatorRef.current);
           scheduleReRender();
           setActiveStagePracticeEntryId(entry.id);
