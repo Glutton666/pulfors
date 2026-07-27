@@ -6078,13 +6078,33 @@ export default function MetronomeScreen() {
             setSubdivisionPattern([...entry.subdivisionPattern]);
           }
           const entryIsBar = entry.mode === "bar";
-          // barModeRef를 동기적으로 먼저 갱신해야 applyEntryToEngineCore 내부에서
-          // 바 모드 정지 로직(requestStopAfterMeasure)이 올바르게 활성화된다.
+          // ── ref를 동기적으로 갱신 ─────────────────────────────────────
+          // barModeRef: applyEntryToEngineCore 전에 갱신해야 바 모드 정지 로직 작동.
+          // barConfigRef / dialConfigRef: togglePlayPause 시작 분기가 이 ref들을
+          // 엔진에 덮어쓰므로, React 상태 업데이트(async)를 기다리지 않고 여기서
+          // 즉시 동기화해야 다음 재생 시 올바른 항목 설정이 적용된다.
           barModeRef.current = entryIsBar;
+          barConfigRef.current = {
+            ...barConfigRef.current,
+            beatsPerMeasure: entry.beatsPerMeasure,
+            beatTypes:        [...entry.beatTypes],
+            beatSubdivisions: { ...entry.beatSubdivisions },
+            barRepeats:       { ...(entry.barRepeats  || {}) },
+            loopBlocks:       [...(entry.loopBlocks   || [])],
+            barLoopMode:      (entry.barLoopMode  || "once") as "loop" | "once",
+            blockPlayMode:    (entry.blockPlayMode || "loop") as "sequential" | "loop" | "random",
+          };
+          dialConfigRef.current = {
+            ...dialConfigRef.current,
+            beatsPerMeasure: entry.beatsPerMeasure,
+            beatTypes:        [...entry.beatTypes],
+            beatSubdivisions: { ...entry.beatSubdivisions },
+          };
+          // ─────────────────────────────────────────────────────────────
           setBarMode(entryIsBar);
           setBarLoopMode(entry.barLoopMode || "once");
           setBarRepeats({ ...(entry.barRepeats || {}) });
-          setLoopBlocks([...(entry.loopBlocks || []) ]);
+          setLoopBlocks([...(entry.loopBlocks || [])]);
           applyEntryToEngineCore(engine, entry, beatDenominatorRef.current);
           scheduleReRender();
           setActiveStagePracticeEntryId(entry.id);
