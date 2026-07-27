@@ -628,6 +628,34 @@ export function StageModeOverlay({
     });
   }, []);
 
+  // ── 수동 전환 중 autoAdvance 억제 플래그 ─────────────────────────
+  // 재생 중 수동 Next/Prev 시 엔진을 직접 정지시키는데,
+  // 그 정지 신호가 autoAdvance 효과를 잘못 트리거하지 않도록 막는다.
+  const suppressAutoAdvanceRef = useRef(false);
+
+  // ── 항목 전환 공통 헬퍼 ──────────────────────────────────────────
+  // 재생 중이면: 정지 → 새 항목 적용 → 재시작 (엔진 내부 상태 완전 초기화)
+  // 정지 중이면: 새 항목 적용만 (재생은 사용자가 직접 시작)
+  const switchToEntry = useCallback((target: PracticeEntry) => {
+    const wasPlaying = isPlayingRef.current;
+    if (wasPlaying) {
+      suppressAutoAdvanceRef.current = true;
+      onPlayPauseRef.current?.();           // 엔진 정지
+    }
+    onSelectEntryRef.current?.(target);     // 새 항목 설정 적용
+    if (wasPlaying) {
+      const expectedId = target.id;
+      setTimeout(() => {
+        suppressAutoAdvanceRef.current = false;
+        // 사용자가 그 사이에 다른 항목으로 이동하지 않은 경우에만 재시작
+        if (!isPlayingRef.current && activeEntryRef.current?.id === expectedId) {
+          onPlayPauseRef.current?.();
+        }
+      }, 150);
+    }
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, []);
+
   // ── 다음 항목으로 이동 ────────────────────────────────────────────
   const advanceSetlist = useCallback(() => {
     if (setlist.length <= 1) return;
@@ -636,9 +664,8 @@ export function StageModeOverlay({
     // 마지막 항목이면 순환하지 않음 (1회 재생)
     if (nextIdx >= setlist.length) return;
     const next = setlist[nextIdx];
-    if (next) onSelectEntry?.(next);
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  }, [setlist, activeEntryId, onSelectEntry]);
+    if (next) switchToEntry(next);
+  }, [setlist, activeEntryId, switchToEntry]);
 
   // ── 이전 항목으로 이동 ────────────────────────────────────────────
   const goToPrevSetlist = useCallback(() => {
@@ -647,13 +674,12 @@ export function StageModeOverlay({
     const prevIdx = idx - 1;
     if (prevIdx < 0) return;
     const prev = setlist[prevIdx];
-    if (prev) onSelectEntry?.(prev);
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  }, [setlist, activeEntryId, onSelectEntry]);
+    if (prev) switchToEntry(prev);
+  }, [setlist, activeEntryId, switchToEntry]);
 
   // ── autoAdvance: 유한 항목이 재생 완료(isPlaying false)되면 다음으로 ─
   // barLoopMode!=="loop" 또는 notePlayMode==="once" 항목 자동 전환.
-  // "loop" 항목은 스와이프 전용.
+  // "loop" 항목은 버튼/스와이프 전용.
   const settingsRef = useRef(settings);
   const activeEntryRef = useRef<PracticeEntry | null>(null);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
@@ -663,6 +689,9 @@ export function StageModeOverlay({
     const wasPlaying = wasPlayingRef.current;
     wasPlayingRef.current = isPlaying;
     if (wasPlaying && !isPlaying) {
+      // 수동 전환으로 인한 정지는 무시 (suppressAutoAdvanceRef가 true인 경우)
+      if (suppressAutoAdvanceRef.current) return;
+
       // Ctrl+숫자 예약 점프가 있으면 autoAdvance보다 우선
       const jumpIdx = pendingJumpIdxRef.current;
       if (jumpIdx !== null) {
@@ -685,20 +714,21 @@ export function StageModeOverlay({
           const curSetlist = setlistRef.current;
           const curIdx = curSetlist.findIndex((e) => e.id === entry.id);
           const nextEntry = curSetlist[curIdx + 1];
-          advanceSetlist();
+          // autoAdvance는 onSelectEntry를 직접 호출 (switchToEntry 경유 불필요:
+          // 이미 정지 상태이므로 suppress 처리 불필요)
+          if (nextEntry) onSelectEntryRef.current?.(nextEntry);
           if (nextEntry) {
-            // 타이머가 발동될 때 activeEntry가 nextEntry와 같아야만 재생 시작.
-            // 사용자가 수동으로 이전/다른 항목으로 이동했다면 ID가 다르므로 재생 안 함.
+            // 타이머 발동 시 activeEntry가 nextEntry와 일치해야만 재시작
             setTimeout(() => {
               if (!isPlayingRef.current && activeEntryRef.current?.id === nextEntry.id) {
                 onPlayPauseRef.current?.();
               }
-            }, 120);
+            }, 150);
           }
         }
       }
     }
-  }, [isPlaying, advanceSetlist]);
+  }, [isPlaying]);
 
   // ── 블루투스 키보드 이벤트 (web) ─────────────────────────────────
   useEffect(() => {

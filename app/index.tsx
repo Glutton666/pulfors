@@ -6100,6 +6100,7 @@ export default function MetronomeScreen() {
             beatTypes:        [...entry.beatTypes],
             beatSubdivisions: { ...entry.beatSubdivisions },
           };
+          barLoopModeRef.current = (entry.barLoopMode || "once") as "loop" | "once";
           // ─────────────────────────────────────────────────────────────
           setBarMode(entryIsBar);
           setBarLoopMode(entry.barLoopMode || "once");
