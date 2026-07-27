@@ -7,9 +7,12 @@ import {
   Platform,
   Pressable,
   Alert,
+  PanResponder,
   useWindowDimensions,
   BackHandler,
   AppState,
+  type GestureResponderEvent,
+  type PanResponderGestureState,
 } from "react-native";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import * as ImagePicker from "expo-image-picker";
@@ -94,7 +97,7 @@ import { OnboardingModal } from "@/components/OnboardingModal";
 import { MoreMenuModal } from "@/components/MoreMenuModal";
 import { ScoreListScreen } from "@/components/ScoreListScreen";
 import { ScoreEditorScreen } from "@/components/ScoreEditorScreen";
-import { ModeSwitcherDial } from "@/components/ModeSwitcherDial";
+import { TopDrawer } from "@/components/TopDrawer";
 import type { ModeSlot } from "@/components/ModeSwitcherDial";
 import { MenuScreen } from "@/components/MenuScreen";
 import type { ScoreDocument } from "@/lib/score-types";
@@ -279,6 +282,8 @@ export default function MetronomeScreen() {
   const sampleVolumeRef = useRef(0.8);
   // 단일 활성 모달 상태 머신: null = 모달 없음. openExclusive로만 전환해 mutual exclusion 보장.
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
+  /** 상단 드로어(D-tab 포함) 열림 여부 — 모드 라벨 탭 또는 스와이프 다운으로 토글 */
+  const [showTopDrawer, setShowTopDrawer] = useState(false);
   const {
     showSettings,
     showMenu,
@@ -4375,6 +4380,21 @@ export default function MetronomeScreen() {
     void switchToMode(nextMode);
   }, [currentMode, switchToMode]);
 
+  // ── 상단 스와이프 다운 → 드로어 열기 ───────────────────────────────────────
+  const setShowTopDrawerRef = useRef<React.Dispatch<React.SetStateAction<boolean>> | null>(null);
+  const swipeDownPR = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder:  () => false,
+      onMoveShouldSetPanResponder:   (_e: GestureResponderEvent, gs: PanResponderGestureState) =>
+        gs.dy > 10 && Math.abs(gs.dx) < Math.abs(gs.dy),
+      onPanResponderRelease:         (_e: GestureResponderEvent, gs: PanResponderGestureState) => {
+        if (gs.dy > 12) setShowTopDrawerRef.current?.(true);
+      },
+    })
+  ).current;
+  // PanResponder 안에서 최신 setShowTopDrawer에 접근하기 위한 ref 동기화
+  setShowTopDrawerRef.current = setShowTopDrawer;
+
   // 모드가 바뀔 때 슬라이드 인(오른쪽 → 중앙) 애니메이션
   const prevModeRef = useRef<ModeSlot>(currentMode);
   useEffect(() => {
@@ -5121,9 +5141,24 @@ export default function MetronomeScreen() {
         </Text>
       </Animated.View>
 
-      {/* 상단 중앙 고정 모드 레이블 — 탭 시 다음 모드로 순환 (모든 모드에서 항상 표시) */}
+      {/* 상단 스와이프 다운 제스처 존 — 드로어 열기 */}
+      {!showTopDrawer && (
+        <View
+          {...swipeDownPR.panHandlers}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: (insets.top || webTopInset) + 10,
+            zIndex: 99998,
+          }}
+        />
+      )}
+
+      {/* 상단 중앙 고정 모드 레이블 — 탭 시 드로어 토글 */}
       <Pressable
-        onPress={cycleToNextMode}
+        onPress={() => setShowTopDrawer((v) => !v)}
         style={{
           position: "absolute",
           top: (insets.top || webTopInset) + 4,
@@ -5132,6 +5167,9 @@ export default function MetronomeScreen() {
           paddingHorizontal: 18,
           paddingVertical: 6,
           borderRadius: 20,
+          flexDirection: "row" as const,
+          alignItems: "center" as const,
+          gap: 4,
         }}
         accessibilityRole="button"
         accessibilityLabel={t("switcher", "cycleTap")}
@@ -5148,13 +5186,23 @@ export default function MetronomeScreen() {
         >
           {t("switcher", currentMode as "beat" | "bar" | "score" | "note" | "stage")}
         </Text>
+        <Ionicons
+          name={showTopDrawer ? "chevron-up" : "chevron-down"}
+          size={S.ms(11, 0.3)}
+          color={stageModeActive ? "rgba(255,255,255,0.4)" : C.textSecondary}
+          pointerEvents="none"
+        />
       </Pressable>
 
-      <ModeSwitcherDial
-        isMenuOpen={showMenu}
-        onMenuToggle={() => setActiveModal(showMenu ? null : "menu")}
+      {/* 상단 드로어 — 모드 라벨 탭 또는 스와이프 다운으로 열림 */}
+      <TopDrawer
+        visible={showTopDrawer}
+        onClose={() => setShowTopDrawer(false)}
+        onMenuOpen={() => {
+          setShowTopDrawer(false);
+          setActiveModal("menu");
+        }}
         topInset={insets.top || webTopInset}
-        isLandscape={isLandscape}
       />
 
       {showMenu && (
