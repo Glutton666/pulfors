@@ -1691,10 +1691,13 @@ export class MetronomeEngine {
       this.timerId = setTimeout(this.loop, wait - 80);
     } else if (wait > 25) {
       this.timerId = setTimeout(this.loop, wait - 16);
-    } else if (wait > 4) {
-      this.timerId = setTimeout(this.loop, 1);
     } else {
-      this.scheduleRAF();
+      // wait ≤ 25ms: 1ms 이하 간격으로 폴링해 정확한 타이밍에 발화.
+      // 이전 코드는 wait ≤ 4ms 구간에서 requestAnimationFrame을 사용했는데,
+      // RAF는 디스플레이 프레임 주기(~16ms)에 고정되어 틱이 최대 ~12ms 늦게
+      // 발화될 수 있었다. setTimeout(0)은 다음 이벤트 루프 반복(~1ms)에 실행되므로
+      // 메트로놈 정밀도가 현저히 개선된다.
+      this.timerId = setTimeout(this.loop, wait > 4 ? 1 : 0);
     }
   }
 
