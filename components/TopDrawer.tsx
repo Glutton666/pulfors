@@ -1,14 +1,16 @@
 /**
  * TopDrawer — 상단에서 슬라이드 다운되는 드로어.
- * 모드 라벨 탭 또는 상단 스와이프 다운으로 열리고,
- * 바깥 탭 또는 위로 스와이프로 닫힌다.
  *
- * D-tab 반원(wall="top" 방향 — 상단 중앙 배치):
- * 평평한 면이 위, 곡면이 아래로 향하며 콘텐츠 영역 상단 중앙에 위치.
+ * 내용:
+ *  - 모드 전환 버튼 5개 (beat / bar / score / note / stage)
+ *  - 메뉴 버튼 (≡)
+ *
+ * 패널 형태: 하단이 둥글게 처리된 D-tab 스타일.
  */
 import React, { useRef, useEffect } from "react";
 import {
   View,
+  Text,
   Pressable,
   PanResponder,
   StyleSheet,
@@ -22,32 +24,55 @@ import Animated, {
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useScale } from "@/lib/scale";
+import { useLanguage } from "@/contexts/LanguageContext";
+import type { ModeSlot } from "@/components/ModeSwitcherDial";
 
-// ── D-tab geometry — ModeSwitcherDial과 동일한 상수 ──────────────────────────
-const HANDLE_R  = 38;
-const RIM_COLOR = "#6B5A1E";
-const RIM_INSET = 6;
-const ICON_S    = 22;
+// ── 스타일 상수 ────────────────────────────────────────────────────────────────
+const RIM_COLOR  = "#6B5A1E";
+const CONTENT_H  = 110; // safe-area 아래 패널 콘텐츠 높이
+const BTN_SIZE   = 52;  // 모드 버튼 크기
+const MENU_SIZE  = 44;  // 메뉴 버튼 크기
+const PANEL_RADIUS = 56; // 패널 하단 둥근 정도
 
-// wall="top": 하단만 둥글게, 상단 테두리 없음
-const OUTER_CORNERS    = { borderBottomLeftRadius: HANDLE_R, borderBottomRightRadius: HANDLE_R };
-const INNER_CORNERS    = { borderBottomLeftRadius: HANDLE_R - RIM_INSET, borderBottomRightRadius: HANDLE_R - RIM_INSET };
-const WALL_EDGE_BORDER = { borderTopWidth: 0 as const };
-const INNER_INSET      = { top: 0, bottom: RIM_INSET, left: RIM_INSET, right: RIM_INSET };
+// ── 모드 정의 ─────────────────────────────────────────────────────────────────
+type ModeDef = {
+  mode: Exclude<ModeSlot, "menu">;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  labelKo: string;
+  labelEn: string;
+};
 
-const CONTENT_H = 88; // safe-area 아래 패널 콘텐츠 높이
+const MODES: ModeDef[] = [
+  { mode: "beat",  icon: "musical-note-outline", labelKo: "비트",  labelEn: "Beat"  },
+  { mode: "bar",   icon: "grid-outline",          labelKo: "바",    labelEn: "Bar"   },
+  { mode: "score", icon: "document-text-outline", labelKo: "악보",  labelEn: "Score" },
+  { mode: "note",  icon: "create-outline",        labelKo: "노트",  labelEn: "Note"  },
+  { mode: "stage", icon: "mic-outline",           labelKo: "무대",  labelEn: "Stage" },
+];
 
 export interface TopDrawerProps {
   visible: boolean;
   onClose: () => void;
-  /** 내부 D-tab 탭 — 드로어를 닫고 메뉴를 열어야 함 */
+  /** D-tab 메뉴(≡) 탭 → 드로어 닫기 + 메뉴 열기 */
   onMenuOpen: () => void;
+  /** 모드 버튼 탭 → 드로어 닫기 + 해당 모드 전환 */
+  onModeChange: (mode: Exclude<ModeSlot, "menu">) => void;
+  /** 현재 활성 모드 (활성 버튼 강조에 사용) */
+  currentMode: ModeSlot;
   topInset: number;
 }
 
-export function TopDrawer({ visible, onClose, onMenuOpen, topInset }: TopDrawerProps) {
+export function TopDrawer({
+  visible,
+  onClose,
+  onMenuOpen,
+  onModeChange,
+  currentMode,
+  topInset,
+}: TopDrawerProps) {
   const { colors: C } = useTheme();
   const S = useScale();
+  const { language } = useLanguage();
 
   const panelH = topInset + CONTENT_H;
 
@@ -58,7 +83,7 @@ export function TopDrawer({ visible, onClose, onMenuOpen, topInset }: TopDrawerP
   useEffect(() => {
     if (visible) {
       translateY.value = withTiming(0,       { duration: 280, easing: Easing.out(Easing.cubic) });
-      overlayOp.value  = withTiming(0.42,    { duration: 280 });
+      overlayOp.value  = withTiming(0.45,    { duration: 280 });
     } else {
       translateY.value = withTiming(-panelH, { duration: 220, easing: Easing.in(Easing.cubic) });
       overlayOp.value  = withTiming(0,       { duration: 220 });
@@ -79,6 +104,9 @@ export function TopDrawer({ visible, onClose, onMenuOpen, topInset }: TopDrawerP
       onPanResponderRelease:        (_, gs) => { if (gs.dy < -30) onCloseRef.current(); },
     })
   ).current;
+
+  const iconSize = S.ms(22, 0.3);
+  const labelSize = S.ms(9, 0.2);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -103,67 +131,123 @@ export function TopDrawer({ visible, onClose, onMenuOpen, topInset }: TopDrawerP
             top: 0, left: 0, right: 0,
             height: panelH,
             zIndex: 99995,
-            backgroundColor: C.surface + "EE",
+            backgroundColor: C.surface + "F2",
+            borderBottomLeftRadius:  PANEL_RADIUS,
+            borderBottomRightRadius: PANEL_RADIUS,
+            borderBottomWidth: 2,
+            borderLeftWidth: 1.5,
+            borderRightWidth: 1.5,
+            borderColor: RIM_COLOR + "90",
             shadowColor: "#000",
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.35,
-            shadowRadius: 10,
-            elevation: 12,
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.4,
+            shadowRadius: 12,
+            elevation: 14,
             pointerEvents: visible ? "auto" : "none",
           } as const,
           drawerStyle,
         ]}
       >
         {/*
-          D-tab 반원 (wall="top" 방향):
-          - 평평한 면이 위(패널 상단 safe-area 바로 아래)
-          - 곡면이 아래를 향함
-          - 상단 중앙 정렬: top = topInset, alignSelf = center
+          콘텐츠 영역 — safe-area 아래 수직 중앙 정렬
+          모드 버튼 행 + 메뉴 버튼
         */}
-        <Pressable
-          onPress={onMenuOpen}
-          testID="top-drawer-menu-button"
-          style={({ pressed }) => ({
+        <View
+          style={{
             position: "absolute" as const,
-            top: topInset + Math.round((CONTENT_H - HANDLE_R) / 2),
-            alignSelf: "center" as const,
-            width:  HANDLE_R * 2,  // 76
-            height: HANDLE_R,      // 38
-            backgroundColor: C.surface + (pressed ? "D0" : "B8"),
-            ...OUTER_CORNERS,
-            ...WALL_EDGE_BORDER,
-            borderWidth: 3,
-            borderColor: RIM_COLOR,
-            shadowColor: RIM_COLOR,
-            shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: pressed ? 0.25 : 0.55,
-            shadowRadius: 6,
-            elevation: pressed ? 2 : 6,
+            top: topInset,
+            left: 0,
+            right: 0,
+            height: CONTENT_H,
+            flexDirection: "row" as const,
             alignItems: "center" as const,
             justifyContent: "center" as const,
-            overflow: "hidden" as const,
-          })}
+            paddingHorizontal: 16,
+            gap: 8,
+          }}
         >
-          {/* 내부 링 — ModeSwitcherDial과 동일 */}
+          {/* ── 모드 버튼 5개 ── */}
+          {MODES.map(({ mode, icon, labelKo, labelEn }) => {
+            const active = currentMode === mode;
+            const label  = language === "ko" ? labelKo : labelEn;
+            return (
+              <Pressable
+                key={mode}
+                onPress={() => onModeChange(mode)}
+                testID={`top-drawer-mode-${mode}`}
+                style={({ pressed }) => ({
+                  width:  BTN_SIZE,
+                  height: BTN_SIZE,
+                  borderRadius: BTN_SIZE / 2,
+                  backgroundColor: active
+                    ? RIM_COLOR + "40"
+                    : pressed
+                    ? C.surface + "FF"
+                    : C.surface + "00",
+                  borderWidth: active ? 2 : 1,
+                  borderColor: active ? RIM_COLOR : C.textSecondary + "30",
+                  alignItems: "center" as const,
+                  justifyContent: "center" as const,
+                  gap: 2,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Ionicons
+                  name={icon}
+                  size={iconSize}
+                  color={active ? RIM_COLOR : C.textSecondary}
+                  pointerEvents="none"
+                />
+                <Text
+                  pointerEvents="none"
+                  style={{
+                    fontSize: labelSize,
+                    fontFamily: "SpaceGrotesk_500Medium",
+                    color: active ? RIM_COLOR : C.textSecondary,
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+
+          {/* ── 구분선 ── */}
           <View
             pointerEvents="none"
             style={{
-              position: "absolute" as const,
-              ...INNER_INSET,
-              ...INNER_CORNERS,
-              ...WALL_EDGE_BORDER,
-              borderWidth: 1.5,
-              borderColor: RIM_COLOR + "70",
+              width: 1,
+              height: 32,
+              backgroundColor: RIM_COLOR + "50",
+              marginHorizontal: 2,
             }}
           />
-          {/* 메뉴 아이콘 */}
-          <Ionicons
-            name="menu"
-            size={S.ms(ICON_S, 0.3)}
-            color={C.text}
-            pointerEvents="none"
-          />
-        </Pressable>
+
+          {/* ── 메뉴 버튼 ── */}
+          <Pressable
+            onPress={onMenuOpen}
+            testID="top-drawer-menu-button"
+            style={({ pressed }) => ({
+              width:  MENU_SIZE,
+              height: MENU_SIZE,
+              borderRadius: MENU_SIZE / 2,
+              backgroundColor: pressed ? C.surface + "FF" : C.surface + "00",
+              borderWidth: 2,
+              borderColor: RIM_COLOR + "80",
+              alignItems: "center" as const,
+              justifyContent: "center" as const,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Ionicons
+              name="menu"
+              size={S.ms(20, 0.3)}
+              color={C.textSecondary}
+              pointerEvents="none"
+            />
+          </Pressable>
+        </View>
       </Animated.View>
     </>
   );

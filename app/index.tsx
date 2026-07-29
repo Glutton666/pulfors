@@ -5204,6 +5204,11 @@ export default function MetronomeScreen() {
           setShowTopDrawer(false);
           setActiveModal("menu");
         }}
+        onModeChange={(mode) => {
+          setShowTopDrawer(false);
+          void switchToMode(mode);
+        }}
+        currentMode={currentMode}
         topInset={insets.top || webTopInset}
       />
 
