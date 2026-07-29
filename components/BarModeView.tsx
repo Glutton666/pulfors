@@ -1577,7 +1577,7 @@ export function BarModeView({
 
         {/* ② 박자기호 N/4 + 재생 + BPM 스테퍼 행 — 좌/중/우 3분할 */}
         {!editorCollapsed && (
-          <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md }]}>
+          <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.lg, overflow: "visible" }]}>
             {/* N/4 박자기호 */}
             <Pressable
               onLongPress={() => {
@@ -1602,24 +1602,26 @@ export function BarModeView({
 
             <View style={{ flex: 1 }} />
 
-            {/* 재생 버튼 — 중앙 */}
-            <BarPlayButton
-              isPlaying={isPlaying}
-              isPreparing={isPreparing}
-              barLoopMode={barLoopMode}
-              onTogglePlay={onTogglePlay}
-              onBarLoopModeChange={onBarLoopModeChange}
-              blockPlayMode={blockPlayMode}
-              onBlockPlayModeChange={onBlockPlayModeChange}
-              baseStyle={[styles.playBtn, { backgroundColor: C.backgroundSecondary }]}
-              sizeOverride={{ width: 80, height: 80, borderRadius: 40 }}
-              accentColor={C.accent}
-              dangerColor={C.danger}
-              backgroundColor={C.background}
-              iconSize={ms(38, 0.4)}
-              badgeIconSize={ms(14, 0.4)}
-              t={t}
-            />
+            {/* 재생 버튼 — 위 행 침범하며 플로팅 */}
+            <View style={{ marginTop: -34, zIndex: 10 }}>
+              <BarPlayButton
+                isPlaying={isPlaying}
+                isPreparing={isPreparing}
+                barLoopMode={barLoopMode}
+                onTogglePlay={onTogglePlay}
+                onBarLoopModeChange={onBarLoopModeChange}
+                blockPlayMode={blockPlayMode}
+                onBlockPlayModeChange={onBlockPlayModeChange}
+                baseStyle={[styles.playBtn, { backgroundColor: C.backgroundSecondary }]}
+                sizeOverride={{ width: 76, height: 76, borderRadius: 38 }}
+                accentColor={C.accent}
+                dangerColor={C.danger}
+                backgroundColor={C.background}
+                iconSize={ms(34, 0.4)}
+                badgeIconSize={ms(13, 0.4)}
+                t={t}
+              />
+            </View>
 
             <View style={{ flex: 1 }} />
 
@@ -2200,6 +2202,7 @@ const styles = StyleSheet.create({
   editorSection: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingBottom: Spacing.xs,
+    overflow: "visible",
   },
   layerTabRow: {
     flexDirection: "row",
