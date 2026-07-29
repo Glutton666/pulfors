@@ -79,18 +79,24 @@ export function TopDrawer({
   // ── 애니메이션 ────────────────────────────────────────────────────────────
   const translateY = useSharedValue(-panelH);
   const overlayOp  = useSharedValue(0);
+  const panelOp    = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
+      panelOp.value    = withTiming(1,       { duration: 280 });
       translateY.value = withTiming(0,       { duration: 280, easing: Easing.out(Easing.cubic) });
       overlayOp.value  = withTiming(0.45,    { duration: 280 });
     } else {
       translateY.value = withTiming(-panelH, { duration: 220, easing: Easing.in(Easing.cubic) });
       overlayOp.value  = withTiming(0,       { duration: 220 });
+      panelOp.value    = withTiming(0,       { duration: 220 });
     }
   }, [visible, panelH]);
 
-  const drawerStyle  = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
+  const drawerStyle  = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+    opacity: panelOp.value,
+  }));
   const overlayStyle = useAnimatedStyle(() => ({ opacity: overlayOp.value }));
 
   // ── 스와이프업 → 닫기 ─────────────────────────────────────────────────────
@@ -134,11 +140,6 @@ export function TopDrawer({
             backgroundColor: C.surface + "F2",
             borderBottomLeftRadius:  PANEL_RADIUS,
             borderBottomRightRadius: PANEL_RADIUS,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.4,
-            shadowRadius: 12,
-            elevation: 14,
             pointerEvents: visible ? "auto" : "none",
           } as const,
           drawerStyle,
