@@ -1577,7 +1577,7 @@ export function BarModeView({
 
         {/* ② 박자기호 N/4 + 재생 + BPM 스테퍼 행 — 좌/중/우 3분할 */}
         {!editorCollapsed && (
-          <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.lg }]}>
+          <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md }]}>
             {/* N/4 박자기호 */}
             <Pressable
               onLongPress={() => {
@@ -1612,11 +1612,12 @@ export function BarModeView({
               blockPlayMode={blockPlayMode}
               onBlockPlayModeChange={onBlockPlayModeChange}
               baseStyle={[styles.playBtn, { backgroundColor: C.backgroundSecondary }]}
+              sizeOverride={{ width: 80, height: 80, borderRadius: 40 }}
               accentColor={C.accent}
               dangerColor={C.danger}
               backgroundColor={C.background}
-              iconSize={ms(32, 0.4)}
-              badgeIconSize={ms(12, 0.4)}
+              iconSize={ms(38, 0.4)}
+              badgeIconSize={ms(14, 0.4)}
               t={t}
             />
 
