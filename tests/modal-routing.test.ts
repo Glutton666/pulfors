@@ -450,11 +450,11 @@ function extractActiveModalLiterals(): Set<string> {
  * 각 키가 ActiveModal 타입에 선언된 유효한 리터럴인지도 검증한다.
  */
 function extractMoreMenuOpenExclusiveKeys(): string[] {
-  const src = readFileSync(join(process.cwd(), "app/index.tsx"), "utf-8");
+  const src = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
 
   // <MoreMenuModal 시작 위치 탐색
   const startIdx = src.indexOf("<MoreMenuModal");
-  assert.ok(startIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
+  assert.ok(startIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
 
   // 닫는 /> 탐색 — MoreMenuModal prop 콜백 내부에는 JSX가 없으므로
   // 첫 번째 /> 가 MoreMenuModal 의 닫는 태그다
@@ -558,13 +558,13 @@ test("source: MoreMenuModal — 닫기 Pressable에 testID=\"more-menu-close\" �
  *   }}
  */
 function extractMoreMenuHandlerBody(handlerName: string): string {
-  const src = readFileSync(join(process.cwd(), "app/index.tsx"), "utf-8");
+  const src = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
 
   const startIdx = src.indexOf("<MoreMenuModal");
-  assert.ok(startIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
+  assert.ok(startIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
 
   const endIdx = src.indexOf("/>", startIdx);
-  assert.ok(endIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 의 닫는 /> 를 찾을 수 없다");
+  assert.ok(endIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MoreMenuModal 의 닫는 /> 를 찾을 수 없다");
 
   const block = src.slice(startIdx, endIdx + 2);
 
@@ -632,13 +632,13 @@ test("source: onDrumKit 핸들러가 setActiveModal을 직접 호출하지 않�
  * 중괄호 깊이 추적을 사용해 중첩 구조를 올바르게 처리한다.
  */
 function extractMoreMenuPropSource(handlerName: string): string {
-  const src = readFileSync(join(process.cwd(), "app/index.tsx"), "utf-8");
+  const src = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
 
   const startIdx = src.indexOf("<MoreMenuModal");
-  assert.ok(startIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
+  assert.ok(startIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
 
   const endIdx = src.indexOf("/>", startIdx);
-  assert.ok(endIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 의 닫는 /> 를 찾을 수 없다");
+  assert.ok(endIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MoreMenuModal 의 닫는 /> 를 찾을 수 없다");
 
   const block = src.slice(startIdx, endIdx + 2);
 
@@ -1061,7 +1061,7 @@ test("source/tuningGuide: BackHandler tuningGuide 분기가 reopenSignalGenAfter
   // BackHandler onBack 의 showTuningGuide 분기가 reopenSignalGenAfterTuningGuideRef 를
   // 직접 참조해 재오픈 여부를 결정하는지 소스 분석으로 검증한다.
   // 이 참조가 없으면 SignalGen 경로 back-press 에서 재오픈 로직이 실행되지 않는다.
-  const src = readFileSync(join(process.cwd(), "app/index.tsx"), "utf-8");
+  const src = readFileSync(join(process.cwd(), "hooks/useMetronomeScreen.ts"), "utf-8");
 
   const addListenerIdx = src.indexOf('BackHandler.addEventListener("hardwareBackPress"');
   assert.ok(addListenerIdx !== -1, 'BackHandler.addEventListener("hardwareBackPress" 를 찾을 수 없다');
@@ -1129,7 +1129,7 @@ function extractBracedBlock(src: string, startIdx: number): string {
 test("android-appstate: 소스 검증 — AppState 콜백 본문에 setActiveModal·openExclusive 미포함", () => {
   // simulateAppStateForegroundReturn 의 "activeModal 변경 없음" 모델이 성립하려면
   // 실제 AppState 핸들러 콜백 본문에 setActiveModal / openExclusive 가 없어야 한다.
-  const src = readFileSync(join(process.cwd(), "app/index.tsx"), "utf-8");
+  const src = readFileSync(join(process.cwd(), "hooks/useMetronomeScreen.ts"), "utf-8");
 
   const adapterIdx = src.indexOf('AppState.addEventListener("change"');
   assert.ok(adapterIdx !== -1, 'AppState.addEventListener("change" 를 찾을 수 없다');
@@ -1152,7 +1152,7 @@ test("android-appstate: 소스 검증 — AppState 콜백 본문에 setActiveMod
 test("android-appstate: 소스 검증 — BackHandler useEffect 의존 배열에 activeModal 포함 (stale closure 방지)", () => {
   // simulateBackPress 가 항상 최신 activeModal 을 참조한다고 가정하는 근거:
   // BackHandler useEffect 의존 배열에 activeModal 이 있어야 한다.
-  const src = readFileSync(join(process.cwd(), "app/index.tsx"), "utf-8");
+  const src = readFileSync(join(process.cwd(), "hooks/useMetronomeScreen.ts"), "utf-8");
 
   const addListenerIdx = src.indexOf('BackHandler.addEventListener("hardwareBackPress"');
   assert.ok(addListenerIdx !== -1, 'BackHandler.addEventListener("hardwareBackPress" 를 찾을 수 없다');
