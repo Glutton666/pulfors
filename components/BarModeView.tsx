@@ -1577,32 +1577,33 @@ export function BarModeView({
 
         {/* ② 박자기호 N/4 + 재생 + BPM 스테퍼 행 — 좌/중/우 3분할 */}
         {!editorCollapsed && (
-          <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.lg, overflow: "visible" }]}>
-            {/* N/4 박자기호 */}
-            <Pressable
-              onLongPress={() => {
-                if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                onDenominatorCycle?.();
-              }}
-              delayLongPress={500}
-              disabled={isPlaying}
-              hitSlop={8}
-              style={{ flexDirection: "row", alignItems: "center", gap: 2, paddingVertical: 2 }}
-            >
-              <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(28, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
-                {editingSubdivisionCount}
-              </Text>
-              <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(28, 0.4), color: C.textTertiary }}>
-                /
-              </Text>
-              <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(28, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
-                {beatDenominator}
-              </Text>
-            </Pressable>
+          <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.md, overflow: "visible" }]}>
 
-            <View style={{ flex: 1 }} />
+            {/* 좌 컬럼 — 박자기호 우정렬 */}
+            <View style={{ flex: 1, alignItems: "flex-end", paddingRight: Spacing.md }}>
+              <Pressable
+                onLongPress={() => {
+                  if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                  onDenominatorCycle?.();
+                }}
+                delayLongPress={500}
+                disabled={isPlaying}
+                hitSlop={8}
+                style={{ flexDirection: "row", alignItems: "center", gap: 2, paddingVertical: 2 }}
+              >
+                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(36, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
+                  {editingSubdivisionCount}
+                </Text>
+                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(36, 0.4), color: C.textTertiary }}>
+                  /
+                </Text>
+                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(36, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
+                  {beatDenominator}
+                </Text>
+              </Pressable>
+            </View>
 
-            {/* 재생 버튼 — 위 행 침범하며 플로팅 */}
+            {/* 중앙 — 재생 버튼 플로팅 */}
             <View style={{ marginTop: -34, zIndex: 10 }}>
               <BarPlayButton
                 isPlaying={isPlaying}
@@ -1623,10 +1624,9 @@ export function BarModeView({
               />
             </View>
 
-            <View style={{ flex: 1 }} />
-
-            {/* BPM 스테퍼 */}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, opacity: isPlaying ? 0.5 : 1 }} {...bpmSwipePan.panHandlers}>
+            {/* 우 컬럼 — BPM 스테퍼 좌정렬, 넓게 */}
+            <View style={{ flex: 1, paddingLeft: Spacing.md }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, opacity: isPlaying ? 0.5 : 1 }} {...bpmSwipePan.panHandlers}>
               <Pressable
                 onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.max(20, (repBpm ?? bpm ?? 120) - 1)); } }}
                 onPressIn={() => { if (!isPlaying) startBpmHold(-1); }}
@@ -1657,6 +1657,7 @@ export function BarModeView({
                 <Ionicons name="add" size={ms(13, 0.4)} color={C.accent} />
               </Pressable>
             </View>
+            </View>{/* 우 컬럼 닫기 */}
           </View>
         )}
 
