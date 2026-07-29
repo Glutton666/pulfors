@@ -43,11 +43,11 @@ type ModeDef = {
 };
 
 const MODES: ModeDef[] = [
-  { mode: "beat",  icon: "musical-note-outline", labelKo: "비트",  labelEn: "Beat"  },
-  { mode: "bar",   icon: "grid-outline",          labelKo: "바",    labelEn: "Bar"   },
-  { mode: "score", icon: "document-text-outline", labelKo: "악보",  labelEn: "Score" },
-  { mode: "note",  icon: "create-outline",        labelKo: "노트",  labelEn: "Note"  },
-  { mode: "stage", icon: "mic-outline",           labelKo: "무대",  labelEn: "Stage" },
+  { mode: "beat",  icon: "musical-note-outline", labelKo: "비트",   labelEn: "Beat"     },
+  { mode: "bar",   icon: "grid-outline",          labelKo: "바",     labelEn: "Bar"      },
+  { mode: "score", icon: "document-text-outline", labelKo: "악보",   labelEn: "Score"    },
+  { mode: "note",  icon: "book-outline",          labelKo: "연습장", labelEn: "Practice" },
+  { mode: "stage", icon: "mic-outline",           labelKo: "무대",   labelEn: "Stage"    },
 ];
 
 export interface TopDrawerProps {
