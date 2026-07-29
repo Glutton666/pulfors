@@ -17,7 +17,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useScale } from "@/lib/scale";
 
 // ModeSlot is still exported so app/index.tsx can use it as a type.
-export type ModeSlot = "beat" | "bar" | "score" | "note" | "stage" | "menu";
+export type ModeSlot = "beat" | "bar" | "score" | "note" | "practice" | "stage" | "menu";
 
 type Wall = "top" | "right" | "bottom" | "left";
 type WallPos = { wall: Wall; t: number };
