@@ -1276,9 +1276,11 @@ export function BarModeView({
             </>
           ) : (
             <>
-              <Text style={{ color: C.accent, fontSize: ms(14, 0.4), fontFamily: "SpaceGrotesk_700Bold" }}>
-                {totalDurationDisplay ?? "—"}
-              </Text>
+              {totalDurationDisplay && (
+                <Text style={{ color: C.accent, fontSize: ms(14, 0.4), fontFamily: "SpaceGrotesk_700Bold" }}>
+                  {totalDurationDisplay}
+                </Text>
+              )}
               {beatsPerMeasure > 0 && (
                 <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_400Regular" }}>
                   {beatsPerMeasure}{t("barModeView", "barsDisplay")}
