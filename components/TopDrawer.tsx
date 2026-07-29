@@ -125,7 +125,7 @@ export function TopDrawer({ visible, onClose, onMenuOpen, topInset }: TopDrawerP
           testID="top-drawer-menu-button"
           style={({ pressed }) => ({
             position: "absolute" as const,
-            top: topInset,
+            top: topInset + Math.round((CONTENT_H - HANDLE_R) / 2),
             alignSelf: "center" as const,
             width:  HANDLE_R * 2,  // 76
             height: HANDLE_R,      // 38

@@ -5156,7 +5156,8 @@ export default function MetronomeScreen() {
         />
       )}
 
-      {/* 상단 중앙 고정 모드 레이블 — 탭 시 드로어 토글 */}
+      {/* 상단 중앙 고정 모드 레이블 — 드로어가 열리면 숨김 (D-tab과 겹침 방지) */}
+      {!showTopDrawer && (
       <Pressable
         onPress={() => setShowTopDrawer((v) => !v)}
         style={{
@@ -5193,6 +5194,7 @@ export default function MetronomeScreen() {
           pointerEvents="none"
         />
       </Pressable>
+      )}
 
       {/* 상단 드로어 — 모드 라벨 탭 또는 스와이프 다운으로 열림 */}
       <TopDrawer
