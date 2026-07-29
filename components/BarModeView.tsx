@@ -1575,9 +1575,9 @@ export function BarModeView({
           </View>
         )}
 
-        {/* ② 박자기호 N/4 + 재생 + 저장 + BPM 스테퍼 행 */}
+        {/* ② 박자기호 N/4 + 재생 + BPM 스테퍼 행 — 세 요소 묶어서 중앙 정렬 */}
         {!editorCollapsed && (
-          <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, flexDirection: "row", alignItems: "center", gap: 6 }]}>
+          <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 16 }]}>
             {/* N/4 박자기호 */}
             <Pressable
               onLongPress={() => {
@@ -1599,8 +1599,8 @@ export function BarModeView({
                 {beatDenominator}
               </Text>
             </Pressable>
-            <View style={{ flex: 1 }} />
-            {/* 재생 버튼 — 중앙 */}
+
+            {/* 재생 버튼 */}
             <BarPlayButton
               isPlaying={isPlaying}
               isPreparing={isPreparing}
@@ -1617,8 +1617,8 @@ export function BarModeView({
               badgeIconSize={ms(10, 0.4)}
               t={t}
             />
-            <View style={{ flex: 1 }} />
-            {/* BPM 스테퍼 — N/4 동일 폰트 크기 */}
+
+            {/* BPM 스테퍼 */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4, opacity: isPlaying ? 0.5 : 1 }} {...bpmSwipePan.panHandlers}>
               <Pressable
                 onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.max(20, (repBpm ?? bpm ?? 120) - 1)); } }}
