@@ -1579,8 +1579,8 @@ export function BarModeView({
         {!editorCollapsed && (
           <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.md, overflow: "visible" }]}>
 
-            {/* 좌 컬럼 — 박자기호 우정렬 */}
-            <View style={{ flex: 1, alignItems: "flex-end", paddingRight: Spacing.md }}>
+            {/* 좌 컬럼 — 박자기호 좌정렬 */}
+            <View style={{ flex: 1, alignItems: "flex-start" }}>
               <Pressable
                 onLongPress={() => {
                   if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -1624,8 +1624,8 @@ export function BarModeView({
               />
             </View>
 
-            {/* 우 컬럼 — BPM 스테퍼 좌정렬, 넓게 */}
-            <View style={{ flex: 1, paddingLeft: Spacing.md }}>
+            {/* 우 컬럼 — BPM 스테퍼 우정렬 */}
+            <View style={{ flex: 1, alignItems: "flex-end" }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, opacity: isPlaying ? 0.5 : 1 }} {...bpmSwipePan.panHandlers}>
               <Pressable
                 onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.max(20, (repBpm ?? bpm ?? 120) - 1)); } }}
