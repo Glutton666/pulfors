@@ -1579,8 +1579,8 @@ export function BarModeView({
         {!editorCollapsed && (
           <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.md, overflow: "visible" }]}>
 
-            {/* 좌 컬럼 — 박자기호 좌정렬 */}
-            <View style={{ flex: 1, alignItems: "flex-start" }}>
+            {/* 좌 컬럼 — 박자기호 중앙 (왼쪽 끝↔재생버튼 사이) */}
+            <View style={{ flex: 1, alignItems: "center" }}>
               <Pressable
                 onLongPress={() => {
                   if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
