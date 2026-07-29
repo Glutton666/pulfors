@@ -1575,9 +1575,9 @@ export function BarModeView({
           </View>
         )}
 
-        {/* ② 박자기호 N/4 + 재생 + BPM 스테퍼 행 — 세 요소 묶어서 중앙 정렬 */}
+        {/* ② 박자기호 N/4 + 재생 + BPM 스테퍼 행 — 좌/중/우 3분할 */}
         {!editorCollapsed && (
-          <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 16 }]}>
+          <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.lg }]}>
             {/* N/4 박자기호 */}
             <Pressable
               onLongPress={() => {
@@ -1600,7 +1600,9 @@ export function BarModeView({
               </Text>
             </Pressable>
 
-            {/* 재생 버튼 */}
+            <View style={{ flex: 1 }} />
+
+            {/* 재생 버튼 — 중앙 */}
             <BarPlayButton
               isPlaying={isPlaying}
               isPreparing={isPreparing}
@@ -1613,10 +1615,12 @@ export function BarModeView({
               accentColor={C.accent}
               dangerColor={C.danger}
               backgroundColor={C.background}
-              iconSize={ms(26, 0.4)}
-              badgeIconSize={ms(10, 0.4)}
+              iconSize={ms(32, 0.4)}
+              badgeIconSize={ms(12, 0.4)}
               t={t}
             />
+
+            <View style={{ flex: 1 }} />
 
             {/* BPM 스테퍼 */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4, opacity: isPlaying ? 0.5 : 1 }} {...bpmSwipePan.panHandlers}>
@@ -2270,9 +2274,9 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
   },
   playBtn: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     alignItems: "center",
     justifyContent: "center",
   },
