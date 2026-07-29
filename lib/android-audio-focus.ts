@@ -1,6 +1,5 @@
 import { Platform } from "react-native";
-import { Audio, InterruptionModeAndroid } from "expo-av";
-import type { AVPlaybackStatus } from "expo-av";
+import type { AudioPlayer, AudioStatus } from "expo-audio";
 import { logger } from "@/lib/logger";
 
 /**
@@ -58,7 +57,8 @@ export const PROBE_PROGRESS_UPDATE_INTERVAL_MS = 50;
 type FocusCallback = () => void;
 
 interface ProbeState {
-  sound: Audio.Sound;
+  player: AudioPlayer;
+  sub: { remove(): void };
   interrupted: boolean;
 }
 
@@ -76,11 +76,11 @@ let expoAudioSub: { remove: () => void } | null = null;
 let expoAudioCapabilityChecked: boolean | null = null;
 let expoAudioNativeAvailable = false;
 
-function handlePlaybackStatus(status: AVPlaybackStatus): void {
+function handlePlaybackStatus(status: AudioStatus): void {
   if (!probe) return;
   if (!status.isLoaded) return;
 
-  const isPlaying = status.isPlaying;
+  const isPlaying = status.playing;
 
   if (!isPlaying && !probe.interrupted) {
     // 우리가 멈추지 않았는데 isPlaying 이 false → audio focus 손실
@@ -186,30 +186,28 @@ export async function startAndroidFocusProbe(): Promise<void> {
     }
   }
 
-  // ── 우선순위 2: expo-av Sound 프로브 ─────────────────────────────────────
-  logger.info("[androidFocus] starting expo-av sound probe");
+  // ── 우선순위 2: expo-audio AudioPlayer 프로브 ────────────────────────────
+  logger.info("[androidFocus] starting expo-audio sound probe");
   try {
-    // shouldDuckAndroid=false: 포커스를 잃으면 덕킹 대신 일시정지되어
-    // isPlaying 이 false 로 전환 → JS 에서 감지 가능.
-    await Audio.setAudioModeAsync({
-      interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
-      shouldDuckAndroid: false,
-    });
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const expoAudioMod = require("expo-audio") as typeof import("expo-audio");
 
-    const { sound } = await Audio.Sound.createAsync(
+    // doNotMix: 포커스를 잃으면 플레이어가 멈춰 playing=false 로 전환 → JS 에서 감지 가능.
+    await expoAudioMod.setAudioModeAsync({ interruptionMode: "doNotMix" });
+
+    const player = expoAudioMod.createAudioPlayer(
       // 기존 에셋의 짧은 WAV 파일을 volume=0 루프로 사용 → 사용자에게 들리지 않음
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       require("@/assets/sounds/click-low.wav"),
-      {
-        shouldPlay: true,
-        isLooping: true,
-        volume: 0,
-        progressUpdateIntervalMillis: PROBE_PROGRESS_UPDATE_INTERVAL_MS,
-      },
-      handlePlaybackStatus,
+      { updateInterval: PROBE_PROGRESS_UPDATE_INTERVAL_MS },
     );
+    player.loop = true;
+    player.volume = 0;
+    const sub = player.addListener("playbackStatusUpdate", handlePlaybackStatus);
+    player.play();
 
-    probe = { sound, interrupted: false };
-    logger.info("[androidFocus] expo-av focus probe started");
+    probe = { player, sub, interrupted: false };
+    logger.info("[androidFocus] expo-audio focus probe started");
   } catch (err) {
     logger.warn("[androidFocus] failed to start focus probe:", err);
     probe = null;
@@ -243,8 +241,9 @@ export async function stopAndroidFocusProbe(): Promise<void> {
   const p = probe;
   probe = null;
   try {
-    await p.sound.unloadAsync();
-    logger.info("[androidFocus] expo-av focus probe stopped");
+    p.sub.remove();
+    p.player.remove();
+    logger.info("[androidFocus] expo-audio focus probe stopped");
   } catch (err) {
     logger.warn("[androidFocus] probe cleanup failed:", err);
   }

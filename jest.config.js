@@ -26,7 +26,6 @@ module.exports = {
     "^expo-audio$": "<rootDir>/tests/_stubs/expo-audio.js",
     "^expo-document-picker$": "<rootDir>/tests/_stubs/expo-document-picker.js",
     "^expo-sharing$": "<rootDir>/tests/_stubs/expo-sharing.js",
-    "^expo-av$": "<rootDir>/tests/_stubs/expo-av.js",
     "^expo-asset$": "<rootDir>/tests/_stubs/expo-asset.js",
     "^expo-modules-core$": "<rootDir>/tests/_stubs/expo-modules-core.js",
     "^onnxruntime-react-native$": "<rootDir>/tests/_stubs/onnxruntime-react-native.js",

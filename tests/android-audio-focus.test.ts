@@ -6,12 +6,11 @@
  * - startAndroidFocusProbe()                  — 프로브 시작 (메트로놈 재생 시)
  * - stopAndroidFocusProbe()                   — 프로브 정지 (메트로놈 정지 시)
  *
- * expo-av 스텁의 MockSound._emit() 으로 isPlaying 상태 변화를 시뮬레이션한다.
+ * expo-audio 스텁의 MockPlayer._emit() 으로 playing 상태 변화를 시뮬레이션한다.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Platform } from "react-native";
-import { Audio } from "expo-av";
 import {
   initAndroidFocusCallbacks,
   startAndroidFocusProbe,
@@ -20,32 +19,34 @@ import {
   PROBE_PROGRESS_UPDATE_INTERVAL_MS,
 } from "../lib/android-audio-focus";
 
-// ── MockSound 타입 (expo-av 스텁과 일치) ──────────────────────────────────
-interface MockSound {
-  _statusCallback: ((s: Record<string, unknown>) => void) | null;
-  _status: Record<string, unknown>;
+// ── MockPlayer 타입 (expo-audio 스텁과 일치) ──────────────────────────────
+interface MockPlayer {
   _emit(patch: Record<string, unknown>): void;
-  unloadAsync(): Promise<void>;
+  addListener(event: string, cb: (s: Record<string, unknown>) => void): { remove: () => void };
+  loop: boolean;
+  volume: number;
+  play(): void;
+  remove(): void;
 }
 
-// expo-av 스텁의 createAsync 를 패치해 마지막 생성된 Sound 와 opts 를 캡처한다.
-let lastSound: MockSound | null = null;
-let lastCreateOpts: Record<string, unknown> | null = null;
-const origCreateAsync = (Audio.Sound as unknown as { createAsync: (
-  src: unknown,
-  opts: Record<string, unknown>,
-  cb: (s: Record<string, unknown>) => void,
-) => Promise<{ sound: MockSound; status: Record<string, unknown> }> }).createAsync;
+// expo-audio 스텁의 createAudioPlayer 를 패치해 마지막 생성된 player 와 interval 을 캡처한다.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const expoAudioStub = require("expo-audio") as Record<string, unknown>;
+const stubAudioModule = expoAudioStub.AudioModule as Record<string, unknown>;
 
-(Audio.Sound as unknown as Record<string, unknown>).createAsync = async (
+let lastPlayer: MockPlayer | null = null;
+let lastCreateOptions: Record<string, unknown> | null = null;
+
+const origCreateAudioPlayer = expoAudioStub.createAudioPlayer as (
   src: unknown,
-  opts: Record<string, unknown>,
-  cb: (s: Record<string, unknown>) => void,
-) => {
-  const result = await origCreateAsync(src, opts, cb);
-  lastSound = result.sound;
-  lastCreateOpts = opts;
-  return result;
+  options?: Record<string, unknown>,
+) => MockPlayer;
+
+expoAudioStub.createAudioPlayer = (src: unknown, options?: Record<string, unknown>) => {
+  const player = origCreateAudioPlayer(src, options);
+  lastPlayer = player;
+  lastCreateOptions = options ?? null;
+  return player;
 };
 
 /**
@@ -53,8 +54,8 @@ const origCreateAsync = (Audio.Sound as unknown as { createAsync: (
  */
 function resetAll(os: "android" | "ios") {
   (Platform as unknown as Record<string, unknown>).OS = os;
-  lastSound = null;
-  lastCreateOpts = null;
+  lastPlayer = null;
+  lastCreateOptions = null;
   _resetAndroidFocusForTests();
 }
 
@@ -67,31 +68,31 @@ test("iOS 에서 initAndroidFocusCallbacks 는 no-op 이다", () => {
   assert.equal(called, false, "iOS 에서 콜백을 즉시 호출하지 않아야 한다");
 });
 
-test("iOS 에서 startAndroidFocusProbe 는 Sound 를 생성하지 않는다", async () => {
+test("iOS 에서 startAndroidFocusProbe 는 player 를 생성하지 않는다", async () => {
   resetAll("ios");
   initAndroidFocusCallbacks(() => {}, () => {});
   await startAndroidFocusProbe();
-  assert.equal(lastSound, null, "iOS 에서 Sound 를 생성하면 안 된다");
+  assert.equal(lastPlayer, null, "iOS 에서 player 를 생성하면 안 된다");
   await stopAndroidFocusProbe(); // no-op
 });
 
-test("Android 에서 startAndroidFocusProbe 가 Sound 를 생성한다", async () => {
+test("Android 에서 startAndroidFocusProbe 가 player 를 생성한다", async () => {
   resetAll("android");
   initAndroidFocusCallbacks(() => {}, () => {});
   await startAndroidFocusProbe();
-  assert.ok(lastSound !== null, "Sound 가 생성돼야 한다");
+  assert.ok(lastPlayer !== null, "player 가 생성돼야 한다");
   await stopAndroidFocusProbe();
 });
 
-test("expo-av 프로브는 300ms 미만 인터럽트를 놓치지 않도록 촘촘한 폴링 간격을 사용한다", async () => {
+test("expo-audio 프로브는 300ms 미만 인터럽트를 놓치지 않도록 촘촘한 폴링 간격을 사용한다", async () => {
   resetAll("android");
   initAndroidFocusCallbacks(() => {}, () => {});
   await startAndroidFocusProbe();
-  assert.ok(lastCreateOpts, "createAsync 가 opts 와 함께 호출돼야 한다");
+  assert.ok(lastCreateOptions !== null, "createAudioPlayer 가 options 와 함께 호출돼야 한다");
   assert.equal(
-    lastCreateOpts!.progressUpdateIntervalMillis,
+    lastCreateOptions!["updateInterval"],
     PROBE_PROGRESS_UPDATE_INTERVAL_MS,
-    "progressUpdateIntervalMillis 는 PROBE_PROGRESS_UPDATE_INTERVAL_MS 상수를 사용해야 한다",
+    "options.updateInterval 은 PROBE_PROGRESS_UPDATE_INTERVAL_MS 상수를 사용해야 한다",
   );
   assert.ok(
     PROBE_PROGRESS_UPDATE_INTERVAL_MS < 300,
@@ -104,43 +105,43 @@ test("startAndroidFocusProbe 는 멱등하다 (이미 실행 중이면 no-op)", 
   resetAll("android");
   initAndroidFocusCallbacks(() => {}, () => {});
   await startAndroidFocusProbe();
-  const firstSound = lastSound;
-  lastSound = null; // 리셋해서 두 번째 createAsync 호출 여부 확인
+  const firstPlayer = lastPlayer;
+  lastPlayer = null; // 리셋해서 두 번째 createAudioPlayer 호출 여부 확인
 
   await startAndroidFocusProbe(); // 두 번째 호출 → no-op
-  assert.equal(lastSound, null, "이미 실행 중이면 Sound 를 다시 생성하지 않아야 한다");
+  assert.equal(lastPlayer, null, "이미 실행 중이면 player 를 다시 생성하지 않아야 한다");
 
-  lastSound = firstSound; // 정리용으로 복원
+  lastPlayer = firstPlayer; // 정리용으로 복원
   await stopAndroidFocusProbe();
 });
 
-test("isPlaying 이 예기치 않게 false 가 되면 onFocusLoss 가 호출된다", async () => {
+test("playing 이 예기치 않게 false 가 되면 onFocusLoss 가 호출된다", async () => {
   resetAll("android");
   let lossCount = 0;
   let gainCount = 0;
   initAndroidFocusCallbacks(() => lossCount++, () => gainCount++);
   await startAndroidFocusProbe();
-  assert.ok(lastSound, "Sound 있어야 함");
+  assert.ok(lastPlayer, "player 있어야 함");
 
-  // 시스템이 오디오 포커스를 가져가 isPlaying 이 false 로 전환.
-  lastSound!._emit({ isLoaded: true, isPlaying: false });
+  // 시스템이 오디오 포커스를 가져가 playing 이 false 로 전환.
+  lastPlayer!._emit({ isLoaded: true, playing: false });
   assert.equal(lossCount, 1, "onFocusLoss 가 1회 호출돼야 한다");
   assert.equal(gainCount, 0);
 
   await stopAndroidFocusProbe();
 });
 
-test("isPlaying 이 다시 true 가 되면 onFocusGain 이 호출된다", async () => {
+test("playing 이 다시 true 가 되면 onFocusGain 이 호출된다", async () => {
   resetAll("android");
   let lossCount = 0;
   let gainCount = 0;
   initAndroidFocusCallbacks(() => lossCount++, () => gainCount++);
   await startAndroidFocusProbe();
 
-  lastSound!._emit({ isLoaded: true, isPlaying: false });
+  lastPlayer!._emit({ isLoaded: true, playing: false });
   assert.equal(lossCount, 1);
 
-  lastSound!._emit({ isLoaded: true, isPlaying: true });
+  lastPlayer!._emit({ isLoaded: true, playing: true });
   assert.equal(gainCount, 1, "onFocusGain 이 1회 호출돼야 한다");
 
   await stopAndroidFocusProbe();
@@ -152,8 +153,8 @@ test("onFocusLoss 는 중복 호출되지 않는다 (멱등)", async () => {
   initAndroidFocusCallbacks(() => lossCount++, () => {});
   await startAndroidFocusProbe();
 
-  lastSound!._emit({ isLoaded: true, isPlaying: false });
-  lastSound!._emit({ isLoaded: true, isPlaying: false }); // 재전송
+  lastPlayer!._emit({ isLoaded: true, playing: false });
+  lastPlayer!._emit({ isLoaded: true, playing: false }); // 재전송
   assert.equal(lossCount, 1, "첫 번째 손실 이벤트만 lossCount 를 증가시켜야 한다");
 
   await stopAndroidFocusProbe();
@@ -165,9 +166,9 @@ test("onFocusGain 은 중복 호출되지 않는다 (멱등)", async () => {
   initAndroidFocusCallbacks(() => {}, () => gainCount++);
   await startAndroidFocusProbe();
 
-  lastSound!._emit({ isLoaded: true, isPlaying: false });
-  lastSound!._emit({ isLoaded: true, isPlaying: true });
-  lastSound!._emit({ isLoaded: true, isPlaying: true }); // 중복
+  lastPlayer!._emit({ isLoaded: true, playing: false });
+  lastPlayer!._emit({ isLoaded: true, playing: true });
+  lastPlayer!._emit({ isLoaded: true, playing: true }); // 중복
   assert.equal(gainCount, 1, "중복 gain 신호는 무시돼야 한다");
 
   await stopAndroidFocusProbe();
@@ -178,13 +179,13 @@ test("stopAndroidFocusProbe 후에는 포커스 이벤트가 콜백을 호출하
   let lossCount = 0;
   initAndroidFocusCallbacks(() => lossCount++, () => {});
   await startAndroidFocusProbe();
-  const soundRef = lastSound;
+  const playerRef = lastPlayer;
 
   await stopAndroidFocusProbe();
 
-  // 정지 이후 isPlaying 변화는 무시되어야 한다.
-  if (soundRef) {
-    soundRef._emit({ isLoaded: true, isPlaying: false });
+  // 정지 이후 playing 변화는 무시되어야 한다.
+  if (playerRef) {
+    playerRef._emit({ isLoaded: true, playing: false });
   }
   assert.equal(lossCount, 0, "프로브 정지 후 콜백이 호출되면 안 된다");
 });
@@ -195,7 +196,7 @@ test("isLoaded: false 상태는 무시된다", async () => {
   initAndroidFocusCallbacks(() => lossCount++, () => {});
   await startAndroidFocusProbe();
 
-  lastSound!._emit({ isLoaded: false, isPlaying: false });
+  lastPlayer!._emit({ isLoaded: false, playing: false });
   assert.equal(lossCount, 0, "isLoaded: false 이면 상태 변화를 무시해야 한다");
 
   await stopAndroidFocusProbe();
@@ -219,14 +220,14 @@ test("onFocusLoss 호출 후 프로브가 살아있어 onFocusGain 을 감지할
   await startAndroidFocusProbe();
 
   // 포커스 손실 → onFocusLoss 호출
-  lastSound!._emit({ isLoaded: true, isPlaying: false });
+  lastPlayer!._emit({ isLoaded: true, playing: false });
   assert.equal(lossCount, 1, "onFocusLoss 가 호출돼야 한다");
 
-  // 프로브가 살아있어야 한다 (probe Sound 가 아직 있어야 함)
-  assert.ok(lastSound, "포커스 손실 후에도 probe Sound 가 남아있어야 한다 (auto-resume 필수)");
+  // 프로브가 살아있어야 한다 (probe player 가 아직 있어야 함)
+  assert.ok(lastPlayer, "포커스 손실 후에도 probe player 가 남아있어야 한다 (auto-resume 필수)");
 
-  // OS 가 포커스를 돌려줌 → probe Sound 자동 재개 → onFocusGain 호출
-  lastSound!._emit({ isLoaded: true, isPlaying: true });
+  // OS 가 포커스를 돌려줌 → probe player 자동 재개 → onFocusGain 호출
+  lastPlayer!._emit({ isLoaded: true, playing: true });
   assert.equal(gainCount, 1, "probe 가 살아있으므로 onFocusGain 이 호출돼야 한다");
 
   await stopAndroidFocusProbe();
@@ -240,8 +241,8 @@ test("포커스 손실/회복 사이클이 여러 번 반복돼도 정상 동작
   await startAndroidFocusProbe();
 
   for (let i = 0; i < 3; i++) {
-    lastSound!._emit({ isLoaded: true, isPlaying: false });
-    lastSound!._emit({ isLoaded: true, isPlaying: true });
+    lastPlayer!._emit({ isLoaded: true, playing: false });
+    lastPlayer!._emit({ isLoaded: true, playing: true });
   }
   assert.equal(lossCount, 3, "3 사이클 loss");
   assert.equal(gainCount, 3, "3 사이클 gain");
@@ -256,7 +257,7 @@ test("포커스 손실/회복 사이클이 여러 번 반복돼도 정상 동작
 // 조사 결과 (2026-05-09 기준, 2026-05-09 56.0.3 재확인):
 //   expo-audio 1.1.1 ~ 56.0.3(최신, next 채널 포함) 모두 NativeAudioModule 에
 //   addInterruptionListener 를 JS API 로 노출하지 않는다.
-//   따라서 현재는 expo-av 프로브(우선순위 2)가 계속 사용된다.
+//   따라서 현재는 expo-audio AudioPlayer 프로브(우선순위 2)가 계속 사용된다.
 //
 // 이 섹션의 목적:
 //   expo-audio 가 해당 API 를 노출하는 버전으로 업그레이드되었을 때
@@ -273,17 +274,13 @@ test("포커스 손실/회복 사이클이 여러 번 반복돼도 정상 동작
 //   1. package.json 의 expo-audio 버전 범위를 해당 버전 이상으로 올린다.
 //   2. 아래 소스 검증 테스트가 "hasApi=true" 분기로 진입하는지 확인한다.
 //   3. 소스 검증 테스트를 삭제하고 이 주석의 "업그레이드 준비" 섹션을 제거한다.
-//   4. lib/android-audio-focus.ts 39-40 행의 "(2026-05-09 조사...)" 주석을 제거한다.
+//   4. lib/android-audio-focus.ts 의 "(2026-05-09 조사...)" 주석을 제거한다.
 //   5. scripts/check-expo-audio-api.sh 를 삭제하거나 비활성화한다.
 //   6. 실제 Android 기기에서 아래 흐름을 직접 검증한다:
 //      a) 메트로놈 재생 → 전화 수신 → 메트로놈 자동 일시정지 확인
 //      b) 통화 종료 → 메트로놈 자동 재개 확인
 //      c) 로그에 "[androidFocus] expo-audio: interruption began/ended" 출력 확인
-//         (expo-av probe 로그 "starting expo-av sound probe" 가 없어야 한다)
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const expoAudioStub = require("expo-audio") as Record<string, unknown>;
-const stubAudioModule = expoAudioStub.AudioModule as Record<string, unknown>;
+//         (expo-audio probe 로그 "starting expo-audio sound probe" 가 없어야 한다)
 
 /**
  * expo-audio 스텁의 AudioModule 에 mock addInterruptionListener 를 설치한다.
@@ -317,7 +314,7 @@ test("소스 검증: expo-audio AudioModule addInterruptionListener 노출 여�
   // 이 테스트는 비차단(non-blocking) 업그레이드 감지 역할을 한다.
   // 2026-05-09 기준(56.0.3 재확인): expo-audio 1.1.1 ~ 56.0.3(next 채널 포함) 모두
   // addInterruptionListener 를 JS 레이어에 노출하지 않으므로
-  // expo-av 프로브(우선순위 2)가 사용된다.
+  // expo-audio AudioPlayer 프로브(우선순위 2)가 사용된다.
   //
   // expo-audio 가 해당 API 를 노출하는 버전으로 업그레이드되면 이 테스트는 assert 없이
   // 경고 로그만 남기고 통과한다 — lib/android-audio-focus.ts 우선순위 1 경로가
@@ -345,16 +342,16 @@ test("소스 검증: expo-audio AudioModule addInterruptionListener 노출 여�
   }
 });
 
-test("addInterruptionListener 가 있으면 expo-av Sound 대신 네이티브 경로를 사용한다", async () => {
+test("addInterruptionListener 가 있으면 expo-audio AudioPlayer 대신 네이티브 경로를 사용한다", async () => {
   resetAll("android");
   const mock = installNativeMock();
   try {
     initAndroidFocusCallbacks(() => {}, () => {});
     await startAndroidFocusProbe();
     assert.equal(
-      lastSound,
+      lastPlayer,
       null,
-      "네이티브 경로 선택 시 expo-av Sound 가 생성되면 안 된다",
+      "네이티브 경로 선택 시 AudioPlayer 가 생성되면 안 된다",
     );
     await stopAndroidFocusProbe();
   } finally {
@@ -423,13 +420,13 @@ test("expoAudioNativeAvailable 캐시: 두 번째 probe 시작에서도 네이�
     initAndroidFocusCallbacks(() => {}, () => {});
 
     await startAndroidFocusProbe();
-    assert.equal(lastSound, null, "첫 번째 probe: 네이티브 경로여야 한다");
+    assert.equal(lastPlayer, null, "첫 번째 probe: 네이티브 경로여야 한다");
     await stopAndroidFocusProbe();
 
-    lastSound = null;
+    lastPlayer = null;
     await startAndroidFocusProbe();
     assert.equal(
-      lastSound,
+      lastPlayer,
       null,
       "두 번째 probe: 캐시된 expoAudioNativeAvailable=true 로 여전히 네이티브 경로여야 한다",
     );

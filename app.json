@@ -77,7 +77,7 @@
       "expo-font",
       "expo-web-browser",
       [
-        "expo-av",
+        "expo-audio",
         {
           "microphonePermission": "마이크를 사용하여 악기 음정을 감지하고 튜닝합니다."
         }
