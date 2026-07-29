@@ -16,7 +16,14 @@ function isLameModule(v: unknown): v is LameModule {
 let lameCache: LameModule | null = null;
 async function loadLame(): Promise<LameModule> {
   if (lameCache) return lameCache;
-  const mod: unknown = await import("@breezystack/lamejs");
+  // Use require() so that Jest's moduleNameMapper can intercept this module
+  // in tests (dynamic import() is not intercepted by moduleNameMapper in CJS
+  // Jest without --experimental-vm-modules). In the React Native bundle,
+  // Metro/Expo treats require() just like import() for code splitting.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mod: unknown = typeof require === "function"
+    ? require("@breezystack/lamejs")
+    : await import("@breezystack/lamejs");
   let lib: unknown = mod;
   if (!isLameModule(lib)) {
     const inner = (mod as { default?: unknown } | null)?.default;

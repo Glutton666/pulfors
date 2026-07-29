@@ -113,7 +113,7 @@ function MiniScorePreview({
   if (loading) {
     return (
       <View style={{ width, height, justifyContent: "center", alignItems: "center" }}>
-        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.textTertiary }} />
+        <View style={{ width: 8, height: 8, borderRadius: Radius.xs, backgroundColor: C.textTertiary }} />
       </View>
     );
   }
@@ -571,12 +571,12 @@ export function NoteModeView({
         <Text style={[styles.sectionCount, { color: C.textTertiary }, isLandscape && { fontSize: S.ms(10, 0.3) }]}>{queue.length} {t("noteMode", "items")}</Text>
       </View>
       {hasScoreItems && (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6, paddingHorizontal: 2 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6, paddingHorizontal: Spacing.xxs }}>
           <Text style={{ fontSize: S.ms(11, 0.3), color: C.textTertiary }}>{t("noteMode", "previewUnit")}:</Text>
           <Pressable
             onPress={() => setPreviewUnit("measure")}
             style={[{
-              paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10,
+              paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xxs, borderRadius: 10,
               backgroundColor: previewUnit === "measure" ? C.accent + "30" : "transparent",
               borderWidth: 1, borderColor: previewUnit === "measure" ? C.accent : C.border,
             }]}
@@ -588,7 +588,7 @@ export function NoteModeView({
           <Pressable
             onPress={() => setPreviewUnit("phrase")}
             style={[{
-              paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10,
+              paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xxs, borderRadius: 10,
               backgroundColor: previewUnit === "phrase" ? C.accent + "30" : "transparent",
               borderWidth: 1, borderColor: previewUnit === "phrase" ? C.accent : C.border,
             }]}
@@ -598,7 +598,7 @@ export function NoteModeView({
             </Text>
           </Pressable>
           {previewUnit === "phrase" && (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginLeft: 4 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs, marginLeft: Spacing.xs }}>
               <Pressable
                 onPress={() => setPhraseSize((p) => Math.max(1, p - 1))}
                 hitSlop={8}

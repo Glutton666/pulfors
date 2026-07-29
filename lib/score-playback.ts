@@ -301,10 +301,11 @@ export function buildPlayTimeline(doc: ScoreDocument): PlayEvent[] {
       currentBpm,
     );
 
-    // 모든 파트의 음표를 하나의 배열로 병합합니다.
-    // 타악기 파트는 drumType이 태깅된 노트 이벤트로 포함됩니다.
+    // 타악기(percussion) 파트를 제외한 모든 파트의 음표를 하나의 배열로 병합합니다.
+    // percussion 파트는 내장 드럼 사운드를 사용하므로 MIDI 준비 대상에서 제외됩니다.
     const notes: PlayNoteEvent[] = [];
     for (const part of doc.parts) {
+      if ((part.clef ?? "treble") === "percussion") continue;
       const partMeasure = part.measures[mIdx];
       if (!partMeasure) continue;
       const partInstrumentId = part.instrumentId ?? "";

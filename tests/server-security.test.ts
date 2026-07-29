@@ -78,7 +78,8 @@ describe("isRateLimited: sliding window per-IP rate limit 런타임 동작", () 
 
 describe("WAV Worker Thread: 비차단 분석 런타임 검증", () => {
   test("Worker eval에서 침묵 WAV 분석 시 null 반환 (이벤트 루프 비차단 확인)", async () => {
-    const { Worker } = await import("node:worker_threads");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Worker } = require("worker_threads");
 
     const WORKER_CODE = `
 const { workerData, parentPort } = require('worker_threads');
@@ -122,7 +123,8 @@ catch (e) { parentPort.postMessage({ ok: false, error: e.message }); }
   });
 
   test("Worker Thread는 eval 모드로 별도 스레드에서 실행됨 (isMainThread = false)", async () => {
-    const { Worker } = await import("node:worker_threads");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Worker } = require("worker_threads");
     const CODE = `
 const { isMainThread, parentPort } = require('worker_threads');
 parentPort.postMessage({ isMainThread });

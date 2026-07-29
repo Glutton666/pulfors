@@ -656,7 +656,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
   typePickerSwatch: {
     width: 14,
     height: 14,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
   },
   typePickerLabel: {
     fontSize: 15,

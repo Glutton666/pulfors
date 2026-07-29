@@ -1160,12 +1160,12 @@ export function NoteRecorderModal({
               </View>
 
               {pressToast && (
-                <View style={{ alignItems: "center", marginTop: 2 }}>
+                <View style={{ alignItems: "center", marginTop: Spacing.xxs }}>
                   <Text style={{ color: C.accent, fontSize: FontSize.caption }}>{pressToast}</Text>
                 </View>
               )}
               {!pressToast && (
-                <Text style={{ color: C.textTertiary, fontSize: FontSize.caption, textAlign: "center", marginTop: 2 }}>
+                <Text style={{ color: C.textTertiary, fontSize: FontSize.caption, textAlign: "center", marginTop: Spacing.xxs }}>
                   {t("noteRecorder", "autoPreviewLongPressHint")}
                 </Text>
               )}
@@ -1198,7 +1198,7 @@ export function NoteRecorderModal({
                   })}
                 </View>
                 {metronomeChannel === "off" && (
-                  <Text style={{ color: C.textTertiary, fontSize: FontSize.caption, textAlign: "center", marginTop: 4 }}>
+                  <Text style={{ color: C.textTertiary, fontSize: FontSize.caption, textAlign: "center", marginTop: Spacing.xs }}>
                     {t("noteRecorder", "channel_off")}
                   </Text>
                 )}
@@ -1250,7 +1250,7 @@ export function NoteRecorderModal({
                             }}
                             style={{
                               paddingHorizontal: Spacing.sm,
-                              paddingVertical: 4,
+                              paddingVertical: Spacing.xs,
                               borderRadius: Radius.sm,
                               backgroundColor: C.accentDim,
                               borderWidth: 1,

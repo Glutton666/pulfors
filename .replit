@@ -44,6 +44,10 @@ args = "Start App"
 task = "workflow.run"
 args = "Start Frontend"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test"
+
 [[workflows.workflow]]
 name = "Start App"
 author = "agent"
@@ -79,6 +83,17 @@ outputType = "webview"
 task = "shell.exec"
 args = "expo start --web --port 8081"
 waitForPort = 8081
+
+[[workflows.workflow]]
+name = "test"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx jest --testPathIgnorePatterns='e2e/'"
+
+[workflows.workflow.metadata]
+isValidation = true
 
 [postMerge]
 path = "scripts/post-merge.sh"

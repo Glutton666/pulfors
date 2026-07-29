@@ -321,33 +321,33 @@ test("saveKeyBindings + loadKeyBindings: 부분 저장 → 나머지는 DEFAULT_
 
 // ── nativeKeyToCode ───────────────────────────────────────────────────────────
 
-test("nativeKeyToCode: 알파벳 소문자 → KeyX 코드", async () => {
-  const { nativeKeyToCode } = await import("../lib/keyboard-bindings");
+test("nativeKeyToCode: 알파벳 소문자 → KeyX 코드", () => {
+  const { nativeKeyToCode } = require("../lib/keyboard-bindings");
   assert.equal(nativeKeyToCode("a"), "KeyA");
   assert.equal(nativeKeyToCode("z"), "KeyZ");
 });
 
-test("nativeKeyToCode: 알파벳 대문자 → KeyX 코드", async () => {
-  const { nativeKeyToCode } = await import("../lib/keyboard-bindings");
+test("nativeKeyToCode: 알파벳 대문자 → KeyX 코드", () => {
+  const { nativeKeyToCode } = require("../lib/keyboard-bindings");
   assert.equal(nativeKeyToCode("A"), "KeyA");
   assert.equal(nativeKeyToCode("S"), "KeyS");
 });
 
-test("nativeKeyToCode: 숫자 → Digit 코드", async () => {
-  const { nativeKeyToCode } = await import("../lib/keyboard-bindings");
+test("nativeKeyToCode: 숫자 → Digit 코드", () => {
+  const { nativeKeyToCode } = require("../lib/keyboard-bindings");
   assert.equal(nativeKeyToCode("0"), "Digit0");
   assert.equal(nativeKeyToCode("5"), "Digit5");
 });
 
-test("nativeKeyToCode: 특수 키 매핑", async () => {
-  const { nativeKeyToCode } = await import("../lib/keyboard-bindings");
+test("nativeKeyToCode: 특수 키 매핑", () => {
+  const { nativeKeyToCode } = require("../lib/keyboard-bindings");
   assert.equal(nativeKeyToCode(" "), "Space");
   assert.equal(nativeKeyToCode("Enter"), "Enter");
   assert.equal(nativeKeyToCode("Escape"), "Escape");
   assert.equal(nativeKeyToCode("?"), "Slash");
 });
 
-test("nativeKeyToCode: 알 수 없는 키 → 그대로 반환", async () => {
-  const { nativeKeyToCode } = await import("../lib/keyboard-bindings");
+test("nativeKeyToCode: 알 수 없는 키 → 그대로 반환", () => {
+  const { nativeKeyToCode } = require("../lib/keyboard-bindings");
   assert.equal(nativeKeyToCode("F1"), "F1");
 });

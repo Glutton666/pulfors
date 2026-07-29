@@ -1077,7 +1077,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             onPress={handlePlayTestSound}
             style={[
               styles.demoButton,
-              { width: "80%", height: 52, marginTop: 8 },
+              { width: "80%", height: 52, marginTop: Spacing.sm },
               soundTestPlayed
                 ? { backgroundColor: C.surfaceLight, borderWidth: 1, borderColor: accentColor }
                 : { backgroundColor: accentColor },
@@ -1094,7 +1094,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             </Text>
           </Pressable>
           {soundTestPlayed && (
-            <Text style={{ color: C.textSecondary, fontSize: 12, textAlign: "center", paddingHorizontal: 12, lineHeight: 18 }}>
+            <Text style={{ color: C.textSecondary, fontSize: FontSize.small, textAlign: "center", paddingHorizontal: 12, lineHeight: 18 }}>
               {t("onboarding", "soundTestMuteHint")}
             </Text>
           )}
@@ -1141,7 +1141,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       <View style={[styles.infoCard, { flexDirection: "row", alignItems: "center", gap: 12 }]}>
         <Ionicons name={iconName as any} size={24} color={accentColor} />
         <View style={{ flex: 1 }}>
-          <Text style={[styles.inputLabel, { marginBottom: 2 }]}>{label}</Text>
+          <Text style={[styles.inputLabel, { marginBottom: Spacing.xxs }]}>{label}</Text>
           <Text style={styles.modeOptionDesc}>{desc}</Text>
         </View>
         {granted && (
@@ -1172,7 +1172,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             testID="onboarding-perm-allow-now"
             style={[
               styles.demoButton,
-              { width: "100%", height: 52, backgroundColor: accentColor, marginTop: 4 },
+              { width: "100%", height: 52, backgroundColor: accentColor, marginTop: Spacing.xs },
             ]}
           >
             <Ionicons name="shield-checkmark-outline" size={20} color={C.background} />

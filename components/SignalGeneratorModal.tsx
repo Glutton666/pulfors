@@ -572,7 +572,7 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
   setTargetBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: Spacing.sm,
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 10,
@@ -586,7 +586,7 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
   },
   setTargetFreq: {
     fontFamily: "SpaceGrotesk_400Regular",
-    fontSize: 12,
+    fontSize: FontSize.small,
     color: "rgba(255,255,255,0.75)",
   },
   hint: {
@@ -599,8 +599,8 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: C.border,
-    marginTop: 8,
-    marginBottom: 8,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   scrollBody: {
     flexGrow: 0,
@@ -618,14 +618,14 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
   legendRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 4,
-    paddingHorizontal: 4,
-    borderRadius: 8,
-    gap: 4,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.xs,
+    borderRadius: Radius.md,
+    gap: Spacing.xs,
   },
   legendLabel: {
     fontFamily: "SpaceGrotesk_500Medium",
-    fontSize: 10,
+    fontSize: FontSize.micro,
     color: C.textSecondary,
     width: 66,
     lineHeight: 13,
@@ -1529,13 +1529,13 @@ export function SignalGeneratorModal({ visible, onClose, onOpenTuningGuide, onOp
           {/* RIGHT column: detected Hz peaks (landscape only) */}
           {isLandscape && (
             <View style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: C.border, paddingLeft: landscapePadH, paddingTop: Spacing.xs }}>
-              <Text style={{ color: C.textSecondary, fontFamily: "SpaceGrotesk_600SemiBold", fontSize: 10, letterSpacing: 1.2, marginBottom: Spacing.sm, textTransform: "uppercase" as const }}>
+              <Text style={{ color: C.textSecondary, fontFamily: "SpaceGrotesk_600SemiBold", fontSize: FontSize.micro, letterSpacing: 1.2, marginBottom: Spacing.sm, textTransform: "uppercase" as const }}>
                 {t("signalGenerator", "detectedFreqs")}
               </Text>
               {micListening ? (
                 topPeaks.length > 0 ? (
                   <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-                    <View style={{ flexDirection: "row" as const, paddingBottom: 4, borderBottomWidth: 0.5, borderBottomColor: C.border, marginBottom: 2 }}>
+                    <View style={{ flexDirection: "row" as const, paddingBottom: Spacing.xs, borderBottomWidth: 0.5, borderBottomColor: C.border, marginBottom: Spacing.xxs }}>
                       <Text style={{ flex: 1.4, color: C.textTertiary, fontSize: 9, letterSpacing: 0.8, fontFamily: "SpaceGrotesk_500Medium" }}>Hz</Text>
                       <Text style={{ flex: 0.7, color: C.textTertiary, fontSize: 9, letterSpacing: 0.8, fontFamily: "SpaceGrotesk_500Medium", textAlign: "center" as const }}>{t("signalGenerator", "noteLabel")}</Text>
                       <Text style={{ flex: 1, color: C.textTertiary, fontSize: 9, letterSpacing: 0.8, fontFamily: "SpaceGrotesk_500Medium", textAlign: "right" as const }}>dBFS</Text>
@@ -1552,17 +1552,17 @@ export function SignalGeneratorModal({ visible, onClose, onOpenTuningGuide, onOp
                           setTimeout(() => setPickerLockFlash(false), 200);
                         }}
                         style={[
-                          { flexDirection: "row" as const, alignItems: "center" as const, paddingVertical: 4, borderBottomWidth: 0.5, borderBottomColor: C.border + "30", borderRadius: 4 },
+                          { flexDirection: "row" as const, alignItems: "center" as const, paddingVertical: Spacing.xs, borderBottomWidth: 0.5, borderBottomColor: C.border + "30", borderRadius: Radius.xs },
                           isSelected && { backgroundColor: C.accentDim },
                         ]}
                       >
-                        <Text style={{ flex: 1.4, color: i === 0 ? C.accent : C.text, fontFamily: "SpaceGrotesk_600SemiBold", fontSize: 12 }}>
+                        <Text style={{ flex: 1.4, color: i === 0 ? C.accent : C.text, fontFamily: "SpaceGrotesk_600SemiBold", fontSize: FontSize.small }}>
                           {peak.hz}
                         </Text>
-                        <Text style={{ flex: 0.7, color: i === 0 ? C.accent : C.textSecondary, fontSize: 11, textAlign: "center" as const, fontFamily: "SpaceGrotesk_500Medium" }}>
+                        <Text style={{ flex: 0.7, color: i === 0 ? C.accent : C.textSecondary, fontSize: FontSize.caption, textAlign: "center" as const, fontFamily: "SpaceGrotesk_500Medium" }}>
                           {peak.note}
                         </Text>
-                        <Text style={{ flex: 1, color: C.textTertiary, fontSize: 11, textAlign: "right" as const, fontFamily: "SpaceGrotesk_400Regular" }}>
+                        <Text style={{ flex: 1, color: C.textTertiary, fontSize: FontSize.caption, textAlign: "right" as const, fontFamily: "SpaceGrotesk_400Regular" }}>
                           {peak.db}
                         </Text>
                       </Pressable>
@@ -1570,14 +1570,14 @@ export function SignalGeneratorModal({ visible, onClose, onOpenTuningGuide, onOp
                     })}
                   </ScrollView>
                 ) : (
-                  <Text style={{ color: C.textTertiary, fontSize: 12, fontFamily: "SpaceGrotesk_400Regular" }}>
+                  <Text style={{ color: C.textTertiary, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_400Regular" }}>
                     {micAnalyzed ? t("signalGenerator", "noSignal") : t("signalGenerator", "detecting")}
                   </Text>
                 )
               ) : (
                 <View style={{ flex: 1, justifyContent: "center" as const, alignItems: "center" as const }}>
                   <MaterialCommunityIcons name="microphone-off" size={28} color={C.textTertiary} style={{ marginBottom: Spacing.sm }} />
-                  <Text style={{ color: C.textTertiary, fontSize: 11, fontFamily: "SpaceGrotesk_400Regular", textAlign: "center" as const, lineHeight: 16 }}>
+                  <Text style={{ color: C.textTertiary, fontSize: FontSize.caption, fontFamily: "SpaceGrotesk_400Regular", textAlign: "center" as const, lineHeight: 16 }}>
                     {t("signalGenerator", "micOffHint")}
                   </Text>
                 </View>
@@ -2188,8 +2188,8 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   targetChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
     borderRadius: Radius.sm,
     borderWidth: 1,

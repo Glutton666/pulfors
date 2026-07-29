@@ -288,7 +288,7 @@ function SwipeableEntry({
                 selectTextOnFocus
               />
             ) : (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs, flex: 1 }}>
                 {item.scoreId ? (
                   <Ionicons name="musical-note" size={12} color="#22c55e" />
                 ) : null}

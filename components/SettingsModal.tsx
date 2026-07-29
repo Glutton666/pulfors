@@ -1399,10 +1399,10 @@ export function SettingsModal({
           <Text style={[styles.sectionValue, { color: C.accent }]}>{Math.round(barCellOpacity * 100)}%</Text>
         </View>
         <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "barCellOpacityHint")}</Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingTop: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingTop: Spacing.sm }}>
           <Pressable
             onPress={() => { const v = Math.max(0, Math.round((barCellOpacity - 0.05) * 100) / 100); onBarCellOpacityChange(v); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
-            style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
+            style={{ width: 36, height: 36, borderRadius: Radius.md, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
           >
             <Text style={{ color: C.text, fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold" }}>−</Text>
           </Pressable>
@@ -1411,7 +1411,7 @@ export function SettingsModal({
           </View>
           <Pressable
             onPress={() => { const v = Math.min(1, Math.round((barCellOpacity + 0.05) * 100) / 100); onBarCellOpacityChange(v); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
-            style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
+            style={{ width: 36, height: 36, borderRadius: Radius.md, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
           >
             <Text style={{ color: C.text, fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold" }}>+</Text>
           </Pressable>
@@ -1427,10 +1427,10 @@ export function SettingsModal({
           <Text style={[styles.sectionValue, { color: C.accent }]}>{barRowHeight}px</Text>
         </View>
         <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "barRowHeightHint")}</Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingTop: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingTop: Spacing.sm }}>
           <Pressable
             onPress={() => { const v = Math.max(32, barRowHeight - 4); onBarRowHeightChange(v); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
-            style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
+            style={{ width: 36, height: 36, borderRadius: Radius.md, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
           >
             <Text style={{ color: C.text, fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold" }}>−</Text>
           </Pressable>
@@ -1439,7 +1439,7 @@ export function SettingsModal({
           </View>
           <Pressable
             onPress={() => { const v = Math.min(72, barRowHeight + 4); onBarRowHeightChange(v); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
-            style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
+            style={{ width: 36, height: 36, borderRadius: Radius.md, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
           >
             <Text style={{ color: C.text, fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold" }}>+</Text>
           </Pressable>
@@ -1595,7 +1595,7 @@ export function SettingsModal({
         </View>
 
         {!editingCustomSlot && (
-          <View style={{ marginTop: 8, gap: 2 }}>
+          <View style={{ marginTop: Spacing.sm, gap: Spacing.xxs }}>
             {[
               ...BUILTIN_SOUND_SETS.map(key => ({ key, label: t("soundSets", key as any), isCustom: false })),
               ...Object.entries(customSoundSets).map(([k, cfg]) => ({ key: k, label: cfg.name, isCustom: true })),
@@ -1608,7 +1608,7 @@ export function SettingsModal({
               return (
                 <Pressable
                   key={opt.key}
-                  style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, backgroundColor: isMain ? C.accentDim : C.overlay08, gap: 8 }}
+                  style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 12, borderRadius: Radius.md, backgroundColor: isMain ? C.accentDim : C.overlay08, gap: Spacing.sm }}
                   onPress={() => { onSoundSetChange(opt.key as any); playSoundPreview(opt.key as SoundSet); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
                 >
                   <Ionicons
@@ -1619,14 +1619,14 @@ export function SettingsModal({
                   <Text style={{ flex: 1, color: isMain ? C.accent : C.text, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_600SemiBold" }}>
                     {opt.label}
                   </Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs }}>
                     {isMain && (
-                      <View style={{ backgroundColor: C.accent, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <View style={{ backgroundColor: C.accent, borderRadius: Radius.xs, paddingHorizontal: 6, paddingVertical: Spacing.xxs }}>
                         <Text style={{ color: C.background, fontSize: 9, fontFamily: "SpaceGrotesk_600SemiBold" }}>{t("settings", "soundSetMain")}</Text>
                       </View>
                     )}
                     {usedInLayers.map(ln => (
-                      <View key={ln} style={{ backgroundColor: C.overlay08, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border }}>
+                      <View key={ln} style={{ backgroundColor: C.overlay08, borderRadius: Radius.xs, paddingHorizontal: 6, paddingVertical: Spacing.xxs, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border }}>
                         <Text style={{ color: C.textSecondary, fontSize: 9 }}>{t("settings", "soundSetLayerBadge").replace("%s", String(ln))}</Text>
                       </View>
                     ))}
@@ -1634,7 +1634,7 @@ export function SettingsModal({
                       <Pressable
                         hitSlop={8}
                         onPress={() => openCustomEditor(opt.key)}
-                        style={{ padding: 4 }}
+                        style={{ padding: Spacing.xs }}
                       >
                         <Ionicons name="pencil-outline" size={S.ms(14, 0.4)} color={C.textSecondary} />
                       </Pressable>
@@ -1646,7 +1646,7 @@ export function SettingsModal({
 
             {Object.keys(customSoundSets).length < 3 && (
               <Pressable
-                style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, borderStyle: "dashed", marginTop: 4 }}
+                style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, paddingVertical: 10, paddingHorizontal: 12, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, borderStyle: "dashed", marginTop: Spacing.xs }}
                 onPress={() => {
                   const slot = getNextCustomSlot();
                   if (slot) openCustomEditor(slot);
@@ -2223,7 +2223,7 @@ export function SettingsModal({
               <Ionicons name="globe-outline" size={S.ms(18, 0.4)} color={C.accent} />
               <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "webVersionLink")}</Text>
             </View>
-            <Text style={[styles.offsetHint, { color: C.textSecondary, marginBottom: 8 }]} numberOfLines={1}>
+            <Text style={[styles.offsetHint, { color: C.textSecondary, marginBottom: Spacing.sm }]} numberOfLines={1}>
               {`https://${process.env.EXPO_PUBLIC_DOMAIN}`}
             </Text>
             <View style={{ flexDirection: "row", gap: 10 }}>
@@ -2342,7 +2342,7 @@ export function SettingsModal({
             </View>
           </Pressable>
         ) : (
-          <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "Inter_400Regular", paddingVertical: 8, borderTopWidth: 1, borderTopColor: C.overlay10 }}>
+          <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "Inter_400Regular", paddingVertical: Spacing.sm, borderTopWidth: 1, borderTopColor: C.overlay10 }}>
             {t("settings", "voiceAssistantIosHint")}
           </Text>
         )}
