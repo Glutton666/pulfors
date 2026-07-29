@@ -136,11 +136,7 @@ export function HintBanner({ hintKey, message, icon = "bulb-outline" }: HintBann
     <Animated.View
       style={[
         styles.banner,
-        {
-          opacity,
-          backgroundColor: C.accent + "18",
-          borderColor: C.accent + "44",
-        },
+        { opacity },
       ]}
     >
       <Ionicons name={icon} size={15} color={C.accent} style={styles.icon} />
@@ -178,8 +174,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
     marginHorizontal: 4,
     marginBottom: 6,
   },
