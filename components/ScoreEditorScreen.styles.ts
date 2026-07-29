@@ -288,8 +288,8 @@ export const makeStyles = (_C: any, _S: any) =>
       flexDirection: "row" as const,
       alignItems: "center" as const,
       justifyContent: "space-between" as const,
-      paddingHorizontal: Spacing.md,
-      paddingVertical: 8,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 6,
       borderBottomWidth: 1,
     },
     drawerHeaderText: {

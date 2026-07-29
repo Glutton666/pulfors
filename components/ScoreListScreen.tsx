@@ -163,7 +163,8 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor }: ScoreList
           <Text style={[styles.dateText, { color: C.textSecondary }]}>
             {formatDate(item.updatedAt)}
           </Text>
-          <View style={styles.cardActions}>
+          {/* 터치가 바깥 Pressable(편집기 열기)로 전파되지 않도록 onStartShouldSetResponder 차단 */}
+          <View style={styles.cardActions} onStartShouldSetResponder={() => true}>
             <Pressable
               style={({ pressed }) => [styles.actionBtn, { borderColor: C.border }, pressed && { opacity: 0.6 }]}
               onPress={() => handleDuplicate(item.id)}

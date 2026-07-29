@@ -5146,8 +5146,8 @@ export default function MetronomeScreen() {
         </Text>
       </Animated.View>
 
-      {/* 상단 스와이프 다운 제스처 존 — 드로어 열기 (무대 모드 중 비활성) */}
-      {!showTopDrawer && !stageModeActive && (
+      {/* 상단 스와이프 다운 제스처 존 — 드로어 열기 (무대 모드·악보 편집 중 비활성) */}
+      {!showTopDrawer && !stageModeActive && scoreMode !== "editor" && (
         <View
           {...swipeDownPR.panHandlers}
           style={{
@@ -5161,8 +5161,8 @@ export default function MetronomeScreen() {
         />
       )}
 
-      {/* 상단 중앙 고정 모드 레이블 — 드로어가 열리거나 무대 모드 중이면 숨김 */}
-      {!showTopDrawer && !stageModeActive && (
+      {/* 상단 중앙 고정 모드 레이블 — 드로어가 열리거나 무대·악보편집 중이면 숨김 */}
+      {!showTopDrawer && !stageModeActive && scoreMode !== "editor" && (
       <Pressable
         onPress={() => setShowTopDrawer((v) => !v)}
         style={{

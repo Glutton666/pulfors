@@ -781,7 +781,7 @@ const makeStyles = (C: any) =>
     },
     tabRow: {
       flexDirection: "row",
-      paddingHorizontal: 4,
+      paddingHorizontal: 0,
       gap: 1,
       borderBottomWidth: 0,
     },
@@ -823,8 +823,8 @@ const makeStyles = (C: any) =>
     },
     itemRow: {
       flexDirection: "row",
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: 8,
+      paddingHorizontal: 0,
+      paddingVertical: 6,
       gap: 6,
       alignItems: "center",
     },
