@@ -4340,7 +4340,7 @@ export default function MetronomeScreen() {
     : "beat";
 
   const switchToMode = useCallback(async (mode: ModeSlot) => {
-    if (mode !== "menu" && mode === currentMode) return;
+    if (mode !== "menu" && mode === currentMode && !showMenu) return;
     // Exit whatever is currently active before entering the new mode
     if (noteMode) handleExitNoteMode();
     else if (barMode) handleBarModeChange(false);
@@ -4394,6 +4394,11 @@ export default function MetronomeScreen() {
   ).current;
   // PanResponder 안에서 최신 setShowTopDrawer에 접근하기 위한 ref 동기화
   setShowTopDrawerRef.current = setShowTopDrawer;
+
+  // 무대 모드 진입 시 드로어 자동 닫기
+  useEffect(() => {
+    if (stageModeActive) setShowTopDrawer(false);
+  }, [stageModeActive]);
 
   // 모드가 바뀔 때 슬라이드 인(오른쪽 → 중앙) 애니메이션
   const prevModeRef = useRef<ModeSlot>(currentMode);
@@ -5141,8 +5146,8 @@ export default function MetronomeScreen() {
         </Text>
       </Animated.View>
 
-      {/* 상단 스와이프 다운 제스처 존 — 드로어 열기 */}
-      {!showTopDrawer && (
+      {/* 상단 스와이프 다운 제스처 존 — 드로어 열기 (무대 모드 중 비활성) */}
+      {!showTopDrawer && !stageModeActive && (
         <View
           {...swipeDownPR.panHandlers}
           style={{
@@ -5156,8 +5161,8 @@ export default function MetronomeScreen() {
         />
       )}
 
-      {/* 상단 중앙 고정 모드 레이블 — 드로어가 열리면 숨김 (D-tab과 겹침 방지) */}
-      {!showTopDrawer && (
+      {/* 상단 중앙 고정 모드 레이블 — 드로어가 열리거나 무대 모드 중이면 숨김 */}
+      {!showTopDrawer && !stageModeActive && (
       <Pressable
         onPress={() => setShowTopDrawer((v) => !v)}
         style={{
