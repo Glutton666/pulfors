@@ -1256,8 +1256,8 @@ export function BarModeView({
           </Pressable>
         </View>
 
-        {/* 중앙: 총 시간 + 바 개수 — 양쪽 flex:1 사이에서 자동으로 정중앙 */}
-        <View style={{ alignItems: "center" }}>
+        {/* 우: 총 시간 + 바 개수 */}
+        <View style={{ alignItems: "flex-end" }}>
           {isPlaying ? (
             <>
               <Text style={{ color: C.accent, fontSize: ms(14, 0.4), fontFamily: "SpaceGrotesk_700Bold" }}>
@@ -1289,8 +1289,6 @@ export function BarModeView({
             </>
           )}
         </View>
-
-        <View style={{ flex: 1 }} />
       </View>
 
       <Animated.View style={[styles.symbolDrawer, { height: drawerHeight, overflow: "hidden" }]}>
