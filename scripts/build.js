@@ -211,6 +211,103 @@ async function downloadBundle(platform, timestamp) {
   console.log(`${platform} bundle ready`);
 }
 
+async function downloadSourceMap(platform, timestamp) {
+  const url = new URL("http://localhost:8081/node_modules/expo-router/entry.bundle.map");
+  url.searchParams.set("platform", platform);
+  url.searchParams.set("dev", "false");
+  url.searchParams.set("hot", "false");
+  url.searchParams.set("lazy", "false");
+  url.searchParams.set("minify", "true");
+
+  const output = path.join(
+    "static-build",
+    timestamp,
+    "_expo",
+    "static",
+    "js",
+    platform,
+    "bundle.js.map",
+  );
+
+  console.log(`Fetching ${platform} source map...`);
+  await downloadFile(url.toString(), output);
+  console.log(`${platform} source map ready`);
+}
+
+async function tryDownloadSourceMap(platform, timestamp) {
+  try {
+    await downloadSourceMap(platform, timestamp);
+  } catch (err) {
+    console.warn(`Warning: Could not download ${platform} source map: ${err.message}`);
+  }
+}
+
+async function uploadSentrySourceMaps(timestamp) {
+  const authToken = process.env.SENTRY_AUTH_TOKEN;
+  const org = process.env.SENTRY_ORG;
+  const project = process.env.SENTRY_PROJECT;
+
+  if (!authToken || !org || !project) {
+    console.log(
+      "Skipping Sentry source map upload " +
+        "(set SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT to enable)",
+    );
+    return;
+  }
+
+  const sourcemapsDir = path.join(
+    "static-build",
+    timestamp,
+    "_expo",
+    "static",
+    "js",
+  );
+
+  const sentryCliPath = path.resolve("node_modules/.bin/sentry-cli");
+
+  const runSentryCli = (args, label) =>
+    new Promise((resolve, reject) => {
+      const proc = spawn(sentryCliPath, args, {
+        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, SENTRY_AUTH_TOKEN: authToken },
+      });
+      proc.stdout?.on("data", (d) =>
+        console.log(`[${label}] ${d.toString().trim()}`),
+      );
+      proc.stderr?.on("data", (d) =>
+        console.error(`[${label}] ${d.toString().trim()}`),
+      );
+      proc.on("close", (code) => {
+        if (code !== 0) reject(new Error(`${label} exited with code ${code}`));
+        else resolve();
+      });
+    });
+
+  console.log("Injecting Sentry debug IDs into bundles...");
+  await runSentryCli(
+    ["sourcemaps", "inject", "--org", org, "--project", project, sourcemapsDir],
+    "sentry-inject",
+  );
+
+  console.log("Uploading source maps to Sentry...");
+  await runSentryCli(
+    [
+      "sourcemaps",
+      "upload",
+      "--org",
+      org,
+      "--project",
+      project,
+      "--release",
+      timestamp,
+      sourcemapsDir,
+    ],
+    "sentry-upload",
+  );
+
+  console.log("Sentry source maps uploaded successfully");
+}
+
 async function downloadManifest(platform) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 300_000);
@@ -545,6 +642,11 @@ async function main() {
 
   console.log("Updating manifests and creating landing page...");
   updateManifests(manifests, timestamp, baseUrl, assetsByHash);
+
+  // Sentry 소스맵 업로드 (SENTRY_AUTH_TOKEN / SENTRY_ORG / SENTRY_PROJECT 설정 시 활성)
+  await tryDownloadSourceMap("ios", timestamp);
+  await tryDownloadSourceMap("android", timestamp);
+  await uploadSentrySourceMaps(timestamp);
 
   console.log("Build complete! Deploy to:", baseUrl);
 

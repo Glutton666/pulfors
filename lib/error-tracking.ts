@@ -3,12 +3,12 @@
  *
  * 기본 동작은 콘솔 출력만 수행하는 no-op입니다.
  * Sentry를 활성화하려면:
- *   1) `npx expo install @sentry/react-native` 로 패키지 설치
- *   2) `EXPO_PUBLIC_SENTRY_DSN` 환경변수 설정 (Replit Secrets 또는 .env)
- *   3) 앱 재시작 — `initErrorTracking()`이 동적으로 SDK를 로드합니다.
+ *   1) `EXPO_PUBLIC_SENTRY_DSN` 환경변수를 Replit Secrets(production)에 등록
+ *   2) 앱 재시작 — `initErrorTracking()`이 프로덕션 환경에서만 SDK를 초기화합니다.
  *
- * 패키지가 설치되지 않았거나 DSN이 비어 있으면 콘솔 로깅만 수행하므로
- * 어떤 환경에서도 안전하게 호출할 수 있습니다.
+ * 개발 환경(__DEV__ === true)에서는 DSN이 설정되어 있어도 Sentry를 초기화하지 않아
+ * 개발 중 노이즈가 Sentry 대시보드에 유입되지 않습니다.
+ * DSN이 없거나 패키지가 없으면 어떤 환경에서도 안전하게 콘솔 로깅만 수행합니다.
  */
 
 type Severity = "fatal" | "error" | "warning" | "info" | "debug";
@@ -40,6 +40,12 @@ export async function initErrorTracking(): Promise<void> {
   const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
   if (!dsn) {
     if (isDev()) console.info("[error-tracking] No DSN — console-only mode");
+    return;
+  }
+  // 개발 환경(__DEV__ === true)에서는 DSN이 설정되어 있어도 Sentry를 초기화하지 않는다.
+  // 이렇게 하면 개발/프리뷰 트래픽이 Sentry 대시보드에 섞이지 않는다.
+  if (isDev()) {
+    console.info("[error-tracking] Dev mode — Sentry disabled (console-only)");
     return;
   }
   try {
