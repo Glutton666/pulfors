@@ -3403,6 +3403,11 @@ export function useMetronomeScreen() {
       currentMode, noteMode, barMode, scoreMode,
       stageModeActive, showMenu, showPracticeBook, activeModal,
     };
+    // 상태 변경 전에 애니메이션 초기값 설정 → 새 뷰가 마운트될 때 이미 opacity=0 상태
+    if (mode !== "menu" && mode !== currentMode) {
+      modeSlideX.value       = windowWidth * 0.25;
+      modeSlideOpacity.value = 0;
+    }
     const cb: ModeSwitchCallbacks = {
       handleExitNoteMode,
       handleBarModeChange,
@@ -3430,15 +3435,13 @@ export function useMetronomeScreen() {
     void switchToMode(nextMode);
   }, [currentMode, switchToMode]);
 
-  // 모드가 바뀔 때 슬라이드 인(오른쪽 → 중앙) + 페이드 인 애니메이션
+  // 모드 변경 후 useEffect에서 withTiming 시작 (초기값은 switchToMode에서 사전 설정)
   const prevModeRef = useRef<ModeSlot>(currentMode);
   useEffect(() => {
     if (prevModeRef.current !== currentMode) {
       prevModeRef.current = currentMode;
-      modeSlideX.value       = windowWidth * 0.25;
-      modeSlideOpacity.value = 0;
-      modeSlideX.value       = withTiming(0,   { duration: 270, easing: Easing.out(Easing.cubic) });
-      modeSlideOpacity.value = withTiming(1,   { duration: 220, easing: Easing.out(Easing.cubic) });
+      modeSlideX.value       = withTiming(0, { duration: 270, easing: Easing.out(Easing.cubic) });
+      modeSlideOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMode]);
