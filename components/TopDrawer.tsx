@@ -25,7 +25,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useScale } from "@/lib/scale";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { ModeSlot } from "@/components/ModeSwitcherDial";
+import type { ModeSlot } from "@/components/ModeDialLabel";
 
 // ── 스타일 상수 ────────────────────────────────────────────────────────────────
 const RIM_COLOR  = "#6B5A1E";
