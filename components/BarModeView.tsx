@@ -1257,7 +1257,7 @@ export function BarModeView({
         </View>
 
         {/* 우: 총 시간 + 바 개수 */}
-        <View style={{ alignItems: "flex-end" }}>
+        <View style={{ alignItems: "flex-end", paddingRight: Spacing.md }}>
           {isPlaying ? (
             <>
               <Text style={{ color: C.accent, fontSize: ms(14, 0.4), fontFamily: "SpaceGrotesk_700Bold" }}>
