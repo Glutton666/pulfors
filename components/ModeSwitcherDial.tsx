@@ -476,14 +476,15 @@ function ModeSwitcherDial({
   }, [doClose]);
 
   // ── Geometry (sync refs synchronously in render) ──────────────────────────
-  // When hideHandle=true, always anchor to top-center regardless of stored wallPos.
+  // When hideHandle=true, all geometry is pinned to top-center regardless of stored wallPos.
   const TOP_CENTER_WP: WallPos = { wall: "top", t: 0.5 };
-  const anchor = anchorPos(hideHandle ? TOP_CENTER_WP : wallPos, winW, winH, topInset);
-  wallRef.current    = wallPos.wall;
+  const activeWP               = hideHandle ? TOP_CENTER_WP : wallPos;
+  const anchor                 = anchorPos(activeWP, winW, winH, topInset);
+  wallRef.current    = activeWP.wall;
   anchorRef.current  = anchor;
 
-  const wall                   = wallPos.wall;
-  const { centAng, halfSpan }  = effectiveArcParams(wall, wallPos.t);
+  const wall                   = activeWP.wall;
+  const { centAng, halfSpan }  = effectiveArcParams(wall, activeWP.t);
   const bgLayout               = fanBgLayout(wall);
   const bgCorner               = fanBgCorners(wall);
   const hLayout                = handleLayout(wall);
