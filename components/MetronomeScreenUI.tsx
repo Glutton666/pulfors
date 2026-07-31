@@ -320,6 +320,8 @@ export function MetronomeScreenUI(props: Props) {
         onMenuToggle={() => setActiveModal(showMenu ? null : "menu")}
         topInset={insets.top || webTopInset}
         isLandscape={isLandscape}
+        currentMode={currentMode}
+        onModeChange={switchToMode}
       />
 
       {showMenu && (
