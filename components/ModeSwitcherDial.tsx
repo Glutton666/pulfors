@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
 import {
   View,
   Text,
@@ -211,6 +211,11 @@ function ModeIcon({ mode, size, color }: { mode: ModeSlot; size: number; color: 
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface ModeSwitcherDialHandle {
+  open(): void;
+  close(): void;
+}
+
 interface ModeSwitcherDialProps {
   currentMode: ModeSlot;
   onSelectMode: (mode: ModeSlot) => void;
@@ -219,13 +224,14 @@ interface ModeSwitcherDialProps {
   isPlaying?: boolean;
 }
 
-export function ModeSwitcherDial({
+export const ModeSwitcherDial = forwardRef(
+function ModeSwitcherDial({
   currentMode,
   onSelectMode,
   topInset,
   isLandscape,
   isPlaying,
-}: ModeSwitcherDialProps) {
+}: ModeSwitcherDialProps, ref: React.ForwardedRef<ModeSwitcherDialHandle>) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
@@ -297,6 +303,12 @@ export function ModeSwitcherDial({
     overlayOp.value  = withTiming(0,    { duration: 160 });
     setTimeout(() => { setIsOpen(false); isOpenRef.current = false; }, 185);
   }, [fanScale, fanOpacity, overlayOp]);
+
+  // Expose open/close to parent via ref
+  useImperativeHandle(ref, () => ({
+    open:  doOpen,
+    close: doClose,
+  }), [doOpen, doClose]);
 
   // Sync refs so stale PanResponder closures always call the latest version
   useEffect(() => { doOpenRef.current  = doOpen;  }, [doOpen]);
@@ -726,4 +738,5 @@ export function ModeSwitcherDial({
       </View>
     </>
   );
-}
+});
+ModeSwitcherDial.displayName = "ModeSwitcherDial";

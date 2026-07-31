@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ import { MoreMenuModal } from "@/components/MoreMenuModal";
 import { ScoreListScreen } from "@/components/ScoreListScreen";
 import { ScoreEditorScreen } from "@/components/ScoreEditorScreen";
 import { ModeSwitcherDial } from "@/components/ModeSwitcherDial";
+import type { ModeSwitcherDialHandle } from "@/components/ModeSwitcherDial";
 import { MenuScreen } from "@/components/MenuScreen";
 import { BpmDetectModal } from "@/components/BpmDetectModal";
 import { StemSeparationModal } from "@/components/StemSeparationModal";
@@ -56,6 +57,8 @@ import type { useMetronomeScreen } from "@/hooks/useMetronomeScreen";
 type Props = ReturnType<typeof useMetronomeScreen>;
 
 export function MetronomeScreenUI(props: Props) {
+  const modeSwitcherDialRef = useRef<ModeSwitcherDialHandle>(null);
+
   const {
     styles, C, S, t, themeMode, language, insets, webTopInset, webBottomInset,
     isLandscape, windowWidth,
@@ -286,7 +289,7 @@ export function MetronomeScreenUI(props: Props) {
       {/* 상단 중앙 고정 모드 레이블 — 탭하면 다음 모드로 순환 (무대·악보편집 중 숨김) */}
       {!stageModeActive && scoreMode !== "editor" && (
         <Pressable
-          onPress={cycleToNextMode}
+          onPress={() => modeSwitcherDialRef.current?.open()}
           style={{
             position: "absolute",
             top: (insets.top || webTopInset) + 4,
@@ -297,7 +300,7 @@ export function MetronomeScreenUI(props: Props) {
             borderRadius: 20,
           }}
           accessibilityRole="button"
-          accessibilityLabel={t("switcher", "cycleTap")}
+          accessibilityLabel={t("switcher", "openDial")}
           testID="mode-cycle-label"
         >
           <Text
@@ -316,6 +319,7 @@ export function MetronomeScreenUI(props: Props) {
 
       {/* 드래그 가능한 D-탭 모드 다이얼 */}
       <ModeSwitcherDial
+        ref={modeSwitcherDialRef}
         currentMode={currentMode}
         onSelectMode={switchToMode}
         topInset={insets.top || webTopInset}
