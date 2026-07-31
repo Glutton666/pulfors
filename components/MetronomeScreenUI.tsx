@@ -314,15 +314,6 @@ export function MetronomeScreenUI(props: Props) {
       </Pressable>
       )}
 
-      {/* 드래그 가능한 D-탭 모드 다이얼 */}
-      <ModeSwitcherDial
-        isMenuOpen={showMenu}
-        onMenuToggle={() => setActiveModal(showMenu ? null : "menu")}
-        topInset={insets.top || webTopInset}
-        isLandscape={isLandscape}
-        currentMode={currentMode}
-        onModeChange={switchToMode}
-      />
 
       {showMenu && (
         <MenuScreen
