@@ -479,7 +479,10 @@ function ModeSwitcherDial({
   // When hideHandle=true, all geometry is pinned to top-center regardless of stored wallPos.
   const TOP_CENTER_WP: WallPos = { wall: "top", t: 0.5 };
   const activeWP               = hideHandle ? TOP_CENTER_WP : wallPos;
-  const anchor                 = anchorPos(activeWP, winW, winH, topInset);
+  // hideHandle: bypass anchorPos — its safeT camera-safe zone shoves t=0.5 to 0.75.
+  const anchor = hideHandle
+    ? { x: winW / 2, y: topInset }
+    : anchorPos(activeWP, winW, winH, topInset);
   wallRef.current    = activeWP.wall;
   anchorRef.current  = anchor;
 

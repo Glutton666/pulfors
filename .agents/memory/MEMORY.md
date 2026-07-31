@@ -15,4 +15,5 @@
 - [Score editor clef resolution priority](score-editor-clef-resolution-priority.md) — per-measure clef must be checked before part-level default clef everywhere; checking only `part.clef` misses measure-level overrides (found via e2e, not tsc).
 - [Web audio bugs need iframe-embedded repro](web-audio-iframe-repro.md) — autoplay/AudioContext bugs can pass in a bare top-level Playwright page but fail once the page is embedded in an `<iframe>`, matching Replit's real preview.
 - [import type erases runtime values — React Compiler {} crash](import-type-erases-values.md) — function imported under `import type {}` becomes undefined at runtime; React Compiler surfaces this as empty-object `{}` ErrorBoundary catch with no message.
+- [Mode dial top-center anchoring](mode-dial-topcenter-anchor.md) — anchorPos/safeT shoves top-wall t=0.5 to 0.75 (camera zone); hideHandle mode must bypass it and pin all geometry.
 - [Orchestration hook domain split](orchestration-hook-split.md) — useMetronomeScreen split pattern: same-name destructuring, early ref declarations, TranslationFn type, language cast for notification controls.
