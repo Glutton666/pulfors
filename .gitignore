@@ -3,6 +3,13 @@
 # dependencies
 node_modules/
 
+# Stem-separation AI models — too large for a normal git push (GitHub's 100MB
+# per-file limit). Bundled locally/on-device via require() in
+# lib/stem-separation.ts; must be placed in this folder manually on every
+# machine that builds the app (not synced through git).
+models/*.ort
+models/*.onnx
+
 # Expo
 .expo/
 dist/

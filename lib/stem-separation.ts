@@ -553,17 +553,12 @@ export const MODEL_DOWNLOAD_URLS: Record<string, string> = {
  * Developers who have not yet added model files should leave this function as-is;
  * `resolveModelPath` will fall through to the download strategy automatically.
  */
-function _bundledAssetModule(_filename: string): number | null {
-  // Add require() cases here when you physically place model files in models/:
-  //
-  // switch (_filename) {
-  //   case "htdemucs.ort":    return require("../models/htdemucs.ort") as number;
-  //   case "htdemucs_6s.ort": return require("../models/htdemucs_6s.ort") as number;
-  //   case "denoiser.ort":    return require("../models/denoiser.ort") as number;
-  // }
-  //
-  // Until then, return null so the document-directory path is used instead.
-  return null;
+function _bundledAssetModule(filename: string): number | null {
+  switch (filename) {
+    case "htdemucs.ort":    return require("../models/htdemucs.ort") as number;
+    case "htdemucs_6s.ort": return require("../models/htdemucs_6s.ort") as number;
+    default: return null;
+  }
 }
 
 /**
