@@ -345,7 +345,7 @@ export function MetronomeScreenUI(props: Props) {
         <Animated.View style={[StyleSheet.absoluteFillObject, { zIndex: 400 }, modeSlideStyle]}>
           <MenuScreen
             topInset={insets.top || webTopInset}
-            onOpenDial={() => { setActiveModal(null); setTimeout(() => modeSwitcherDialRef.current?.open(), 100); }}
+            onOpenDial={() => modeSwitcherDialRef.current?.open()}
             onClose={() => setActiveModal(null)}
             onSettings={() => {
               settingsReturnModalRef.current = "menu";
