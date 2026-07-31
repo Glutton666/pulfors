@@ -530,7 +530,8 @@ export function useMetronomeScreen() {
   /** 비트 진행률: 각 비트 시작 시 0 → 다음 비트까지 1 로 sweep. StageBeatArc 구동. */
   const beatProgress = useSharedValue(0);
   /** 모드 전환 슬라이드 애니메이션: 새 모드가 오른쪽에서 진입. */
-  const modeSlideX = useSharedValue(0);
+  const modeSlideX       = useSharedValue(0);
+  const modeSlideOpacity = useSharedValue(1);
 
   const flashStyle = useAnimatedStyle(() => ({
     opacity: flashOpacity.value,
@@ -539,6 +540,7 @@ export function useMetronomeScreen() {
     opacity: halfTimeFlash.value,
   }));
   const modeSlideStyle = useAnimatedStyle(() => ({
+    opacity: modeSlideOpacity.value,
     transform: [{ translateX: modeSlideX.value }],
   }));
 
@@ -3440,13 +3442,15 @@ export function useMetronomeScreen() {
     void switchToMode(nextMode);
   }, [currentMode, switchToMode]);
 
-  // 모드가 바뀔 때 슬라이드 인(오른쪽 → 중앙) 애니메이션
+  // 모드가 바뀔 때 슬라이드 인(오른쪽 → 중앙) + 페이드 인 애니메이션
   const prevModeRef = useRef<ModeSlot>(currentMode);
   useEffect(() => {
     if (prevModeRef.current !== currentMode) {
       prevModeRef.current = currentMode;
-      modeSlideX.value = windowWidth * 0.25;
-      modeSlideX.value = withTiming(0, { duration: 270, easing: Easing.out(Easing.cubic) });
+      modeSlideX.value       = windowWidth * 0.25;
+      modeSlideOpacity.value = 0;
+      modeSlideX.value       = withTiming(0,   { duration: 270, easing: Easing.out(Easing.cubic) });
+      modeSlideOpacity.value = withTiming(1,   { duration: 220, easing: Easing.out(Easing.cubic) });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMode]);

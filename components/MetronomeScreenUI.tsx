@@ -173,7 +173,7 @@ export function MetronomeScreenUI(props: Props) {
 
       {/* ── 악보 모드 전체화면 오버레이 ── */}
       {scoreMode === "list" && (
-        <View style={[StyleSheet.absoluteFillObject, { zIndex: 500, backgroundColor: C.background }]}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, { zIndex: 500, backgroundColor: C.background }, modeSlideStyle]}>
           <ScoreListScreen
             defaultBpm={bpm}
             onOpenDial={() => modeSwitcherDialRef.current?.open()}
@@ -183,10 +183,10 @@ export function MetronomeScreenUI(props: Props) {
               setScoreMode("editor");
             }}
           />
-        </View>
+        </Animated.View>
       )}
       {scoreMode === "editor" && scoreEditorDoc && (
-        <View style={[StyleSheet.absoluteFillObject, { zIndex: 500, backgroundColor: C.background }]}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, { zIndex: 500, backgroundColor: C.background }, modeSlideStyle]}>
           <ScoreEditorScreen
             doc={scoreEditorDoc}
             onBack={() => setScoreMode("list")}
@@ -198,7 +198,7 @@ export function MetronomeScreenUI(props: Props) {
             }}
             onLinkedEntryChange={handleLinkedEntryChange}
           />
-        </View>
+        </Animated.View>
       )}
       {permissionRecoveryToast ? (
         <View
@@ -342,25 +342,27 @@ export function MetronomeScreenUI(props: Props) {
 
 
       {showMenu && (
-        <MenuScreen
-          topInset={insets.top || webTopInset}
-          onOpenDial={() => { setActiveModal(null); setTimeout(() => modeSwitcherDialRef.current?.open(), 100); }}
-          onClose={() => setActiveModal(null)}
-          onSettings={() => {
-            settingsReturnModalRef.current = "menu";
-            openExclusive("settings");
-          }}
-          onSignalGen={() => {
-            if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
-            openExclusive("signalGen");
-          }}
-          onWorkUp={() => openExclusive("workUp")}
-          onPracticeBook={() => {
-            if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
-            openExclusive("practiceBook");
-          }}
-          onMoreMenu={() => openExclusive("moreMenu")}
-        />
+        <Animated.View style={[StyleSheet.absoluteFillObject, { zIndex: 400 }, modeSlideStyle]}>
+          <MenuScreen
+            topInset={insets.top || webTopInset}
+            onOpenDial={() => { setActiveModal(null); setTimeout(() => modeSwitcherDialRef.current?.open(), 100); }}
+            onClose={() => setActiveModal(null)}
+            onSettings={() => {
+              settingsReturnModalRef.current = "menu";
+              openExclusive("settings");
+            }}
+            onSignalGen={() => {
+              if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
+              openExclusive("signalGen");
+            }}
+            onWorkUp={() => openExclusive("workUp")}
+            onPracticeBook={() => {
+              if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
+              openExclusive("practiceBook");
+            }}
+            onMoreMenu={() => openExclusive("moreMenu")}
+          />
+        </Animated.View>
       )}
 
       <MoreMenuModal
@@ -1227,6 +1229,7 @@ export function MetronomeScreenUI(props: Props) {
         />
       )}
 
+      <Animated.View style={modeSlideStyle}>
       <StageModeOverlay
         visible={stageModeActive}
         onOpenDial={() => modeSwitcherDialRef.current?.open()}
@@ -1355,6 +1358,7 @@ export function MetronomeScreenUI(props: Props) {
           setActiveStagePracticeEntryId(entry.id);
         }}
       />
+      </Animated.View>
     </KbView>
   );
 }

@@ -10,9 +10,9 @@ export function ModeIcon({ mode, size, color }: { mode: ModeSlot; size: number; 
     case "beat":     return <Ionicons name="ellipse"       size={size} color={color} />;
     case "bar":      return <Ionicons name="reorder-three" size={size} color={color} />;
     case "score":    return <Ionicons name="musical-note"  size={size} color={color} />;
-    case "note":     return <Ionicons name="list"          size={size} color={color} />;
-    case "practice": return <Ionicons name="book-outline"  size={size} color={color} />;
-    case "stage":    return <Ionicons name="mic-outline"   size={size} color={color} />;
-    case "menu":     return <Ionicons name="menu"          size={size} color={color} />;
+    case "note":     return <Ionicons name="journal-outline" size={size} color={color} />;
+    case "practice": return <Ionicons name="book-outline"   size={size} color={color} />;
+    case "stage":    return <Ionicons name="mic-outline"    size={size} color={color} />;
+    case "menu":     return <Ionicons name="grid-outline"   size={size} color={color} />;
   }
 }

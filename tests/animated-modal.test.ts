@@ -413,7 +413,87 @@ describe("모달 라우팅 — 단일 활성 모달 보장", () => {
   });
 });
 
-// ─── 10. SignalGenerator → TuningGuide 전환 ─────────────────────────────────
+// ─── 10. 연습장 모달 — 닫기 버튼 제거 후 닫기 경로 검증 ─────────────────────
+//
+// PracticeBookModal 의 닫기(×) 버튼을 제거한 뒤 두 가지 닫기 경로가
+// 모달을 올바르게 닫는지 검증한다.
+//
+// 경로 A. Android 뒤로가기 (하드웨어 Back)
+//   onRequestClose={onClose}           (PracticeBookModal.tsx:672)
+//   → AnimatedSlideModal이 네이티브 Modal로 포워딩 (AnimatedModal.tsx:113)
+//   → onClose() → setActiveModal(null) (MetronomeScreenUI.tsx:577)
+//   → showPracticeBook = false
+//
+// 경로 B. 팬 다이얼 트리거 (헤더 Pressable)
+//   onOpenDial()                        (MetronomeScreenUI.tsx:576)
+//   → setActiveModal(null) → {showPracticeBook && ...} 조건 false → 컴포넌트 언마운트
+//   → setTimeout(100ms) → modeSwitcherDialRef.current?.open()
+//
+// 경로 C. iOS 페이지 시트 스와이프
+//   presentationStyle="pageSheet"      (PracticeBookModal.tsx:671)
+//   → 네이티브 스와이프 해제 → onRequestClose 발화 → 경로 A 와 동일
+//
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("연습장 모달 — 닫기 버튼 제거 후 닫기 경로 검증", () => {
+  test("경로 A. Android 뒤로가기: onRequestClose → setActiveModal(null) → showPracticeBook=false", () => {
+    // setActiveModal(null) 이후 deriveModalFlags 로 showPracticeBook 가 false 인지 확인
+    const flags = deriveModalFlags(null);
+    assert.equal(flags.showPracticeBook, false,
+      "onClose() → setActiveModal(null) 후 showPracticeBook 가 false 여야 한다");
+  });
+
+  test("경로 A. AnimatedSlideModal 상태 머신: onRequestClose → visible=false → 닫힘 완료", () => {
+    const sim = new ModalVisibilitySimulation(true);   // 연습장 열림
+    const { animDone } = sim.setVisible(false);         // onRequestClose → onClose → visible=false
+    assert.equal(sim.nativeVisible, true, "닫기 애니메이션 중에는 여전히 보여야 한다");
+    animDone(true);
+    assert.equal(sim.nativeVisible, false, "애니메이션 완료 후 숨겨야 한다");
+  });
+
+  test("경로 B. 팬 다이얼 트리거: setActiveModal(null) 후 showPracticeBook=false (다이얼 열기 가능)", () => {
+    // onOpenDial: setActiveModal(null) → showPracticeBook=false → 100ms 뒤 dial.open()
+    const afterClose = deriveModalFlags(null);
+    assert.equal(afterClose.showPracticeBook, false,
+      "다이얼 트리거 직후 showPracticeBook 가 false 여야 다이얼이 열릴 수 있다");
+    // 다이얼이 열린 상태에서도 다른 모달이 동시에 열리지 않음을 보장
+    assert.equal(countVisibleModals(afterClose), 0);
+  });
+
+  test("경로 C. iOS 스와이프 해제: presentationStyle=pageSheet + onRequestClose 조합 — 경로 A 와 동일", () => {
+    // iOS 스와이프 → onRequestClose → onClose → visible=false (경로 A 와 동일 로직)
+    const sim = new ModalVisibilitySimulation(true);
+    const { animDone } = sim.setVisible(false);
+    animDone(true);
+    assert.equal(sim.nativeVisible, false,
+      "iOS 스와이프 해제(onRequestClose 경유) 후 모달이 닫혀야 한다");
+  });
+
+  test("닫기 후 재열기: 연습장을 다시 열면 정상적으로 열린다", () => {
+    const sim = new ModalVisibilitySimulation(false);
+    sim.setVisible(true);
+    assert.equal(sim.nativeVisible, true);
+
+    const { animDone } = sim.setVisible(false);
+    animDone(true);
+    assert.equal(sim.nativeVisible, false);
+
+    sim.setVisible(true);   // 재열기 (다시 연습장 모드 선택)
+    assert.equal(sim.nativeVisible, true);
+  });
+
+  test("뒤로가기 빠른 연속 입력: stale 콜백이 모달을 열린 상태로 되돌리지 않는다", () => {
+    // 짧은 간격으로 뒤로가기 → 열기 → 뒤로가기 시나리오
+    const sim = new ModalVisibilitySimulation(true);
+    const { animDone: stale } = sim.setVisible(false);  // 첫 번째 닫기
+    sim.setVisible(true);                                // 빠르게 재열기
+    stale(true);                                         // 첫 번째 닫기 stale 콜백 — 무시돼야 함
+    assert.equal(sim.nativeVisible, true,
+      "stale 닫기 콜백이 재열기된 모달을 닫으면 안 된다");
+  });
+});
+
+// ─── 11. SignalGenerator → TuningGuide 전환 ─────────────────────────────────
 
 describe("SignalGenerator → TuningGuide 전환 순수 로직", () => {
   test("openTuningGuideFromSignalGen: activeModal 을 tuningGuide 로 전환하고 reopen 플래그 set", () => {
