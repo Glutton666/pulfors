@@ -3400,7 +3400,7 @@ export function useMetronomeScreen() {
     ? "score"
     : "beat";
 
-  const switchToMode = useCallback(async (mode: ModeSlot) => {
+  const switchToMode = useCallback(async (mode: ModeSlot, direction: "left" | "right" = "right") => {
     const state: ModeSwitchState = {
       currentMode, noteMode, barMode, scoreMode,
       stageModeActive, showMenu, showPracticeBook, activeModal,
@@ -3409,7 +3409,8 @@ export function useMetronomeScreen() {
     // 메뉴는 오버레이라 콘텐츠 변경 없음 → 애니메이션 제외
     const isMenuOverlay = mode === "menu" || currentMode === "menu";
     if (!isMenuOverlay && mode !== currentMode) {
-      modeSlideX.value       = windowWidth * 0.25;
+      // 다이얼 방향에 따라 슬라이드 시작 위치 결정
+      modeSlideX.value       = direction === "right" ? windowWidth * 0.25 : -windowWidth * 0.25;
       modeSlideOpacity.value = 0;
     }
     const cb: ModeSwitchCallbacks = {
@@ -3436,7 +3437,7 @@ export function useMetronomeScreen() {
   const cycleToNextMode = useCallback(() => {
     const idx = MODE_CYCLE.indexOf(currentMode as typeof MODE_CYCLE[number]);
     const nextMode = MODE_CYCLE[(idx + 1) % MODE_CYCLE.length];
-    void switchToMode(nextMode);
+    void switchToMode(nextMode, "right");
   }, [currentMode, switchToMode]);
 
   // 모드 변경 후 useEffect에서 withTiming 시작 (초기값은 switchToMode에서 사전 설정)

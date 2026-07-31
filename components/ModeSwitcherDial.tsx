@@ -218,7 +218,7 @@ export interface ModeSwitcherDialHandle {
 
 interface ModeSwitcherDialProps {
   currentMode: ModeSlot;
-  onSelectMode: (mode: ModeSlot) => void;
+  onSelectMode: (mode: ModeSlot, direction: "left" | "right") => void;
   topInset: number;
   isLandscape: boolean;
   isPlaying?: boolean;
@@ -475,8 +475,14 @@ function ModeSwitcherDial({
   // Confirm the highlighted mode and close the fan
   const confirmSelection = useCallback(() => {
     const snapped = snapWrap(scrollPosRef.current);
+    // 다이얼을 돌린 방향 계산 (원형 보정)
+    const currentIdx = MODES.indexOf(currentModeRef.current);
+    let delta = snapped - currentIdx;
+    if (delta >  N_MODES / 2) delta -= N_MODES;
+    if (delta < -N_MODES / 2) delta += N_MODES;
+    const direction: "left" | "right" = delta < 0 ? "left" : "right";
     doClose();
-    setTimeout(() => onSelectModeRef.current(MODES[snapped]), 200);
+    setTimeout(() => onSelectModeRef.current(MODES[snapped], direction), 200);
   }, [doClose]);
 
   // ── Geometry (sync refs synchronously in render) ──────────────────────────

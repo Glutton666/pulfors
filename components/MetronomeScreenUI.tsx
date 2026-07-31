@@ -290,8 +290,8 @@ export function MetronomeScreenUI(props: Props) {
         </Text>
       </Animated.View>
 
-      {/* 상단 중앙 고정 모드 레이블 — 탭하면 팬 다이얼 열기 (무대·악보편집·메뉴·연습장 중 숨김) */}
-      {!stageModeActive && scoreMode !== "editor" && !showMenu && !showPracticeBook && (
+      {/* 상단 중앙 고정 모드 레이블 — 탭하면 팬 다이얼 열기 (무대·악보·메뉴·연습장 중 숨김, 해당 화면 헤더에 자체 트리거 있음) */}
+      {!stageModeActive && scoreMode === null && !showMenu && !showPracticeBook && (
         <Pressable
           onPress={() => modeSwitcherDialRef.current?.open()}
           style={{
