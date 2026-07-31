@@ -317,7 +317,7 @@ export function MetronomeScreenUI(props: Props) {
         </Pressable>
       )}
 
-      {/* 드래그 가능한 D-탭 모드 다이얼 */}
+      {/* 모드 다이얼 — D-탭 없이 텍스트 레이블이 트리거 */}
       <ModeSwitcherDial
         ref={modeSwitcherDialRef}
         currentMode={currentMode}
@@ -325,6 +325,7 @@ export function MetronomeScreenUI(props: Props) {
         topInset={insets.top || webTopInset}
         isLandscape={isLandscape}
         isPlaying={isPlaying}
+        hideHandle
       />
 
 

@@ -222,6 +222,8 @@ interface ModeSwitcherDialProps {
   topInset: number;
   isLandscape: boolean;
   isPlaying?: boolean;
+  /** When true, hides the D-tab handle entirely and anchors the fan to top-center. */
+  hideHandle?: boolean;
 }
 
 export const ModeSwitcherDial = forwardRef(
@@ -231,6 +233,7 @@ function ModeSwitcherDial({
   topInset,
   isLandscape,
   isPlaying,
+  hideHandle = false,
 }: ModeSwitcherDialProps, ref: React.ForwardedRef<ModeSwitcherDialHandle>) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -238,10 +241,13 @@ function ModeSwitcherDial({
   const { width: winW, height: winH } = useWindowDimensions();
 
   // ── Wall position ────────────────────────────────────────────────────────
-  const defaultWP: WallPos = { wall: "right", t: 0.02 };
+  // When hideHandle=true, always anchor to top-center (fan opens downward from text label).
+  const TOP_CENTER: WallPos = { wall: "top", t: 0.5 };
+  const defaultWP: WallPos = hideHandle ? TOP_CENTER : { wall: "right", t: 0.02 };
   const [wallPos, setWallPos] = useState<WallPos>(defaultWP);
 
   useEffect(() => {
+    if (hideHandle) return;  // fixed position, no persistence needed
     AsyncStorage.getItem(WALL_KEY).then((raw) => {
       if (!raw) return;
       try {
@@ -251,6 +257,7 @@ function ModeSwitcherDial({
         }
       } catch {}
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Auto-relocation: move D-tab away from mode buttons on mode entry ─────
@@ -652,7 +659,8 @@ function ModeSwitcherDial({
         </Animated.View>
       )}
 
-      {/* Handle — always rendered; when fan open, transparent but still tappable to close */}
+      {/* Handle — hidden when hideHandle=true (fan is triggered externally via ref.open()) */}
+      {!hideHandle && (
       <View
         {...handlePR.panHandlers}
         style={{
@@ -736,6 +744,7 @@ function ModeSwitcherDial({
         )}
 
       </View>
+      )}
     </>
   );
 });
