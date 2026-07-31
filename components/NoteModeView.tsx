@@ -504,10 +504,6 @@ export function NoteModeView({
         )}
 
         <View style={styles.header}>
-          <View style={{ width: 22 }} />
-          <Text style={[styles.title, { color: hasImg ? "#fff" : C.accent }]}>
-            {t("noteMode", "title")}
-          </Text>
           <View style={[styles.progressBadge, { backgroundColor: hasImg ? "rgba(0,0,0,0.45)" : C.accent + "22" }]}>
             <Text style={[styles.progressText, { color: hasImg ? "#fff" : C.accent }]}>
               {currentIndex + 1}/{queue.length}
@@ -778,7 +774,6 @@ export function NoteModeView({
       <View style={[styles.container, { flexDirection: "row" as const, gap: S.ms(8, 0.3) }, S.isTablet && { maxWidth: 900, alignSelf: "center" as const, width: "100%" as const }]}>
         <View style={{ flex: 2 }}>
           <View style={[styles.header, { marginBottom: S.ms(2, 0.3), gap: S.ms(8, 0.3) }]}>
-            <Text style={[styles.title, { color: C.accent, fontSize: S.ms(14, 0.3) }]}>{t("noteMode", "title")}</Text>
             <View style={[styles.headerActions, { gap: S.ms(6, 0.3) }]}>
               <Pressable onPress={handleSaveWithFeedback} hitSlop={8} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : C.surface, width: S.ms(28, 0.4), height: S.ms(28, 0.4) }]}>
                 <Ionicons name={saved ? "checkmark" : "save-outline"} size={S.ms(13, 0.3)} color={saved ? "#4CAF50" : C.accent} />
@@ -801,8 +796,6 @@ export function NoteModeView({
   return (
     <View style={[styles.container, S.isTablet && { maxWidth: 720, alignSelf: "center" as const, width: "100%" as const }]}>
       <View style={styles.header}>
-        <View style={{ width: 22 }} />
-        <Text style={[styles.title, { color: C.accent }]}>{t("noteMode", "title")}</Text>
         <View style={styles.headerActions}>
           <Pressable onPress={handleSaveWithFeedback} hitSlop={8} style={[styles.headerBtn, { borderColor: saved ? "#4CAF50" : C.accent, backgroundColor: saved ? "#4CAF5020" : C.surface }]}>
             <Ionicons name={saved ? "checkmark" : "save-outline"} size={S.ms(16, 0.4)} color={saved ? "#4CAF50" : C.accent} />
