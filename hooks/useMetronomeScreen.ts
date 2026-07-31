@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useLandscapePanel } from "@/hooks/useLandscapePanel";
+import { useNotificationBridge } from "@/hooks/useNotificationBridge";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { useAudioPipeline } from "@/hooks/useAudioPipeline";
 import {
   View,
   Platform,
@@ -123,6 +127,7 @@ export function useMetronomeScreen() {
   useEffect(() => { languageRef.current = language; }, [language]);
 
   const [bpm, setBpm] = useState(120);
+  const bpmRef = useRef(bpm);
   const baseBpmRef = useRef(120);
   const beatDenominatorRef = useRef<2 | 4 | 8>(4);
   const {
@@ -163,13 +168,17 @@ export function useMetronomeScreen() {
   const [beatSubdivisions, setBeatSubdivisions] = useState<
     Record<string, BeatType[]>
   >({});
-  const [landscapeImageUri, setLandscapeImageUri] = useState<string | null>(null);
-  const [landscapeImageModalVisible, setLandscapeImageModalVisible] = useState(false);
-  const [showLandscapeImage, setShowLandscapeImage] = useState(true);
-  const [landscapeContentType, setLandscapeContentType] = useState<"photo" | "stats">("photo");
-  const [landscapeStatsLogs, setLandscapeStatsLogs] = useState<ActivityLog[]>([]);
+  const {
+    landscapeImageUri, setLandscapeImageUri,
+    landscapeImageModalVisible, setLandscapeImageModalVisible,
+    showLandscapeImage, setShowLandscapeImage,
+    landscapeContentType, setLandscapeContentType,
+    landscapeStatsLogs, landscapeStats, formatStatMinutes,
+    pickLandscapeImage, removeLandscapeImage,
+  } = useLandscapePanel({ isLandscape, isPlaying, t });
 
   const [barMode, setBarMode] = useState(false);
+  const barModeRef = useRef(barMode);
   const [barStartBeat, setBarStartBeat] = useState<number | null>(null);
   const [barLoopMode, setBarLoopMode] = useState<"loop" | "once">("once");
   const [blockPlayMode, setBlockPlayMode] = useState<"sequential" | "loop" | "random">("loop");
@@ -434,23 +443,7 @@ export function useMetronomeScreen() {
   const [barRowHeight, setBarRowHeight] = useState(44);
   const [noteSampleMetroChannels, setNoteSampleMetroChannels] = useState<NoteSampleMetroChannelMap>({});
   const noteSampleMetroChannelsRef = useRef<NoteSampleMetroChannelMap>({});
-  const noteSampleSoundsRef = useRef<Record<string, ExpoAudioPlayer>>({});
-  const samplePlayStateRef = useRef<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>({});
   const [recorderTarget, setRecorderTarget] = useState<{ beat: number; sub: number } | null>(null);
-
-  const renderedPlayerRef = useRef<ExpoAudioPlayer | null>(null);
-  const pendingRenderedPlayerRef = useRef<ExpoAudioPlayer | null>(null);
-  const clickPCMCacheRef = useRef<Record<string, ClickPCMs>>({});
-  const samplePCMCacheRef = useRef<Map<string, SamplePCMEntry>>(new Map());
-  const renderedUrlRef = useRef<string | null>(null);
-  const webRenderedLoopRef = useRef<{ stop: () => void } | null>(null);
-  const webClickReadyRef = useRef(false);
-  // 재생 복구 watchdog용 — 오디오 콜백이 실제로 발화할 때마다 갱신
-  const lastAudioFireRef = useRef(0);
-  const audioWatchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const audioRetryCountRef = useRef(0);
-  const armAudioWatchdogRef = useRef<() => void>(() => {});
-  const clearAudioWatchdogRef = useRef<() => void>(() => {});
 
   const { engineRef } = useMetronomeEngine();
   const tapTimesRef = useRef<number[]>([]);
@@ -459,6 +452,23 @@ export function useMetronomeScreen() {
 
   const audioPlayersHook = useAudioPlayers(soundSet);
   const { allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle } = audioPlayersHook;
+
+  // ── Audio pipeline (PCM cache, rendered player, watchdog, sample players) ──
+  const {
+    renderedPlayerRef, clickPCMCacheRef, samplePCMCacheRef, renderedUrlRef,
+    webRenderedLoopRef, webClickReadyRef, lastAudioFireRef,
+    armAudioWatchdogRef, clearAudioWatchdogRef,
+    noteSampleSoundsRef, samplePlayStateRef,
+    buildRenderedPlayer, scheduleReRender, stopRenderedAudio, warmupAudioPlayers,
+    getClickPCMs, getSamplePCMs, getLayerClickPCMsForSchedule,
+    invalidateSamplePCMCache, preloadNoteSampleSounds, clearSamplePlayStates,
+    armAudioWatchdog, clearAudioWatchdog,
+  } = useAudioPipeline({
+    engineRef, soundSet, soundSetRef, customSoundSetsRef, allPlayersRef,
+    layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, barModeRef,
+    barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
+    isPlayingRef, bpmRef, t, showRecoveryToast,
+  });
 
   // ── 웹 AudioContext 잠금 해제 (audio unlock) ─────────────────────────────
   // Chrome의 Autoplay Policy: AudioContext는 사용자 제스처 이후에만 resume 가능.
@@ -485,18 +495,6 @@ export function useMetronomeScreen() {
       window.removeEventListener("keydown", unlock, true);
     };
   }, []);
-
-  // ── 웹 클릭 버퍼 사전 로드 ──────────────────────────────────────────────────
-  // 마운트 직후 + soundSet 변경 시 버퍼를 미리 디코딩해두면
-  // 사용자가 재생을 누를 때 webClickReadyRef = true 상태가 돼
-  // 엔진 시작 즉시 per-tick 오디오가 발화된다.
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    const src = soundSets[soundSet as keyof typeof soundSets] || soundSets.classic;
-    ensureWebClickBuffers(src as any)
-      .then((ok) => { if (ok) webClickReadyRef.current = true; })
-      .catch(() => {});
-  }, [soundSet]);
 
   // 재생 시작 1회만 풀 cut-off 위험 측정 (관측 전용).
   // prev 게이트로 false→true edge에서만 통과. 재생 중 bpm/분할 변경 시 effect는
@@ -713,29 +711,6 @@ export function useMetronomeScreen() {
       } catch (e) {}
     });
 
-    const preloadSounds = async (samples: NoteSampleMap) => {
-      for (const s of Object.values(noteSampleSoundsRef.current)) {
-        try { s.release(); } catch {}
-      }
-      noteSampleSoundsRef.current = {};
-
-      for (const [key, uri] of Object.entries(samples)) {
-        if (!isSafeNoteSampleUri(uri)) {
-          captureBreadcrumb({ category: "sample.preload", message: "Unsafe URI blocked on startup", level: "warning", data: { key, uriPrefix: uri.slice(0, 80) } });
-          continue;
-        }
-        try {
-          const channel = noteSampleChannelsRef.current[key] ?? "both";
-          const result = await syncStereoArtifact(key, uri, channel);
-          const isFileUri = result.uri.startsWith("file://");
-          const player = createAudioPlayer(result.uri, { downloadFirst: isFileUri });
-          player.volume = Math.max(0, Math.min(1, sampleVolumeRef.current));
-          noteSampleSoundsRef.current[key] = player;
-        } catch (e) {
-          captureBreadcrumb({ category: "sample.preload", message: "Failed to preload", level: "warning", data: { key, error: String(e) } });
-        }
-      }
-    };
 
     loadSettings().then((settings) => {
       setBpm(settings.bpm);
@@ -843,7 +818,7 @@ export function useMetronomeScreen() {
       setNoteSampleMetroChannels(metroChannels);
       noteSampleMetroChannelsRef.current = metroChannels;
       if (Object.keys(samples).length > 0) {
-        await preloadSounds(samples);
+        await preloadNoteSampleSounds(samples);
       }
     }).catch(() => {});
 
@@ -946,363 +921,6 @@ export function useMetronomeScreen() {
     };
   }, []);
 
-  const preloadNoteSampleSounds = useCallback(async (samples: NoteSampleMap, keepExisting?: boolean) => {
-    const existing = noteSampleSoundsRef.current;
-    const newPlayers: Record<string, ExpoAudioPlayer> = {};
-    const keysToKeep = new Set<string>();
-
-    for (const [key, uri] of Object.entries(samples)) {
-      if (!isSafeNoteSampleUri(uri)) {
-        captureBreadcrumb({ category: "sample.preload", message: "Unsafe URI blocked", level: "warning", data: { key, uriPrefix: uri.slice(0, 80) } });
-        continue;
-      }
-      const channel = noteSampleChannelsRef.current[key] ?? "both";
-      let result;
-      try {
-        result = await syncStereoArtifact(key, uri, channel);
-      } catch (e) {
-        captureBreadcrumb({ category: "sample.preload", message: "syncStereoArtifact failed", level: "warning", data: { key, error: String(e) } });
-        continue;
-      }
-      if (keepExisting && existing[key] && !result.changed) {
-        newPlayers[key] = existing[key];
-        keysToKeep.add(key);
-      } else {
-        try {
-          const isFileUri = result.uri.startsWith("file://");
-          const player = createAudioPlayer(result.uri, { downloadFirst: isFileUri });
-          player.volume = Math.max(0, Math.min(1, sampleVolumeRef.current));
-          newPlayers[key] = player;
-        } catch (e) {
-          captureBreadcrumb({ category: "sample.preload", message: "Failed", level: "warning", data: { key, error: String(e) } });
-        }
-      }
-    }
-
-    for (const [key, s] of Object.entries(existing)) {
-      if (!keysToKeep.has(key)) {
-        try { s.release(); } catch {}
-        if (!samples[key]) {
-          await releaseStereoArtifact(key);
-        }
-      }
-    }
-    noteSampleSoundsRef.current = newPlayers;
-  }, []);
-
-  const clearSamplePlayStates = useCallback(() => {
-    for (const [key, state] of Object.entries(samplePlayStateRef.current)) {
-      if (state.endTimer) clearTimeout(state.endTimer);
-    }
-    samplePlayStateRef.current = {};
-    for (const [key, player] of Object.entries(noteSampleSoundsRef.current)) {
-      try { player.pause(); } catch {}
-      const uri = noteSamplesRef.current[key] || "";
-      const hashParts = uri.split("#t=")[1];
-      let startSec = 0;
-      if (hashParts) {
-        const parts = hashParts.split(",").map(Number);
-        if (!isNaN(parts[0])) startSec = parts[0] / 1000;
-      }
-      try { player.seekTo(startSec); } catch {}
-    }
-  }, []);
-
-  const trimPCM = useCallback((decoded: DecodedSample, durationSec: number): DecodedSample => {
-    const maxSamples = Math.floor(durationSec * 44100);
-    if (decoded.pcm.length <= maxSamples) return decoded;
-    const trimmed = decoded.pcm.slice(0, maxSamples);
-    const fadeLen = Math.min(Math.floor(0.01 * 44100), trimmed.length);
-    for (let i = 0; i < fadeLen; i++) {
-      trimmed[trimmed.length - fadeLen + i] *= (fadeLen - i) / fadeLen;
-    }
-    return { pcm: trimmed, trimStartSamples: decoded.trimStartSamples, trimLenSamples: Math.min(decoded.trimLenSamples, maxSamples) };
-  }, []);
-
-  const getClickPCMs = useCallback(async (set: SoundSet): Promise<ClickPCMs> => {
-    if (clickPCMCacheRef.current[set]) return clickPCMCacheRef.current[set];
-
-    const customCfg = customSoundSetsRef.current[set];
-    if (customCfg) {
-      const loadSample = async (cfg: CustomSoundSample) => {
-        if (cfg.type === "custom" && cfg.sampleUri) {
-          try {
-            const pcm = await decodeSampleFile(cfg.sampleUri);
-            if (pcm) {
-              const trimmed = trimPCM({ pcm, trimStartSamples: 0, trimLenSamples: pcm.length }, cfg.duration);
-              return trimmed.pcm;
-            }
-            captureBreadcrumb({ category: "custom-sound", message: "Decode returned null", level: "warning", data: { sampleUri: cfg.sampleUri } });
-          } catch (e) {
-            captureBreadcrumb({ category: "custom-sound", message: "Failed to decode custom sample", level: "warning", data: { error: String(e) } });
-          }
-        }
-        const srcSet = cfg.sourceSet || "classic";
-        const srcRole = cfg.sourceRole || "strong";
-        const src = (soundSets as Record<string, typeof soundSets.classic>)[srcSet] ?? soundSets.classic;
-        const asset = srcRole === "strong" ? src.strong : srcRole === "high" ? src.high : src.low;
-        const raw = await loadAssetPCM(asset);
-        const trimmed = trimPCM({ pcm: raw, trimStartSamples: 0, trimLenSamples: raw.length }, cfg.duration);
-        return trimmed.pcm;
-      };
-      const [strong, high, low] = await Promise.all([
-        loadSample(customCfg.strong),
-        loadSample(customCfg.accent),
-        loadSample(customCfg.normal),
-      ]);
-      const result: ClickPCMs = { strong, high, low };
-      clickPCMCacheRef.current[set] = result;
-      return result;
-    }
-
-    const src = soundSets[set as keyof typeof soundSets] || soundSets.classic;
-    const [strong, high, low] = await Promise.all([
-      loadAssetPCM(src.strong),
-      loadAssetPCM(src.high),
-      loadAssetPCM(src.low),
-    ]);
-    const result: ClickPCMs = { strong, high, low };
-    clickPCMCacheRef.current[set] = result;
-    return result;
-  }, [trimPCM]);
-
-  const getSamplePCMs = useCallback(async (samples: NoteSampleMap): Promise<Map<string, SamplePCMEntry>> => {
-    const map = new Map<string, SamplePCMEntry>();
-    const entries = Object.entries(samples);
-    if (entries.length === 0) return map;
-
-    await Promise.all(entries.map(async ([key, uri]) => {
-      const cached = samplePCMCacheRef.current.get(key);
-      if (cached) {
-        map.set(key, cached);
-        return;
-      }
-      try {
-        const pcm = await decodeSampleFile(uri);
-        if (pcm) {
-          const { trimStartMs, trimDurationMs } = parseTrimInfo(uri);
-          const entry: SamplePCMEntry = { pcm, trimStartMs, trimDurationMs };
-          map.set(key, entry);
-          samplePCMCacheRef.current.set(key, entry);
-        }
-      } catch (e) {
-        captureBreadcrumb({ category: "pre-render", message: "Failed to decode sample", level: "warning", data: { key, error: String(e) } });
-      }
-    }));
-    return map;
-  }, []);
-
-  const getLayerClickPCMsForSchedule = useCallback(async (
-    ticks: TickInfo[]
-  ): Promise<Map<string, ClickPCMs>> => {
-    const soundSetByName = new Set<string>();
-    const fallbackByIndex = new Map<number, string>();
-    for (const tick of ticks) {
-      const li = tick.layerIndex ?? 0;
-      if (li > 0) {
-        if (tick.layerSoundSet) {
-          soundSetByName.add(tick.layerSoundSet);
-        } else {
-          const ss = layerSoundSetsRef.current[li] || soundSetRef.current;
-          fallbackByIndex.set(li, ss);
-          soundSetByName.add(ss);
-        }
-      }
-    }
-    const loaded = new Map<string, ClickPCMs>();
-    await Promise.all([...soundSetByName].map(async (ss) => {
-      const pcms = await getClickPCMs(ss as SoundSet);
-      loaded.set(ss, pcms);
-    }));
-    const map = new Map<string, ClickPCMs>(loaded);
-    for (const [li, ss] of fallbackByIndex) {
-      const pcms = loaded.get(ss);
-      if (pcms) map.set(`#${li}`, pcms);
-    }
-    return map;
-  }, [getClickPCMs]);
-
-  const buildRenderedPlayer = useCallback(async (): Promise<ExpoAudioPlayer | null> => {
-    const engine = engineRef.current;
-    if (!engine) return null;
-
-    try {
-      const scheduleInfo = engine.getScheduleInfo();
-      const ticks = scheduleInfo.ticks as TickInfo[];
-      const [clickPCMs, layerClickPCMs] = await Promise.all([
-        getClickPCMs(soundSetRef.current),
-        getLayerClickPCMsForSchedule(ticks),
-      ]);
-      const samplePCMs = new Map<string, SamplePCMEntry>();
-
-      await new Promise(r => setTimeout(r, 0));
-
-      const pcm = renderMeasure({
-        schedule: ticks,
-        measureDurationMs: scheduleInfo.durationMs,
-        clickPCMs,
-        samplePCMs,
-        clickVolume: Math.max(1.0, volumeRef.current),
-        sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current : 0,
-        metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
-        metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
-        layerClickPCMs,
-      });
-      if (volumeRef.current > 1.0) {
-        if (pcm instanceof Float32Array) {
-          applySoftClip(pcm);
-        } else {
-          applySoftClip(pcm.left);
-          applySoftClip(pcm.right);
-        }
-      }
-
-      const wavUri = await saveRenderedWav(pcm);
-
-      if (Platform.OS === "web" && renderedUrlRef.current) {
-        try { URL.revokeObjectURL(renderedUrlRef.current); } catch {}
-      }
-      renderedUrlRef.current = wavUri;
-
-      const player = createAudioPlayer(wavUri);
-      player.loop = true;
-      player.volume = 1.0;
-      return player;
-    } catch (e) {
-      captureBreadcrumb({ category: "pre-render", message: "Failed, falling back to per-tick audio", level: "warning", data: { error: String(e) } });
-      return null;
-    }
-  }, [getClickPCMs, getSamplePCMs, getLayerClickPCMsForSchedule]);
-
-  const warmupAudioPlayers = useCallback(async () => {
-    try {
-      const set = soundSetRef.current;
-      const customCfg = customSoundSetsRef.current[set];
-      const builtinSet: BuiltinSoundSet = (customCfg ? customCfg.strong.sourceSet : (set as BuiltinSoundSet)) || "classic";
-      const pool = allPlayersRef.current[builtinSet as keyof BuiltinPlayers];
-      if (!pool) {
-        notifyAudioPoolFallback("warmup-missing-set", { requestedSet: String(builtinSet) });
-      }
-      const players = pool || allPlayersRef.current.classic;
-      const toWarm = [players.highA, players.highB, players.highC, players.highD, players.lowA, players.lowB, players.lowC, players.lowD, players.strongA, players.strongB, players.strongC, players.strongD];
-      const savedVolumes = toWarm.map(p => p.volume);
-      toWarm.forEach(p => { p.volume = 0; });
-      await Promise.all(toWarm.map(async (p) => {
-        try { await p.seekTo(0); } catch {}
-        safePlay(p, "warmup");
-      }));
-      await new Promise(r => setTimeout(r, 50));
-      await Promise.all(toWarm.map(async (p, i) => {
-        try { p.pause(); await p.seekTo(0); p.volume = savedVolumes[i]; } catch {}
-      }));
-    } catch {}
-  }, []);
-
-  const stopRenderedAudio = useCallback(() => {
-    if (webRenderedLoopRef.current) {
-      webRenderedLoopRef.current.stop();
-      webRenderedLoopRef.current = null;
-    }
-    if (renderedPlayerRef.current) {
-      try {
-        renderedPlayerRef.current.pause();
-        renderedPlayerRef.current.release();
-      } catch {}
-      renderedPlayerRef.current = null;
-    }
-    if (Platform.OS === "web" && renderedUrlRef.current) {
-      try { URL.revokeObjectURL(renderedUrlRef.current); } catch {}
-      renderedUrlRef.current = null;
-    }
-    const engine = engineRef.current;
-    if (engine) engine.setPreRenderedAudio(false);
-  }, []);
-
-
-  const reRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleReRender = useCallback(() => {
-    if (reRenderTimerRef.current) clearTimeout(reRenderTimerRef.current);
-    reRenderTimerRef.current = setTimeout(async () => {
-      const engine = engineRef.current;
-      if (!engine?.getIsRunning()) return;
-
-      stopRenderedAudio();
-      engine.setPendingMeasureStartAction(null);
-
-      if (Platform.OS === "web") {
-        try {
-          const scheduleInfo = engine.getScheduleInfo();
-          const ticks = scheduleInfo.ticks as TickInfo[];
-          const [clickPCMs, layerClickPCMs] = await Promise.all([
-            getClickPCMs(soundSetRef.current),
-            getLayerClickPCMsForSchedule(ticks),
-          ]);
-          if (!engine.getIsRunning()) return;
-          const pcm = renderMeasure({
-            schedule: ticks,
-            measureDurationMs: scheduleInfo.durationMs,
-            clickPCMs,
-            samplePCMs: new Map(),
-            clickVolume: Math.max(1.0, volumeRef.current),
-            sampleVolume: 0,
-            metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
-            metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
-            layerClickPCMs,
-          });
-          if (volumeRef.current > 1.0) {
-            if (pcm instanceof Float32Array) { applySoftClip(pcm); }
-            else { applySoftClip(pcm.left); applySoftClip(pcm.right); }
-          }
-          engine.setPendingMeasureStartAction(() => {
-            if (!engine.getIsRunning()) return;
-            if (webRenderedLoopRef.current) {
-              try { webRenderedLoopRef.current.stop(); } catch {}
-              webRenderedLoopRef.current = null;
-            }
-            const loop = playWebRenderedLoop(pcm);
-            webRenderedLoopRef.current = loop;
-            engine.setPreRenderedAudio(true);
-          });
-        } catch {
-        }
-      } else {
-        try {
-          const player = await buildRenderedPlayer();
-          if (!player) return;
-          if (!engine.getIsRunning()) {
-            try { player.release(); } catch {}
-            return;
-          }
-          engine.setPendingMeasureStartAction(() => {
-            if (!engine.getIsRunning()) {
-              try { player.release(); } catch {}
-              return;
-            }
-            if (renderedPlayerRef.current) {
-              try {
-                renderedPlayerRef.current.pause();
-                renderedPlayerRef.current.release();
-              } catch {}
-              renderedPlayerRef.current = null;
-            }
-            renderedPlayerRef.current = player;
-            player.volume = 1.0;
-            engine.setPreRenderedAudio(true);
-            safePlay(player, "preRender.initial");
-          });
-        } catch {
-        }
-      }
-    }, 300);
-  }, [stopRenderedAudio, buildRenderedPlayer, getClickPCMs, getLayerClickPCMsForSchedule]);
-
-  const invalidateSamplePCMCache = useCallback((key?: string) => {
-    if (key) {
-      samplePCMCacheRef.current.delete(key);
-    } else {
-      samplePCMCacheRef.current.clear();
-    }
-  }, []);
 
   const handleNoteRecordRequest = useCallback((beatIndex: number, subIndex: number) => {
     setRecorderTarget({ beat: beatIndex, sub: subIndex });
@@ -2010,7 +1628,6 @@ export function useMetronomeScreen() {
     []
   );
 
-  const barModeRef = useRef(barMode);
   useEffect(() => { barModeRef.current = barMode; }, [barMode]);
   const barStartBeatRef = useRef(barStartBeat);
   useEffect(() => { barStartBeatRef.current = barStartBeat; }, [barStartBeat]);
@@ -2201,86 +1818,6 @@ export function useMetronomeScreen() {
   const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
 
-  // ─── 재생 복구 watchdog ───────────────────────────────────────────────────
-  const armTimeRef = useRef<number | null>(null);
-  const showRecoveryToastRef = useRef(showRecoveryToast);
-  useEffect(() => { showRecoveryToastRef.current = showRecoveryToast; }, [showRecoveryToast]);
-
-  const clearAudioWatchdog = useCallback(() => {
-    if (audioWatchdogTimerRef.current) {
-      clearTimeout(audioWatchdogTimerRef.current);
-      audioWatchdogTimerRef.current = null;
-    }
-  }, []);
-
-  const armAudioWatchdog = useCallback(() => {
-    clearAudioWatchdog();
-    audioRetryCountRef.current = 0;
-    lastAudioFireRef.current = 0;
-
-    const runCheck = () => {
-      const engine = engineRef.current;
-      if (!engine?.getIsRunning() || !isPlayingRef.current) {
-        audioWatchdogTimerRef.current = null;
-        return;
-      }
-
-      const bpmNow = bpmRef.current;
-      const beatMs = 60000 / Math.max(bpmNow, 20);
-      const threshold = Math.max(3500, 5 * beatMs);
-      const timeSinceFire = lastAudioFireRef.current > 0
-        ? Date.now() - lastAudioFireRef.current
-        : Date.now() - (armTimeRef.current ?? Date.now());
-
-      // web: AudioContext가 suspended이면 무조건 stuck
-      const webCtxSuspended = Platform.OS === "web"
-        && (getWebAudioContext()?.state === "suspended");
-
-      const isStuck = webCtxSuspended || timeSinceFire > threshold;
-
-      if (!isStuck) {
-        audioWatchdogTimerRef.current = setTimeout(runCheck, 3000);
-        return;
-      }
-
-      if (audioRetryCountRef.current < 2) {
-        audioRetryCountRef.current += 1;
-
-        if (Platform.OS === "web") {
-          const ctx = getWebAudioContext();
-          if (ctx?.state === "suspended") {
-            ctx.resume().catch(() => {});
-          }
-          if (!webClickReadyRef.current) {
-            const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
-            ensureWebClickBuffers(src as any).then((ok) => {
-              if (ok) webClickReadyRef.current = true;
-            }).catch(() => {});
-          }
-        }
-        // pre-rendered 모드가 막혀있을 수 있으므로 per-tick으로 강제 전환
-        // stopRenderedAudio()를 먼저 호출해 재생 중인 rendered 루프/플레이어를
-        // 완전히 정지한 뒤 per-tick을 활성화한다.
-        // (순서를 지키지 않으면 rendered 오디오와 per-tick 클릭이 동시에 발화됨)
-        stopRenderedAudio();
-        lastAudioFireRef.current = Date.now();
-        showRecoveryToastRef.current(t("main", "audioRecoveryRetry"));
-        audioWatchdogTimerRef.current = setTimeout(runCheck, 3500);
-      } else {
-        showRecoveryToastRef.current(t("main", "audioRecoveryFailed"));
-        audioWatchdogTimerRef.current = null;
-      }
-    };
-
-    armTimeRef.current = Date.now();
-    audioWatchdogTimerRef.current = setTimeout(runCheck, 4000);
-  }, [clearAudioWatchdog, stopRenderedAudio, t]);
-
-  useEffect(() => {
-    armAudioWatchdogRef.current = armAudioWatchdog;
-    clearAudioWatchdogRef.current = clearAudioWatchdog;
-  }, [armAudioWatchdog, clearAudioWatchdog]);
-  // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     registerMetronomeBridge({
       isRunning: () => engineRef.current?.getIsRunning() ?? false,
@@ -2295,7 +1832,6 @@ export function useMetronomeScreen() {
   }, []);
   const updateBpmRef = useRef(updateBpm);
   useEffect(() => { updateBpmRef.current = updateBpm; }, [updateBpm]);
-  const bpmRef = useRef(bpm);
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
 
   const { stageModeActive, enterStageMode, exitStageMode } = useStageMode(bpmRef, updateBpm);
@@ -2368,9 +1904,6 @@ export function useMetronomeScreen() {
   const anyModalOpenRef = useRef(false);
   useEffect(() => { anyModalOpenRef.current = activeModal !== null || landscapeImageModalVisible || recorderTarget !== null || showKbShortcuts || showNativeKbHint; }, [activeModal, landscapeImageModalVisible, recorderTarget, showKbShortcuts, showNativeKbHint]);
 
-  const bpmTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const bpmTapCountRef = useRef<{ direction: string; count: number }>({ direction: "", count: 0 });
-
   const rootViewRef = useRef<View>(null);
 
   useEffect(() => {
@@ -2409,462 +1942,24 @@ export function useMetronomeScreen() {
     nativeKbUpRef.current(e);
   }, []);
 
-  useEffect(() => {
-    const repeatTimerRef = { current: null as ReturnType<typeof setInterval> | null };
-    const heldKeyRef = { current: "" };
-    const repeatCountRef = { current: 0 };
+  useKeyboardShortcuts({
+    keyBindingsRef, bpmRef, updateBpmRef, beatsPerMeasureRef, updateTimeSignatureRef,
+    barModeRef, noteModeRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
+    subdivisionPatternRef, beatTypesRef, handleNoteTogglePlayRef, anyModalOpenRef,
+    showKbShortcutsRef, showNativeKbHintRef, engineRef, nativeKbDownRef, nativeKbUpRef,
+    togglePlayPauseRef, setNoteMode, setBarMode, setShowKbShortcuts, setShowNativeKbHint,
+    setActiveModal, setBarLoopMode, setBlockPlayMode, setBeatsPerMeasure, setBeatTypes,
+    setSubdivisionPattern, persistSettings,
+  });
 
-    const clearRepeat = () => {
-      if (repeatTimerRef.current) { clearInterval(repeatTimerRef.current); repeatTimerRef.current = null; }
-      heldKeyRef.current = "";
-      repeatCountRef.current = 0;
-    };
+  // ── Notification bridge (TOGGLE_PLAY / BPM_UP / BPM_DOWN from lock screen) ─
+  useNotificationBridge({
+    engineRef, barModeRef, barConfigRef, dialConfigRef, barLoopModeRef,
+    blockPlayModeRef, barStartBeatRef, bpmRef, updateBpmRef, languageRef,
+    renderedPlayerRef, buildRenderedPlayer, stopRenderedAudio, clearSamplePlayStates,
+    resetPlaybackVisuals, setIsPlaying, setIsPreparing,
+  });
 
-    const applyBpmDelta = (delta: number) => {
-      const cur = bpmRef.current;
-      updateBpmRef.current(cur + delta);
-    };
-
-    const applyBeatDelta = (delta: number) => {
-      updateTimeSignatureRef.current(beatsPerMeasureRef.current + delta);
-    };
-
-    const tapTimestamps: number[] = [];
-    const TAP_RESET_MS = 2000;
-    const TAP_MIN_TAPS = 2;
-
-    const kb = () => keyBindingsRef.current;
-
-    const handleKeyDown = (e: NormalizedKeyEvent) => {
-      if (isEditableTarget(e)) return;
-
-      const b = kb();
-      const inNoteMode = noteModeRef.current;
-      const inBarMode = barModeRef.current;
-      const modalOpen = anyModalOpenRef.current;
-
-      // Escape — 우선순위: 노트모드 → 바모드 → 단축키 모달 → 네이티브 힌트 → 기타 모달
-      if (matchesBinding(e, b.escape)) {
-        if (inNoteMode) {
-          e.preventDefault();
-          setNoteMode(false);
-          return;
-        }
-        if (inBarMode) {
-          e.preventDefault();
-          setBarMode(false);
-          return;
-        }
-        if (showKbShortcutsRef.current) {
-          e.preventDefault();
-          setShowKbShortcuts(false);
-          return;
-        }
-        if (showNativeKbHintRef.current) {
-          e.preventDefault();
-          setShowNativeKbHint(false);
-          return;
-        }
-        if (modalOpen) {
-          // anyModalOpen이면 App level 뒤로가기가 처리
-          return;
-        }
-        return;
-      }
-
-      if (modalOpen) return;
-
-      // Space — 재생/정지 (노트모드에서는 노트 토글)
-      if (matchesBinding(e, b.playPause)) {
-        e.preventDefault();
-        if (inNoteMode && handleNoteTogglePlayRef.current) {
-          handleNoteTogglePlayRef.current();
-        } else {
-          togglePlayPauseRef.current();
-        }
-        return;
-      }
-
-      // 노트 모드에서는 Space 외 단축키 비활성
-      if (inNoteMode) return;
-
-      // Enter — 타이머 idle/편집 중이면 타이머 설정 완료, 아니면 탭 템포
-      if (matchesBinding(e, b.tapTempo)) {
-        const swRef = stopwatchTimerRef.current || stopwatchTimerLandscapeRef.current;
-        if (swRef?.isTimerInputActive()) {
-          e.preventDefault();
-          swRef.handleEnterKey();
-          return;
-        }
-        e.preventDefault();
-        const now = performance.now();
-        if (tapTimestamps.length > 0 && now - tapTimestamps[tapTimestamps.length - 1] > TAP_RESET_MS) {
-          tapTimestamps.length = 0;
-        }
-        tapTimestamps.push(now);
-        if (tapTimestamps.length >= TAP_MIN_TAPS) {
-          const intervals: number[] = [];
-          for (let i = 1; i < tapTimestamps.length; i++) {
-            intervals.push(tapTimestamps[i] - tapTimestamps[i - 1]);
-          }
-          const avgMs = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-          const tapBpm = Math.round(60000 / avgMs);
-          if (tapBpm >= 20 && tapBpm <= 300) {
-            updateBpmRef.current(tapBpm);
-          }
-        }
-        if (tapTimestamps.length > 8) tapTimestamps.splice(0, tapTimestamps.length - 8);
-        return;
-      }
-
-      // Arrow Up/Down — BPM ±1 (키 반복 지원)
-      if (matchesBinding(e, b.bpmUp) || matchesBinding(e, b.bpmDown)) {
-        e.preventDefault();
-        const delta = matchesBinding(e, b.bpmUp) ? 1 : -1;
-        applyBeatDelta(delta);
-        if (heldKeyRef.current !== e.code) {
-          clearRepeat();
-          heldKeyRef.current = e.code;
-          repeatCountRef.current = 0;
-          repeatTimerRef.current = setInterval(() => {
-            repeatCountRef.current++;
-            const d = repeatCountRef.current > 10 ? delta * 2 : delta;
-            applyBeatDelta(d);
-          }, 150);
-        }
-        return;
-      }
-
-      // Arrow Left/Right — BPM ±5 (키 반복 지원)
-      if (matchesBinding(e, b.bpmRight) || matchesBinding(e, b.bpmLeft)) {
-        e.preventDefault();
-        const delta = matchesBinding(e, b.bpmRight) ? 5 : -5;
-        applyBpmDelta(delta);
-        if (heldKeyRef.current !== e.code) {
-          clearRepeat();
-          heldKeyRef.current = e.code;
-          repeatCountRef.current = 0;
-          repeatTimerRef.current = setInterval(() => {
-            repeatCountRef.current++;
-            const step = repeatCountRef.current > 10 ? 20 : repeatCountRef.current > 5 ? 10 : 5;
-            const d = matchesBinding(e, b.bpmRight) ? step : -step;
-            applyBpmDelta(d);
-          }, 120);
-        }
-        return;
-      }
-
-      // Tab — 메뉴 토글
-      if (matchesBinding(e, b.toggleMenu)) {
-        e.preventDefault();
-        setActiveModal((prev) => (prev === "menu" ? null : "menu"));
-        return;
-      }
-
-      // W — 스톱워치 토글
-      if (matchesBinding(e, b.toggleStopwatch)) {
-        e.preventDefault();
-        const ref = stopwatchTimerRef.current || stopwatchTimerLandscapeRef.current;
-        if (ref) ref.openStopwatch();
-        return;
-      }
-
-      // T — 타이머 토글
-      if (matchesBinding(e, b.toggleTimer)) {
-        e.preventDefault();
-        const ref = stopwatchTimerRef.current || stopwatchTimerLandscapeRef.current;
-        if (ref) ref.openTimer();
-        return;
-      }
-
-      // P — Practice Book 열기
-      if (matchesBinding(e, b.openPracticeBook)) {
-        e.preventDefault();
-        setActiveModal((prev) => (prev === "practiceBook" ? null : "practiceBook"));
-        return;
-      }
-
-      // ? — 단축키 목록 팝업 (web) / 힌트 오버레이 (native)
-      // 네이티브에서는 shiftKey 없이 key==="?" 만 전달될 수 있으므로 직접 비교도 추가
-      if (matchesBinding(e, b.showShortcuts) || (Platform.OS !== "web" && e.key === "?")) {
-        e.preventDefault();
-        if (Platform.OS === "web") {
-          setShowKbShortcuts((prev) => !prev);
-        } else {
-          setShowNativeKbHint((prev) => !prev);
-        }
-        return;
-      }
-
-      // S/A/N/M — 비트 추가 (비트 모드 + 재생 중 비활성화)
-      const playing = engineRef.current?.getIsRunning() ?? false;
-      if (!playing && !barModeRef.current && !noteModeRef.current) {
-        const addBeatShortcuts: { binding: typeof b.addBeatStrong; type: BeatType }[] = [
-          { binding: b.addBeatStrong, type: "strong" },
-          { binding: b.addBeatAccent, type: "accent" },
-          { binding: b.addBeatNormal, type: "normal" },
-          { binding: b.addBeatMute,   type: "mute" },
-        ];
-        for (const { binding, type } of addBeatShortcuts) {
-          if (matchesBinding(e, binding)) {
-            e.preventDefault();
-            const cur = beatsPerMeasureRef.current;
-            if (cur < 16) {
-              const newBeats = cur + 1;
-              const newTypes: BeatType[] = [...beatTypesRef.current, type];
-              setBeatsPerMeasure(newBeats);
-              setBeatTypes(newTypes);
-              engineRef.current?.setBeatsPerMeasure(newBeats);
-              engineRef.current?.setBeatTypes(newTypes);
-              if (!inBarMode) persistSettings({ beatsPerMeasure: newBeats });
-            }
-            return;
-          }
-        }
-
-        // D — 마지막 비트 삭제 (재생 중에는 비활성화)
-        if (matchesBinding(e, b.removeBeat)) {
-          e.preventDefault();
-          const cur = beatsPerMeasureRef.current;
-          if (cur > 1) {
-            const newBeats = cur - 1;
-            const newTypes = beatTypesRef.current.slice(0, newBeats);
-            setBeatsPerMeasure(newBeats);
-            setBeatTypes(newTypes);
-            engineRef.current?.setBeatsPerMeasure(newBeats);
-            engineRef.current?.setBeatTypes(newTypes);
-            if (!inBarMode) persistSettings({ beatsPerMeasure: newBeats });
-          }
-          return;
-        }
-      }
-
-      // Shift+S/A/N/M — 서브디비전 셀 추가 (비트 모드 + 재생 중 비활성화)
-      if (!playing && !barModeRef.current && !noteModeRef.current) {
-        const addSubShortcuts: { binding: typeof b.addSubStrong; type: BeatType }[] = [
-          { binding: b.addSubStrong, type: "strong" },
-          { binding: b.addSubAccent, type: "accent" },
-          { binding: b.addSubNormal, type: "normal" },
-          { binding: b.addSubMute,   type: "mute" },
-        ];
-        for (const { binding, type } of addSubShortcuts) {
-          if (matchesBinding(e, binding)) {
-            e.preventDefault();
-            const p = subdivisionPatternRef.current;
-            if (p.length < 8) {
-              const newP: BeatType[] = [...p, type];
-              setSubdivisionPattern(newP);
-              persistSettings({ subdivisionPattern: newP });
-            }
-            return;
-          }
-        }
-
-        // Shift+D — 서브디비전 셀 삭제 (재생 중에는 비활성화)
-        if (matchesBinding(e, b.removeSub)) {
-          e.preventDefault();
-          const p = subdivisionPatternRef.current;
-          if (p.length > 1) {
-            const newP = p.slice(0, -1);
-            setSubdivisionPattern(newP);
-            persistSettings({ subdivisionPattern: newP });
-          }
-          return;
-        }
-      }
-
-      // 0 — 서브디비전 셀 전체 타입 순환 (strong→accent→normal→mute, 비트 모드 전용)
-      if (!barModeRef.current && !noteModeRef.current && matchesBinding(e, b.cycleBeatTypes)) {
-        e.preventDefault();
-        const subCycleOrder: BeatType[] = ["strong", "accent", "normal", "mute"];
-        const prev = subdivisionPatternRef.current;
-        const first = prev[0] || "normal";
-        const idx = subCycleOrder.indexOf(first as BeatType);
-        const next = subCycleOrder[(idx + 1) % subCycleOrder.length];
-        const newP = prev.map(() => next) as BeatType[];
-        setSubdivisionPattern(newP);
-        persistSettings({ subdivisionPattern: newP });
-        return;
-      }
-
-      // 숫자 키 — 타이머 입력 활성 상태일 때만 consume (미활성 시 하위 액션 재바인딩 허용)
-      if (/^Digit[0-9]$/.test(e.code)) {
-        const swRef = stopwatchTimerRef.current || stopwatchTimerLandscapeRef.current;
-        if (swRef?.isTimerInputActive()) {
-          const digit = e.code.slice(5);
-          swRef.handleDigit(digit);
-          return;
-        }
-      }
-
-      // L — 루프 모드 토글 (바 모드)
-      if (inBarMode && matchesBinding(e, b.loopToggle)) {
-        e.preventDefault();
-        setBarLoopMode((prev) => (prev === "once" ? "loop" : "once"));
-        return;
-      }
-
-      // G — 재생 순서 순환 (바 모드)
-      if (inBarMode && matchesBinding(e, b.blockPlayModeNext)) {
-        e.preventDefault();
-        setBlockPlayMode((prev) => {
-          const order: ("sequential" | "loop" | "random")[] = ["sequential", "loop", "random"];
-          const idx = order.indexOf(prev);
-          return order[(idx + 1) % order.length];
-        });
-        return;
-      }
-    };
-
-    const handleKeyUp = (e: NormalizedKeyEvent) => {
-      if (e.code === heldKeyRef.current) clearRepeat();
-    };
-
-    if (Platform.OS === "web") {
-      const webKeyDown = (e: KeyboardEvent) => handleKeyDown(e);
-      const webKeyUp = (e: KeyboardEvent) => handleKeyUp(e);
-      window.addEventListener("keydown", webKeyDown);
-      window.addEventListener("keyup", webKeyUp);
-      return () => {
-        clearRepeat();
-        window.removeEventListener("keydown", webKeyDown);
-        window.removeEventListener("keyup", webKeyUp);
-      };
-    } else {
-      nativeKbDownRef.current = handleKeyDown;
-      nativeKbUpRef.current = handleKeyUp;
-      return () => {
-        clearRepeat();
-        nativeKbDownRef.current = null;
-        nativeKbUpRef.current = null;
-      };
-    }
-  }, []);
-
-  useEffect(() => {
-    const sub = addNotificationActionListener((actionId) => {
-      const handleAsync = async () => {
-      if (actionId === "TOGGLE_PLAY") {
-        const engine = engineRef.current;
-        if (!engine) return;
-
-        const modeLabel = barModeRef.current ? "Bar" : "Dial";
-
-        if (engine.getIsRunning()) {
-          engine.stop();
-          stopRenderedAudio();
-          clearSamplePlayStates();
-          setIsPreparing(false);
-          setIsPlaying(false);
-          resetPlaybackVisuals();
-          showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
-        } else {
-          stopRenderedAudio();
-          engine.setPreRenderedAudio(false);
-          setIsPreparing(false);
-
-          if (barModeRef.current) {
-            engine.setBeatTypes([...(barConfigRef.current.beatTypes || [])]);
-            engine.setAllBeatSubdivisions(barConfigRef.current.beatSubdivisions || {});
-            engine.setAllBarRepeats(barConfigRef.current.barRepeats || {});
-            engine.setLoopBlocks(barConfigRef.current.loopBlocks || []);
-            engine.setBlockPlayMode(blockPlayModeRef.current);
-            const bpmOverrides: Record<number, number> = {};
-            for (const [k, v] of Object.entries(barConfigRef.current.barRepeats || {})) {
-              if (v.bpm) bpmOverrides[Number(k)] = v.bpm;
-            }
-            engine.setAllBarBpmOverrides(bpmOverrides);
-          } else {
-            engine.setBeatTypes([...(dialConfigRef.current.beatTypes || [])]);
-            engine.setAllBeatSubdivisions(dialConfigRef.current.beatSubdivisions || {});
-          }
-          engine.buildScheduleOnly();
-
-          resetPlaybackVisuals();
-
-          if (Platform.OS !== "web") {
-            try {
-              await AudioModule.setAudioModeAsync({
-                playsInSilentMode: true,
-                interruptionMode: "mixWithOthers",
-                shouldPlayInBackground: true,
-              });
-            } catch {}
-          }
-
-          // 오디오 플레이어 생성 후 재생 (일반 재생 버튼과 동일한 경로)
-          const renderedPlayer = await buildRenderedPlayer();
-          if (renderedPlayer) {
-            stopRenderedAudio();
-            renderedPlayerRef.current = renderedPlayer;
-            renderedPlayer.volume = 1.0;
-            engine.setPreRenderedAudio(true);
-          }
-
-          setIsPlaying(true);
-          engine.start(barModeRef.current ? (barStartBeatRef.current ?? undefined) : undefined);
-
-          if (renderedPlayer) {
-            safePlay(renderedPlayer, "metronome.start.barMode");
-          }
-
-          showPlayingNotification(bpmRef.current, modeLabel, languageRef.current);
-
-          if (barModeRef.current && barLoopModeRef.current === "once") {
-            engine.requestStopAfterMeasure();
-          }
-        }
-        return;
-      }
-
-      if (actionId === "BPM_DOWN" || actionId === "BPM_UP") {
-        const dir = actionId;
-        const engine = engineRef.current;
-
-        if (bpmTapCountRef.current.direction === dir && bpmTapTimerRef.current) {
-          clearTimeout(bpmTapTimerRef.current);
-          bpmTapTimerRef.current = null;
-          bpmTapCountRef.current = { direction: "", count: 0 };
-
-          const delta = dir === "BPM_DOWN" ? -5 : 5;
-          const newBpm = Math.max(20, Math.min(300, bpmRef.current + delta));
-          updateBpmRef.current(newBpm);
-          const isCurrentlyPlaying = engine?.getIsRunning() ?? false;
-          if (isCurrentlyPlaying) {
-            stopRenderedAudio();
-          }
-          const modeLabel = barModeRef.current ? "Bar" : "Dial";
-          updateNotificationBpm(newBpm, modeLabel, isCurrentlyPlaying, languageRef.current);
-        } else {
-          if (bpmTapTimerRef.current) {
-            clearTimeout(bpmTapTimerRef.current);
-          }
-          bpmTapCountRef.current = { direction: dir, count: 1 };
-
-          bpmTapTimerRef.current = setTimeout(() => {
-            bpmTapTimerRef.current = null;
-            bpmTapCountRef.current = { direction: "", count: 0 };
-
-            const delta = dir === "BPM_DOWN" ? -1 : 1;
-            const newBpm = Math.max(20, Math.min(300, bpmRef.current + delta));
-            updateBpmRef.current(newBpm);
-            const isNowPlaying = engineRef.current?.getIsRunning() ?? false;
-            if (isNowPlaying) {
-              stopRenderedAudio();
-            }
-            const modeLabel = barModeRef.current ? "Bar" : "Dial";
-            updateNotificationBpm(newBpm, modeLabel, isNowPlaying, languageRef.current);
-          }, 300);
-        }
-      }
-      };
-      handleAsync().catch((e) => captureBreadcrumb({ category: "notification", message: "알림 버튼 핸들러 에러", level: "warning", data: { error: String(e) } }));
-    });
-    return () => {
-      sub.remove();
-      if (bpmTapTimerRef.current) clearTimeout(bpmTapTimerRef.current);
-    };
-  }, []);
 
   const handleBarModeChange = useCallback((toBarMode: boolean) => {
     const engine = engineRef.current;
@@ -4887,65 +3982,6 @@ export function useMetronomeScreen() {
 
   const tempoLabel = getTempoLabelI18n(bpm, language);
 
-  const pickLandscapeImageRef = useRef<() => Promise<void>>(async () => {});
-  const pickLandscapeImage = useCallback(async () => {
-    try {
-      const ok = await ensurePermission("photo", t, {
-        pendingAction: () => { void pickLandscapeImageRef.current(); },
-      });
-      if (!ok) {
-        setLandscapeImageModalVisible(false);
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.8,
-      });
-      if (!result.canceled && result.assets[0]) {
-        const uri = result.assets[0].uri;
-        setLandscapeImageUri(uri);
-        AsyncStorage.setItem("metronome_landscape_image", uri);
-      }
-    } catch (e) {
-      captureBreadcrumb({ category: "imagePicker", message: "pickLandscapeImage failed", level: "warning", data: { error: String(e) } });
-    } finally {
-      setLandscapeImageModalVisible(false);
-    }
-  }, [t]);
-
-  useEffect(() => { pickLandscapeImageRef.current = pickLandscapeImage; }, [pickLandscapeImage]);
-
-  const removeLandscapeImage = useCallback(() => {
-    setLandscapeImageUri(null);
-    AsyncStorage.removeItem("metronome_landscape_image");
-    setLandscapeImageModalVisible(false);
-  }, []);
-
-  // Load activity logs whenever the landscape stats panel is visible / playback toggles
-  useEffect(() => {
-    if (!isLandscape || !showLandscapeImage || landscapeContentType !== "stats") return;
-    let cancelled = false;
-    const refresh = () => {
-      loadActivityLogs().then((logs) => { if (!cancelled) setLandscapeStatsLogs(logs); });
-    };
-    refresh();
-    const id = setInterval(refresh, 30000);
-    return () => { cancelled = true; clearInterval(id); };
-  }, [isLandscape, showLandscapeImage, landscapeContentType, isPlaying]);
-
-  const landscapeStats = useMemo(
-    () => computeLandscapeStats(landscapeStatsLogs),
-    [landscapeStatsLogs],
-  );
-
-  const formatStatMinutes = useCallback((seconds: number): string => {
-    const mins = Math.round(seconds / 60);
-    if (mins < 60) return `${mins}m`;
-    const hrs = Math.floor(mins / 60);
-    const rem = mins % 60;
-    return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
-  }, []);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;

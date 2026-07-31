@@ -1,0 +1,516 @@
+import { useRef, useEffect, useCallback } from "react";
+import { Platform } from "react-native";
+import { createAudioPlayer } from "expo-audio";
+import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
+import { soundSets } from "@/lib/metronome-engine";
+import type { MetronomeEngine } from "@/lib/metronome-engine";
+import {
+  decodeSampleFile,
+  loadAssetPCM,
+  parseTrimInfo,
+  renderMeasure,
+  applySoftClip,
+  saveRenderedWav,
+  ensureWebClickBuffers,
+  playWebRenderedLoop,
+  getWebAudioContext,
+  clearWebClickBuffers,
+} from "@/lib/audio-renderer";
+import { syncStereoArtifact, releaseStereoArtifact } from "@/lib/sample-cache";
+import { captureBreadcrumb } from "@/lib/error-tracking";
+import { safePlay, notifyAudioPoolFallback } from "@/lib/audio-utils";
+import { isSafeNoteSampleUri } from "@/app/index.helpers";
+import type { ClickPCMs, SamplePCMEntry, TickInfo, DecodedSample } from "@/lib/audio-renderer";
+import type { SoundSet, BuiltinSoundSet, CustomSoundSetConfig } from "@/lib/storage";
+import type { NoteSampleMap, NoteSampleChannelMap, NoteSampleMetroChannelMap } from "@/lib/note-samples";
+import type { SampleChannel } from "@/lib/stereo-channel";
+import type { BuiltinPlayers } from "@/hooks/useAudioPlayers";
+import { BUILTIN_POOL_SIZE } from "@/hooks/useAudioPlayers";
+import type { TranslationFn } from "@/lib/i18n";
+
+export interface UseAudioPipelineParams {
+  engineRef: React.MutableRefObject<MetronomeEngine | null>;
+  /** Reactive: triggers click-buffer preload when sound set changes. */
+  soundSet: SoundSet;
+  soundSetRef: React.MutableRefObject<SoundSet>;
+  customSoundSetsRef: React.MutableRefObject<Record<string, CustomSoundSetConfig>>;
+  allPlayersRef: React.MutableRefObject<BuiltinPlayers>;
+  layerSoundSetsRef: React.MutableRefObject<Record<number, SoundSet>>;
+  noteSamplesRef: React.MutableRefObject<NoteSampleMap>;
+  noteSampleChannelsRef: React.MutableRefObject<NoteSampleChannelMap>;
+  barModeRef: React.MutableRefObject<boolean>;
+  barMetronomeChannelRef: React.MutableRefObject<SampleChannel>;
+  noteSampleMetroChannelsRef: React.MutableRefObject<NoteSampleMetroChannelMap>;
+  volumeRef: React.MutableRefObject<number>;
+  sampleVolumeRef: React.MutableRefObject<number>;
+  isPlayingRef: React.MutableRefObject<boolean>;
+  bpmRef: React.MutableRefObject<number>;
+  t: TranslationFn;
+  showRecoveryToast: (msg: string) => void;
+}
+
+export interface UseAudioPipelineResult {
+  // Refs owned by this hook, exposed for coordination
+  renderedPlayerRef: React.MutableRefObject<ExpoAudioPlayer | null>;
+  clickPCMCacheRef: React.MutableRefObject<Record<string, ClickPCMs>>;
+  samplePCMCacheRef: React.MutableRefObject<Map<string, SamplePCMEntry>>;
+  renderedUrlRef: React.MutableRefObject<string | null>;
+  webRenderedLoopRef: React.MutableRefObject<{ stop: () => void } | null>;
+  webClickReadyRef: React.MutableRefObject<boolean>;
+  lastAudioFireRef: React.MutableRefObject<number>;
+  armAudioWatchdogRef: React.MutableRefObject<() => void>;
+  clearAudioWatchdogRef: React.MutableRefObject<() => void>;
+  noteSampleSoundsRef: React.MutableRefObject<Record<string, ExpoAudioPlayer>>;
+  samplePlayStateRef: React.MutableRefObject<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>;
+  // Functions
+  buildRenderedPlayer: () => Promise<ExpoAudioPlayer | null>;
+  scheduleReRender: () => void;
+  stopRenderedAudio: () => void;
+  warmupAudioPlayers: () => Promise<void>;
+  getClickPCMs: (set: SoundSet) => Promise<ClickPCMs>;
+  getSamplePCMs: (samples: NoteSampleMap) => Promise<Map<string, SamplePCMEntry>>;
+  getLayerClickPCMsForSchedule: (ticks: TickInfo[]) => Promise<Map<string, ClickPCMs>>;
+  invalidateSamplePCMCache: (key?: string) => void;
+  preloadNoteSampleSounds: (samples: NoteSampleMap, keepExisting?: boolean) => Promise<void>;
+  clearSamplePlayStates: () => void;
+  armAudioWatchdog: () => void;
+  clearAudioWatchdog: () => void;
+}
+
+/**
+ * Owns the audio pre-rendering pipeline: PCM caches, rendered player lifecycle,
+ * scheduled re-render on settings changes, warmup, sample preloading, and the
+ * playback-recovery watchdog.
+ *
+ * Extracted from useMetronomeScreen so audio I/O logic lives in one place.
+ */
+export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipelineResult {
+  const {
+    engineRef, soundSet, soundSetRef, customSoundSetsRef, allPlayersRef,
+    layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, barModeRef,
+    barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
+    isPlayingRef, bpmRef, t, showRecoveryToast,
+  } = params;
+
+  // ── Owned refs ──────────────────────────────────────────────────────────────
+  const renderedPlayerRef = useRef<ExpoAudioPlayer | null>(null);
+  const clickPCMCacheRef = useRef<Record<string, ClickPCMs>>({});
+  const samplePCMCacheRef = useRef<Map<string, SamplePCMEntry>>(new Map());
+  const renderedUrlRef = useRef<string | null>(null);
+  const webRenderedLoopRef = useRef<{ stop: () => void } | null>(null);
+  const webClickReadyRef = useRef(false);
+  const lastAudioFireRef = useRef(0);
+  const audioWatchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioRetryCountRef = useRef(0);
+  const armAudioWatchdogRef = useRef<() => void>(() => {});
+  const clearAudioWatchdogRef = useRef<() => void>(() => {});
+  const reRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noteSampleSoundsRef = useRef<Record<string, ExpoAudioPlayer>>({});
+  const samplePlayStateRef = useRef<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>({});
+  const armTimeRef = useRef<number | null>(null);
+  const showRecoveryToastRef = useRef(showRecoveryToast);
+  useEffect(() => { showRecoveryToastRef.current = showRecoveryToast; }, [showRecoveryToast]);
+
+  // ── Web click-buffer preload (re-runs on soundSet change) ───────────────────
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const src = soundSets[soundSet as keyof typeof soundSets] || soundSets.classic;
+    ensureWebClickBuffers(src as any)
+      .then((ok) => { if (ok) webClickReadyRef.current = true; })
+      .catch(() => {});
+  }, [soundSet]);
+
+  // ── PCM helpers ─────────────────────────────────────────────────────────────
+  const trimPCM = useCallback((decoded: DecodedSample, durationSec: number): DecodedSample => {
+    const maxSamples = Math.floor(durationSec * 44100);
+    if (decoded.pcm.length <= maxSamples) return decoded;
+    const trimmed = decoded.pcm.slice(0, maxSamples);
+    const fadeLen = Math.min(Math.floor(0.01 * 44100), trimmed.length);
+    for (let i = 0; i < fadeLen; i++) {
+      trimmed[trimmed.length - fadeLen + i] *= (fadeLen - i) / fadeLen;
+    }
+    return { pcm: trimmed, trimStartSamples: decoded.trimStartSamples, trimLenSamples: Math.min(decoded.trimLenSamples, maxSamples) };
+  }, []);
+
+  const getClickPCMs = useCallback(async (set: SoundSet): Promise<ClickPCMs> => {
+    if (clickPCMCacheRef.current[set]) return clickPCMCacheRef.current[set];
+    const customCfg = customSoundSetsRef.current[set];
+    if (customCfg) {
+      const loadSample = async (cfg: any) => {
+        if (cfg.type === "custom" && cfg.sampleUri) {
+          try {
+            const pcm = await decodeSampleFile(cfg.sampleUri);
+            if (pcm) {
+              const trimmed = trimPCM({ pcm, trimStartSamples: 0, trimLenSamples: pcm.length }, cfg.duration);
+              return trimmed.pcm;
+            }
+            captureBreadcrumb({ category: "custom-sound", message: "Decode returned null", level: "warning", data: { sampleUri: cfg.sampleUri } });
+          } catch (e) {
+            captureBreadcrumb({ category: "custom-sound", message: "Failed to decode custom sample", level: "warning", data: { error: String(e) } });
+          }
+        }
+        const srcSet = cfg.sourceSet || "classic";
+        const srcRole = cfg.sourceRole || "strong";
+        const src = (soundSets as Record<string, typeof soundSets.classic>)[srcSet] ?? soundSets.classic;
+        const asset = srcRole === "strong" ? src.strong : srcRole === "high" ? src.high : src.low;
+        const raw = await loadAssetPCM(asset);
+        const trimmed = trimPCM({ pcm: raw, trimStartSamples: 0, trimLenSamples: raw.length }, cfg.duration);
+        return trimmed.pcm;
+      };
+      const [strong, high, low] = await Promise.all([loadSample(customCfg.strong), loadSample(customCfg.accent), loadSample(customCfg.normal)]);
+      const result: ClickPCMs = { strong, high, low };
+      clickPCMCacheRef.current[set] = result;
+      return result;
+    }
+    const src = soundSets[set as keyof typeof soundSets] || soundSets.classic;
+    const [strong, high, low] = await Promise.all([loadAssetPCM(src.strong), loadAssetPCM(src.high), loadAssetPCM(src.low)]);
+    const result: ClickPCMs = { strong, high, low };
+    clickPCMCacheRef.current[set] = result;
+    return result;
+  }, [trimPCM]);
+
+  const getSamplePCMs = useCallback(async (samples: NoteSampleMap): Promise<Map<string, SamplePCMEntry>> => {
+    const map = new Map<string, SamplePCMEntry>();
+    const entries = Object.entries(samples);
+    if (entries.length === 0) return map;
+    await Promise.all(entries.map(async ([key, uri]) => {
+      const cached = samplePCMCacheRef.current.get(key);
+      if (cached) { map.set(key, cached); return; }
+      try {
+        const pcm = await decodeSampleFile(uri);
+        if (pcm) {
+          const { trimStartMs, trimDurationMs } = parseTrimInfo(uri);
+          const entry: SamplePCMEntry = { pcm, trimStartMs, trimDurationMs };
+          map.set(key, entry);
+          samplePCMCacheRef.current.set(key, entry);
+        }
+      } catch (e) {
+        captureBreadcrumb({ category: "pre-render", message: "Failed to decode sample", level: "warning", data: { key, error: String(e) } });
+      }
+    }));
+    return map;
+  }, []);
+
+  const getLayerClickPCMsForSchedule = useCallback(async (ticks: TickInfo[]): Promise<Map<string, ClickPCMs>> => {
+    const soundSetByName = new Set<string>();
+    const fallbackByIndex = new Map<number, string>();
+    for (const tick of ticks) {
+      const li = tick.layerIndex ?? 0;
+      if (li > 0) {
+        if (tick.layerSoundSet) {
+          soundSetByName.add(tick.layerSoundSet);
+        } else {
+          const ss = layerSoundSetsRef.current[li] || soundSetRef.current;
+          fallbackByIndex.set(li, ss);
+          soundSetByName.add(ss);
+        }
+      }
+    }
+    const loaded = new Map<string, ClickPCMs>();
+    await Promise.all([...soundSetByName].map(async (ss) => {
+      const pcms = await getClickPCMs(ss as SoundSet);
+      loaded.set(ss, pcms);
+    }));
+    const map = new Map<string, ClickPCMs>(loaded);
+    for (const [li, ss] of fallbackByIndex) {
+      const pcms = loaded.get(ss);
+      if (pcms) map.set(`#${li}`, pcms);
+    }
+    return map;
+  }, [getClickPCMs]);
+
+  // ── Core audio player lifecycle ──────────────────────────────────────────────
+  const buildRenderedPlayer = useCallback(async (): Promise<ExpoAudioPlayer | null> => {
+    const engine = engineRef.current;
+    if (!engine) return null;
+    try {
+      const scheduleInfo = engine.getScheduleInfo();
+      const ticks = scheduleInfo.ticks as TickInfo[];
+      const [clickPCMs, layerClickPCMs] = await Promise.all([
+        getClickPCMs(soundSetRef.current),
+        getLayerClickPCMsForSchedule(ticks),
+      ]);
+      const samplePCMs = new Map<string, SamplePCMEntry>();
+      await new Promise(r => setTimeout(r, 0));
+      const pcm = renderMeasure({
+        schedule: ticks,
+        measureDurationMs: scheduleInfo.durationMs,
+        clickPCMs,
+        samplePCMs,
+        clickVolume: Math.max(1.0, volumeRef.current),
+        sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current : 0,
+        metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
+        metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
+        layerClickPCMs,
+      });
+      if (volumeRef.current > 1.0) {
+        if (pcm instanceof Float32Array) { applySoftClip(pcm); }
+        else { applySoftClip(pcm.left); applySoftClip(pcm.right); }
+      }
+      const wavUri = await saveRenderedWav(pcm);
+      if (Platform.OS === "web" && renderedUrlRef.current) {
+        try { URL.revokeObjectURL(renderedUrlRef.current); } catch {}
+      }
+      renderedUrlRef.current = wavUri;
+      const player = createAudioPlayer(wavUri);
+      player.loop = true;
+      player.volume = 1.0;
+      return player;
+    } catch (e) {
+      captureBreadcrumb({ category: "pre-render", message: "Failed, falling back to per-tick audio", level: "warning", data: { error: String(e) } });
+      return null;
+    }
+  }, [getClickPCMs, getLayerClickPCMsForSchedule]);
+
+  const warmupAudioPlayers = useCallback(async () => {
+    try {
+      const set = soundSetRef.current;
+      const customCfg = customSoundSetsRef.current[set];
+      const builtinSet: BuiltinSoundSet = (customCfg ? customCfg.strong.sourceSet : (set as BuiltinSoundSet)) || "classic";
+      const pool = allPlayersRef.current[builtinSet as keyof BuiltinPlayers];
+      if (!pool) notifyAudioPoolFallback("warmup-missing-set", { requestedSet: String(builtinSet) });
+      const players = pool || allPlayersRef.current.classic;
+      const toWarm = [players.highA, players.highB, players.highC, players.highD, players.lowA, players.lowB, players.lowC, players.lowD, players.strongA, players.strongB, players.strongC, players.strongD];
+      const savedVolumes = toWarm.map(p => p.volume);
+      toWarm.forEach(p => { p.volume = 0; });
+      await Promise.all(toWarm.map(async (p) => {
+        try { await p.seekTo(0); } catch {}
+        safePlay(p, "warmup");
+      }));
+      await new Promise(r => setTimeout(r, 50));
+      await Promise.all(toWarm.map(async (p, i) => {
+        try { p.pause(); await p.seekTo(0); p.volume = savedVolumes[i]; } catch {}
+      }));
+    } catch {}
+  }, []);
+
+  const stopRenderedAudio = useCallback(() => {
+    if (webRenderedLoopRef.current) {
+      webRenderedLoopRef.current.stop();
+      webRenderedLoopRef.current = null;
+    }
+    if (renderedPlayerRef.current) {
+      try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
+      renderedPlayerRef.current = null;
+    }
+    if (Platform.OS === "web" && renderedUrlRef.current) {
+      try { URL.revokeObjectURL(renderedUrlRef.current); } catch {}
+      renderedUrlRef.current = null;
+    }
+    const engine = engineRef.current;
+    if (engine) engine.setPreRenderedAudio(false);
+  }, []);
+
+  const scheduleReRender = useCallback(() => {
+    if (reRenderTimerRef.current) clearTimeout(reRenderTimerRef.current);
+    reRenderTimerRef.current = setTimeout(async () => {
+      const engine = engineRef.current;
+      if (!engine?.getIsRunning()) return;
+      stopRenderedAudio();
+      engine.setPendingMeasureStartAction(null);
+
+      if (Platform.OS === "web") {
+        try {
+          const scheduleInfo = engine.getScheduleInfo();
+          const ticks = scheduleInfo.ticks as TickInfo[];
+          const [clickPCMs, layerClickPCMs] = await Promise.all([
+            getClickPCMs(soundSetRef.current),
+            getLayerClickPCMsForSchedule(ticks),
+          ]);
+          if (!engine.getIsRunning()) return;
+          const pcm = renderMeasure({
+            schedule: ticks,
+            measureDurationMs: scheduleInfo.durationMs,
+            clickPCMs,
+            samplePCMs: new Map(),
+            clickVolume: Math.max(1.0, volumeRef.current),
+            sampleVolume: 0,
+            metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
+            metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
+            layerClickPCMs,
+          });
+          if (volumeRef.current > 1.0) {
+            if (pcm instanceof Float32Array) { applySoftClip(pcm); }
+            else { applySoftClip(pcm.left); applySoftClip(pcm.right); }
+          }
+          engine.setPendingMeasureStartAction(() => {
+            if (!engine.getIsRunning()) return;
+            if (webRenderedLoopRef.current) { try { webRenderedLoopRef.current.stop(); } catch {} webRenderedLoopRef.current = null; }
+            const loop = playWebRenderedLoop(pcm);
+            webRenderedLoopRef.current = loop;
+            engine.setPreRenderedAudio(true);
+          });
+        } catch {}
+      } else {
+        try {
+          const player = await buildRenderedPlayer();
+          if (!player) return;
+          if (!engine.getIsRunning()) { try { player.release(); } catch {} return; }
+          engine.setPendingMeasureStartAction(() => {
+            if (!engine.getIsRunning()) { try { player.release(); } catch {} return; }
+            if (renderedPlayerRef.current) {
+              try { renderedPlayerRef.current.pause(); renderedPlayerRef.current.release(); } catch {}
+              renderedPlayerRef.current = null;
+            }
+            renderedPlayerRef.current = player;
+            player.volume = 1.0;
+            engine.setPreRenderedAudio(true);
+            safePlay(player, "preRender.initial");
+          });
+        } catch {}
+      }
+    }, 300);
+  }, [stopRenderedAudio, buildRenderedPlayer, getClickPCMs, getLayerClickPCMsForSchedule]);
+
+  const invalidateSamplePCMCache = useCallback((key?: string) => {
+    if (key) { samplePCMCacheRef.current.delete(key); }
+    else { samplePCMCacheRef.current.clear(); }
+  }, []);
+
+  // ── Note sample player management ───────────────────────────────────────────
+  const preloadNoteSampleSounds = useCallback(async (samples: NoteSampleMap, keepExisting?: boolean) => {
+    const existing = noteSampleSoundsRef.current;
+    const newPlayers: Record<string, ExpoAudioPlayer> = {};
+    const keysToKeep = new Set<string>();
+
+    for (const [key, uri] of Object.entries(samples)) {
+      if (!isSafeNoteSampleUri(uri)) {
+        captureBreadcrumb({ category: "sample.preload", message: "Unsafe URI blocked", level: "warning", data: { key, uriPrefix: uri.slice(0, 80) } });
+        continue;
+      }
+      const channel = noteSampleChannelsRef.current[key] ?? "both";
+      let result;
+      try { result = await syncStereoArtifact(key, uri, channel); }
+      catch (e) {
+        captureBreadcrumb({ category: "sample.preload", message: "syncStereoArtifact failed", level: "warning", data: { key, error: String(e) } });
+        continue;
+      }
+      if (keepExisting && existing[key] && !result.changed) {
+        newPlayers[key] = existing[key];
+        keysToKeep.add(key);
+      } else {
+        try {
+          const isFileUri = result.uri.startsWith("file://");
+          const player = createAudioPlayer(result.uri, { downloadFirst: isFileUri });
+          player.volume = Math.max(0, Math.min(1, sampleVolumeRef.current));
+          newPlayers[key] = player;
+        } catch (e) {
+          captureBreadcrumb({ category: "sample.preload", message: "Failed", level: "warning", data: { key, error: String(e) } });
+        }
+      }
+    }
+    for (const [key, s] of Object.entries(existing)) {
+      if (!keysToKeep.has(key)) {
+        try { s.release(); } catch {}
+        if (!samples[key]) { await releaseStereoArtifact(key); }
+      }
+    }
+    noteSampleSoundsRef.current = newPlayers;
+  }, []);
+
+  const clearSamplePlayStates = useCallback(() => {
+    for (const [, state] of Object.entries(samplePlayStateRef.current)) {
+      if (state.endTimer) clearTimeout(state.endTimer);
+    }
+    samplePlayStateRef.current = {};
+    for (const [key, player] of Object.entries(noteSampleSoundsRef.current)) {
+      try { player.pause(); } catch {}
+      const uri = noteSamplesRef.current[key] || "";
+      const hashParts = uri.split("#t=")[1];
+      let startSec = 0;
+      if (hashParts) {
+        const parts = hashParts.split(",").map(Number);
+        if (!isNaN(parts[0])) startSec = parts[0] / 1000;
+      }
+      try { player.seekTo(startSec); } catch {}
+    }
+  }, []);
+
+  // ── Playback-recovery watchdog ───────────────────────────────────────────────
+  const clearAudioWatchdog = useCallback(() => {
+    if (audioWatchdogTimerRef.current) {
+      clearTimeout(audioWatchdogTimerRef.current);
+      audioWatchdogTimerRef.current = null;
+    }
+  }, []);
+
+  const armAudioWatchdog = useCallback(() => {
+    clearAudioWatchdog();
+    audioRetryCountRef.current = 0;
+    lastAudioFireRef.current = 0;
+
+    const runCheck = () => {
+      const engine = engineRef.current;
+      if (!engine?.getIsRunning() || !isPlayingRef.current) {
+        audioWatchdogTimerRef.current = null;
+        return;
+      }
+      const bpmNow = bpmRef.current;
+      const beatMs = 60000 / Math.max(bpmNow, 20);
+      const threshold = Math.max(3500, 5 * beatMs);
+      const timeSinceFire = lastAudioFireRef.current > 0
+        ? Date.now() - lastAudioFireRef.current
+        : Date.now() - (armTimeRef.current ?? Date.now());
+      const webCtxSuspended = Platform.OS === "web" && (getWebAudioContext()?.state === "suspended");
+      const isStuck = webCtxSuspended || timeSinceFire > threshold;
+
+      if (!isStuck) {
+        audioWatchdogTimerRef.current = setTimeout(runCheck, 3000);
+        return;
+      }
+
+      if (audioRetryCountRef.current < 2) {
+        audioRetryCountRef.current += 1;
+        if (Platform.OS === "web") {
+          const ctx = getWebAudioContext();
+          if (ctx?.state === "suspended") { ctx.resume().catch(() => {}); }
+          if (!webClickReadyRef.current) {
+            const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
+            ensureWebClickBuffers(src as any).then((ok) => { if (ok) webClickReadyRef.current = true; }).catch(() => {});
+          }
+        }
+        stopRenderedAudio();
+        lastAudioFireRef.current = Date.now();
+        showRecoveryToastRef.current(t("main", "audioRecoveryRetry"));
+        audioWatchdogTimerRef.current = setTimeout(runCheck, 3500);
+      } else {
+        showRecoveryToastRef.current(t("main", "audioRecoveryFailed"));
+        audioWatchdogTimerRef.current = null;
+      }
+    };
+
+    armTimeRef.current = Date.now();
+    audioWatchdogTimerRef.current = setTimeout(runCheck, 4000);
+  }, [clearAudioWatchdog, stopRenderedAudio, t]);
+
+  useEffect(() => {
+    armAudioWatchdogRef.current = armAudioWatchdog;
+    clearAudioWatchdogRef.current = clearAudioWatchdog;
+  }, [armAudioWatchdog, clearAudioWatchdog]);
+
+  return {
+    renderedPlayerRef,
+    clickPCMCacheRef,
+    samplePCMCacheRef,
+    renderedUrlRef,
+    webRenderedLoopRef,
+    webClickReadyRef,
+    lastAudioFireRef,
+    armAudioWatchdogRef,
+    clearAudioWatchdogRef,
+    noteSampleSoundsRef,
+    samplePlayStateRef,
+    buildRenderedPlayer,
+    scheduleReRender,
+    stopRenderedAudio,
+    warmupAudioPlayers,
+    getClickPCMs,
+    getSamplePCMs,
+    getLayerClickPCMsForSchedule,
+    invalidateSamplePCMCache,
+    preloadNoteSampleSounds,
+    clearSamplePlayStates,
+    armAudioWatchdog,
+    clearAudioWatchdog,
+  };
+}
