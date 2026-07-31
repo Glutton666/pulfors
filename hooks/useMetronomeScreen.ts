@@ -74,6 +74,7 @@ import { useFadeOutSession } from "@/hooks/useFadeOutSession";
 import { useGoalPopups } from "@/hooks/useGoalPopups";
 import { usePracticeRoomTracking } from "@/hooks/usePracticeRoomTracking";
 import { useStageMode } from "@/hooks/useStageMode";
+import { applySwitchToMode, type ModeSwitchState, type ModeSwitchCallbacks } from "@/lib/stage-mode-logic";
 import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist";
 import { createRafBatcher } from "@/lib/raf-batcher";
 import type { ModeSlot } from "@/components/ModeSwitcherDial";
@@ -3398,39 +3399,26 @@ export function useMetronomeScreen() {
     : "beat";
 
   const switchToMode = useCallback(async (mode: ModeSlot) => {
-    if (mode !== "menu" && mode === currentMode && !showMenu) return;
-    // Exit whatever is currently active before entering the new mode
-    if (noteMode) handleExitNoteMode();
-    else if (barMode) handleBarModeChange(false);
-    else if (scoreMode !== null) setScoreMode(null);
-    else if (stageModeActive) exitStageMode();
-    else if (showPracticeBook) setActiveModal(null);
-    else if (showMenu) setActiveModal(null);
-
-    switch (mode) {
-      case "beat":
-        break;
-      case "bar":
-        handleBarModeChange(true);
-        break;
-      case "score":
-        setScoreMode("list");
-        break;
-      case "note":
-        await handleEnterNoteMode();
-        break;
-      case "practice":
-        openExclusive("practiceBook");
-        break;
-      case "stage":
-        void enterStageMode();
-        loadPracticeBook().then((entries) => {
-          setStagePracticeEntries(entries);
-        }).catch(() => {});
-        break;
-      case "menu":
-        setActiveModal(activeModal === "menu" ? null : "menu");
-        break;
+    const state: ModeSwitchState = {
+      currentMode, noteMode, barMode, scoreMode,
+      stageModeActive, showMenu, showPracticeBook, activeModal,
+    };
+    const cb: ModeSwitchCallbacks = {
+      handleExitNoteMode,
+      handleBarModeChange,
+      setScoreMode: (m) => setScoreMode(m as "list" | "editor" | null),
+      exitStageMode,
+      setActiveModal: (m) => setActiveModal(m as ActiveModal),
+      handleEnterNoteMode,
+      enterStageMode: () => { void enterStageMode(); },
+      openExclusive: (m) => openExclusive(m as ActiveModal),
+    };
+    await applySwitchToMode(mode, state, cb);
+    // Load practice entries after entering stage mode (side-effect kept in hook)
+    if (mode === "stage") {
+      loadPracticeBook().then((entries) => {
+        setStagePracticeEntries(entries);
+      }).catch(() => {});
     }
   }, [currentMode, noteMode, barMode, scoreMode, stageModeActive, showMenu, showPracticeBook, handleExitNoteMode, handleBarModeChange, handleEnterNoteMode, enterStageMode, exitStageMode, activeModal, openExclusive]);
 

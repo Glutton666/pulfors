@@ -52,6 +52,7 @@ import { scoreScaleFactor, BASE_LINE_SPACING } from "@/lib/score-scale";
 import type { ScoreDocument } from "@/lib/score-types";
 import type { PracticeEntry, FlashMode, HapticMode } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
+import { handleStageModeBackPress, type StageModeBackState } from "@/lib/stage-mode-logic";
 
 // ─── 스테이지 설정 타입 ──────────────────────────────────────────────
 const STAGE_SETTINGS_KEY = "stage_settings_v1";
@@ -531,11 +532,14 @@ export function StageModeOverlay({
   useEffect(() => {
     if (!visible || Platform.OS !== "android") return;
     const handler = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (settingsOpen) { setSettingsOpen(false); return true; }
-      if (pickerOpen)   { setPickerOpen(false);   return true; }
-      if (contextEntryId) { setContextEntryId(null); return true; }
-      setConfirmExit(true);
-      return true;
+      const backState: StageModeBackState = { settingsOpen, pickerOpen, contextEntryId };
+      return handleStageModeBackPress(
+        backState,
+        setSettingsOpen,
+        setPickerOpen,
+        setContextEntryId,
+        setConfirmExit,
+      );
     });
     return () => handler.remove();
   }, [visible, settingsOpen, pickerOpen, contextEntryId]);
