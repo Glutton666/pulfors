@@ -176,6 +176,7 @@ export function MetronomeScreenUI(props: Props) {
         <View style={[StyleSheet.absoluteFillObject, { zIndex: 500, backgroundColor: C.background }]}>
           <ScoreListScreen
             defaultBpm={bpm}
+            onOpenDial={() => modeSwitcherDialRef.current?.open()}
             onClose={() => setScoreMode(null)}
             onOpenEditor={(doc) => {
               setScoreEditorDoc(doc);

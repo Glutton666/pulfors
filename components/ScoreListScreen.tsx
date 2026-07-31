@@ -33,9 +33,10 @@ export interface ScoreListScreenProps {
   defaultBpm: number;
   onClose: () => void;
   onOpenEditor: (doc: ScoreDocument) => void;
+  onOpenDial?: () => void;
 }
 
-export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor }: ScoreListScreenProps) {
+export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onOpenDial }: ScoreListScreenProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -199,8 +200,16 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor }: ScoreList
     <View style={[styles.container, { backgroundColor: C.background }]}>
       {/* 헤더 */}
       <View style={[styles.header, { paddingTop: topInset + 8, borderBottomColor: C.border }]}>
-        <View style={styles.backBtn} />
-        <Text style={[styles.headerTitle, { color: C.text }]}>{t("scoreMode", "title")}</Text>
+        <Pressable
+          onPress={onOpenDial}
+          style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}
+          accessibilityRole="button"
+        >
+          <Ionicons name="musical-notes" size={S.ms(20, 0.4)} color={C.accent} />
+          <Text style={[styles.headerTitle, { color: C.accent, fontFamily: "SpaceGrotesk_700Bold", fontSize: S.ms(18, 0.4), letterSpacing: 1.2, textTransform: "uppercase", flex: 0 }]}>
+            {t("scoreMode", "title")}
+          </Text>
+        </Pressable>
         <Pressable
           style={({ pressed }) => [styles.importBtn, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
           onPress={handleImport}

@@ -295,7 +295,8 @@ function ModeSwitcherDial({
   const iconSlotsRef = useRef<{ i: number; dx: number; dy: number }[]>([]);
 
   const doOpen = useCallback(() => {
-    const idx = Math.max(0, MODES.indexOf(currentMode));
+    // currentModeRef는 렌더 중 동기 갱신되므로 항상 최신값
+    const idx = Math.max(0, MODES.indexOf(currentModeRef.current));
     scrollPosRef.current = idx;
     setScrollPos(idx);
     setIsOpen(true);
@@ -303,7 +304,9 @@ function ModeSwitcherDial({
     fanScale.value   = withTiming(1,   { duration: 220, easing: Easing.out(Easing.cubic) });
     fanOpacity.value = withTiming(1,   { duration: 180 });
     overlayOp.value  = withTiming(0.5, { duration: 200 });
-  }, [currentMode, fanScale, fanOpacity, overlayOp]);
+  // currentMode 제거 — ref로 읽으므로 deps 불필요, React Compiler 재생성 방지
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fanScale, fanOpacity, overlayOp]);
 
   const doClose = useCallback(() => {
     fanScale.value   = withTiming(0.05, { duration: 180, easing: Easing.in(Easing.cubic) });
@@ -342,11 +345,12 @@ function ModeSwitcherDial({
   const topInRef      = useRef(topInset);
   const wallRef       = useRef<Wall>(wallPos.wall);
   const currentModeRef = useRef<ModeSlot>(currentMode);
-  useEffect(() => { winWRef.current       = winW; },           [winW]);
-  useEffect(() => { winHRef.current       = winH; },           [winH]);
-  useEffect(() => { topInRef.current      = topInset; },       [topInset]);
-  useEffect(() => { wallRef.current       = wallPos.wall; },   [wallPos.wall]);
-  useEffect(() => { currentModeRef.current = currentMode; },   [currentMode]);
+  // 렌더 중 동기적으로 갱신 — effect로 갱신하면 모드 변경 직후 탭 시 구버전이 읽힘
+  currentModeRef.current = currentMode;
+  useEffect(() => { winWRef.current  = winW; },        [winW]);
+  useEffect(() => { winHRef.current  = winH; },        [winH]);
+  useEffect(() => { topInRef.current = topInset; },    [topInset]);
+  useEffect(() => { wallRef.current  = wallPos.wall; }, [wallPos.wall]);
 
   // ── Handle PanResponder (tap = toggle; drag = reposition) ─────────────────
   const longRef = useRef<ReturnType<typeof setTimeout> | null>(null);
