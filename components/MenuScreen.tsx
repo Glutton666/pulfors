@@ -16,6 +16,7 @@ import { Spacing } from "@/constants/tokens";
 interface MenuScreenProps {
   topInset: number;
   onClose: () => void;
+  onOpenDial: () => void;
   onSettings: () => void;
   onSignalGen: () => void;
   onWorkUp: () => void;
@@ -26,6 +27,7 @@ interface MenuScreenProps {
 export function MenuScreen({
   topInset,
   onClose,
+  onOpenDial,
   onSettings,
   onSignalGen,
   onWorkUp,
@@ -80,29 +82,34 @@ export function MenuScreen({
         { zIndex: 500, backgroundColor: C.background },
       ]}
     >
-      <View
+      <Pressable
+        onPress={onOpenDial}
         style={{
           flexDirection: "row",
           alignItems: "center",
+          justifyContent: "center",
+          gap: S.ms(8, 0.3),
           paddingTop: topInset + S.ms(12, 0.3),
           paddingHorizontal: S.ms(20, 0.3),
-          paddingBottom: S.ms(8, 0.3),
+          paddingBottom: S.ms(12, 0.3),
           borderBottomWidth: 1,
           borderBottomColor: C.border,
         }}
+        accessibilityRole="button"
       >
+        <Ionicons name="menu" size={S.ms(22, 0.4)} color={C.accent} />
         <Text
           style={{
-            flex: 1,
             fontFamily: "SpaceGrotesk_700Bold",
             fontSize: S.ms(20, 0.4),
-            color: C.text,
-            letterSpacing: 0.2,
+            color: C.accent,
+            letterSpacing: 1.2,
+            textTransform: "uppercase",
           }}
         >
           {t("switcher", "menu")}
         </Text>
-      </View>
+      </Pressable>
 
       <ScrollView
         contentContainerStyle={{ paddingVertical: S.ms(8, 0.3) }}

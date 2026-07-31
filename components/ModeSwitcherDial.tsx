@@ -650,6 +650,19 @@ function ModeSwitcherDial({
                     size={S.ms(20, 0.3)}
                     color={isCtr ? "#fff" : C.textSecondary}
                   />
+                  {isCtr && (
+                    <Text
+                      style={{
+                        fontSize: 7, lineHeight: 9,
+                        color: "#fff",
+                        fontFamily: "SpaceGrotesk_500Medium",
+                        letterSpacing: 0.3,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {t("switcher", mode as "beat"|"bar"|"score"|"note"|"practice"|"stage"|"menu")}
+                    </Text>
+                  )}
                 </View>
             ))}
           </View>

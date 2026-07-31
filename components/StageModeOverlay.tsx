@@ -286,6 +286,7 @@ export interface StageModeOverlayProps {
   hapticMode:        HapticMode;
   onPlayPause:       () => void;
   onExit:            () => void;
+  onOpenDial?:       () => void;
   onBpmChange:       (bpm: number) => void;
   onTapTempo:        () => void;
   onBeatsPerMeasureChange: (n: number) => void;
@@ -328,6 +329,7 @@ export function StageModeOverlay({
   hapticMode,
   onPlayPause,
   onExit,
+  onOpenDial,
   onBpmChange,
   onTapTempo,
   onBeatsPerMeasureChange,
@@ -866,26 +868,26 @@ export function StageModeOverlay({
 
       {/* 상단 바 */}
       <View style={[styles.topBar, { paddingTop: topPad }]}>
+        <View style={{ minWidth: 44 }} />
+
         <Pressable
-          style={({ pressed }) => [styles.topBarBtn, pressed && { opacity: 0.6 }]}
-          onPress={() => {
-            if (Platform.OS === "web") {
-              setConfirmExit(true);
-            } else {
-              onExit();
-            }
-          }}
-          testID="stage-mode-exit"
-          accessibilityLabel={t("stageMode", "exitButton")}
+          onPress={onOpenDial}
+          style={({ pressed }) => ({
+            flexDirection: "row" as const,
+            alignItems: "center" as const,
+            gap: 8,
+            opacity: pressed ? 0.7 : 1,
+          })}
+          accessibilityRole="button"
         >
-          <Ionicons name="chevron-down" size={22} color={faint} />
-          <Text style={[styles.topBarBtnText, { color: faint }]}>{t("stageMode", "exitButton")}</Text>
+          <Ionicons name="mic-outline" size={22} color={faint} />
+          <Text style={[styles.topTitle, { color: faint, fontSize: 20, fontFamily: "SpaceGrotesk_700Bold", letterSpacing: 1.2 }]}>
+            {t("stageMode", "title")}
+          </Text>
         </Pressable>
 
-        <Text style={[styles.topTitle, { color: faint }]}>{t("stageMode", "title")}</Text>
-
         <Pressable
-          style={({ pressed }) => [styles.topBarBtn, pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [styles.topBarBtn, { minWidth: 44, justifyContent: "flex-end" }, pressed && { opacity: 0.6 }]}
           onPress={() => setSettingsOpen((v) => !v)}
           accessibilityLabel={t("stageMode", "settings")}
         >

@@ -148,11 +148,12 @@ export interface ScoreEditorScreenProps {
   onBack: () => void;
   onSaved: (doc: ScoreDocument) => void;
   onLinkedEntryChange?: (entryId: string | undefined, scoreDefaults: { bpm: number; beatsPerMeasure: number }) => void;
+  onOpenDial?: () => void;
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
 
-export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEntryChange }: ScoreEditorScreenProps) {
+export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEntryChange, onOpenDial }: ScoreEditorScreenProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -1752,10 +1753,24 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           <Ionicons name="chevron-back" size={S.ms(22, 0.4)} color={C.text} />
         </Pressable>
 
-        {/* 제목 */}
-        <Text style={[styles.topTitle, { color: C.text }]} numberOfLines={1}>
-          {doc.metadata.title || t("scoreMode", "untitled")}
-        </Text>
+        {/* 악보 모드 레이블 — 탭하면 팬 다이얼 열기 */}
+        <Pressable
+          onPress={onOpenDial}
+          style={({ pressed }) => ({
+            flex: 1,
+            flexDirection: "row" as const,
+            alignItems: "center" as const,
+            justifyContent: "center" as const,
+            gap: 6,
+            opacity: pressed ? 0.7 : 1,
+          })}
+          accessibilityRole="button"
+        >
+          <Ionicons name="musical-notes" size={S.ms(18, 0.4)} color={C.accent} />
+          <Text style={[styles.topTitle, { color: C.accent, fontFamily: "SpaceGrotesk_700Bold", fontSize: S.ms(17, 0.4), letterSpacing: 1.2 }]} numberOfLines={1}>
+            {t("scoreMode", "title") || t("switcher", "score")}
+          </Text>
+        </Pressable>
 
         {savedToast && (
           <Text style={[styles.savedToast, { color: C.accent }]}>

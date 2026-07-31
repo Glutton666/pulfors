@@ -29,6 +29,8 @@ import { ScoreListScreen } from "@/components/ScoreListScreen";
 import { ScoreEditorScreen } from "@/components/ScoreEditorScreen";
 import { ModeSwitcherDial } from "@/components/ModeSwitcherDial";
 import type { ModeSwitcherDialHandle } from "@/components/ModeSwitcherDial";
+import type { ModeSlot } from "@/components/ModeSwitcherDial";
+import { ModeIcon } from "@/components/ModeIcon";
 import { MenuScreen } from "@/components/MenuScreen";
 import { BpmDetectModal } from "@/components/BpmDetectModal";
 import { StemSeparationModal } from "@/components/StemSeparationModal";
@@ -187,6 +189,7 @@ export function MetronomeScreenUI(props: Props) {
           <ScoreEditorScreen
             doc={scoreEditorDoc}
             onBack={() => setScoreMode("list")}
+            onOpenDial={() => modeSwitcherDialRef.current?.open()}
             onSaved={(updatedDoc) => {
               setScoreEditorDoc(updatedDoc);
               // 연습장 캐시 무효화 (저장된 연결 항목 반영)
@@ -286,29 +289,37 @@ export function MetronomeScreenUI(props: Props) {
         </Text>
       </Animated.View>
 
-      {/* 상단 중앙 고정 모드 레이블 — 탭하면 다음 모드로 순환 (무대·악보편집 중 숨김) */}
-      {!stageModeActive && scoreMode !== "editor" && (
+      {/* 상단 중앙 고정 모드 레이블 — 탭하면 팬 다이얼 열기 (무대·악보편집·메뉴·연습장 중 숨김) */}
+      {!stageModeActive && scoreMode !== "editor" && !showMenu && !showPracticeBook && (
         <Pressable
           onPress={() => modeSwitcherDialRef.current?.open()}
           style={{
             position: "absolute",
-            top: (insets.top || webTopInset) + 4,
+            top: (insets.top || webTopInset) + 2,
             alignSelf: "center" as const,
             zIndex: 99999,
-            paddingHorizontal: 18,
-            paddingVertical: 6,
-            borderRadius: 20,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            borderRadius: 28,
+            flexDirection: "row" as const,
+            alignItems: "center" as const,
+            gap: 8,
           }}
           accessibilityRole="button"
           accessibilityLabel={t("switcher", "openDial")}
           testID="mode-cycle-label"
         >
+          <ModeIcon
+            mode={currentMode as ModeSlot}
+            size={S.ms(20, 0.4)}
+            color={C.accent}
+          />
           <Text
             style={{
-              fontFamily: "SpaceGrotesk_600SemiBold",
-              fontSize: S.ms(12, 0.3),
-              color: C.textSecondary,
-              letterSpacing: 1.8,
+              fontFamily: "SpaceGrotesk_700Bold",
+              fontSize: S.ms(18, 0.4),
+              color: C.accent,
+              letterSpacing: 1.2,
               textTransform: "uppercase" as const,
             }}
           >
@@ -332,6 +343,7 @@ export function MetronomeScreenUI(props: Props) {
       {showMenu && (
         <MenuScreen
           topInset={insets.top || webTopInset}
+          onOpenDial={() => { setActiveModal(null); setTimeout(() => modeSwitcherDialRef.current?.open(), 100); }}
           onClose={() => setActiveModal(null)}
           onSettings={() => {
             settingsReturnModalRef.current = "menu";
@@ -560,6 +572,7 @@ export function MetronomeScreenUI(props: Props) {
       {showPracticeBook && (
       <PracticeBookModal
         visible={showPracticeBook}
+        onOpenDial={() => { setActiveModal(null); setTimeout(() => modeSwitcherDialRef.current?.open(), 100); }}
         onClose={() => {
           setActiveModal(null);
           if (loggingEnabled && featureStartRef.current?.name === "practice_note") {
@@ -1215,6 +1228,7 @@ export function MetronomeScreenUI(props: Props) {
 
       <StageModeOverlay
         visible={stageModeActive}
+        onOpenDial={() => modeSwitcherDialRef.current?.open()}
         bpm={bpm}
         flashOpacity={flashOpacity}
         beatProgress={beatProgress}

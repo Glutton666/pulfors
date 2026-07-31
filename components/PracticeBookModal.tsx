@@ -34,6 +34,7 @@ import { ExportEntryModal } from "@/components/ExportEntryModal";
 interface PracticeBookModalProps {
   visible: boolean;
   onClose: () => void;
+  onOpenDial?: () => void;
   onLoad: (entry: PracticeEntry) => void;
   onSetGoal?: (entry: PracticeEntry, targetMinutes: number) => void;
   currentConfig: Omit<PracticeEntry, "id" | "label" | "createdAt"> | null;
@@ -488,6 +489,7 @@ const VIEW_MODE_KEY = "@practice_book_view_mode";
 export function PracticeBookModal({
   visible,
   onClose,
+  onOpenDial,
   onLoad,
   onSetGoal,
   currentConfig,
@@ -680,30 +682,31 @@ export function PracticeBookModal({
         ]}
       >
         <View style={styles.header}>
-          <View style={styles.headerLeft}>
+          <Pressable
+            onPress={onOpenDial}
+            style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: S.ms(8, 0.3) }}
+            accessibilityRole="button"
+          >
             <MaterialCommunityIcons
               name="notebook-outline"
               size={S.ms(22, 0.4)}
               color={C.accent}
             />
-            <Text style={[styles.title, { color: C.text }]}>{t("practiceBook", "title")}</Text>
-          </View>
-          <View style={styles.headerRight}>
-            <Pressable
-              onPress={toggleViewMode}
-              hitSlop={8}
-              style={styles.viewToggleBtn}
-            >
-              <Ionicons
-                name={viewMode === "grid" ? "grid" : "list"}
-                size={S.ms(18, 0.4)}
-                color={C.accent}
-              />
-            </Pressable>
-            <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel={t("a11y", "closeModal")}>
-              <Ionicons name="close" size={S.ms(24, 0.4)} color={C.textSecondary} />
-            </Pressable>
-          </View>
+            <Text style={[styles.title, { color: C.accent, fontSize: S.ms(20, 0.4), fontFamily: "SpaceGrotesk_700Bold" }]}>
+              {t("practiceBook", "title")}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={toggleViewMode}
+            hitSlop={8}
+            style={styles.viewToggleBtn}
+          >
+            <Ionicons
+              name={viewMode === "grid" ? "grid" : "list"}
+              size={S.ms(18, 0.4)}
+              color={C.accent}
+            />
+          </Pressable>
         </View>
 
         {currentConfig && (
