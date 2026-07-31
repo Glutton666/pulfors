@@ -151,7 +151,10 @@ export function StemSeparationModal({
   const [stemTracks, setStemTracks] = useState<StemTrack[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  const onnxAvailable = isOnnxRuntimeAvailable();
+  // visible이 아닐 때 onnxruntime-react-native를 미리 require()하면
+  // 앱 시작 시(이 모달이 항상 마운트되어 있으므로) native 바인딩 미설치 상태에서
+  // 크래시가 나므로, 실제로 모달을 열었을 때만 probe한다.
+  const onnxAvailable = visible ? isOnnxRuntimeAvailable() : false;
 
   // Pre-create 6 players (max stems). useAudioPlayer hooks must be
   // called unconditionally at the top level — one slot per stem track.
@@ -229,22 +232,32 @@ export function StemSeparationModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
+  const SUPPORTED_IMPORT_EXTS = ["wav", "mp3", "m4a", "aac"];
+
   const handleImport = useCallback(async () => {
     try {
-      // Stem separation decodes audio entirely on-device using a pure-JS WAV
-      // parser — only WAV files are accepted. The MIME type filter below
-      // restricts the system picker on most platforms; the extension check
-      // below provides a second layer of defense.
+      // WAV is decoded entirely in pure JS. MP3/M4A/AAC are transcoded to WAV
+      // on-device first via the native audio-decoder module (AVFoundation on
+      // iOS, MediaCodec on Android) — see lib/stem-separation.ts step 0. That
+      // module requires a custom build (not Expo Go/web), so on those runtimes
+      // non-WAV imports still fail with a clear error at separation start.
+      // The MIME type filter below restricts the system picker on most
+      // platforms; the extension check below provides a second layer of defense.
       const res = await DocumentPicker.getDocumentAsync({
-        type: ["audio/wav", "audio/x-wav", "audio/wave"],
+        type: [
+          "audio/wav", "audio/x-wav", "audio/wave",
+          "audio/mpeg", "audio/mp3",
+          "audio/mp4", "audio/x-m4a", "audio/m4a",
+          "audio/aac", "audio/x-aac",
+        ],
         copyToCacheDirectory: true,
       });
       if (res.canceled || !res.assets?.length) return;
       const asset = res.assets[0];
 
-      // Second-layer guard: reject any non-WAV that slipped through
+      // Second-layer guard: reject any format the pipeline can't handle at all.
       const ext = (asset.name || "").split(".").pop()?.toLowerCase() ?? "";
-      if (ext && ext !== "wav") {
+      if (ext && !SUPPORTED_IMPORT_EXTS.includes(ext)) {
         Alert.alert(
           t("stemSep", "formatErrorTitle"),
           t("stemSep", "formatErrorBody"),

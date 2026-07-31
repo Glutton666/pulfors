@@ -7,9 +7,11 @@
  *
  * 추론 환경 요구 사항:
  *   - onnxruntime-react-native 네이티브 모듈 (Expo Go 미지원, 커스텀 빌드 필요)
+ *   - MP3/M4A/AAC 소스는 audio-decoder 네이티브 모듈로 먼저 WAV 변환 (역시 커스텀 빌드 필요)
  *   - 모델 파일: <bundle>/models/htdemucs.ort 또는 htdemucs_6s.ort
  *
  * 실행 흐름:
+ *   0. (WAV가 아닌 경우) audio-decoder로 PCM WAV 변환 — OS 네이티브 코덱 사용
  *   1. WAV/PCM 디코딩 → Float32 스테레오 PCM
  *   2. (선택) 노이즈 제거 ONNX 모델 적용
  *   3. Demucs ONNX 모델로 청크 단위 스템 분리
@@ -1042,12 +1044,58 @@ export async function runStemSeparation(
 
   let demucsSession: OrtSession | null = null;
 
+  let decodedTempUri: string | null = null;
+
   try {
+    // ── 0. Compressed source (MP3/M4A/AAC, …) → PCM WAV via native decoder ──
+    // decodeWavBytes() below only understands WAV; anything else must be
+    // transcoded first using the platform's own codec (see modules/audio-decoder).
+    // Not available on web or in Expo Go — a custom dev/production build is required.
+    let effectiveSourceUri = sourceUri;
+    const ext = sourceUri.split(".").pop()?.toLowerCase() ?? "";
+    if (ext !== "wav") {
+      if (Platform.OS === "web") {
+        return {
+          ok: false,
+          error: "unsupported_format",
+          message: `"${ext}" 형식은 웹에서 지원되지 않습니다. WAV 파일을 사용하거나 앱에서 시도하세요.`,
+        };
+      }
+      let decoder: typeof import("audio-decoder") | null = null;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        decoder = require("audio-decoder") as typeof import("audio-decoder");
+      } catch {
+        decoder = null;
+      }
+      if (!decoder || !decoder.isAudioDecoderAvailable()) {
+        return {
+          ok: false,
+          error: "unsupported_format",
+          message: `"${ext}" 형식을 변환하려면 커스텀 네이티브 빌드가 필요합니다 (Expo Go 미지원). WAV 파일은 바로 사용할 수 있습니다.`,
+        };
+      }
+      onProgress({ phase: "decoding", pct: 2 });
+      const destUri = `${FileSystem.cacheDirectory ?? ""}stem_import_${resultId}.wav`;
+      try {
+        await decoder.decodeToWav(sourceUri, destUri);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return {
+          ok: false,
+          error: "file_read_error",
+          message: `오디오 변환에 실패했습니다 (${ext}): ${msg}`,
+        };
+      }
+      decodedTempUri = destUri;
+      effectiveSourceUri = destUri;
+    }
+
     // ── 1. Read source file ──────────────────────────────────────────────
     if (signal?.aborted) return { ok: false, error: "inference_failed", message: "Cancelled" };
     onProgress({ phase: "decoding", pct: 5 });
 
-    const rawBase64 = await FileSystem.readAsStringAsync(sourceUri, {
+    const rawBase64 = await FileSystem.readAsStringAsync(effectiveSourceUri, {
       encoding: FileSystem.EncodingType.Base64,
     });
     onProgress({ phase: "decoding", pct: 20 });
@@ -1056,18 +1104,16 @@ export async function runStemSeparation(
     // Pure-JS base64 decode (avoids atob() RN inconsistencies)
     const rawBytes = base64ToArrayBuffer(rawBase64);
 
-    // WAV-only: stem separation decodes audio entirely on-device.
-    // Non-WAV formats are rejected at the import UI; if a non-WAV somehow
-    // arrives here we surface a clear, actionable error.
+    // The bytes read above are always WAV at this point — either the original
+    // source, or the native-decoder output from step 0 above.
     let wav: WavData;
     try {
       wav = decodeWavBytes(rawBytes);
     } catch {
-      const ext = sourceUri.split(".").pop()?.toLowerCase() ?? "unknown";
       return {
         ok: false,
         error: "unsupported_format",
-        message: `"${ext}" 형식은 지원되지 않습니다. WAV 파일만 가져올 수 있습니다. (Only WAV files are supported for stem separation.)`,
+        message: `"${ext}" 파일을 읽는 데 실패했습니다. 파일이 손상되었을 수 있습니다.`,
       };
     }
     onProgress({ phase: "decoding", pct: 50 });
@@ -1198,5 +1244,8 @@ export async function runStemSeparation(
     return { ok: false, error: "inference_failed", message: msg };
   } finally {
     try { await demucsSession?.release(); } catch {}
+    if (decodedTempUri) {
+      try { await FileSystem.deleteAsync(decodedTempUri, { idempotent: true }); } catch {}
+    }
   }
 }

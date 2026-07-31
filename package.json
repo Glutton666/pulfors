@@ -30,6 +30,7 @@
     "@types/express": "^5.0.6",
     "@types/jest": "^29.5.14",
     "@xmldom/xmldom": "^0.8.12",
+    "audio-decoder": "file:./modules/audio-decoder",
     "babel-preset-expo": "~54.0.10",
     "drizzle-orm": "^0.45.2",
     "drizzle-zod": "^0.7.0",
