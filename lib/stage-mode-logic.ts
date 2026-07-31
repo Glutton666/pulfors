@@ -62,28 +62,33 @@ export async function applySwitchToMode(
     activeModal,
   } = state;
 
-  // Same mode selected while no menu is open → no-op
-  if (mode !== "menu" && mode === currentMode && !showMenu) return;
+  // 같은 모드를 다시 선택 → no-op
+  if (mode === currentMode) return;
 
-  // Exit the currently active mode (only one branch fires, highest priority first)
+  // 메뉴는 오버레이 — 진입 시 기존 모드를 종료하지 않고 위에 열기만 함
+  if (mode === "menu") {
+    cb.setActiveModal("menu");
+    return;
+  }
+
+  // 메뉴에서 다른 모드로 이동 → 메뉴 먼저 닫기
+  if (showMenu) cb.setActiveModal(null);
+
+  // 기존 모드 종료 (한 브랜치만 실행)
   if (noteMode)                cb.handleExitNoteMode();
   else if (barMode)            cb.handleBarModeChange(false);
   else if (scoreMode !== null) cb.setScoreMode(null);
   else if (stageModeActive)    cb.exitStageMode();
   else if (showPracticeBook)   cb.setActiveModal(null);
-  else if (showMenu)           cb.setActiveModal(null);
 
-  // Enter the new mode
+  // 새 모드 진입
   switch (mode) {
     case "beat":     break;
-    case "bar":      cb.handleBarModeChange(true);                              break;
-    case "score":    cb.setScoreMode("list");                                   break;
-    case "note":     await cb.handleEnterNoteMode();                            break;
-    case "practice": cb.openExclusive("practiceBook");                          break;
-    case "stage":    cb.enterStageMode();                                       break;
-    case "menu":
-      cb.setActiveModal(activeModal === "menu" ? null : "menu");
-      break;
+    case "bar":      cb.handleBarModeChange(true);   break;
+    case "score":    cb.setScoreMode("list");         break;
+    case "note":     await cb.handleEnterNoteMode();  break;
+    case "practice": cb.openExclusive("practiceBook"); break;
+    case "stage":    cb.enterStageMode();             break;
   }
 }
 

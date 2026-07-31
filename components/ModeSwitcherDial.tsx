@@ -294,9 +294,6 @@ function ModeSwitcherDial({
   const anchorRef    = useRef({ x: 0, y: 0 });
   const iconSlotsRef = useRef<{ i: number; dx: number; dy: number }[]>([]);
 
-  // 다이얼이 열린 직후 click-through로 overlay confirmSelection이 오발되는 것을 막는 가드
-  const justOpenedRef = useRef(false);
-
   const doOpen = useCallback(() => {
     // currentModeRef는 렌더 중 동기 갱신되므로 항상 최신값
     const idx = Math.max(0, MODES.indexOf(currentModeRef.current));
@@ -307,9 +304,6 @@ function ModeSwitcherDial({
     fanScale.value   = withTiming(1,   { duration: 220, easing: Easing.out(Easing.cubic) });
     fanOpacity.value = withTiming(1,   { duration: 180 });
     overlayOp.value  = withTiming(0.5, { duration: 200 });
-    // 열림 직후 50ms 동안 overlay 탭을 무시 — 웹 click-through 방지
-    justOpenedRef.current = true;
-    setTimeout(() => { justOpenedRef.current = false; }, 50);
   // currentMode 제거 — ref로 읽으므로 deps 불필요, React Compiler 재생성 방지
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fanScale, fanOpacity, overlayOp]);
@@ -480,17 +474,9 @@ function ModeSwitcherDial({
 
   // Confirm the highlighted mode and close the fan
   const confirmSelection = useCallback(() => {
-    // 다이얼이 열린 직후 click-through 방지
-    if (justOpenedRef.current) return;
     const snapped = snapWrap(scrollPosRef.current);
-    const selected = MODES[snapped];
     doClose();
-    // 현재 모드와 동일한 모드를 선택하면 다이얼만 닫고 모드 전환은 하지 않음
-    // (menu·stage 등 overlay 모드에서 같은 모드가 선택된 채 overlay를 탭하면
-    //  토글로 모드가 닫히는 문제를 방지)
-    if (selected !== currentModeRef.current) {
-      setTimeout(() => onSelectModeRef.current(selected), 200);
-    }
+    setTimeout(() => onSelectModeRef.current(MODES[snapped]), 200);
   }, [doClose]);
 
   // ── Geometry (sync refs synchronously in render) ──────────────────────────

@@ -3386,7 +3386,9 @@ export function useMetronomeScreen() {
     setNoteBarEntries([]);
   }, [isPlaying]);
 
-  const currentMode: ModeSlot = stageModeActive
+  const currentMode: ModeSlot = showMenu
+    ? "menu"
+    : stageModeActive
     ? "stage"
     : noteMode
     ? "note"
@@ -3403,8 +3405,10 @@ export function useMetronomeScreen() {
       currentMode, noteMode, barMode, scoreMode,
       stageModeActive, showMenu, showPracticeBook, activeModal,
     };
-    // 상태 변경 전에 애니메이션 초기값 설정 → 새 뷰가 마운트될 때 이미 opacity=0 상태
-    if (mode !== "menu" && mode !== currentMode) {
+    // 실제 콘텐츠가 바뀔 때만 슬라이드+페이드 적용
+    // 메뉴는 오버레이라 콘텐츠 변경 없음 → 애니메이션 제외
+    const isMenuOverlay = mode === "menu" || currentMode === "menu";
+    if (!isMenuOverlay && mode !== currentMode) {
       modeSlideX.value       = windowWidth * 0.25;
       modeSlideOpacity.value = 0;
     }
