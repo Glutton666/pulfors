@@ -483,8 +483,14 @@ function ModeSwitcherDial({
     // 다이얼이 열린 직후 click-through 방지
     if (justOpenedRef.current) return;
     const snapped = snapWrap(scrollPosRef.current);
+    const selected = MODES[snapped];
     doClose();
-    setTimeout(() => onSelectModeRef.current(MODES[snapped]), 200);
+    // 현재 모드와 동일한 모드를 선택하면 다이얼만 닫고 모드 전환은 하지 않음
+    // (menu·stage 등 overlay 모드에서 같은 모드가 선택된 채 overlay를 탭하면
+    //  토글로 모드가 닫히는 문제를 방지)
+    if (selected !== currentModeRef.current) {
+      setTimeout(() => onSelectModeRef.current(selected), 200);
+    }
   }, [doClose]);
 
   // ── Geometry (sync refs synchronously in render) ──────────────────────────
