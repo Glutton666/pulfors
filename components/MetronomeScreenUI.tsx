@@ -27,7 +27,7 @@ import { OnboardingModal } from "@/components/OnboardingModal";
 import { MoreMenuModal } from "@/components/MoreMenuModal";
 import { ScoreListScreen } from "@/components/ScoreListScreen";
 import { ScoreEditorScreen } from "@/components/ScoreEditorScreen";
-import { ModeDialLabel } from "@/components/ModeDialLabel";
+import { ModeSwitcherDial } from "@/components/ModeSwitcherDial";
 import { MenuScreen } from "@/components/MenuScreen";
 import { BpmDetectModal } from "@/components/BpmDetectModal";
 import { StemSeparationModal } from "@/components/StemSeparationModal";
@@ -283,15 +283,45 @@ export function MetronomeScreenUI(props: Props) {
         </Text>
       </Animated.View>
 
-      {/* 상단 중앙 모드 레이블 — 탭하면 모드 전환 다이얼 열림 (무대·악보편집 중 숨김) */}
+      {/* 상단 중앙 고정 모드 레이블 — 탭하면 다음 모드로 순환 (무대·악보편집 중 숨김) */}
       {!stageModeActive && scoreMode !== "editor" && (
-        <ModeDialLabel
-          currentMode={currentMode}
-          onModeChange={switchToMode}
-          topInset={insets.top || webTopInset}
-          onMenuToggle={() => setActiveModal(showMenu ? null : "menu")}
-        />
+        <Pressable
+          onPress={cycleToNextMode}
+          style={{
+            position: "absolute",
+            top: (insets.top || webTopInset) + 4,
+            alignSelf: "center" as const,
+            zIndex: 99999,
+            paddingHorizontal: 18,
+            paddingVertical: 6,
+            borderRadius: 20,
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={t("switcher", "cycleTap")}
+          testID="mode-cycle-label"
+        >
+          <Text
+            style={{
+              fontFamily: "SpaceGrotesk_600SemiBold",
+              fontSize: S.ms(12, 0.3),
+              color: C.textSecondary,
+              letterSpacing: 1.8,
+              textTransform: "uppercase" as const,
+            }}
+          >
+            {t("switcher", currentMode as "beat" | "bar" | "score" | "note" | "practice" | "stage")}
+          </Text>
+        </Pressable>
       )}
+
+      {/* 드래그 가능한 D-탭 모드 다이얼 */}
+      <ModeSwitcherDial
+        currentMode={currentMode}
+        onSelectMode={switchToMode}
+        topInset={insets.top || webTopInset}
+        isLandscape={isLandscape}
+        isPlaying={isPlaying}
+      />
 
 
       {showMenu && (

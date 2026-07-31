@@ -76,7 +76,7 @@ import { usePracticeRoomTracking } from "@/hooks/usePracticeRoomTracking";
 import { useStageMode } from "@/hooks/useStageMode";
 import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist";
 import { createRafBatcher } from "@/lib/raf-batcher";
-import type { ModeSlot } from "@/components/ModeDialLabel";
+import type { ModeSlot } from "@/components/ModeSwitcherDial";
 import type { ScoreDocument } from "@/lib/score-types";
 import type { OnboardingResult } from "@/components/OnboardingModal";
 import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
