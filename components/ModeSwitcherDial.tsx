@@ -265,14 +265,15 @@ function ModeSwitcherDial({
   const userOverrodeRef = useRef<Set<ModeSlot>>(new Set());
 
   useEffect(() => {
-    if (userOverrodeRef.current.has(currentMode)) return;   // user already overrode this mode
+    if (hideHandle) return;  // no D-tab to relocate
+    if (userOverrodeRef.current.has(currentMode)) return;
     setWallPos(prev => {
-      if (!hasConflict(prev, currentMode)) return prev;     // no conflict — keep position
+      if (!hasConflict(prev, currentMode)) return prev;
       AsyncStorage.setItem(WALL_KEY, JSON.stringify(SAFE_FALLBACK));
       return SAFE_FALLBACK;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMode]);
+  }, [currentMode, hideHandle]);
 
   // ── Animation shared values ───────────────────────────────────────────────
   const fanScale   = useSharedValue(0.05);
@@ -311,11 +312,14 @@ function ModeSwitcherDial({
     setTimeout(() => { setIsOpen(false); isOpenRef.current = false; }, 185);
   }, [fanScale, fanOpacity, overlayOp]);
 
-  // Expose open/close to parent via ref
+  // Expose open/close to parent via ref.
+  // Always call through doOpenRef/doCloseRef so React Compiler memoization
+  // can't accidentally capture a stale closure.
   useImperativeHandle(ref, () => ({
-    open:  doOpen,
-    close: doClose,
-  }), [doOpen, doClose]);
+    open:  () => doOpenRef.current(),
+    close: () => doCloseRef.current(),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), []);
 
   // Sync refs so stale PanResponder closures always call the latest version
   useEffect(() => { doOpenRef.current  = doOpen;  }, [doOpen]);
@@ -472,7 +476,9 @@ function ModeSwitcherDial({
   }, [doClose]);
 
   // ── Geometry (sync refs synchronously in render) ──────────────────────────
-  const anchor = anchorPos(wallPos, winW, winH, topInset);
+  // When hideHandle=true, always anchor to top-center regardless of stored wallPos.
+  const TOP_CENTER_WP: WallPos = { wall: "top", t: 0.5 };
+  const anchor = anchorPos(hideHandle ? TOP_CENTER_WP : wallPos, winW, winH, topInset);
   wallRef.current    = wallPos.wall;
   anchorRef.current  = anchor;
 
