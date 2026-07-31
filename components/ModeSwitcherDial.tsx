@@ -446,7 +446,7 @@ export function ModeSwitcherDial({
             left: 0, top: 0,
             width: 0, height: 0,
             overflow: "visible" as const,
-            opacity: isMenuOpen ? 0 : (isDragging ? 0.5 : 1),
+            opacity: (isMenuOpen || isFanOpen) ? 0 : (isDragging ? 0.5 : 1),
           }}
         >
           <View
