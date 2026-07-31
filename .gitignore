@@ -12,6 +12,12 @@ expo-env.d.ts
 # Native
 ios/
 android/
+# Exception: audio-decoder is a hand-written local Expo module (not expo-prebuild
+# output) — its ios/ and android/ source folders must stay under version control.
+!modules/audio-decoder/ios/
+!modules/audio-decoder/ios/**
+!modules/audio-decoder/android/
+!modules/audio-decoder/android/**
 *.orig.*
 *.jks
 *.p8

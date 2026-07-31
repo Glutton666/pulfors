@@ -33,6 +33,7 @@ module.exports = {
     "^expo-asset$": "<rootDir>/tests/_stubs/expo-asset.js",
     "^expo-modules-core$": "<rootDir>/tests/_stubs/expo-modules-core.js",
     "^onnxruntime-react-native$": "<rootDir>/tests/_stubs/onnxruntime-react-native.js",
+    "^audio-decoder$": "<rootDir>/tests/_stubs/audio-decoder.js",
     // babel-preset-expo rewrites EXPO_PUBLIC_* to require("expo/virtual/env.js"),
     // which is an ESM module that Jest can't load. Stub it with a CJS equivalent.
     "^expo/virtual/env(\\.js)?$": "<rootDir>/tests/_stubs/expo-virtual-env.js",
