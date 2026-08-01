@@ -1,0 +1,60 @@
+# EAS Build upload ignore rules.
+#
+# IMPORTANT: when this file exists, EAS Build uses it INSTEAD OF .gitignore
+# to decide what to upload — the two are not merged. This file mirrors
+# .gitignore but deliberately does NOT exclude models/*.ort — those files
+# are excluded from *git* (GitHub's 100MB per-file limit) but MUST be
+# included in the EAS build upload, since lib/stem-separation.ts require()s
+# them directly for bundling. Keep this file in sync with .gitignore
+# whenever .gitignore changes, except for that one exclusion.
+
+# dependencies (EAS runs its own install)
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+ios/
+android/
+# Exception: audio-decoder is a hand-written local Expo module (not expo-prebuild
+# output) — its ios/ and android/ source folders must be uploaded.
+!modules/audio-decoder/ios/
+!modules/audio-decoder/ios/**
+!modules/audio-decoder/android/
+!modules/audio-decoder/android/**
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+.vercel
+
+.env
+
+# Playwright E2E
+test-results/
+playwright-report/
+.cache/ms-playwright/
