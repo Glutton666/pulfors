@@ -1229,7 +1229,10 @@ export function MetronomeScreenUI(props: Props) {
         />
       )}
 
-      <Animated.View style={modeSlideStyle}>
+      <Animated.View
+        style={[StyleSheet.absoluteFillObject, { zIndex: 99999 }, modeSlideStyle]}
+        pointerEvents="box-none"
+      >
       <StageModeOverlay
         visible={stageModeActive}
         onOpenDial={() => modeSwitcherDialRef.current?.open()}
