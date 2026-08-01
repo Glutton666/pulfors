@@ -1727,11 +1727,19 @@ export function useMetronomeScreen() {
       try {
         if (Platform.OS === "web") {
           const ctx = getWebAudioContext();
-          if (ctx && ctx.state === "suspended") {
+          // ① 항상 resume 시도 — 이미 running이면 즉시 resolve (no-op)
+          if (ctx) {
             await ctx.resume().catch(() => {});
           }
+          // ② 버퍼 미준비면 엔진 시작 전에 먼저 로드
+          //    (preload effect에서 이미 완료됐으면 즉시 true 반환)
+          if (!webClickReadyRef.current) {
+            const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
+            const ready = await ensureWebClickBuffers(src as any).catch(() => false);
+            if (ready) webClickReadyRef.current = true;
+          }
 
-          // 즉시 시작 — per-tick 모드로 바로 재생, pre-render는 백그라운드 처리
+          // context running + buffers ready 상태에서 시작
           setIsPreparing(false);
           setIsPlaying(true);
           notifyVoicePlayState(true);
@@ -1739,7 +1747,7 @@ export function useMetronomeScreen() {
           engine.start(startBeat ?? undefined);
           armAudioWatchdogRef.current();
 
-          // 백그라운드: 버퍼 로딩 후 pre-rendered loop으로 전환
+          // 백그라운드: PCM 렌더 후 pre-rendered loop으로 전환
           ;(async () => {
             try {
               const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
@@ -1747,8 +1755,9 @@ export function useMetronomeScreen() {
               if (!ready || !engineRef.current?.getIsRunning()) return;
               webClickReadyRef.current = true;
 
+              // ctx는 이미 위에서 resume됨 — 한 번 더 suspend된 경우만 처리
               if (ctx && ctx.state === "suspended") {
-                await ctx.resume();
+                await ctx.resume().catch(() => {});
               }
 
               if (webRenderedLoopRef.current) {
