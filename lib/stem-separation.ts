@@ -625,12 +625,19 @@ async function resolveModelPath(modelFilename: string): Promise<string | null> {
  */
 export async function isModelAvailable(model: StemModel): Promise<boolean> {
   const filename = model === "htdemucs_6s" ? "htdemucs_6s.ort" : "htdemucs.ort";
+
+  // Strategy 1: bundled asset — resolveModelPath will use this at runtime
+  if (_bundledAssetModule(filename) != null) return true;
+
+  // Strategy 2a: previously downloaded to documents cache
   const modelsDir = `${FileSystem.documentDirectory ?? ""}models/`;
   const docPath = `${modelsDir}${filename}`;
   try {
     const info = await FileSystem.getInfoAsync(docPath);
     if (info.exists && ((info as { size?: number }).size ?? 0) > 1024) return true;
   } catch {}
+
+  // Strategy 2b: CDN URL configured — will download on first run
   return !!MODEL_DOWNLOAD_URLS[filename];
 }
 
