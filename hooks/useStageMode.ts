@@ -20,20 +20,26 @@ export function useStageMode(
   const onBpmChangeRef = useRef(onBpmChange);
   useEffect(() => { onBpmChangeRef.current = onBpmChange; }, [onBpmChange]);
 
-  const enterStageMode = useCallback(async () => {
-    if (Platform.OS !== "web") {
-      try {
-        const KeepAwake = await import("expo-keep-awake");
-        await KeepAwake.activateKeepAwakeAsync("stage-mode");
-      } catch {}
-      try {
-        const Brightness = await import("expo-brightness");
-        const brightness = await Brightness.getBrightnessAsync();
-        savedBrightnessRef.current = brightness;
-        await Brightness.setBrightnessAsync(1.0);
-      } catch {}
-    }
+  const enterStageMode = useCallback(() => {
+    // Flip the UI state first — keep-awake/brightness are best-effort side
+    // effects that can take real wall-clock time on Android (permission
+    // checks etc.), and stageModeActive must not wait on them or the screen
+    // visibly stays on "beat" until they resolve.
     setStageModeActive(true);
+    if (Platform.OS !== "web") {
+      (async () => {
+        try {
+          const KeepAwake = await import("expo-keep-awake");
+          await KeepAwake.activateKeepAwakeAsync("stage-mode");
+        } catch {}
+        try {
+          const Brightness = await import("expo-brightness");
+          const brightness = await Brightness.getBrightnessAsync();
+          savedBrightnessRef.current = brightness;
+          await Brightness.setBrightnessAsync(1.0);
+        } catch {}
+      })();
+    }
   }, []);
 
   const exitStageMode = useCallback(async () => {

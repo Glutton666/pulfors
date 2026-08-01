@@ -1939,7 +1939,13 @@ export function useMetronomeScreen() {
   }, [setCommandHandler]);
   const handleNoteTogglePlayRef = useRef<(() => void) | null>(null);
   const anyModalOpenRef = useRef(false);
-  useEffect(() => { anyModalOpenRef.current = activeModal !== null || landscapeImageModalVisible || recorderTarget !== null || showKbShortcuts || showNativeKbHint; }, [activeModal, landscapeImageModalVisible, recorderTarget, showKbShortcuts, showNativeKbHint]);
+  useEffect(() => {
+    // stageModeActive must count as "modal open" here too — otherwise global
+    // shortcuts (Tab → menu, P → practice book, etc.) stay live while Stage
+    // Mode is on screen and a stray key/pedal press silently kicks the user
+    // back out to another mode without going through exitStageMode().
+    anyModalOpenRef.current = activeModal !== null || landscapeImageModalVisible || recorderTarget !== null || showKbShortcuts || showNativeKbHint || stageModeActive;
+  }, [activeModal, landscapeImageModalVisible, recorderTarget, showKbShortcuts, showNativeKbHint, stageModeActive]);
 
   const rootViewRef = useRef<View>(null);
 
