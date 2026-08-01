@@ -2,7 +2,7 @@
 // 악보 SVG 레이아웃 계산 엔진 (순수 함수)
 // ============================================================
 
-import type { ClefType, NoteDuration, Pitch, ScoreMeasure, ScoreDocument, ScoreElement, ScoreNote, DrumType } from "./score-types";
+import type { ClefType, NoteDuration, Pitch, ScoreMeasure, ScoreDocument, ScoreElement, ScoreNote, DrumType, NoteHeadType } from "./score-types";
 import { DRUM_MAP, DRUM_TYPES } from "./score-types";
 import { getElementBeatScale } from "./score-tuplet";
 
@@ -152,10 +152,31 @@ export function drumTypeToY(drumType: DrumType): number {
 }
 
 /**
- * Y 좌표 → 가장 가까운 드럼 종류 (타악기 파트 터치 입력용)
+ * Y 좌표 → 가장 가까운 드럼 종류 (타악기 파트 터치 입력용).
+ *
+ * 같은 staffStep에 여러 DrumType이 있으면 `selectedNoteHead`로 우선 판별한다.
+ * noteHead가 없거나 일치하는 항목이 없을 때는 DRUM_TYPES 배열 순서 기준으로
+ * 가장 먼저 나오는 항목(= 기본값)을 반환한다.
  */
-export function yToDrumType(y: number): DrumType {
+export function yToDrumType(y: number, selectedNoteHead?: NoteHeadType): DrumType {
   const step = Math.round(y / (LINE_SPACING / 2));
+
+  // 1) 정확히 같은 staffStep 후보 모두 수집
+  const exact: DrumType[] = DRUM_TYPES.filter((dt) => DRUM_MAP[dt].staffStep === step);
+
+  if (exact.length === 1) return exact[0];
+
+  if (exact.length > 1) {
+    // noteHead 인자로 우선 판별
+    if (selectedNoteHead) {
+      const byHead = exact.find((dt) => DRUM_MAP[dt].noteHead === selectedNoteHead);
+      if (byHead) return byHead;
+    }
+    // 기본값: DRUM_TYPES 순서 기준 첫 번째 (= hihat_closed > ride 등)
+    return exact[0];
+  }
+
+  // 2) 정확 매칭 없음 → 가장 가까운 항목
   let closest: DrumType = "snare";
   let minDist = Infinity;
   for (const dt of DRUM_TYPES) {
@@ -295,6 +316,8 @@ export interface NotePosition {
   x: number;
   y: number;
   width: number;
+  /** 이 요소가 속한 잇단음표 그룹 ID (없으면 undefined) */
+  tupletGroupId?: string;
 }
 
 /**
@@ -356,36 +379,94 @@ export function layoutMeasure(
     return positions;
   }
 
-  // ── 순차 레이아웃 모드 (기존 동작) ──
+  // ── 순차 레이아웃 모드 ──────────────────────────────────────────
   const widths = measure.elements.map((el) =>
     getElementDisplayWidth(measure, el)
   );
-  const totalNoteWidth = widths.reduce((a, b) => a + b, 0);
 
+  // 요소 → 잇단음표 그룹 ID 매핑 (빠른 조회용)
+  const elementTupletMap = new Map<string, string>();
+  for (const group of (measure.tuplets ?? [])) {
+    for (const id of group.elementIds) {
+      elementTupletMap.set(id, group.id);
+    }
+  }
+
+  // ── 블록 기반 레이아웃: extraPerBlock을 잇단음표 그룹 내부에 새지 않게 한다 ──
+  // "블록"은 단독 요소 1개 또는 잇단음표 그룹 전체이며, 블록 단위로 여백을 배분한다.
+  // 잇단음표 그룹 내 요소들은 그룹이 확보한 폭(총 요소 폭) 안에서 균등 배치된다.
+  interface LayoutBlock {
+    groupId?: string;          // 잇단음표 그룹 ID (단독 요소면 없음)
+    elementIndices: number[];  // 이 블록에 속한 요소 인덱스 배열
+    totalWidth: number;        // 블록 전체 너비 = 멤버 widths 합계
+  }
+  const blocks: LayoutBlock[] = [];
+  {
+    let i = 0;
+    while (i < measure.elements.length) {
+      const groupId = elementTupletMap.get(measure.elements[i].id);
+      if (groupId) {
+        // 같은 그룹의 모든 요소를 하나의 블록으로 묶는다
+        const group = (measure.tuplets ?? []).find((g) => g.id === groupId);
+        const idSet = new Set(group?.elementIds ?? []);
+        const indices: number[] = [];
+        for (let j = 0; j < measure.elements.length; j++) {
+          if (idSet.has(measure.elements[j].id)) indices.push(j);
+        }
+        const blockWidth = indices.reduce((s, idx) => s + widths[idx], 0);
+        blocks.push({ groupId, elementIndices: indices, totalWidth: blockWidth });
+        // 다음 반복은 그룹 마지막 요소 다음부터
+        i = (indices[indices.length - 1] ?? i) + 1;
+      } else {
+        blocks.push({ elementIndices: [i], totalWidth: widths[i] });
+        i++;
+      }
+    }
+  }
+
+  const totalNoteWidth = widths.reduce((a, b) => a + b, 0);
   const leftPad = 8;
-  const extraPerNote = Math.max(
+  // 여백을 블록 수 기준으로 배분 (잇단음표 내부에는 별도 여백 없음)
+  const extraPerBlock = Math.max(
     0,
-    (totalWidth - totalNoteWidth - leftPad * 2) / elementCount
+    (totalWidth - totalNoteWidth - leftPad * 2) / blocks.length,
   );
 
   let x = startX + leftPad;
-  for (let i = 0; i < measure.elements.length; i++) {
-    const el = measure.elements[i];
-    const w = widths[i];
-    let y = STAFF_HEIGHT / 2;
-
-    if (el.type === "note") {
-      y = noteStaffY(el, clef);
+  for (const block of blocks) {
+    if (!block.groupId) {
+      // 단독 요소 블록
+      const idx = block.elementIndices[0];
+      const el = measure.elements[idx];
+      const w = widths[idx];
+      let y = STAFF_HEIGHT / 2;
+      if (el.type === "note") y = noteStaffY(el, clef);
+      positions.push({ elementId: el.id, x: x + w / 2, y, width: w });
+      x += w + extraPerBlock;
+    } else {
+      // 잇단음표 그룹 블록: 그룹에 할당된 전체 폭(raw 폭 + 블록 간격)을 멤버 수로 균등 분할
+      // extraPerBlock을 그룹 내부에도 배분해야 notes가 마디 전체에 고르게 퍼진다.
+      const n = block.elementIndices.length;
+      const stepWidth = (block.totalWidth + extraPerBlock) / n;
+      let gx = x;
+      for (let k = 0; k < n; k++) {
+        const idx = block.elementIndices[k];
+        const el = measure.elements[idx];
+        let y = STAFF_HEIGHT / 2;
+        if (el.type === "note") y = noteStaffY(el, clef);
+        positions.push({
+          elementId: el.id,
+          x: gx + stepWidth / 2,
+          y,
+          width: widths[idx],
+          tupletGroupId: block.groupId,
+        });
+        gx += stepWidth;
+      }
+      x += block.totalWidth + extraPerBlock;
     }
-
-    positions.push({
-      elementId: el.id,
-      x: x + w / 2,
-      y,
-      width: w,
-    });
-    x += w + extraPerNote;
   }
+
   return positions;
 }
 
@@ -397,34 +478,52 @@ export interface BeamGroup {
   beamLevel: number; // 1 = 8분음표 빔, 2 = 16분음표 빔
 }
 
+/** 음표 음길이에서 빔 단수를 반환한다 (8분음표=1, 16분=2, 32분=3) */
+export function beamLevelForDur(dur: string): number {
+  if (dur === "thirty_second" || dur === "thirty_second_dot") return 3;
+  if (dur === "sixteenth" || dur === "sixteenth_dot") return 2;
+  return 1;
+}
+
+const _BEAMABLE_DURS = new Set<string>([
+  "eighth", "eighth_dot",
+  "sixteenth", "sixteenth_dot",
+  "thirty_second", "thirty_second_dot",
+]);
+
 /**
- * 8분음표 이상을 빔으로 묶는 그룹 계산
+ * 마디 요소 배열에서 일반(잇단음표 외) 빔 그룹을 계산한다.
+ * - 쉼표, 잇단음표 멤버는 그룹 경계로 작용한다.
+ * - 2개 이상의 연속 beamable note가 있어야 그룹이 생성된다.
+ * - beamLevel: 그룹 내 최단 음표 기준 최대 단수 (8분=1, 16분=2, 32분=3)
  */
 export function calcBeamGroups(
-  durations: NoteDuration[],
-  beatsPerMeasure: number,
-  denominator: number,
+  elements: ScoreElement[],
+  tupletMemberIds: Set<string> = new Set(),
 ): BeamGroup[] {
   const groups: BeamGroup[] = [];
-  // 간단한 구현: 인접한 8분/16분음표를 묶음
   let start = -1;
-  for (let i = 0; i <= durations.length; i++) {
-    const dur = durations[i];
+  let maxLevel = 1;
+
+  for (let i = 0; i <= elements.length; i++) {
+    const el = elements[i];
     const beamable =
-      dur === "eighth" ||
-      dur === "sixteenth" ||
-      dur === "thirty_second" ||
-      dur === "thirty_second_dot" ||
-      dur === "eighth_dot" ||
-      dur === "sixteenth_dot";
+      !!el &&
+      el.type === "note" &&
+      _BEAMABLE_DURS.has(el.duration) &&
+      !tupletMemberIds.has(el.id);
 
     if (beamable && start === -1) {
       start = i;
+      maxLevel = beamLevelForDur(el.duration);
+    } else if (beamable) {
+      maxLevel = Math.max(maxLevel, beamLevelForDur(el.duration));
     } else if (!beamable && start !== -1) {
       if (i - start >= 2) {
-        groups.push({ startIdx: start, endIdx: i - 1, beamLevel: 1 });
+        groups.push({ startIdx: start, endIdx: i - 1, beamLevel: maxLevel });
       }
       start = -1;
+      maxLevel = 1;
     }
   }
   return groups;
@@ -440,11 +539,11 @@ export interface ScoreRowLayout {
 }
 
 // ScoreRenderer와 동일한 레이아웃 상수 (LINE_SPACING 기반)
-export const SCORE_STAFF_PADDING_TOP    = Math.round(LINE_SPACING * 2.4); // 24
-export const SCORE_STAFF_PADDING_BOTTOM = Math.round(LINE_SPACING * 2.8); // 28
-export const SCORE_PART_HEIGHT = SCORE_STAFF_PADDING_TOP + STAFF_HEIGHT + SCORE_STAFF_PADDING_BOTTOM; // 92
-export const SCORE_ROW_MARGIN_TOP    = Math.round(LINE_SPACING * 1.6); // 16
-export const SCORE_ROW_MARGIN_BOTTOM = Math.round(LINE_SPACING * 0.8); // 8
+export const SCORE_STAFF_PADDING_TOP    = Math.round(LINE_SPACING * 2.0); // 20
+export const SCORE_STAFF_PADDING_BOTTOM = Math.round(LINE_SPACING * 2.2); // 22
+export const SCORE_PART_HEIGHT = SCORE_STAFF_PADDING_TOP + STAFF_HEIGHT + SCORE_STAFF_PADDING_BOTTOM; // 82
+export const SCORE_ROW_MARGIN_TOP    = Math.round(LINE_SPACING * 0.8); // 8
+export const SCORE_ROW_MARGIN_BOTTOM = Math.round(LINE_SPACING * 0.4); // 4
 export const SCORE_DEFAULT_MEASURE_WIDTH = Math.round(LINE_SPACING * 12); // 120
 export const SCORE_FIRST_MEASURE_EXTRA   = Math.round(LINE_SPACING * 6);  // 60
 

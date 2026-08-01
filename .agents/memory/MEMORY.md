@@ -1,3 +1,4 @@
+- [onnxruntime-react-native new arch crash](onnxruntime-new-arch-crash.md) — v1.x uses old-arch RCTBridge; crashes on startup with newArchEnabled=true; fix via react-native.config.js null platforms.
 - [Alert.alert no-op on web](alert-web-noop.md) — react-native-web's Alert.alert is a stub that does nothing; long-press context menus using Alert.alert can't be verified via web/Playwright e2e tests.
 - [screenshot tool hits wrong port](screenshot-tool-wrong-port.md) — app_preview screenshot tool sometimes serves the Express landing page (port 5000) instead of the real Expo web app (port 8081); retry via runTest() instead of looping the screenshot tool.
 - [Score editor magnifier must render existing notes](score-magnifier-nearby-notes.md) — MagnifierView only draws staff+ghost by default; attach nearby element data to GhostState from touchToGhost, don't recompute layout inside the magnifier.
@@ -13,3 +14,7 @@
 - [ScoreDocument fields serialize generically](score-document-generic-serialization.md) — save/load/backup/deep-link modules pass ScoreDocument through as a whole; new top-level fields usually need no changes there.
 - [Score editor clef resolution priority](score-editor-clef-resolution-priority.md) — per-measure clef must be checked before part-level default clef everywhere; checking only `part.clef` misses measure-level overrides (found via e2e, not tsc).
 - [Web audio bugs need iframe-embedded repro](web-audio-iframe-repro.md) — autoplay/AudioContext bugs can pass in a bare top-level Playwright page but fail once the page is embedded in an `<iframe>`, matching Replit's real preview.
+- [import type erases runtime values — React Compiler {} crash](import-type-erases-values.md) — function imported under `import type {}` becomes undefined at runtime; React Compiler surfaces this as empty-object `{}` ErrorBoundary catch with no message.
+- [Mode dial top-center anchoring](mode-dial-topcenter-anchor.md) — anchorPos/safeT shoves top-wall t=0.5 to 0.75 (camera zone); hideHandle mode must bypass it and pin all geometry.
+- [Orchestration hook domain split](orchestration-hook-split.md) — useMetronomeScreen split pattern: same-name destructuring, early ref declarations, TranslationFn type, language cast for notification controls.
+- [Stage mode overlay wrapper](stage-mode-overlay-wrapper.md) — modeSlideStyle wrappers need absoluteFillObject or the overlay renders at 0×0; also add pointerEvents="box-none" so transparent wrapper doesn't block touches.

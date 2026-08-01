@@ -450,11 +450,11 @@ function extractActiveModalLiterals(): Set<string> {
  * 각 키가 ActiveModal 타입에 선언된 유효한 리터럴인지도 검증한다.
  */
 function extractMoreMenuOpenExclusiveKeys(): string[] {
-  const src = readFileSync(join(process.cwd(), "app/index.tsx"), "utf-8");
+  const src = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
 
   // <MoreMenuModal 시작 위치 탐색
   const startIdx = src.indexOf("<MoreMenuModal");
-  assert.ok(startIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
+  assert.ok(startIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
 
   // 닫는 /> 탐색 — MoreMenuModal prop 콜백 내부에는 JSX가 없으므로
   // 첫 번째 /> 가 MoreMenuModal 의 닫는 태그다
@@ -558,13 +558,13 @@ test("source: MoreMenuModal — 닫기 Pressable에 testID=\"more-menu-close\" �
  *   }}
  */
 function extractMoreMenuHandlerBody(handlerName: string): string {
-  const src = readFileSync(join(process.cwd(), "app/index.tsx"), "utf-8");
+  const src = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
 
   const startIdx = src.indexOf("<MoreMenuModal");
-  assert.ok(startIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
+  assert.ok(startIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
 
   const endIdx = src.indexOf("/>", startIdx);
-  assert.ok(endIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 의 닫는 /> 를 찾을 수 없다");
+  assert.ok(endIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MoreMenuModal 의 닫는 /> 를 찾을 수 없다");
 
   const block = src.slice(startIdx, endIdx + 2);
 
@@ -632,13 +632,13 @@ test("source: onDrumKit 핸들러가 setActiveModal을 직접 호출하지 않�
  * 중괄호 깊이 추적을 사용해 중첩 구조를 올바르게 처리한다.
  */
 function extractMoreMenuPropSource(handlerName: string): string {
-  const src = readFileSync(join(process.cwd(), "app/index.tsx"), "utf-8");
+  const src = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
 
   const startIdx = src.indexOf("<MoreMenuModal");
-  assert.ok(startIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
+  assert.ok(startIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
 
   const endIdx = src.indexOf("/>", startIdx);
-  assert.ok(endIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 의 닫는 /> 를 찾을 수 없다");
+  assert.ok(endIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MoreMenuModal 의 닫는 /> 를 찾을 수 없다");
 
   const block = src.slice(startIdx, endIdx + 2);
 
@@ -991,6 +991,118 @@ test("android-appstate: 복귀 후 연속 모달 전환에서도 mutual exclusio
 });
 
 // ────────────────────────────────────────────────────────────────
+// 7c. TuningGuide 경로 — back-press 처리 검증
+//
+//     SignalGen → TuningGuide 경로:
+//       openTuningGuideFromSignalGen() 로 TuningGuide 에 진입하면
+//       reopenSignalGenAfterTuningGuide=true 가 설정된다.
+//       background → foreground 복귀 후 back-press 를 누르면
+//       BackHandler tuningGuide 분기가 SignalGen 을 재오픈해야 한다.
+//
+//     TuningGuide 독립 경로:
+//       SignalGen 을 거치지 않고 TuningGuide 를 열면
+//       reopenSignalGenAfterTuningGuide=false 이다.
+//       back-press 후 아무 모달도 열리지 않아야 한다.
+// ────────────────────────────────────────────────────────────────
+
+test("android-appstate/tuningGuide: signalGen 경로 진입 → foreground 복귀 → back-press → signalGen 재오픈 (visible=1)", () => {
+  // 1단계: signalGen 열림 → TuningGuide 진입
+  let sgTg: SgTgState = { activeModal: "signalGen", reopenSignalGenAfterTuningGuide: false };
+  sgTg = openTuningGuideFromSignalGen(sgTg);
+  assert.equal(sgTg.activeModal, "tuningGuide");
+  assert.equal(sgTg.reopenSignalGenAfterTuningGuide, true);
+  assert.equal(countVisibleModals(deriveModalFlags(sgTg.activeModal)), 1,
+    "TuningGuide 진입 직후: tuningGuide visible=1");
+
+  // 2단계: background → foreground (AppState 핸들러 — activeModal 변경 없음)
+  const afterReturn = simulateAppStateForegroundReturn(sgTg.activeModal);
+  assert.equal(afterReturn, "tuningGuide",
+    "foreground 복귀 후 activeModal 은 tuningGuide 그대로여야 한다");
+  assert.equal(countVisibleModals(deriveModalFlags(afterReturn)), 1,
+    "foreground 복귀 후 tuningGuide visible=1 유지");
+
+  // 3단계: back-press (BackHandler tuningGuide 분기 — reopenSignalGen=true)
+  const { nextActiveModal, consumed } = simulateBackPress(
+    afterReturn,
+    sgTg.reopenSignalGenAfterTuningGuide,
+  );
+  assert.equal(consumed, true, "back-press 이벤트는 소비되어야 한다");
+  assert.equal(nextActiveModal, "signalGen",
+    "signalGen 경로 back-press → signalGen 이 재오픈되어야 한다");
+  assert.equal(countVisibleModals(deriveModalFlags(nextActiveModal)), 1,
+    "signalGen 재오픈 후 visible=1");
+});
+
+test("android-appstate/tuningGuide: 독립 경로(signalGen 없이) → foreground 복귀 → back-press → null (visible=0)", () => {
+  // 1단계: TuningGuide 를 직접 열기 (signalGen 거치지 않음)
+  //        reopenSignalGenAfterTuningGuide=false
+  let activeModal: ActiveModal = "tuningGuide";
+  const reopenFlag = false;
+  assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 1,
+    "TuningGuide 독립 열기: visible=1");
+
+  // 2단계: background → foreground (AppState 핸들러 — activeModal 변경 없음)
+  const afterReturn = simulateAppStateForegroundReturn(activeModal);
+  assert.equal(afterReturn, "tuningGuide",
+    "foreground 복귀 후 activeModal 은 tuningGuide 그대로여야 한다");
+  assert.equal(countVisibleModals(deriveModalFlags(afterReturn)), 1,
+    "foreground 복귀 후 tuningGuide visible=1 유지");
+
+  // 3단계: back-press (BackHandler tuningGuide 분기 — reopenSignalGen=false)
+  const { nextActiveModal, consumed } = simulateBackPress(afterReturn, reopenFlag);
+  assert.equal(consumed, true, "back-press 이벤트는 소비되어야 한다");
+  assert.equal(nextActiveModal, null,
+    "독립 경로 back-press → null (아무 모달도 열리지 않아야 한다)");
+  assert.equal(countVisibleModals(deriveModalFlags(nextActiveModal)), 0,
+    "back-press 후 visible=0");
+});
+
+test("source/tuningGuide: BackHandler tuningGuide 분기가 reopenSignalGenAfterTuningGuideRef 를 참조한다", () => {
+  // BackHandler onBack 의 showTuningGuide 분기가 reopenSignalGenAfterTuningGuideRef 를
+  // 직접 참조해 재오픈 여부를 결정하는지 소스 분석으로 검증한다.
+  // 이 참조가 없으면 SignalGen 경로 back-press 에서 재오픈 로직이 실행되지 않는다.
+  const src = readFileSync(join(process.cwd(), "hooks/useMetronomeScreen.ts"), "utf-8");
+
+  const addListenerIdx = src.indexOf('BackHandler.addEventListener("hardwareBackPress"');
+  assert.ok(addListenerIdx !== -1, 'BackHandler.addEventListener("hardwareBackPress" 를 찾을 수 없다');
+
+  // addEventListener 앞의 onBack 함수 본문을 추출 — BackHandler useEffect 전체 블록
+  // BackHandler useEffect 의 시작점을 찾는다
+  const backHandlerEffectIdx = src.lastIndexOf("useEffect(", addListenerIdx);
+  assert.ok(backHandlerEffectIdx !== -1, "BackHandler useEffect 시작점을 찾을 수 없다");
+
+  const backHandlerBlock = extractBracedBlock(src, backHandlerEffectIdx);
+
+  // showTuningGuide 분기가 있는지 확인
+  assert.ok(
+    backHandlerBlock.includes("showTuningGuide"),
+    "BackHandler 본문에 showTuningGuide 분기가 없다 — tuningGuide back-press 처리가 누락되었다",
+  );
+
+  // reopenSignalGenAfterTuningGuideRef 참조가 있는지 확인
+  assert.ok(
+    backHandlerBlock.includes("reopenSignalGenAfterTuningGuideRef"),
+    "BackHandler tuningGuide 분기에 reopenSignalGenAfterTuningGuideRef 참조가 없다 — " +
+    "SignalGen 경로 back-press 시 signalGen 재오픈 로직이 실행되지 않는다",
+  );
+
+  // showTuningGuide 분기 내부에 reopenSignalGenAfterTuningGuideRef 가 포함되는지
+  // tuningGuide 관련 위치를 찾아 검증
+  const tuningGuideIdx = backHandlerBlock.indexOf("showTuningGuide");
+  const reopenIdx = backHandlerBlock.indexOf("reopenSignalGenAfterTuningGuideRef");
+  const signalGenIdx = backHandlerBlock.indexOf('"signalGen"', reopenIdx);
+  assert.ok(
+    tuningGuideIdx < reopenIdx,
+    "reopenSignalGenAfterTuningGuideRef 참조가 showTuningGuide 분기 이전에 위치한다 — " +
+    "tuningGuide 분기 내부에서 재오픈 플래그를 확인해야 한다",
+  );
+  assert.ok(
+    signalGenIdx !== -1,
+    'BackHandler tuningGuide 분기 안에서 "signalGen" 을 setActiveModal 에 전달하는 코드가 없다',
+  );
+});
+
+// ────────────────────────────────────────────────────────────────
 // 7b. 소스 구조 테스트 — AppState / BackHandler 구현 계약 검증
 //
 //     위 시뮬레이션 테스트의 전제 조건(simulateAppStateForegroundReturn 과
@@ -1017,7 +1129,7 @@ function extractBracedBlock(src: string, startIdx: number): string {
 test("android-appstate: 소스 검증 — AppState 콜백 본문에 setActiveModal·openExclusive 미포함", () => {
   // simulateAppStateForegroundReturn 의 "activeModal 변경 없음" 모델이 성립하려면
   // 실제 AppState 핸들러 콜백 본문에 setActiveModal / openExclusive 가 없어야 한다.
-  const src = readFileSync(join(process.cwd(), "app/index.tsx"), "utf-8");
+  const src = readFileSync(join(process.cwd(), "hooks/useMetronomeScreen.ts"), "utf-8");
 
   const adapterIdx = src.indexOf('AppState.addEventListener("change"');
   assert.ok(adapterIdx !== -1, 'AppState.addEventListener("change" 를 찾을 수 없다');
@@ -1040,7 +1152,7 @@ test("android-appstate: 소스 검증 — AppState 콜백 본문에 setActiveMod
 test("android-appstate: 소스 검증 — BackHandler useEffect 의존 배열에 activeModal 포함 (stale closure 방지)", () => {
   // simulateBackPress 가 항상 최신 activeModal 을 참조한다고 가정하는 근거:
   // BackHandler useEffect 의존 배열에 activeModal 이 있어야 한다.
-  const src = readFileSync(join(process.cwd(), "app/index.tsx"), "utf-8");
+  const src = readFileSync(join(process.cwd(), "hooks/useMetronomeScreen.ts"), "utf-8");
 
   const addListenerIdx = src.indexOf('BackHandler.addEventListener("hardwareBackPress"');
   assert.ok(addListenerIdx !== -1, 'BackHandler.addEventListener("hardwareBackPress" 를 찾을 수 없다');

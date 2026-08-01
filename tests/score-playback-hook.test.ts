@@ -1,4 +1,3 @@
-/// <reference types="jest" />
 /**
  * @jest-environment jsdom
  *
@@ -41,6 +40,10 @@ import { Platform } from "react-native";
 jest.mock("../lib/score-audio", () => ({
   getPrepareBatchSize: jest.fn(() => 4),
   prepareScoreAudio: jest.fn(),
+  // prepareDrumAudio must be mocked: the hook calls it inside Promise.all and a
+  // missing (undefined) export causes a synchronous TypeError that escapes
+  // .catch(() => {}) and crashes the Jest worker on Node.js v22+.
+  prepareDrumAudio: jest.fn().mockResolvedValue(undefined),
   scheduleMeasureNotes: jest.fn(() => jest.fn()),
   stopAllScoreNotes: jest.fn(),
 }));

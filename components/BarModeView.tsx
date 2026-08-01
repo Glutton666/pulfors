@@ -166,9 +166,13 @@ const SOUND_SET_OPTIONS: { key: string; labelKey: BarModeViewKey }[] = [
   { key: "woodblock", labelKey: "ssWoodblock" },
   { key: "cowbell",   labelKey: "ssCowbell" },
   { key: "digital",   labelKey: "ssDigital" },
-  { key: "rimshot",   labelKey: "ssRimshot" },
-  { key: "triangle",  labelKey: "ssTriangle" },
-  { key: "hihat",     labelKey: "ssHihat" },
+  { key: "jamblock",  labelKey: "ssJamblock" },
+  { key: "sine",      labelKey: "ssSine" },
+  { key: "blip",      labelKey: "ssBlip" },
+  { key: "clave",     labelKey: "ssClave" },
+  { key: "cajon",     labelKey: "ssCajon" },
+  { key: "marimba",   labelKey: "ssMarimba" },
+  { key: "stick",     labelKey: "ssStick" },
 ];
 
 // ─── 헬퍼 ────────────────────────────────────────────────────────────────────
@@ -1252,8 +1256,8 @@ export function BarModeView({
           </Pressable>
         </View>
 
-        {/* 중앙: 총 시간 + 바 개수 — 양쪽 flex:1 사이에서 자동으로 정중앙 */}
-        <View style={{ alignItems: "center" }}>
+        {/* 우: 총 시간 + 바 개수 */}
+        <View style={{ alignItems: "flex-end", paddingRight: Spacing.md }}>
           {isPlaying ? (
             <>
               <Text style={{ color: C.accent, fontSize: ms(14, 0.4), fontFamily: "SpaceGrotesk_700Bold" }}>
@@ -1272,28 +1276,17 @@ export function BarModeView({
             </>
           ) : (
             <>
-              <Text style={{ color: C.accent, fontSize: ms(14, 0.4), fontFamily: "SpaceGrotesk_700Bold" }}>
-                {totalDurationDisplay ?? "—"}
-              </Text>
+              {totalDurationDisplay && (
+                <Text style={{ color: C.accent, fontSize: ms(14, 0.4), fontFamily: "SpaceGrotesk_700Bold" }}>
+                  {totalDurationDisplay}
+                </Text>
+              )}
               {beatsPerMeasure > 0 && (
                 <Text style={{ color: C.textTertiary, fontSize: 9, fontFamily: "SpaceGrotesk_400Regular" }}>
                   {beatsPerMeasure}{t("barModeView", "barsDisplay")}
                 </Text>
               )}
             </>
-          )}
-        </View>
-
-        {/* 우: flex:1 — 닫기 버튼 오른쪽 정렬 */}
-        <View style={{ flex: 1, alignItems: "flex-end" }}>
-          {onExitBarMode && (
-            <Pressable
-              onPress={onExitBarMode}
-              hitSlop={10}
-              style={[styles.stpBtn, { backgroundColor: C.overlay08 }]}
-            >
-              <Ionicons name="close" size={ms(14, 0.4)} color={C.textSecondary} />
-            </Pressable>
           )}
         </View>
       </View>
@@ -1582,51 +1575,58 @@ export function BarModeView({
           </View>
         )}
 
-        {/* ② 박자기호 N/4 + 재생 + 저장 + BPM 스테퍼 행 */}
+        {/* ② 박자기호 N/4 + 재생 + BPM 스테퍼 행 — 좌/중/우 3분할 */}
         {!editorCollapsed && (
-          <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, flexDirection: "row", alignItems: "center", gap: 6 }]}>
-            {/* N/4 박자기호 */}
-            <Pressable
-              onLongPress={() => {
-                if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                onDenominatorCycle?.();
-              }}
-              delayLongPress={500}
-              disabled={isPlaying}
-              hitSlop={8}
-              style={{ flexDirection: "row", alignItems: "center", gap: 2, paddingVertical: 2 }}
-            >
-              <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(28, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
-                {editingSubdivisionCount}
-              </Text>
-              <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(28, 0.4), color: C.textTertiary }}>
-                /
-              </Text>
-              <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(28, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
-                {beatDenominator}
-              </Text>
-            </Pressable>
-            <View style={{ flex: 1 }} />
-            {/* 재생 버튼 — 중앙 */}
-            <BarPlayButton
-              isPlaying={isPlaying}
-              isPreparing={isPreparing}
-              barLoopMode={barLoopMode}
-              onTogglePlay={onTogglePlay}
-              onBarLoopModeChange={onBarLoopModeChange}
-              blockPlayMode={blockPlayMode}
-              onBlockPlayModeChange={onBlockPlayModeChange}
-              baseStyle={[styles.playBtn, { backgroundColor: C.backgroundSecondary }]}
-              accentColor={C.accent}
-              dangerColor={C.danger}
-              backgroundColor={C.background}
-              iconSize={ms(26, 0.4)}
-              badgeIconSize={ms(10, 0.4)}
-              t={t}
-            />
-            <View style={{ flex: 1 }} />
-            {/* BPM 스테퍼 — N/4 동일 폰트 크기 */}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, opacity: isPlaying ? 0.5 : 1 }} {...bpmSwipePan.panHandlers}>
+          <View style={[styles.inlineRepeatPanel, { borderBottomColor: C.overlay08, flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.md, overflow: "visible" }]}>
+
+            {/* 좌 컬럼 — 박자기호 중앙 (왼쪽 끝↔재생버튼 사이) */}
+            <View style={{ flex: 1, alignItems: "center" }}>
+              <Pressable
+                onLongPress={() => {
+                  if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                  onDenominatorCycle?.();
+                }}
+                delayLongPress={500}
+                disabled={isPlaying}
+                hitSlop={8}
+                style={{ flexDirection: "row", alignItems: "center", gap: 2, paddingVertical: 2 }}
+              >
+                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(36, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
+                  {editingSubdivisionCount}
+                </Text>
+                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(36, 0.4), color: C.textTertiary }}>
+                  /
+                </Text>
+                <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(36, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
+                  {beatDenominator}
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* 중앙 — 재생 버튼 플로팅 */}
+            <View style={{ marginTop: -34, zIndex: 10 }}>
+              <BarPlayButton
+                isPlaying={isPlaying}
+                isPreparing={isPreparing}
+                barLoopMode={barLoopMode}
+                onTogglePlay={onTogglePlay}
+                onBarLoopModeChange={onBarLoopModeChange}
+                blockPlayMode={blockPlayMode}
+                onBlockPlayModeChange={onBlockPlayModeChange}
+                baseStyle={[styles.playBtn, { backgroundColor: C.backgroundSecondary }]}
+                sizeOverride={{ width: 76, height: 76, borderRadius: 38 }}
+                accentColor={C.accent}
+                dangerColor={C.danger}
+                backgroundColor={C.background}
+                iconSize={ms(34, 0.4)}
+                badgeIconSize={ms(13, 0.4)}
+                t={t}
+              />
+            </View>
+
+            {/* 우 컬럼 — BPM 스테퍼 우정렬 */}
+            <View style={{ flex: 1, alignItems: "flex-end" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, opacity: isPlaying ? 0.5 : 1 }} {...bpmSwipePan.panHandlers}>
               <Pressable
                 onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.max(20, (repBpm ?? bpm ?? 120) - 1)); } }}
                 onPressIn={() => { if (!isPlaying) startBpmHold(-1); }}
@@ -1657,6 +1657,7 @@ export function BarModeView({
                 <Ionicons name="add" size={ms(13, 0.4)} color={C.accent} />
               </Pressable>
             </View>
+            </View>{/* 우 컬럼 닫기 */}
           </View>
         )}
 
@@ -2202,6 +2203,7 @@ const styles = StyleSheet.create({
   editorSection: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingBottom: Spacing.xs,
+    overflow: "visible",
   },
   layerTabRow: {
     flexDirection: "row",
@@ -2277,9 +2279,9 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
   },
   playBtn: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     alignItems: "center",
     justifyContent: "center",
   },

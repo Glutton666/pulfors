@@ -30,12 +30,22 @@ interface BpmSliderProps {
   onTapTempo: () => void;
   onDenominatorCycle?: () => void;
   isLandscape?: boolean;
+  /** 무대모드 전용: 앱 테마와 무관하게 다크/라이트 색상을 강제 적용 */
+  isDark?: boolean;
 }
 
 type Zone = "left" | "center" | "right";
 
-export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, isLandscape = false }: BpmSliderProps) {
-  const { colors: C } = useTheme();
+export function BpmSlider({ bpm, onBpmChange, onTapTempo, onDenominatorCycle, isLandscape = false, isDark }: BpmSliderProps) {
+  const { colors: themeC } = useTheme();
+  const C = isDark === undefined ? themeC : {
+    ...themeC,
+    surface:       isDark ? "#1a1a1a" : "#f5f5f5",
+    border:        isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)",
+    text:          isDark ? "#ffffff" : "#111111",
+    textSecondary: isDark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.6)",
+    textTertiary:  isDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)",
+  };
   const { t } = useLanguage();
   const S = useScale();
   const styles = useMemo(() => make_styles(C, S), [C, S]);

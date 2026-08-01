@@ -88,8 +88,8 @@ export const makeStyles = (_C: any, _S: any) =>
       minWidth: 32,
     },
     selBarBtnText: {
-      fontSize: 16,
-      fontFamily: "serif",
+      fontSize: 14,
+      fontFamily: "SpaceGrotesk_600SemiBold",
     },
     scoreScroll: {
       flex: 1,
@@ -260,18 +260,36 @@ export const makeStyles = (_C: any, _S: any) =>
       fontSize: FontSize.body,
       flex: 1,
     },
-    drawerContainer: {
-      borderWidth: 1,
+    floatingToolPanel: {
+      position: "absolute" as const,
+      right: 8,
+      zIndex: 20,
+      gap: 4,
+    },
+    floatingToolBtn: {
+      width: 32,
+      height: 32,
       borderRadius: Radius.sm,
-      marginTop: 8,
+      borderWidth: 1,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    drawerStatusText: {
+      fontFamily: "SpaceGrotesk_400Regular",
+      fontSize: 9,
+      flex: 1,
+      textAlign: "right" as const,
+    },
+    drawerContainer: {
+      borderTopWidth: 1,
       overflow: "hidden" as const,
     },
     drawerHeader: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
       justifyContent: "space-between" as const,
-      paddingHorizontal: Spacing.md,
-      paddingVertical: 8,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 6,
       borderBottomWidth: 1,
     },
     drawerHeaderText: {
@@ -280,8 +298,8 @@ export const makeStyles = (_C: any, _S: any) =>
     },
     drawerContent: {
       paddingHorizontal: Spacing.md,
-      paddingVertical: 8,
-      gap: 8,
+      paddingVertical: 4,
+      gap: 4,
     },
     drawerRow: {
       flexDirection: "row" as const,

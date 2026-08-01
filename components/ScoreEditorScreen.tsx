@@ -14,6 +14,7 @@ import {
   Image,
   ActivityIndicator,
   Animated,
+  PanResponder,
   useWindowDimensions,
 } from "react-native";
 import { captureRef } from "react-native-view-shot";
@@ -29,6 +30,7 @@ import { saveScore, createEmptyMeasure } from "@/lib/score-storage";
 import { stopAllScoreNotes, stopPreviewNote } from "@/lib/score-audio";
 import { exportScoreAsJson, exportScoreAsJpg, exportScorePagesAsPng, shareScoreAsScoreJson, importScoreFromJson, importReferenceImage, extractParts } from "@/lib/score-io";
 import { paginateScoreDoc } from "@/lib/score-layout";
+import { measureBeatTotal } from "@/lib/score-playback";
 import { createTupletGroup, removeTupletGroup, findTupletForElement, removeElementFromTuplets } from "@/lib/score-tuplet";
 import { loadPracticeBook, savePracticeBook, createPracticeEntry } from "@/lib/storage";
 import type {
@@ -45,7 +47,7 @@ import type {
   ClefType,
   ScoreLayoutOverrides,
 } from "@/lib/score-types";
-import { INSTRUMENTS } from "@/lib/score-types";
+import { INSTRUMENTS, getKeySignatureLabel, DRUM_MAP } from "@/lib/score-types";
 import { ScoreCanvas } from "@/components/ScoreCanvas";
 import type { EditorTool } from "@/components/ScoreCanvas";
 import { ScoreRenderer } from "@/components/ScoreRenderer";
@@ -87,6 +89,7 @@ function makeNote(
   dynamic?: Dynamic,
   ornament?: import("@/lib/score-types").OrnamentType | null,
   doubleDotted?: boolean,
+  noteHead?: import("@/lib/score-types").NoteHeadType | null,
   drumType?: import("@/lib/score-types").DrumType,
 ): ScoreNote {
   const finalPitch: Pitch = accidental
@@ -101,6 +104,7 @@ function makeNote(
     articulations: articulations?.length ? articulations : undefined,
     dynamic: dynamic ?? undefined,
     ornament: ornament ?? undefined,
+    noteHead: noteHead ?? undefined,
     drumType: drumType ?? undefined,
   };
 }
@@ -144,11 +148,12 @@ export interface ScoreEditorScreenProps {
   onBack: () => void;
   onSaved: (doc: ScoreDocument) => void;
   onLinkedEntryChange?: (entryId: string | undefined, scoreDefaults: { bpm: number; beatsPerMeasure: number }) => void;
+  onOpenDial?: () => void;
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
 
-export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEntryChange }: ScoreEditorScreenProps) {
+export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEntryChange, onOpenDial }: ScoreEditorScreenProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -211,13 +216,11 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   const [activeDuration, setActiveDuration] = useState<NoteDuration>("quarter");
   const [isDotted, setIsDotted] = useState(false);
   const [isDoubleDotted, setIsDoubleDotted] = useState(false);
-  const [selectedInstrumentSymbol, setSelectedInstrumentSymbol] = useState<string | null>(null);
   const [accidental, setAccidental] = useState<Accidental | null>(null);
   const [selectedArticulation, setSelectedArticulation] = useState<ArticulationType | null>(null);
-  const [selectedDynamic, setSelectedDynamic] = useState<Dynamic | null>(null);
   const [selectedRepeatSign, setSelectedRepeatSign] = useState<RepeatSignId | null>(null);
   const [selectedCrescType, setSelectedCrescType] = useState<CrescType>(null);
-  const [selectedDrumType, setSelectedDrumType] = useState<import("@/lib/score-types").DrumType>("snare");
+  const [selectedNoteHead, setSelectedNoteHead] = useState<import("@/lib/score-types").NoteHeadType | null>(null);
 
   // ── 마디 컨텍스트 메뉴 state ──────────────────────────────────
   const [measureContextMenu, setMeasureContextMenu] = useState<{
@@ -267,6 +270,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
 
   // ── 마디 설정 드로어 (오선보 위 고정, 마디 미선택 시 "다음에 추가할 마디" 설정) ──
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [topBarHeight, setTopBarHeight] = useState(0);
   const [draftMeasure, setDraftMeasure] = useState<{
     bpm?: number;
     timeSignature?: { numerator: number; denominator: number };
@@ -335,9 +339,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   // 하이라이트 색상
   const highlightColor = C.accent + "28"; // ~16% opacity
 
-  // ── 악기 기호 설정 모달 ──────────────────────────────────────
-  const [showSymbolSettings, setShowSymbolSettings] = useState(false);
-
   // ── ⋯ 메뉴 ──────────────────────────────────────────────────
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
@@ -371,6 +372,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   // ── 저장 ──────────────────────────────────────────────────────
   const [savedToast, setSavedToast] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── 박자 초과 경고 토스트 ─────────────────────────────────────
+  const [beatOverflowToast, setBeatOverflowToast] = useState(false);
+  const beatOverflowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── IO 핸들러 ─────────────────────────────────────────────────
 
@@ -444,7 +448,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       const entry = createPracticeEntry(
         doc.metadata.title || t("scoreMode", "untitled"),
         {
-          mode: "beat",
+          mode: "score",
           bpm: bpm_,
           beatsPerMeasure: beats,
           beatTypes: (["accent", ...Array(Math.max(0, beats - 1)).fill("normal")] as any),
@@ -636,33 +640,18 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
 
   // ── 음표 추가 (터치 확정) ─────────────────────────────────────
   const handleNotePlaced = useCallback(
-    (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number, drumType?: import("@/lib/score-types").DrumType) => {
+    (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number, noteHead?: import("@/lib/score-types").NoteHeadType | null, drumType?: import("@/lib/score-types").DrumType) => {
       let newElement = makeNote(
         pitch,
         duration,
         accidental,
         selectedArticulation ? [selectedArticulation] : [],
-        selectedDynamic ?? undefined,
+        undefined,
         selectedOrnament ?? undefined,
         isDoubleDotted,
+        noteHead ?? null,
         drumType,
       );
-      // sticky 악기 기호를 새로 놓인 음표에 자동 적용
-      const instrSym = _selectedInstrumentSymbolRef.current;
-      if (instrSym) {
-        const patch: Partial<ScoreNote> = {};
-        if (instrSym === "bowUp")          patch.bowUp = true;
-        else if (instrSym === "bowDown")   patch.bowDown = true;
-        else if (instrSym === "harmonic")  patch.harmonic = true;
-        else if (instrSym === "pizzicato") patch.pizzicato = true;
-        else if (instrSym === "arco")      patch.arco = true;
-        else if (instrSym === "pedal")     patch.pedal = true;
-        else if (instrSym === "pedalEnd")  patch.pedalEnd = true;
-        else if (instrSym === "ottava1")   patch.ottava = 1;
-        else if (instrSym === "arpeggio")  patch.arpeggio = true;
-        newElement = { ...newElement, ...patch };
-      }
-
       const measureId = doc.parts[selectedPartIdx]?.measures[measureIdx]?.id;
       const newDoc: ScoreDocument = {
         ...doc,
@@ -681,10 +670,20 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           : doc.layoutOverrides,
       };
       applyDoc(newDoc);
+      // 박자 초과 경고
+      const updatedMeasure = newDoc.parts[selectedPartIdx]?.measures[measureIdx];
+      if (updatedMeasure) {
+        const effectiveSig = updatedMeasure.timeSignature ?? newDoc.timeSignature;
+        if (measureBeatTotal(updatedMeasure, effectiveSig).overflow) {
+          if (beatOverflowTimerRef.current) clearTimeout(beatOverflowTimerRef.current);
+          setBeatOverflowToast(true);
+          beatOverflowTimerRef.current = setTimeout(() => setBeatOverflowToast(false), 2500);
+        }
+      }
       setSelectedElementId(newElement.id);
       setSelectedMeasureIdx(measureIdx);
     },
-    [doc, selectedPartIdx, accidental, selectedArticulation, selectedDynamic, selectedOrnament, isDoubleDotted],
+    [doc, selectedPartIdx, accidental, selectedArticulation, selectedOrnament, isDoubleDotted],
   );
 
   // ── 쉼표 추가 ─────────────────────────────────────────────────
@@ -710,6 +709,16 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           : doc.layoutOverrides,
       };
       applyDoc(newDoc);
+      // 박자 초과 경고
+      const updatedMeasureR = newDoc.parts[selectedPartIdx]?.measures[measureIdx];
+      if (updatedMeasureR) {
+        const effectiveSigR = updatedMeasureR.timeSignature ?? newDoc.timeSignature;
+        if (measureBeatTotal(updatedMeasureR, effectiveSigR).overflow) {
+          if (beatOverflowTimerRef.current) clearTimeout(beatOverflowTimerRef.current);
+          setBeatOverflowToast(true);
+          beatOverflowTimerRef.current = setTimeout(() => setBeatOverflowToast(false), 2500);
+        }
+      }
       setSelectedElementId(newElement.id);
       setSelectedMeasureIdx(measureIdx);
     },
@@ -800,10 +809,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   _selectedArticulationRef.current = selectedArticulation;
   const _selectedOrnamentRef = useRef(selectedOrnament);
   _selectedOrnamentRef.current = selectedOrnament;
-  const _selectedDynamicRef = useRef(selectedDynamic);
-  _selectedDynamicRef.current = selectedDynamic;
-  const _selectedInstrumentSymbolRef = useRef<string | null>(null);
-  _selectedInstrumentSymbolRef.current = selectedInstrumentSymbol;
   const _selectedCrescTypeRef = useRef<CrescType>(null);
   _selectedCrescTypeRef.current = selectedCrescType;
   const _applyDocRef = useRef(applyDoc);
@@ -871,9 +876,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       // ── 활성 sticky 기호가 있으면 탭한 노트에 즉시 적용/해제 ─
       const art = _selectedArticulationRef.current;
       const orn = _selectedOrnamentRef.current;
-      const dyn = _selectedDynamicRef.current;
-      const instrSym = _selectedInstrumentSymbolRef.current;
-      if (!art && !orn && !dyn && !instrSym) {
+      if (!art && !orn) {
         // #317: 팔레트에 선택된 기호 없이 노트를 탭하면
         // 해당 노트의 현재 꾸밈음·아티큘레이션을 팔레트에 반영해
         // 사용자가 즉시 수정하거나 제거할 수 있도록 한다
@@ -911,22 +914,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
                   }
                   if (orn) {
                     updated = { ...updated, ornament: updated.ornament === orn ? undefined : orn };
-                  }
-                  // dynamic은 노트 레벨로 적용/해제 (note.dynamic)
-                  if (dyn) {
-                    updated = { ...updated, dynamic: updated.dynamic === dyn ? undefined : dyn };
-                  }
-                  // 악기 특수 기호 토글 (note 레벨)
-                  if (instrSym) {
-                    if (instrSym === "bowUp")     updated = { ...updated, bowUp:     updated.bowUp     ? undefined : true };
-                    else if (instrSym === "bowDown")   updated = { ...updated, bowDown:   updated.bowDown   ? undefined : true };
-                    else if (instrSym === "harmonic")  updated = { ...updated, harmonic:  updated.harmonic  ? undefined : true };
-                    else if (instrSym === "pizzicato") updated = { ...updated, pizzicato: updated.pizzicato ? undefined : true };
-                    else if (instrSym === "arco")      updated = { ...updated, arco:      updated.arco      ? undefined : true };
-                    else if (instrSym === "pedal")     updated = { ...updated, pedal:     updated.pedal     ? undefined : true };
-                    else if (instrSym === "pedalEnd")  updated = { ...updated, pedalEnd:  updated.pedalEnd  ? undefined : true };
-                    else if (instrSym === "ottava1")   updated = { ...updated, ottava:    updated.ottava === 1 ? undefined : 1 };
-                    else if (instrSym === "arpeggio")  updated = { ...updated, arpeggio:  updated.arpeggio  ? undefined : true };
                   }
                   return updated;
                 }),
@@ -986,6 +973,13 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     setSelectedRepeatSign(null); // 적용 후 선택 해제
   }, [doc, selectedPartIdx, applyDoc]);
 
+  // ── 선택 초기화 (빈 공간 탭) ─────────────────────────────────
+  const handleClearSelection = useCallback(() => {
+    setSelectedElementId(null);
+    setSelectedMeasureIdx(null);
+    setMeasureMultiSelectIndices([]);
+  }, []);
+
   // ── 마디 탭 ──────────────────────────────────────────────────
   const handleMeasureTap = useCallback((measureIdx: number) => {
     // 1) 반복부호 선택 중 → 부호 적용
@@ -993,24 +987,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       handleRepeatSignApply(measureIdx, selectedRepeatSign);
       return;
     }
-    // 2) 강약 기호 선택 중 → 마디에 dynamic 적용
-    if (selectedDynamic) {
-      const newDoc: ScoreDocument = {
-        ...doc,
-        parts: doc.parts.map((p, pIdx) => {
-          if (pIdx !== selectedPartIdx) return p;
-          return {
-            ...p,
-            measures: p.measures.map((m, mIdx) =>
-              mIdx !== measureIdx ? m : { ...m, dynamic: selectedDynamic },
-            ),
-          };
-        }),
-      };
-      applyDoc(newDoc);
-      return;
-    }
-    // 3) cresc/decresc 선택 중 → 마디에 크레셴도 헤어핀 적용
+    // 2) cresc/decresc 선택 중 → 마디에 크레셴도 헤어핀 적용
     if (selectedCrescType) {
       const curMeasure = doc.parts[selectedPartIdx]?.measures[measureIdx];
       const isCrescent = selectedCrescType === "cresc";
@@ -1043,14 +1020,14 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       if (hasStart) setSelectedCrescType(null);
       return;
     }
-    // 4) 기본 동작: 마디 선택 + 다중 선택 토글 (note multiSelectIds와 동일한 조작감:
+    // 3) 기본 동작: 마디 선택 + 다중 선택 토글 (note multiSelectIds와 동일한 조작감:
     // 탭할 때마다 선택/해제 토글, 마지막으로 탭한 마디를 selectedMeasureIdx로 표시)
     setMeasureMultiSelectIndices((prev) =>
       prev.includes(measureIdx) ? prev.filter((i) => i !== measureIdx) : [...prev, measureIdx],
     );
     setSelectedMeasureIdx(measureIdx);
     setSelectedElementId(null);
-  }, [selectedRepeatSign, selectedDynamic, selectedCrescType, selectedPartIdx, doc, handleRepeatSignApply, applyDoc]);
+  }, [selectedRepeatSign, selectedCrescType, selectedPartIdx, doc, handleRepeatSignApply, applyDoc]);
 
   // ── 마디 롱프레스 → 컨텍스트 메뉴 ───────────────────────────
   const handleMeasureLongPress = useCallback((measureIdx: number) => {
@@ -1264,6 +1241,61 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
     applyDoc(newDoc);
     setSelectedElementId(null);
   }
+
+  // ── 다중 선택 음표 일괄 삭제 ──────────────────────────────────
+  function handleDeleteMultiSelected() {
+    if (multiSelectIds.length === 0) return;
+    const idsToDelete = new Set(multiSelectIds);
+    const newDoc: ScoreDocument = {
+      ...doc,
+      parts: doc.parts.map((p, pIdx) => {
+        if (pIdx !== selectedPartIdx) return p;
+        return {
+          ...p,
+          measures: p.measures.map((m) => {
+            let cleaned = m;
+            for (const id of idsToDelete) {
+              cleaned = removeElementFromTuplets(cleaned, id);
+            }
+            return {
+              ...cleaned,
+              elements: cleaned.elements.filter((el) => !idsToDelete.has(el.id)),
+            };
+          }),
+        };
+      }),
+    };
+    applyDoc(newDoc);
+    handleClearMultiSelect();
+  }
+
+  // ── 선택 음표 이전/다음 이동 ──────────────────────────────────
+  const navigateElementRef = useRef<(dir: "prev" | "next") => void>(() => {});
+  const handleNavigateElement = useCallback((dir: "prev" | "next") => {
+    if (!selectedElementId) return;
+    const part = doc.parts[selectedPartIdx];
+    if (!part) return;
+    const allEls = part.measures.flatMap((m) => m.elements);
+    const idx = allEls.findIndex((el) => el.id === selectedElementId);
+    if (idx === -1) return;
+    const nextIdx = dir === "prev" ? idx - 1 : idx + 1;
+    if (nextIdx >= 0 && nextIdx < allEls.length) {
+      setSelectedElementId(allEls[nextIdx].id);
+    }
+  }, [selectedElementId, doc, selectedPartIdx]);
+  navigateElementRef.current = handleNavigateElement;
+
+  // 선택 바 수평 스와이프 → 이전/다음 음표
+  const selectionBarPan = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, gs) =>
+      Math.abs(gs.dx) > 12 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+    onPanResponderRelease: (_, gs) => {
+      if (Math.abs(gs.dx) > 35) {
+        navigateElementRef.current(gs.dx < 0 ? "next" : "prev");
+      }
+    },
+  }), []);
 
   // ── 다중 선택된 음표: 문서 순서(마디→요소 인덱스)로 정렬 ──────
   const multiSelectSortedNotes = useMemo(() => {
@@ -1578,7 +1610,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   }
 
   // ── 음표 드래그 이동 (선택 모드에서 위아래 드래그 → 음높이 변경) ──
-  function handleNoteMoved(elementId: string, measureIdx: number, newPitch: Pitch) {
+  function handleNoteMoved(elementId: string, measureIdx: number, newPitch: Pitch, newDrumType?: import("@/lib/score-types").DrumType) {
     const newDoc: ScoreDocument = {
       ...doc,
       parts: doc.parts.map((p, pIdx) => {
@@ -1591,26 +1623,16 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
               ...m,
               elements: m.elements.map((el) => {
                 if (el.id !== elementId || el.type !== "note") return el;
-                return { ...el, pitch: newPitch };
+                const updated = { ...el, pitch: newPitch };
+                if (newDrumType !== undefined) {
+                  // 퍼커션 드래그: drumType 및 음표머리를 새 위치에 맞게 갱신
+                  updated.drumType = newDrumType;
+                  updated.noteHead = DRUM_MAP[newDrumType].noteHead;
+                }
+                return updated;
               }),
             };
           }),
-        };
-      }),
-    };
-    applyDoc(newDoc);
-  }
-
-  // ── 악기별 기호 ON/OFF 토글 ─────────────────────────────────
-  function handleSymbolToggle(symId: string, enabled: boolean) {
-    const newDoc: ScoreDocument = {
-      ...doc,
-      parts: doc.parts.map((p, pIdx) => {
-        if (pIdx !== selectedPartIdx) return p;
-        const prevEnabled = p.enabledSymbols ?? {};
-        return {
-          ...p,
-          enabledSymbols: { ...prevEnabled, [symId]: enabled },
         };
       }),
     };
@@ -1656,6 +1678,54 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       : draftMeasure.clef) ?? currentPart?.clef ?? "treble";
   const isPercussionPart = effectiveClef === "percussion";
 
+  // 드로어 헤더 상태 요약 (닫혀있을 때 표시) — IIFE 사용 금지(React Compiler 비호환)
+  // ── 선택 마디 박자 잔여/초과 상태 ───────────────────────────
+  // React Compiler 호환: IIFE 대신 let + if 블록 사용
+  let beatStatusText = "";
+  let beatIsOverflow = false;
+  if (currentPart && selectedMeasureIdx !== null) {
+    const _bsm = currentPart.measures[selectedMeasureIdx];
+    if (_bsm) {
+      const _bsig = _bsm.timeSignature ?? doc.timeSignature;
+      const _bst = measureBeatTotal(_bsm, _bsig);
+      const _bfmt = (b: number) => {
+        const v = Math.round(b * 1000) / 1000;
+        return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/\.?0+$/, "");
+      };
+      if (_bst.overflow) {
+        beatIsOverflow = true;
+        beatStatusText = `+${_bfmt(Math.abs(_bst.remaining))}박 초과`;
+      } else if (_bst.remaining > 1e-9) {
+        beatStatusText = `잔여 ${_bfmt(_bst.remaining)}박`;
+      }
+    }
+  }
+
+  let drawerMeasureStatus = "";
+  if (currentPart) {
+    const _dms_measure = selectedMeasureIdx !== null ? currentPart.measures[selectedMeasureIdx] : null;
+    const _dms_sig = _dms_measure?.timeSignature ?? doc.timeSignature;
+    const _dms_sharps = _dms_measure?.keySignature?.sharps ?? doc.keySignature?.sharps ?? 0;
+    const _dms_keyName = getKeySignatureLabel(_dms_sharps).split(" ")[0];
+    const _dms_clef = _dms_measure?.clef ?? currentPart.clef ?? "treble";
+    const _dms_bpm = _dms_measure?.bpm;
+    const _dms_items: string[] = [
+      `${_dms_sig?.numerator ?? 4}/${_dms_sig?.denominator ?? 4}`,
+      `${_dms_keyName}장조`,
+    ];
+    if (_dms_clef !== "treble") {
+      _dms_items.push(
+        _dms_clef === "bass" ? "낮은음"
+        : _dms_clef === "alto" ? "알토"
+        : _dms_clef === "tenor" ? "테너"
+        : _dms_clef === "percussion" ? "타악기"
+        : _dms_clef
+      );
+    }
+    if (_dms_bpm) _dms_items.push(`BPM${_dms_bpm}`);
+    drawerMeasureStatus = _dms_items.join(" · ");
+  }
+
   const styles = makeStyles(C, S);
 
   return (
@@ -1671,6 +1741,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           styles.topBar,
           { paddingTop: topInset + 4, borderBottomColor: C.border, backgroundColor: C.surface },
         ]}
+        onLayout={(e) => setTopBarHeight(e.nativeEvent.layout.height)}
       >
         {/* 뒤로가기 */}
         <Pressable
@@ -1682,14 +1753,33 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           <Ionicons name="chevron-back" size={S.ms(22, 0.4)} color={C.text} />
         </Pressable>
 
-        {/* 제목 */}
-        <Text style={[styles.topTitle, { color: C.text }]} numberOfLines={1}>
-          {doc.metadata.title || t("scoreMode", "untitled")}
-        </Text>
+        {/* 악보 모드 레이블 — 탭하면 팬 다이얼 열기 */}
+        <Pressable
+          onPress={onOpenDial}
+          style={({ pressed }) => ({
+            flex: 1,
+            flexDirection: "row" as const,
+            alignItems: "center" as const,
+            justifyContent: "center" as const,
+            gap: 6,
+            opacity: pressed ? 0.7 : 1,
+          })}
+          accessibilityRole="button"
+        >
+          <Ionicons name="musical-notes" size={S.ms(18, 0.4)} color={C.accent} />
+          <Text style={[styles.topTitle, { color: C.accent, fontFamily: "SpaceGrotesk_700Bold", fontSize: S.ms(17, 0.4), letterSpacing: 1.2 }]} numberOfLines={1}>
+            {t("scoreMode", "title") || t("switcher", "score")}
+          </Text>
+        </Pressable>
 
         {savedToast && (
           <Text style={[styles.savedToast, { color: C.accent }]}>
             {t("scoreMode", "saved")}
+          </Text>
+        )}
+        {beatOverflowToast && (
+          <Text style={[styles.savedToast, { color: "#FF8C42" }]}>
+            {t("scoreMode", "beatOverflowToast")}
           </Text>
         )}
 
@@ -1890,24 +1980,29 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
 
       {/* ── 선택된 음표 액션 바 ────────────────────────────────── */}
       {selectedElementId && (
-        <View style={[styles.selectionBar, { backgroundColor: C.surface, borderBottomColor: C.border }]}>
+        <View
+          style={[styles.selectionBar, { backgroundColor: C.surface, borderBottomColor: C.border }]}
+          {...selectionBarPan.panHandlers}
+        >
           <Text style={[styles.selectionLabel, { color: C.textSecondary }]}>
             {t("scoreMode", "toolSelect")} ·
           </Text>
 
-          {/* 임시표 빠른 적용 */}
-          {(["♯", "♭", "♮"] as const).map((sym, i) => {
-            const accVal: Array<Accidental | null> = ["sharp", "flat", null];
-            return (
-              <Pressable
-                key={sym}
-                style={[styles.selBarBtn, { borderColor: C.border }]}
-                onPress={() => handleApplyAccidentalToSelected(accVal[i] ?? null)}
-              >
-                <Text style={[styles.selBarBtnText, { color: C.text }]}>{sym}</Text>
-              </Pressable>
-            );
-          })}
+          {/* 이전/다음 음표 내비게이션 버튼 */}
+          <Pressable
+            style={[styles.selBarBtn, { borderColor: C.border }]}
+            onPress={() => handleNavigateElement("prev")}
+            testID="score-editor-nav-prev"
+          >
+            <Ionicons name="chevron-back" size={14} color={C.text} />
+          </Pressable>
+          <Pressable
+            style={[styles.selBarBtn, { borderColor: C.border }]}
+            onPress={() => handleNavigateElement("next")}
+            testID="score-editor-nav-next"
+          >
+            <Ionicons name="chevron-forward" size={14} color={C.text} />
+          </Pressable>
 
           <View style={{ flex: 1 }} />
 
@@ -1968,6 +2063,16 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           <View style={{ flex: 1 }} />
 
           <Pressable
+            style={[styles.selBarBtn, { borderColor: C.border }]}
+            onPress={() => setMeasureMultiSelectIndices([])}
+            testID="score-editor-measure-deselect"
+          >
+            <Text style={[styles.selBarBtnText, { color: C.textSecondary }]}>
+              {t("scoreMode", "deselect")}
+            </Text>
+          </Pressable>
+
+          <Pressable
             style={[styles.selBarBtn, { borderColor: C.accent }]}
             onPress={() => handleCopyMeasures(measureMultiSelectIndices[measureMultiSelectIndices.length - 1])}
             testID="score-editor-measure-copy"
@@ -1986,6 +2091,25 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             <Ionicons name="cut-outline" size={16} color={C.accent} />
             <Text style={[styles.selBarBtnText, { color: C.accent }]}>
               {t("scoreMode", "measureMoveAction")}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.selBarBtn, { borderColor: "#FF4444" }]}
+            onPress={() => {
+              const sorted = [...measureMultiSelectIndices].sort((a, b) => b - a);
+              let working = doc;
+              for (const idx of sorted) {
+                const next = deleteMeasureFromDoc(working, selectedPartIdx, idx);
+                if (next !== working) working = next;
+              }
+              applyDoc(working);
+              setMeasureMultiSelectIndices([]);
+            }}
+            testID="score-editor-measure-delete"
+          >
+            <Text style={[styles.selBarBtnText, { color: "#FF4444" }]}>
+              {t("scoreMode", "deleteAction")}
             </Text>
           </Pressable>
 
@@ -2012,6 +2136,16 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           <View style={{ flex: 1 }} />
 
           <Pressable
+            style={[styles.selBarBtn, { borderColor: C.border }]}
+            onPress={handleClearMultiSelect}
+            testID="score-editor-group-deselect"
+          >
+            <Text style={[styles.selBarBtnText, { color: C.textSecondary }]}>
+              {t("scoreMode", "deselect")}
+            </Text>
+          </Pressable>
+
+          <Pressable
             style={[
               styles.selBarBtn,
               { borderColor: multiSelectCanTie ? C.accent : C.border, opacity: multiSelectCanTie ? 1 : 0.4 },
@@ -2020,7 +2154,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             disabled={!multiSelectCanTie}
             testID="score-editor-group-tie"
           >
-            <Text style={[styles.selBarBtnText, { color: multiSelectCanTie ? C.accent : C.textSecondary, fontSize: 16 }]}>
+            <Text style={[styles.selBarBtnText, { color: multiSelectCanTie ? C.accent : C.textSecondary }]}>
               ⌣ {t("scoreMode", "groupBarTieButton")}
             </Text>
           </Pressable>
@@ -2030,7 +2164,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             onPress={handleSlurMultiSelected}
             testID="score-editor-group-slur"
           >
-            <Text style={[styles.selBarBtnText, { color: C.accent, fontSize: 16 }]}>
+            <Text style={[styles.selBarBtnText, { color: C.accent }]}>
               ⌢ {t("scoreMode", "groupBarSlurButton")}
             </Text>
           </Pressable>
@@ -2044,9 +2178,19 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             disabled={!multiSelectCanTuplet}
             testID="score-editor-group-tuplet"
           >
-            <Text style={[styles.selBarBtnText, { color: multiSelectCanTuplet ? C.accent : C.textSecondary, fontSize: 16 }]}>
+            <Text style={[styles.selBarBtnText, { color: multiSelectCanTuplet ? C.accent : C.textSecondary }]}>
               ⋮⋮ {t("scoreMode", "groupBarTupletButton")}
               {multiSelectCanTuplet ? ` (${multiSelectSortedElements.length})` : ""}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.selBarBtn, { borderColor: "#FF4444" }]}
+            onPress={handleDeleteMultiSelected}
+            testID="score-editor-group-delete"
+          >
+            <Text style={[styles.selBarBtnText, { color: "#FF4444" }]}>
+              {t("scoreMode", "deleteAction")}
             </Text>
           </Pressable>
 
@@ -2066,7 +2210,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         style={styles.scoreScroll}
         contentContainerStyle={[
           styles.scoreContent,
-          { paddingHorizontal: Spacing.lg, paddingBottom: bottomInset + 180 },
+          { paddingHorizontal: Spacing.lg, paddingBottom: 40 },
         ]}
         showsVerticalScrollIndicator={false}
         scrollEnabled
@@ -2107,12 +2251,106 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           </Text>
         )}
 
+        {/* 오선보 터치 캔버스 (참조 이미지 포함) */}
+        {currentPart ? (
+          <View style={{ position: "relative" }}>
+            <ScoreCanvas
+              doc={{ ...doc, parts: [currentPart] }}
+              containerWidth={containerWidth}
+              selectedElementId={selectedElementId}
+              multiSelectIds={multiSelectIds}
+              selectedMeasureIdx={selectedMeasureIdx}
+              multiSelectMeasureIndices={measureMultiSelectIndices}
+              selectedPartIdx={0}
+              activeTool={activeTool}
+              activeDuration={activeDuration}
+              isDotted={isDotted}
+              accidental={accidental}
+              onNotePlaced={handleNotePlaced}
+              selectedNoteHead={selectedNoteHead}
+              onRestPlaced={handleRestPlaced}
+              onElementTap={handleElementTap}
+              onMeasureTap={handleMeasureTap}
+              onClearSelection={handleClearSelection}
+              onMeasureLongPress={handleMeasureLongPress}
+              onEraseElement={handleEraseElement}
+              onEraseMultiple={handleEraseMultiple}
+              onNoteMoved={handleNoteMoved}
+              onTupletBracketTap={handleTupletBracketTap}
+              cursorMeasureIdx={null}
+              isPlaying={playback.isPlaying}
+              notePreviewEnabled={notePreviewEnabled}
+              instrumentId={doc.parts[selectedPartIdx]?.instrumentId}
+              playheadMeasureIdx={
+                playback.isPlaying &&
+                playback.currentMeasureIdx < (doc.parts[selectedPartIdx]?.measures.length ?? 0)
+                  ? playback.currentMeasureIdx
+                  : undefined
+              }
+              playheadFraction={playback.playheadFraction}
+              showPlayhead={showPlayhead}
+              highlightColor={highlightColor}
+              lineSpacing={lineSpacing}
+              disabled={!!measureContextMenu?.visible || showMeasureEditModal || drawerOpen}
+              measuresPerLineOverride={S.isLandscape ? 2 : 1}
+            />
+            {/* 참조 이미지 오버레이 (편집 불가) */}
+            {doc.referenceImageUri ? (
+              <>
+                <View
+                  style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+                  pointerEvents="none"
+                >
+                  <Image
+                    source={{ uri: doc.referenceImageUri }}
+                    style={{
+                      position: "absolute",
+                      top: 0, left: 0, right: 0, bottom: 0,
+                      opacity: doc.referenceImageOpacity ?? 0.4,
+                      resizeMode: "contain",
+                    }}
+                  />
+                </View>
+                <Pressable
+                  style={[styles.refOpacityBtn, { backgroundColor: C.surface + "CC", borderColor: C.border }]}
+                  onPress={handleReferenceOpacityToggle}
+                  hitSlop={8}
+                  testID="score-ref-opacity-btn"
+                >
+                  <Text style={[styles.refOpacityLabel, { color: C.text }]}>
+                    {Math.round((doc.referenceImageOpacity ?? 0.4) * 100)}%
+                  </Text>
+                </Pressable>
+              </>
+            ) : null}
+          </View>
+        ) : (
+          <Text style={{ color: C.textSecondary, marginTop: 24 }}>
+            {t("scoreMode", "noPartsHint")}
+          </Text>
+        )}
+
+        {currentPart && (
+          <Pressable
+            style={[styles.addMeasureRow, { borderColor: C.accent, marginTop: 16, marginBottom: 8, alignSelf: "center" }]}
+            onPress={handleAddMeasure}
+            testID="score-add-measure-btn"
+          >
+            <Ionicons name="add-circle-outline" size={16} color={C.accent} />
+            <Text style={[styles.addMeasureRowText, { color: C.accent }]}>
+              {t("scoreMode", "addMeasure")}
+            </Text>
+          </Pressable>
+        )}
+
+      </ScrollView>
+
         {/* ── 마디 설정 드로어 (오선보 바로 위 고정 — 마디 선택 시 해당 마디 설정, 미선택 시 "다음에 추가할 마디" 초안 설정) ── */}
         {currentPart && (
-          <View style={[styles.drawerContainer, { borderColor: C.border, backgroundColor: C.surface }]}>
+          <View style={[styles.drawerContainer, { borderColor: C.border, backgroundColor: C.surface, borderRadius: 0, marginTop: 0, paddingBottom: bottomInset, borderLeftWidth: 0, borderRightWidth: 0, borderBottomWidth: 0 }]}>
             <View style={[styles.drawerHeader, { borderBottomColor: drawerOpen ? C.border : "transparent" }]}>
               <Pressable
-                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+                style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 6 }}
                 onPress={() => setDrawerOpen((v) => !v)}
                 testID="score-editor-drawer-toggle"
               >
@@ -2121,21 +2359,25 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
                     ? `${t("scoreMode", "drawerMeasureSettings")} — ${selectedMeasureIdx + 1}`
                     : t("scoreMode", "drawerNextMeasureSettings")}
                 </Text>
+                {beatStatusText ? (
+                  <Text
+                    style={[styles.drawerStatusText, { color: beatIsOverflow ? "#FF8C42" : C.textSecondary }]}
+                    numberOfLines={1}
+                    testID="score-editor-beat-status"
+                  >
+                    {beatStatusText}
+                  </Text>
+                ) : null}
+                {!drawerOpen && drawerMeasureStatus ? (
+                  <Text style={[styles.drawerStatusText, { color: C.textSecondary }]} numberOfLines={1}>
+                    {drawerMeasureStatus}
+                  </Text>
+                ) : null}
                 <Ionicons
-                  name={drawerOpen ? "chevron-up" : "chevron-down"}
+                  name={drawerOpen ? "chevron-down" : "chevron-up"}
                   size={14}
                   color={C.textSecondary}
                 />
-              </Pressable>
-              <Pressable
-                style={[styles.addMeasureRow, { borderColor: C.accent, marginBottom: 0, marginLeft: 8 }]}
-                onPress={handleAddMeasure}
-                testID="score-add-measure-btn"
-              >
-                <Ionicons name="add-circle-outline" size={16} color={C.accent} />
-                <Text style={[styles.addMeasureRowText, { color: C.accent }]}>
-                  {t("scoreMode", "addMeasure")}
-                </Text>
               </Pressable>
             </View>
 
@@ -2291,119 +2533,10 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
                   </View>
                 </View>
 
-                {/* 줄당 마디 수 (PNG/JPG 내보내기 전용 — 편집 화면은 화면 방향에 따라 자동: 세로 1마디, 가로 2마디) */}
-                <View style={styles.drawerRow}>
-                  <Text style={[styles.drawerFieldLabel, { color: C.textSecondary }]}>
-                    {t("scoreMode", "drawerMeasuresPerLine")}
-                  </Text>
-                  <Text style={[styles.drawerFieldLabel, { color: C.text, minWidth: 0 }]}>
-                    {doc.measuresPerLine
-                      ? String(doc.measuresPerLine)
-                      : t("scoreMode", "drawerMeasuresPerLineAuto")}
-                  </Text>
-                  <View style={{ flexDirection: "row", gap: 4 }}>
-                    {([-1, 1] as const).map((delta) => (
-                      <Pressable
-                        key={delta}
-                        style={[styles.drawerApplyBtn, { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }]}
-                        onPress={() => {
-                          const cur = doc.measuresPerLine ?? 0;
-                          const next = Math.max(0, Math.min(8, cur + delta));
-                          applyDoc({ ...doc, measuresPerLine: next === 0 ? undefined : next });
-                        }}
-                        testID={`score-drawer-mpl-${delta > 0 ? "plus" : "minus"}`}
-                      >
-                        <Text style={[styles.drawerApplyBtnText, { color: C.text }]}>
-                          {delta > 0 ? "+1" : "-1"}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
               </View>
             )}
           </View>
         )}
-
-        {/* 오선보 터치 캔버스 (참조 이미지 포함) */}
-        {currentPart ? (
-          <View style={{ position: "relative" }}>
-            <ScoreCanvas
-              doc={{ ...doc, parts: [currentPart] }}
-              containerWidth={containerWidth}
-              selectedElementId={selectedElementId}
-              multiSelectIds={multiSelectIds}
-              selectedMeasureIdx={selectedMeasureIdx}
-              multiSelectMeasureIndices={measureMultiSelectIndices}
-              selectedPartIdx={0}
-              activeTool={activeTool}
-              activeDuration={activeDuration}
-              isDotted={isDotted}
-              accidental={accidental}
-              onNotePlaced={handleNotePlaced}
-              selectedDrumType={isPercussionPart ? selectedDrumType : undefined}
-              onRestPlaced={handleRestPlaced}
-              onElementTap={handleElementTap}
-              onMeasureTap={handleMeasureTap}
-              onMeasureLongPress={handleMeasureLongPress}
-              onEraseElement={handleEraseElement}
-              onEraseMultiple={handleEraseMultiple}
-              onNoteMoved={handleNoteMoved}
-              onTupletBracketTap={handleTupletBracketTap}
-              cursorMeasureIdx={null}
-              isPlaying={playback.isPlaying}
-              notePreviewEnabled={notePreviewEnabled}
-              instrumentId={doc.parts[selectedPartIdx]?.instrumentId}
-              playheadMeasureIdx={
-                playback.isPlaying &&
-                playback.currentMeasureIdx < (doc.parts[selectedPartIdx]?.measures.length ?? 0)
-                  ? playback.currentMeasureIdx
-                  : undefined
-              }
-              playheadFraction={playback.playheadFraction}
-              showPlayhead={showPlayhead}
-              highlightColor={highlightColor}
-              lineSpacing={lineSpacing}
-              disabled={!!measureContextMenu?.visible || showMeasureEditModal || drawerOpen}
-              measuresPerLineOverride={S.isLandscape ? 2 : 1}
-            />
-            {/* 참조 이미지 오버레이 (편집 불가) */}
-            {doc.referenceImageUri ? (
-              <>
-                <View
-                  style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
-                  pointerEvents="none"
-                >
-                  <Image
-                    source={{ uri: doc.referenceImageUri }}
-                    style={{
-                      position: "absolute",
-                      top: 0, left: 0, right: 0, bottom: 0,
-                      opacity: doc.referenceImageOpacity ?? 0.4,
-                      resizeMode: "contain",
-                    }}
-                  />
-                </View>
-                <Pressable
-                  style={[styles.refOpacityBtn, { backgroundColor: C.surface + "CC", borderColor: C.border }]}
-                  onPress={handleReferenceOpacityToggle}
-                  hitSlop={8}
-                  testID="score-ref-opacity-btn"
-                >
-                  <Text style={[styles.refOpacityLabel, { color: C.text }]}>
-                    {Math.round((doc.referenceImageOpacity ?? 0.4) * 100)}%
-                  </Text>
-                </Pressable>
-              </>
-            ) : null}
-          </View>
-        ) : (
-          <Text style={{ color: C.textSecondary, marginTop: 24 }}>
-            {t("scoreMode", "noPartsHint")}
-          </Text>
-        )}
-
-      </ScrollView>
 
       {/* ── 연결된 연습 항목 배지 (재생 중 linkedPracticeEntryId가 있을 때) */}
       {playback.isPlaying && !!playback.currentLinkedEntryId && (
@@ -2446,6 +2579,39 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         </View>
       )}
 
+      {/* ── 선택 / 지우기 플로팅 버튼 — 우측 상단 저장 버튼 아래 ── */}
+      {topBarHeight > 0 && (
+        <View style={[styles.floatingToolPanel, { top: topBarHeight + 6 }]}>
+          {(["select", "erase"] as const).map((tool) => {
+            const isActive = activeTool === tool;
+            const icon = tool === "select" ? "hand-right-outline" : "backspace-outline";
+            return (
+              <Pressable
+                key={tool}
+                style={[
+                  styles.floatingToolBtn,
+                  {
+                    backgroundColor: isActive ? C.accent : C.surface,
+                    borderColor: isActive ? C.accent : C.border,
+                  },
+                ]}
+                onPress={() => {
+                  const next = isActive ? "note" : tool;
+                  setActiveTool(next);
+                  if (next !== "select") {
+                    setMultiSelectIds([]);
+                    setSelectedElementId(null);
+                  }
+                }}
+                testID={`score-float-tool-${tool}`}
+              >
+                <Ionicons name={icon} size={16} color={isActive ? "#fff" : C.text} />
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
       {/* ── 하단 팔레트 ──────────────────────────────────────────── */}
       <View
         style={[
@@ -2463,20 +2629,12 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           isDoubleDotted={isDoubleDotted}
           accidental={accidental}
           selectedArticulation={selectedArticulation}
-          selectedDynamic={selectedDynamic}
-          instrumentCategory={
-            currentPart
-              ? (INSTRUMENTS[currentPart.instrumentId]?.category ?? undefined)
-              : undefined
-          }
-          enabledSymbols={currentPart?.enabledSymbols ?? {}}
           onToolChange={(tool) => {
             setActiveTool(tool);
-            // "select"에서 다른 도구(특히 "erase")로 바꿀 때 남은 다중 선택을 정리한다.
-            // 정리하지 않으면 activeTool="erase" 상태에서 이전 multiSelectIds가 남아
-            // ScoreCanvas의 erase 브랜치가 onElementTap을 호출하지 않는 것과 상호작용해 오작동한다.
+            // "select"에서 다른 도구로 바꿀 때 남은 선택을 모두 정리한다.
             if (tool !== "select") {
               setMultiSelectIds([]);
+              setSelectedElementId(null);
             }
           }}
           onDurationChange={setActiveDuration}
@@ -2490,7 +2648,6 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             setSelectedArticulation(art);
             if (selectedElementId) handleApplyArticulationToSelected(art);
           }}
-          onDynamicSelect={setSelectedDynamic}
           selectedOrnament={selectedOrnament}
           onOrnamentSelect={(orn) => {
             setSelectedOrnament((prev) => (prev === orn ? null : orn));
@@ -2501,12 +2658,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
           onRepeatSignSelect={setSelectedRepeatSign}
           onCrescTypeSelect={setSelectedCrescType}
           onTempoSelect={handleTempoSelect}
-          selectedInstrumentSymbol={selectedInstrumentSymbol}
-          onInstrumentSymbolSelect={setSelectedInstrumentSymbol}
-          onSymbolToggle={handleSymbolToggle}
           isPercussionPart={isPercussionPart}
-          selectedDrumType={selectedDrumType}
-          onDrumTypeSelect={setSelectedDrumType}
+          selectedNoteHead={selectedNoteHead}
+          onNoteHeadSelect={setSelectedNoteHead}
         />
       </View>
 
@@ -2720,7 +2874,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         onClearReferenceImage={handleClearReferenceImage}
         onAddToPractice={handleAddToPractice}
         onExtractPart={handleExtractPartOpen}
-        onOpenSymbolSettings={() => { setShowMoreMenu(false); setShowSymbolSettings(true); }}
+        onOpenSymbolSettings={() => { setShowMoreMenu(false); }}
       />
       <ScoreExtractPartModal
         visible={showExtractPartModal}
@@ -2735,14 +2889,14 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
         onConfirm={handleExtractConfirm}
       />
       <ScoreSymbolSettingsModal
-        visible={showSymbolSettings}
-        onClose={() => setShowSymbolSettings(false)}
+        visible={false}
+        onClose={() => {}}
         currentPart={currentPart}
         showPlayhead={showPlayhead}
         showZoomView={showZoomView}
         notePreviewEnabled={notePreviewEnabled}
         onUpdatePlaybackSettings={updatePlaybackSettings}
-        onSymbolToggle={handleSymbolToggle}
+        onSymbolToggle={() => {}}
       />
       <ScoreMeasureContextMenu
         measureIdx={measureContextMenu?.measureIdx ?? null}

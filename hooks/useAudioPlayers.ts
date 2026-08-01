@@ -52,7 +52,7 @@ export interface AudioPlayersHook {
 
 /**
  * Builtin sound-set audio player pool.
- * 8 sets × 3 roles × 4 instances = 96 players.
+ * 11 sets × 3 roles × 4 instances = 132 players.
  *
  * Increased from the original A/B (2 instances) to A/B/C/D (4 instances) to
  * prevent cut-off at high BPM + multiple subdivisions. At 300 BPM × 4
@@ -116,45 +116,6 @@ export function useAudioPlayers(soundSet: SoundSet): AudioPlayersHook {
   const digitalStrongC = useAudioPlayer(soundSets.digital.strong);
   const digitalStrongD = useAudioPlayer(soundSets.digital.strong);
 
-  const rimshotHighA = useAudioPlayer(soundSets.rimshot.high);
-  const rimshotHighB = useAudioPlayer(soundSets.rimshot.high);
-  const rimshotHighC = useAudioPlayer(soundSets.rimshot.high);
-  const rimshotHighD = useAudioPlayer(soundSets.rimshot.high);
-  const rimshotLowA = useAudioPlayer(soundSets.rimshot.low);
-  const rimshotLowB = useAudioPlayer(soundSets.rimshot.low);
-  const rimshotLowC = useAudioPlayer(soundSets.rimshot.low);
-  const rimshotLowD = useAudioPlayer(soundSets.rimshot.low);
-  const rimshotStrongA = useAudioPlayer(soundSets.rimshot.strong);
-  const rimshotStrongB = useAudioPlayer(soundSets.rimshot.strong);
-  const rimshotStrongC = useAudioPlayer(soundSets.rimshot.strong);
-  const rimshotStrongD = useAudioPlayer(soundSets.rimshot.strong);
-
-  const triangleHighA = useAudioPlayer(soundSets.triangle.high);
-  const triangleHighB = useAudioPlayer(soundSets.triangle.high);
-  const triangleHighC = useAudioPlayer(soundSets.triangle.high);
-  const triangleHighD = useAudioPlayer(soundSets.triangle.high);
-  const triangleLowA = useAudioPlayer(soundSets.triangle.low);
-  const triangleLowB = useAudioPlayer(soundSets.triangle.low);
-  const triangleLowC = useAudioPlayer(soundSets.triangle.low);
-  const triangleLowD = useAudioPlayer(soundSets.triangle.low);
-  const triangleStrongA = useAudioPlayer(soundSets.triangle.strong);
-  const triangleStrongB = useAudioPlayer(soundSets.triangle.strong);
-  const triangleStrongC = useAudioPlayer(soundSets.triangle.strong);
-  const triangleStrongD = useAudioPlayer(soundSets.triangle.strong);
-
-  const hihatHighA = useAudioPlayer(soundSets.hihat.high);
-  const hihatHighB = useAudioPlayer(soundSets.hihat.high);
-  const hihatHighC = useAudioPlayer(soundSets.hihat.high);
-  const hihatHighD = useAudioPlayer(soundSets.hihat.high);
-  const hihatLowA = useAudioPlayer(soundSets.hihat.low);
-  const hihatLowB = useAudioPlayer(soundSets.hihat.low);
-  const hihatLowC = useAudioPlayer(soundSets.hihat.low);
-  const hihatLowD = useAudioPlayer(soundSets.hihat.low);
-  const hihatStrongA = useAudioPlayer(soundSets.hihat.strong);
-  const hihatStrongB = useAudioPlayer(soundSets.hihat.strong);
-  const hihatStrongC = useAudioPlayer(soundSets.hihat.strong);
-  const hihatStrongD = useAudioPlayer(soundSets.hihat.strong);
-
   const jamblockHighA = useAudioPlayer(soundSets.jamblock.high);
   const jamblockHighB = useAudioPlayer(soundSets.jamblock.high);
   const jamblockHighC = useAudioPlayer(soundSets.jamblock.high);
@@ -168,24 +129,108 @@ export function useAudioPlayers(soundSet: SoundSet): AudioPlayersHook {
   const jamblockStrongC = useAudioPlayer(soundSets.jamblock.strong);
   const jamblockStrongD = useAudioPlayer(soundSets.jamblock.strong);
 
+  const sineHighA = useAudioPlayer(soundSets.sine.high);
+  const sineHighB = useAudioPlayer(soundSets.sine.high);
+  const sineHighC = useAudioPlayer(soundSets.sine.high);
+  const sineHighD = useAudioPlayer(soundSets.sine.high);
+  const sineLowA = useAudioPlayer(soundSets.sine.low);
+  const sineLowB = useAudioPlayer(soundSets.sine.low);
+  const sineLowC = useAudioPlayer(soundSets.sine.low);
+  const sineLowD = useAudioPlayer(soundSets.sine.low);
+  const sineStrongA = useAudioPlayer(soundSets.sine.strong);
+  const sineStrongB = useAudioPlayer(soundSets.sine.strong);
+  const sineStrongC = useAudioPlayer(soundSets.sine.strong);
+  const sineStrongD = useAudioPlayer(soundSets.sine.strong);
+
+  const blipHighA = useAudioPlayer(soundSets.blip.high);
+  const blipHighB = useAudioPlayer(soundSets.blip.high);
+  const blipHighC = useAudioPlayer(soundSets.blip.high);
+  const blipHighD = useAudioPlayer(soundSets.blip.high);
+  const blipLowA = useAudioPlayer(soundSets.blip.low);
+  const blipLowB = useAudioPlayer(soundSets.blip.low);
+  const blipLowC = useAudioPlayer(soundSets.blip.low);
+  const blipLowD = useAudioPlayer(soundSets.blip.low);
+  const blipStrongA = useAudioPlayer(soundSets.blip.strong);
+  const blipStrongB = useAudioPlayer(soundSets.blip.strong);
+  const blipStrongC = useAudioPlayer(soundSets.blip.strong);
+  const blipStrongD = useAudioPlayer(soundSets.blip.strong);
+
+  const claveHighA = useAudioPlayer(soundSets.clave.high);
+  const claveHighB = useAudioPlayer(soundSets.clave.high);
+  const claveHighC = useAudioPlayer(soundSets.clave.high);
+  const claveHighD = useAudioPlayer(soundSets.clave.high);
+  const claveLowA = useAudioPlayer(soundSets.clave.low);
+  const claveLowB = useAudioPlayer(soundSets.clave.low);
+  const claveLowC = useAudioPlayer(soundSets.clave.low);
+  const claveLowD = useAudioPlayer(soundSets.clave.low);
+  const claveStrongA = useAudioPlayer(soundSets.clave.strong);
+  const claveStrongB = useAudioPlayer(soundSets.clave.strong);
+  const claveStrongC = useAudioPlayer(soundSets.clave.strong);
+  const claveStrongD = useAudioPlayer(soundSets.clave.strong);
+
+  const cajonHighA = useAudioPlayer(soundSets.cajon.high);
+  const cajonHighB = useAudioPlayer(soundSets.cajon.high);
+  const cajonHighC = useAudioPlayer(soundSets.cajon.high);
+  const cajonHighD = useAudioPlayer(soundSets.cajon.high);
+  const cajonLowA = useAudioPlayer(soundSets.cajon.low);
+  const cajonLowB = useAudioPlayer(soundSets.cajon.low);
+  const cajonLowC = useAudioPlayer(soundSets.cajon.low);
+  const cajonLowD = useAudioPlayer(soundSets.cajon.low);
+  const cajonStrongA = useAudioPlayer(soundSets.cajon.strong);
+  const cajonStrongB = useAudioPlayer(soundSets.cajon.strong);
+  const cajonStrongC = useAudioPlayer(soundSets.cajon.strong);
+  const cajonStrongD = useAudioPlayer(soundSets.cajon.strong);
+
+  const marimbaHighA = useAudioPlayer(soundSets.marimba.high);
+  const marimbaHighB = useAudioPlayer(soundSets.marimba.high);
+  const marimbaHighC = useAudioPlayer(soundSets.marimba.high);
+  const marimbaHighD = useAudioPlayer(soundSets.marimba.high);
+  const marimbaLowA = useAudioPlayer(soundSets.marimba.low);
+  const marimbaLowB = useAudioPlayer(soundSets.marimba.low);
+  const marimbaLowC = useAudioPlayer(soundSets.marimba.low);
+  const marimbaLowD = useAudioPlayer(soundSets.marimba.low);
+  const marimbaStrongA = useAudioPlayer(soundSets.marimba.strong);
+  const marimbaStrongB = useAudioPlayer(soundSets.marimba.strong);
+  const marimbaStrongC = useAudioPlayer(soundSets.marimba.strong);
+  const marimbaStrongD = useAudioPlayer(soundSets.marimba.strong);
+
+  const stickHighA = useAudioPlayer(soundSets.stick.high);
+  const stickHighB = useAudioPlayer(soundSets.stick.high);
+  const stickHighC = useAudioPlayer(soundSets.stick.high);
+  const stickHighD = useAudioPlayer(soundSets.stick.high);
+  const stickLowA = useAudioPlayer(soundSets.stick.low);
+  const stickLowB = useAudioPlayer(soundSets.stick.low);
+  const stickLowC = useAudioPlayer(soundSets.stick.low);
+  const stickLowD = useAudioPlayer(soundSets.stick.low);
+  const stickStrongA = useAudioPlayer(soundSets.stick.strong);
+  const stickStrongB = useAudioPlayer(soundSets.stick.strong);
+  const stickStrongC = useAudioPlayer(soundSets.stick.strong);
+  const stickStrongD = useAudioPlayer(soundSets.stick.strong);
+
   const allPlayers = useMemo<BuiltinPlayers>(() => ({
     classic: { highA: classicHighA, highB: classicHighB, highC: classicHighC, highD: classicHighD, lowA: classicLowA, lowB: classicLowB, lowC: classicLowC, lowD: classicLowD, strongA: classicStrongA, strongB: classicStrongB, strongC: classicStrongC, strongD: classicStrongD },
     woodblock: { highA: woodblockHighA, highB: woodblockHighB, highC: woodblockHighC, highD: woodblockHighD, lowA: woodblockLowA, lowB: woodblockLowB, lowC: woodblockLowC, lowD: woodblockLowD, strongA: woodblockStrongA, strongB: woodblockStrongB, strongC: woodblockStrongC, strongD: woodblockStrongD },
     cowbell: { highA: cowbellHighA, highB: cowbellHighB, highC: cowbellHighC, highD: cowbellHighD, lowA: cowbellLowA, lowB: cowbellLowB, lowC: cowbellLowC, lowD: cowbellLowD, strongA: cowbellStrongA, strongB: cowbellStrongB, strongC: cowbellStrongC, strongD: cowbellStrongD },
     digital: { highA: digitalHighA, highB: digitalHighB, highC: digitalHighC, highD: digitalHighD, lowA: digitalLowA, lowB: digitalLowB, lowC: digitalLowC, lowD: digitalLowD, strongA: digitalStrongA, strongB: digitalStrongB, strongC: digitalStrongC, strongD: digitalStrongD },
-    rimshot: { highA: rimshotHighA, highB: rimshotHighB, highC: rimshotHighC, highD: rimshotHighD, lowA: rimshotLowA, lowB: rimshotLowB, lowC: rimshotLowC, lowD: rimshotLowD, strongA: rimshotStrongA, strongB: rimshotStrongB, strongC: rimshotStrongC, strongD: rimshotStrongD },
-    triangle: { highA: triangleHighA, highB: triangleHighB, highC: triangleHighC, highD: triangleHighD, lowA: triangleLowA, lowB: triangleLowB, lowC: triangleLowC, lowD: triangleLowD, strongA: triangleStrongA, strongB: triangleStrongB, strongC: triangleStrongC, strongD: triangleStrongD },
-    hihat: { highA: hihatHighA, highB: hihatHighB, highC: hihatHighC, highD: hihatHighD, lowA: hihatLowA, lowB: hihatLowB, lowC: hihatLowC, lowD: hihatLowD, strongA: hihatStrongA, strongB: hihatStrongB, strongC: hihatStrongC, strongD: hihatStrongD },
     jamblock: { highA: jamblockHighA, highB: jamblockHighB, highC: jamblockHighC, highD: jamblockHighD, lowA: jamblockLowA, lowB: jamblockLowB, lowC: jamblockLowC, lowD: jamblockLowD, strongA: jamblockStrongA, strongB: jamblockStrongB, strongC: jamblockStrongC, strongD: jamblockStrongD },
+    sine: { highA: sineHighA, highB: sineHighB, highC: sineHighC, highD: sineHighD, lowA: sineLowA, lowB: sineLowB, lowC: sineLowC, lowD: sineLowD, strongA: sineStrongA, strongB: sineStrongB, strongC: sineStrongC, strongD: sineStrongD },
+    blip: { highA: blipHighA, highB: blipHighB, highC: blipHighC, highD: blipHighD, lowA: blipLowA, lowB: blipLowB, lowC: blipLowC, lowD: blipLowD, strongA: blipStrongA, strongB: blipStrongB, strongC: blipStrongC, strongD: blipStrongD },
+    clave: { highA: claveHighA, highB: claveHighB, highC: claveHighC, highD: claveHighD, lowA: claveLowA, lowB: claveLowB, lowC: claveLowC, lowD: claveLowD, strongA: claveStrongA, strongB: claveStrongB, strongC: claveStrongC, strongD: claveStrongD },
+    cajon: { highA: cajonHighA, highB: cajonHighB, highC: cajonHighC, highD: cajonHighD, lowA: cajonLowA, lowB: cajonLowB, lowC: cajonLowC, lowD: cajonLowD, strongA: cajonStrongA, strongB: cajonStrongB, strongC: cajonStrongC, strongD: cajonStrongD },
+    marimba: { highA: marimbaHighA, highB: marimbaHighB, highC: marimbaHighC, highD: marimbaHighD, lowA: marimbaLowA, lowB: marimbaLowB, lowC: marimbaLowC, lowD: marimbaLowD, strongA: marimbaStrongA, strongB: marimbaStrongB, strongC: marimbaStrongC, strongD: marimbaStrongD },
+    stick: { highA: stickHighA, highB: stickHighB, highC: stickHighC, highD: stickHighD, lowA: stickLowA, lowB: stickLowB, lowC: stickLowC, lowD: stickLowD, strongA: stickStrongA, strongB: stickStrongB, strongC: stickStrongC, strongD: stickStrongD },
   }), [
     classicHighA, classicHighB, classicHighC, classicHighD, classicLowA, classicLowB, classicLowC, classicLowD, classicStrongA, classicStrongB, classicStrongC, classicStrongD,
     woodblockHighA, woodblockHighB, woodblockHighC, woodblockHighD, woodblockLowA, woodblockLowB, woodblockLowC, woodblockLowD, woodblockStrongA, woodblockStrongB, woodblockStrongC, woodblockStrongD,
     cowbellHighA, cowbellHighB, cowbellHighC, cowbellHighD, cowbellLowA, cowbellLowB, cowbellLowC, cowbellLowD, cowbellStrongA, cowbellStrongB, cowbellStrongC, cowbellStrongD,
     digitalHighA, digitalHighB, digitalHighC, digitalHighD, digitalLowA, digitalLowB, digitalLowC, digitalLowD, digitalStrongA, digitalStrongB, digitalStrongC, digitalStrongD,
-    rimshotHighA, rimshotHighB, rimshotHighC, rimshotHighD, rimshotLowA, rimshotLowB, rimshotLowC, rimshotLowD, rimshotStrongA, rimshotStrongB, rimshotStrongC, rimshotStrongD,
-    triangleHighA, triangleHighB, triangleHighC, triangleHighD, triangleLowA, triangleLowB, triangleLowC, triangleLowD, triangleStrongA, triangleStrongB, triangleStrongC, triangleStrongD,
-    hihatHighA, hihatHighB, hihatHighC, hihatHighD, hihatLowA, hihatLowB, hihatLowC, hihatLowD, hihatStrongA, hihatStrongB, hihatStrongC, hihatStrongD,
     jamblockHighA, jamblockHighB, jamblockHighC, jamblockHighD, jamblockLowA, jamblockLowB, jamblockLowC, jamblockLowD, jamblockStrongA, jamblockStrongB, jamblockStrongC, jamblockStrongD,
+    sineHighA, sineHighB, sineHighC, sineHighD, sineLowA, sineLowB, sineLowC, sineLowD, sineStrongA, sineStrongB, sineStrongC, sineStrongD,
+    blipHighA, blipHighB, blipHighC, blipHighD, blipLowA, blipLowB, blipLowC, blipLowD, blipStrongA, blipStrongB, blipStrongC, blipStrongD,
+    claveHighA, claveHighB, claveHighC, claveHighD, claveLowA, claveLowB, claveLowC, claveLowD, claveStrongA, claveStrongB, claveStrongC, claveStrongD,
+    cajonHighA, cajonHighB, cajonHighC, cajonHighD, cajonLowA, cajonLowB, cajonLowC, cajonLowD, cajonStrongA, cajonStrongB, cajonStrongC, cajonStrongD,
+    marimbaHighA, marimbaHighB, marimbaHighC, marimbaHighD, marimbaLowA, marimbaLowB, marimbaLowC, marimbaLowD, marimbaStrongA, marimbaStrongB, marimbaStrongC, marimbaStrongD,
+    stickHighA, stickHighB, stickHighC, stickHighD, stickLowA, stickLowB, stickLowC, stickLowD, stickStrongA, stickStrongB, stickStrongC, stickStrongD,
   ]);
 
   const highToggle = useRef(0);

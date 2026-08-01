@@ -65,7 +65,6 @@ interface NoteRecorderModalProps {
   beatsPerMeasure?: number;
   soundSet?: BuiltinSoundSet;
   onSuggestBpm?: (bpm: number) => void;
-  onOpenStemSep?: () => void;
 }
 
 const MAX_RECORD_SECONDS = 10;
@@ -133,7 +132,6 @@ export function NoteRecorderModal({
   beatsPerMeasure = 4,
   soundSet = "classic",
   onSuggestBpm,
-  onOpenStemSep,
 }: NoteRecorderModalProps) {
   const { colors: C } = useTheme();
   const styles = make_styles(C);
@@ -193,6 +191,9 @@ export function NoteRecorderModal({
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const metronomeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const previewWatchRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Guards against double-cleanup: handleClose sets this true so the
+  // useEffect([visible]) branch skips a redundant cleanup() call.
+  const closedByHandleRef = useRef(false);
   const recordingActiveRef = useRef(false);
 
   const countScale = useSharedValue(1);
@@ -383,7 +384,13 @@ export function NoteRecorderModal({
 
   useEffect(() => {
     if (!visible) {
-      cleanup();
+      // Skip cleanup() if handleClose already ran it — calling it twice would
+      // double-invoke releaseAudioSession and fire its metronome-resume path
+      // a second time with stale state.
+      if (!closedByHandleRef.current) {
+        cleanup();
+      }
+      closedByHandleRef.current = false;
       setPhase("idle");
       setCountdownValue(1);
       setRecordDuration(0);
@@ -841,6 +848,7 @@ export function NoteRecorderModal({
   }, [onDelete]);
 
   const handleClose = useCallback(async () => {
+    closedByHandleRef.current = true;
     await cleanup();
     onClose();
   }, [cleanup, onClose]);
@@ -965,15 +973,6 @@ export function NoteRecorderModal({
                   <Text style={[styles.sourceButtonText, { color: C.text }]}>{t("noteRecorder", "import")}</Text>
                 </Pressable>
               </View>
-              {onOpenStemSep && (
-                <Pressable
-                  style={[styles.sourceButton, { backgroundColor: C.surfaceLight, width: "100%", marginTop: 8 }]}
-                  onPress={onOpenStemSep}
-                >
-                  <Ionicons name="git-branch-outline" size={22} color={C.text} />
-                  <Text style={[styles.sourceButtonText, { color: C.text }]}>{t("noteRecorder", "stemSep")}</Text>
-                </Pressable>
-              )}
               {hasExisting && (
                 <Pressable style={styles.deleteButton} onPress={handleDelete}>
                   <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
@@ -1171,12 +1170,12 @@ export function NoteRecorderModal({
               </View>
 
               {pressToast && (
-                <View style={{ alignItems: "center", marginTop: 2 }}>
+                <View style={{ alignItems: "center", marginTop: Spacing.xxs }}>
                   <Text style={{ color: C.accent, fontSize: FontSize.caption }}>{pressToast}</Text>
                 </View>
               )}
               {!pressToast && (
-                <Text style={{ color: C.textTertiary, fontSize: FontSize.caption, textAlign: "center", marginTop: 2 }}>
+                <Text style={{ color: C.textTertiary, fontSize: FontSize.caption, textAlign: "center", marginTop: Spacing.xxs }}>
                   {t("noteRecorder", "autoPreviewLongPressHint")}
                 </Text>
               )}
@@ -1209,7 +1208,7 @@ export function NoteRecorderModal({
                   })}
                 </View>
                 {metronomeChannel === "off" && (
-                  <Text style={{ color: C.textTertiary, fontSize: FontSize.caption, textAlign: "center", marginTop: 4 }}>
+                  <Text style={{ color: C.textTertiary, fontSize: FontSize.caption, textAlign: "center", marginTop: Spacing.xs }}>
                     {t("noteRecorder", "channel_off")}
                   </Text>
                 )}
@@ -1261,7 +1260,7 @@ export function NoteRecorderModal({
                             }}
                             style={{
                               paddingHorizontal: Spacing.sm,
-                              paddingVertical: 4,
+                              paddingVertical: Spacing.xs,
                               borderRadius: Radius.sm,
                               backgroundColor: C.accentDim,
                               borderWidth: 1,

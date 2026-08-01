@@ -40,25 +40,40 @@ export const soundSets = {
     low: require("@/assets/sounds/digital-low.wav"),
     strong: require("@/assets/sounds/digital-strong.wav"),
   },
-  rimshot: {
-    high: require("@/assets/sounds/rimshot-high.wav"),
-    low: require("@/assets/sounds/rimshot-low.wav"),
-    strong: require("@/assets/sounds/rimshot-strong.wav"),
-  },
-  triangle: {
-    high: require("@/assets/sounds/triangle-high.wav"),
-    low: require("@/assets/sounds/triangle-low.wav"),
-    strong: require("@/assets/sounds/triangle-strong.wav"),
-  },
-  hihat: {
-    high: require("@/assets/sounds/hihat-high.wav"),
-    low: require("@/assets/sounds/hihat-low.wav"),
-    strong: require("@/assets/sounds/hihat-strong.wav"),
-  },
   jamblock: {
     high: require("@/assets/sounds/jamblock-high.wav"),
     low: require("@/assets/sounds/jamblock-low.wav"),
     strong: require("@/assets/sounds/jamblock-strong.wav"),
+  },
+  sine: {
+    high: require("@/assets/sounds/sine-high.wav"),
+    low: require("@/assets/sounds/sine-low.wav"),
+    strong: require("@/assets/sounds/sine-strong.wav"),
+  },
+  blip: {
+    high: require("@/assets/sounds/blip-high.wav"),
+    low: require("@/assets/sounds/blip-low.wav"),
+    strong: require("@/assets/sounds/blip-strong.wav"),
+  },
+  clave: {
+    high: require("@/assets/sounds/clave-high.wav"),
+    low: require("@/assets/sounds/clave-low.wav"),
+    strong: require("@/assets/sounds/clave-strong.wav"),
+  },
+  cajon: {
+    high: require("@/assets/sounds/cajon-high.wav"),
+    low: require("@/assets/sounds/cajon-low.wav"),
+    strong: require("@/assets/sounds/cajon-strong.wav"),
+  },
+  marimba: {
+    high: require("@/assets/sounds/marimba-high.wav"),
+    low: require("@/assets/sounds/marimba-low.wav"),
+    strong: require("@/assets/sounds/marimba-strong.wav"),
+  },
+  stick: {
+    high: require("@/assets/sounds/stick-high.wav"),
+    low: require("@/assets/sounds/stick-low.wav"),
+    strong: require("@/assets/sounds/stick-strong.wav"),
   },
 };
 
@@ -96,6 +111,21 @@ export const drumPadSounds = {
     strong: require("@/assets/sounds/crash-strong.wav"),
     high: require("@/assets/sounds/crash-high.wav"),
     low: require("@/assets/sounds/crash-low.wav"),
+  },
+  rimshot: {
+    strong: require("@/assets/sounds/rimshot-strong.wav"),
+    high: require("@/assets/sounds/rimshot-high.wav"),
+    low: require("@/assets/sounds/rimshot-low.wav"),
+  },
+  triangle: {
+    strong: require("@/assets/sounds/triangle-strong.wav"),
+    high: require("@/assets/sounds/triangle-high.wav"),
+    low: require("@/assets/sounds/triangle-low.wav"),
+  },
+  hihat: {
+    strong: require("@/assets/sounds/hihat-strong.wav"),
+    high: require("@/assets/sounds/hihat-high.wav"),
+    low: require("@/assets/sounds/hihat-low.wav"),
   },
 };
 
@@ -1419,6 +1449,10 @@ export class MetronomeEngine {
   }
 
   private playTickAudio(beat: number, subBeat: number, isStrong: boolean, isAccent: boolean, isMute: boolean, layerIndex: number = 0, blockIndex: number = -1, layerSoundSet?: string) {
+    // scheduleOffsetCallback에서 지연 발화될 때 preRenderedAudio가 이미 true로
+    // 전환됐을 수 있다. 이 경우 rendered 오디오가 동일한 클릭을 재생하므로
+    // per-tick 발화를 건너뛰어 이중 재생(double-play)을 방지한다.
+    if (this.preRenderedAudio) return;
     if (!isMute) {
       try {
         if (layerIndex > 0 && this.playLayerClick) {
@@ -1599,6 +1633,11 @@ export class MetronomeEngine {
     return this.measureDurationMs;
   }
 
+  /** stop() 후에도 보존되는 현재 마디 시작 시각 (performance.now 기준) */
+  getMeasureStartTime(): number {
+    return this.measureStartTime;
+  }
+
   private loop = () => {
     if (!this.isRunning) return;
 
@@ -1652,10 +1691,11 @@ export class MetronomeEngine {
       this.timerId = setTimeout(this.loop, wait - 80);
     } else if (wait > 25) {
       this.timerId = setTimeout(this.loop, wait - 16);
-    } else if (wait > 4) {
-      this.timerId = setTimeout(this.loop, 1);
     } else {
-      this.scheduleRAF();
+      // wait ≤ 25ms: RAF는 프레임 경계(~16ms)에 고정되어 틱이 최대 ~12ms 늦게
+      // 발화될 수 있다. setTimeout(0)은 다음 이벤트 루프 반복(~1ms)에 실행되므로
+      // wait이 얼마든 무조건 setTimeout(0)으로 통일한다.
+      this.timerId = setTimeout(this.loop, 0);
     }
   }
 
@@ -1683,15 +1723,17 @@ export class MetronomeEngine {
     }
   }
 
-  start(arg?: number | { startFromBeat?: number; startAtPerformanceTime?: number }) {
+  start(arg?: number | { startFromBeat?: number; startAtPerformanceTime?: number; measureStartAt?: number }) {
     if (this.isRunning) return;
     let startFromBeat: number | undefined;
     let startAtPerformanceTime: number | undefined;
+    let measureStartAt: number | undefined;
     if (typeof arg === "number") {
       startFromBeat = arg;
     } else if (arg && typeof arg === "object") {
       startFromBeat = arg.startFromBeat;
       startAtPerformanceTime = arg.startAtPerformanceTime;
+      measureStartAt = arg.measureStartAt;
     }
 
     if (
@@ -1741,7 +1783,12 @@ export class MetronomeEngine {
       this.currentBeat = 0;
       this.currentSubBeat = 0;
       this.scheduleIndex = 0;
-      this.measureStartTime = performance.now();
+      // measureStartAt이 주어지면 그 시각을 마디 기준점으로 사용.
+      // 이 값이 미래라면 loop()의 elapsed < 0 → 모든 tick이 대기 상태가 되어
+      // 정확한 wall-clock 시각에 비트 1이 발화된다 (seamless 전환용).
+      this.measureStartTime = (typeof measureStartAt === "number" && Number.isFinite(measureStartAt))
+        ? measureStartAt
+        : performance.now();
     }
     // 절대 기준선 anchor 초기화. 이후 매 마디 시작 시각은
     // anchorWallTime + (measureCount - anchorMeasureCount) * anchorMeasureDurationMs

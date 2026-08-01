@@ -283,13 +283,13 @@ describe("upsertStemResult", () => {
 // ─── 5. isModelAvailable ──────────────────────────────────────────────────────
 
 describe("isModelAvailable", () => {
-  test("returns false when no file cached and CDN URL is empty string", async () => {
+  test("returns true with no cache and no CDN URL, because the model is bundled", async () => {
     // Default FS stub has getInfoAsync → { exists: false }
     const savedUrl = MODEL_DOWNLOAD_URLS["htdemucs.ort"];
     MODEL_DOWNLOAD_URLS["htdemucs.ort"] = "";
     const result = await isModelAvailable("htdemucs");
     MODEL_DOWNLOAD_URLS["htdemucs.ort"] = savedUrl;
-    assert.equal(result, false);
+    assert.equal(result, true);
   });
 
   test("returns true when CDN URL is non-empty (download possible)", async () => {

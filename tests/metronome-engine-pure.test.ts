@@ -8,6 +8,7 @@ import {
   pureCalcSinglePassDur,
   pureAddBeatTicks,
   pureAddBarWithRepeat,
+  pureEmitBeatsInRange,
   pureEmitStackedBlockTicks,
   type ScheduleInputs,
   type EmitState,
@@ -468,6 +469,104 @@ test("pureAddBarWithRepeat: count 반복 + layers — 각 반복마다 레이어
   pureAddBarWithRepeat(inputs, state, 0, 0, -1, 1);
   const layerTicks = state.ticks.filter(t => t.layerIndex === 1);
   assert.equal(layerTicks.length, 2, "2회 반복 × 레이어 1 = 2 tick");
+});
+
+// ─── 루프 부호(voltaMax / isEnd / jumpFromId-jumpToId) 테스트 ───────────────
+
+test("pureAddBarWithRepeat: voltaMax — blockIteration < voltaMax 이면 바를 재생", () => {
+  const inputs = makeInputs({
+    barRepeats: new Map([[0, { type: "count", value: 1, voltaMax: 2 }]]),
+  });
+  const state = makeState();
+  pureAddBarWithRepeat(inputs, state, 0, 1, -1, 3);
+  assert.equal(state.ticks.length, 1, "iteration 1 < voltaMax 2 → 재생");
+});
+
+test("pureAddBarWithRepeat: voltaMax — blockIteration >= voltaMax 이면 바를 건너뜀", () => {
+  const inputs = makeInputs({
+    barRepeats: new Map([[0, { type: "count", value: 1, voltaMax: 2 }]]),
+  });
+  const state = makeState();
+  pureAddBarWithRepeat(inputs, state, 0, 2, -1, 3);
+  assert.equal(state.ticks.length, 0, "iteration 2 >= voltaMax 2 → 건너뜀, tick 없음");
+});
+
+test("pureAddBarWithRepeat: voltaMax=0 이면 건너뜀 없음 (비활성)", () => {
+  const inputs = makeInputs({
+    barRepeats: new Map([[0, { type: "count", value: 1, voltaMax: 0 }]]),
+  });
+  const state = makeState();
+  pureAddBarWithRepeat(inputs, state, 0, 0, -1, 1);
+  assert.equal(state.ticks.length, 1, "voltaMax=0 → 조건 비활성, 바 재생");
+});
+
+test("pureEmitBeatsInRange: isEnd — 마지막 반복에서 마지막 tick에 stopAfterThis 설정", () => {
+  // 블록 3회 반복, beat 1에 isEnd 부호 → outerIter=2(last) 에서 stopAfterThis=true
+  const inputs = makeInputs({
+    beatsPerMeasure: 3,
+    beatTypes: ["accent", "normal", "normal"] as BeatType[],
+    barRepeats: new Map([[1, { type: "count", value: 1, isEnd: true }]]),
+  });
+  const state = makeState();
+  pureEmitBeatsInRange(inputs, state, new Map(), 0, 2, -1, 2, 3, undefined);
+  const stopTick = state.ticks.find(t => t.stopAfterThis);
+  assert.ok(stopTick !== undefined, "마지막 반복에서 stopAfterThis tick 존재");
+});
+
+test("pureEmitBeatsInRange: isEnd — 마지막 반복이 아닐 때는 stopAfterThis 없음", () => {
+  const inputs = makeInputs({
+    beatsPerMeasure: 3,
+    beatTypes: ["accent", "normal", "normal"] as BeatType[],
+    barRepeats: new Map([[1, { type: "count", value: 1, isEnd: true }]]),
+  });
+  // outerIter=0, outerRepTotal=3 → 마지막 아님
+  const state = makeState();
+  pureEmitBeatsInRange(inputs, state, new Map(), 0, 2, -1, 0, 3, undefined);
+  const stopTick = state.ticks.find(t => t.stopAfterThis);
+  assert.equal(stopTick, undefined, "마지막 반복 아닐 때 stopAfterThis 없음");
+});
+
+test("pureEmitBeatsInRange: isEnd + voltaMax — voltaMax-1번째 반복에서 stopAfterThis 설정", () => {
+  // voltaMax=2 → outerIter >= voltaMax-1 = 1 이면 마지막 허용 반복
+  const inputs = makeInputs({
+    beatsPerMeasure: 3,
+    beatTypes: ["accent", "normal", "normal"] as BeatType[],
+    barRepeats: new Map([[1, { type: "count", value: 1, isEnd: true, voltaMax: 2 }]]),
+  });
+  const state = makeState();
+  pureEmitBeatsInRange(inputs, state, new Map(), 0, 2, -1, 1, 5, undefined);
+  const stopTick = state.ticks.find(t => t.stopAfterThis);
+  assert.ok(stopTick !== undefined, "outerIter=voltaMax-1 → stopAfterThis 설정");
+});
+
+test("pureEmitBeatsInRange: jumpFromId/jumpToId — 1회 점프 후 나머지 진행", () => {
+  // beat 0: jumpToId=1(목적지), beat 2: jumpFromId=1(출발지)
+  // 예상 순서: 0,1,2 → 점프→0,1,2 (총 6 tick, jumpFromId는 1회만 동작)
+  const inputs = makeInputs({
+    beatsPerMeasure: 3,
+    beatTypes: ["accent", "normal", "normal"] as BeatType[],
+    barRepeats: new Map([
+      [0, { type: "count", value: 1, jumpToId: 1 }],
+      [2, { type: "count", value: 1, jumpFromId: 1 }],
+    ]),
+  });
+  const state = makeState();
+  pureEmitBeatsInRange(inputs, state, new Map(), 0, 2, -1, 0, 1, undefined);
+  const beatNums = state.ticks.filter(t => t.layerIndex === 0).map(t => t.beat);
+  assert.deepEqual(beatNums, [0, 1, 2, 0, 1, 2], "점프 후 beat 0부터 재개, 총 6 tick");
+});
+
+test("pureEmitBeatsInRange: jumpFromId — 매칭 jumpToId 없으면 점프 없이 진행", () => {
+  // beat 2에 jumpFromId=99 있지만 jumpToId=99인 바가 없음
+  const inputs = makeInputs({
+    beatsPerMeasure: 3,
+    beatTypes: ["accent", "normal", "normal"] as BeatType[],
+    barRepeats: new Map([[2, { type: "count", value: 1, jumpFromId: 99 }]]),
+  });
+  const state = makeState();
+  pureEmitBeatsInRange(inputs, state, new Map(), 0, 2, -1, 0, 1, undefined);
+  const beatNums = state.ticks.filter(t => t.layerIndex === 0).map(t => t.beat);
+  assert.deepEqual(beatNums, [0, 1, 2], "매칭 없으면 정상 진행");
 });
 
 test("pureEmitStackedBlockTicks: blockDurMs 경계를 벗어난 tick은 잘려나감", () => {

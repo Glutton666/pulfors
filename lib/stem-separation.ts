@@ -7,11 +7,9 @@
  *
  * 추론 환경 요구 사항:
  *   - onnxruntime-react-native 네이티브 모듈 (Expo Go 미지원, 커스텀 빌드 필요)
- *   - MP3/M4A/AAC 소스는 audio-decoder 네이티브 모듈로 먼저 WAV 변환 (역시 커스텀 빌드 필요)
  *   - 모델 파일: <bundle>/models/htdemucs.ort 또는 htdemucs_6s.ort
  *
  * 실행 흐름:
- *   0. (WAV가 아닌 경우) audio-decoder로 PCM WAV 변환 — OS 네이티브 코덱 사용
  *   1. WAV/PCM 디코딩 → Float32 스테레오 PCM
  *   2. (선택) 노이즈 제거 ONNX 모델 적용
  *   3. Demucs ONNX 모델로 청크 단위 스템 분리
@@ -94,12 +92,12 @@ export interface SeparationFailure {
 // ORT type definitions (onnxruntime-react-native shape)
 // ---------------------------------------------------------------------------
 
-interface OrtTensor {
+export interface OrtTensor {
   data: Float32Array;
   dims: readonly number[];
   type: string;
 }
-interface OrtSession {
+export interface OrtSession {
   /** Input tensor names as exported from the model graph */
   inputNames: string[];
   /** Output tensor names as exported from the model graph */
@@ -107,14 +105,14 @@ interface OrtSession {
   run(feeds: Record<string, OrtTensor>): Promise<Record<string, OrtTensor>>;
   release(): Promise<void>;
 }
-interface OrtLib {
+export interface OrtLib {
   InferenceSession: {
     create(
       modelPathOrBuffer: string | ArrayBuffer,
       options?: { executionProviders?: string[]; graphOptimizationLevel?: string },
     ): Promise<OrtSession>;
   };
-  Tensor: new (type: "float32", data: Float32Array, dims: [number, number, number]) => OrtTensor;
+  Tensor: new (type: string, data: Float32Array, dims: number[]) => OrtTensor;
 }
 
 // ---------------------------------------------------------------------------
@@ -627,12 +625,19 @@ async function resolveModelPath(modelFilename: string): Promise<string | null> {
  */
 export async function isModelAvailable(model: StemModel): Promise<boolean> {
   const filename = model === "htdemucs_6s" ? "htdemucs_6s.ort" : "htdemucs.ort";
+
+  // Strategy 1: bundled asset — resolveModelPath will use this at runtime
+  if (_bundledAssetModule(filename) != null) return true;
+
+  // Strategy 2a: previously downloaded to documents cache
   const modelsDir = `${FileSystem.documentDirectory ?? ""}models/`;
   const docPath = `${modelsDir}${filename}`;
   try {
     const info = await FileSystem.getInfoAsync(docPath);
     if (info.exists && ((info as { size?: number }).size ?? 0) > 1024) return true;
   } catch {}
+
+  // Strategy 2b: CDN URL configured — will download on first run
   return !!MODEL_DOWNLOAD_URLS[filename];
 }
 
@@ -1024,17 +1029,21 @@ export async function runStemSeparation(
   config: StemSeparationConfig,
   onProgress: (p: SeparationProgress) => void,
   signal?: AbortSignal,
+  ortOverride?: OrtLib,
 ): Promise<SeparationResult | SeparationFailure> {
-  if (!isOnnxRuntimeAvailable()) {
+  let ort: OrtLib;
+  if (ortOverride) {
+    ort = ortOverride;
+  } else if (isOnnxRuntimeAvailable()) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    ort = require("onnxruntime-react-native") as OrtLib;
+  } else {
     return {
       ok: false,
       error: "model_unavailable",
-      message: "onnxruntime-react-native 네이티브 모듈이 없습니다. 커스텀 개발 클라이언트 빌드가 필요합니다.",
+      message: "onnxruntime-react-native 네이티브 모듈이 없습니다.",
     };
   }
-
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const ort = require("onnxruntime-react-native") as OrtLib;
   const resultId = Crypto.randomUUID();
 
   let demucsSession: OrtSession | null = null;

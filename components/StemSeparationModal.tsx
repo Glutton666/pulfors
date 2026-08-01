@@ -13,6 +13,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { StemWebView, type StemWebViewHandle } from "@/components/StemWebView";
 import {
   Alert,
   Modal,
@@ -146,15 +147,22 @@ export function StemSeparationModal({
   const [progress, setProgress] = useState<SeparationProgress>({ phase: "decoding", pct: 0 });
   const [downloadProgress, setDownloadProgress] = useState<ModelDownloadProgress>({ filename: "", overallPct: 0 });
   const abortRef = useRef<AbortController | null>(null);
+  // True while handleClose is in progress. Prevents the visible→false useEffect
+  // from calling stopAllPlayback() a second time and triggering a spurious
+  // metronome restart (stop path sets isPlaying=false; second call sees stale
+  // closure with isPlaying=true and takes the START path instead of STOP).
+  const closedByHandleRef = useRef(false);
 
   const [activeStem, setActiveStem] = useState<StemResult | null>(null);
   const [stemTracks, setStemTracks] = useState<StemTrack[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
 
+  const stemWebViewRef = useRef<StemWebViewHandle>(null);
+  // WebView WASM 방식이 있으면 사용, 없으면 네이티브 ORT 시도
   // visible이 아닐 때 onnxruntime-react-native를 미리 require()하면
   // 앱 시작 시(이 모달이 항상 마운트되어 있으므로) native 바인딩 미설치 상태에서
   // 크래시가 나므로, 실제로 모달을 열었을 때만 probe한다.
-  const onnxAvailable = visible ? isOnnxRuntimeAvailable() : false;
+  const onnxAvailable = visible ? (Platform.OS === "android" || isOnnxRuntimeAvailable()) : false;
 
   // Pre-create 6 players (max stems). useAudioPlayer hooks must be
   // called unconditionally at the top level — one slot per stem track.
@@ -212,8 +220,16 @@ export function StemSeparationModal({
 
   useEffect(() => {
     if (!visible) {
-      // Ensure transport is fully torn down when modal is hidden
-      stopAllPlayback();
+      // If handleClose already ran (user pressed X / back), stopAllPlayback was
+      // already called there. Calling it again from this effect would fire
+      // onStopMetronome a second time with a stale isPlaying=true closure,
+      // causing togglePlayPause to take the START path and restart the engine.
+      // Only call stopAllPlayback when visible went false via an external path
+      // (e.g. Android back button or a mode switch that sets activeModal=null).
+      if (!closedByHandleRef.current) {
+        stopAllPlayback();
+      }
+      closedByHandleRef.current = false;
       setPhase("landing");
       abortRef.current?.abort();
       setIsPlaying(false);
@@ -232,8 +248,6 @@ export function StemSeparationModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
-  const SUPPORTED_IMPORT_EXTS = ["wav", "mp3", "m4a", "aac"];
-
   const handleImport = useCallback(async () => {
     try {
       // WAV is decoded entirely in pure JS. MP3/M4A/AAC are transcoded to WAV
@@ -243,6 +257,7 @@ export function StemSeparationModal({
       // non-WAV imports still fail with a clear error at separation start.
       // The MIME type filter below restricts the system picker on most
       // platforms; the extension check below provides a second layer of defense.
+      const SUPPORTED_IMPORT_EXTS = ["wav", "mp3", "m4a", "aac"];
       const res = await DocumentPicker.getDocumentAsync({
         type: [
           "audio/wav", "audio/x-wav", "audio/wave",
@@ -312,12 +327,23 @@ export function StemSeparationModal({
     setPhase("progress");
     setProgress({ phase: "decoding", pct: 0 });
 
+    // Android: WebView WASM 브리지 사용; 그 외: 네이티브 ORT (또는 없으면 실패)
+    let ortOverride: Parameters<typeof runStemSeparation>[5] = undefined;
+    if (Platform.OS === "android" && stemWebViewRef.current) {
+      try {
+        ortOverride = await stemWebViewRef.current.waitForOrtLib() as Parameters<typeof runStemSeparation>[5];
+      } catch {
+        // WebView 준비 실패 → 네이티브 ORT 로 폴백
+      }
+    }
+
     const outcome = await runStemSeparation(
       pendingUri,
       pendingName,
       { model: selectedModel, noiseRemoval },
       (p) => { setProgress(p); },
       ctrl.signal,
+      ortOverride,
     );
 
     if (ctrl.signal.aborted) {
@@ -412,6 +438,9 @@ export function StemSeparationModal({
   }, []);
 
   const handleClose = useCallback(() => {
+    // Mark that we're the ones closing so the visible→false useEffect skips
+    // the duplicate stopAllPlayback() call (which would cause a spurious restart).
+    closedByHandleRef.current = true;
     // Always tear down transport first so metronome stays in sync
     stopAllPlayback();
     abortRef.current?.abort();
@@ -425,6 +454,8 @@ export function StemSeparationModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+      {/* 숨긴 WebView — Android 에서 onnxruntime-web WASM 실행용 */}
+      <StemWebView ref={stemWebViewRef} />
       <View style={[styles.overlay]}>
         <View style={[styles.sheet, { paddingTop: topPad, paddingBottom: botPad }]}>
 

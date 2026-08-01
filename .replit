@@ -1,5 +1,5 @@
 entrypoint = "README.md"
-modules = ["nodejs-22", "python-3.11"]
+modules = ["nodejs-22", "python-3.11", "java-17"]
 
 [nix]
 channel = "stable-24_05"
@@ -19,6 +19,10 @@ externalPort = 80
 
 [[ports]]
 localPort = 8082
+externalPort = 3000
+
+[[ports]]
+localPort = 8083
 externalPort = 3001
 
 [env]
@@ -43,6 +47,10 @@ args = "Start App"
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "Start Frontend"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test"
 
 [[workflows.workflow]]
 name = "Start App"
@@ -79,6 +87,17 @@ outputType = "webview"
 task = "shell.exec"
 args = "expo start --web --port 8081"
 waitForPort = 8081
+
+[[workflows.workflow]]
+name = "test"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx jest --testPathIgnorePatterns='e2e/'"
+
+[workflows.workflow.metadata]
+isValidation = true
 
 [postMerge]
 path = "scripts/post-merge.sh"

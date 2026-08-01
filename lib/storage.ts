@@ -73,10 +73,10 @@ export async function saveFadeOutSettings(s: FadeOutSettings): Promise<void> {
   }
 }
 
-export type FlashMode = "all" | "accent" | "off";
+export type FlashMode = "all" | "accent" | "both" | "off";
 export type HapticMode = "all" | "accent" | "off";
-export type BuiltinSoundSet = "classic" | "woodblock" | "cowbell" | "digital" | "rimshot" | "triangle" | "hihat" | "jamblock"
-  | "kick" | "snare" | "clap" | "openhat" | "tom" | "crash";
+export type BuiltinSoundSet = "classic" | "woodblock" | "cowbell" | "digital" | "jamblock" | "sine" | "blip" | "clave" | "cajon" | "marimba" | "stick"
+  | "kick" | "snare" | "clap" | "openhat" | "tom" | "crash" | "rimshot" | "triangle" | "hihat";
 export type SoundSet = BuiltinSoundSet | "custom1" | "custom2" | "custom3";
 
 export type SoundRole = "strong" | "high" | "low";
@@ -175,7 +175,7 @@ export async function saveCustomSoundSets(configs: Record<string, CustomSoundSet
   }
 }
 
-export const BUILTIN_SOUND_SETS: BuiltinSoundSet[] = ["classic", "woodblock", "cowbell", "digital", "rimshot", "triangle", "hihat", "jamblock"];
+export const BUILTIN_SOUND_SETS: BuiltinSoundSet[] = ["classic", "woodblock", "cowbell", "digital", "jamblock", "sine", "blip", "clave", "cajon", "marimba", "stick"];
 export const CUSTOM_SOUND_SET_SLOTS: SoundSet[] = ["custom1", "custom2", "custom3"];
 
 export interface MetronomeSettings {
@@ -326,7 +326,7 @@ export interface PracticeEntry {
   label: string;
   createdAt: number;
   createdBy?: string;
-  mode?: "beat" | "bar" | "note";
+  mode?: "beat" | "bar" | "note" | "score";
   bpm: number;
   beatsPerMeasure: number;
   beatTypes: BeatType[];
@@ -434,6 +434,13 @@ export async function savePracticeBook(entries: PracticeEntry[]): Promise<void> 
   } catch (e) {
     logger.warn("Failed to save practice book:", e);
   }
+}
+
+export async function runStorageMigrations(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(CONTROL_PAD_MAPPING_KEY);
+    await AsyncStorage.removeItem(QUICK_ADD_KEY);
+  } catch {}
 }
 
 export function createPracticeEntry(

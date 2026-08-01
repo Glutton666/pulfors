@@ -11,6 +11,8 @@ interface Ctx {
   lastCommand: VoiceCommand | null;
   lastUrl: string;
   setCommandHandler: (h: DeepLinkCommandHandler | null) => void;
+  /** Dispatch a VoiceCommand directly (e.g. from the in-app voice assistant). */
+  dispatchCommand: (cmd: VoiceCommand) => void;
 }
 
 const DeepLinkContext = createContext<Ctx | null>(null);
@@ -68,8 +70,17 @@ export function DeepLinkProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const dispatchCommand = useCallback((cmd: VoiceCommand) => {
+    setLastCommand(cmd);
+    try {
+      queueRef.current.dispatch(cmd);
+    } catch (err) {
+      logger.warn("[deeplink] dispatchCommand error:", err);
+    }
+  }, []);
+
   return (
-    <DeepLinkContext.Provider value={{ lastCommand, lastUrl, setCommandHandler }}>
+    <DeepLinkContext.Provider value={{ lastCommand, lastUrl, setCommandHandler, dispatchCommand }}>
       {children}
     </DeepLinkContext.Provider>
   );

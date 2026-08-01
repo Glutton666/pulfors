@@ -1,5 +1,9 @@
 /** @type {import('jest').Config} */
 module.exports = {
+  testPathIgnorePatterns: [
+    "<rootDir>/node_modules/",
+    "<rootDir>/e2e/",
+  ],
   modulePathIgnorePatterns: [
     "<rootDir>/.cache/",
     "<rootDir>/node_modules/.cache/",
@@ -26,7 +30,6 @@ module.exports = {
     "^expo-audio$": "<rootDir>/tests/_stubs/expo-audio.js",
     "^expo-document-picker$": "<rootDir>/tests/_stubs/expo-document-picker.js",
     "^expo-sharing$": "<rootDir>/tests/_stubs/expo-sharing.js",
-    "^expo-av$": "<rootDir>/tests/_stubs/expo-av.js",
     "^expo-asset$": "<rootDir>/tests/_stubs/expo-asset.js",
     "^expo-modules-core$": "<rootDir>/tests/_stubs/expo-modules-core.js",
     "^onnxruntime-react-native$": "<rootDir>/tests/_stubs/onnxruntime-react-native.js",
@@ -34,6 +37,7 @@ module.exports = {
     // babel-preset-expo rewrites EXPO_PUBLIC_* to require("expo/virtual/env.js"),
     // which is an ESM module that Jest can't load. Stub it with a CJS equivalent.
     "^expo/virtual/env(\\.js)?$": "<rootDir>/tests/_stubs/expo-virtual-env.js",
+    "^@breezystack/lamejs$": "<rootDir>/tests/_stubs/lamejs.js",
   },
   transform: {
     "^.+\\.[jt]sx?$": ["babel-jest", { presets: ["babel-preset-expo"] }],

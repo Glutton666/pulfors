@@ -40,6 +40,8 @@ export const PracticeShareFileSchema = z.object({
   _meta: PracticeShareMetaSchema,
   entry: PracticeEntryMinimalSchema,
   audioFiles: z.record(z.string()).optional(),
+  // 악보 모드 항목의 연결된 ScoreDocument (선택적; 수신 기기에 없을 경우 복원용)
+  scoreDoc: z.record(z.unknown()).optional(),
 });
 
 export type PracticeShareFileParsed = z.infer<typeof PracticeShareFileSchema>;

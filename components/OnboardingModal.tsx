@@ -28,7 +28,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LANGUAGE_OPTIONS, type Language } from "@/lib/i18n";
 import { Switch } from "react-native";
 import { AssistantShortcutsGuide } from "@/components/AssistantShortcutsGuide";
-import { Audio } from "expo-av";
+import { createAudioPlayer } from "expo-audio";
+import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import { ensurePermission } from "@/lib/permissions";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -245,7 +246,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   const [soundTestPlayed, setSoundTestPlayed] = useState(false);
   const [permMicGranted, setPermMicGranted] = useState(false);
   const [permLocationGranted, setPermLocationGranted] = useState(false);
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const soundRef = useRef<ExpoAudioPlayer | null>(null);
   const hueTrackRef = useRef<View>(null);
   const hueTrackWidthRef = useRef(0);
 
@@ -266,12 +267,12 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       setPermMicGranted(false);
       setPermLocationGranted(false);
       if (soundRef.current) {
-        soundRef.current.unloadAsync().catch(() => {});
+        try { soundRef.current.remove(); } catch {}
         soundRef.current = null;
       }
     }
     if (!visible && soundRef.current) {
-      soundRef.current.unloadAsync().catch(() => {});
+      try { soundRef.current.remove(); } catch {}
       soundRef.current = null;
     }
     prevVisibleRef.current = visible;
@@ -280,7 +281,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   useEffect(() => {
     return () => {
       if (soundRef.current) {
-        soundRef.current.unloadAsync().catch(() => {});
+        try { soundRef.current.remove(); } catch {}
       }
     };
   }, []);
@@ -454,17 +455,18 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
     }
   }, [step, animateToStep, hapticDemo, flashDemo]);
 
-  const handlePlayTestSound = useCallback(async () => {
+  const handlePlayTestSound = useCallback(() => {
     try {
       if (soundRef.current) {
-        await soundRef.current.setPositionAsync(0);
-        await soundRef.current.playAsync();
+        soundRef.current.seekTo(0);
+        soundRef.current.play();
       } else {
-        const { sound } = await Audio.Sound.createAsync(
+        const player = createAudioPlayer(
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
           require("@/assets/sounds/click-strong.wav"),
-          { shouldPlay: true }
         );
-        soundRef.current = sound;
+        player.play();
+        soundRef.current = player;
       }
       setSoundTestPlayed(true);
     } catch {
@@ -1075,7 +1077,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             onPress={handlePlayTestSound}
             style={[
               styles.demoButton,
-              { width: "80%", height: 52, marginTop: 8 },
+              { width: "80%", height: 52, marginTop: Spacing.sm },
               soundTestPlayed
                 ? { backgroundColor: C.surfaceLight, borderWidth: 1, borderColor: accentColor }
                 : { backgroundColor: accentColor },
@@ -1092,7 +1094,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             </Text>
           </Pressable>
           {soundTestPlayed && (
-            <Text style={{ color: C.textSecondary, fontSize: 12, textAlign: "center", paddingHorizontal: 12, lineHeight: 18 }}>
+            <Text style={{ color: C.textSecondary, fontSize: FontSize.small, textAlign: "center", paddingHorizontal: 12, lineHeight: 18 }}>
               {t("onboarding", "soundTestMuteHint")}
             </Text>
           )}
@@ -1139,7 +1141,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       <View style={[styles.infoCard, { flexDirection: "row", alignItems: "center", gap: 12 }]}>
         <Ionicons name={iconName as any} size={24} color={accentColor} />
         <View style={{ flex: 1 }}>
-          <Text style={[styles.inputLabel, { marginBottom: 2 }]}>{label}</Text>
+          <Text style={[styles.inputLabel, { marginBottom: Spacing.xxs }]}>{label}</Text>
           <Text style={styles.modeOptionDesc}>{desc}</Text>
         </View>
         {granted && (
@@ -1170,7 +1172,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             testID="onboarding-perm-allow-now"
             style={[
               styles.demoButton,
-              { width: "100%", height: 52, backgroundColor: accentColor, marginTop: 4 },
+              { width: "100%", height: 52, backgroundColor: accentColor, marginTop: Spacing.xs },
             ]}
           >
             <Ionicons name="shield-checkmark-outline" size={20} color={C.background} />

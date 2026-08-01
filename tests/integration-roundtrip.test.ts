@@ -5,6 +5,8 @@
 //   2) 연습 항목: PracticeEntry -> entryToBarConfig -> selectCurrentBarConfig
 //      라운드트립이 동일한 라이브 출력을 만들어내는지
 //   3) 백업: 데이터 sanitize + remap + JSON 직렬화 라운드트립이 손실 없는지
+//   4) 백업 전체 흐름: exportBackup이 만든 JSON을 restoreFromJson이 읽어
+//      schemaVersion=1 경로를 통과하고 데이터를 손실 없이 복원하는지 (Task #46)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
@@ -24,6 +26,15 @@ import {
   remapDataUris,
   remapSampleMap,
 } from "../lib/backup/shared";
+import { exportBackup, restoreFromJson } from "../lib/backup/full";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { CURRENT_SCHEMA_VERSION } from "../lib/backup/migrations";
+
+// FileSystem stub을 직접 참조해 writeAsStringAsync를 패치할 수 있도록 가져온다.
+// setup.cjs가 "expo-file-system/legacy"를 이 스텁으로 라우팅하므로
+// exportBackup 내부의 writeStringToFile 호출이 같은 객체를 사용한다.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const FileSystemStub = require("./_stubs/expo-file-system");
 
 function makeDialState(): DialConfig {
   return {
@@ -400,4 +411,95 @@ test("[backup-roundtrip] remapSampleMap은 매핑 없는 URI는 그대로 둔다
   const out = remapSampleMap(samples, mapping);
   assert.equal(out["0"], "file:///stub/cache/note_samples/known-new.wav");
   assert.equal(out["1"], "file:///stub/cache/note_samples/unknown.wav");
+});
+
+// ── 백업 전체 흐름 회귀 테스트 (Task #46) ─────────────────────────────────
+// exportBackup이 실제로 직렬화한 JSON을 restoreFromJson이 읽어
+// schemaVersion 분기를 올바르게 통과하는지, 그리고 미래 버전 파일을
+// 적절한 errorCode로 거부하는지 검증한다.
+// exportBackup은 FileSystem.writeAsStringAsync에 JSON을 쓴 뒤 Sharing으로
+// 공유를 시도한다. 테스트 환경에서는 Sharing.isAvailableAsync()가 false를
+// 반환하므로 exportBackup은 false를 반환하지만, writeAsStringAsync 호출은
+// 공유 시도 이전에 완료된다 — 이 순서를 이용해 JSON을 가로채고 직접 검증한다.
+
+test("[backup-export-import] exportBackup이 생성한 JSON을 restoreFromJson이 schemaVersion=1 경로로 손실 없이 복원한다", async () => {
+  // 1) AsyncStorage를 초기화하고 테스트 데이터를 기록한다.
+  (AsyncStorage as unknown as { __reset(): void }).__reset();
+  const originalSettings = JSON.stringify({ bpm: 137, beatsPerMeasure: 5 });
+  const originalBook = JSON.stringify([
+    {
+      id: "rt1",
+      label: "라운드트립 항목",
+      createdAt: 1000,
+      bpm: 120,
+      beatsPerMeasure: 4,
+      beatTypes: ["accent", "normal", "normal", "normal"],
+      beatSubdivisions: {},
+      barRepeats: {},
+      barLoopMode: "once",
+      subdivisionPattern: ["accent"],
+    },
+  ]);
+  await AsyncStorage.setItem("metronome_settings", originalSettings);
+  await AsyncStorage.setItem("practice_book", originalBook);
+
+  // 2) FileSystem stub의 writeAsStringAsync를 패치해 exportBackup이 쓰는
+  //    JSON 문자열을 가로챈다.
+  let capturedJson: string | null = null;
+  const originalWrite = FileSystemStub.writeAsStringAsync;
+  FileSystemStub.writeAsStringAsync = async (_uri: string, content: string) => {
+    capturedJson = content;
+  };
+
+  try {
+    await exportBackup();
+  } finally {
+    FileSystemStub.writeAsStringAsync = originalWrite;
+  }
+
+  // 3) exportBackup이 JSON을 생성했는지 확인하고 schemaVersion을 검증한다.
+  assert.ok(capturedJson !== null, "exportBackup이 JSON을 써야 한다");
+  const parsed = JSON.parse(capturedJson!) as {
+    schemaVersion: number;
+    data: Record<string, string | null>;
+    _meta: { app: string };
+  };
+  assert.equal(parsed._meta.app, "metronome", "_meta.app이 'metronome'");
+  assert.equal(parsed.schemaVersion, CURRENT_SCHEMA_VERSION, "schemaVersion이 CURRENT_SCHEMA_VERSION(1)");
+  assert.equal(parsed.data["metronome_settings"], originalSettings, "settings 직렬화 동일");
+  assert.equal(parsed.data["practice_book"], originalBook, "practice_book 직렬화 동일");
+
+  // 4) AsyncStorage를 초기화한 뒤 가로챈 JSON을 restoreFromJson에 넘겨
+  //    데이터가 손실 없이 복원되는지 확인한다.
+  (AsyncStorage as unknown as { __reset(): void }).__reset();
+  const result = await restoreFromJson(capturedJson!);
+  assert.equal(result.success, true, "복원 성공");
+  assert.equal(result.errorCode, undefined, "errorCode 없음");
+  assert.ok(result.keyCount >= 2, "최소 2개 키 복원");
+
+  const restoredSettings = await AsyncStorage.getItem("metronome_settings");
+  assert.equal(restoredSettings, originalSettings, "settings가 원본과 동일하게 복원됨");
+  const restoredBook = await AsyncStorage.getItem("practice_book");
+  assert.equal(restoredBook, originalBook, "practice_book이 원본과 동일하게 복원됨");
+});
+
+test("[backup-export-import] schemaVersion=999으로 조작된 JSON은 importBackup이 'unsupported_version'으로 거부한다", async () => {
+  // schemaVersion=999은 CURRENT_SCHEMA_VERSION(1)보다 훨씬 크므로
+  // migrateBackup이 UnsupportedBackupVersionError를 던지고
+  // restoreFromJson은 errorCode='unsupported_version'을 반환해야 한다.
+  const futureBackup = JSON.stringify({
+    _meta: {
+      app: "metronome",
+      version: 2,
+      createdAt: "2099-07-17T00:00:00.000Z",
+      keyCount: 1,
+    },
+    schemaVersion: 999,
+    data: { metronome_settings: JSON.stringify({ bpm: 200 }) },
+  });
+
+  const result = await restoreFromJson(futureBackup);
+  assert.equal(result.success, false, "미래 버전 파일은 거부되어야 한다");
+  assert.equal(result.errorCode, "unsupported_version", "errorCode='unsupported_version'");
+  assert.equal(result.keyCount, 0, "복원된 키 없음");
 });

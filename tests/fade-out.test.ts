@@ -17,8 +17,8 @@ test("clampFadeOutMeasures: clamps to 1..64 and floors", () => {
 
 test("fade-out muted guard: all audio paths short-circuit when muted", () => {
   // 모든 click/sample 콜백은 진입 직후 fadeOutMutedRef를 검사한다.
-  // 이 회귀 테스트는 app/index.tsx에 5개 클릭 가드 + 1개 샘플 가드가 존재함을 보장한다.
-  const src = require("node:fs").readFileSync("app/index.tsx", "utf8") as string;
+  // 이 회귀 테스트는 hooks/useMetronomeScreen.ts에 5개 클릭 가드 + 1개 샘플 가드가 존재함을 보장한다.
+  const src = require("node:fs").readFileSync("hooks/useMetronomeScreen.ts", "utf8") as string;
   const guards = src.match(/if \(fadeOutMutedRef\.current\)\s+return/g) || [];
   // high, low, strong, layer, block, customSample → 6
   if (guards.length < 6) {

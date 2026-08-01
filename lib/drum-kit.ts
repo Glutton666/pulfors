@@ -67,13 +67,15 @@ const ALL_BUILTIN_OPTIONS: Array<{ setName: BuiltinSoundSet; role: SoundRole }> 
   { setName: "digital", role: "strong" },
   { setName: "digital", role: "high"   },
   { setName: "digital", role: "low"    },
-  { setName: "rimshot", role: "strong" },
-  { setName: "rimshot", role: "high"   },
-  { setName: "rimshot", role: "low"    },
-  { setName: "triangle", role: "strong" },
-  { setName: "triangle", role: "high"   },
-  { setName: "triangle", role: "low"    },
-  { setName: "hihat",   role: "low"    },
+  { setName: "jamblock", role: "strong" },
+  { setName: "jamblock", role: "high"   },
+  { setName: "jamblock", role: "low"    },
+  { setName: "clave",    role: "strong" },
+  { setName: "clave",    role: "high"   },
+  { setName: "clave",    role: "low"    },
+  { setName: "stick",    role: "strong" },
+  { setName: "stick",    role: "high"   },
+  { setName: "stick",    role: "low"    },
 ];
 
 export function createDefaultDrumKitMapping(): DrumKitMapping {
@@ -90,10 +92,11 @@ export function listBuiltinPadOptions(): Array<{ setName: BuiltinSoundSet; role:
 }
 
 const DRUM_PAD_SET_NAMES = new Set<string>(["kick", "snare", "clap", "openhat", "tom", "crash"]);
-const METRONOME_SET_NAMES = new Set<string>(["classic", "woodblock", "cowbell", "digital", "rimshot", "triangle", "hihat"]);
+const METRONOME_SET_NAMES = new Set<string>(["classic", "woodblock", "cowbell", "digital", "jamblock", "sine", "blip", "clave", "cajon", "marimba", "stick"]);
+const LEGACY_DRUM_SET_NAMES = new Set<string>(["rimshot", "triangle", "hihat"]);
 
 function isBuiltinSetName(v: unknown): v is BuiltinSoundSet {
-  return typeof v === "string" && (DRUM_PAD_SET_NAMES.has(v) || METRONOME_SET_NAMES.has(v));
+  return typeof v === "string" && (DRUM_PAD_SET_NAMES.has(v) || METRONOME_SET_NAMES.has(v) || LEGACY_DRUM_SET_NAMES.has(v));
 }
 function isRole(v: unknown): v is SoundRole {
   return v === "strong" || v === "high" || v === "low";

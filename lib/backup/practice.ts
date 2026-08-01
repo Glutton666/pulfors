@@ -4,6 +4,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { Platform } from "react-native";
 import type { PracticeEntry } from "../storage";
 import { loadPracticeBook, savePracticeBook } from "../storage";
+import { loadScore, saveScore } from "../score-storage";
 import { logger } from "../logger";
 import { captureBreadcrumb } from "../error-tracking";
 import {
@@ -20,6 +21,7 @@ import {
   writeStringToFile,
 } from "./shared";
 import { PracticeShareFileSchema, formatZodError } from "./schema";
+import type { ScoreDocument } from "../score-types";
 
 export interface ImportPracticeResult {
   success: boolean;
@@ -47,6 +49,20 @@ export async function sharePracticeEntry(entry: PracticeEntry): Promise<boolean>
     }
     const audioFiles = await readAllAudioFiles(entryUris);
 
+    // 악보 모드 항목인 경우 연결된 ScoreDocument 도 함께 포함한다.
+    // 수신 기기에 해당 악보가 없어도 import 시 복원할 수 있도록 한다.
+    let scoreDoc: ScoreDocument | undefined;
+    if (entry.scoreId) {
+      try {
+        const loaded = await loadScore(entry.scoreId);
+        if (loaded) {
+          scoreDoc = loaded;
+        }
+      } catch (e) {
+        logger.warn("[Backup] Could not load scoreDoc for entry:", entry.scoreId, e);
+      }
+    }
+
     const shareData: PracticeShareFile = {
       _meta: {
         app: "metronome",
@@ -55,6 +71,7 @@ export async function sharePracticeEntry(entry: PracticeEntry): Promise<boolean>
       },
       entry,
       ...(Object.keys(audioFiles).length > 0 ? { audioFiles } : {}),
+      ...(scoreDoc ? { scoreDoc } : {}),
     };
 
     const json = JSON.stringify(shareData);
@@ -179,6 +196,19 @@ async function parsePracticeJson(
           ...qe,
           noteSamples: qe.noteSamples ? remapSampleMap(qe.noteSamples, uriMapping) : qe.noteSamples,
         }));
+      }
+    }
+
+    // 악보 모드 항목에 scoreDoc 이 포함된 경우, 수신 기기에 해당 악보가 없으면 복원한다.
+    if (data.scoreDoc && sanitized.scoreId) {
+      try {
+        const existingScore = await loadScore(sanitized.scoreId);
+        if (!existingScore) {
+          await saveScore(data.scoreDoc as unknown as ScoreDocument);
+          logger.info("[Backup] Restored scoreDoc for imported practice entry:", sanitized.scoreId);
+        }
+      } catch (e) {
+        logger.warn("[Backup] Failed to restore scoreDoc for imported practice entry:", sanitized.scoreId, e);
       }
     }
 

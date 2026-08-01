@@ -468,11 +468,11 @@ export interface EntryEngineSetters {
   setAllBarBpmOverrides(overrides: Record<number, number>): void;
 }
 
-export function applyEntryToEngine(engine: EntryEngineSetters, entry: PracticeEntry): void {
+export function applyEntryToEngine(engine: EntryEngineSetters, entry: PracticeEntry, denominator: 2 | 4 | 8 = 4): void {
   const rawBlocks = entry.loopBlocks ?? [];
   const rawRepeats = { ...(entry.barRepeats || {}) } as Record<number, BarRepeat>;
   const { barRepeats: migratedRepeats, loopBlocks: blocks } = migrateLayerBlocks(rawBlocks, rawRepeats);
-  engine.setBpm(entry.bpm);
+  engine.setBpm(entry.bpm * (4 / denominator));
   engine.setBeatsPerMeasure(entry.beatsPerMeasure);
   engine.setBeatTypes([...entry.beatTypes]);
   engine.setAllBeatSubdivisions({ ...entry.beatSubdivisions });

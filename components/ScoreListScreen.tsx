@@ -33,9 +33,10 @@ export interface ScoreListScreenProps {
   defaultBpm: number;
   onClose: () => void;
   onOpenEditor: (doc: ScoreDocument) => void;
+  onOpenDial?: () => void;
 }
 
-export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor }: ScoreListScreenProps) {
+export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onOpenDial }: ScoreListScreenProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -163,7 +164,8 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor }: ScoreList
           <Text style={[styles.dateText, { color: C.textSecondary }]}>
             {formatDate(item.updatedAt)}
           </Text>
-          <View style={styles.cardActions}>
+          {/* 터치가 바깥 Pressable(편집기 열기)로 전파되지 않도록 onStartShouldSetResponder 차단 */}
+          <View style={styles.cardActions} onStartShouldSetResponder={() => true}>
             <Pressable
               style={({ pressed }) => [styles.actionBtn, { borderColor: C.border }, pressed && { opacity: 0.6 }]}
               onPress={() => handleDuplicate(item.id)}
@@ -199,14 +201,15 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor }: ScoreList
       {/* 헤더 */}
       <View style={[styles.header, { paddingTop: topInset + 8, borderBottomColor: C.border }]}>
         <Pressable
-          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
-          onPress={onClose}
-          hitSlop={12}
-          testID="score-list-back"
+          onPress={onOpenDial}
+          style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}
+          accessibilityRole="button"
         >
-          <Ionicons name="chevron-back" size={S.ms(24, 0.4)} color={C.text} />
+          <Ionicons name="musical-notes" size={S.ms(20, 0.4)} color={C.accent} />
+          <Text style={[styles.headerTitle, { color: C.accent, fontFamily: "SpaceGrotesk_700Bold", fontSize: S.ms(18, 0.4), letterSpacing: 1.2, textTransform: "uppercase", flex: 0 }]}>
+            {t("scoreMode", "title")}
+          </Text>
         </Pressable>
-        <Text style={[styles.headerTitle, { color: C.text }]}>{t("scoreMode", "title")}</Text>
         <Pressable
           style={({ pressed }) => [styles.importBtn, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
           onPress={handleImport}

@@ -42,6 +42,7 @@ import Colors, { accentFromHex, type ThemeColor } from "@/constants/colors";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { PRESET_COLORS, HUE_COLORS } from "@/constants/color-presets";
 import { useTheme, type BeatTypeKey } from "@/contexts/ThemeContext";
+import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, SoundRole, CustomSoundSetConfig, CustomSoundSample } from "@/lib/storage";
 import { loadCustomSoundSets, saveCustomSoundSets, BUILTIN_SOUND_SETS } from "@/lib/storage";
 import { soundSets } from "@/lib/metronome-engine";
@@ -93,18 +94,27 @@ const SoundPreviewPlayers = React.forwardRef<
   const digitalStrong = useAudioPlayer(soundSets.digital.strong);
   const digitalHigh = useAudioPlayer(soundSets.digital.high);
   const digitalLow = useAudioPlayer(soundSets.digital.low);
-  const rimshotStrong = useAudioPlayer(soundSets.rimshot.strong);
-  const rimshotHigh = useAudioPlayer(soundSets.rimshot.high);
-  const rimshotLow = useAudioPlayer(soundSets.rimshot.low);
-  const triangleStrong = useAudioPlayer(soundSets.triangle.strong);
-  const triangleHigh = useAudioPlayer(soundSets.triangle.high);
-  const triangleLow = useAudioPlayer(soundSets.triangle.low);
-  const hihatStrong = useAudioPlayer(soundSets.hihat.strong);
-  const hihatHigh = useAudioPlayer(soundSets.hihat.high);
-  const hihatLow = useAudioPlayer(soundSets.hihat.low);
   const jamblockStrong = useAudioPlayer(soundSets.jamblock.strong);
   const jamblockHigh = useAudioPlayer(soundSets.jamblock.high);
   const jamblockLow = useAudioPlayer(soundSets.jamblock.low);
+  const sineStrong = useAudioPlayer(soundSets.sine.strong);
+  const sineHigh = useAudioPlayer(soundSets.sine.high);
+  const sineLow = useAudioPlayer(soundSets.sine.low);
+  const blipStrong = useAudioPlayer(soundSets.blip.strong);
+  const blipHigh = useAudioPlayer(soundSets.blip.high);
+  const blipLow = useAudioPlayer(soundSets.blip.low);
+  const claveStrong = useAudioPlayer(soundSets.clave.strong);
+  const claveHigh = useAudioPlayer(soundSets.clave.high);
+  const claveLow = useAudioPlayer(soundSets.clave.low);
+  const cajonStrong = useAudioPlayer(soundSets.cajon.strong);
+  const cajonHigh = useAudioPlayer(soundSets.cajon.high);
+  const cajonLow = useAudioPlayer(soundSets.cajon.low);
+  const marimbaStrong = useAudioPlayer(soundSets.marimba.strong);
+  const marimbaHigh = useAudioPlayer(soundSets.marimba.high);
+  const marimbaLow = useAudioPlayer(soundSets.marimba.low);
+  const stickStrong = useAudioPlayer(soundSets.stick.strong);
+  const stickHigh = useAudioPlayer(soundSets.stick.high);
+  const stickLow = useAudioPlayer(soundSets.stick.low);
   const previewIndexRef = useRef<Record<string, number>>({});
 
   type PlayerList = typeof classicStrong[];
@@ -113,10 +123,13 @@ const SoundPreviewPlayers = React.forwardRef<
     woodblock: [woodblockStrong, woodblockHigh, woodblockLow],
     cowbell: [cowbellStrong, cowbellHigh, cowbellLow],
     digital: [digitalStrong, digitalHigh, digitalLow],
-    rimshot: [rimshotStrong, rimshotHigh, rimshotLow],
-    triangle: [triangleStrong, triangleHigh, triangleLow],
-    hihat: [hihatStrong, hihatHigh, hihatLow],
     jamblock: [jamblockStrong, jamblockHigh, jamblockLow],
+    sine: [sineStrong, sineHigh, sineLow],
+    blip: [blipStrong, blipHigh, blipLow],
+    clave: [claveStrong, claveHigh, claveLow],
+    cajon: [cajonStrong, cajonHigh, cajonLow],
+    marimba: [marimbaStrong, marimbaHigh, marimbaLow],
+    stick: [stickStrong, stickHigh, stickLow],
   };
 
   useImperativeHandle(ref, () => ({
@@ -314,6 +327,7 @@ export function SettingsModal({
   const styles = make_styles(C);
   const csStyles = make_csStyles(C);
   const { language, setLanguage, t } = useLanguage();
+  const { isSupported: voiceSupported, isEnabled: voiceEnabled, isListening: voiceListening, setEnabled: setVoiceEnabled } = useVoiceAssistant();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
   const [showCustomPicker, setShowCustomPicker] = useState(themeColor === "custom");
@@ -1385,10 +1399,10 @@ export function SettingsModal({
           <Text style={[styles.sectionValue, { color: C.accent }]}>{Math.round(barCellOpacity * 100)}%</Text>
         </View>
         <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "barCellOpacityHint")}</Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingTop: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingTop: Spacing.sm }}>
           <Pressable
             onPress={() => { const v = Math.max(0, Math.round((barCellOpacity - 0.05) * 100) / 100); onBarCellOpacityChange(v); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
-            style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
+            style={{ width: 36, height: 36, borderRadius: Radius.md, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
           >
             <Text style={{ color: C.text, fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold" }}>−</Text>
           </Pressable>
@@ -1397,7 +1411,7 @@ export function SettingsModal({
           </View>
           <Pressable
             onPress={() => { const v = Math.min(1, Math.round((barCellOpacity + 0.05) * 100) / 100); onBarCellOpacityChange(v); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
-            style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
+            style={{ width: 36, height: 36, borderRadius: Radius.md, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
           >
             <Text style={{ color: C.text, fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold" }}>+</Text>
           </Pressable>
@@ -1413,10 +1427,10 @@ export function SettingsModal({
           <Text style={[styles.sectionValue, { color: C.accent }]}>{barRowHeight}px</Text>
         </View>
         <Text style={[styles.offsetHint, { color: C.textTertiary }]}>{t("settings", "barRowHeightHint")}</Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingTop: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingTop: Spacing.sm }}>
           <Pressable
             onPress={() => { const v = Math.max(32, barRowHeight - 4); onBarRowHeightChange(v); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
-            style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
+            style={{ width: 36, height: 36, borderRadius: Radius.md, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
           >
             <Text style={{ color: C.text, fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold" }}>−</Text>
           </Pressable>
@@ -1425,7 +1439,7 @@ export function SettingsModal({
           </View>
           <Pressable
             onPress={() => { const v = Math.min(72, barRowHeight + 4); onBarRowHeightChange(v); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
-            style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
+            style={{ width: 36, height: 36, borderRadius: Radius.md, backgroundColor: C.backgroundSecondary, alignItems: "center", justifyContent: "center" }}
           >
             <Text style={{ color: C.text, fontSize: 20, fontFamily: "SpaceGrotesk_600SemiBold" }}>+</Text>
           </Pressable>
@@ -1443,7 +1457,7 @@ export function SettingsModal({
             message={t("settings", "screenFlashHelp")}
           />
         </View>
-        <TripleSelector value={flashMode} onChange={onFlashModeChange} accentColor={C.accent} accentDimColor={C.accentDim} options={TRIPLE_OPTS} />
+        <TripleSelector value={flashMode as import("@/components/SettingsModal.helpers").TripleValue} onChange={onFlashModeChange as (v: import("@/components/SettingsModal.helpers").TripleValue) => void} accentColor={C.accent} accentDimColor={C.accentDim} options={TRIPLE_OPTS} />
       </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
@@ -1581,7 +1595,7 @@ export function SettingsModal({
         </View>
 
         {!editingCustomSlot && (
-          <View style={{ marginTop: 8, gap: 2 }}>
+          <View style={{ marginTop: Spacing.sm, gap: Spacing.xxs }}>
             {[
               ...BUILTIN_SOUND_SETS.map(key => ({ key, label: t("soundSets", key as any), isCustom: false })),
               ...Object.entries(customSoundSets).map(([k, cfg]) => ({ key: k, label: cfg.name, isCustom: true })),
@@ -1594,7 +1608,7 @@ export function SettingsModal({
               return (
                 <Pressable
                   key={opt.key}
-                  style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, backgroundColor: isMain ? C.accentDim : C.overlay08, gap: 8 }}
+                  style={{ flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 12, borderRadius: Radius.md, backgroundColor: isMain ? C.accentDim : C.overlay08, gap: Spacing.sm }}
                   onPress={() => { onSoundSetChange(opt.key as any); playSoundPreview(opt.key as SoundSet); if (Platform.OS !== "web") Haptics.selectionAsync(); }}
                 >
                   <Ionicons
@@ -1605,14 +1619,14 @@ export function SettingsModal({
                   <Text style={{ flex: 1, color: isMain ? C.accent : C.text, fontSize: FontSize.small, fontFamily: "SpaceGrotesk_600SemiBold" }}>
                     {opt.label}
                   </Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs }}>
                     {isMain && (
-                      <View style={{ backgroundColor: C.accent, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <View style={{ backgroundColor: C.accent, borderRadius: Radius.xs, paddingHorizontal: 6, paddingVertical: Spacing.xxs }}>
                         <Text style={{ color: C.background, fontSize: 9, fontFamily: "SpaceGrotesk_600SemiBold" }}>{t("settings", "soundSetMain")}</Text>
                       </View>
                     )}
                     {usedInLayers.map(ln => (
-                      <View key={ln} style={{ backgroundColor: C.overlay08, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border }}>
+                      <View key={ln} style={{ backgroundColor: C.overlay08, borderRadius: Radius.xs, paddingHorizontal: 6, paddingVertical: Spacing.xxs, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border }}>
                         <Text style={{ color: C.textSecondary, fontSize: 9 }}>{t("settings", "soundSetLayerBadge").replace("%s", String(ln))}</Text>
                       </View>
                     ))}
@@ -1620,7 +1634,7 @@ export function SettingsModal({
                       <Pressable
                         hitSlop={8}
                         onPress={() => openCustomEditor(opt.key)}
-                        style={{ padding: 4 }}
+                        style={{ padding: Spacing.xs }}
                       >
                         <Ionicons name="pencil-outline" size={S.ms(14, 0.4)} color={C.textSecondary} />
                       </Pressable>
@@ -1632,7 +1646,7 @@ export function SettingsModal({
 
             {Object.keys(customSoundSets).length < 3 && (
               <Pressable
-                style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, borderStyle: "dashed", marginTop: 4 }}
+                style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, paddingVertical: 10, paddingHorizontal: 12, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, borderStyle: "dashed", marginTop: Spacing.xs }}
                 onPress={() => {
                   const slot = getNextCustomSlot();
                   if (slot) openCustomEditor(slot);
@@ -1736,7 +1750,7 @@ export function SettingsModal({
                               }}
                             >
                               <Text style={[csStyles.chipText, active && { color: C.accent }]}>
-                                {t("soundSets", bs)}
+                                {t("soundSets", bs as Parameters<typeof t>[1])}
                               </Text>
                             </Pressable>
                           );
@@ -2209,7 +2223,7 @@ export function SettingsModal({
               <Ionicons name="globe-outline" size={S.ms(18, 0.4)} color={C.accent} />
               <Text style={[styles.sectionLabel, { color: C.text }]}>{t("settings", "webVersionLink")}</Text>
             </View>
-            <Text style={[styles.offsetHint, { color: C.textSecondary, marginBottom: 8 }]} numberOfLines={1}>
+            <Text style={[styles.offsetHint, { color: C.textSecondary, marginBottom: Spacing.sm }]} numberOfLines={1}>
               {`https://${process.env.EXPO_PUBLIC_DOMAIN}`}
             </Text>
             <View style={{ flexDirection: "row", gap: 10 }}>
@@ -2292,6 +2306,47 @@ export function SettingsModal({
           </View>
         </View>
       )}
+
+      <View style={[styles.divider, { backgroundColor: C.border }]} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="mic-outline" size={S.ms(18, 0.4)} color={C.accent} />
+          <Text style={[styles.sectionLabel, { color: C.text }]}>
+            {t("settings", "voiceAssistant")}
+          </Text>
+        </View>
+        <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "Inter_400Regular", marginBottom: Spacing.sm }}>
+          {t("settings", "voiceAssistantHint")}
+        </Text>
+        {voiceSupported ? (
+          <Pressable
+            onPress={() => setVoiceEnabled(!voiceEnabled)}
+            style={{ flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.overlay10 }}
+          >
+            <Text style={{ color: C.text, fontSize: 14, fontFamily: "Inter_500Medium" }}>
+              {t("settings", "voiceAssistantEnabled")}
+            </Text>
+            <View style={{ flexDirection: "row" as const, alignItems: "center" as const, gap: Spacing.xs }}>
+              {voiceEnabled && voiceListening && (
+                <Text style={{ color: C.accent, fontSize: FontSize.caption, fontFamily: "Inter_400Regular" }}>
+                  {t("settings", "voiceAssistantListening")}
+                </Text>
+              )}
+              <Switch
+                value={voiceEnabled}
+                onValueChange={setVoiceEnabled}
+                trackColor={{ true: C.accent }}
+                thumbColor={C.surface}
+              />
+            </View>
+          </Pressable>
+        ) : (
+          <Text style={{ color: C.textSecondary, fontSize: FontSize.caption, fontFamily: "Inter_400Regular", paddingVertical: Spacing.sm, borderTopWidth: 1, borderTopColor: C.overlay10 }}>
+            {t("settings", "voiceAssistantIosHint")}
+          </Text>
+        )}
+      </View>
 
       <View style={[styles.divider, { backgroundColor: C.border }]} />
 

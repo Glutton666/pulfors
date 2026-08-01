@@ -16,8 +16,6 @@ import {
   yToPitch,
   pitchToY,
   noteStaffY,
-  drumTypeToY,
-  yToDrumType,
   SCORE_STAFF_PADDING_TOP,
   SCORE_PART_HEIGHT,
   NOTE_HEAD_RX,
@@ -30,6 +28,7 @@ import {
   TIME_SIG_WIDTH,
   KEY_SIG_ACCIDENTAL_WIDTH,
   layoutMeasure,
+  yToDrumType,
 } from "@/lib/score-layout";
 import { BASE_LINE_SPACING, scoreScaleFactor } from "@/lib/score-scale";
 import type {
@@ -38,9 +37,29 @@ import type {
   NoteDuration,
   ClefType,
   Accidental,
+  NoteHeadType,
   DrumType,
 } from "@/lib/score-types";
-import { DRUM_MAP } from "@/lib/score-types";
+
+// ── 조표 자동 임시표 ─────────────────────────────────────────
+/** 샤프 조표 적용 음이름 순서 (1개: F, 2개: F+C, …) */
+const KEY_SIG_SHARP_STEPS = ["F", "C", "G", "D", "A", "E", "B"] as const;
+/** 플랫 조표 적용 음이름 순서 (1개: B, 2개: B+E, …) */
+const KEY_SIG_FLAT_STEPS  = ["B", "E", "A", "D", "G", "C", "F"] as const;
+
+/**
+ * 조표(effSharps)와 음이름(step)을 받아 자동 임시표를 반환한다.
+ * 조표 범위 밖의 음이름이면 null 반환.
+ */
+function keySigAccidentalFor(step: string, effSharps: number): Accidental | null {
+  if (effSharps > 0 && KEY_SIG_SHARP_STEPS.slice(0, effSharps).includes(step as typeof KEY_SIG_SHARP_STEPS[number])) {
+    return "sharp";
+  }
+  if (effSharps < 0 && KEY_SIG_FLAT_STEPS.slice(0, -effSharps).includes(step as typeof KEY_SIG_FLAT_STEPS[number])) {
+    return "flat";
+  }
+  return null;
+}
 
 // ── 음이름 변환 ───────────────────────────────────────────────
 
@@ -52,18 +71,6 @@ function pitchLabel(pitch: Pitch): string {
     pitch.accidental === "double_flat" ? "𝄫" : "";
   return `${pitch.step}${acc}${pitch.octave}`;
 }
-
-const DRUM_SHORT_LABEL: Record<DrumType, string> = {
-  crash: "Crash",
-  ride: "Ride",
-  hihat_open: "H.H. Open",
-  hihat_closed: "H.H.",
-  tom_high: "Tom H",
-  tom_mid: "Tom M",
-  snare: "Snare",
-  tom_low: "Tom L",
-  kick: "Kick",
-};
 
 // ── 공개 타입 ─────────────────────────────────────────────────
 
@@ -81,8 +88,8 @@ export interface GhostState {
   measureRelX: number;
   /** 돋보기 미니뷰에 함께 그릴 주변(같은 마디) 기존 음표/쉼표 — 정확한 배치를 위한 참조용 */
   nearbyElements: NearbyElement[];
-  /** 타악기(percussion) 파트에서 선택된 드럼 종류 — 지정 시 pitch/noteY는 이 값에서 파생됨 */
-  drumType?: DrumType;
+  /** 해당 마디가 퍼커션 클레프인지 여부 — 오디오 미리보기 및 noteHead 게이트에 사용 */
+  isPercussionClef: boolean;
 }
 
 interface NearbyElement {
@@ -115,16 +122,16 @@ export interface ScoreCanvasProps {
   activeDuration: NoteDuration;
   isDotted: boolean;
   accidental: Accidental | null;
-  onNotePlaced: (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number, drumType?: DrumType) => void;
-  /** 타악기(percussion) 파트에서 현재 선택된 드럼 종류 — 지정 시 터치 Y좌표를 무시하고 표준 오선 위치에 배치 */
-  selectedDrumType?: DrumType;
+  onNotePlaced: (measureIdx: number, pitch: Pitch, duration: NoteDuration, insertIdx: number, placedX: number, noteHead?: NoteHeadType | null, drumType?: DrumType) => void;
+  /** 퍼커션 클레프에서 사용할 음표머리 — ScoreCanvas가 onNotePlaced에 noteHead로 전달 */
+  selectedNoteHead?: NoteHeadType | null;
   onRestPlaced: (measureIdx: number, duration: NoteDuration, insertIdx: number, placedX: number) => void;
   onElementTap: (elementId: string, measureIdx: number) => void;
   onMeasureTap: (measureIdx: number) => void;
   onMeasureLongPress?: (measureIdx: number) => void;
   onEraseElement: (elementId: string, measureIdx: number) => void;
   onEraseMultiple?: (elements: Array<{elementId: string; measureIdx: number}>) => void;
-  onNoteMoved?: (elementId: string, measureIdx: number, newPitch: Pitch) => void;
+  onNoteMoved?: (elementId: string, measureIdx: number, newPitch: Pitch, drumType?: DrumType) => void;
   /** 잇단음표 브래킷/숫자를 탭했을 때 호출 — 그룹 전체 elementIds를 전달 (다중 선택용) */
   onTupletBracketTap?: (elementIds: string[]) => void;
   // 재생 연동
@@ -146,6 +153,8 @@ export interface ScoreCanvasProps {
   cursorInsertIdx?: number;
   /** true이면 터치 입력(음표 배치/드래그/지우기 등)을 모두 무시합니다 — 마디 설정 메뉴 등 오버레이가 열려 있을 때 사용 */
   disabled?: boolean;
+  /** 선택 도구에서 빈 공간을 탭해 아무것도 선택되지 않았을 때 호출 — 기존 선택을 초기화할 때 사용 */
+  onClearSelection?: () => void;
   /** 줄당 마디 수를 강제 지정 (예: 화면 방향에 따라 세로=1, 가로=2). 지정 시 doc.measuresPerLine보다 우선 적용됩니다. */
   measuresPerLineOverride?: number;
 }
@@ -165,7 +174,7 @@ export function ScoreCanvas({
   isDotted,
   accidental,
   onNotePlaced,
-  selectedDrumType,
+  selectedNoteHead,
   onRestPlaced,
   onElementTap,
   onMeasureTap,
@@ -186,6 +195,7 @@ export function ScoreCanvas({
   cursorInsertIdx = 0,
   disabled = false,
   measuresPerLineOverride,
+  onClearSelection,
 }: ScoreCanvasProps) {
   const { colors: C } = useTheme();
   const [ghost, setGhost] = useState<GhostState | null>(null);
@@ -212,10 +222,11 @@ export function ScoreCanvas({
   const onMeasureLongPressRef = useRef(onMeasureLongPress);
   const onEraseMultipleRef = useRef(onEraseMultiple);
   const onTupletBracketTapRef = useRef(onTupletBracketTap);
+  const onClearSelectionRef = useRef(onClearSelection);
   const docRef = useRef(doc);
   const selectedPartIdxRef = useRef(selectedPartIdx);
-  const selectedDrumTypeRef = useRef(selectedDrumType);
-  selectedDrumTypeRef.current = selectedDrumType;
+  const selectedNoteHeadRef = useRef(selectedNoteHead);
+  selectedNoteHeadRef.current = selectedNoteHead;
   activeToolRef.current = activeTool;
   activeDurationRef.current = activeDuration;
   isDottedRef.current = isDotted;
@@ -225,6 +236,7 @@ export function ScoreCanvas({
   onMeasureLongPressRef.current = onMeasureLongPress;
   onEraseMultipleRef.current = onEraseMultiple;
   onTupletBracketTapRef.current = onTupletBracketTap;
+  onClearSelectionRef.current = onClearSelection;
   docRef.current = doc;
   selectedPartIdxRef.current = selectedPartIdx;
 
@@ -408,21 +420,26 @@ export function ScoreCanvas({
             const staffY = row.y + SCORE_STAFF_PADDING_TOP;
             const staffRelY = ly - staffY;
             const effClefGhost = effectiveClefAtMeasureRef.current.get(mIdx) ?? clefRef.current;
-            const isPercussionGhost = effClefGhost === "percussion";
-            const ghostDrumType = isPercussionGhost
-              ? (selectedDrumTypeRef.current ?? yToDrumType(staffRelY))
-              : undefined;
-            const pitch = isPercussionGhost
-              ? yToPitch(ghostDrumType ? drumTypeToY(ghostDrumType) : staffRelY, effClefGhost)
-              : yToPitch(staffRelY, effClefGhost);
+            const pitch = yToPitch(staffRelY, effClefGhost);
             const acc = accidentalRef.current;
-            const finalPitch: Pitch =
-              acc != null && acc !== "natural"
-                ? { ...pitch, accidental: acc }
-                : pitch;
-            const noteY = isPercussionGhost && ghostDrumType
-              ? staffY + drumTypeToY(ghostDrumType)
-              : staffY + pitchToY(finalPitch, effClefGhost);
+            let finalPitch: Pitch;
+            if (acc != null && acc !== "natural") {
+              // 팔레트에서 명시적으로 임시표 선택 — 그대로 사용
+              finalPitch = { ...pitch, accidental: acc };
+            } else if (acc === "natural") {
+              // 내추럴(♮) 선택 — 조표 자동 반음을 재정의하고 임시표 없이 배치
+              finalPitch = pitch;
+            } else {
+              // 미선택 — 현재 마디의 조표에서 자동 임시표 결정
+              const effSharps =
+                effectiveSharpsAtMeasureRef.current.get(mIdx) ??
+                (docRef.current.keySignature?.sharps ?? 0);
+              const keySigAcc = effClefGhost !== "percussion"
+                ? keySigAccidentalFor(pitch.step, effSharps)
+                : null;
+              finalPitch = keySigAcc ? { ...pitch, accidental: keySigAcc } : pitch;
+            }
+            const noteY = staffY + pitchToY(finalPitch, effClefGhost);
 
             const measure = docRef.current.parts[selectedPartIdxRef.current]?.measures[mIdx];
             const contentX = measureContentX(accX, i, mIdx);
@@ -458,7 +475,7 @@ export function ScoreCanvas({
                   })
                   .filter((v): v is NearbyElement => v != null)
               : [];
-            return { x: lx, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx, insertIdx, measureRelX, nearbyElements, drumType: ghostDrumType };
+            return { x: lx, y: ly, staffY, noteY, pitch: finalPitch, measureIdx: mIdx, insertIdx, measureRelX, nearbyElements, isPercussionClef: effClefGhost === "percussion" };
           }
           accX += mWidth;
         }
@@ -729,14 +746,20 @@ export function ScoreCanvas({
         if (tool === "note") {
           const info = touchToGhost(slx, sly);
           if (info) {
+            // 퍼커션 파트: 터치 Y + 선택 음표머리로 DrumType 결정
+            const noteHead = info.isPercussionClef ? selectedNoteHeadRef.current : null;
+            const staffRelY = info.y - info.staffY;
+            const drumType: DrumType | undefined = info.isPercussionClef
+              ? yToDrumType(staffRelY, noteHead ?? undefined)
+              : undefined;
             if (notePreviewEnabledRef.current && !isPlayingRef.current) {
-              if (info.drumType) {
-                previewScoreDrum(info.drumType);
-              } else {
+              if (info.isPercussionClef && drumType) {
+                previewScoreDrum(drumType);
+              } else if (!info.isPercussionClef) {
                 applyNotePreviewOnRelease(isPlayingRef.current, pitchToMidi(info.pitch), previewScoreNote, instrumentIdRef.current);
               }
             }
-            onNotePlaced(info.measureIdx, info.pitch, dur, info.insertIdx, info.measureRelX, info.drumType);
+            onNotePlaced(info.measureIdx, info.pitch, dur, info.insertIdx, info.measureRelX, noteHead, drumType);
           }
         } else if (tool === "rest") {
           const info = touchToGhost(slx, sly);
@@ -761,10 +784,15 @@ export function ScoreCanvas({
                 origAcc !== undefined
                   ? { ...info.pitch, accidental: origAcc ?? undefined }
                   : { ...info.pitch, accidental: undefined };
+              // 퍼커션 파트: 드래그 목표 위치에서 새 DrumType 계산
+              const movedDrumType: DrumType | undefined = info.isPercussionClef
+                ? yToDrumType(info.y - info.staffY, selectedNoteHeadRef.current ?? undefined)
+                : undefined;
               onNoteMoveRef.current?.(
                 dragElementIdRef.current,
                 dragMeasureIdxRef.current,
                 finalPitch,
+                movedDrumType,
               );
             }
             dragElementIdRef.current = null;
@@ -776,7 +804,12 @@ export function ScoreCanvas({
               onElementTap(hit.elementId, hit.measureIdx);
             } else {
               const tupletHit = hitTestTupletBracket(slx, sly);
-              if (tupletHit) onTupletBracketTapRef.current?.(tupletHit);
+              if (tupletHit) {
+                onTupletBracketTapRef.current?.(tupletHit);
+              } else {
+                // 빈 공간 탭 — 기존 선택 초기화
+                onClearSelectionRef.current?.();
+              }
             }
           }
         }
@@ -1044,8 +1077,7 @@ function MagnifierView({
     duration === "whole_dot" ||
     duration === "half_dot";
 
-  const label = activeTool === "note" ? (ghost.drumType ? DRUM_SHORT_LABEL[ghost.drumType] : pitchLabel(ghost.pitch)) : "";
-  const drumEntry = ghost.drumType ? DRUM_MAP[ghost.drumType] : undefined;
+  const label = activeTool === "note" ? pitchLabel(ghost.pitch) : "";
 
   return (
     <Svg
@@ -1108,34 +1140,16 @@ function MagnifierView({
 
       {/* 음표 또는 쉼표 고스트 */}
       {activeTool === "note" ? (
-        drumEntry?.noteHead === "cross" ? (
-          <G opacity={0.9}>
-            <Line x1={ghost.x - NOTE_HEAD_RX} y1={ghost.noteY - NOTE_HEAD_RX} x2={ghost.x + NOTE_HEAD_RX} y2={ghost.noteY + NOTE_HEAD_RX} stroke={accentColor} strokeWidth={1} />
-            <Line x1={ghost.x - NOTE_HEAD_RX} y1={ghost.noteY + NOTE_HEAD_RX} x2={ghost.x + NOTE_HEAD_RX} y2={ghost.noteY - NOTE_HEAD_RX} stroke={accentColor} strokeWidth={1} />
-          </G>
-        ) : drumEntry?.noteHead === "triangle" ? (
-          <Rect
-            x={ghost.x - NOTE_HEAD_RX}
-            y={ghost.noteY - NOTE_HEAD_RY}
-            width={NOTE_HEAD_RX * 2}
-            height={NOTE_HEAD_RY * 2}
-            fill="none"
-            stroke={accentColor}
-            strokeWidth={0.8}
-            opacity={0.9}
-          />
-        ) : (
-          <Ellipse
-            cx={ghost.x}
-            cy={ghost.noteY}
-            rx={NOTE_HEAD_RX}
-            ry={NOTE_HEAD_RY}
-            fill={isOpen ? "none" : accentColor}
-            stroke={accentColor}
-            strokeWidth={0.8}
-            opacity={0.9}
-          />
-        )
+        <Ellipse
+          cx={ghost.x}
+          cy={ghost.noteY}
+          rx={NOTE_HEAD_RX}
+          ry={NOTE_HEAD_RY}
+          fill={isOpen ? "none" : accentColor}
+          stroke={accentColor}
+          strokeWidth={0.8}
+          opacity={0.9}
+        />
       ) : (
         <Rect
           x={ghost.x - 4}

@@ -1,0 +1,148 @@
+name: Android 오디오 포커스 E2E (전화 수신 시뮬레이션)
+
+on:
+  workflow_dispatch:
+    inputs:
+      api-level:
+        description: 'Android API 레벨 (에뮬레이터)'
+        required: false
+        default: '29'
+        type: choice
+        options: ['29', '30', '31', '32', '33']
+      commit-results:
+        description: '테스트 결과를 docs/ 에 커밋할지 여부'
+        required: false
+        default: 'true'
+        type: boolean
+
+# 동시에 같은 브랜치에서 실행되면 이전 실행을 취소한다.
+concurrency:
+  group: android-audio-focus-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-audio-focus-e2e:
+    name: Android 에뮬레이터 전화 수신 E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+
+    steps:
+      # ── 체크아웃 ──────────────────────────────────────────────────────────────
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      # ── Node.js 설정 ──────────────────────────────────────────────────────────
+      - name: Node.js 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: npm 의존성 설치
+        run: npm ci
+
+      # ── Java / Android SDK 설정 ───────────────────────────────────────────────
+      - name: JDK 17 설정
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Gradle 빌드 캐시 설정
+        uses: gradle/actions/setup-gradle@v3
+
+      # ── KVM 가속 활성화 (에뮬레이터 성능) ────────────────────────────────────
+      - name: KVM 커널 모듈 활성화
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # ── Expo 네이티브 프로젝트 생성 ───────────────────────────────────────────
+      - name: expo prebuild (Android 네이티브 프로젝트 생성)
+        run: npx expo prebuild --platform android --no-install
+        env:
+          EXPO_PUBLIC_DOMAIN: http://localhost:5000
+
+      # ── 에뮬레이터 AVD 캐시 ──────────────────────────────────────────────────
+      - name: AVD 캐시 복원
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ inputs.api-level || '29' }}-x86_64
+
+      - name: AVD 스냅샷 생성 (캐시 없을 때만)
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ inputs.api-level || '29' }}
+          target: default
+          arch: x86_64
+          profile: pixel_4
+          avd-name: pulfors_avd
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "AVD 캐시 준비 완료"
+
+      # ── APK 빌드 + E2E 테스트 실행 ───────────────────────────────────────────
+      - name: Android Debug APK 빌드 및 E2E 테스트
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ inputs.api-level || '29' }}
+          target: default
+          arch: x86_64
+          profile: pixel_4
+          avd-name: pulfors_avd
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            set -euo pipefail
+
+            # ── APK 빌드 ──────────────────────────────────────────────────────
+            echo "=== APK 빌드 시작 ==="
+            cd android
+            ./gradlew assembleDebug \
+              --no-daemon \
+              --build-cache \
+              -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=512m" \
+              -q
+            cd ..
+
+            APK_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -1)
+            echo "빌드된 APK: $APK_PATH"
+
+            # ── APK 설치 ──────────────────────────────────────────────────────
+            echo "=== APK 에뮬레이터 설치 ==="
+            adb wait-for-device
+            adb install -r "$APK_PATH"
+
+            # ── E2E 테스트 실행 ───────────────────────────────────────────────
+            echo "=== E2E 테스트 시작 ==="
+            bash scripts/android-phone-call-e2e.sh
+
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g"
+
+      # ── 결과 아티팩트 업로드 ──────────────────────────────────────────────────
+      - name: logcat 아티팩트 업로드
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-e2e-logcat
+          path: /tmp/pulfors-e2e-focus.log
+          if-no-files-found: ignore
+
+      # ── 검증 문서를 저장소에 커밋 ─────────────────────────────────────────────
+      - name: 테스트 결과 docs/ 에 커밋
+        if: always() && inputs.commit-results != 'false'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "ci: Android E2E 전화 수신 테스트 결과 자동 업데이트 [skip ci]"
+          file_pattern: docs/android-audio-focus-verification.md
+          commit_options: '--no-verify'

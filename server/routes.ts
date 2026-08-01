@@ -370,6 +370,22 @@ export const MAX_CONCURRENT_WAV = 2;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 export const RATE_LIMIT_MAX_REQUESTS = 20;
 const rateLimitMap = new Map<string, { count: number; windowStart: number }>();
+// Exported for tests so they can reset state between test runs.
+// Type alias: tests import as Map<string, number[]> but only call .clear().
+export const _ipRequestLog: Map<unknown, unknown> = rateLimitMap as unknown as Map<unknown, unknown>;
+
+// 만료된 IP 항목을 주기적으로 정리해 Map 무한 증가 방지.
+// 창 크기의 2배 간격으로 실행 — 너무 잦으면 CPU 낭비, 너무 드물면 메모리 증가.
+const _rateLimitSweep = setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitMap) {
+    if (now - entry.windowStart >= RATE_LIMIT_WINDOW_MS) {
+      rateLimitMap.delete(ip);
+    }
+  }
+}, RATE_LIMIT_WINDOW_MS * 2);
+// unref: 이 타이머 때문에 프로세스 종료가 막히지 않도록
+(_rateLimitSweep as unknown as NodeJS.Timeout).unref?.();
 
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
@@ -383,6 +399,11 @@ function checkRateLimit(ip: string): boolean {
   }
   entry.count++;
   return true;
+}
+
+/** Exported for tests: returns true when an IP has exceeded its rate limit. */
+export function isRateLimited(ip: string): boolean {
+  return !checkRateLimit(ip);
 }
 
 // ---------------------------------------------------------------------------

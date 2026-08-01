@@ -45,47 +45,70 @@ export type OrnamentType =
   | "arpeggio_up"
   | "arpeggio_down";
 
-export type NoteHeadType = "normal" | "cross" | "diamond" | "triangle" | "slash";
+export type NoteHeadType = "normal" | "cross" | "cross_open" | "open_circle" | "diamond" | "triangle" | "slash";
 
 // ── 드럼(타악기) 종류 ────────────────────────────────────────────
 // 표준 드럼 표기법을 단순화한 매핑: 킥/스네어/하이햇(오픈·클로즈드)/크래시/라이드/탐탐(하이·미드·로우)
+// + 림샷·사이드 스틱·풋 하이햇·풋 하이햇 오픈·라이드 벨
 export type DrumType =
   | "crash"
   | "ride"
+  | "ride_bell"
   | "hihat_open"
   | "hihat_closed"
   | "tom_high"
   | "tom_mid"
   | "snare"
+  | "rimshot"
+  | "side_stick"
   | "tom_low"
-  | "kick";
+  | "kick"
+  | "foot_hihat"
+  | "foot_hihat_open";
 
 export interface DrumMapEntry {
   /**
    * 오선 위치 — 맨 위 선(0)을 기준으로 한 half-line-step 개수(1 step = LINE_SPACING/2 px).
-   * 음수 = 오선 위 스페이스(덧줄 필요), 8 = 맨 아래 선.
+   * 음수 = 오선 위 스페이스/덧줄, 양수 = 오선 내·아래.
+   * 예) -4 = 오선 위 두 번째 덧줄, -2 = 첫 번째 덧줄, 0 = 맨 위 선, 8 = 맨 아래 선, 9 = 오선 아래 공간
    */
   staffStep: number;
   noteHead: NoteHeadType;
   labelKey: string;
 }
 
-// 표준 드럼 표기법에 기반한 단순화된 오선 위치 매핑 (위→아래로 음높이가 높은 악기부터 배치)
+/**
+ * 표준 드럼 기보 위치·음표머리 매핑 (위→아래 순서).
+ *
+ * staffStep 충돌(같은 위치에 여러 악기): noteHead로 구분한다.
+ *   − step -2: hihat_closed(cross), hihat_open(open_circle), ride(cross), ride_bell(diamond)
+ *   − step  4: snare(normal), rimshot(cross), side_stick(cross_open)
+ *   − step  9: kick(normal), foot_hihat(cross), foot_hihat_open(open_circle)
+ */
 export const DRUM_MAP: Record<DrumType, DrumMapEntry> = {
-  crash:        { staffStep: -2, noteHead: "cross",    labelKey: "drumCrash" },
-  ride:         { staffStep: -1, noteHead: "cross",    labelKey: "drumRide" },
-  hihat_open:   { staffStep: 0,  noteHead: "triangle", labelKey: "drumHihatOpen" },
-  hihat_closed: { staffStep: 0,  noteHead: "cross",    labelKey: "drumHihatClosed" },
-  tom_high:     { staffStep: 1,  noteHead: "normal",   labelKey: "drumTomHigh" },
-  tom_mid:      { staffStep: 3,  noteHead: "normal",   labelKey: "drumTomMid" },
-  snare:        { staffStep: 4,  noteHead: "normal",   labelKey: "drumSnare" },
-  tom_low:      { staffStep: 6,  noteHead: "normal",   labelKey: "drumTomLow" },
-  kick:         { staffStep: 8,  noteHead: "normal",   labelKey: "drumKick" },
+  crash:          { staffStep: -4, noteHead: "cross",        labelKey: "drumCrash" },
+  ride:           { staffStep: -3, noteHead: "cross",        labelKey: "drumRide" },
+  ride_bell:      { staffStep: -3, noteHead: "diamond",      labelKey: "drumRideBell" },
+  hihat_open:     { staffStep: -2, noteHead: "open_circle",  labelKey: "drumHihatOpen" },
+  hihat_closed:   { staffStep: -2, noteHead: "cross",        labelKey: "drumHihatClosed" },
+  tom_high:       { staffStep: 1,  noteHead: "normal",       labelKey: "drumTomHigh" },
+  tom_mid:        { staffStep: 3,  noteHead: "normal",       labelKey: "drumTomMid" },
+  snare:          { staffStep: 4,  noteHead: "normal",       labelKey: "drumSnare" },
+  rimshot:        { staffStep: 4,  noteHead: "cross",        labelKey: "drumRimshot" },
+  side_stick:     { staffStep: 4,  noteHead: "cross_open",   labelKey: "drumSideStick" },
+  tom_low:        { staffStep: 6,  noteHead: "normal",       labelKey: "drumTomLow" },
+  kick:           { staffStep: 9,  noteHead: "normal",       labelKey: "drumKick" },
+  foot_hihat:     { staffStep: 9,  noteHead: "cross",        labelKey: "drumFootHihat" },
+  foot_hihat_open:{ staffStep: 9,  noteHead: "open_circle",  labelKey: "drumFootHihatOpen" },
 };
 
 export const DRUM_TYPES: DrumType[] = [
-  "crash", "ride", "hihat_open", "hihat_closed",
-  "tom_high", "tom_mid", "snare", "tom_low", "kick",
+  "crash",
+  "ride", "ride_bell", "hihat_open", "hihat_closed",
+  "tom_high", "tom_mid",
+  "snare", "rimshot", "side_stick",
+  "tom_low",
+  "kick", "foot_hihat", "foot_hihat_open",
 ];
 
 // 악기 카테고리

@@ -13,13 +13,20 @@ import type {
   NoteDuration,
   Accidental,
   ArticulationType,
-  Dynamic,
-  InstrumentCategory,
   OrnamentType,
-  DrumType,
+  NoteHeadType,
 } from "@/lib/score-types";
-import { DRUM_TYPES, DRUM_MAP } from "@/lib/score-types";
 import type { EditorTool } from "@/components/ScoreCanvas";
+
+// ── 음표 머리 선택 항목 (퍼커션 클레프 전용) ───────────────────
+const NOTE_HEAD_OPTIONS: Array<{ value: NoteHeadType; symbol: string; labelKey: string }> = [
+  { value: "normal",      symbol: "●",  labelKey: "noteHeadNormal" },
+  { value: "cross",       symbol: "✕",  labelKey: "noteHeadCross" },
+  { value: "cross_open",  symbol: "✕°", labelKey: "noteHeadCrossOpen" },
+  { value: "open_circle", symbol: "○",  labelKey: "noteHeadOpenCircle" },
+  { value: "diamond",     symbol: "◆",  labelKey: "noteHeadDiamond" },
+  { value: "slash",       symbol: "/",  labelKey: "noteHeadSlash" },
+];
 
 // ── 음표 길이 ─────────────────────────────────────────────────
 
@@ -89,22 +96,6 @@ const REPEAT_SIGNS: RepeatSignItem[] = [
   { id: "volta2",          symbol: "2.",    labelKey: "signVolta2" },
 ];
 
-// ── 강약 ──────────────────────────────────────────────────────
-
-const DYNAMICS: Array<{ id: Dynamic; symbol: string }> = [
-  { id: "ppp",  symbol: "ppp" },
-  { id: "pp",   symbol: "pp" },
-  { id: "p",    symbol: "p" },
-  { id: "mp",   symbol: "mp" },
-  { id: "mf",   symbol: "mf" },
-  { id: "f",    symbol: "f" },
-  { id: "ff",   symbol: "ff" },
-  { id: "fff",  symbol: "fff" },
-  { id: "sfz",  symbol: "sfz" },
-  { id: "fp",   symbol: "fp" },
-  { id: "mute", symbol: "𝄽" },
-];
-
 // ── 꾸밈음 ────────────────────────────────────────────────────
 
 const ORNAMENTS: Array<{ id: OrnamentType; symbol: string; labelKey: string }> = [
@@ -130,17 +121,19 @@ interface TempoItem {
   id: string;
   labelKey: string;
   bpm: number;
+  bpmMin?: number;
+  bpmMax?: number;
   symbol?: string;
 }
 
 const TEMPOS: TempoItem[] = [
-  { id: "Largo",    labelKey: "tempoLargo",    bpm: 50 },
-  { id: "Adagio",   labelKey: "tempoAdagio",   bpm: 72 },
-  { id: "Andante",  labelKey: "tempoAndante",  bpm: 92 },
-  { id: "Moderato", labelKey: "tempoModerato", bpm: 108 },
-  { id: "Allegro",  labelKey: "tempoAllegro",  bpm: 132 },
-  { id: "Vivace",   labelKey: "tempoVivace",   bpm: 160 },
-  { id: "Presto",   labelKey: "tempoPresto",   bpm: 180 },
+  { id: "Largo",    labelKey: "tempoLargo",    bpm: 50,  bpmMin: 20,  bpmMax: 60 },
+  { id: "Adagio",   labelKey: "tempoAdagio",   bpm: 72,  bpmMin: 60,  bpmMax: 80 },
+  { id: "Andante",  labelKey: "tempoAndante",  bpm: 92,  bpmMin: 76,  bpmMax: 108 },
+  { id: "Moderato", labelKey: "tempoModerato", bpm: 108, bpmMin: 100, bpmMax: 120 },
+  { id: "Allegro",  labelKey: "tempoAllegro",  bpm: 132, bpmMin: 120, bpmMax: 168 },
+  { id: "Vivace",   labelKey: "tempoVivace",   bpm: 160, bpmMin: 156, bpmMax: 176 },
+  { id: "Presto",   labelKey: "tempoPresto",   bpm: 180, bpmMin: 168, bpmMax: 208 },
   { id: "rit.",     labelKey: "tempoRit",      bpm: 0, symbol: "rit." },
   { id: "accel.",   labelKey: "tempoAccel",    bpm: 0, symbol: "accel." },
 ];
@@ -221,7 +214,7 @@ const INSTR_SYMBOL_MAP: Record<InstrSubTab, InstrSymbol[]> = {
 
 // ── 팔레트 탭 ─────────────────────────────────────────────────
 
-type PaletteTab = "notes" | "rests" | "signs" | "dynamics" | "tempo" | "instr";
+type PaletteTab = "notes" | "rests" | "signs" | "tempo";
 
 // ── Props ─────────────────────────────────────────────────────
 
@@ -232,30 +225,23 @@ export interface ScorePaletteProps {
   isDoubleDotted?: boolean;
   accidental: Accidental | null;
   selectedArticulation: ArticulationType | null;
-  selectedDynamic: Dynamic | null;
   selectedOrnament?: OrnamentType | null;
   selectedRepeatSign?: RepeatSignId | null;
-  selectedInstrumentSymbol?: string | null;
-  onInstrumentSymbolSelect?: (id: string | null) => void;
   selectedCrescType?: CrescType;
-  instrumentCategory?: InstrumentCategory;
-  enabledSymbols?: Record<string, boolean>;
   onToolChange: (tool: EditorTool) => void;
   onDurationChange: (dur: NoteDuration) => void;
   onDottedChange: (dotted: boolean) => void;
   onDoubleDottedChange?: (doubleDotted: boolean) => void;
   onAccidentalChange: (acc: Accidental | null) => void;
   onArticulationSelect: (id: ArticulationType | null) => void;
-  onDynamicSelect: (id: Dynamic | null) => void;
   onOrnamentSelect?: (id: OrnamentType | null) => void;
   onRepeatSignSelect?: (id: RepeatSignId | null) => void;
   onCrescTypeSelect?: (type: CrescType) => void;
   onTempoSelect?: (text: string, bpm: number) => void;
-  onSymbolToggle?: (id: string, enabled: boolean) => void;
-  /** true이면 현재 활성 파트가 타악기(percussion) 오선이며 드럼 종류 선택 UI를 표시합니다 */
+  /** true이면 현재 활성 파트가 타악기(percussion) 오선이며 음표머리 선택 UI를 표시합니다 */
   isPercussionPart?: boolean;
-  selectedDrumType?: DrumType;
-  onDrumTypeSelect?: (drumType: DrumType) => void;
+  selectedNoteHead?: NoteHeadType | null;
+  onNoteHeadSelect?: (noteHead: NoteHeadType | null) => void;
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
@@ -267,29 +253,22 @@ export function ScorePalette({
   isDoubleDotted = false,
   accidental,
   selectedArticulation,
-  selectedDynamic,
   selectedOrnament,
   selectedRepeatSign,
   selectedCrescType,
-  selectedInstrumentSymbol = null,
-  onInstrumentSymbolSelect,
-  instrumentCategory,
-  enabledSymbols = {},
   onToolChange,
   onDurationChange,
   onDottedChange,
   onDoubleDottedChange,
   onAccidentalChange,
   onArticulationSelect,
-  onDynamicSelect,
   onOrnamentSelect,
   onRepeatSignSelect,
   onCrescTypeSelect,
   onTempoSelect,
-  onSymbolToggle,
   isPercussionPart = false,
-  selectedDrumType,
-  onDrumTypeSelect,
+  selectedNoteHead,
+  onNoteHeadSelect,
 }: ScorePaletteProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -297,32 +276,23 @@ export function ScorePalette({
     activeTool === "rest" ? "rests" : "notes",
   );
   const [selectedTempo, setSelectedTempo] = useState<string | null>(null);
+  const [editingTempoBpm, setEditingTempoBpm] = useState("");
   const [customTempoText, setCustomTempoText] = useState("");
   const [customBpmValue, setCustomBpmValue] = useState("");
-  const [instrSubTab, setInstrSubTab] = useState<InstrSubTab>(() => {
-    switch (instrumentCategory) {
-      case "strings":    return "strings";
-      case "keyboard":   return "keyboard";
-      case "woodwind":
-      case "brass":      return "woodwind_brass";
-      case "percussion": return "percussion";
-      case "vocal":      return "vocal";
-      default:           return "all";
-    }
-  });
 
   const styles = makeStyles(C);
 
-  // 카테고리 서브탭 기호 목록
-  const instrSymbols = INSTR_SYMBOL_MAP[instrSubTab] ?? INSTR_SYMBOL_MAP.all;
+  const activeTempoItem = TEMPOS.find((tempo) => tempo.id === selectedTempo) ?? null;
+  const editingBpmNum = parseInt(editingTempoBpm, 10);
+  const isTempoEditVisible = activeTempoItem != null && activeTempoItem.bpmMin != null;
+  const isBpmOutOfRange = isTempoEditVisible && !isNaN(editingBpmNum)
+    && (editingBpmNum < activeTempoItem!.bpmMin! || editingBpmNum > activeTempoItem!.bpmMax!);
 
   const TAB_DEFS: Array<{ id: PaletteTab; labelKey: string; tool?: EditorTool }> = [
     { id: "notes",    labelKey: "paletteNotes",    tool: "note" },
     { id: "rests",    labelKey: "paletteRests",    tool: "rest" },
-    { id: "signs",    labelKey: "paletteSigns" },
-    { id: "dynamics", labelKey: "paletteDynamics" },
+    { id: "signs",    labelKey: "paletteSigns",    tool: "select" },
     { id: "tempo",    labelKey: "paletteTempo" },
-    { id: "instr",    labelKey: "paletteInstr" },
   ];
 
   return (
@@ -344,7 +314,11 @@ export function ScorePalette({
               ]}
               onPress={() => {
                 setTab(td.id);
-                if (td.tool) onToolChange(td.tool);
+                if (td.tool) {
+                  onToolChange(td.tool);
+                } else if (activeTool === "select" || activeTool === "erase") {
+                  onToolChange("note");
+                }
               }}
               testID={`score-palette-tab-${td.id}`}
             >
@@ -359,33 +333,10 @@ export function ScorePalette({
             </Pressable>
           );
         })}
-
-        {/* 선택 / 지우기 도구 */}
-        {(["select", "erase"] as EditorTool[]).map((tool) => {
-          const key = tool === "select" ? "toolSelect" : "toolErase";
-          const isActive = activeTool === tool;
-          return (
-            <Pressable
-              key={tool}
-              style={[
-                styles.tabBtn,
-                { borderBottomColor: isActive ? C.accent : "transparent" },
-              ]}
-              onPress={() => onToolChange(tool)}
-              testID={`score-palette-tool-${tool}`}
-            >
-              <Text
-                style={[styles.tabLabel, { color: isActive ? C.accent : C.textSecondary }]}
-              >
-                {t("scoreMode", key as any)}
-              </Text>
-            </Pressable>
-          );
-        })}
       </ScrollView>
 
-      {/* ── 현재 적용중인 기호(아티큘레이션/꾸밈음/강약/악기 기호) 표시줄 ── */}
-      {tab === "notes" && (selectedArticulation || selectedOrnament || selectedDynamic || selectedInstrumentSymbol) && (
+      {/* ── 현재 적용중인 기호(아티큘레이션/꾸밈음) 표시줄 ── */}
+      {tab === "notes" && (selectedArticulation || selectedOrnament) && (
         <View style={[styles.activeSymbolsRow, { borderBottomColor: C.border }]}>
           <Text style={[styles.activeSymbolsLabel, { color: C.textSecondary }]}>
             {t("scoreMode", "currentArticulationLabel")}:
@@ -411,26 +362,6 @@ export function ScorePalette({
               <Text style={[styles.activeSymbolChipText, { color: C.accent }]}>
                 {ORNAMENTS.find((o) => o.id === selectedOrnament)?.symbol ?? selectedOrnament}
               </Text>
-              <Ionicons name="close" size={12} color={C.accent} />
-            </Pressable>
-          )}
-          {selectedDynamic && (
-            <Pressable
-              style={[styles.activeSymbolChip, { borderColor: C.accent, backgroundColor: C.accent + "22" }]}
-              onPress={() => onDynamicSelect(null)}
-              testID="score-palette-active-dynamic"
-            >
-              <Text style={[styles.activeSymbolChipText, { color: C.accent }]}>{selectedDynamic}</Text>
-              <Ionicons name="close" size={12} color={C.accent} />
-            </Pressable>
-          )}
-          {selectedInstrumentSymbol && (
-            <Pressable
-              style={[styles.activeSymbolChip, { borderColor: C.accent, backgroundColor: C.accent + "22" }]}
-              onPress={() => onInstrumentSymbolSelect?.(null)}
-              testID="score-palette-active-instr-symbol"
-            >
-              <Text style={[styles.activeSymbolChipText, { color: C.accent }]}>{selectedInstrumentSymbol}</Text>
               <Ionicons name="close" size={12} color={C.accent} />
             </Pressable>
           )}
@@ -504,19 +435,37 @@ export function ScorePalette({
         </ScrollView>
       )}
 
-      {/* ── 타악기 파트: 드럼 종류 선택 (notes 탭 하단) ────────── */}
+      {/* ── 퍼커션 클레프: 음표머리 선택 행 ───────────────────────── */}
       {tab === "notes" && isPercussionPart && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.itemRow}
         >
-          {DRUM_TYPES.map((dt) => {
-            const isActive = selectedDrumType === dt;
-            const entry = DRUM_MAP[dt];
+          {/* null 선택 = 기본 음표머리 사용 */}
+          <Pressable
+            style={[
+              styles.durBtn,
+              {
+                backgroundColor: selectedNoteHead == null ? C.accent + "33" : "transparent",
+                borderColor: selectedNoteHead == null ? C.accent : C.border,
+              },
+            ]}
+            onPress={() => onNoteHeadSelect?.(null)}
+            testID="score-palette-notehead-default"
+          >
+            <Text style={[styles.durSymbol, { color: selectedNoteHead == null ? C.accent : C.text }]}>
+              —
+            </Text>
+            <Text style={[styles.durLabel, { color: selectedNoteHead == null ? C.accent : C.textSecondary }]}>
+              {t("scoreMode", "noteHeadDefault" as any)}
+            </Text>
+          </Pressable>
+          {NOTE_HEAD_OPTIONS.map((nh) => {
+            const isActive = selectedNoteHead === nh.value;
             return (
               <Pressable
-                key={dt}
+                key={nh.value}
                 style={[
                   styles.durBtn,
                   {
@@ -524,14 +473,14 @@ export function ScorePalette({
                     borderColor: isActive ? C.accent : C.border,
                   },
                 ]}
-                onPress={() => onDrumTypeSelect?.(dt)}
-                testID={`score-palette-drum-${dt}`}
+                onPress={() => onNoteHeadSelect?.(nh.value)}
+                testID={`score-palette-notehead-${nh.value}`}
               >
                 <Text style={[styles.durSymbol, { color: isActive ? C.accent : C.text }]}>
-                  {entry.noteHead === "cross" ? "✕" : entry.noteHead === "triangle" ? "▲" : entry.noteHead === "diamond" ? "◆" : "●"}
+                  {nh.symbol}
                 </Text>
                 <Text style={[styles.durLabel, { color: isActive ? C.accent : C.textSecondary }]}>
-                  {t("scoreMode", entry.labelKey as any)}
+                  {t("scoreMode", nh.labelKey as any)}
                 </Text>
               </Pressable>
             );
@@ -652,57 +601,27 @@ export function ScorePalette({
               </Pressable>
             );
           })}
-        </ScrollView>
-      )}
-
-      {/* ── 강약 탭 ───────────────────────────────────────────── */}
-      {tab === "dynamics" && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.itemRow}
-        >
-          {DYNAMICS.map((dyn) => {
-            const isActive = selectedDynamic === dyn.id;
-            return (
-              <Pressable
-                key={dyn.id}
-                style={[
-                  styles.dynBtn,
-                  {
-                    backgroundColor: isActive ? C.accent + "33" : "transparent",
-                    borderColor: isActive ? C.accent : C.border,
-                  },
-                ]}
-                onPress={() => onDynamicSelect(isActive ? null : dyn.id)}
-                testID={`score-palette-dyn-${dyn.id}`}
-              >
-                <Text style={[styles.dynSymbol, { color: isActive ? C.accent : C.text }]}>
-                  {dyn.symbol}
-                </Text>
-              </Pressable>
-            );
-          })}
 
           <View style={[styles.divider, { backgroundColor: C.border }]} />
 
+          {/* 크레셴도 / 데크레셴도 */}
           {CRESC_ITEMS.map((ci) => {
             const isActive = selectedCrescType === ci.id;
             return (
               <Pressable
                 key={ci.id as string}
                 style={[
-                  styles.dynBtn,
+                  styles.signBtn,
                   {
                     backgroundColor: isActive ? C.accent + "33" : "transparent",
                     borderColor: isActive ? C.accent : C.border,
-                    width: 56,
+                    minWidth: 56,
                   },
                 ]}
                 onPress={() => onCrescTypeSelect?.(isActive ? null : ci.id)}
                 testID={`score-palette-cresc-${ci.id}`}
               >
-                <Text style={[styles.dynSymbol, { color: isActive ? C.accent : C.text, fontSize: 18 }]}>
+                <Text style={[styles.artSymbol, { color: isActive ? C.accent : C.text, fontSize: 18 }]}>
                   {ci.symbol}
                 </Text>
                 <Text style={[styles.durLabel, { color: isActive ? C.accent : C.textSecondary }]}>
@@ -726,6 +645,7 @@ export function ScorePalette({
             {TEMPOS.map((tempo) => {
               const isActive = selectedTempo === tempo.id;
               const displayLabel = t("scoreMode", tempo.labelKey as any);
+              const hasRange = tempo.bpmMin != null && tempo.bpmMax != null;
               return (
                 <Pressable
                   key={tempo.id}
@@ -737,9 +657,21 @@ export function ScorePalette({
                     },
                   ]}
                   onPress={() => {
-                    setSelectedTempo(isActive ? null : tempo.id);
-                    if (!isActive) {
-                      onTempoSelect?.(tempo.id, tempo.bpm);
+                    if (!hasRange) {
+                      // rit. / accel. — 즉시 적용
+                      setSelectedTempo(isActive ? null : tempo.id);
+                      if (!isActive) {
+                        onTempoSelect?.(tempo.id, tempo.bpm);
+                      }
+                    } else {
+                      // 범위 있는 프리셋 → 편집 모드 진입/나가기
+                      if (isActive) {
+                        setSelectedTempo(null);
+                        setEditingTempoBpm("");
+                      } else {
+                        setSelectedTempo(tempo.id);
+                        setEditingTempoBpm(String(tempo.bpm));
+                      }
                     }
                   }}
                   testID={`score-palette-tempo-${tempo.id}`}
@@ -747,15 +679,57 @@ export function ScorePalette({
                   <Text style={[styles.tempoName, { color: isActive ? C.accent : C.text }]}>
                     {tempo.symbol ?? displayLabel}
                   </Text>
-                  {tempo.bpm > 0 && (
+                  {hasRange && (
                     <Text style={[styles.tempoBpm, { color: isActive ? C.accent : C.textSecondary }]}>
-                      ♩={tempo.bpm}
+                      {tempo.bpmMin}–{tempo.bpmMax}
                     </Text>
                   )}
                 </Pressable>
               );
             })}
           </ScrollView>
+
+          {/* 선택된 프리셋의 BPM 편집 행 */}
+          {isTempoEditVisible && activeTempoItem && (
+            <View style={[styles.tempoEditRow, { borderTopColor: C.border, backgroundColor: C.surface }]}>
+              <Text style={[styles.tempoEditLabel, { color: C.textSecondary }]}>
+                {t("scoreMode", activeTempoItem.labelKey as any)}
+                {"  "}
+                <Text style={{ color: C.textSecondary, fontStyle: "italic" }}>
+                  {activeTempoItem.bpmMin}–{activeTempoItem.bpmMax}
+                </Text>
+              </Text>
+              <TextInput
+                style={[
+                  styles.tempoEditInput,
+                  {
+                    color: isBpmOutOfRange ? "#e05050" : C.text,
+                    borderColor: isBpmOutOfRange ? "#e05050" : C.accent,
+                    backgroundColor: C.background,
+                  },
+                ]}
+                value={editingTempoBpm}
+                onChangeText={setEditingTempoBpm}
+                keyboardType="number-pad"
+                returnKeyType="done"
+                testID="score-palette-tempo-bpm-edit"
+              />
+              <Pressable
+                style={[styles.tempoCustomApply, { backgroundColor: C.accent }]}
+                onPress={() => {
+                  const bpm = parseInt(editingTempoBpm.trim(), 10);
+                  const clamped = isNaN(bpm) ? activeTempoItem.bpm
+                    : Math.max(activeTempoItem.bpmMin!, Math.min(activeTempoItem.bpmMax!, bpm));
+                  onTempoSelect?.(activeTempoItem.id, clamped);
+                  setSelectedTempo(null);
+                  setEditingTempoBpm("");
+                }}
+                testID="score-palette-tempo-bpm-confirm"
+              >
+                <Text style={styles.tempoCustomApplyText}>✓</Text>
+              </Pressable>
+            </View>
+          )}
 
           {/* 자유 텍스트 입력 행 */}
           <View style={[styles.tempoCustomRow, { borderTopColor: C.border }]}>
@@ -795,77 +769,6 @@ export function ScorePalette({
           </View>
         </View>
       )}
-
-      {/* ── 악기별 기호 탭 ────────────────────────────────────── */}
-      {tab === "instr" && (
-        <View>
-          {/* 카테고리 서브탭 */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[styles.itemRow, { paddingVertical: 4 }]}
-          >
-            {INSTR_SUB_TABS.map((sub) => {
-              const isSubActive = instrSubTab === sub.id;
-              return (
-                <Pressable
-                  key={sub.id}
-                  style={[
-                    styles.subTabBtn,
-                    {
-                      backgroundColor: isSubActive ? C.accent + "33" : "transparent",
-                      borderColor: isSubActive ? C.accent : C.border,
-                    },
-                  ]}
-                  onPress={() => setInstrSubTab(sub.id)}
-                  testID={`score-palette-instr-sub-${sub.id}`}
-                >
-                  <Text style={[styles.durLabel, { color: isSubActive ? C.accent : C.textSecondary }]}>
-                    {t("scoreMode", sub.labelKey as any)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-
-          {/* 해당 카테고리 기호 목록 */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.itemRow}
-          >
-            {instrSymbols.map((sym) => {
-              const isEnabled = enabledSymbols[sym.id] !== false;
-              const isActive = selectedInstrumentSymbol === sym.id;
-              return (
-                <Pressable
-                  key={sym.id}
-                  style={[
-                    styles.instrBtn,
-                    {
-                      backgroundColor: isActive ? C.accent + "44" : isEnabled ? C.accent + "22" : "transparent",
-                      borderColor: isActive ? C.accent : isEnabled ? C.accent + "88" : C.border,
-                      opacity: isEnabled ? 1 : 0.5,
-                    },
-                  ]}
-                  onPress={() => {
-                    if (isEnabled) onInstrumentSymbolSelect?.(isActive ? null : sym.id);
-                  }}
-                  onLongPress={() => onSymbolToggle?.(sym.id, !isEnabled)}
-                  testID={`score-palette-sym-${sym.id}`}
-                >
-                  <Text style={[styles.instrSymbol, { color: isActive ? C.accent : isEnabled ? C.accent : C.text }]}>
-                    {sym.symbol}
-                  </Text>
-                  <Text style={[styles.durLabel, { color: isActive ? C.accent : isEnabled ? C.accent : C.textSecondary }]}>
-                    {t("scoreMode", sym.labelKey as any)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
     </View>
   );
 }
@@ -878,7 +781,7 @@ const makeStyles = (C: any) =>
     },
     tabRow: {
       flexDirection: "row",
-      paddingHorizontal: 4,
+      paddingHorizontal: 0,
       gap: 1,
       borderBottomWidth: 0,
     },
@@ -920,8 +823,8 @@ const makeStyles = (C: any) =>
     },
     itemRow: {
       flexDirection: "row",
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: 8,
+      paddingHorizontal: 0,
+      paddingVertical: 6,
       gap: 6,
       alignItems: "center",
     },
@@ -1020,6 +923,30 @@ const makeStyles = (C: any) =>
       paddingHorizontal: 8,
       paddingVertical: 4,
       minWidth: 36,
+    },
+    tempoEditRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 6,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 6,
+      borderTopWidth: 1,
+    },
+    tempoEditLabel: {
+      flex: 1,
+      fontFamily: "SpaceGrotesk_500Medium",
+      fontSize: 12,
+      fontStyle: "italic" as const,
+    },
+    tempoEditInput: {
+      borderWidth: 1,
+      borderRadius: Radius.sm,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+      fontSize: 14,
+      fontFamily: "SpaceGrotesk_600SemiBold",
+      minWidth: 56,
+      textAlign: "center" as const,
     },
     tempoCustomRow: {
       flexDirection: "row" as const,

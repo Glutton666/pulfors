@@ -14,6 +14,15 @@ const assert = {
   fail: (msg) => { throw new Error(msg || "assert.fail"); },
   match: (str, re, msg) => expect(str).toMatch(re),
   doesNotMatch: (str, re, msg) => expect(str).not.toMatch(re),
+  // assert.rejects: fn must return a rejected promise; optionally validate error.message
+  rejects: async (fn, patternOrMsg) => {
+    let threw = false;
+    try { await fn(); } catch (e) {
+      threw = true;
+      if (patternOrMsg instanceof RegExp) expect(e.message).toMatch(patternOrMsg);
+    }
+    expect(threw).toBe(true);
+  },
 };
 module.exports = assert;
 module.exports.default = assert;

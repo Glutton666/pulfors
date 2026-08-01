@@ -17,6 +17,7 @@ import { queryClient } from "@/lib/query-client";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { DeepLinkProvider } from "@/contexts/DeepLinkContext";
+import { VoiceAssistantProvider } from "@/contexts/VoiceAssistantContext";
 import { initErrorTracking } from "@/lib/error-tracking";
 import { StorageErrorAlert } from "@/components/StorageErrorAlert";
 import { rollbackPendingRestoreIfAny } from "@/lib/backup/full";
@@ -52,7 +53,7 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const [appIsReady, setAppIsReady] = useState(false);
 
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     SpaceGrotesk_400Regular,
     SpaceGrotesk_500Medium,
     SpaceGrotesk_600SemiBold,
@@ -169,10 +170,10 @@ export default function RootLayout() {
       }
     };
 
-    if (fontsLoaded) {
+    if (fontsLoaded || fontError) {
       prepareApp();
     }
-  }, [fontsLoaded, loadIconFonts, configureAudio]);
+  }, [fontsLoaded, fontError, loadIconFonts, configureAudio]);
 
   if (!appIsReady) {
     return null;
@@ -184,6 +185,7 @@ export default function RootLayout() {
         <ThemeProvider>
           <LanguageProvider>
             <DeepLinkProvider>
+              <VoiceAssistantProvider>
               <GestureHandlerRootView style={{ flex: 1 }}>
                 <KeyboardProvider>
                   <StorageErrorAlert />
@@ -193,6 +195,7 @@ export default function RootLayout() {
                   </Stack>
                 </KeyboardProvider>
               </GestureHandlerRootView>
+              </VoiceAssistantProvider>
             </DeepLinkProvider>
           </LanguageProvider>
         </ThemeProvider>

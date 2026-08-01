@@ -240,12 +240,14 @@ export function BpmDetectModal({ visible, onClose, onApply }: BpmDetectModalProp
   }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleClose = useCallback(() => {
+    // Do NOT repeat stopWebDetection/webViewRef.stop() here.
+    // The useEffect cleanup (the function returned from the effect) already
+    // runs when visible transitions to false after onClose() is called.
+    // Calling these again here would double-invoke stream teardown.
     cancelledRef.current = true;
     listeningRef.current = false;
-    stopWebDetection();
-    webViewRef.current?.stop();
     onClose();
-  }, [stopWebDetection, onClose]);
+  }, [onClose]);
 
   const handleApply = useCallback(() => {
     onApply(adjustedBpm);
