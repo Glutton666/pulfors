@@ -530,8 +530,9 @@ export function useMetronomeScreen() {
   const halfTimeFlash = useSharedValue(0);
   /** 비트 진행률: 각 비트 시작 시 0 → 다음 비트까지 1 로 sweep. StageBeatArc 구동. */
   const beatProgress = useSharedValue(0);
-  /** 모드 전환 슬라이드 애니메이션: 새 모드가 오른쪽에서 진입. */
+  /** 모드 전환 슬라이드 애니메이션: 좌우(X) 또는 위→아래(Y) */
   const modeSlideX       = useSharedValue(0);
+  const modeSlideY       = useSharedValue(0);
   const modeSlideOpacity = useSharedValue(1);
 
   const flashStyle = useAnimatedStyle(() => ({
@@ -542,7 +543,7 @@ export function useMetronomeScreen() {
   }));
   const modeSlideStyle = useAnimatedStyle(() => ({
     opacity: modeSlideOpacity.value,
-    transform: [{ translateX: modeSlideX.value }],
+    transform: [{ translateX: modeSlideX.value }, { translateY: modeSlideY.value }],
   }));
 
   useEffect(() => {
@@ -3405,13 +3406,20 @@ export function useMetronomeScreen() {
       currentMode, noteMode, barMode, scoreMode,
       stageModeActive, showMenu, showPracticeBook, activeModal,
     };
-    // 실제 콘텐츠가 바뀔 때만 슬라이드+페이드 적용
-    // 메뉴는 오버레이라 콘텐츠 변경 없음 → 애니메이션 제외
-    const isMenuOverlay = mode === "menu" || currentMode === "menu";
-    if (!isMenuOverlay && mode !== currentMode) {
-      // 다이얼 방향에 따라 슬라이드 시작 위치 결정
-      modeSlideX.value       = direction === "right" ? windowWidth * 0.25 : -windowWidth * 0.25;
-      modeSlideOpacity.value = 0;
+    // 콘텐츠가 바뀔 때 슬라이드+페이드 적용
+    // 메뉴 진입·이탈 → 위에서 아래로 슬라이드 (Y축)
+    // 그 외 모드 전환  → 다이얼 방향에 따라 좌우 슬라이드 (X축)
+    if (mode !== currentMode) {
+      const isMenuTransition = mode === "menu" || currentMode === "menu";
+      if (isMenuTransition) {
+        modeSlideX.value       = 0;
+        modeSlideY.value       = -windowHeight * 0.25;
+        modeSlideOpacity.value = 0;
+      } else {
+        modeSlideX.value       = direction === "right" ? windowWidth * 0.25 : -windowWidth * 0.25;
+        modeSlideY.value       = 0;
+        modeSlideOpacity.value = 0;
+      }
     }
     const cb: ModeSwitchCallbacks = {
       handleExitNoteMode,
@@ -3446,6 +3454,7 @@ export function useMetronomeScreen() {
     if (prevModeRef.current !== currentMode) {
       prevModeRef.current = currentMode;
       modeSlideX.value       = withTiming(0, { duration: 270, easing: Easing.out(Easing.cubic) });
+      modeSlideY.value       = withTiming(0, { duration: 270, easing: Easing.out(Easing.cubic) });
       modeSlideOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
