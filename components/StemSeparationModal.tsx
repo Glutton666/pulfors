@@ -147,6 +147,11 @@ export function StemSeparationModal({
   const [progress, setProgress] = useState<SeparationProgress>({ phase: "decoding", pct: 0 });
   const [downloadProgress, setDownloadProgress] = useState<ModelDownloadProgress>({ filename: "", overallPct: 0 });
   const abortRef = useRef<AbortController | null>(null);
+  // True while handleClose is in progress. Prevents the visible→false useEffect
+  // from calling stopAllPlayback() a second time and triggering a spurious
+  // metronome restart (stop path sets isPlaying=false; second call sees stale
+  // closure with isPlaying=true and takes the START path instead of STOP).
+  const closedByHandleRef = useRef(false);
 
   const [activeStem, setActiveStem] = useState<StemResult | null>(null);
   const [stemTracks, setStemTracks] = useState<StemTrack[]>([]);
@@ -215,8 +220,16 @@ export function StemSeparationModal({
 
   useEffect(() => {
     if (!visible) {
-      // Ensure transport is fully torn down when modal is hidden
-      stopAllPlayback();
+      // If handleClose already ran (user pressed X / back), stopAllPlayback was
+      // already called there. Calling it again from this effect would fire
+      // onStopMetronome a second time with a stale isPlaying=true closure,
+      // causing togglePlayPause to take the START path and restart the engine.
+      // Only call stopAllPlayback when visible went false via an external path
+      // (e.g. Android back button or a mode switch that sets activeModal=null).
+      if (!closedByHandleRef.current) {
+        stopAllPlayback();
+      }
+      closedByHandleRef.current = false;
       setPhase("landing");
       abortRef.current?.abort();
       setIsPlaying(false);
@@ -425,6 +438,9 @@ export function StemSeparationModal({
   }, []);
 
   const handleClose = useCallback(() => {
+    // Mark that we're the ones closing so the visible→false useEffect skips
+    // the duplicate stopAllPlayback() call (which would cause a spurious restart).
+    closedByHandleRef.current = true;
     // Always tear down transport first so metronome stays in sync
     stopAllPlayback();
     abortRef.current?.abort();
