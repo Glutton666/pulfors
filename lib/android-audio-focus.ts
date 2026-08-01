@@ -193,7 +193,16 @@ export async function startAndroidFocusProbe(): Promise<void> {
     const expoAudioMod = require("expo-audio") as typeof import("expo-audio");
 
     // doNotMix: 포커스를 잃으면 플레이어가 멈춰 playing=false 로 전환 → JS 에서 감지 가능.
-    await expoAudioMod.setAudioModeAsync({ interruptionMode: "doNotMix" });
+    // 주의: 나머지 필드를 반드시 명시해야 한다. expo-audio 는 Partial<AudioMode> 를
+    // 네이티브 측에서 기존 설정과 병합하지 않고 전달 → 미설정 필드가 기본값으로 교체될 수
+    // 있다. playsInSilentMode 가 false(기본값)로 리셋되면 Android 에서 오디오가
+    // 미디어 스트림 대신 알림 스트림으로 라우팅되어 앱 전체 무음이 발생한다.
+    await expoAudioMod.setAudioModeAsync({
+      interruptionMode: "doNotMix",
+      playsInSilentMode: true,
+      shouldPlayInBackground: true,
+      allowsRecording: false,
+    });
 
     const player = expoAudioMod.createAudioPlayer(
       // 기존 에셋의 짧은 WAV 파일을 volume=0 루프로 사용 → 사용자에게 들리지 않음
