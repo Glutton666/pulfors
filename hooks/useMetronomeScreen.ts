@@ -1788,9 +1788,17 @@ export function useMetronomeScreen() {
                   if (pcm instanceof Float32Array) { applySoftClip(pcm); }
                   else { applySoftClip(pcm.left); applySoftClip(pcm.right); }
                 }
-                const loop = playWebRenderedLoop(pcm);
-                webRenderedLoopRef.current = loop;
-                engineRef.current?.setPreRenderedAudio(true);
+                // 다음 마디 경계에서 루프 시작 — 마디 중간에 시작하면 위상이 어긋남
+                engineRef.current.setPendingMeasureStartAction(() => {
+                  if (!engineRef.current?.getIsRunning()) return;
+                  if (webRenderedLoopRef.current) {
+                    try { webRenderedLoopRef.current.stop(); } catch {}
+                    webRenderedLoopRef.current = null;
+                  }
+                  const loop = playWebRenderedLoop(pcm);
+                  webRenderedLoopRef.current = loop;
+                  engineRef.current?.setPreRenderedAudio(true);
+                });
               } catch (renderErr) {
                 captureBreadcrumb({ category: "metronome", message: "togglePlayPause: Web pre-render failed, using per-tick", level: "warning", data: { error: String(renderErr) } });
               }
