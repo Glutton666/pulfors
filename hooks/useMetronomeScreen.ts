@@ -3366,6 +3366,13 @@ export function useMetronomeScreen() {
 
   useEffect(() => { noteAdvanceQueueRef.current = noteAdvanceQueue; }, [noteAdvanceQueue]);
 
+  /** Returns true for entries that should appear as note-mode sources:
+   *  bar entries, score entries (new mode:"score"), and legacy beat+scoreId entries. */
+  const isNoteSourceEntry = (e: PracticeEntry) =>
+    (e.mode || "bar") === "bar" ||
+    e.mode === "score" ||
+    (!!(e.scoreId) && (!e.mode || e.mode === "beat"));
+
   const handleEnterNoteMode = useCallback(async () => {
     const engine = engineRef.current;
     if (engine && isPlaying) {
@@ -3377,8 +3384,7 @@ export function useMetronomeScreen() {
       resetPlaybackVisuals();
     }
     const book = await loadPracticeBook();
-    const barItems = book.filter(e => (e.mode || "bar") === "bar");
-    setNoteBarEntries(barItems);
+    setNoteBarEntries(book.filter(isNoteSourceEntry));
     setNoteMode(true);
     noteModeRef.current = true;
     setNoteIsPlaying(false);
@@ -3754,12 +3760,7 @@ export function useMetronomeScreen() {
       noteIsPlayingRef.current = false;
       (async () => {
         const book = await loadPracticeBook();
-        setNoteBarEntries(book.filter(e =>
-          (e.mode || "bar") === "bar" ||
-          e.mode === "score" ||
-          // backward-compat: legacy beat+scoreId entries are also score entries
-          (!!(e.scoreId) && (!e.mode || e.mode === "beat"))
-        ));
+        setNoteBarEntries(book.filter(isNoteSourceEntry));
       })();
       return;
     }
