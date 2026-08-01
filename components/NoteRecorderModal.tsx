@@ -191,6 +191,9 @@ export function NoteRecorderModal({
   const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const metronomeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const previewWatchRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Guards against double-cleanup: handleClose sets this true so the
+  // useEffect([visible]) branch skips a redundant cleanup() call.
+  const closedByHandleRef = useRef(false);
   const recordingActiveRef = useRef(false);
 
   const countScale = useSharedValue(1);
@@ -381,7 +384,13 @@ export function NoteRecorderModal({
 
   useEffect(() => {
     if (!visible) {
-      cleanup();
+      // Skip cleanup() if handleClose already ran it — calling it twice would
+      // double-invoke releaseAudioSession and fire its metronome-resume path
+      // a second time with stale state.
+      if (!closedByHandleRef.current) {
+        cleanup();
+      }
+      closedByHandleRef.current = false;
       setPhase("idle");
       setCountdownValue(1);
       setRecordDuration(0);
@@ -839,6 +848,7 @@ export function NoteRecorderModal({
   }, [onDelete]);
 
   const handleClose = useCallback(async () => {
+    closedByHandleRef.current = true;
     await cleanup();
     onClose();
   }, [cleanup, onClose]);
