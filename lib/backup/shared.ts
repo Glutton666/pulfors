@@ -1,6 +1,7 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
 import type { PracticeEntry } from "../storage";
+import type { ScoreDocument } from "../score-types";
 import { logger } from "../logger";
 import { normalizeSampleChannel, type SampleChannel } from "../stereo-channel";
 
@@ -73,6 +74,8 @@ export interface PracticeShareFile {
   };
   entry: PracticeEntry;
   audioFiles?: Record<string, string>;
+  /** 악보 모드 항목 전용: 연결된 ScoreDocument. 수신 기기에 악보가 없어도 복원할 수 있도록 포함한다. */
+  scoreDoc?: ScoreDocument;
 }
 
 export function formatDateForFilename(): string {

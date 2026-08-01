@@ -413,6 +413,8 @@ export const translations = {
     viewGrid: { ko: "격자", en: "Grid" },
     viewList: { ko: "줄", en: "List" },
     exportAudio: { ko: "음원 내보내기", en: "Export Audio" },
+    scoreNotFound: { ko: "악보를 찾을 수 없습니다", en: "Score not found" },
+    scoreNotFoundDetail: { ko: "이 항목에 연결된 악보 파일이 없습니다. 악보 모드에서 다시 저장해 주세요.", en: "The score linked to this entry is not available. Please re-save it from score mode." },
   },
   exportAudio: {
     title: { ko: "음원 내보내기", en: "Export Audio" },

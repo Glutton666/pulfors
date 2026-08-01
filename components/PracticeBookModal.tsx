@@ -642,6 +642,25 @@ export function PracticeBookModal({
     setExportEntry(entry);
   }, []);
 
+  const handleOpenScore = useCallback(async (scoreId: string) => {
+    if (!onOpenScore) return;
+    try {
+      const { loadScore } = await import("@/lib/score-storage");
+      const doc = await loadScore(scoreId);
+      if (doc) {
+        onOpenScore(scoreId);
+      } else {
+        Alert.alert(
+          t("practiceBook", "scoreNotFound"),
+          t("practiceBook", "scoreNotFoundDetail"),
+        );
+      }
+    } catch {
+      // 로드 실패 시 일단 호출 — 상위에서 처리
+      onOpenScore(scoreId);
+    }
+  }, [onOpenScore, t]);
+
   const handleImportEntry = useCallback(async () => {
     try {
       const { importPracticeEntry } = await import("@/lib/backup");
@@ -688,7 +707,7 @@ export function PracticeBookModal({
       editLabel={editLabel}
       setEditLabel={setEditLabel}
       editInputRef={editInputRef}
-      onOpenScore={onOpenScore}
+      onOpenScore={handleOpenScore}
       onRename={editingId === item.id ? handleRename : handleStartRename}
       onLoad={handleLoad}
       onDelete={handleDelete}
@@ -862,7 +881,7 @@ export function PracticeBookModal({
                 onDelete={handleDelete}
                 onShare={handleShare}
                 onExport={handleExport}
-                onOpenScore={onOpenScore}
+                onOpenScore={handleOpenScore}
                 accentColor={C.accent}
               />
             )}
