@@ -382,6 +382,16 @@ export function useMetronomeScreen() {
     recoveryToastTimerRef.current = setTimeout(() => setPermissionRecoveryToast(null), 2500);
   }, []);
 
+  const [beatQuickSaveModalVisible, setBeatQuickSaveModalVisible] = useState(false);
+  const [beatQuickSaveName, setBeatQuickSaveName] = useState("");
+  const [beatQuickSaveToast, setBeatQuickSaveToast] = useState<string | null>(null);
+  const beatQuickSaveToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showBeatQuickSaveToast = useCallback((msg: string) => {
+    if (beatQuickSaveToastTimerRef.current) clearTimeout(beatQuickSaveToastTimerRef.current);
+    setBeatQuickSaveToast(msg);
+    beatQuickSaveToastTimerRef.current = setTimeout(() => setBeatQuickSaveToast(null), 2500);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const runRecovery = () => runPermissionRecoveryLoop({
@@ -420,6 +430,12 @@ export function useMetronomeScreen() {
   useEffect(() => {
     return () => {
       if (recoveryToastTimerRef.current) clearTimeout(recoveryToastTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (beatQuickSaveToastTimerRef.current) clearTimeout(beatQuickSaveToastTimerRef.current);
     };
   }, []);
 
@@ -2804,6 +2820,40 @@ export function useMetronomeScreen() {
     opacity: fullScreenResetFlash.value * 0.5,
   }));
 
+  const handleBeatQuickSaveOpen = useCallback(() => {
+    const defaultName = `${bpm} BPM`;
+    setBeatQuickSaveName(defaultName);
+    setBeatQuickSaveModalVisible(true);
+  }, [bpm]);
+
+  const handleBeatQuickSaveCancel = useCallback(() => {
+    setBeatQuickSaveModalVisible(false);
+  }, []);
+
+  const handleBeatQuickSaveConfirm = useCallback(async (name: string) => {
+    setBeatQuickSaveModalVisible(false);
+    try {
+      const label = name.trim() || `${bpm} BPM`;
+      const config = {
+        mode: "beat" as const,
+        bpm,
+        beatsPerMeasure,
+        beatTypes: [...beatTypes],
+        beatSubdivisions: { ...beatSubdivisions },
+        barRepeats: {} as Record<number, import("@/lib/storage").BarRepeatEntry>,
+        barLoopMode: "once" as const,
+        subdivisionPattern: [...subdivisionPattern],
+      };
+      const entry = createPracticeEntry(label, config, username);
+      const existing = await loadPracticeBook();
+      await savePracticeBook([entry, ...existing]);
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showBeatQuickSaveToast(t("main", "quickSavedMsg"));
+    } catch (e) {
+      captureBreadcrumb({ category: "practice-book", message: "Beat quick save error", level: "warning", data: { error: String(e) } });
+    }
+  }, [bpm, beatsPerMeasure, beatTypes, beatSubdivisions, subdivisionPattern, username, t, showBeatQuickSaveToast]);
+
   const handleBarQuickSave = useCallback(async (): Promise<boolean> => {
     try {
       const config = {
@@ -4313,5 +4363,14 @@ export function useMetronomeScreen() {
     languageRef,
     // Window height
     windowHeight,
+    // Beat mode quick save
+    beatQuickSaveModalVisible,
+    setBeatQuickSaveModalVisible,
+    beatQuickSaveName,
+    setBeatQuickSaveName,
+    beatQuickSaveToast,
+    handleBeatQuickSaveOpen,
+    handleBeatQuickSaveCancel,
+    handleBeatQuickSaveConfirm,
   };
 }

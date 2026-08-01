@@ -6,6 +6,9 @@ import {
   StyleSheet,
   Platform,
   Pressable,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import Animated from "react-native-reanimated";
@@ -151,6 +154,14 @@ export function MetronomeScreenUI(props: Props) {
     barModeRef, barConfigRef, dialConfigRef, barLoopModeRef, languageRef,
     // Window height
     windowHeight,
+    // Beat mode quick save
+    beatQuickSaveModalVisible,
+    beatQuickSaveName,
+    setBeatQuickSaveName,
+    beatQuickSaveToast,
+    handleBeatQuickSaveOpen,
+    handleBeatQuickSaveCancel,
+    handleBeatQuickSaveConfirm,
   } = props;
 
   type NativeKbViewProps = React.ComponentProps<typeof View> & {
@@ -963,6 +974,24 @@ export function MetronomeScreenUI(props: Props) {
               </Pressable>
             )}
             <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
+            {scoreMode === null && (
+              <Pressable
+                onPress={handleBeatQuickSaveOpen}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={t("main", "beatQuickSaveTitle")}
+                style={{
+                  marginTop: S.ms(2, 0.3),
+                  padding: S.ms(6, 0.3),
+                  borderRadius: 999,
+                  backgroundColor: C.overlay10,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons name="bookmark-outline" size={S.ms(18, 0.3)} color={C.textSecondary} />
+              </Pressable>
+            )}
           </View>
         )}
         {isLandscape && !barMode && (
@@ -1140,6 +1169,23 @@ export function MetronomeScreenUI(props: Props) {
               </Pressable>
             )}
             <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
+            {scoreMode === null && (
+              <Pressable
+                onPress={handleBeatQuickSaveOpen}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={t("main", "beatQuickSaveTitle")}
+                style={{
+                  padding: S.ms(6, 0.3),
+                  borderRadius: 999,
+                  backgroundColor: C.overlay10,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons name="bookmark-outline" size={S.ms(18, 0.3)} color={C.textSecondary} />
+              </Pressable>
+            )}
             {easterEggActive ? (
               <EasterEggQuiz
                 onGuess={handleEasterEggGuess}
@@ -1362,6 +1408,124 @@ export function MetronomeScreenUI(props: Props) {
         }}
       />
       </Animated.View>
+
+      {/* Beat mode quick-save name input modal */}
+      <Modal
+        visible={beatQuickSaveModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={handleBeatQuickSaveCancel}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onPress={handleBeatQuickSaveCancel}
+        >
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+            <Pressable
+              style={{
+                backgroundColor: C.surface,
+                borderRadius: 16,
+                padding: S.ms(20, 0.4),
+                width: Math.min(320, windowWidth - 48),
+                gap: S.ms(14, 0.3),
+                borderWidth: 1,
+                borderColor: C.border,
+              }}
+              onPress={() => {}}
+            >
+              <Text
+                style={{
+                  color: C.text,
+                  fontSize: S.ms(16, 0.4),
+                  fontWeight: "600",
+                  textAlign: "center",
+                }}
+              >
+                {t("main", "beatQuickSaveTitle")}
+              </Text>
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: C.accent,
+                  borderRadius: 10,
+                  paddingHorizontal: S.ms(12, 0.3),
+                  paddingVertical: S.ms(10, 0.3),
+                  color: C.text,
+                  fontSize: S.ms(15, 0.3),
+                  backgroundColor: C.background,
+                }}
+                value={beatQuickSaveName}
+                onChangeText={setBeatQuickSaveName}
+                placeholder={t("main", "beatQuickSaveNamePlaceholder")}
+                placeholderTextColor={C.textTertiary}
+                autoFocus
+                onSubmitEditing={() => void handleBeatQuickSaveConfirm(beatQuickSaveName)}
+                returnKeyType="done"
+              />
+              <View style={{ flexDirection: "row", gap: S.ms(10, 0.3) }}>
+                <Pressable
+                  onPress={handleBeatQuickSaveCancel}
+                  style={{
+                    flex: 1,
+                    paddingVertical: S.ms(10, 0.3),
+                    borderRadius: 10,
+                    backgroundColor: C.overlay10,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ color: C.textSecondary, fontSize: S.ms(15, 0.3), fontWeight: "500" }}>
+                    {t("main", "cancel")}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void handleBeatQuickSaveConfirm(beatQuickSaveName)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: S.ms(10, 0.3),
+                    borderRadius: 10,
+                    backgroundColor: C.accent,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ color: C.background, fontSize: S.ms(15, 0.3), fontWeight: "600" }}>
+                    {t("main", "beatQuickSaveConfirm")}
+                  </Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      {/* Beat quick-save success toast */}
+      {beatQuickSaveToast ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            bottom: (insets.bottom || webBottomInset) + 24,
+            left: 16,
+            right: 16,
+            zIndex: 9999,
+            backgroundColor: C.surface,
+            borderRadius: 12,
+            paddingVertical: 10,
+            paddingHorizontal: 14,
+            borderWidth: 1,
+            borderColor: C.border,
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ color: C.text, fontSize: 14, fontWeight: "500" as const }}>
+            {beatQuickSaveToast}
+          </Text>
+        </View>
+      ) : null}
     </KbView>
   );
 }
