@@ -3754,7 +3754,12 @@ export function useMetronomeScreen() {
       noteIsPlayingRef.current = false;
       (async () => {
         const book = await loadPracticeBook();
-        setNoteBarEntries(book.filter(e => (e.mode || "bar") === "bar"));
+        setNoteBarEntries(book.filter(e =>
+          (e.mode || "bar") === "bar" ||
+          e.mode === "score" ||
+          // backward-compat: legacy beat+scoreId entries are also score entries
+          (!!(e.scoreId) && (!e.mode || e.mode === "beat"))
+        ));
       })();
       return;
     }

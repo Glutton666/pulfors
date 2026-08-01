@@ -448,7 +448,7 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       const entry = createPracticeEntry(
         doc.metadata.title || t("scoreMode", "untitled"),
         {
-          mode: "beat",
+          mode: "score",
           bpm: bpm_,
           beatsPerMeasure: beats,
           beatTypes: (["accent", ...Array(Math.max(0, beats - 1)).fill("normal")] as any),

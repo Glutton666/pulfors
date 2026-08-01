@@ -163,7 +163,8 @@ function SwipeableEntry({
     })
   ).current;
 
-  const isBeatMode = (item.mode || "bar") === "beat";
+  const isScoreMode = item.mode === "score" || (!!(item.scoreId) && (!item.mode || item.mode === "beat"));
+  const isBeatMode = !isScoreMode && (item.mode || "bar") === "beat";
   const isNoteMode = item.mode === "note";
   const barCount = item.beatsPerMeasure;
   const secondsPerBeat = 60 / item.bpm;
@@ -182,7 +183,7 @@ function SwipeableEntry({
   if (isNoteMode) {
     const pm = item.notePlayMode || "once";
     playModeText = pm === "loop" ? t("practiceBook", "continuousPlay") : pm === "random" ? t("practiceBook", "randomPlay") : t("practiceBook", "singlePlay");
-  } else if (isBeatMode) {
+  } else if (isScoreMode || isBeatMode) {
     playModeText = t("practiceBook", "continuousPlay");
   } else if (clockMode === "timer" && timerDur != null && timerDur > 0) {
     const tm = Math.floor(timerDur / 60);
@@ -318,8 +319,18 @@ function SwipeableEntry({
           ) : null}
 
           <View style={styles.entryDetails}>
-            <View style={[styles.modeBadge, { backgroundColor: isNoteMode ? "#22c55e" : isBeatMode ? "#3B82F6" : accentColor }]}>
-              <Text style={styles.modeBadgeText}>{isNoteMode ? t("practiceBook", "badgeNote") : isBeatMode ? t("practiceBook", "badgeBeat") : t("practiceBook", "badgeBar")}</Text>
+            <View style={[styles.modeBadge, {
+              backgroundColor: isNoteMode ? "#22c55e"
+                : isScoreMode ? "#a855f7"
+                : isBeatMode ? "#3B82F6"
+                : accentColor,
+            }]}>
+              <Text style={styles.modeBadgeText}>
+                {isNoteMode ? t("practiceBook", "badgeNote")
+                  : isScoreMode ? t("practiceBook", "badgeScore")
+                  : isBeatMode ? t("practiceBook", "badgeBeat")
+                  : t("practiceBook", "badgeBar")}
+              </Text>
             </View>
             {isNoteMode ? (
               <>
@@ -351,7 +362,7 @@ function SwipeableEntry({
                   <Text style={[styles.detailValue, { color: accentColor }]}>
                     {barCount}
                   </Text>
-                  <Text style={styles.detailUnit}>{isBeatMode ? t("practiceBook", "badgeBeat") : t("practiceBook", "badgeBar")}</Text>
+                  <Text style={styles.detailUnit}>{isScoreMode ? t("practiceBook", "badgeScore") : isBeatMode ? t("practiceBook", "badgeBeat") : t("practiceBook", "badgeBar")}</Text>
                 </View>
                 <View style={styles.detailChip}>
                   <Ionicons
@@ -380,6 +391,7 @@ function GridItem({
   onDelete,
   onShare,
   onExport,
+  onOpenScore,
   accentColor,
 }: {
   item: PracticeEntry;
@@ -387,6 +399,7 @@ function GridItem({
   onDelete: (id: string) => void;
   onShare: (entry: PracticeEntry) => void;
   onExport: (entry: PracticeEntry) => void;
+  onOpenScore?: (scoreId: string) => void;
   accentColor: string;
 }) {
   const { colors: C } = useTheme();
@@ -394,14 +407,15 @@ function GridItem({
   const styles = make_styles(C);
   const gridStyles = make_gridStyles(C);
   const { t } = useLanguage();
-  const isBeatMode = (item.mode || "bar") === "beat";
+  const isScoreMode = item.mode === "score" || (!!(item.scoreId) && (!item.mode || item.mode === "beat"));
+  const isBeatMode = !isScoreMode && (item.mode || "bar") === "beat";
   const isNoteMode = item.mode === "note";
 
   let playModeText: string;
   if (isNoteMode) {
     const pm = item.notePlayMode || "once";
     playModeText = pm === "loop" ? t("practiceBook", "continuousPlay") : pm === "random" ? t("practiceBook", "randomPlay") : t("practiceBook", "singlePlay");
-  } else if (isBeatMode) {
+  } else if (isScoreMode || isBeatMode) {
     playModeText = t("practiceBook", "continuousPlay");
   } else {
     const clockMode = item.barClockMode || "stopwatch";
@@ -435,13 +449,24 @@ function GridItem({
         gridStyles.card,
         pressed && { opacity: 0.7 },
       ]}
-      onPress={() => onLoad(item)}
+      onPress={() => {
+        if (isScoreMode && item.scoreId && onOpenScore) {
+          onOpenScore(item.scoreId);
+        } else {
+          onLoad(item);
+        }
+      }}
       onLongPress={handleLongPressActions}
       delayLongPress={500}
     >
       <View style={gridStyles.cardHeader}>
         <Text style={gridStyles.cardLabel} numberOfLines={1}>{item.label}</Text>
-        <View style={[gridStyles.modeDot, { backgroundColor: isNoteMode ? "#22c55e" : isBeatMode ? "#3B82F6" : accentColor }]} />
+        <View style={[gridStyles.modeDot, {
+          backgroundColor: isNoteMode ? "#22c55e"
+            : isBeatMode ? "#3B82F6"
+            : isScoreMode ? "#a855f7"
+            : accentColor,
+        }]} />
         <Pressable
           testID={`export-grid-${item.id}`}
           accessibilityLabel={t("practiceBook", "exportAudio")}
@@ -470,7 +495,10 @@ function GridItem({
       )}
       <View style={gridStyles.cardFooter}>
         <Text style={gridStyles.cardMeta} numberOfLines={1}>
-          {isNoteMode ? t("practiceBook", "badgeNote") : isBeatMode ? t("practiceBook", "badgeBeat") : t("practiceBook", "badgeBar")}
+          {isNoteMode ? t("practiceBook", "badgeNote")
+            : isScoreMode ? t("practiceBook", "badgeScore")
+            : isBeatMode ? t("practiceBook", "badgeBeat")
+            : t("practiceBook", "badgeBar")}
           {" · "}
           {isNoteMode ? `${(item.noteQueueEntries || item.noteQueueEntryIds || []).length}` : `${item.beatsPerMeasure}`}
           {!isNoteMode && ` ${t("practiceBook", "beatsUnit")}`}
@@ -511,7 +539,12 @@ export function PracticeBookModal({
   const [goalMinutes, setGoalMinutes] = useState("10");
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
-  const [filterMode, setFilterMode] = useState<"all" | "beat" | "bar" | "note">("all");
+  const [filterMode, setFilterMode] = useState<"all" | "beat" | "bar" | "note" | "score">("all");
+
+  /** True for entries that are linked to a score document (new mode:"score" and
+   * legacy mode:"beat" entries that carry a scoreId). */
+  const isScoreEntry = (e: PracticeEntry) =>
+    e.mode === "score" || (!!(e.scoreId) && (!e.mode || e.mode === "beat"));
   const saveInputRef = useRef<TextInput>(null);
   const editInputRef = useRef<TextInput | null>(null);
 
@@ -630,13 +663,19 @@ export function PracticeBookModal({
 
   const filteredEntries = filterMode === "all"
     ? entries
-    : entries.filter(e => (e.mode || "beat") === filterMode);
+    : filterMode === "score"
+      ? entries.filter(isScoreEntry)
+      : filterMode === "beat"
+        // Beat tab excludes score-linked entries (they appear under Score tab)
+        ? entries.filter(e => (!e.mode || e.mode === "beat") && !e.scoreId)
+        : entries.filter(e => e.mode === filterMode);
 
   const modeCounts = {
     all: entries.length,
-    beat: entries.filter(e => !e.mode || e.mode === "beat").length,
+    beat: entries.filter(e => (!e.mode || e.mode === "beat") && !e.scoreId).length,
     bar: entries.filter(e => e.mode === "bar").length,
     note: entries.filter(e => e.mode === "note").length,
+    score: entries.filter(isScoreEntry).length,
   };
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -768,12 +807,13 @@ export function PracticeBookModal({
 
         {entries.length > 0 && (
           <View style={styles.tabBar}>
-            {(["all", "beat", "bar", "note"] as const).map((mode) => {
+            {(["all", "beat", "bar", "note", "score"] as const).map((mode) => {
               const isActive = filterMode === mode;
               const label = mode === "all" ? t("practiceBook", "tabAll")
                 : mode === "beat" ? t("practiceBook", "tabBeat")
                 : mode === "bar" ? t("practiceBook", "tabBar")
-                : t("practiceBook", "tabNote");
+                : mode === "note" ? t("practiceBook", "tabNote")
+                : t("practiceBook", "tabScore");
               const count = modeCounts[mode];
               return (
                 <Pressable
@@ -822,6 +862,7 @@ export function PracticeBookModal({
                 onDelete={handleDelete}
                 onShare={handleShare}
                 onExport={handleExport}
+                onOpenScore={onOpenScore}
                 accentColor={C.accent}
               />
             )}
