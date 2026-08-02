@@ -115,8 +115,8 @@ catch (e) { parentPort.postMessage({ ok: false, error: e.message }); }
         workerData: { buffer: Array.from(silentWav) },
       });
       const timer = setTimeout(() => { worker.terminate(); reject(new Error("timeout")); }, 5000);
-      worker.on("message", (msg) => { clearTimeout(timer); resolve(msg); });
-      worker.on("error", (e) => { clearTimeout(timer); reject(e); });
+      worker.on("message", (msg: { ok: boolean; result: unknown }) => { clearTimeout(timer); resolve(msg); });
+      worker.on("error", (e: Error) => { clearTimeout(timer); reject(e); });
     });
 
     assert.strictEqual(result.ok, true, "Worker가 성공적으로 완료되어야 함");
@@ -132,7 +132,7 @@ parentPort.postMessage({ isMainThread });
     const isMain = await new Promise<boolean>((resolve, reject) => {
       const w = new Worker(CODE, { eval: true });
       const timer = setTimeout(() => { w.terminate(); reject(new Error("timeout")); }, 3000);
-      w.on("message", (msg) => { clearTimeout(timer); resolve(msg.isMainThread); });
+      w.on("message", (msg: { isMainThread: boolean }) => { clearTimeout(timer); resolve(msg.isMainThread); });
       w.on("error", reject);
     });
     assert.strictEqual(isMain, false, "Worker Thread는 isMainThread = false이어야 함");
