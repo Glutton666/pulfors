@@ -3423,11 +3423,11 @@ export function useMetronomeScreen() {
   useEffect(() => { noteAdvanceQueueRef.current = noteAdvanceQueue; }, [noteAdvanceQueue]);
 
   /** Returns true for entries that should appear as note-mode sources:
-   *  bar entries, score entries (new mode:"score"), and legacy beat+scoreId entries. */
+   *  bar entries, beat entries, and score entries. */
   const isNoteSourceEntry = (e: PracticeEntry) =>
     (e.mode || "bar") === "bar" ||
     e.mode === "score" ||
-    (!!(e.scoreId) && (!e.mode || e.mode === "beat"));
+    e.mode === "beat";
 
   const handleEnterNoteMode = useCallback(async () => {
     const engine = engineRef.current;
