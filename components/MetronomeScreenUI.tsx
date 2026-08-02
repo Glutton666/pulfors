@@ -379,8 +379,15 @@ export function MetronomeScreenUI(props: Props) {
       <MoreMenuModal
         visible={showMoreMenu}
         onClose={() => setActiveModal(null)}
-        onScheduledStart={() => openExclusive("scheduledStart")}
-        onFadeOut={() => openExclusive("fadeOut")}
+        // MoreMenuModal/DrumKitModal/FadeOutModal/ScheduledStartModal 모두
+        // AnimatedModal 기반 네이티브 Modal이라, activeModal을 한 틱에 바로
+        // 다른 값으로 바꾸면 페이드아웃 중인 이전 Modal(최대 150ms)과 새로
+        // 뜨는 Modal이 동시에 마운트되어 터치 입력이 한쪽에 묶이는 'ghost'
+        // 상태가 될 수 있다 (SignalGeneratorModal.tsx 707-712 참고). 먼저
+        // null로 닫고, AnimatedModal의 페이드 시간보다 긴 지연 후 다음
+        // Modal을 연다.
+        onScheduledStart={() => { setActiveModal(null); setTimeout(() => openExclusive("scheduledStart"), 160); }}
+        onFadeOut={() => { setActiveModal(null); setTimeout(() => openExclusive("fadeOut"), 160); }}
         onStageMode={() => {
           setActiveModal(null);
           void enterStageMode();
@@ -397,7 +404,8 @@ export function MetronomeScreenUI(props: Props) {
           resetPlaybackVisuals();
           setIsPreparing(false);
           setIsPlaying(false);
-          openExclusive("drumKit");
+          setActiveModal(null);
+          setTimeout(() => openExclusive("drumKit"), 160);
         }}
         onScoreMode={() => {
           setActiveModal(null);
@@ -405,7 +413,7 @@ export function MetronomeScreenUI(props: Props) {
         }}
         onStemSep={() => {
           setActiveModal(null);
-          setTimeout(() => openExclusive("stemSep"), 50);
+          setTimeout(() => openExclusive("stemSep"), 160);
         }}
       />
 
@@ -529,7 +537,7 @@ export function MetronomeScreenUI(props: Props) {
           reopenSignalGenAfterTuningGuideRef.current = next.reopenSignalGenAfterTuningGuide;
           setActiveModal(next.activeModal);
         }}
-        onOpenBpmDetect={() => openExclusive("bpmDetect")}
+        onOpenBpmDetect={() => { setActiveModal(null); setTimeout(() => openExclusive("bpmDetect"), 160); }}
       />
 
       {recorderTarget !== null && (

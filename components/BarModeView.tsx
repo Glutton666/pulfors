@@ -1532,7 +1532,7 @@ export function BarModeView({
                 </Pressable>
               ))}
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: repType === "count" ? 4 : 2 }}>
               {repType === "count" ? (
                 <>
                   <Pressable onPress={() => { if (!isPlaying) { const c = Math.max(1, repCount - 1); setRepCount(c); commitRepeat(repType, c, repMin, repSec, repBpm); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
@@ -1545,29 +1545,29 @@ export function BarModeView({
                 </>
               ) : (
                 <>
-                  <Pressable onPress={() => { if (!isPlaying) { const m = Math.max(0, repMin - 1); setRepMin(m); commitRepeat(repType, repCount, m, repSec, repBpm); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
-                    <Ionicons name="remove" size={ms(12, 0.4)} color={C.textSecondary} />
+                  <Pressable onPress={() => { if (!isPlaying) { const m = Math.max(0, repMin - 1); setRepMin(m); commitRepeat(repType, repCount, m, repSec, repBpm); } }} style={[styles.stepBtn, styles.stepBtnCompact, { backgroundColor: C.overlay10 }]}>
+                    <Ionicons name="remove" size={ms(11, 0.4)} color={C.textSecondary} />
                   </Pressable>
-                  <Text style={{ color: C.text, fontSize: 14, fontFamily: "SpaceGrotesk_700Bold", minWidth: 24, textAlign: "center" }}>{repMin}{t("barModeView", "minuteSuffix")}</Text>
-                  <Pressable onPress={() => { if (!isPlaying) { const m = Math.min(59, repMin + 1); setRepMin(m); commitRepeat(repType, repCount, m, repSec, repBpm); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
-                    <Ionicons name="add" size={ms(12, 0.4)} color={C.textSecondary} />
+                  <Text style={{ color: C.text, fontSize: 13, fontFamily: "SpaceGrotesk_700Bold", minWidth: 18, textAlign: "center" }}>{repMin}{t("barModeView", "minuteSuffix")}</Text>
+                  <Pressable onPress={() => { if (!isPlaying) { const m = Math.min(59, repMin + 1); setRepMin(m); commitRepeat(repType, repCount, m, repSec, repBpm); } }} style={[styles.stepBtn, styles.stepBtnCompact, { backgroundColor: C.overlay10 }]}>
+                    <Ionicons name="add" size={ms(11, 0.4)} color={C.textSecondary} />
                   </Pressable>
                   <Pressable
                     onPress={() => { if (!isPlaying && !secHoldFired.current) { const total = Math.max(0, repMin * 60 + repSec - 1); const m = Math.floor(total / 60); const s = total % 60; setRepMin(m); setRepSec(s); commitRepeat(repType, repCount, m, s, repBpm); } }}
                     onPressIn={() => { if (!isPlaying) startSecHold(-1, repMin, repSec, (m, s) => { setRepMin(m); setRepSec(s); commitRepeat(repTypeRef.current, repCountRef.current, m, s, repBpmRef.current); }); }}
                     onPressOut={() => clearSecTimers()}
-                    style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
+                    style={[styles.stepBtn, styles.stepBtnCompact, { backgroundColor: C.overlay10 }]}
                   >
-                    <Ionicons name="remove" size={ms(12, 0.4)} color={C.textSecondary} />
+                    <Ionicons name="remove" size={ms(11, 0.4)} color={C.textSecondary} />
                   </Pressable>
-                  <Text style={{ color: C.text, fontSize: 14, fontFamily: "SpaceGrotesk_700Bold", minWidth: 24, textAlign: "center" }}>{repSec}{t("barModeView", "secondSuffix")}</Text>
+                  <Text style={{ color: C.text, fontSize: 13, fontFamily: "SpaceGrotesk_700Bold", minWidth: 18, textAlign: "center" }}>{repSec}{t("barModeView", "secondSuffix")}</Text>
                   <Pressable
                     onPress={() => { if (!isPlaying && !secHoldFired.current) { const total = Math.min(3599, repMin * 60 + repSec + 1); const m = Math.floor(total / 60); const s = total % 60; setRepMin(m); setRepSec(s); commitRepeat(repType, repCount, m, s, repBpm); } }}
                     onPressIn={() => { if (!isPlaying) startSecHold(1, repMin, repSec, (m, s) => { setRepMin(m); setRepSec(s); commitRepeat(repTypeRef.current, repCountRef.current, m, s, repBpmRef.current); }); }}
                     onPressOut={() => clearSecTimers()}
-                    style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}
+                    style={[styles.stepBtn, styles.stepBtnCompact, { backgroundColor: C.overlay10 }]}
                   >
-                    <Ionicons name="add" size={ms(12, 0.4)} color={C.textSecondary} />
+                    <Ionicons name="add" size={ms(11, 0.4)} color={C.textSecondary} />
                   </Pressable>
                 </>
               )}
@@ -2317,6 +2317,14 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
+  },
+  // 시간(duration) 모드는 스테퍼가 6개(분±, 초±)라 횟수(count) 모드의 3개보다
+  // 훨씬 넓어져, 아래 행에서 -34px 떠오르는 재생 버튼과 겹치는 문제가 있었다.
+  // 폭을 줄여 전체 그룹 너비를 좁혀서 겹침을 완화한다.
+  stepBtnCompact: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
   },
   bpmInput: {
     fontSize: 16,
