@@ -819,10 +819,14 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   // ── 음표 탭 시 다중 선택 목록 토글 (2개 이상 선택 시 묶기 바 노출용) ──
   const toggleMultiSelect = useCallback((elementId: string) => {
     setMultiSelectIds((prev) => {
-      const next = prev.includes(elementId)
-        ? prev.filter((id) => id !== elementId)
-        : [...prev, elementId];
+      const adding = !prev.includes(elementId);
+      const next = adding
+        ? [...prev, elementId]
+        : prev.filter((id) => id !== elementId);
       setSelectedElementId(next.length === 1 ? next[0] : null);
+      // 음표가 추가되는 순간 마디 다중 선택은 해제한다.
+      // (두 선택이 동시에 활성화되면 액션바가 겹쳐 편집 대상이 모호해진다.)
+      if (adding) setMeasureMultiSelectIndices([]);
       return next;
     });
   }, []);
@@ -831,6 +835,8 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   const handleTupletBracketTap = useCallback((elementIds: string[]) => {
     setSelectedElementId(null);
     setMultiSelectIds(elementIds);
+    // 음표 그룹이 선택되면 마디 다중 선택 해제 (불변식: 두 선택은 상호 배타적)
+    setMeasureMultiSelectIndices([]);
   }, []);
 
   const handleElementTap = useCallback(
@@ -1026,7 +1032,9 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
       prev.includes(measureIdx) ? prev.filter((i) => i !== measureIdx) : [...prev, measureIdx],
     );
     setSelectedMeasureIdx(measureIdx);
+    // 마디가 선택되면 음표 다중 선택 해제 (불변식: 두 선택은 상호 배타적)
     setSelectedElementId(null);
+    setMultiSelectIds([]);
   }, [selectedRepeatSign, selectedCrescType, selectedPartIdx, doc, handleRepeatSignApply, applyDoc]);
 
   // ── 마디 롱프레스 → 컨텍스트 메뉴 ───────────────────────────
