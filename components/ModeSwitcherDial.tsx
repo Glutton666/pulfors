@@ -43,7 +43,6 @@ const MINI_A_STEP   = 55;   // wider step so dots clear the centre icon at MINI_
 const ANGLE_STEP    = 34;   // degrees between adjacent mode slots; arc dist=45px > ICON_S=40 ✓
 const PX_PER_STEP = 36;   // pixels of swipe per one mode step
 const N_MODES     = MODES.length; // 7 — used for circular wrapping
-const RIM_COLOR   = "#6B5A1E";   // dark olive-gold rim colour
 const RIM_INSET   = 6;           // inner ring inset from rim edge
 
 // Circular wrap: keeps scrollPos in [0, N_MODES)
@@ -236,6 +235,9 @@ function ModeSwitcherDial({
   hideHandle = false,
 }: ModeSwitcherDialProps, ref: React.ForwardedRef<ModeSwitcherDialHandle>) {
   const { colors: C } = useTheme();
+  // 테마 accent 색에서 림 색상 파생 — 외곽 테두리는 69%, 내부 링은 33% 불투명도
+  const rimColor    = C.accent + "B0";
+  const rimColorDim = C.accent + "55";
   const { t } = useLanguage();
   const S = useScale();
   const { width: winW, height: winH } = useWindowDimensions();
@@ -590,7 +592,7 @@ function ModeSwitcherDial({
               backgroundColor: C.surface,
               ...bgCorner,
               borderWidth: 3,
-              borderColor: RIM_COLOR,
+              borderColor: rimColor,
               ...wallEdgeBorder(wall),
               overflow: "hidden" as const,
               pointerEvents: "none" as const,
@@ -604,7 +606,7 @@ function ModeSwitcherDial({
                 ...innerRingInset(wall),
                 ...innerBgCorners,
                 borderWidth: 1.5,
-                borderColor: RIM_COLOR + "70",
+                borderColor: rimColorDim,
                 ...wallEdgeBorder(wall),
               }}
             />
@@ -620,7 +622,7 @@ function ModeSwitcherDial({
               borderRadius: HOLE_R,
               backgroundColor: C.background,
               borderWidth: 2.5,
-              borderColor: RIM_COLOR,
+              borderColor: rimColor,
             }}
           />
 
@@ -697,7 +699,7 @@ function ModeSwitcherDial({
             backgroundColor: C.surface,
             ...hLayout.corners,
             borderWidth: 3,
-            borderColor: RIM_COLOR,
+            borderColor: rimColor,
             ...wallEdgeBorder(wall),
             overflow: "hidden" as const,
           }}
@@ -711,7 +713,7 @@ function ModeSwitcherDial({
               ...innerRingInset(wall),
               ...innerHCorners,
               borderWidth: 1.5,
-              borderColor: RIM_COLOR + "70",
+              borderColor: rimColorDim,
               ...wallEdgeBorder(wall),
             }}
           />
