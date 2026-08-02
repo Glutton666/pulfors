@@ -123,9 +123,12 @@ export const StemWebView = forwardRef<StemWebViewHandle, StemWebViewProps>(
     if (Platform.OS !== "android") return null;
     if (!htmlUri) return null;
 
+    // htmlUri is already a full file:// URI (FileSystem.documentDirectory
+    // includes the scheme) — do not prepend another "file://" or the WebView
+    // rejects the resulting double-prefixed URL ("file://file:///...").
     const source = htmlUri === "__inline__"
       ? { html: STEM_WEBVIEW_HTML }
-      : { uri: `file://${htmlUri}` };
+      : { uri: htmlUri };
 
     return (
       <WebView
