@@ -599,11 +599,14 @@ test("source: onDrumKit 핸들러가 openExclusive(\"drumKit\")를 호출한다"
   );
 });
 
-test("source: onDrumKit 핸들러가 setActiveModal을 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
+test("source: onDrumKit 핸들러가 setActiveModal(null) 외의 값으로 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
   const body = extractMoreMenuHandlerBody("onDrumKit");
+  // setActiveModal(null) 은 허용: 네이티브 Modal 겹침(ghost 입력) 방지를 위해
+  // 먼저 닫고 setTimeout 이후 openExclusive 로 여는 패턴에서 필요하다. 실제로
+  // openExclusive 를 우회해 다른 값으로 모달을 여는 호출만 금지한다.
   assert.ok(
-    !body.includes("setActiveModal("),
-    `onDrumKit 핸들러 본문에서 setActiveModal 직접 호출이 발견됐다 — ` +
+    !/setActiveModal\(\s*(?!null\s*\))/.test(body),
+    `onDrumKit 핸들러 본문에서 setActiveModal(null) 이 아닌 직접 호출이 발견됐다 — ` +
     `openExclusive 를 우회하면 mutual exclusion 보장이 깨진다:\n${body}`,
   );
 });
@@ -679,20 +682,22 @@ test("source: onFadeOut 핸들러가 openExclusive(\"fadeOut\")를 호출한다"
   );
 });
 
-test("source: onScheduledStart 핸들러가 setActiveModal을 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
+test("source: onScheduledStart 핸들러가 setActiveModal(null) 외의 값으로 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
   const prop = extractMoreMenuPropSource("onScheduledStart");
+  // setActiveModal(null) 은 허용: 네이티브 Modal 겹침(ghost 입력) 방지를 위해
+  // 먼저 닫고 setTimeout 이후 openExclusive 로 여는 패턴에서 필요하다.
   assert.ok(
-    !prop.includes("setActiveModal("),
-    `onScheduledStart prop 에서 setActiveModal 직접 호출이 발견됐다 — ` +
+    !/setActiveModal\(\s*(?!null\s*\))/.test(prop),
+    `onScheduledStart prop 에서 setActiveModal(null) 이 아닌 직접 호출이 발견됐다 — ` +
     `openExclusive 를 우회하면 mutual exclusion 보장이 깨진다:\n${prop}`,
   );
 });
 
-test("source: onFadeOut 핸들러가 setActiveModal을 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
+test("source: onFadeOut 핸들러가 setActiveModal(null) 외의 값으로 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
   const prop = extractMoreMenuPropSource("onFadeOut");
   assert.ok(
-    !prop.includes("setActiveModal("),
-    `onFadeOut prop 에서 setActiveModal 직접 호출이 발견됐다 — ` +
+    !/setActiveModal\(\s*(?!null\s*\))/.test(prop),
+    `onFadeOut prop 에서 setActiveModal(null) 이 아닌 직접 호출이 발견됐다 — ` +
     `openExclusive 를 우회하면 mutual exclusion 보장이 깨진다:\n${prop}`,
   );
 });
