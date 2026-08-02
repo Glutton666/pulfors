@@ -2958,16 +2958,9 @@ export function useMetronomeScreen() {
     // 메뉴 진입·이탈 → 위에서 아래로 슬라이드 (Y축)
     // 그 외 모드 전환  → 다이얼 방향에 따라 좌우 슬라이드 (X축)
     if (mode !== currentMode) {
-      const isMenuTransition = mode === "menu" || currentMode === "menu";
-      if (isMenuTransition) {
-        modeSlideX.value       = 0;
-        modeSlideY.value       = -windowHeight * 0.25;
-        modeSlideOpacity.value = 0;
-      } else {
-        modeSlideX.value       = direction === "right" ? windowWidth * 0.25 : -windowWidth * 0.25;
-        modeSlideY.value       = 0;
-        modeSlideOpacity.value = 0;
-      }
+      modeSlideX.value       = direction === "right" ? windowWidth * 0.25 : -windowWidth * 0.25;
+      modeSlideY.value       = 0;
+      modeSlideOpacity.value = 0;
     }
     const cb: ModeSwitchCallbacks = {
       handleExitNoteMode,
