@@ -45,6 +45,8 @@ export interface UseAudioPipelineParams {
   barModeRef: React.MutableRefObject<boolean>;
   barMetronomeChannelRef: React.MutableRefObject<SampleChannel>;
   noteSampleMetroChannelsRef: React.MutableRefObject<NoteSampleMetroChannelMap>;
+  /** Reactive volume (0–1+). Used to sync all player pool volumes. */
+  volume: number;
   volumeRef: React.MutableRefObject<number>;
   sampleVolumeRef: React.MutableRefObject<number>;
   isPlayingRef: React.MutableRefObject<boolean>;
@@ -61,8 +63,6 @@ export interface UseAudioPipelineParams {
 
 export interface UseAudioPipelineResult {
   // ── Player pool (owned here, forwarded for tick callback use) ────────────
-  /** Lazy-proxy of all built-in sound-set players. */
-  allPlayers: BuiltinPlayers;
   allPlayersRef: React.MutableRefObject<BuiltinPlayers>;
   soundSetRef: React.MutableRefObject<SoundSet>;
   /** Round-robin indices for polyphony; read/write these in the tick callback. */
@@ -119,7 +119,7 @@ export interface UseAudioPipelineResult {
  */
 export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipelineResult {
   const {
-    engineRef, soundSet, customSoundSetsRef,
+    engineRef, soundSet, volume, customSoundSetsRef,
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
     isPlayingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
@@ -128,7 +128,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   // ── Player pool ownership (moved from useMetronomeScreen) ───────────────────
   // allPlayersRef, soundSetRef, highToggle/lowToggle/strongToggle are now owned
   // here. useMetronomeScreen's tick callback reads these via the return value.
-  const { allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle } =
+  const { allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle, setPoolsVolume } =
     useAudioPlayers(soundSet);
 
   // ── Audio-session settings (moved from useMetronomeScreen) ─────────────────
@@ -173,6 +173,16 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     },
     [persistAudioSettingsCallbackRef],
   );
+
+  // ── Player volume sync ───────────────────────────────────────────────────────
+  // Keeps all pooled players in sync with the reactive volume state.
+  // Moved from useMetronomeScreen so audio resource management stays in one layer.
+  // NOTE: allPlayers is a lazy Proxy with no enumerable keys — iterating it via
+  // Object.values() returns []. We use setPoolsVolume() which walks the internal
+  // cache directly and also records the value for pools created lazily afterward.
+  useEffect(() => {
+    setPoolsVolume(volume);
+  }, [volume, setPoolsVolume]);
 
   // ── Owned refs ──────────────────────────────────────────────────────────────
   const renderedPlayerRef = useRef<ExpoAudioPlayer | null>(null);
@@ -572,7 +582,6 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
 
   return {
     // Player pool
-    allPlayers,
     allPlayersRef,
     soundSetRef,
     highToggle,

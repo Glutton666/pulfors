@@ -539,7 +539,7 @@ export function useMetronomeScreen() {
   // ── Audio pipeline (player pool + PCM cache + rendered player + audio session settings) ──
   const {
     // Player pool (now owned by the pipeline)
-    allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle,
+    allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle,
     // Audio-session settings (now owned by the pipeline)
     backgroundPlay, autoResumeAfterInterruption,
     updateBackgroundPlay, updateAutoResumeAfterInterruption, applyAudioSettings,
@@ -553,7 +553,7 @@ export function useMetronomeScreen() {
     invalidateSamplePCMCache, preloadNoteSampleSounds, clearSamplePlayStates,
     armAudioWatchdog, clearAudioWatchdog,
   } = useAudioPipeline({
-    engineRef, soundSet, customSoundSetsRef,
+    engineRef, soundSet, volume, customSoundSetsRef,
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
     isPlayingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
@@ -1195,25 +1195,6 @@ export function useMetronomeScreen() {
     };
   }, [flashOpacity]);
 
-  useEffect(() => {
-    try {
-      Object.values(allPlayers).forEach((set) => {
-        const v = Math.max(0, Math.min(1, volume));
-        set.highA.volume = v;
-        set.highB.volume = v;
-        set.highC.volume = v;
-        set.highD.volume = v;
-        set.lowA.volume = v;
-        set.lowB.volume = v;
-        set.lowC.volume = v;
-        set.lowD.volume = v;
-        set.strongA.volume = v;
-        set.strongB.volume = v;
-        set.strongC.volume = v;
-        set.strongD.volume = v;
-      });
-    } catch (e) {}
-  }, [volume, allPlayers]);
 
   // 설정 영속화 스냅샷 ref. 매 렌더에서 최신 React state를 복사해 둔다 →
   // createDebouncedPersister가 flush 시점에 항상 최신값을 읽는다.

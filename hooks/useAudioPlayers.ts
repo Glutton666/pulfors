@@ -48,6 +48,11 @@ export interface AudioPlayersHook {
   lowToggle: React.MutableRefObject<number>;
   /** 0-based round-robin index for the "strong" role */
   strongToggle: React.MutableRefObject<number>;
+  /**
+   * Sets volume on all currently-cached player pools AND stores it so that
+   * pools created lazily afterward inherit the same volume.
+   */
+  setPoolsVolume: (v: number) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,10 +114,14 @@ function disposeSoundSetPlayers(players: SoundSetPlayers): void {
 export function useAudioPlayers(soundSet: SoundSet): AudioPlayersHook {
   // soundset key → SoundSetPlayers 캐시
   const cacheRef = useRef<Map<string, SoundSetPlayers>>(new Map());
+  // Tracks the last volume set via setPoolsVolume so newly created pools
+  // inherit the correct volume rather than starting at the default (1.0).
+  const currentVolumeRef = useRef(1);
 
   /**
    * 캐시에서 플레이어를 가져오거나 없으면 즉석 생성한다.
    * 동기 함수 — 엔진 틱 콜백 내에서도 안전하게 호출할 수 있다.
+   * 새로 생성한 풀은 currentVolumeRef의 볼륨을 즉시 적용한다.
    */
   const getOrCreate = useCallback((key: string): SoundSetPlayers | undefined => {
     const hit = cacheRef.current.get(key);
@@ -120,10 +129,42 @@ export function useAudioPlayers(soundSet: SoundSet): AudioPlayersHook {
     const def = soundSets[key as keyof typeof soundSets] as SoundSetDef | undefined;
     if (!def) return undefined;
     const players = makeSoundSetPlayers(def);
+    // Apply current volume so the pool is ready at the right level on first use.
+    const v = Math.max(0, Math.min(1, currentVolumeRef.current));
+    for (const p of Object.values(players) as ExpoAudioPlayer[]) {
+      try { p.volume = v; } catch {}
+    }
     cacheRef.current.set(key, players);
     return players;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // cacheRef는 ref이므로 의존성 배열에 불필요
+  }, []); // cacheRef and currentVolumeRef are refs — stable
+
+  /**
+   * Sets volume on all currently-cached player pools AND stores the value so
+   * that pools created lazily afterward inherit the same volume.
+   * Called from useAudioPipeline whenever the reactive `volume` state changes.
+   */
+  const setPoolsVolume = useCallback((v: number) => {
+    currentVolumeRef.current = v;
+    const clamped = Math.max(0, Math.min(1, v));
+    for (const set of cacheRef.current.values()) {
+      try {
+        set.highA.volume = clamped;
+        set.highB.volume = clamped;
+        set.highC.volume = clamped;
+        set.highD.volume = clamped;
+        set.lowA.volume = clamped;
+        set.lowB.volume = clamped;
+        set.lowC.volume = clamped;
+        set.lowD.volume = clamped;
+        set.strongA.volume = clamped;
+        set.strongB.volume = clamped;
+        set.strongC.volume = clamped;
+        set.strongD.volume = clamped;
+      } catch {}
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // cacheRef and currentVolumeRef are refs — stable
 
   /**
    * allPlayers: Proxy를 통해 key 접근 시 지연 생성.
@@ -164,5 +205,5 @@ export function useAudioPlayers(soundSet: SoundSet): AudioPlayersHook {
     };
   }, []);
 
-  return { allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle };
+  return { allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle, setPoolsVolume };
 }
