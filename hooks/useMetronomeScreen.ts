@@ -178,8 +178,63 @@ export function useMetronomeScreen() {
     pickLandscapeImage, removeLandscapeImage,
   } = useLandscapePanel({ isLandscape, isPlaying, t });
 
-  const [barMode, setBarMode] = useState(false);
-  const barModeRef = useRef(barMode);
+  // ── 주 콘텐츠 모드 — 단일 소스오브트루스 ──────────────────────────────
+  // 기존 barMode/noteMode/scoreMode boolean 세 개를 단일 enum 상태로 통합.
+  const [coreMode, setCoreMode] = useState<"beat" | "bar" | "note" | "score">("beat");
+  const activeModeRef = useRef<"beat" | "bar" | "note" | "score">("beat");
+  // 원자적 setter: ref와 React state를 항상 동시에 갱신.
+  // useEffect 동기화를 쓰지 않으므로 effect 지연으로 인한 stale 덮어쓰기가 없다.
+  // setCoreMode는 React가 렌더 간 동일 참조를 보장하므로 deps 없이 안정적.
+  const setCoreModeAndRef = useCallback(
+    (mode: "beat" | "bar" | "note" | "score") => {
+      activeModeRef.current = mode;
+      setCoreMode(mode);
+    },
+    [], // setCoreMode & activeModeRef are both stable
+  );
+  // 하위 호환 파생 상수 — 나머지 코드는 수정 없이 그대로 동작
+  const barMode  = coreMode === "bar";
+  const noteMode = coreMode === "note";
+  // 하위 호환 setter 래퍼 (useCallback으로 참조 안정성 보장)
+  const setBarMode  = useCallback((v: boolean) => setCoreModeAndRef(v ? "bar" : "beat"), [setCoreModeAndRef]);
+  const setNoteMode = useCallback((v: boolean) => setCoreModeAndRef(v ? "note" : "beat"), [setCoreModeAndRef]);
+  // barModeRef / noteModeRef — 안정적 프록시 (useRef로 렌더 간 동일 객체 참조 보장).
+  // setter가 setCoreModeAndRef를 호출해 ref+state를 원자적으로 갱신한다.
+  // 초기화 클로저에서 setCoreMode/activeModeRef를 직접 참조해도 안전:
+  //   • activeModeRef는 useRef이므로 항상 같은 객체
+  //   • setCoreMode는 React가 동일 참조를 보장
+  // barModeRef / noteModeRef — 안정적 프록시 (useRef로 렌더 간 동일 객체 참조 보장).
+  // setter의 false 경로는 해당 모드가 실제로 활성화된 경우에만 beat로 클리어한다.
+  // 이렇게 해야 다른 모드(예: score, note)에서 오래된 cleanup 코드가
+  // barModeRef.current = false 를 호출해도 현재 모드를 덮어쓰지 않는다.
+  const _barModeRefHolder = useRef<React.MutableRefObject<boolean>>({
+    get current(): boolean { return activeModeRef.current === "bar"; },
+    set current(v: boolean) {
+      if (v) {
+        activeModeRef.current = "bar";
+        setCoreMode("bar");
+      } else if (activeModeRef.current === "bar") {
+        // false 경로: 현재 bar 모드일 때만 beat로 클리어 (다른 모드는 no-op)
+        activeModeRef.current = "beat";
+        setCoreMode("beat");
+      }
+    },
+  });
+  const barModeRef = _barModeRefHolder.current;
+  const _noteModeRefHolder = useRef<React.MutableRefObject<boolean>>({
+    get current(): boolean { return activeModeRef.current === "note"; },
+    set current(v: boolean) {
+      if (v) {
+        activeModeRef.current = "note";
+        setCoreMode("note");
+      } else if (activeModeRef.current === "note") {
+        // false 경로: 현재 note 모드일 때만 beat로 클리어 (다른 모드는 no-op)
+        activeModeRef.current = "beat";
+        setCoreMode("beat");
+      }
+    },
+  });
+  const noteModeRef = _noteModeRefHolder.current;
   const [barStartBeat, setBarStartBeat] = useState<number | null>(null);
   const [barLoopMode, setBarLoopMode] = useState<"loop" | "once">("once");
   const [blockPlayMode, setBlockPlayMode] = useState<"sequential" | "loop" | "random">("loop");
@@ -209,12 +264,14 @@ export function useMetronomeScreen() {
   const [progressInfo, setProgressInfo] = useState<ProgressInfo | null>(null);
   const [layerProgressMap, setLayerProgressMap] = useState<Record<string, number>>({});
 
-  const [noteMode, setNoteMode] = useState(false);
-  const noteModeRef = useRef(false);
-  useEffect(() => { noteModeRef.current = noteMode; }, [noteMode]);
-
-  // 악보 모드: null=비활성, "list"=목록, "editor"=편집기
-  const [scoreMode, setScoreMode] = useState<null | "list" | "editor">(null);
+  // 악보 서브-모드 ("list" | "editor"); coreMode==="score"일 때만 의미 있음.
+  const [scoreSubMode, setScoreSubMode] = useState<"list" | "editor">("list");
+  const scoreMode: "list" | "editor" | null = coreMode === "score" ? scoreSubMode : null;
+  // setScoreMode — 하위 호환 래퍼 (모드 변경 + 서브-모드 설정)
+  const setScoreMode = useCallback((m: "list" | "editor" | null) => {
+    if (m === null) setCoreModeAndRef("beat");
+    else { setCoreModeAndRef("score"); setScoreSubMode(m); }
+  }, [setCoreModeAndRef]);
   const [scoreEditorDoc, setScoreEditorDoc] = useState<ScoreDocument | null>(null);
   const [noteQueue, setNoteQueue] = useState<PracticeEntry[]>([]);
   const noteQueueRef = useRef<PracticeEntry[]>([]);
@@ -1657,7 +1714,6 @@ export function useMetronomeScreen() {
     []
   );
 
-  useEffect(() => { barModeRef.current = barMode; }, [barMode]);
   const barStartBeatRef = useRef(barStartBeat);
   useEffect(() => { barStartBeatRef.current = barStartBeat; }, [barStartBeat]);
   const barLoopModeRef = useRef(barLoopMode);
@@ -3489,19 +3545,19 @@ export function useMetronomeScreen() {
     ? "menu"
     : stageModeActive
     ? "stage"
-    : noteMode
+    : coreMode === "note"
     ? "note"
     : showPracticeBook
     ? "practice"
-    : barMode
+    : coreMode === "bar"
     ? "bar"
-    : scoreMode !== null
+    : coreMode === "score"
     ? "score"
     : "beat";
 
   const switchToMode = useCallback(async (mode: ModeSlot, direction: "left" | "right" = "right") => {
     const state: ModeSwitchState = {
-      currentMode, noteMode, barMode, scoreMode,
+      currentMode,
       stageModeActive, showMenu, showPracticeBook, activeModal,
     };
     // 콘텐츠가 바뀔 때 슬라이드+페이드 적용
@@ -3536,7 +3592,7 @@ export function useMetronomeScreen() {
         setStagePracticeEntries(entries);
       }).catch(() => {});
     }
-  }, [currentMode, noteMode, barMode, scoreMode, stageModeActive, showMenu, showPracticeBook, handleExitNoteMode, handleBarModeChange, handleEnterNoteMode, enterStageMode, exitStageMode, activeModal, openExclusive]);
+  }, [currentMode, coreMode, stageModeActive, showMenu, showPracticeBook, handleExitNoteMode, handleBarModeChange, handleEnterNoteMode, enterStageMode, exitStageMode, activeModal, openExclusive]);
 
   // ── 상단 중앙 레이블 탭 → 다음 모드 순환 ──
   const MODE_CYCLE: ModeSlot[] = ["beat", "bar", "score", "note", "practice", "stage"];

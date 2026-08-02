@@ -29,9 +29,6 @@ describe("applySwitchToMode — 무대 모드 활성 상태에서 모드 전환"
   function stageState(overrides: Partial<ModeSwitchState> = {}): ModeSwitchState {
     return {
       currentMode: "stage",
-      noteMode: false,
-      barMode: false,
-      scoreMode: null,
       stageModeActive: true,
       showMenu: false,
       showPracticeBook: false,
@@ -92,17 +89,17 @@ describe("applySwitchToMode — 무대 모드 활성 상태에서 모드 전환"
     assert.deepStrictEqual(cb.log, []);
   });
 
-  test("noteMode 우선: noteMode+stageModeActive 모두 true이면 exitNote만 호출", async () => {
+  test("note 모드에서 beat 선택 → exitNote만 호출, exitStageMode 없음", async () => {
     const cb = spyCbs();
-    // noteMode=true 가 stageModeActive=true 보다 높은 우선순위
-    await applySwitchToMode("beat", stageState({ noteMode: true }), cb);
+    // currentMode="note"이면 stageModeActive와 무관하게 exitNote가 우선
+    await applySwitchToMode("beat", stageState({ currentMode: "note" }), cb);
     assert.ok(cb.log.includes("exitNote"), "exitNote must fire");
     assert.ok(!cb.log.includes("exitStageMode"), "exitStageMode must NOT also fire");
   });
 
-  test("barMode 우선: barMode+stageModeActive 모두 true이면 barMode(false)만 호출", async () => {
+  test("bar 모드에서 beat 선택 → barMode(false)만 호출, exitStageMode 없음", async () => {
     const cb = spyCbs();
-    await applySwitchToMode("beat", stageState({ barMode: true }), cb);
+    await applySwitchToMode("beat", stageState({ currentMode: "bar" }), cb);
     assert.ok(cb.log.includes("barMode(false)"), "barMode(false) must fire");
     assert.ok(!cb.log.includes("exitStageMode"), "exitStageMode must NOT fire");
   });
@@ -111,7 +108,6 @@ describe("applySwitchToMode — 무대 모드 활성 상태에서 모드 전환"
     const cb = spyCbs();
     const state: ModeSwitchState = {
       currentMode: "beat",
-      noteMode: false, barMode: false, scoreMode: null,
       stageModeActive: false, showMenu: false,
       showPracticeBook: false, activeModal: null,
     };
@@ -243,5 +239,85 @@ describe("경로 A: 상단 '무대 모드' 텍스트가 onOpenDial에 연결됨"
       src.includes("handleStageModeBackPress("),
       "StageModeOverlay BackHandler must delegate to handleStageModeBackPress",
     );
+  });
+});
+
+// ─── 모드 전환 회귀 — currentMode string 비교 경로 검증 ──────────────────────
+// coreMode 리팩터링 후 exit-branch가 noteMode/barMode boolean 대신
+// currentMode ModeSlot 문자열 비교로 동작하는 것을 보장한다.
+
+describe("applySwitchToMode — 비-무대 모드 전환 exit 콜백", () => {
+  function beatState(overrides: Partial<ModeSwitchState> = {}): ModeSwitchState {
+    return {
+      currentMode: "beat",
+      stageModeActive: false,
+      showMenu: false,
+      showPracticeBook: false,
+      activeModal: null,
+      ...overrides,
+    };
+  }
+
+  function spyCbs(): ModeSwitchCallbacks & { log: string[] } {
+    const log: string[] = [];
+    return {
+      log,
+      handleExitNoteMode:  () => { log.push("exitNote"); },
+      handleBarModeChange: (v: boolean) => { log.push(`barMode(${v})`); },
+      setScoreMode:        (m: string | null) => { log.push(`scoreMode(${m})`); },
+      exitStageMode:       () => { log.push("exitStageMode"); },
+      setActiveModal:      (m: string | null) => { log.push(`modal(${m})`); },
+      handleEnterNoteMode: async () => { log.push("enterNote"); },
+      enterStageMode:      () => { log.push("enterStage"); },
+      openExclusive:       (m: string) => { log.push(`exclusive(${m})`); },
+    };
+  }
+
+  test("beat→bar: handleBarModeChange(true) 한 번만 호출", async () => {
+    const cb = spyCbs();
+    await applySwitchToMode("bar", beatState(), cb);
+    assert.deepStrictEqual(cb.log, ["barMode(true)"]);
+  });
+
+  test("beat→note: handleEnterNoteMode 한 번만 호출", async () => {
+    const cb = spyCbs();
+    await applySwitchToMode("note", beatState(), cb);
+    assert.deepStrictEqual(cb.log, ["enterNote"]);
+  });
+
+  test("bar→beat: handleBarModeChange(false) 한 번만 호출", async () => {
+    const cb = spyCbs();
+    await applySwitchToMode("beat", beatState({ currentMode: "bar" }), cb);
+    assert.deepStrictEqual(cb.log, ["barMode(false)"]);
+  });
+
+  test("note→beat: handleExitNoteMode 한 번만 호출", async () => {
+    const cb = spyCbs();
+    await applySwitchToMode("beat", beatState({ currentMode: "note" }), cb);
+    assert.deepStrictEqual(cb.log, ["exitNote"]);
+  });
+
+  test("score→beat: setScoreMode(null) 한 번만 호출", async () => {
+    const cb = spyCbs();
+    await applySwitchToMode("beat", beatState({ currentMode: "score" }), cb);
+    assert.deepStrictEqual(cb.log, ["scoreMode(null)"]);
+  });
+
+  test("bar→note: barMode(false) 종료 후 enterNote 진입", async () => {
+    const cb = spyCbs();
+    await applySwitchToMode("note", beatState({ currentMode: "bar" }), cb);
+    assert.deepStrictEqual(cb.log, ["barMode(false)", "enterNote"]);
+  });
+
+  test("note→bar: exitNote 종료 후 barMode(true) 진입", async () => {
+    const cb = spyCbs();
+    await applySwitchToMode("bar", beatState({ currentMode: "note" }), cb);
+    assert.deepStrictEqual(cb.log, ["exitNote", "barMode(true)"]);
+  });
+
+  test("beat→beat: early return, 아무 콜백도 없음", async () => {
+    const cb = spyCbs();
+    await applySwitchToMode("beat", beatState(), cb);
+    assert.deepStrictEqual(cb.log, []);
   });
 });

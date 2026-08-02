@@ -14,10 +14,8 @@ import type { ModeSlot } from "@/components/ModeSwitcherDial";
 // ─── switchToMode ────────────────────────────────────────────────────────────
 
 export interface ModeSwitchState {
+  /** 전체 모드 슬롯 — "beat"|"bar"|"note"|"score"|"practice"|"stage"|"menu" */
   currentMode: ModeSlot;
-  noteMode: boolean;
-  barMode: boolean;
-  scoreMode: string | null;
   stageModeActive: boolean;
   showMenu: boolean;
   showPracticeBook: boolean;
@@ -53,9 +51,6 @@ export async function applySwitchToMode(
 ): Promise<void> {
   const {
     currentMode,
-    noteMode,
-    barMode,
-    scoreMode,
     stageModeActive,
     showMenu,
     showPracticeBook,
@@ -79,12 +74,12 @@ export async function applySwitchToMode(
   // 메뉴에서 다른 모드로 이동 → 메뉴 먼저 닫기 (위에서 이미 처리됐지만 명시적으로 유지)
   if (showMenu) cb.setActiveModal(null);
 
-  // 기존 모드 종료 (한 브랜치만 실행)
-  if (noteMode)                cb.handleExitNoteMode();
-  else if (barMode)            cb.handleBarModeChange(false);
-  else if (scoreMode !== null) cb.setScoreMode(null);
-  else if (stageModeActive)    cb.exitStageMode();
-  else if (showPracticeBook)   cb.setActiveModal(null);
+  // 기존 모드 종료 — currentMode로 판단 (boolean triplet 불필요)
+  if (currentMode === "note")     cb.handleExitNoteMode();
+  else if (currentMode === "bar") cb.handleBarModeChange(false);
+  else if (currentMode === "score") cb.setScoreMode(null);
+  else if (stageModeActive)       cb.exitStageMode();
+  else if (showPracticeBook)      cb.setActiveModal(null);
 
   // 새 모드 진입
   switch (mode) {
