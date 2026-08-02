@@ -70,7 +70,7 @@ export function MetronomeScreenUI(props: Props) {
     rootViewRef, barAreaRef, dialRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
     barScrollOffsetRef, engineRef, togglePlayPauseRef, updateBpmRef, beatDenominatorRef,
     seamlessNextEntryRef, tuningGuideOnSelectRef, reopenSignalGenAfterTuningGuideRef,
-    settingsReturnModalRef, featureStartRef, practiceStartRef,
+    settingsReturnModalRef, stemSepReturnModalRef, featureStartRef, practiceStartRef,
     handleNoteTogglePlayRef, clickPCMCacheRef,
     bpm, beatsPerMeasure, beatDenominator, beatTypes, subdivisionPattern, beatSubdivisions,
     isPlaying, isPreparing, currentBeat, measureCount, activeSubNote, progressInfo,
@@ -412,6 +412,8 @@ export function MetronomeScreenUI(props: Props) {
           setScoreMode("list");
         }}
         onStemSep={() => {
+          // 음원분리 닫을 때 이 모달로 돌아올 수 있도록 직전 activeModal을 저장한다.
+          stemSepReturnModalRef.current = activeModal;
           setActiveModal(null);
           setTimeout(() => openExclusive("stemSep"), 160);
         }}
@@ -434,7 +436,10 @@ export function MetronomeScreenUI(props: Props) {
       <StemSeparationModal
         visible={showStemSep}
         onClose={() => {
-          setActiveModal(null);
+          // 음원분리 진입 직전 모달(메뉴 등)이 있으면 그쪽으로 복귀한다.
+          const returnTo = stemSepReturnModalRef.current;
+          stemSepReturnModalRef.current = null;
+          setActiveModal(returnTo);
         }}
         onSetBpm={updateBpm}
         onStartMetronome={() => {

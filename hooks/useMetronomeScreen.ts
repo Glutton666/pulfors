@@ -314,6 +314,9 @@ export function useMetronomeScreen() {
   // Tracks which modal opened settings, so we can return there on close
   const settingsReturnModalRef = useRef<ActiveModal>(null);
 
+  // Tracks which modal opened stem separation, so we can return there on close
+  const stemSepReturnModalRef = useRef<ActiveModal>(null);
+
   const openExclusive = useCallback((modal: ActiveModal) => {
     tuningGuideOnSelectRef.current = null;
     setActiveModal(modal);
@@ -348,7 +351,12 @@ export function useMetronomeScreen() {
       if (showFadeOut) { setActiveModal(null); return true; }
       if (showScheduledStart) { setActiveModal(null); return true; }
       if (showDrumKit) { setActiveModal(null); return true; }
-      if (showStemSep) { setActiveModal(null); return true; }
+      if (showStemSep) {
+        const returnTo = stemSepReturnModalRef.current;
+        stemSepReturnModalRef.current = null;
+        setActiveModal(returnTo);
+        return true;
+      }
       if (showMoreMenu) { setActiveModal(null); return true; }
       if (showMenu) { setActiveModal(null); return true; }
       if (showOnboarding) { setActiveModal(null); return true; }
@@ -4114,6 +4122,7 @@ export function useMetronomeScreen() {
     tuningGuideOnSelectRef,
     reopenSignalGenAfterTuningGuideRef,
     settingsReturnModalRef,
+    stemSepReturnModalRef,
     featureStartRef,
     practiceStartRef,
     handleNoteTogglePlayRef,
