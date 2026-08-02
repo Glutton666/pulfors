@@ -30,6 +30,7 @@ import {
   TextInput,
   PanResponder,
   useWindowDimensions,
+  InteractionManager,
 } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -355,6 +356,10 @@ export function StageModeOverlay({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pickerOpen,   setPickerOpen]   = useState(false);
   const [confirmExit,  setConfirmExit]  = useState(false);
+
+  // ── 숨겨진 BT 키보드 캡처용 TextInput ref ────────────────────────
+  const hiddenInputRef = useRef<TextInput>(null);
+
   /** 롱프레스로 선택된 셋 리스트 항목 ID (이동/삭제 컨텍스트 메뉴) */
   const [contextEntryId, setContextEntryId] = useState<string | null>(null);
   /** Ctrl+숫자로 예약된 점프 인덱스 (0-based) — 현재 항목 종료 시 이동 */
@@ -443,6 +448,19 @@ export function StageModeOverlay({
     setSettingsOpen(false);
     setPickerOpen(false);
     setContextEntryId(null);
+  }, [visible]);
+
+  // ── BT 키보드 캡처 입력창 포커스 — 소프트 키보드 없이 ────────────
+  // visible이 true가 되면 인터랙션이 끝난 뒤 숨겨진 TextInput에 포커스를 잡는다.
+  // showSoftInputOnFocus={false}가 TextInput에 설정돼 있으므로 포커스가 잡혀도
+  // Android IME(소프트 키보드)가 올라오지 않는다.
+  // 물리 키보드/BT 키보드 이벤트는 포커스가 있어야 수신되므로 focus()는 유지한다.
+  useEffect(() => {
+    if (!visible || Platform.OS === "web") return;
+    const task = InteractionManager.runAfterInteractions(() => {
+      hiddenInputRef.current?.focus();
+    });
+    return () => task.cancel();
   }, [visible]);
 
   // ── keep-awake 연동 ───────────────────────────────────────────────
@@ -1443,10 +1461,16 @@ export function StageModeOverlay({
       </Modal>
 
       {/* ── 네이티브 숨겨진 TextInput: 블루투스 키보드 1~0 캡처 ────── */}
+      {/* autoFocus=false + 마운트 시 프로그래매틱 포커스 후 즉시 Keyboard.dismiss()로
+          소프트 키보드 소환 없이 BT 키보드 이벤트만 수신한다. */}
       {Platform.OS !== "web" && (
         <TextInput
+          ref={hiddenInputRef}
           style={{ position: "absolute", opacity: 0, width: 1, height: 1, left: -9999 }}
-          autoFocus
+          autoFocus={false}
+          // showSoftInputOnFocus=false: 포커스가 잡혀도 Android IME가 올라오지 않는다.
+          // BT 키보드 이벤트는 포커스가 있어야 수신되므로 포커스 자체는 유지한다.
+          showSoftInputOnFocus={false}
           blurOnSubmit={false}
           onKeyPress={({ nativeEvent }) => {
             const key = nativeEvent.key;
@@ -1542,7 +1566,7 @@ export function StageModeOverlay({
               </Pressable>
               <Pressable
                 style={[styles.confirmBtn, { backgroundColor: "rgba(255,68,68,0.15)", borderColor: "rgba(255,68,68,0.3)" }]}
-                onPress={onExit}
+                onPress={() => { setConfirmExit(false); onExit(); }}
               >
                 <Text style={[styles.confirmBtnText, { color: "#ff4444" }]}>{t("stageMode", "exitConfirm")}</Text>
               </Pressable>
