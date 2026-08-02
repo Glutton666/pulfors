@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { Platform } from "react-native";
 import { createAudioPlayer } from "expo-audio";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
@@ -24,17 +24,21 @@ import type { ClickPCMs, SamplePCMEntry, TickInfo, DecodedSample } from "@/lib/a
 import type { SoundSet, BuiltinSoundSet, CustomSoundSetConfig } from "@/lib/storage";
 import type { NoteSampleMap, NoteSampleChannelMap, NoteSampleMetroChannelMap } from "@/lib/note-samples";
 import type { SampleChannel } from "@/lib/stereo-channel";
-import type { BuiltinPlayers } from "@/hooks/useAudioPlayers";
+import { useAudioPlayers } from "@/hooks/useAudioPlayers";
+import type { BuiltinPlayers, SoundSetPlayers } from "@/hooks/useAudioPlayers";
 import { BUILTIN_POOL_SIZE } from "@/hooks/useAudioPlayers";
+import { setAutoResumeAfterInterruption as setAudioSessionAutoResume } from "@/lib/audio-session";
 import type { TranslationFn } from "@/lib/i18n";
+
+/** Narrow callback type for audio-specific settings persistence. */
+export type PersistAudioSettingsFn = (s: Partial<{ backgroundPlay: boolean; autoResumeAfterInterruption: boolean }>) => void;
 
 export interface UseAudioPipelineParams {
   engineRef: React.MutableRefObject<MetronomeEngine | null>;
   /** Reactive: triggers click-buffer preload when sound set changes. */
   soundSet: SoundSet;
-  soundSetRef: React.MutableRefObject<SoundSet>;
+  // soundSetRef and allPlayersRef are now owned by this hook via useAudioPlayers.
   customSoundSetsRef: React.MutableRefObject<Record<string, CustomSoundSetConfig>>;
-  allPlayersRef: React.MutableRefObject<BuiltinPlayers>;
   layerSoundSetsRef: React.MutableRefObject<Record<number, SoundSet>>;
   noteSamplesRef: React.MutableRefObject<NoteSampleMap>;
   noteSampleChannelsRef: React.MutableRefObject<NoteSampleChannelMap>;
@@ -47,10 +51,39 @@ export interface UseAudioPipelineParams {
   bpmRef: React.MutableRefObject<number>;
   t: TranslationFn;
   showRecoveryToast: (msg: string) => void;
+  /**
+   * Ref to the settings-persistence callback. Kept as a ref so this hook can be
+   * called before persistSettings is created in useMetronomeScreen; the ref's
+   * .current is updated each render by the caller.
+   */
+  persistAudioSettingsCallbackRef: React.MutableRefObject<PersistAudioSettingsFn>;
 }
 
 export interface UseAudioPipelineResult {
-  // Refs owned by this hook, exposed for coordination
+  // ── Player pool (owned here, forwarded for tick callback use) ────────────
+  /** Lazy-proxy of all built-in sound-set players. */
+  allPlayers: BuiltinPlayers;
+  allPlayersRef: React.MutableRefObject<BuiltinPlayers>;
+  soundSetRef: React.MutableRefObject<SoundSet>;
+  /** Round-robin indices for polyphony; read/write these in the tick callback. */
+  highToggle: React.MutableRefObject<number>;
+  lowToggle: React.MutableRefObject<number>;
+  strongToggle: React.MutableRefObject<number>;
+  // ── Audio-session settings (owned here, exposed for settings UI) ─────────
+  backgroundPlay: boolean;
+  autoResumeAfterInterruption: boolean;
+  /**
+   * User-facing setter: updates state + calls audio-session + persists.
+   * Use this from settings UI change handlers.
+   */
+  updateBackgroundPlay: (v: boolean) => void;
+  updateAutoResumeAfterInterruption: (v: boolean) => void;
+  /**
+   * Apply-only setter (no persistence side-effect).
+   * Use this when restoring saved settings on startup.
+   */
+  applyAudioSettings: (s: Partial<{ backgroundPlay: boolean; autoResumeAfterInterruption: boolean }>) => void;
+  // ── Refs owned by this hook, exposed for coordination ────────────────────
   renderedPlayerRef: React.MutableRefObject<ExpoAudioPlayer | null>;
   clickPCMCacheRef: React.MutableRefObject<Record<string, ClickPCMs>>;
   samplePCMCacheRef: React.MutableRefObject<Map<string, SamplePCMEntry>>;
@@ -62,7 +95,7 @@ export interface UseAudioPipelineResult {
   clearAudioWatchdogRef: React.MutableRefObject<() => void>;
   noteSampleSoundsRef: React.MutableRefObject<Record<string, ExpoAudioPlayer>>;
   samplePlayStateRef: React.MutableRefObject<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>;
-  // Functions
+  // ── Functions ────────────────────────────────────────────────────────────
   buildRenderedPlayer: () => Promise<ExpoAudioPlayer | null>;
   scheduleReRender: () => void;
   stopRenderedAudio: () => void;
@@ -86,11 +119,60 @@ export interface UseAudioPipelineResult {
  */
 export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipelineResult {
   const {
-    engineRef, soundSet, soundSetRef, customSoundSetsRef, allPlayersRef,
+    engineRef, soundSet, customSoundSetsRef,
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
-    isPlayingRef, bpmRef, t, showRecoveryToast,
+    isPlayingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
   } = params;
+
+  // ── Player pool ownership (moved from useMetronomeScreen) ───────────────────
+  // allPlayersRef, soundSetRef, highToggle/lowToggle/strongToggle are now owned
+  // here. useMetronomeScreen's tick callback reads these via the return value.
+  const { allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle } =
+    useAudioPlayers(soundSet);
+
+  // ── Audio-session settings (moved from useMetronomeScreen) ─────────────────
+  const [backgroundPlay, setBackgroundPlay] = useState(false);
+  const [autoResumeAfterInterruption, setAutoResumeState] = useState(true);
+
+  /**
+   * Apply-only: sets state (and audio-session for autoResume) without persisting.
+   * Called during initial settings load.
+   */
+  const applyAudioSettings = useCallback(
+    (s: Partial<{ backgroundPlay: boolean; autoResumeAfterInterruption: boolean }>) => {
+      if (s.backgroundPlay !== undefined) setBackgroundPlay(s.backgroundPlay);
+      if (s.autoResumeAfterInterruption !== undefined) {
+        setAutoResumeState(s.autoResumeAfterInterruption);
+        setAudioSessionAutoResume(s.autoResumeAfterInterruption);
+      }
+    },
+    [],
+  );
+
+  /**
+   * User-facing setter for backgroundPlay: updates state + persists.
+   */
+  const updateBackgroundPlay = useCallback(
+    (value: boolean) => {
+      setBackgroundPlay(value);
+      persistAudioSettingsCallbackRef.current({ backgroundPlay: value });
+    },
+    [persistAudioSettingsCallbackRef],
+  );
+
+  /**
+   * User-facing setter for autoResumeAfterInterruption: updates state +
+   * notifies audio-session module + persists.
+   */
+  const updateAutoResumeAfterInterruption = useCallback(
+    (value: boolean) => {
+      setAutoResumeState(value);
+      setAudioSessionAutoResume(value);
+      persistAudioSettingsCallbackRef.current({ autoResumeAfterInterruption: value });
+    },
+    [persistAudioSettingsCallbackRef],
+  );
 
   // ── Owned refs ──────────────────────────────────────────────────────────────
   const renderedPlayerRef = useRef<ExpoAudioPlayer | null>(null);
@@ -489,6 +571,20 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   }, [armAudioWatchdog, clearAudioWatchdog]);
 
   return {
+    // Player pool
+    allPlayers,
+    allPlayersRef,
+    soundSetRef,
+    highToggle,
+    lowToggle,
+    strongToggle,
+    // Audio-session settings
+    backgroundPlay,
+    autoResumeAfterInterruption,
+    updateBackgroundPlay,
+    updateAutoResumeAfterInterruption,
+    applyAudioSettings,
+    // PCM / rendered-player refs
     renderedPlayerRef,
     clickPCMCacheRef,
     samplePCMCacheRef,

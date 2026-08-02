@@ -33,7 +33,7 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import { safePlay, notifyAudioPoolFallback, detectPoolCutoffRisk } from "@/lib/audio-utils";
-import { registerMetronomeBridge, notifyUserMetronomeToggle, setAutoResumeAfterInterruption as setAudioSessionAutoResume } from "@/lib/audio-session";
+import { registerMetronomeBridge, notifyUserMetronomeToggle } from "@/lib/audio-session";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import { sanitizeDeepLinkEntry } from "@/lib/deep-link-import";
 import * as Haptics from "expo-haptics";
@@ -65,7 +65,7 @@ import {
   openTuningGuideFromSignalGen,
   closeTuningGuide,
 } from "@/lib/modal-routing";
-import { useAudioPlayers, BUILTIN_POOL_SIZE, type BuiltinPlayers, type SoundSetPlayers } from "@/hooks/useAudioPlayers";
+import { BUILTIN_POOL_SIZE, type BuiltinPlayers, type SoundSetPlayers } from "@/hooks/useAudioPlayers";
 import { useNoteSamples } from "@/hooks/useNoteSamples";
 import { useBarConfig, useDialConfig } from "@/hooks/useBarDialConfig";
 import { useMetronomeEngine } from "@/hooks/useMetronomeEngine";
@@ -325,8 +325,6 @@ export function useMetronomeScreen() {
     showBpmDetect,
     showStemSep,
   } = deriveModalFlags(activeModal);
-  const [backgroundPlay, setBackgroundPlay] = useState(false);
-  const [autoResumeAfterInterruption, setAutoResumeAfterInterruption] = useState(true);
   const [soundSet, setSoundSet] = useState<SoundSet>("classic");
   const [layerSoundSets, setLayerSoundSets] = useState<Record<number, SoundSet>>({});
   const layerSoundSetsRef = useRef<Record<number, SoundSet>>({});
@@ -533,11 +531,19 @@ export function useMetronomeScreen() {
   const dialRef = useRef<View>(null);
   const dialCenterRef = useRef({ x: 0, y: 0 });
 
-  const audioPlayersHook = useAudioPlayers(soundSet);
-  const { allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle } = audioPlayersHook;
+  // ── Persistence callback ref for audio settings ─────────────────────────────
+  // useAudioPipeline is called before persistSettings exists, so we pass a
+  // stable ref whose .current is kept up to date each render (see below).
+  const persistAudioSettingsCallbackRef = useRef<import("@/hooks/useAudioPipeline").PersistAudioSettingsFn>(() => {});
 
-  // ── Audio pipeline (PCM cache, rendered player, watchdog, sample players) ──
+  // ── Audio pipeline (player pool + PCM cache + rendered player + audio session settings) ──
   const {
+    // Player pool (now owned by the pipeline)
+    allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle,
+    // Audio-session settings (now owned by the pipeline)
+    backgroundPlay, autoResumeAfterInterruption,
+    updateBackgroundPlay, updateAutoResumeAfterInterruption, applyAudioSettings,
+    // PCM / rendered-player refs & functions
     renderedPlayerRef, clickPCMCacheRef, samplePCMCacheRef, renderedUrlRef,
     webRenderedLoopRef, webClickReadyRef, lastAudioFireRef,
     armAudioWatchdogRef, clearAudioWatchdogRef,
@@ -547,10 +553,10 @@ export function useMetronomeScreen() {
     invalidateSamplePCMCache, preloadNoteSampleSounds, clearSamplePlayStates,
     armAudioWatchdog, clearAudioWatchdog,
   } = useAudioPipeline({
-    engineRef, soundSet, soundSetRef, customSoundSetsRef, allPlayersRef,
+    engineRef, soundSet, customSoundSetsRef,
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
-    isPlayingRef, bpmRef, t, showRecoveryToast,
+    isPlayingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
   });
 
   // ── 웹 AudioContext 잠금 해제 (audio unlock) ─────────────────────────────
@@ -825,13 +831,10 @@ export function useMetronomeScreen() {
         setSampleVolume(settings.sampleVolume);
         sampleVolumeRef.current = settings.sampleVolume;
       }
-      if (settings.backgroundPlay !== undefined) {
-        setBackgroundPlay(settings.backgroundPlay);
-      }
-      if (settings.autoResumeAfterInterruption !== undefined) {
-        setAutoResumeAfterInterruption(settings.autoResumeAfterInterruption);
-        setAudioSessionAutoResume(settings.autoResumeAfterInterruption);
-      }
+      applyAudioSettings({
+        backgroundPlay: settings.backgroundPlay,
+        autoResumeAfterInterruption: settings.autoResumeAfterInterruption,
+      });
       if (settings.soundSet) {
         setSoundSet(settings.soundSet);
       }
@@ -1273,6 +1276,10 @@ export function useMetronomeScreen() {
   }
   const persistSettings = persistSettingsRef.current;
 
+  // Keep persistAudioSettingsCallbackRef current each render so that
+  // useAudioPipeline's update callbacks always invoke the real persister.
+  persistAudioSettingsCallbackRef.current = (s) => persistSettings(s);
+
   const updateVolume = useCallback(
     (newVolume: number) => {
       setVolume(newVolume);
@@ -1301,23 +1308,6 @@ export function useMetronomeScreen() {
       try { player.volume = Math.max(0, Math.min(1, sampleVolume)); } catch {}
     }
   }, [sampleVolume]);
-
-  const updateBackgroundPlay = useCallback(
-    (value: boolean) => {
-      setBackgroundPlay(value);
-      persistSettings({ backgroundPlay: value });
-    },
-    [persistSettings]
-  );
-
-  const updateAutoResumeAfterInterruption = useCallback(
-    (value: boolean) => {
-      setAutoResumeAfterInterruption(value);
-      setAudioSessionAutoResume(value);
-      persistSettings({ autoResumeAfterInterruption: value });
-    },
-    [persistSettings]
-  );
 
   const updateSoundSet = useCallback(
     (value: SoundSet) => {
@@ -1463,7 +1453,7 @@ export function useMetronomeScreen() {
       volumeRef.current = 0.5;
       setSampleVolume(0.8);
       sampleVolumeRef.current = 0.8;
-      setBackgroundPlay(false);
+      applyAudioSettings({ backgroundPlay: false, autoResumeAfterInterruption: true });
       setSoundSet("classic");
       setFlashMode("accent");
       flashModeRef.current = "accent";
