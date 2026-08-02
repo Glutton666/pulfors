@@ -1871,7 +1871,7 @@ export function useMetronomeScreen() {
   useEffect(() => { updateBpmRef.current = updateBpm; }, [updateBpm]);
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
 
-  const { stageModeActive, enterStageMode, exitStageMode } = useStageMode(bpmRef, updateBpm);
+  const { stageModeActive, enterStageMode, exitStageMode } = useStageMode();
   /** 무대 모드 셋 리스트 — 진입 시 연습장에서 로드 */
   const [stagePracticeEntries, setStagePracticeEntries] = useState<PracticeEntry[]>([]);
   /** 셋 리스트에서 현재 선택/적용된 항목 ID */
