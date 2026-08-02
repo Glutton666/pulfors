@@ -1428,9 +1428,12 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   }, [multiSelectSortedNotes, doc, selectedPartIdx]);
 
   // ── 다중 선택된 음표를 타이로 묶기 (인접한 2개 음표 전용) ──────
+  // 이미 타이가 적용돼 있으면 제거, 없으면 추가 (토글)
   function handleTieMultiSelected() {
     if (!multiSelectCanTie) return;
     const [a, b] = multiSelectSortedNotes;
+    const elA = doc.parts[selectedPartIdx]?.measures[a.measureIdx]?.elements[a.elemIdx];
+    const alreadyTied = elA?.type === "note" && (elA as ScoreNote).tieStart;
     const newDoc: ScoreDocument = {
       ...doc,
       parts: doc.parts.map((p, pIdx) => {
@@ -1441,10 +1444,10 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             ...m,
             elements: m.elements.map((el, ei) => {
               if (mi === a.measureIdx && ei === a.elemIdx && el.type === "note") {
-                return { ...el, tieStart: true };
+                return { ...el, tieStart: alreadyTied ? undefined : true };
               }
               if (mi === b.measureIdx && ei === b.elemIdx && el.type === "note") {
-                return { ...el, tieEnd: true };
+                return { ...el, tieEnd: alreadyTied ? undefined : true };
               }
               return el;
             }),
@@ -1458,10 +1461,15 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
   }
 
   // ── 다중 선택된 음표를 슬러로 묶기 (첫/마지막 음표에 slurStart/slurEnd 적용) ──
+  // 이미 슬러가 적용돼 있으면 제거, 없으면 추가 (토글)
   function handleSlurMultiSelected() {
     if (multiSelectSortedNotes.length < 2) return;
     const first = multiSelectSortedNotes[0];
     const last = multiSelectSortedNotes[multiSelectSortedNotes.length - 1];
+    const firstEl = doc.parts[selectedPartIdx]?.measures
+      .flatMap((m) => m.elements)
+      .find((e) => e.id === first.id);
+    const alreadySlurred = firstEl?.type === "note" && (firstEl as ScoreNote).slurStart;
     const newDoc: ScoreDocument = {
       ...doc,
       parts: doc.parts.map((p, pIdx) => {
@@ -1473,10 +1481,14 @@ export function ScoreEditorScreen({ doc: initialDoc, onBack, onSaved, onLinkedEn
             elements: m.elements.map((el) => {
               if (el.type !== "note") return el;
               if (el.id === first.id) {
-                return { ...el, slurStart: true, slurEnd: undefined, slurEndNoteId: last.id };
+                return alreadySlurred
+                  ? { ...el, slurStart: undefined, slurEndNoteId: undefined }
+                  : { ...el, slurStart: true, slurEnd: undefined, slurEndNoteId: last.id };
               }
               if (el.id === last.id) {
-                return { ...el, slurEnd: true, slurStart: undefined };
+                return alreadySlurred
+                  ? { ...el, slurEnd: undefined }
+                  : { ...el, slurEnd: true, slurStart: undefined };
               }
               return el;
             }),
