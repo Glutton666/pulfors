@@ -68,7 +68,8 @@ import {
 } from "@/lib/modal-routing";
 import { BUILTIN_POOL_SIZE, type BuiltinPlayers, type SoundSetPlayers } from "@/hooks/useAudioPlayers";
 import { useNoteSamples } from "@/hooks/useNoteSamples";
-import { useBarConfig, useDialConfig } from "@/hooks/useBarDialConfig";
+import { useDialConfig } from "@/hooks/useBarDialConfig";
+import { useBarMode } from "@/hooks/useBarMode";
 import { useMetronomeEngine } from "@/hooks/useMetronomeEngine";
 import { useEasterEggQuiz } from "@/hooks/useEasterEggQuiz";
 import { useFadeOutSession } from "@/hooks/useFadeOutSession";
@@ -226,9 +227,6 @@ export function useMetronomeScreen() {
     },
   });
   const noteModeRef = _noteModeRefHolder.current;
-  const [barStartBeat, setBarStartBeat] = useState<number | null>(null);
-  const [barLoopMode, setBarLoopMode] = useState<"loop" | "once">("once");
-  const [blockPlayMode, setBlockPlayMode] = useState<"sequential" | "loop" | "random">("loop");
   const [keyBindings, setKeyBindings] = useState<KeyBindingsMap>(DEFAULT_BINDINGS);
   const keyBindingsRef = useRef<KeyBindingsMap>(DEFAULT_BINDINGS);
   useEffect(() => { keyBindingsRef.current = keyBindings; }, [keyBindings]);
@@ -243,14 +241,11 @@ export function useMetronomeScreen() {
   const nativeKbUpRef = useRef<((e: NormalizedKeyEvent) => void) | null>(null);
   const stopwatchTimerRef = useRef<StopwatchTimerHandle>(null);
   const stopwatchTimerLandscapeRef = useRef<StopwatchTimerHandle>(null);
-  const [barRepeats, setBarRepeats] = useState<Record<number, BarRepeat>>({});
-  const [loopBlocks, setLoopBlocks] = useState<LoopBlock[]>([]);
   const barAreaRef = useRef<View>(null);
   const barAreaLayoutRef = useRef({ y: 0, height: 0 });
   const barScrollOffsetRef = useRef(0);
 
   const { dialConfigRef } = useDialConfig();
-  const { barConfigRef } = useBarConfig();
 
   const [progressInfo, setProgressInfo] = useState<ProgressInfo | null>(null);
   const [layerProgressMap, setLayerProgressMap] = useState<Record<string, number>>({});
@@ -620,6 +615,70 @@ export function useMetronomeScreen() {
     autoResumeAfterInterruption,
     showLandscapeImage,
     landscapeContentType,
+  });
+
+  // ── stopIfPlaying — explicit stop interface passed to useBarMode ──────────
+  // Bundles engine.stop() + rendered-audio teardown + state reset so that
+  // useBarMode has no dependency on stopRenderedAudio / clearSamplePlayStates
+  // / setIsPlaying / setIsPreparing.
+  const stopIfPlaying = useCallback(() => {
+    if (!isPlayingRef.current) return;
+    engineRef.current?.stop();
+    stopRenderedAudio();
+    clearSamplePlayStates();
+    setIsPreparing(false);
+    setIsPlaying(false);
+    resetPlaybackVisuals();
+  }, [stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals]);
+
+  // ── Bar mode domain ───────────────────────────────────────────────────────
+  const {
+    barConfigRef,
+    barRepeats, setBarRepeats,
+    loopBlocks, setLoopBlocks,
+    barStartBeat, setBarStartBeat,
+    barLoopMode, setBarLoopMode,
+    blockPlayMode, setBlockPlayMode,
+    barStartBeatRef,
+    barLoopModeRef,
+    blockPlayModeRef,
+    handleBarModeChange,
+    handleBarRepeatChange,
+    handleLoopBlocksChange,
+    handleBarReset,
+    handleBarQuickSave,
+    handleAddBar,
+    handleDeleteBar,
+    handleCopyBar,
+    handleInsertBarAfter,
+    handleReorderBar,
+  } = useBarMode({
+    engineRef,
+    barModeRef,
+    setBarMode,
+    dialConfigRef,
+    stopIfPlaying,
+    isPlayingRef,
+    beatsPerMeasure, setBeatsPerMeasure,
+    beatTypes, setBeatTypes,
+    beatSubdivisions, setBeatSubdivisions,
+    subdivisionPattern,
+    noteSamples, setNoteSamples, noteSamplesRef,
+    noteSampleNames, setNoteSampleNames, noteSampleNamesRef,
+    noteSampleSources, setNoteSampleSources, noteSampleSourcesRef,
+    noteSampleChannels, setNoteSampleChannels, noteSampleChannelsRef,
+    setNoteSampleMetroChannels,
+    noteSampleMetroChannelsRef,
+    noteSampleSoundsRef,
+    samplePlayStateRef,
+    preloadNoteSampleSounds,
+    bpm,
+    bpmRef,
+    beatDenominatorRef,
+    username,
+    persistSettings,
+    scheduleReRender,
+    t,
   });
 
   // ── 웹 AudioContext 잠금 해제 (audio unlock) ─────────────────────────────
@@ -1520,14 +1579,8 @@ export function useMetronomeScreen() {
     []
   );
 
-  const barStartBeatRef = useRef(barStartBeat);
-  useEffect(() => { barStartBeatRef.current = barStartBeat; }, [barStartBeat]);
-  const barLoopModeRef = useRef(barLoopMode);
-  useEffect(() => { barLoopModeRef.current = barLoopMode; }, [barLoopMode]);
   /** 셋리스트 seamless 전환 시 onMeasureComplete에서 즉시 적용할 다음 항목 */
   const seamlessNextEntryRef = useRef<PracticeEntry | null>(null);
-  const blockPlayModeRef = useRef(blockPlayMode);
-  useEffect(() => { blockPlayModeRef.current = blockPlayMode; }, [blockPlayMode]);
 
   const togglePlayPause = useCallback(async () => {
     const engine = engineRef.current;
@@ -1885,111 +1938,7 @@ export function useMetronomeScreen() {
   });
 
 
-  const handleBarModeChange = useCallback((toBarMode: boolean) => {
-    const engine = engineRef.current;
-    if (!engine) return;
-
-    if (isPlaying) {
-      engine.stop();
-      stopRenderedAudio();
-      clearSamplePlayStates();
-      setIsPreparing(false);
-      setIsPlaying(false);
-      resetPlaybackVisuals();
-    }
-    setBarStartBeat(null);
-
-    if (toBarMode) {
-      dialConfigRef.current = {
-        beatsPerMeasure,
-        beatTypes: [...beatTypes],
-        beatSubdivisions: { ...beatSubdivisions },
-        noteSamples: { ...noteSamples },
-        noteSampleNames: { ...noteSampleNames },
-        noteSampleSources: { ...noteSampleSources },
-        noteSampleChannels: { ...noteSampleChannels },
-      };
-
-      const bc = barConfigRef.current;
-      barConfigRef.current = {
-        ...bc,
-        beatsPerMeasure: 0,
-        beatTypes: [],
-        beatSubdivisions: {},
-        barRepeats: {},
-        loopBlocks: [],
-        barClockMode: "stopwatch",
-        barTimerDuration: 180,
-        noteSamples: {},
-        noteSampleNames: {},
-        noteSampleSources: {},
-        noteSampleChannels: {},
-        barLoopMode: "once",
-        blockPlayMode: "loop",
-        hasBeenConfigured: true,
-      };
-      setBeatsPerMeasure(0);
-      setBeatTypes([]);
-      setBeatSubdivisions({});
-      setBarRepeats({});
-      setLoopBlocks([]);
-      setBarLoopMode("once");
-      setNoteSamples({});
-      noteSamplesRef.current = {};
-      setNoteSampleNames({});
-      noteSampleNamesRef.current = {};
-      setNoteSampleSources({});
-      noteSampleSourcesRef.current = {};
-      setNoteSampleChannels({});
-      noteSampleChannelsRef.current = {};
-      setNoteSampleMetroChannels({});
-      noteSampleMetroChannelsRef.current = {};
-      engine.setBeatsPerMeasure(0);
-      engine.setBeatTypes([]);
-      engine.setAllBeatSubdivisions({});
-      engine.clearLoopBlocks();
-      engine.clearBarRepeats();
-    } else {
-      barConfigRef.current = {
-        ...barConfigRef.current,
-        beatsPerMeasure,
-        beatTypes: [...beatTypes],
-        beatSubdivisions: { ...beatSubdivisions },
-        barRepeats: { ...barRepeats },
-        loopBlocks: [...loopBlocks],
-        noteSamples: { ...noteSamples },
-        noteSampleNames: { ...noteSampleNames },
-        noteSampleSources: { ...noteSampleSources },
-        noteSampleChannels: { ...noteSampleChannels },
-        barLoopMode,
-        blockPlayMode,
-        hasBeenConfigured: true,
-      };
-      const dc = dialConfigRef.current;
-      setBeatsPerMeasure(dc.beatsPerMeasure);
-      setBeatTypes([...dc.beatTypes]);
-      setBeatSubdivisions({ ...dc.beatSubdivisions });
-      setBarRepeats({});
-      setLoopBlocks([]);
-      setNoteSamples({ ...dc.noteSamples });
-      noteSamplesRef.current = { ...dc.noteSamples };
-      setNoteSampleNames({ ...dc.noteSampleNames });
-      noteSampleNamesRef.current = { ...dc.noteSampleNames };
-      setNoteSampleSources({ ...dc.noteSampleSources });
-      noteSampleSourcesRef.current = { ...dc.noteSampleSources };
-      setNoteSampleChannels({ ...(dc.noteSampleChannels || {}) });
-      noteSampleChannelsRef.current = { ...(dc.noteSampleChannels || {}) };
-      engine.setBeatsPerMeasure(dc.beatsPerMeasure);
-      engine.setBeatTypes([...dc.beatTypes]);
-      engine.setAllBeatSubdivisions(dc.beatSubdivisions);
-      engine.clearLoopBlocks();
-      engine.clearBarRepeats();
-    }
-
-    void releaseAllStereoArtifacts();
-    engine.flushSchedule();
-    setBarMode(toBarMode);
-  }, [isPlaying, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels]);
+  // handleBarModeChange → useBarMode
 
   const startMetronome = useCallback(async () => {
     const engine = engineRef.current;
@@ -2667,26 +2616,7 @@ export function useMetronomeScreen() {
     [findDropTarget, subdivisionPattern, beatSubdivisions, persistSettings, applyToAllBeats]
   );
 
-  const handleBarRepeatChange = useCallback((beat: number, repeat: BarRepeat | null) => {
-    setBarRepeats(prev => {
-      const next = { ...prev };
-      if (repeat) {
-        next[beat] = repeat;
-      } else {
-        delete next[beat];
-      }
-      barConfigRef.current.barRepeats = { ...next };
-      engineRef.current?.setBarRepeat(beat, repeat);
-      engineRef.current?.setBarBpmOverride(beat, repeat?.bpm ?? null);
-      return next;
-    });
-    scheduleReRender();
-  }, [scheduleReRender]);
-
-  const handleLoopBlocksChange = useCallback((blocks: LoopBlock[]) => {
-    setLoopBlocks(blocks);
-    applyLoopBlocksChange(engineRef.current ?? null, barConfigRef.current, scheduleReRender, blocks);
-  }, [scheduleReRender]);
+  // handleBarRepeatChange / handleLoopBlocksChange → useBarMode
 
   const fullScreenResetFlash = useSharedValue(0);
   const fullScreenResetFlashStyle = useAnimatedStyle(() => ({
@@ -2727,34 +2657,7 @@ export function useMetronomeScreen() {
     }
   }, [bpm, beatsPerMeasure, beatTypes, beatSubdivisions, subdivisionPattern, username, t, showBeatQuickSaveToast]);
 
-  const handleBarQuickSave = useCallback(async (): Promise<boolean> => {
-    try {
-      const config = {
-        mode: "bar" as const,
-        bpm,
-        beatsPerMeasure,
-        beatTypes: [...beatTypes],
-        beatSubdivisions: { ...beatSubdivisions },
-        barRepeats: { ...barRepeats },
-        loopBlocks: [...loopBlocks],
-        barLoopMode: barLoopMode as "loop" | "once",
-        blockPlayMode: blockPlayMode as "sequential" | "loop" | "random",
-        subdivisionPattern: [...subdivisionPattern],
-        barClockMode: barConfigRef.current.barClockMode,
-        barTimerDuration: barConfigRef.current.barTimerDuration,
-      };
-      const now = new Date();
-      const label = `Bar ${beatsPerMeasure}/${bpm} ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
-      const entry = createPracticeEntry(label, config, username);
-      const existing = await loadPracticeBook();
-      await savePracticeBook([entry, ...existing]);
-      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      return true;
-    } catch (e) {
-      captureBreadcrumb({ category: "practice-book", message: "Quick save error", level: "warning", data: { error: String(e) } });
-      return false;
-    }
-  }, [bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, blockPlayMode, subdivisionPattern, username, t]);
+  // handleBarQuickSave → useBarMode
 
   const handleResetFlash = useCallback(() => {
     fullScreenResetFlash.value = withSequence(
@@ -2763,309 +2666,8 @@ export function useMetronomeScreen() {
     );
   }, []);
 
-  const handleAddBar = useCallback((draftRepeat?: BarRepeat) => {
-    if (beatsPerMeasure >= 16) return;
-    const newBeat = beatsPerMeasure;
-    const newBeats = beatsPerMeasure + 1;
-    const newTypes: BeatType[] = [...beatTypes, "normal"];
-    setBeatsPerMeasure(newBeats);
-    setBeatTypes(newTypes);
-    engineRef.current?.setBeatsPerMeasure(newBeats);
-    engineRef.current?.setBeatTypes(newTypes);
-    const currentPattern = subdivisionPattern;
-    const newSubs = { ...beatSubdivisions };
-    if (currentPattern.length > 1 || (currentPattern.length === 1 && currentPattern[0] !== "normal")) {
-      newSubs[String(newBeat)] = [...currentPattern];
-      engineRef.current?.setBeatSubdivision(newBeat, [...currentPattern]);
-    }
-    setBeatSubdivisions(newSubs);
-    // draftRepeat이 있으면 그 설정을 사용, 없으면 현재 편집 중인 바 레이어 복사
-    const newRepeat: BarRepeat = draftRepeat
-      ? { ...draftRepeat }
-      : (() => {
-          const srcLayers = barStartBeat !== null ? (barRepeats[barStartBeat]?.layers ?? []) : [];
-          return { type: "count", value: 1, layers: srcLayers.length ? srcLayers.map(l => ({ ...l })) : [] };
-        })();
-    setBarRepeats(prev => ({ ...prev, [newBeat]: newRepeat }));
-    barConfigRef.current.beatsPerMeasure = newBeats;
-    barConfigRef.current.beatTypes = newTypes;
-    barConfigRef.current.beatSubdivisions = newSubs;
-    barConfigRef.current.barRepeats = { ...barConfigRef.current.barRepeats, [newBeat]: newRepeat };
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [beatsPerMeasure, beatTypes, beatSubdivisions, subdivisionPattern, barStartBeat, barRepeats]);
-
-  const handleCopyBar = useCallback((beatIndex: number) => {
-    if (isPlaying) return;
-    if (beatsPerMeasure >= 16) return;
-    const srcType = beatTypes[beatIndex] ?? "strong";
-    const srcSub = beatSubdivisions[String(beatIndex)] ?? [];
-    const srcRepeat = barRepeats[beatIndex];
-    const newBeat = beatsPerMeasure;
-    const newTypes = [...beatTypes, srcType];
-    const newSubs = { ...beatSubdivisions };
-    if (srcSub.length > 0) newSubs[String(newBeat)] = [...srcSub];
-    // barRepeats 전체 복사 (반복 유형/BPM/심볼/레이어 포함) — layers 깊은 복사로 공유 참조 방지
-    const newRepeats = { ...barRepeats };
-    if (srcRepeat) newRepeats[newBeat] = {
-      ...srcRepeat,
-      layers: srcRepeat.layers ? srcRepeat.layers.map(l => ({ ...l })) : undefined,
-    };
-    setBeatsPerMeasure(beatsPerMeasure + 1);
-    setBeatTypes(newTypes);
-    setBeatSubdivisions(newSubs);
-    setBarRepeats(newRepeats);
-    engineRef.current?.setBeatsPerMeasure(beatsPerMeasure + 1);
-    engineRef.current?.setBeatTypes(newTypes);
-    engineRef.current?.setAllBeatSubdivisions(newSubs);
-    engineRef.current?.setAllBarRepeats(newRepeats);
-    barConfigRef.current.beatsPerMeasure = beatsPerMeasure + 1;
-    barConfigRef.current.beatTypes = newTypes;
-    barConfigRef.current.beatSubdivisions = newSubs;
-    barConfigRef.current.barRepeats = newRepeats;
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [isPlaying, beatTypes, beatSubdivisions, beatsPerMeasure, barRepeats]);
-
-  const handleInsertBarAfter = useCallback((beatIndex: number) => {
-    if (isPlaying) return;
-    if (beatsPerMeasure >= 16) return;
-    const insertAt = beatIndex + 1;
-    const srcType = beatTypes[beatIndex] ?? "normal";
-    const srcSub = beatSubdivisions[String(beatIndex)] ?? [];
-    const srcRepeat = barRepeats[beatIndex];
-
-    const newTypes = [...beatTypes.slice(0, insertAt), srcType, ...beatTypes.slice(insertAt)];
-
-    const newSubs: Record<string, BeatType[]> = {};
-    for (const [k, v] of Object.entries(beatSubdivisions)) {
-      const ki = Number(k);
-      if (ki < insertAt) newSubs[String(ki)] = v;
-      else newSubs[String(ki + 1)] = v;
-    }
-    if (srcSub.length > 0) newSubs[String(insertAt)] = [...srcSub];
-
-    const newRepeats: Record<number, BarRepeat> = {};
-    for (const [k, v] of Object.entries(barRepeats)) {
-      const ki = Number(k);
-      if (ki < insertAt) newRepeats[ki] = v;
-      else newRepeats[ki + 1] = v;
-    }
-    if (srcRepeat) newRepeats[insertAt] = {
-      ...srcRepeat,
-      layers: srcRepeat.layers ? srcRepeat.layers.map(l => ({ ...l })) : undefined,
-    };
-
-    const shiftUp = (b: number) => b >= insertAt ? b + 1 : b;
-    const newBlocks = loopBlocks.map(lb => {
-      const newOwnBeatTypes: Record<number, BeatType> = {};
-      for (const [k, v] of Object.entries(lb.ownBeatTypes ?? {})) {
-        newOwnBeatTypes[shiftUp(Number(k))] = v as BeatType;
-      }
-      const newOwnSubdivisions: Record<string, BeatType[]> = {};
-      for (const [k, v] of Object.entries(lb.ownSubdivisions ?? {})) {
-        newOwnSubdivisions[String(shiftUp(Number(k)))] = v as BeatType[];
-      }
-      return {
-        ...lb,
-        startBeat: shiftUp(lb.startBeat),
-        endBeat: shiftUp(lb.endBeat),
-        ownBeatTypes: newOwnBeatTypes,
-        ownSubdivisions: newOwnSubdivisions,
-      };
-    });
-
-    const newBeats = beatsPerMeasure + 1;
-    setBeatsPerMeasure(newBeats);
-    setBeatTypes(newTypes);
-    setBeatSubdivisions(newSubs);
-    setBarRepeats(newRepeats);
-    setLoopBlocks(newBlocks);
-    engineRef.current?.setBeatsPerMeasure(newBeats);
-    engineRef.current?.setBeatTypes(newTypes);
-    engineRef.current?.setAllBeatSubdivisions(newSubs);
-    engineRef.current?.setAllBarRepeats(newRepeats);
-    engineRef.current?.setLoopBlocks(newBlocks);
-    barConfigRef.current.beatsPerMeasure = newBeats;
-    barConfigRef.current.beatTypes = newTypes;
-    barConfigRef.current.beatSubdivisions = newSubs;
-    barConfigRef.current.barRepeats = newRepeats;
-    barConfigRef.current.loopBlocks = newBlocks;
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [isPlaying, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks]);
-
-  const handleDeleteBar = useCallback((beatIndex: number) => {
-    const newBeats = beatsPerMeasure - 1;
-    const newTypes = beatTypes.filter((_, i) => i !== beatIndex);
-    const newSubs: Record<string, BeatType[]> = {};
-    for (const [k, v] of Object.entries(beatSubdivisions)) {
-      const ki = Number(k);
-      if (ki < beatIndex) newSubs[String(ki)] = v;
-      else if (ki > beatIndex) newSubs[String(ki - 1)] = v;
-    }
-    const newRepeats: Record<number, BarRepeat> = {};
-    for (const [k, v] of Object.entries(barRepeats)) {
-      const ki = Number(k);
-      if (ki < beatIndex) newRepeats[ki] = v;
-      else if (ki > beatIndex) newRepeats[ki - 1] = v;
-    }
-    // loopBlocks 재인덱싱: 삭제된 beat를 포함하는 블록 처리
-    const shiftBeat = (b: number) => b < beatIndex ? b : b - 1;
-    const newBlocks = loopBlocks
-      .map(lb => {
-        const newStart = lb.startBeat < beatIndex ? lb.startBeat : lb.startBeat > beatIndex ? lb.startBeat - 1 : lb.endBeat > beatIndex ? lb.startBeat : -1;
-        const newEnd = lb.endBeat < beatIndex ? lb.endBeat : lb.endBeat > beatIndex ? lb.endBeat - 1 : lb.startBeat < beatIndex ? lb.endBeat - 1 : -1;
-        if (newStart < 0 || newEnd < 0 || newStart > newEnd) return null;
-        const newOwnBeatTypes: Record<number, BeatType> = {};
-        for (const [k, v] of Object.entries(lb.ownBeatTypes ?? {})) {
-          const ki = Number(k);
-          if (ki !== beatIndex) newOwnBeatTypes[shiftBeat(ki)] = v;
-        }
-        const newOwnSubdivisions: Record<string, BeatType[]> = {};
-        for (const [k, v] of Object.entries(lb.ownSubdivisions ?? {})) {
-          const ki = Number(k);
-          if (ki !== beatIndex) newOwnSubdivisions[String(shiftBeat(ki))] = v;
-        }
-        return { ...lb, startBeat: newStart, endBeat: newEnd, ownBeatTypes: newOwnBeatTypes, ownSubdivisions: newOwnSubdivisions };
-      })
-      .filter((b): b is NonNullable<typeof b> => b !== null);
-    setBeatsPerMeasure(newBeats);
-    setBeatTypes(newTypes);
-    setBeatSubdivisions(newSubs);
-    setBarRepeats(newRepeats);
-    setLoopBlocks(newBlocks);
-    engineRef.current?.setBeatsPerMeasure(newBeats);
-    engineRef.current?.setBeatTypes(newTypes);
-    engineRef.current?.setAllBeatSubdivisions(newSubs);
-    engineRef.current?.setAllBarRepeats(newRepeats);
-    engineRef.current?.setLoopBlocks(newBlocks);
-    if (barStartBeat !== null) {
-      if (barStartBeat === beatIndex) setBarStartBeat(null);
-      else if (barStartBeat > beatIndex) setBarStartBeat(barStartBeat - 1);
-    }
-    barConfigRef.current.beatsPerMeasure = newBeats;
-    barConfigRef.current.beatTypes = newTypes;
-    barConfigRef.current.beatSubdivisions = newSubs;
-    barConfigRef.current.barRepeats = newRepeats;
-    barConfigRef.current.loopBlocks = newBlocks;
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  }, [beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, barStartBeat, loopBlocks]);
-
-  const handleReorderBar = useCallback((fromIndex: number, toIndex: number) => {
-    if (fromIndex === toIndex) return;
-
-    const reindex = (b: number): number => {
-      if (b === fromIndex) return toIndex;
-      if (fromIndex < toIndex && b > fromIndex && b <= toIndex) return b - 1;
-      if (fromIndex > toIndex && b >= toIndex && b < fromIndex) return b + 1;
-      return b;
-    };
-
-    const newTypes = [...beatTypes];
-    const [moved] = newTypes.splice(fromIndex, 1);
-    newTypes.splice(toIndex, 0, moved);
-
-    const newSubs: Record<string, BeatType[]> = {};
-    for (const [k, v] of Object.entries(beatSubdivisions)) {
-      newSubs[String(reindex(Number(k)))] = v;
-    }
-
-    const newRepeats: Record<number, BarRepeat> = {};
-    for (const [k, v] of Object.entries(barRepeats)) {
-      newRepeats[reindex(Number(k))] = v as BarRepeat;
-    }
-
-    const newBlocks = loopBlocks.map(lb => {
-      const newStart = reindex(lb.startBeat);
-      const newEnd = reindex(lb.endBeat);
-      const newOwnBeatTypes: Record<number, BeatType> = {};
-      for (const [k, v] of Object.entries(lb.ownBeatTypes ?? {})) {
-        newOwnBeatTypes[reindex(Number(k))] = v as BeatType;
-      }
-      const newOwnSubdivisions: Record<string, BeatType[]> = {};
-      for (const [k, v] of Object.entries(lb.ownSubdivisions ?? {})) {
-        newOwnSubdivisions[String(reindex(Number(k)))] = v as BeatType[];
-      }
-      return {
-        ...lb,
-        startBeat: Math.min(newStart, newEnd),
-        endBeat: Math.max(newStart, newEnd),
-        ownBeatTypes: newOwnBeatTypes,
-        ownSubdivisions: newOwnSubdivisions,
-      };
-    });
-
-    setBeatTypes(newTypes);
-    setBeatSubdivisions(newSubs);
-    setBarRepeats(newRepeats);
-    setLoopBlocks(newBlocks);
-    engineRef.current?.setBeatTypes(newTypes);
-    engineRef.current?.setAllBeatSubdivisions(newSubs);
-    engineRef.current?.setAllBarRepeats(newRepeats);
-    engineRef.current?.setLoopBlocks(newBlocks);
-
-    if (barStartBeat !== null) setBarStartBeat(reindex(barStartBeat));
-
-    barConfigRef.current.beatTypes = newTypes;
-    barConfigRef.current.beatSubdivisions = newSubs;
-    barConfigRef.current.barRepeats = newRepeats;
-    barConfigRef.current.loopBlocks = newBlocks;
-  }, [beatTypes, beatSubdivisions, barRepeats, loopBlocks, barStartBeat]);
-
-  const handleBarReset = useCallback(() => {
-    const engine = engineRef.current;
-    const beats = barConfigRef.current.beatsPerMeasure || 4;
-    const newTypes = defaultBeatTypes(beats);
-    setBeatTypes(newTypes);
-    setBeatSubdivisions({});
-    setBarRepeats({});
-    setLoopBlocks([]);
-    setBarStartBeat(null);
-    setBarLoopMode("once");
-    setNoteSamples({});
-    noteSamplesRef.current = {};
-    setNoteSampleNames({});
-    noteSampleNamesRef.current = {};
-    setNoteSampleSources({});
-    noteSampleSourcesRef.current = {};
-    setNoteSampleChannels({});
-    noteSampleChannelsRef.current = {};
-    for (const [k, st] of Object.entries(samplePlayStateRef.current)) {
-      if (st.endTimer) clearTimeout(st.endTimer);
-    }
-    samplePlayStateRef.current = {};
-    for (const player of Object.values(noteSampleSoundsRef.current)) {
-      try { player.pause(); } catch {}
-      try { player.release(); } catch {}
-    }
-    noteSampleSoundsRef.current = {};
-    void releaseAllStereoArtifacts();
-    saveNoteSamples({});
-    saveNoteSampleNames({});
-    saveNoteSampleSources({});
-    saveNoteSampleChannels({});
-    barConfigRef.current = {
-      beatsPerMeasure: beats,
-      beatTypes: [...newTypes],
-      beatSubdivisions: {},
-      barRepeats: {},
-      loopBlocks: [],
-      barClockMode: "stopwatch",
-      barTimerDuration: 180,
-      noteSamples: {},
-      noteSampleNames: {},
-      noteSampleSources: {},
-      noteSampleChannels: {},
-      barLoopMode: "once",
-      blockPlayMode: "loop",
-      hasBeenConfigured: true,
-    };
-    if (engine) {
-      engine.setBeatTypes([...newTypes]);
-      engine.setAllBeatSubdivisions({});
-      engine.setAllBarRepeats({});
-      engine.clearLoopBlocks();
-      engine.setAllBarBpmOverrides({});
-    }
-  }, []);
+  // handleAddBar / handleCopyBar / handleInsertBarAfter / handleDeleteBar
+  // handleReorderBar / handleBarReset → useBarMode
 
   const applyEntryToEngine = useCallback((entry: PracticeEntry) => {
     const engine = engineRef.current;
