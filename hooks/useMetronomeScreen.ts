@@ -48,7 +48,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { getTempoLabel as getTempoLabelI18n } from "@/lib/i18n";
 import { useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
-import { MetronomeEngine, soundSets } from "@/lib/metronome-engine";
+import { MetronomeEngine, soundSets, toEngineBpm } from "@/lib/metronome-engine";
 import type { BeatType, ProgressInfo } from "@/lib/metronome-engine";
 import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, runStorageMigrations, type MetronomeSettings } from "@/lib/storage";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample, FadeOutSettings, PracticeEntry } from "@/lib/storage";
@@ -1660,7 +1660,7 @@ export function useMetronomeScreen() {
         engine.setBlockPlayMode(blockPlayModeRef.current);
         const bpmOverrides: Record<number, number> = {};
         for (const [k, v] of Object.entries(barConfigRef.current.barRepeats || {})) {
-          if (v.bpm) bpmOverrides[Number(k)] = v.bpm;
+          if (v.bpm) bpmOverrides[Number(k)] = toEngineBpm(v.bpm, beatDenominatorRef.current);
         }
         engine.setAllBarBpmOverrides(bpmOverrides);
       } else {
@@ -1932,9 +1932,9 @@ export function useMetronomeScreen() {
   // ── Notification bridge (TOGGLE_PLAY / BPM_UP / BPM_DOWN from lock screen) ─
   useNotificationBridge({
     engineRef, barModeRef, barConfigRef, dialConfigRef, barLoopModeRef,
-    blockPlayModeRef, barStartBeatRef, bpmRef, updateBpmRef, languageRef,
-    renderedPlayerRef, buildRenderedPlayer, stopRenderedAudio, clearSamplePlayStates,
-    resetPlaybackVisuals, setIsPlaying, setIsPreparing,
+    blockPlayModeRef, barStartBeatRef, bpmRef, beatDenominatorRef, updateBpmRef,
+    languageRef, renderedPlayerRef, buildRenderedPlayer, stopRenderedAudio,
+    clearSamplePlayStates, resetPlaybackVisuals, setIsPlaying, setIsPreparing,
   });
 
 
@@ -1955,7 +1955,7 @@ export function useMetronomeScreen() {
       engine.setBlockPlayMode(blockPlayModeRef.current);
       const bpmOv: Record<number, number> = {};
       for (const [k, v] of Object.entries(barConfigRef.current.barRepeats || {})) {
-        if (v.bpm) bpmOv[Number(k)] = v.bpm;
+        if (v.bpm) bpmOv[Number(k)] = toEngineBpm(v.bpm, beatDenominatorRef.current);
       }
       engine.setAllBarBpmOverrides(bpmOv);
     } else {
@@ -3404,7 +3404,7 @@ export function useMetronomeScreen() {
       engine.setAllBarRepeats(mgRepeats3 || {});
       const bpmOverridesEntry: Record<number, number> = {};
       for (const [k, v] of Object.entries(mgRepeats3 || {})) {
-        if ((v as any).bpm) bpmOverridesEntry[Number(k)] = (v as any).bpm;
+        if ((v as any).bpm) bpmOverridesEntry[Number(k)] = toEngineBpm((v as any).bpm, beatDenominatorRef.current);
       }
       engine.setAllBarBpmOverrides(bpmOverridesEntry);
       barConfigRef.current = {

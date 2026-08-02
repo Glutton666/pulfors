@@ -17,6 +17,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Platform } from "react-native";
 import * as Haptics from "expo-haptics";
+import { toEngineBpm } from "@/lib/metronome-engine";
 import type { BeatType, MetronomeEngine } from "@/lib/metronome-engine";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
 import type { MetronomeSettings, PracticeEntry } from "@/lib/storage";
@@ -348,7 +349,12 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
         }
         barConfigRef.current.barRepeats = { ...next };
         p.engineRef.current?.setBarRepeat(beat, repeat);
-        p.engineRef.current?.setBarBpmOverride(beat, repeat?.bpm ?? null);
+        p.engineRef.current?.setBarBpmOverride(
+          beat,
+          repeat?.bpm != null
+            ? toEngineBpm(repeat.bpm, p.beatDenominatorRef.current)
+            : null,
+        );
         return next;
       });
       p.scheduleReRender();

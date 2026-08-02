@@ -345,6 +345,45 @@ test("[apply-engine] 루프 부호 필드: voltaMax/isEnd/jumpFromId/jumpToId �
   assert.equal((reps[3] as BarRepeat).jumpFromId, 5, "beat 3 jumpFromId 보존");
 });
 
+test("[apply-engine] denominator 회귀: 바 오버라이드 BPM이 denominator로 정규화되어 엔진에 전달됨", () => {
+  // 버그 재현 시나리오: denominator=8(6/8 박자)에서 displayBpm=120을
+  // 미정규화 시 엔진에 120이 그대로 전달 → 메인 BPM(60)과 2배 차이.
+  // 수정 후: toEngineBpm(120, 8) = 60이 전달되어야 한다.
+  const entry: PracticeEntry = {
+    ...emptyEntry,
+    bpm: 120,
+    barRepeats: {
+      0: { type: "count", value: 2, bpm: 120 } as BarRepeat,
+      1: { type: "count", value: 1, bpm: 80 } as BarRepeat,
+    },
+  };
+  const fake = createFakeEngine();
+  // denominator=8 (6/8 박자) 전달
+  applyEntryToEngine(fake, entry, 8);
+
+  // 메인 BPM: 120 * (4/8) = 60
+  assert.equal(fake.state.bpm, 60, "메인 BPM이 denominator=8로 정규화");
+
+  // 바 오버라이드도 동일한 denominator 적용: 120*(4/8)=60, 80*(4/8)=40
+  assert.equal(fake.state.bpmOverrides![0], 60, "beat 0 오버라이드 BPM 120 → 60 (denominator=8)");
+  assert.equal(fake.state.bpmOverrides![1], 40, "beat 1 오버라이드 BPM 80 → 40 (denominator=8)");
+});
+
+test("[apply-engine] denominator=4 시 바 오버라이드 BPM이 항등 변환", () => {
+  const entry: PracticeEntry = {
+    ...emptyEntry,
+    bpm: 120,
+    barRepeats: {
+      0: { type: "count", value: 2, bpm: 120 } as BarRepeat,
+    },
+  };
+  const fake = createFakeEngine();
+  applyEntryToEngine(fake, entry, 4);
+
+  assert.equal(fake.state.bpm, 120, "denominator=4에서 메인 BPM 항등 변환");
+  assert.equal(fake.state.bpmOverrides![0], 120, "denominator=4에서 오버라이드 BPM 항등 변환");
+});
+
 test("[apply-engine] blockPlayMode 누락 시 'loop' 폴백, barRepeats 누락 시 빈 객체", () => {
   const noBlocksEntry: PracticeEntry = {
     ...emptyEntry,

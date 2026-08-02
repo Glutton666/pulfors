@@ -10,6 +10,7 @@ import {
   pureAddBarWithRepeat,
   pureEmitBeatsInRange,
   pureEmitStackedBlockTicks,
+  toEngineBpm,
   type ScheduleInputs,
   type EmitState,
   type LoopBlockData,
@@ -567,6 +568,48 @@ test("pureEmitBeatsInRange: jumpFromId — 매칭 jumpToId 없으면 점프 없�
   pureEmitBeatsInRange(inputs, state, new Map(), 0, 2, -1, 0, 1, undefined);
   const beatNums = state.ticks.filter(t => t.layerIndex === 0).map(t => t.beat);
   assert.deepEqual(beatNums, [0, 1, 2], "매칭 없으면 정상 진행");
+});
+
+// ── toEngineBpm + 바 BPM 오버라이드 denominator 정규화 회귀 테스트 ──────────
+// 버그: 6/8 박자에서 메인 BPM 120은 engine.setBpm(60) [1000ms/beat]로 정규화되지만
+// 바 오버라이드 BPM 120은 미정규화 시 60000/120 = 500ms/beat로 재생 → 2배 차이.
+// 수정 후: toEngineBpm을 통해 동일 엔진 단위로 통일되어야 한다.
+
+test("toEngineBpm: denominator=4 시 항등 변환", () => {
+  assert.equal(toEngineBpm(120, 4), 120, "4/4 박자에서는 displayBpm과 동일");
+});
+
+test("toEngineBpm: denominator=8 시 절반값 반환 (quarter-note 단위)", () => {
+  assert.equal(toEngineBpm(120, 8), 60, "6/8 박자에서 120 → 60");
+});
+
+test("toEngineBpm: denominator=2 시 두 배값 반환", () => {
+  assert.equal(toEngineBpm(120, 2), 240, "2/2 박자에서 120 → 240");
+});
+
+test("[denominator 회귀] 6/8 박자에서 main BPM과 바 오버라이드 BPM이 동일 beat duration 생성", () => {
+  const denominator = 8;
+  const displayBpm = 120;
+
+  // 메인 BPM 경로: updateBpm → engine.setBpm(displayBpm * (4/denominator))
+  const mainEngineBpm = toEngineBpm(displayBpm, denominator); // 60
+
+  // 바 오버라이드 경로: toEngineBpm 적용 후 setBarBpmOverride에 전달
+  const overrideEngineBpm = toEngineBpm(displayBpm, denominator); // 60
+
+  // pureGetBeatDur가 두 경로에서 동일한 duration을 반환해야 한다
+  const mainInputs = makeInputs({ bpm: mainEngineBpm });
+  const overrideInputs = makeInputs({
+    bpm: 999, // 덮어쓰이게 의도적으로 다른 값
+    barBpmOverrides: new Map([[0, overrideEngineBpm]]),
+  });
+
+  const mainDur = pureGetBeatDur(mainInputs, 0);
+  const overrideDur = pureGetBeatDur(overrideInputs, 0);
+
+  assert.equal(mainDur, 1000, "6/8 BPM 120의 메인 beat duration은 1000ms");
+  assert.equal(overrideDur, 1000, "6/8 BPM 120의 바 오버라이드 beat duration도 1000ms");
+  assert.equal(mainDur, overrideDur, "두 경로의 beat duration이 일치해야 함");
 });
 
 test("pureEmitStackedBlockTicks: blockDurMs 경계를 벗어난 tick은 잘려나감", () => {

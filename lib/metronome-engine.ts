@@ -210,6 +210,20 @@ export interface EmitState {
   jump: JumpState;
 }
 
+/**
+ * 순수 함수: 사용자 표시용 BPM을 엔진 내부 quarter-note BPM으로 변환.
+ *
+ * 메인 BPM 경로(`updateBpm`의 `clampedBpm * (4 / beatDenominator)`)와 동일한
+ * 정규화를 적용한다. 바 BPM 오버라이드를 `setBarBpmOverride` / `setAllBarBpmOverrides`
+ * 에 넘기기 전에 반드시 이 함수로 변환해야 한다.
+ *
+ * @param displayBpm 사용자가 UI에서 보고 입력한 BPM 값
+ * @param denominator 현재 박자 분모 (2 | 4 | 8)
+ */
+export function toEngineBpm(displayBpm: number, denominator: 2 | 4 | 8): number {
+  return displayBpm * (4 / denominator);
+}
+
 /** 순수 함수: 한 비트의 실제 길이(ms)를 반환. */
 export function pureGetBeatDur(
   inputs: Pick<ScheduleInputs, "bpm" | "halfTime" | "barBpmOverrides">,
@@ -950,6 +964,12 @@ export class MetronomeEngine {
     return result;
   }
 
+  /**
+   * 특정 바(beat)의 BPM 오버라이드를 설정한다.
+   * @param bpm 반드시 `toEngineBpm(displayBpm, denominator)` 로 변환한
+   *            quarter-note BPM 값을 전달해야 한다.
+   *            null을 전달하면 해당 바의 오버라이드가 해제된다.
+   */
   setBarBpmOverride(beat: number, bpm: number | null) {
     if (bpm !== null) {
       this.barBpmOverrides.set(beat, Math.max(20, Math.min(300, bpm)));
@@ -962,6 +982,12 @@ export class MetronomeEngine {
     }
   }
 
+  /**
+   * 모든 바의 BPM 오버라이드를 일괄 교체한다.
+   * @param overrides 바 인덱스 → quarter-note BPM 맵.
+   *                 값은 반드시 `toEngineBpm(displayBpm, denominator)` 로 변환한
+   *                 엔진 내부 단위이어야 한다.
+   */
   setAllBarBpmOverrides(overrides: Record<number, number>) {
     this.barBpmOverrides.clear();
     for (const [key, value] of Object.entries(overrides)) {

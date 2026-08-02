@@ -10,6 +10,7 @@ import {
 } from "@/lib/notification-controls";
 import { safePlay } from "@/lib/audio-utils";
 import { captureBreadcrumb } from "@/lib/error-tracking";
+import { toEngineBpm } from "@/lib/metronome-engine";
 import type { MetronomeEngine } from "@/lib/metronome-engine";
 import type { BarConfig, DialConfig } from "@/app/index.helpers";
 
@@ -22,6 +23,7 @@ interface UseNotificationBridgeParams {
   blockPlayModeRef: React.MutableRefObject<"sequential" | "loop" | "random">;
   barStartBeatRef: React.MutableRefObject<number | null>;
   bpmRef: React.MutableRefObject<number>;
+  beatDenominatorRef: React.MutableRefObject<2 | 4 | 8>;
   updateBpmRef: React.MutableRefObject<(bpm: number) => void>;
   languageRef: React.MutableRefObject<"ko" | "en" | string>;
   renderedPlayerRef: React.MutableRefObject<ExpoAudioPlayer | null>;
@@ -82,7 +84,7 @@ export function useNotificationBridge(params: UseNotificationBridgeParams): void
               engine.setBlockPlayMode(blockPlayModeRef.current);
               const bpmOverrides: Record<number, number> = {};
               for (const [k, v] of Object.entries(barConfigRef.current.barRepeats || {})) {
-                if (v.bpm) bpmOverrides[Number(k)] = v.bpm;
+                if (v.bpm) bpmOverrides[Number(k)] = toEngineBpm(v.bpm, params.beatDenominatorRef.current);
               }
               engine.setAllBarBpmOverrides(bpmOverrides);
             } else {
