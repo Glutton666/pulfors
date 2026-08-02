@@ -354,7 +354,8 @@ export function useMetronomeScreen() {
       if (showStemSep) {
         const returnTo = stemSepReturnModalRef.current;
         stemSepReturnModalRef.current = null;
-        setActiveModal(returnTo);
+        setActiveModal(null);
+        if (returnTo) setTimeout(() => setActiveModal(returnTo), 160);
         return true;
       }
       if (showMoreMenu) { setActiveModal(null); return true; }

@@ -437,9 +437,12 @@ export function MetronomeScreenUI(props: Props) {
         visible={showStemSep}
         onClose={() => {
           // 음원분리 진입 직전 모달(메뉴 등)이 있으면 그쪽으로 복귀한다.
+          // AnimatedModal 기반 모달은 null→modal 전환이 있어야 fade-in이 트리거되므로
+          // 먼저 null로 닫은 뒤 160 ms 지연 후 복귀 모달을 열어야 한다.
           const returnTo = stemSepReturnModalRef.current;
           stemSepReturnModalRef.current = null;
-          setActiveModal(returnTo);
+          setActiveModal(null);
+          if (returnTo) setTimeout(() => setActiveModal(returnTo), 160);
         }}
         onSetBpm={updateBpm}
         onStartMetronome={() => {
