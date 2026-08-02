@@ -1,7 +1,7 @@
 import { useRef, useEffect } from "react";
 import { Platform } from "react-native";
-import { AudioModule } from "expo-audio";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
+import { applyAudioModeIfChanged } from "@/lib/audio-mode-cache";
 import {
   addNotificationActionListener,
   showPlayingNotification,
@@ -94,13 +94,16 @@ export function useNotificationBridge(params: UseNotificationBridgeParams): void
             resetPlaybackVisuals();
 
             if (Platform.OS !== "web") {
-              try {
-                await AudioModule.setAudioModeAsync({
-                  playsInSilentMode: true,
-                  interruptionMode: "mixWithOthers",
-                  shouldPlayInBackground: true,
-                });
-              } catch {}
+              // lib/android-audio-focus.ts의 오디오 포커스 프로브, lib/android-foreground-service.ts와
+              // 동일한 "doNotMix" 설정을 사용한다 — 서로 다른 interruptionMode를 쓰면
+              // 재생 시작 시점에 오디오 모드가 오락가락하며 AudioTrack 생성과 경합해
+              // 무음을 유발할 수 있다 (2026-08-02 확인, useMetronomeScreen.ts 참고).
+              await applyAudioModeIfChanged({
+                allowsRecording: false,
+                playsInSilentMode: true,
+                interruptionMode: "doNotMix",
+                shouldPlayInBackground: true,
+              });
             }
 
             const renderedPlayer = await buildRenderedPlayer();

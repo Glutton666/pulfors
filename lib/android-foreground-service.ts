@@ -23,6 +23,7 @@
 
 import { Platform } from "react-native";
 import { logger } from "./logger";
+import { applyAudioModeIfChanged } from "./audio-mode-cache";
 
 /**
  * 포그라운드 서비스 활성 여부를 추적합니다.
@@ -40,17 +41,25 @@ export async function requestForegroundPlayback(): Promise<void> {
   if (isForegroundActive) return;
 
   try {
-    // AudioModule을 동적으로 import해 번들러가 플랫폼별로 처리하도록 합니다.
-    // require()를 사용해 테스트 스텁(STUB_MAP)이 정상적으로 적용되도록 합니다.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { AudioModule } = require("expo-audio") as typeof import("expo-audio");
-
     // shouldPlayInBackground: true → AudioModule.kt의 staysActiveInBackground 플래그를 설정.
     // OnActivityEntersBackground 콜백에서 AudioPlayer를 정지하지 않게 되어,
     // AudioControlsService가 MediaSessionService로서 startForeground()를 유지합니다.
-    await AudioModule.setAudioModeAsync({
+    //
+    // interruptionMode는 반드시 lib/android-audio-focus.ts의 오디오 포커스
+    // 프로브와 동일한 "doNotMix"를 사용해야 합니다. 예전에는 "mixWithOthers"를
+    // 썼는데, 재생 버튼 하나로 이 함수와 포커스 프로브가 거의 동시에 서로 다른
+    // interruptionMode로 setAudioModeAsync를 호출하면서 매 재생마다 오디오 모드가
+    // 오락가락(mixWithOthers ↔ doNotMix)했습니다. expo-audio의 Android 구현은
+    // setAudioModeAsync 호출마다 무조건 AudioManager.setSpeakerphoneOn(true)를
+    // 실행하므로, 이 오락가락이 메트로놈 자신의 AudioTrack 생성과 경합해
+    // "createTrack_l() initCheck failed -12" → 무음을 유발했습니다
+    // (2026-08-02 adb logcat 실기기 재현으로 확인). 두 호출자가 같은 설정을
+    // 쓰면 applyAudioModeIfChanged 캐시가 둘 중 하나만 실제로 실행해 경합을
+    // 없앤다.
+    await applyAudioModeIfChanged({
+      allowsRecording: false,
       playsInSilentMode: true,
-      interruptionMode: "mixWithOthers",
+      interruptionMode: "doNotMix",
       shouldPlayInBackground: true,
     });
 

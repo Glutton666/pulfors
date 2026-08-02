@@ -18,6 +18,7 @@ import {
   _resetAndroidFocusForTests,
   PROBE_PROGRESS_UPDATE_INTERVAL_MS,
 } from "../lib/android-audio-focus";
+import { _resetAudioModeCacheForTests } from "../lib/audio-mode-cache";
 
 // ── MockPlayer 타입 (expo-audio 스텁과 일치) ──────────────────────────────
 interface MockPlayer {
@@ -57,6 +58,7 @@ function resetAll(os: "android" | "ios") {
   lastPlayer = null;
   lastCreateOptions = null;
   _resetAndroidFocusForTests();
+  _resetAudioModeCacheForTests();
 }
 
 // ── 테스트 ──────────────────────────────────────────────────────────────────

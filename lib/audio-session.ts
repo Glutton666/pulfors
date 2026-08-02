@@ -1,6 +1,6 @@
 import { Platform } from "react-native";
-import { setAudioModeAsync } from "expo-audio";
 import { logger } from "@/lib/logger";
+import { applyAudioModeIfChanged, _resetAudioModeCacheForTests } from "@/lib/audio-mode-cache";
 
 /**
  * Caller ID 컨벤션 (충돌 방지용 레지스트리)
@@ -25,7 +25,11 @@ export interface MetronomeBridge {
 
 /** Android 오디오 포커스 프로브의 start/stop 진입점. */
 export interface AndroidFocusProbeController {
-  start: () => void;
+  // Promise 를 반환한다 — notifyUserMetronomeToggle 이 이를 호출자에게
+  // 그대로 전달해, 메트로놈 엔진을 시작하기 전에 오디오 모드 적용(및 그에
+  // 딸린 네이티브 setSpeakerphoneOn 라우팅 변경)이 완료되길 기다릴 수 있게
+  // 한다. AudioTrack 생성 경합(2026-08-02 확인) 방지가 목적이다.
+  start: () => Promise<void>;
   stop: () => void;
 }
 
@@ -90,16 +94,12 @@ function needsRecordingCategory(): boolean {
 
 async function applyMode(allowsRecording: boolean, isBaseline: boolean): Promise<void> {
   if (Platform.OS === "web") return;
-  try {
-    await setAudioModeAsync({
-      allowsRecording,
-      playsInSilentMode: true,
-      interruptionMode: "mixWithOthers",
-      shouldPlayInBackground: isBaseline,
-    });
-  } catch (e) {
-    logger.warn("[audioSession] setAudioModeAsync failed:", e);
-  }
+  await applyAudioModeIfChanged({
+    allowsRecording,
+    playsInSilentMode: true,
+    interruptionMode: "mixWithOthers",
+    shouldPlayInBackground: isBaseline,
+  });
 }
 
 export async function acquireAudioSession(callerId: string, mode: SessionMode): Promise<void> {
@@ -172,7 +172,12 @@ export async function releaseAudioSession(callerId: string): Promise<void> {
 }
 
 /** 사용자가 직접 메트로놈을 토글했음을 알린다 (Play/Pause 버튼, 음성 명령 등). */
-export function notifyUserMetronomeToggle(): void {
+/**
+ * 반환된 Promise 는 프로브를 "시작"하는 경우에만 의미가 있다 (오디오 모드
+ * 적용까지 기다리고 싶은 호출자를 위함). 정지하는 경우/프로브가 없는 경우는
+ * undefined 를 반환하며, 이때 await 은 즉시 완료되는 no-op 이다.
+ */
+export function notifyUserMetronomeToggle(): Promise<void> | undefined {
   if (suppressUserToggle > 0) return;
   if (activeCallers.size > 0) {
     userToggledDuringSession = true;
@@ -188,9 +193,10 @@ export function notifyUserMetronomeToggle(): void {
     if (bridge.isRunning()) {
       androidProbe?.stop();
     } else {
-      androidProbe?.start();
+      return androidProbe?.start();
     }
   }
+  return undefined;
 }
 
 /**
@@ -306,6 +312,7 @@ export function _resetAudioSessionForTests() {
   userToggledDuringInterruption = false;
   androidProbe = null;
   autoResumeAfterInterruption = true;
+  _resetAudioModeCacheForTests();
 }
 
 export function _audioSessionDebugState() {

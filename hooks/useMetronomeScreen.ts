@@ -1664,7 +1664,14 @@ export function useMetronomeScreen() {
 
     // 모달이 열려있는 동안 사용자가 직접 토글했음을 audio-session에 알려서
     // 모달 닫힐 때 우리가 무심코 자동 resume하지 않도록 한다.
-    notifyUserMetronomeToggle();
+    // 반환된 Promise는 재생 시작 분기(else 분기)에서 engine.start() 직전에
+    // await한다 — Android 오디오 포커스 프로브의 setAudioModeAsync 호출이
+    // 완료된 뒤에 엔진이 자신의 AudioTrack을 생성하도록 순서를 보장해,
+    // 네이티브 setSpeakerphoneOn 라우팅 변경과의 경합(무음 원인, 2026-08-02
+    // adb logcat으로 확인)을 없앤다. 설정이 이전과 동일하면
+    // applyAudioModeIfChanged 캐시가 네이티브 호출 자체를 생략하므로 보통은
+    // 즉시 resolve된다.
+    const androidProbeReady = notifyUserMetronomeToggle();
 
     // BPM 퀴즈 이스터에그 활성 중 정지 → 정답 공개 후 비트모드로 복귀
     if (easterEggActiveRef.current) {
@@ -1826,6 +1833,9 @@ export function useMetronomeScreen() {
           setIsPlaying(true);
           notifyVoicePlayState(true);
           isPlayingRef.current = true;
+          if (Platform.OS === "android") {
+            await androidProbeReady;
+          }
           engine.start(startBeat ?? undefined);
           armAudioWatchdogRef.current();
 

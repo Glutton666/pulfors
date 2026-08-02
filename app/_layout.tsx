@@ -31,6 +31,7 @@ import {
   startAndroidFocusProbe,
   stopAndroidFocusProbe,
 } from "@/lib/android-audio-focus";
+import { applyAudioModeIfChanged } from "@/lib/audio-mode-cache";
 
 import {
   useFonts,
@@ -79,8 +80,8 @@ export default function RootLayout() {
     if (Platform.OS === "web") return;
 
     try {
-      const { AudioModule } = await import("expo-audio");
-      await AudioModule.setAudioModeAsync({
+      await applyAudioModeIfChanged({
+        allowsRecording: false,
         playsInSilentMode: true,
         interruptionMode: "mixWithOthers",
         shouldPlayInBackground: true,
@@ -116,7 +117,7 @@ export default function RootLayout() {
     if (Platform.OS !== "android") return;
     initAndroidFocusCallbacks(notifyInterruptionBegin, notifyInterruptionEnd);
     registerAndroidFocusProbeController({
-      start: () => { void startAndroidFocusProbe(); },
+      start: () => startAndroidFocusProbe(),
       stop: () => { void stopAndroidFocusProbe(); },
     });
     return () => {

@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 import type { AudioPlayer, AudioStatus } from "expo-audio";
 import { logger } from "@/lib/logger";
+import { applyAudioModeIfChanged } from "@/lib/audio-mode-cache";
 
 /**
  * Android Audio Focus Monitor
@@ -197,7 +198,11 @@ export async function startAndroidFocusProbe(): Promise<void> {
     // 네이티브 측에서 기존 설정과 병합하지 않고 전달 → 미설정 필드가 기본값으로 교체될 수
     // 있다. playsInSilentMode 가 false(기본값)로 리셋되면 Android 에서 오디오가
     // 미디어 스트림 대신 알림 스트림으로 라우팅되어 앱 전체 무음이 발생한다.
-    await expoAudioMod.setAudioModeAsync({
+    // applyAudioModeIfChanged 를 통해 호출한다 — 이미 동일한 설정이 적용돼
+    // 있으면 (예: 포그라운드 서비스가 같은 tick 에 먼저 적용한 경우) 네이티브
+    // setAudioModeAsync 호출 자체를 생략해 메트로놈 자신의 AudioTrack 생성과의
+    // 경합을 줄인다.
+    await applyAudioModeIfChanged({
       interruptionMode: "doNotMix",
       playsInSilentMode: true,
       shouldPlayInBackground: true,
