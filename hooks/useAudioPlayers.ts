@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef } from "react";
-import { useAudioPlayer } from "expo-audio";
-import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
+import { useEffect, useMemo, useRef, useCallback } from "react";
+import { createAudioPlayer } from "expo-audio";
+import type { AudioPlayer as ExpoAudioPlayer, AudioSource } from "expo-audio";
 import { soundSets } from "@/lib/metronome-engine";
 import type { SoundSet } from "@/lib/storage";
 
@@ -50,196 +50,119 @@ export interface AudioPlayersHook {
   strongToggle: React.MutableRefObject<number>;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 헬퍼 함수 (모듈 레벨 — 훅 외부)
+// ─────────────────────────────────────────────────────────────────────────────
+
+type SoundSetDef = { high: AudioSource; low: AudioSource; strong: AudioSource };
+
 /**
- * Builtin sound-set audio player pool.
- * 11 sets × 3 roles × 4 instances = 132 players.
+ * 사운드셋 하나에 대해 역할 3 × 풀 4 = 12개 AudioPlayer를 즉석 생성한다.
+ * createAudioPlayer는 동기 함수이므로 엔진 틱 콜백 내에서도 안전하게 호출할 수 있다.
+ */
+function makeSoundSetPlayers(def: SoundSetDef): SoundSetPlayers {
+  const h = def.high;
+  const l = def.low;
+  const s = def.strong;
+  return {
+    highA: createAudioPlayer(h), highB: createAudioPlayer(h),
+    highC: createAudioPlayer(h), highD: createAudioPlayer(h),
+    lowA:  createAudioPlayer(l), lowB:  createAudioPlayer(l),
+    lowC:  createAudioPlayer(l), lowD:  createAudioPlayer(l),
+    strongA: createAudioPlayer(s), strongB: createAudioPlayer(s),
+    strongC: createAudioPlayer(s), strongD: createAudioPlayer(s),
+  };
+}
+
+/** 사운드셋 플레이어 12개를 모두 해제한다. */
+function disposeSoundSetPlayers(players: SoundSetPlayers): void {
+  for (const p of Object.values(players) as ExpoAudioPlayer[]) {
+    try { p.remove(); } catch { /* 이미 해제된 경우 무시 */ }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 훅
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 빌트인 사운드셋 플레이어 풀 — 지연(lazy) 생성 + 캐시 방식.
  *
- * Increased from the original A/B (2 instances) to A/B/C/D (4 instances) to
- * prevent cut-off at high BPM + multiple subdivisions. At 300 BPM × 4
- * subdivisions the hit interval is ~50 ms, which is shorter than a typical
- * 120 ms click sample. Four instances guarantee no slot is reused before it
- * finishes playing. Toggle refs are now 0-based number indices (round-robin)
- * instead of booleans.
+ * 이전 구현은 11개 사운드셋 × 3 역할 × 4 풀 = 132개 AudioPlayer를 앱 시작 시
+ * 한꺼번에 useAudioPlayer() 훅으로 생성했다. Android AudioFlinger의 트랙 슬롯이
+ * 이미 대부분 소진되어 새 트랙 할당(createTrack_l)이 -12(ENOMEM)으로 실패하고
+ * 무음이 발생했다.
+ *
+ * 새 구현:
+ *   - 실제 접근이 일어나는 시점에 createAudioPlayer()로 해당 세트만 생성한다.
+ *   - 생성한 플레이어는 cacheRef(Map)에 보관해 이후 재사용한다.
+ *   - 사운드셋을 바꾸면 useEffect가 새 세트를 미리(warm-up) 만들어 두어
+ *     첫 틱에서 지연이 없다.
+ *   - 보통 사용자는 12개, 레이어/블록에서 세트를 3개 쓰면 36개만 생성된다.
+ *   - 언마운트 시 모든 캐시된 플레이어를 해제한다.
+ *
+ * allPlayers / allPlayersRef는 Proxy로 구현돼 기존 allPlayersRef.current[key]
+ * 접근 패턴과 완전히 호환된다 — 호출부 변경 불필요.
  *
  * Hook order is unconditional and stable so this is a safe extraction.
  */
 export function useAudioPlayers(soundSet: SoundSet): AudioPlayersHook {
-  const classicHighA = useAudioPlayer(soundSets.classic.high);
-  const classicHighB = useAudioPlayer(soundSets.classic.high);
-  const classicHighC = useAudioPlayer(soundSets.classic.high);
-  const classicHighD = useAudioPlayer(soundSets.classic.high);
-  const classicLowA = useAudioPlayer(soundSets.classic.low);
-  const classicLowB = useAudioPlayer(soundSets.classic.low);
-  const classicLowC = useAudioPlayer(soundSets.classic.low);
-  const classicLowD = useAudioPlayer(soundSets.classic.low);
-  const classicStrongA = useAudioPlayer(soundSets.classic.strong);
-  const classicStrongB = useAudioPlayer(soundSets.classic.strong);
-  const classicStrongC = useAudioPlayer(soundSets.classic.strong);
-  const classicStrongD = useAudioPlayer(soundSets.classic.strong);
+  // soundset key → SoundSetPlayers 캐시
+  const cacheRef = useRef<Map<string, SoundSetPlayers>>(new Map());
 
-  const woodblockHighA = useAudioPlayer(soundSets.woodblock.high);
-  const woodblockHighB = useAudioPlayer(soundSets.woodblock.high);
-  const woodblockHighC = useAudioPlayer(soundSets.woodblock.high);
-  const woodblockHighD = useAudioPlayer(soundSets.woodblock.high);
-  const woodblockLowA = useAudioPlayer(soundSets.woodblock.low);
-  const woodblockLowB = useAudioPlayer(soundSets.woodblock.low);
-  const woodblockLowC = useAudioPlayer(soundSets.woodblock.low);
-  const woodblockLowD = useAudioPlayer(soundSets.woodblock.low);
-  const woodblockStrongA = useAudioPlayer(soundSets.woodblock.strong);
-  const woodblockStrongB = useAudioPlayer(soundSets.woodblock.strong);
-  const woodblockStrongC = useAudioPlayer(soundSets.woodblock.strong);
-  const woodblockStrongD = useAudioPlayer(soundSets.woodblock.strong);
+  /**
+   * 캐시에서 플레이어를 가져오거나 없으면 즉석 생성한다.
+   * 동기 함수 — 엔진 틱 콜백 내에서도 안전하게 호출할 수 있다.
+   */
+  const getOrCreate = useCallback((key: string): SoundSetPlayers | undefined => {
+    const hit = cacheRef.current.get(key);
+    if (hit) return hit;
+    const def = soundSets[key as keyof typeof soundSets] as SoundSetDef | undefined;
+    if (!def) return undefined;
+    const players = makeSoundSetPlayers(def);
+    cacheRef.current.set(key, players);
+    return players;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // cacheRef는 ref이므로 의존성 배열에 불필요
 
-  const cowbellHighA = useAudioPlayer(soundSets.cowbell.high);
-  const cowbellHighB = useAudioPlayer(soundSets.cowbell.high);
-  const cowbellHighC = useAudioPlayer(soundSets.cowbell.high);
-  const cowbellHighD = useAudioPlayer(soundSets.cowbell.high);
-  const cowbellLowA = useAudioPlayer(soundSets.cowbell.low);
-  const cowbellLowB = useAudioPlayer(soundSets.cowbell.low);
-  const cowbellLowC = useAudioPlayer(soundSets.cowbell.low);
-  const cowbellLowD = useAudioPlayer(soundSets.cowbell.low);
-  const cowbellStrongA = useAudioPlayer(soundSets.cowbell.strong);
-  const cowbellStrongB = useAudioPlayer(soundSets.cowbell.strong);
-  const cowbellStrongC = useAudioPlayer(soundSets.cowbell.strong);
-  const cowbellStrongD = useAudioPlayer(soundSets.cowbell.strong);
+  /**
+   * allPlayers: Proxy를 통해 key 접근 시 지연 생성.
+   * 기존 `allPlayersRef.current[soundSetKey].highA` 패턴과 완전 호환.
+   */
+  const allPlayers = useMemo<BuiltinPlayers>(
+    () =>
+      new Proxy({} as BuiltinPlayers, {
+        get: (_t, prop: string) => getOrCreate(prop),
+        has: (_t, prop: string) => prop in soundSets,
+      }),
+    [getOrCreate],
+  );
 
-  const digitalHighA = useAudioPlayer(soundSets.digital.high);
-  const digitalHighB = useAudioPlayer(soundSets.digital.high);
-  const digitalHighC = useAudioPlayer(soundSets.digital.high);
-  const digitalHighD = useAudioPlayer(soundSets.digital.high);
-  const digitalLowA = useAudioPlayer(soundSets.digital.low);
-  const digitalLowB = useAudioPlayer(soundSets.digital.low);
-  const digitalLowC = useAudioPlayer(soundSets.digital.low);
-  const digitalLowD = useAudioPlayer(soundSets.digital.low);
-  const digitalStrongA = useAudioPlayer(soundSets.digital.strong);
-  const digitalStrongB = useAudioPlayer(soundSets.digital.strong);
-  const digitalStrongC = useAudioPlayer(soundSets.digital.strong);
-  const digitalStrongD = useAudioPlayer(soundSets.digital.strong);
-
-  const jamblockHighA = useAudioPlayer(soundSets.jamblock.high);
-  const jamblockHighB = useAudioPlayer(soundSets.jamblock.high);
-  const jamblockHighC = useAudioPlayer(soundSets.jamblock.high);
-  const jamblockHighD = useAudioPlayer(soundSets.jamblock.high);
-  const jamblockLowA = useAudioPlayer(soundSets.jamblock.low);
-  const jamblockLowB = useAudioPlayer(soundSets.jamblock.low);
-  const jamblockLowC = useAudioPlayer(soundSets.jamblock.low);
-  const jamblockLowD = useAudioPlayer(soundSets.jamblock.low);
-  const jamblockStrongA = useAudioPlayer(soundSets.jamblock.strong);
-  const jamblockStrongB = useAudioPlayer(soundSets.jamblock.strong);
-  const jamblockStrongC = useAudioPlayer(soundSets.jamblock.strong);
-  const jamblockStrongD = useAudioPlayer(soundSets.jamblock.strong);
-
-  const sineHighA = useAudioPlayer(soundSets.sine.high);
-  const sineHighB = useAudioPlayer(soundSets.sine.high);
-  const sineHighC = useAudioPlayer(soundSets.sine.high);
-  const sineHighD = useAudioPlayer(soundSets.sine.high);
-  const sineLowA = useAudioPlayer(soundSets.sine.low);
-  const sineLowB = useAudioPlayer(soundSets.sine.low);
-  const sineLowC = useAudioPlayer(soundSets.sine.low);
-  const sineLowD = useAudioPlayer(soundSets.sine.low);
-  const sineStrongA = useAudioPlayer(soundSets.sine.strong);
-  const sineStrongB = useAudioPlayer(soundSets.sine.strong);
-  const sineStrongC = useAudioPlayer(soundSets.sine.strong);
-  const sineStrongD = useAudioPlayer(soundSets.sine.strong);
-
-  const blipHighA = useAudioPlayer(soundSets.blip.high);
-  const blipHighB = useAudioPlayer(soundSets.blip.high);
-  const blipHighC = useAudioPlayer(soundSets.blip.high);
-  const blipHighD = useAudioPlayer(soundSets.blip.high);
-  const blipLowA = useAudioPlayer(soundSets.blip.low);
-  const blipLowB = useAudioPlayer(soundSets.blip.low);
-  const blipLowC = useAudioPlayer(soundSets.blip.low);
-  const blipLowD = useAudioPlayer(soundSets.blip.low);
-  const blipStrongA = useAudioPlayer(soundSets.blip.strong);
-  const blipStrongB = useAudioPlayer(soundSets.blip.strong);
-  const blipStrongC = useAudioPlayer(soundSets.blip.strong);
-  const blipStrongD = useAudioPlayer(soundSets.blip.strong);
-
-  const claveHighA = useAudioPlayer(soundSets.clave.high);
-  const claveHighB = useAudioPlayer(soundSets.clave.high);
-  const claveHighC = useAudioPlayer(soundSets.clave.high);
-  const claveHighD = useAudioPlayer(soundSets.clave.high);
-  const claveLowA = useAudioPlayer(soundSets.clave.low);
-  const claveLowB = useAudioPlayer(soundSets.clave.low);
-  const claveLowC = useAudioPlayer(soundSets.clave.low);
-  const claveLowD = useAudioPlayer(soundSets.clave.low);
-  const claveStrongA = useAudioPlayer(soundSets.clave.strong);
-  const claveStrongB = useAudioPlayer(soundSets.clave.strong);
-  const claveStrongC = useAudioPlayer(soundSets.clave.strong);
-  const claveStrongD = useAudioPlayer(soundSets.clave.strong);
-
-  const cajonHighA = useAudioPlayer(soundSets.cajon.high);
-  const cajonHighB = useAudioPlayer(soundSets.cajon.high);
-  const cajonHighC = useAudioPlayer(soundSets.cajon.high);
-  const cajonHighD = useAudioPlayer(soundSets.cajon.high);
-  const cajonLowA = useAudioPlayer(soundSets.cajon.low);
-  const cajonLowB = useAudioPlayer(soundSets.cajon.low);
-  const cajonLowC = useAudioPlayer(soundSets.cajon.low);
-  const cajonLowD = useAudioPlayer(soundSets.cajon.low);
-  const cajonStrongA = useAudioPlayer(soundSets.cajon.strong);
-  const cajonStrongB = useAudioPlayer(soundSets.cajon.strong);
-  const cajonStrongC = useAudioPlayer(soundSets.cajon.strong);
-  const cajonStrongD = useAudioPlayer(soundSets.cajon.strong);
-
-  const marimbaHighA = useAudioPlayer(soundSets.marimba.high);
-  const marimbaHighB = useAudioPlayer(soundSets.marimba.high);
-  const marimbaHighC = useAudioPlayer(soundSets.marimba.high);
-  const marimbaHighD = useAudioPlayer(soundSets.marimba.high);
-  const marimbaLowA = useAudioPlayer(soundSets.marimba.low);
-  const marimbaLowB = useAudioPlayer(soundSets.marimba.low);
-  const marimbaLowC = useAudioPlayer(soundSets.marimba.low);
-  const marimbaLowD = useAudioPlayer(soundSets.marimba.low);
-  const marimbaStrongA = useAudioPlayer(soundSets.marimba.strong);
-  const marimbaStrongB = useAudioPlayer(soundSets.marimba.strong);
-  const marimbaStrongC = useAudioPlayer(soundSets.marimba.strong);
-  const marimbaStrongD = useAudioPlayer(soundSets.marimba.strong);
-
-  const stickHighA = useAudioPlayer(soundSets.stick.high);
-  const stickHighB = useAudioPlayer(soundSets.stick.high);
-  const stickHighC = useAudioPlayer(soundSets.stick.high);
-  const stickHighD = useAudioPlayer(soundSets.stick.high);
-  const stickLowA = useAudioPlayer(soundSets.stick.low);
-  const stickLowB = useAudioPlayer(soundSets.stick.low);
-  const stickLowC = useAudioPlayer(soundSets.stick.low);
-  const stickLowD = useAudioPlayer(soundSets.stick.low);
-  const stickStrongA = useAudioPlayer(soundSets.stick.strong);
-  const stickStrongB = useAudioPlayer(soundSets.stick.strong);
-  const stickStrongC = useAudioPlayer(soundSets.stick.strong);
-  const stickStrongD = useAudioPlayer(soundSets.stick.strong);
-
-  const allPlayers = useMemo<BuiltinPlayers>(() => ({
-    classic: { highA: classicHighA, highB: classicHighB, highC: classicHighC, highD: classicHighD, lowA: classicLowA, lowB: classicLowB, lowC: classicLowC, lowD: classicLowD, strongA: classicStrongA, strongB: classicStrongB, strongC: classicStrongC, strongD: classicStrongD },
-    woodblock: { highA: woodblockHighA, highB: woodblockHighB, highC: woodblockHighC, highD: woodblockHighD, lowA: woodblockLowA, lowB: woodblockLowB, lowC: woodblockLowC, lowD: woodblockLowD, strongA: woodblockStrongA, strongB: woodblockStrongB, strongC: woodblockStrongC, strongD: woodblockStrongD },
-    cowbell: { highA: cowbellHighA, highB: cowbellHighB, highC: cowbellHighC, highD: cowbellHighD, lowA: cowbellLowA, lowB: cowbellLowB, lowC: cowbellLowC, lowD: cowbellLowD, strongA: cowbellStrongA, strongB: cowbellStrongB, strongC: cowbellStrongC, strongD: cowbellStrongD },
-    digital: { highA: digitalHighA, highB: digitalHighB, highC: digitalHighC, highD: digitalHighD, lowA: digitalLowA, lowB: digitalLowB, lowC: digitalLowC, lowD: digitalLowD, strongA: digitalStrongA, strongB: digitalStrongB, strongC: digitalStrongC, strongD: digitalStrongD },
-    jamblock: { highA: jamblockHighA, highB: jamblockHighB, highC: jamblockHighC, highD: jamblockHighD, lowA: jamblockLowA, lowB: jamblockLowB, lowC: jamblockLowC, lowD: jamblockLowD, strongA: jamblockStrongA, strongB: jamblockStrongB, strongC: jamblockStrongC, strongD: jamblockStrongD },
-    sine: { highA: sineHighA, highB: sineHighB, highC: sineHighC, highD: sineHighD, lowA: sineLowA, lowB: sineLowB, lowC: sineLowC, lowD: sineLowD, strongA: sineStrongA, strongB: sineStrongB, strongC: sineStrongC, strongD: sineStrongD },
-    blip: { highA: blipHighA, highB: blipHighB, highC: blipHighC, highD: blipHighD, lowA: blipLowA, lowB: blipLowB, lowC: blipLowC, lowD: blipLowD, strongA: blipStrongA, strongB: blipStrongB, strongC: blipStrongC, strongD: blipStrongD },
-    clave: { highA: claveHighA, highB: claveHighB, highC: claveHighC, highD: claveHighD, lowA: claveLowA, lowB: claveLowB, lowC: claveLowC, lowD: claveLowD, strongA: claveStrongA, strongB: claveStrongB, strongC: claveStrongC, strongD: claveStrongD },
-    cajon: { highA: cajonHighA, highB: cajonHighB, highC: cajonHighC, highD: cajonHighD, lowA: cajonLowA, lowB: cajonLowB, lowC: cajonLowC, lowD: cajonLowD, strongA: cajonStrongA, strongB: cajonStrongB, strongC: cajonStrongC, strongD: cajonStrongD },
-    marimba: { highA: marimbaHighA, highB: marimbaHighB, highC: marimbaHighC, highD: marimbaHighD, lowA: marimbaLowA, lowB: marimbaLowB, lowC: marimbaLowC, lowD: marimbaLowD, strongA: marimbaStrongA, strongB: marimbaStrongB, strongC: marimbaStrongC, strongD: marimbaStrongD },
-    stick: { highA: stickHighA, highB: stickHighB, highC: stickHighC, highD: stickHighD, lowA: stickLowA, lowB: stickLowB, lowC: stickLowC, lowD: stickLowD, strongA: stickStrongA, strongB: stickStrongB, strongC: stickStrongC, strongD: stickStrongD },
-  }), [
-    classicHighA, classicHighB, classicHighC, classicHighD, classicLowA, classicLowB, classicLowC, classicLowD, classicStrongA, classicStrongB, classicStrongC, classicStrongD,
-    woodblockHighA, woodblockHighB, woodblockHighC, woodblockHighD, woodblockLowA, woodblockLowB, woodblockLowC, woodblockLowD, woodblockStrongA, woodblockStrongB, woodblockStrongC, woodblockStrongD,
-    cowbellHighA, cowbellHighB, cowbellHighC, cowbellHighD, cowbellLowA, cowbellLowB, cowbellLowC, cowbellLowD, cowbellStrongA, cowbellStrongB, cowbellStrongC, cowbellStrongD,
-    digitalHighA, digitalHighB, digitalHighC, digitalHighD, digitalLowA, digitalLowB, digitalLowC, digitalLowD, digitalStrongA, digitalStrongB, digitalStrongC, digitalStrongD,
-    jamblockHighA, jamblockHighB, jamblockHighC, jamblockHighD, jamblockLowA, jamblockLowB, jamblockLowC, jamblockLowD, jamblockStrongA, jamblockStrongB, jamblockStrongC, jamblockStrongD,
-    sineHighA, sineHighB, sineHighC, sineHighD, sineLowA, sineLowB, sineLowC, sineLowD, sineStrongA, sineStrongB, sineStrongC, sineStrongD,
-    blipHighA, blipHighB, blipHighC, blipHighD, blipLowA, blipLowB, blipLowC, blipLowD, blipStrongA, blipStrongB, blipStrongC, blipStrongD,
-    claveHighA, claveHighB, claveHighC, claveHighD, claveLowA, claveLowB, claveLowC, claveLowD, claveStrongA, claveStrongB, claveStrongC, claveStrongD,
-    cajonHighA, cajonHighB, cajonHighC, cajonHighD, cajonLowA, cajonLowB, cajonLowC, cajonLowD, cajonStrongA, cajonStrongB, cajonStrongC, cajonStrongD,
-    marimbaHighA, marimbaHighB, marimbaHighC, marimbaHighD, marimbaLowA, marimbaLowB, marimbaLowC, marimbaLowD, marimbaStrongA, marimbaStrongB, marimbaStrongC, marimbaStrongD,
-    stickHighA, stickHighB, stickHighC, stickHighD, stickLowA, stickLowB, stickLowC, stickLowD, stickStrongA, stickStrongB, stickStrongC, stickStrongD,
-  ]);
-
-  const highToggle = useRef(0);
-  const lowToggle = useRef(0);
-  const strongToggle = useRef(0);
-  const soundSetRef = useRef<SoundSet>(soundSet);
-  useEffect(() => { soundSetRef.current = soundSet; }, [soundSet]);
+  // Proxy 자체는 교체되지 않으므로 ref를 별도로 갱신할 필요 없다.
   const allPlayersRef = useRef<BuiltinPlayers>(allPlayers);
-  useEffect(() => { allPlayersRef.current = allPlayers; }, [allPlayers]);
+
+  const highToggle   = useRef(0);
+  const lowToggle    = useRef(0);
+  const strongToggle = useRef(0);
+  const soundSetRef  = useRef<SoundSet>(soundSet);
+
+  // soundSet 변경(또는 최초 마운트) 시:
+  //   1. soundSetRef 동기화
+  //   2. 새 세트를 미리 생성(warm-up) — 첫 틱에서 즉시 재생 가능
+  useEffect(() => {
+    soundSetRef.current = soundSet;
+    getOrCreate(soundSet);
+  }, [soundSet, getOrCreate]);
+
+  // 언마운트 시 모든 캐시된 플레이어 해제
+  useEffect(() => {
+    return () => {
+      for (const players of cacheRef.current.values()) {
+        disposeSoundSetPlayers(players);
+      }
+      cacheRef.current.clear();
+    };
+  }, []);
 
   return { allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle };
 }
