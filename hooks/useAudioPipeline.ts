@@ -49,6 +49,12 @@ export interface UseAudioPipelineParams {
   volume: number;
   volumeRef: React.MutableRefObject<number>;
   sampleVolumeRef: React.MutableRefObject<number>;
+  /** PCM cache — created in useMetronomeScreen, shared with useSettings. */
+  clickPCMCacheRef: React.MutableRefObject<Record<string, ClickPCMs>>;
+  /** Web click-ready flag — created in useMetronomeScreen, shared with useSettings. */
+  webClickReadyRef: React.MutableRefObject<boolean>;
+  /** Per-note sample players — created in useMetronomeScreen, shared with useSettings. */
+  noteSampleSoundsRef: React.MutableRefObject<Record<string, ExpoAudioPlayer>>;
   isPlayingRef: React.MutableRefObject<boolean>;
   bpmRef: React.MutableRefObject<number>;
   t: TranslationFn;
@@ -85,15 +91,12 @@ export interface UseAudioPipelineResult {
   applyAudioSettings: (s: Partial<{ backgroundPlay: boolean; autoResumeAfterInterruption: boolean }>) => void;
   // ── Refs owned by this hook, exposed for coordination ────────────────────
   renderedPlayerRef: React.MutableRefObject<ExpoAudioPlayer | null>;
-  clickPCMCacheRef: React.MutableRefObject<Record<string, ClickPCMs>>;
   samplePCMCacheRef: React.MutableRefObject<Map<string, SamplePCMEntry>>;
   renderedUrlRef: React.MutableRefObject<string | null>;
   webRenderedLoopRef: React.MutableRefObject<{ stop: () => void } | null>;
-  webClickReadyRef: React.MutableRefObject<boolean>;
   lastAudioFireRef: React.MutableRefObject<number>;
   armAudioWatchdogRef: React.MutableRefObject<() => void>;
   clearAudioWatchdogRef: React.MutableRefObject<() => void>;
-  noteSampleSoundsRef: React.MutableRefObject<Record<string, ExpoAudioPlayer>>;
   samplePlayStateRef: React.MutableRefObject<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>;
   // ── Functions ────────────────────────────────────────────────────────────
   buildRenderedPlayer: () => Promise<ExpoAudioPlayer | null>;
@@ -130,6 +133,9 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   // here. useMetronomeScreen's tick callback reads these via the return value.
   const { allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle, setPoolsVolume } =
     useAudioPlayers(soundSet);
+
+  // 3 refs now live in useMetronomeScreen (shared with useSettings)
+  const { clickPCMCacheRef, webClickReadyRef, noteSampleSoundsRef } = params;
 
   // ── Audio-session settings (moved from useMetronomeScreen) ─────────────────
   const [backgroundPlay, setBackgroundPlay] = useState(false);
@@ -186,18 +192,15 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
 
   // ── Owned refs ──────────────────────────────────────────────────────────────
   const renderedPlayerRef = useRef<ExpoAudioPlayer | null>(null);
-  const clickPCMCacheRef = useRef<Record<string, ClickPCMs>>({});
   const samplePCMCacheRef = useRef<Map<string, SamplePCMEntry>>(new Map());
   const renderedUrlRef = useRef<string | null>(null);
   const webRenderedLoopRef = useRef<{ stop: () => void } | null>(null);
-  const webClickReadyRef = useRef(false);
   const lastAudioFireRef = useRef(0);
   const audioWatchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioRetryCountRef = useRef(0);
   const armAudioWatchdogRef = useRef<() => void>(() => {});
   const clearAudioWatchdogRef = useRef<() => void>(() => {});
   const reRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const noteSampleSoundsRef = useRef<Record<string, ExpoAudioPlayer>>({});
   const samplePlayStateRef = useRef<Record<string, { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }>>({});
   const armTimeRef = useRef<number | null>(null);
   const showRecoveryToastRef = useRef(showRecoveryToast);
@@ -595,15 +598,12 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
     applyAudioSettings,
     // PCM / rendered-player refs
     renderedPlayerRef,
-    clickPCMCacheRef,
     samplePCMCacheRef,
     renderedUrlRef,
     webRenderedLoopRef,
-    webClickReadyRef,
     lastAudioFireRef,
     armAudioWatchdogRef,
     clearAudioWatchdogRef,
-    noteSampleSoundsRef,
     samplePlayStateRef,
     buildRenderedPlayer,
     scheduleReRender,

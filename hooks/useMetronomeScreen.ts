@@ -3,6 +3,7 @@ import { useLandscapePanel } from "@/hooks/useLandscapePanel";
 import { useNotificationBridge } from "@/hooks/useNotificationBridge";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useAudioPipeline } from "@/hooks/useAudioPipeline";
+import { useSettings } from "@/hooks/useSettings";
 import {
   View,
   Platform,
@@ -127,8 +128,8 @@ export function useMetronomeScreen() {
   const languageRef = useRef(language);
   useEffect(() => { languageRef.current = language; }, [language]);
 
-  const [bpm, setBpm] = useState(120);
-  const bpmRef = useRef(bpm);
+  // bpm/halfTime/beatDenominator/beatsPerMeasure/beatTypes → useSettings 소유
+  // baseBpmRef / beatDenominatorRef 는 useSettings 파라미터이므로 여기서 생성
   const baseBpmRef = useRef(120);
   const beatDenominatorRef = useRef<2 | 4 | 8>(4);
   const {
@@ -143,11 +144,6 @@ export function useMetronomeScreen() {
   } = useEasterEggQuiz();
   // 이스터에그 발동 직전 재생 상태 보존 → 종료 시 원상복구
   const easterEggWasPlayingRef = useRef(false);
-  const [halfTime, setHalfTime] = useState(false);
-  const [beatDenominator, setBeatDenominator] = useState<2 | 4 | 8>(4);
-  useEffect(() => { beatDenominatorRef.current = beatDenominator; }, [beatDenominator]);
-  const [beatsPerMeasure, setBeatsPerMeasure] = useState(4);
-  const [beatTypes, setBeatTypes] = useState<BeatType[]>(defaultBeatTypes(4));
   const [isPlaying, setIsPlaying] = useState(false);
   const isPlayingRef = useRef(false);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
@@ -163,12 +159,7 @@ export function useMetronomeScreen() {
     setProgressInfo(null);
     setLayerProgressMap({});
   }, []);
-  const [subdivisionPattern, setSubdivisionPattern] = useState<BeatType[]>([
-    "accent",
-  ]);
-  const [beatSubdivisions, setBeatSubdivisions] = useState<
-    Record<string, BeatType[]>
-  >({});
+  // subdivisionPattern / beatSubdivisions → useSettings 소유
   const {
     landscapeImageUri, setLandscapeImageUri,
     landscapeImageModalVisible, setLandscapeImageModalVisible,
@@ -304,9 +295,8 @@ export function useMetronomeScreen() {
   const isPreparingRef = useRef(false);
   useEffect(() => { isPreparingRef.current = isPreparing; }, [isPreparing]);
   const preparingCancelledRef = useRef(false);
-  const [volume, setVolume] = useState(0.75);
+  // volume / sampleVolume state → useSettings 소유. refs 는 파라미터로 여기서 생성.
   const volumeRef = useRef(0.75);
-  const [sampleVolume, setSampleVolume] = useState(0.8);
   const sampleVolumeRef = useRef(0.8);
   // 단일 활성 모달 상태 머신: null = 모달 없음. openExclusive로만 전환해 mutual exclusion 보장.
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
@@ -325,17 +315,8 @@ export function useMetronomeScreen() {
     showBpmDetect,
     showStemSep,
   } = deriveModalFlags(activeModal);
-  const [soundSet, setSoundSet] = useState<SoundSet>("classic");
-  const [layerSoundSets, setLayerSoundSets] = useState<Record<number, SoundSet>>({});
-  const layerSoundSetsRef = useRef<Record<number, SoundSet>>({});
-  useEffect(() => { layerSoundSetsRef.current = layerSoundSets; }, [layerSoundSets]);
-  const [flashMode, setFlashMode] = useState<FlashMode>("accent");
-  const [hapticMode, setHapticMode] = useState<HapticMode>("all");
-  const [audioOffsetMs, setAudioOffsetMs] = useState(0);
-  const [timerStopMode, setTimerStopMode] = useState<"immediate" | "end-of-cycle">("end-of-cycle");
-  const [landscapeReversed, setLandscapeReversed] = useState(false);
-  const [beatDirection, setBeatDirection] = useState<"cw" | "ccw">("cw");
-  const [username, setUsername] = useState("");
+  // soundSet/layerSoundSets/flashMode/hapticMode/audioOffsetMs/timerStopMode/
+  // landscapeReversed/beatDirection/username → useSettings 소유
   const tuningGuideOnSelectRef = useRef<((freq: number) => void) | null>(null);
   // SignalGenerator → TuningGuide 전환 시 SignalGen을 닫고, TuningGuide
   // 종료 직후 자동으로 SignalGen을 재오픈하기 위한 플래그.
@@ -518,10 +499,7 @@ export function useMetronomeScreen() {
     channelsRef: noteSampleChannelsRef,
     setChannels: setNoteSampleChannels,
   } = noteSamplesHook;
-  const [barMetronomeChannel, setBarMetronomeChannel] = useState<SampleChannel>("both");
-  const barMetronomeChannelRef = useRef<SampleChannel>("both");
-  const [barCellOpacity, setBarCellOpacity] = useState(0.55);
-  const [barRowHeight, setBarRowHeight] = useState(44);
+  // barMetronomeChannel/barCellOpacity/barRowHeight → useSettings 소유
   const [noteSampleMetroChannels, setNoteSampleMetroChannels] = useState<NoteSampleMetroChannelMap>({});
   const noteSampleMetroChannelsRef = useRef<NoteSampleMetroChannelMap>({});
   const [recorderTarget, setRecorderTarget] = useState<{ beat: number; sub: number } | null>(null);
@@ -531,10 +509,82 @@ export function useMetronomeScreen() {
   const dialRef = useRef<View>(null);
   const dialCenterRef = useRef({ x: 0, y: 0 });
 
-  // ── Persistence callback ref for audio settings ─────────────────────────────
-  // useAudioPipeline is called before persistSettings exists, so we pass a
-  // stable ref whose .current is kept up to date each render (see below).
-  const persistAudioSettingsCallbackRef = useRef<import("@/hooks/useAudioPipeline").PersistAudioSettingsFn>(() => {});
+  // ── Refs shared between useSettings and useAudioPipeline ─────────────────────
+  // Created here so both hooks can receive them as params.
+  // clickPCMCacheRef / webClickReadyRef / noteSampleSoundsRef were previously
+  // owned by useAudioPipeline; they now live here so useSettings (called first)
+  // can also access them in updateSoundSet / updateSampleVolume.
+  const clickPCMCacheRef = useRef<Record<string, import("@/lib/audio-renderer").ClickPCMs>>({});
+  const webClickReadyRef = useRef(false);
+  const noteSampleSoundsRef = useRef<Record<string, import("expo-audio").AudioPlayer>>({});
+
+  // Stable refs for callbacks that come from useAudioPipeline (called after useSettings).
+  // useSettings' loadSettings effect fires asynchronously, so by the time it runs
+  // both hooks have already been called and .current is populated.
+  const scheduleReRenderCallbackRef = useRef<() => void>(() => {});
+  const applyAudioSettingsCallbackRef = useRef<
+    (s: Partial<{ backgroundPlay: boolean; autoResumeAfterInterruption: boolean }>) => void
+  >(() => {});
+
+  // ── Settings (persistent state + load effect + update callbacks) ──────────────
+  const {
+    bpm, setBpm, bpmRef,
+    halfTime, setHalfTime,
+    beatDenominator, setBeatDenominator,
+    beatsPerMeasure, setBeatsPerMeasure,
+    beatTypes, setBeatTypes,
+    subdivisionPattern, setSubdivisionPattern,
+    beatSubdivisions, setBeatSubdivisions,
+    volume, setVolume,
+    sampleVolume, setSampleVolume,
+    soundSet, setSoundSet,
+    layerSoundSets, setLayerSoundSets, layerSoundSetsRef,
+    flashMode, setFlashMode, flashModeRef,
+    hapticMode, setHapticMode,
+    audioOffsetMs, setAudioOffsetMs,
+    timerStopMode, setTimerStopMode,
+    landscapeReversed, setLandscapeReversed,
+    beatDirection, setBeatDirection,
+    username, setUsername,
+    barMetronomeChannel, setBarMetronomeChannel, barMetronomeChannelRef,
+    barCellOpacity, setBarCellOpacity,
+    barRowHeight, setBarRowHeight,
+    persistSettings,
+    persistAudioSettingsCallbackRef,
+    syncExternalSnapshot,
+    updateVolume, updateSampleVolume, updateSoundSet,
+    updateFlashMode, updateHapticMode, updateAudioOffset,
+    updateBpm, updateTimerStopMode, updateUsername,
+  } = useSettings({
+    engineRef,
+    baseBpmRef,
+    volumeRef,
+    sampleVolumeRef,
+    beatDenominatorRef,
+    noteSampleSoundsRef,
+    clickPCMCacheRef,
+    webClickReadyRef,
+    scheduleReRenderCallbackRef,
+    applyAudioSettingsCallbackRef,
+    onSettingsLoaded: (settings) => {
+      if (settings.themeColor) setThemeColor(settings.themeColor);
+      if (settings.showLandscapeImage !== undefined) setShowLandscapeImage(settings.showLandscapeImage);
+      if (settings.landscapeContentType) setLandscapeContentType(settings.landscapeContentType);
+      loadCustomSoundSets().then(setCustomSoundSets);
+      loadKeyBindings().then((kb) => { setKeyBindings(kb); keyBindingsRef.current = kb; });
+      setIsLoaded(true);
+      // PCM warmup for the loaded sound-set
+      const set = settings.soundSet || "classic";
+      const src = soundSets[set as keyof typeof soundSets] || soundSets.classic;
+      Promise.all([
+        loadAssetPCM(src.strong),
+        loadAssetPCM(src.high),
+        loadAssetPCM(src.low),
+      ]).then(([strong, high, low]) => {
+        clickPCMCacheRef.current[set] = { strong, high, low };
+      }).catch(() => {});
+    },
+  });
 
   // ── Audio pipeline (player pool + PCM cache + rendered player + audio session settings) ──
   const {
@@ -544,10 +594,10 @@ export function useMetronomeScreen() {
     backgroundPlay, autoResumeAfterInterruption,
     updateBackgroundPlay, updateAutoResumeAfterInterruption, applyAudioSettings,
     // PCM / rendered-player refs & functions
-    renderedPlayerRef, clickPCMCacheRef, samplePCMCacheRef, renderedUrlRef,
-    webRenderedLoopRef, webClickReadyRef, lastAudioFireRef,
+    renderedPlayerRef, samplePCMCacheRef, renderedUrlRef,
+    webRenderedLoopRef, lastAudioFireRef,
     armAudioWatchdogRef, clearAudioWatchdogRef,
-    noteSampleSoundsRef, samplePlayStateRef,
+    samplePlayStateRef,
     buildRenderedPlayer, scheduleReRender, stopRenderedAudio, warmupAudioPlayers,
     getClickPCMs, getSamplePCMs, getLayerClickPCMsForSchedule,
     invalidateSamplePCMCache, preloadNoteSampleSounds, clearSamplePlayStates,
@@ -556,7 +606,20 @@ export function useMetronomeScreen() {
     engineRef, soundSet, volume, customSoundSetsRef,
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
+    clickPCMCacheRef, webClickReadyRef, noteSampleSoundsRef,
     isPlayingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
+  });
+
+  // ── Post-pipeline: populate stable callback refs & sync external snapshot ───
+  // Inline updates — run every render, not inside a useEffect (they are ref
+  // mutations, safe to call during render).
+  scheduleReRenderCallbackRef.current = scheduleReRender;
+  applyAudioSettingsCallbackRef.current = applyAudioSettings;
+  syncExternalSnapshot({
+    backgroundPlay,
+    autoResumeAfterInterruption,
+    showLandscapeImage,
+    landscapeContentType,
   });
 
   // ── 웹 AudioContext 잠금 해제 (audio unlock) ─────────────────────────────
@@ -804,96 +867,7 @@ export function useMetronomeScreen() {
     });
 
 
-    loadSettings().then((settings) => {
-      setBpm(settings.bpm);
-      const loadedDenom = settings.beatDenominator ?? 4;
-      baseBpmRef.current = Math.round(settings.bpm * (loadedDenom / 4));
-      setBeatsPerMeasure(settings.beatsPerMeasure);
-      if (settings.beatDenominator) {
-        setBeatDenominator(settings.beatDenominator);
-      }
-      // 분모에 따라 실제 엔진 속도 조정 (표시 BPM은 그대로 유지)
-      engine.setBpm(settings.bpm * (4 / loadedDenom));
-      engine.setBeatsPerMeasure(settings.beatsPerMeasure);
-
-      if (settings.subdivisionPattern && settings.subdivisionPattern.length > 0) {
-        setSubdivisionPattern(settings.subdivisionPattern);
-      }
-      if (settings.beatSubdivisions) {
-        setBeatSubdivisions(settings.beatSubdivisions);
-        engine.setAllBeatSubdivisions(settings.beatSubdivisions);
-      }
-      if (settings.volume !== undefined) {
-        setVolume(settings.volume);
-        volumeRef.current = settings.volume;
-      }
-      if (settings.sampleVolume !== undefined) {
-        setSampleVolume(settings.sampleVolume);
-        sampleVolumeRef.current = settings.sampleVolume;
-      }
-      applyAudioSettings({
-        backgroundPlay: settings.backgroundPlay,
-        autoResumeAfterInterruption: settings.autoResumeAfterInterruption,
-      });
-      if (settings.soundSet) {
-        setSoundSet(settings.soundSet);
-      }
-      if (settings.layerSoundSets) {
-        setLayerSoundSets(settings.layerSoundSets);
-      }
-      if (settings.flashMode) {
-        setFlashMode(settings.flashMode);
-        flashModeRef.current = settings.flashMode;
-      }
-      if (settings.hapticMode) {
-        setHapticMode(settings.hapticMode);
-        engine.setHapticMode(settings.hapticMode);
-      }
-      if (settings.audioOffsetMs !== undefined) {
-        setAudioOffsetMs(settings.audioOffsetMs);
-        engine.setAudioOffsetMs(settings.audioOffsetMs);
-      }
-      if (settings.themeColor) {
-        setThemeColor(settings.themeColor);
-      }
-      if (settings.timerStopMode) {
-        setTimerStopMode(settings.timerStopMode);
-      }
-      if (settings.landscapeReversed !== undefined) {
-        setLandscapeReversed(settings.landscapeReversed);
-      }
-      if (settings.showLandscapeImage !== undefined) {
-        setShowLandscapeImage(settings.showLandscapeImage);
-      }
-      if (settings.landscapeContentType) {
-        setLandscapeContentType(settings.landscapeContentType);
-      }
-      if (settings.beatDirection) {
-        setBeatDirection(settings.beatDirection);
-      }
-      if (settings.barMetronomeChannel) {
-        setBarMetronomeChannel(settings.barMetronomeChannel);
-        barMetronomeChannelRef.current = settings.barMetronomeChannel;
-      }
-      if (settings.barCellOpacity != null) setBarCellOpacity(settings.barCellOpacity);
-      if (settings.barRowHeight != null) setBarRowHeight(settings.barRowHeight);
-      if (settings.username) {
-        setUsername(settings.username);
-      }
-      loadCustomSoundSets().then(setCustomSoundSets);
-      loadKeyBindings().then((kb) => { setKeyBindings(kb); keyBindingsRef.current = kb; });
-      setIsLoaded(true);
-
-      const set = settings.soundSet || "classic";
-      const src = soundSets[set as keyof typeof soundSets] || soundSets.classic;
-      Promise.all([
-        loadAssetPCM(src.strong),
-        loadAssetPCM(src.high),
-        loadAssetPCM(src.low),
-      ]).then(([strong, high, low]) => {
-        clickPCMCacheRef.current[set] = { strong, high, low };
-      }).catch(() => {});
-    });
+    // loadSettings は useSettings が担当。ここでは note-sample 관련만 처리.
 
     Promise.all([loadNoteSamples(), loadNoteSampleNames(), loadNoteSampleSources(), loadNoteSampleChannels(), loadNoteSampleMetroChannels()]).then(async ([samples, names, sources, channels, metroChannels]) => {
       setNoteSamples(samples);
@@ -1076,8 +1050,7 @@ export function useMetronomeScreen() {
     setRecorderTarget(null);
   }, [recorderTarget, invalidateSamplePCMCache, scheduleReRender]);
 
-  const flashModeRef = useRef(flashMode);
-  useEffect(() => { flashModeRef.current = flashMode; }, [flashMode]);
+  // flashModeRef は useSettings から返される
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -1196,111 +1169,8 @@ export function useMetronomeScreen() {
   }, [flashOpacity]);
 
 
-  // 설정 영속화 스냅샷 ref. 매 렌더에서 최신 React state를 복사해 둔다 →
-  // createDebouncedPersister가 flush 시점에 항상 최신값을 읽는다.
-  const persistSnapshotRef = useRef<MetronomeSettings>({
-    bpm,
-    beatsPerMeasure,
-    subdivisions: 1,
-    subdivisionPattern,
-    beatSubdivisions,
-    volume,
-    sampleVolume,
-    backgroundPlay,
-    autoResumeAfterInterruption,
-    soundSet,
-    layerSoundSets,
-    flashMode,
-    hapticMode,
-    audioOffsetMs,
-    timerStopMode,
-    landscapeReversed,
-    showLandscapeImage,
-    landscapeContentType,
-    beatDirection,
-    barMetronomeChannel,
-  });
-  persistSnapshotRef.current = {
-    bpm,
-    beatsPerMeasure,
-    subdivisions: 1,
-    subdivisionPattern,
-    beatSubdivisions,
-    volume,
-    sampleVolume,
-    backgroundPlay,
-    autoResumeAfterInterruption,
-    soundSet,
-    layerSoundSets,
-    flashMode,
-    hapticMode,
-    audioOffsetMs,
-    timerStopMode,
-    landscapeReversed,
-    showLandscapeImage,
-    landscapeContentType,
-    beatDirection,
-    barMetronomeChannel,
-    barCellOpacity,
-    barRowHeight,
-  };
-  const persistSettingsRef = useRef<DebouncedPersister<MetronomeSettings> | null>(null);
-  if (!persistSettingsRef.current) {
-    persistSettingsRef.current = createDebouncedPersister<MetronomeSettings>(
-      () => persistSnapshotRef.current,
-      // saveSettings는 실패 시 reject한다. 디바운서가 자동으로 백오프 재시도하고
-      // 최종 실패 시 storage-notifier 구독자(StorageErrorAlert)에게 알린다.
-      (merged) => saveSettings(merged),
-      500,
-      { maxAttempts: 3, baseDelayMs: 500 },
-    );
-  }
-  const persistSettings = persistSettingsRef.current;
-
-  // Keep persistAudioSettingsCallbackRef current each render so that
-  // useAudioPipeline's update callbacks always invoke the real persister.
-  persistAudioSettingsCallbackRef.current = (s) => persistSettings(s);
-
-  const updateVolume = useCallback(
-    (newVolume: number) => {
-      setVolume(newVolume);
-      volumeRef.current = newVolume;
-      persistSettings({ volume: newVolume });
-      scheduleReRender();
-    },
-    [persistSettings, scheduleReRender]
-  );
-
-  const updateSampleVolume = useCallback(
-    (newVol: number) => {
-      setSampleVolume(newVol);
-      sampleVolumeRef.current = newVol;
-      for (const player of Object.values(noteSampleSoundsRef.current)) {
-        try { player.volume = Math.max(0, Math.min(1, newVol)); } catch {}
-      }
-      persistSettings({ sampleVolume: newVol });
-      scheduleReRender();
-    },
-    [persistSettings, scheduleReRender]
-  );
-
-  useEffect(() => {
-    for (const player of Object.values(noteSampleSoundsRef.current)) {
-      try { player.volume = Math.max(0, Math.min(1, sampleVolume)); } catch {}
-    }
-  }, [sampleVolume]);
-
-  const updateSoundSet = useCallback(
-    (value: SoundSet) => {
-      delete clickPCMCacheRef.current[value];
-      clearWebClickBuffers();           // 캐시 초기화 → preload effect가 새 셋으로 재로드
-      webClickReadyRef.current = false;
-      setSoundSet(value);
-      persistSettings({ soundSet: value });
-      scheduleReRender();
-    },
-    [persistSettings, scheduleReRender]
-  );
+  // persistSnapshotRef / persistSettings / updateVolume / updateSampleVolume /
+  // updateSoundSet → useSettings 소유 (위에서 destructure된 persistSettings 사용)
 
   const previewSoundSet = useCallback((key: string) => {
     if (engineRef.current?.getIsRunning()) return;
@@ -1321,32 +1191,7 @@ export function useMetronomeScreen() {
     }
   }, []);
 
-  const updateFlashMode = useCallback(
-    (value: FlashMode) => {
-      setFlashMode(value);
-      flashModeRef.current = value;
-      persistSettings({ flashMode: value });
-    },
-    [persistSettings]
-  );
-
-  const updateHapticMode = useCallback(
-    (value: HapticMode) => {
-      setHapticMode(value);
-      engineRef.current?.setHapticMode(value);
-      persistSettings({ hapticMode: value });
-    },
-    [persistSettings]
-  );
-
-  const updateAudioOffset = useCallback(
-    (value: number) => {
-      setAudioOffsetMs(value);
-      engineRef.current?.setAudioOffsetMs(value);
-      persistSettings({ audioOffsetMs: value });
-    },
-    [persistSettings]
-  );
+  // updateFlashMode / updateHapticMode / updateAudioOffset → useSettings 소유
 
   const handleOnboardingComplete = useCallback(async (result: OnboardingResult) => {
     setActiveModal(null);
@@ -1481,17 +1326,7 @@ export function useMetronomeScreen() {
     }
   }, [setThemeColor]);
 
-  const updateBpm = useCallback(
-    (newBpm: number) => {
-      const clampedBpm = Math.max(20, Math.min(300, newBpm));
-      setBpm(clampedBpm);
-      // 엔진은 분모 반영 속도로 실행 (표시 BPM은 clampedBpm 그대로)
-      engineRef.current?.setBpm(clampedBpm * (4 / beatDenominator));
-      persistSettings({ bpm: clampedBpm });
-      scheduleReRender();
-    },
-    [beatDenominator, persistSettings, scheduleReRender]
-  );
+  // updateBpm → useSettings 소유
 
   const handleEasterEggGuess = useCallback((guess: number) => {
     const actual = easterEggActualBpmRef.current;
@@ -1915,7 +1750,7 @@ export function useMetronomeScreen() {
   }, []);
   const updateBpmRef = useRef(updateBpm);
   useEffect(() => { updateBpmRef.current = updateBpm; }, [updateBpm]);
-  useEffect(() => { bpmRef.current = bpm; }, [bpm]);
+  // bpmRef sync는 useSettings 내부에서 처리
 
   const { stageModeActive, enterStageMode, exitStageMode } = useStageMode();
   /** 무대 모드 셋 리스트 — 진입 시 연습장에서 로드 */
@@ -2499,21 +2334,7 @@ export function useMetronomeScreen() {
     }
   }, []);
 
-  const updateTimerStopMode = useCallback(
-    (mode: "immediate" | "end-of-cycle") => {
-      setTimerStopMode(mode);
-      persistSettings({ timerStopMode: mode });
-    },
-    [persistSettings]
-  );
-
-  const updateUsername = useCallback(
-    (name: string) => {
-      setUsername(name);
-      persistSettings({ username: name });
-    },
-    [persistSettings]
-  );
+  // updateTimerStopMode / updateUsername → useSettings 소유
 
   const handleTapTempo = useCallback(() => {
     const now = Date.now();
