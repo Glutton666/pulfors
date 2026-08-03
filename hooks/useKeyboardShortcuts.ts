@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { Platform } from "react-native";
 import {
   matchesBinding,
   isEditableTarget,
+  nativeKeyToCode,
   type KeyBindingsMap,
   type NormalizedKeyEvent,
 } from "@/lib/keyboard-bindings";
@@ -11,6 +12,13 @@ import type { StopwatchTimerHandle } from "@/components/StopwatchTimer";
 import type { ActiveModal } from "@/lib/modal-routing";
 import type { DebouncedPersister } from "@/lib/persist";
 import type { MetronomeSettings } from "@/lib/storage";
+
+export interface UseKeyboardShortcutsResult {
+  /** 네이티브 뷰의 onKeyDown 이벤트에 연결할 핸들러 */
+  handleNativeKeyDown: (nativeEvent: { key: string; shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean }) => void;
+  /** 네이티브 뷰의 onKeyUp 이벤트에 연결할 핸들러 */
+  handleNativeKeyUp: (nativeEvent: { key: string }) => void;
+}
 
 interface UseKeyboardShortcutsParams {
   // Stable refs — all captured at mount time (dep array is [])
@@ -30,8 +38,6 @@ interface UseKeyboardShortcutsParams {
   showKbShortcutsRef: React.MutableRefObject<boolean>;
   showNativeKbHintRef: React.MutableRefObject<boolean>;
   engineRef: React.MutableRefObject<MetronomeEngine | null>;
-  nativeKbDownRef: React.MutableRefObject<((e: NormalizedKeyEvent) => void) | null>;
-  nativeKbUpRef: React.MutableRefObject<((e: NormalizedKeyEvent) => void) | null>;
   togglePlayPauseRef: React.MutableRefObject<() => void>;
   // Stable setters from useState (identity stable across renders)
   setNoteMode: (v: boolean) => void;
@@ -55,16 +61,20 @@ interface UseKeyboardShortcutsParams {
  * The effect has an empty dep array — all mutable state is accessed through stable
  * refs, so the listener is registered once at mount and cleaned up on unmount.
  */
-export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): void {
+export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): UseKeyboardShortcutsResult {
   const {
     keyBindingsRef, bpmRef, updateBpmRef, beatsPerMeasureRef, updateTimeSignatureRef,
     barModeRef, noteModeRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
     subdivisionPatternRef, beatTypesRef, handleNoteTogglePlayRef, anyModalOpenRef,
-    showKbShortcutsRef, showNativeKbHintRef, engineRef, nativeKbDownRef, nativeKbUpRef,
+    showKbShortcutsRef, showNativeKbHintRef, engineRef,
     togglePlayPauseRef, setNoteMode, setBarMode, setShowKbShortcuts, setShowNativeKbHint,
     setActiveModal, setBarLoopMode, setBlockPlayMode, setBeatsPerMeasure, setBeatTypes,
     setSubdivisionPattern, persistSettings,
   } = params;
+
+  // 네이티브 키 핸들러 ref — useEffect 내부에서 등록·해제한다.
+  const nativeKbDownRef = useRef<((e: NormalizedKeyEvent) => void) | null>(null);
+  const nativeKbUpRef = useRef<((e: NormalizedKeyEvent) => void) | null>(null);
 
   useEffect(() => {
     const repeatTimerRef = { current: null as ReturnType<typeof setInterval> | null };
@@ -376,4 +386,45 @@ export function useKeyboardShortcuts(params: UseKeyboardShortcutsParams): void {
       };
     }
   }, []);
+
+  // ── 네이티브 키 어댑터 ──────────────────────────────────────────────────────
+  // 네이티브 뷰의 onKeyDown/onKeyUp 이벤트를 NormalizedKeyEvent로 변환해 핸들러에 전달한다.
+  // 웹에서는 window.addEventListener가 직접 처리하므로 이 콜백은 호출되지 않는다.
+  const handleNativeKeyDown = useCallback((nativeEvent: {
+    key: string;
+    shiftKey?: boolean;
+    ctrlKey?: boolean;
+    altKey?: boolean;
+    metaKey?: boolean;
+  }) => {
+    if (!nativeKbDownRef.current) return;
+    const e: NormalizedKeyEvent = {
+      code: nativeKeyToCode(nativeEvent.key),
+      key: nativeEvent.key,
+      shiftKey: nativeEvent.shiftKey ?? false,
+      ctrlKey: nativeEvent.ctrlKey ?? false,
+      altKey: nativeEvent.altKey ?? false,
+      metaKey: nativeEvent.metaKey ?? false,
+      preventDefault: () => {},
+      target: null,
+    };
+    nativeKbDownRef.current(e);
+  }, []); // nativeKbDownRef is a stable ref
+
+  const handleNativeKeyUp = useCallback((nativeEvent: { key: string }) => {
+    if (!nativeKbUpRef.current) return;
+    const e: NormalizedKeyEvent = {
+      code: nativeKeyToCode(nativeEvent.key),
+      key: nativeEvent.key,
+      shiftKey: false,
+      ctrlKey: false,
+      altKey: false,
+      metaKey: false,
+      preventDefault: () => {},
+      target: null,
+    };
+    nativeKbUpRef.current(e);
+  }, []); // nativeKbUpRef is a stable ref
+
+  return { handleNativeKeyDown, handleNativeKeyUp };
 }

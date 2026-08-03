@@ -16,7 +16,7 @@ import {
   type PanResponderGestureState,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { ensurePermission, tryRecoverPermissionActions, hasAnyPendingPermissionAction, runPermissionRecoveryLoop } from "@/lib/permissions";
+import { ensurePermission } from "@/lib/permissions";
 import * as Linking from "expo-linking";
 import {
   setupNotificationControls,
@@ -73,6 +73,8 @@ import { useBarMode } from "@/hooks/useBarMode";
 import { useMetronomeEngine } from "@/hooks/useMetronomeEngine";
 import { useEasterEggQuiz } from "@/hooks/useEasterEggQuiz";
 import { useFadeOutSession } from "@/hooks/useFadeOutSession";
+import { usePermissionRecoveryToast } from "@/hooks/usePermissionRecoveryToast";
+import { useBeatQuickSave } from "@/hooks/useBeatQuickSave";
 import { useGoalPopups } from "@/hooks/useGoalPopups";
 import { usePracticeRoomTracking } from "@/hooks/usePracticeRoomTracking";
 import { useStageMode } from "@/hooks/useStageMode";
@@ -111,10 +113,8 @@ import {
   saveKeyBindings,
   matchesBinding,
   isEditableTarget,
-  nativeKeyToCode,
   DEFAULT_BINDINGS,
   type KeyBindingsMap,
-  type NormalizedKeyEvent,
 } from "@/lib/keyboard-bindings";
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
@@ -237,8 +237,6 @@ export function useMetronomeScreen() {
   const [showNativeKbHint, setShowNativeKbHint] = useState(false);
   const showNativeKbHintRef = useRef(false);
   useEffect(() => { showNativeKbHintRef.current = showNativeKbHint; }, [showNativeKbHint]);
-  const nativeKbDownRef = useRef<((e: NormalizedKeyEvent) => void) | null>(null);
-  const nativeKbUpRef = useRef<((e: NormalizedKeyEvent) => void) | null>(null);
   const stopwatchTimerRef = useRef<StopwatchTimerHandle>(null);
   const stopwatchTimerLandscapeRef = useRef<StopwatchTimerHandle>(null);
   const barAreaRef = useRef<View>(null);
@@ -414,70 +412,8 @@ export function useMetronomeScreen() {
     return () => sub.remove();
   }, []);
 
-  const [permissionRecoveryToast, setPermissionRecoveryToast] = useState<string | null>(null);
-  const recoveryToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showRecoveryToast = useCallback((msg: string) => {
-    if (recoveryToastTimerRef.current) clearTimeout(recoveryToastTimerRef.current);
-    setPermissionRecoveryToast(msg);
-    recoveryToastTimerRef.current = setTimeout(() => setPermissionRecoveryToast(null), 2500);
-  }, []);
-
-  const [beatQuickSaveModalVisible, setBeatQuickSaveModalVisible] = useState(false);
-  const [beatQuickSaveName, setBeatQuickSaveName] = useState("");
-  const [beatQuickSaveToast, setBeatQuickSaveToast] = useState<string | null>(null);
-  const beatQuickSaveToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showBeatQuickSaveToast = useCallback((msg: string) => {
-    if (beatQuickSaveToastTimerRef.current) clearTimeout(beatQuickSaveToastTimerRef.current);
-    setBeatQuickSaveToast(msg);
-    beatQuickSaveToastTimerRef.current = setTimeout(() => setBeatQuickSaveToast(null), 2500);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const runRecovery = () => runPermissionRecoveryLoop({
-      hasPending: hasAnyPendingPermissionAction,
-      recover: tryRecoverPermissionActions,
-      isCancelled: () => cancelled,
-      onRecovered: (kind) => {
-        const key = kind === "mic" ? "recoveredMic" : "recoveredPhoto";
-        showRecoveryToast(t("permissions", key));
-      },
-    });
-    if (Platform.OS === "web") {
-      const onVis = () => {
-        if (typeof document !== "undefined" && document.visibilityState === "visible") {
-          void runRecovery();
-        }
-      };
-      if (typeof document !== "undefined") {
-        document.addEventListener("visibilitychange", onVis);
-        return () => {
-          cancelled = true;
-          document.removeEventListener("visibilitychange", onVis);
-        };
-      }
-      return () => { cancelled = true; };
-    }
-    const sub = AppState.addEventListener("change", (next) => {
-      if (next === "active") void runRecovery();
-    });
-    return () => {
-      cancelled = true;
-      sub.remove();
-    };
-  }, [t, showRecoveryToast]);
-
-  useEffect(() => {
-    return () => {
-      if (recoveryToastTimerRef.current) clearTimeout(recoveryToastTimerRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (beatQuickSaveToastTimerRef.current) clearTimeout(beatQuickSaveToastTimerRef.current);
-    };
-  }, []);
+  // ── 권한 복구 토스트 ────────────────────────────────────────────────────────
+  const { permissionRecoveryToast, showRecoveryToast } = usePermissionRecoveryToast(t);
 
   const noteSamplesHook = useNoteSamples();
   const {
@@ -580,6 +516,14 @@ export function useMetronomeScreen() {
       }).catch(() => {});
     },
   });
+
+  // ── 비트 모드 빠른 저장 ────────────────────────────────────────────────────
+  const {
+    beatQuickSaveModalVisible, setBeatQuickSaveModalVisible,
+    beatQuickSaveName, setBeatQuickSaveName,
+    beatQuickSaveToast,
+    handleBeatQuickSaveOpen, handleBeatQuickSaveCancel, handleBeatQuickSaveConfirm,
+  } = useBeatQuickSave({ bpm, beatsPerMeasure, beatTypes, beatSubdivisions, subdivisionPattern, username, t });
 
   // ── Audio pipeline (player pool + PCM cache + rendered player + audio session settings) ──
   const {
@@ -1889,41 +1833,12 @@ export function useMetronomeScreen() {
     }
   }, []);
 
-  const handleNativeKeyDown = useCallback((nativeEvent: { key: string; shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean }) => {
-    if (!nativeKbDownRef.current) return;
-    const e: NormalizedKeyEvent = {
-      code: nativeKeyToCode(nativeEvent.key),
-      key: nativeEvent.key,
-      shiftKey: nativeEvent.shiftKey ?? false,
-      ctrlKey: nativeEvent.ctrlKey ?? false,
-      altKey: nativeEvent.altKey ?? false,
-      metaKey: nativeEvent.metaKey ?? false,
-      preventDefault: () => {},
-      target: null,
-    };
-    nativeKbDownRef.current(e);
-  }, []);
-
-  const handleNativeKeyUp = useCallback((nativeEvent: { key: string }) => {
-    if (!nativeKbUpRef.current) return;
-    const e: NormalizedKeyEvent = {
-      code: nativeKeyToCode(nativeEvent.key),
-      key: nativeEvent.key,
-      shiftKey: false,
-      ctrlKey: false,
-      altKey: false,
-      metaKey: false,
-      preventDefault: () => {},
-      target: null,
-    };
-    nativeKbUpRef.current(e);
-  }, []);
-
-  useKeyboardShortcuts({
+  // handleNativeKeyDown / handleNativeKeyUp — useKeyboardShortcuts 내부에서 생성돼 반환된다.
+  const { handleNativeKeyDown, handleNativeKeyUp } = useKeyboardShortcuts({
     keyBindingsRef, bpmRef, updateBpmRef, beatsPerMeasureRef, updateTimeSignatureRef,
     barModeRef, noteModeRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
     subdivisionPatternRef, beatTypesRef, handleNoteTogglePlayRef, anyModalOpenRef,
-    showKbShortcutsRef, showNativeKbHintRef, engineRef, nativeKbDownRef, nativeKbUpRef,
+    showKbShortcutsRef, showNativeKbHintRef, engineRef,
     togglePlayPauseRef, setNoteMode, setBarMode, setShowKbShortcuts, setShowNativeKbHint,
     setActiveModal, setBarLoopMode, setBlockPlayMode, setBeatsPerMeasure, setBeatTypes,
     setSubdivisionPattern, persistSettings,
@@ -2623,40 +2538,7 @@ export function useMetronomeScreen() {
     opacity: fullScreenResetFlash.value * 0.5,
   }));
 
-  const handleBeatQuickSaveOpen = useCallback(() => {
-    const defaultName = `${bpm} BPM`;
-    setBeatQuickSaveName(defaultName);
-    setBeatQuickSaveModalVisible(true);
-  }, [bpm]);
-
-  const handleBeatQuickSaveCancel = useCallback(() => {
-    setBeatQuickSaveModalVisible(false);
-  }, []);
-
-  const handleBeatQuickSaveConfirm = useCallback(async (name: string) => {
-    setBeatQuickSaveModalVisible(false);
-    try {
-      const label = name.trim() || `${bpm} BPM`;
-      const config = {
-        mode: "beat" as const,
-        bpm,
-        beatsPerMeasure,
-        beatTypes: [...beatTypes],
-        beatSubdivisions: { ...beatSubdivisions },
-        barRepeats: {} as Record<number, import("@/lib/storage").BarRepeatEntry>,
-        barLoopMode: "once" as const,
-        subdivisionPattern: [...subdivisionPattern],
-      };
-      const entry = createPracticeEntry(label, config, username);
-      const existing = await loadPracticeBook();
-      await savePracticeBook([entry, ...existing]);
-      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showBeatQuickSaveToast(t("main", "quickSavedMsg"));
-    } catch (e) {
-      captureBreadcrumb({ category: "practice-book", message: "Beat quick save error", level: "warning", data: { error: String(e) } });
-    }
-  }, [bpm, beatsPerMeasure, beatTypes, beatSubdivisions, subdivisionPattern, username, t, showBeatQuickSaveToast]);
-
+  // handleBeatQuickSaveOpen / handleBeatQuickSaveCancel / handleBeatQuickSaveConfirm → useBeatQuickSave
   // handleBarQuickSave → useBarMode
 
   const handleResetFlash = useCallback(() => {
@@ -3339,7 +3221,7 @@ export function useMetronomeScreen() {
         preloadNoteSampleSounds(entrySamples);
       }
 
-      engine.setBpm(entry.bpm * (4 / beatDenominatorRef.current));
+      engine.setBpm(toEngineBpm(entry.bpm, beatDenominatorRef.current));
       engine.setBeatsPerMeasure(entry.beatsPerMeasure);
       engine.setBeatTypes([...entry.beatTypes]);
       engine.setAllBeatSubdivisions(entry.beatSubdivisions);
@@ -3388,7 +3270,7 @@ export function useMetronomeScreen() {
         preloadNoteSampleSounds(barSamples);
       }
 
-      engine.setBpm(entry.bpm * (4 / beatDenominatorRef.current));
+      engine.setBpm(toEngineBpm(entry.bpm, beatDenominatorRef.current));
       engine.setBeatsPerMeasure(entry.beatsPerMeasure);
       engine.setBeatTypes([...entry.beatTypes]);
       engine.setAllBeatSubdivisions(entry.beatSubdivisions);
