@@ -75,6 +75,7 @@ import { useEasterEggQuiz } from "@/hooks/useEasterEggQuiz";
 import { useFadeOutSession } from "@/hooks/useFadeOutSession";
 import { usePermissionRecoveryToast } from "@/hooks/usePermissionRecoveryToast";
 import { useBeatQuickSave } from "@/hooks/useBeatQuickSave";
+import { usePracticeBookLoad } from "@/hooks/usePracticeBookLoad";
 import { useGoalPopups } from "@/hooks/useGoalPopups";
 import { usePracticeRoomTracking } from "@/hooks/usePracticeRoomTracking";
 import { useStageMode } from "@/hooks/useStageMode";
@@ -272,9 +273,7 @@ export function useMetronomeScreen() {
   const [noteMeasureCount, setNoteMeasureCount] = useState(0);
   const noteMeasureCountRef = useRef(0);
   const noteFirstBeatFiredRef = useRef(false);
-  // 악보-마디 프리셋 전환: 연습장 캐시 + 버전 카운터(race 방지)
-  const scorePracticeBookRef = useRef<PracticeEntry[]>([]);
-  const linkedEntryVersionRef = useRef(0);
+  // 악보-마디 프리셋 전환: 연습장 캐시 + 버전 카운터 → usePracticeBookLoad 소유
   const [noteBarEntries, setNoteBarEntries] = useState<PracticeEntry[]>([]);
   const noteAdvanceQueueRef = useRef<() => void>(() => {});
   const noteShuffledIndicesRef = useRef<number[]>([]);
@@ -2550,86 +2549,7 @@ export function useMetronomeScreen() {
 
   // handleAddBar / handleCopyBar / handleInsertBarAfter / handleDeleteBar
   // handleReorderBar / handleBarReset → useBarMode
-
-  const applyEntryToEngine = useCallback((entry: PracticeEntry) => {
-    const engine = engineRef.current;
-    if (!engine) return;
-
-    const { barRepeats: mgRepeats1, loopBlocks: mgBlocks1 } = migrateLayerBlocks((entry.loopBlocks || []) as LoopBlock[], { ...entry.barRepeats });
-    setBpm(entry.bpm);
-    setBeatsPerMeasure(entry.beatsPerMeasure);
-    setBeatTypes([...entry.beatTypes]);
-    setBeatSubdivisions({ ...entry.beatSubdivisions });
-    setBarRepeats(mgRepeats1);
-    setLoopBlocks([...mgBlocks1]);
-    setBarLoopMode(entry.barLoopMode || "once");
-    setBlockPlayMode(entry.blockPlayMode || "loop");
-    if (entry.subdivisionPattern) setSubdivisionPattern([...entry.subdivisionPattern]);
-
-    const entrySamples = entry.noteSamples || {};
-    const entryNames = entry.noteSampleNames || {};
-    const entrySources = entry.noteSampleSources || {};
-    const entryChannels = entry.noteSampleChannels || {};
-    setNoteSamples({ ...entrySamples });
-    noteSamplesRef.current = { ...entrySamples };
-    setNoteSampleNames({ ...entryNames });
-    noteSampleNamesRef.current = { ...entryNames };
-    setNoteSampleSources({ ...entrySources });
-    noteSampleSourcesRef.current = { ...entrySources };
-    setNoteSampleChannels({ ...entryChannels });
-    noteSampleChannelsRef.current = { ...entryChannels };
-
-    if (Object.keys(entrySamples).length > 0) {
-      preloadNoteSampleSounds(entrySamples);
-    }
-
-    applyEntryToEngineCore(engine, entry, beatDenominatorRef.current);
-
-    barConfigRef.current = entryToBarConfig(entry);
-
-    if (!barMode) {
-      dialConfigRef.current = {
-        beatsPerMeasure,
-        beatTypes: [...beatTypes],
-        beatSubdivisions: { ...beatSubdivisions },
-        noteSamples: { ...noteSamples },
-        noteSampleNames: { ...noteSampleNames },
-        noteSampleSources: { ...noteSampleSources },
-        noteSampleChannels: { ...noteSampleChannels },
-      };
-      setBarMode(true);
-    }
-  }, [barMode, beatsPerMeasure, beatTypes, beatSubdivisions, noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, preloadNoteSampleSounds]);
-
-  const handleLinkedEntryChange = useCallback(async (
-    entryId: string | undefined,
-    scoreDefaults: { bpm: number; beatsPerMeasure: number },
-  ) => {
-    const version = ++linkedEntryVersionRef.current;
-    if (!entryId) {
-      // 연결 없는 마디: 악보 기본 설정 복원
-      const engine = engineRef.current;
-      if (engine) {
-        const clampedBpm = Math.max(20, Math.min(300, scoreDefaults.bpm));
-        setBpm(clampedBpm);
-        engine.setBpm(clampedBpm);
-        setBeatsPerMeasure(scoreDefaults.beatsPerMeasure);
-        engine.setBeatsPerMeasure(scoreDefaults.beatsPerMeasure);
-      }
-      return;
-    }
-    // 캐시된 연습장 우선 사용; 미스 시 로드 후 캐시 갱신
-    let book = scorePracticeBookRef.current;
-    if (book.length === 0) {
-      book = await loadPracticeBook();
-      scorePracticeBookRef.current = book;
-    }
-    if (version !== linkedEntryVersionRef.current) return; // stale
-    const entry = book.find((e) => e.id === entryId);
-    if (entry) {
-      applyEntryToEngine(entry);
-    }
-  }, [applyEntryToEngine]);
+  // applyEntryToEngine / handleLinkedEntryChange / handleLoadPracticeEntry → usePracticeBookLoad
 
   const noteStartPlayingEntry = useCallback(async (index: number) => {
     const q = noteQueueRef.current;
@@ -2816,6 +2736,35 @@ export function useMetronomeScreen() {
     noteQueueRef.current = [];
     setNoteBarEntries([]);
   }, [isPlaying]);
+
+  // ── 연습장 로드 훅 ──────────────────────────────────────────────────────────
+  const {
+    scorePracticeBookRef,
+    applyEntryToEngine,
+    handleLinkedEntryChange,
+    handleLoadPracticeEntry,
+  } = usePracticeBookLoad({
+    engineRef,
+    barModeRef, noteModeRef,
+    barConfigRef, dialConfigRef,
+    beatDenominatorRef,
+    noteSamplesRef, noteSampleNamesRef, noteSampleSourcesRef, noteSampleChannelsRef,
+    noteQueueRef, notePlayModeRef, noteIsPlayingRef,
+    seamlessNextEntryRef, loadedPracticeNoteRef,
+    isPlaying, barMode, noteMode,
+    beatsPerMeasure, beatTypes, beatSubdivisions,
+    barRepeats, loopBlocks,
+    noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels,
+    setBpm, setBeatsPerMeasure, setBeatTypes, setBeatSubdivisions,
+    setBarRepeats, setLoopBlocks, setBarLoopMode, setBlockPlayMode, setSubdivisionPattern,
+    setNoteSamples, setNoteSampleNames, setNoteSampleSources, setNoteSampleChannels,
+    setBarMode, setNoteMode,
+    setIsPlaying, setIsPreparing,
+    setNoteQueue, setNotePlayMode, setNoteCurrentIndex, setNoteIsPlaying, setNoteBarEntries,
+    stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals,
+    preloadNoteSampleSounds,
+    handleExitNoteMode,
+  });
 
   const currentMode: ModeSlot = showMenu
     ? "menu"
@@ -3128,178 +3077,7 @@ export function useMetronomeScreen() {
     barTimerDuration: barConfigRef.current.barTimerDuration,
   }), [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, blockPlayMode, subdivisionPattern, noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels]);
 
-  const handleLoadPracticeEntry = useCallback((entry: PracticeEntry) => {
-    const engine = engineRef.current;
-    if (!engine) return;
-
-    if (isPlaying) {
-      engine.stop();
-      stopRenderedAudio();
-      clearSamplePlayStates();
-      setIsPreparing(false);
-      setIsPlaying(false);
-      resetPlaybackVisuals();
-    }
-
-    const entryMode = entry.mode || "bar";
-    const isBeatEntry = entryMode === "beat";
-    const isNoteEntry = entryMode === "note";
-
-    if (isNoteEntry) {
-      if (!noteMode) {
-        setNoteMode(true);
-        noteModeRef.current = true;
-      }
-      const queueEntries = entry.noteQueueEntries || [];
-      setNoteQueue(queueEntries);
-      noteQueueRef.current = queueEntries;
-      setNotePlayMode(entry.notePlayMode || "once");
-      notePlayModeRef.current = entry.notePlayMode || "once";
-      setNoteCurrentIndex(-1);
-      setNoteIsPlaying(false);
-      noteIsPlayingRef.current = false;
-      (async () => {
-        const book = await loadPracticeBook();
-        setNoteBarEntries(book.filter(isNoteSourceEntry));
-      })();
-      return;
-    }
-
-    if (noteMode) {
-      handleExitNoteMode();
-    }
-
-    if (isBeatEntry) {
-      if (barMode) {
-        barConfigRef.current = {
-          ...barConfigRef.current,
-          beatsPerMeasure,
-          beatTypes: [...beatTypes],
-          beatSubdivisions: { ...beatSubdivisions },
-          barRepeats: { ...barRepeats },
-          loopBlocks: [...loopBlocks],
-          noteSamples: { ...noteSamples },
-          noteSampleNames: { ...noteSampleNames },
-          noteSampleSources: { ...noteSampleSources },
-          hasBeenConfigured: true,
-        };
-        setBarMode(false);
-      }
-
-      const entrySamples = entry.noteSamples || {};
-      const entryNames = entry.noteSampleNames || {};
-      const entrySources = entry.noteSampleSources || {};
-
-      dialConfigRef.current = {
-        ...dialConfigRef.current,
-        beatsPerMeasure: entry.beatsPerMeasure,
-        beatTypes: [...entry.beatTypes],
-        beatSubdivisions: { ...entry.beatSubdivisions },
-        noteSamples: { ...entrySamples },
-        noteSampleNames: { ...entryNames },
-        noteSampleSources: { ...entrySources },
-      };
-
-      setBpm(entry.bpm);
-      setBeatsPerMeasure(entry.beatsPerMeasure);
-      setBeatTypes([...entry.beatTypes]);
-      setBeatSubdivisions({ ...entry.beatSubdivisions });
-      if (entry.subdivisionPattern) setSubdivisionPattern([...entry.subdivisionPattern]);
-      setNoteSamples({ ...entrySamples });
-      noteSamplesRef.current = { ...entrySamples };
-      setNoteSampleNames({ ...entryNames });
-      noteSampleNamesRef.current = { ...entryNames };
-      setNoteSampleSources({ ...entrySources });
-      noteSampleSourcesRef.current = { ...entrySources };
-      setNoteSampleChannels({ ...(entry.noteSampleChannels || {}) });
-      noteSampleChannelsRef.current = { ...(entry.noteSampleChannels || {}) };
-      saveNoteSamples(entrySamples);
-      saveNoteSampleNames(entryNames);
-      saveNoteSampleSources(entrySources);
-      saveNoteSampleChannels(entry.noteSampleChannels || {});
-      if (Object.keys(entrySamples).length > 0) {
-        preloadNoteSampleSounds(entrySamples);
-      }
-
-      engine.setBpm(toEngineBpm(entry.bpm, beatDenominatorRef.current));
-      engine.setBeatsPerMeasure(entry.beatsPerMeasure);
-      engine.setBeatTypes([...entry.beatTypes]);
-      engine.setAllBeatSubdivisions(entry.beatSubdivisions);
-    } else {
-      if (!barMode) {
-        dialConfigRef.current = {
-          ...dialConfigRef.current,
-          beatsPerMeasure,
-          beatTypes: [...beatTypes],
-          beatSubdivisions: { ...beatSubdivisions },
-          noteSamples: { ...noteSamples },
-          noteSampleNames: { ...noteSampleNames },
-          noteSampleSources: { ...noteSampleSources },
-        };
-        setBarMode(true);
-      }
-
-      const barSamples = entry.noteSamples || {};
-      const barNames = entry.noteSampleNames || {};
-      const barSources = entry.noteSampleSources || {};
-      const barChannels = entry.noteSampleChannels || {};
-
-      const { barRepeats: mgRepeats3, loopBlocks: mgBlocks3 } = migrateLayerBlocks((entry.loopBlocks || []) as LoopBlock[], { ...entry.barRepeats });
-      setBpm(entry.bpm);
-      setBeatsPerMeasure(entry.beatsPerMeasure);
-      setBeatTypes([...entry.beatTypes]);
-      setBeatSubdivisions({ ...entry.beatSubdivisions });
-      setBarRepeats(mgRepeats3);
-      setLoopBlocks([...mgBlocks3]);
-      setBarLoopMode(entry.barLoopMode);
-      setBlockPlayMode(entry.blockPlayMode || "loop");
-      setSubdivisionPattern([...entry.subdivisionPattern]);
-      setNoteSamples({ ...barSamples });
-      noteSamplesRef.current = { ...barSamples };
-      setNoteSampleNames({ ...barNames });
-      noteSampleNamesRef.current = { ...barNames };
-      setNoteSampleSources({ ...barSources });
-      noteSampleSourcesRef.current = { ...barSources };
-      setNoteSampleChannels({ ...barChannels });
-      noteSampleChannelsRef.current = { ...barChannels };
-      saveNoteSamples(barSamples);
-      saveNoteSampleNames(barNames);
-      saveNoteSampleSources(barSources);
-      saveNoteSampleChannels(barChannels);
-      if (Object.keys(barSamples).length > 0) {
-        preloadNoteSampleSounds(barSamples);
-      }
-
-      engine.setBpm(toEngineBpm(entry.bpm, beatDenominatorRef.current));
-      engine.setBeatsPerMeasure(entry.beatsPerMeasure);
-      engine.setBeatTypes([...entry.beatTypes]);
-      engine.setAllBeatSubdivisions(entry.beatSubdivisions);
-      engine.setLoopBlocks(mgBlocks3);
-      engine.setBlockPlayMode(entry.blockPlayMode || "loop");
-      engine.setAllBarRepeats(mgRepeats3 || {});
-      const bpmOverridesEntry: Record<number, number> = {};
-      for (const [k, v] of Object.entries(mgRepeats3 || {})) {
-        if ((v as any).bpm) bpmOverridesEntry[Number(k)] = toEngineBpm((v as any).bpm, beatDenominatorRef.current);
-      }
-      engine.setAllBarBpmOverrides(bpmOverridesEntry);
-      barConfigRef.current = {
-        ...barConfigRef.current,
-        beatsPerMeasure: entry.beatsPerMeasure,
-        beatTypes: [...entry.beatTypes],
-        beatSubdivisions: { ...entry.beatSubdivisions },
-        barRepeats: { ...mgRepeats3 },
-        loopBlocks: [...mgBlocks3],
-        barClockMode: entry.barClockMode || "stopwatch",
-        barTimerDuration: entry.barTimerDuration ?? 180,
-        noteSamples: { ...barSamples },
-        noteSampleNames: { ...barNames },
-        noteSampleSources: { ...barSources },
-        hasBeenConfigured: true,
-      };
-    }
-
-    loadedPracticeNoteRef.current = { id: entry.id, label: entry.label };
-  }, [isPlaying, barMode, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, noteSamples, noteSampleNames, noteSampleSources, preloadNoteSampleSounds]);
+  // handleLoadPracticeEntry → usePracticeBookLoad
 
   const handleDeepLinkImport = useCallback((url: string) => {
     try {
