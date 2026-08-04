@@ -298,6 +298,7 @@ export function ScoreEditorScreen({
   // ── ⋯ 메뉴 ──────────────────────────────────────────────────
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showSymbolSettings, setShowSymbolSettings] = useState(false);
 
   // ── 성부 분리 모달 ─────────────────────────────────────────────
   const [showExtractPartModal, setShowExtractPartModal] = useState(false);
@@ -2002,7 +2003,7 @@ export function ScoreEditorScreen({
           setShowMetaModal(true);
         }}
         onExtractPart={handleExtractPartOpen}
-        onOpenSymbolSettings={() => { setShowMoreMenu(false); }}
+        onOpenSymbolSettings={() => { setShowMoreMenu(false); setShowSymbolSettings(true); }}
       />
       <ScoreExtractPartModal
         visible={showExtractPartModal}
@@ -2017,14 +2018,23 @@ export function ScoreEditorScreen({
         onConfirm={handleExtractConfirm}
       />
       <ScoreSymbolSettingsModal
-        visible={false}
-        onClose={() => {}}
+        visible={showSymbolSettings}
+        onClose={() => setShowSymbolSettings(false)}
         currentPart={currentPart ?? null}
         showPlayhead={showPlayhead}
         showZoomView={showZoomView}
         notePreviewEnabled={notePreviewEnabled}
         onUpdatePlaybackSettings={updatePlaybackSettings}
-        onSymbolToggle={() => {}}
+        onSymbolToggle={(symId, enabled) => {
+          const part = doc.parts[selectedPartIdx];
+          if (!part) return;
+          const newParts = doc.parts.map((p, i) =>
+            i === selectedPartIdx
+              ? { ...p, enabledSymbols: { ...(p.enabledSymbols ?? {}), [symId]: enabled } }
+              : p,
+          );
+          applyDoc({ ...doc, parts: newParts });
+        }}
       />
       <ScoreMeasureContextMenu
         measureIdx={measureContextMenu?.measureIdx ?? null}

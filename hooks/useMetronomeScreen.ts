@@ -300,7 +300,6 @@ export function useMetronomeScreen() {
     showPracticeBook,
     showWorkUp,
     showOnboarding,
-    showMoreMenu,
     showDrumKit,
     showScheduledStart,
     showFadeOut,
@@ -386,7 +385,6 @@ export function useMetronomeScreen() {
         if (returnTo) setTimeout(() => setActiveModal(returnTo), 160);
         return true;
       }
-      if (showMoreMenu) { setActiveModal(null); return true; }
       if (showMenu) { setActiveModal(null); return true; }
       if (showOnboarding) { setActiveModal(null); return true; }
       if (showReboot) { setShowReboot(false); return true; }
@@ -3283,7 +3281,6 @@ export function useMetronomeScreen() {
     showPracticeBook,
     showWorkUp,
     showOnboarding,
-    showMoreMenu,
     showDrumKit,
     showScheduledStart,
     showFadeOut,

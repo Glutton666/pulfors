@@ -27,7 +27,6 @@ import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import PracticeStatsGraph from "@/components/PracticeStatsGraph";
 import { StageModeOverlay } from "@/components/StageModeOverlay";
 import { OnboardingModal } from "@/components/OnboardingModal";
-import { MoreMenuModal } from "@/components/MoreMenuModal";
 import { ScoreListScreen } from "@/components/ScoreListScreen";
 import { ScoreEditorScreen } from "@/components/ScoreEditorScreen";
 import { ModeSwitcherDial } from "@/components/ModeSwitcherDial";
@@ -84,7 +83,7 @@ export function MetronomeScreenUI(props: Props) {
     showSubdivisionLongPressHint, setShowSubdivisionLongPressHint,
     activeModal, setActiveModal, openExclusive,
     showSettings, showMenu, showSignalGen, showTuningGuide, showPracticeBook,
-    showWorkUp, showOnboarding, showMoreMenu, showDrumKit, showScheduledStart,
+    showWorkUp, showOnboarding, showDrumKit, showScheduledStart,
     showFadeOut, showBpmDetect, showStemSep,
     volume, updateVolume, sampleVolume, updateSampleVolume,
     backgroundPlay, updateBackgroundPlay,
@@ -371,28 +370,14 @@ export function MetronomeScreenUI(props: Props) {
               if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
               openExclusive("practiceBook");
             }}
-            onMoreMenu={() => openExclusive("moreMenu")}
+            onStemSep={() => {
+              // 음원분리 닫을 때 메뉴로 돌아올 수 있도록 직전 activeModal을 저장한다.
+              stemSepReturnModalRef.current = activeModal;
+              openExclusive("stemSep");
+            }}
           />
         </Animated.View>
       )}
-
-      <MoreMenuModal
-        visible={showMoreMenu}
-        onClose={() => setActiveModal(null)}
-        // MoreMenuModal/DrumKitModal/FadeOutModal/ScheduledStartModal 모두
-        // AnimatedModal 기반 네이티브 Modal이라, activeModal을 한 틱에 바로
-        // 다른 값으로 바꾸면 페이드아웃 중인 이전 Modal(최대 150ms)과 새로
-        // 뜨는 Modal이 동시에 마운트되어 터치 입력이 한쪽에 묶이는 'ghost'
-        // 상태가 될 수 있다 (SignalGeneratorModal.tsx 707-712 참고). 먼저
-        // null로 닫고, AnimatedModal의 페이드 시간보다 긴 지연 후 다음
-        // Modal을 연다.
-        onStemSep={() => {
-          // 음원분리 닫을 때 이 모달로 돌아올 수 있도록 직전 activeModal을 저장한다.
-          stemSepReturnModalRef.current = activeModal;
-          setActiveModal(null);
-          setTimeout(() => openExclusive("stemSep"), 160);
-        }}
-      />
 
       <DrumKitModal
         visible={showDrumKit}

@@ -16,7 +16,6 @@ export type ActiveModal =
   | "practiceBook"
   | "workUp"
   | "onboarding"
-  | "moreMenu"
   | "drumKit"
   | "scheduledStart"
   | "fadeOut"
@@ -34,7 +33,6 @@ export function deriveModalFlags(activeModal: ActiveModal) {
     showPracticeBook:   activeModal === "practiceBook",
     showWorkUp:         activeModal === "workUp",
     showOnboarding:     activeModal === "onboarding",
-    showMoreMenu:       activeModal === "moreMenu",
     showDrumKit:        activeModal === "drumKit",
     showScheduledStart: activeModal === "scheduledStart",
     showFadeOut:        activeModal === "fadeOut",

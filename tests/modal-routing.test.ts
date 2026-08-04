@@ -2,7 +2,7 @@
  * 주요 모달 진입 흐름 회귀 테스트
  *
  * 검증 대상:
- *   1. MoreMenu → 하위 모달(StemSep) 전환 시
+ *   1. 메인 메뉴 → 음원 분리(StemSep) 전환 시
  *      한 시점에 하나의 모달만 visible해지는지
  *   2. SignalGenerator → TuningGuide 전환 시 두 모달이 동시에 visible=true가
  *      되지 않으며, TuningGuide 종료 후 SignalGenerator가 재오픈되는지
@@ -37,7 +37,7 @@ test("modal-routing: activeModal=null 이면 visible 모달이 0개", () => {
 test("modal-routing: 어떤 activeModal 값이든 visible 모달은 최대 1개", () => {
   const allValues: ActiveModal[] = [
     "settings", "menu", "signalGen", "tuningGuide", "practiceBook", "workUp",
-    "onboarding", "moreMenu", "drumKit", "scheduledStart", "fadeOut",
+    "onboarding", "drumKit", "scheduledStart", "fadeOut",
     "bpmDetect", "stemSep",
     null,
   ];
@@ -59,7 +59,6 @@ test("modal-routing: 각 activeModal 값은 정확히 해당 show* 플래그만 
     ["practiceBook",   "showPracticeBook"],
     ["workUp",         "showWorkUp"],
     ["onboarding",     "showOnboarding"],
-    ["moreMenu",       "showMoreMenu"],
     ["drumKit",        "showDrumKit"],
     ["scheduledStart", "showScheduledStart"],
     ["fadeOut",        "showFadeOut"],
@@ -74,65 +73,28 @@ test("modal-routing: 각 activeModal 값은 정확히 해당 show* 플래그만 
 });
 
 // ────────────────────────────────────────────────────────────────
-// 2. MoreMenu → 하위 모달 전환
-//    openExclusive(React callback)는 setActiveModal(next)를 호출한다.
+// 2. 메인 메뉴 → 음원 분리 전환
+//    메뉴 항목 탭 시 openExclusive("stemSep") 가 setActiveModal 을 호출한다.
 //    activeModal 단일 문자열 구조 때문에 mutual exclusion이 보장된다.
-//    아래 테스트는 그 구조적 보장을 파생 플래그 레벨에서 검증한다.
 // ────────────────────────────────────────────────────────────────
 
-// ─── MoreMenu 새 항목 추가 체크리스트 ────────────────────────────────────────
-//
-// 새 항목을 추가할 때 아래 4개 파일을 모두 수정해야 한다.
-// 하나라도 빠뜨리면 회귀 테스트가 실패하거나 실제 기능이 동작하지 않는다.
-//
-//  1. lib/modal-routing.ts
-//       ActiveModal 유니온 타입에 새 리터럴 추가 (예: | "myFeature")
-//
-//  2. components/MoreMenuModal.tsx
-//       a) MoreMenuModalProps 에 핸들러 prop 추가 (onMyFeature: () => void)
-//       b) 함수 시그니처에서 구조 분해 추가
-//       c) 새 <Pressable onPress={onMyFeature} testID="more-menu-myFeature"> 항목 추가
-//
-//  3. app/index.tsx
-//       <MoreMenuModal … /> JSX 블록에 onMyFeature={() => openExclusive("myFeature")} 추가
-//
-//  4. tests/modal-routing.test.ts  ← 지금 여기
-//       MORE_MENU_ITEMS 배열에 ["myFeature", "showMyFeature"] 항목 추가
-//
-// ─────────────────────────────────────────────────────────────────────────────
-const MORE_MENU_ITEMS: Array<[ActiveModal, keyof ReturnType<typeof deriveModalFlags>]> = [
-  ["stemSep",        "showStemSep"],
-];
+test("modal-routing: menu → stemSep — 전환 전 menu만 visible, 전환 후 stemSep만 visible", () => {
+  const beforeFlags = deriveModalFlags("menu");
+  assert.equal(beforeFlags.showMenu, true);
+  assert.equal(countVisibleModals(beforeFlags), 1);
 
-for (const [item, flagKey] of MORE_MENU_ITEMS) {
-  test(`modal-routing: MoreMenu → ${item} — 전환 전 MoreMenu만 visible, 전환 후 ${item}만 visible`, () => {
-    // 전환 전: MoreMenu 만 열림
-    const beforeFlags = deriveModalFlags("moreMenu");
-    assert.equal(beforeFlags.showMoreMenu, true);
-    assert.equal(countVisibleModals(beforeFlags), 1);
+  const afterFlags = deriveModalFlags("stemSep");
+  assert.equal(afterFlags.showMenu, false, "메뉴가 닫혀야 한다");
+  assert.equal(afterFlags.showStemSep, true, "stemSep 모달이 열려야 한다");
+  assert.equal(countVisibleModals(afterFlags), 1, "전환 후 visible 모달은 1개여야 한다");
+});
 
-    // app/index.tsx 의 openExclusive 는 setActiveModal(next) 를 호출한다.
-    // 다음 activeModal 값으로 파생 플래그를 계산해 전환 결과를 검증한다.
-    const afterFlags = deriveModalFlags(item);
-    assert.equal(afterFlags.showMoreMenu, false, "MoreMenu가 닫혀야 한다");
-    assert.equal(afterFlags[flagKey], true,       `${item} 모달이 열려야 한다`);
-    assert.equal(countVisibleModals(afterFlags), 1, "전환 후 visible 모달은 1개여야 한다");
-  });
-}
-
-test("modal-routing: MoreMenu와 하위 모달이 동시에 visible=true가 되는 경우 없음", () => {
-  // activeModal 이 단일 문자열이므로 before/after 에서 같은 key 가 동시에 true 일 수 없다.
-  for (const [item] of MORE_MENU_ITEMS) {
-    const beforeFlags = deriveModalFlags("moreMenu");
-    const afterFlags  = deriveModalFlags(item);
-    const keys = Object.keys(beforeFlags) as Array<keyof typeof beforeFlags>;
-    const simultaneous = keys.filter((k) => beforeFlags[k] && afterFlags[k]);
-    assert.deepEqual(
-      simultaneous,
-      [],
-      `${item} 전환 중 두 모달이 동시에 visible 이면 안 된다`,
-    );
-  }
+test("modal-routing: menu와 stemSep이 동시에 visible=true가 되는 경우 없음", () => {
+  const beforeFlags = deriveModalFlags("menu");
+  const afterFlags  = deriveModalFlags("stemSep");
+  const keys = Object.keys(beforeFlags) as Array<keyof typeof beforeFlags>;
+  const simultaneous = keys.filter((k) => beforeFlags[k] && afterFlags[k]);
+  assert.deepEqual(simultaneous, [], "menu → stemSep 전환 중 두 모달이 동시에 visible 이면 안 된다");
 });
 
 // ────────────────────────────────────────────────────────────────
@@ -217,7 +179,7 @@ test("modal-routing: SignalGen → TG → 닫기 전체 흐름 — 각 단계에
 //
 //    커버 시나리오 (task #85 Done 기준):
 //      A. menu → settings  (같은 메뉴를 빠르게 열고-닫고-다시 열기)
-//      B. menu → moreMenu → drumKit
+//      B. menu → stemSep
 //      C. menu → signalGen → tuningGuide
 // ────────────────────────────────────────────────────────────────
 
@@ -268,17 +230,15 @@ test("rapid-tap: menu → settings 빠른 토글 — 동일 모달이 open-close
   }
 });
 
-test("rapid-tap: menu → moreMenu → drumKit — 빠른 연속 탭에서 visible 모달은 항상 ≤ 1", () => {
-  // 사용자가 빠르게: 메뉴 열기 → 더보기 메뉴 → 드럼 킷 → 닫기 → 다시 반복
+test("rapid-tap: menu → stemSep — 빠른 연속 탭에서 visible 모달은 항상 ≤ 1", () => {
+  // 사용자가 빠르게: 메뉴 열기 → 음원 분리 → 닫기 → 다시 반복
   const sequence: ActiveModal[] = [
     null,
     "menu",
-    "moreMenu",
-    "drumKit",
+    "stemSep",
     null,
     "menu",     // 빠른 재탭
-    "moreMenu",
-    "drumKit",
+    "stemSep",
     null,
   ];
 
@@ -292,16 +252,14 @@ test("rapid-tap: menu → moreMenu → drumKit — 빠른 연속 탭에서 visib
   }
 });
 
-test("rapid-tap: menu → moreMenu → drumKit — 연속 전환에서 동시에 두 모달 visible 없음", () => {
+test("rapid-tap: menu → stemSep — 연속 전환에서 동시에 두 모달 visible 없음", () => {
   const transitions: Array<[ActiveModal, ActiveModal]> = [
-    [null,       "menu"],
-    ["menu",     "moreMenu"],
-    ["moreMenu", "drumKit"],
-    ["drumKit",  null],
-    [null,       "menu"],      // 빠른 재탭
-    ["menu",     "moreMenu"],
-    ["moreMenu", "drumKit"],
-    ["drumKit",  null],
+    [null,      "menu"],
+    ["menu",    "stemSep"],
+    ["stemSep", null],
+    [null,      "menu"],      // 빠른 재탭
+    ["menu",    "stemSep"],
+    ["stemSep", null],
   ];
 
   for (const [from, to] of transitions) {
@@ -409,14 +367,12 @@ test("rapid-tap: menu → signalGen → tuningGuide — 연속 전환에서 동�
 });
 
 // ────────────────────────────────────────────────────────────────
-// 5. 소스 구조 테스트 — MoreMenuModal testID 및 props 동기화 검증
+// 5. 소스 구조 테스트 — 메인 메뉴 음원 분리 항목 및 핸들러 검증
 //
-//    정답(canonical) 소스: app/index.tsx 의 <MoreMenuModal … /> JSX 블록
-//    해당 블록의 openExclusive("key") 호출이 "어떤 항목이 있어야 하는가"를 결정한다.
-//
-//    새 모달 항목 추가 시 다음이 모두 갖춰지지 않으면 자동으로 실패한다:
-//      a) components/MoreMenuModal.tsx 의 각 항목 Pressable 에 testID 가 있어야 한다
-//      b) MoreMenuModalProps 의 onXxx 핸들러 목록이 app/index.tsx 의 openExclusive 키 목록과 일치해야 한다
+//    a) components/MenuScreen.tsx 에 testID="menu-stemSep" 항목이 있어야 한다
+//    b) components/MetronomeScreenUI.tsx 의 <MenuScreen> onStemSep 핸들러는
+//       openExclusive("stemSep") 를 경유해야 하며, stemSepReturnModalRef 로
+//       복귀 모달을 저장해야 한다.
 // ────────────────────────────────────────────────────────────────
 
 /**
@@ -426,223 +382,84 @@ test("rapid-tap: menu → signalGen → tuningGuide — 연속 전환에서 동�
 function extractActiveModalLiterals(): Set<string> {
   const src = readFileSync(join(process.cwd(), "lib/modal-routing.ts"), "utf-8");
 
-  // "foo" | "bar" | null; 형태의 유니온에서 문자열 리터럴만 추출
   const typeMatch = src.match(/export type ActiveModal\s*=\s*([\s\S]*?);/);
   assert.ok(typeMatch, "lib/modal-routing.ts 에서 ActiveModal 타입 선언을 찾을 수 없다");
 
   const literals = new Set<string>();
   const literalRe = /["']([a-zA-Z]+)["']/g;
   let m: RegExpExecArray | null;
-  while ((m = literalRe.exec(typeMatch[1])) !== null) {
+  while ((m = literalRe.exec(typeMatch![1])) !== null) {
     literals.add(m[1]);
   }
   return literals;
 }
 
-/**
- * app/index.tsx 의 <MoreMenuModal … /> JSX 블록에서
- * openExclusive("key") 호출 키를 추출한다.
- * 이것이 "moreMenu 하위 모달 목록"의 유일한 정답(canonical) 소스다.
- *
- * 각 키가 ActiveModal 타입에 선언된 유효한 리터럴인지도 검증한다.
- */
-function extractMoreMenuOpenExclusiveKeys(): string[] {
-  const src = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
-
-  // <MoreMenuModal 시작 위치 탐색
-  const startIdx = src.indexOf("<MoreMenuModal");
-  assert.ok(startIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
-
-  // 닫는 /> 탐색 — MoreMenuModal prop 콜백 내부에는 JSX가 없으므로
-  // 첫 번째 /> 가 MoreMenuModal 의 닫는 태그다
-  const endIdx = src.indexOf("/>", startIdx);
-  assert.ok(endIdx !== -1, "app/index.tsx 에서 <MoreMenuModal 의 닫는 /> 를 찾을 수 없다");
-
-  const block = src.slice(startIdx, endIdx + 2);
-
-  // openExclusive("key") 패턴에서 key 추출
-  const re = /openExclusive\(["']([a-zA-Z]+)["']\)/g;
-  const keys: string[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(block)) !== null) {
-    keys.push(m[1]);
-  }
-
-  assert.ok(
-    keys.length > 0,
-    "app/index.tsx <MoreMenuModal 블록에서 openExclusive 호출을 찾을 수 없다 — MoreMenuModal 의 항목 핸들러는 openExclusive(\"key\") 형태로 작성되어야 한다",
-  );
-
-  // 각 키가 ActiveModal 타입에 선언된 유효한 리터럴인지 검증
-  const validLiterals = extractActiveModalLiterals();
-  for (const key of keys) {
-    assert.ok(
-      validLiterals.has(key),
-      `openExclusive("${key}") 의 키 "${key}" 가 lib/modal-routing.ts 의 ActiveModal 타입에 선언되어 있지 않다 — ActiveModal 타입에 먼저 추가해야 한다`,
-    );
-  }
-
-  return keys;
-}
-
-test("source: MoreMenuModal — 각 항목 Pressable에 testID 속성이 존재한다", () => {
-  // 정답 소스: app/index.tsx <MoreMenuModal> 블록의 openExclusive 호출 키
-  const canonicalKeys = extractMoreMenuOpenExclusiveKeys();
-
-  const modalSrc = readFileSync(join(process.cwd(), "components/MoreMenuModal.tsx"), "utf-8");
-
-  // <Pressable 태그 기준으로 소스를 분할해 각 블록을 독립 검사
-  const pressableBlocks = modalSrc.split("<Pressable");
-
-  for (const key of canonicalKeys) {
-    // 키 → 핸들러 이름 변환: "scheduledStart" → "onScheduledStart"
-    const handler = "on" + key.charAt(0).toUpperCase() + key.slice(1);
-
-    const block = pressableBlocks.find((b) => b.includes(`onPress={${handler}}`));
-
-    assert.ok(
-      block !== undefined,
-      `onPress={${handler}} 가 있는 <Pressable 블록을 찾을 수 없다 (modal key: "${key}") — MoreMenuModal 에 항목을 추가할 때 <Pressable onPress={${handler}} …> 형태로 작성해야 한다`,
-    );
-
-    assert.ok(
-      block!.includes("testID="),
-      `onPress={${handler}} 가 있는 <Pressable 에 testID 속성이 없다 (modal key: "${key}") — 새 항목 추가 시 testID="more-menu-${key}" 형태로 포함해야 한다`,
-    );
-  }
+test("source: ActiveModal 타입에 stemSep 리터럴이 선언되어 있다", () => {
+  assert.ok(extractActiveModalLiterals().has("stemSep"));
 });
 
-test("source: MoreMenuModal — 닫기 Pressable에 testID=\"more-menu-close\" 속성이 존재한다", () => {
-  const modalSrc = readFileSync(join(process.cwd(), "components/MoreMenuModal.tsx"), "utf-8");
-
-  // <Pressable 태그 기준으로 소스를 분할해 닫기 버튼 블록을 찾는다.
-  // overlay Pressable 도 onPress={onClose} 를 가지므로, 닫기 버튼 고유 스타일
-  // (closeBtn) 로 구별한다.
-  const pressableBlocks = modalSrc.split("<Pressable");
-  const closeBlock = pressableBlocks.find(
-    (b) => b.includes("onPress={onClose}") && b.includes("closeBtn"),
-  );
-
+test("source: MenuScreen — 음원 분리 항목에 testID=\"menu-stemSep\" 가 존재한다", () => {
+  const src = readFileSync(join(process.cwd(), "components/MenuScreen.tsx"), "utf-8");
   assert.ok(
-    closeBlock !== undefined,
-    "closeBtn 스타일과 onPress={onClose} 가 함께 있는 <Pressable 블록을 찾을 수 없다 — " +
-    "닫기 버튼이 제거되거나 스타일 이름이 변경되었을 수 있다",
+    src.includes('testID: "menu-stemSep"') || src.includes('testID="menu-stemSep"'),
+    'components/MenuScreen.tsx 에 testID "menu-stemSep" 가 없다 — e2e 테스트가 음원 분리 항목에 접근하려면 필요하다',
   );
-
   assert.ok(
-    closeBlock!.includes('testID="more-menu-close"'),
-    'onPress={onClose} 가 있는 닫기 <Pressable 에 testID="more-menu-close" 가 없다 — ' +
-    "e2e 테스트에서 닫기 버튼에 접근하려면 testID 가 필요하다",
+    /onPress:\s*onStemSep/.test(src),
+    "MenuScreen 의 음원 분리 항목이 onStemSep 핸들러를 사용해야 한다",
   );
 });
 
-// ────────────────────────────────────────────────────────────────
-// 6. 소스 구조 테스트 — DrumKit 핸들러 내부 구조 검증
-//
-//    onDrumKit 핸들러는 엔진 정지·상태 초기화 코드를 포함해
-//    단순 람다가 아니다. 그럼에도 openExclusive("drumKit") 를
-//    반드시 경유해야 하며, setActiveModal 을 직접 호출해
-//    openExclusive 를 우회해선 안 된다.
-// ────────────────────────────────────────────────────────────────
-
 /**
- * app/index.tsx 에서 <MoreMenuModal … /> JSX 블록을 추출하고,
- * 지정한 핸들러 prop (e.g. "onDrumKit") 의 화살표 함수 본문을 반환한다.
- *
- * 핸들러는 다음 형태로 작성되어 있다고 가정한다:
- *   onDrumKit={() => {
- *     ...
- *   }}
+ * components/MetronomeScreenUI.tsx 의 <MenuScreen … /> JSX 블록에서
+ * 지정한 핸들러 prop 의 소스 문자열을 반환한다.
  */
-function extractMoreMenuHandlerBody(handlerName: string): string {
+function extractMenuScreenHandlerSource(handlerName: string): string {
   const src = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
 
-  const startIdx = src.indexOf("<MoreMenuModal");
-  assert.ok(startIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
+  const startIdx = src.indexOf("<MenuScreen");
+  assert.ok(startIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MenuScreen 를 찾을 수 없다");
 
   const endIdx = src.indexOf("/>", startIdx);
-  assert.ok(endIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MoreMenuModal 의 닫는 /> 를 찾을 수 없다");
+  assert.ok(endIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MenuScreen 의 닫는 /> 를 찾을 수 없다");
 
   const block = src.slice(startIdx, endIdx + 2);
 
-  // handlerName={() => { … }} 형태에서 중괄호 내부를 추출
-  const propIdx = block.indexOf(`${handlerName}={() => {`);
-  assert.ok(
-    propIdx !== -1,
-    `<MoreMenuModal 블록에서 ${handlerName}={() => { 를 찾을 수 없다`,
-  );
+  const propStart = block.indexOf(`${handlerName}={`);
+  assert.ok(propStart !== -1, `<MenuScreen 블록에서 ${handlerName}={ 를 찾을 수 없다`);
 
-  // 중괄호 깊이 추적으로 핸들러 본문 종료 위치를 찾는다
-  const bodyStart = block.indexOf("{", propIdx + handlerName.length + "={() => ".length);
+  const braceStart = block.indexOf("{", propStart + handlerName.length + 1);
   let depth = 0;
-  let i = bodyStart;
+  let i = braceStart;
   for (; i < block.length; i++) {
     if (block[i] === "{") depth++;
-    else if (block[i] === "}") {
-      depth--;
-      if (depth === 0) break;
-    }
+    else if (block[i] === "}") { depth--; if (depth === 0) break; }
   }
 
-  return block.slice(bodyStart, i + 1);
+  return block.slice(propStart, i + 1);
 }
 
-test("source: onStemSep 핸들러가 openExclusive(\"stemSep\")를 호출한다", () => {
-  const body = extractMoreMenuHandlerBody("onStemSep");
+test("source: MenuScreen onStemSep 핸들러가 openExclusive(\"stemSep\")를 호출한다", () => {
+  const prop = extractMenuScreenHandlerSource("onStemSep");
   assert.ok(
-    /openExclusive\(["']stemSep["']\)/.test(body),
-    `onStemSep 핸들러 본문에 openExclusive("stemSep") 호출이 없다 — ` +
-    `핸들러 내부에서 모달 전환은 반드시 openExclusive 를 경유해야 한다:\n${body}`,
+    /openExclusive\(["']stemSep["']\)/.test(prop),
+    `onStemSep 핸들러에 openExclusive("stemSep") 호출이 없다 — 모달 전환은 반드시 openExclusive 를 경유해야 한다:\n${prop}`,
   );
 });
 
-test("source: onStemSep 핸들러가 setActiveModal(null) 외의 값으로 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
-  const body = extractMoreMenuHandlerBody("onStemSep");
-  // setActiveModal(null) 은 허용: 네이티브 Modal 겹침(ghost 입력) 방지를 위해
-  // 먼저 닫고 setTimeout 이후 openExclusive 로 여는 패턴에서 필요하다. 실제로
-  // openExclusive 를 우회해 다른 값으로 모달을 여는 호출만 금지한다.
+test("source: MenuScreen onStemSep 핸들러가 복귀용 stemSepReturnModalRef 를 설정한다", () => {
+  const prop = extractMenuScreenHandlerSource("onStemSep");
   assert.ok(
-    !/setActiveModal\(\s*(?!null\s*\))/.test(body),
-    `onStemSep 핸들러 본문에서 setActiveModal(null) 이 아닌 직접 호출이 발견됐다 — ` +
-    `openExclusive 를 우회하면 mutual exclusion 보장이 깨진다:\n${body}`,
+    /stemSepReturnModalRef\.current\s*=/.test(prop),
+    `onStemSep 핸들러가 stemSepReturnModalRef 를 설정하지 않는다 — 음원 분리 종료 시 메뉴 복귀가 깨진다:\n${prop}`,
   );
 });
 
-
-test("source: MoreMenuModal onXxx 핸들러 목록과 app/index.tsx openExclusive 키 목록이 동기화되어 있다", () => {
-  // 정답 소스: app/index.tsx <MoreMenuModal> 블록의 openExclusive 호출 키
-  const canonicalKeys = [...extractMoreMenuOpenExclusiveKeys()].sort();
-
-  const modalSrc = readFileSync(join(process.cwd(), "components/MoreMenuModal.tsx"), "utf-8");
-
-  // MoreMenuModalProps 인터페이스 본문 추출
-  const interfaceMatch = modalSrc.match(/export interface MoreMenuModalProps \{([\s\S]*?)\}/);
+test("source: MenuScreen onStemSep 핸들러가 setActiveModal 을 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
+  const prop = extractMenuScreenHandlerSource("onStemSep");
   assert.ok(
-    interfaceMatch,
-    "MoreMenuModalProps 인터페이스를 찾을 수 없다 — components/MoreMenuModal.tsx 에 export interface MoreMenuModalProps { … } 가 있어야 한다",
-  );
-
-  // onXxx: () => void 형태의 핸들러 prop 이름 추출
-  // 제외 목록: openExclusive 를 거치지 않고 별도 메커니즘으로 동작하는 핸들러
-  //   - onClose: 닫기 전용, ActiveModal 항목 아님
-  //   - onScoreMode: 악보 모드는 setScoreMode 상태로 직접 전환 (ActiveModal 미사용)
-  //   - onStageMode: 무대 모드는 ActiveModal 시스템 외부에서 관리되는 전용 오버레이
-  const NON_EXCLUSIVE_HANDLERS = new Set(["Close", "ScoreMode", "StageMode"]);
-  const handlerRe = /\bon([A-Z][a-zA-Z]+)\s*:\s*\(\)\s*=>/g;
-  const handlerKeys: string[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = handlerRe.exec(interfaceMatch[1])) !== null) {
-    const pascal = m[1]; // e.g. "ScheduledStart"
-    if (NON_EXCLUSIVE_HANDLERS.has(pascal)) continue;
-    handlerKeys.push(pascal.charAt(0).toLowerCase() + pascal.slice(1));
-  }
-  handlerKeys.sort();
-
-  assert.deepEqual(
-    handlerKeys,
-    canonicalKeys,
-    `MoreMenuModal 인터페이스 onXxx 파생 키(${handlerKeys.join(", ")})와 app/index.tsx openExclusive 키(${canonicalKeys.join(", ")})가 일치하지 않는다\n` +
-    "새 항목 추가 시: MoreMenuModalProps 인터페이스, Pressable(testID 포함), app/index.tsx <MoreMenuModal 블록을 함께 업데이트하세요.",
+    !/setActiveModal\(\s*(?!null\s*\))/.test(prop),
+    `onStemSep 핸들러에서 setActiveModal(null) 이 아닌 직접 호출이 발견됐다:\n${prop}`,
   );
 });
 
@@ -724,7 +541,6 @@ function simulateBackPress(
     showFadeOut,
     showScheduledStart,
     showDrumKit,
-    showMoreMenu,
     showMenu,
     showOnboarding,
   } = deriveModalFlags(activeModal);
@@ -742,7 +558,6 @@ function simulateBackPress(
   if (showFadeOut)       return { nextActiveModal: null,          consumed: true };
   if (showScheduledStart)return { nextActiveModal: null,          consumed: true };
   if (showDrumKit)       return { nextActiveModal: null,          consumed: true };
-  if (showMoreMenu)      return { nextActiveModal: null,          consumed: true };
   if (showMenu)          return { nextActiveModal: null,          consumed: true };
   if (showOnboarding)    return { nextActiveModal: null,          consumed: true };
   // 모든 모달이 닫혀 있거나 showReboot 상태: Alert.alert — activeModal 변경 없음
@@ -760,13 +575,13 @@ test("android-appstate: settings 열림 → foreground 복귀 → AppState 이�
     "foreground 복귀 후에도 settings 모달 1개만 visible 이어야 한다");
 });
 
-test("android-appstate: moreMenu 열림 → foreground 복귀 → AppState 이벤트 후 activeModal 불변 → visible=1", () => {
-  const before: ActiveModal = "moreMenu";
+test("android-appstate: drumKit 열림 → foreground 복귀 → AppState 이벤트 후 activeModal 불변 → visible=1", () => {
+  const before: ActiveModal = "drumKit";
   const after = simulateAppStateForegroundReturn(before);
 
-  assert.equal(after, "moreMenu", "AppState active 이후 activeModal 값이 바뀌어서는 안 된다");
+  assert.equal(after, "drumKit", "AppState active 이후 activeModal 값이 바뀌어서는 안 된다");
   assert.equal(countVisibleModals(deriveModalFlags(after)), 1,
-    "foreground 복귀 후에도 moreMenu 모달 1개만 visible 이어야 한다");
+    "foreground 복귀 후에도 drumKit 모달 1개만 visible 이어야 한다");
 });
 
 test("android-appstate: settings 열림 → foreground 복귀 → back-press → visible=0 (이벤트 시퀀스 시뮬레이션)", () => {
@@ -786,18 +601,18 @@ test("android-appstate: settings 열림 → foreground 복귀 → back-press →
     "back-press 처리 후 visible 모달 0개");
 });
 
-test("android-appstate: moreMenu 열림 → foreground 복귀 → back-press → visible=0 (이벤트 시퀀스 시뮬레이션)", () => {
-  let activeModal: ActiveModal = "moreMenu";
+test("android-appstate: drumKit 열림 → foreground 복귀 → back-press → visible=0 (이벤트 시퀀스 시뮬레이션)", () => {
+  let activeModal: ActiveModal = "drumKit";
 
   // 1단계: background → foreground
   activeModal = simulateAppStateForegroundReturn(activeModal);
   assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 1,
-    "foreground 복귀 직후: moreMenu visible=1");
+    "foreground 복귀 직후: drumKit visible=1");
 
   // 2단계: back-press
   const { nextActiveModal, consumed } = simulateBackPress(activeModal, false);
   assert.equal(consumed, true);
-  assert.equal(nextActiveModal, null, "moreMenu 상태에서 back-press → setActiveModal(null)");
+  assert.equal(nextActiveModal, null, "drumKit 상태에서 back-press → setActiveModal(null)");
   assert.equal(countVisibleModals(deriveModalFlags(nextActiveModal)), 0,
     "back-press 처리 후 visible 모달 0개");
 });
@@ -806,7 +621,7 @@ test("android-appstate: 모든 모달 상태에서 foreground 복귀 → back-pr
   // 모든 ActiveModal 값에 대해 이벤트 시퀀스를 시뮬레이션한다.
   const allModals: ActiveModal[] = [
     "settings", "menu", "signalGen", "tuningGuide",
-    "practiceBook", "workUp", "moreMenu", "drumKit",
+    "practiceBook", "workUp", "drumKit",
     "scheduledStart", "fadeOut", "onboarding",
     "bpmDetect", "stemSep",
     null,
@@ -855,18 +670,18 @@ test("android-appstate: 전체 시나리오 — settings 열림 → background �
   assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 0, "back-press 후: null");
 });
 
-test("android-appstate: 전체 시나리오 — moreMenu 열림 → background → foreground → back-press → 각 단계 visible ≤ 1", () => {
+test("android-appstate: 전체 시나리오 — drumKit 열림 → background → foreground → back-press → 각 단계 visible ≤ 1", () => {
   let activeModal: ActiveModal = null;
 
   activeModal = "menu";
   assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 1, "메뉴 열기");
 
-  activeModal = "moreMenu";
-  assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 1, "더보기 열기");
+  activeModal = "drumKit";
+  assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 1, "드럼 킷 열기");
 
   // background → foreground
   activeModal = simulateAppStateForegroundReturn(activeModal);
-  assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 1, "복귀 후: moreMenu 그대로");
+  assert.equal(countVisibleModals(deriveModalFlags(activeModal)), 1, "복귀 후: drumKit 그대로");
 
   // back-press
   const { nextActiveModal } = simulateBackPress(activeModal, false);
@@ -883,8 +698,8 @@ test("android-appstate: 복귀 후 연속 모달 전환에서도 mutual exclusio
   const transitions: Array<[ActiveModal, ActiveModal]> = [
     [activeModal, simulateBackPress(activeModal, false).nextActiveModal], // back-press
     [null, "menu"],
-    ["menu", "moreMenu"],
-    ["moreMenu", simulateBackPress("moreMenu", false).nextActiveModal],  // back-press
+    ["menu", "drumKit"],
+    ["drumKit", simulateBackPress("drumKit", false).nextActiveModal],  // back-press
     [null, "settings"],
     ["settings", simulateBackPress("settings", false).nextActiveModal],  // back-press
   ];

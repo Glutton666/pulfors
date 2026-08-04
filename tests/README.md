@@ -35,9 +35,9 @@ npx playwright test e2e/modal-open-close.spec.ts
 ### 현재 E2E 커버리지
 
 - `e2e/modal-open-close.spec.ts` — AnimatedModal 기반 모달 열기/닫기
-  - 메인 메뉴 열기 → 항목(설정·연습장·그 외...) 표시 → backdrop 닫기
+  - 메인 메뉴 열기 → 항목(설정·연습장·음원 분리...) 표시 → backdrop 닫기
   - 설정 모달 열기 → 내용 표시 → X 버튼 닫기
-  - MoreMenu 모달 열기 → 4개 항목(예약시작·페이드아웃·드럼킷·템포퀴즈) 표시 → backdrop 닫기
+  - 메인 메뉴 → 음원 분리 항목 클릭 → 음원 분리 모달 열기 → X 닫기
 
 ## 단위 테스트 현재 커버리지
 

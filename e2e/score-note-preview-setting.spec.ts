@@ -25,7 +25,7 @@
  *   components/ScoreEditorModals.tsx testID="score-toggle-note-preview", "score-symbol-settings-done"
  *   components/ScoreEditorScreen.tsx testID="score-editor-back", "score-editor-play", "score-editor-stop",
  *                                    "score-editor-more-menu"
- *   components/ScoreListScreen.tsx   testID="score-list-empty-new", "score-list-back"
+ *   components/ScoreListScreen.tsx   testID="score-list-empty-new", "score-list-import"
  *   components/ScoreNewModal.tsx     testID="score-new-create"
  */
 
@@ -54,40 +54,52 @@ const CANVAS_NOTE_X_RATIO = 0.55;
 
 // ── 헬퍼 ─────────────────────────────────────────────────────────────────────
 
-/** 온보딩이 있으면 모두 건너뛴다 (최대 5회). */
+/**
+ * 온보딩이 있으면 모두 건너뛴다 (최대 8회).
+ * 주의: 건너뛰기는 accessibilityRole 없는 Pressable+Text 이므로
+ * getByRole("button") 이 아닌 getByText 로 찾아야 한다.
+ */
 async function skipOnboarding(page: Page) {
-  for (let i = 0; i < 5; i++) {
-    const skip = page
-      .getByRole("button")
-      .filter({ hasText: /건너뛰기|skip/i });
+  for (let i = 0; i < 8; i++) {
+    const skip = page.getByText(/건너뛰기|Skip/i);
     if ((await skip.count()) === 0) break;
     await skip.first().click();
-    await page
-      .getByRole("button")
-      .filter({ hasText: /건너뛰기|skip/i })
-      .waitFor({ state: "hidden", timeout: 2000 })
-      .catch(() => {});
+    await page.waitForTimeout(400);
   }
 }
 
 /**
- * 메인 화면 → MoreMenu → 악보 모드 → 새 악보 생성 → 악보 편집기.
+ * 메인 화면 → 모드 다이얼 → 악보 모드 → 새 악보 생성 → 악보 편집기.
  * 호출 후 score-editor-back 이 visible 상태가 보장된다.
+ *
+ * 다이얼 fan 지오메트리 (ModeSwitcherDial.tsx, hideHandle=true → top-center 고정):
+ *   anchor = (winW/2, 0), centAng = 90°(아래), ANGLE_STEP = 34°, ICON_R = 104
+ *   MODES  = [beat, bar, score, note, practice, stage, menu]
+ *   초기 모드 beat(idx 0) 기준 score 는 offset +2
+ *     → deg = 90 + 2×34 = 158° → dx = cos·104 ≈ −96, dy = sin·104 ≈ +39
+ *   탭 판정: 가장 가까운 슬롯이 ICON_S(52px) 이내면 해당 슬롯 선택.
+ *   이후 오버레이(fan 밖) 탭이 confirmSelection → switchToMode("score").
  */
 async function navigateToScoreEditor(page: Page) {
-  // 메인 메뉴 열기
-  await page.locator('[data-testid="menu-button"]').click();
-  await page.locator('[data-testid="menu-more"]').waitFor({ state: "visible" });
-  await page.locator('[data-testid="menu-more"]').click();
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error("viewportSize() 가 null — playwright 설정 확인");
+  const cx = viewport.width / 2;
 
-  // MoreMenu → 악보 모드
-  const scoreMode = page.locator('[data-testid="more-menu-scoreMode"]');
-  await scoreMode.waitFor({ state: "visible" });
-  await scoreMode.click();
+  // 상단 중앙 모드 레이블 탭 → 팬 다이얼 열기
+  await page.locator('[data-testid="mode-cycle-label"]').click();
+  // 팬 오픈 애니메이션 대기
+  await page.waitForTimeout(400);
 
-  // 악보 목록이 열릴 때까지 대기
+  // score 아이콘 위치 탭 (offset +2 → x = cx−96, y = 39)
+  await page.mouse.click(cx - 96, 39);
+  await page.waitForTimeout(300);
+
+  // 팬 밖 오버레이 탭 → 선택 확정 (confirmSelection → switchToMode("score"))
+  await page.mouse.click(cx, viewport.height * 0.7);
+
+  // 악보 목록이 열릴 때까지 대기 (score-list-import 는 목록 헤더에 항상 존재)
   await page
-    .locator('[data-testid="score-list-back"]')
+    .locator('[data-testid="score-list-import"]')
     .waitFor({ state: "visible", timeout: 10000 });
 
   // 새 악보 버튼 (목록 비어있을 때는 score-list-empty-new, 그 외엔 score-list-new)
@@ -106,6 +118,10 @@ async function navigateToScoreEditor(page: Page) {
   await page
     .locator('[data-testid="score-editor-back"]')
     .waitFor({ state: "visible", timeout: 10000 });
+
+  // 4분음표 선택 — 팔레트에서 음길이를 골라야 캔버스 탭이 음표 입력으로 동작한다.
+  await page.locator('[data-testid="score-palette-dur-quarter"]').click();
+  await page.waitForTimeout(300);
 }
 
 /**
@@ -139,8 +155,11 @@ async function closeSymbolSettings(page: Page) {
  */
 async function setNotePreview(page: Page, desiredOn: boolean) {
   const toggle = page.locator('[data-testid="score-toggle-note-preview"]');
-  // React Native Web Switch: aria-checked 속성으로 상태 확인
-  const current = (await toggle.getAttribute("aria-checked")) === "true";
+  // React Native Web Switch: 래퍼 div 에는 aria-checked 가 없다.
+  // 내부 <input type="checkbox"> 의 checked 프로퍼티로 상태를 읽는다.
+  const current = await toggle.evaluate(
+    (el) => (el.querySelector("input") as HTMLInputElement | null)?.checked ?? false,
+  );
   if (current !== desiredOn) {
     await toggle.click();
     // 상태 반전 후 안정화 대기
@@ -183,10 +202,9 @@ async function getOscillatorCount(page: Page): Promise<number> {
 
 // ── 테스트 ────────────────────────────────────────────────────────────────────
 
-// NOTE(2026-08): '그 외' 메뉴에서 악보 모드 항목이 제거되어(음원 분리만 유지)
-// 이 스펙의 MoreMenu 경유 네비게이션 경로가 사라졌다. 악보 모드의 새 UI 진입점이
-// 생기면 navigateToScoreEditor 를 재작성하고 skip 을 해제할 것.
-test.describe.skip("음표 입력 미리 듣기 설정 E2E", () => {
+// NOTE(2026-08): '그 외' 메뉴가 제거되어 MoreMenu 경유 경로 대신
+// 상단 모드 다이얼(mode-cycle-label → 팬 다이얼)로 악보 모드에 진입한다.
+test.describe("음표 입력 미리 듣기 설정 E2E", () => {
   test.beforeEach(async ({ page }) => {
     // AudioContext.createOscillator 를 패치해 발음 시도 횟수를 추적한다.
     // previewScoreNote 웹 경로는 _playWebNote → getWebAudioContext().createOscillator() 를 사용한다.
@@ -209,7 +227,7 @@ test.describe.skip("음표 입력 미리 듣기 설정 E2E", () => {
 
     await page.goto("/");
     await page
-      .locator('[data-testid="menu-button"]')
+      .locator('[data-testid="mode-cycle-label"]')
       .waitFor({ state: "visible", timeout: 20000 });
     await skipOnboarding(page);
     await navigateToScoreEditor(page);
@@ -225,7 +243,11 @@ test.describe.skip("음표 입력 미리 듣기 설정 E2E", () => {
     await setNotePreview(page, true);
 
     const toggle = page.locator('[data-testid="score-toggle-note-preview"]');
-    await expect(toggle).toHaveAttribute("aria-checked", "true");
+    expect(
+      await toggle.evaluate(
+        (el) => (el.querySelector("input") as HTMLInputElement | null)?.checked,
+      ),
+    ).toBe(true);
 
     await closeSymbolSettings(page);
 
@@ -262,7 +284,11 @@ test.describe.skip("음표 입력 미리 듣기 설정 E2E", () => {
     await setNotePreview(page, false);
 
     const toggleOff = page.locator('[data-testid="score-toggle-note-preview"]');
-    await expect(toggleOff).toHaveAttribute("aria-checked", "false");
+    expect(
+      await toggleOff.evaluate(
+        (el) => (el.querySelector("input") as HTMLInputElement | null)?.checked,
+      ),
+    ).toBe(false);
 
     await closeSymbolSettings(page);
 

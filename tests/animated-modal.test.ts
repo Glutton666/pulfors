@@ -15,7 +15,6 @@
  * 커버하는 모달:
  *   - 메인 메뉴  (app/index.tsx: <AnimatedModal visible={showMenu}>)
  *   - SettingsModal (AnimatedModal, fade 타입)
- *   - MoreMenuModal (AnimatedModal, fade 타입)
  *   - PracticeBookModal / ScheduledStartModal (AnimatedSlideModal, slide 타입)
  *
  * 배경:
@@ -258,37 +257,6 @@ describe("SettingsModal 시나리오 (AnimatedModal, fade 타입)", () => {
   });
 });
 
-// ─── 6. MoreMenuModal 시나리오 ────────────────────────────────────────────────
-//
-// components/MoreMenuModal.tsx: <AnimatedModal visible={visible} ...>
-// visible = showMoreMenu = activeModal === "moreMenu"
-// testID: more-menu-stemSep, more-menu-close 등
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe("MoreMenuModal 시나리오 (AnimatedModal, fade 타입)", () => {
-  test("더보기 메뉴 열기: nativeVisible 즉시 true", () => {
-    const sim = new ModalVisibilitySimulation(false);
-    sim.setVisible(true);
-    assert.equal(sim.nativeVisible, true);
-  });
-
-  test("더보기 메뉴 닫기: 애니메이션 완료 후 hidden", () => {
-    const sim = new ModalVisibilitySimulation(true);
-    const { animDone } = sim.setVisible(false);
-    animDone(true);
-    assert.equal(sim.nativeVisible, false);
-  });
-
-  test("더보기 메뉴: 빠른 open→close→open 시 nativeVisible 최종 true", () => {
-    const sim = new ModalVisibilitySimulation(false);
-    sim.setVisible(true);
-    const { animDone: stale } = sim.setVisible(false);
-    sim.setVisible(true);
-    stale(true);
-    assert.equal(sim.nativeVisible, true);
-  });
-});
-
 // ─── 7. AnimatedSlideModal 시나리오 (동일 상태 머신 패턴) ──────────────────
 //
 // components/AnimatedModal.tsx: AnimatedSlideModal
@@ -340,7 +308,6 @@ describe("deriveModalFlags — activeModal → visible 파생", () => {
     const flags = deriveModalFlags("menu");
     assert.equal(flags.showMenu, true);
     assert.equal(flags.showSettings, false);
-    assert.equal(flags.showMoreMenu, false);
   });
 
   test("activeModal='settings': showSettings=true, showMenu=false", () => {
@@ -349,9 +316,9 @@ describe("deriveModalFlags — activeModal → visible 파생", () => {
     assert.equal(flags.showMenu, false);
   });
 
-  test("activeModal='moreMenu': showMoreMenu=true, 나머지 false", () => {
-    const flags = deriveModalFlags("moreMenu");
-    assert.equal(flags.showMoreMenu, true);
+  test("activeModal='stemSep': showStemSep=true, 나머지 false", () => {
+    const flags = deriveModalFlags("stemSep");
+    assert.equal(flags.showStemSep, true);
     assert.equal(flags.showMenu, false);
     assert.equal(flags.showSettings, false);
   });
@@ -365,8 +332,8 @@ describe("deriveModalFlags — activeModal → visible 파생", () => {
   test("모든 activeModal 값에서 정확히 1개만 true 가 된다 (단일 모달 보장)", () => {
     const modals: ActiveModal[] = [
       "settings", "menu", "signalGen", "tuningGuide",
-      "practiceBook", "workUp", "onboarding", "moreMenu",
-      "drumKit", "scheduledStart", "fadeOut",
+      "practiceBook", "workUp", "onboarding",
+      "drumKit", "scheduledStart", "fadeOut", "stemSep",
     ];
     for (const modal of modals) {
       const flags = deriveModalFlags(modal);
@@ -386,8 +353,8 @@ describe("모달 라우팅 — 단일 활성 모달 보장", () => {
   test("countVisibleModals: 모든 비-null 상태에서 정확히 1", () => {
     const allValues: ActiveModal[] = [
       "settings", "menu", "signalGen", "tuningGuide",
-      "practiceBook", "workUp", "onboarding", "moreMenu",
-      "drumKit", "scheduledStart", "fadeOut",
+      "practiceBook", "workUp", "onboarding",
+      "drumKit", "scheduledStart", "fadeOut", "stemSep",
     ];
     for (const v of allValues) {
       assert.equal(countVisibleModals(deriveModalFlags(v)), 1, `${v} → 1 modal`);
@@ -403,12 +370,12 @@ describe("모달 라우팅 — 단일 활성 모달 보장", () => {
     assert.equal(toMenu.showMenu, true);
   });
 
-  test("더보기 → 설정 전환: 더보기 false, 설정 true", () => {
-    const from = deriveModalFlags("moreMenu");
+  test("음원 분리 → 설정 전환: stemSep false, 설정 true", () => {
+    const from = deriveModalFlags("stemSep");
     const to = deriveModalFlags("settings");
-    assert.equal(from.showMoreMenu, true);
+    assert.equal(from.showStemSep, true);
     assert.equal(from.showSettings, false);
-    assert.equal(to.showMoreMenu, false);
+    assert.equal(to.showStemSep, false);
     assert.equal(to.showSettings, true);
   });
 });

@@ -21,7 +21,7 @@ interface MenuScreenProps {
   onSignalGen: () => void;
   onWorkUp: () => void;
   onPracticeBook: () => void;
-  onMoreMenu: () => void;
+  onStemSep: () => void;
 }
 
 export function MenuScreen({
@@ -32,7 +32,7 @@ export function MenuScreen({
   onSignalGen,
   onWorkUp,
   onPracticeBook,
-  onMoreMenu,
+  onStemSep,
 }: MenuScreenProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -68,10 +68,10 @@ export function MenuScreen({
       onPress: onPracticeBook,
     },
     {
-      icon: <Ionicons name="ellipsis-horizontal" size={ICON_SIZE} color={C.accent} />,
-      label: t("main", "menuMore"),
-      onPress: onMoreMenu,
-      testID: "menu-more",
+      icon: <MaterialCommunityIcons name="layers-triple-outline" size={ICON_SIZE} color={C.accent} />,
+      label: t("stemSep", "title"),
+      onPress: onStemSep,
+      testID: "menu-stemSep",
     },
   ];
 
