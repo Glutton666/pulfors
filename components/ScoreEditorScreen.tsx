@@ -224,6 +224,8 @@ export function ScoreEditorScreen({
   // ── 마디 설정 드로어 ──────────────────────────────────────────
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [topBarHeight, setTopBarHeight] = useState(0);
+  // 선택 액션 바 영역 높이 (플로팅 도구 패널 위치 보정용, 없으면 0)
+  const [selectionBarsHeight, setSelectionBarsHeight] = useState(0);
   const [draftMeasure, setDraftMeasure] = useState<{
     bpm?: number;
     timeSignature?: { numerator: number; denominator: number };
@@ -1741,7 +1743,10 @@ export function ScoreEditorScreen({
         onLayout={setTopBarHeight}
       />
 
-      {/* 선택 액션 바 */}
+      {/* 선택 액션 바 — 높이를 측정해 플로팅 도구 패널이 겹치지 않게 아래로 내린다 */}
+      <View
+        onLayout={(e) => setSelectionBarsHeight(e.nativeEvent.layout.height)}
+      >
       <ScoreEditorSelectionBars
         selectedElementId={selectedElementId}
         selectedNote={selectedNote}
@@ -1783,6 +1788,7 @@ export function ScoreEditorScreen({
         onApplyTuplet={handleApplyTupletToSelected}
         onDeleteMultiSelected={handleDeleteMultiSelected}
       />
+      </View>
 
       {/* 악보 캔버스 */}
       <ScoreEditorCanvas
@@ -1867,7 +1873,7 @@ export function ScoreEditorScreen({
 
       {/* 재생 오버레이 (확대 뷰 + 배지 + 플로팅 버튼) */}
       <ScoreEditorPlaybackOverlay
-        topBarHeight={topBarHeight}
+        topBarHeight={topBarHeight > 0 ? topBarHeight + selectionBarsHeight : 0}
         isPlaying={playback.isPlaying}
         showZoomView={showZoomView}
         showPlayhead={showPlayhead}
