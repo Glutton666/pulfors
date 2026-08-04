@@ -10,14 +10,14 @@ import {
   buildPlayTimeline,
   type PlayEvent,
 } from "../lib/score-playback";
-import type { ScoreMeasure, ScoreDocument } from "../lib/score-types";
+import type { ScoreMeasure, ScoreDocument, Pitch } from "../lib/score-types";
 
 // ── 헬퍼: 최소 ScoreElement 팩토리 ─────────────────────────────
 
 let idSeq = 0;
 function nid() { return `el-${++idSeq}`; }
 
-function noteEl(duration: string, pitch = { step: "C" as const, octave: 4 }) {
+function noteEl(duration: string, pitch: Pitch = { step: "C", octave: 4 }) {
   return { id: nid(), type: "note" as const, duration: duration as any, pitch };
 }
 function restEl(duration: string) {
