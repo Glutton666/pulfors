@@ -262,7 +262,7 @@ describe("SettingsModal 시나리오 (AnimatedModal, fade 타입)", () => {
 //
 // components/MoreMenuModal.tsx: <AnimatedModal visible={visible} ...>
 // visible = showMoreMenu = activeModal === "moreMenu"
-// testID: more-menu-scheduled-start, more-menu-fade-out, etc.
+// testID: more-menu-stemSep, more-menu-close 등
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("MoreMenuModal 시나리오 (AnimatedModal, fade 타입)", () => {

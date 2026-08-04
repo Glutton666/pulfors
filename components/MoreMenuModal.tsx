@@ -31,15 +31,10 @@ import { Radius, Spacing, FontSize } from "@/constants/tokens";
 export interface MoreMenuModalProps {
   visible: boolean;
   onClose: () => void;
-  onScheduledStart: () => void;
-  onFadeOut: () => void;
-  onDrumKit: () => void;
-  onScoreMode: () => void;
-  onStageMode: () => void;
   onStemSep: () => void;
 }
 
-export function MoreMenuModal({ visible, onClose, onScheduledStart, onFadeOut, onDrumKit, onScoreMode, onStageMode, onStemSep }: MoreMenuModalProps) {
+export function MoreMenuModal({ visible, onClose, onStemSep }: MoreMenuModalProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -60,81 +55,6 @@ export function MoreMenuModal({ visible, onClose, onScheduledStart, onFadeOut, o
         >
           <View style={styles.handle} />
           <Text style={[styles.title, { color: C.text }]}>{t("main", "menuMore")}</Text>
-
-          <Pressable
-            style={({ pressed }) => [styles.item, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
-            onPress={onScheduledStart}
-            accessibilityRole="button"
-            accessibilityLabel={t("scheduledStart", "title")}
-            testID="more-menu-scheduled-start"
-          >
-            <MaterialCommunityIcons name="clock-time-four-outline" size={S.ms(22, 0.4)} color={C.accent} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.itemTitle, { color: C.text }]}>{t("scheduledStart", "title")}</Text>
-              <Text style={[styles.itemHint, { color: C.textSecondary }]}>{t("scheduledStart", "menuHint")}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={S.ms(18, 0.3)} color={C.textSecondary} />
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.item, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
-            onPress={onFadeOut}
-            accessibilityRole="button"
-            accessibilityLabel={t("fadeOut", "title")}
-            testID="more-menu-fade-out"
-          >
-            <MaterialCommunityIcons name="volume-mute" size={S.ms(22, 0.4)} color={C.accent} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.itemTitle, { color: C.text }]}>{t("fadeOut", "title")}</Text>
-              <Text style={[styles.itemHint, { color: C.textSecondary }]}>{t("fadeOut", "menuHint")}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={S.ms(18, 0.3)} color={C.textSecondary} />
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.item, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
-            onPress={onDrumKit}
-            accessibilityRole="button"
-            accessibilityLabel={t("drumKit", "title")}
-            testID="more-menu-drum-kit"
-          >
-            <MaterialCommunityIcons name="grid" size={S.ms(22, 0.4)} color={C.accent} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.itemTitle, { color: C.text }]}>{t("drumKit", "title")}</Text>
-              <Text style={[styles.itemHint, { color: C.textSecondary }]}>{t("drumKit", "menuHint")}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={S.ms(18, 0.3)} color={C.textSecondary} />
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.item, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
-            onPress={onScoreMode}
-            accessibilityRole="button"
-            accessibilityLabel={t("scoreMode", "title")}
-            testID="more-menu-scoreMode"
-          >
-            <MaterialCommunityIcons name="music-note-whole" size={S.ms(22, 0.4)} color={C.accent} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.itemTitle, { color: C.text }]}>{t("scoreMode", "title")}</Text>
-              <Text style={[styles.itemHint, { color: C.textSecondary }]}>{t("scoreMode", "menuHint")}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={S.ms(18, 0.3)} color={C.textSecondary} />
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.item, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
-            onPress={onStageMode}
-            accessibilityRole="button"
-            accessibilityLabel={t("stageMode", "title")}
-            testID="more-menu-stageMode"
-          >
-            <MaterialCommunityIcons name="television-play" size={S.ms(22, 0.4)} color={C.accent} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.itemTitle, { color: C.text }]}>{t("stageMode", "title")}</Text>
-              <Text style={[styles.itemHint, { color: C.textSecondary }]}>{t("stageMode", "menuHint")}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={S.ms(18, 0.3)} color={C.textSecondary} />
-          </Pressable>
 
           <Pressable
             style={({ pressed }) => [styles.item, { borderColor: C.border }, pressed && { opacity: 0.7 }]}

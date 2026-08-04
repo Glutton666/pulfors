@@ -25,7 +25,6 @@
  *   components/ScoreEditorModals.tsx testID="score-toggle-note-preview", "score-symbol-settings-done"
  *   components/ScoreEditorScreen.tsx testID="score-editor-back", "score-editor-play", "score-editor-stop",
  *                                    "score-editor-more-menu"
- *   components/MoreMenuModal.tsx     testID="more-menu-scoreMode"
  *   components/ScoreListScreen.tsx   testID="score-list-empty-new", "score-list-back"
  *   components/ScoreNewModal.tsx     testID="score-new-create"
  */
@@ -184,7 +183,10 @@ async function getOscillatorCount(page: Page): Promise<number> {
 
 // ── 테스트 ────────────────────────────────────────────────────────────────────
 
-test.describe("음표 입력 미리 듣기 설정 E2E", () => {
+// NOTE(2026-08): '그 외' 메뉴에서 악보 모드 항목이 제거되어(음원 분리만 유지)
+// 이 스펙의 MoreMenu 경유 네비게이션 경로가 사라졌다. 악보 모드의 새 UI 진입점이
+// 생기면 navigateToScoreEditor 를 재작성하고 skip 을 해제할 것.
+test.describe.skip("음표 입력 미리 듣기 설정 E2E", () => {
   test.beforeEach(async ({ page }) => {
     // AudioContext.createOscillator 를 패치해 발음 시도 횟수를 추적한다.
     // previewScoreNote 웹 경로는 _playWebNote → getWebAudioContext().createOscillator() 를 사용한다.

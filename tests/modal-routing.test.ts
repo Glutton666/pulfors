@@ -2,7 +2,7 @@
  * 주요 모달 진입 흐름 회귀 테스트
  *
  * 검증 대상:
- *   1. MoreMenu → 하위 모달(ScheduledStart/FadeOut/DrumKit/TempoQuiz) 전환 시
+ *   1. MoreMenu → 하위 모달(StemSep) 전환 시
  *      한 시점에 하나의 모달만 visible해지는지
  *   2. SignalGenerator → TuningGuide 전환 시 두 모달이 동시에 visible=true가
  *      되지 않으며, TuningGuide 종료 후 SignalGenerator가 재오픈되는지
@@ -101,9 +101,6 @@ test("modal-routing: 각 activeModal 값은 정확히 해당 show* 플래그만 
 //
 // ─────────────────────────────────────────────────────────────────────────────
 const MORE_MENU_ITEMS: Array<[ActiveModal, keyof ReturnType<typeof deriveModalFlags>]> = [
-  ["scheduledStart", "showScheduledStart"],
-  ["fadeOut",        "showFadeOut"],
-  ["drumKit",        "showDrumKit"],
   ["stemSep",        "showStemSep"],
 ];
 
@@ -590,117 +587,27 @@ function extractMoreMenuHandlerBody(handlerName: string): string {
   return block.slice(bodyStart, i + 1);
 }
 
-test("source: onDrumKit 핸들러가 openExclusive(\"drumKit\")를 호출한다", () => {
-  const body = extractMoreMenuHandlerBody("onDrumKit");
+test("source: onStemSep 핸들러가 openExclusive(\"stemSep\")를 호출한다", () => {
+  const body = extractMoreMenuHandlerBody("onStemSep");
   assert.ok(
-    /openExclusive\(["']drumKit["']\)/.test(body),
-    `onDrumKit 핸들러 본문에 openExclusive("drumKit") 호출이 없다 — ` +
+    /openExclusive\(["']stemSep["']\)/.test(body),
+    `onStemSep 핸들러 본문에 openExclusive("stemSep") 호출이 없다 — ` +
     `핸들러 내부에서 모달 전환은 반드시 openExclusive 를 경유해야 한다:\n${body}`,
   );
 });
 
-test("source: onDrumKit 핸들러가 setActiveModal(null) 외의 값으로 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
-  const body = extractMoreMenuHandlerBody("onDrumKit");
+test("source: onStemSep 핸들러가 setActiveModal(null) 외의 값으로 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
+  const body = extractMoreMenuHandlerBody("onStemSep");
   // setActiveModal(null) 은 허용: 네이티브 Modal 겹침(ghost 입력) 방지를 위해
   // 먼저 닫고 setTimeout 이후 openExclusive 로 여는 패턴에서 필요하다. 실제로
   // openExclusive 를 우회해 다른 값으로 모달을 여는 호출만 금지한다.
   assert.ok(
     !/setActiveModal\(\s*(?!null\s*\))/.test(body),
-    `onDrumKit 핸들러 본문에서 setActiveModal(null) 이 아닌 직접 호출이 발견됐다 — ` +
+    `onStemSep 핸들러 본문에서 setActiveModal(null) 이 아닌 직접 호출이 발견됐다 — ` +
     `openExclusive 를 우회하면 mutual exclusion 보장이 깨진다:\n${body}`,
   );
 });
 
-
-// ────────────────────────────────────────────────────────────────
-// 6b. 소스 구조 테스트 — ScheduledStart·FadeOut 핸들러 구조 검증
-//
-//    onScheduledStart / onFadeOut 은 현재 단순 표현식 람다:
-//      onScheduledStart={() => openExclusive("scheduledStart")}
-//      onFadeOut={() => openExclusive("fadeOut")}
-//    이므로 extractMoreMenuHandlerBody (블록 람다 전용) 를 사용할 수 없다.
-//    prop 전체를 중괄호 깊이 추적으로 추출하는 별도 헬퍼를 사용한다.
-//
-//    향후 핸들러에 엔진 정지 등 부수 효과 코드가 추가될 때
-//    openExclusive 경유를 잊거나 setActiveModal 을 직접 호출하는 회귀를
-//    사전 차단하기 위해 커버한다.
-// ────────────────────────────────────────────────────────────────
-
-/**
- * app/index.tsx 의 <MoreMenuModal … /> JSX 블록에서
- * 지정한 prop 전체 소스 문자열을 반환한다.
- *
- * 단순 표현식 람다(onScheduledStart={() => openExclusive(...)}) 와
- * 블록 람다(onDrumKit={() => { ... }}) 를 모두 처리한다.
- * 중괄호 깊이 추적을 사용해 중첩 구조를 올바르게 처리한다.
- */
-function extractMoreMenuPropSource(handlerName: string): string {
-  const src = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
-
-  const startIdx = src.indexOf("<MoreMenuModal");
-  assert.ok(startIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MoreMenuModal 를 찾을 수 없다");
-
-  const endIdx = src.indexOf("/>", startIdx);
-  assert.ok(endIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MoreMenuModal 의 닫는 /> 를 찾을 수 없다");
-
-  const block = src.slice(startIdx, endIdx + 2);
-
-  // handlerName={...} 시작 위치 탐색
-  const propStart = block.indexOf(`${handlerName}={`);
-  assert.ok(
-    propStart !== -1,
-    `<MoreMenuModal 블록에서 ${handlerName}={ 를 찾을 수 없다`,
-  );
-
-  // { ... } 전체를 중괄호 깊이 추적으로 추출
-  const braceStart = block.indexOf("{", propStart + handlerName.length + 1);
-  let depth = 0;
-  let i = braceStart;
-  for (; i < block.length; i++) {
-    if (block[i] === "{") depth++;
-    else if (block[i] === "}") { depth--; if (depth === 0) break; }
-  }
-
-  return block.slice(propStart, i + 1);
-}
-
-test("source: onScheduledStart 핸들러가 openExclusive(\"scheduledStart\")를 호출한다", () => {
-  const prop = extractMoreMenuPropSource("onScheduledStart");
-  assert.ok(
-    /openExclusive\(["']scheduledStart["']\)/.test(prop),
-    `onScheduledStart prop 에 openExclusive("scheduledStart") 호출이 없다 — ` +
-    `모달 전환은 반드시 openExclusive 를 경유해야 한다:\n${prop}`,
-  );
-});
-
-test("source: onFadeOut 핸들러가 openExclusive(\"fadeOut\")를 호출한다", () => {
-  const prop = extractMoreMenuPropSource("onFadeOut");
-  assert.ok(
-    /openExclusive\(["']fadeOut["']\)/.test(prop),
-    `onFadeOut prop 에 openExclusive("fadeOut") 호출이 없다 — ` +
-    `모달 전환은 반드시 openExclusive 를 경유해야 한다:\n${prop}`,
-  );
-});
-
-test("source: onScheduledStart 핸들러가 setActiveModal(null) 외의 값으로 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
-  const prop = extractMoreMenuPropSource("onScheduledStart");
-  // setActiveModal(null) 은 허용: 네이티브 Modal 겹침(ghost 입력) 방지를 위해
-  // 먼저 닫고 setTimeout 이후 openExclusive 로 여는 패턴에서 필요하다.
-  assert.ok(
-    !/setActiveModal\(\s*(?!null\s*\))/.test(prop),
-    `onScheduledStart prop 에서 setActiveModal(null) 이 아닌 직접 호출이 발견됐다 — ` +
-    `openExclusive 를 우회하면 mutual exclusion 보장이 깨진다:\n${prop}`,
-  );
-});
-
-test("source: onFadeOut 핸들러가 setActiveModal(null) 외의 값으로 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
-  const prop = extractMoreMenuPropSource("onFadeOut");
-  assert.ok(
-    !/setActiveModal\(\s*(?!null\s*\))/.test(prop),
-    `onFadeOut prop 에서 setActiveModal(null) 이 아닌 직접 호출이 발견됐다 — ` +
-    `openExclusive 를 우회하면 mutual exclusion 보장이 깨진다:\n${prop}`,
-  );
-});
 
 test("source: MoreMenuModal onXxx 핸들러 목록과 app/index.tsx openExclusive 키 목록이 동기화되어 있다", () => {
   // 정답 소스: app/index.tsx <MoreMenuModal> 블록의 openExclusive 호출 키

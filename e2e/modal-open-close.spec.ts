@@ -6,7 +6,7 @@
  * 검증 대상:
  *   1. 메인 메뉴 (AnimatedModal) — 열기 → 항목 표시 → overlay 닫기
  *   2. 설정 모달 (AnimatedModal) — 메뉴에서 열기 → 내용 표시 → X 버튼 닫기
- *   3. MoreMenu 모달 (AnimatedModal) — 메뉴에서 열기 → 4개 항목 표시 → overlay 닫기
+ *   3. MoreMenu 모달 (AnimatedModal) — 메뉴에서 열기 → 음원 분리 항목 표시 → overlay 닫기
  *
  * 실행:
  *   npx playwright test e2e/modal-open-close.spec.ts
@@ -107,16 +107,14 @@ test.describe("AnimatedModal 열기/닫기", () => {
     await expect(settingsClose).toBeHidden();
   });
 
-  test("MoreMenu 모달: 메뉴에서 열기 → 4개 항목 표시 → overlay 닫기", async ({
+  test("MoreMenu 모달: 메뉴에서 열기 → 음원 분리 항목 표시 → overlay 닫기", async ({
     page,
   }) => {
-    const scheduledStart = page.locator(
-      '[data-testid="more-menu-scheduled-start"]',
-    );
+    const stemSep = page.locator('[data-testid="more-menu-stemSep"]');
     const moreMenuOverlay = page.locator('[data-testid="more-menu-overlay"]');
 
-    // 초기 상태: more-menu-scheduled-start 숨겨짐
-    await expect(scheduledStart).toBeHidden();
+    // 초기 상태: more-menu-stemSep 숨겨짐
+    await expect(stemSep).toBeHidden();
 
     // 메뉴 열기
     await page.locator('[data-testid="menu-button"]').click();
@@ -126,25 +124,13 @@ test.describe("AnimatedModal 열기/닫기", () => {
     await expect(menuMore).toBeVisible();
     await menuMore.click();
 
-    // MoreMenu 4개 항목이 visible 상태로 전환될 때까지 조건부 대기
-    await expect(scheduledStart).toBeVisible();
-    await expect(
-      page.locator('[data-testid="more-menu-fade-out"]'),
-    ).toBeVisible();
-    await expect(
-      page.locator('[data-testid="more-menu-drum-kit"]'),
-    ).toBeVisible();
-    await expect(
-      page.locator('[data-testid="more-menu-tempo-quiz"]'),
-    ).toBeVisible();
+    // MoreMenu 항목이 visible 상태로 전환될 때까지 조건부 대기
+    await expect(stemSep).toBeVisible();
 
     // overlay 클릭으로 닫기 (시트 바깥 영역)
     await moreMenuOverlay.click({ position: { x: 10, y: 10 } });
 
-    // MoreMenu 항목들이 hidden 상태로 전환될 때까지 조건부 대기
-    await expect(scheduledStart).toBeHidden();
-    await expect(
-      page.locator('[data-testid="more-menu-tempo-quiz"]'),
-    ).toBeHidden();
+    // MoreMenu 항목이 hidden 상태로 전환될 때까지 조건부 대기
+    await expect(stemSep).toBeHidden();
   });
 });

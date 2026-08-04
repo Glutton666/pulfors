@@ -386,31 +386,6 @@ export function MetronomeScreenUI(props: Props) {
         // 상태가 될 수 있다 (SignalGeneratorModal.tsx 707-712 참고). 먼저
         // null로 닫고, AnimatedModal의 페이드 시간보다 긴 지연 후 다음
         // Modal을 연다.
-        onScheduledStart={() => { setActiveModal(null); setTimeout(() => openExclusive("scheduledStart"), 160); }}
-        onFadeOut={() => { setActiveModal(null); setTimeout(() => openExclusive("fadeOut"), 160); }}
-        onStageMode={() => {
-          setActiveModal(null);
-          void enterStageMode();
-          // 연습장 전체를 피커용으로 로드
-          loadPracticeBook().then((entries) => {
-            setStagePracticeEntries(entries);
-          }).catch(() => {});
-        }}
-        onDrumKit={() => {
-          const engine = engineRef.current;
-          if (engine?.getIsRunning()) engine.stop();
-          stopRenderedAudio();
-          clearSamplePlayStates();
-          resetPlaybackVisuals();
-          setIsPreparing(false);
-          setIsPlaying(false);
-          setActiveModal(null);
-          setTimeout(() => openExclusive("drumKit"), 160);
-        }}
-        onScoreMode={() => {
-          setActiveModal(null);
-          setScoreMode("list");
-        }}
         onStemSep={() => {
           // 음원분리 닫을 때 이 모달로 돌아올 수 있도록 직전 activeModal을 저장한다.
           stemSepReturnModalRef.current = activeModal;
