@@ -44,30 +44,43 @@ function SubdivDots({
   types,
   theme,
   size = 10,
+  activeIndex,
 }: {
   types: BeatType[];
   theme: "dark" | "light";
   size?: number;
+  /** 재생 중 현재 활성 서브디비전 인덱스 — 해당 점을 크고 밝게 하이라이트 */
+  activeIndex?: number;
 }) {
   if (types.length <= 1) return null;
+  // 활성 인덱스가 표시 패턴 범위를 벗어나면(예: 블록 자체 서브디비전 재생 중)
+  // 잘못된 점을 강조하지 않도록 하이라이트를 생략한다.
+  if (activeIndex != null && (activeIndex < 0 || activeIndex >= types.length)) activeIndex = undefined;
   const dotInactive = theme === "dark" ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)";
+  const activeRing  = theme === "dark" ? "#FFD54F" : "#B8860B";
   return (
     <View style={[styles.subdivRow, { gap: size * 0.6 }]}>
       {types.map((t, i) => {
+        const isActive = activeIndex === i;
         const color =
           t === "accent" ? (theme === "dark" ? "#FFD54F" : "#B8860B")
           : t === "mute"   ? dotInactive
           : t === "strong" ? (theme === "dark" ? "#ffffff" : "#111111")
+          : isActive ? (theme === "dark" ? "#ffffff" : "#111111")
           : dotInactive;
+        const w = isActive ? size * 1.6 : i === 0 ? size * 1.5 : size;
+        const h = isActive ? size * 1.3 : size;
         return (
           <View
             key={i}
             style={{
-              width: i === 0 ? size * 1.5 : size,
-              height: size,
-              borderRadius: size / 2,
+              width: w,
+              height: h,
+              borderRadius: h / 2,
               backgroundColor: color,
-              opacity: i === 0 ? 1 : 0.85,
+              opacity: isActive ? 1 : i === 0 ? 1 : 0.85,
+              borderWidth: isActive ? 2 : 0,
+              borderColor: activeRing,
             }}
           />
         );
@@ -84,6 +97,8 @@ export interface StageBeatColumnProps {
   subdivisionTypes?:    BeatType[];
   /** 다음 비트의 서브디비전 타입 */
   nextSubdivisionTypes?: BeatType[];
+  /** 현재 활성 서브디비전 인덱스 (재생 중 하이라이트) */
+  activeSubNote?:       number;
   theme?:               "dark" | "light";
   /** 왼쪽 스와이프 → 다음 항목 */
   onSwipeLeft?:         () => void;
@@ -97,6 +112,7 @@ export function StageBeatColumn({
   beatTypes,
   subdivisionTypes,
   nextSubdivisionTypes,
+  activeSubNote,
   theme = "dark",
   onSwipeLeft,
   onSwipeRight,
@@ -229,7 +245,12 @@ export function StageBeatColumn({
 
             {/* 서브디비전 — 현재 + 다음, 아래에만 */}
             {subdivisionTypes && subdivisionTypes.length > 1 && (
-              <SubdivDots types={subdivisionTypes} theme={theme} size={10} />
+              <SubdivDots
+                types={subdivisionTypes}
+                theme={theme}
+                size={16}
+                activeIndex={activeSubNote != null && activeSubNote >= 0 ? activeSubNote : undefined}
+              />
             )}
             {nextSubdivisionTypes && nextSubdivisionTypes.length > 1 && (
               <SubdivDots types={nextSubdivisionTypes} theme={theme} size={10} />

@@ -1233,6 +1233,8 @@ export function MetronomeScreenUI(props: Props) {
         subdivisionCount={Math.max(1, subdivisionPattern?.length ?? 1)}
         beatTypes={beatTypes}
         beatSubdivisions={beatSubdivisions}
+        activeSubNote={activeSubNote}
+        progressInfo={progressInfo}
         isPlaying={isPlaying}
         flashMode={flashMode}
         hapticMode={hapticMode}

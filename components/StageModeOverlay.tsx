@@ -53,6 +53,7 @@ import { scoreScaleFactor, BASE_LINE_SPACING } from "@/lib/score-scale";
 import type { ScoreDocument } from "@/lib/score-types";
 import type { PracticeEntry, FlashMode, HapticMode } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
+import type { ProgressInfo } from "@/lib/metronome-engine-pure";
 import { handleStageModeBackPress, type StageModeBackState } from "@/lib/stage-mode-logic";
 
 // ─── 스테이지 설정 타입 ──────────────────────────────────────────────
@@ -283,6 +284,10 @@ export interface StageModeOverlayProps {
   subdivisionCount?: number;
   beatTypes?:        BeatType[];
   beatSubdivisions?: Record<string, BeatType[]>;
+  /** 현재 활성 서브디비전 인덱스 (재생 중 실시간 하이라이트) */
+  activeSubNote?:    number;
+  /** 엔진 진행 정보 (바 반복·블록 진행 등) — 무대용 전체 진행도 표시 */
+  progressInfo?:     ProgressInfo | null;
   isPlaying:         boolean;
   flashMode:         FlashMode;
   hapticMode:        HapticMode;
@@ -326,6 +331,8 @@ export function StageModeOverlay({
   subdivisionCount = 1,
   beatTypes,
   beatSubdivisions,
+  activeSubNote,
+  progressInfo,
   isPlaying,
   flashMode,
   hapticMode,
@@ -577,6 +584,22 @@ export function StageModeOverlay({
     }
   }, [setlist, visible, activeEntryId]);
   const activeMode  = activeEntry ? getEntryMode(activeEntry) : "beat";
+
+  // 현재 재생 위치의 실효 서브디비전 패턴 = 전역 beatSubdivisions.
+  // 엔진 정합성 근거: onSubBeat(→ activeSubNote)는 비레이어 틱에서만 발화하고
+  // (metronome-engine.ts fireTick, !isLayerTick 가드), 비레이어 틱의 subBeat 는
+  // 항상 전역 패턴(pureGetSubPattern ≒ beatSubdivisions)으로 스케줄된다
+  // (pureAddBeatTicks). 블록 자체 서브디비전(ownSubdivisions)은 오직 레이어 틱
+  // (pureEmitStackedBlockTicks, layerIndex>0, beat=-1)에만 적용되며 이 틱들은
+  // onSubBeat 를 구동하지 않는다. 따라서 전역 패턴 표시가 항상 activeSubNote 와
+  // 인덱스가 일치한다.
+  const getEffectiveSubdiv = useCallback(
+    (beat: number): BeatType[] | undefined => {
+      if (beat < 0) return undefined;
+      return beatSubdivisions?.[String(beat)];
+    },
+    [beatSubdivisions],
+  );
   // 악보 모드 또는 사진이 있는 노트 모드 → 전체화면 컨텐츠 표시
   const hasPhoto    = activeMode === "note" && !!activeEntry?.imageUri;
   const isFullscreen = activeMode === "score" || hasPhoto;
@@ -960,10 +983,21 @@ export function StageModeOverlay({
           <View style={[styles.miniBar, { backgroundColor: isDark ? "rgba(0,0,0,0.85)" : "rgba(240,240,240,0.92)" }]}>
             <View style={styles.miniBarRow}>
               {/* 비트 숫자 */}
-              <Text style={[styles.miniBeat, { color: text }]}>
-                {currentBeat < 0 ? "—" : String(currentBeat + 1)}
-                <Text style={[styles.miniTotal, { color: faint }]}>/{beatsPerMeasure}</Text>
-              </Text>
+              <View style={styles.miniBeatGroup}>
+                <Text style={[styles.miniBeat, { color: text }]}>
+                  {currentBeat < 0 ? "—" : String(currentBeat + 1)}
+                  <Text style={[styles.miniTotal, { color: faint }]}>/{beatsPerMeasure}</Text>
+                </Text>
+                {isPlaying && progressInfo && progressInfo.barRepeatTotal > 1 && (
+                  <View style={styles.miniProgressItem}>
+                    <Ionicons name="repeat" size={14} color={faint} />
+                    <Text style={[styles.miniTotal, { color: faint }]}>
+                      {Math.min(progressInfo.barRepeatCurrent + 1, progressInfo.barRepeatTotal)}
+                      /{progressInfo.barRepeatTotal}
+                    </Text>
+                  </View>
+                )}
+              </View>
 
               {/* BPM (재생 중: 읽기 전용, 정지 중: 탭 템포) */}
               <Pressable
@@ -996,6 +1030,44 @@ export function StageModeOverlay({
       ) : (
         /* ─ 기본 모드 (비트 / 바) ─────────────────────────────── */
         <View style={styles.mainContent}>
+          {/* 전체 진행도 — 바 반복·블록·점프 진행 (재생 중, 진행 정보 있을 때만) */}
+          {isPlaying && progressInfo &&
+            (progressInfo.barRepeatTotal > 1 || progressInfo.blockRepeatTotal > 1 || (progressInfo.jumpTotal ?? 0) > 0) && (
+            <View style={styles.stageProgressRow} pointerEvents="none">
+              {progressInfo.barRepeatTotal > 1 && (
+                <View style={styles.stageProgressItem}>
+                  <Ionicons name="repeat" size={22} color={faint} />
+                  <Text style={[styles.stageProgressText, { color: text }]}>
+                    {/* 엔진 카운터는 0-기반 → 사용자에게는 1-기반으로 표시 */}
+                    {Math.min(progressInfo.barRepeatCurrent + 1, progressInfo.barRepeatTotal)}
+                    <Text style={{ color: faint }}>/{progressInfo.barRepeatTotal}</Text>
+                  </Text>
+                </View>
+              )}
+              {progressInfo.blockRepeatTotal > 1 && (
+                <View style={styles.stageProgressItem}>
+                  <Ionicons name="albums-outline" size={22} color={faint} />
+                  <Text style={[styles.stageProgressText, { color: text }]}>
+                    {progressInfo.blockIndex + 1}
+                    <Text style={{ color: faint }}>
+                      {" · "}
+                      {Math.min(progressInfo.blockRepeatCurrent + 1, progressInfo.blockRepeatTotal)}
+                      /{progressInfo.blockRepeatTotal}
+                    </Text>
+                  </Text>
+                </View>
+              )}
+              {(progressInfo.jumpTotal ?? 0) > 0 && (
+                <View style={styles.stageProgressItem}>
+                  <Ionicons name="return-down-back" size={22} color={faint} />
+                  <Text style={[styles.stageProgressText, { color: text }]}>
+                    {Math.min((progressInfo.jumpCurrent ?? 0) + 1, progressInfo.jumpTotal ?? 1)}
+                    <Text style={{ color: faint }}>/{progressInfo.jumpTotal}</Text>
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
           {/* 비트 컬럼: 정지 + 셋리스트 없을 때 → noSetlistContent(BeatIndicator), 나머지 → StageBeatColumn(큰 숫자) */}
           {setlist.length === 0 && !isPlaying && noSetlistContent
             ? <View style={{ flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center" }}>{noSetlistContent}</View>
@@ -1007,14 +1079,17 @@ export function StageModeOverlay({
                   beatTypes={beatTypes}
                   theme={settings.theme}
                   subdivisionTypes={
-                    beatSubdivisions && currentBeat >= 0
-                      ? beatSubdivisions[String(currentBeat)]
-                      : undefined
+                    currentBeat >= 0 ? getEffectiveSubdiv(currentBeat) : undefined
                   }
                   nextSubdivisionTypes={
-                    beatSubdivisions && currentBeat >= 0
-                      ? beatSubdivisions[String((currentBeat + 1) % Math.max(1, beatsPerMeasure))]
+                    currentBeat >= 0
+                      ? getEffectiveSubdiv((currentBeat + 1) % Math.max(1, beatsPerMeasure))
                       : undefined
+                  }
+                  activeSubNote={
+                    // 실효 패턴(블록 자체 서브디비전 포함)을 표시하므로 재생 중이면
+                    // 항상 하이라이트. 범위를 벗어난 인덱스는 SubdivDots 가 무시.
+                    isPlaying ? activeSubNote : undefined
                   }
                   onSwipeLeft={isPlaying && setlist.length > 1 ? advanceSetlist : undefined}
                   onSwipeRight={isPlaying && setlist.length > 1 ? goToPrevSetlist : undefined}
@@ -1689,6 +1764,33 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  stageProgressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 24,
+    paddingTop: 4,
+  },
+  stageProgressItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  miniBeatGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  miniProgressItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  stageProgressText: {
+    fontSize: 26,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
   },
   miniBeat: {
     fontSize: 28,
