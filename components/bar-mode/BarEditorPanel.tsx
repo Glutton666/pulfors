@@ -605,7 +605,7 @@ export function BarEditorPanel({
                   <Ionicons name="remove" size={ms(13, 0.4)} color={C.accent} />
                 </Pressable>
                 <TextInput
-                  style={{ fontSize: ms(28, 0.4), fontFamily: "SpaceGrotesk_700Bold", width: 56, textAlign: "center", borderBottomWidth: 1.5, paddingVertical: 1, color: C.accent, borderBottomColor: C.accent }}
+                  style={{ fontSize: ms(28, 0.4), fontFamily: "SpaceGrotesk_700Bold", width: ms(56, 0.4), textAlign: "center", borderBottomWidth: 1.5, paddingVertical: 1, color: C.accent, borderBottomColor: C.accent }}
                   value={String(repBpm ?? bpm ?? 120)}
                   keyboardType="number-pad"
                   editable={!isPlaying}
