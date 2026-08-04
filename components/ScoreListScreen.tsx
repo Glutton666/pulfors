@@ -200,14 +200,18 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onOpenDial 
     <View style={[styles.container, { backgroundColor: C.background }]}>
       {/* 헤더 */}
       <View style={[styles.header, { paddingTop: topInset + 8, borderBottomColor: C.border }]}>
+        {/* 제목 — 화면 전체 기준 가운데 정렬 (우측 버튼과 무관하게 절대 중앙) */}
         <Pressable
           onPress={onOpenDial}
-          style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}
+          style={{
+            position: "absolute", left: 0, right: 0,
+            top: topInset + 8, bottom: 12,
+            flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+          }}
           accessibilityRole="button"
         >
           <Ionicons name="musical-notes" size={S.ms(20, 0.4)} color={C.accent} />
-          {/* headerTitle의 flex:1을 쓰지 않음 — flex:0은 웹에서 flex-basis:0%로 변환돼
-              텍스트가 한 글자 폭으로 붕괴(세로 쌓임)하므로 flex 관련 속성 없이 렌더 */}
+          {/* flex:0은 웹에서 flex-basis:0%로 변환돼 세로 쌓임 발생 — flex 속성 없이 렌더 */}
           <Text
             numberOfLines={1}
             style={{ color: C.accent, fontFamily: "SpaceGrotesk_700Bold", fontSize: S.ms(18, 0.4), letterSpacing: 1.2, textTransform: "uppercase" }}
@@ -215,6 +219,7 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onOpenDial 
             {t("scoreMode", "title")}
           </Text>
         </Pressable>
+        <View style={{ flex: 1 }} pointerEvents="none" />
         <Pressable
           style={({ pressed }) => [styles.importBtn, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
           onPress={handleImport}
@@ -222,14 +227,6 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onOpenDial 
           hitSlop={8}
         >
           <Ionicons name="folder-open-outline" size={S.ms(18, 0.4)} color={C.text} />
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.newBtn, { backgroundColor: C.accent }, pressed && { opacity: 0.8 }]}
-          onPress={() => setShowNewModal(true)}
-          testID="score-list-new"
-        >
-          <Ionicons name="add" size={S.ms(18, 0.4)} color="#fff" />
-          <Text style={styles.newBtnText}>{t("scoreMode", "newScore")}</Text>
         </Pressable>
       </View>
 
@@ -264,6 +261,20 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onOpenDial 
           contentContainerStyle={{ padding: Spacing.lg, paddingBottom: bottomInset + Spacing.lg }}
           showsVerticalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={{ height: Spacing.md }} />}
+          ListHeaderComponent={
+            <Pressable
+              style={({ pressed }) => [
+                styles.newBtn,
+                { backgroundColor: C.accent, justifyContent: "center", marginBottom: Spacing.md },
+                pressed && { opacity: 0.8 },
+              ]}
+              onPress={() => setShowNewModal(true)}
+              testID="score-list-new"
+            >
+              <Ionicons name="add" size={S.ms(18, 0.4)} color="#fff" />
+              <Text style={styles.newBtnText}>{t("scoreMode", "newScore")}</Text>
+            </Pressable>
+          }
           testID="score-list"
         />
       )}
