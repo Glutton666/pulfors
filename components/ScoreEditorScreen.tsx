@@ -1723,19 +1723,6 @@ export function ScoreEditorScreen({
           updatePlaybackSettings({ muteAudio: next });
           if (next) stopAllScoreNotes();
         }}
-        onOpenMeta={() => {
-          setMetaDraft({
-            title: doc.metadata.title,
-            subtitle: doc.metadata.subtitle ?? "",
-            composer: doc.metadata.composer ?? "",
-            arranger: doc.metadata.arranger ?? "",
-            lyricist: doc.metadata.lyricist ?? "",
-            copyright: doc.metadata.copyright ?? "",
-            difficulty: doc.metadata.difficulty,
-            memo: doc.metadata.memo ?? "",
-          });
-          setShowMetaModal(true);
-        }}
         onOpenShare={() => setShowShareModal(true)}
         onOpenMoreMenu={() => setShowMoreMenu(true)}
         onSave={handleSave}
@@ -2000,6 +1987,20 @@ export function ScoreEditorScreen({
         onImportReferenceImage={handleImportReferenceImageAction}
         onClearReferenceImage={handleClearReferenceImage}
         onAddToPractice={handleAddToPractice}
+        onEditMetadata={() => {
+          setShowMoreMenu(false);
+          setMetaDraft({
+            title: doc.metadata.title,
+            subtitle: doc.metadata.subtitle ?? "",
+            composer: doc.metadata.composer ?? "",
+            arranger: doc.metadata.arranger ?? "",
+            lyricist: doc.metadata.lyricist ?? "",
+            copyright: doc.metadata.copyright ?? "",
+            difficulty: doc.metadata.difficulty,
+            memo: doc.metadata.memo ?? "",
+          });
+          setShowMetaModal(true);
+        }}
         onExtractPart={handleExtractPartOpen}
         onOpenSymbolSettings={() => { setShowMoreMenu(false); }}
       />

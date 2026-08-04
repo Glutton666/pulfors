@@ -36,7 +36,6 @@ export interface ScoreEditorToolbarProps {
   onPlayPause: () => void;
   onStop: () => void;
   onToggleMute: () => void;
-  onOpenMeta: () => void;
   onOpenShare: () => void;
   onOpenMoreMenu: () => void;
   onSave: () => void;
@@ -62,7 +61,6 @@ export function ScoreEditorToolbar({
   onPlayPause,
   onStop,
   onToggleMute,
-  onOpenMeta,
   onOpenShare,
   onOpenMoreMenu,
   onSave,
@@ -218,16 +216,6 @@ export function ScoreEditorToolbar({
             size={S.ms(20, 0.4)}
             color={muteAudio ? C.accent : C.text}
           />
-        </Pressable>
-
-        {/* 악보 정보 편집 */}
-        <Pressable
-          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
-          onPress={onOpenMeta}
-          hitSlop={8}
-          testID="score-editor-meta"
-        >
-          <Ionicons name="information-circle-outline" size={S.ms(20, 0.4)} color={C.text} />
         </Pressable>
 
         {/* 공유 버튼 */}

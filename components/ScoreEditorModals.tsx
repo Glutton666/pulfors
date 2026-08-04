@@ -45,6 +45,7 @@ export interface ScoreMoreMenuModalProps {
   onImportReferenceImage: () => void;
   onClearReferenceImage: () => void;
   onAddToPractice: () => void;
+  onEditMetadata: () => void;
   onExtractPart: () => void;
   onOpenSymbolSettings: () => void;
 }
@@ -61,6 +62,7 @@ export function ScoreMoreMenuModal({
   onImportReferenceImage,
   onClearReferenceImage,
   onAddToPractice,
+  onEditMetadata,
   onExtractPart,
   onOpenSymbolSettings,
 }: ScoreMoreMenuModalProps) {
@@ -82,6 +84,14 @@ export function ScoreMoreMenuModal({
           <Text style={[styles.symbolModalTitle, { color: C.text }]}>
             {t("scoreMode", "moreMenu")}
           </Text>
+          <Pressable
+            style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
+            onPress={onEditMetadata}
+            testID="score-menu-edit-metadata"
+          >
+            <Ionicons name="information-circle-outline" size={18} color={C.accent} />
+            <Text style={[styles.ctxMenuLabel, { color: C.text }]}>{t("scoreMode", "editMetadata")}</Text>
+          </Pressable>
           <Pressable
             style={[styles.ctxMenuItem, { borderBottomColor: C.border }]}
             onPress={onExportJpg}
