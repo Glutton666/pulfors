@@ -94,34 +94,23 @@ export function ScoreEditorToolbar({
           <Ionicons name="chevron-back" size={S.ms(22, 0.4)} color={C.text} />
         </Pressable>
 
-        {/* 악보 모드 레이블 — 탭하면 팬 다이얼 열기 */}
+        {/* 모드 다이얼 트리거 — 아이콘만 표시 (좁은 화면에서 텍스트가 잘려 제거됨) */}
         <Pressable
           onPress={onOpenDial}
           style={({ pressed }) => ({
             flex: 1,
+            minWidth: 44,
+            minHeight: 36,
             flexDirection: "row" as const,
             alignItems: "center" as const,
             justifyContent: "center" as const,
-            gap: 6,
             opacity: pressed ? 0.7 : 1,
           })}
+          hitSlop={8}
           accessibilityRole="button"
+          accessibilityLabel={t("scoreMode", "title") || t("switcher", "score")}
         >
-          <Ionicons name="musical-notes" size={S.ms(18, 0.4)} color={C.accent} />
-          <Text
-            style={[
-              styles.topTitle,
-              {
-                color: C.accent,
-                fontFamily: "SpaceGrotesk_700Bold",
-                fontSize: S.ms(17, 0.4),
-                letterSpacing: 1.2,
-              },
-            ]}
-            numberOfLines={1}
-          >
-            {t("scoreMode", "title") || t("switcher", "score")}
-          </Text>
+          <Ionicons name="musical-notes" size={S.ms(20, 0.4)} color={C.accent} />
         </Pressable>
 
         {savedToast && (

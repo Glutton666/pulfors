@@ -32,11 +32,6 @@ export const makeStyles = (_C: any, _S: any) =>
       height: 2,
       borderRadius: 1,
     },
-    topTitle: {
-      flex: 1,
-      fontFamily: "SpaceGrotesk_600SemiBold",
-      fontSize: FontSize.body,
-    },
     savedToast: {
       fontFamily: "SpaceGrotesk_500Medium",
       fontSize: FontSize.small,
