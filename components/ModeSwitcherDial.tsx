@@ -552,12 +552,18 @@ function ModeSwitcherDial({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* Dim overlay — tap to CONFIRM the highlighted mode */}
+      {/* Dim overlay — tap to CONFIRM the highlighted mode.
+          Clipped to the side the fan opens into so the area behind the
+          dial handle (e.g. above the circle on a top-wall position) stays clean. */}
       {isOpen && (
         <Animated.View
           style={[
             {
-              position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+              position: "absolute",
+              top:    wall === "top"    ? anchor.y : 0,
+              bottom: wall === "bottom" ? winH - anchor.y : 0,
+              left:   wall === "left"   ? anchor.x : 0,
+              right:  wall === "right"  ? winW - anchor.x : 0,
               zIndex: Z_OVERLAY, backgroundColor: "#000",
               pointerEvents: "box-none" as const,
             },
