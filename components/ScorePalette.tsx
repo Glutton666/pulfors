@@ -784,6 +784,9 @@ const makeStyles = (C: any) =>
       paddingHorizontal: 0,
       gap: 1,
       borderBottomWidth: 0,
+      // 콘텐츠가 화면 폭보다 좁을 때 가운데 정렬 (넘치면 flexGrow가 최소폭만 보장해 기존 스크롤 유지)
+      flexGrow: 1,
+      justifyContent: "center",
     },
     tabBtn: {
       alignItems: "center",
@@ -827,6 +830,9 @@ const makeStyles = (C: any) =>
       paddingVertical: 6,
       gap: 6,
       alignItems: "center",
+      // 콘텐츠가 화면 폭보다 좁을 때 가운데 정렬 (넘치면 flexGrow가 최소폭만 보장해 기존 스크롤 유지)
+      flexGrow: 1,
+      justifyContent: "center",
     },
     durBtn: {
       alignItems: "center",
