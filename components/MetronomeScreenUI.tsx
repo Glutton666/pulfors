@@ -811,6 +811,7 @@ export function MetronomeScreenUI(props: Props) {
             isPreparing={isPreparing}
             onBeatsChange={updateTimeSignature}
             onTogglePlay={togglePlayPause}
+            onPlayLongPress={scoreMode === null && !barMode ? handleBeatQuickSaveOpen : undefined}
             beatTypes={beatTypes}
             onBeatTypeChange={handleBeatTypeChange}
             dropTargetBeat={dropTargetBeat}
@@ -950,24 +951,6 @@ export function MetronomeScreenUI(props: Props) {
               </Pressable>
             )}
             <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
-            {scoreMode === null && (
-              <Pressable
-                onPress={handleBeatQuickSaveOpen}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel={t("main", "beatQuickSaveTitle")}
-                style={{
-                  marginTop: S.ms(2, 0.3),
-                  padding: S.ms(6, 0.3),
-                  borderRadius: 999,
-                  backgroundColor: C.overlay10,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name="bookmark-outline" size={S.ms(18, 0.3)} color={C.textSecondary} />
-              </Pressable>
-            )}
           </View>
         )}
         {isLandscape && !barMode && (
@@ -1145,23 +1128,6 @@ export function MetronomeScreenUI(props: Props) {
               </Pressable>
             )}
             <Text style={[styles.tempoLabel, { color: C.accentMuted }]}>{tempoLabel}</Text>
-            {scoreMode === null && (
-              <Pressable
-                onPress={handleBeatQuickSaveOpen}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel={t("main", "beatQuickSaveTitle")}
-                style={{
-                  padding: S.ms(6, 0.3),
-                  borderRadius: 999,
-                  backgroundColor: C.overlay10,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name="bookmark-outline" size={S.ms(18, 0.3)} color={C.textSecondary} />
-              </Pressable>
-            )}
             {easterEggActive ? (
               <EasterEggQuiz
                 onGuess={handleEasterEggGuess}
@@ -1301,6 +1267,7 @@ export function MetronomeScreenUI(props: Props) {
               isPreparing={isPreparing}
               onBeatsChange={updateTimeSignature}
               onTogglePlay={togglePlayPause}
+              onPlayLongPress={scoreMode === null && !barMode ? handleBeatQuickSaveOpen : undefined}
               beatTypes={beatTypes}
               onBeatTypeChange={handleBeatTypeChange}
               dropTargetBeat={dropTargetBeat}

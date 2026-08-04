@@ -77,6 +77,8 @@ interface BeatIndicatorProps {
   isPreparing?: boolean;
   onBeatsChange: (beats: number) => void;
   onTogglePlay: () => void;
+  /** 재생 버튼 길게 누름 — 비트 모드 빠른 저장(연습장 저장) 모달 열기 */
+  onPlayLongPress?: () => void;
   beatTypes: BeatType[];
   onBeatTypeChange: (index: number, type: BeatType) => void;
   dropTargetBeat: number | null;
@@ -150,6 +152,7 @@ export function BeatIndicator({
   isPreparing = false,
   onBeatsChange,
   onTogglePlay,
+  onPlayLongPress,
   beatTypes,
   onBeatTypeChange,
   dropTargetBeat,
@@ -1451,6 +1454,19 @@ export function BeatIndicator({
 
           <Pressable
             onPress={onTogglePlay}
+            // 길게 누르면 빠른 저장 — onLongPress 가 발화하면 RN Pressable 은
+            // 손을 떼도 onPress 를 호출하지 않으므로 재생 토글과 자연히 분리된다.
+            onLongPress={
+              onPlayLongPress
+                ? () => {
+                    if (Platform.OS !== "web") {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    }
+                    onPlayLongPress();
+                  }
+                : undefined
+            }
+            delayLongPress={450}
             style={({ pressed }) => [
               styles.playButton,
               pressed && styles.playButtonPressed,
@@ -1460,6 +1476,7 @@ export function BeatIndicator({
             disabled={isPreparing}
             accessibilityRole="button"
             accessibilityLabel={t("a11y", "playButton")}
+            accessibilityHint={onPlayLongPress ? t("main", "beatQuickSaveTitle") : undefined}
             accessibilityState={{ selected: isPlaying, disabled: isPreparing }}
           >
             {isPreparing ? (
