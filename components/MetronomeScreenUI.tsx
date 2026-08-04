@@ -799,10 +799,10 @@ export function MetronomeScreenUI(props: Props) {
           isLandscape
             ? barMode
               ? { flex: 1, justifyContent: "flex-start" as const, alignItems: "stretch" as const }
-              : { flex: 5, justifyContent: "center" as const, alignItems: "center" as const }
+              : { flex: 5, justifyContent: "center" as const, alignItems: "center" as const, transform: [{ translateY: windowHeight > 400 || S.isTablet ? S.ms(8, 0.3) : 0 }] }
             : barMode
               ? { flex: 5, justifyContent: "flex-start" as const, alignItems: "stretch" as const }
-              : { flex: 5, justifyContent: "center" as const, alignItems: "center" as const }
+              : { flex: 5, justifyContent: "center" as const, alignItems: "center" as const, transform: [{ translateY: windowHeight > 600 || S.isTablet ? S.ms(12, 0.3) : 0 }] }
         }>
           <BeatIndicator
             beatsPerMeasure={beatsPerMeasure}
