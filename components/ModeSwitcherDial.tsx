@@ -31,16 +31,16 @@ const Z_FAN     = 100001;
 const Z_HANDLE  = 100002;
 
 // ── Geometry ──────────────────────────────────────────────────────────────────
-const HANDLE_R    = 38;   // collapsed D-tab half-circle radius (larger = more room for mini arc)
-const HOLE_R      = HANDLE_R + 16; // donut inner-hole radius (between handle edge and icons)
-const FAN_R       = 220;  // expanded fan diameter; radius = FAN_R/2 = 110
-const ICON_R      = 82;   // expanded icon arc radius; outer edge = 82+20=102 ≤ 110 ✓
-const ICON_S      = 40;   // expanded icon slot size
-const MINI_R        = 19;   // = HANDLE_R/2 → icon sits at D-tab visual centre
-const MINI_DOT      = 5;    // mini arc neighbour dot size
-const MINI_ICON_S   = 22;   // icon size for current-mode slot in mini arc
-const MINI_A_STEP   = 55;   // wider step so dots clear the centre icon at MINI_R=19
-const ANGLE_STEP    = 34;   // degrees between adjacent mode slots; arc dist=45px > ICON_S=40 ✓
+const HANDLE_R    = 48;   // collapsed D-tab half-circle radius (larger = more room for mini arc)
+const HOLE_R      = HANDLE_R + 20; // donut inner-hole radius (between handle edge and icons)
+const FAN_R       = 280;  // expanded fan diameter; radius = FAN_R/2 = 140
+const ICON_R      = 104;  // expanded icon arc radius; outer edge = 104+26=130 ≤ 140 ✓
+const ICON_S      = 52;   // expanded icon slot size
+const MINI_R        = 24;   // = HANDLE_R/2 → icon sits at D-tab visual centre
+const MINI_DOT      = 6;    // mini arc neighbour dot size
+const MINI_ICON_S   = 28;   // icon size for current-mode slot in mini arc
+const MINI_A_STEP   = 55;   // wider step so dots clear the centre icon at MINI_R=24
+const ANGLE_STEP    = 34;   // degrees between adjacent mode slots; arc dist=104×34°≈62px > ICON_S=52 ✓
 const PX_PER_STEP = 36;   // pixels of swipe per one mode step
 const N_MODES     = MODES.length; // 7 — used for circular wrapping
 const RIM_INSET   = 6;           // inner ring inset from rim edge
@@ -517,7 +517,8 @@ function ModeSwitcherDial({
   // hideHandle: bypass anchorPos — its safeT camera-safe zone shoves t=0.5 to 0.75.
   // Anchored at y=0 (true screen top) so the fan hugs the physical edge with no
   // empty band above it; the background continues behind the camera cutout while
-  // the icon arc (ICON_R=82) still clears the Dynamic Island / notch area.
+  // the icon arc (ICON_R=104; edge icons sit ≥±90px from centre-x, dy≥52) still
+  // clears the Dynamic Island / notch area.
   const anchor = hideHandle
     ? { x: winW / 2, y: 0 }
     : anchorPos(activeWP, winW, winH, topInset);
@@ -697,13 +698,13 @@ function ModeSwitcherDial({
                 >
                   <ModeIcon
                     mode={mode}
-                    size={S.ms(20, 0.3)}
+                    size={S.ms(25, 0.3)}
                     color={isCtr ? "#fff" : C.textSecondary}
                   />
                   {isCtr && (
                     <Text
                       style={{
-                        fontSize: 7, lineHeight: 9,
+                        fontSize: 9, lineHeight: 11,
                         color: "#fff",
                         fontFamily: "SpaceGrotesk_500Medium",
                         letterSpacing: 0.3,
