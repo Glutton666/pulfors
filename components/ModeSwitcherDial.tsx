@@ -143,6 +143,29 @@ function handleLayout(wall: Wall) {
   }
 }
 
+// ── Donut-hole clip: inward half-rect relative to anchor ─────────────────────
+// Keeps the hole circle from rendering past the wall edge (camera/notch area).
+function holeClipLayout(wall: Wall) {
+  const r = HOLE_R + 3; // +3 so the border stroke isn't clipped on the inward side
+  switch (wall) {
+    case "top":    return { left: -r, top:  0, width: r * 2, height: r };
+    case "right":  return { left: -r, top: -r, width: r,     height: r * 2 };
+    case "bottom": return { left: -r, top: -r, width: r * 2, height: r };
+    case "left":   return { left:  0, top: -r, width: r,     height: r * 2 };
+  }
+}
+// Circle position inside the clip so its centre stays on the anchor point.
+// clip origin differs per wall, so offset = (-HOLE_R) - clipOrigin per axis.
+function holeCircleOffset(wall: Wall) {
+  const pad = 3; // matches holeClipLayout's +3 border allowance
+  switch (wall) {
+    case "top":    return { left: pad,     top: -HOLE_R };
+    case "right":  return { left: pad,     top: pad };
+    case "bottom": return { left: pad,     top: pad };
+    case "left":   return { left: -HOLE_R, top: pad };
+  }
+}
+
 // ── Expanded fan background: semicircle relative to anchor ────────────────────
 function fanBgLayout(wall: Wall) {
   const r = FAN_R / 2;
@@ -618,19 +641,29 @@ function ModeSwitcherDial({
             />
           </View>
 
-          {/* Donut hole — background circle that punches the centre out of the fan */}
+          {/* Donut hole — background circle that punches the centre out of the fan.
+              Clipped to the inward half so it never pokes past the wall edge
+              (e.g. up into the camera / Dynamic Island area on a top-wall dial). */}
           <View
             pointerEvents="none"
             style={{
               position: "absolute",
-              left: -HOLE_R, top: -HOLE_R,
-              width: HOLE_R * 2, height: HOLE_R * 2,
-              borderRadius: HOLE_R,
-              backgroundColor: C.background,
-              borderWidth: 2.5,
-              borderColor: rimColor,
+              ...holeClipLayout(wall),
+              overflow: "hidden" as const,
             }}
-          />
+          >
+            <View
+              style={{
+                position: "absolute",
+                ...holeCircleOffset(wall),
+                width: HOLE_R * 2, height: HOLE_R * 2,
+                borderRadius: HOLE_R,
+                backgroundColor: C.background,
+                borderWidth: 2.5,
+                borderColor: rimColor,
+              }}
+            />
+          </View>
 
           {/* Swipe-capture wrapper — claims all touches; tap/swipe detected on release */}
           <View
