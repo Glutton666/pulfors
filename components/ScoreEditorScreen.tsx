@@ -325,8 +325,6 @@ export function ScoreEditorScreen({
   // ── 저장 토스트 ───────────────────────────────────────────────
   const [savedToast, setSavedToast] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [beatOverflowToast, setBeatOverflowToast] = useState(false);
-  const beatOverflowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── IO 핸들러 ─────────────────────────────────────────────────
 
@@ -629,15 +627,7 @@ export function ScoreEditorScreen({
           : doc.layoutOverrides,
       };
       applyDoc(newDoc);
-      const updatedMeasure = newDoc.parts[selectedPartIdx]?.measures[measureIdx];
-      if (updatedMeasure) {
-        const effectiveSig = updatedMeasure.timeSignature ?? newDoc.timeSignature;
-        if (measureBeatTotal(updatedMeasure, effectiveSig).overflow) {
-          if (beatOverflowTimerRef.current) clearTimeout(beatOverflowTimerRef.current);
-          setBeatOverflowToast(true);
-          beatOverflowTimerRef.current = setTimeout(() => setBeatOverflowToast(false), 2500);
-        }
-      }
+      // 초과 안내는 하단 상태 표시(beatStatusText)가 담당 — 팝업 토스트 제거됨
       setSelectedElementId(newElement.id);
       setSelectedMeasureIdx(measureIdx);
     },
@@ -666,15 +656,6 @@ export function ScoreEditorScreen({
           : doc.layoutOverrides,
       };
       applyDoc(newDoc);
-      const updatedMeasureR = newDoc.parts[selectedPartIdx]?.measures[measureIdx];
-      if (updatedMeasureR) {
-        const effectiveSigR = updatedMeasureR.timeSignature ?? newDoc.timeSignature;
-        if (measureBeatTotal(updatedMeasureR, effectiveSigR).overflow) {
-          if (beatOverflowTimerRef.current) clearTimeout(beatOverflowTimerRef.current);
-          setBeatOverflowToast(true);
-          beatOverflowTimerRef.current = setTimeout(() => setBeatOverflowToast(false), 2500);
-        }
-      }
       setSelectedElementId(newElement.id);
       setSelectedMeasureIdx(measureIdx);
     },
@@ -1723,7 +1704,6 @@ export function ScoreEditorScreen({
         canUndo={canUndo}
         canRedo={canRedo}
         savedToast={savedToast}
-        beatOverflowToast={beatOverflowToast}
         muteAudio={muteAudio}
         isPlaying={playback.isPlaying}
         isPreparing={playback.isPreparing}

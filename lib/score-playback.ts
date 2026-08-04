@@ -94,18 +94,25 @@ export function measureBeatTotal(
   measure: ScoreMeasure,
   timeSignature: { numerator: number; denominator: number },
 ): MeasureBeatStatus {
-  let total = 0;
-  for (const el of measure.elements) {
-    const baseBeats = noteDurationToBeats(
-      el.duration as NoteDuration,
-      el.type === "note" ? el.doubleDotted : undefined,
-    );
-    const scale = getElementBeatScale(measure, el.id);
-    total += baseBeats * scale;
-  }
   // 박자 용량: 분자 × (4분음표 환산 분모) = 분자 × (4 / 분모)
   // 예) 4/4 → 4×1=4박, 6/8 → 6×0.5=3박, 3/4 → 3×1=3박
   const capacity = timeSignature.numerator * (4 / timeSignature.denominator);
+  let total = 0;
+  for (const el of measure.elements) {
+    let baseBeats: number;
+    if (el.type === "rest" && el.duration === "whole") {
+      // 기보 관례: 온쉼표는 박자표와 무관하게 "마디 전체 쉼"을 의미한다.
+      // 4박으로 고정 계산하면 3/4·6/8 등에서 실제 초과가 아닌데도 초과로 오탐된다.
+      baseBeats = Math.min(4, capacity);
+    } else {
+      baseBeats = noteDurationToBeats(
+        el.duration as NoteDuration,
+        el.type === "note" ? el.doubleDotted : undefined,
+      );
+    }
+    const scale = getElementBeatScale(measure, el.id);
+    total += baseBeats * scale;
+  }
   return {
     total,
     capacity,

@@ -23,7 +23,6 @@ export interface ScoreEditorToolbarProps {
   canUndo: boolean;
   canRedo: boolean;
   savedToast: boolean;
-  beatOverflowToast: boolean;
   muteAudio: boolean;
   isPlaying: boolean;
   isPreparing: boolean;
@@ -50,7 +49,6 @@ export function ScoreEditorToolbar({
   canUndo,
   canRedo,
   savedToast,
-  beatOverflowToast,
   muteAudio,
   isPlaying,
   isPreparing,
@@ -129,11 +127,6 @@ export function ScoreEditorToolbar({
         {savedToast && (
           <Text style={[styles.savedToast, { color: C.accent }]}>
             {t("scoreMode", "saved")}
-          </Text>
-        )}
-        {beatOverflowToast && (
-          <Text style={[styles.savedToast, { color: "#FF8C42" }]}>
-            {t("scoreMode", "beatOverflowToast")}
           </Text>
         )}
 

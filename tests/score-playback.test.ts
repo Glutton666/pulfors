@@ -201,6 +201,51 @@ test("measureBeatTotal: rests count toward beat total", () => {
   assert.equal(status.overflow, false);
 });
 
+test("measureBeatTotal: whole rest fills a 3/4 measure without overflow (full-measure rest convention)", () => {
+  const status = measureBeatTotal(mkMeasure([restEl("whole")]), { numerator: 3, denominator: 4 });
+  assert.equal(status.overflow, false);
+  assert.equal(status.total, 3);
+  assert.equal(status.remaining, 0);
+});
+
+test("measureBeatTotal: whole rest fills a 6/8 measure without overflow", () => {
+  const status = measureBeatTotal(mkMeasure([restEl("whole")]), TS68);
+  assert.equal(status.overflow, false);
+  assert.equal(status.total, 3);
+  assert.equal(status.remaining, 0);
+});
+
+test("measureBeatTotal: whole rest in 4/4 still counts 4 beats", () => {
+  const status = measureBeatTotal(mkMeasure([restEl("whole")]), TS44);
+  assert.equal(status.total, 4);
+  assert.equal(status.overflow, false);
+});
+
+test("measureBeatTotal: whole NOTE in 3/4 still overflows (only rests use the convention)", () => {
+  const status = measureBeatTotal(mkMeasure([noteEl("whole")]), { numerator: 3, denominator: 4 });
+  assert.equal(status.overflow, true);
+});
+
+test("measureBeatTotal: whole rest plus extra note in 3/4 overflows", () => {
+  const status = measureBeatTotal(
+    mkMeasure([restEl("whole"), noteEl("quarter")]),
+    { numerator: 3, denominator: 4 },
+  );
+  assert.equal(status.overflow, true);
+});
+
+test("measureBeatTotal: eighth triplet counts as 1 beat (no float false-positive)", () => {
+  const els = [noteEl("eighth"), noteEl("eighth"), noteEl("eighth")];
+  const m = mkMeasure(els, {
+    tuplets: [{ id: "tp1", elementIds: els.map((e) => e.id), count: 3, normalCount: 2 }],
+  });
+  // triplet (1.5 × 2/3 = 1) + 3 quarters = exactly 4 in 4/4
+  m.elements = [...els, noteEl("quarter"), noteEl("quarter"), noteEl("quarter")];
+  const status = measureBeatTotal(m, TS44);
+  assert.equal(status.overflow, false);
+  assert.ok(Math.abs(status.total - 4) < 1e-9);
+});
+
 test("measureBeatTotal: mixed dotted notes", () => {
   // dotted-half (3) + quarter (1) = 4 in 4/4
   const m = mkMeasure([noteEl("half_dot"), noteEl("quarter")]);
