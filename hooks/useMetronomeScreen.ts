@@ -58,7 +58,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDeepLink } from "@/contexts/DeepLinkContext";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { make_styles } from "@/app/index.styles";
-import { defaultBeatTypes, isCompoundMeterBeatCount, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks, applyLoopBlocksChange } from "@/app/index.helpers";
+import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks, applyLoopBlocksChange } from "@/app/index.helpers";
 import {
   type ActiveModal,
   type SgTgState,
@@ -1443,11 +1443,13 @@ export function useMetronomeScreen() {
       const isAdding = beats > oldBeats;
 
       let newTypes: BeatType[];
-      if (isAdding && !isCompoundMeterBeatCount(beats)) {
+      if (isAdding) {
         newTypes = [...oldTypes];
         for (let i = oldTypes.length; i < beats; i++) {
           newTypes.push("normal");
         }
+      } else if (beats < oldBeats) {
+        newTypes = oldTypes.slice(0, beats);
       } else {
         newTypes = defaultBeatTypes(beats);
       }
@@ -1468,10 +1470,10 @@ export function useMetronomeScreen() {
         for (let i = oldBeats; i < beats; i++) {
           if (currentPattern.length > 1 || (currentPattern.length === 1 && currentPattern[0] !== "normal")) {
             cleaned[String(i)] = [...currentPattern];
-            engineRef.current?.setBeatSubdivision(i, [...currentPattern]);
           }
         }
       }
+      engineRef.current?.setAllBeatSubdivisions(cleaned);
       setBeatSubdivisions(cleaned);
       if (barModeRef.current) {
         barConfigRef.current.beatsPerMeasure = beats;
