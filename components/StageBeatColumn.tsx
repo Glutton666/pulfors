@@ -12,7 +12,7 @@
  * theme: "dark" | "light" — 배경 색상에 맞춰 텍스트 색상 결정.
  */
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, PanResponder } from "react-native";
 import Animated, {
   useSharedValue,
@@ -56,18 +56,20 @@ function SubdivDots({
   // 활성 인덱스가 표시 패턴 범위를 벗어나면(예: 블록 자체 서브디비전 재생 중)
   // 잘못된 점을 강조하지 않도록 하이라이트를 생략한다.
   if (activeIndex != null && (activeIndex < 0 || activeIndex >= types.length)) activeIndex = undefined;
-  const dotInactive = theme === "dark" ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)";
+  // 무대용 가시성: 일반 점도 어두운 배경에서 멀리서 보이도록 충분히 밝게.
+  const dotBase     = theme === "dark" ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.38)";
+  const dotMute     = theme === "dark" ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
   const activeRing  = theme === "dark" ? "#FFD54F" : "#B8860B";
   return (
-    <View style={[styles.subdivRow, { gap: size * 0.6 }]}>
+    <View style={[styles.subdivRow, { gap: size * 0.6 }]} testID="stage-subdiv-dots">
       {types.map((t, i) => {
         const isActive = activeIndex === i;
         const color =
           t === "accent" ? (theme === "dark" ? "#FFD54F" : "#B8860B")
-          : t === "mute"   ? dotInactive
+          : t === "mute"   ? dotMute
           : t === "strong" ? (theme === "dark" ? "#ffffff" : "#111111")
           : isActive ? (theme === "dark" ? "#ffffff" : "#111111")
-          : dotInactive;
+          : dotBase;
         const w = isActive ? size * 1.6 : i === 0 ? size * 1.5 : size;
         const h = isActive ? size * 1.3 : size;
         return (
@@ -186,8 +188,21 @@ export function StageBeatColumn({
 
   const maxDots = Math.min(total, 16);
 
+  // 컨테이너 높이에 맞춰 축소: 재생 중 콘텐츠(도트+구분선+큰 숫자 2개+서브디비전)는
+  // 최대 약 420px — 짧은 화면에서는 overflow hidden 에 위·아래(마디 도트,
+  // 서브디비전 점)가 잘려 아예 안 보였다. 높이를 재서 비율로 글자를 줄인다.
+  const [rootH, setRootH] = useState(0);
+  const fit = rootH > 0 ? Math.min(1, rootH / 430) : 1;
+  const curFont  = Math.round(172 * fit);
+  const nextFont = Math.round(108 * fit);
+  const subSize  = Math.max(10, Math.round(16 * fit));
+
   return (
-    <View style={styles.root} {...swipePR.panHandlers}>
+    <View
+      style={styles.root}
+      onLayout={(e) => setRootH(e.nativeEvent.layout.height)}
+      {...swipePR.panHandlers}
+    >
       <Animated.View style={[styles.inner, slideStyle]}>
 
         {stopped ? (
@@ -234,12 +249,12 @@ export function StageBeatColumn({
             <View style={[styles.divider, { backgroundColor: dividerColor }]} />
 
             {/* 현재 비트 */}
-            <Text style={[styles.beatNum, { color: curColor, fontSize: 172, lineHeight: 180 }]}>
+            <Text style={[styles.beatNum, { color: curColor, fontSize: curFont, lineHeight: curFont + 8 }]}>
               {String(cur0 + 1)}
             </Text>
 
             {/* 다음 비트 */}
-            <Text style={[styles.beatNum, { color: nextColor, fontSize: 108, lineHeight: 116 }]}>
+            <Text style={[styles.beatNum, { color: nextColor, fontSize: nextFont, lineHeight: nextFont + 8 }]}>
               {String(next0 + 1)}
             </Text>
 
@@ -248,7 +263,7 @@ export function StageBeatColumn({
               <SubdivDots
                 types={subdivisionTypes}
                 theme={theme}
-                size={16}
+                size={subSize}
                 activeIndex={activeSubNote != null && activeSubNote >= 0 ? activeSubNote : undefined}
               />
             )}

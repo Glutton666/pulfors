@@ -18,4 +18,5 @@
 - [import type erases runtime values — React Compiler {} crash](import-type-erases-values.md) — function imported under `import type {}` becomes undefined at runtime; React Compiler surfaces this as empty-object `{}` ErrorBoundary catch with no message.
 - [Mode dial top-center anchoring](mode-dial-topcenter-anchor.md) — anchorPos/safeT shoves top-wall t=0.5 to 0.75 (camera zone); hideHandle mode must bypass it and pin all geometry.
 - [Orchestration hook domain split](orchestration-hook-split.md) — useMetronomeScreen split pattern: same-name destructuring, early ref declarations, TranslationFn type, language cast for notification controls.
+- [Stage beat column height clipping](stage-beat-column-clipping.md) — overflow:hidden + fixed 172px fonts silently clipped subdiv/measure dots on phone heights; scale by measured height, dots need ≥0.4 alpha.
 - [Stage mode overlay wrapper](stage-mode-overlay-wrapper.md) — modeSlideStyle wrappers need absoluteFillObject or the overlay renders at 0×0; also add pointerEvents="box-none" so transparent wrapper doesn't block touches.
