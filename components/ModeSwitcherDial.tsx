@@ -515,8 +515,11 @@ function ModeSwitcherDial({
   const TOP_CENTER_WP: WallPos = { wall: "top", t: 0.5 };
   const activeWP               = hideHandle ? TOP_CENTER_WP : wallPos;
   // hideHandle: bypass anchorPos — its safeT camera-safe zone shoves t=0.5 to 0.75.
+  // Anchored at y=0 (true screen top) so the fan hugs the physical edge with no
+  // empty band above it; the background continues behind the camera cutout while
+  // the icon arc (ICON_R=82) still clears the Dynamic Island / notch area.
   const anchor = hideHandle
-    ? { x: winW / 2, y: topInset }
+    ? { x: winW / 2, y: 0 }
     : anchorPos(activeWP, winW, winH, topInset);
   wallRef.current    = activeWP.wall;
   anchorRef.current  = anchor;

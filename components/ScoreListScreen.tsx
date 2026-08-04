@@ -206,7 +206,12 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onOpenDial 
           accessibilityRole="button"
         >
           <Ionicons name="musical-notes" size={S.ms(20, 0.4)} color={C.accent} />
-          <Text style={[styles.headerTitle, { color: C.accent, fontFamily: "SpaceGrotesk_700Bold", fontSize: S.ms(18, 0.4), letterSpacing: 1.2, textTransform: "uppercase", flex: 0 }]}>
+          {/* headerTitle의 flex:1을 쓰지 않음 — flex:0은 웹에서 flex-basis:0%로 변환돼
+              텍스트가 한 글자 폭으로 붕괴(세로 쌓임)하므로 flex 관련 속성 없이 렌더 */}
+          <Text
+            numberOfLines={1}
+            style={{ color: C.accent, fontFamily: "SpaceGrotesk_700Bold", fontSize: S.ms(18, 0.4), letterSpacing: 1.2, textTransform: "uppercase" }}
+          >
             {t("scoreMode", "title")}
           </Text>
         </Pressable>
