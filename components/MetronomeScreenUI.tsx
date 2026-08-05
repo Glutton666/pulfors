@@ -861,6 +861,7 @@ export function MetronomeScreenUI(props: Props) {
                 isPlaying={isPlaying}
                 activeSubNote={activeSubNote}
                 activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
+                currentBeatType={isPlaying && currentBeat >= 0 ? (beatTypes[currentBeat] ?? "normal") : null}
               />
             ) : undefined}
             bpmSliderElement={!barMode && isLandscape ? (
@@ -936,6 +937,7 @@ export function MetronomeScreenUI(props: Props) {
               isPlaying={isPlaying}
               activeSubNote={activeSubNote}
               activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
+                currentBeatType={isPlaying && currentBeat >= 0 ? (beatTypes[currentBeat] ?? "normal") : null}
             />
             {showSubdivisionLongPressHint && (
               <Pressable
@@ -1113,6 +1115,7 @@ export function MetronomeScreenUI(props: Props) {
               isPlaying={isPlaying}
               activeSubNote={activeSubNote}
               activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
+                currentBeatType={isPlaying && currentBeat >= 0 ? (beatTypes[currentBeat] ?? "normal") : null}
             />
             {showSubdivisionLongPressHint && (
               <Pressable
@@ -1300,6 +1303,7 @@ export function MetronomeScreenUI(props: Props) {
               isPlaying={isPlaying}
               activeSubNote={activeSubNote}
               activeBeatPattern={isPlaying && currentBeat >= 0 ? (beatSubdivisions[String(currentBeat)] || null) : null}
+                currentBeatType={isPlaying && currentBeat >= 0 ? (beatTypes[currentBeat] ?? "normal") : null}
             />
           </>
         }

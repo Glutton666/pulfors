@@ -25,6 +25,7 @@ import { moderateScale, IS_TABLET, useScale } from "@/lib/scale";
 import { Radius, Spacing } from "@/constants/tokens";
 import type { ScaleValues } from "@/lib/scale";
 import type { BeatType } from "@/lib/metronome-engine";
+import { pureGetSubPattern } from "@/lib/metronome-engine-pure";
 
 interface SubdivisionBarProps {
   pattern: BeatType[];
@@ -36,6 +37,8 @@ interface SubdivisionBarProps {
   isPlaying?: boolean;
   activeSubNote?: number;
   activeBeatPattern?: BeatType[] | null;
+  /** 재생 중 현재 비트의 타입 — 지정 패턴이 없는 비트 차례에 실제 소리(단일 클릭)와 일치하는 1셀 표시용 */
+  currentBeatType?: BeatType | null;
 }
 
 const CELL_SIZE = IS_TABLET ? moderateScale(28, 0.4) : moderateScale(28, 0.4);
@@ -71,6 +74,7 @@ export function SubdivisionBar({
   isPlaying = false,
   activeSubNote = -1,
   activeBeatPattern = null,
+  currentBeatType = null,
 }: SubdivisionBarProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -385,7 +389,18 @@ export function SubdivisionBar({
 
   const nativePanHandlers = Platform.OS !== "web" ? panResponder.panHandlers : {};
 
-  const displayPattern = isPlaying && activeBeatPattern ? activeBeatPattern : pattern;
+  // 재생 중에는 실제로 연주되는 내용만 표시한다. 엔진과 동일한 순수 함수로
+  // 비트 타입 변환(뮤트 비트 → 전부 뮤트, strong/accent → 첫 셀 승격)까지 반영:
+  // - 현재 비트에 지정 패턴이 있으면 변환된 그 패턴
+  // - 없으면 단일 클릭(비트 타입 1셀) — 준비(스테이징) 패턴은 소리로 재생되지 않으므로 보여주지 않음
+  const livePattern: BeatType[] | null = useMemo(() => {
+    if (!currentBeatType) return null;
+    const subs = new Map<number, BeatType[]>();
+    if (activeBeatPattern && activeBeatPattern.length > 0) subs.set(0, activeBeatPattern);
+    return pureGetSubPattern([currentBeatType], subs, 0);
+  }, [currentBeatType, activeBeatPattern]);
+  const displayPattern = isPlaying ? (livePattern ?? pattern) : pattern;
+  const isShowingLivePattern = isPlaying && displayPattern !== pattern;
   const baseCellSize = S.isTablet ? S.ms(28, 0.5) : CELL_SIZE;
   const baseCellGap = S.isTablet ? S.ms(4, 0.4) : CELL_GAP;
   const hintWidth = 16;
@@ -416,7 +431,7 @@ export function SubdivisionBar({
             <Pressable
               key={i}
               onPress={() => {
-                if (!activeBeatPattern) cycleType(i);
+                if (!isShowingLivePattern) cycleType(i);
               }}
               onLongPress={() => {
                 if (isPlaying) return;
@@ -426,7 +441,7 @@ export function SubdivisionBar({
                 setTypePicker({ cellIndex: i });
               }}
               delayLongPress={350}
-              style={({ pressed }) => [pressed && !activeBeatPattern && { opacity: 0.6 }]}
+              style={({ pressed }) => [pressed && !isShowingLivePattern && { opacity: 0.6 }]}
               hitSlop={8}
               testID={`subdivision-cell-${i}`}
             >
