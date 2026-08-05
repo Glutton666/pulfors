@@ -113,14 +113,13 @@ function effectiveArcParams(wall: Wall, t: number): { centAng: number; halfSpan:
   };
 }
 
-// Swipe axis and sign — icons follow the finger with the reading-order layout
-// (deg = centAng − offset×ANGLE_STEP): scroll+1 moves icons toward +deg, whose
-// screen direction per wall is: top=left, right=up, bottom=right, left=down.
+// Swipe axis and sign — 사용자에게 익숙한 기존 방향 유지 (배치 반전과 무관하게
+// 스와이프 → 모드 진행 방향은 이전과 동일해야 함).
 const SWIPE_CFG: Record<Wall, { axis: "x" | "y"; sign: 1 | -1 }> = {
-  top:    { axis: "x", sign: -1 },
+  top:    { axis: "x", sign:  1 },
   right:  { axis: "y", sign: -1 },
-  bottom: { axis: "x", sign:  1 },
-  left:   { axis: "y", sign:  1 },
+  bottom: { axis: "x", sign: -1 },
+  left:   { axis: "y", sign: -1 },
 };
 
 // ── Anchor: exactly on the wall edge (camera-safe) ───────────────────────────
