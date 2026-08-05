@@ -198,7 +198,7 @@ export function StageBeatColumn({
   const fit = rootH > 0 ? Math.min(1, rootH / 430) : 1;
   const curFont  = Math.round(172 * fit);
   const nextFont = Math.round(108 * fit);
-  const subSize  = Math.max(10, Math.round(16 * fit));
+  const subSize  = Math.max(12, Math.round(20 * fit));
 
   return (
     <View
@@ -261,7 +261,7 @@ export function StageBeatColumn({
               {String(next0 + 1)}
             </Text>
 
-            {/* 서브디비전 — 현재 + 다음, 아래에만 */}
+            {/* 서브디비전 — 현재 비트만 한 줄로 넓게 (다음 비트 줄은 2단으로 보여 제거) */}
             {subdivisionTypes && subdivisionTypes.length > 1 && (
               <SubdivDots
                 types={subdivisionTypes}
@@ -269,9 +269,6 @@ export function StageBeatColumn({
                 size={subSize}
                 activeIndex={activeSubNote != null && activeSubNote >= 0 ? activeSubNote : undefined}
               />
-            )}
-            {nextSubdivisionTypes && nextSubdivisionTypes.length > 1 && (
-              <SubdivDots types={nextSubdivisionTypes} theme={theme} size={10} />
             )}
           </>
         )}
