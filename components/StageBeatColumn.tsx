@@ -57,7 +57,7 @@ function SubdivDots({
   // 잘못된 점을 강조하지 않도록 하이라이트를 생략한다.
   if (activeIndex != null && (activeIndex < 0 || activeIndex >= types.length)) activeIndex = undefined;
   // 무대용 가시성: 일반 점도 어두운 배경에서 멀리서 보이도록 충분히 밝게.
-  const dotBase     = theme === "dark" ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.38)";
+  const dotBase     = theme === "dark" ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.55)";
   const dotMute     = theme === "dark" ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
   const activeRing  = theme === "dark" ? "#FFD54F" : "#B8860B";
   // 두 줄(현재+다음)로 세로 공간을 쓰는 대신 가로로 넓게 펼친다.
@@ -198,7 +198,7 @@ export function StageBeatColumn({
   const fit = rootH > 0 ? Math.min(1, rootH / 430) : 1;
   const curFont  = Math.round(172 * fit);
   const nextFont = Math.round(108 * fit);
-  const subSize  = Math.max(12, Math.round(20 * fit));
+  const subSize  = Math.max(16, Math.round(26 * fit));
 
   return (
     <View
