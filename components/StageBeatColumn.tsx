@@ -45,12 +45,15 @@ function SubdivDots({
   theme,
   size = 10,
   activeIndex,
+  maxWidth,
 }: {
   types: BeatType[];
   theme: "dark" | "light";
   size?: number;
   /** 재생 중 현재 활성 서브디비전 인덱스 — 해당 점을 크고 밝게 하이라이트 */
   activeIndex?: number;
+  /** 사용 가능한 가로 폭 — 점 개수가 많아도 잘리지 않도록 크기를 줄인다 */
+  maxWidth?: number;
 }) {
   if (types.length <= 1) return null;
   // 활성 인덱스가 표시 패턴 범위를 벗어나면(예: 블록 자체 서브디비전 재생 중)
@@ -62,7 +65,15 @@ function SubdivDots({
   const activeRing  = theme === "dark" ? "#FFD54F" : "#B8860B";
   // 두 줄(현재+다음)로 세로 공간을 쓰는 대신 가로로 넓게 펼친다.
   // 점 개수가 많으면 화면을 넘지 않도록 간격을 줄인다.
-  const gap = size * (types.length <= 4 ? 2.2 : types.length <= 8 ? 1.4 : 0.7);
+  const n = types.length;
+  const ratio = n <= 4 ? 2.2 : n <= 8 ? 1.2 : 0.7;
+  // 첫 점 1.5배 + 활성 점 1.6배 여유분(+1.6유닛)을 포함해 전체 폭이
+  // maxWidth 안에 들어가도록 점 크기를 줄인다. (8분할 이상에서 잘려 안 보이던 문제)
+  if (maxWidth && maxWidth > 0) {
+    const units = n + (n - 1) * ratio + 1.6;
+    size = Math.max(8, Math.min(size, Math.floor((maxWidth - 16) / units)));
+  }
+  const gap = size * ratio;
   return (
     <View style={[styles.subdivRow, { gap }]} testID="stage-subdiv-dots">
       {types.map((t, i) => {
@@ -195,6 +206,7 @@ export function StageBeatColumn({
   // 최대 약 420px — 짧은 화면에서는 overflow hidden 에 위·아래(마디 도트,
   // 서브디비전 점)가 잘려 아예 안 보였다. 높이를 재서 비율로 글자를 줄인다.
   const [rootH, setRootH] = useState(0);
+  const [rootW, setRootW] = useState(0);
   const fit = rootH > 0 ? Math.min(1, rootH / 430) : 1;
   const curFont  = Math.round(172 * fit);
   const nextFont = Math.round(108 * fit);
@@ -203,7 +215,7 @@ export function StageBeatColumn({
   return (
     <View
       style={styles.root}
-      onLayout={(e) => setRootH(e.nativeEvent.layout.height)}
+      onLayout={(e) => { setRootH(e.nativeEvent.layout.height); setRootW(e.nativeEvent.layout.width); }}
       {...swipePR.panHandlers}
     >
       <Animated.View style={[styles.inner, slideStyle]}>
@@ -267,6 +279,7 @@ export function StageBeatColumn({
                 types={subdivisionTypes}
                 theme={theme}
                 size={subSize}
+                maxWidth={rootW > 0 ? rootW : undefined}
                 activeIndex={activeSubNote != null && activeSubNote >= 0 ? activeSubNote : undefined}
               />
             )}
