@@ -74,9 +74,11 @@ async function skipOnboarding(page: Page) {
  *
  * 다이얼 fan 지오메트리 (ModeSwitcherDial.tsx, hideHandle=true → top-center 고정):
  *   anchor = (winW/2, 0), centAng = 90°(아래), ANGLE_STEP = 34°, ICON_R = 104
- *   MODES  = [beat, bar, score, note, practice, stage, menu]
- *   초기 모드 beat(idx 0) 기준 score 는 offset +2
- *     → deg = 90 + 2×34 = 158° → dx = cos·104 ≈ −96, dy = sin·104 ≈ +39
+ *   MODES  = [beat, bar, note, stage, score, practice, menu]
+ *   배치는 읽기 방향: deg = 90 − offset×34° (다음 모드가 오른쪽)
+ *   초기 모드 beat(idx 0) 기준 score 는 offset −3 → 호 밖(클릭 불가).
+ *   → 두 단계 탭: note(+2, deg=22° → dx≈+96, dy≈+39)를 탭해 스크롤을 옮기고
+ *     (탭은 확정 없이 scrollPos만 이동, 팬은 열린 채 재중앙), 다시 +2 위치(score) 탭.
  *   탭 판정: 가장 가까운 슬롯이 ICON_S(52px) 이내면 해당 슬롯 선택.
  *   이후 오버레이(fan 밖) 탭이 confirmSelection → switchToMode("score").
  */
@@ -90,8 +92,10 @@ async function navigateToScoreEditor(page: Page) {
   // 팬 오픈 애니메이션 대기
   await page.waitForTimeout(400);
 
-  // score 아이콘 위치 탭 (offset +2 → x = cx−96, y = 39)
-  await page.mouse.click(cx - 96, 39);
+  // note(+2) 탭으로 스크롤 이동 → score 가 +2 로 들어옴 → 다시 +2 위치 탭
+  await page.mouse.click(cx + 96, 39);
+  await page.waitForTimeout(300);
+  await page.mouse.click(cx + 96, 39);
   await page.waitForTimeout(300);
 
   // 팬 밖 오버레이 탭 → 선택 확정 (confirmSelection → switchToMode("score"))

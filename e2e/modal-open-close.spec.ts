@@ -51,8 +51,8 @@ async function skipOnboarding(page: Page) {
  * 상단 모드 다이얼로 메인 메뉴를 연다.
  * ModeSwitcherDial 지오메트리 (hideHandle=true → top-center 고정):
  *   anchor=(winW/2, 0), centAng=90°, ANGLE_STEP=34°, ICON_R=104
- *   MODES=[beat,bar,score,note,practice,stage,menu] — beat 기준 menu 는 offset −1
- *     → deg = 90 − 34 = 56° → dx = cos·104 ≈ +58, dy = sin·104 ≈ +86
+ *   MODES=[beat,bar,note,stage,score,practice,menu] — beat 기준 menu 는 offset −1
+ *   배치는 읽기 방향: deg = 90 − offset×34° → menu(−1) = 124° → dx ≈ −58, dy ≈ +86
  *   아이콘 탭(≤52px)으로 선택 후, 팬 밖 오버레이 탭으로 확정한다.
  */
 async function openMainMenu(page: Page) {
@@ -60,7 +60,7 @@ async function openMainMenu(page: Page) {
   if (!vp) throw new Error("viewportSize() 가 null — playwright 설정 확인");
   await page.locator('[data-testid="mode-cycle-label"]').click();
   await page.waitForTimeout(400);
-  await page.mouse.click(vp.width / 2 + 58, 86);
+  await page.mouse.click(vp.width / 2 - 58, 86);
   await page.waitForTimeout(300);
   await page.mouse.click(vp.width / 2, vp.height * 0.7);
   await page.waitForTimeout(600);
@@ -92,11 +92,11 @@ test.describe("AnimatedModal 열기/닫기", () => {
     await expect(page.getByRole("menuitem").first()).toBeVisible();
 
     // 메뉴는 전체 화면(오버레이 없음) — 헤더 탭으로 다이얼을 열어 비트 모드로 복귀한다.
-    // menu(idx 6) 기준 beat 는 offset +1 → deg = 90 + 34 = 124° → dx ≈ −58, dy ≈ +86
+    // menu(idx 6) 기준 beat 는 offset +1 → deg = 90 − 34 = 56° → dx ≈ +58, dy ≈ +86
     const vp = page.viewportSize()!;
     await page.getByText(/^메뉴$|^Menu$/i).first().click();
     await page.waitForTimeout(400);
-    await page.mouse.click(vp.width / 2 - 58, 86);
+    await page.mouse.click(vp.width / 2 + 58, 86);
     await page.waitForTimeout(300);
     await page.mouse.click(vp.width / 2, vp.height * 0.7);
 

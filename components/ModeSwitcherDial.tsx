@@ -113,12 +113,14 @@ function effectiveArcParams(wall: Wall, t: number): { centAng: number; halfSpan:
   };
 }
 
-// Swipe axis and sign (flipped from natural so "up = prev, down = next" on right wall)
+// Swipe axis and sign — icons follow the finger with the reading-order layout
+// (deg = centAng − offset×ANGLE_STEP): scroll+1 moves icons toward +deg, whose
+// screen direction per wall is: top=left, right=up, bottom=right, left=down.
 const SWIPE_CFG: Record<Wall, { axis: "x" | "y"; sign: 1 | -1 }> = {
-  top:    { axis: "x", sign:  1 },
+  top:    { axis: "x", sign: -1 },
   right:  { axis: "y", sign: -1 },
-  bottom: { axis: "x", sign: -1 },
-  left:   { axis: "y", sign: -1 },
+  bottom: { axis: "x", sign:  1 },
+  left:   { axis: "y", sign:  1 },
 };
 
 // ── Anchor: exactly on the wall edge (camera-safe) ───────────────────────────
@@ -544,7 +546,9 @@ function ModeSwitcherDial({
     // Circular shortest-path offset so wrapping works smoothly
     const rawOff         = i - scrollPos;
     const offset         = rawOff - Math.round(rawOff / N_MODES) * N_MODES;
-    const deg            = centAng + offset * ANGLE_STEP;
+    // 부호를 빼기로: 배열 순서(비트→바→…)가 사용자가 읽는 방향과 일치하도록
+    // (top 벽: 다음 모드가 오른쪽, right 벽: 다음 모드가 아래쪽)
+    const deg            = centAng - offset * ANGLE_STEP;
     const rad            = (deg * Math.PI) / 180;
     const dist           = Math.abs(offset);
     const outOfArc       = Math.abs(offset * ANGLE_STEP) > halfSpan;
@@ -565,7 +569,7 @@ function ModeSwitcherDial({
   const miniSlots = [-1, 0, 1].map((offset) => {
     const idx  = currentIdx + offset;
     const mode = MODES[idx] as ModeSlot | undefined;
-    const deg  = centAng + offset * MINI_A_STEP;
+    const deg  = centAng - offset * MINI_A_STEP;  // 확장 부채꼴과 같은 방향
     const rad  = (deg * Math.PI) / 180;
     return {
       mode, offset,
