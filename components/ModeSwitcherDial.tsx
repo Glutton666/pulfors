@@ -113,13 +113,14 @@ function effectiveArcParams(wall: Wall, t: number): { centAng: number; halfSpan:
   };
 }
 
-// Swipe axis and sign — 사용자에게 익숙한 기존 방향 유지 (배치 반전과 무관하게
-// 스와이프 → 모드 진행 방향은 이전과 동일해야 함).
+// Swipe axis and sign — 아이콘이 손가락을 따라오는(끌어오는) 방향 (사용자 확정 2026-08).
+// deg = centAng − offset×ANGLE_STEP 배치에서 scroll+1 시 아이콘은 +deg 방향으로 이동:
+// top=왼쪽, right=위, bottom=오른쪽, left=아래. 그 방향 스와이프가 다음 모드.
 const SWIPE_CFG: Record<Wall, { axis: "x" | "y"; sign: 1 | -1 }> = {
-  top:    { axis: "x", sign:  1 },
+  top:    { axis: "x", sign: -1 },
   right:  { axis: "y", sign: -1 },
-  bottom: { axis: "x", sign: -1 },
-  left:   { axis: "y", sign: -1 },
+  bottom: { axis: "x", sign:  1 },
+  left:   { axis: "y", sign:  1 },
 };
 
 // ── Anchor: exactly on the wall edge (camera-safe) ───────────────────────────
