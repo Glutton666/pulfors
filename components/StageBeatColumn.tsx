@@ -60,8 +60,11 @@ function SubdivDots({
   const dotBase     = theme === "dark" ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.38)";
   const dotMute     = theme === "dark" ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
   const activeRing  = theme === "dark" ? "#FFD54F" : "#B8860B";
+  // 두 줄(현재+다음)로 세로 공간을 쓰는 대신 가로로 넓게 펼친다.
+  // 점 개수가 많으면 화면을 넘지 않도록 간격을 줄인다.
+  const gap = size * (types.length <= 4 ? 2.2 : types.length <= 8 ? 1.4 : 0.7);
   return (
-    <View style={[styles.subdivRow, { gap: size * 0.6 }]} testID="stage-subdiv-dots">
+    <View style={[styles.subdivRow, { gap }]} testID="stage-subdiv-dots">
       {types.map((t, i) => {
         const isActive = activeIndex === i;
         const color =
