@@ -74,18 +74,25 @@ function SubdivDots({
     size = Math.max(8, Math.min(size, Math.floor((maxWidth - 16) / units)));
   }
   const gap = size * ratio;
+  const strongBg  = theme === "dark" ? "#ffffff" : "#111111";
+  const strongFg  = theme === "dark" ? "#111111" : "#ffffff";
+  const accentCol = theme === "dark" ? "#FFD54F" : "#B8860B";
+  const muteEdge  = theme === "dark" ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.45)";
   return (
     <View style={[styles.subdivRow, { gap }]} testID="stage-subdiv-dots">
       {types.map((t, i) => {
         const isActive = activeIndex === i;
+        // 타입별 약호: strong=흰 바탕 S, accent=노란 채움 A, mute=속 빈 링, normal=회색 점
         const color =
-          t === "accent" ? (theme === "dark" ? "#FFD54F" : "#B8860B")
-          : t === "mute"   ? dotMute
-          : t === "strong" ? (theme === "dark" ? "#ffffff" : "#111111")
-          : isActive ? (theme === "dark" ? "#ffffff" : "#111111")
+          t === "accent" ? accentCol
+          : t === "mute"   ? "transparent"
+          : t === "strong" ? strongBg
+          : isActive ? strongBg
           : dotBase;
         const w = isActive ? size * 1.6 : i === 0 ? size * 1.5 : size;
         const h = isActive ? size * 1.3 : size;
+        const label = t === "strong" ? "S" : t === "accent" ? "A" : null;
+        const labelColor = t === "strong" ? strongFg : theme === "dark" ? "#3a2c00" : "#fff8e1";
         return (
           <View
             key={i}
@@ -93,12 +100,28 @@ function SubdivDots({
               width: w,
               height: h,
               borderRadius: h / 2,
-              backgroundColor: color,
-              opacity: isActive ? 1 : i === 0 ? 1 : 0.85,
-              borderWidth: isActive ? 2 : 0,
-              borderColor: activeRing,
+              backgroundColor: t === "mute" ? "transparent" : color,
+              opacity: isActive ? 1 : i === 0 ? 1 : 0.9,
+              borderWidth: isActive ? 2 : t === "mute" ? 2 : 0,
+              borderColor: isActive ? activeRing : muteEdge,
+              alignItems: "center",
+              justifyContent: "center",
             }}
-          />
+          >
+            {label != null && size >= 12 && (
+              <Text
+                style={{
+                  color: labelColor,
+                  fontSize: Math.round(h * 0.62),
+                  lineHeight: Math.round(h * 0.8),
+                  fontWeight: "800",
+                  includeFontPadding: false,
+                }}
+              >
+                {label}
+              </Text>
+            )}
+          </View>
         );
       })}
     </View>
