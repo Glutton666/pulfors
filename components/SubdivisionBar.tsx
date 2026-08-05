@@ -431,7 +431,7 @@ export function SubdivisionBar({
               testID={`subdivision-cell-${i}`}
             >
               {type === "strong" ? (
-                <View style={[{ width: clampedCellSize, height: clampedCellSize, borderRadius: dynamicRadius, overflow: "hidden", backgroundColor: C.accent, opacity: isPlaying ? (isActive ? 1 : 0.55) : 1 }]}>
+                <View style={[{ width: clampedCellSize, height: clampedCellSize, borderRadius: dynamicRadius, overflow: "hidden", backgroundColor: C.accent, opacity: isPlaying ? (isActive ? 1 : 0.8) : 1 }]}>
                   <LinearGradient
                     key={C.accent}
                     colors={[C.white, C.accent, C.accent]}
@@ -453,7 +453,9 @@ export function SubdivisionBar({
                       backgroundColor: getCellColor(type, true, C.accent, C.accentMuted, C.text, C.textTertiary),
                       borderColor: getCellBorder(type, C.textTertiary, C.white),
                       borderWidth: type === "mute" ? 2 : 0,
-                      opacity: isPlaying ? (isActive ? 1 : 0.3) : 1,
+                      // 재생 중에도 현재 비트의 패턴이 뚜렷이 보이도록 비활성 셀을
+                      // 지나치게 어둡게(0.3) 만들지 않는다 — 활성 셀은 하이라이트로 구분됨.
+                      opacity: isPlaying ? (isActive ? 1 : 0.7) : 1,
                     },
                   ]}
                 />
