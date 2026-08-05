@@ -92,7 +92,13 @@ function SubdivDots({
         const w = isActive ? size * 1.6 : i === 0 ? size * 1.5 : size;
         const h = isActive ? size * 1.3 : size;
         const label = t === "strong" ? "S" : t === "accent" ? "A" : null;
-        const labelColor = t === "strong" ? strongFg : theme === "dark" ? "#3a2c00" : "#fff8e1";
+        // 활성 점은 링만 두르지 않고 노란색으로 꽉 채워 확실히 강조
+        const bg = isActive
+          ? activeRing
+          : t === "mute" ? "transparent" : color;
+        const labelColor = isActive
+          ? "#3a2c00"
+          : t === "strong" ? strongFg : theme === "dark" ? "#3a2c00" : "#fff8e1";
         return (
           <View
             key={i}
@@ -100,10 +106,10 @@ function SubdivDots({
               width: w,
               height: h,
               borderRadius: h / 2,
-              backgroundColor: t === "mute" ? "transparent" : color,
+              backgroundColor: bg,
               opacity: isActive ? 1 : i === 0 ? 1 : 0.9,
-              borderWidth: isActive ? 2 : t === "mute" ? 2 : 0,
-              borderColor: isActive ? activeRing : muteEdge,
+              borderWidth: !isActive && t === "mute" ? 2 : 0,
+              borderColor: muteEdge,
               alignItems: "center",
               justifyContent: "center",
             }}
