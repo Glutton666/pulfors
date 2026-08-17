@@ -36,6 +36,8 @@ import { ModeIcon } from "@/components/ModeIcon";
 import { MenuScreen } from "@/components/MenuScreen";
 import { BpmDetectModal } from "@/components/BpmDetectModal";
 import { StemSeparationModal } from "@/components/StemSeparationModal";
+import { PolygonModeView } from "@/components/PolygonModeView";
+import { usePolygonMode } from "@/hooks/usePolygonMode";
 import { DrumKitModal } from "@/components/DrumKitModal";
 import { ScheduledStartModal } from "@/components/ScheduledStartModal";
 import { FadeOutModal } from "@/components/FadeOutModal";
@@ -85,7 +87,7 @@ export function MetronomeScreenUI(props: Props) {
     activeModal, setActiveModal, openExclusive,
     showSettings, showMenu, showSignalGen, showTuningGuide, showPracticeBook,
     showWorkUp, showOnboarding, showDrumKit, showScheduledStart,
-    showFadeOut, showBpmDetect, showStemSep,
+    showFadeOut, showBpmDetect, showStemSep, showPolygon,
     volume, updateVolume, sampleVolume, updateSampleVolume,
     backgroundPlay, updateBackgroundPlay,
     autoResumeAfterInterruption, updateAutoResumeAfterInterruption,
@@ -142,6 +144,8 @@ export function MetronomeScreenUI(props: Props) {
     flashOpacity, beatProgress, flashStyle, halfTimeFlashStyle, modeSlideStyle, fullScreenResetFlashStyle,
     currentMode, cycleToNextMode, switchToMode,
     completedGoalPopups, dismissGoalPopup,
+    getClickPCMs,
+    polygonOnBeatRef,
     scheduleReRender, stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals,
     notifyVoicePlayState, persistSettings,
     tempoLabel,
@@ -162,7 +166,21 @@ export function MetronomeScreenUI(props: Props) {
     handleBeatQuickSaveOpen,
     handleBeatQuickSaveCancel,
     handleBeatQuickSaveConfirm,
+    allPlayersRef,
+    volumeRef,
   } = props;
+
+  // ── 폴리곤 메트로놈 상태 ──────────────────────────────────────────────────
+  const polygonMode = usePolygonMode({
+    enabled: showPolygon,
+    isPlaying,
+    engineBeatCallbackRef: polygonOnBeatRef,
+    bpm,
+    allPlayersRef,
+    clickPCMCacheRef,
+    volumeRef,
+    getClickPCMs,
+  });
 
   type NativeKbViewProps = React.ComponentProps<typeof View> & {
     ref?: React.Ref<View>;
@@ -376,6 +394,13 @@ export function MetronomeScreenUI(props: Props) {
               stemSepReturnModalRef.current = activeModal;
               openExclusive("stemSep");
             }}
+            onScore={() => {
+              setActiveModal(null);
+              setScoreMode("list");
+            }}
+            onPolygon={() => {
+              openExclusive("polygon");
+            }}
           />
         </Animated.View>
       )}
@@ -418,6 +443,15 @@ export function MetronomeScreenUI(props: Props) {
         }}
       />
 
+
+      {/* ── 폴리곤 메트로놈 전체화면 ── */}
+      {showPolygon && (
+        <PolygonModeView
+          polygonMode={polygonMode}
+          isPlaying={isPlaying}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
 
       <FadeOutModal
         visible={showFadeOut}

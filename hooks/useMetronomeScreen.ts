@@ -289,6 +289,8 @@ export function useMetronomeScreen() {
   const preparingCancelledRef = useRef(false);
   // volume / sampleVolume state → useSettings 소유. refs 는 파라미터로 여기서 생성.
   const volumeRef = useRef(0.75);
+  /** 폴리곤 모드 비트 핸들러 ref — 엔진 오디오 콜백에서 매 비트마다 호출된다 */
+  const polygonOnBeatRef = useRef<(() => void) | null>(null);
   const sampleVolumeRef = useRef(0.8);
   // 단일 활성 모달 상태 머신: null = 모달 없음. openExclusive로만 전환해 mutual exclusion 보장.
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
@@ -305,6 +307,7 @@ export function useMetronomeScreen() {
     showFadeOut,
     showBpmDetect,
     showStemSep,
+    showPolygon,
   } = deriveModalFlags(activeModal);
   // soundSet/layerSoundSets/flashMode/hapticMode/audioOffsetMs/timerStopMode/
   // landscapeReversed/beatDirection/username → useSettings 소유
@@ -1106,6 +1109,8 @@ export function useMetronomeScreen() {
     });
 
     engine.setOnBeat((beat: number, isAccent: boolean) => {
+      // 폴리곤 모드: 메인 비트에서만 트리거 (서브비트·레이어비트 제외)
+      polygonOnBeatRef.current?.();
       pendingBeat = beat;
       pendingAccent = isAccent;
       hasBeatUpdate = true;
@@ -2813,7 +2818,7 @@ export function useMetronomeScreen() {
   }, [currentMode, coreMode, stageModeActive, showMenu, showPracticeBook, handleExitNoteMode, handleBarModeChange, handleEnterNoteMode, enterStageMode, exitStageMode, activeModal, openExclusive]);
 
   // ── 상단 중앙 레이블 탭 → 다음 모드 순환 ──
-  const MODE_CYCLE: ModeSlot[] = ["beat", "bar", "note", "stage", "score", "practice"];
+  const MODE_CYCLE: ModeSlot[] = ["beat", "bar", "note", "stage", "practice"];
   const cycleToNextMode = useCallback(() => {
     const idx = MODE_CYCLE.indexOf(currentMode as typeof MODE_CYCLE[number]);
     const nextMode = MODE_CYCLE[(idx + 1) % MODE_CYCLE.length];
@@ -3231,6 +3236,8 @@ export function useMetronomeScreen() {
     practiceStartRef,
     handleNoteTogglePlayRef,
     clickPCMCacheRef,
+    allPlayersRef,
+    volumeRef,
     // Core playback state
     bpm,
     beatsPerMeasure,
@@ -3286,6 +3293,7 @@ export function useMetronomeScreen() {
     showFadeOut,
     showBpmDetect,
     showStemSep,
+    showPolygon,
     // Settings
     volume,
     updateVolume,
@@ -3463,6 +3471,8 @@ export function useMetronomeScreen() {
     completedGoalPopups,
     dismissGoalPopup,
     // Audio helpers used inline in JSX
+    getClickPCMs,
+    polygonOnBeatRef,
     scheduleReRender,
     stopRenderedAudio,
     clearSamplePlayStates,

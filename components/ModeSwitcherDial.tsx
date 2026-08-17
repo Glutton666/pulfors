@@ -24,7 +24,7 @@ export type ModeSlot = "beat" | "bar" | "score" | "note" | "practice" | "stage" 
 type Wall = "top" | "right" | "bottom" | "left";
 type WallPos = { wall: Wall; t: number };
 
-const MODES: ModeSlot[] = ["beat", "bar", "note", "stage", "score", "practice", "menu"];
+const MODES: ModeSlot[] = ["beat", "bar", "note", "stage", "practice", "menu"];
 const WALL_KEY = "metronome_dial_wall_v2";
 
 const Z_OVERLAY = 100000;

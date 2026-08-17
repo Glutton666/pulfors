@@ -22,6 +22,8 @@ interface MenuScreenProps {
   onWorkUp: () => void;
   onPracticeBook: () => void;
   onStemSep: () => void;
+  onScore: () => void;
+  onPolygon: () => void;
 }
 
 export function MenuScreen({
@@ -33,6 +35,8 @@ export function MenuScreen({
   onWorkUp,
   onPracticeBook,
   onStemSep,
+  onScore,
+  onPolygon,
 }: MenuScreenProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -72,6 +76,18 @@ export function MenuScreen({
       label: t("stemSep", "title"),
       onPress: onStemSep,
       testID: "menu-stemSep",
+    },
+    {
+      icon: <Ionicons name="document-text-outline" size={ICON_SIZE} color={C.accent} />,
+      label: t("polygon", "scoreMenuLabel"),
+      onPress: onScore,
+      testID: "menu-score",
+    },
+    {
+      icon: <Ionicons name="shapes-outline" size={ICON_SIZE} color={C.accent} />,
+      label: t("polygon", "polygonMenuLabel"),
+      onPress: onPolygon,
+      testID: "menu-polygon",
     },
   ];
 
