@@ -113,6 +113,10 @@ interface BeatIndicatorProps {
   noteSampleSources?: Record<string, string>;
   onNoteRecordRequest?: (beatIndex: number, subIndex: number) => void;
   bpm?: number;
+  /** Bar-mode's own BPM, independent of the global beat-mode BPM. */
+  barBpm?: number;
+  /** Called when user edits bar-mode's base BPM (no per-bar override). */
+  onBarBpmChange?: (bpm: number) => void;
   onDenominatorCycle?: () => void;
   barStartBeat?: number | null;
   onBarStartBeatSelect?: (beat: number | null) => void;
@@ -187,6 +191,8 @@ export function BeatIndicator({
   noteSampleSources,
   onNoteRecordRequest,
   bpm,
+  barBpm,
+  onBarBpmChange,
   onDenominatorCycle,
   barStartBeat,
   onBarStartBeatSelect,
@@ -1327,7 +1333,8 @@ export function BeatIndicator({
         noteSamples={noteSamples ?? {}}
         noteSampleNames={noteSampleNames}
         noteSampleSources={noteSampleSources}
-        bpm={bpm}
+        bpm={barBpm ?? bpm}
+        onBpmChange={onBarBpmChange}
         halfTime={halfTime}
         beatDenominator={beatDenominator}
         onDenominatorCycle={onDenominatorCycle}

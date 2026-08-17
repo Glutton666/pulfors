@@ -576,8 +576,12 @@ export function useMetronomeScreen() {
   }, [stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals]);
 
   // ── Bar mode domain ───────────────────────────────────────────────────────
+  /** Global BPM saved on bar mode entry; restored on exit. */
+  const prevGlobalBpmRef = useRef<number>(120);
+
   const {
     barConfigRef,
+    barBpm, setBarBpm, barBpmRef,
     barRepeats, setBarRepeats,
     loopBlocks, setLoopBlocks,
     barStartBeat, setBarStartBeat,
@@ -586,7 +590,8 @@ export function useMetronomeScreen() {
     barStartBeatRef,
     barLoopModeRef,
     blockPlayModeRef,
-    handleBarModeChange,
+    handleBarModeChange: barModeHandleBarModeChange,
+    handleBarBpmChange,
     handleBarRepeatChange,
     handleLoopBlocksChange,
     handleBarReset,
@@ -616,14 +621,35 @@ export function useMetronomeScreen() {
     noteSampleSoundsRef,
     samplePlayStateRef,
     preloadNoteSampleSounds,
-    bpm,
-    bpmRef,
+    onBarBpmChange: (newBpm) => { updateBpmRef.current(newBpm); },
     beatDenominatorRef,
     username,
     persistSettings,
     scheduleReRender,
     t,
   });
+
+  /**
+   * Wraps barMode's handleBarModeChange with BPM isolation logic:
+   *   enter → save prevGlobalBpm, sync barBpm to current global BPM
+   *   exit  → restore prevGlobalBpm via updateBpm
+   */
+  const handleBarModeChange = useCallback((toBarMode: boolean) => {
+    if (toBarMode) {
+      // Snapshot current global BPM before entering bar mode
+      prevGlobalBpmRef.current = bpmRef.current;
+      // Seed bar BPM to the current global BPM (ref update is synchronous;
+      // the state update is async but barBpmRef is what matters for callbacks)
+      barBpmRef.current = bpmRef.current;
+      setBarBpm(bpmRef.current);
+      // Engine already has bpmRef.current — no updateBpm call needed on entry
+      barModeHandleBarModeChange(true);
+    } else {
+      barModeHandleBarModeChange(false);
+      // Restore global BPM to the value before bar mode was entered
+      updateBpmRef.current(prevGlobalBpmRef.current);
+    }
+  }, [barModeHandleBarModeChange, setBarBpm, barBpmRef]);
 
   // ── 웹 AudioContext 잠금 해제 (audio unlock) ─────────────────────────────
   // Chrome의 Autoplay Policy: AudioContext는 사용자 제스처 이후에만 resume 가능.
@@ -1857,7 +1883,7 @@ export function useMetronomeScreen() {
   });
 
 
-  // handleBarModeChange → useBarMode
+  // handleBarModeChange → wrapped (BPM swap) + barModeHandleBarModeChange
 
   const startMetronome = useCallback(async () => {
     const engine = engineRef.current;
@@ -2760,7 +2786,7 @@ export function useMetronomeScreen() {
     beatsPerMeasure, beatTypes, beatSubdivisions,
     barRepeats, loopBlocks,
     noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels,
-    setBpm, setBeatsPerMeasure, setBeatTypes, setBeatSubdivisions,
+    setBpm, setBarBpm, setBeatsPerMeasure, setBeatTypes, setBeatSubdivisions,
     setBarRepeats, setLoopBlocks, setBarLoopMode, setBlockPlayMode, setSubdivisionPattern,
     setNoteSamples, setNoteSampleNames, setNoteSampleSources, setNoteSampleChannels,
     setBarMode, setNoteMode,
@@ -3352,6 +3378,8 @@ export function useMetronomeScreen() {
     handleEasterEggGiveUpRef,
     // Bar mode
     barMode,
+    barBpm,
+    handleBarBpmChange,
     handleBarModeChange,
     barLoopMode,
     setBarLoopMode,

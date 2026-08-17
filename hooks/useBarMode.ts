@@ -124,8 +124,8 @@ export interface UseBarModeParams {
   preloadNoteSampleSounds: (samples: NoteSampleMap) => void;
 
   // ── BPM / denominator ──────────────────────────────────────────────────────
-  bpm: number;
-  bpmRef: React.MutableRefObject<number>;
+  /** Called whenever bar-mode BPM changes — updates the engine + global BPM state. */
+  onBarBpmChange: (bpm: number) => void;
   beatDenominatorRef: React.MutableRefObject<2 | 4 | 8>;
 
   // ── Settings ──────────────────────────────────────────────────────────────
@@ -144,6 +144,10 @@ export interface UseBarModeResult {
   barConfigRef: React.MutableRefObject<BarConfig>;
 
   // ── State ─────────────────────────────────────────────────────────────────
+  /** Bar-mode's own BPM, independent of global beat-mode BPM. */
+  barBpm: number;
+  setBarBpm: React.Dispatch<React.SetStateAction<number>>;
+  barBpmRef: React.MutableRefObject<number>;
   barRepeats: Record<number, BarRepeat>;
   setBarRepeats: React.Dispatch<React.SetStateAction<Record<number, BarRepeat>>>;
   loopBlocks: LoopBlock[];
@@ -164,6 +168,8 @@ export interface UseBarModeResult {
 
   // ── Callbacks ─────────────────────────────────────────────────────────────
   handleBarModeChange: (toBarMode: boolean) => void;
+  /** Sets bar-mode BPM, updates engine and notifies parent via onBarBpmChange. */
+  handleBarBpmChange: (newBpm: number) => void;
   handleBarRepeatChange: (beat: number, repeat: BarRepeat | null) => void;
   handleLoopBlocksChange: (blocks: LoopBlock[]) => void;
   handleBarReset: () => void;
@@ -184,6 +190,12 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
   const barConfigRef = useRef<BarConfig>(createInitialBarConfig(4));
 
   // ── State ──────────────────────────────────────────────────────────────────
+  /** Bar-mode BPM — independent of global beat-mode BPM. Seeded by useMetronomeScreen
+   *  wrapper (which calls setBarBpm / sets barBpmRef) before entering bar mode. */
+  const [barBpm, setBarBpm] = useState<number>(120);
+  const barBpmRef = useRef<number>(120);
+  useEffect(() => { barBpmRef.current = barBpm; }, [barBpm]);
+
   const [barRepeats, setBarRepeats] = useState<Record<number, BarRepeat>>({});
   const [loopBlocks, setLoopBlocks] = useState<LoopBlock[]>([]);
   const [barStartBeat, setBarStartBeat] = useState<number | null>(null);
@@ -209,6 +221,17 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
   useEffect(() => {
     blockPlayModeRef.current = blockPlayMode;
   }, [blockPlayMode]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // handleBarBpmChange
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const handleBarBpmChange = useCallback((newBpm: number) => {
+    const clamped = Math.max(20, Math.min(300, newBpm));
+    setBarBpm(clamped);
+    barBpmRef.current = clamped;
+    p.onBarBpmChange(clamped);
+  }, [p.onBarBpmChange]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // handleBarModeChange
@@ -387,7 +410,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
     try {
       const config = {
         mode: "bar" as const,
-        bpm: p.bpm,
+        bpm: barBpm,
         beatsPerMeasure: p.beatsPerMeasure,
         beatTypes: [...p.beatTypes],
         beatSubdivisions: { ...p.beatSubdivisions },
@@ -400,7 +423,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
         barTimerDuration: barConfigRef.current.barTimerDuration,
       };
       const now = new Date();
-      const label = `Bar ${p.beatsPerMeasure}/${p.bpm} ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
+      const label = `Bar ${p.beatsPerMeasure}/${barBpm} ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
       const entry = createPracticeEntry(label, config, p.username);
       const existing = await loadPracticeBook();
       await savePracticeBook([entry, ...existing]);
@@ -417,7 +440,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
       return false;
     }
   }, [
-    p.bpm,
+    barBpm,
     p.beatsPerMeasure,
     p.beatTypes,
     p.beatSubdivisions,
@@ -843,6 +866,9 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
 
   return {
     barConfigRef,
+    barBpm,
+    setBarBpm,
+    barBpmRef,
     barRepeats,
     setBarRepeats,
     loopBlocks,
@@ -857,6 +883,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
     barLoopModeRef,
     blockPlayModeRef,
     handleBarModeChange,
+    handleBarBpmChange,
     handleBarRepeatChange,
     handleLoopBlocksChange,
     handleBarReset,

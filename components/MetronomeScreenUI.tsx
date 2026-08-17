@@ -107,7 +107,7 @@ export function MetronomeScreenUI(props: Props) {
     easterEggShakeCount, easterEggSuccessCount, easterEggHintDirection, easterEggApplyBpm,
     handleEasterEggGuess, handleEasterEggToggleApplyBpm, handleEasterEggTrigger,
     handleEasterEggGiveUpRef,
-    barMode, handleBarModeChange, barLoopMode, setBarLoopMode,
+    barMode, barBpm, handleBarBpmChange, handleBarModeChange, barLoopMode, setBarLoopMode,
     blockPlayMode, setBlockPlayMode, barRepeats, loopBlocks,
     barStartBeat, setBarStartBeat,
     handleBarRepeatChange, handleLoopBlocksChange,
@@ -872,6 +872,8 @@ export function MetronomeScreenUI(props: Props) {
             noteSampleSources={noteSampleSources}
             onNoteRecordRequest={handleNoteRecordRequest}
             bpm={bpm}
+            barBpm={barBpm}
+            onBarBpmChange={handleBarBpmChange}
             barStartBeat={barStartBeat}
             onBarStartBeatSelect={setBarStartBeat}
             progressInfo={progressInfo}

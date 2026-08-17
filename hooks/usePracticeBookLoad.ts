@@ -66,6 +66,8 @@ export interface UsePracticeBookLoadParams {
 
   // Stable setters from useState / useBarMode / useSettings
   setBpm: (bpm: number) => void;
+  /** If provided, syncs barBpm to entry.bpm when loading a bar-mode entry. */
+  setBarBpm?: (bpm: number) => void;
   setBeatsPerMeasure: (n: number) => void;
   setBeatTypes: (types: BeatType[]) => void;
   setBeatSubdivisions: (subs: Record<string, BeatType[]>) => void;
@@ -153,7 +155,7 @@ export function usePracticeBookLoad({
   noteSampleNames,
   noteSampleSources,
   noteSampleChannels,
-  setBpm,
+  setBpm, setBarBpm,
   setBeatsPerMeasure,
   setBeatTypes,
   setBeatSubdivisions,
@@ -397,6 +399,8 @@ export function usePracticeBookLoad({
         { ...entry.barRepeats },
       );
       setBpm(entry.bpm);
+      // Sync bar-mode's independent BPM so it matches the loaded entry
+      setBarBpm?.(entry.bpm);
       setBeatsPerMeasure(entry.beatsPerMeasure);
       setBeatTypes([...entry.beatTypes]);
       setBeatSubdivisions({ ...entry.beatSubdivisions });

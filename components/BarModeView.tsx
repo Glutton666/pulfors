@@ -73,6 +73,8 @@ export interface BarModeViewProps {
   noteSampleNames?: Record<string, string>;
   noteSampleSources?: Record<string, string>;
   bpm?: number;
+  /** Called when user edits the base bar-mode BPM (not a per-bar override). */
+  onBpmChange?: (bpm: number) => void;
   halfTime?: boolean;
   beatDenominator?: 2 | 4 | 8;
   onDenominatorCycle?: () => void;
@@ -104,7 +106,7 @@ export function BarModeView({
   onBarLoopModeChange, blockPlayMode, onBlockPlayModeChange, progressInfo,
   barStartBeat, onBarStartBeatSelect, onAddBar, onDeleteBar,
   subdivisionBarElement, onBarQuickSave, onBarScrollOffset,
-  bpm, beatDenominator = 4, onDenominatorCycle,
+  bpm, onBpmChange, beatDenominator = 4, onDenominatorCycle,
   soundSet = "classic", onSoundSetChange, layerSoundSets = {} as Record<number, string>,
   onLayerSoundSetsChange, onPreviewSoundSet,
   customSoundSets = {} as Record<string, CustomSoundSetConfig>, onCustomSoundSetsChange,
@@ -593,6 +595,7 @@ export function BarModeView({
         onAddBar={onAddBar ?? (() => {})}
         onBarQuickSave={onBarQuickSave}
         bpm={bpm}
+        onBpmChange={onBpmChange}
         beatDenominator={beatDenominator}
         onDenominatorCycle={onDenominatorCycle}
         isPreparing={isPreparing}

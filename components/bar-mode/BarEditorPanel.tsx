@@ -48,6 +48,8 @@ export interface BarEditorPanelProps {
   onBarQuickSave?: () => Promise<boolean> | void;
   // Playback controls
   bpm?: number;
+  /** When provided, +/- buttons with no per-bar override edit the base bar BPM. */
+  onBpmChange?: (bpm: number) => void;
   beatDenominator?: 2 | 4 | 8;
   onDenominatorCycle?: () => void;
   isPreparing: boolean;
@@ -80,7 +82,7 @@ const MAX_LAYERS = 6;
 export function BarEditorPanel({
   editingBeat, barRepeats, isPlaying, beatsPerMeasure, beatSubdivisions,
   onBarRepeatChange, onDeleteBar, onBarStartBeatSelect, onAddBar, onBarQuickSave,
-  bpm, beatDenominator = 4, onDenominatorCycle, isPreparing, onTogglePlay,
+  bpm, onBpmChange, beatDenominator = 4, onDenominatorCycle, isPreparing, onTogglePlay,
   barLoopMode, onBarLoopModeChange, blockPlayMode, onBlockPlayModeChange,
   loopBlocks, onLoopBlocksChange,
   soundSet = "classic", onSoundSetChange, layerSoundSets = {}, onLayerSoundSetsChange,
@@ -211,10 +213,18 @@ export function BarEditorPanel({
 
   // ─── BPM helpers ─────────────────────────────────────────────────────────
 
+  const onBpmChangeRef = useRef(onBpmChange);
+  useEffect(() => { onBpmChangeRef.current = onBpmChange; }, [onBpmChange]);
+
   const applyRepBpm = useCallback((newBpm: number) => {
-    setRepBpm(newBpm);
     if (editingBeatRef.current !== null) {
+      // Per-bar override: update local repBpm state and commit to bar repeat
+      setRepBpm(newBpm);
       commitRepeatRef.current(repTypeRef.current, repCountRef.current, repMinRef.current, repSecRef.current, newBpm);
+    } else {
+      // No bar selected → edit the base bar BPM via the parent callback
+      setRepBpm(null); // keep per-bar override cleared
+      onBpmChangeRef.current?.(newBpm);
     }
   }, []);
 
