@@ -1,5 +1,6 @@
 import { StyleSheet } from "react-native";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
+import { onAccentColor } from "@/lib/color-contrast";
 
 export const makeStyles = (_C: any, _S: any) =>
   StyleSheet.create({
@@ -240,7 +241,7 @@ export const makeStyles = (_C: any, _S: any) =>
     symbolModalCloseText: {
       fontFamily: "SpaceGrotesk_600SemiBold",
       fontSize: FontSize.small,
-      color: "#fff",
+      color: onAccentColor(_C.accent),
     },
     ctxMenuItem: {
       flexDirection: "row" as const,
@@ -325,7 +326,7 @@ export const makeStyles = (_C: any, _S: any) =>
     drawerApplyBtnText: {
       fontFamily: "SpaceGrotesk_600SemiBold",
       fontSize: 11,
-      color: "#fff",
+      color: onAccentColor(_C.accent),
     },
     drawerClearBtn: {
       borderRadius: Radius.sm,

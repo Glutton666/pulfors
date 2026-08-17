@@ -9,4 +9,6 @@ Seeding `metronome_settings` in localStorage works for `bpm`, `beatsPerMeasure`,
 
 **How to apply:** to e2e-test beat-type-dependent behavior (mute beat, strong promotion), either seed the dial/bar config storage key or change beat types through the UI; don't trust `beatTypes` in a `metronome_settings` seed.
 
+**Theme seeding:** seeding only the theme-color keys is not enough — the onboarding-complete handler and the settings loader both re-apply theme afterward and clobber the seed. To e2e-test a custom theme, seed the onboarding-done flag AND include the theme in the main settings blob so the loader re-applies the same value (grep useMetronomeScreen for the current key names).
+
 Related: during playback the SubdivisionBar shows the live per-beat pattern via `pureGetSubPattern` (same transform as audio: mute beat → all-mute rings, strong/accent promote first cell); the staged global pattern is a clipboard only and is never played.

@@ -26,6 +26,7 @@ import { Radius, Spacing } from "@/constants/tokens";
 import type { ScaleValues } from "@/lib/scale";
 import type { BeatType } from "@/lib/metronome-engine";
 import { pureGetSubPattern } from "@/lib/metronome-engine-pure";
+import { accentGradientEdge, onAccentColor, onAccentShadow } from "@/lib/color-contrast";
 
 interface SubdivisionBarProps {
   pattern: BeatType[];
@@ -449,13 +450,13 @@ export function SubdivisionBar({
                 <View style={[{ width: clampedCellSize, height: clampedCellSize, borderRadius: dynamicRadius, overflow: "hidden", backgroundColor: C.accent, opacity: isPlaying ? (isActive ? 1 : 0.8) : 1 }]}>
                   <LinearGradient
                     key={C.accent}
-                    colors={[C.white, C.accent, C.accent]}
+                    colors={[accentGradientEdge(C.accent), C.accent, C.accent]}
                     locations={[0, 0.4, 1]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={{ width: clampedCellSize, height: clampedCellSize, alignItems: "center", justifyContent: "center", borderRadius: dynamicRadius }}
                   >
-                    <Text style={{ color: C.white, fontSize: dynamicFontSize, fontWeight: "bold" as const, lineHeight: dynamicFontSize + 2, textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
+                    <Text style={{ color: onAccentColor(C.accent), fontSize: dynamicFontSize, fontWeight: "bold" as const, lineHeight: dynamicFontSize + 2, textShadowColor: onAccentShadow(C.accent), textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
                   </LinearGradient>
                 </View>
               ) : (
@@ -581,13 +582,13 @@ export function DragGhost({
           <View key={i} style={[styles.ghostCell, { overflow: "hidden", backgroundColor: GC.accent }]}>
             <LinearGradient
               key={GC.accent}
-              colors={[GC.white, GC.accent, GC.accent]}
+              colors={[accentGradientEdge(GC.accent), GC.accent, GC.accent]}
               locations={[0, 0.4, 1]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={{ width: 18, height: 18, alignItems: "center", justifyContent: "center", borderRadius: Radius.xs }}
             >
-              <Text style={{ color: GC.white, fontSize: 8, fontWeight: "bold" as const, lineHeight: 10, textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 }}>S</Text>
+              <Text style={{ color: onAccentColor(GC.accent), fontSize: 8, fontWeight: "bold" as const, lineHeight: 10, textShadowColor: onAccentShadow(GC.accent), textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 }}>S</Text>
             </LinearGradient>
           </View>
         ) : (

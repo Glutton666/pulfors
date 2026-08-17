@@ -31,6 +31,7 @@ import { useAudioPlayer } from "expo-audio";
 import type { AudioPlayer } from "expo-audio";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/contexts/ThemeContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { type TranslationFn } from "@/lib/i18n";
 import { useScale } from "@/lib/scale";
@@ -600,8 +601,8 @@ function LandingPhase({
         onPress={onImport}
         testID="stem-sep-import"
       >
-        <Ionicons name="add-circle-outline" size={S.ms(20, 0.4)} color={C.background} />
-        <Text style={[styles.importBtnText, { color: C.background }]}>{t("stemSep", "importSong")}</Text>
+        <Ionicons name="add-circle-outline" size={S.ms(20, 0.4)} color={onAccentColor(C.accent)} />
+        <Text style={[styles.importBtnText, { color: onAccentColor(C.accent) }]}>{t("stemSep", "importSong")}</Text>
       </Pressable>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: Spacing.sm, paddingTop: Spacing.sm }}>
@@ -741,7 +742,7 @@ function OptionsPhase({
             <Ionicons
               name={denoiserReady && noiseRemoval ? "checkmark" : "close"}
               size={S.ms(14, 0.4)}
-              color={denoiserReady && noiseRemoval ? C.background : C.textSecondary}
+              color={denoiserReady && noiseRemoval ? onAccentColor(C.accent) : C.textSecondary}
             />
           </View>
         </Pressable>
@@ -772,11 +773,11 @@ function OptionsPhase({
         <MaterialCommunityIcons
           name="layers-triple-outline"
           size={S.ms(20, 0.4)}
-          color={modelReady === false ? C.textSecondary : C.background}
+          color={modelReady === false ? C.textSecondary : onAccentColor(C.accent)}
         />
         <Text style={[
           styles.primaryBtnText,
-          { color: modelReady === false ? C.textSecondary : C.background },
+          { color: modelReady === false ? C.textSecondary : onAccentColor(C.accent) },
         ]}>
           {modelReady === false
             ? t("stemSep", "modelNotConfigured")
@@ -1049,8 +1050,8 @@ function MixerPhase({
           onPress={onPlayToggle}
           testID="stem-mixer-play"
         >
-          <Ionicons name={isPlaying ? "stop" : "play"} size={S.ms(20, 0.4)} color={C.background} />
-          <Text style={[styles.playBtnText, { color: C.background }]}>
+          <Ionicons name={isPlaying ? "stop" : "play"} size={S.ms(20, 0.4)} color={onAccentColor(C.accent)} />
+          <Text style={[styles.playBtnText, { color: onAccentColor(C.accent) }]}>
             {isPlaying ? t("stemSep", "stop") : t("stemSep", "playAll")}
           </Text>
         </Pressable>

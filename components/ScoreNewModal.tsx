@@ -15,6 +15,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AnimatedModal } from "@/components/AnimatedModal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/contexts/ThemeContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
@@ -122,7 +123,7 @@ export function ScoreNewModal({ visible, defaultBpm, onClose, onCreate }: ScoreN
               onPress={handleCreate}
               testID="score-new-create"
             >
-              <Text style={styles.createText}>{t("scoreMode", "create")}</Text>
+              <Text style={[styles.createText, { color: onAccentColor(C.accent) }]}>{t("scoreMode", "create")}</Text>
             </Pressable>
           </View>
         </View>

@@ -36,6 +36,7 @@ import Animated, {
 import Colors from "@/constants/colors";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { SampleSource } from "@/lib/note-samples";
 import type { SampleChannel, MetroChannel } from "@/lib/stereo-channel";
@@ -962,8 +963,8 @@ export function NoteRecorderModal({
                   style={[styles.sourceButton, { backgroundColor: C.accent }]}
                   onPress={startCountdown}
                 >
-                  <Ionicons name="mic" size={24} color={C.white} />
-                  <Text style={styles.sourceButtonText}>{t("noteRecorder", "record")}</Text>
+                  <Ionicons name="mic" size={24} color={onAccentColor(C.accent)} />
+                  <Text style={[styles.sourceButtonText, { color: onAccentColor(C.accent) }]}>{t("noteRecorder", "record")}</Text>
                 </Pressable>
                 <Pressable
                   style={[styles.sourceButton, { backgroundColor: C.surfaceLight }]}
@@ -1314,8 +1315,8 @@ export function NoteRecorderModal({
                   style={[styles.saveBtn, { backgroundColor: C.accent }]}
                   onPress={handleSave}
                 >
-                  <Ionicons name="checkmark" size={18} color={C.white} />
-                  <Text style={styles.saveBtnText}>{t("noteRecorder", "save")}</Text>
+                  <Ionicons name="checkmark" size={18} color={onAccentColor(C.accent)} />
+                  <Text style={[styles.saveBtnText, { color: onAccentColor(C.accent) }]}>{t("noteRecorder", "save")}</Text>
                 </Pressable>
               </View>
             </View>

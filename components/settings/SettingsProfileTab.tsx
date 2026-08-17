@@ -17,6 +17,7 @@ import { Share } from "react-native";
 import { useScale } from "@/lib/scale";
 import { FontSize, Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import {
@@ -264,9 +265,9 @@ export function SettingsProfileTab({
               />
               <Pressable style={[styles.addRoomSaveBtn, { backgroundColor: C.accent }]} onPress={handleAddRoom} disabled={addingRoom}>
                 {addingRoom ? (
-                  <ActivityIndicator size="small" color={C.surface} />
+                  <ActivityIndicator size="small" color={onAccentColor(C.accent)} />
                 ) : (
-                  <Ionicons name="checkmark" size={S.ms(16, 0.4)} color={C.surface} />
+                  <Ionicons name="checkmark" size={S.ms(16, 0.4)} color={onAccentColor(C.accent)} />
                 )}
               </Pressable>
             </View>

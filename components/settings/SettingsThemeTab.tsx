@@ -17,6 +17,7 @@ import { useScale } from "@/lib/scale";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { PRESET_COLORS, HUE_COLORS } from "@/constants/color-presets";
 import { useTheme, type BeatTypeKey } from "@/contexts/ThemeContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LANGUAGE_OPTIONS } from "@/lib/i18n";
 import type { FlashMode, HapticMode } from "@/lib/storage";
@@ -254,7 +255,7 @@ export function SettingsThemeTab({
                 style={[styles.themeChip, active && { borderColor: opt.color }]}
               >
                 <View style={[styles.themeDot, { backgroundColor: opt.color }]} />
-                {active && <Ionicons name="checkmark" size={S.ms(10, 0.4)} color={C.white} style={styles.themeCheck} />}
+                {active && <Ionicons name="checkmark" size={S.ms(10, 0.4)} color={onAccentColor(opt.color)} style={styles.themeCheck} />}
               </Pressable>
             );
           })}
@@ -270,7 +271,7 @@ export function SettingsThemeTab({
             {themeColor === "custom" ? (
               <>
                 <View style={[styles.themeDot, { backgroundColor: customHex }]} />
-                <Ionicons name="checkmark" size={S.ms(10, 0.4)} color={C.white} style={styles.themeCheck} />
+                <Ionicons name="checkmark" size={S.ms(10, 0.4)} color={onAccentColor(customHex)} style={styles.themeCheck} />
               </>
             ) : (
               <Ionicons name="color-wand-outline" size={S.ms(18, 0.4)} color={C.textSecondary} />
@@ -616,7 +617,7 @@ export function SettingsThemeTab({
                 style={[styles.loggingInfoCloseBtn, { backgroundColor: C.accent }]}
                 onPress={() => setShowLoggingInfo(false)}
               >
-                <Text style={styles.loggingInfoCloseBtnText}>{t("loggingInfo", "close")}</Text>
+                <Text style={[styles.loggingInfoCloseBtnText, { color: onAccentColor(C.accent) }]}>{t("loggingInfo", "close")}</Text>
               </Pressable>
             </Pressable>
           </View>

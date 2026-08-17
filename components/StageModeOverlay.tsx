@@ -55,6 +55,7 @@ import type { PracticeEntry, FlashMode, HapticMode } from "@/lib/storage";
 import type { BeatType } from "@/lib/metronome-engine";
 import type { ProgressInfo } from "@/lib/metronome-engine-pure";
 import { handleStageModeBackPress, type StageModeBackState } from "@/lib/stage-mode-logic";
+import { withAlpha } from "@/lib/color-contrast";
 
 // ─── 스테이지 설정 타입 ──────────────────────────────────────────────
 const STAGE_SETTINGS_KEY = "stage_settings_v1";
@@ -622,7 +623,8 @@ export function StageModeOverlay({
   // ── 악보 현재 마디 계산 (내부 루프 카운터 → measureIdx) ──────────
   const scoreMeasureCount = scoreDoc?.parts[0]?.measures?.length ?? 1;
   const currentMeasureIdx = internalLoopCount % Math.max(1, scoreMeasureCount);
-  const SCORE_HIGHLIGHT_COLOR = "rgba(74,158,255,0.25)";
+  // 무대 모드 자체 accent(아래 accentColor)와 동일 계열로 파생 — 임의 고정 파랑 제거
+  const SCORE_HIGHLIGHT_COLOR = withAlpha(settings.theme === "dark" ? "#5B9EFF" : "#2563EB", 0.25);
 
   // ── 악보 하이라이트 수직 위치 제어 (scoreHighlight 설정) ─────────
   // computeScoreLayout 으로 row Y 좌표를 구한 뒤 ScrollView 를 스크롤.

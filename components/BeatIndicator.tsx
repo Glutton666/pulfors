@@ -66,6 +66,7 @@ export { DIAL_SIZE, DIAL_RADIUS, DOT_RADIUS_FROM_CENTER };
 
 // BarRepeat/LoopBlock/BeatType 은 ./beat-indicator.types 에서 re-export (위 라인 참조).
 import type { BarRepeat, LoopBlock } from "./beat-indicator.types";
+import { onAccentColor } from "@/lib/color-contrast";
 
 export type { ProgressInfo } from "@/lib/metronome-engine";
 type ProgressInfo = import("@/lib/metronome-engine").ProgressInfo;
@@ -1277,7 +1278,7 @@ export function BeatIndicator({
         zIndex: 10000,
       }}
     >
-      <Text style={{ color: C.white, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_700Bold" }}>
+      <Text style={{ color: onAccentColor(C.accent), fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_700Bold" }}>
         {loopBlocks[pillDrag.origIndex]?.startBeat !== undefined
           ? `${loopBlocks[pillDrag.origIndex].startBeat + 1}-${Math.min(loopBlocks[pillDrag.origIndex].endBeat + 1, beatsPerMeasure)}`
           : "?"}

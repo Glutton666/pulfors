@@ -27,6 +27,7 @@ import { captureBreadcrumb } from "@/lib/error-tracking";
 import Colors from "@/constants/colors";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import { useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
 import {
@@ -426,8 +427,8 @@ export function TuningGuideModal({ visible, onClose, onSelectFreq, lang, accentC
               }}
               style={[tgStyles.setTargetBtn, { backgroundColor: accentColor }]}
             >
-              <Text style={tgStyles.setTargetBtnText}>{t("signalGenerator", "setTargetNote")}</Text>
-              <Text style={tgStyles.setTargetFreq}>{pickerFreq} Hz</Text>
+              <Text style={[tgStyles.setTargetBtnText, { color: onAccentColor(accentColor) }]}>{t("signalGenerator", "setTargetNote")}</Text>
+              <Text style={[tgStyles.setTargetFreq, { color: onAccentColor(accentColor), opacity: 0.75 }]}>{pickerFreq} Hz</Text>
             </Pressable>
           </View>
           <View style={tgStyles.divider} />
@@ -1517,9 +1518,9 @@ export function SignalGeneratorModal({ visible, onClose, onOpenTuningGuide, onOp
               <Ionicons
                 name={isPlaying ? "stop" : "play"}
                 size={S.ms(20, 0.4)}
-                color={isPlaying ? C.white : C.background}
+                color={isPlaying ? C.white : onAccentColor(C.accent)}
               />
-              <Text style={[styles.playBtnText, { color: isPlaying ? C.white : C.background }]}>
+              <Text style={[styles.playBtnText, { color: isPlaying ? C.white : onAccentColor(C.accent) }]}>
                 {isPlaying ? t("signalGenerator", "stop") : t("signalGenerator", "play")}
               </Text>
             </Pressable>

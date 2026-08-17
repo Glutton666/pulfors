@@ -14,6 +14,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import { useScale } from "@/lib/scale";
 import { makeStyles } from "./ScoreEditorScreen.styles";
 import { ALL_INSTR_SYMBOLS } from "./ScorePalette";
@@ -314,7 +315,7 @@ export function ScoreSymbolSettingsModal({
                 value={showPlayhead}
                 onValueChange={(v) => onUpdatePlaybackSettings({ showPlayhead: v })}
                 trackColor={{ false: C.border, true: C.accent }}
-                thumbColor={showPlayhead ? "#fff" : "#ccc"}
+                thumbColor={showPlayhead ? onAccentColor(C.accent) : "#ccc"}
                 testID="score-toggle-show-playhead"
               />
             </View>
@@ -326,7 +327,7 @@ export function ScoreSymbolSettingsModal({
                 value={showZoomView}
                 onValueChange={(v) => onUpdatePlaybackSettings({ showZoomView: v })}
                 trackColor={{ false: C.border, true: C.accent }}
-                thumbColor={showZoomView ? "#fff" : "#ccc"}
+                thumbColor={showZoomView ? onAccentColor(C.accent) : "#ccc"}
                 testID="score-toggle-show-zoom-view"
               />
             </View>
@@ -338,7 +339,7 @@ export function ScoreSymbolSettingsModal({
                 value={notePreviewEnabled}
                 onValueChange={(v) => onUpdatePlaybackSettings({ notePreview: v })}
                 trackColor={{ false: C.border, true: C.accent }}
-                thumbColor={notePreviewEnabled ? "#fff" : "#ccc"}
+                thumbColor={notePreviewEnabled ? onAccentColor(C.accent) : "#ccc"}
                 testID="score-toggle-note-preview"
               />
             </View>
@@ -356,7 +357,7 @@ export function ScoreSymbolSettingsModal({
                     value={enabled}
                     onValueChange={(v) => onSymbolToggle(sym.id, v)}
                     trackColor={{ false: C.border, true: C.accent }}
-                    thumbColor={enabled ? "#fff" : "#ccc"}
+                    thumbColor={enabled ? onAccentColor(C.accent) : "#ccc"}
                     testID={`score-symbol-toggle-${sym.id}`}
                   />
                 </View>
@@ -678,7 +679,7 @@ export function ScorePngExportOptionsModal({
                   <Text
                     style={[
                       styles.drawerApplyBtnText,
-                      { color: selected ? "#fff" : C.text },
+                      { color: selected ? onAccentColor(C.accent) : C.text },
                     ]}
                   >
                     {opt ? String(opt) : t("scoreMode", "drawerMeasuresPerLineAuto")}
@@ -712,7 +713,7 @@ export function ScorePngExportOptionsModal({
                   <Text
                     style={[
                       styles.drawerApplyBtnText,
-                      { color: selected ? "#fff" : C.text },
+                      { color: selected ? onAccentColor(C.accent) : C.text },
                     ]}
                   >
                     {opt ? String(opt) : t("scoreMode", "pngExportLinesPerPageNone")}
@@ -764,7 +765,7 @@ export function ScorePngExportOptionsModal({
             onPress={onConfirm}
             testID="score-png-export-confirm"
           >
-            <Text style={[styles.symbolModalCloseText, { color: "#fff" }]}>
+            <Text style={styles.symbolModalCloseText}>
               {t("scoreMode", "pngExportConfirm")}
             </Text>
           </Pressable>

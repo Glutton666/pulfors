@@ -12,6 +12,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/contexts/ThemeContext";
 import type { BeatType } from "@/lib/metronome-engine";
 import { Radius, FontSize } from "@/constants/tokens";
+import { accentGradientEdge, onAccentColor, onAccentShadow } from "@/lib/color-contrast";
 
 export interface DialBeatDotProps {
   index: number;
@@ -97,7 +98,8 @@ export function DialBeatDot({
               withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) })
             );
           }
-          beatBg.value = withTiming("rgba(72, 79, 88, 0.35)", { duration: 50 });
+          // 테마 중립 플래시 — 고정 회색 대신 현재 팔레트의 overlay 색 사용
+          beatBg.value = withTiming(C.overlay10, { duration: 50 });
           beatBorder.value = withTiming(C.textSecondary, { duration: 50 });
         } else {
           if (activeChanged) {
@@ -169,14 +171,14 @@ export function DialBeatDot({
         >
           <LinearGradient
             key={C.accent}
-            colors={[C.white, C.accent, C.accent]}
+            colors={[accentGradientEdge(C.accent), C.accent, C.accent]}
             locations={[0, 0.4, 1]}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
             style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}
           >
             <View style={{ width: size - 10, height: size - 10, borderRadius: (size - 10) / 2, backgroundColor: C.accent, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: C.white, fontSize: FontSize.caption, fontWeight: "bold" as const, lineHeight: 13, textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
+              <Text style={{ color: onAccentColor(C.accent), fontSize: FontSize.caption, fontWeight: "bold" as const, lineHeight: 13, textShadowColor: onAccentShadow(C.accent), textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
             </View>
           </LinearGradient>
         </Animated.View>

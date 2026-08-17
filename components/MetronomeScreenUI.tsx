@@ -57,6 +57,7 @@ import { addActivityLog, saveLoggingEnabled } from "@/lib/activity-log";
 import { hasNoteSample } from "@/lib/note-samples";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { useMetronomeScreen } from "@/hooks/useMetronomeScreen";
+import { onAccentColor } from "@/lib/color-contrast";
 
 type Props = ReturnType<typeof useMetronomeScreen>;
 
@@ -271,7 +272,7 @@ export function MetronomeScreenUI(props: Props) {
           }}
           testID="fade-out-status"
         >
-          <Text style={{ color: "#fff", fontFamily: "SpaceGrotesk_600SemiBold", fontSize: FontSize.small }}>
+          <Text style={{ color: fadeOutPhase === "muted" ? "#fff" : onAccentColor(C.accent), fontFamily: "SpaceGrotesk_600SemiBold", fontSize: FontSize.small }}>
             {fadeOutStatusText}
           </Text>
         </View>
@@ -293,7 +294,7 @@ export function MetronomeScreenUI(props: Props) {
         <Text style={{
           fontFamily: "SpaceGrotesk_700Bold",
           fontSize: S.ms(96, 0.5),
-          color: C.background,
+          color: onAccentColor(C.accent),
           letterSpacing: 4,
         }}>
           {beatsPerMeasure}/{beatDenominator}
@@ -995,7 +996,7 @@ export function MetronomeScreenUI(props: Props) {
                         <Ionicons
                           name="image-outline"
                           size={S.ms(14, 0.3)}
-                          color={landscapeContentType === "photo" ? C.background : C.textSecondary}
+                          color={landscapeContentType === "photo" ? onAccentColor(C.accent) : C.textSecondary}
                         />
                       </Pressable>
                       <Pressable
@@ -1019,7 +1020,7 @@ export function MetronomeScreenUI(props: Props) {
                         <Ionicons
                           name="stats-chart"
                           size={S.ms(14, 0.3)}
-                          color={landscapeContentType === "stats" ? C.background : C.textSecondary}
+                          color={landscapeContentType === "stats" ? onAccentColor(C.accent) : C.textSecondary}
                         />
                       </Pressable>
                     </View>
@@ -1441,7 +1442,7 @@ export function MetronomeScreenUI(props: Props) {
                     alignItems: "center",
                   }}
                 >
-                  <Text style={{ color: C.background, fontSize: S.ms(15, 0.3), fontWeight: "600" }}>
+                  <Text style={{ color: onAccentColor(C.accent), fontSize: S.ms(15, 0.3), fontWeight: "600" }}>
                     {t("main", "beatQuickSaveConfirm")}
                   </Text>
                 </Pressable>

@@ -23,6 +23,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { useScale } from "@/lib/scale";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { SoundSet, BuiltinSoundSet, SoundRole, CustomSoundSetConfig, CustomSoundSample } from "@/lib/storage";
 import { saveCustomSoundSets, BUILTIN_SOUND_SETS } from "@/lib/storage";
@@ -543,7 +544,7 @@ export function SettingsSoundTab({
                   <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs }}>
                     {isMain && (
                       <View style={{ backgroundColor: C.accent, borderRadius: Radius.xs, paddingHorizontal: 6, paddingVertical: Spacing.xxs }}>
-                        <Text style={{ color: C.background, fontSize: 9, fontFamily: "SpaceGrotesk_600SemiBold" }}>{t("settings", "soundSetMain")}</Text>
+                        <Text style={{ color: onAccentColor(C.accent), fontSize: 9, fontFamily: "SpaceGrotesk_600SemiBold" }}>{t("settings", "soundSetMain")}</Text>
                       </View>
                     )}
                     {usedInLayers.map((ln) => (
@@ -786,8 +787,8 @@ export function SettingsSoundTab({
                 </Pressable>
               )}
               <Pressable style={[csStyles.saveBtn, { backgroundColor: C.accent }]} onPress={saveCustomSet}>
-                <Ionicons name="checkmark" size={S.ms(16, 0.4)} color={C.background} />
-                <Text style={csStyles.saveBtnText}>{t("customSoundSet", "save")}</Text>
+                <Ionicons name="checkmark" size={S.ms(16, 0.4)} color={onAccentColor(C.accent)} />
+                <Text style={[csStyles.saveBtnText, { color: onAccentColor(C.accent) }]}>{t("customSoundSet", "save")}</Text>
               </Pressable>
             </View>
           </View>

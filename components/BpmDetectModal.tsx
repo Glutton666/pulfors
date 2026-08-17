@@ -31,6 +31,7 @@ import { useModalCardLayout } from "@/lib/modal-layout";
 import { ensurePermission } from "@/lib/permissions";
 import { detectBpm } from "@/lib/bpm-detect";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
+import { onAccentColor } from "@/lib/color-contrast";
 
 // ─── BPM detect WebView HTML (iOS + Android) ─────────────────────────────────
 const BPM_HTML = `<!DOCTYPE html><html><body><script>
@@ -509,7 +510,7 @@ const makeStyles = (C: any, S: any) =>
     applyText: {
       fontFamily: "SpaceGrotesk_600SemiBold",
       fontSize: FontSize.body,
-      color: "#fff",
+      color: onAccentColor(C.accent),
     },
     errorArea: {
       alignItems: "center",

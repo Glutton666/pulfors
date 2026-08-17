@@ -26,6 +26,7 @@ import {
   type ExportFormat,
 } from "@/lib/audio-export";
 import { logger } from "@/lib/logger";
+import { onAccentColor } from "@/lib/color-contrast";
 
 interface ExportEntryModalProps {
   visible: boolean;
@@ -217,7 +218,7 @@ export function ExportEntryModal({ visible, entry, onClose }: ExportEntryModalPr
                 disabled={busy}
                 testID="export-fade-toggle"
               >
-                <Text style={[styles.toggleText, fadeEnabled && { color: "#fff" }]}>
+                <Text style={[styles.toggleText, fadeEnabled && { color: onAccentColor(C.accent) }]}>
                   {fadeEnabled ? t("exportAudio", "fadeOutEnabled") : t("exportAudio", "fadeOutDisabled")}
                 </Text>
               </Pressable>
@@ -294,7 +295,7 @@ export function ExportEntryModal({ visible, entry, onClose }: ExportEntryModalPr
             disabled={!canStart}
             testID="export-start-btn"
           >
-            <Ionicons name="download-outline" size={S.ms(18, 0.4)} color="#fff" />
+            <Ionicons name="download-outline" size={S.ms(18, 0.4)} color={onAccentColor(C.accent)} />
             <Text style={styles.startText}>{t("exportAudio", "start")}</Text>
           </Pressable>
         </View>
@@ -322,7 +323,7 @@ function FormatChip({
         { borderColor: active ? C.accent : C.border, backgroundColor: active ? C.accent : "transparent" },
       ]}
     >
-      <Text style={[chipStyles.text, { color: active ? "#fff" : C.text }]}>{label}</Text>
+      <Text style={[chipStyles.text, { color: active ? onAccentColor(C.accent) : C.text }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -513,7 +514,7 @@ const makeStyles = (C: typeof Colors) =>
     },
     startText: {
       fontSize: FontSize.body,
-      color: "#fff",
+      color: onAccentColor(C.accent),
       fontWeight: FontWeight.semibold,
     },
   });

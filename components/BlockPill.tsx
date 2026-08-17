@@ -1,3 +1,4 @@
+import { onAccentColor } from "@/lib/color-contrast";
 import React, { useEffect, useRef } from "react";
 import { View, Text, Pressable, Platform, PanResponder } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -167,7 +168,7 @@ export const BlockPill = React.memo(function BlockPill({
         </Text>
         {layerCount > 0 && (
           <View style={{ position: "absolute", top: badgeSize.top, right: badgeSize.right, backgroundColor: accentColor, borderRadius: badgeSize.r, minWidth: badgeSize.mw, height: badgeSize.h, alignItems: "center", justifyContent: "center", paddingHorizontal: badgeSize.px }}>
-            <Ionicons name="layers-outline" size={badgeSize.fs + 1} color={whiteColor} />
+            <Ionicons name="layers-outline" size={badgeSize.fs + 1} color={onAccentColor(accentColor)} />
           </View>
         )}
       </Pressable>

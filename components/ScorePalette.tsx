@@ -7,6 +7,7 @@ import React, { useState } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Spacing, Radius } from "@/constants/tokens";
 import type {
@@ -726,7 +727,7 @@ export function ScorePalette({
                 }}
                 testID="score-palette-tempo-bpm-confirm"
               >
-                <Text style={styles.tempoCustomApplyText}>✓</Text>
+                <Text style={[styles.tempoCustomApplyText, { color: onAccentColor(C.accent) }]}>✓</Text>
               </Pressable>
             </View>
           )}
@@ -764,7 +765,7 @@ export function ScorePalette({
               }}
               testID="score-palette-custom-tempo-apply"
             >
-              <Text style={styles.tempoCustomApplyText}>✓</Text>
+              <Text style={[styles.tempoCustomApplyText, { color: onAccentColor(C.accent) }]}>✓</Text>
             </Pressable>
           </View>
         </View>

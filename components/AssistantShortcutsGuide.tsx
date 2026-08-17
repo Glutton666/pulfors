@@ -11,6 +11,7 @@ import { AnimatedModal } from "@/components/AnimatedModal";
 import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
 
@@ -139,9 +140,9 @@ export function AssistantShortcutsGuide({ visible, onClose }: Props) {
                 <Ionicons
                   name={t === "ios" ? "logo-apple" : "logo-android"}
                   size={14}
-                  color={tab === t ? C.background : C.textSecondary}
+                  color={tab === t ? onAccentColor(C.accent) : C.textSecondary}
                 />
-                <Text style={[s.tabLabel, { color: tab === t ? C.background : C.textSecondary }]}>
+                <Text style={[s.tabLabel, { color: tab === t ? onAccentColor(C.accent) : C.textSecondary }]}>
                   {t === "ios" ? iosLabel : androidLabel}
                 </Text>
               </Pressable>
@@ -153,7 +154,7 @@ export function AssistantShortcutsGuide({ visible, onClose }: Props) {
               {steps.map((step, i) => (
                 <View key={i} style={s.stepRow}>
                   <View style={[s.stepNum, { backgroundColor: C.accent }]}>
-                    <Text style={[s.stepNumText, { color: C.background }]}>{i + 1}</Text>
+                    <Text style={[s.stepNumText, { color: onAccentColor(C.accent) }]}>{i + 1}</Text>
                   </View>
                   <Text style={[s.stepText, { color: C.text }]}>{step}</Text>
                 </View>

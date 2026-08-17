@@ -12,6 +12,7 @@ import {
   saveFadeOutSettings,
   type FadeOutSettings,
 } from "@/lib/storage";
+import { onAccentColor } from "@/lib/color-contrast";
 
 export interface FadeOutModalProps {
   visible: boolean;
@@ -148,7 +149,7 @@ export function FadeOutModal({ visible, onClose, onStart }: FadeOutModalProps) {
               accessibilityRole="button"
               testID="fade-out-start"
             >
-              <Text style={[styles.primaryText, { color: "#fff" }]}>{t("fadeOut", "start")}</Text>
+              <Text style={[styles.primaryText, { color: onAccentColor(C.accent) }]}>{t("fadeOut", "start")}</Text>
             </Pressable>
 
             <Pressable

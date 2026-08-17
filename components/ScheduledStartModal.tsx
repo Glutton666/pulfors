@@ -11,6 +11,7 @@ import { AnimatedSlideModal } from "@/components/AnimatedModal";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
@@ -367,7 +368,7 @@ export function ScheduledStartModal({
                     onPress={handleStart}
                     testID="scheduled-start-fire"
                   >
-                    <Text style={styles.primaryBtnText}>{t("scheduledStart", "start")}</Text>
+                    <Text style={[styles.primaryBtnText, { color: onAccentColor(C.accent) }]}>{t("scheduledStart", "start")}</Text>
                   </Pressable>
                 </View>
               </>

@@ -30,6 +30,7 @@ import type { BeatType } from "@/lib/metronome-engine";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import { ExportEntryModal } from "@/components/ExportEntryModal";
+import { onAccentColor } from "@/lib/color-contrast";
 
 interface PracticeBookModalProps {
   visible: boolean;
@@ -325,7 +326,7 @@ function SwipeableEntry({
                 : isBeatMode ? "#3B82F6"
                 : accentColor,
             }]}>
-              <Text style={styles.modeBadgeText}>
+              <Text style={[styles.modeBadgeText, !isNoteMode && !isScoreMode && !isBeatMode && { color: onAccentColor(accentColor) }]}>
                 {isNoteMode ? t("practiceBook", "badgeNote")
                   : isScoreMode ? t("practiceBook", "badgeScore")
                   : isBeatMode ? t("practiceBook", "badgeBeat")
@@ -1053,7 +1054,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   saveConfirmText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
-    color: C.white,
+    color: onAccentColor(C.accent),
   },
   saveCancelBtn: {
     height: 40,
@@ -1279,7 +1280,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   goalConfirmText: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     fontSize: 14,
-    color: C.white,
+    color: onAccentColor(C.accent),
   },
 });
 

@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import { makeStyles } from "@/components/ScoreEditorScreen.styles";
@@ -248,7 +249,7 @@ export function ScoreEditorToolbar({
           onPress={onSave}
           testID="score-editor-save"
         >
-          <Text style={styles.saveBtnText}>{t("scoreMode", "save")}</Text>
+          <Text style={[styles.saveBtnText, { color: onAccentColor(C.accent) }]}>{t("scoreMode", "save")}</Text>
         </Pressable>
       </View>
 

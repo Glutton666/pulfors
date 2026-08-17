@@ -21,6 +21,7 @@ import Svg, { Circle } from "react-native-svg";
 import Colors from "@/constants/colors";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import * as Crypto from "expo-crypto";
 import { captureRef } from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
@@ -542,7 +543,7 @@ export function WorkUpOverviewModal({
           <View style={s.addFormRow}>
             <TextInput style={[s.formInput, { borderColor: C.accentMuted }]} value={newGoalTarget} onChangeText={setNewGoalTarget} placeholder={t("workUp", "minutesPlaceholder")} placeholderTextColor={C.textTertiary} keyboardType="numeric" />
             <Pressable style={[s.formSaveBtn, { backgroundColor: C.accent }]} onPress={handleAddGoal}>
-              <Ionicons name="checkmark" size={16} color={C.surface} />
+              <Ionicons name="checkmark" size={16} color={onAccentColor(C.accent)} />
             </Pressable>
           </View>
         </View>
@@ -566,7 +567,7 @@ export function WorkUpOverviewModal({
                   <View style={s.goalEditRow}>
                     <TextInput style={[s.goalEditInput, { borderColor: goalColor }]} value={editGoalTarget} onChangeText={setEditGoalTarget} keyboardType="numeric" autoFocus selectTextOnFocus onSubmitEditing={handleUpdateGoalTarget} />
                     <Text style={s.goalEditUnit}>분</Text>
-                    <Pressable style={[s.goalEditSave, { backgroundColor: goalColor }]} onPress={handleUpdateGoalTarget}><Ionicons name="checkmark" size={14} color={C.surface} /></Pressable>
+                    <Pressable style={[s.goalEditSave, { backgroundColor: goalColor }]} onPress={handleUpdateGoalTarget}><Ionicons name="checkmark" size={14} color={onAccentColor(goalColor)} /></Pressable>
                     <Pressable style={s.goalEditCancel} onPress={() => setEditingGoalId(null)}><Ionicons name="close" size={14} color={C.textTertiary} /></Pressable>
                   </View>
                 ) : (
@@ -767,7 +768,7 @@ export function WorkUpOverviewModal({
                 {shareCapturing ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={shareStyles.shareBtnText}>{t("workUp", "share")}</Text>
+                  <Text style={[shareStyles.shareBtnText, { color: onAccentColor(C.accent) }]}>{t("workUp", "share")}</Text>
                 )}
               </Pressable>
             </View>

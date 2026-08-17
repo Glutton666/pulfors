@@ -33,6 +33,7 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { moderateScale, useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
@@ -1052,7 +1053,7 @@ function StopwatchTimer({
               style={({ pressed }) => [styles.controlButton, styles.startButton, { backgroundColor: C.accent }, pressed && styles.buttonPressed]}
               testID="stopwatch-start"
             >
-              <Ionicons name="play" size={S.ms(16, 0.4)} color={C.background} />
+              <Ionicons name="play" size={S.ms(16, 0.4)} color={onAccentColor(C.accent)} />
             </Pressable>
           )}
           {state === "running" && (
@@ -1078,7 +1079,7 @@ function StopwatchTimer({
                 style={({ pressed }) => [styles.controlButton, styles.startButton, { backgroundColor: C.accent }, pressed && styles.buttonPressed]}
                 testID="stopwatch-resume"
               >
-                <Ionicons name="play" size={S.ms(16, 0.4)} color={C.background} />
+                <Ionicons name="play" size={S.ms(16, 0.4)} color={onAccentColor(C.accent)} />
               </Pressable>
             </>
           )}
@@ -1174,7 +1175,7 @@ function StopwatchTimer({
               onPress={commitTimerEdit}
               style={({ pressed }) => [styles.timerEditConfirm, { backgroundColor: C.accent }, pressed && { opacity: 0.7 }]}
             >
-              <Ionicons name="checkmark" size={S.ms(16, 0.4)} color={C.background} />
+              <Ionicons name="checkmark" size={S.ms(16, 0.4)} color={onAccentColor(C.accent)} />
             </Pressable>
             <Pressable
               onPress={cancelTimerEdit}
@@ -1240,7 +1241,7 @@ function StopwatchTimer({
               style={({ pressed }) => [styles.controlButton, styles.startButton, { backgroundColor: C.accent }, pressed && styles.buttonPressed]}
               testID="timer-start"
             >
-              <Ionicons name="play" size={S.ms(16, 0.4)} color={C.background} />
+              <Ionicons name="play" size={S.ms(16, 0.4)} color={onAccentColor(C.accent)} />
             </Pressable>
           )}
           {state === "running" && (
@@ -1266,7 +1267,7 @@ function StopwatchTimer({
                 style={({ pressed }) => [styles.controlButton, styles.startButton, { backgroundColor: C.accent }, pressed && styles.buttonPressed]}
                 testID="timer-resume"
               >
-                <Ionicons name="play" size={S.ms(16, 0.4)} color={C.background} />
+                <Ionicons name="play" size={S.ms(16, 0.4)} color={onAccentColor(C.accent)} />
               </Pressable>
             </>
           )}

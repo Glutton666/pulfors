@@ -26,6 +26,7 @@ import { saveCustomSoundSets, BUILTIN_SOUND_SETS } from "@/lib/storage";
 import type { BuiltinSoundSet, SoundRole, CustomSoundSetConfig, CustomSoundSample } from "@/lib/storage";
 import { soundSets } from "@/lib/metronome-engine";
 import { useTheme } from "@/contexts/ThemeContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { safePlay } from "@/lib/audio-utils";
 import { logger } from "@/lib/logger";
@@ -512,8 +513,8 @@ export function CustomSoundSetEditor({
             </Pressable>
           )}
           <Pressable style={[styles.saveBtn, { backgroundColor: C.accent, flex: 1 }]} onPress={handleSave}>
-            <Ionicons name="checkmark" size={ms(14, 0.4)} color={C.background} />
-            <Text style={[styles.saveBtnText, { color: C.background }]}>{t("customSoundSet", "save")}</Text>
+            <Ionicons name="checkmark" size={ms(14, 0.4)} color={onAccentColor(C.accent)} />
+            <Text style={[styles.saveBtnText, { color: onAccentColor(C.accent) }]}>{t("customSoundSet", "save")}</Text>
           </Pressable>
         </View>
       </ScrollView>

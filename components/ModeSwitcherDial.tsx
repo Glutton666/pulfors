@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
+import { onAccentColor } from "@/lib/color-contrast";
 
 export type ModeSlot = "beat" | "bar" | "score" | "note" | "practice" | "stage" | "menu";
 
@@ -703,13 +704,13 @@ function ModeSwitcherDial({
                   <ModeIcon
                     mode={mode}
                     size={S.ms(25, 0.3)}
-                    color={isCtr ? "#fff" : C.textSecondary}
+                    color={isCtr ? onAccentColor(C.accent) : C.textSecondary}
                   />
                   {isCtr && (
                     <Text
                       style={{
                         fontSize: 9, lineHeight: 11,
-                        color: "#fff",
+                        color: onAccentColor(C.accent),
                         fontFamily: "SpaceGrotesk_500Medium",
                         letterSpacing: 0.3,
                       }}
@@ -784,7 +785,7 @@ function ModeSwitcherDial({
                 opacity: op,
               }}
             >
-              <ModeIcon mode={mode} size={MINI_ICON_S - 4} color="#fff" />
+              <ModeIcon mode={mode} size={MINI_ICON_S - 4} color={onAccentColor(C.accent)} />
             </View>
           ) : (
             // Neighbour: plain dot

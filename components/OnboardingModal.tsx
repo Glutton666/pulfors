@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import { Radius, FontSize, Spacing } from "@/constants/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import { ACCENT_PRESETS } from "@/constants/colors";
 import type { ThemeColor } from "@/constants/colors";
 import type { FlashMode, HapticMode } from "@/lib/storage";
@@ -522,11 +523,11 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           style={[styles.landNextButton, { backgroundColor: accentColor }]}
           onPress={handleNext}
         >
-          <Text style={styles.landNextButtonText}>
+          <Text style={[styles.landNextButtonText, { color: onAccentColor(accentColor) }]}>
             {step === TOTAL_STEPS - 1 ? t("onboarding", "start") : t("onboarding", "next")}
           </Text>
           {step < TOTAL_STEPS - 1 && (
-            <Ionicons name="arrow-forward" size={14} color={C.background} />
+            <Ionicons name="arrow-forward" size={14} color={onAccentColor(accentColor)} />
           )}
         </Pressable>
       )}
@@ -588,7 +589,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           >
             <View style={[styles.themeCircle, isLandscape && { width: 32, height: 32, borderRadius: 16 }, { backgroundColor: opt.color }]}>
               {selectedTheme === opt.key && (
-                <Ionicons name="checkmark" size={isLandscape ? 16 : 20} color="#fff" />
+                <Ionicons name="checkmark" size={isLandscape ? 16 : 20} color={onAccentColor(opt.color)} />
               )}
             </View>
             <Text
@@ -611,7 +612,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
         >
           <View style={[styles.themeCircle, isLandscape && { width: 32, height: 32, borderRadius: 16 }, selectedTheme === "custom" ? { backgroundColor: customHex } : { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border }]}>
             {selectedTheme === "custom" ? (
-              <Ionicons name="checkmark" size={isLandscape ? 16 : 20} color="#fff" />
+              <Ionicons name="checkmark" size={isLandscape ? 16 : 20} color={onAccentColor(customHex)} />
             ) : (
               <Ionicons name="color-wand-outline" size={isLandscape ? 14 : 18} color={C.textSecondary} />
             )}
@@ -699,12 +700,12 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
           <Ionicons
             name={loggingEnabled ? "checkmark-circle" : "close-circle-outline"}
             size={22}
-            color={loggingEnabled ? C.background : C.textSecondary}
+            color={loggingEnabled ? onAccentColor(accentColor) : C.textSecondary}
           />
           <Text
             style={[
               styles.bigToggleText,
-              { color: loggingEnabled ? C.background : C.textSecondary },
+              { color: loggingEnabled ? onAccentColor(accentColor) : C.textSecondary },
             ]}
           >
             {loggingEnabled ? t("onboarding", "loggingOn") : t("onboarding", "loggingOff")}
@@ -806,8 +807,8 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             ]}
             onPress={hapticDemo.toggle}
           >
-            <Ionicons name={hapticDemo.playing ? "stop" : "play"} size={16} color={hapticDemo.playing ? accentColor : C.background} />
-            <Text style={[styles.demoButtonText, { color: hapticDemo.playing ? accentColor : C.background }]}>
+            <Ionicons name={hapticDemo.playing ? "stop" : "play"} size={16} color={hapticDemo.playing ? accentColor : onAccentColor(accentColor)} />
+            <Text style={[styles.demoButtonText, { color: hapticDemo.playing ? accentColor : onAccentColor(accentColor) }]}>
               {hapticDemo.playing ? t("onboarding", "stop") : t("onboarding", "preview")}
             </Text>
           </Pressable>
@@ -860,8 +861,8 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             ]}
             onPress={flashDemo.toggle}
           >
-            <Ionicons name={flashDemo.playing ? "stop" : "play"} size={16} color={flashDemo.playing ? accentColor : C.background} />
-            <Text style={[styles.demoButtonText, { color: flashDemo.playing ? accentColor : C.background }]}>
+            <Ionicons name={flashDemo.playing ? "stop" : "play"} size={16} color={flashDemo.playing ? accentColor : onAccentColor(accentColor)} />
+            <Text style={[styles.demoButtonText, { color: flashDemo.playing ? accentColor : onAccentColor(accentColor) }]}>
               {flashDemo.playing ? t("onboarding", "stop") : t("onboarding", "preview")}
             </Text>
           </Pressable>
@@ -1087,9 +1088,9 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             <Ionicons
               name="volume-high-outline"
               size={20}
-              color={soundTestPlayed ? accentColor : C.background}
+              color={soundTestPlayed ? accentColor : onAccentColor(accentColor)}
             />
-            <Text style={[styles.demoButtonText, { color: soundTestPlayed ? accentColor : C.background }]}>
+            <Text style={[styles.demoButtonText, { color: soundTestPlayed ? accentColor : onAccentColor(accentColor) }]}>
               {t("onboarding", "soundTestPlay")}
             </Text>
           </Pressable>
@@ -1175,8 +1176,8 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
               { width: "100%", height: 52, backgroundColor: accentColor, marginTop: Spacing.xs },
             ]}
           >
-            <Ionicons name="shield-checkmark-outline" size={20} color={C.background} />
-            <Text style={[styles.demoButtonText, { color: C.background }]}>
+            <Ionicons name="shield-checkmark-outline" size={20} color={onAccentColor(accentColor)} />
+            <Text style={[styles.demoButtonText, { color: onAccentColor(accentColor) }]}>
               {t("onboarding", "permAllowNow")}
             </Text>
           </Pressable>
@@ -1280,11 +1281,11 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
               style={[styles.nextButton, { backgroundColor: accentColor }]}
               onPress={handleNext}
             >
-              <Text style={styles.nextButtonText}>
+              <Text style={[styles.nextButtonText, { color: onAccentColor(accentColor) }]}>
                 {step === TOTAL_STEPS - 1 ? t("onboarding", "start") : t("onboarding", "next")}
               </Text>
               {step < TOTAL_STEPS - 1 && (
-                <Ionicons name="arrow-forward" size={18} color={C.background} />
+                <Ionicons name="arrow-forward" size={18} color={onAccentColor(accentColor)} />
               )}
             </Pressable>
           </View>

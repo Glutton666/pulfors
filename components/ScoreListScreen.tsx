@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
+import { onAccentColor } from "@/lib/color-contrast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import { Radius, Spacing, FontSize } from "@/constants/tokens";
@@ -249,8 +250,8 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onOpenDial 
             onPress={() => setShowNewModal(true)}
             testID="score-list-empty-new"
           >
-            <Ionicons name="add" size={20} color="#fff" />
-            <Text style={styles.emptyCreateText}>{t("scoreMode", "newScore")}</Text>
+            <Ionicons name="add" size={20} color={onAccentColor(C.accent)} />
+            <Text style={[styles.emptyCreateText, { color: onAccentColor(C.accent) }]}>{t("scoreMode", "newScore")}</Text>
           </Pressable>
         </View>
       ) : (
@@ -271,8 +272,8 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onOpenDial 
               onPress={() => setShowNewModal(true)}
               testID="score-list-new"
             >
-              <Ionicons name="add" size={S.ms(18, 0.4)} color="#fff" />
-              <Text style={styles.newBtnText}>{t("scoreMode", "newScore")}</Text>
+              <Ionicons name="add" size={S.ms(18, 0.4)} color={onAccentColor(C.accent)} />
+              <Text style={[styles.newBtnText, { color: onAccentColor(C.accent) }]}>{t("scoreMode", "newScore")}</Text>
             </Pressable>
           }
           testID="score-list"
