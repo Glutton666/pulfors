@@ -73,7 +73,49 @@ export function sortLayersForDisplay(layers: PolygonLayer[]): PolygonLayer[] {
   return [...layers].sort((a, b) => b.sides - a.sides);
 }
 
+/** 레이어별 배치 결과: 반지름 + 중심 좌표 (공유 꼭짓점 팬 구조) */
+export interface LayerLayout {
+  r: number;
+  cx: number;
+  cy: number;
+}
+
 /**
+ * 공유 꼭짓점(보석형 팬) 레이아웃 계산.
+ *
+ * 모든 폴리곤의 첫 번째(-π/2, 상단) 꼭짓점이 같은 핀 포인트에 고정된다:
+ * - pinX = size/2, pinY = 상단 여백
+ * - 각 레이어 중심: cx = pinX, cy = pinY + r (첫 꼭짓점 y = cy - r = pinY)
+ * - 반지름은 정렬 순서(변 많은 것부터) 기준으로 바깥→안쪽 단계적 축소
+ * - 같은 변 수 레이어는 cy에 ±4px 단위 델타를 줘 겹침 방지
+ *
+ * sides=1(원/펄스) 레이어도 동일 공식을 쓰지만 Canvas 쪽에서 팬 구조 미적용.
+ */
+export function computeLayerLayout(sortedLayers: PolygonLayer[], size: number): LayerLayout[] {
+  const n = sortedLayers.length;
+  if (n === 0) return [];
+
+  const maxRadius = size / 2 - 20;
+  const pinX = size / 2;
+  const pinY = 20; // 캔버스 상단 여백 (핀 포인트 y)
+
+  const base = maxRadius * 0.72;
+  const step = n === 1 ? 0 : (maxRadius * 0.62) / n;
+
+  // 같은 변 수 그룹 내 인덱스를 추적해 cy 미세 오프셋 적용
+  const groupCount: Record<number, number> = {};
+  return sortedLayers.map((layer, i) => {
+    const r = Math.max(20, base - step * i);
+    const g = groupCount[layer.sides] ?? 0;
+    groupCount[layer.sides] = g + 1;
+    // 같은 변 수면 cy에 작은 델타 (두 번째는 -4, 세 번째는 +4, ...)
+    const cyDelta = g === 0 ? 0 : (g % 2 === 0 ? 4 * Math.ceil(g / 2) : -4 * Math.ceil(g / 2));
+    return { r, cx: pinX, cy: pinY + r + cyDelta };
+  });
+}
+
+/**
+ * @deprecated 공유 꼭짓점 레이아웃(computeLayerLayout)으로 대체됨.
  * 정렬된 레이어 배열에서 각 레이어의 반지름 비율(0~1)을 계산한다.
  * 같은 변 수의 레이어는 살짝 크기 차이를 준다.
  */

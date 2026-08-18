@@ -16,7 +16,7 @@ import React from "react";
 import { renderHook, act } from "@testing-library/react";
 import { usePolygonMode } from "@/hooks/usePolygonMode";
 import type { UsePolygonModeParams } from "@/hooks/usePolygonMode";
-import { computeVertexAngles } from "@/components/polygon-mode/PolygonTypes";
+import { computeVertexAngles, computeLayerLayout, sortLayersForDisplay } from "@/components/polygon-mode/PolygonTypes";
 import type { PolygonLayer } from "@/components/polygon-mode/PolygonTypes";
 
 // ── 모듈 모킹 ─────────────────────────────────────────────────────────────
@@ -572,5 +572,61 @@ describe("computeVertexAngles", () => {
     const regular = [0, 1, 2, 3].map((i) => -Math.PI / 2 + (TWO_PI * i) / 4);
     expect(result.muteAngles).toHaveLength(4);
     result.muteAngles.forEach((a, i) => expect(a).toBeCloseTo(regular[i], 6));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// computeLayerLayout — 공유 꼭짓점(보석형 팬) 레이아웃 단위 테스트
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("computeLayerLayout", () => {
+  const SIZE = 300;
+  const PIN_Y = 20;
+
+  function layoutFor(layers: PolygonLayer[]) {
+    return computeLayerLayout(sortLayersForDisplay(layers), SIZE);
+  }
+
+  it("empty input returns empty array", () => {
+    expect(computeLayerLayout([], SIZE)).toEqual([]);
+  });
+
+  it("single layer: top vertex sits at the pin point", () => {
+    const [l] = layoutFor([makeLayer({ sides: 4 })]);
+    expect(l.cx).toBeCloseTo(SIZE / 2, 6);
+    // 첫 꼭짓점(-π/2 방향) y = cy - r = pinY
+    expect(l.cy - l.r).toBeCloseTo(PIN_Y, 6);
+  });
+
+  it("multiple layers with distinct sides: all share the pin point, more sides → larger radius", () => {
+    const layers = [
+      makeLayer({ id: "a", sides: 3, beatTypes: ["strong", "normal", "normal"] }),
+      makeLayer({ id: "b", sides: 6, beatTypes: ["strong", "normal", "normal", "normal", "normal", "normal"] }),
+      makeLayer({ id: "c", sides: 4 }),
+    ];
+    const layouts = layoutFor(layers);
+    // 정렬: 6 → 4 → 3
+    expect(layouts[0].r).toBeGreaterThan(layouts[1].r);
+    expect(layouts[1].r).toBeGreaterThan(layouts[2].r);
+    // 모두 핀 포인트 공유: cy - r = pinY
+    for (const l of layouts) {
+      expect(l.cx).toBeCloseTo(SIZE / 2, 6);
+      expect(l.cy - l.r).toBeCloseTo(PIN_Y, 6);
+    }
+    // 반지름이 클수록 중심이 아래
+    expect(layouts[0].cy).toBeGreaterThan(layouts[1].cy);
+    expect(layouts[1].cy).toBeGreaterThan(layouts[2].cy);
+  });
+
+  it("same-sides layers: same radius but cy offset so they do not overlap exactly", () => {
+    const layers = [
+      makeLayer({ id: "a", sides: 4 }),
+      makeLayer({ id: "b", sides: 4 }),
+    ];
+    const layouts = layoutFor(layers);
+    // 첫 레이어는 델타 없음 → 핀 포인트 정확히 유지
+    expect(layouts[0].cy - layouts[0].r).toBeCloseTo(PIN_Y, 6);
+    // 두 번째 레이어는 정확히 -4px 델타 (cy - r = pinY - 4)
+    expect(layouts[1].cy - layouts[1].r).toBeCloseTo(PIN_Y - 4, 6);
   });
 });
