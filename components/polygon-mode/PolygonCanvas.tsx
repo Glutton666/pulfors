@@ -6,11 +6,13 @@
  * - 활성 꼭짓점: 색상+크기 강조
  * - 오프셋 있는 꼭짓점: 점선 링으로 시각 구분
  * - 편집 모드: 비편집 레이어 opacity 0.25 dimmed
+ * - 꼭짓점 탭: S/A/N/M 강세 순환 (onVertexPress)
+ * - 꼭짓점 롱프레스: 오프셋 편집 (onVertexLongPress, 편집 모드일 때만)
  */
 
 import React, { useEffect, useRef } from "react";
 import { View } from "react-native";
-import Svg, { Circle, Polygon, G, Line } from "react-native-svg";
+import Svg, { Circle, Polygon, G, Text as SvgText } from "react-native-svg";
 import Animated, {
   useSharedValue,
   useAnimatedProps,
@@ -23,6 +25,8 @@ import {
   sortLayersForDisplay,
   computeLayerRadii,
   polygonVertices,
+  getVertexBeatType,
+  BEAT_TYPE_LABEL,
 } from "./PolygonTypes";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -31,6 +35,8 @@ interface PolygonCanvasProps {
   layers: PolygonLayer[];
   activeVertices: Record<string, number>;
   editingLayerId: string | null;
+  /** 꼭짓점 탭 → 강세 순환 (S/A/N/M) */
+  onVertexPress?: (layerId: string, vertexIdx: number) => void;
   /** 편집 모드에서 꼭짓점 롱프레스 → 오프셋 편집 */
   onVertexLongPress?: (layerId: string, vertexIdx: number) => void;
   size: number; // 캔버스 크기 (정사각형)
@@ -74,8 +80,28 @@ function AnimatedVertex({
   );
 }
 
+/**
+ * 꼭짓점에서 바깥(중심 반대 방향)으로 offset px 이동한 레이블 좌표를 반환한다.
+ * 꼭짓점이 중심과 같은 경우(sides=1 펄스) 아래쪽으로 내린다.
+ */
+function getLabelPos(
+  vx: number, vy: number,
+  cx: number, cy: number,
+  offset: number,
+): { x: number; y: number } {
+  const dx = vx - cx;
+  const dy = vy - cy;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 1) {
+    // 중심점 — 아래쪽에 배치
+    return { x: vx, y: vy + offset };
+  }
+  return { x: vx + (dx / len) * offset, y: vy + (dy / len) * offset };
+}
+
 export function PolygonCanvas({
-  layers, activeVertices, editingLayerId, onVertexLongPress, size,
+  layers, activeVertices, editingLayerId,
+  onVertexPress, onVertexLongPress, size,
 }: PolygonCanvasProps) {
   const cx = size / 2;
   const cy = size / 2;
@@ -86,6 +112,9 @@ export function PolygonCanvas({
 
   const VERTEX_R_NORMAL = 5;
   const VERTEX_R_ACTIVE = 8;
+  const HIT_R = VERTEX_R_ACTIVE + 12;
+  const LABEL_OFFSET = 16; // 꼭짓점에서 레이블까지 거리 (px)
+  const LABEL_FONT_SIZE = 9;
 
   return (
     <View style={{ width: size, height: size }}>
@@ -103,8 +132,14 @@ export function PolygonCanvas({
           const verts = polygonVertices(cx, cy, r, sides);
 
           if (sides === 1) {
-            // 원(펄스) 렌더링
+            // ── 원(펄스) 렌더링 ──
             const isActive = activeVertex === 0;
+            const beatType = getVertexBeatType(layer, 0);
+            const label = BEAT_TYPE_LABEL[beatType];
+            const isMute = beatType === "mute";
+            const labelColor = isMute ? layer.color + "55" : layer.color;
+            // 원 중심 탭 히트 영역
+            const labelPos = getLabelPos(cx, cy, cx, cy, VERTEX_R_ACTIVE + LABEL_OFFSET);
             return (
               <G key={layer.id} opacity={layerOpacity}>
                 <Circle
@@ -127,19 +162,37 @@ export function PolygonCanvas({
                     opacity={0.5}
                   />
                 )}
-                {/* 펄스 중심 점 */}
-                <AnimatedVertex
-                  cx={cx}
-                  cy={cy}
-                  r={VERTEX_R_ACTIVE}
-                  color={layer.color}
-                  isActive={isActive}
-                />
+                {/* 탭 히트 영역 + 펄스 점 */}
+                <G
+                  onPress={onVertexPress ? () => onVertexPress(layer.id, 0) : undefined}
+                  onLongPress={onVertexLongPress ? () => onVertexLongPress(layer.id, 0) : undefined}
+                >
+                  <Circle cx={cx} cy={cy} r={HIT_R} fill="transparent" />
+                  <AnimatedVertex
+                    cx={cx}
+                    cy={cy}
+                    r={VERTEX_R_ACTIVE}
+                    color={layer.color}
+                    isActive={isActive}
+                  />
+                  {/* 강세 레이블 */}
+                  <SvgText
+                    x={labelPos.x}
+                    y={labelPos.y}
+                    textAnchor="middle"
+                    dy="0.35em"
+                    fontSize={LABEL_FONT_SIZE}
+                    fontWeight="700"
+                    fill={labelColor}
+                  >
+                    {label}
+                  </SvgText>
+                </G>
               </G>
             );
           }
 
-          // 다각형 렌더링
+          // ── 다각형 렌더링 ──
           const pointsStr = verts.map((v) => `${v.x},${v.y}`).join(" ");
 
           return (
@@ -157,11 +210,16 @@ export function PolygonCanvas({
               {verts.map((v, vi) => {
                 const isActive = vi === activeVertex;
                 const hasOffset = (layer.offsets[vi] ?? 0) > 0.01;
-                const hitR = VERTEX_R_ACTIVE + 12;
+                const beatType = getVertexBeatType(layer, vi);
+                const label = BEAT_TYPE_LABEL[beatType];
+                const isMute = beatType === "mute";
+                const labelColor = isMute ? layer.color + "55" : layer.color;
+                const labelPos = getLabelPos(v.x, v.y, cx, cy, LABEL_OFFSET);
 
                 return (
                   <G
                     key={vi}
+                    onPress={onVertexPress ? () => onVertexPress(layer.id, vi) : undefined}
                     onLongPress={
                       onVertexLongPress
                         ? () => onVertexLongPress(layer.id, vi)
@@ -169,7 +227,7 @@ export function PolygonCanvas({
                     }
                   >
                     {/* 터치 히트 영역 (투명) */}
-                    <Circle cx={v.x} cy={v.y} r={hitR} fill="transparent" />
+                    <Circle cx={v.x} cy={v.y} r={HIT_R} fill="transparent" />
                     {/* 오프셋 표시: 점선 링 */}
                     {hasOffset && (
                       <Circle
@@ -190,6 +248,18 @@ export function PolygonCanvas({
                       color={layer.color}
                       isActive={isActive}
                     />
+                    {/* 강세 레이블 (S/A/N/M) */}
+                    <SvgText
+                      x={labelPos.x}
+                      y={labelPos.y}
+                      textAnchor="middle"
+                      dy="0.35em"
+                      fontSize={LABEL_FONT_SIZE}
+                      fontWeight="700"
+                      fill={labelColor}
+                    >
+                      {label}
+                    </SvgText>
                   </G>
                 );
               })}

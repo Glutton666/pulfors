@@ -39,6 +39,7 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose }: PolygonMode
     layers, editingLayerId, setEditingLayerId,
     activeVertices, offsetPopup, setOffsetPopup,
     handleAddLayer, handleDeleteLayer, handleUpdateLayer, handleSetOffset,
+    handleVertexBeatTypeCycle,
   } = polygonMode;
 
   // 캔버스 크기: 화면 너비 기반 (정사각형)
@@ -146,6 +147,7 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose }: PolygonMode
             layers={layers}
             activeVertices={activeVertices}
             editingLayerId={editingLayerId}
+            onVertexPress={handleVertexBeatTypeCycle}
             onVertexLongPress={handleVertexLongPress}
             size={canvasSize}
           />

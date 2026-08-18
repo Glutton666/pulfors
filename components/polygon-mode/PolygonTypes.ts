@@ -2,6 +2,49 @@
  * PolygonTypes.ts — 폴리곤 메트로놈 타입 정의
  */
 
+/** 꼭짓점 강세 종류. S=Strong, A=Accent, N=Normal, M=Mute */
+export type VertexBeatType = "strong" | "accent" | "normal" | "mute";
+
+const BEAT_TYPE_CYCLE: VertexBeatType[] = ["strong", "accent", "normal", "mute"];
+
+/** 탭할 때마다 S→A→N→M→S로 순환 */
+export function cycleVertexBeatType(current: VertexBeatType): VertexBeatType {
+  const idx = BEAT_TYPE_CYCLE.indexOf(current);
+  return BEAT_TYPE_CYCLE[(idx + 1) % BEAT_TYPE_CYCLE.length];
+}
+
+/**
+ * 꼭짓점의 실제 강세를 반환한다.
+ * beatTypes 배열이 없거나 짧으면 layer.role로 fallback한다.
+ */
+export function getVertexBeatType(layer: PolygonLayer, vertexIdx: number): VertexBeatType {
+  if (layer.beatTypes && layer.beatTypes[vertexIdx] !== undefined) {
+    return layer.beatTypes[vertexIdx];
+  }
+  // fallback: 기존 role → VertexBeatType 매핑
+  if (layer.role === "strong") return "strong";
+  if (layer.role === "high")   return "accent";
+  return "normal";
+}
+
+/** 화면에 표시할 단일 문자 레이블 */
+export const BEAT_TYPE_LABEL: Record<VertexBeatType, string> = {
+  strong: "S",
+  accent: "A",
+  normal: "N",
+  mute:   "M",
+};
+
+/**
+ * 새 레이어의 기본 beatTypes 배열을 생성한다.
+ * 첫 꼭짓점은 S(strong), 나머지는 N(normal).
+ */
+export function makeDefaultBeatTypes(sides: number): VertexBeatType[] {
+  return Array.from({ length: Math.max(1, sides) }, (_, i) =>
+    i === 0 ? "strong" : "normal",
+  );
+}
+
 export interface PolygonLayer {
   /** 레이어 고유 ID */
   id: string;
@@ -11,13 +54,18 @@ export interface PolygonLayer {
   color: string;
   /** 사운드셋 키 (soundSets의 키) */
   soundSet: string;
-  /** 사운드 역할 */
+  /** 레이어 전체 기본 사운드 역할 (beatTypes 미지정 꼭짓점의 fallback) */
   role: "high" | "low" | "strong";
   /**
    * 꼭짓점별 타이밍 오프셋 비율 (0.0 ~ 0.5).
    * 배열 길이 = sides. 0 = 오프셋 없음, 0.5 = 다음 비트까지 절반 지연 (스윙).
    */
   offsets: number[];
+  /**
+   * 꼭짓점별 강세 (S/A/N/M).
+   * 배열 길이 = sides. 미설정 인덱스는 role로 fallback.
+   */
+  beatTypes: VertexBeatType[];
 }
 
 /** 레이어를 마트료시카 배치 기준으로 정렬: 변 많은 것 → 바깥(큰 반지름) */
@@ -72,4 +120,5 @@ export const DEFAULT_POLYGON_LAYER: Omit<PolygonLayer, "id" | "color"> = {
   soundSet: "classic",
   role: "high",
   offsets: [],
+  beatTypes: [],
 };
