@@ -383,7 +383,10 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   const handleDeleteLayer = useCallback((id: string) => {
     // 삭제 전 해당 레이어의 대기 중 타이머를 즉시 취소
     clearLayerTimers(id);
-    setLayers((prev) => prev.filter((l) => l.id !== id));
+    // layersRef를 즉시 갱신 — effect 실행 전에 엔진 비트가 오면 삭제된
+    // 레이어를 다시 읽어 슬롯을 재예약하는 경쟁 조건 방지
+    layersRef.current = layersRef.current.filter((l) => l.id !== id);
+    setLayers(layersRef.current);
     setEditingLayerId((prev) => (prev === id ? null : prev));
     setActiveVertices((prev) => {
       const next = { ...prev };
@@ -392,12 +395,26 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     });
   }, [clearLayerTimers]);
 
+  /**
+   * 레이어 배열을 변환하고 layersRef와 state를 동시에 갱신한다.
+   * setLayers의 updater와 달리 ref를 즉시 갱신하므로,
+   * React effect 실행 전에 엔진 비트가 와도 최신 배열을 읽는다.
+   */
+  const applyLayerMutation = useCallback(
+    (transform: (prev: PolygonLayer[]) => PolygonLayer[]) => {
+      const next = transform(layersRef.current);
+      layersRef.current = next;
+      setLayers(next);
+    },
+    [],
+  );
+
   const handleUpdateLayer = useCallback(
     (id: string, patch: Partial<PolygonLayer>) => {
       // 재생 중 편집: 옛 데이터로 예약된 이 레이어의 잔여 이벤트를 취소.
-      // 남은 마디는 침묵하고 다음 마디부터 새 설정으로 재스케줄된다.
+      // 남은 비트는 침묵하고 다음 비트부터 새 설정으로 발화한다.
       clearLayerTimers(id);
-      setLayers((prev) =>
+      applyLayerMutation((prev) =>
         prev.map((l) => {
           if (l.id !== id) return l;
           const updated = { ...l, ...patch };
@@ -429,13 +446,13 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       );
       if (patch.soundSet) ensurePCM(patch.soundSet);
     },
-    [ensurePCM, clearLayerTimers],
+    [ensurePCM, clearLayerTimers, applyLayerMutation],
   );
 
   const handleSetOffset = useCallback(
     (layerId: string, vertexIdx: number, offset: number) => {
       clearLayerTimers(layerId);
-      setLayers((prev) =>
+      applyLayerMutation((prev) =>
         prev.map((l) => {
           if (l.id !== layerId) return l;
           const newOffsets = [...l.offsets];
@@ -444,14 +461,14 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
         }),
       );
     },
-    [clearLayerTimers],
+    [clearLayerTimers, applyLayerMutation],
   );
 
   // ── 꼭짓점 강세 순환 (S → A → N → M → S) ──────────────────────────────
   const handleVertexBeatTypeCycle = useCallback(
     (layerId: string, vertexIdx: number) => {
       clearLayerTimers(layerId);
-      setLayers((prev) =>
+      applyLayerMutation((prev) =>
         prev.map((l) => {
           if (l.id !== layerId) return l;
           const current = getVertexBeatType(l, vertexIdx);
@@ -466,7 +483,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
         }),
       );
     },
-    [clearLayerTimers],
+    [clearLayerTimers, applyLayerMutation],
   );
 
   return {
