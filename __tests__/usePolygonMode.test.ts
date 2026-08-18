@@ -41,6 +41,7 @@ function makeParams(
     isPlaying: true,
     engineBeatCallbackRef,
     bpm: 120,
+    beatsPerMeasure: 4,
     allPlayersRef: { current: {} as any },
     clickPCMCacheRef: { current: {} },
     volumeRef: { current: 0.75 },
@@ -54,6 +55,11 @@ function fireBeat(ref: React.MutableRefObject<(() => void) | null>, times = 1) {
   for (let i = 0; i < times; i++) {
     act(() => { ref.current?.(); });
   }
+}
+
+/** fake timers를 ms만큼 진행한다 (예약된 폴리곤 이벤트 발화) */
+function advanceMs(ms: number) {
+  act(() => { jest.advanceTimersByTime(ms); });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -73,7 +79,8 @@ describe("usePolygonMode — engine callback driven", () => {
 
   // ── 1. 4박자 롤오버 ─────────────────────────────────────────────────────
 
-  it("4-sided layer: vertex cycles 0→1→2→3→0 across 5 beats", () => {
+  // bpm=120, beatsPerMeasure=4 → 마디 2000ms. 4각형 슬롯 간격 500ms.
+  it("4-sided layer: vertex cycles 0→1→2→3 within one measure, 0 at next measure", () => {
     const params = makeParams();
     const { result } = renderHook(() => usePolygonMode(params));
 
@@ -82,19 +89,23 @@ describe("usePolygonMode — engine callback driven", () => {
 
     const layerId = result.current.layers[0].id;
 
-    fireBeat(params.engineBeatCallbackRef); // beat 0 → vertex 0
+    fireBeat(params.engineBeatCallbackRef); // 마디 시작 → k=0 즉시 발화
     expect(result.current.activeVertices[layerId]).toBe(0);
 
-    fireBeat(params.engineBeatCallbackRef); // beat 1 → vertex 1
+    advanceMs(500); // k=1
     expect(result.current.activeVertices[layerId]).toBe(1);
 
-    fireBeat(params.engineBeatCallbackRef); // beat 2 → vertex 2
+    advanceMs(500); // k=2
     expect(result.current.activeVertices[layerId]).toBe(2);
 
-    fireBeat(params.engineBeatCallbackRef); // beat 3 → vertex 3
+    advanceMs(500); // k=3
     expect(result.current.activeVertices[layerId]).toBe(3);
 
-    fireBeat(params.engineBeatCallbackRef); // beat 4 → vertex 0 (rollover)
+    // 마디 중간 비트(1~3)는 no-op
+    fireBeat(params.engineBeatCallbackRef, 3);
+    expect(result.current.activeVertices[layerId]).toBe(3);
+
+    fireBeat(params.engineBeatCallbackRef); // beat 4 → 새 마디 시작 → vertex 0
     expect(result.current.activeVertices[layerId]).toBe(0);
   });
 
@@ -119,16 +130,23 @@ describe("usePolygonMode — engine callback driven", () => {
 
   // ── 3. 정확히 1회 발화 (중복 없음) ─────────────────────────────────────
 
-  it("each engine fire advances vertex exactly once (no duplicates)", () => {
+  it("each scheduled slot fires exactly once per measure (no duplicates)", () => {
     const params = makeParams();
     const { result } = renderHook(() => usePolygonMode(params));
 
     const layerId = result.current.layers[0].id;
     const vertices: number[] = [];
 
-    for (let i = 0; i < 8; i++) {
+    for (let m = 0; m < 2; m++) {
+      // 마디 시작 비트
       fireBeat(params.engineBeatCallbackRef);
       vertices.push(result.current.activeVertices[layerId]);
+      for (let k = 1; k < 4; k++) {
+        advanceMs(500);
+        vertices.push(result.current.activeVertices[layerId]);
+      }
+      // 마디 중간 비트 3개 (no-op)
+      fireBeat(params.engineBeatCallbackRef, 3);
     }
 
     // 0→1→2→3→0→1→2→3
@@ -165,8 +183,9 @@ describe("usePolygonMode — engine callback driven", () => {
       { initialProps: params },
     );
 
-    // 3비트 발화
-    fireBeat(params.engineBeatCallbackRef, 3);
+    // 마디 시작 + 1000ms 진행 → vertex 2까지 발화
+    fireBeat(params.engineBeatCallbackRef);
+    advanceMs(1000);
 
     const layerId = result.current.layers[0].id;
     expect(result.current.activeVertices[layerId]).toBe(2); // 0→1→2
@@ -305,8 +324,14 @@ describe("usePolygonMode — engine callback driven", () => {
 
   // ── 10. mute 꼭짓점: 4박 주기 유지, 뮤트 슬롯은 소리·비주얼만 생략 ────
 
-  it("mute vertex keeps 4-beat period: slot 2 muted → silent on beat 2, visible on 0·1·3", () => {
-    const params = makeParams();
+  it("mute vertex keeps measure period: slot 2 muted → silent at its slot time, 0·1·3 fire", () => {
+    const { safePlay } = require("@/lib/audio-utils");
+    const mkPool = () => ({
+      strongA: {}, strongB: {}, strongC: {}, strongD: {},
+      highA: {}, highB: {}, highC: {}, highD: {},
+      lowA: {}, lowB: {}, lowC: {}, lowD: {},
+    });
+    const params = makeParams({ allPlayersRef: { current: { classic: mkPool() } as any } });
     const { result } = renderHook(() => usePolygonMode(params));
 
     const layerId = result.current.layers[0].id;
@@ -315,25 +340,130 @@ describe("usePolygonMode — engine callback driven", () => {
     act(() => { result.current.handleVertexBeatTypeCycle(layerId, 2); }); // normal → mute
     expect(result.current.layers[0].beatTypes[2]).toBe("mute");
 
-    // absbeat=0 → vertexIdx=0 (strong) → activeVertex=0
+    (safePlay as jest.Mock).mockClear();
+
+    // 마디 시작 → k=0 즉시 발화
     fireBeat(params.engineBeatCallbackRef);
     expect(result.current.activeVertices[layerId]).toBe(0);
 
-    // absbeat=1 → vertexIdx=1 (normal) → activeVertex=1
-    fireBeat(params.engineBeatCallbackRef);
+    advanceMs(500); // k=1
     expect(result.current.activeVertices[layerId]).toBe(1);
 
-    // absbeat=2 → vertexIdx=2 (mute) → 레이어 absent (무음, 비주얼 없음)
-    fireBeat(params.engineBeatCallbackRef);
+    advanceMs(500); // k=2 뮤트 슬롯 → 소리 없음 + 비주얼도 꺼짐
     expect(result.current.activeVertices[layerId]).toBeUndefined();
 
-    // absbeat=3 → vertexIdx=3 (normal) → activeVertex=3
-    fireBeat(params.engineBeatCallbackRef);
+    advanceMs(500); // k=3
     expect(result.current.activeVertices[layerId]).toBe(3);
 
-    // absbeat=4 → vertexIdx=0 → 4박 주기 유지 확인
-    fireBeat(params.engineBeatCallbackRef);
+    // 마디 전체에서 소리는 3회만 (뮤트 슬롯 제외)
+    expect((safePlay as jest.Mock).mock.calls.length).toBe(3);
+
+    // 다음 마디 시작 → 주기 유지 (vertex 0으로 복귀)
+    fireBeat(params.engineBeatCallbackRef, 3); // 마디 중간 no-op
+    fireBeat(params.engineBeatCallbackRef);    // 새 마디 시작
     expect(result.current.activeVertices[layerId]).toBe(0);
+  });
+
+  // ── 마디 중 레이어 편집: 옛 데이터로 예약된 잔여 이벤트 취소 ────────────
+
+  it("editing a layer mid-measure cancels its pending scheduled events", () => {
+    const clearTimeoutSpy = jest.spyOn(globalThis, "clearTimeout");
+    const params = makeParams();
+    const { result } = renderHook(() => usePolygonMode(params));
+
+    const layerId = result.current.layers[0].id;
+
+    // 마디 시작 → k=1..3 이벤트가 예약됨
+    fireBeat(params.engineBeatCallbackRef);
+
+    // sides 변경 → 이 레이어의 잔여 타이머가 취소돼야 한다
+    clearTimeoutSpy.mockClear();
+    act(() => { result.current.handleUpdateLayer(layerId, { sides: 3 }); });
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+
+    // 잔여 시간이 흘러도 옛 스케줄(vertex 1~3)이 발화하지 않는다
+    advanceMs(2000);
+    expect(result.current.activeVertices[layerId]).toBe(0); // k=0만 발화된 상태 유지
+
+    clearTimeoutSpy.mockRestore();
+  });
+
+  // ── 마디 중 BPM 변경: 남은 슬롯을 새 타이밍으로 즉시 재스케줄 ──────────
+
+  it("mid-measure BPM change reschedules remaining slots without re-firing past ones", () => {
+    const params = makeParams(); // bpm=120 → 마디 2000ms, 슬롯 500ms
+    const { result, rerender } = renderHook(
+      (p: UsePolygonModeParams) => usePolygonMode(p),
+      { initialProps: params },
+    );
+    const layerId = result.current.layers[0].id;
+
+    fireBeat(params.engineBeatCallbackRef); // 마디 시작 → k=0
+    expect(result.current.activeVertices[layerId]).toBe(0);
+    advanceMs(600); // k=1 (500ms에 발화)
+    expect(result.current.activeVertices[layerId]).toBe(1);
+
+    // BPM 120→60: 마디 4000ms, 슬롯 1000ms. 경과 600ms 기준으로
+    // k=2는 2000ms(1400ms 후), k=3은 3000ms(2400ms 후)에 재예약돼야 한다.
+    rerender({ ...params, bpm: 60 });
+
+    advanceMs(1300); // 아직 k=2 이전 (경과 1900ms)
+    expect(result.current.activeVertices[layerId]).toBe(1);
+    advanceMs(100); // 경과 2000ms → k=2
+    expect(result.current.activeVertices[layerId]).toBe(2);
+    advanceMs(1000); // 경과 3000ms → k=3
+    expect(result.current.activeVertices[layerId]).toBe(3);
+  });
+
+  it("meter change re-anchors phase: next engine callback is treated as measure start", () => {
+    const params = makeParams(); // beatsPerMeasure=4
+    const { result, rerender } = renderHook(
+      (p: UsePolygonModeParams) => usePolygonMode(p),
+      { initialProps: params },
+    );
+    const layerId = result.current.layers[0].id;
+
+    fireBeat(params.engineBeatCallbackRef); // 마디 시작 (absbeat 0)
+    fireBeat(params.engineBeatCallbackRef); // 마디 중간 (absbeat 1)
+    advanceMs(500);
+    expect(result.current.activeVertices[layerId]).toBe(1);
+
+    // 박자표 4→3: 엔진은 비트 카운터를 0으로 리셋하므로
+    // 폴리곤도 다음 콜백을 마디 시작으로 인식해야 한다.
+    rerender({ ...params, beatsPerMeasure: 3 });
+
+    fireBeat(params.engineBeatCallbackRef); // 새 마디 시작 → k=0 즉시
+    expect(result.current.activeVertices[layerId]).toBe(0);
+  });
+
+  // ── 폴리리듬: 3각형+4각형이 마디를 각각 3·4등분 ─────────────────────────
+
+  it("polyrhythm: 4-sided and 3-sided layers divide the measure into 4 and 3 slots", () => {
+    const setTimeoutSpy = jest.spyOn(globalThis, "setTimeout");
+    const params = makeParams();
+    const { result } = renderHook(() => usePolygonMode(params));
+
+    // 레이어 추가 → sides = 4-1 = 3
+    act(() => { result.current.handleAddLayer(); });
+    expect(result.current.layers[1].sides).toBe(3);
+
+    setTimeoutSpy.mockClear();
+    // 마디 시작 (bpm=120, 4박 → 마디 2000ms)
+    fireBeat(params.engineBeatCallbackRef);
+
+    const delays = setTimeoutSpy.mock.calls
+      .map((c: any[]) => c[1] as number)
+      .sort((a, b) => a - b);
+
+    // 4각형: 500, 1000, 1500 / 3각형: 666.67, 1333.33 (k=0은 즉시 발화, 예약 없음)
+    expect(delays.length).toBe(5);
+    expect(delays[0]).toBeCloseTo(500, 1);
+    expect(delays[1]).toBeCloseTo(2000 / 3, 1);
+    expect(delays[2]).toBeCloseTo(1000, 1);
+    expect(delays[3]).toBeCloseTo(4000 / 3, 1);
+    expect(delays[4]).toBeCloseTo(1500, 1);
+
+    setTimeoutSpy.mockRestore();
   });
 
   it("all-muted layer is absent from activeVertices (no pulse)", () => {

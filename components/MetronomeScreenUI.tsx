@@ -176,6 +176,7 @@ export function MetronomeScreenUI(props: Props) {
     isPlaying,
     engineBeatCallbackRef: polygonOnBeatRef,
     bpm,
+    beatsPerMeasure,
     allPlayersRef,
     clickPCMCacheRef,
     volumeRef,

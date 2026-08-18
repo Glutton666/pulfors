@@ -50,8 +50,10 @@ export interface UsePolygonModeParams {
    * usePolygonMode는 enabled=true이면 자신의 핸들러를 이 ref에 등록한다.
    */
   engineBeatCallbackRef: React.MutableRefObject<(() => void) | null>;
-  /** BPM (오프셋 타이밍 계산용) */
+  /** BPM (마디·오프셋 타이밍 계산용) */
   bpm: number;
+  /** 한 마디의 박 수 — N각형은 이 마디를 N등분해 발화한다 (폴리리듬) */
+  beatsPerMeasure: number;
   /** 내장 오디오 플레이어 ref (native) */
   allPlayersRef: React.MutableRefObject<BuiltinPlayers>;
   /** 전역 PCM 캐시 ref (read-only) */
@@ -136,6 +138,9 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   const bpmRef = useRef(p.bpm);
   useEffect(() => { bpmRef.current = p.bpm; }, [p.bpm]);
 
+  const beatsPerMeasureRef = useRef(p.beatsPerMeasure);
+  useEffect(() => { beatsPerMeasureRef.current = p.beatsPerMeasure; }, [p.beatsPerMeasure]);
+
   const enabledRef = useRef(p.enabled);
   useEffect(() => { enabledRef.current = p.enabled; }, [p.enabled]);
 
@@ -189,15 +194,168 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     layers.forEach((l) => ensurePCM(l.soundSet));
   }, [p.enabled, layers, ensurePCM]);
 
-  // ── 재생 중단 → absoluteBeat 리셋 ──────────────────────────────────────
+  // ── 마디 앵커/발화 추적 ─────────────────────────────────────────────────
+  // measureStartMsRef: 현재 마디 시작 시각 (0 = 진행 중인 마디 없음)
+  // lastFiredSlotRef: 레이어별 마지막 발화 슬롯 k — 중간 재스케줄 시 중복 발화 방지
+  const measureStartMsRef = useRef(0);
+  const lastFiredSlotRef = useRef<Map<string, number>>(new Map());
+
+  const playSound = useCallback(
+    (layer: PolygonLayer, beatType: Exclude<VertexBeatType, "mute">) => {
+      try {
+        if (Platform.OS === "web") {
+          const cached =
+            polygonPCMCacheRef.current.get(layer.soundSet)
+            ?? p.clickPCMCacheRef.current[layer.soundSet];
+          if (cached) {
+            // beatType → PCM 선택
+            const pcm: Float32Array =
+              beatType === "strong" ? cached.strong
+              : beatType === "accent" ? cached.high
+              : cached.low; // "normal"
+            playPCMOnWeb(pcm, p.volumeRef.current);
+          } else {
+            playWebClick(beatTypeToWebClickRole(beatType), "both");
+            ensurePCM(layer.soundSet);
+          }
+        } else {
+          // Native: sound-set + beatType 조합별 round-robin으로 플레이어 풀 순환
+          const players =
+            p.allPlayersRef.current[layer.soundSet as keyof BuiltinPlayers]
+            ?? p.allPlayersRef.current.classic;
+          const pool = players as SoundSetPlayers;
+          // 같은 sound-set + beatType을 쓰는 레이어가 동일 시점에 발화할 때
+          // 동일한 공유 풀에서 서로 다른 슬롯을 선택해 겹침 재생을 지원한다.
+          const toggleKey = `${layer.soundSet}-${beatType}`;
+          const idx = polygonToggleRef.current[toggleKey] ?? 0;
+          polygonToggleRef.current[toggleKey] = (idx + 1) % 4; // BUILTIN_POOL_SIZE=4
+          const player =
+            beatType === "strong"
+              ? [pool.strongA, pool.strongB, pool.strongC, pool.strongD][idx]
+              : beatType === "accent"
+              ? [pool.highA, pool.highB, pool.highC, pool.highD][idx]
+              : [pool.lowA, pool.lowB, pool.lowC, pool.lowD][idx];
+          if (player) safePlay(player, "polygon.beat");
+        }
+      } catch {}
+    },
+    // p의 ref 필드들은 안정적; ensurePCM만 의존
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ensurePCM],
+  );
+
+  /**
+   * 현재 마디의 폴리리듬 이벤트를 예약한다.
+   * fromElapsedMs: 마디 시작 이후 경과 시간 — 이 시각 이전 슬롯은 건너뛴다.
+   * 이미 발화한 슬롯(lastFiredSlotRef)은 타이밍이 바뀌어도 재발화하지 않는다.
+   */
+  const scheduleMeasureEvents = useCallback((fromElapsedMs: number) => {
+    const layers = layersRef.current;
+    const bpm = bpmRef.current;
+    const beatsPerMeasure = Math.max(1, Math.floor(beatsPerMeasureRef.current || 4));
+    const beatDurationMs = 60000 / Math.max(20, bpm);
+    const measureDurationMs = beatsPerMeasure * beatDurationMs;
+
+    layers.forEach((layer) => {
+      const sides = Math.max(1, layer.sides);
+      // N각형 슬롯 간격 = 마디 길이 / N (3각형+4각형 → 3:4 폴리리듬)
+      const slotDurationMs = measureDurationMs / sides;
+      const lastFired = lastFiredSlotRef.current.get(layer.id) ?? -1;
+
+      const schedule = (delayMs: number, fn: () => void) => {
+        if (delayMs <= 0) {
+          fn();
+          return;
+        }
+        if (!pendingTimerMapRef.current.has(layer.id)) {
+          pendingTimerMapRef.current.set(layer.id, new Set());
+        }
+        const layerTimers = pendingTimerMapRef.current.get(layer.id)!;
+        const t = setTimeout(() => {
+          layerTimers.delete(t);
+          fn();
+        }, delayMs);
+        layerTimers.add(t);
+      };
+
+      for (let k = 0; k < sides; k++) {
+        if (k <= lastFired) continue; // 이미 발화한 슬롯 (중간 재스케줄 시 중복 방지)
+
+        const beatType = getVertexBeatType(layer, k);
+        const slotTimeMs =
+          beatType === "mute"
+            ? k * slotDurationMs
+            // 꼭짓점별 오프셋: 해당 슬롯 간격의 비율(0~0.5)만큼 지연
+            : k * slotDurationMs + (layer.offsets[k] ?? 0) * slotDurationMs;
+
+        if (slotTimeMs < fromElapsedMs && k > 0) continue; // 이미 지나간 시각
+
+        if (beatType === "mute") {
+          // 뮤트 슬롯: 소리 없음 + 슬롯 시각에 비주얼도 끔 (주기는 유지)
+          schedule(slotTimeMs - fromElapsedMs, () => {
+            lastFiredSlotRef.current.set(layer.id, k);
+            setActiveVertices((prev) => {
+              if (!(layer.id in prev)) return prev;
+              const next = { ...prev };
+              delete next[layer.id];
+              return next;
+            });
+          });
+          continue;
+        }
+
+        schedule(slotTimeMs - fromElapsedMs, () => {
+          lastFiredSlotRef.current.set(layer.id, k);
+          setActiveVertices((prev) =>
+            prev[layer.id] === k ? prev : { ...prev, [layer.id]: k },
+          );
+          playSound(layer, beatType);
+        });
+      }
+    });
+  }, [playSound]);
+
+  // ── 재생 중단 → absoluteBeat/마디 앵커 리셋 ────────────────────────────
   // 엔진이 멈추면 더 이상 콜백이 오지 않으므로 카운터만 초기화한다.
   // 비주얼 리셋(setActiveVertices)은 enabled가 false가 될 때 처리한다.
   useEffect(() => {
     if (!p.isPlaying) {
       clearPendingTimers();
       absoluteBeatRef.current = 0;
+      measureStartMsRef.current = 0;
+      lastFiredSlotRef.current.clear();
     }
   }, [p.isPlaying, clearPendingTimers]);
+
+  // ── BPM·박자표 변경 → 남은 마디를 새 타이밍으로 즉시 재스케줄 ──────────
+  const isFirstTimingRef = useRef(true);
+  const prevBeatsPerMeasureRef = useRef(p.beatsPerMeasure);
+  useEffect(() => {
+    const meterChanged = prevBeatsPerMeasureRef.current !== p.beatsPerMeasure;
+    prevBeatsPerMeasureRef.current = p.beatsPerMeasure;
+    if (isFirstTimingRef.current) {
+      isFirstTimingRef.current = false;
+      return;
+    }
+    clearPendingTimers();
+
+    // ref 갱신 effect보다 먼저 실행될 수 있으므로 여기서 직접 갱신
+    beatsPerMeasureRef.current = p.beatsPerMeasure;
+    bpmRef.current = p.bpm;
+
+    // 박자표 변경: 엔진이 자체 비트 카운터를 0으로 리셋하므로,
+    // 다음 엔진 콜백이 마디 시작으로 인식되도록 위상을 재정렬한다.
+    if (meterChanged) {
+      absoluteBeatRef.current = 0;
+    }
+
+    // 마디 진행 중이면 남은 슬롯을 새 타이밍으로 즉시 재예약한다.
+    if (p.enabled && p.isPlaying && measureStartMsRef.current > 0) {
+      const elapsed = Math.max(0, Date.now() - measureStartMsRef.current);
+      scheduleMeasureEvents(elapsed);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.bpm, p.beatsPerMeasure]);
 
   // ── 엔진 비트 핸들러 등록/해제 ──────────────────────────────────────────
   // enabled=true이면 핸들러를 ref에 등록하고 엔진 콜백이 직접 호출한다.
@@ -207,6 +365,8 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       p.engineBeatCallbackRef.current = null;
       clearPendingTimers();
       absoluteBeatRef.current = 0;
+      measureStartMsRef.current = 0;
+      lastFiredSlotRef.current.clear();
       setActiveVertices({});
       return;
     }
@@ -214,84 +374,21 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     p.engineBeatCallbackRef.current = () => {
       // 이 핸들러는 React lifecycle 밖(엔진 오디오 스레드)에서 호출된다.
       // 최신 레이어/BPM은 ref를 통해 읽는다.
-      const layers = layersRef.current;
-      const bpm = bpmRef.current;
+      //
+      // 폴리리듬 스케줄링: N각형은 한 마디(beatsPerMeasure × beatDuration)를
+      // N등분해 발화한다. 마디 시작 비트에서만 각 레이어의 N개 이벤트를
+      // setTimeout으로 일괄 예약한다. (3각형+4각형 → 3:4 폴리리듬)
+      const beatsPerMeasure = Math.max(1, Math.floor(beatsPerMeasureRef.current || 4));
       const absbeat = absoluteBeatRef.current++;
-      const beatDurationMs = 60000 / Math.max(20, bpm);
 
-      const newActiveVertices: Record<string, number> = {};
+      // 마디 중간 비트는 무시 — 모든 스케줄은 마디 시작에서 이뤄진다.
+      if (absbeat % beatsPerMeasure !== 0) return;
 
-      layers.forEach((layer) => {
-        const sides = Math.max(1, layer.sides);
-
-        // 슬롯 위치: 전체 변 수 기준으로 4~16박 주기 유지
-        // (뮤트 꼭짓점도 슬롯을 점유하며 소리·비주얼만 생략된다)
-        const vertexIdx = absbeat % sides;
-        const beatType = getVertexBeatType(layer, vertexIdx);
-
-        // 뮤트 슬롯: 소리·비주얼 생략 (전체 mute 레이어도 자동 처리됨)
-        if (beatType === "mute") return;
-
-        newActiveVertices[layer.id] = vertexIdx;
-
-        const delayMs = (layer.offsets[vertexIdx] ?? 0) * beatDurationMs;
-
-        const playSound = () => {
-          try {
-            if (Platform.OS === "web") {
-              const cached =
-                polygonPCMCacheRef.current.get(layer.soundSet)
-                ?? p.clickPCMCacheRef.current[layer.soundSet];
-              if (cached) {
-                // beatType → PCM 선택
-                const pcm: Float32Array =
-                  beatType === "strong" ? cached.strong
-                  : beatType === "accent" ? cached.high
-                  : cached.low; // "normal"
-                playPCMOnWeb(pcm, p.volumeRef.current);
-              } else {
-                playWebClick(beatTypeToWebClickRole(beatType), "both");
-                ensurePCM(layer.soundSet);
-              }
-            } else {
-              // Native: sound-set + beatType 조합별 round-robin으로 플레이어 풀 순환
-              const players =
-                p.allPlayersRef.current[layer.soundSet as keyof BuiltinPlayers]
-                ?? p.allPlayersRef.current.classic;
-              const pool = players as SoundSetPlayers;
-              // 같은 sound-set + beatType을 쓰는 레이어가 동일 비트에 발화할 때
-              // 동일한 공유 풀에서 서로 다른 슬롯을 선택해 겹침 재생을 지원한다.
-              const toggleKey = `${layer.soundSet}-${beatType}`;
-              const idx = polygonToggleRef.current[toggleKey] ?? 0;
-              polygonToggleRef.current[toggleKey] = (idx + 1) % 4; // BUILTIN_POOL_SIZE=4
-              const player =
-                beatType === "strong"
-                  ? [pool.strongA, pool.strongB, pool.strongC, pool.strongD][idx]
-                  : beatType === "accent"
-                  ? [pool.highA, pool.highB, pool.highC, pool.highD][idx]
-                  : [pool.lowA, pool.lowB, pool.lowC, pool.lowD][idx];
-              if (player) safePlay(player, "polygon.beat");
-            }
-          } catch {}
-        };
-
-        if (delayMs <= 0) {
-          playSound();
-        } else {
-          if (!pendingTimerMapRef.current.has(layer.id)) {
-            pendingTimerMapRef.current.set(layer.id, new Set());
-          }
-          const layerTimers = pendingTimerMapRef.current.get(layer.id)!;
-          const t = setTimeout(() => {
-            layerTimers.delete(t);
-            playSound();
-          }, delayMs);
-          layerTimers.add(t);
-        }
-      });
-
-      // 비주얼 업데이트: React가 rAF 배치로 처리 (오디오와 독립)
-      setActiveVertices(newActiveVertices);
+      // 이전 마디의 잔여 타이머 정리 후 새 마디 전체 예약
+      clearPendingTimers();
+      lastFiredSlotRef.current.clear();
+      measureStartMsRef.current = Date.now();
+      scheduleMeasureEvents(0);
     };
 
     return () => {
@@ -302,7 +399,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   // enabled가 변경될 때만 핸들러를 재등록한다.
   // layers/bpm은 ref를 통해 항상 최신값을 읽으므로 의존성 불필요.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.enabled, p.engineBeatCallbackRef, clearPendingTimers, ensurePCM]);
+  }, [p.enabled, p.engineBeatCallbackRef, clearPendingTimers, scheduleMeasureEvents]);
 
   // ── 레이어 관리 ─────────────────────────────────────────────────────────
 
@@ -337,6 +434,9 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
 
   const handleUpdateLayer = useCallback(
     (id: string, patch: Partial<PolygonLayer>) => {
+      // 재생 중 편집: 옛 데이터로 예약된 이 레이어의 잔여 이벤트를 취소.
+      // 남은 마디는 침묵하고 다음 마디부터 새 설정으로 재스케줄된다.
+      clearLayerTimers(id);
       setLayers((prev) =>
         prev.map((l) => {
           if (l.id !== id) return l;
@@ -368,11 +468,12 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       );
       if (patch.soundSet) ensurePCM(patch.soundSet);
     },
-    [ensurePCM],
+    [ensurePCM, clearLayerTimers],
   );
 
   const handleSetOffset = useCallback(
     (layerId: string, vertexIdx: number, offset: number) => {
+      clearLayerTimers(layerId);
       setLayers((prev) =>
         prev.map((l) => {
           if (l.id !== layerId) return l;
@@ -382,12 +483,13 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
         }),
       );
     },
-    [],
+    [clearLayerTimers],
   );
 
   // ── 꼭짓점 강세 순환 (S → A → N → M → S) ──────────────────────────────
   const handleVertexBeatTypeCycle = useCallback(
     (layerId: string, vertexIdx: number) => {
+      clearLayerTimers(layerId);
       setLayers((prev) =>
         prev.map((l) => {
           if (l.id !== layerId) return l;
@@ -403,7 +505,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
         }),
       );
     },
-    [],
+    [clearLayerTimers],
   );
 
   return {
