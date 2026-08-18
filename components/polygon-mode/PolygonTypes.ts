@@ -112,12 +112,13 @@ export function polygonVertices(
 /**
  * 뮤트·오프셋을 반영한 꼭짓점 각도 계산 결과.
  *
- * - activeAngles: non-mute 꼭짓점 n개를 원 위에 2π/n 균등 배치 + 오프셋 이동.
- *   도형은 활성 꼭짓점만으로 구성된 정 n각형(오프셋으로 찌그러질 수 있음).
+ * - activeAngles: non-mute 꼭짓점들의 정 N각형 원래 각도 + 오프셋 이동.
+ *   외곽선은 활성 꼭짓점만 연결하고 뮤트 꼭짓점은 건너뛴다
+ *   (예: 4각형에서 1개 뮤트 → 이등변삼각형).
  * - muteAngles: mute 꼭짓점의 정 N각형 원래 위치. M 레이블 표시 전용.
  */
 export interface VertexAnglesResult {
-  /** Non-mute 꼭짓점들의 각도 (2π/n 균등 배치 + 오프셋) */
+  /** Non-mute 꼭짓점들의 각도 (정 N각형 원래 위치 + 오프셋) */
   activeAngles: number[];
   /** activeAngles[k]에 대응하는 원래 layer vertex index */
   activeIndices: number[];
@@ -141,13 +142,10 @@ export function computeVertexAngles(layer: PolygonLayer): VertexAnglesResult {
     }
   }
 
-  const n = activeIndices.length;
-  const activeArc = n > 0 ? (2 * Math.PI) / n : 0;
-
-  const activeAngles = activeIndices.map((vertexIdx, k) => {
-    const base = -Math.PI / 2 + activeArc * k;
+  const activeAngles = activeIndices.map((vertexIdx) => {
+    const base = -Math.PI / 2 + arcPerSide * vertexIdx;
     const offset = layer.offsets[vertexIdx] ?? 0;
-    return base + offset * activeArc;
+    return base + offset * arcPerSide;
   });
 
   const muteAngles = muteIndices.map((vertexIdx) =>

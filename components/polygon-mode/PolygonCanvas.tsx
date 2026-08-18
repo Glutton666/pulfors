@@ -195,7 +195,7 @@ export function PolygonCanvas({
           }
 
           // ── 다각형 렌더링 ──
-          // 활성(non-mute) 꼭짓점 n개를 2π/n 균등 배치. 뮤트 꼭짓점은 유령 위치.
+          // 활성(non-mute) 꼭짓점은 정 N각형 원래 위치 유지, 외곽선은 뮤트 꼭짓점을 건너뛰고 연결.
           const { activeAngles, activeIndices, muteAngles, muteIndices } =
             computeVertexAngles(layer);
 

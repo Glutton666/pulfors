@@ -52,10 +52,9 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay 
 
   const handleVertexLongPress = useCallback(
     (layerId: string, vertexIdx: number) => {
-      if (!editingLayerId) return; // 편집 모드일 때만
       setOffsetPopup({ layerId, vertexIdx });
     },
-    [editingLayerId, setOffsetPopup],
+    [setOffsetPopup],
   );
 
   const currentPopupLayer = offsetPopup

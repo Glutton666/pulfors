@@ -520,10 +520,11 @@ describe("computeVertexAngles", () => {
     expect(shifted.activeAngles[0] - plain.activeAngles[0]).toBeCloseTo(0.25 * (TWO_PI / 4), 6);
   });
 
-  // ── 3. Mute 꼭짓점 제외 → active n개가 2π/n 균등 배치, mute는 유령 위치 ──
+  // ── 3. Mute 꼭짓점 제외 → active는 원래 정N각형 위치 유지, mute는 유령 위치 ──
 
-  it("mute vertex excluded: active vertices evenly distributed, mute at ghost position", () => {
-    // vertex 2 muted → active: [0,1,3] (n=3), mute: [2]
+  it("mute vertex excluded: active vertices keep original N-gon positions, mute at ghost position", () => {
+    // vertex 2 muted → active: [0,1,3], mute: [2]
+    // active 꼭짓점은 정 4각형 원래 각도 유지 → 이등변삼각형
     const bt: PolygonLayer["beatTypes"] = ["strong", "normal", "mute", "normal"];
     const layer = makeLayer({ sides: 4, offsets: [], beatTypes: bt });
     const result = computeVertexAngles(layer);
@@ -531,11 +532,11 @@ describe("computeVertexAngles", () => {
     expect(result.activeIndices).toEqual([0, 1, 3]);
     expect(result.muteIndices).toEqual([2]);
 
-    // active 3개가 2π/3 균등 배치
-    const spacing = TWO_PI / 3;
+    // active 꼭짓점들이 정 4각형 원래 각도 유지 (0 → -π/2, 1 → 0, 3 → π)
+    const arc = TWO_PI / 4;
     expect(result.activeAngles[0]).toBeCloseTo(-Math.PI / 2, 6);
-    expect(result.activeAngles[1]).toBeCloseTo(-Math.PI / 2 + spacing, 6);
-    expect(result.activeAngles[2]).toBeCloseTo(-Math.PI / 2 + spacing * 2, 6);
+    expect(result.activeAngles[1]).toBeCloseTo(-Math.PI / 2 + arc, 6);
+    expect(result.activeAngles[2]).toBeCloseTo(-Math.PI / 2 + arc * 3, 6);
 
     // mute 꼭짓점(2)은 정 4각형 원래 각도 (i=2 → -π/2 + 2·(2π/4) = π/2)
     expect(result.muteAngles[0]).toBeCloseTo(-Math.PI / 2 + 2 * (TWO_PI / 4), 6);
@@ -544,6 +545,20 @@ describe("computeVertexAngles", () => {
     const withOffset = makeLayer({ sides: 4, offsets: [0, 0, 0.4, 0], beatTypes: bt });
     const result2 = computeVertexAngles(withOffset);
     expect(result2.muteAngles[0]).toBeCloseTo(-Math.PI / 2 + 2 * (TWO_PI / 4), 6);
+  });
+
+  it("offset scale uses 2π/sides even when some vertices are muted", () => {
+    // vertex 2 muted, vertex 1에 오프셋 0.5 → 이동량은 0.5 * (2π/4) (active 수 3과 무관)
+    const bt: PolygonLayer["beatTypes"] = ["strong", "normal", "mute", "normal"];
+    const plain = computeVertexAngles(makeLayer({ sides: 4, offsets: [], beatTypes: bt }));
+    const shifted = computeVertexAngles(
+      makeLayer({ sides: 4, offsets: [0, 0.5, 0, 0], beatTypes: bt }),
+    );
+    // activeIndices = [0,1,3] → vertex 1은 k=1
+    expect(shifted.activeAngles[1] - plain.activeAngles[1]).toBeCloseTo(0.5 * (TWO_PI / 4), 6);
+    // 다른 active 꼭짓점은 그대로
+    expect(shifted.activeAngles[0]).toBeCloseTo(plain.activeAngles[0], 6);
+    expect(shifted.activeAngles[2]).toBeCloseTo(plain.activeAngles[2], 6);
   });
 
   it("all mutes: no active vertices, all at regular polygon ghost positions", () => {
