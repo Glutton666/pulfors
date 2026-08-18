@@ -112,18 +112,20 @@ function beatTypeToWebClickRole(bt: VertexBeatType): "strong" | "high" | "low" {
 // Hook
 // ─────────────────────────────────────────────────────────────────────────────
 
+const INITIAL_LAYERS: PolygonLayer[] = [
+  {
+    id: "default-0",
+    sides: 4,
+    color: LAYER_COLORS[0],
+    soundSet: "classic",
+    role: "high",
+    offsets: [],
+    beatTypes: makeDefaultBeatTypes(4),
+  },
+];
+
 export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
-  const [layers, setLayers] = useState<PolygonLayer[]>([
-    {
-      id: "default-0",
-      sides: 4,
-      color: LAYER_COLORS[0],
-      soundSet: "classic",
-      role: "high",
-      offsets: [],
-      beatTypes: makeDefaultBeatTypes(4),
-    },
-  ]);
+  const [layers, setLayers] = useState<PolygonLayer[]>(INITIAL_LAYERS);
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
   const [activeVertices, setActiveVertices] = useState<Record<string, number>>({});
   const [offsetPopup, setOffsetPopup] = useState<{
@@ -238,6 +240,13 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       p.engineBeatCallbackRef.current = null;
       clearPendingTimers();
       absoluteBeatRef.current = 0;
+      // 폴리곤 모드를 닫을 때 레이어·UI 상태를 초기화한다.
+      // MetronomeScreenUI가 언마운트되지 않으므로 명시적으로 리셋해야
+      // 다음 번 열 때 이전 레이어가 남아 있지 않는다.
+      layersRef.current = INITIAL_LAYERS;
+      setLayers(INITIAL_LAYERS);
+      setEditingLayerId(null);
+      setOffsetPopup(null);
       setActiveVertices({});
       return;
     }
