@@ -27,9 +27,14 @@ interface PolygonModeViewProps {
   isPlaying: boolean;
   onClose: () => void;
   onTogglePlay?: () => void;
+  bpm?: number;
+  onBpmChange?: (bpm: number) => void;
 }
 
-export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay }: PolygonModeViewProps) {
+const BPM_MIN = 20;
+const BPM_MAX = 300;
+
+export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay, bpm, onBpmChange }: PolygonModeViewProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
@@ -125,6 +130,86 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay 
           </Text>
         </Pressable>
       </View>
+
+      {/* ── BPM 컨트롤 ── */}
+      {bpm !== undefined && onBpmChange && (
+        <View style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: S.ms(12, 0.3),
+          paddingVertical: S.ms(8, 0.3),
+          borderBottomWidth: 1,
+          borderBottomColor: C.border,
+        }}>
+          <Pressable
+            onPress={() => onBpmChange(Math.max(BPM_MIN, bpm - 1))}
+            style={({ pressed }) => ({
+              width: S.ms(32, 0.3),
+              height: S.ms(32, 0.3),
+              borderRadius: S.ms(16, 0.3),
+              backgroundColor: C.surface,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: pressed ? 0.6 : 1,
+            })}
+            hitSlop={8}
+          >
+            <Text style={{ fontSize: S.ms(18, 0.3), color: C.text, lineHeight: S.ms(22, 0.3) }}>−</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => onTogglePlay?.()}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "baseline",
+              gap: 5,
+              opacity: pressed ? 0.7 : 1,
+            })}
+            hitSlop={8}
+          >
+            <Text style={{
+              fontFamily: "SpaceGrotesk_700Bold",
+              fontSize: S.ms(28, 0.4),
+              color: C.text,
+              lineHeight: S.ms(32, 0.4),
+              minWidth: S.ms(64, 0.3),
+              textAlign: "center",
+            }}>
+              {bpm}
+            </Text>
+            <Text style={{
+              fontFamily: "SpaceGrotesk_400Regular",
+              fontSize: S.ms(12, 0.3),
+              color: C.textSecondary,
+              paddingBottom: 2,
+            }}>
+              BPM
+            </Text>
+            <View style={{
+              width: 8, height: 8, borderRadius: 4,
+              backgroundColor: isPlaying ? C.accent : C.textTertiary,
+              marginLeft: 4,
+            }} />
+          </Pressable>
+
+          <Pressable
+            onPress={() => onBpmChange(Math.min(BPM_MAX, bpm + 1))}
+            style={({ pressed }) => ({
+              width: S.ms(32, 0.3),
+              height: S.ms(32, 0.3),
+              borderRadius: S.ms(16, 0.3),
+              backgroundColor: C.surface,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: pressed ? 0.6 : 1,
+            })}
+            hitSlop={8}
+          >
+            <Text style={{ fontSize: S.ms(18, 0.3), color: C.text, lineHeight: S.ms(22, 0.3) }}>+</Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* ── 캔버스 영역 ── */}
       <ScrollView

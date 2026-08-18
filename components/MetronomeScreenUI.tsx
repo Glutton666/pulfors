@@ -452,6 +452,8 @@ export function MetronomeScreenUI(props: Props) {
             isPlaying={isPlaying}
             onClose={() => setActiveModal(null)}
             onTogglePlay={() => void togglePlayPauseRef.current?.()}
+            bpm={bpm}
+            onBpmChange={updateBpm}
           />
         </View>
       )}
