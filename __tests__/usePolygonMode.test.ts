@@ -303,9 +303,9 @@ describe("usePolygonMode — engine callback driven", () => {
     expect(result.current.layers[0].beatTypes[0]).toBe("strong");
   });
 
-  // ── 10. mute 꼭짓점: 사이클에서 완전히 제외 ───────────────────────────
+  // ── 10. mute 꼭짓점: 4박 주기 유지, 뮤트 슬롯은 소리·비주얼만 생략 ────
 
-  it("mute vertex is excluded from beat cycle: 4-sided with vertex 2 muted cycles 0→1→3→0", () => {
+  it("mute vertex keeps 4-beat period: slot 2 muted → silent on beat 2, visible on 0·1·3", () => {
     const params = makeParams();
     const { result } = renderHook(() => usePolygonMode(params));
 
@@ -315,20 +315,23 @@ describe("usePolygonMode — engine callback driven", () => {
     act(() => { result.current.handleVertexBeatTypeCycle(layerId, 2); }); // normal → mute
     expect(result.current.layers[0].beatTypes[2]).toBe("mute");
 
-    // activeIndices = [0, 1, 3]
-    // absbeat=0 → pos=0 → vertexIdx=0
+    // absbeat=0 → vertexIdx=0 (strong) → activeVertex=0
     fireBeat(params.engineBeatCallbackRef);
     expect(result.current.activeVertices[layerId]).toBe(0);
 
-    // absbeat=1 → pos=1 → vertexIdx=1
+    // absbeat=1 → vertexIdx=1 (normal) → activeVertex=1
     fireBeat(params.engineBeatCallbackRef);
     expect(result.current.activeVertices[layerId]).toBe(1);
 
-    // absbeat=2 → pos=2 → vertexIdx=3 (vertex 2는 건너뜀)
+    // absbeat=2 → vertexIdx=2 (mute) → 레이어 absent (무음, 비주얼 없음)
+    fireBeat(params.engineBeatCallbackRef);
+    expect(result.current.activeVertices[layerId]).toBeUndefined();
+
+    // absbeat=3 → vertexIdx=3 (normal) → activeVertex=3
     fireBeat(params.engineBeatCallbackRef);
     expect(result.current.activeVertices[layerId]).toBe(3);
 
-    // absbeat=3 → pos=0 → vertexIdx=0 (다시 처음으로)
+    // absbeat=4 → vertexIdx=0 → 4박 주기 유지 확인
     fireBeat(params.engineBeatCallbackRef);
     expect(result.current.activeVertices[layerId]).toBe(0);
   });
