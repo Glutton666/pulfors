@@ -24,7 +24,6 @@ import type { PolygonLayer } from "./PolygonTypes";
 import {
   sortLayersForDisplay,
   computeLayerRadii,
-  polygonVertices,
   getVertexBeatType,
   BEAT_TYPE_LABEL,
   computeVertexAngles,
@@ -130,7 +129,6 @@ export function PolygonCanvas({
           const layerOpacity = isEditing && !isThisEditing ? 0.2 : 1;
           const activeVertex = activeVertices[layer.id] ?? -1;
           const sides = Math.max(1, layer.sides);
-          const verts = polygonVertices(cx, cy, r, sides);
 
           if (sides === 1) {
             // ── 원(펄스) 렌더링 ──
@@ -139,20 +137,22 @@ export function PolygonCanvas({
             const label = BEAT_TYPE_LABEL[beatType];
             const isMute = beatType === "mute";
             const labelColor = isMute ? layer.color + "55" : layer.color;
-            // 원 중심 탭 히트 영역
             const labelPos = getLabelPos(cx, cy, cx, cy, VERTEX_R_ACTIVE + LABEL_OFFSET);
             return (
               <G key={layer.id} opacity={layerOpacity}>
-                <Circle
-                  cx={cx}
-                  cy={cy}
-                  r={r}
-                  fill="none"
-                  stroke={layer.color}
-                  strokeWidth={isThisEditing ? 2.5 : 1.5}
-                  strokeDasharray="4 4"
-                />
-                {isActive && (
+                {/* 원 외곽선·활성 링: mute이면 미표시 */}
+                {!isMute && (
+                  <Circle
+                    cx={cx}
+                    cy={cy}
+                    r={r}
+                    fill="none"
+                    stroke={layer.color}
+                    strokeWidth={isThisEditing ? 2.5 : 1.5}
+                    strokeDasharray="4 4"
+                  />
+                )}
+                {!isMute && isActive && (
                   <Circle
                     cx={cx}
                     cy={cy}
@@ -169,7 +169,6 @@ export function PolygonCanvas({
                   onLongPress={onVertexLongPress ? () => onVertexLongPress(layer.id, 0) : undefined}
                 >
                   <Circle cx={cx} cy={cy} r={HIT_R} fill="transparent" />
-                  {/* 펄스 도트 (mute이면 미표시) */}
                   {!isMute && (
                     <AnimatedVertex
                       cx={cx}
@@ -179,7 +178,6 @@ export function PolygonCanvas({
                       isActive={isActive}
                     />
                   )}
-                  {/* 강세 레이블 */}
                   <SvgText
                     x={labelPos.x}
                     y={labelPos.y}
@@ -197,53 +195,49 @@ export function PolygonCanvas({
           }
 
           // ── 다각형 렌더링 ──
-          // 외곽선은 정 N각형 원래 좌표 유지 (mute 포함)
-          const pointsStr = verts.map((v) => `${v.x},${v.y}`).join(" ");
+          // 활성(non-mute) 꼭짓점 n개를 2π/n 균등 배치. 뮤트 꼭짓점은 유령 위치.
+          const { activeAngles, activeIndices, muteAngles, muteIndices } =
+            computeVertexAngles(layer);
 
-          // 꼭짓점 도트·라벨은 오프셋·mute 반영 각도 기반 좌표 사용
-          // - Non-mute: 실제 타이밍(offset) 반영 각도로 이동
-          // - Mute: 정 N각형 원래 각도 그대로 (M 라벨 위치 유지)
-          const angles = computeVertexAngles(layer);
-          const adjustedVerts = angles.map((angle) => ({
+          const activeVerts = activeAngles.map((angle) => ({
+            x: cx + r * Math.cos(angle),
+            y: cy + r * Math.sin(angle),
+          }));
+          const muteGhostVerts = muteAngles.map((angle) => ({
             x: cx + r * Math.cos(angle),
             y: cy + r * Math.sin(angle),
           }));
 
+          const activePointsStr = activeVerts.map((v) => `${v.x},${v.y}`).join(" ");
+
           return (
             <G key={layer.id} opacity={layerOpacity}>
-              {/* 폴리곤 외곽선 (정 N각형 유지) */}
-              <Polygon
-                points={pointsStr}
-                fill="none"
-                stroke={layer.color}
-                strokeWidth={isThisEditing ? 2.5 : 1.5}
-                strokeOpacity={0.7}
-              />
+              {/* 폴리곤 외곽선: 활성 꼭짓점만 연결 (2개 이상이어야 선이 보임) */}
+              {activeVerts.length >= 2 && (
+                <Polygon
+                  points={activePointsStr}
+                  fill="none"
+                  stroke={layer.color}
+                  strokeWidth={isThisEditing ? 2.5 : 1.5}
+                  strokeOpacity={0.7}
+                />
+              )}
 
-              {/* 꼭짓점들 */}
-              {adjustedVerts.map((av, vi) => {
+              {/* 활성 꼭짓점들: 도트 + 오프셋 링 + 레이블 */}
+              {activeVerts.map((av, k) => {
+                const vi = activeIndices[k];
                 const isActive = vi === activeVertex;
                 const hasOffset = (layer.offsets[vi] ?? 0) > 0.01;
-                const beatType = getVertexBeatType(layer, vi);
-                const label = BEAT_TYPE_LABEL[beatType];
-                const isMute = beatType === "mute";
-                const labelColor = isMute ? layer.color + "55" : layer.color;
+                const label = BEAT_TYPE_LABEL[getVertexBeatType(layer, vi)];
                 const labelPos = getLabelPos(av.x, av.y, cx, cy, LABEL_OFFSET);
-
                 return (
                   <G
                     key={vi}
                     onPress={onVertexPress ? () => onVertexPress(layer.id, vi) : undefined}
-                    onLongPress={
-                      onVertexLongPress
-                        ? () => onVertexLongPress(layer.id, vi)
-                        : undefined
-                    }
+                    onLongPress={onVertexLongPress ? () => onVertexLongPress(layer.id, vi) : undefined}
                   >
-                    {/* 터치 히트 영역 (투명) */}
                     <Circle cx={av.x} cy={av.y} r={HIT_R} fill="transparent" />
-                    {/* 오프셋 표시: 점선 링 (mute 꼭짓점 제외) */}
-                    {!isMute && hasOffset && (
+                    {hasOffset && (
                       <Circle
                         cx={av.x}
                         cy={av.y}
@@ -255,17 +249,13 @@ export function PolygonCanvas({
                         opacity={0.5}
                       />
                     )}
-                    {/* 꼭짓점 도트 (mute 꼭짓점 제외) */}
-                    {!isMute && (
-                      <AnimatedVertex
-                        cx={av.x}
-                        cy={av.y}
-                        r={isActive ? VERTEX_R_ACTIVE : VERTEX_R_NORMAL}
-                        color={layer.color}
-                        isActive={isActive}
-                      />
-                    )}
-                    {/* 강세 레이블 (S/A/N/M) */}
+                    <AnimatedVertex
+                      cx={av.x}
+                      cy={av.y}
+                      r={isActive ? VERTEX_R_ACTIVE : VERTEX_R_NORMAL}
+                      color={layer.color}
+                      isActive={isActive}
+                    />
                     <SvgText
                       x={labelPos.x}
                       y={labelPos.y}
@@ -273,9 +263,35 @@ export function PolygonCanvas({
                       dy="0.35em"
                       fontSize={LABEL_FONT_SIZE}
                       fontWeight="700"
-                      fill={labelColor}
+                      fill={layer.color}
                     >
                       {label}
+                    </SvgText>
+                  </G>
+                );
+              })}
+
+              {/* 뮤트 꼭짓점들: 유령 위치에 M 레이블 + 히트 영역만 */}
+              {muteGhostVerts.map((gv, k) => {
+                const vi = muteIndices[k];
+                const labelPos = getLabelPos(gv.x, gv.y, cx, cy, LABEL_OFFSET);
+                return (
+                  <G
+                    key={`mute-${vi}`}
+                    onPress={onVertexPress ? () => onVertexPress(layer.id, vi) : undefined}
+                    onLongPress={onVertexLongPress ? () => onVertexLongPress(layer.id, vi) : undefined}
+                  >
+                    <Circle cx={gv.x} cy={gv.y} r={HIT_R} fill="transparent" />
+                    <SvgText
+                      x={labelPos.x}
+                      y={labelPos.y}
+                      textAnchor="middle"
+                      dy="0.35em"
+                      fontSize={LABEL_FONT_SIZE}
+                      fontWeight="700"
+                      fill={layer.color + "55"}
+                    >
+                      M
                     </SvgText>
                   </G>
                 );

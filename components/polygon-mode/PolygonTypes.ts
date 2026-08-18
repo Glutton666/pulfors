@@ -110,26 +110,51 @@ export function polygonVertices(
 }
 
 /**
- * 오프셋을 반영한 꼭짓점별 각도 배열을 반환한다 (라디안, 시작 각도 -π/2).
+ * 뮤트·오프셋을 반영한 꼭짓점 각도 계산 결과.
  *
- * - 모든 꼭짓점의 기준 각도는 정 N각형 원래 위치다 (-π/2 + 2π·i/sides).
- *   도트는 항상 폴리곤 코너 근처에 위치한다.
- * - Non-mute 꼭짓점에 오프셋이 있으면, 자신의 코너에서 다음 인접 코너 방향으로
- *   오프셋 비율만큼 이동한다: angle += offset · (2π / sides).
- *   offset 0.5 → 다음 코너까지 절반 지점. 도트가 인접 코너 사이 호 위에서 이동.
- * - Mute 꼭짓점은 오프셋 없이 원래 각도를 유지한다 (M 라벨 위치 유지).
+ * - activeAngles: non-mute 꼭짓점 n개를 원 위에 2π/n 균등 배치 + 오프셋 이동.
+ *   도형은 활성 꼭짓점만으로 구성된 정 n각형(오프셋으로 찌그러질 수 있음).
+ * - muteAngles: mute 꼭짓점의 정 N각형 원래 위치. M 레이블 표시 전용.
  */
-export function computeVertexAngles(layer: PolygonLayer): number[] {
+export interface VertexAnglesResult {
+  /** Non-mute 꼭짓점들의 각도 (2π/n 균등 배치 + 오프셋) */
+  activeAngles: number[];
+  /** activeAngles[k]에 대응하는 원래 layer vertex index */
+  activeIndices: number[];
+  /** Mute 꼭짓점들의 정 N각형 유령 각도 (M 레이블 위치) */
+  muteAngles: number[];
+  /** muteAngles[k]에 대응하는 원래 layer vertex index */
+  muteIndices: number[];
+}
+
+export function computeVertexAngles(layer: PolygonLayer): VertexAnglesResult {
   const sides = Math.max(1, layer.sides);
   const arcPerSide = (2 * Math.PI) / sides;
 
-  return Array.from({ length: sides }, (_, i) => {
-    const baseAngle = -Math.PI / 2 + arcPerSide * i;
-    const isMute = getVertexBeatType(layer, i) === "mute";
-    if (isMute) return baseAngle;
-    const offsetFrac = layer.offsets[i] ?? 0;
-    return baseAngle + offsetFrac * arcPerSide;
+  const activeIndices: number[] = [];
+  const muteIndices: number[] = [];
+  for (let i = 0; i < sides; i++) {
+    if (getVertexBeatType(layer, i) === "mute") {
+      muteIndices.push(i);
+    } else {
+      activeIndices.push(i);
+    }
+  }
+
+  const n = activeIndices.length;
+  const activeArc = n > 0 ? (2 * Math.PI) / n : 0;
+
+  const activeAngles = activeIndices.map((vertexIdx, k) => {
+    const base = -Math.PI / 2 + activeArc * k;
+    const offset = layer.offsets[vertexIdx] ?? 0;
+    return base + offset * activeArc;
   });
+
+  const muteAngles = muteIndices.map((vertexIdx) =>
+    -Math.PI / 2 + arcPerSide * vertexIdx,
+  );
+
+  return { activeAngles, activeIndices, muteAngles, muteIndices };
 }
 
 /** 기본 레이어 색상 팔레트 */

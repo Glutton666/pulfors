@@ -472,13 +472,14 @@ describe("computeVertexAngles", () => {
 
   it("no offsets and no mutes: angles equal regular polygon spacing", () => {
     const layer = makeLayer({ sides: 4, offsets: [], beatTypes: ["strong", "normal", "normal", "normal"] });
-    const angles = computeVertexAngles(layer);
-    expect(angles.length).toBe(4);
+    const { activeAngles, activeIndices } = computeVertexAngles(layer);
+    expect(activeAngles.length).toBe(4);
+    expect(activeIndices).toEqual([0, 1, 2, 3]);
 
     // 각도 간격이 2π/4 = π/2 에 가까워야 한다
     const spacing = TWO_PI / 4;
     for (let i = 1; i < 4; i++) {
-      expect(angles[i] - angles[i - 1]).toBeCloseTo(spacing, 6);
+      expect(activeAngles[i] - activeAngles[i - 1]).toBeCloseTo(spacing, 6);
     }
   });
 
@@ -486,10 +487,10 @@ describe("computeVertexAngles", () => {
     for (const sides of [3, 4, 5, 6, 8]) {
       const bt = Array.from({ length: sides }, (_, i) => i === 0 ? "strong" : "normal") as PolygonLayer["beatTypes"];
       const layer = makeLayer({ sides, offsets: [], beatTypes: bt });
-      const angles = computeVertexAngles(layer);
+      const { activeAngles } = computeVertexAngles(layer);
       // 마지막 꼭짓점에서 처음 꼭짓점까지 span 포함
-      const lastSpan = (angles[0] + TWO_PI) - angles[sides - 1];
-      const spans = angles.slice(1).map((a, i) => a - angles[i]).concat(lastSpan);
+      const lastSpan = (activeAngles[0] + TWO_PI) - activeAngles[sides - 1];
+      const spans = activeAngles.slice(1).map((a, i) => a - activeAngles[i]).concat(lastSpan);
       const total = spans.reduce((s, x) => s + x, 0);
       expect(total).toBeCloseTo(TWO_PI, 5);
     }
@@ -498,7 +499,8 @@ describe("computeVertexAngles", () => {
   // ── 2. 오프셋 적용 → 해당 꼭짓점이 다음 방향으로 이동 ──────────────────
 
   it("non-zero offset shifts the vertex angle forward", () => {
-    // vertex 0에 오프셋 0.25 적용 (4꼭짓점 → 이동량 = 0.25 * (2π/4) = π/8)
+    // 모두 active (4꼭짓점), vertex 0에 오프셋 0.25 적용
+    // 이동량 = 0.25 * (2π/n) = 0.25 * (2π/4) = π/8
     const layer = makeLayer({
       sides: 4,
       offsets: [0.25, 0, 0, 0],
@@ -507,43 +509,53 @@ describe("computeVertexAngles", () => {
     const plain = computeVertexAngles(makeLayer({ sides: 4, offsets: [], beatTypes: ["strong", "normal", "normal", "normal"] }));
     const shifted = computeVertexAngles(layer);
 
-    // vertex 0의 각도가 plain보다 커야 한다
-    expect(shifted[0]).toBeGreaterThan(plain[0]);
+    // vertex 0(k=0)의 각도가 plain보다 커야 한다
+    expect(shifted.activeAngles[0]).toBeGreaterThan(plain.activeAngles[0]);
     // 나머지 꼭짓점은 변동 없음
-    expect(shifted[1]).toBeCloseTo(plain[1], 6);
-    expect(shifted[2]).toBeCloseTo(plain[2], 6);
-    expect(shifted[3]).toBeCloseTo(plain[3], 6);
+    expect(shifted.activeAngles[1]).toBeCloseTo(plain.activeAngles[1], 6);
+    expect(shifted.activeAngles[2]).toBeCloseTo(plain.activeAngles[2], 6);
+    expect(shifted.activeAngles[3]).toBeCloseTo(plain.activeAngles[3], 6);
 
     // 이동량 검증: 0.25 * (2π / 4)
-    expect(shifted[0] - plain[0]).toBeCloseTo(0.25 * (TWO_PI / 4), 6);
+    expect(shifted.activeAngles[0] - plain.activeAngles[0]).toBeCloseTo(0.25 * (TWO_PI / 4), 6);
   });
 
-  // ── 3. Mute 꼭짓점은 원래 코너 위치 유지, non-mute는 오프셋만 반영 ───────
+  // ── 3. Mute 꼭짓점 제외 → active n개가 2π/n 균등 배치, mute는 유령 위치 ──
 
-  it("mute vertex keeps its regular polygon angle; non-mute vertices stay at their corners", () => {
-    // vertex 2 muted, 오프셋 없음
+  it("mute vertex excluded: active vertices evenly distributed, mute at ghost position", () => {
+    // vertex 2 muted → active: [0,1,3] (n=3), mute: [2]
     const bt: PolygonLayer["beatTypes"] = ["strong", "normal", "mute", "normal"];
     const layer = makeLayer({ sides: 4, offsets: [], beatTypes: bt });
-    const angles = computeVertexAngles(layer);
+    const result = computeVertexAngles(layer);
 
-    // 모든 꼭짓점이 정 4각형 원래 각도를 유지해야 한다
-    const arc = TWO_PI / 4;
-    expect(angles[0]).toBeCloseTo(-Math.PI / 2, 6);           // vertex 0
-    expect(angles[1]).toBeCloseTo(-Math.PI / 2 + arc, 6);     // vertex 1
-    expect(angles[2]).toBeCloseTo(-Math.PI / 2 + arc * 2, 6); // vertex 2 (mute, unchanged)
-    expect(angles[3]).toBeCloseTo(-Math.PI / 2 + arc * 3, 6); // vertex 3
+    expect(result.activeIndices).toEqual([0, 1, 3]);
+    expect(result.muteIndices).toEqual([2]);
 
-    // mute 꼭짓점에 오프셋을 줘도 각도가 변하지 않아야 한다
+    // active 3개가 2π/3 균등 배치
+    const spacing = TWO_PI / 3;
+    expect(result.activeAngles[0]).toBeCloseTo(-Math.PI / 2, 6);
+    expect(result.activeAngles[1]).toBeCloseTo(-Math.PI / 2 + spacing, 6);
+    expect(result.activeAngles[2]).toBeCloseTo(-Math.PI / 2 + spacing * 2, 6);
+
+    // mute 꼭짓점(2)은 정 4각형 원래 각도 (i=2 → -π/2 + 2·(2π/4) = π/2)
+    expect(result.muteAngles[0]).toBeCloseTo(-Math.PI / 2 + 2 * (TWO_PI / 4), 6);
+
+    // mute 꼭짓점에 오프셋을 줘도 muteAngles는 변하지 않아야 한다
     const withOffset = makeLayer({ sides: 4, offsets: [0, 0, 0.4, 0], beatTypes: bt });
-    const angles2 = computeVertexAngles(withOffset);
-    expect(angles2[2]).toBeCloseTo(-Math.PI / 2 + arc * 2, 6); // mute → no shift
+    const result2 = computeVertexAngles(withOffset);
+    expect(result2.muteAngles[0]).toBeCloseTo(-Math.PI / 2 + 2 * (TWO_PI / 4), 6);
   });
 
-  it("all mutes: returns regular polygon angles unchanged", () => {
+  it("all mutes: no active vertices, all at regular polygon ghost positions", () => {
     const bt: PolygonLayer["beatTypes"] = ["mute", "mute", "mute", "mute"];
     const layer = makeLayer({ sides: 4, offsets: [], beatTypes: bt });
-    const angles = computeVertexAngles(layer);
+    const result = computeVertexAngles(layer);
+
+    expect(result.activeAngles).toHaveLength(0);
+    expect(result.activeIndices).toHaveLength(0);
+
     const regular = [0, 1, 2, 3].map((i) => -Math.PI / 2 + (TWO_PI * i) / 4);
-    angles.forEach((a, i) => expect(a).toBeCloseTo(regular[i], 6));
+    expect(result.muteAngles).toHaveLength(4);
+    result.muteAngles.forEach((a, i) => expect(a).toBeCloseTo(regular[i], 6));
   });
 });
