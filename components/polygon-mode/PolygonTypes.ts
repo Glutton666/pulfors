@@ -86,8 +86,9 @@ export interface LayerLayout {
  * 모든 폴리곤의 첫 번째(-π/2, 상단) 꼭짓점이 같은 핀 포인트에 고정된다:
  * - pinX = size/2, pinY = 상단 여백
  * - 각 레이어 중심: cx = pinX, cy = pinY + r (첫 꼭짓점 y = cy - r = pinY)
- * - 반지름은 정렬 순서(변 많은 것부터) 기준으로 바깥→안쪽 단계적 축소
- * - 같은 변 수 레이어는 cy에 ±4px 단위 델타를 줘 겹침 방지
+ * - 반지름은 **고유 변 수 그룹** 기준으로 바깥→안쪽 단계적 축소:
+ *   같은 변 수 레이어는 항상 동일한 반지름(동일 크기)을 갖는다
+ * - 같은 변 수 레이어는 cy에 ±2px(선 두께 수준) 델타만 줘 "두 줄"처럼 보이게 함
  *
  * sides=1(원/펄스) 레이어도 동일 공식을 쓰지만 Canvas 쪽에서 팬 구조 미적용.
  */
@@ -99,19 +100,84 @@ export function computeLayerLayout(sortedLayers: PolygonLayer[], size: number): 
   const pinX = size / 2;
   const pinY = 20; // 캔버스 상단 여백 (핀 포인트 y)
 
+  // 고유 변 수 그룹 (sortedLayers는 변 많은 것부터 정렬돼 있음)
+  const uniqueSides: number[] = [];
+  for (const layer of sortedLayers) {
+    if (!uniqueSides.includes(layer.sides)) uniqueSides.push(layer.sides);
+  }
+  const groupIndex = new Map(uniqueSides.map((s, i) => [s, i]));
+
   const base = maxRadius * 0.72;
-  const step = n === 1 ? 0 : (maxRadius * 0.62) / n;
+  const gN = uniqueSides.length;
+  const step = gN === 1 ? 0 : (maxRadius * 0.62) / gN;
 
   // 같은 변 수 그룹 내 인덱스를 추적해 cy 미세 오프셋 적용
   const groupCount: Record<number, number> = {};
-  return sortedLayers.map((layer, i) => {
-    const r = Math.max(20, base - step * i);
+  return sortedLayers.map((layer) => {
+    const gi = groupIndex.get(layer.sides) ?? 0;
+    const r = Math.max(20, base - step * gi);
     const g = groupCount[layer.sides] ?? 0;
     groupCount[layer.sides] = g + 1;
-    // 같은 변 수면 cy에 작은 델타 (두 번째는 -4, 세 번째는 +4, ...)
-    const cyDelta = g === 0 ? 0 : (g % 2 === 0 ? 4 * Math.ceil(g / 2) : -4 * Math.ceil(g / 2));
+    // 같은 변 수면 cy에 ±2px 델타 (앵커 제외 -2/+2 교대, 누적 없음)
+    const cyDelta = g === 0 ? 0 : (g % 2 === 0 ? 2 : -2);
     return { r, cx: pinX, cy: pinY + r + cyDelta };
   });
+}
+
+/** 터치 오버레이 히트 타깃 (Pressable 위치·라우팅) */
+export interface VertexHitTarget {
+  key: string;
+  x: number;
+  y: number;
+  layerId: string;
+  vertexIdx: number;
+}
+
+/**
+ * 터치 오버레이 히트 타깃 계산.
+ *
+ * 편집 모드(editingLayerId 지정)에서는 **편집 중인 레이어의 타깃만** 반환한다 —
+ * 같은 변 수 레이어들은 꼭짓점이 ±2px 이내로 겹치므로, 전 레이어 타깃을 깔면
+ * 항상 마지막에 렌더된 레이어만 터치를 받는다. 편집 모드 라우팅으로 이를 방지.
+ * 비편집 모드에서는 모든 레이어 타깃을 반환한다 (겹치면 나중 것이 우선).
+ */
+export function computeHitTargets(
+  sortedLayers: PolygonLayer[],
+  layouts: LayerLayout[],
+  size: number,
+  editingLayerId: string | null,
+): VertexHitTarget[] {
+  const centerX = size / 2;
+  const centerY = size / 2;
+  const targets: VertexHitTarget[] = [];
+
+  sortedLayers.forEach((layer, idx) => {
+    if (editingLayerId !== null && layer.id !== editingLayerId) return;
+    const sides = Math.max(1, layer.sides);
+    const r = layouts[idx].r;
+    const cx = sides === 1 ? centerX : layouts[idx].cx;
+    const cy = sides === 1 ? centerY : layouts[idx].cy;
+    if (sides === 1) {
+      targets.push({ key: `${layer.id}-0`, x: cx, y: cy, layerId: layer.id, vertexIdx: 0 });
+      return;
+    }
+    const { activeAngles, activeIndices, muteAngles, muteIndices } = computeVertexAngles(layer);
+    activeAngles.forEach((a, k) => {
+      targets.push({
+        key: `${layer.id}-${activeIndices[k]}`,
+        x: cx + r * Math.cos(a), y: cy + r * Math.sin(a),
+        layerId: layer.id, vertexIdx: activeIndices[k],
+      });
+    });
+    muteAngles.forEach((a, k) => {
+      targets.push({
+        key: `${layer.id}-${muteIndices[k]}`,
+        x: cx + r * Math.cos(a), y: cy + r * Math.sin(a),
+        layerId: layer.id, vertexIdx: muteIndices[k],
+      });
+    });
+  });
+  return targets;
 }
 
 /**

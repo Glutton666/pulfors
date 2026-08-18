@@ -16,7 +16,7 @@ import React from "react";
 import { renderHook, act } from "@testing-library/react";
 import { usePolygonMode } from "@/hooks/usePolygonMode";
 import type { UsePolygonModeParams } from "@/hooks/usePolygonMode";
-import { computeVertexAngles, computeLayerLayout, sortLayersForDisplay } from "@/components/polygon-mode/PolygonTypes";
+import { computeVertexAngles, computeLayerLayout, sortLayersForDisplay, computeHitTargets } from "@/components/polygon-mode/PolygonTypes";
 import type { PolygonLayer } from "@/components/polygon-mode/PolygonTypes";
 
 // ── 모듈 모킹 ─────────────────────────────────────────────────────────────
@@ -624,9 +624,69 @@ describe("computeLayerLayout", () => {
       makeLayer({ id: "b", sides: 4 }),
     ];
     const layouts = layoutFor(layers);
+    // 같은 변 수 → 반지름 동일 (그룹 단위 반지름)
+    expect(layouts[0].r).toBeCloseTo(layouts[1].r, 6);
     // 첫 레이어는 델타 없음 → 핀 포인트 정확히 유지
     expect(layouts[0].cy - layouts[0].r).toBeCloseTo(PIN_Y, 6);
-    // 두 번째 레이어는 정확히 -4px 델타 (cy - r = pinY - 4)
-    expect(layouts[1].cy - layouts[1].r).toBeCloseTo(PIN_Y - 4, 6);
+    // 두 번째 레이어는 정확히 -2px 델타 (cy - r = pinY - 2)
+    expect(layouts[1].cy - layouts[1].r).toBeCloseTo(PIN_Y - 2, 6);
+  });
+
+  it("4+ same-sides layers: every non-anchor pin displacement is exactly ±2px", () => {
+    const layers = ["a", "b", "c", "d"].map((id) => makeLayer({ id, sides: 4 }));
+    const layouts = layoutFor(layers);
+    // 모두 동일 반지름
+    for (const l of layouts) expect(l.r).toBeCloseTo(layouts[0].r, 6);
+    // 앵커는 델타 0, 나머지는 정확히 ±2 (누적 없음)
+    expect(layouts[0].cy - layouts[0].r).toBeCloseTo(PIN_Y, 6);
+    for (let i = 1; i < layouts.length; i++) {
+      expect(Math.abs(layouts[i].cy - layouts[i].r - PIN_Y)).toBeCloseTo(2, 6);
+    }
+  });
+
+  it("computeHitTargets: editing mode routes all targets to the editing layer only", () => {
+    // 같은 변 수 2개 → 꼭짓점이 ±2px 이내로 겹침
+    const layers = sortLayersForDisplay([
+      makeLayer({ id: "a", sides: 4 }),
+      makeLayer({ id: "b", sides: 4 }),
+    ]);
+    const layouts = computeLayerLayout(layers, SIZE);
+
+    // 편집 모드: "a" 레이어만 타깃 생성
+    const editing = computeHitTargets(layers, layouts, SIZE, "a");
+    expect(editing.length).toBe(4);
+    expect(editing.every((t) => t.layerId === "a")).toBe(true);
+
+    // 비편집 모드: 두 레이어 모두 (4 + 4)
+    const all = computeHitTargets(layers, layouts, SIZE, null);
+    expect(all.length).toBe(8);
+    expect(new Set(all.map((t) => t.layerId))).toEqual(new Set(["a", "b"]));
+  });
+
+  it("computeHitTargets: includes mute-ghost vertices and sides=1 center target", () => {
+    const layers = sortLayersForDisplay([
+      makeLayer({ id: "p", sides: 1, beatTypes: ["strong"] }),
+      makeLayer({ id: "m", sides: 4, beatTypes: ["strong", "mute", "normal", "normal"] }),
+    ]);
+    const layouts = computeLayerLayout(layers, SIZE);
+    const targets = computeHitTargets(layers, layouts, SIZE, null);
+    // m: 3 active + 1 mute, p: 1 center
+    expect(targets.length).toBe(5);
+    expect(targets.filter((t) => t.layerId === "m").map((t) => t.vertexIdx).sort()).toEqual([0, 1, 2, 3]);
+    const pTarget = targets.find((t) => t.layerId === "p")!;
+    expect(pTarget.x).toBeCloseTo(SIZE / 2, 6);
+    expect(pTarget.y).toBeCloseTo(SIZE / 2, 6);
+  });
+
+  it("mixed same+different sides: radius depends only on sides group", () => {
+    const layers = [
+      makeLayer({ id: "a", sides: 4 }),
+      makeLayer({ id: "b", sides: 4 }),
+      makeLayer({ id: "c", sides: 3, beatTypes: ["strong", "normal", "normal"] }),
+    ];
+    const layouts = layoutFor(layers);
+    // 정렬: 4, 4, 3 — 같은 그룹은 동일 r, 다른 그룹만 축소
+    expect(layouts[0].r).toBeCloseTo(layouts[1].r, 6);
+    expect(layouts[2].r).toBeLessThan(layouts[1].r);
   });
 });

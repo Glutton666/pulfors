@@ -7,11 +7,13 @@
  * - 오프셋 있는 꼭짓점: 점선 링으로 시각 구분
  * - 편집 모드: 비편집 레이어 opacity 0.25 dimmed
  * - 꼭짓점 탭: S/A/N/M 강세 순환 (onVertexPress)
- * - 꼭짓점 롱프레스: 오프셋 편집 (onVertexLongPress, 편집 모드일 때만)
+ * - 꼭짓점 롱프레스: 오프셋 편집 (onVertexLongPress)
+ * - 터치 처리: SVG 위 절대위치 Pressable 오버레이 사용
+ *   (react-native-svg <G> onLongPress는 웹에서 동작하지 않음)
  */
 
 import React, { useEffect, useRef } from "react";
-import { View } from "react-native";
+import { View, Pressable, StyleSheet } from "react-native";
 import Svg, { Circle, Polygon, G, Text as SvgText } from "react-native-svg";
 import Animated, {
   useSharedValue,
@@ -27,6 +29,7 @@ import {
   getVertexBeatType,
   BEAT_TYPE_LABEL,
   computeVertexAngles,
+  computeHitTargets,
 } from "./PolygonTypes";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -116,6 +119,10 @@ export function PolygonCanvas({
   const LABEL_OFFSET = 16; // 꼭짓점에서 레이블까지 거리 (px)
   const LABEL_FONT_SIZE = 9;
 
+  // ── 터치 오버레이 히트 타깃 (SVG G onLongPress는 웹에서 미동작) ──
+  // 편집 모드에서는 편집 중인 레이어의 타깃만 활성화 (겹치는 꼭짓점 라우팅)
+  const hitTargets = computeHitTargets(sorted, layouts, size, editingLayerId);
+
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size}>
@@ -166,12 +173,8 @@ export function PolygonCanvas({
                     opacity={0.5}
                   />
                 )}
-                {/* 탭 히트 영역 + 펄스 점 */}
-                <G
-                  onPress={onVertexPress ? () => onVertexPress(layer.id, 0) : undefined}
-                  onLongPress={onVertexLongPress ? () => onVertexLongPress(layer.id, 0) : undefined}
-                >
-                  <Circle cx={cx} cy={cy} r={HIT_R} fill="transparent" />
+                {/* 펄스 점 (터치는 오버레이 Pressable에서 처리) */}
+                <G>
                   {!isMute && (
                     <AnimatedVertex
                       cx={cx}
@@ -234,12 +237,7 @@ export function PolygonCanvas({
                 const label = BEAT_TYPE_LABEL[getVertexBeatType(layer, vi)];
                 const labelPos = getLabelPos(av.x, av.y, cx, cy, LABEL_OFFSET);
                 return (
-                  <G
-                    key={vi}
-                    onPress={onVertexPress ? () => onVertexPress(layer.id, vi) : undefined}
-                    onLongPress={onVertexLongPress ? () => onVertexLongPress(layer.id, vi) : undefined}
-                  >
-                    <Circle cx={av.x} cy={av.y} r={HIT_R} fill="transparent" />
+                  <G key={vi}>
                     {hasOffset && (
                       <Circle
                         cx={av.x}
@@ -279,12 +277,7 @@ export function PolygonCanvas({
                 const vi = muteIndices[k];
                 const labelPos = getLabelPos(gv.x, gv.y, cx, cy, LABEL_OFFSET);
                 return (
-                  <G
-                    key={`mute-${vi}`}
-                    onPress={onVertexPress ? () => onVertexPress(layer.id, vi) : undefined}
-                    onLongPress={onVertexLongPress ? () => onVertexLongPress(layer.id, vi) : undefined}
-                  >
-                    <Circle cx={gv.x} cy={gv.y} r={HIT_R} fill="transparent" />
+                  <G key={`mute-${vi}`}>
                     <SvgText
                       x={labelPos.x}
                       y={labelPos.y}
@@ -303,6 +296,26 @@ export function PolygonCanvas({
           );
         })}
       </Svg>
+
+      {/* ── 터치 오버레이: 탭(강세 순환) + 롱프레스(오프셋 팝업) ── */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        {hitTargets.map((tgt) => (
+          <Pressable
+            key={tgt.key}
+            onPress={onVertexPress ? () => onVertexPress(tgt.layerId, tgt.vertexIdx) : undefined}
+            onLongPress={onVertexLongPress ? () => onVertexLongPress(tgt.layerId, tgt.vertexIdx) : undefined}
+            delayLongPress={400}
+            style={{
+              position: "absolute",
+              left: tgt.x - HIT_R,
+              top: tgt.y - HIT_R,
+              width: HIT_R * 2,
+              height: HIT_R * 2,
+              borderRadius: HIT_R,
+            }}
+          />
+        ))}
+      </View>
     </View>
   );
 }
