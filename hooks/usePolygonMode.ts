@@ -13,7 +13,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Platform } from "react-native";
 import * as Crypto from "expo-crypto";
-import { safePlay } from "@/lib/audio-utils";
+import { safePlay, safePlayWithVolume } from "@/lib/audio-utils";
 import { playWebClick, getWebAudioContext } from "@/lib/audio-renderer";
 import type { BuiltinPlayers, SoundSetPlayers } from "@/hooks/useAudioPlayers";
 import type { ClickPCMs } from "@/lib/audio-renderer";
@@ -24,8 +24,6 @@ import {
   LAYER_COLORS,
   DEFAULT_POLYGON_LAYER,
   getVertexBeatType,
-  cycleVertexBeatType,
-  makeDefaultBeatTypes,
 } from "@/components/polygon-mode/PolygonTypes";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,8 +73,10 @@ export interface UsePolygonModeResult {
   handleDeleteLayer: (id: string) => void;
   handleUpdateLayer: (id: string, patch: Partial<PolygonLayer>) => void;
   handleSetOffset: (layerId: string, vertexIdx: number, offset: number) => void;
-  /** 꼭짓점을 탭할 때마다 S → A → N → M 순환 */
+  /** 꼭짓점을 탭할 때마다 뮤트/언뮤트 토글 */
   handleVertexBeatTypeCycle: (layerId: string, vertexIdx: number) => void;
+  /** 커스텀 사운드 PCM을 훅 캐시에 등록하고 해당 레이어의 soundSet을 갱신한다 */
+  setLayerCustomSound: (layerId: string, pcms: ClickPCMs) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,8 +119,9 @@ const INITIAL_LAYERS: PolygonLayer[] = [
     color: LAYER_COLORS[0],
     soundSet: "classic",
     role: "high",
+    volume: 1.0,
     offsets: [],
-    beatTypes: makeDefaultBeatTypes(4),
+    beatTypes: [],
   },
 ];
 
@@ -178,6 +179,8 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   const ensurePCM = useCallback(
     (soundSet: string) => {
       if (Platform.OS !== "web") return;
+      // 사용자 업로드 커스텀 사운드는 이미 캐시에 등록되어 있으므로 네트워크 요청 불필요
+      if (soundSet.startsWith("custom-")) return;
       if (polygonPCMCacheRef.current.has(soundSet)) return;
       if (loadingRef.current.has(soundSet)) return;
       loadingRef.current.add(soundSet);
@@ -211,6 +214,18 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     }
   }, [p.isPlaying, clearPendingTimers]);
 
+  // ── BPM 변경 → 예약된 슬롯 취소 (다음 비트부터 새 BPM 적용) ────────────
+  // BPM이 바뀌면 현재 마디에서 아직 발화되지 않은 슬롯을 취소한다.
+  // 엔진이 다음 비트 콜백을 보낼 때 새 BPM 기준으로 재예약된다.
+  const prevBpmRef = useRef(p.bpm);
+  useEffect(() => {
+    if (prevBpmRef.current !== p.bpm) {
+      prevBpmRef.current = p.bpm;
+      bpmRef.current = p.bpm;
+      clearPendingTimers();
+    }
+  }, [p.bpm, clearPendingTimers]);
+
   // ── 박자표 변경 → 위상 재정렬 ──────────────────────────────────────────
   // 엔진이 자체 비트 카운터를 0으로 리셋하므로, 폴리곤도 다음 콜백을
   // 마디 시작(beat 0)으로 인식하도록 절대 비트 카운터를 리셋한다.
@@ -237,15 +252,12 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   // 자동 반영된다. (3각형+4각형 → 3:4 폴리리듬)
   useEffect(() => {
     if (!p.enabled) {
+      // 엔진 콜백 해제 및 재생 상태 초기화.
+      // 레이어 설정(layers, editingLayerId)은 보존한다:
+      // 사용자가 폴리곤 모드를 닫았다 다시 열어도 설정한 레이어가 남아 있어야 한다.
       p.engineBeatCallbackRef.current = null;
       clearPendingTimers();
       absoluteBeatRef.current = 0;
-      // 폴리곤 모드를 닫을 때 레이어·UI 상태를 초기화한다.
-      // MetronomeScreenUI가 언마운트되지 않으므로 명시적으로 리셋해야
-      // 다음 번 열 때 이전 레이어가 남아 있지 않는다.
-      layersRef.current = INITIAL_LAYERS;
-      setLayers(INITIAL_LAYERS);
-      setEditingLayerId(null);
       setOffsetPopup(null);
       setActiveVertices({});
       return;
@@ -254,40 +266,38 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     // 사운드 재생 헬퍼 — 모든 가변 데이터는 ref를 통해 읽으므로
     // 이 클로저는 enabled가 바뀔 때까지 재생성되지 않는다.
     const playSound = (layer: PolygonLayer, beatType: Exclude<VertexBeatType, "mute">) => {
+      // layer.volume (0-1)를 전역 볼륨에 곱해 레이어별 음량을 제어한다.
+      const layerVol = Math.max(0, Math.min(1, layer.volume ?? 1.0));
       try {
         if (Platform.OS === "web") {
           const cached =
             polygonPCMCacheRef.current.get(layer.soundSet)
             ?? p.clickPCMCacheRef.current[layer.soundSet];
           if (cached) {
-            // beatType → PCM 선택
-            const pcm: Float32Array =
-              beatType === "strong" ? cached.strong
-              : beatType === "accent" ? cached.high
-              : cached.low; // "normal"
-            playPCMOnWeb(pcm, p.volumeRef.current);
+            // 볼륨이 레이어 강세를 대체한다: 항상 normal(low) PCM을 사용하고
+            // layer.volume 으로 음량을 조절한다.
+            const pcm: Float32Array = cached.low;
+            playPCMOnWeb(pcm, p.volumeRef.current * layerVol);
           } else {
-            playWebClick(beatTypeToWebClickRole(beatType), "both");
+            // 웹 폴백도 항상 low(normal) 톤으로 통일한다.
+            playWebClick("low", "both", p.volumeRef.current * layerVol);
             ensurePCMRef.current(layer.soundSet);
           }
         } else {
-          // Native: sound-set + beatType 조합별 round-robin으로 플레이어 풀 순환
+          // Native: 볼륨이 강세를 대체하므로 항상 low 풀을 선택하고
+          // layer.volume × globalVolume 으로 음량을 조절한다.
+          // (web 캐시 경로가 cached.low를 쓰는 것과 동일한 기준)
           const players =
             p.allPlayersRef.current[layer.soundSet as keyof BuiltinPlayers]
             ?? p.allPlayersRef.current.classic;
           const pool = players as SoundSetPlayers;
-          // 같은 sound-set + beatType을 쓰는 레이어가 동일 시점에 발화할 때
-          // 동일한 공유 풀에서 서로 다른 슬롯을 선택해 겹침 재생을 지원한다.
-          const toggleKey = `${layer.soundSet}-${beatType}`;
+          // 같은 sound-set을 쓰는 레이어가 동일 시점에 발화할 때
+          // 서로 다른 슬롯을 선택해 겹침 재생을 지원한다.
+          const toggleKey = `${layer.soundSet}`;
           const idx = polygonToggleRef.current[toggleKey] ?? 0;
           polygonToggleRef.current[toggleKey] = (idx + 1) % 4; // BUILTIN_POOL_SIZE=4
-          const player =
-            beatType === "strong"
-              ? [pool.strongA, pool.strongB, pool.strongC, pool.strongD][idx]
-              : beatType === "accent"
-              ? [pool.highA, pool.highB, pool.highC, pool.highD][idx]
-              : [pool.lowA, pool.lowB, pool.lowC, pool.lowD][idx];
-          if (player) safePlay(player, "polygon.beat");
+          const player = [pool.lowA, pool.lowB, pool.lowC, pool.lowD][idx];
+          if (player) safePlayWithVolume(player, layerVol * p.volumeRef.current, "polygon.beat");
         }
       } catch {}
     };
@@ -381,8 +391,9 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       id,
       color: LAYER_COLORS[colorIdx],
       sides: newSides,
+      volume: 1.0,
       offsets: [],
-      beatTypes: makeDefaultBeatTypes(newSides),
+      beatTypes: [], // 빈 배열 = 모든 꼭짓점 normal (mute 없음)
     };
     setLayers((prev) => [...prev, newLayer]);
     setEditingLayerId(id);
@@ -434,7 +445,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
             // beatTypes도 새 변 수에 맞게 조정 (기존 값 유지, 새 꼭짓점은 normal)
             updated.beatTypes = Array.from(
               { length: newSides },
-              (_, i) => updated.beatTypes[i] ?? (i === 0 ? "strong" : "normal"),
+              (_, i) => updated.beatTypes[i] ?? "normal",
             );
           }
           // role이 변경되면 모든 꼭짓점의 beatType을 해당 role에 맞게 초기화한다.
@@ -473,26 +484,38 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     [clearLayerTimers, applyLayerMutation],
   );
 
-  // ── 꼭짓점 강세 순환 (S → A → N → M → S) ──────────────────────────────
+  // ── 꼭짓점 뮤트 토글 (N ↔ M) ───────────────────────────────────────────
+  // 이전 S→A→N→M 순환을 대체한다. 볼륨 슬라이더가 강세를 담당하므로
+  // 꼭짓점 탭은 오직 뮤트 여부만 전환한다.
   const handleVertexBeatTypeCycle = useCallback(
     (layerId: string, vertexIdx: number) => {
       clearLayerTimers(layerId);
       applyLayerMutation((prev) =>
         prev.map((l) => {
           if (l.id !== layerId) return l;
-          const current = getVertexBeatType(l, vertexIdx);
-          const next = cycleVertexBeatType(current);
-          // beatTypes 배열을 sides 길이만큼 확장하고 해당 인덱스만 교체
+          const isMuted = getVertexBeatType(l, vertexIdx) === "mute";
           const newBeatTypes: VertexBeatType[] = Array.from(
             { length: Math.max(1, l.sides) },
-            (_, i) => l.beatTypes[i] ?? (i === 0 ? "strong" : "normal"),
+            (_, i) => l.beatTypes[i] ?? "normal",
           );
-          newBeatTypes[vertexIdx] = next;
+          newBeatTypes[vertexIdx] = isMuted ? "normal" : "mute";
           return { ...l, beatTypes: newBeatTypes };
         }),
       );
     },
     [clearLayerTimers, applyLayerMutation],
+  );
+
+  // ── 커스텀 사운드 등록 ──────────────────────────────────────────────────
+  // 뷰에서 오디오 파일을 디코딩한 뒤 PCM과 레이어 ID를 넘기면
+  // 훅 내부 캐시에 저장하고 해당 레이어의 soundSet을 갱신한다.
+  const setLayerCustomSound = useCallback(
+    (layerId: string, pcms: ClickPCMs) => {
+      const customKey = `custom-${layerId}`;
+      polygonPCMCacheRef.current.set(customKey, pcms);
+      handleUpdateLayer(layerId, { soundSet: customKey });
+    },
+    [handleUpdateLayer],
   );
 
   return {
@@ -507,5 +530,6 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     handleUpdateLayer,
     handleSetOffset,
     handleVertexBeatTypeCycle,
+    setLayerCustomSound,
   };
 }

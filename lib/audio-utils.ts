@@ -15,6 +15,35 @@ interface PlayerLike {
  * @param player .play() 메서드를 가진 객체. null/undefined도 안전하게 무시됩니다.
  * @param label 디버깅용 컨텍스트 라벨 (예: "metronome.tick", "preview.start")
  */
+/**
+ * Expo AudioPlayer의 동기 `volume` 프로퍼티로 볼륨을 설정한 뒤 즉시 재생합니다.
+ *
+ * useAudioPlayers는 expo-audio의 ExpoAudioPlayer를 사용하며,
+ * `player.volume = v` (동기 setter)로 볼륨을 즉시 반영합니다.
+ * 플레이어가 `volume` 프로퍼티를 갖고 있지 않으면 (테스트 더미 등) 그냥 재생합니다.
+ *
+ * 공유 풀(strongA…D, highA…D, lowA…D)에서는 round-robin이 각 레이어에
+ * 서로 다른 슬롯을 할당하므로, 볼륨 설정이 다른 레이어의 슬롯에 간섭하지 않습니다.
+ *
+ * @param player 재생 대상 플레이어 (null/undefined 안전)
+ * @param volume 목표 볼륨 (0–1), layerVol × globalVol 합산 값
+ * @param label 디버깅용 컨텍스트 라벨
+ */
+export function safePlayWithVolume(
+  player: PlayerLike | null | undefined,
+  volume: number,
+  label: string,
+): void {
+  if (!player || typeof player.play !== "function") return;
+  const vol = Math.max(0, Math.min(1, volume));
+  // ExpoAudioPlayer는 동기 volume 프로퍼티를 가진다.
+  // 재생 직전에 설정하면 해당 슬롯이 올바른 볼륨으로 시작된다.
+  if (typeof (player as any).volume === "number") {
+    try { (player as any).volume = vol; } catch {}
+  }
+  safePlay(player, label);
+}
+
 export function safePlay(player: PlayerLike | null | undefined, label: string): void {
   if (!player || typeof player.play !== "function") return;
   let result: unknown;

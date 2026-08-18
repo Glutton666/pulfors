@@ -644,6 +644,7 @@ export async function ensureWebClickBuffers(
 export function playWebClick(
   role: "strong" | "high" | "low",
   channel: MetroChannel = "both",
+  gain: number = 1.0,
 ): boolean {
   if (channel === "off") return false;
   if (Platform.OS !== "web" || !webClickBuffers) return false;
@@ -655,13 +656,17 @@ export function playWebClick(
   const buffer = webClickBuffers[role];
   const source = ctx.createBufferSource();
   source.buffer = buffer;
+  // GainNode로 레이어별 볼륨 적용 (gain=1.0이면 투명하게 동작)
+  const gainNode = ctx.createGain();
+  gainNode.gain.value = Math.max(0, Math.min(2, gain));
+  source.connect(gainNode);
   if (channel !== "both" && hasStereoPanner(ctx)) {
     const panner = ctx.createStereoPanner();
     panner.pan.value = channel === "left" ? -1 : 1;
-    source.connect(panner);
+    gainNode.connect(panner);
     panner.connect(ctx.destination);
   } else {
-    source.connect(ctx.destination);
+    gainNode.connect(ctx.destination);
   }
   source.start(0);
   return true;

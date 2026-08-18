@@ -21,7 +21,17 @@ import type { PolygonLayer } from "@/components/polygon-mode/PolygonTypes";
 
 // ── 모듈 모킹 ─────────────────────────────────────────────────────────────
 
-jest.mock("@/lib/audio-utils", () => ({ safePlay: jest.fn() }));
+jest.mock("@/lib/audio-utils", () => {
+  const safePlay = jest.fn();
+  // safePlayWithVolume: 실제 구현과 동일하게 player.volume (동기) 설정 후 safePlay 호출
+  const safePlayWithVolume = jest.fn(function(player: any, volume: number, label: string) {
+    if (player && typeof player.volume === "number") {
+      try { player.volume = Math.max(0, Math.min(1, volume)); } catch (_) {}
+    }
+    safePlay(player, label);
+  });
+  return { safePlay, safePlayWithVolume };
+});
 jest.mock("@/lib/audio-renderer", () => ({
   playWebClick: jest.fn(),
   getWebAudioContext: jest.fn(() => null),
@@ -274,31 +284,28 @@ describe("usePolygonMode — engine callback driven", () => {
 
   // ── 10. handleVertexBeatTypeCycle: S→A→N→M→S 순환 ──────────────────────
 
-  it("handleVertexBeatTypeCycle cycles one vertex S→A→N→M→S without touching others", () => {
+  it("handleVertexBeatTypeCycle toggles mute on a vertex without touching others", () => {
+    // 볼륨 슬라이더가 S/A/N 강세를 대체하므로 꼭짓점 탭은 뮤트 토글만 수행한다.
     const params = makeParams();
     const { result } = renderHook(() => usePolygonMode(params));
 
     const layerId = result.current.layers[0].id;
-    // 기본 beatTypes: [strong, normal, normal, normal]
-    expect(result.current.layers[0].beatTypes[0]).toBe("strong");
+    // 초기 beatTypes: [] (빈 배열 — getVertexBeatType은 role fallback으로 non-mute 반환)
+    expect(result.current.layers[0].beatTypes.length).toBe(0);
+
+    // 첫 탭: non-mute → mute
+    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 0); });
+    expect(result.current.layers[0].beatTypes[0]).toBe("mute");
+    // 다른 꼭짓점은 "normal"로 초기화됨 (뮤트 아님)
     expect(result.current.layers[0].beatTypes[1]).toBe("normal");
 
-    // vertex 0: strong → accent
-    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 0); });
-    expect(result.current.layers[0].beatTypes[0]).toBe("accent");
-    expect(result.current.layers[0].beatTypes[1]).toBe("normal"); // 나머지 불변
-
-    // accent → normal
+    // 두 번째 탭: mute → normal
     act(() => { result.current.handleVertexBeatTypeCycle(layerId, 0); });
     expect(result.current.layers[0].beatTypes[0]).toBe("normal");
 
-    // normal → mute
+    // 세 번째 탭: normal → mute
     act(() => { result.current.handleVertexBeatTypeCycle(layerId, 0); });
     expect(result.current.layers[0].beatTypes[0]).toBe("mute");
-
-    // mute → strong (wrap-around)
-    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 0); });
-    expect(result.current.layers[0].beatTypes[0]).toBe("strong");
   });
 
   // ── 10. mute 꼭짓점: 4박 주기 유지, 뮤트 슬롯은 소리·비주얼만 생략 ────
@@ -553,29 +560,27 @@ describe("usePolygonMode — engine callback driven", () => {
   // ── 11. sides 변경 시 beatTypes 크기 조정 ───────────────────────────────
 
   it("changing sides resizes beatTypes, preserving existing values and defaulting new ones", () => {
+    // 볼륨 대체 이후: 초기 beatTypes는 [] (빈 배열)
+    // 뮤트 토글로 beatTypes를 채운 뒤 sides 변경 시 기존 값이 보존되는지 확인한다.
     const params = makeParams();
     const { result } = renderHook(() => usePolygonMode(params));
 
     const layerId = result.current.layers[0].id;
 
-    // vertex 1을 accent로 변경
-    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 1); }); // normal→accent... wait, 1 is normal, cycle: normal→mute? No: cycle is S→A→N→M
-    // beatTypes[1]은 'normal'이므로 한 번 cycle하면 'mute'? No, let me check the cycle order.
-    // cycleVertexBeatType: strong→accent→normal→mute→strong
-    // beatTypes[1]은 'normal' → cycle → 'mute'
-    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 1); }); // normal → mute... wait above act was already done
-    // Actually the first act above already cycled vertex 1. Let me just set it properly.
-    // beatTypes after first cycle of vertex 1: normal → mute
-    // Let me instead cycle vertex 0 to accent and check resize preserves it.
+    // vertex 2를 뮤트로 만들어 beatTypes 배열을 명시적으로 초기화한다
+    // (뮤트 토글은 전체 배열을 sides 길이로 확장하며 나머지는 "normal"로 설정)
+    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 2); }); // non-mute → mute
+    // 이제 beatTypes = ["normal", "normal", "mute", "normal"]
 
-    // 먼저 sides를 6으로 늘린다
+    // sides를 6으로 늘린다
     act(() => {
       result.current.handleUpdateLayer(layerId, { sides: 6 });
     });
     const bt6 = result.current.layers[0].beatTypes;
     expect(bt6.length).toBe(6);
-    // 기존 4개 값은 유지
-    expect(bt6[0]).toBe("strong"); // 원래 strong
+    // 기존 4개 값 보존: [0]=normal, [2]=mute
+    expect(bt6[0]).toBe("normal");
+    expect(bt6[2]).toBe("mute");
     // 새로 추가된 꼭짓점은 normal
     expect(bt6[4]).toBe("normal");
     expect(bt6[5]).toBe("normal");
@@ -585,7 +590,7 @@ describe("usePolygonMode — engine callback driven", () => {
       result.current.handleUpdateLayer(layerId, { sides: 3 });
     });
     expect(result.current.layers[0].beatTypes.length).toBe(3);
-    expect(result.current.layers[0].beatTypes[0]).toBe("strong");
+    expect(result.current.layers[0].beatTypes[2]).toBe("mute"); // 뮤트 상태 보존
   });
 
   // ── 12. role 변경 시 모든 꼭짓점 beatType 동기화 ─────────────────────────
@@ -632,16 +637,16 @@ describe("usePolygonMode — engine callback driven", () => {
     const { safePlay } = require("@/lib/audio-utils");
     (safePlay as jest.Mock).mockClear();
 
-    // classic/strong 플레이어 풀 목 구성
-    // beatTypes[0] 기본값이 'strong'이므로 strong 풀을 추적 대상으로 설정한다.
-    const strongA = { play: jest.fn(), name: "strongA" };
-    const strongB = { play: jest.fn(), name: "strongB" };
-    const strongC = { play: jest.fn(), name: "strongC" };
-    const strongD = { play: jest.fn(), name: "strongD" };
+    // classic 플레이어 풀 목 구성
+    // 볼륨이 강세를 대체하므로 항상 low 풀을 사용한다 (beatType/role 무관)
+    const lowA = { play: jest.fn(), name: "lowA" };
+    const lowB = { play: jest.fn(), name: "lowB" };
+    const lowC = { play: jest.fn(), name: "lowC" };
+    const lowD = { play: jest.fn(), name: "lowD" };
     const classicPool = {
-      strongA, strongB, strongC, strongD,
+      strongA: {}, strongB: {}, strongC: {}, strongD: {},
       highA: {}, highB: {}, highC: {}, highD: {},
-      lowA: {}, lowB: {}, lowC: {}, lowD: {},
+      lowA, lowB, lowC, lowD,
     };
 
     const allPlayersRef = { current: { classic: classicPool } as any };
@@ -674,9 +679,130 @@ describe("usePolygonMode — engine callback driven", () => {
     // 각 호출에서 전달된 player 객체가 달라야 한다 (A → B)
     const players = calls.map((c: any[]) => c[0]);
     expect(players[0]).not.toBe(players[1]);
-    // 첫 번째는 strongA, 두 번째는 strongB
-    expect(players[0]).toBe(strongA);
-    expect(players[1]).toBe(strongB);
+    // 볼륨 기반 설계: beatType/role에 무관하게 low 풀에서 A → B 순서
+    expect(players[0]).toBe(lowA);
+    expect(players[1]).toBe(lowB);
+  });
+  // ── 14. 네이티브 레이어 볼륨: setVolumeAsync가 layerVol × globalVol 값으로 호출됨 ────
+
+  it("native playback calls setVolumeAsync with layerVol × globalVol on each beat", () => {
+    // ExpoAudioPlayer 계약에 맞게 동기 volume 프로퍼티를 가진 플레이어 목
+    // 볼륨 기반 설계: 항상 low 풀의 첫 번째 슬롯(lowA)이 대상
+    const trackablePlayer = { play: jest.fn(), volume: 1.0 };
+    const classicPool = {
+      strongA: {}, strongB: {}, strongC: {}, strongD: {},
+      highA: {}, highB: {}, highC: {}, highD: {},
+      lowA: trackablePlayer, lowB: {}, lowC: {}, lowD: {},
+    };
+    const volumeRef = { current: 0.8 }; // 전역 볼륨 0.8
+    const allPlayersRef = { current: { classic: classicPool } as any };
+    const params = makeParams({ allPlayersRef, volumeRef });
+    const { result } = renderHook(() => usePolygonMode(params));
+
+    const layerId = result.current.layers[0].id;
+    // 레이어 볼륨을 0.5로 설정
+    act(() => { result.current.handleUpdateLayer(layerId, { volume: 0.5 }); });
+
+    // 비트 발화: 첫 슬롯 = highA (trackablePlayer)
+    fireBeat(params.engineBeatCallbackRef);
+
+    // player.volume이 layerVol(0.5) × globalVol(0.8) = 0.4 로 설정되어야 한다
+    expect(trackablePlayer.volume).toBeCloseTo(0.4, 5);
+    // safePlay도 즉시(동기) 호출되어야 한다
+    const { safePlay: safePlayMock } = require("@/lib/audio-utils");
+    expect(safePlayMock).toHaveBeenCalledWith(trackablePlayer, "polygon.beat");
+  });
+  // ── 15. sides 변경 후 네이티브 경로가 normal(low) 풀을 사용하는지 확인 ─────
+  // beatTypes가 빈 배열인 상태에서 sides를 변경하면 새 꼭짓점이 모두 "normal"이어야 한다.
+  // (이전 코드는 vertex 0을 "strong"으로 초기화해 strong 풀을 잘못 선택했음)
+
+  it("changing sides expands beatTypes with 'normal' — low pool is used on native, not strong", () => {
+    const { safePlay } = require("@/lib/audio-utils");
+    const lowA = { play: jest.fn(), volume: 1.0, name: "lowA" };
+    const classicPool = {
+      strongA: {}, strongB: {}, strongC: {}, strongD: {},
+      highA: {}, highB: {}, highC: {}, highD: {},
+      lowA, lowB: {}, lowC: {}, lowD: {},
+    };
+    const allPlayersRef = { current: { classic: classicPool } as any };
+    const params = makeParams({ allPlayersRef });
+    const { result } = renderHook(() => usePolygonMode(params));
+
+    const layerId = result.current.layers[0].id;
+
+    // sides를 6으로 늘린다 — 새 꼭짓점은 "normal"이어야 한다
+    act(() => { result.current.handleUpdateLayer(layerId, { sides: 6 }); });
+    const bts = result.current.layers[0].beatTypes;
+    // 기존 4개는 "normal" (초기 beatTypes가 빈 배열 → normal 확장)
+    // 새로 추가된 2개도 "normal"
+    expect(bts.every((bt: string) => bt === "normal")).toBe(true);
+
+    // 비트 발화 → role="high"지만 beatType이 "normal" → low 풀 선택
+    (safePlay as jest.Mock).mockClear();
+    fireBeat(params.engineBeatCallbackRef);
+    advanceMs(500); // 슬롯 타이머 발화 대기
+
+    // strong 풀은 호출되지 않아야 한다
+    const calls = (safePlay as jest.Mock).mock.calls;
+    const strongPlayers = [classicPool.strongA, classicPool.strongB, classicPool.strongC, classicPool.strongD];
+    const anyStrongCalled = calls.some((c: any[]) => strongPlayers.includes(c[0]));
+    expect(anyStrongCalled).toBe(false);
+  });
+
+  // ── 16. BPM 변경 시 미발화 슬롯 취소 (다음 비트부터 새 BPM) ─────────────
+
+  it("changing BPM cancels pending slots so they do not fire at the old tempo", () => {
+    const { safePlay } = require("@/lib/audio-utils");
+    const params = makeParams({ bpm: 120, beatsPerMeasure: 4 });
+    const { rerender } = renderHook(
+      (props: UsePolygonModeParams) => usePolygonMode(props),
+      { initialProps: params },
+    );
+
+    // 첫 비트 발화 → 4각형 슬롯 0이 즉시 예약됨 (delay≈0ms)
+    act(() => { params.engineBeatCallbackRef.current?.(); });
+
+    // BPM을 변경하면 대기 중인 슬롯 타이머가 취소되어야 한다.
+    const nextParams = { ...params, bpm: 200 };
+    rerender(nextParams);
+
+    // 이전 BPM 기준 타이머가 모두 취소됐으므로, 가짜 타이머를 진행해도
+    // 추가 safePlay 호출이 없어야 한다.
+    const callsBefore = (safePlay as jest.Mock).mock.calls.length;
+    advanceMs(2000); // 120 BPM 기준 최대 오프셋 범위를 훨씬 초과
+    const callsAfter = (safePlay as jest.Mock).mock.calls.length;
+    expect(callsAfter).toBe(callsBefore); // 취소된 슬롯은 발화하지 않아야 한다
+  });
+
+  // ── 16. 폴리곤 모드 닫기/열기 시 레이어 설정 보존 ────────────────────────
+
+  it("disabling and re-enabling preserves configured layers", () => {
+    const params = makeParams();
+    const { result, rerender } = renderHook(
+      (props: UsePolygonModeParams) => usePolygonMode(props),
+      { initialProps: params },
+    );
+
+    const layerId = result.current.layers[0].id;
+
+    // 변 수를 6으로 변경하고 레이어를 추가해 2-레이어 구성을 만든다
+    act(() => { result.current.handleUpdateLayer(layerId, { sides: 6 }); });
+    act(() => { result.current.handleAddLayer(); });
+    expect(result.current.layers).toHaveLength(2);
+    expect(result.current.layers[0].sides).toBe(6);
+
+    // 폴리곤 모드 비활성화 (enabled=false)
+    rerender({ ...params, enabled: false });
+
+    // 다시 활성화 (enabled=true)
+    rerender({ ...params, enabled: true });
+
+    // 레이어 설정이 보존되어야 한다
+    expect(result.current.layers).toHaveLength(2);
+    expect(result.current.layers[0].sides).toBe(6);
+
+    // 재생 상태(activeVertices)는 초기화되어야 한다
+    expect(result.current.activeVertices).toEqual({});
   });
 });
 
@@ -691,6 +817,7 @@ function makeLayer(overrides: Partial<PolygonLayer> = {}): PolygonLayer {
     color: "#FF0000",
     soundSet: "classic",
     role: "high",
+    volume: 1.0,
     offsets: [],
     beatTypes: ["strong", "normal", "normal", "normal"],
     ...overrides,

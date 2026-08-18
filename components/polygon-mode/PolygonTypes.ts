@@ -50,19 +50,24 @@ export interface PolygonLayer {
   id: string;
   /** 변(꼭짓점) 수: 1 = 원(펄스), 2-16 = 다각형 */
   sides: number;
-  /** 레이어 색상 (hex) */
+  /** 레이어 색상 (hex) — UI에서 자동 배정, 사용자 변경 불가 */
   color: string;
-  /** 사운드셋 키 (soundSets의 키) */
+  /** 사운드셋 키 (soundSets의 키, 또는 'custom-<id>') */
   soundSet: string;
   /** 레이어 전체 기본 사운드 역할 (beatTypes 미지정 꼭짓점의 fallback) */
   role: "high" | "low" | "strong";
+  /**
+   * 레이어 볼륨 (0.0 ~ 1.0). 기본값 1.0.
+   * 꼭짓점별 강세(S/A/N) 대신 단일 볼륨으로 음량을 조절한다.
+   */
+  volume: number;
   /**
    * 꼭짓점별 타이밍 오프셋 비율 (0.0 ~ 0.5).
    * 배열 길이 = sides. 0 = 오프셋 없음, 0.5 = 다음 비트까지 절반 지연 (스윙).
    */
   offsets: number[];
   /**
-   * 꼭짓점별 강세 (S/A/N/M).
+   * 꼭짓점별 강세 (N/M 만 사용 — N=normal, M=mute).
    * 배열 길이 = sides. 미설정 인덱스는 role로 fallback.
    */
   beatTypes: VertexBeatType[];
@@ -273,6 +278,7 @@ export const DEFAULT_POLYGON_LAYER: Omit<PolygonLayer, "id" | "color"> = {
   sides: 4,
   soundSet: "classic",
   role: "high",
+  volume: 1.0,
   offsets: [],
   beatTypes: [],
 };

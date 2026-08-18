@@ -1,13 +1,14 @@
 /**
  * PolygonLayerEditor — 레이어 목록 + 편집 패널
  *
- * 레이어 탭 → 해당 레이어 편집 모드 진입
- * 편집 항목: 변 수(1~16), 색상, 사운드셋, 사운드 역할
+ * 편집 항목: 변 수, 볼륨, 사운드셋(커스텀 가져오기 포함)
+ * 삭제된 항목: 색상 선택(자동 배정), 사운드 역할(강/약/강세 → 볼륨으로 대체)
+ * 꼭짓점 강세 → 탭으로 뮤트/언뮤트 전환
  */
 
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
-  View, Text, Pressable, ScrollView,
+  View, Text, Pressable, ScrollView, PanResponder,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,23 +16,12 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import type { PolygonLayer } from "./PolygonTypes";
-import { LAYER_COLORS } from "./PolygonTypes";
 import { soundSets } from "@/lib/metronome-engine";
 
 // 편집 가능한 사운드셋 목록
 const SOUND_SET_KEYS = Object.keys(soundSets) as (keyof typeof soundSets)[];
 
-interface PolygonLayerEditorProps {
-  layers: PolygonLayer[];
-  editingLayerId: string | null;
-  onSelectLayer: (id: string) => void;
-  onUpdateLayer: (id: string, patch: Partial<PolygonLayer>) => void;
-  onDeleteLayer: (id: string) => void;
-  onAddLayer: () => void;
-  onVertexLongPress?: (layerId: string, vertexIdx: number) => void;
-}
-
-// 사운드셋 이름 → 표시명 (i18n 없이 간단히)
+// 사운드셋 이름 → 표시명
 function soundSetLabel(key: string): string {
   const labels: Record<string, string> = {
     classic: "Classic", metronome: "Metronome", wood: "Wood", bell: "Bell",
@@ -40,8 +30,100 @@ function soundSetLabel(key: string): string {
   return labels[key] ?? key;
 }
 
+interface PolygonLayerEditorProps {
+  layers: PolygonLayer[];
+  editingLayerId: string | null;
+  onSelectLayer: (id: string) => void;
+  onUpdateLayer: (id: string, patch: Partial<PolygonLayer>) => void;
+  onDeleteLayer: (id: string) => void;
+  onAddLayer: () => void;
+  /** 커스텀 사운드 가져오기 버튼을 탭했을 때 (실제 파일 피킹은 부모가 담당) */
+  onPickCustomSound?: (layerId: string) => void;
+}
+
+// ── 볼륨 슬라이더 ─────────────────────────────────────────────────────────────
+function VolumeSlider({
+  value, onChange, color,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  color: string;
+}) {
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+  const trackWidthRef = useRef(200);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => {
+        const v = Math.max(0, Math.min(1, e.nativeEvent.locationX / trackWidthRef.current));
+        onChangeRef.current(v);
+      },
+      onPanResponderMove: (e) => {
+        const v = Math.max(0, Math.min(1, e.nativeEvent.locationX / trackWidthRef.current));
+        onChangeRef.current(v);
+      },
+    }),
+  ).current;
+
+  const pct = Math.round(value * 100);
+
+  return (
+    <View style={{ flex: 1, justifyContent: "center", height: 32 }}>
+      <View
+        {...panResponder.panHandlers}
+        onLayout={(e) => { trackWidthRef.current = e.nativeEvent.layout.width; }}
+        style={{
+          height: 8,
+          borderRadius: 4,
+          backgroundColor: color + "30",
+          overflow: "visible",
+          position: "relative",
+        }}
+      >
+        {/* 채워진 트랙 */}
+        <View style={{
+          width: `${pct}%`,
+          height: "100%",
+          backgroundColor: color + "CC",
+          borderRadius: 4,
+        }} />
+        {/* 썸 */}
+        <View style={{
+          position: "absolute",
+          left: `${pct}%` as any,
+          top: -6,
+          width: 20,
+          height: 20,
+          borderRadius: 10,
+          backgroundColor: color,
+          transform: [{ translateX: -10 }],
+          shadowColor: "#000",
+          shadowOpacity: 0.25,
+          shadowRadius: 3,
+          elevation: 3,
+        }} />
+      </View>
+      <Text style={{
+        position: "absolute",
+        right: 0,
+        bottom: -2,
+        fontSize: 10,
+        color: color,
+        fontFamily: "SpaceGrotesk_500Medium",
+        opacity: 0.8,
+      }}>
+        {pct}%
+      </Text>
+    </View>
+  );
+}
+
 export function PolygonLayerEditor({
   layers, editingLayerId, onSelectLayer, onUpdateLayer, onDeleteLayer, onAddLayer,
+  onPickCustomSound,
 }: PolygonLayerEditorProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -59,15 +141,20 @@ export function PolygonLayerEditor({
     onUpdateLayer(id, { sides: next });
   }, [layers, onUpdateLayer]);
 
+  const handleVolumeChange = useCallback((id: string, volume: number) => {
+    onUpdateLayer(id, { volume });
+  }, [onUpdateLayer]);
+
+  const isCustomSound = editingLayer?.soundSet.startsWith("custom-") ?? false;
+
   return (
     <View style={{
       backgroundColor: C.surface,
       borderTopWidth: 1,
       borderTopColor: C.border,
-      // 편집 패널·빈 상태가 없을 때(탭 행만 표시) safe-area 확보
       paddingBottom: !editingLayer && layers.length > 0 ? insets.bottom : 0,
     }}>
-      {/* ── 레이어 목록 탭 ── */}
+      {/* ── 레이어 탭 목록 ── */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -95,9 +182,7 @@ export function PolygonLayerEditor({
                 borderColor: isEditing ? layer.color : C.border,
                 backgroundColor: isEditing
                   ? layer.color + "22"
-                  : pressed
-                  ? C.background
-                  : "transparent",
+                  : pressed ? C.background : "transparent",
               })}
             >
               <View style={{
@@ -155,7 +240,12 @@ export function PolygonLayerEditor({
         }}>
           {/* 변 수 스텝 */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: S.ms(13, 0.3), color: C.textSecondary, flex: 1 }}>
+            <Text style={{
+              fontFamily: "SpaceGrotesk_500Medium",
+              fontSize: S.ms(13, 0.3),
+              color: C.textSecondary,
+              flex: 1,
+            }}>
               {t("polygon", "sides")}
             </Text>
             <Pressable
@@ -191,36 +281,35 @@ export function PolygonLayerEditor({
             </Pressable>
           </View>
 
-          {/* 색상 선택 */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: S.ms(13, 0.3), color: C.textSecondary, flex: 1 }}>
-              {t("polygon", "color")}
+          {/* 볼륨 슬라이더 (강/약/강세 대체) */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <Text style={{
+              fontFamily: "SpaceGrotesk_500Medium",
+              fontSize: S.ms(13, 0.3),
+              color: C.textSecondary,
+              width: 40,
+            }}>
+              {t("polygon", "volume")}
             </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                {LAYER_COLORS.map((color) => (
-                  <Pressable
-                    key={color}
-                    onPress={() => onUpdateLayer(editingLayer.id, { color })}
-                    style={{
-                      width: 24, height: 24, borderRadius: 12,
-                      backgroundColor: color,
-                      borderWidth: editingLayer.color === color ? 3 : 1,
-                      borderColor: editingLayer.color === color ? "#fff" : "transparent",
-                    }}
-                  />
-                ))}
-              </View>
-            </ScrollView>
+            <VolumeSlider
+              value={editingLayer.volume ?? 1.0}
+              onChange={(v) => handleVolumeChange(editingLayer.id, v)}
+              color={editingLayer.color}
+            />
           </View>
 
-          {/* 사운드셋 */}
+          {/* 사운드셋 + 커스텀 가져오기 */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: S.ms(13, 0.3), color: C.textSecondary, flex: 1 }}>
+            <Text style={{
+              fontFamily: "SpaceGrotesk_500Medium",
+              fontSize: S.ms(13, 0.3),
+              color: C.textSecondary,
+              width: 40,
+            }}>
               {t("polygon", "soundSet")}
             </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={{ flexDirection: "row", gap: 6 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
                 {SOUND_SET_KEYS.map((key) => {
                   const active = editingLayer.soundSet === key;
                   return (
@@ -246,42 +335,60 @@ export function PolygonLayerEditor({
                     </Pressable>
                   );
                 })}
-              </View>
-            </ScrollView>
-          </View>
 
-          {/* 사운드 역할 */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Text style={{ fontFamily: "SpaceGrotesk_500Medium", fontSize: S.ms(13, 0.3), color: C.textSecondary, flex: 1 }}>
-              {t("polygon", "role")}
-            </Text>
-            <View style={{ flexDirection: "row", gap: 6 }}>
-              {(["high", "low", "strong"] as const).map((role) => {
-                const active = editingLayer.role === role;
-                return (
-                  <Pressable
-                    key={role}
-                    onPress={() => onUpdateLayer(editingLayer.id, { role })}
-                    style={({ pressed }) => ({
-                      paddingHorizontal: 12,
-                      paddingVertical: 5,
-                      borderRadius: 8,
-                      backgroundColor: active ? C.accent : pressed ? C.accent + "22" : C.background,
-                      borderWidth: 1,
-                      borderColor: active ? C.accent : C.border,
-                    })}
-                  >
+                {/* 커스텀 사운드가 로드된 경우 표시 */}
+                {isCustomSound && (
+                  <View style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 8,
+                    backgroundColor: C.accent,
+                    borderWidth: 1,
+                    borderColor: C.accent,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                  }}>
+                    <Ionicons name="musical-note" size={10} color="#fff" />
                     <Text style={{
                       fontFamily: "SpaceGrotesk_500Medium",
-                      fontSize: S.ms(12, 0.3),
-                      color: active ? "#fff" : C.textSecondary,
+                      fontSize: S.ms(11, 0.3),
+                      color: "#fff",
                     }}>
-                      {t("polygon", role as "high" | "low" | "strong")}
+                      {t("polygon", "customSound")}
+                    </Text>
+                  </View>
+                )}
+
+                {/* 커스텀 사운드 가져오기 버튼 */}
+                {onPickCustomSound && (
+                  <Pressable
+                    onPress={() => onPickCustomSound(editingLayer.id)}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 8,
+                      backgroundColor: pressed ? C.accent + "22" : "transparent",
+                      borderWidth: 1,
+                      borderColor: C.border,
+                      borderStyle: "dashed" as const,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                    })}
+                  >
+                    <Ionicons name="add" size={12} color={C.textSecondary} />
+                    <Text style={{
+                      fontFamily: "SpaceGrotesk_500Medium",
+                      fontSize: S.ms(11, 0.3),
+                      color: C.textSecondary,
+                    }}>
+                      {t("polygon", "importAudio")}
                     </Text>
                   </Pressable>
-                );
-              })}
-            </View>
+                )}
+              </View>
+            </ScrollView>
           </View>
 
           {/* 삭제 버튼 */}
@@ -314,10 +421,15 @@ export function PolygonLayerEditor({
             onPress={onAddLayer}
             style={({ pressed }) => ({
               paddingHorizontal: 20, paddingVertical: 10,
-              borderRadius: 10, backgroundColor: pressed ? C.accent + "CC" : C.accent,
+              borderRadius: 10,
+              backgroundColor: pressed ? C.accent + "CC" : C.accent,
             })}
           >
-            <Text style={{ fontFamily: "SpaceGrotesk_600SemiBold", fontSize: S.ms(14, 0.3), color: "#fff" }}>
+            <Text style={{
+              fontFamily: "SpaceGrotesk_600SemiBold",
+              fontSize: S.ms(14, 0.3),
+              color: "#fff",
+            }}>
               {t("polygon", "addFirstLayer")}
             </Text>
           </Pressable>
