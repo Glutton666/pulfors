@@ -169,13 +169,16 @@ export function PolygonCanvas({
                   onLongPress={onVertexLongPress ? () => onVertexLongPress(layer.id, 0) : undefined}
                 >
                   <Circle cx={cx} cy={cy} r={HIT_R} fill="transparent" />
-                  <AnimatedVertex
-                    cx={cx}
-                    cy={cy}
-                    r={VERTEX_R_ACTIVE}
-                    color={layer.color}
-                    isActive={isActive}
-                  />
+                  {/* 펄스 도트 (mute이면 미표시) */}
+                  {!isMute && (
+                    <AnimatedVertex
+                      cx={cx}
+                      cy={cy}
+                      r={VERTEX_R_ACTIVE}
+                      color={layer.color}
+                      isActive={isActive}
+                    />
+                  )}
                   {/* 강세 레이블 */}
                   <SvgText
                     x={labelPos.x}
@@ -239,8 +242,8 @@ export function PolygonCanvas({
                   >
                     {/* 터치 히트 영역 (투명) */}
                     <Circle cx={av.x} cy={av.y} r={HIT_R} fill="transparent" />
-                    {/* 오프셋 표시: 점선 링 */}
-                    {hasOffset && (
+                    {/* 오프셋 표시: 점선 링 (mute 꼭짓점 제외) */}
+                    {!isMute && hasOffset && (
                       <Circle
                         cx={av.x}
                         cy={av.y}
@@ -252,13 +255,16 @@ export function PolygonCanvas({
                         opacity={0.5}
                       />
                     )}
-                    <AnimatedVertex
-                      cx={av.x}
-                      cy={av.y}
-                      r={isActive ? VERTEX_R_ACTIVE : VERTEX_R_NORMAL}
-                      color={layer.color}
-                      isActive={isActive}
-                    />
+                    {/* 꼭짓점 도트 (mute 꼭짓점 제외) */}
+                    {!isMute && (
+                      <AnimatedVertex
+                        cx={av.x}
+                        cy={av.y}
+                        r={isActive ? VERTEX_R_ACTIVE : VERTEX_R_NORMAL}
+                        color={layer.color}
+                        isActive={isActive}
+                      />
+                    )}
                     {/* 강세 레이블 (S/A/N/M) */}
                     <SvgText
                       x={labelPos.x}
