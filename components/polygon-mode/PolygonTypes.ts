@@ -112,42 +112,24 @@ export function polygonVertices(
 /**
  * 오프셋을 반영한 꼭짓점별 각도 배열을 반환한다 (라디안, 시작 각도 -π/2).
  *
- * - Mute 꼭짓점은 active 타이밍 계산에서 제외된다.
- *   (active 꼭짓점 n개가 2π를 균등 분할한다.)
- * - Non-mute 꼭짓점 k번째 기준 각도:  -π/2 + (2π · k / n)
- *   오프셋 조정: offset[i] ∈ [0, 0.5] → 각도 += offset[i] · (2π / n)
- *   이렇게 하면 offset 0.5 = 다음 꼭짓점까지 절반 지연이 호(arc) 크기로 표현된다.
- * - Mute 꼭짓점은 정 N각형의 원래 각도를 그대로 반환한다 (M 라벨 표시 위치 유지).
+ * - 모든 꼭짓점의 기준 각도는 정 N각형 원래 위치다 (-π/2 + 2π·i/sides).
+ *   도트는 항상 폴리곤 코너 근처에 위치한다.
+ * - Non-mute 꼭짓점에 오프셋이 있으면, 자신의 코너에서 다음 인접 코너 방향으로
+ *   오프셋 비율만큼 이동한다: angle += offset · (2π / sides).
+ *   offset 0.5 → 다음 코너까지 절반 지점. 도트가 인접 코너 사이 호 위에서 이동.
+ * - Mute 꼭짓점은 오프셋 없이 원래 각도를 유지한다 (M 라벨 위치 유지).
  */
 export function computeVertexAngles(layer: PolygonLayer): number[] {
   const sides = Math.max(1, layer.sides);
+  const arcPerSide = (2 * Math.PI) / sides;
 
-  // 정 N각형 기본 각도 (mute 포함 전체)
-  const baseAngles = Array.from({ length: sides }, (_, i) =>
-    -Math.PI / 2 + (2 * Math.PI * i) / sides,
-  );
-
-  // Non-mute 꼭짓점 인덱스
-  const activeIndices: number[] = [];
-  for (let i = 0; i < sides; i++) {
-    if (getVertexBeatType(layer, i) !== "mute") {
-      activeIndices.push(i);
-    }
-  }
-
-  const n = activeIndices.length;
-  if (n === 0) return baseAngles; // 전체 mute: 원래 각도 유지
-
-  const result = [...baseAngles];
-
-  activeIndices.forEach((vertexIdx, k) => {
-    const baseAngle = -Math.PI / 2 + (2 * Math.PI * k) / n;
-    const offsetFrac = layer.offsets[vertexIdx] ?? 0;
-    const offsetAngle = offsetFrac * ((2 * Math.PI) / n);
-    result[vertexIdx] = baseAngle + offsetAngle;
+  return Array.from({ length: sides }, (_, i) => {
+    const baseAngle = -Math.PI / 2 + arcPerSide * i;
+    const isMute = getVertexBeatType(layer, i) === "mute";
+    if (isMute) return baseAngle;
+    const offsetFrac = layer.offsets[i] ?? 0;
+    return baseAngle + offsetFrac * arcPerSide;
   });
-
-  return result;
 }
 
 /** 기본 레이어 색상 팔레트 */

@@ -518,23 +518,25 @@ describe("computeVertexAngles", () => {
     expect(shifted[0] - plain[0]).toBeCloseTo(0.25 * (TWO_PI / 4), 6);
   });
 
-  // ── 3. Mute 꼭짓점 제외 → active n개가 2π 균등 분할 ───────────────────
+  // ── 3. Mute 꼭짓점은 원래 코너 위치 유지, non-mute는 오프셋만 반영 ───────
 
-  it("mute vertex is excluded from timing: active vertices span 2π evenly", () => {
-    // vertex 2 muted: active = [0, 1, 3]
+  it("mute vertex keeps its regular polygon angle; non-mute vertices stay at their corners", () => {
+    // vertex 2 muted, 오프셋 없음
     const bt: PolygonLayer["beatTypes"] = ["strong", "normal", "mute", "normal"];
     const layer = makeLayer({ sides: 4, offsets: [], beatTypes: bt });
     const angles = computeVertexAngles(layer);
 
-    // Active 꼭짓점(0, 1, 3)의 기준 각도는 2π/3 간격이어야 한다
-    const spacing = TWO_PI / 3;
-    expect(angles[0]).toBeCloseTo(-Math.PI / 2, 6);          // k=0: -π/2
-    expect(angles[1]).toBeCloseTo(-Math.PI / 2 + spacing, 6); // k=1
-    expect(angles[3]).toBeCloseTo(-Math.PI / 2 + spacing * 2, 6); // k=2 (idx=3)
+    // 모든 꼭짓점이 정 4각형 원래 각도를 유지해야 한다
+    const arc = TWO_PI / 4;
+    expect(angles[0]).toBeCloseTo(-Math.PI / 2, 6);           // vertex 0
+    expect(angles[1]).toBeCloseTo(-Math.PI / 2 + arc, 6);     // vertex 1
+    expect(angles[2]).toBeCloseTo(-Math.PI / 2 + arc * 2, 6); // vertex 2 (mute, unchanged)
+    expect(angles[3]).toBeCloseTo(-Math.PI / 2 + arc * 3, 6); // vertex 3
 
-    // Mute 꼭짓점(idx=2)은 정 4각형 원래 각도 그대로
-    const regularAngle2 = -Math.PI / 2 + (TWO_PI * 2) / 4;
-    expect(angles[2]).toBeCloseTo(regularAngle2, 6);
+    // mute 꼭짓점에 오프셋을 줘도 각도가 변하지 않아야 한다
+    const withOffset = makeLayer({ sides: 4, offsets: [0, 0, 0.4, 0], beatTypes: bt });
+    const angles2 = computeVertexAngles(withOffset);
+    expect(angles2[2]).toBeCloseTo(-Math.PI / 2 + arc * 2, 6); // mute → no shift
   });
 
   it("all mutes: returns regular polygon angles unchanged", () => {
