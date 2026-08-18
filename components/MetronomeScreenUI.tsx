@@ -446,11 +446,13 @@ export function MetronomeScreenUI(props: Props) {
 
       {/* ── 폴리곤 메트로놈 전체화면 ── */}
       {showPolygon && (
-        <PolygonModeView
-          polygonMode={polygonMode}
-          isPlaying={isPlaying}
-          onClose={() => setActiveModal(null)}
-        />
+        <View style={[StyleSheet.absoluteFillObject, { zIndex: 600 }]}>
+          <PolygonModeView
+            polygonMode={polygonMode}
+            isPlaying={isPlaying}
+            onClose={() => setActiveModal(null)}
+          />
+        </View>
       )}
 
       <FadeOutModal
