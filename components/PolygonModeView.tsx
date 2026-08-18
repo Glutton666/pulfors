@@ -26,9 +26,10 @@ interface PolygonModeViewProps {
   polygonMode: UsePolygonModeResult;
   isPlaying: boolean;
   onClose: () => void;
+  onTogglePlay?: () => void;
 }
 
-export function PolygonModeView({ polygonMode, isPlaying, onClose }: PolygonModeViewProps) {
+export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay }: PolygonModeViewProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
@@ -96,16 +97,22 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose }: PolygonMode
         }}>
           {t("polygon", "title")}
         </Text>
-        {/* 재생 상태 표시 */}
-        <View style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 6,
-          paddingHorizontal: 10,
-          paddingVertical: 5,
-          borderRadius: 12,
-          backgroundColor: isPlaying ? C.accent + "22" : C.background,
-        }}>
+        {/* 재생/정지 버튼 */}
+        <Pressable
+          onPress={onTogglePlay}
+          disabled={!onTogglePlay}
+          style={({ pressed }) => ({
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 12,
+            backgroundColor: isPlaying ? C.accent + "22" : C.background,
+            opacity: pressed ? 0.7 : 1,
+          })}
+          hitSlop={8}
+        >
           <View style={{
             width: 6, height: 6, borderRadius: 3,
             backgroundColor: isPlaying ? C.accent : C.textTertiary,
@@ -117,7 +124,7 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose }: PolygonMode
           }}>
             {isPlaying ? t("polygon", "playing") : t("polygon", "stopped")}
           </Text>
-        </View>
+        </Pressable>
       </View>
 
       {/* ── 캔버스 영역 ── */}

@@ -1299,8 +1299,8 @@ export const translations = {
     syncBpmHint:      { ko: "검출된 BPM: {{bpm}}", en: "Detected BPM: {{bpm}}" },
   },
   polygon: {
-    title:           { ko: "폴리곤 메트로놈", en: "Polygon Metronome" },
-    polygonMenuLabel: { ko: "폴리곤 메트로놈", en: "Polygon Metronome" },
+    title:           { ko: "펄스 폴리곤", en: "Pulse Polygon" },
+    polygonMenuLabel: { ko: "펄스 폴리곤", en: "Pulse Polygon" },
     scoreMenuLabel:  { ko: "악보 모드", en: "Score Mode" },
     addLayer:        { ko: "레이어 추가", en: "Add Layer" },
     addFirstLayer:   { ko: "+ 첫 레이어 추가", en: "+ Add First Layer" },

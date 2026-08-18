@@ -10,6 +10,7 @@ import {
   View, Text, Pressable, ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
@@ -45,6 +46,7 @@ export function PolygonLayerEditor({
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
+  const insets = useSafeAreaInsets();
 
   const editingLayer = layers.find(l => l.id === editingLayerId) ?? null;
 
@@ -58,7 +60,13 @@ export function PolygonLayerEditor({
   }, [layers, onUpdateLayer]);
 
   return (
-    <View style={{ backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.border }}>
+    <View style={{
+      backgroundColor: C.surface,
+      borderTopWidth: 1,
+      borderTopColor: C.border,
+      // 편집 패널·빈 상태가 없을 때(탭 행만 표시) safe-area 확보
+      paddingBottom: !editingLayer && layers.length > 0 ? insets.bottom : 0,
+    }}>
       {/* ── 레이어 목록 탭 ── */}
       <ScrollView
         horizontal
@@ -140,7 +148,7 @@ export function PolygonLayerEditor({
       {editingLayer && (
         <View style={{
           paddingHorizontal: S.ms(16, 0.3),
-          paddingBottom: S.ms(16, 0.3),
+          paddingBottom: S.ms(16, 0.3) + insets.bottom,
           gap: S.ms(12, 0.3),
           borderTopWidth: 1,
           borderTopColor: C.border + "55",
@@ -301,7 +309,7 @@ export function PolygonLayerEditor({
 
       {/* 레이어 없을 때 힌트 */}
       {layers.length === 0 && (
-        <View style={{ paddingHorizontal: 16, paddingBottom: 16, alignItems: "center" }}>
+        <View style={{ paddingHorizontal: 16, paddingBottom: 16 + insets.bottom, alignItems: "center" }}>
           <Pressable
             onPress={onAddLayer}
             style={({ pressed }) => ({
