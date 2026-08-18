@@ -212,14 +212,24 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
 
       layers.forEach((layer) => {
         const sides = Math.max(1, layer.sides);
-        const vertexIdx = absbeat % sides;
+
+        // Mute가 아닌 꼭짓점만 사이클에 포함
+        const activeIndices: number[] = [];
+        for (let i = 0; i < sides; i++) {
+          if (getVertexBeatType(layer, i) !== "mute") {
+            activeIndices.push(i);
+          }
+        }
+
+        // 전체 mute이면 사이클에서 이 레이어를 완전히 건너뜀
+        if (activeIndices.length === 0) return;
+
+        const pos = absbeat % activeIndices.length;
+        const vertexIdx = activeIndices[pos];
         newActiveVertices[layer.id] = vertexIdx;
 
-        // 꼭짓점 강세 결정 (beatTypes 미설정 시 role로 fallback)
+        // 꼭짓점 강세 결정 (beatTypes 미설정 시 role로 fallback; mute는 위에서 제외됨)
         const beatType = getVertexBeatType(layer, vertexIdx);
-
-        // mute이면 오프셋 타이머도 세우지 않고 건너뜀
-        if (beatType === "mute") return;
 
         const delayMs = (layer.offsets[vertexIdx] ?? 0) * beatDurationMs;
 

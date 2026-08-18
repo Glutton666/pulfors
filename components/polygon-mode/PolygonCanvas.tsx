@@ -27,6 +27,7 @@ import {
   polygonVertices,
   getVertexBeatType,
   BEAT_TYPE_LABEL,
+  computeVertexAngles,
 } from "./PolygonTypes";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -193,11 +194,21 @@ export function PolygonCanvas({
           }
 
           // ── 다각형 렌더링 ──
+          // 외곽선은 정 N각형 원래 좌표 유지 (mute 포함)
           const pointsStr = verts.map((v) => `${v.x},${v.y}`).join(" ");
+
+          // 꼭짓점 도트·라벨은 오프셋·mute 반영 각도 기반 좌표 사용
+          // - Non-mute: 실제 타이밍(offset) 반영 각도로 이동
+          // - Mute: 정 N각형 원래 각도 그대로 (M 라벨 위치 유지)
+          const angles = computeVertexAngles(layer);
+          const adjustedVerts = angles.map((angle) => ({
+            x: cx + r * Math.cos(angle),
+            y: cy + r * Math.sin(angle),
+          }));
 
           return (
             <G key={layer.id} opacity={layerOpacity}>
-              {/* 폴리곤 외곽선 */}
+              {/* 폴리곤 외곽선 (정 N각형 유지) */}
               <Polygon
                 points={pointsStr}
                 fill="none"
@@ -207,14 +218,14 @@ export function PolygonCanvas({
               />
 
               {/* 꼭짓점들 */}
-              {verts.map((v, vi) => {
+              {adjustedVerts.map((av, vi) => {
                 const isActive = vi === activeVertex;
                 const hasOffset = (layer.offsets[vi] ?? 0) > 0.01;
                 const beatType = getVertexBeatType(layer, vi);
                 const label = BEAT_TYPE_LABEL[beatType];
                 const isMute = beatType === "mute";
                 const labelColor = isMute ? layer.color + "55" : layer.color;
-                const labelPos = getLabelPos(v.x, v.y, cx, cy, LABEL_OFFSET);
+                const labelPos = getLabelPos(av.x, av.y, cx, cy, LABEL_OFFSET);
 
                 return (
                   <G
@@ -227,12 +238,12 @@ export function PolygonCanvas({
                     }
                   >
                     {/* 터치 히트 영역 (투명) */}
-                    <Circle cx={v.x} cy={v.y} r={HIT_R} fill="transparent" />
+                    <Circle cx={av.x} cy={av.y} r={HIT_R} fill="transparent" />
                     {/* 오프셋 표시: 점선 링 */}
                     {hasOffset && (
                       <Circle
-                        cx={v.x}
-                        cy={v.y}
+                        cx={av.x}
+                        cy={av.y}
                         r={isActive ? VERTEX_R_ACTIVE + 5 : VERTEX_R_NORMAL + 4}
                         fill="none"
                         stroke={layer.color}
@@ -242,8 +253,8 @@ export function PolygonCanvas({
                       />
                     )}
                     <AnimatedVertex
-                      cx={v.x}
-                      cy={v.y}
+                      cx={av.x}
+                      cy={av.y}
                       r={isActive ? VERTEX_R_ACTIVE : VERTEX_R_NORMAL}
                       color={layer.color}
                       isActive={isActive}

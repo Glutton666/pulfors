@@ -16,6 +16,8 @@ import React from "react";
 import { renderHook, act } from "@testing-library/react";
 import { usePolygonMode } from "@/hooks/usePolygonMode";
 import type { UsePolygonModeParams } from "@/hooks/usePolygonMode";
+import { computeVertexAngles } from "@/components/polygon-mode/PolygonTypes";
+import type { PolygonLayer } from "@/components/polygon-mode/PolygonTypes";
 
 // ── 모듈 모킹 ─────────────────────────────────────────────────────────────
 
@@ -260,34 +262,59 @@ describe("usePolygonMode — engine callback driven", () => {
     expect(result.current.layers[0].beatTypes[0]).toBe("strong");
   });
 
-  // ── 10. mute 꼭짓점: safePlay 억제 ─────────────────────────────────────
+  // ── 10. mute 꼭짓점: 사이클에서 완전히 제외 ───────────────────────────
 
-  it("mute vertex suppresses safePlay for that beat", () => {
-    const { safePlay } = require("@/lib/audio-utils");
-    (safePlay as jest.Mock).mockClear();
-
-    const strongA = { play: jest.fn(), name: "strongA" };
-    const classicPool = {
-      strongA, strongB: {}, strongC: {}, strongD: {},
-      highA: {}, highB: {}, highC: {}, highD: {},
-      lowA: {}, lowB: {}, lowC: {}, lowD: {},
-    };
-    const allPlayersRef = { current: { classic: classicPool } as any };
-    const params = makeParams({ allPlayersRef });
+  it("mute vertex is excluded from beat cycle: 4-sided with vertex 2 muted cycles 0→1→3→0", () => {
+    const params = makeParams();
     const { result } = renderHook(() => usePolygonMode(params));
 
     const layerId = result.current.layers[0].id;
 
-    // vertex 0을 mute로 만든다 (strong→accent→normal→mute)
-    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 0); }); // accent
-    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 0); }); // normal
-    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 0); }); // mute
-    expect(result.current.layers[0].beatTypes[0]).toBe("mute");
+    // vertex 2를 mute로 만든다 (normal → mute, 한 번 cycle)
+    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 2); }); // normal → mute
+    expect(result.current.layers[0].beatTypes[2]).toBe("mute");
+
+    // activeIndices = [0, 1, 3]
+    // absbeat=0 → pos=0 → vertexIdx=0
+    fireBeat(params.engineBeatCallbackRef);
+    expect(result.current.activeVertices[layerId]).toBe(0);
+
+    // absbeat=1 → pos=1 → vertexIdx=1
+    fireBeat(params.engineBeatCallbackRef);
+    expect(result.current.activeVertices[layerId]).toBe(1);
+
+    // absbeat=2 → pos=2 → vertexIdx=3 (vertex 2는 건너뜀)
+    fireBeat(params.engineBeatCallbackRef);
+    expect(result.current.activeVertices[layerId]).toBe(3);
+
+    // absbeat=3 → pos=0 → vertexIdx=0 (다시 처음으로)
+    fireBeat(params.engineBeatCallbackRef);
+    expect(result.current.activeVertices[layerId]).toBe(0);
+  });
+
+  it("all-muted layer is absent from activeVertices (no pulse)", () => {
+    const { safePlay } = require("@/lib/audio-utils");
+    (safePlay as jest.Mock).mockClear();
+
+    const params = makeParams();
+    const { result } = renderHook(() => usePolygonMode(params));
+
+    const layerId = result.current.layers[0].id;
+
+    // 4개 꼭짓점 모두 mute로 설정 (role: "low" → all 'normal', then cycle each to mute)
+    act(() => { result.current.handleUpdateLayer(layerId, { role: "low" }); });
+    // 이제 beatTypes = ['normal','normal','normal','normal']
+    // 각각 cycle 1번: normal → mute
+    for (let i = 0; i < 4; i++) {
+      act(() => { result.current.handleVertexBeatTypeCycle(layerId, i); });
+    }
+    expect(result.current.layers[0].beatTypes.every((bt: string) => bt === "mute")).toBe(true);
 
     (safePlay as jest.Mock).mockClear();
-    fireBeat(params.engineBeatCallbackRef); // absbeat=0 → vertex 0 → mute
+    fireBeat(params.engineBeatCallbackRef);
 
-    // mute이므로 safePlay가 호출되면 안 된다
+    // 전체 mute → activeVertices에 해당 레이어 없음, safePlay 미호출
+    expect(result.current.activeVertices[layerId]).toBeUndefined();
     expect((safePlay as jest.Mock).mock.calls.length).toBe(0);
   });
 
@@ -418,5 +445,103 @@ describe("usePolygonMode — engine callback driven", () => {
     // 첫 번째는 strongA, 두 번째는 strongB
     expect(players[0]).toBe(strongA);
     expect(players[1]).toBe(strongB);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// computeVertexAngles — 순수 함수 단위 테스트
+// ─────────────────────────────────────────────────────────────────────────────
+
+function makeLayer(overrides: Partial<PolygonLayer> = {}): PolygonLayer {
+  return {
+    id: "test",
+    sides: 4,
+    color: "#FF0000",
+    soundSet: "classic",
+    role: "high",
+    offsets: [],
+    beatTypes: ["strong", "normal", "normal", "normal"],
+    ...overrides,
+  };
+}
+
+describe("computeVertexAngles", () => {
+  const TWO_PI = 2 * Math.PI;
+
+  // ── 1. 오프셋 없음 → 정 N각형 균등 분할 ────────────────────────────────
+
+  it("no offsets and no mutes: angles equal regular polygon spacing", () => {
+    const layer = makeLayer({ sides: 4, offsets: [], beatTypes: ["strong", "normal", "normal", "normal"] });
+    const angles = computeVertexAngles(layer);
+    expect(angles.length).toBe(4);
+
+    // 각도 간격이 2π/4 = π/2 에 가까워야 한다
+    const spacing = TWO_PI / 4;
+    for (let i = 1; i < 4; i++) {
+      expect(angles[i] - angles[i - 1]).toBeCloseTo(spacing, 6);
+    }
+  });
+
+  it("no offsets and no mutes: all non-mute → sum of arc spans equals 2π", () => {
+    for (const sides of [3, 4, 5, 6, 8]) {
+      const bt = Array.from({ length: sides }, (_, i) => i === 0 ? "strong" : "normal") as PolygonLayer["beatTypes"];
+      const layer = makeLayer({ sides, offsets: [], beatTypes: bt });
+      const angles = computeVertexAngles(layer);
+      // 마지막 꼭짓점에서 처음 꼭짓점까지 span 포함
+      const lastSpan = (angles[0] + TWO_PI) - angles[sides - 1];
+      const spans = angles.slice(1).map((a, i) => a - angles[i]).concat(lastSpan);
+      const total = spans.reduce((s, x) => s + x, 0);
+      expect(total).toBeCloseTo(TWO_PI, 5);
+    }
+  });
+
+  // ── 2. 오프셋 적용 → 해당 꼭짓점이 다음 방향으로 이동 ──────────────────
+
+  it("non-zero offset shifts the vertex angle forward", () => {
+    // vertex 0에 오프셋 0.25 적용 (4꼭짓점 → 이동량 = 0.25 * (2π/4) = π/8)
+    const layer = makeLayer({
+      sides: 4,
+      offsets: [0.25, 0, 0, 0],
+      beatTypes: ["strong", "normal", "normal", "normal"],
+    });
+    const plain = computeVertexAngles(makeLayer({ sides: 4, offsets: [], beatTypes: ["strong", "normal", "normal", "normal"] }));
+    const shifted = computeVertexAngles(layer);
+
+    // vertex 0의 각도가 plain보다 커야 한다
+    expect(shifted[0]).toBeGreaterThan(plain[0]);
+    // 나머지 꼭짓점은 변동 없음
+    expect(shifted[1]).toBeCloseTo(plain[1], 6);
+    expect(shifted[2]).toBeCloseTo(plain[2], 6);
+    expect(shifted[3]).toBeCloseTo(plain[3], 6);
+
+    // 이동량 검증: 0.25 * (2π / 4)
+    expect(shifted[0] - plain[0]).toBeCloseTo(0.25 * (TWO_PI / 4), 6);
+  });
+
+  // ── 3. Mute 꼭짓점 제외 → active n개가 2π 균등 분할 ───────────────────
+
+  it("mute vertex is excluded from timing: active vertices span 2π evenly", () => {
+    // vertex 2 muted: active = [0, 1, 3]
+    const bt: PolygonLayer["beatTypes"] = ["strong", "normal", "mute", "normal"];
+    const layer = makeLayer({ sides: 4, offsets: [], beatTypes: bt });
+    const angles = computeVertexAngles(layer);
+
+    // Active 꼭짓점(0, 1, 3)의 기준 각도는 2π/3 간격이어야 한다
+    const spacing = TWO_PI / 3;
+    expect(angles[0]).toBeCloseTo(-Math.PI / 2, 6);          // k=0: -π/2
+    expect(angles[1]).toBeCloseTo(-Math.PI / 2 + spacing, 6); // k=1
+    expect(angles[3]).toBeCloseTo(-Math.PI / 2 + spacing * 2, 6); // k=2 (idx=3)
+
+    // Mute 꼭짓점(idx=2)은 정 4각형 원래 각도 그대로
+    const regularAngle2 = -Math.PI / 2 + (TWO_PI * 2) / 4;
+    expect(angles[2]).toBeCloseTo(regularAngle2, 6);
+  });
+
+  it("all mutes: returns regular polygon angles unchanged", () => {
+    const bt: PolygonLayer["beatTypes"] = ["mute", "mute", "mute", "mute"];
+    const layer = makeLayer({ sides: 4, offsets: [], beatTypes: bt });
+    const angles = computeVertexAngles(layer);
+    const regular = [0, 1, 2, 3].map((i) => -Math.PI / 2 + (TWO_PI * i) / 4);
+    angles.forEach((a, i) => expect(a).toBeCloseTo(regular[i], 6));
   });
 });
