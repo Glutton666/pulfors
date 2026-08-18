@@ -194,14 +194,57 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     layers.forEach((l) => ensurePCM(l.soundSet));
   }, [p.enabled, layers, ensurePCM]);
 
-  // ── 마디 앵커/발화 추적 ─────────────────────────────────────────────────
-  // measureStartMsRef: 현재 마디 시작 시각 (0 = 진행 중인 마디 없음)
-  // lastFiredSlotRef: 레이어별 마지막 발화 슬롯 k — 중간 재스케줄 시 중복 발화 방지
-  const measureStartMsRef = useRef(0);
-  const lastFiredSlotRef = useRef<Map<string, number>>(new Map());
+  // ── ensurePCM ref — 엔진 핸들러가 참조 변경에 영향받지 않도록 ref로 접근 ──
+  // (getClickPCMs → ensurePCM 참조가 바뀌어도 핸들러 재등록이 일어나지 않는다)
+  const ensurePCMRef = useRef(ensurePCM);
+  useEffect(() => { ensurePCMRef.current = ensurePCM; }, [ensurePCM]);
 
-  const playSound = useCallback(
-    (layer: PolygonLayer, beatType: Exclude<VertexBeatType, "mute">) => {
+  // ── 재생 중단 → absoluteBeat 리셋 ──────────────────────────────────────
+  // 엔진이 멈추면 더 이상 콜백이 오지 않으므로 카운터만 초기화한다.
+  // 비주얼 리셋(setActiveVertices)은 enabled가 false가 될 때 처리한다.
+  useEffect(() => {
+    if (!p.isPlaying) {
+      clearPendingTimers();
+      absoluteBeatRef.current = 0;
+    }
+  }, [p.isPlaying, clearPendingTimers]);
+
+  // ── 박자표 변경 → 위상 재정렬 ──────────────────────────────────────────
+  // 엔진이 자체 비트 카운터를 0으로 리셋하므로, 폴리곤도 다음 콜백을
+  // 마디 시작(beat 0)으로 인식하도록 절대 비트 카운터를 리셋한다.
+  // 옛 타이밍으로 예약된 현재 비트 구간의 잔여 타이머도 취소한다.
+  const prevMeterRef = useRef(p.beatsPerMeasure);
+  useEffect(() => {
+    if (prevMeterRef.current !== p.beatsPerMeasure) {
+      prevMeterRef.current = p.beatsPerMeasure;
+      beatsPerMeasureRef.current = p.beatsPerMeasure;
+      clearPendingTimers();
+      absoluteBeatRef.current = 0;
+    }
+  }, [p.beatsPerMeasure, clearPendingTimers]);
+
+  // ── 엔진 비트 핸들러 등록/해제 ──────────────────────────────────────────
+  // enabled=true이면 핸들러를 ref에 등록하고 엔진 콜백이 직접 호출한다.
+  // enabled=false이면 ref를 null로 해제하고 비주얼 상태를 초기화한다.
+  //
+  // 폴리리듬 스케줄링 (비트별 슬롯 예약):
+  // N각형은 한 마디(beatsPerMeasure × beatDuration)를 N등분해 발화한다.
+  // 매 엔진 비트에서 "이 비트 구간 [beatStart, beatEnd)에 속하는 슬롯"만
+  // 짧은 setTimeout으로 예약한다. 앵커가 항상 최신 엔진 비트이므로
+  // 벽시계(Date.now()) 오차가 누적되지 않고, BPM 변경도 다음 비트부터
+  // 자동 반영된다. (3각형+4각형 → 3:4 폴리리듬)
+  useEffect(() => {
+    if (!p.enabled) {
+      p.engineBeatCallbackRef.current = null;
+      clearPendingTimers();
+      absoluteBeatRef.current = 0;
+      setActiveVertices({});
+      return;
+    }
+
+    // 사운드 재생 헬퍼 — 모든 가변 데이터는 ref를 통해 읽으므로
+    // 이 클로저는 enabled가 바뀔 때까지 재생성되지 않는다.
+    const playSound = (layer: PolygonLayer, beatType: Exclude<VertexBeatType, "mute">) => {
       try {
         if (Platform.OS === "web") {
           const cached =
@@ -216,7 +259,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
             playPCMOnWeb(pcm, p.volumeRef.current);
           } else {
             playWebClick(beatTypeToWebClickRole(beatType), "both");
-            ensurePCM(layer.soundSet);
+            ensurePCMRef.current(layer.soundSet);
           }
         } else {
           // Native: sound-set + beatType 조합별 round-robin으로 플레이어 풀 순환
@@ -238,157 +281,74 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
           if (player) safePlay(player, "polygon.beat");
         }
       } catch {}
-    },
-    // p의 ref 필드들은 안정적; ensurePCM만 의존
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ensurePCM],
-  );
-
-  /**
-   * 현재 마디의 폴리리듬 이벤트를 예약한다.
-   * fromElapsedMs: 마디 시작 이후 경과 시간 — 이 시각 이전 슬롯은 건너뛴다.
-   * 이미 발화한 슬롯(lastFiredSlotRef)은 타이밍이 바뀌어도 재발화하지 않는다.
-   */
-  const scheduleMeasureEvents = useCallback((fromElapsedMs: number) => {
-    const layers = layersRef.current;
-    const bpm = bpmRef.current;
-    const beatsPerMeasure = Math.max(1, Math.floor(beatsPerMeasureRef.current || 4));
-    const beatDurationMs = 60000 / Math.max(20, bpm);
-    const measureDurationMs = beatsPerMeasure * beatDurationMs;
-
-    layers.forEach((layer) => {
-      const sides = Math.max(1, layer.sides);
-      // N각형 슬롯 간격 = 마디 길이 / N (3각형+4각형 → 3:4 폴리리듬)
-      const slotDurationMs = measureDurationMs / sides;
-      const lastFired = lastFiredSlotRef.current.get(layer.id) ?? -1;
-
-      const schedule = (delayMs: number, fn: () => void) => {
-        if (delayMs <= 0) {
-          fn();
-          return;
-        }
-        if (!pendingTimerMapRef.current.has(layer.id)) {
-          pendingTimerMapRef.current.set(layer.id, new Set());
-        }
-        const layerTimers = pendingTimerMapRef.current.get(layer.id)!;
-        const t = setTimeout(() => {
-          layerTimers.delete(t);
-          fn();
-        }, delayMs);
-        layerTimers.add(t);
-      };
-
-      for (let k = 0; k < sides; k++) {
-        if (k <= lastFired) continue; // 이미 발화한 슬롯 (중간 재스케줄 시 중복 방지)
-
-        const beatType = getVertexBeatType(layer, k);
-        const slotTimeMs =
-          beatType === "mute"
-            ? k * slotDurationMs
-            // 꼭짓점별 오프셋: 해당 슬롯 간격의 비율(0~0.5)만큼 지연
-            : k * slotDurationMs + (layer.offsets[k] ?? 0) * slotDurationMs;
-
-        if (slotTimeMs < fromElapsedMs && k > 0) continue; // 이미 지나간 시각
-
-        if (beatType === "mute") {
-          // 뮤트 슬롯: 소리 없음 + 슬롯 시각에 비주얼도 끔 (주기는 유지)
-          schedule(slotTimeMs - fromElapsedMs, () => {
-            lastFiredSlotRef.current.set(layer.id, k);
-            setActiveVertices((prev) => {
-              if (!(layer.id in prev)) return prev;
-              const next = { ...prev };
-              delete next[layer.id];
-              return next;
-            });
-          });
-          continue;
-        }
-
-        schedule(slotTimeMs - fromElapsedMs, () => {
-          lastFiredSlotRef.current.set(layer.id, k);
-          setActiveVertices((prev) =>
-            prev[layer.id] === k ? prev : { ...prev, [layer.id]: k },
-          );
-          playSound(layer, beatType);
-        });
-      }
-    });
-  }, [playSound]);
-
-  // ── 재생 중단 → absoluteBeat/마디 앵커 리셋 ────────────────────────────
-  // 엔진이 멈추면 더 이상 콜백이 오지 않으므로 카운터만 초기화한다.
-  // 비주얼 리셋(setActiveVertices)은 enabled가 false가 될 때 처리한다.
-  useEffect(() => {
-    if (!p.isPlaying) {
-      clearPendingTimers();
-      absoluteBeatRef.current = 0;
-      measureStartMsRef.current = 0;
-      lastFiredSlotRef.current.clear();
-    }
-  }, [p.isPlaying, clearPendingTimers]);
-
-  // ── BPM·박자표 변경 → 남은 마디를 새 타이밍으로 즉시 재스케줄 ──────────
-  const isFirstTimingRef = useRef(true);
-  const prevBeatsPerMeasureRef = useRef(p.beatsPerMeasure);
-  useEffect(() => {
-    const meterChanged = prevBeatsPerMeasureRef.current !== p.beatsPerMeasure;
-    prevBeatsPerMeasureRef.current = p.beatsPerMeasure;
-    if (isFirstTimingRef.current) {
-      isFirstTimingRef.current = false;
-      return;
-    }
-    clearPendingTimers();
-
-    // ref 갱신 effect보다 먼저 실행될 수 있으므로 여기서 직접 갱신
-    beatsPerMeasureRef.current = p.beatsPerMeasure;
-    bpmRef.current = p.bpm;
-
-    // 박자표 변경: 엔진이 자체 비트 카운터를 0으로 리셋하므로,
-    // 다음 엔진 콜백이 마디 시작으로 인식되도록 위상을 재정렬한다.
-    if (meterChanged) {
-      absoluteBeatRef.current = 0;
-    }
-
-    // 마디 진행 중이면 남은 슬롯을 새 타이밍으로 즉시 재예약한다.
-    if (p.enabled && p.isPlaying && measureStartMsRef.current > 0) {
-      const elapsed = Math.max(0, Date.now() - measureStartMsRef.current);
-      scheduleMeasureEvents(elapsed);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.bpm, p.beatsPerMeasure]);
-
-  // ── 엔진 비트 핸들러 등록/해제 ──────────────────────────────────────────
-  // enabled=true이면 핸들러를 ref에 등록하고 엔진 콜백이 직접 호출한다.
-  // enabled=false이면 ref를 null로 해제하고 비주얼 상태를 초기화한다.
-  useEffect(() => {
-    if (!p.enabled) {
-      p.engineBeatCallbackRef.current = null;
-      clearPendingTimers();
-      absoluteBeatRef.current = 0;
-      measureStartMsRef.current = 0;
-      lastFiredSlotRef.current.clear();
-      setActiveVertices({});
-      return;
-    }
+    };
 
     p.engineBeatCallbackRef.current = () => {
       // 이 핸들러는 React lifecycle 밖(엔진 오디오 스레드)에서 호출된다.
-      // 최신 레이어/BPM은 ref를 통해 읽는다.
-      //
-      // 폴리리듬 스케줄링: N각형은 한 마디(beatsPerMeasure × beatDuration)를
-      // N등분해 발화한다. 마디 시작 비트에서만 각 레이어의 N개 이벤트를
-      // setTimeout으로 일괄 예약한다. (3각형+4각형 → 3:4 폴리리듬)
+      // 최신 레이어/BPM/박자표는 ref를 통해 읽는다.
+      const layers = layersRef.current;
+      const bpm = bpmRef.current;
       const beatsPerMeasure = Math.max(1, Math.floor(beatsPerMeasureRef.current || 4));
       const absbeat = absoluteBeatRef.current++;
 
-      // 마디 중간 비트는 무시 — 모든 스케줄은 마디 시작에서 이뤄진다.
-      if (absbeat % beatsPerMeasure !== 0) return;
+      const beatWithinMeasure = absbeat % beatsPerMeasure;
+      const beatDurationMs = 60000 / Math.max(20, bpm);
+      const beatStartMs = beatWithinMeasure * beatDurationMs; // 마디 시작 기준
+      const beatEndMs = beatStartMs + beatDurationMs;
 
-      // 이전 마디의 잔여 타이머 정리 후 새 마디 전체 예약
-      clearPendingTimers();
-      lastFiredSlotRef.current.clear();
-      measureStartMsRef.current = Date.now();
-      scheduleMeasureEvents(0);
+      layers.forEach((layer) => {
+        const sides = Math.max(1, layer.sides);
+        // N각형 슬롯 간격 = 마디 길이 / N
+        const slotDurationMs = (beatsPerMeasure * beatDurationMs) / sides;
+
+        const schedule = (delayMs: number, fn: () => void) => {
+          if (delayMs <= 0) {
+            fn();
+            return;
+          }
+          if (!pendingTimerMapRef.current.has(layer.id)) {
+            pendingTimerMapRef.current.set(layer.id, new Set());
+          }
+          const layerTimers = pendingTimerMapRef.current.get(layer.id)!;
+          const t = setTimeout(() => {
+            layerTimers.delete(t);
+            fn();
+          }, delayMs);
+          layerTimers.add(t);
+        };
+
+        for (let k = 0; k < sides; k++) {
+          const slotTimeMs = k * slotDurationMs;
+          // 이 비트 구간에 속하는 슬롯만 예약한다
+          if (slotTimeMs < beatStartMs || slotTimeMs >= beatEndMs) continue;
+
+          const beatType = getVertexBeatType(layer, k);
+
+          if (beatType === "mute") {
+            // 뮤트 슬롯: 소리 없음 + 슬롯 시각에 비주얼도 끔 (주기는 유지)
+            schedule(slotTimeMs - beatStartMs, () => {
+              setActiveVertices((prev) => {
+                if (!(layer.id in prev)) return prev;
+                const next = { ...prev };
+                delete next[layer.id];
+                return next;
+              });
+            });
+            continue;
+          }
+
+          // 꼭짓점별 오프셋: 해당 슬롯 간격의 비율(0~0.5)만큼 지연
+          const delayMs =
+            slotTimeMs - beatStartMs + (layer.offsets[k] ?? 0) * slotDurationMs;
+
+          schedule(delayMs, () => {
+            setActiveVertices((prev) =>
+              prev[layer.id] === k ? prev : { ...prev, [layer.id]: k },
+            );
+            playSound(layer, beatType);
+          });
+        }
+      });
     };
 
     return () => {
@@ -397,9 +357,9 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       clearPendingTimers();
     };
   // enabled가 변경될 때만 핸들러를 재등록한다.
-  // layers/bpm은 ref를 통해 항상 최신값을 읽으므로 의존성 불필요.
+  // layers/bpm/beatsPerMeasure/ensurePCM은 ref로 읽으므로 의존성 불필요.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.enabled, p.engineBeatCallbackRef, clearPendingTimers, scheduleMeasureEvents]);
+  }, [p.enabled, p.engineBeatCallbackRef, clearPendingTimers]);
 
   // ── 레이어 관리 ─────────────────────────────────────────────────────────
 
@@ -443,11 +403,12 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
           const updated = { ...l, ...patch };
           if (patch.sides !== undefined && patch.sides !== l.sides) {
             const newSides = Math.max(1, patch.sides);
-            updated.offsets = Array.from({ length: newSides }, (_, i) => l.offsets[i] ?? 0);
+            // 같은 패치로 전달된 offsets/beatTypes를 우선 사용 (updated 기준)
+            updated.offsets = Array.from({ length: newSides }, (_, i) => updated.offsets[i] ?? 0);
             // beatTypes도 새 변 수에 맞게 조정 (기존 값 유지, 새 꼭짓점은 normal)
             updated.beatTypes = Array.from(
               { length: newSides },
-              (_, i) => l.beatTypes[i] ?? (i === 0 ? "strong" : "normal"),
+              (_, i) => updated.beatTypes[i] ?? (i === 0 ? "strong" : "normal"),
             );
           }
           // role이 변경되면 모든 꼭짓점의 beatType을 해당 role에 맞게 초기화한다.

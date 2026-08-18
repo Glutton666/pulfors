@@ -7,6 +7,8 @@ The polygon metronome is a **polyrhythm** feature: an N-sided layer must sound N
 
 **Why:** The user explicitly rejected per-engine-beat firing — "just overlapping same-interval metronomes." 3-sided + 4-sided must sound as 3:4.
 
+**Scheduling rule (settled after an overlap bug):** anchor every slot to the engine beat that owns it — each engine beat schedules only slots in its half-open window `[beatStart, beatEnd)`. Never anchor a whole measure to `Date.now()`: the wall clock drifts from the audio clock, and any React dependency-chain re-registration mid-measure kills pending timers and resets phase. The beat handler must read everything via refs so no prop/function identity change re-registers it.
+
 **Decided semantics:**
 - Mute vertex = silent AND visually off at its slot time, but the slot keeps its time — the period never shrinks.
 - BPM / time-signature changes take effect immediately: the remaining slots of the in-flight measure are rescheduled against the new timing (already-fired slots must not re-fire).
