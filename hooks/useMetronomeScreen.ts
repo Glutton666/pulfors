@@ -3379,6 +3379,8 @@ export function useMetronomeScreen() {
     // Bar mode
     barMode,
     barBpm,
+    setBarBpm,
+    barBpmRef,
     handleBarBpmChange,
     handleBarModeChange,
     barLoopMode,

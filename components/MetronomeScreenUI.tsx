@@ -107,7 +107,7 @@ export function MetronomeScreenUI(props: Props) {
     easterEggShakeCount, easterEggSuccessCount, easterEggHintDirection, easterEggApplyBpm,
     handleEasterEggGuess, handleEasterEggToggleApplyBpm, handleEasterEggTrigger,
     handleEasterEggGiveUpRef,
-    barMode, barBpm, handleBarBpmChange, handleBarModeChange, barLoopMode, setBarLoopMode,
+    barMode, barBpm, setBarBpm, barBpmRef, handleBarBpmChange, handleBarModeChange, barLoopMode, setBarLoopMode,
     blockPlayMode, setBlockPlayMode, barRepeats, loopBlocks,
     barStartBeat, setBarStartBeat,
     handleBarRepeatChange, handleLoopBlocksChange,
@@ -1352,14 +1352,20 @@ export function MetronomeScreenUI(props: Props) {
           seamlessNextEntryRef.current = null; // 수동 전환 시 예약된 seamless 취소
           const engine = engineRef.current;
           if (!engine) return;
+          const entryIsBar = entry.mode === "bar";
           updateBpmRef.current(entry.bpm);
+          // 바 모드 항목 선택 시 barBpm 상태도 동기화해야 나중에
+          // 일반 바 모드로 복귀할 때 BPM 표시가 올바르게 유지된다.
+          if (entryIsBar) {
+            barBpmRef.current = entry.bpm;
+            setBarBpm(entry.bpm);
+          }
           setBeatsPerMeasure(entry.beatsPerMeasure);
           setBeatTypes([...entry.beatTypes]);
           setBeatSubdivisions({ ...entry.beatSubdivisions });
           if (entry.subdivisionPattern && entry.subdivisionPattern.length > 0) {
             setSubdivisionPattern([...entry.subdivisionPattern]);
           }
-          const entryIsBar = entry.mode === "bar";
           // ── ref를 동기적으로 갱신 ─────────────────────────────────────
           // barModeRef: applyEntryToEngineCore 전에 갱신해야 바 모드 정지 로직 작동.
           // barConfigRef / dialConfigRef: togglePlayPause 시작 분기가 이 ref들을
