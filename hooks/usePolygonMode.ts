@@ -146,11 +146,22 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   const polygonToggleRef = useRef<Record<string, number>>({});
 
   // ── 오프셋 setTimeout 핸들 ───────────────────────────────────────────────
-  // Set을 사용해 완료된 타이머를 O(1)로 제거하고 무한 성장을 방지한다.
-  const pendingTimerSetRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  // Map<layerId, Set<timerId>>: 레이어별로 관리해 삭제 시 해당 레이어 타이머만 취소.
+  const pendingTimerMapRef = useRef<Map<string, Set<ReturnType<typeof setTimeout>>>>(new Map());
+
+  /** 특정 레이어의 대기 중 타이머를 모두 취소한다 */
+  const clearLayerTimers = useCallback((layerId: string) => {
+    const timers = pendingTimerMapRef.current.get(layerId);
+    if (timers) {
+      timers.forEach(clearTimeout);
+      pendingTimerMapRef.current.delete(layerId);
+    }
+  }, []);
+
+  /** 모든 레이어의 대기 중 타이머를 취소한다 (전역 cleanup 전용) */
   const clearPendingTimers = useCallback(() => {
-    pendingTimerSetRef.current.forEach(clearTimeout);
-    pendingTimerSetRef.current.clear();
+    pendingTimerMapRef.current.forEach((timers) => timers.forEach(clearTimeout));
+    pendingTimerMapRef.current.clear();
   }, []);
 
   // ── Per-layer PCM 캐시 (전역 clickPCMCacheRef와 분리) ───────────────────
@@ -275,11 +286,15 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
         if (delayMs <= 0) {
           playSound();
         } else {
+          if (!pendingTimerMapRef.current.has(layer.id)) {
+            pendingTimerMapRef.current.set(layer.id, new Set());
+          }
+          const layerTimers = pendingTimerMapRef.current.get(layer.id)!;
           const t = setTimeout(() => {
-            pendingTimerSetRef.current.delete(t);
+            layerTimers.delete(t);
             playSound();
           }, delayMs);
-          pendingTimerSetRef.current.add(t);
+          layerTimers.add(t);
         }
       });
 
@@ -317,6 +332,8 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
   }, [layers, ensurePCM]);
 
   const handleDeleteLayer = useCallback((id: string) => {
+    // 삭제 전 해당 레이어의 대기 중 타이머를 즉시 취소
+    clearLayerTimers(id);
     setLayers((prev) => prev.filter((l) => l.id !== id));
     setEditingLayerId((prev) => (prev === id ? null : prev));
     setActiveVertices((prev) => {
@@ -324,7 +341,7 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       delete next[id];
       return next;
     });
-  }, []);
+  }, [clearLayerTimers]);
 
   const handleUpdateLayer = useCallback(
     (id: string, patch: Partial<PolygonLayer>) => {

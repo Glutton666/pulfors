@@ -228,12 +228,53 @@ describe("usePolygonMode — engine callback driven", () => {
     clearTimeoutSpy.mockRestore();
   });
 
-  // ── 8. Native round-robin: 같은 soundSet+role 레이어가 다른 슬롯 선택 ──
+  // ── 8. 레이어 삭제 시 해당 레이어 타이머만 취소 ────────────────────────
+
+  it("deleting a layer cancels only that layer's pending timers, not others", () => {
+    const clearTimeoutSpy = jest.spyOn(globalThis, "clearTimeout");
+    const setTimeoutSpy = jest.spyOn(globalThis, "setTimeout");
+
+    const params = makeParams({ enabled: true });
+    const { result } = renderHook(() => usePolygonMode(params));
+
+    const layerId0 = result.current.layers[0].id;
+
+    // 레이어 2개 추가 (레이어 0 + 레이어 1)
+    act(() => { result.current.handleAddLayer(); });
+    const layerId1 = result.current.layers[1].id;
+
+    // 두 레이어 모두 오프셋 설정
+    act(() => {
+      result.current.handleUpdateLayer(layerId0, { offsets: [0.25, 0.25, 0.25, 0.25] });
+      result.current.handleUpdateLayer(layerId1, { offsets: [0.25, 0.25, 0.25] });
+    });
+
+    // 비트 발화 → 두 레이어 모두 setTimeout 예약됨
+    clearTimeoutSpy.mockClear();
+    setTimeoutSpy.mockClear();
+    fireBeat(params.engineBeatCallbackRef);
+
+    const scheduledCount = setTimeoutSpy.mock.calls.length;
+    expect(scheduledCount).toBeGreaterThan(0);
+
+    // 레이어 0 삭제 → clearTimeout이 호출돼야 한다
+    clearTimeoutSpy.mockClear();
+    act(() => { result.current.handleDeleteLayer(layerId0); });
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+
+    // 레이어 1은 여전히 존재
+    expect(result.current.layers.find((l) => l.id === layerId1)).toBeDefined();
+
+    clearTimeoutSpy.mockRestore();
+    setTimeoutSpy.mockRestore();
+  });
+
+  // ── 9. Native round-robin: 같은 soundSet+role 레이어가 다른 슬롯 선택 ──
   //
   // Platform.OS는 jest 환경에서 "ios"(native)로 설정되어 있다.
   // safePlay mock을 통해 어떤 player 객체가 호출됐는지 추적한다.
 
-  // ── 9. handleVertexBeatTypeCycle: S→A→N→M→S 순환 ──────────────────────
+  // ── 10. handleVertexBeatTypeCycle: S→A→N→M→S 순환 ──────────────────────
 
   it("handleVertexBeatTypeCycle cycles one vertex S→A→N→M→S without touching others", () => {
     const params = makeParams();
