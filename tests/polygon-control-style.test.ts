@@ -11,18 +11,14 @@ const between = (source: string, start: string, end: string) => {
   return source.slice(from, to);
 };
 
-describe("polygon plus/minus control styling", () => {
-  it("keeps BPM plus/minus targets at 36px without a circular container", () => {
+describe("polygon controls styling", () => {
+  it("uses the beat-mode BPM controller after the layer editor", () => {
     const source = readSource("components/PolygonModeView.tsx");
 
-    for (const testId of ['testID="bpm-minus"', 'testID="bpm-plus"']) {
-      const control = between(source, testId, "</Pressable>");
-      expect(control).toContain("width: S.ms(36, 0.3)");
-      expect(control).toContain("height: S.ms(36, 0.3)");
-      expect(control).not.toContain("borderRadius");
-      expect(control).not.toContain("backgroundColor");
-      expect(control).not.toContain("borderWidth");
-    }
+    expect(source).toContain('import { BpmSlider } from "@/components/BpmSlider";');
+    expect(source.indexOf("<PolygonLayerEditor")).toBeLessThan(source.indexOf("<BpmSlider"));
+    expect(source).not.toContain('testID="bpm-minus"');
+    expect(source).not.toContain('testID="bpm-plus"');
   });
 
   it("keeps side-count plus/minus targets at 32px without a circular container", () => {
@@ -42,11 +38,4 @@ describe("polygon plus/minus control styling", () => {
     }
   });
 
-  it("does not render the status dot beside the BPM value", () => {
-    const source = readSource("components/PolygonModeView.tsx");
-    const bpmDisplay = between(source, "/* BPM 표시: 수직 스와이프로 조정 */", "/* + 버튼");
-
-    expect(bpmDisplay).not.toContain("width: 8, height: 8");
-    expect(bpmDisplay).not.toContain("backgroundColor: isPlaying");
-  });
 });

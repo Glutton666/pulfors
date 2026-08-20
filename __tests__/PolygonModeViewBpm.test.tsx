@@ -1,12 +1,7 @@
 /**
  * @jest-environment jsdom
  *
- * PolygonModeView — BPM ± 컨트롤 상호작용 테스트
- *
- * 검증 항목:
- *   1. 짧게 누르면 -1 / +1 BPM
- *   2. 길게 누르면 -10 / +10 BPM
- *   3. 길게 누른 직후 짧게 누르면 -1 / +1 BPM (억제되지 않음)
+ * PolygonModeView — 비트 모드 BPM 컨트롤 연결 테스트
  */
 
 import React from "react";
@@ -48,6 +43,19 @@ jest.mock("@/components/polygon-mode/PolygonLayerEditor", () => ({
 jest.mock("@/components/polygon-mode/PolygonOffsetPopup", () => ({
   PolygonOffsetPopup: () => null,
 }));
+jest.mock("@/components/BpmSlider", () => {
+  const React = require("react");
+  return {
+    BpmSlider: ({ bpm, onBpmChange, onTapTempo }: any) => React.createElement(
+      "div",
+      { "data-testid": "bpm-slider" },
+      React.createElement("button", { "data-testid": "bpm-slider-tap", onClick: onTapTempo }, "TAP"),
+      React.createElement("button", { "data-testid": "bpm-slider-increment", onClick: () => onBpmChange(bpm + 1) }, "+"),
+      React.createElement("span", { "data-testid": "bpm-display" }, String(bpm)),
+      React.createElement("span", null, "BPM"),
+    ),
+  };
+});
 jest.mock("@/lib/audio-renderer", () => ({
   getWebAudioContext: jest.fn(() => null),
 }));
@@ -76,8 +84,8 @@ function makePolygonMode(): UsePolygonModeResult {
 
 // ── 테스트 ────────────────────────────────────────────────────────────────────
 
-describe("PolygonModeView — BPM ± controls", () => {
-  it("shows only the BPM value without the label or status dot", () => {
+describe("PolygonModeView — beat-mode BPM controller", () => {
+  it("renders the shared beat-mode BPM controller with its BPM label", () => {
     const { queryByText } = render(
       <PolygonModeView
         polygonMode={makePolygonMode()}
@@ -88,13 +96,13 @@ describe("PolygonModeView — BPM ± controls", () => {
       />,
     );
 
-    expect(queryByText("BPM")).toBeNull();
+    expect(queryByText("BPM")).not.toBeNull();
     expect(queryByText("120")).not.toBeNull();
   });
 
-  it("keeps a tap on the BPM value for play toggle and claims only vertical drags", () => {
+  it("keeps the BPM controller tap connected to play toggle", () => {
     const onTogglePlay = jest.fn();
-    const { getByText } = render(
+    const { getByTestId } = render(
       <PolygonModeView
         polygonMode={makePolygonMode()}
         isPlaying={false}
@@ -104,25 +112,12 @@ describe("PolygonModeView — BPM ± controls", () => {
         onBpmChange={jest.fn()}
       />,
     );
-    const panResponder = (require("react-native") as {
-      __getLastPanResponderConfig: () => {
-        onStartShouldSetPanResponder: () => boolean;
-        onMoveShouldSetPanResponder: (_event: unknown, gesture: { dx: number; dy: number }) => boolean;
-      };
-    }).__getLastPanResponderConfig();
 
-    expect(panResponder.onStartShouldSetPanResponder()).toBe(false);
-    expect(panResponder.onMoveShouldSetPanResponder({}, { dx: 0, dy: 4 })).toBe(false);
-    expect(panResponder.onMoveShouldSetPanResponder({}, { dx: 2, dy: -12 })).toBe(true);
-    expect(panResponder.onMoveShouldSetPanResponder({}, { dx: 12, dy: -2 })).toBe(false);
-
-    fireEvent.click(getByText("120"));
+    fireEvent.click(getByTestId("bpm-slider-tap"));
     expect(onTogglePlay).toHaveBeenCalledTimes(1);
   });
 
-  // ── 단축키: click = 짧게 누름, contextMenu = 길게 누름 (stub 매핑) ──
-
-  it("short press on − calls onBpmChange(bpm - 1)", () => {
+  it("forwards BPM changes through the shared controller", () => {
     const onBpmChange = jest.fn();
     const { getByTestId } = render(
       <PolygonModeView
@@ -133,122 +128,7 @@ describe("PolygonModeView — BPM ± controls", () => {
         onBpmChange={onBpmChange}
       />,
     );
-    fireEvent.click(getByTestId("bpm-minus"));
-    expect(onBpmChange).toHaveBeenCalledWith(119);
-  });
-
-  it("short press on + calls onBpmChange(bpm + 1)", () => {
-    const onBpmChange = jest.fn();
-    const { getByTestId } = render(
-      <PolygonModeView
-        polygonMode={makePolygonMode()}
-        isPlaying={false}
-        onClose={jest.fn()}
-        bpm={120}
-        onBpmChange={onBpmChange}
-      />,
-    );
-    fireEvent.click(getByTestId("bpm-plus"));
+    fireEvent.click(getByTestId("bpm-slider-increment"));
     expect(onBpmChange).toHaveBeenCalledWith(121);
-  });
-
-  it("long press on − calls onBpmChange(bpm - 10)", () => {
-    const onBpmChange = jest.fn();
-    const { getByTestId } = render(
-      <PolygonModeView
-        polygonMode={makePolygonMode()}
-        isPlaying={false}
-        onClose={jest.fn()}
-        bpm={120}
-        onBpmChange={onBpmChange}
-      />,
-    );
-    // contextMenu fires onContextMenu → onLongPress (stub 매핑)
-    fireEvent.contextMenu(getByTestId("bpm-minus"));
-    expect(onBpmChange).toHaveBeenCalledWith(110);
-  });
-
-  it("long press on + calls onBpmChange(bpm + 10)", () => {
-    const onBpmChange = jest.fn();
-    const { getByTestId } = render(
-      <PolygonModeView
-        polygonMode={makePolygonMode()}
-        isPlaying={false}
-        onClose={jest.fn()}
-        bpm={120}
-        onBpmChange={onBpmChange}
-      />,
-    );
-    fireEvent.contextMenu(getByTestId("bpm-plus"));
-    expect(onBpmChange).toHaveBeenCalledWith(130);
-  });
-
-  it("short press after long press on − still calls onBpmChange(bpm - 1)", () => {
-    // bpmLongPressRef를 제거했으므로 다음 짧은 탭이 억제되지 않아야 한다.
-    // React Native Pressability가 longPress 직후 릴리즈 onPress를 억제하지만,
-    // 이후의 독립적인 짧은 탭(새 제스처)은 정상적으로 -1을 발화해야 한다.
-    const onBpmChange = jest.fn();
-    const { getByTestId } = render(
-      <PolygonModeView
-        polygonMode={makePolygonMode()}
-        isPlaying={false}
-        onClose={jest.fn()}
-        bpm={120}
-        onBpmChange={onBpmChange}
-      />,
-    );
-    fireEvent.contextMenu(getByTestId("bpm-minus")); // -10
-    fireEvent.click(getByTestId("bpm-minus"));        // -1 (억제되지 않음)
-    expect(onBpmChange).toHaveBeenCalledTimes(2);
-    expect(onBpmChange).toHaveBeenNthCalledWith(1, 110);
-    expect(onBpmChange).toHaveBeenNthCalledWith(2, 119);
-  });
-
-  it("short press after long press on + still calls onBpmChange(bpm + 1)", () => {
-    const onBpmChange = jest.fn();
-    const { getByTestId } = render(
-      <PolygonModeView
-        polygonMode={makePolygonMode()}
-        isPlaying={false}
-        onClose={jest.fn()}
-        bpm={120}
-        onBpmChange={onBpmChange}
-      />,
-    );
-    fireEvent.contextMenu(getByTestId("bpm-plus")); // +10
-    fireEvent.click(getByTestId("bpm-plus"));       // +1
-    expect(onBpmChange).toHaveBeenCalledTimes(2);
-    expect(onBpmChange).toHaveBeenNthCalledWith(1, 130);
-    expect(onBpmChange).toHaveBeenNthCalledWith(2, 121);
-  });
-
-  it("clamps − at BPM_MIN (20)", () => {
-    const onBpmChange = jest.fn();
-    const { getByTestId } = render(
-      <PolygonModeView
-        polygonMode={makePolygonMode()}
-        isPlaying={false}
-        onClose={jest.fn()}
-        bpm={25}
-        onBpmChange={onBpmChange}
-      />,
-    );
-    fireEvent.contextMenu(getByTestId("bpm-minus")); // 25 - 10 = 15 → clamped to 20
-    expect(onBpmChange).toHaveBeenCalledWith(20);
-  });
-
-  it("clamps + at BPM_MAX (300)", () => {
-    const onBpmChange = jest.fn();
-    const { getByTestId } = render(
-      <PolygonModeView
-        polygonMode={makePolygonMode()}
-        isPlaying={false}
-        onClose={jest.fn()}
-        bpm={295}
-        onBpmChange={onBpmChange}
-      />,
-    );
-    fireEvent.contextMenu(getByTestId("bpm-plus")); // 295 + 10 = 305 → clamped to 300
-    expect(onBpmChange).toHaveBeenCalledWith(300);
   });
 });

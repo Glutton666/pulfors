@@ -3,16 +3,16 @@
  *
  * 레이아웃 (위 → 아래):
  *   1. 헤더 (제목 + 닫기)
- *   2. BPM 컨트롤 (스와이프 조정, 길게 누르면 ±10)
- *   3. 폴리곤 캔버스 (flex: 1)
- *   4. 레이어 편집 패널
+ *   2. 폴리곤 캔버스 (flex: 1)
+ *   3. 레이어 편집 패널
+ *   4. 비트 모드와 같은 BPM 컨트롤
  *   5. 오프셋 팝업 (overlay)
  */
 
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback } from "react";
 import {
   View, Text, Pressable, StyleSheet, useWindowDimensions, ScrollView,
-  PanResponder, Platform,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,6 +25,7 @@ import { getWebAudioContext } from "@/lib/audio-renderer";
 import { PolygonCanvas } from "@/components/polygon-mode/PolygonCanvas";
 import { PolygonLayerEditor } from "@/components/polygon-mode/PolygonLayerEditor";
 import { PolygonOffsetPopup } from "@/components/polygon-mode/PolygonOffsetPopup";
+import { BpmSlider } from "@/components/BpmSlider";
 
 interface PolygonModeViewProps {
   polygonMode: UsePolygonModeResult;
@@ -34,9 +35,6 @@ interface PolygonModeViewProps {
   bpm?: number;
   onBpmChange?: (bpm: number) => void;
 }
-
-const BPM_MIN = 20;
-const BPM_MAX = 300;
 
 export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay, bpm, onBpmChange }: PolygonModeViewProps) {
   const { colors: C } = useTheme();
@@ -72,38 +70,6 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
   const currentPopupOffset = currentPopupLayer
     ? (currentPopupLayer.offsets[offsetPopup!.vertexIdx] ?? 0)
     : 0;
-
-  // ── BPM 스와이프 제스처 ─────────────────────────────────────────────────
-  // 수직 드래그로 BPM 조정: 위로 올리면 증가, 아래로 내리면 감소
-  // 1.5px = 1 BPM (앵커: 제스처 시작 시점의 BPM)
-  const bpmRef = useRef(bpm ?? 120);
-  useEffect(() => { if (bpm !== undefined) bpmRef.current = bpm; }, [bpm]);
-  const onBpmChangeRef = useRef(onBpmChange);
-  useEffect(() => { onBpmChangeRef.current = onBpmChange; }, [onBpmChange]);
-  const bpmGestureStartRef = useRef(120);
-
-  const bpmPanResponder = useRef(
-    PanResponder.create({
-      // 시작 시에는 부모 Pressable이 탭을 처리하도록 양보한다.
-      onStartShouldSetPanResponder: () => false,
-      // 의미 있는 세로 드래그만 BPM 제스처로 가져간다.
-      onMoveShouldSetPanResponder: (_, gs) => {
-        const absDy = Math.abs(gs.dy);
-        const absDx = Math.abs(gs.dx);
-        return absDy > 8 && absDy > absDx * 1.2;
-      },
-      onPanResponderGrant: () => {
-        bpmGestureStartRef.current = bpmRef.current;
-      },
-      onPanResponderMove: (_, gs) => {
-        const cb = onBpmChangeRef.current;
-        if (!cb) return;
-        const delta = Math.round(-gs.dy / 1.5);
-        const newBpm = Math.max(BPM_MIN, Math.min(BPM_MAX, bpmGestureStartRef.current + delta));
-        if (newBpm !== bpmRef.current) cb(newBpm);
-      },
-    }),
-  ).current;
 
   // ── 커스텀 사운드 가져오기 ──────────────────────────────────────────────
   const handlePickCustomSound = useCallback(async (layerId: string) => {
@@ -199,81 +165,6 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
         </Pressable>
       </View>
 
-      {/* ── BPM 컨트롤 ── */}
-      {bpm !== undefined && onBpmChange && (
-        <View style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: S.ms(12, 0.3),
-          paddingVertical: S.ms(8, 0.3),
-          borderBottomWidth: 1,
-          borderBottomColor: C.border,
-        }}>
-          {/* − 버튼: 짧게 누르면 -1, 길게 누르면 -10 */}
-          {/* RN Pressability가 longPress 후 릴리즈 onPress를 이미 억제하므로 추가 ref 불필요 */}
-          <Pressable
-            testID="bpm-minus"
-            onPress={() => onBpmChange(Math.max(BPM_MIN, bpm - 1))}
-            onLongPress={() => onBpmChange(Math.max(BPM_MIN, bpm - 10))}
-            delayLongPress={300}
-            style={({ pressed }) => ({
-              width: S.ms(36, 0.3),
-              height: S.ms(36, 0.3),
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: pressed ? 0.6 : 1,
-            })}
-            hitSlop={8}
-          >
-            <Text style={{ fontSize: S.ms(18, 0.3), color: C.text, lineHeight: S.ms(22, 0.3) }}>−</Text>
-          </Pressable>
-
-          {/* BPM 표시: 수직 스와이프로 조정 */}
-          <Pressable
-            onPress={() => onTogglePlay?.()}
-            style={({ pressed }) => ({
-              opacity: pressed ? 0.7 : 1,
-            })}
-            hitSlop={4}
-          >
-            <View
-              {...bpmPanResponder.panHandlers}
-              style={{ flexDirection: "row", alignItems: "baseline", paddingVertical: 4 }}
-            >
-              <Text style={{
-                fontFamily: "SpaceGrotesk_700Bold",
-                fontSize: S.ms(28, 0.4),
-                color: C.text,
-                lineHeight: S.ms(32, 0.4),
-                minWidth: S.ms(64, 0.3),
-                textAlign: "center",
-              }}>
-                {bpm}
-              </Text>
-            </View>
-          </Pressable>
-
-          {/* + 버튼: 짧게 누르면 +1, 길게 누르면 +10 */}
-          <Pressable
-            testID="bpm-plus"
-            onPress={() => onBpmChange(Math.min(BPM_MAX, bpm + 1))}
-            onLongPress={() => onBpmChange(Math.min(BPM_MAX, bpm + 10))}
-            delayLongPress={300}
-            style={({ pressed }) => ({
-              width: S.ms(36, 0.3),
-              height: S.ms(36, 0.3),
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: pressed ? 0.6 : 1,
-            })}
-            hitSlop={8}
-          >
-            <Text style={{ fontSize: S.ms(18, 0.3), color: C.text, lineHeight: S.ms(22, 0.3) }}>+</Text>
-          </Pressable>
-        </View>
-      )}
-
       {/* ── 캔버스 영역 ── */}
       <ScrollView
         style={{ flex: 1 }}
@@ -331,6 +222,23 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
         onAddLayer={handleAddLayer}
         onPickCustomSound={handlePickCustomSound}
       />
+
+      {/* ── BPM 컨트롤: 비트 모드와 동일한 디자인, 화면 최하단 ── */}
+      {bpm !== undefined && onBpmChange && (
+        <View style={{
+          paddingHorizontal: S.ms(16, 0.3),
+          paddingTop: S.ms(8, 0.3),
+          paddingBottom: insets.bottom + S.ms(8, 0.3),
+          borderTopWidth: 1,
+          borderTopColor: C.border,
+        }}>
+          <BpmSlider
+            bpm={bpm}
+            onBpmChange={onBpmChange}
+            onTapTempo={() => onTogglePlay?.()}
+          />
+        </View>
+      )}
 
       {/* ── 오프셋 팝업 ── */}
       {offsetPopup && (
