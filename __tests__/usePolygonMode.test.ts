@@ -980,25 +980,38 @@ describe("computeLayerLayout", () => {
     }
   });
 
-  it("same-sides layers overlap exactly at the hub", () => {
+  it("same-sides layers share the hub and grow in insertion order", () => {
     const layers = [
       makeLayer({ id: "a", sides: 4 }),
       makeLayer({ id: "b", sides: 4 }),
     ];
     const layouts = layoutFor(layers);
-    expect(layouts[0].r).toBeCloseTo(layouts[1].r, 6);
+    expect(layouts[1].r).toBeGreaterThan(layouts[0].r);
     expect(layouts[0].cx).toBeCloseTo(layouts[1].cx, 6);
     expect(layouts[0].cy).toBeCloseTo(layouts[1].cy, 6);
   });
 
-  it("4+ same-sides layers all share the same center and radius", () => {
+  it("4+ same-sides layers all share the center and grow by 10px", () => {
     const layers = ["a", "b", "c", "d"].map((id) => makeLayer({ id, sides: 4 }));
     const layouts = layoutFor(layers);
-    for (const l of layouts) {
-      expect(l.r).toBeCloseTo(layouts[0].r, 6);
-      expect(l.cx).toBeCloseTo(CENTER, 6);
-      expect(l.cy).toBeCloseTo(CENTER, 6);
+    for (let i = 0; i < layouts.length; i++) {
+      expect(layouts[i].cx).toBeCloseTo(CENTER, 6);
+      expect(layouts[i].cy).toBeCloseTo(CENTER, 6);
+      if (i > 0) {
+        expect(layouts[i].r - layouts[i - 1].r).toBeCloseTo(10, 6);
+      }
     }
+  });
+
+  it("compresses crowded same-sides layers inside the canvas margin", () => {
+    const layers = Array.from({ length: 8 }, (_, index) =>
+      makeLayer({ id: `layer-${index}`, sides: 4 }),
+    );
+    const layouts = layoutFor(layers);
+    const maxRadius = SIZE / 2 - 20;
+
+    expect(layouts.at(-1)!.r).toBeCloseTo(maxRadius, 6);
+    expect(layouts.every((layout) => layout.r <= maxRadius)).toBe(true);
   });
 
   it("same pulse layers share the hub and grow slightly in insertion order", () => {
@@ -1053,15 +1066,16 @@ describe("computeLayerLayout", () => {
     expect(pTarget.y).toBeCloseTo(SIZE / 2, 6);
   });
 
-  it("mixed same+different sides: every shape keeps the same radius", () => {
+  it("mixed sides: only matching sides receive the overlap offset", () => {
     const layers = [
       makeLayer({ id: "a", sides: 4 }),
       makeLayer({ id: "b", sides: 4 }),
       makeLayer({ id: "c", sides: 3, beatTypes: ["strong", "normal", "normal"] }),
     ];
     const layouts = layoutFor(layers);
+    expect(layouts[1].r).toBeGreaterThan(layouts[0].r);
+    expect(layouts[2].r).toBeCloseTo(layouts[0].r, 6);
     for (const layout of layouts) {
-      expect(layout.r).toBeCloseTo(layouts[0].r, 6);
       expect(layout.cx).toBeCloseTo(SIZE / 2, 6);
       expect(layout.cy).toBeCloseTo(SIZE / 2, 6);
     }

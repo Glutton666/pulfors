@@ -88,29 +88,34 @@ export interface LayerLayout {
 /**
  * 중앙 허브 기반 동심 레이아웃 계산.
  *
- * 모든 레이어가 캔버스 중앙 허브를 공유한다. 일반 다각형은 같은
- * 외접 반지름을 사용하고, 여러 펄스 레이어만 추가 순서대로 조금씩
- * 커져서 겹친 원의 외곽선이 보이도록 한다.
+ * 모든 레이어가 캔버스 중앙 허브를 공유한다. 변 수가 같은 도형 그룹은
+ * 추가 순서대로 조금씩 커져서 겹친 도형의 외곽선이 보이도록 하고,
+ * 변 수가 다른 도형 그룹은 기본 외접 반지름을 공유한다.
  */
 export function computeLayerLayout(sortedLayers: PolygonLayer[], size: number): LayerLayout[] {
   if (sortedLayers.length === 0) return [];
 
   const maxRadius = size / 2 - 20;
   const baseRadius = Math.max(20, maxRadius * 0.72);
-  const pulseCount = sortedLayers.filter((layer) => Math.max(1, layer.sides) === 1).length;
-  // 10px은 1.5px 점선 테두리 위에서도 겹친 링이 분명히 구분되는 최소 간격이다.
-  // 펄스가 많아지면 가용 반지름 안으로 자동 압축한다.
-  const pulseStep = pulseCount > 1
-    ? Math.min(10, Math.max(0, (maxRadius - baseRadius) / (pulseCount - 1)))
-    : 0;
+  const shapeCounts = new Map<number, number>();
+  for (const layer of sortedLayers) {
+    const sides = Math.max(1, layer.sides);
+    shapeCounts.set(sides, (shapeCounts.get(sides) ?? 0) + 1);
+  }
+  // 10px은 1.5px 점선 테두리 위에서도 겹친 도형이 분명히 구분되는
+  // 최소 간격이다. 같은 변 수의 도형이 많아지면 가용 반지름 안으로 압축한다.
+  const shapeIndices = new Map<number, number>();
   const cx = size / 2;
   const cy = size / 2;
-  let pulseIndex = 0;
   return sortedLayers.map((layer) => {
-    const isPulse = Math.max(1, layer.sides) === 1;
-    const r = isPulse
-      ? baseRadius + pulseStep * pulseIndex++
-      : baseRadius;
+    const sides = Math.max(1, layer.sides);
+    const index = shapeIndices.get(sides) ?? 0;
+    const count = shapeCounts.get(sides) ?? 1;
+    const groupStep = count > 1
+      ? Math.min(10, Math.max(0, (maxRadius - baseRadius) / (count - 1)))
+      : 0;
+    shapeIndices.set(sides, index + 1);
+    const r = baseRadius + groupStep * index;
     return { r, cx, cy };
   });
 }

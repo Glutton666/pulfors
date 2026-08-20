@@ -11,6 +11,6 @@ The polygon metronome is a **polyrhythm** feature: an N-sided layer must sound N
 
 **Decided semantics:**
 - Mute vertex = silent AND visually off at its slot time, but the slot keeps its time — the period never shrinks.
-- BPM / time-signature changes take effect immediately: the remaining slots of the in-flight measure are rescheduled against the new timing (already-fired slots must not re-fire).
+- BPM / time-signature changes clear already-scheduled slots; the next engine beat schedules using the latest timing. Do not expect remaining slots in the current beat window to be rescheduled.
 - A time-signature change resets the engine's beat counter to 0, so the polygon's measure phase must be re-anchored too, or measure starts drift apart.
 - Layer edits during playback silence the rest of the current measure and apply from the next measure (prevents stale-closure fires on deleted vertices).

@@ -21,4 +21,5 @@
 - [Stage beat column height clipping](stage-beat-column-clipping.md) — overflow:hidden + fixed 172px fonts silently clipped subdiv/measure dots on phone heights; scale by measured height, dots need ≥0.4 alpha.
 - [e2e settings seeding limits](e2e-settings-seeding-limits.md) — localStorage metronome_settings seed restores most fields but NOT beatTypes; staged subdivision pattern is a clipboard, never played.
 - [Polygon polyrhythm scheduling](polygon-polyrhythm-scheduling.md) — N-gon = N events per measure (not per beat); mute keeps its slot; mid-measure edits cancel that layer's timers.
+- [Polygon overlap layout](polygon-overlap-layout.md) — same-side layers step outward by insertion order; different side counts share the hub/base radius.
 - [Stage mode overlay wrapper](stage-mode-overlay-wrapper.md) — modeSlideStyle wrappers need absoluteFillObject or the overlay renders at 0×0; also add pointerEvents="box-none" so transparent wrapper doesn't block touches.
