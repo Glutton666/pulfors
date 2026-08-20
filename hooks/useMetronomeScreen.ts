@@ -63,6 +63,7 @@ import {
   type ActiveModal,
   type SgTgState,
   deriveModalFlags,
+  getMenuItemCloseTarget,
   openTuningGuideFromSignalGen,
   closeTuningGuide,
 } from "@/lib/modal-routing";
@@ -334,18 +335,35 @@ export function useMetronomeScreen() {
   } = useFadeOutSession(isPlaying, t);
 
 
-  const closeAllModals = useCallback(() => {
-    tuningGuideOnSelectRef.current = null;
-    setActiveModal(null);
-    setLandscapeImageModalVisible(false);
-    setRecorderTarget(null);
-  }, []);
-
   // Tracks which modal opened settings, so we can return there on close
   const settingsReturnModalRef = useRef<ActiveModal>(null);
 
   // Tracks which modal opened stem separation, so we can return there on close
   const stemSepReturnModalRef = useRef<ActiveModal>(null);
+
+  // Tracks whether a full-screen item was opened from the main menu.
+  // This lives in the screen hook (rather than a UI component) so Android's
+  // hardware-back handler follows the same return path as on-screen close buttons.
+  const menuItemReturnRef = useRef(false);
+  const markMenuItemReturn = useCallback(() => {
+    menuItemReturnRef.current = true;
+  }, []);
+  const clearMenuItemReturn = useCallback(() => {
+    menuItemReturnRef.current = false;
+  }, []);
+  const closeMenuItem = useCallback(() => {
+    const target = getMenuItemCloseTarget(menuItemReturnRef.current);
+    menuItemReturnRef.current = false;
+    setActiveModal(target);
+  }, []);
+
+  const closeAllModals = useCallback(() => {
+    tuningGuideOnSelectRef.current = null;
+    clearMenuItemReturn();
+    setActiveModal(null);
+    setLandscapeImageModalVisible(false);
+    setRecorderTarget(null);
+  }, [clearMenuItemReturn]);
 
   const openExclusive = useCallback((modal: ActiveModal) => {
     tuningGuideOnSelectRef.current = null;
@@ -373,11 +391,11 @@ export function useMetronomeScreen() {
       if (showSignalGen) {
         tuningGuideOnSelectRef.current = null;
         reopenSignalGenAfterTuningGuideRef.current = false;
-        setActiveModal(null);
+        closeMenuItem();
         return true;
       }
-      if (showPracticeBook) { setActiveModal(null); return true; }
-      if (showWorkUp) { setActiveModal(null); return true; }
+      if (showPracticeBook) { closeMenuItem(); return true; }
+      if (showWorkUp) { closeMenuItem(); return true; }
       if (showFadeOut) { setActiveModal(null); return true; }
       if (showScheduledStart) { setActiveModal(null); return true; }
       if (showDrumKit) { setActiveModal(null); return true; }
@@ -388,9 +406,15 @@ export function useMetronomeScreen() {
         if (returnTo) setTimeout(() => setActiveModal(returnTo), 160);
         return true;
       }
-      if (showMenu) { setActiveModal(null); return true; }
+      if (showPolygon) { closeMenuItem(); return true; }
+      if (showMenu) { clearMenuItemReturn(); setActiveModal(null); return true; }
       if (showOnboarding) { setActiveModal(null); return true; }
       if (showReboot) { setShowReboot(false); return true; }
+      if (coreMode === "score") {
+        setScoreMode(null);
+        closeMenuItem();
+        return true;
+      }
       if (barModeRef.current) { setBarMode(false); barModeRef.current = false; return true; }
       Alert.alert("앱 종료", "앱을 종료하시겠습니까?", [
         { text: "취소", style: "cancel" },
@@ -400,7 +424,7 @@ export function useMetronomeScreen() {
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
     return () => sub.remove();
-  }, [activeModal, showReboot]);
+  }, [activeModal, showReboot, coreMode, closeMenuItem, clearMenuItemReturn, setScoreMode]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -3307,6 +3331,9 @@ export function useMetronomeScreen() {
     activeModal,
     setActiveModal,
     openExclusive,
+    markMenuItemReturn,
+    clearMenuItemReturn,
+    closeMenuItem,
     showSettings,
     showMenu,
     showSignalGen,

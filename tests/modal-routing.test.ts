@@ -19,6 +19,7 @@ import { join } from "node:path";
 import {
   type ActiveModal,
   deriveModalFlags,
+  getMenuItemCloseTarget,
   countVisibleModals,
   openTuningGuideFromSignalGen,
   closeTuningGuide,
@@ -34,6 +35,36 @@ test("modal-routing: activeModal=null 이면 visible 모달이 0개", () => {
   assert.equal(countVisibleModals(deriveModalFlags(null)), 0);
 });
 
+test("modal-routing: 메뉴에서 연 항목을 닫으면 메뉴로 복귀한다", () => {
+  const target = getMenuItemCloseTarget(true);
+  assert.equal(target, "menu");
+  assert.equal(countVisibleModals(deriveModalFlags(target)), 1);
+  assert.equal(deriveModalFlags(target).showMenu, true);
+});
+
+test("modal-routing: 메뉴 밖에서 연 항목을 닫으면 기본 화면으로 복귀한다", () => {
+  const target = getMenuItemCloseTarget(false);
+  assert.equal(target, null);
+  assert.equal(countVisibleModals(deriveModalFlags(target)), 0);
+});
+
+test("menu return: 메뉴 진입·직접 진입의 종료 대상이 모든 메뉴 항목에서 일관된다", () => {
+  const menuItems = ["signalGen", "practiceBook", "workUp", "polygon", "score"] as const;
+
+  for (const item of menuItems) {
+    assert.equal(
+      getMenuItemCloseTarget(true),
+      "menu",
+      `${item}: 메뉴에서 열었으면 닫을 때 메뉴로 돌아가야 한다`,
+    );
+    assert.equal(
+      getMenuItemCloseTarget(false),
+      null,
+      `${item}: 다이얼 등 메뉴 밖에서 열었으면 기본 화면으로 닫혀야 한다`,
+    );
+  }
+});
+
 test("modal-routing: 어떤 activeModal 값이든 visible 모달은 최대 1개", () => {
   const allValues: ActiveModal[] = [
     "settings", "menu", "signalGen", "tuningGuide", "practiceBook", "workUp",
@@ -47,6 +78,36 @@ test("modal-routing: 어떤 activeModal 값이든 visible 모달은 최대 1개"
       count <= 1,
       `activeModal="${modal}" 일 때 visible 모달 수가 ${count}개 — 최대 1개여야 한다`,
     );
+  }
+});
+
+test("menu return: Android BackHandler가 메뉴 진입 항목을 공통 closeMenuItem 경로로 닫는다", () => {
+  const src = readFileSync(join(process.cwd(), "hooks/useMetronomeScreen.ts"), "utf-8");
+  const backStart = src.indexOf("const onBack = () => {");
+  const backEnd = src.indexOf('BackHandler.addEventListener("hardwareBackPress"', backStart);
+  assert.ok(backStart >= 0 && backEnd > backStart, "Android BackHandler 본문을 찾을 수 없다");
+  const onBack = src.slice(backStart, backEnd);
+
+  for (const branch of ["showSignalGen", "showPracticeBook", "showWorkUp", "showPolygon", 'coreMode === "score"']) {
+    const branchIndex = onBack.indexOf(branch);
+    assert.ok(branchIndex >= 0, `Android BackHandler에 ${branch} 종료 분기가 없다`);
+    const nextBranchIndex = onBack.indexOf("if (", branchIndex + 3);
+    const branchBody = onBack.slice(branchIndex, nextBranchIndex === -1 ? undefined : nextBranchIndex);
+    assert.match(
+      branchBody,
+      /closeMenuItem\(\)/,
+      `Android BackHandler의 ${branch} 분기가 공통 메뉴 복귀 경로를 사용하지 않는다`,
+    );
+  }
+});
+
+test("menu return: 메뉴 화면의 각 항목 진입이 메뉴 복귀 상태를 기록한다", () => {
+  const src = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
+  for (const callback of ["onSignalGen", "onWorkUp", "onPracticeBook", "onScore", "onPolygon"]) {
+    const start = src.indexOf(`${callback}={() =>`);
+    assert.ok(start >= 0, `MenuScreen에 ${callback} 콜백이 없다`);
+    const body = src.slice(start, src.indexOf("}", start + callback.length + 8) + 1);
+    assert.match(body, /openMenuItem\(/, `${callback} 진입 시 메뉴 복귀 상태를 기록하지 않는다`);
   }
 });
 

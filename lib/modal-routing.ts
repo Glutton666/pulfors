@@ -43,6 +43,16 @@ export function deriveModalFlags(activeModal: ActiveModal) {
   };
 }
 
+/**
+ * 메뉴에서 연 항목을 닫을 때의 복귀 대상.
+ *
+ * 다이얼 등 다른 경로에서 직접 연 항목은 기존처럼 기본 화면(null)으로 닫고,
+ * 메뉴에서 연 항목만 메뉴를 다시 표시한다.
+ */
+export function getMenuItemCloseTarget(openedFromMenu: boolean): ActiveModal {
+  return openedFromMenu ? "menu" : null;
+}
+
 /** 현재 visible=true 인 모달 수를 반환한다. */
 export function countVisibleModals(
   flags: ReturnType<typeof deriveModalFlags>,

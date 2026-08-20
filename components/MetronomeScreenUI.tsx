@@ -85,6 +85,7 @@ export function MetronomeScreenUI(props: Props) {
     handlePatternChange, handleDragStart, handleDragMove, handleDragEnd,
     showSubdivisionLongPressHint, setShowSubdivisionLongPressHint,
     activeModal, setActiveModal, openExclusive,
+    markMenuItemReturn, clearMenuItemReturn, closeMenuItem,
     showSettings, showMenu, showSignalGen, showTuningGuide, showPracticeBook,
     showWorkUp, showOnboarding, showDrumKit, showScheduledStart,
     showFadeOut, showBpmDetect, showStemSep, showPolygon,
@@ -170,6 +171,22 @@ export function MetronomeScreenUI(props: Props) {
     volumeRef,
   } = props;
 
+  const openMenuItem = (open: () => void) => {
+    markMenuItemReturn();
+    open();
+  };
+
+  const closeScoreMode = () => {
+    setScoreMode(null);
+    closeMenuItem();
+  };
+
+  const openModeDial = () => {
+    // 사용자가 다이얼에서 새 모드를 고르면 메뉴 복귀 흐름을 벗어난다.
+    clearMenuItemReturn();
+    modeSwitcherDialRef.current?.open();
+  };
+
   // ── 폴리곤 메트로놈 상태 ──────────────────────────────────────────────────
   const polygonMode = usePolygonMode({
     enabled: showPolygon,
@@ -206,8 +223,8 @@ export function MetronomeScreenUI(props: Props) {
         <Animated.View style={[StyleSheet.absoluteFillObject, { zIndex: 500, backgroundColor: C.background }, modeSlideStyle]}>
           <ScoreListScreen
             defaultBpm={bpm}
-            onOpenDial={() => modeSwitcherDialRef.current?.open()}
-            onClose={() => setScoreMode(null)}
+            onOpenDial={openModeDial}
+            onClose={closeScoreMode}
             onOpenEditor={(doc) => {
               setScoreEditorDoc(doc);
               setScoreMode("editor");
@@ -220,7 +237,7 @@ export function MetronomeScreenUI(props: Props) {
           <ScoreEditorScreen
             doc={scoreEditorDoc}
             onBack={() => setScoreMode("list")}
-            onOpenDial={() => modeSwitcherDialRef.current?.open()}
+            onOpenDial={openModeDial}
             onSaved={(updatedDoc) => {
               setScoreEditorDoc(updatedDoc);
               // 연습장 캐시 무효화 (저장된 연결 항목 반영)
@@ -323,7 +340,7 @@ export function MetronomeScreenUI(props: Props) {
       {/* 상단 중앙 고정 모드 레이블 — 탭하면 팬 다이얼 열기 (무대·악보·메뉴·연습장 중 숨김, 해당 화면 헤더에 자체 트리거 있음) */}
       {!stageModeActive && scoreMode === null && !showMenu && !showPracticeBook && !showPolygon && (
         <Pressable
-          onPress={() => modeSwitcherDialRef.current?.open()}
+          onPress={openModeDial}
           style={{
             position: "absolute",
             top: (insets.top || webTopInset) + 2,
@@ -375,32 +392,41 @@ export function MetronomeScreenUI(props: Props) {
         <Animated.View style={[StyleSheet.absoluteFillObject, { zIndex: 400 }, modeSlideStyle]}>
           <MenuScreen
             topInset={insets.top || webTopInset}
-            onOpenDial={() => modeSwitcherDialRef.current?.open()}
-            onClose={() => setActiveModal(null)}
+            onOpenDial={openModeDial}
+            onClose={() => {
+              clearMenuItemReturn();
+              setActiveModal(null);
+            }}
             onSettings={() => {
               settingsReturnModalRef.current = "menu";
               openExclusive("settings");
             }}
             onSignalGen={() => {
-              if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
-              openExclusive("signalGen");
+              openMenuItem(() => {
+                if (loggingEnabled) featureStartRef.current = { name: "signal_generator", start: Date.now() };
+                openExclusive("signalGen");
+              });
             }}
-            onWorkUp={() => openExclusive("workUp")}
+            onWorkUp={() => openMenuItem(() => openExclusive("workUp"))}
             onPracticeBook={() => {
-              if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
-              openExclusive("practiceBook");
+              openMenuItem(() => {
+                if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
+                openExclusive("practiceBook");
+              });
             }}
             onStemSep={() => {
               // 음원분리 닫을 때 메뉴로 돌아올 수 있도록 직전 activeModal을 저장한다.
-              stemSepReturnModalRef.current = activeModal;
+              stemSepReturnModalRef.current = "menu";
               openExclusive("stemSep");
             }}
             onScore={() => {
-              setActiveModal(null);
-              setScoreMode("list");
+              openMenuItem(() => {
+                setActiveModal(null);
+                setScoreMode("list");
+              });
             }}
             onPolygon={() => {
-              openExclusive("polygon");
+              openMenuItem(() => openExclusive("polygon"));
             }}
           />
         </Animated.View>
@@ -451,7 +477,7 @@ export function MetronomeScreenUI(props: Props) {
           <PolygonModeView
             polygonMode={polygonMode}
             isPlaying={isPlaying}
-            onClose={() => setActiveModal(null)}
+            onClose={closeMenuItem}
             onTogglePlay={() => void togglePlayPauseRef.current?.()}
             bpm={bpm}
             onBpmChange={updateBpm}
@@ -535,7 +561,7 @@ export function MetronomeScreenUI(props: Props) {
             if (dur >= 2) addActivityLog({ type: "feature_usage", data: { feature: "signal_generator", duration: dur } });
             featureStartRef.current = null;
           }
-          setActiveModal(null);
+          closeMenuItem();
         }}
         onOpenTuningGuide={(currentFreq, onSelectFreq) => {
           tuningGuideOnSelectRef.current = onSelectFreq;
@@ -603,9 +629,13 @@ export function MetronomeScreenUI(props: Props) {
       {showPracticeBook && (
       <PracticeBookModal
         visible={showPracticeBook}
-        onOpenDial={() => { setActiveModal(null); setTimeout(() => modeSwitcherDialRef.current?.open(), 100); }}
-        onClose={() => {
+        onOpenDial={() => {
+          clearMenuItemReturn();
           setActiveModal(null);
+          setTimeout(() => modeSwitcherDialRef.current?.open(), 100);
+        }}
+        onClose={() => {
+          closeMenuItem();
           if (loggingEnabled && featureStartRef.current?.name === "practice_note") {
             const dur = Math.round((Date.now() - featureStartRef.current.start) / 1000);
             if (dur >= 2) addActivityLog({ type: "feature_usage", data: { feature: "practice_note", duration: dur } });
@@ -672,7 +702,7 @@ export function MetronomeScreenUI(props: Props) {
       {showWorkUp && (
       <WorkUpOverviewModal
         visible={showWorkUp}
-        onClose={() => setActiveModal(null)}
+        onClose={closeMenuItem}
         loggingEnabled={loggingEnabled}
         roomTrackingActive={roomTrackingActive}
         trackingRoomName={trackingRoomName}
