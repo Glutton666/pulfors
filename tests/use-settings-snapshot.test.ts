@@ -17,6 +17,13 @@ import { renderHook, act } from "@testing-library/react";
 
 // Saved settings accumulator — records every call to saveSettings
 const savedSettings: Array<Record<string, unknown>> = [];
+let mockPersistStatus = {
+  lastSaveAt: null as number | null,
+  lastErrorAt: null as number | null,
+  consecutiveFailures: 0,
+  pendingChanges: 0,
+  cycleFailed: false,
+};
 
 jest.mock("@/lib/storage", () => ({
   loadSettings: jest.fn().mockResolvedValue({
@@ -61,11 +68,13 @@ jest.mock("@/lib/persist", () => ({
     ) => {
       // Returns a partial-update persister that merges into the snapshot and
       // saves immediately — mirrors the real one's contract without debouncing.
-      return (partial?: Record<string, unknown>) => {
+      const persister = (partial?: Record<string, unknown>) => {
         const snapshot = getSnapshot();
         const merged = partial ? { ...snapshot, ...partial } : snapshot;
         save(merged);
       };
+      persister.getStatus = () => mockPersistStatus;
+      return persister;
     },
   ),
 }));
@@ -118,6 +127,13 @@ function buildParams(): UseSettingsParams {
 
 beforeEach(() => {
   savedSettings.length = 0;
+  mockPersistStatus = {
+    lastSaveAt: null,
+    lastErrorAt: null,
+    consecutiveFailures: 0,
+    pendingChanges: 0,
+    cycleFailed: false,
+  };
   jest.clearAllMocks();
   // Re-apply the mock implementation that was cleared
   const { saveSettings } = require("@/lib/storage");
@@ -137,6 +153,10 @@ beforeEach(() => {
     backgroundPlay: false, autoResumeAfterInterruption: true,
     showLandscapeImage: true, landscapeContentType: "photo",
   });
+});
+
+afterEach(() => {
+  jest.useRealTimers();
 });
 
 test("beatDenominator is present in the snapshot when volume is changed after setting denominator", () => {
@@ -186,4 +206,36 @@ test("beatDenominator is present in every save, not only in the explicit change 
   expect(savedSettings.length).toBeGreaterThan(0);
   const anyHasDenominator = savedSettings.some((s) => s.beatDenominator !== undefined);
   expect(anyHasDenominator).toBe(true);
+});
+
+test("failed persistence is exposed to the UI and clears after the next success", () => {
+  jest.useFakeTimers();
+  const params = buildParams();
+  const { result } = renderHook(() => useSettings(params));
+
+  act(() => {
+    mockPersistStatus = {
+      lastSaveAt: null,
+      lastErrorAt: Date.now(),
+      consecutiveFailures: 1,
+      pendingChanges: 1,
+      cycleFailed: false,
+    };
+    jest.advanceTimersByTime(250);
+  });
+  expect(result.current.persistStatus.consecutiveFailures).toBe(1);
+  expect(result.current.persistStatus.cycleFailed).toBe(false);
+
+  act(() => {
+    mockPersistStatus = {
+      lastSaveAt: Date.now(),
+      lastErrorAt: mockPersistStatus.lastErrorAt,
+      consecutiveFailures: 0,
+      pendingChanges: 0,
+      cycleFailed: false,
+    };
+    jest.advanceTimersByTime(250);
+  });
+  expect(result.current.persistStatus.consecutiveFailures).toBe(0);
+  expect(result.current.persistStatus.cycleFailed).toBe(false);
 });

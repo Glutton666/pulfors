@@ -247,11 +247,25 @@ export async function loadSettings(): Promise<MetronomeSettings> {
   return DEFAULT_SETTINGS;
 }
 
-export async function saveSettings(settings: MetronomeSettings): Promise<void> {
+export interface SaveSettingsOptions {
+  /**
+   * Use false when a caller owns its own recovery UI (for example, the
+   * debounced settings persister). This avoids a blocking global Alert for
+   * every retry attempt while preserving the rejected Promise.
+   */
+  notifyOnError?: boolean;
+}
+
+export async function saveSettings(
+  settings: MetronomeSettings,
+  options: SaveSettingsOptions = {},
+): Promise<void> {
   try {
     await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   } catch (e) {
-    notifyStorageError({ key: SETTINGS_KEY, operation: "save", error: e });
+    if (options.notifyOnError !== false) {
+      notifyStorageError({ key: SETTINGS_KEY, operation: "save", error: e });
+    }
     throw e;
   }
 }

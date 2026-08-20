@@ -19,7 +19,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { loadSettings, saveSettings } from "@/lib/storage";
 import type { MetronomeSettings, FlashMode, HapticMode, SoundSet } from "@/lib/storage";
-import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist";
+import {
+  createDebouncedPersister,
+  type DebouncedPersister,
+  type PersisterStatus,
+} from "@/lib/persist";
 import { clearWebClickBuffers } from "@/lib/audio-renderer";
 import type { ClickPCMs } from "@/lib/audio-renderer";
 import { defaultBeatTypes } from "@/app/index.helpers";
@@ -127,6 +131,8 @@ export interface UseSettingsResult {
   setBarRowHeight: React.Dispatch<React.SetStateAction<number>>;
   // ── Persistence ────────────────────────────────────────────────────────────
   persistSettings: DebouncedPersister<MetronomeSettings>;
+  /** Latest retry status, kept in React state so the UI can show stale changes. */
+  persistStatus: PersisterStatus;
   /**
    * Created here so it exists before useAudioPipeline is called.
    * Pass directly to useAudioPipeline; .current is kept current each render.
@@ -258,14 +264,50 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   if (!persistSettingsRef.current) {
     persistSettingsRef.current = createDebouncedPersister<MetronomeSettings>(
       () => persistSnapshotRef.current,
-      // saveSettings rejects on failure; the debouncer auto-retries with backoff
-      // and notifies StorageErrorAlert subscribers on final failure.
-      (merged) => saveSettings(merged),
+      // saveSettings rejects on failure and the debouncer auto-retries with
+      // backoff. The retry banner below owns this error path. Do not emit the global
+      // storage error event here: StorageErrorAlert turns that event into a
+      // blocking native Alert for every failed retry.
+      (merged) => saveSettings(merged, { notifyOnError: false }),
       500,
       { maxAttempts: 3, baseDelayMs: 500 },
     );
   }
   const persistSettings = persistSettingsRef.current;
+
+  // The persister intentionally has no React dependency, so retry callbacks
+  // cannot trigger a render on their own. Poll its public status while this
+  // screen is mounted; this catches both the first failed attempt and the
+  // eventual success that should hide the warning.
+  const [persistStatus, setPersistStatus] = useState<PersisterStatus>({
+    lastSaveAt: null,
+    lastErrorAt: null,
+    consecutiveFailures: 0,
+    pendingChanges: 0,
+    cycleFailed: false,
+  });
+  useEffect(() => {
+    // Keep this guard for lightweight test doubles and older callers that
+    // provide only the callable persister contract.
+    if (typeof persistSettings.getStatus !== "function") return;
+
+    const refreshStatus = () => {
+      const next = persistSettings.getStatus();
+      setPersistStatus((previous) => (
+        previous.lastSaveAt === next.lastSaveAt
+        && previous.lastErrorAt === next.lastErrorAt
+        && previous.consecutiveFailures === next.consecutiveFailures
+        && previous.pendingChanges === next.pendingChanges
+        && previous.cycleFailed === next.cycleFailed
+          ? previous
+          : next
+      ));
+    };
+
+    refreshStatus();
+    const timer = setInterval(refreshStatus, 250);
+    return () => clearInterval(timer);
+  }, [persistSettings]);
 
   // Stable ref for the audio-settings persist callback.
   // Created here so it is available before useAudioPipeline is called in
@@ -490,6 +532,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     barCellOpacity, setBarCellOpacity,
     barRowHeight, setBarRowHeight,
     persistSettings,
+    persistStatus,
     persistAudioSettingsCallbackRef,
     syncExternalSnapshot,
     updateVolume,

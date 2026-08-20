@@ -3,6 +3,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createDebouncedPersister } from "../lib/persist";
+import { getPersistFailureBannerKey } from "../lib/persist-status";
+import { saveSettings, type MetronomeSettings } from "../lib/storage";
+import {
+  clearStorageErrorListeners,
+  onStorageError,
+} from "../lib/storage-notifier";
+
+const AsyncStorage = require("./_stubs/async-storage");
 
 test("[persist] 디바운스 윈도우 내 다중 호출은 한 번만 write로 flush된다", async () => {
   let snapshot = { a: 1, b: 2, c: 3 };
@@ -258,4 +266,56 @@ test("[persist:retry] write가 sync void를 반환해도 기존처럼 동작한�
   assert.equal(writes.length, 1);
   assert.deepEqual(writes[0], { k: 5 });
   assert.equal(persist.getStatus().consecutiveFailures, 0);
+});
+
+test("[persist:retry] 설정 저장 재시도는 전역 차단 알림 없이 실패 상태를 복구한다", async () => {
+  const originalSetItem = AsyncStorage.setItem;
+  let writes = 0;
+  const storageErrors: unknown[] = [];
+  const off = onStorageError((info) => storageErrors.push(info));
+  AsyncStorage.setItem = async () => {
+    writes += 1;
+    if (writes === 1) throw new Error("temporary storage error");
+  };
+
+  const snapshot = { bpm: 120 } as MetronomeSettings;
+  const persist = createDebouncedPersister(
+    () => snapshot,
+    (settings) => saveSettings(settings, { notifyOnError: false }),
+    5,
+    { maxAttempts: 3, baseDelayMs: 30 },
+  );
+
+  try {
+    persist({ bpm: 132 });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assert.equal(persist.getStatus().consecutiveFailures, 1);
+    assert.equal(getPersistFailureBannerKey(persist.getStatus()), "saveRetrying");
+    assert.equal(storageErrors.length, 0, "retry failures must not trigger StorageErrorAlert");
+
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(writes, 2);
+    assert.equal(persist.getStatus().consecutiveFailures, 0);
+    assert.equal(getPersistFailureBannerKey(persist.getStatus()), null);
+    assert.equal(storageErrors.length, 0);
+  } finally {
+    persist.cancel();
+    AsyncStorage.setItem = originalSetItem;
+    off();
+    clearStorageErrorListeners();
+  }
+});
+
+test("[persist:retry] 소진된 사이클은 재시도 중 메시지 대신 보류된 실패 메시지를 사용한다", () => {
+  assert.equal(
+    getPersistFailureBannerKey({
+      lastSaveAt: null,
+      lastErrorAt: Date.now(),
+      consecutiveFailures: 3,
+      pendingChanges: 1,
+      cycleFailed: true,
+    }),
+    "saveFailedPending",
+  );
 });

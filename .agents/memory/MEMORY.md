@@ -23,3 +23,4 @@
 - [Polygon polyrhythm scheduling](polygon-polyrhythm-scheduling.md) — N-gon = N events per measure (not per beat); mute keeps its slot; mid-measure edits cancel that layer's timers.
 - [Polygon overlap layout](polygon-overlap-layout.md) — same-side layers step outward by insertion order; different side counts share the hub/base radius.
 - [Stage mode overlay wrapper](stage-mode-overlay-wrapper.md) — modeSlideStyle wrappers need absoluteFillObject or the overlay renders at 0×0; also add pointerEvents="box-none" so transparent wrapper doesn't block touches.
+- [Settings retry notifications](settings-retry-notifications.md) — automatic settings-write retries must own a nonblocking warning, not trigger a modal storage alert per attempt.

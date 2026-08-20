@@ -57,6 +57,7 @@ import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import { showPlayingNotification } from "@/lib/notification-controls";
 import { addActivityLog, saveLoggingEnabled } from "@/lib/activity-log";
 import { hasNoteSample } from "@/lib/note-samples";
+import { getPersistFailureBannerKey } from "@/lib/persist-status";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { useMetronomeScreen } from "@/hooks/useMetronomeScreen";
 import { onAccentColor } from "@/lib/color-contrast";
@@ -148,7 +149,7 @@ export function MetronomeScreenUI(props: Props) {
     getClickPCMs,
     polygonOnBeatRef,
     scheduleReRender, stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals,
-    notifyVoicePlayState, persistSettings,
+    notifyVoicePlayState, persistSettings, persistStatus,
     tempoLabel,
     // Additional state setters
     setIsPreparing, setIsPlaying,
@@ -170,6 +171,8 @@ export function MetronomeScreenUI(props: Props) {
     allPlayersRef,
     volumeRef,
   } = props;
+
+  const saveFailureBannerKey = getPersistFailureBannerKey(persistStatus);
 
   const openMenuItem = (open: () => void) => {
     markMenuItemReturn();
@@ -218,6 +221,33 @@ export function MetronomeScreenUI(props: Props) {
     >
       <StatusBar style={themeMode === "day" ? "dark" : "light"} />
 
+      {saveFailureBannerKey ? (
+        <View
+          pointerEvents="none"
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+          testID="storage-save-status"
+          style={{
+            position: "absolute",
+            top: insets.top + 12,
+            left: 16,
+            right: 16,
+            zIndex: 9999,
+            backgroundColor: C.surface,
+            borderRadius: 12,
+            paddingVertical: 10,
+            paddingHorizontal: 14,
+            borderWidth: 1,
+            borderColor: C.accent,
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ color: C.text, fontSize: 14, fontWeight: "500" as const, textAlign: "center" }}>
+            {t("storage", saveFailureBannerKey)}
+          </Text>
+        </View>
+      ) : null}
+
       {/* ── 악보 모드 전체화면 오버레이 ── */}
       {scoreMode === "list" && (
         <Animated.View style={[StyleSheet.absoluteFillObject, { zIndex: 500, backgroundColor: C.background }, modeSlideStyle]}>
@@ -252,7 +282,7 @@ export function MetronomeScreenUI(props: Props) {
           pointerEvents="none"
           style={{
             position: "absolute",
-            top: insets.top + 12,
+            top: insets.top + (saveFailureBannerKey ? 60 : 12),
             left: 16,
             right: 16,
             zIndex: 9999,

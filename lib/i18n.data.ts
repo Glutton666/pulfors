@@ -732,6 +732,14 @@ export const translations = {
     builtinPick: { ko: "내장 사운드 선택", en: "Pick built-in" },
   },
   storage: {
+    saveRetrying: {
+      ko: "최근 변경이 저장되지 않았어요. 자동으로 다시 시도 중…",
+      en: "Recent changes haven't been saved. Retrying automatically…",
+    },
+    saveFailedPending: {
+      ko: "최근 변경이 저장되지 않았어요. 다음 변경 시 다시 저장을 시도합니다.",
+      en: "Recent changes haven't been saved. Saving will be retried after your next change.",
+    },
     saveFailedTitle: { ko: "저장 실패", en: "Save failed" },
     saveFailedBody: {
       ko: "기기 저장소에 설정을 저장하지 못했습니다. 저장 공간이 부족하거나 권한이 제한되었을 수 있습니다.",

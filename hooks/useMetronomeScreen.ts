@@ -505,6 +505,7 @@ export function useMetronomeScreen() {
     barCellOpacity, setBarCellOpacity,
     barRowHeight, setBarRowHeight,
     persistSettings,
+    persistStatus,
     persistAudioSettingsCallbackRef,
     syncExternalSnapshot,
     updateVolume, updateSampleVolume, updateSoundSet,
@@ -3548,6 +3549,7 @@ export function useMetronomeScreen() {
     resetPlaybackVisuals,
     notifyVoicePlayState,
     persistSettings,
+    persistStatus,
     // Tempo label
     tempoLabel,
     // Additional state setters exposed for JSX inline callbacks
