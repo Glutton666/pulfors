@@ -70,7 +70,9 @@ const THEME_OPTIONS: { key: ThemeColor; color: string; label: string }[] = [
   { key: "neon", color: ACCENT_PRESETS.neon.accent, label: "Neon" },
 ];
 
-const TOTAL_STEPS = 9;
+// 첫 실행에는 언어, 소리 확인, 바로 시작만 요구한다.
+// 테마·기록·햅틱·플래시·프로필·권한은 설정에서 나중에 바꿀 수 있다.
+const TOTAL_STEPS = 3;
 
 const DEMO_BEAT_TYPES: BeatType[] = ["strong", "accent", "normal", "mute"];
 
@@ -245,6 +247,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   const [username, setUsername] = useState("");
   const [roomName, setRoomName] = useState("");
   const [soundTestPlayed, setSoundTestPlayed] = useState(false);
+  const [soundTestError, setSoundTestError] = useState(false);
   const [permMicGranted, setPermMicGranted] = useState(false);
   const [permLocationGranted, setPermLocationGranted] = useState(false);
   const soundRef = useRef<ExpoAudioPlayer | null>(null);
@@ -265,6 +268,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       setUsername("");
       setRoomName("");
       setSoundTestPlayed(false);
+       setSoundTestError(false);
       setPermMicGranted(false);
       setPermLocationGranted(false);
       if (soundRef.current) {
@@ -457,6 +461,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
   }, [step, animateToStep, hapticDemo, flashDemo]);
 
   const handlePlayTestSound = useCallback(() => {
+    setSoundTestError(false);
     try {
       if (soundRef.current) {
         soundRef.current.seekTo(0);
@@ -471,6 +476,7 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       }
       setSoundTestPlayed(true);
     } catch {
+      setSoundTestError(true);
     }
   }, []);
 
@@ -522,6 +528,10 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
         <Pressable
           style={[styles.landNextButton, { backgroundColor: accentColor }]}
           onPress={handleNext}
+          accessibilityRole="button"
+          accessibilityLabel={step === TOTAL_STEPS - 1 ? t("onboarding", "start") : t("onboarding", "next")}
+          accessibilityHint={step === TOTAL_STEPS - 1 ? t("onboarding", "startHint") : t("onboarding", "nextHint")}
+          testID="onboarding-land-next"
         >
           <Text style={[styles.landNextButtonText, { color: onAccentColor(accentColor) }]}>
             {step === TOTAL_STEPS - 1 ? t("onboarding", "start") : t("onboarding", "next")}
@@ -978,6 +988,9 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
                 justifyContent: "space-between",
               }}
               testID={`onboarding-lang-${opt.value}`}
+              accessibilityRole="radio"
+              accessibilityLabel={opt.label}
+              accessibilityState={{ selected: active }}
             >
               <Text style={{ color: active ? accentColor : C.text, fontSize: 16, fontWeight: "600" }}>
                 {opt.label}
@@ -1084,6 +1097,9 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
                 : { backgroundColor: accentColor },
             ]}
             testID="onboarding-sound-test-play"
+             accessibilityRole="button"
+             accessibilityLabel={t("onboarding", "soundTestPlay")}
+             accessibilityHint={t("onboarding", "soundTestPlayHint")}
           >
             <Ionicons
               name="volume-high-outline"
@@ -1099,6 +1115,14 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
               {t("onboarding", "soundTestMuteHint")}
             </Text>
           )}
+           {soundTestError && (
+             <Text
+               style={{ color: C.danger, fontSize: FontSize.small, textAlign: "center", paddingHorizontal: 12, lineHeight: 18 }}
+               accessibilityRole="alert"
+             >
+               {t("onboarding", "soundTestFailed")}
+             </Text>
+           )}
         </View>
       </>
     );
@@ -1122,6 +1146,47 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
         <Ionicons name="volume-high-outline" size={40} color={accentColor} />
         <Text style={styles.stepTitle}>{t("onboarding", "soundTestTitle")}</Text>
         <Text style={styles.stepSubtitle}>{t("onboarding", "soundTestSubtitle")}</Text>
+        {content}
+      </ScrollView>
+    );
+  };
+
+  const renderReadyStep = () => {
+    const content = (
+      <View
+        style={[styles.infoCard, { alignItems: "center", marginTop: Spacing.sm }]}
+        testID="onboarding-ready-summary"
+        accessibilityRole="summary"
+      >
+        <Ionicons name="checkmark-circle-outline" size={42} color={accentColor} />
+        <Text style={[styles.infoCardTitle, { textAlign: "center", fontSize: 17 }]}>
+          {t("onboarding", "quickStartBody")}
+        </Text>
+        <Text style={[styles.infoText, { textAlign: "center" }]}>
+          {t("onboarding", "quickStartHint")}
+        </Text>
+      </View>
+    );
+
+    if (isLandscape) {
+      return (
+        <View style={styles.landRow}>
+          {renderStepHeader(
+            <Ionicons name="checkmark-circle-outline" size={36} color={accentColor} />,
+            "quickStartTitle", "quickStartSubtitle"
+          )}
+          <ScrollView style={styles.landContentCol} contentContainerStyle={styles.landContentInner} showsVerticalScrollIndicator={false}>
+            {content}
+          </ScrollView>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.stepContent} showsVerticalScrollIndicator={false}>
+        <Ionicons name="checkmark-circle-outline" size={48} color={accentColor} />
+        <Text style={styles.stepTitle}>{t("onboarding", "quickStartTitle")}</Text>
+        <Text style={styles.stepSubtitle}>{t("onboarding", "quickStartSubtitle")}</Text>
         {content}
       </ScrollView>
     );
@@ -1223,21 +1288,9 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       case 0:
         return renderLanguageStep();
       case 1:
-        return renderVoiceStep();
-      case 2:
-        return renderThemeStep();
-      case 3:
-        return renderLoggingStep();
-      case 4:
-        return renderHapticStep();
-      case 5:
-        return renderFlashStep();
-      case 6:
         return renderSoundTestStep();
-      case 7:
-        return renderPermissionsStep();
-      case 8:
-        return renderProfileStep();
+      case 2:
+        return renderReadyStep();
       default:
         return null;
     }
@@ -1257,14 +1310,30 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
       >
         <View style={[styles.topBar, isLandscape && { paddingVertical: Spacing.xs }]}>
           {step > 0 ? (
-            <Pressable onPress={handleBack} hitSlop={10} style={styles.backBtn}>
+            <Pressable
+              onPress={handleBack}
+              hitSlop={10}
+              style={styles.backBtn}
+              accessibilityRole="button"
+              accessibilityLabel={t("onboarding", "back")}
+              accessibilityHint={t("onboarding", "backHint")}
+              testID="onboarding-back"
+            >
               <Ionicons name="chevron-back" size={22} color={C.textSecondary} />
             </Pressable>
           ) : (
             <View style={styles.backBtn} />
           )}
           {renderStepIndicator()}
-          <Pressable onPress={handleSkip} hitSlop={10}>
+          <Pressable
+            onPress={handleSkip}
+            hitSlop={10}
+            style={styles.skipButton}
+            accessibilityRole="button"
+            accessibilityLabel={t("onboarding", "skip")}
+            accessibilityHint={t("onboarding", "skipHint")}
+            testID="onboarding-skip"
+          >
             <Text style={styles.skipText}>{t("onboarding", "skip")}</Text>
           </Pressable>
         </View>
@@ -1280,6 +1349,10 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
             <Pressable
               style={[styles.nextButton, { backgroundColor: accentColor }]}
               onPress={handleNext}
+              accessibilityRole="button"
+              accessibilityLabel={step === TOTAL_STEPS - 1 ? t("onboarding", "start") : t("onboarding", "next")}
+              accessibilityHint={step === TOTAL_STEPS - 1 ? t("onboarding", "startHint") : t("onboarding", "nextHint")}
+              testID="onboarding-next"
             >
               <Text style={[styles.nextButtonText, { color: onAccentColor(accentColor) }]}>
                 {step === TOTAL_STEPS - 1 ? t("onboarding", "start") : t("onboarding", "next")}
@@ -1332,6 +1405,15 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
   },
   backBtn: {
     width: 60,
+    height: 44,
+    alignItems: "flex-start",
+    justifyContent: "center",
+  },
+  skipButton: {
+    minWidth: 60,
+    minHeight: 44,
+    alignItems: "flex-end",
+    justifyContent: "center",
   },
   skipText: {
     fontFamily: "SpaceGrotesk_500Medium",
@@ -1592,7 +1674,7 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     gap: 6,
     width: "85%",
     maxWidth: 220,
-    height: 40,
+    height: 44,
     borderRadius: 12,
     marginTop: 14,
   },

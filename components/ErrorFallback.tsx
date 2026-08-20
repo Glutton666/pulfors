@@ -15,6 +15,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useThemeSafe } from "@/contexts/ThemeContext";
 import { Radius, FontSize } from "@/constants/tokens";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createT, detectDeviceLanguage, isLanguageCode, type Language } from "@/lib/i18n";
+import { router } from "expo-router";
 
 export type ErrorFallbackProps = {
   error: Error;
@@ -31,6 +34,10 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
     ? appTheme.themeMode === "night"
     : systemColorScheme === "dark";
   const insets = useSafeAreaInsets();
+  // ErrorBoundary는 LanguageProvider 바깥에 있으므로 컨텍스트 대신
+  // 저장된 언어를 직접 읽고, 실패하면 기기 언어를 사용한다.
+  const [language, setLanguage] = useState<Language>(() => detectDeviceLanguage());
+  const t = createT(language);
 
   const theme = {
     background: isDark ? "#000000" : "#FFFFFF",
@@ -42,14 +49,42 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
   };
 
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isRestarting, setIsRestarting] = useState(false);
+
+  React.useEffect(() => {
+    let mounted = true;
+    AsyncStorage.getItem("metronome_language")
+      .then((saved) => {
+        if (mounted && isLanguageCode(saved)) setLanguage(saved);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleRestart = async () => {
+    if (isRestarting) return;
+    setIsRestarting(true);
     try {
       await reloadAppAsync();
     } catch (restartError) {
       logger.error("Failed to restart app:", restartError);
+      setIsRestarting(false);
       resetError();
     }
+  };
+
+  const handleGoHome = () => {
+    resetError();
+    // reset 뒤 라우터가 다시 마운트된 다음 기본 경로로 이동한다.
+    setTimeout(() => {
+      try {
+        router.replace("/");
+      } catch (navigationError) {
+        logger.warn("Failed to return home after an error:", navigationError);
+      }
+    }, 0);
   };
 
   const formatErrorDetails = (): string => {
@@ -71,7 +106,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
       {__DEV__ ? (
         <Pressable
           onPress={() => setIsModalVisible(true)}
-          accessibilityLabel="View error details"
+          accessibilityLabel={t("errorFallback", "details")}
           accessibilityRole="button"
           style={({ pressed }) => [
             styles.topButton,
@@ -88,15 +123,23 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
 
       <View style={styles.content}>
         <Text style={[styles.title, { color: theme.text }]}>
-          Something went wrong
+          {t("errorFallback", "title")}
         </Text>
 
         <Text style={[styles.message, { color: theme.textSecondary }]}>
-          Please reload the app to continue.
+          {t("errorFallback", "message")}
+        </Text>
+        <Text style={[styles.dataSafety, { color: theme.textSecondary }]}>
+          {t("errorFallback", "dataSafe")}
         </Text>
 
         <Pressable
           onPress={handleRestart}
+          accessibilityRole="button"
+          accessibilityLabel={t("errorFallback", "retry")}
+          accessibilityHint={t("errorFallback", "retryHint")}
+          accessibilityState={{ busy: isRestarting, disabled: isRestarting }}
+          testID="error-fallback-retry"
           style={({ pressed }) => [
             styles.button,
             {
@@ -107,7 +150,22 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
           ]}
         >
           <Text style={[styles.buttonText, { color: theme.buttonText }]}>
-            Try Again
+            {isRestarting ? t("errorFallback", "retrying") : t("errorFallback", "retry")}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={handleGoHome}
+          accessibilityRole="button"
+          accessibilityLabel={t("errorFallback", "home")}
+          accessibilityHint={t("errorFallback", "homeHint")}
+          testID="error-fallback-home"
+          style={({ pressed }) => [
+            styles.secondaryButton,
+            { borderColor: theme.link, opacity: pressed ? 0.7 : 1 },
+          ]}
+        >
+          <Text style={[styles.secondaryButtonText, { color: theme.link }]}>
+            {t("errorFallback", "home")}
           </Text>
         </Pressable>
       </View>
@@ -137,11 +195,11 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
                 ]}
               >
                 <Text style={[styles.modalTitle, { color: theme.text }]}>
-                  Error Details
+                  {t("errorFallback", "details")}
                 </Text>
                 <Pressable
                   onPress={() => setIsModalVisible(false)}
-                  accessibilityLabel="Close error details"
+                  accessibilityLabel={t("errorFallback", "closeDetails")}
                   accessibilityRole="button"
                   style={({ pressed }) => [
                     styles.closeButton,
@@ -215,6 +273,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 24,
   },
+  dataSafety: {
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 21,
+    maxWidth: 520,
+  },
   topButton: {
     position: "absolute",
     right: 16,
@@ -241,6 +305,21 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   buttonText: {
+    fontWeight: "600",
+    textAlign: "center",
+    fontSize: 16,
+  },
+  secondaryButton: {
+    minWidth: 200,
+    minHeight: 52,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryButtonText: {
     fontWeight: "600",
     textAlign: "center",
     fontSize: 16,
