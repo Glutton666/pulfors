@@ -284,28 +284,42 @@ describe("usePolygonMode — engine callback driven", () => {
 
   // ── 10. handleVertexBeatTypeCycle: S→A→N→M→S 순환 ──────────────────────
 
-  it("handleVertexBeatTypeCycle toggles mute on a vertex without touching others", () => {
-    // 볼륨 슬라이더가 S/A/N 강세를 대체하므로 꼭짓점 탭은 뮤트 토글만 수행한다.
+  it("handleVertexBeatTypeCycle cycles A → N → M → S → A without touching other vertices", () => {
     const params = makeParams();
     const { result } = renderHook(() => usePolygonMode(params));
 
     const layerId = result.current.layers[0].id;
-    // 초기 beatTypes: [] (빈 배열 — getVertexBeatType은 role fallback으로 non-mute 반환)
+    // 기본 role은 high이므로 빈 beatTypes의 첫 꼭짓점은 accent(A)로 fallback한다.
     expect(result.current.layers[0].beatTypes.length).toBe(0);
 
-    // 첫 탭: non-mute → mute
-    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 0); });
-    expect(result.current.layers[0].beatTypes[0]).toBe("mute");
-    // 다른 꼭짓점은 "normal"로 초기화됨 (뮤트 아님)
-    expect(result.current.layers[0].beatTypes[1]).toBe("normal");
-
-    // 두 번째 탭: mute → normal
+    // 첫 탭: A → N
     act(() => { result.current.handleVertexBeatTypeCycle(layerId, 0); });
     expect(result.current.layers[0].beatTypes[0]).toBe("normal");
+    // 다른 꼭짓점은 role fallback A를 유지하고 변경되지 않는다.
+    expect(result.current.layers[0].beatTypes[1]).toBe("accent");
 
-    // 세 번째 탭: normal → mute
+    // N → M → S → A
     act(() => { result.current.handleVertexBeatTypeCycle(layerId, 0); });
     expect(result.current.layers[0].beatTypes[0]).toBe("mute");
+    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 0); });
+    expect(result.current.layers[0].beatTypes[0]).toBe("strong");
+    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 0); });
+    expect(result.current.layers[0].beatTypes[0]).toBe("accent");
+  });
+
+  it("cycling one vertex preserves other vertices' effective role fallback", () => {
+    const params = makeParams();
+    const { result } = renderHook(() => usePolygonMode(params));
+    const layerId = result.current.layers[0].id;
+
+    // 기본 role=high(A): 첫 꼭짓점만 A → N, 나머지는 A를 유지한다.
+    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 0); });
+    expect(result.current.layers[0].beatTypes).toEqual(["normal", "accent", "accent", "accent"]);
+
+    // role=strong(S)에서도 선택한 꼭짓점만 S → A가 되고 나머지는 S다.
+    act(() => { result.current.handleUpdateLayer(layerId, { role: "strong" }); });
+    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 1); });
+    expect(result.current.layers[0].beatTypes).toEqual(["strong", "accent", "strong", "strong"]);
   });
 
   // ── 10. mute 꼭짓점: 4박 주기 유지, 뮤트 슬롯은 소리·비주얼만 생략 ────
@@ -322,8 +336,9 @@ describe("usePolygonMode — engine callback driven", () => {
 
     const layerId = result.current.layers[0].id;
 
-    // vertex 2를 mute로 만든다 (normal → mute, 한 번 cycle)
-    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 2); }); // normal → mute
+    // vertex 2를 mute로 만든다 (기본 A → N → M)
+    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 2); });
+    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 2); });
     expect(result.current.layers[0].beatTypes[2]).toBe("mute");
 
     (safePlay as jest.Mock).mockClear();
@@ -560,17 +575,16 @@ describe("usePolygonMode — engine callback driven", () => {
   // ── 11. sides 변경 시 beatTypes 크기 조정 ───────────────────────────────
 
   it("changing sides resizes beatTypes, preserving existing values and defaulting new ones", () => {
-    // 볼륨 대체 이후: 초기 beatTypes는 [] (빈 배열)
-    // 뮤트 토글로 beatTypes를 채운 뒤 sides 변경 시 기존 값이 보존되는지 확인한다.
+    // 초기 beatTypes는 []이며, 꼭짓점을 M까지 순환해 배열을 명시적으로 채운다.
     const params = makeParams();
     const { result } = renderHook(() => usePolygonMode(params));
 
     const layerId = result.current.layers[0].id;
 
-    // vertex 2를 뮤트로 만들어 beatTypes 배열을 명시적으로 초기화한다
-    // (뮤트 토글은 전체 배열을 sides 길이로 확장하며 나머지는 "normal"로 설정)
-    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 2); }); // non-mute → mute
-    // 이제 beatTypes = ["normal", "normal", "mute", "normal"]
+    // A(role fallback) → N → M
+    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 2); });
+    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 2); });
+    // 이제 beatTypes = ["accent", "accent", "mute", "accent"]
 
     // sides를 6으로 늘린다
     act(() => {
@@ -578,8 +592,8 @@ describe("usePolygonMode — engine callback driven", () => {
     });
     const bt6 = result.current.layers[0].beatTypes;
     expect(bt6.length).toBe(6);
-    // 기존 4개 값 보존: [0]=normal, [2]=mute
-    expect(bt6[0]).toBe("normal");
+    // 기존 4개 값 보존: [0]=accent, [2]=mute
+    expect(bt6[0]).toBe("accent");
     expect(bt6[2]).toBe("mute");
     // 새로 추가된 꼭짓점은 normal
     expect(bt6[4]).toBe("normal");
@@ -601,11 +615,9 @@ describe("usePolygonMode — engine callback driven", () => {
 
     const layerId = result.current.layers[0].id;
 
-    // vertex 1, 2를 accent/mute로 변경해 둔다
-    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 1); }); // normal→mute? No: normal→mute is 3rd step
-    // cycle for vertex 1 (starts at 'normal'): normal is 3rd in [strong,accent,normal,mute]
-    // cycle: normal → mute (next after normal)
-    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 2); }); // normal → mute
+    // vertex 1, 2를 초기 fallback A와 다른 값으로 변경해 둔다.
+    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 1); }); // A → N
+    act(() => { result.current.handleVertexBeatTypeCycle(layerId, 2); }); // A → N
 
     // 이제 role을 "high"로 변경 → 모든 꼭짓점이 'accent'가 돼야 한다
     act(() => {
@@ -638,22 +650,21 @@ describe("usePolygonMode — engine callback driven", () => {
     (safePlay as jest.Mock).mockClear();
 
     // classic 플레이어 풀 목 구성
-    // 볼륨이 강세를 대체하므로 항상 low 풀을 사용한다 (beatType/role 무관)
-    const lowA = { play: jest.fn(), name: "lowA" };
-    const lowB = { play: jest.fn(), name: "lowB" };
-    const lowC = { play: jest.fn(), name: "lowC" };
-    const lowD = { play: jest.fn(), name: "lowD" };
+    const highA = { play: jest.fn(), name: "highA" };
+    const highB = { play: jest.fn(), name: "highB" };
+    const highC = { play: jest.fn(), name: "highC" };
+    const highD = { play: jest.fn(), name: "highD" };
     const classicPool = {
       strongA: {}, strongB: {}, strongC: {}, strongD: {},
-      highA: {}, highB: {}, highC: {}, highD: {},
-      lowA, lowB, lowC, lowD,
+      highA, highB, highC, highD,
+      lowA: {}, lowB: {}, lowC: {}, lowD: {},
     };
 
     const allPlayersRef = { current: { classic: classicPool } as any };
     const params = makeParams({ allPlayersRef });
     const { result } = renderHook(() => usePolygonMode(params));
 
-    // 레이어 2개 모두 classic 사운드셋 (beatTypes[0]='strong' 기본값 유지)
+    // 레이어 2개 모두 classic 사운드셋 (빈 beatTypes의 role fallback은 high=accent)
     const layerId0 = result.current.layers[0].id;
     act(() => {
       result.current.handleUpdateLayer(layerId0, { soundSet: "classic" });
@@ -668,7 +679,7 @@ describe("usePolygonMode — engine callback driven", () => {
       });
     }
 
-    // 첫 비트 발화 (absbeat=0 → vertexIdx=0 → beatType='strong')
+    // 첫 비트 발화 (absbeat=0 → vertexIdx=0 → beatType='accent')
     (safePlay as jest.Mock).mockClear();
     fireBeat(params.engineBeatCallbackRef);
 
@@ -679,20 +690,18 @@ describe("usePolygonMode — engine callback driven", () => {
     // 각 호출에서 전달된 player 객체가 달라야 한다 (A → B)
     const players = calls.map((c: any[]) => c[0]);
     expect(players[0]).not.toBe(players[1]);
-    // 볼륨 기반 설계: beatType/role에 무관하게 low 풀에서 A → B 순서
-    expect(players[0]).toBe(lowA);
-    expect(players[1]).toBe(lowB);
+    expect(players[0]).toBe(highA);
+    expect(players[1]).toBe(highB);
   });
   // ── 14. 네이티브 레이어 볼륨: setVolumeAsync가 layerVol × globalVol 값으로 호출됨 ────
 
   it("native playback calls setVolumeAsync with layerVol × globalVol on each beat", () => {
     // ExpoAudioPlayer 계약에 맞게 동기 volume 프로퍼티를 가진 플레이어 목
-    // 볼륨 기반 설계: 항상 low 풀의 첫 번째 슬롯(lowA)이 대상
     const trackablePlayer = { play: jest.fn(), volume: 1.0 };
     const classicPool = {
       strongA: {}, strongB: {}, strongC: {}, strongD: {},
-      highA: {}, highB: {}, highC: {}, highD: {},
-      lowA: trackablePlayer, lowB: {}, lowC: {}, lowD: {},
+      highA: trackablePlayer, highB: {}, highC: {}, highD: {},
+      lowA: {}, lowB: {}, lowC: {}, lowD: {},
     };
     const volumeRef = { current: 0.8 }; // 전역 볼륨 0.8
     const allPlayersRef = { current: { classic: classicPool } as any };

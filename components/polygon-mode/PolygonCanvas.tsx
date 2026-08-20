@@ -27,6 +27,7 @@ import {
   sortLayersForDisplay,
   computeLayerLayout,
   getVertexBeatType,
+  BEAT_TYPE_LABEL,
   computeVertexAngles,
   computeHitTargets,
 } from "./PolygonTypes";
@@ -144,7 +145,7 @@ export function PolygonCanvas({
             const isActive = activeVertex === 0;
             const beatType = getVertexBeatType(layer, 0);
             const isMute = beatType === "mute";
-            const label = isMute ? "M" : "";
+            const label = BEAT_TYPE_LABEL[beatType];
             const labelColor = isMute ? layer.color + "55" : layer.color;
             const labelPos = getLabelPos(cx, cy, cx, cy, VERTEX_R_ACTIVE + LABEL_OFFSET);
             return (
@@ -233,7 +234,8 @@ export function PolygonCanvas({
                 const vi = activeIndices[k];
                 const isActive = vi === activeVertex;
                 const hasOffset = (layer.offsets[vi] ?? 0) > 0.01;
-                const label = ""; // 비뮤트 꼭짓점 레이블 제거 — 볼륨 슬라이더로 강세 대체
+                const beatType = getVertexBeatType(layer, vi);
+                const label = BEAT_TYPE_LABEL[beatType];
                 const labelPos = getLabelPos(av.x, av.y, cx, cy, LABEL_OFFSET);
                 return (
                   <G key={vi}>

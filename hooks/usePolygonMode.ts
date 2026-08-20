@@ -24,6 +24,7 @@ import {
   LAYER_COLORS,
   DEFAULT_POLYGON_LAYER,
   getVertexBeatType,
+  cycleVertexBeatType,
 } from "@/components/polygon-mode/PolygonTypes";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -73,7 +74,7 @@ export interface UsePolygonModeResult {
   handleDeleteLayer: (id: string) => void;
   handleUpdateLayer: (id: string, patch: Partial<PolygonLayer>) => void;
   handleSetOffset: (layerId: string, vertexIdx: number, offset: number) => void;
-  /** 꼭짓점을 탭할 때마다 뮤트/언뮤트 토글 */
+  /** 꼭짓점을 탭할 때마다 S/A/N/M 순환 */
   handleVertexBeatTypeCycle: (layerId: string, vertexIdx: number) => void;
   /** 커스텀 사운드 PCM을 훅 캐시에 등록하고 해당 레이어의 soundSet을 갱신한다 */
   setLayerCustomSound: (layerId: string, pcms: ClickPCMs) => void;
@@ -268,35 +269,34 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     const playSound = (layer: PolygonLayer, beatType: Exclude<VertexBeatType, "mute">) => {
       // layer.volume (0-1)를 전역 볼륨에 곱해 레이어별 음량을 제어한다.
       const layerVol = Math.max(0, Math.min(1, layer.volume ?? 1.0));
+      const soundRole = beatType === "strong" ? "strong" : beatType === "accent" ? "high" : "low";
       try {
         if (Platform.OS === "web") {
           const cached =
             polygonPCMCacheRef.current.get(layer.soundSet)
             ?? p.clickPCMCacheRef.current[layer.soundSet];
           if (cached) {
-            // 볼륨이 레이어 강세를 대체한다: 항상 normal(low) PCM을 사용하고
-            // layer.volume 으로 음량을 조절한다.
-            const pcm: Float32Array = cached.low;
+            const pcm: Float32Array = cached[soundRole];
             playPCMOnWeb(pcm, p.volumeRef.current * layerVol);
           } else {
-            // 웹 폴백도 항상 low(normal) 톤으로 통일한다.
-            playWebClick("low", "both", p.volumeRef.current * layerVol);
+            playWebClick(soundRole, "both", p.volumeRef.current * layerVol);
             ensurePCMRef.current(layer.soundSet);
           }
         } else {
-          // Native: 볼륨이 강세를 대체하므로 항상 low 풀을 선택하고
-          // layer.volume × globalVolume 으로 음량을 조절한다.
-          // (web 캐시 경로가 cached.low를 쓰는 것과 동일한 기준)
           const players =
             p.allPlayersRef.current[layer.soundSet as keyof BuiltinPlayers]
             ?? p.allPlayersRef.current.classic;
           const pool = players as SoundSetPlayers;
-          // 같은 sound-set을 쓰는 레이어가 동일 시점에 발화할 때
+          // 같은 sound-set과 강세를 쓰는 레이어가 동시에 발화할 때
           // 서로 다른 슬롯을 선택해 겹침 재생을 지원한다.
-          const toggleKey = `${layer.soundSet}`;
+          const toggleKey = `${layer.soundSet}:${soundRole}`;
           const idx = polygonToggleRef.current[toggleKey] ?? 0;
           polygonToggleRef.current[toggleKey] = (idx + 1) % 4; // BUILTIN_POOL_SIZE=4
-          const player = [pool.lowA, pool.lowB, pool.lowC, pool.lowD][idx];
+          const player = soundRole === "strong"
+            ? [pool.strongA, pool.strongB, pool.strongC, pool.strongD][idx]
+            : soundRole === "high"
+            ? [pool.highA, pool.highB, pool.highC, pool.highD][idx]
+            : [pool.lowA, pool.lowB, pool.lowC, pool.lowD][idx];
           if (player) safePlayWithVolume(player, layerVol * p.volumeRef.current, "polygon.beat");
         }
       } catch {}
@@ -484,21 +484,19 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
     [clearLayerTimers, applyLayerMutation],
   );
 
-  // ── 꼭짓점 뮤트 토글 (N ↔ M) ───────────────────────────────────────────
-  // 이전 S→A→N→M 순환을 대체한다. 볼륨 슬라이더가 강세를 담당하므로
-  // 꼭짓점 탭은 오직 뮤트 여부만 전환한다.
+  // ── 꼭짓점 강세 순환 (S → A → N → M) ──────────────────────────────────
   const handleVertexBeatTypeCycle = useCallback(
     (layerId: string, vertexIdx: number) => {
       clearLayerTimers(layerId);
       applyLayerMutation((prev) =>
         prev.map((l) => {
           if (l.id !== layerId) return l;
-          const isMuted = getVertexBeatType(l, vertexIdx) === "mute";
+          const current = getVertexBeatType(l, vertexIdx);
           const newBeatTypes: VertexBeatType[] = Array.from(
             { length: Math.max(1, l.sides) },
-            (_, i) => l.beatTypes[i] ?? "normal",
+            (_, i) => getVertexBeatType(l, i),
           );
-          newBeatTypes[vertexIdx] = isMuted ? "normal" : "mute";
+          newBeatTypes[vertexIdx] = cycleVertexBeatType(current);
           return { ...l, beatTypes: newBeatTypes };
         }),
       );

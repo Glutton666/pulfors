@@ -58,7 +58,7 @@ export interface PolygonLayer {
   role: "high" | "low" | "strong";
   /**
    * 레이어 볼륨 (0.0 ~ 1.0). 기본값 1.0.
-   * 꼭짓점별 강세(S/A/N) 대신 단일 볼륨으로 음량을 조절한다.
+   * 꼭짓점별 사운드 강세에 곱해지는 레이어 전체 볼륨.
    */
   volume: number;
   /**
@@ -67,7 +67,7 @@ export interface PolygonLayer {
    */
   offsets: number[];
   /**
-   * 꼭짓점별 강세 (N/M 만 사용 — N=normal, M=mute).
+   * 꼭짓점별 강세 (S=strong, A=accent, N=normal, M=mute).
    * 배열 길이 = sides. 미설정 인덱스는 role로 fallback.
    */
   beatTypes: VertexBeatType[];
