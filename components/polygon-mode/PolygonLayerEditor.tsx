@@ -251,10 +251,10 @@ export function PolygonLayerEditor({
             <Pressable
               onPress={() => handleSidesChange(editingLayer.id, -1)}
               style={({ pressed }) => ({
-                width: 32, height: 32, borderRadius: 16,
-                backgroundColor: pressed ? C.accent + "33" : C.background,
-                borderWidth: 1, borderColor: C.border,
+                width: 32,
+                height: 32,
                 alignItems: "center", justifyContent: "center",
+                opacity: pressed ? 0.6 : 1,
               })}
             >
               <Text style={{ color: C.text, fontSize: 18, lineHeight: 20 }}>−</Text>
@@ -271,10 +271,10 @@ export function PolygonLayerEditor({
             <Pressable
               onPress={() => handleSidesChange(editingLayer.id, 1)}
               style={({ pressed }) => ({
-                width: 32, height: 32, borderRadius: 16,
-                backgroundColor: pressed ? C.accent + "33" : C.background,
-                borderWidth: 1, borderColor: C.border,
+                width: 32,
+                height: 32,
                 alignItems: "center", justifyContent: "center",
+                opacity: pressed ? 0.6 : 1,
               })}
             >
               <Text style={{ color: C.text, fontSize: 18, lineHeight: 20 }}>+</Text>

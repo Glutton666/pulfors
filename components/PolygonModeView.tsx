@@ -84,8 +84,14 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
 
   const bpmPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 3,
+      // 시작 시에는 부모 Pressable이 탭을 처리하도록 양보한다.
+      onStartShouldSetPanResponder: () => false,
+      // 의미 있는 세로 드래그만 BPM 제스처로 가져간다.
+      onMoveShouldSetPanResponder: (_, gs) => {
+        const absDy = Math.abs(gs.dy);
+        const absDx = Math.abs(gs.dx);
+        return absDy > 8 && absDy > absDx * 1.2;
+      },
       onPanResponderGrant: () => {
         bpmGestureStartRef.current = bpmRef.current;
       },
@@ -214,8 +220,6 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
             style={({ pressed }) => ({
               width: S.ms(36, 0.3),
               height: S.ms(36, 0.3),
-              borderRadius: S.ms(18, 0.3),
-              backgroundColor: C.surface,
               alignItems: "center",
               justifyContent: "center",
               opacity: pressed ? 0.6 : 1,
@@ -235,7 +239,7 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
           >
             <View
               {...bpmPanResponder.panHandlers}
-              style={{ flexDirection: "row", alignItems: "baseline", gap: 5, paddingVertical: 4 }}
+              style={{ flexDirection: "row", alignItems: "baseline", paddingVertical: 4 }}
             >
               <Text style={{
                 fontFamily: "SpaceGrotesk_700Bold",
@@ -247,19 +251,6 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
               }}>
                 {bpm}
               </Text>
-              <Text style={{
-                fontFamily: "SpaceGrotesk_400Regular",
-                fontSize: S.ms(12, 0.3),
-                color: C.textSecondary,
-                paddingBottom: 2,
-              }}>
-                BPM
-              </Text>
-              <View style={{
-                width: 8, height: 8, borderRadius: 4,
-                backgroundColor: isPlaying ? C.accent : C.textTertiary,
-                marginLeft: 4,
-              }} />
             </View>
           </Pressable>
 
@@ -272,8 +263,6 @@ export function PolygonModeView({ polygonMode, isPlaying, onClose, onTogglePlay,
             style={({ pressed }) => ({
               width: S.ms(36, 0.3),
               height: S.ms(36, 0.3),
-              borderRadius: S.ms(18, 0.3),
-              backgroundColor: C.surface,
               alignItems: "center",
               justifyContent: "center",
               opacity: pressed ? 0.6 : 1,

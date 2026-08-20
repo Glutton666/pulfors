@@ -77,6 +77,49 @@ function makePolygonMode(): UsePolygonModeResult {
 // ── 테스트 ────────────────────────────────────────────────────────────────────
 
 describe("PolygonModeView — BPM ± controls", () => {
+  it("shows only the BPM value without the label or status dot", () => {
+    const { queryByText } = render(
+      <PolygonModeView
+        polygonMode={makePolygonMode()}
+        isPlaying={false}
+        onClose={jest.fn()}
+        bpm={120}
+        onBpmChange={jest.fn()}
+      />,
+    );
+
+    expect(queryByText("BPM")).toBeNull();
+    expect(queryByText("120")).not.toBeNull();
+  });
+
+  it("keeps a tap on the BPM value for play toggle and claims only vertical drags", () => {
+    const onTogglePlay = jest.fn();
+    const { getByText } = render(
+      <PolygonModeView
+        polygonMode={makePolygonMode()}
+        isPlaying={false}
+        onClose={jest.fn()}
+        onTogglePlay={onTogglePlay}
+        bpm={120}
+        onBpmChange={jest.fn()}
+      />,
+    );
+    const panResponder = (require("react-native") as {
+      __getLastPanResponderConfig: () => {
+        onStartShouldSetPanResponder: () => boolean;
+        onMoveShouldSetPanResponder: (_event: unknown, gesture: { dx: number; dy: number }) => boolean;
+      };
+    }).__getLastPanResponderConfig();
+
+    expect(panResponder.onStartShouldSetPanResponder()).toBe(false);
+    expect(panResponder.onMoveShouldSetPanResponder({}, { dx: 0, dy: 4 })).toBe(false);
+    expect(panResponder.onMoveShouldSetPanResponder({}, { dx: 2, dy: -12 })).toBe(true);
+    expect(panResponder.onMoveShouldSetPanResponder({}, { dx: 12, dy: -2 })).toBe(false);
+
+    fireEvent.click(getByText("120"));
+    expect(onTogglePlay).toHaveBeenCalledTimes(1);
+  });
+
   // ── 단축키: click = 짧게 누름, contextMenu = 길게 누름 (stub 매핑) ──
 
   it("short press on − calls onBpmChange(bpm - 1)", () => {

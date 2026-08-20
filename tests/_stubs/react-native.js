@@ -9,6 +9,7 @@
  */
 
 const React = require("react");
+let lastPanResponderConfig = null;
 
 /** Create a simple pass-through component that forwards key RN props to DOM. */
 function makeRNComponent(tag) {
@@ -67,8 +68,12 @@ module.exports = {
   ScrollView,
   Pressable,
   PanResponder: {
-    create: () => ({ panHandlers: {} }),
+    create: (config) => {
+      lastPanResponderConfig = config;
+      return { panHandlers: {} };
+    },
   },
+  __getLastPanResponderConfig: () => lastPanResponderConfig,
   // No-ops / minimal shims
   Animated: {
     View,
