@@ -166,6 +166,9 @@ export class MetronomeEngine {
   private barRepeats: Map<number, BarRepeatSpec> = new Map();
   private barBpmOverrides: Map<number, number> = new Map();
   private preRenderedAudio = false;
+  // 폴리곤 모드처럼 엔진 타이밍/콜백은 유지하면서 기본 클릭만 끌 때 사용한다.
+  // bar-layer 클릭은 독립 채널이므로 이 플래그의 영향을 받지 않는다.
+  private baseClickMuted = false;
   private pendingMeasureStartAction: (() => void) | null = null;
   private onProgress: ((info: ProgressInfo) => void) | null = null;
   private onScheduleRebuild: (() => void) | null = null;
@@ -228,6 +231,14 @@ export class MetronomeEngine {
 
   setPreRenderedAudio(enabled: boolean) {
     this.preRenderedAudio = enabled;
+  }
+
+  /**
+   * 기본 메트로놈 클릭과 연결된 샘플만 음소거한다.
+   * onBeat/onSubBeat 콜백은 계속 발화하므로 폴리곤의 자체 스케줄링은 유지된다.
+   */
+  setBaseClickMuted(muted: boolean) {
+    this.baseClickMuted = muted;
   }
 
   setPendingMeasureStartAction(action: (() => void) | null) {
@@ -893,7 +904,10 @@ export class MetronomeEngine {
     // 전환됐을 수 있다. 이 경우 rendered 오디오가 동일한 클릭을 재생하므로
     // per-tick 발화를 건너뛰어 이중 재생(double-play)을 방지한다.
     if (this.preRenderedAudio) return;
-    if (!isMute) {
+    // 폴리곤 모드에서는 엔진의 base-layer 클릭(및 연결 샘플)만 억제한다.
+    // 비트 콜백은 playTickAudio 전에 실행되므로 폴리곤 자체 사운드는 별도 재생된다.
+    const suppressBaseAudio = this.baseClickMuted && layerIndex === 0;
+    if (!isMute && !suppressBaseAudio) {
       try {
         if (layerIndex > 0 && this.playLayerClick) {
           const role = isStrong ? "strong" : isAccent ? "high" : "low";
@@ -912,7 +926,7 @@ export class MetronomeEngine {
         }
       } catch (e) {}
     }
-    if (this.playCustomSample) {
+    if (!suppressBaseAudio && this.playCustomSample) {
       this.playCustomSample(beat, subBeat);
     }
   }

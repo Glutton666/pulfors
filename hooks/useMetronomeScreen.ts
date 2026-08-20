@@ -573,6 +573,18 @@ export function useMetronomeScreen() {
     isPlayingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
   });
 
+  // 폴리곤은 엔진의 메인 비트 콜백을 시계로만 사용하고, 자체 레이어 소리만 낸다.
+  // 기존 렌더링 루프는 진입 전부터 일반 클릭을 포함할 수 있으므로 함께 중지한다.
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.setBaseClickMuted(showPolygon);
+    if (showPolygon) stopRenderedAudio();
+    return () => {
+      engine.setBaseClickMuted(false);
+    };
+  }, [showPolygon, stopRenderedAudio]);
+
   // ── Post-pipeline: populate stable callback refs & sync external snapshot ───
   // Inline updates — run every render, not inside a useEffect (they are ref
   // mutations, safe to call during render).

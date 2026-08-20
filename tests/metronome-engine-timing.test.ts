@@ -247,3 +247,50 @@ test("rolloverToNextMeasure: measureDurationMs가 변경되면 anchor를 새 길
     e.stop();
   });
 });
+
+test("base click mute: 폴리곤이 엔진 비트를 시계로 써도 기본 클릭과 샘플은 발화하지 않는다", () => {
+  const e = new MetronomeEngine();
+  const clicks: string[] = [];
+  let samples = 0;
+  let beats = 0;
+  e.setAudioCallbacks(
+    () => clicks.push("high"),
+    () => clicks.push("low"),
+    () => clicks.push("strong"),
+  );
+  e.setCustomSampleCallback(() => {
+    samples += 1;
+    return true;
+  });
+  e.setOnBeat(() => { beats += 1; });
+
+  const internals = e as unknown as EngineInternals;
+  const mainTick = {
+    time: 0,
+    beat: 0,
+    subBeat: 0,
+    type: "normal",
+    isMainBeat: true,
+    layerIndex: 0,
+    blockIndex: -1,
+    barRepeatIteration: 0,
+    barRepeatTotal: 1,
+    repeatIteration: 0,
+    blockRepeatTotal: 1,
+    jumpIteration: 0,
+    jumpTotal: 0,
+    jumpSourceBlockIndex: -1,
+    layerBeat: 0,
+  };
+
+  e.setBaseClickMuted(true);
+  internals.fireTick(mainTick);
+  assert.equal(beats, 1, "폴리곤 스케줄러가 쓰는 엔진 비트 콜백은 유지되어야 함");
+  assert.deepEqual(clicks, [], "기본 메트로놈 클릭은 음소거되어야 함");
+  assert.equal(samples, 0, "기본 비트에 연결된 샘플도 음소거되어야 함");
+
+  e.setBaseClickMuted(false);
+  internals.fireTick(mainTick);
+  assert.deepEqual(clicks, ["low"], "폴리곤을 닫으면 기본 클릭이 다시 재생되어야 함");
+  assert.equal(samples, 1, "폴리곤을 닫으면 기본 샘플도 다시 재생되어야 함");
+});
