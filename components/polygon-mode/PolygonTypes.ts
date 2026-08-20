@@ -78,7 +78,7 @@ export function sortLayersForDisplay(layers: PolygonLayer[]): PolygonLayer[] {
   return [...layers].sort((a, b) => b.sides - a.sides);
 }
 
-/** 레이어별 배치 결과: 동일 반지름 + 중앙 허브 중심 좌표 */
+/** 레이어별 배치 결과: 중앙 허브 중심 좌표 + 레이어별 반지름 */
 export interface LayerLayout {
   r: number;
   cx: number;
@@ -88,18 +88,29 @@ export interface LayerLayout {
 /**
  * 중앙 허브 기반 동심 레이아웃 계산.
  *
- * 모든 레이어가 캔버스 중앙 허브를 공유하고, 변 수가 달라도 동일한
- * 외접 반지름을 사용한다. 따라서 원(펄스)과 다각형이 같은 중심과
- * 스케일로 겹쳐진다.
+ * 모든 레이어가 캔버스 중앙 허브를 공유한다. 일반 다각형은 같은
+ * 외접 반지름을 사용하고, 여러 펄스 레이어만 추가 순서대로 조금씩
+ * 커져서 겹친 원의 외곽선이 보이도록 한다.
  */
 export function computeLayerLayout(sortedLayers: PolygonLayer[], size: number): LayerLayout[] {
   if (sortedLayers.length === 0) return [];
 
   const maxRadius = size / 2 - 20;
-  const r = Math.max(20, maxRadius * 0.72);
+  const baseRadius = Math.max(20, maxRadius * 0.72);
+  const pulseCount = sortedLayers.filter((layer) => Math.max(1, layer.sides) === 1).length;
+  const pulseStep = pulseCount > 1
+    ? Math.min(4, Math.max(0, (maxRadius - baseRadius) / (pulseCount - 1)))
+    : 0;
   const cx = size / 2;
   const cy = size / 2;
-  return sortedLayers.map(() => ({ r, cx, cy }));
+  let pulseIndex = 0;
+  return sortedLayers.map((layer) => {
+    const isPulse = Math.max(1, layer.sides) === 1;
+    const r = isPulse
+      ? baseRadius + pulseStep * pulseIndex++
+      : baseRadius;
+    return { r, cx, cy };
+  });
 }
 
 /** 터치 오버레이 히트 타깃 (Pressable 위치·라우팅) */

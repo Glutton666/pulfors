@@ -965,7 +965,7 @@ describe("computeLayerLayout", () => {
     expect(l.cy).toBeCloseTo(CENTER, 6);
   });
 
-  it("multiple layers with distinct sides share the hub and the same radius", () => {
+  it("multiple non-pulse layers share the hub and the same radius", () => {
     const layers = [
       makeLayer({ id: "a", sides: 3, beatTypes: ["strong", "normal", "normal"] }),
       makeLayer({ id: "b", sides: 6, beatTypes: ["strong", "normal", "normal", "normal", "normal", "normal"] }),
@@ -999,6 +999,23 @@ describe("computeLayerLayout", () => {
       expect(l.cx).toBeCloseTo(CENTER, 6);
       expect(l.cy).toBeCloseTo(CENTER, 6);
     }
+  });
+
+  it("same pulse layers share the hub and grow slightly in insertion order", () => {
+    const layers = [
+      makeLayer({ id: "first", sides: 1 }),
+      makeLayer({ id: "second", sides: 1 }),
+      makeLayer({ id: "third", sides: 1 }),
+    ];
+    const layouts = layoutFor(layers);
+
+    for (const layout of layouts) {
+      expect(layout.cx).toBeCloseTo(CENTER, 6);
+      expect(layout.cy).toBeCloseTo(CENTER, 6);
+    }
+    expect(layouts[1].r).toBeGreaterThan(layouts[0].r);
+    expect(layouts[2].r).toBeGreaterThan(layouts[1].r);
+    expect(layouts[2].r - layouts[1].r).toBeLessThanOrEqual(4);
   });
 
   it("computeHitTargets: editing mode routes all targets to the editing layer only", () => {
