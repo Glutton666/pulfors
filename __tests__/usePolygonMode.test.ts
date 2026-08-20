@@ -944,12 +944,12 @@ describe("computeVertexAngles", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// computeLayerLayout — 공유 꼭짓점(보석형 팬) 레이아웃 단위 테스트
+// computeLayerLayout — 중앙 허브·동일 반지름 레이아웃 단위 테스트
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("computeLayerLayout", () => {
   const SIZE = 300;
-  const PIN_Y = 20;
+  const CENTER = SIZE / 2;
 
   function layoutFor(layers: PolygonLayer[]) {
     return computeLayerLayout(sortLayersForDisplay(layers), SIZE);
@@ -959,56 +959,45 @@ describe("computeLayerLayout", () => {
     expect(computeLayerLayout([], SIZE)).toEqual([]);
   });
 
-  it("single layer: top vertex sits at the pin point", () => {
+  it("single layer: center is the central hub", () => {
     const [l] = layoutFor([makeLayer({ sides: 4 })]);
-    expect(l.cx).toBeCloseTo(SIZE / 2, 6);
-    // 첫 꼭짓점(-π/2 방향) y = cy - r = pinY
-    expect(l.cy - l.r).toBeCloseTo(PIN_Y, 6);
+    expect(l.cx).toBeCloseTo(CENTER, 6);
+    expect(l.cy).toBeCloseTo(CENTER, 6);
   });
 
-  it("multiple layers with distinct sides: all share the pin point, more sides → larger radius", () => {
+  it("multiple layers with distinct sides share the hub and the same radius", () => {
     const layers = [
       makeLayer({ id: "a", sides: 3, beatTypes: ["strong", "normal", "normal"] }),
       makeLayer({ id: "b", sides: 6, beatTypes: ["strong", "normal", "normal", "normal", "normal", "normal"] }),
       makeLayer({ id: "c", sides: 4 }),
     ];
     const layouts = layoutFor(layers);
-    // 정렬: 6 → 4 → 3
-    expect(layouts[0].r).toBeGreaterThan(layouts[1].r);
-    expect(layouts[1].r).toBeGreaterThan(layouts[2].r);
-    // 모두 핀 포인트 공유: cy - r = pinY
+    // 정렬 순서와 무관하게 모두 중앙 허브와 동일 반지름을 공유한다.
     for (const l of layouts) {
-      expect(l.cx).toBeCloseTo(SIZE / 2, 6);
-      expect(l.cy - l.r).toBeCloseTo(PIN_Y, 6);
+      expect(l.cx).toBeCloseTo(CENTER, 6);
+      expect(l.cy).toBeCloseTo(CENTER, 6);
+      expect(l.r).toBeCloseTo(layouts[0].r, 6);
     }
-    // 반지름이 클수록 중심이 아래
-    expect(layouts[0].cy).toBeGreaterThan(layouts[1].cy);
-    expect(layouts[1].cy).toBeGreaterThan(layouts[2].cy);
   });
 
-  it("same-sides layers: same radius but cy offset so they do not overlap exactly", () => {
+  it("same-sides layers overlap exactly at the hub", () => {
     const layers = [
       makeLayer({ id: "a", sides: 4 }),
       makeLayer({ id: "b", sides: 4 }),
     ];
     const layouts = layoutFor(layers);
-    // 같은 변 수 → 반지름 동일 (그룹 단위 반지름)
     expect(layouts[0].r).toBeCloseTo(layouts[1].r, 6);
-    // 첫 레이어는 델타 없음 → 핀 포인트 정확히 유지
-    expect(layouts[0].cy - layouts[0].r).toBeCloseTo(PIN_Y, 6);
-    // 두 번째 레이어는 정확히 -2px 델타 (cy - r = pinY - 2)
-    expect(layouts[1].cy - layouts[1].r).toBeCloseTo(PIN_Y - 2, 6);
+    expect(layouts[0].cx).toBeCloseTo(layouts[1].cx, 6);
+    expect(layouts[0].cy).toBeCloseTo(layouts[1].cy, 6);
   });
 
-  it("4+ same-sides layers: every non-anchor pin displacement is exactly ±2px", () => {
+  it("4+ same-sides layers all share the same center and radius", () => {
     const layers = ["a", "b", "c", "d"].map((id) => makeLayer({ id, sides: 4 }));
     const layouts = layoutFor(layers);
-    // 모두 동일 반지름
-    for (const l of layouts) expect(l.r).toBeCloseTo(layouts[0].r, 6);
-    // 앵커는 델타 0, 나머지는 정확히 ±2 (누적 없음)
-    expect(layouts[0].cy - layouts[0].r).toBeCloseTo(PIN_Y, 6);
-    for (let i = 1; i < layouts.length; i++) {
-      expect(Math.abs(layouts[i].cy - layouts[i].r - PIN_Y)).toBeCloseTo(2, 6);
+    for (const l of layouts) {
+      expect(l.r).toBeCloseTo(layouts[0].r, 6);
+      expect(l.cx).toBeCloseTo(CENTER, 6);
+      expect(l.cy).toBeCloseTo(CENTER, 6);
     }
   });
 
@@ -1046,15 +1035,17 @@ describe("computeLayerLayout", () => {
     expect(pTarget.y).toBeCloseTo(SIZE / 2, 6);
   });
 
-  it("mixed same+different sides: radius depends only on sides group", () => {
+  it("mixed same+different sides: every shape keeps the same radius", () => {
     const layers = [
       makeLayer({ id: "a", sides: 4 }),
       makeLayer({ id: "b", sides: 4 }),
       makeLayer({ id: "c", sides: 3, beatTypes: ["strong", "normal", "normal"] }),
     ];
     const layouts = layoutFor(layers);
-    // 정렬: 4, 4, 3 — 같은 그룹은 동일 r, 다른 그룹만 축소
-    expect(layouts[0].r).toBeCloseTo(layouts[1].r, 6);
-    expect(layouts[2].r).toBeLessThan(layouts[1].r);
+    for (const layout of layouts) {
+      expect(layout.r).toBeCloseTo(layouts[0].r, 6);
+      expect(layout.cx).toBeCloseTo(SIZE / 2, 6);
+      expect(layout.cy).toBeCloseTo(SIZE / 2, 6);
+    }
   });
 });

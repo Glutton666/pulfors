@@ -106,10 +106,6 @@ export function PolygonCanvas({
   layers, activeVertices, editingLayerId,
   onVertexPress, onVertexLongPress, size,
 }: PolygonCanvasProps) {
-  const centerX = size / 2;
-  const centerY = size / 2;
-  const pinY = 20; // 공유 꼭짓점(핀 포인트) y 좌표
-
   const sorted = sortLayersForDisplay(layers);
   const layouts = computeLayerLayout(sorted, size);
 
@@ -126,9 +122,6 @@ export function PolygonCanvas({
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size}>
-        {/* 공유 꼭짓점(핀 포인트) 가이드 */}
-        <Circle cx={centerX} cy={pinY} r={3} fill="#ffffff22" />
-
         {sorted.map((layer, idx) => {
           const isEditing = editingLayerId !== null;
           const isThisEditing = layer.id === editingLayerId;
@@ -136,9 +129,8 @@ export function PolygonCanvas({
           const activeVertex = activeVertices[layer.id] ?? -1;
           const sides = Math.max(1, layer.sides);
           const r = layouts[idx].r;
-          // sides=1(원/펄스)은 팬 구조 미적용 — 캔버스 중심 유지
-          const cx = sides === 1 ? centerX : layouts[idx].cx;
-          const cy = sides === 1 ? centerY : layouts[idx].cy;
+          const cx = layouts[idx].cx;
+          const cy = layouts[idx].cy;
 
           if (sides === 1) {
             // ── 원(펄스) 렌더링 ──

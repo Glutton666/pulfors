@@ -78,7 +78,7 @@ export function sortLayersForDisplay(layers: PolygonLayer[]): PolygonLayer[] {
   return [...layers].sort((a, b) => b.sides - a.sides);
 }
 
-/** 레이어별 배치 결과: 반지름 + 중심 좌표 (공유 꼭짓점 팬 구조) */
+/** 레이어별 배치 결과: 동일 반지름 + 중앙 허브 중심 좌표 */
 export interface LayerLayout {
   r: number;
   cx: number;
@@ -86,47 +86,20 @@ export interface LayerLayout {
 }
 
 /**
- * 공유 꼭짓점(보석형 팬) 레이아웃 계산.
+ * 중앙 허브 기반 동심 레이아웃 계산.
  *
- * 모든 폴리곤의 첫 번째(-π/2, 상단) 꼭짓점이 같은 핀 포인트에 고정된다:
- * - pinX = size/2, pinY = 상단 여백
- * - 각 레이어 중심: cx = pinX, cy = pinY + r (첫 꼭짓점 y = cy - r = pinY)
- * - 반지름은 **고유 변 수 그룹** 기준으로 바깥→안쪽 단계적 축소:
- *   같은 변 수 레이어는 항상 동일한 반지름(동일 크기)을 갖는다
- * - 같은 변 수 레이어는 cy에 ±2px(선 두께 수준) 델타만 줘 "두 줄"처럼 보이게 함
- *
- * sides=1(원/펄스) 레이어도 동일 공식을 쓰지만 Canvas 쪽에서 팬 구조 미적용.
+ * 모든 레이어가 캔버스 중앙 허브를 공유하고, 변 수가 달라도 동일한
+ * 외접 반지름을 사용한다. 따라서 원(펄스)과 다각형이 같은 중심과
+ * 스케일로 겹쳐진다.
  */
 export function computeLayerLayout(sortedLayers: PolygonLayer[], size: number): LayerLayout[] {
-  const n = sortedLayers.length;
-  if (n === 0) return [];
+  if (sortedLayers.length === 0) return [];
 
   const maxRadius = size / 2 - 20;
-  const pinX = size / 2;
-  const pinY = 20; // 캔버스 상단 여백 (핀 포인트 y)
-
-  // 고유 변 수 그룹 (sortedLayers는 변 많은 것부터 정렬돼 있음)
-  const uniqueSides: number[] = [];
-  for (const layer of sortedLayers) {
-    if (!uniqueSides.includes(layer.sides)) uniqueSides.push(layer.sides);
-  }
-  const groupIndex = new Map(uniqueSides.map((s, i) => [s, i]));
-
-  const base = maxRadius * 0.72;
-  const gN = uniqueSides.length;
-  const step = gN === 1 ? 0 : (maxRadius * 0.62) / gN;
-
-  // 같은 변 수 그룹 내 인덱스를 추적해 cy 미세 오프셋 적용
-  const groupCount: Record<number, number> = {};
-  return sortedLayers.map((layer) => {
-    const gi = groupIndex.get(layer.sides) ?? 0;
-    const r = Math.max(20, base - step * gi);
-    const g = groupCount[layer.sides] ?? 0;
-    groupCount[layer.sides] = g + 1;
-    // 같은 변 수면 cy에 ±2px 델타 (앵커 제외 -2/+2 교대, 누적 없음)
-    const cyDelta = g === 0 ? 0 : (g % 2 === 0 ? 2 : -2);
-    return { r, cx: pinX, cy: pinY + r + cyDelta };
-  });
+  const r = Math.max(20, maxRadius * 0.72);
+  const cx = size / 2;
+  const cy = size / 2;
+  return sortedLayers.map(() => ({ r, cx, cy }));
 }
 
 /** 터치 오버레이 히트 타깃 (Pressable 위치·라우팅) */
@@ -152,16 +125,14 @@ export function computeHitTargets(
   size: number,
   editingLayerId: string | null,
 ): VertexHitTarget[] {
-  const centerX = size / 2;
-  const centerY = size / 2;
   const targets: VertexHitTarget[] = [];
 
   sortedLayers.forEach((layer, idx) => {
     if (editingLayerId !== null && layer.id !== editingLayerId) return;
     const sides = Math.max(1, layer.sides);
     const r = layouts[idx].r;
-    const cx = sides === 1 ? centerX : layouts[idx].cx;
-    const cy = sides === 1 ? centerY : layouts[idx].cy;
+    const cx = layouts[idx].cx;
+    const cy = layouts[idx].cy;
     if (sides === 1) {
       targets.push({ key: `${layer.id}-0`, x: cx, y: cy, layerId: layer.id, vertexIdx: 0 });
       return;
@@ -186,7 +157,7 @@ export function computeHitTargets(
 }
 
 /**
- * @deprecated 공유 꼭짓점 레이아웃(computeLayerLayout)으로 대체됨.
+ * @deprecated 중앙 허브 레이아웃(computeLayerLayout)으로 대체됨.
  * 정렬된 레이어 배열에서 각 레이어의 반지름 비율(0~1)을 계산한다.
  * 같은 변 수의 레이어는 살짝 크기 차이를 준다.
  */
