@@ -601,6 +601,7 @@ export const translations = {
     blockSelectHint: { ko: "바 {0} 선택됨 — 다른 바를 길게 눌러 블록 생성", en: "Bar {0} selected — long press another bar to create block" },
     menuSignalGenerator: { ko: "시그널 제너레이터", en: "Signal Generator" },
     menuPracticeNote: { ko: "연습장", en: "Practice Note" },
+    menuLab: { ko: "실험실", en: "Lab" },
     menuWorkUp: { ko: "활동 기록", en: "Work Up" },
     menuNoteMode: { ko: "노트 모드", en: "Note Mode" },
     menuSettings: { ko: "설정", en: "Settings" },

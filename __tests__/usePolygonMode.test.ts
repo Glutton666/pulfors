@@ -1015,7 +1015,8 @@ describe("computeLayerLayout", () => {
     }
     expect(layouts[1].r).toBeGreaterThan(layouts[0].r);
     expect(layouts[2].r).toBeGreaterThan(layouts[1].r);
-    expect(layouts[2].r - layouts[1].r).toBeLessThanOrEqual(4);
+    expect(layouts[1].r - layouts[0].r).toBeCloseTo(10, 6);
+    expect(layouts[2].r - layouts[1].r).toBeCloseTo(10, 6);
   });
 
   it("computeHitTargets: editing mode routes all targets to the editing layer only", () => {

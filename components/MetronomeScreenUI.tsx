@@ -408,12 +408,6 @@ export function MetronomeScreenUI(props: Props) {
               });
             }}
             onWorkUp={() => openMenuItem(() => openExclusive("workUp"))}
-            onPracticeBook={() => {
-              openMenuItem(() => {
-                if (loggingEnabled) featureStartRef.current = { name: "practice_note", start: Date.now() };
-                openExclusive("practiceBook");
-              });
-            }}
             onStemSep={() => {
               // 음원분리 닫을 때 메뉴로 돌아올 수 있도록 직전 activeModal을 저장한다.
               stemSepReturnModalRef.current = "menu";

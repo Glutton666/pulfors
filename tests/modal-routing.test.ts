@@ -103,7 +103,7 @@ test("menu return: Android BackHandler가 메뉴 진입 항목을 공통 closeMe
 
 test("menu return: 메뉴 화면의 각 항목 진입이 메뉴 복귀 상태를 기록한다", () => {
   const src = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
-  for (const callback of ["onSignalGen", "onWorkUp", "onPracticeBook", "onScore", "onPolygon"]) {
+  for (const callback of ["onSignalGen", "onWorkUp", "onScore", "onPolygon"]) {
     const start = src.indexOf(`${callback}={() =>`);
     assert.ok(start >= 0, `MenuScreen에 ${callback} 콜백이 없다`);
     const body = src.slice(start, src.indexOf("}", start + callback.length + 8) + 1);
@@ -428,9 +428,9 @@ test("rapid-tap: menu → signalGen → tuningGuide — 연속 전환에서 동�
 });
 
 // ────────────────────────────────────────────────────────────────
-// 5. 소스 구조 테스트 — 메인 메뉴 음원 분리 항목 및 핸들러 검증
+// 5. 소스 구조 테스트 — 실험실 하위 메뉴 음원 분리 항목 및 핸들러 검증
 //
-//    a) components/MenuScreen.tsx 에 testID="menu-stemSep" 항목이 있어야 한다
+//    a) components/MenuScreen.tsx 의 실험실 하위 목록에 testID="menu-stemSep" 항목이 있어야 한다
 //    b) components/MetronomeScreenUI.tsx 의 <MenuScreen> onStemSep 핸들러는
 //       openExclusive("stemSep") 를 경유해야 하며, stemSepReturnModalRef 로
 //       복귀 모달을 저장해야 한다.
@@ -469,6 +469,35 @@ test("source: MenuScreen — 음원 분리 항목에 testID=\"menu-stemSep\" 가
     /onPress:\s*onStemSep/.test(src),
     "MenuScreen 의 음원 분리 항목이 onStemSep 핸들러를 사용해야 한다",
   );
+});
+
+test("source: MenuScreen — 연습장은 메인 메뉴에서 제거되고 실험실 진입점이 있다", () => {
+  const src = readFileSync(join(process.cwd(), "components/MenuScreen.tsx"), "utf-8");
+  const mainStart = src.indexOf("const mainItems");
+  const labStart = src.indexOf("const labItems");
+  assert.ok(mainStart >= 0 && labStart > mainStart, "메인 메뉴와 실험실 항목 목록을 찾을 수 없다");
+  const mainItems = src.slice(mainStart, labStart);
+
+  assert.ok(mainItems.includes('label: t("main", "menuLab")'), "메인 메뉴에 실험실 진입점이 없다");
+  assert.ok(mainItems.includes('testID: "menu-lab"'), "실험실 메뉴 항목에 testID가 없다");
+  assert.ok(!mainItems.includes("menuPracticeNote"), "연습장이 메인 메뉴에 남아 있다");
+});
+
+test("source: MenuScreen — 실험실에 음원 분리·악보·펄스 폴리곤을 묶는다", () => {
+  const src = readFileSync(join(process.cwd(), "components/MenuScreen.tsx"), "utf-8");
+  const labStart = src.indexOf("const labItems");
+  const itemsEnd = src.indexOf("const items =", labStart);
+  assert.ok(labStart >= 0 && itemsEnd > labStart, "실험실 항목 목록을 찾을 수 없다");
+  const labItems = src.slice(labStart, itemsEnd);
+
+  for (const [testID, handler] of [
+    ['testID: "menu-stemSep"', "onStemSep"],
+    ['testID: "menu-score"', "onScore"],
+    ['testID: "menu-polygon"', "onPolygon"],
+  ]) {
+    assert.ok(labItems.includes(testID), `실험실에 ${testID} 항목이 없다`);
+    assert.ok(labItems.includes(`onPress: ${handler}`), `실험실 ${testID} 항목이 ${handler}를 호출하지 않는다`);
+  }
 });
 
 /**

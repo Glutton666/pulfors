@@ -5,13 +5,11 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
-  Platform,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
-import { Spacing } from "@/constants/tokens";
 
 interface MenuScreenProps {
   topInset: number;
@@ -20,7 +18,6 @@ interface MenuScreenProps {
   onSettings: () => void;
   onSignalGen: () => void;
   onWorkUp: () => void;
-  onPracticeBook: () => void;
   onStemSep: () => void;
   onScore: () => void;
   onPolygon: () => void;
@@ -33,7 +30,6 @@ export function MenuScreen({
   onSettings,
   onSignalGen,
   onWorkUp,
-  onPracticeBook,
   onStemSep,
   onScore,
   onPolygon,
@@ -41,11 +37,12 @@ export function MenuScreen({
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const S = useScale();
+  const [showLab, setShowLab] = React.useState(false);
 
   const ITEM_H = S.ms(64, 0.4);
   const ICON_SIZE = S.ms(22, 0.4);
 
-  const items: {
+  const mainItems: {
     icon: React.ReactNode;
     label: string;
     onPress: () => void;
@@ -67,10 +64,19 @@ export function MenuScreen({
       onPress: onWorkUp,
     },
     {
-      icon: <MaterialCommunityIcons name="notebook-outline" size={ICON_SIZE} color={C.accent} />,
-      label: t("main", "menuPracticeNote"),
-      onPress: onPracticeBook,
+      icon: <Ionicons name="flask-outline" size={ICON_SIZE} color={C.accent} />,
+      label: t("main", "menuLab"),
+      onPress: () => setShowLab(true),
+      testID: "menu-lab",
     },
+  ];
+
+  const labItems: {
+    icon: React.ReactNode;
+    label: string;
+    onPress: () => void;
+    testID?: string;
+  }[] = [
     {
       icon: <MaterialCommunityIcons name="layers-triple-outline" size={ICON_SIZE} color={C.accent} />,
       label: t("stemSep", "title"),
@@ -90,6 +96,7 @@ export function MenuScreen({
       testID: "menu-polygon",
     },
   ];
+  const items = showLab ? labItems : mainItems;
 
   return (
     <View
@@ -99,7 +106,7 @@ export function MenuScreen({
       ]}
     >
       <Pressable
-        onPress={onOpenDial}
+        onPress={showLab ? () => setShowLab(false) : onOpenDial}
         style={{
           flexDirection: "row",
           alignItems: "center",
@@ -113,7 +120,11 @@ export function MenuScreen({
         }}
         accessibilityRole="button"
       >
-        <Ionicons name="menu" size={S.ms(22, 0.4)} color={C.accent} />
+        <Ionicons
+          name={showLab ? "chevron-back" : "menu"}
+          size={S.ms(22, 0.4)}
+          color={C.accent}
+        />
         <Text
           style={{
             fontFamily: "SpaceGrotesk_700Bold",
@@ -123,7 +134,7 @@ export function MenuScreen({
             textTransform: "uppercase",
           }}
         >
-          {t("switcher", "menu")}
+          {showLab ? t("main", "menuLab") : t("switcher", "menu")}
         </Text>
       </Pressable>
 

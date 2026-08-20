@@ -98,8 +98,10 @@ export function computeLayerLayout(sortedLayers: PolygonLayer[], size: number): 
   const maxRadius = size / 2 - 20;
   const baseRadius = Math.max(20, maxRadius * 0.72);
   const pulseCount = sortedLayers.filter((layer) => Math.max(1, layer.sides) === 1).length;
+  // 10px은 1.5px 점선 테두리 위에서도 겹친 링이 분명히 구분되는 최소 간격이다.
+  // 펄스가 많아지면 가용 반지름 안으로 자동 압축한다.
   const pulseStep = pulseCount > 1
-    ? Math.min(4, Math.max(0, (maxRadius - baseRadius) / (pulseCount - 1)))
+    ? Math.min(10, Math.max(0, (maxRadius - baseRadius) / (pulseCount - 1)))
     : 0;
   const cx = size / 2;
   const cy = size / 2;
