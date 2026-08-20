@@ -52,6 +52,14 @@ test("decodeWavBase64: RIFF 헤더 아니면 null", () => {
   assert.equal(decodeWavBase64(b64, 48000), null);
 });
 
+test("decodeWavBase64: WAVE 컨테이너가 아니면 null", () => {
+  const fake = new Uint8Array(48);
+  fake.set([0x52, 0x49, 0x46, 0x46], 0); // RIFF
+  fake.set([0x4e, 0x4f, 0x50, 0x45], 8); // NOPE
+  const b64 = Buffer.from(fake).toString("base64");
+  assert.equal(decodeWavBase64(b64, 48000), null);
+});
+
 test("decodeWavBase64: 16-bit PCM mono 정상 디코드", () => {
   const samples = [0, 0.5, -0.5, 1, -1];
   const b64 = buildWavBase64(samples, 48000, 16);
@@ -89,6 +97,25 @@ test("decodeWavBase64: data chunk 없으면 null", () => {
   view.setUint16(34, 16, true);
   const b64 = Buffer.from(buf).toString("base64");
   assert.equal(decodeWavBase64(b64, 48000), null);
+});
+
+test("decodeWavBase64: 비정상 data chunk 길이가 버퍼보다 커도 안전하게 처리", () => {
+  const buf = new Uint8Array(48);
+  const view = new DataView(buf.buffer);
+  buf.set([0x52, 0x49, 0x46, 0x46], 0);
+  buf.set([0x57, 0x41, 0x56, 0x45], 8);
+  buf.set([0x66, 0x6d, 0x74, 0x20], 12);
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, 48000, true);
+  view.setUint16(34, 16, true);
+  buf.set([0x64, 0x61, 0x74, 0x61], 36);
+  view.setUint32(40, 0xffff_ffff, true);
+  const b64 = Buffer.from(buf).toString("base64");
+  const decoded = decodeWavBase64(b64, 48000);
+  assert.ok(decoded);
+  assert.ok(decoded.samples.length <= 2, "버퍼에 실제로 있는 바이트보다 큰 배열을 할당하면 안 됨");
 });
 
 test("analyzeWavLocally: 너무 짧은 신호 → frequency null", () => {

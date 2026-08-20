@@ -611,8 +611,8 @@ describe("트림 변경 시 재감지 시뮬레이션 (recompute on trim change)
 // ─── 서버 ffmpeg 트림 파라미터: trimStartSec/trimEndSec 파싱 검증 ─────────────
 //
 // ffmpeg 자체 실행은 통합 테스트 영역이므로, 여기서는 analyzeAudioHandler가
-// trimStartSec/trimEndSec 필드를 안전하게 파싱/무시하며 기존 동작(413/400 등)을
-// 깨지 않는지만 검증한다.
+// trimStartSec/trimEndSec 입력을 명시적으로 검증해 과도하거나 잘못된 탐색값을
+// ffmpeg에 전달하지 않는지만 검증한다.
 
 describe("/api/analyze-audio: trimStartSec/trimEndSec 파라미터 안전성", () => {
   const { analyzeAudioHandler } = require("../server/routes") as {
@@ -631,7 +631,7 @@ describe("/api/analyze-audio: trimStartSec/trimEndSec 파라미터 안전성", (
     return res;
   }
 
-  test("잘못된 타입(문자열)의 trimStartSec/trimEndSec → 무시되고 정상 동작(WAV 경로)", async () => {
+  test("잘못된 타입(문자열)의 trimStartSec/trimEndSec → 400", async () => {
     const silence = new Float32Array(44100 * 2);
     const wavBuf = buildWavBuffer(silence, 44100);
     const audio = wavBuf.toString("base64");
@@ -641,10 +641,10 @@ describe("/api/analyze-audio: trimStartSec/trimEndSec 파라미터 안전성", (
     };
     const res = makeRes();
     await analyzeAudioHandler(req, res);
-    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(res.statusCode, 400);
   });
 
-  test("음수 trimStartSec → 무시되고 400/413 없이 정상 응답", async () => {
+  test("음수 trimStartSec → 400", async () => {
     const silence = new Float32Array(44100 * 2);
     const wavBuf = buildWavBuffer(silence, 44100);
     const audio = wavBuf.toString("base64");
@@ -654,6 +654,6 @@ describe("/api/analyze-audio: trimStartSec/trimEndSec 파라미터 안전성", (
     };
     const res = makeRes();
     await analyzeAudioHandler(req, res);
-    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(res.statusCode, 400);
   });
 });

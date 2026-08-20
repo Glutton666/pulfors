@@ -1,12 +1,21 @@
 import { logger } from "@/lib/logger";
 
 export const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const MAX_LOCAL_WAV_BYTES = 20 * 1024 * 1024;
+export const MAX_LOCAL_BASE64_CHARS = Math.ceil(MAX_LOCAL_WAV_BYTES / 3) * 4;
 
 export function base64ToBytes(base64: string): Uint8Array {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   const lookup = new Uint8Array(256);
   for (let i = 0; i < chars.length; i++) lookup[chars.charCodeAt(i)] = i;
-  const clean = base64.replace(/[^A-Za-z0-9+/]/g, "");
+  // Check before whitespace normalization so a huge attacker-controlled string
+  // cannot trigger another equally large allocation just to be rejected.
+  if (base64.length > MAX_LOCAL_BASE64_CHARS) return new Uint8Array(0);
+  const normalized = base64.replace(/\s/g, "");
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(normalized)) {
+    return new Uint8Array(0);
+  }
+  const clean = normalized.replace(/=/g, "");
   const len = clean.length;
   let outLen = Math.floor(len * 3 / 4);
   if (clean[len - 1] === "=") outLen--;
@@ -31,13 +40,14 @@ export function decodeWavBase64(
 ): { samples: Float32Array; rate: number } | null {
   try {
     const bytes = base64ToBytes(base64);
-    if (bytes.length < 44) {
+    if (bytes.length < 44 || bytes.length > MAX_LOCAL_WAV_BYTES) {
       logger.warn("[MicTuner] decodeWav: file too small:", bytes.length);
       return null;
     }
     const view = new DataView(bytes.buffer);
     const riffTag = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
-    if (riffTag !== "RIFF") {
+    const waveTag = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
+    if (riffTag !== "RIFF" || waveTag !== "WAVE") {
       logger.warn("[MicTuner] decodeWav: not a WAV file, header:", riffTag, "size:", bytes.length);
       return null;
     }
@@ -45,6 +55,19 @@ export function decodeWavBase64(
     const numChannels = view.getUint16(22, true);
     const wavSampleRate = view.getUint32(24, true);
     const bitsPerSample = view.getUint16(34, true);
+    const isSupportedEncoding =
+      (audioFormat === 1 && [8, 16, 24].includes(bitsPerSample))
+      || (audioFormat === 3 && bitsPerSample === 32);
+    if (
+      !isSupportedEncoding
+      || numChannels < 1
+      || numChannels > 2
+      || wavSampleRate < 8000
+      || wavSampleRate > 192000
+    ) {
+      logger.warn("[MicTuner] decodeWav: unsupported WAV encoding");
+      return null;
+    }
     logger.log("[MicTuner] WAV: fmt=", audioFormat, "ch=", numChannels, "rate=", wavSampleRate, "bits=", bitsPerSample, "size=", bytes.length);
     let dataOffset = 12;
     while (dataOffset < bytes.length - 8) {
@@ -53,7 +76,9 @@ export function decodeWavBase64(
       if (tag === "data") {
         dataOffset += 8;
         const bytesPerSample = bitsPerSample / 8;
-        const numSamples = Math.floor(chunkSize / (bytesPerSample * numChannels));
+          const availableBytes = Math.min(chunkSize, bytes.length - dataOffset);
+          const numSamples = Math.floor(availableBytes / (bytesPerSample * numChannels));
+          if (numSamples <= 0) return null;
         const samples = new Float32Array(numSamples);
         for (let i = 0; i < numSamples; i++) {
           const offset = dataOffset + i * bytesPerSample * numChannels;

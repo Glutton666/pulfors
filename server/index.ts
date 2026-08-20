@@ -6,6 +6,59 @@ import * as path from "path";
 
 const app = express();
 const log = console.log;
+const isProduction = process.env.NODE_ENV === "production";
+
+export function getTrustProxyHops(): number {
+  const configured = Number.parseInt(process.env.TRUST_PROXY_HOPS ?? "", 10);
+  if (Number.isInteger(configured) && configured >= 0 && configured <= 5) {
+    return configured;
+  }
+  // Proxy topology must be declared by deployment configuration. Trusting
+  // forwarding headers by default lets a direct client choose its own req.ip.
+  return 0;
+}
+
+function configuredHostnames(): string[] {
+  return [
+    process.env.REPLIT_DEV_DOMAIN,
+    ...(process.env.REPLIT_DOMAINS?.split(",") ?? []),
+  ]
+    .map((value) => value?.trim().toLowerCase().replace(/^https?:\/\//, ""))
+    .filter((value): value is string => Boolean(value));
+}
+
+function isLocalOrigin(origin: string): boolean {
+  return !isProduction && /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d{1,5})?$/.test(origin);
+}
+
+export function isAllowedCorsOrigin(origin: string): boolean {
+  if (isLocalOrigin(origin)) return true;
+  return configuredHostnames().some((hostname) => origin === `https://${hostname}`);
+}
+
+export function isSafePublicHost(host: string | undefined): boolean {
+  if (!host || host.length > 255 || host.includes(",") || /[\r\n<>"'`\\/\s]/.test(host)) {
+    return false;
+  }
+  if (!/^(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::\d{1,5})?$/.test(host)) {
+    return false;
+  }
+  const normalizedHost = host.toLowerCase();
+  if (configuredHostnames().some((configured) => configured === normalizedHost)) {
+    return true;
+  }
+  const hostname = normalizedHost.replace(/:\d{1,5}$/, "").replace(/^\[|\]$/g, "");
+  return !isProduction && (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1");
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 declare module "http" {
   interface IncomingMessage {
@@ -13,28 +66,12 @@ declare module "http" {
   }
 }
 
-function setupCors(app: express.Application) {
+export function setupCors(app: express.Application) {
   app.use((req, res, next) => {
-    const origins = new Set<string>();
-
-    if (process.env.REPLIT_DEV_DOMAIN) {
-      origins.add(`https://${process.env.REPLIT_DEV_DOMAIN}`);
-    }
-
-    if (process.env.REPLIT_DOMAINS) {
-      process.env.REPLIT_DOMAINS.split(",").forEach((d) => {
-        origins.add(`https://${d.trim()}`);
-      });
-    }
-
     const origin = req.header("origin");
 
-    // Allow localhost origins for Expo web development (any port)
-    const isLocalhost =
-      origin?.startsWith("http://localhost:") ||
-      origin?.startsWith("http://127.0.0.1:");
-
-    if (origin && (origins.has(origin) || isLocalhost)) {
+    if (origin && isAllowedCorsOrigin(origin)) {
+      res.header("Vary", "Origin");
       res.header("Access-Control-Allow-Origin", origin);
       res.header(
         "Access-Control-Allow-Methods",
@@ -45,24 +82,41 @@ function setupCors(app: express.Application) {
     }
 
     if (req.method === "OPTIONS") {
+      if (origin && !isAllowedCorsOrigin(origin)) {
+        return res.status(403).json({ error: "Origin not allowed" });
+      }
       return res.sendStatus(200);
+    }
+
+    if (origin && !isAllowedCorsOrigin(origin) && req.path.startsWith("/api")) {
+      return res.status(403).json({ error: "Origin not allowed" });
     }
 
     next();
   });
 }
 
-function setupBodyParsing(app: express.Application) {
+export function setupSecurityHeaders(app: express.Application) {
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(self)");
+    next();
+  });
+}
+
+export function setupBodyParsing(app: express.Application) {
   app.use(
     express.json({
-      limit: "5mb",
+      // 5 MB binary audio becomes ~6.99 MB when base64 encoded.
+      limit: "7mb",
       verify: (req, _res, buf) => {
         req.rawBody = buf;
       },
     }),
   );
 
-  app.use(express.urlencoded({ extended: false }));
+  app.use(express.urlencoded({ extended: false, limit: "16kb" }));
 }
 
 function setupRequestLogging(app: express.Application) {
@@ -142,10 +196,15 @@ function serveLandingPage({
   landingPageTemplate: string;
   appName: string;
 }) {
-  const forwardedProto = req.header("x-forwarded-proto");
-  const protocol = forwardedProto || req.protocol || "https";
-  const forwardedHost = req.header("x-forwarded-host");
-  const host = forwardedHost || req.get("host");
+  const trustsForwardedHeaders = getTrustProxyHops() > 0;
+  const forwardedProto = trustsForwardedHeaders ? req.header("x-forwarded-proto") : undefined;
+  const protocol = forwardedProto === "http" || forwardedProto === "https"
+    ? forwardedProto
+    : req.protocol === "http" && !isProduction ? "http" : "https";
+  const forwardedHost = trustsForwardedHeaders ? req.header("x-forwarded-host") : undefined;
+  const requestedHost = forwardedHost && !forwardedHost.includes(",") ? forwardedHost : req.get("host");
+  const fallbackHost = configuredHostnames()[0] ?? (isProduction ? "localhost" : "localhost:5000");
+  const host = isSafePublicHost(requestedHost) ? requestedHost! : fallbackHost;
   const baseUrl = `${protocol}://${host}`;
   const expsUrl = `${host}`;
 
@@ -155,7 +214,7 @@ function serveLandingPage({
   const html = landingPageTemplate
     .replace(/BASE_URL_PLACEHOLDER/g, baseUrl)
     .replace(/EXPS_URL_PLACEHOLDER/g, expsUrl)
-    .replace(/APP_NAME_PLACEHOLDER/g, appName);
+    .replace(/APP_NAME_PLACEHOLDER/g, escapeHtml(appName));
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.status(200).send(html);
@@ -218,18 +277,29 @@ function configureExpoAndLanding(app: express.Application): {
   return { landingPageTemplate, appName };
 }
 
-function setupErrorHandler(app: express.Application) {
+export function setupErrorHandler(app: express.Application) {
   app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     const error = err as {
       status?: number;
       statusCode?: number;
+      type?: string;
       message?: string;
     };
 
-    const status = error.status || error.statusCode || 500;
-    const message = error.message || "Internal Server Error";
+    const candidateStatus = Number(error.status || error.statusCode);
+    const status = candidateStatus >= 400 && candidateStatus <= 599 ? candidateStatus : 500;
+    const message = error.type === "entity.too.large" || status === 413
+      ? "Request body too large"
+      : error.type === "entity.parse.failed" || status === 400
+        ? "Invalid request body"
+        : "Internal server error";
 
-    console.error("Internal Server Error:", err);
+    console.error("Request failed:", {
+      method: _req.method,
+      path: _req.path,
+      status,
+      error: error.message,
+    });
 
     if (res.headersSent) {
       return next(err);
@@ -239,8 +309,9 @@ function setupErrorHandler(app: express.Application) {
   });
 }
 
-(async () => {
-  app.set("trust proxy", 1);
+export async function startServer() {
+  app.set("trust proxy", getTrustProxyHops());
+  setupSecurityHeaders(app);
   setupCors(app);
   setupBodyParsing(app);
   setupRequestLogging(app);
@@ -294,4 +365,8 @@ function setupErrorHandler(app: express.Application) {
   };
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
-})();
+}
+
+if (require.main === module) {
+  void startServer();
+}

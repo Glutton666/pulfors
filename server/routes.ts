@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import { execFile } from "node:child_process";
-import { writeFile, mkdtemp } from "node:fs/promises";
+import { writeFile, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Worker } from "node:worker_threads";
@@ -58,10 +58,15 @@ function decodeWavBuffer(buf) {
   try {
     if (buf.length < 44) return null;
     if (buf.toString('ascii', 0, 4) !== 'RIFF') return null;
+    if (buf.toString('ascii', 8, 12) !== 'WAVE') return null;
     const audioFormat  = buf.readUInt16LE(20);
     const numChannels  = buf.readUInt16LE(22);
     const sampleRate   = buf.readUInt32LE(24);
     const bitsPerSample = buf.readUInt16LE(34);
+    if (!((audioFormat === 1 && [8, 16, 24].includes(bitsPerSample)) || (audioFormat === 3 && bitsPerSample === 32))) return null;
+    if (numChannels < 1 || numChannels > 2) return null;
+    if (sampleRate < 8000 || sampleRate > 192000) return null;
+    if (![8, 16, 24, 32].includes(bitsPerSample)) return null;
     let offset = 12;
     while (offset < buf.length - 8) {
       const tag       = buf.toString('ascii', offset, offset + 4);
@@ -203,8 +208,8 @@ function analyzeWavInWorker(
     });
     const timeout = setTimeout(() => {
       worker.terminate();
-      reject(new Error("WAV analysis timed out"));
-    }, 8000);
+      reject(Object.assign(new Error("WAV analysis timed out"), { code: "TIMEOUT" }));
+    }, ANALYSIS_TIMEOUT_MS);
     worker.once("message", (result) => {
       clearTimeout(timeout);
       resolve(result);
@@ -351,11 +356,14 @@ export function detectBpmCandidatesFromSamples(samples: Float32Array, sampleRate
 // ---------------------------------------------------------------------------
 // Concurrency guards
 // ---------------------------------------------------------------------------
-const MAX_ANALYSIS_SECONDS = 3;
+export const MAX_ANALYSIS_SECONDS = 3;
 const FFMPEG_SAMPLE_RATE = 48000;
 const MAX_PCM_BYTES = MAX_ANALYSIS_SECONDS * FFMPEG_SAMPLE_RATE * 2;
 const MAX_AUDIO_SAMPLES = MAX_ANALYSIS_SECONDS * FFMPEG_SAMPLE_RATE;
 const MAX_ANALYSIS_WINDOWS = 5;
+export const MAX_AUDIO_BYTES = 5 * 1024 * 1024;
+export const MAX_TRIM_SECONDS = 60 * 60;
+export const ANALYSIS_TIMEOUT_MS = 12_000;
 
 let activeFfmpegCount = 0;
 const MAX_CONCURRENT_FFMPEG = 2;
@@ -414,9 +422,10 @@ function ffmpegConvertToPcm(
   outputPath: string,
   trimStartSec?: number,
   trimEndSec?: number,
+  inputFormat?: string,
 ): Promise<void> {
   if (activeFfmpegCount >= MAX_CONCURRENT_FFMPEG) {
-    return Promise.reject(new Error("Server busy: too many concurrent audio conversions"));
+    return Promise.reject(Object.assign(new Error("Audio conversion capacity reached"), { code: "BUSY" }));
   }
   activeFfmpegCount++;
 
@@ -428,6 +437,9 @@ function ffmpegConvertToPcm(
     : MAX_ANALYSIS_SECONDS;
 
   const args = ["-y"];
+  if (inputFormat) {
+    args.push("-f", inputFormat);
+  }
   if (hasValidStart) {
     args.push("-ss", String(trimStartSec));
   }
@@ -440,7 +452,11 @@ function ffmpegConvertToPcm(
     execFile("ffmpeg", args, { timeout: 10000 }, (err, _stdout, stderr) => {
       activeFfmpegCount--;
       if (err) {
-        reject(new Error(`FFmpeg error: ${stderr || err.message}`));
+        const code = err.killed || (err as NodeJS.ErrnoException).code === "ETIMEDOUT"
+          ? "TIMEOUT"
+          : "INVALID_AUDIO";
+        void stderr;
+        reject(Object.assign(new Error("Audio conversion failed"), { code }));
       } else {
         resolve();
       }
@@ -452,8 +468,76 @@ function ffmpegConvertToPcm(
 // Request handler
 // ---------------------------------------------------------------------------
 
-// Max base64 length for a 5 MB binary payload — reject early before decoding
-const MAX_BASE64_AUDIO_CHARS = Math.ceil((5 * 1024 * 1024) / 3) * 4;
+// Max base64 length for a 5 MB binary payload — reject early before decoding.
+const MAX_BASE64_AUDIO_CHARS = Math.ceil(MAX_AUDIO_BYTES / 3) * 4;
+const ALLOWED_AUDIO_EXTS = [".wav", ".m4a", ".3gp", ".mp4", ".aac", ".webm"] as const;
+type AudioExtension = (typeof ALLOWED_AUDIO_EXTS)[number];
+const FFMPEG_INPUT_FORMAT: Record<Exclude<AudioExtension, ".wav">, string> = {
+  ".m4a": "mov",
+  ".3gp": "mov,mp4,m4a,3gp,3g2,mj2",
+  ".mp4": "mov",
+  ".aac": "aac",
+  ".webm": "matroska,webm",
+};
+
+function isValidBase64(value: string): boolean {
+  if (value.length === 0 || value.length % 4 === 1) return false;
+  return /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value);
+}
+
+function isRiffWave(buffer: Buffer): boolean {
+  return buffer.length >= 12
+    && buffer.toString("ascii", 0, 4) === "RIFF"
+    && buffer.toString("ascii", 8, 12) === "WAVE";
+}
+
+function isDeclaredContainer(buffer: Buffer, extension: AudioExtension): boolean {
+  if (extension === ".wav") return isRiffWave(buffer);
+  if (extension === ".aac") {
+    return buffer.length >= 2 && buffer[0] === 0xff && (buffer[1] & 0xf6) === 0xf0;
+  }
+  if (extension === ".webm") {
+    return buffer.length >= 8
+      && buffer.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))
+      && buffer.subarray(0, Math.min(buffer.length, 4096)).includes(Buffer.from("webm"));
+  }
+  if (buffer.length < 12 || buffer.toString("ascii", 4, 8) !== "ftyp") return false;
+  const brand = buffer.toString("ascii", 8, 12).toLowerCase();
+  if (extension === ".3gp") return brand.startsWith("3gp");
+  return ["m4a ", "m4b ", "isom", "iso2", "mp41", "mp42", "avc1", "dash"].includes(brand);
+}
+
+function getAudioExtension(format: unknown): AudioExtension | null {
+  if (format === undefined) return ".wav";
+  if (typeof format !== "string") return null;
+  const normalized = format.toLowerCase().startsWith(".")
+    ? format.toLowerCase()
+    : `.${format.toLowerCase()}`;
+  return (ALLOWED_AUDIO_EXTS as readonly string[]).includes(normalized)
+    ? normalized as AudioExtension
+    : null;
+}
+
+function getOptionalTrim(
+  value: unknown,
+  fieldName: "trimStartSec" | "trimEndSec",
+): { value?: number; error?: string } {
+  if (value === undefined) return {};
+  if (
+    typeof value !== "number"
+    || !Number.isFinite(value)
+    || value < 0
+    || value > MAX_TRIM_SECONDS
+    || (fieldName === "trimEndSec" && value === 0)
+  ) {
+    return { error: `${fieldName} must be a finite value between 0 and ${MAX_TRIM_SECONDS} seconds` };
+  }
+  return { value };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 export async function analyzeAudioHandler(req: Request, res: Response) {
   const ip = req.ip ?? "unknown";
@@ -461,25 +545,49 @@ export async function analyzeAudioHandler(req: Request, res: Response) {
     return res.status(429).json({ error: "Too many requests. Please try again later." });
   }
 
+  if (!isRecord(req.body)) {
+    return res.status(400).json({ error: "Request body must be a JSON object" });
+  }
+
   const { audio, format, trimStartSec: rawTrimStartSec, trimEndSec: rawTrimEndSec } = req.body;
-  if (!audio || typeof audio !== "string") {
+  if (typeof audio !== "string" || audio.length === 0) {
     return res.status(400).json({ error: "Missing audio data" });
   }
-  if (audio.length > MAX_BASE64_AUDIO_CHARS) {
+  const cleanAudio = audio.replace(/\s/g, "");
+  if (cleanAudio.length > MAX_BASE64_AUDIO_CHARS) {
     return res.status(413).json({ error: "Audio data exceeds maximum allowed size" });
   }
+  if (!isValidBase64(cleanAudio)) {
+    return res.status(400).json({ error: "Audio data must be valid base64" });
+  }
 
-  const trimStartSec = typeof rawTrimStartSec === "number" && Number.isFinite(rawTrimStartSec) && rawTrimStartSec >= 0
-    ? rawTrimStartSec
-    : undefined;
-  const trimEndSec = typeof rawTrimEndSec === "number" && Number.isFinite(rawTrimEndSec) && rawTrimEndSec > 0
-    ? rawTrimEndSec
-    : undefined;
+  const trimStart = getOptionalTrim(rawTrimStartSec, "trimStartSec");
+  const trimEnd = getOptionalTrim(rawTrimEndSec, "trimEndSec");
+  if (trimStart.error || trimEnd.error) {
+    return res.status(400).json({ error: trimStart.error ?? trimEnd.error });
+  }
+  if (trimStart.value !== undefined && trimEnd.value !== undefined && trimEnd.value <= trimStart.value) {
+    return res.status(400).json({ error: "trimEndSec must be greater than trimStartSec" });
+  }
 
-  const ALLOWED_EXTS = [".wav", ".m4a", ".3gp", ".mp4", ".aac", ".webm"];
-  const rawExt = typeof format === "string" ? format.replace(/[^a-zA-Z0-9.]/g, "") : ".wav";
-  const ext = ALLOWED_EXTS.includes(rawExt) ? rawExt : ".wav";
-  const audioBuffer = Buffer.from(audio, "base64");
+  const ext = getAudioExtension(format);
+  if (!ext) {
+    return res.status(415).json({ error: "Unsupported audio format" });
+  }
+  const audioBuffer = Buffer.from(cleanAudio, "base64");
+  if (audioBuffer.length === 0) {
+    return res.status(400).json({ error: "Audio data is empty" });
+  }
+  if (audioBuffer.length > MAX_AUDIO_BYTES) {
+    return res.status(413).json({ error: "Audio data exceeds maximum allowed size" });
+  }
+  if (!isDeclaredContainer(audioBuffer, ext)) {
+    return res.status(415).json({
+      error: ext === ".wav"
+        ? "Audio data does not match the WAV format"
+        : "Audio data does not match the declared format",
+    });
+  }
 
   // WAV: run analysis in a worker thread so the main event loop stays free
   if (ext === ".wav") {
@@ -491,8 +599,9 @@ export async function analyzeAudioHandler(req: Request, res: Response) {
       const result = await analyzeWavInWorker(audioBuffer);
       return res.json(result);
     } catch (e: any) {
-      console.error("[analyze-audio] WAV worker error:", e.message);
-      return res.status(500).json({ error: e.message });
+      console.error("[analyze-audio] WAV worker failed:", { code: e.code ?? "INVALID_AUDIO" });
+      const status = e.code === "TIMEOUT" ? 504 : 422;
+      return res.status(status).json({ error: status === 504 ? "Audio analysis timed out" : "Audio data could not be analyzed" });
     } finally {
       activeWavCount--;
     }
@@ -506,9 +615,14 @@ export async function analyzeAudioHandler(req: Request, res: Response) {
     const pcmPath = join(tmpDir, "output.pcm");
 
     await writeFile(inputPath, audioBuffer);
-    await ffmpegConvertToPcm(inputPath, pcmPath, trimStartSec, trimEndSec);
+    await ffmpegConvertToPcm(
+      inputPath,
+      pcmPath,
+      trimStart.value,
+      trimEnd.value,
+      FFMPEG_INPUT_FORMAT[ext],
+    );
 
-    const { readFile, stat } = await import("node:fs/promises");
     const pcmStat = await stat(pcmPath);
     if (pcmStat.size > MAX_PCM_BYTES) {
       return res.status(413).json({ error: "Decoded audio exceeds maximum allowed size" });
@@ -557,13 +671,17 @@ export async function analyzeAudioHandler(req: Request, res: Response) {
     }
     return res.json({ frequency: null, note: null, bpm, bpmCandidates });
   } catch (e: any) {
-    console.error("[analyze-audio] Error:", e.message);
-    const status = typeof e.message === "string" && e.message.startsWith("Server busy") ? 503 : 500;
-    return res.status(status).json({ error: e.message });
+    console.error("[analyze-audio] analysis failed:", { code: e.code ?? "INVALID_AUDIO" });
+    const status = e.code === "BUSY" ? 503 : e.code === "TIMEOUT" ? 504 : 422;
+    const error = status === 503
+      ? "Server busy. Please try again later."
+      : status === 504
+        ? "Audio analysis timed out"
+        : "Audio data could not be analyzed";
+    return res.status(status).json({ error });
   } finally {
     if (tmpDir) {
       try {
-        const { rm } = await import("node:fs/promises");
         await rm(tmpDir, { recursive: true, force: true });
       } catch {}
     }

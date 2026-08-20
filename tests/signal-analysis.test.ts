@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   NOTE_NAMES,
+  MAX_LOCAL_BASE64_CHARS,
   base64ToBytes,
   frequencyToNote,
   noteToFreq,
@@ -39,6 +40,16 @@ test("base64ToBytes: padding 처리 'TWE=' → 'Ma'", () => {
 test("base64ToBytes: 비-base64 문자 무시(개행/공백)", () => {
   const r = base64ToBytes("TW\nFu ");
   assert.equal(r.length, 3);
+});
+
+test("base64ToBytes: 잘못된 문자는 빈 배열로 거절", () => {
+  const r = base64ToBytes("not base64!");
+  assert.equal(r.length, 0);
+});
+
+test("base64ToBytes: 로컬 한도 초과 입력은 디코드 전에 빈 배열로 거절", () => {
+  const r = base64ToBytes("A".repeat(MAX_LOCAL_BASE64_CHARS + 1));
+  assert.equal(r.length, 0);
 });
 
 test("frequencyToNote: A4 = 440Hz → A/4/0cents", () => {

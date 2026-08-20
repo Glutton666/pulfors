@@ -2,6 +2,10 @@ import { test, describe, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import express from "express";
+import type { Server } from "node:http";
 
 describe("Landing page: CDN script self-hosting", () => {
   const html = fs.readFileSync(
@@ -181,6 +185,30 @@ describe("/api/analyze-audio: 429/503 통합 동작 테스트 (mock req/res)", (
     return res;
   }
 
+  function makeShortAudioFixture(
+    extension: ".3gp" | ".webm",
+    codec: string,
+    muxer: string,
+  ): string {
+    const directory = fs.mkdtempSync(path.join(tmpdir(), "audio-format-fixture-"));
+    const filePath = path.join(directory, `sample${extension}`);
+    try {
+      execFileSync("ffmpeg", [
+        "-v", "error",
+        "-y",
+        "-f", "lavfi",
+        "-i", "anullsrc=channel_layout=mono:sample_rate=48000",
+        "-t", "0.25",
+        "-c:a", codec,
+        "-f", muxer,
+        filePath,
+      ], { stdio: "pipe" });
+      return fs.readFileSync(filePath).toString("base64");
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  }
+
   beforeEach(() => {
     routesModule._ipRequestLog.clear();
   });
@@ -212,5 +240,200 @@ describe("/api/analyze-audio: 429/503 통합 동작 테스트 (mock req/res)", (
     const res = makeRes();
     await routesModule.analyzeAudioHandler(req, res);
     assert.strictEqual(res.statusCode, 413, "audio 크기 초과 시 413이어야 함");
+  });
+
+  test("잘못된 base64는 디코더에 넘기지 않고 400으로 거절", async () => {
+    const req = { ip: "6.6.6.6", body: { audio: "not base64!", format: ".wav" } };
+    const res = makeRes();
+    await routesModule.analyzeAudioHandler(req, res);
+    assert.strictEqual(res.statusCode, 400);
+    assert.deepStrictEqual(res.body, { error: "Audio data must be valid base64" });
+  });
+
+  test("허용되지 않은 오디오 확장자는 415로 거절", async () => {
+    const req = { ip: "5.5.5.5", body: { audio: "dGVzdA==", format: ".exe" } };
+    const res = makeRes();
+    await routesModule.analyzeAudioHandler(req, res);
+    assert.strictEqual(res.statusCode, 415);
+    assert.deepStrictEqual(res.body, { error: "Unsupported audio format" });
+  });
+
+  test("WAV라고 주장하지만 RIFF/WAVE 헤더가 아닌 데이터는 415로 거절", async () => {
+    const req = { ip: "4.4.4.4", body: { audio: "dGVzdA==", format: ".wav" } };
+    const res = makeRes();
+    await routesModule.analyzeAudioHandler(req, res);
+    assert.strictEqual(res.statusCode, 415);
+    assert.deepStrictEqual(res.body, { error: "Audio data does not match the WAV format" });
+  });
+
+  test("허용 목록의 비-WAV 확장자도 실제 컨테이너 서명이 아니면 415로 거절", async () => {
+    for (const [index, format] of [".m4a", ".3gp", ".mp4", ".aac", ".webm"].entries()) {
+      const req = { ip: `4.4.5.${index}`, body: { audio: "dGVzdA==", format } };
+      const res = makeRes();
+      await routesModule.analyzeAudioHandler(req, res);
+      assert.strictEqual(res.statusCode, 415, `${format} should require a matching container signature`);
+      assert.deepStrictEqual(res.body, { error: "Audio data does not match the declared format" });
+    }
+  });
+
+  test("유효한 3GP와 WebM 컨테이너는 명시적인 FFmpeg demuxer로 분석됨", async () => {
+    const fixtures = [
+      { format: ".3gp" as const, codec: "aac", muxer: "3gp" },
+      { format: ".webm" as const, codec: "libopus", muxer: "webm" },
+    ];
+
+    for (const [index, fixture] of fixtures.entries()) {
+      const req = {
+        ip: `4.4.6.${index}`,
+        body: {
+          audio: makeShortAudioFixture(fixture.format, fixture.codec, fixture.muxer),
+          format: fixture.format,
+        },
+      };
+      const res = makeRes();
+      await routesModule.analyzeAudioHandler(req, res);
+      assert.strictEqual(res.statusCode, 200, `${fixture.format} fixture should be accepted`);
+      assert.ok(res.body && typeof res.body === "object");
+    }
+  });
+
+  test("객체가 아닌 요청 본문은 400으로 거절", async () => {
+    const req = { ip: "3.3.3.3", body: [] };
+    const res = makeRes();
+    await routesModule.analyzeAudioHandler(req, res);
+    assert.strictEqual(res.statusCode, 400);
+  });
+});
+
+describe("server boundary policy: CORS, proxy, host, and safe failures", () => {
+  const indexSource = fs.readFileSync(path.resolve(process.cwd(), "server/index.ts"), "utf-8");
+  const routesSource = fs.readFileSync(path.resolve(process.cwd(), "server/routes.ts"), "utf-8");
+
+  test("개발 localhost 허용은 production 전용이 아니라 개발 환경에만 한정됨", () => {
+    assert.ok(indexSource.includes("return !isProduction &&"));
+    assert.ok(indexSource.includes("localhost|127\\.0\\.0\\.1"));
+  });
+
+  test("허용되지 않은 API Origin과 preflight는 403으로 거절", () => {
+    assert.match(indexSource, /origin && !isAllowedCorsOrigin\(origin\) && req\.path\.startsWith\("\/api"\)/);
+    assert.match(indexSource, /res\.status\(403\)\.json\(\{ error: "Origin not allowed" \}\)/);
+  });
+
+  test("신뢰 프록시는 환경/명시적인 hop 값으로만 설정", () => {
+    assert.match(indexSource, /TRUST_PROXY_HOPS/);
+    assert.match(indexSource, /app\.set\("trust proxy", getTrustProxyHops\(\)\)/);
+    assert.match(indexSource, /return 0;/);
+  });
+
+  test("호스트 반사는 허용 형식과 구성된 호스트를 확인", () => {
+    assert.match(indexSource, /isSafePublicHost/);
+    assert.match(indexSource, /fallbackHost/);
+    assert.match(indexSource, /escapeHtml\(appName\)/);
+    assert.match(indexSource, /configured === normalizedHost/);
+  });
+
+  test("기본 보안 응답 헤더를 모든 요청에 적용", () => {
+    for (const header of ["X-Content-Type-Options", "Referrer-Policy", "Permissions-Policy"]) {
+      assert.ok(indexSource.includes(header), `missing security header: ${header}`);
+    }
+  });
+
+  test("변환기·워커의 내부 예외 문자열을 API 응답에 그대로 보내지 않음", () => {
+    assert.ok(!routesSource.includes("json({ error: e.message })"));
+    assert.ok(!routesSource.includes("e.detail ?? e.message"));
+    assert.match(routesSource, /Audio data could not be analyzed/);
+    assert.match(routesSource, /Audio analysis timed out/);
+  });
+
+  test("비-WAV 입력은 컨테이너 서명과 명시적인 FFmpeg 입력 형식을 함께 확인", () => {
+    assert.match(routesSource, /isDeclaredContainer/);
+    assert.match(routesSource, /FFMPEG_INPUT_FORMAT/);
+    assert.match(routesSource, /args\.push\("-f", inputFormat\)/);
+  });
+});
+
+describe("server security middleware: HTTP response behavior", () => {
+  const {
+    setupBodyParsing,
+    setupCors,
+    setupErrorHandler,
+    setupSecurityHeaders,
+  } = require("../server/index") as {
+    setupBodyParsing: (app: express.Express) => void;
+    setupCors: (app: express.Express) => void;
+    setupErrorHandler: (app: express.Express) => void;
+    setupSecurityHeaders: (app: express.Express) => void;
+  };
+
+  async function withTestServer(
+    callback: (baseUrl: string) => Promise<void>,
+  ): Promise<void> {
+    const app = express();
+    setupSecurityHeaders(app);
+    setupCors(app);
+    setupBodyParsing(app);
+    app.post("/api/echo", (req, res) => res.json(req.body));
+    setupErrorHandler(app);
+
+    const server = await new Promise<Server>((resolve) => {
+      const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
+    });
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Test server did not expose a TCP port");
+
+    try {
+      await callback(`http://127.0.0.1:${address.port}`);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  }
+
+  test("허용된 개발 Origin에는 CORS와 기본 보안 헤더를 모두 보냄", async () => {
+    await withTestServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/echo`, {
+        method: "POST",
+        headers: {
+          Origin: "http://localhost:3000",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ok: true }),
+      });
+
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("access-control-allow-origin"), "http://localhost:3000");
+      assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+      assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+      assert.equal(response.headers.get("permissions-policy"), "camera=(), microphone=(self)");
+    });
+  });
+
+  test("허용되지 않은 Origin의 API 요청은 403이며 CORS 헤더를 주지 않음", async () => {
+    await withTestServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/echo`, {
+        method: "POST",
+        headers: {
+          Origin: "https://untrusted.example",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ok: true }),
+      });
+
+      assert.equal(response.status, 403);
+      assert.equal(response.headers.get("access-control-allow-origin"), null);
+      assert.deepStrictEqual(await response.json(), { error: "Origin not allowed" });
+    });
+  });
+
+  test("잘못된 JSON은 내부 파서 오류 대신 안전한 400 응답을 받음", async () => {
+    await withTestServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/echo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{not-json",
+      });
+
+      assert.equal(response.status, 400);
+      assert.deepStrictEqual(await response.json(), { message: "Invalid request body" });
+    });
   });
 });
