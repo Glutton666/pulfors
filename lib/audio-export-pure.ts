@@ -1,5 +1,15 @@
 export type ExportFormat = "wav" | "mp3";
 
+export const EXPORT_ABORTED = "EXPORT_ABORTED";
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new Error(EXPORT_ABORTED);
+}
+
+async function yieldToEventLoop(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
 interface LameMp3Encoder {
   encodeBuffer(left: Int16Array, right?: Int16Array): Uint8Array;
   flush(): Uint8Array;
@@ -245,8 +255,11 @@ export async function encodeMp3MonoChunked(
   fadeOutSec: number,
   sampleRate: number,
   kbps: number = 128,
+  signal?: AbortSignal,
 ): Promise<Uint8Array> {
+  throwIfAborted(signal);
   const lame = await loadLame();
+  throwIfAborted(signal);
   const enc = new lame.Mp3Encoder(1, sampleRate, kbps);
   const r = clampRepeats(repeats);
   const n = loop.length;
@@ -259,6 +272,7 @@ export async function encodeMp3MonoChunked(
 
   let g = 0;
   let workLen = 0;
+  let blocksSinceYield = 0;
 
   function flush_work() {
     const slice = work.subarray(0, workLen);
@@ -269,17 +283,113 @@ export async function encodeMp3MonoChunked(
 
   for (let rep = 0; rep < r; rep++) {
     for (let i = 0; i < n; i++, g++) {
+      throwIfAborted(signal);
       const gain = fadeGain(g, fadeStart, fadeSamples);
       const s = Math.max(-1, Math.min(1, loop[i] * gain));
       work[workLen++] = s < 0 ? s * 0x8000 : s * 0x7fff;
-      if (workLen === blockSize) flush_work();
+      if (workLen === blockSize) {
+        flush_work();
+        blocksSinceYield++;
+        if (blocksSinceYield >= 8) {
+          blocksSinceYield = 0;
+          await yieldToEventLoop();
+          throwIfAborted(signal);
+        }
+      }
     }
   }
+  throwIfAborted(signal);
   if (workLen > 0) flush_work();
 
   const tail = enc.flush();
   if (tail.length > 0) chunks.push(tail);
-  return concatU8(chunks);
+  return concatU8Abortable(chunks, signal);
+}
+
+/**
+ * Abortable WAV encoder. The original synchronous encoder remains available
+ * for callers that need a pure, immediate result; exports use this yielding
+ * variant so a button press can reach the event loop during long repeats.
+ */
+export async function encodeWavMonoChunkedAbortable(
+  loop: Float32Array,
+  repeats: number,
+  fadeOutSec: number,
+  sampleRate: number,
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
+  throwIfAborted(signal);
+  const r = clampRepeats(repeats);
+  const n = loop.length;
+  const totalSamples = n * r;
+  const dataSize = totalSamples * 2;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const v = new DataView(buf);
+  const ws = (off: number, s: string) => {
+    for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i));
+  };
+  ws(0, "RIFF");
+  v.setUint32(4, 36 + dataSize, true);
+  ws(8, "WAVE");
+  ws(12, "fmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  ws(36, "data");
+  v.setUint32(40, dataSize, true);
+
+  const fadeSamples = Math.min(totalSamples, Math.floor(clampFadeOutSec(fadeOutSec) * sampleRate));
+  const fadeStart = totalSamples - fadeSamples;
+  let g = 0;
+  let samplesSinceYield = 0;
+  for (let rep = 0; rep < r; rep++) {
+    for (let i = 0; i < n; i++, g++) {
+      throwIfAborted(signal);
+      const gain = fadeGain(g, fadeStart, fadeSamples);
+      const s = Math.max(-1, Math.min(1, loop[i] * gain));
+      v.setInt16(44 + g * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      samplesSinceYield++;
+      if (samplesSinceYield >= 8192) {
+        samplesSinceYield = 0;
+        await yieldToEventLoop();
+        throwIfAborted(signal);
+      }
+    }
+  }
+  throwIfAborted(signal);
+  return new Uint8Array(buf);
+}
+
+/** Concatenates rendered note-queue passes without monopolizing the JS thread. */
+export async function concatFloat32Abortable(
+  passes: Float32Array[],
+  signal?: AbortSignal,
+): Promise<Float32Array> {
+  let total = 0;
+  for (const pass of passes) {
+    throwIfAborted(signal);
+    total += pass.length;
+  }
+  await yieldToEventLoop();
+  throwIfAborted(signal);
+  const out = new Float32Array(total);
+  let offset = 0;
+  const chunkSize = 8192;
+  for (const pass of passes) {
+    for (let start = 0; start < pass.length; start += chunkSize) {
+      throwIfAborted(signal);
+      const end = Math.min(start + chunkSize, pass.length);
+      out.set(pass.subarray(start, end), offset);
+      offset += end - start;
+      await yieldToEventLoop();
+    }
+  }
+  throwIfAborted(signal);
+  return out;
 }
 
 export function concatU8(chunks: Uint8Array[]): Uint8Array {
@@ -291,6 +401,31 @@ export function concatU8(chunks: Uint8Array[]): Uint8Array {
     out.set(c, off);
     off += c.length;
   }
+  return out;
+}
+
+async function concatU8Abortable(
+  chunks: Uint8Array[],
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
+  let total = 0;
+  for (const chunk of chunks) {
+    throwIfAborted(signal);
+    total += chunk.length;
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  const copyChunkSize = 64 * 1024;
+  for (const chunk of chunks) {
+    for (let start = 0; start < chunk.length; start += copyChunkSize) {
+      throwIfAborted(signal);
+      const end = Math.min(start + copyChunkSize, chunk.length);
+      out.set(chunk.subarray(start, end), offset);
+      offset += end - start;
+      await yieldToEventLoop();
+    }
+  }
+  throwIfAborted(signal);
   return out;
 }
 

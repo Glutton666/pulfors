@@ -6,7 +6,7 @@ import {
   loadAssetPCM,
   decodeSampleFile,
   parseTrimInfo,
-  renderMeasure,
+  renderMeasureAbortable,
   encodeWav,
   getRenderSampleRate,
   type ClickPCMs,
@@ -23,6 +23,9 @@ import {
   encodeMp3Mono as _encodeMp3Mono,
   encodeMp3MonoChunked as _encodeMp3MonoChunked,
   encodeWavMonoChunked as _encodeWavMonoChunked,
+  encodeWavMonoChunkedAbortable as _encodeWavMonoChunkedAbortable,
+  concatFloat32Abortable as _concatFloat32Abortable,
+  EXPORT_ABORTED,
   safeFilename as _safeFilename,
 } from "./audio-export-pure";
 
@@ -32,6 +35,8 @@ const repeatAndFadeMono = _repeatAndFadeMono;
 const encodeMp3Mono = _encodeMp3Mono;
 const encodeMp3MonoChunked = _encodeMp3MonoChunked;
 const encodeWavMonoChunked = _encodeWavMonoChunked;
+const encodeWavMonoChunkedAbortable = _encodeWavMonoChunkedAbortable;
+const concatFloat32Abortable = _concatFloat32Abortable;
 const safeFilename = _safeFilename;
 
 export {
@@ -42,6 +47,8 @@ export {
   encodeMp3Mono,
   encodeMp3Stereo,
   encodeWavStereoBytes,
+  encodeWavMonoChunkedAbortable,
+  EXPORT_ABORTED,
 } from "./audio-export-pure";
 export type { ExportFormat } from "./audio-export-pure";
 import type { ExportFormat } from "./audio-export-pure";
@@ -53,6 +60,7 @@ export interface ExportOptions {
   repeats: number;
   fadeOutSec: number;
   onProgress?: (p: number) => void;
+  signal?: AbortSignal;
 }
 
 export interface ExportResult {
@@ -65,18 +73,33 @@ function encodeWavMonoBytes(pcm: Float32Array, sampleRate: number = SR): Uint8Ar
   return new Uint8Array(encodeWav(pcm, sampleRate));
 }
 
-async function loadClickPCMsForSoundSet(setName: string): Promise<ClickPCMs> {
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new Error(EXPORT_ABORTED);
+}
+
+async function checkpoint(signal?: AbortSignal): Promise<void> {
+  throwIfAborted(signal);
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  throwIfAborted(signal);
+}
+
+async function loadClickPCMsForSoundSet(
+  setName: string,
+  signal?: AbortSignal,
+): Promise<ClickPCMs> {
+  throwIfAborted(signal);
   const set = (soundSets as Record<string, typeof soundSets.classic>)[setName] ?? soundSets.classic;
   const [strong, high, low] = await Promise.all([
     loadAssetPCM(set.strong),
     loadAssetPCM(set.high),
     loadAssetPCM(set.low),
   ]);
+  throwIfAborted(signal);
   return { strong, high, low };
 }
 
-async function loadDefaultClickPCMs(): Promise<ClickPCMs> {
-  return loadClickPCMsForSoundSet("classic");
+async function loadDefaultClickPCMs(signal?: AbortSignal): Promise<ClickPCMs> {
+  return loadClickPCMsForSoundSet("classic", signal);
 }
 
 /**
@@ -84,7 +107,11 @@ async function loadDefaultClickPCMs(): Promise<ClickPCMs> {
  * layerSoundSet이 명시된 경우 해당 셋을, 없으면 classic으로 fallback.
  * 반환 Map 키: 사운드 셋 이름 ("classic" 등) 및 인덱스 키 ("#1" 등).
  */
-async function loadLayerClickPCMsForSchedule(ticks: TickInfo[]): Promise<Map<string, ClickPCMs>> {
+async function loadLayerClickPCMsForSchedule(
+  ticks: TickInfo[],
+  signal?: AbortSignal,
+): Promise<Map<string, ClickPCMs>> {
+  throwIfAborted(signal);
   const soundSetByName = new Set<string>();
   const fallbackByIndex = new Map<number, string>();
   for (const tick of ticks) {
@@ -101,7 +128,7 @@ async function loadLayerClickPCMsForSchedule(ticks: TickInfo[]): Promise<Map<str
   if (soundSetByName.size === 0) return new Map();
   const loaded = new Map<string, ClickPCMs>();
   await Promise.all([...soundSetByName].map(async (ss) => {
-    const pcms = await loadClickPCMsForSoundSet(ss);
+    const pcms = await loadClickPCMsForSoundSet(ss, signal);
     loaded.set(ss, pcms);
   }));
   const map = new Map<string, ClickPCMs>(loaded);
@@ -109,16 +136,22 @@ async function loadLayerClickPCMsForSchedule(ticks: TickInfo[]): Promise<Map<str
     const pcms = loaded.get(ss);
     if (pcms) map.set(`#${li}`, pcms);
   }
+  throwIfAborted(signal);
   return map;
 }
 
-async function loadEntrySamplePCMs(entry: PracticeEntry): Promise<Map<string, SamplePCMEntry>> {
+async function loadEntrySamplePCMs(
+  entry: PracticeEntry,
+  signal?: AbortSignal,
+): Promise<Map<string, SamplePCMEntry>> {
   const out = new Map<string, SamplePCMEntry>();
   const samples = entry.noteSamples || {};
   for (const [key, uri] of Object.entries(samples)) {
+    throwIfAborted(signal);
     if (!uri || typeof uri !== "string") continue;
     try {
       const pcm = await decodeSampleFile(uri);
+      throwIfAborted(signal);
       if (!pcm) continue;
       const { trimStartMs, trimDurationMs } = parseTrimInfo(uri);
       out.set(key, { pcm, trimStartMs, trimDurationMs });
@@ -133,7 +166,11 @@ async function loadEntrySamplePCMs(entry: PracticeEntry): Promise<Map<string, Sa
  * 단일 PracticeEntry → 한 패스(루프 1회) 모노 PCM.
  * 한 마디(또는 블록 시퀀스 1회)를 click + 샘플 믹스로 렌더.
  */
-async function renderSingleEntryLoopPCM(entry: PracticeEntry): Promise<Float32Array> {
+async function renderSingleEntryLoopPCM(
+  entry: PracticeEntry,
+  signal?: AbortSignal,
+): Promise<Float32Array> {
+  throwIfAborted(signal);
   const engine = new MetronomeEngine();
   applyEntryToEngine(engine, entry);
   const info = engine.getScheduleInfo();
@@ -142,11 +179,12 @@ async function renderSingleEntryLoopPCM(entry: PracticeEntry): Promise<Float32Ar
   }
   const ticks = info.ticks as TickInfo[];
   const [clickPCMs, layerClickPCMs, samplePCMs] = await Promise.all([
-    loadDefaultClickPCMs(),
-    loadLayerClickPCMsForSchedule(ticks),
-    loadEntrySamplePCMs(entry),
+    loadDefaultClickPCMs(signal),
+    loadLayerClickPCMsForSchedule(ticks, signal),
+    loadEntrySamplePCMs(entry, signal),
   ]);
-  const rendered = renderMeasure({
+  await checkpoint(signal);
+  const rendered = await renderMeasureAbortable({
     schedule: ticks,
     measureDurationMs: info.durationMs,
     clickPCMs,
@@ -155,7 +193,7 @@ async function renderSingleEntryLoopPCM(entry: PracticeEntry): Promise<Float32Ar
     sampleVolume: samplePCMs.size > 0 ? 1.0 : 0,
     metronomeChannel: "both",
     layerClickPCMs: layerClickPCMs.size > 0 ? layerClickPCMs : undefined,
-  });
+  }, signal);
   // renderMeasure returns 2 copies; take first measure span (it includes wrapped
   // tail from the previous loop iteration, so tiling stays seamless).
   const measureSamples = Math.ceil((info.durationMs / 1000) * SR);
@@ -177,40 +215,63 @@ function mixStereoToMono(s: { left: Float32Array; right: Float32Array }): Float3
 async function renderEntryAllPassesPCM(
   entry: PracticeEntry,
   onProgress?: (p: number) => void,
+  signal?: AbortSignal,
 ): Promise<Float32Array> {
   if (entry.mode === "note" && entry.noteQueueEntries && entry.noteQueueEntries.length > 0) {
     const queue = entry.noteQueueEntries;
     const passes: Float32Array[] = [];
     for (let i = 0; i < queue.length; i++) {
+      throwIfAborted(signal);
       // 큐 sub-entry 는 노트 모드 표식 제거 (단순 바 렌더로 처리)
       const sub: PracticeEntry = { ...queue[i], mode: "bar", noteQueueEntries: undefined, noteQueueEntryIds: undefined };
-      const pcm = await renderSingleEntryLoopPCM(sub);
+      const pcm = await renderSingleEntryLoopPCM(sub, signal);
       if (pcm.length > 0) passes.push(pcm);
       onProgress?.((i + 1) / queue.length * 0.5);
       await new Promise((r) => setTimeout(r, 0));
     }
-    let total = 0;
-    for (const p of passes) total += p.length;
-    const out = new Float32Array(total);
-    let off = 0;
-    for (const p of passes) { out.set(p, off); off += p.length; }
-    return out;
+    return concatFloat32Abortable(passes, signal);
   }
+  throwIfAborted(signal);
   onProgress?.(0.25);
-  const pcm = await renderSingleEntryLoopPCM(entry);
+  const pcm = await renderSingleEntryLoopPCM(entry, signal);
   onProgress?.(0.5);
   return pcm;
 }
 
-async function saveBytesToCache(bytes: Uint8Array, filename: string, mimeType: string): Promise<string> {
+async function saveBytesToCache(
+  bytes: Uint8Array,
+  filename: string,
+  mimeType: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  await checkpoint(signal);
   if (Platform.OS === "web") {
     const blob = new Blob([bytes as BlobPart], { type: mimeType });
+    throwIfAborted(signal);
     return URL.createObjectURL(blob);
   }
   const file = new File(Paths.cache, filename);
   try { file.delete(); } catch {}
+  throwIfAborted(signal);
   file.write(bytes);
+  throwIfAborted(signal);
   return file.uri;
+}
+
+function makeCacheFilename(filename: string): string {
+  const dot = filename.lastIndexOf(".");
+  const base = dot >= 0 ? filename.slice(0, dot) : filename;
+  const ext = dot >= 0 ? filename.slice(dot) : "";
+  const nonce = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${base}-${nonce}${ext}`;
+}
+
+export function discardExportedUri(uri: string): void {
+  if (Platform.OS === "web") {
+    revokeExportedUri(uri);
+    return;
+  }
+  try { new File(uri).delete(); } catch {}
 }
 
 export function revokeExportedUri(uri: string): void {
@@ -253,35 +314,44 @@ export async function exportPracticeEntry(
   entry: PracticeEntry,
   options: ExportOptions,
 ): Promise<ExportResult> {
-  const { format, onProgress } = options;
+  const { format, onProgress, signal } = options;
+  throwIfAborted(signal);
   const repeats = clampRepeats(options.repeats);
   const fadeOutSec = clampFadeOutSec(options.fadeOutSec);
 
   onProgress?.(0.02);
-  const pcm = await renderEntryAllPassesPCM(entry, (p) => onProgress?.(0.05 + p * 0.45));
+  const pcm = await renderEntryAllPassesPCM(
+    entry,
+    (p) => onProgress?.(0.05 + p * 0.45),
+    signal,
+  );
   if (pcm.length === 0) {
     throw new Error("EMPTY_RENDER");
   }
   onProgress?.(0.6);
-  await new Promise((r) => setTimeout(r, 0));
+  await checkpoint(signal);
 
   const base = safeFilename(entry.label);
   let bytes: Uint8Array;
   let filename: string;
   let mime: string;
   if (format === "mp3") {
-    bytes = await encodeMp3MonoChunked(pcm, repeats, fadeOutSec, SR, 128);
+    bytes = await encodeMp3MonoChunked(pcm, repeats, fadeOutSec, SR, 128, signal);
     filename = `${base}_x${repeats}.mp3`;
     mime = "audio/mpeg";
   } else {
-    bytes = encodeWavMonoChunked(pcm, repeats, fadeOutSec, SR);
+    bytes = await encodeWavMonoChunkedAbortable(pcm, repeats, fadeOutSec, SR, signal);
     filename = `${base}_x${repeats}.wav`;
     mime = "audio/wav";
   }
   onProgress?.(0.9);
-  await new Promise((r) => setTimeout(r, 0));
+  await checkpoint(signal);
 
-  const uri = await saveBytesToCache(bytes, filename, mime);
+  const uri = await saveBytesToCache(bytes, makeCacheFilename(filename), mime, signal);
+  if (signal?.aborted) {
+    discardExportedUri(uri);
+    throw new Error(EXPORT_ABORTED);
+  }
   onProgress?.(1);
   return { uri, filename, format };
 }

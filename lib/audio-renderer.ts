@@ -324,11 +324,13 @@ function mixInto(
   dest: Float32Array,
   src: Float32Array,
   offset: number,
-  vol: number
+  vol: number,
+  shouldAbort?: () => boolean,
 ) {
   const start = offset < 0 ? -offset : 0;
   const end = Math.min(src.length, dest.length - offset);
   for (let i = start; i < end; i++) {
+    if ((i & 1023) === 0 && shouldAbort?.()) throw new Error("EXPORT_ABORTED");
     dest[offset + i] += src[i] * vol;
   }
 }
@@ -345,7 +347,7 @@ export interface SamplePCMEntry {
   trimDurationMs: number;
 }
 
-export function renderMeasure(params: {
+export interface RenderMeasureParams {
   schedule: TickInfo[];
   measureDurationMs: number;
   clickPCMs: ClickPCMs;
@@ -356,7 +358,10 @@ export function renderMeasure(params: {
   sampleChannels?: Record<string, SampleChannel>;
   layerClickPCMs?: Map<string, ClickPCMs>;
   metroChannelsByBeat?: Record<string, MetroChannel>;
-}): Float32Array | { left: Float32Array; right: Float32Array } {
+  shouldAbort?: () => boolean;
+}
+
+export function renderMeasure(params: RenderMeasureParams): Float32Array | { left: Float32Array; right: Float32Array } {
   const {
     schedule,
     measureDurationMs,
@@ -368,6 +373,7 @@ export function renderMeasure(params: {
     sampleChannels = {},
     layerClickPCMs,
     metroChannelsByBeat,
+    shouldAbort,
   } = params;
   const stereoMode =
     metronomeChannel !== "both" ||
@@ -396,12 +402,12 @@ export function renderMeasure(params: {
     channel: SampleChannel,
   ) => {
     if (channel === "both") {
-      mixInto(bufL, src, offset, vol);
-      mixInto(bufR, src, offset, vol);
+      mixInto(bufL, src, offset, vol, shouldAbort);
+      mixInto(bufR, src, offset, vol, shouldAbort);
     } else if (channel === "left") {
-      mixInto(bufL, src, offset, vol);
+      mixInto(bufL, src, offset, vol, shouldAbort);
     } else {
-      mixInto(bufR, src, offset, vol);
+      mixInto(bufR, src, offset, vol, shouldAbort);
     }
   };
 
@@ -409,6 +415,7 @@ export function renderMeasure(params: {
     for (let copy = 0; copy < COPIES; copy++) {
       const copyOffset = copy * measureSamples;
       for (const tick of schedule) {
+        if (shouldAbort?.()) throw new Error("EXPORT_ABORTED");
         if (tick.type === "mute") continue;
         const offsetSamples = copyOffset + Math.round((tick.time / 1000) * RENDER_SR);
         const key = `${tick.beat}-${tick.subBeat}`;
@@ -431,7 +438,7 @@ export function renderMeasure(params: {
           if (right) {
             mixToChannel(left, right, clickPCM, offsetSamples, clickVolume, effectiveMetroChannel as SampleChannel);
           } else {
-            mixInto(left, clickPCM, offsetSamples, clickVolume);
+            mixInto(left, clickPCM, offsetSamples, clickVolume, shouldAbort);
           }
         }
 
@@ -450,7 +457,7 @@ export function renderMeasure(params: {
             const ch = sampleChannels[key] ?? "both";
             mixToChannel(left, right, trimmed, offsetSamples, sampleVolume, ch);
           } else {
-            mixInto(left, trimmed, offsetSamples, sampleVolume);
+            mixInto(left, trimmed, offsetSamples, sampleVolume, shouldAbort);
           }
         }
       }
@@ -459,10 +466,12 @@ export function renderMeasure(params: {
 
   const finalize = (buf: Float32Array): Float32Array => {
     for (let i = loopSamples; i < totalSamples; i++) {
+      if ((i & 8191) === 0 && shouldAbort?.()) throw new Error("EXPORT_ABORTED");
       buf[i - loopSamples] += buf[i];
     }
     const out = buf.subarray(0, loopSamples);
     for (let i = 0; i < out.length; i++) {
+      if ((i & 8191) === 0 && shouldAbort?.()) throw new Error("EXPORT_ABORTED");
       out[i] = Math.max(-1, Math.min(1, out[i]));
     }
     return out;
@@ -478,6 +487,161 @@ export function renderMeasure(params: {
   const rightBuf = new Float32Array(totalSamples);
   renderInto(leftBuf, rightBuf);
   return { left: finalize(leftBuf), right: finalize(rightBuf) };
+}
+
+async function renderYield(signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) throw new Error("EXPORT_ABORTED");
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  if (signal?.aborted) throw new Error("EXPORT_ABORTED");
+}
+
+async function mixIntoAbortable(
+  dest: Float32Array,
+  src: Float32Array,
+  offset: number,
+  vol: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  const start = offset < 0 ? -offset : 0;
+  const end = Math.min(src.length, dest.length - offset);
+  const chunkSize = 4096;
+  for (let chunkStart = start; chunkStart < end; chunkStart += chunkSize) {
+    const chunkEnd = Math.min(chunkStart + chunkSize, end);
+    for (let i = chunkStart; i < chunkEnd; i++) {
+      dest[offset + i] += src[i] * vol;
+    }
+    await renderYield(signal);
+  }
+}
+
+/**
+ * Cooperative export renderer. The interactive renderer stays synchronous for
+ * normal playback; this variant yields between bounded audio chunks so export
+ * cancellation can be observed while a large sample is being mixed.
+ */
+export async function renderMeasureAbortable(
+  params: RenderMeasureParams,
+  signal?: AbortSignal,
+): Promise<Float32Array | { left: Float32Array; right: Float32Array }> {
+  const {
+    schedule,
+    measureDurationMs,
+    clickPCMs,
+    samplePCMs,
+    clickVolume,
+    sampleVolume,
+    metronomeChannel = "both",
+    sampleChannels = {},
+    layerClickPCMs,
+    metroChannelsByBeat,
+  } = params;
+  await renderYield(signal);
+  const stereoMode =
+    metronomeChannel !== "both" ||
+    Object.values(sampleChannels).some((c) => c !== "both") ||
+    (metroChannelsByBeat
+      ? Object.values(metroChannelsByBeat).some((c) => c !== "both")
+      : false);
+  const COPIES = 2;
+  const measureSamples = Math.ceil((measureDurationMs / 1000) * RENDER_SR);
+  const loopSamples = measureSamples * COPIES;
+  const maxClickLen = Math.max(
+    clickPCMs.strong.length,
+    clickPCMs.high.length,
+    clickPCMs.low.length,
+    Math.ceil(RENDER_SR * 0.15),
+  );
+  const totalSamples = loopSamples + maxClickLen;
+
+  const mixToChannel = async (
+    left: Float32Array,
+    right: Float32Array,
+    src: Float32Array,
+    offset: number,
+    volume: number,
+    channel: SampleChannel,
+  ) => {
+    if (channel === "both") {
+      await mixIntoAbortable(left, src, offset, volume, signal);
+      await mixIntoAbortable(right, src, offset, volume, signal);
+    } else if (channel === "left") {
+      await mixIntoAbortable(left, src, offset, volume, signal);
+    } else {
+      await mixIntoAbortable(right, src, offset, volume, signal);
+    }
+  };
+
+  const renderInto = async (left: Float32Array, right: Float32Array | null) => {
+    for (let copy = 0; copy < COPIES; copy++) {
+      const copyOffset = copy * measureSamples;
+      for (const tick of schedule) {
+        await renderYield(signal);
+        if (tick.type === "mute") continue;
+        const offsetSamples = copyOffset + Math.round((tick.time / 1000) * RENDER_SR);
+        const key = `${tick.beat}-${tick.subBeat}`;
+        const isLayerTick = (tick.layerIndex ?? 0) > 0;
+        let effectiveClickPCMs = clickPCMs;
+        if (isLayerTick && layerClickPCMs) {
+          const bySet = tick.layerSoundSet ? layerClickPCMs.get(tick.layerSoundSet) : undefined;
+          const byIdx = layerClickPCMs.get(`#${tick.layerIndex ?? 0}`);
+          effectiveClickPCMs = bySet ?? byIdx ?? clickPCMs;
+        }
+        const effectiveMetroChannel: MetroChannel =
+          metroChannelsByBeat?.[String(tick.beat)] ?? metronomeChannel;
+        if (effectiveMetroChannel !== "off") {
+          const clickPCM = tick.type === "strong"
+            ? effectiveClickPCMs.strong
+            : tick.type === "accent"
+              ? effectiveClickPCMs.high
+              : effectiveClickPCMs.low;
+          if (right) {
+            await mixToChannel(left, right, clickPCM, offsetSamples, clickVolume, effectiveMetroChannel as SampleChannel);
+          } else {
+            await mixIntoAbortable(left, clickPCM, offsetSamples, clickVolume, signal);
+          }
+        }
+        if (tick.repeatIteration === 0 && tick.barRepeatIteration === 0 && samplePCMs.has(key)) {
+          const sample = samplePCMs.get(key)!;
+          const trimStart = Math.round((sample.trimStartMs / 1000) * RENDER_SR);
+          const trimLen = sample.trimDurationMs > 0
+            ? Math.round((sample.trimDurationMs / 1000) * RENDER_SR)
+            : sample.pcm.length - trimStart;
+          const trimmed = sample.pcm.subarray(trimStart, Math.min(trimStart + trimLen, sample.pcm.length));
+          if (right) {
+            await mixToChannel(left, right, trimmed, offsetSamples, sampleVolume, sampleChannels[key] ?? "both");
+          } else {
+            await mixIntoAbortable(left, trimmed, offsetSamples, sampleVolume, signal);
+          }
+        }
+      }
+    }
+  };
+
+  const finalize = async (buffer: Float32Array): Promise<Float32Array> => {
+    const chunkSize = 8192;
+    for (let start = loopSamples; start < totalSamples; start += chunkSize) {
+      const end = Math.min(start + chunkSize, totalSamples);
+      for (let i = start; i < end; i++) buffer[i - loopSamples] += buffer[i];
+      await renderYield(signal);
+    }
+    const out = buffer.subarray(0, loopSamples);
+    for (let start = 0; start < out.length; start += chunkSize) {
+      const end = Math.min(start + chunkSize, out.length);
+      for (let i = start; i < end; i++) out[i] = Math.max(-1, Math.min(1, out[i]));
+      await renderYield(signal);
+    }
+    return out;
+  };
+
+  if (!stereoMode) {
+    const buffer = new Float32Array(totalSamples);
+    await renderInto(buffer, null);
+    return finalize(buffer);
+  }
+  const leftBuf = new Float32Array(totalSamples);
+  const rightBuf = new Float32Array(totalSamples);
+  await renderInto(leftBuf, rightBuf);
+  return { left: await finalize(leftBuf), right: await finalize(rightBuf) };
 }
 
 type StereoPCM = { left: Float32Array; right: Float32Array };

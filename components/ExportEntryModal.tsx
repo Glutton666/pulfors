@@ -21,8 +21,10 @@ import {
   exportPracticeEntry,
   shareExportedFile,
   revokeExportedUri,
+  discardExportedUri,
   clampRepeats,
   clampFadeOutSec,
+  EXPORT_ABORTED,
   type ExportFormat,
 } from "@/lib/audio-export";
 import { logger } from "@/lib/logger";
@@ -51,9 +53,14 @@ export function ExportEntryModal({ visible, entry, onClose }: ExportEntryModalPr
   const [doneInfo, setDoneInfo] = useState<{ filename: string; uri: string; format: ExportFormat } | null>(null);
 
   const mountedRef = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const activeExportUriRef = useRef<string | null>(null);
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+      abortControllerRef.current?.abort();
+    };
   }, []);
 
   const lastUriRef = useRef<string | null>(null);
@@ -74,7 +81,13 @@ export function ExportEntryModal({ visible, entry, onClose }: ExportEntryModalPr
   }, []);
 
   const handleClose = useCallback(() => {
-    if (busy) return;
+    if (busy) {
+      abortControllerRef.current?.abort();
+      if (activeExportUriRef.current) {
+        discardExportedUri(activeExportUriRef.current);
+        activeExportUriRef.current = null;
+      }
+    }
     reset();
     onClose();
   }, [busy, reset, onClose]);
@@ -87,30 +100,45 @@ export function ExportEntryModal({ visible, entry, onClose }: ExportEntryModalPr
     setErrorMsg(null);
     setDoneInfo(null);
     setProgress(0);
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    const isCurrentExport = () =>
+      mountedRef.current
+      && abortControllerRef.current === abortController
+      && !abortController.signal.aborted;
     try {
       const result = await exportPracticeEntry(entry, {
         format,
         repeats,
         fadeOutSec,
-        onProgress: (p) => { if (mountedRef.current) setProgress(p); },
+        signal: abortController.signal,
+        onProgress: (p) => { if (isCurrentExport()) setProgress(p); },
       });
-      if (!mountedRef.current) {
-        revokeExportedUri(result.uri);
+      if (!isCurrentExport()) {
+        discardExportedUri(result.uri);
         return;
       }
       lastUriRef.current = result.uri;
+      activeExportUriRef.current = result.uri;
       setDoneInfo(result);
       // 자동 공유 트리거.
       try {
         await shareExportedFile(result.uri, result.filename, result.format);
       } catch (e) {
         logger.warn("[ExportEntryModal] share failed:", e);
-        if (mountedRef.current) setErrorMsg(t("exportAudio", "failMsg"));
+        if (isCurrentExport()) setErrorMsg(t("exportAudio", "failMsg"));
+      } finally {
+        if (!isCurrentExport()) {
+          discardExportedUri(result.uri);
+          if (lastUriRef.current === result.uri) lastUriRef.current = null;
+        }
+        if (activeExportUriRef.current === result.uri) activeExportUriRef.current = null;
       }
     } catch (e) {
       const msg = String((e as Error)?.message || e);
+      if (msg === EXPORT_ABORTED) return;
       logger.warn("[ExportEntryModal] export failed:", e);
-      if (mountedRef.current) {
+      if (isCurrentExport()) {
         if (msg === "EMPTY_RENDER") {
           setErrorMsg(t("exportAudio", "emptyRender"));
         } else {
@@ -118,7 +146,11 @@ export function ExportEntryModal({ visible, entry, onClose }: ExportEntryModalPr
         }
       }
     } finally {
-      if (mountedRef.current) setBusy(false);
+      const isCurrentExport = abortControllerRef.current === abortController;
+      if (isCurrentExport) {
+        abortControllerRef.current = null;
+      }
+      if (mountedRef.current && isCurrentExport) setBusy(false);
     }
   }, [entry, busy, repeatsText, fadeEnabled, fadeText, format, t]);
 
@@ -166,8 +198,8 @@ export function ExportEntryModal({ visible, entry, onClose }: ExportEntryModalPr
             {t("exportAudio", "title")}
             {entry?.label ? `  ·  ${entry.label}` : ""}
           </Text>
-          <Pressable onPress={handleClose} hitSlop={10} disabled={busy}>
-            <Ionicons name="close" size={S.ms(24, 0.4)} color={busy ? C.textTertiary : C.textSecondary} />
+          <Pressable onPress={handleClose} hitSlop={10} testID="export-close-btn">
+            <Ionicons name="close" size={S.ms(24, 0.4)} color={C.textSecondary} />
           </Pressable>
         </View>
 
@@ -281,7 +313,7 @@ export function ExportEntryModal({ visible, entry, onClose }: ExportEntryModalPr
           <Pressable
             style={styles.cancelBtn}
             onPress={handleClose}
-            disabled={busy}
+            testID="export-cancel-btn"
           >
             <Text style={styles.cancelText}>{t("exportAudio", "cancel")}</Text>
           </Pressable>

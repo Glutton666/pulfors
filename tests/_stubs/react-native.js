@@ -38,6 +38,8 @@ function makeRNComponent(tag) {
 const View = makeRNComponent("div");
 const Text = makeRNComponent("span");
 const ScrollView = makeRNComponent("div");
+const TextInput = makeRNComponent("input");
+const ActivityIndicator = makeRNComponent("div");
 
 // Pressable — renders as a <button>; onPress → onClick, onLongPress → onContextMenu
 // (contextMenu is the closest standard DOM event we can fire from tests)
@@ -66,6 +68,8 @@ module.exports = {
   View,
   Text,
   ScrollView,
+  TextInput,
+  ActivityIndicator,
   Pressable,
   PanResponder: {
     create: (config) => {

@@ -8,6 +8,9 @@ import {
   encodeMp3Mono,
   encodeMp3MonoChunked,
   encodeWavMonoChunked,
+  encodeWavMonoChunkedAbortable,
+  concatFloat32Abortable,
+  EXPORT_ABORTED,
   applyLinearFadeOut,
 } from "../lib/audio-export-pure";
 
@@ -216,4 +219,30 @@ test("encodeWavMonoChunked vs repeatAndFadeMono+applyFade: fade equivalence", ()
     maxDiff = Math.max(maxDiff, Math.abs(sample - tiled[i]));
   }
   assert.ok(maxDiff < 2e-4, `max diff between chunked WAV and baseline: ${maxDiff}`);
+});
+
+test("encodeWavMonoChunkedAbortable: stops at a yield boundary after cancellation", async () => {
+  const controller = new AbortController();
+  // More than one yield interval makes this representative of a long export.
+  const pcm = new Float32Array(8192 * 4).fill(0.4);
+  const pending = encodeWavMonoChunkedAbortable(pcm, 2, 0, 44100, controller.signal);
+  setTimeout(() => controller.abort(), 0);
+  await assert.rejects(() => pending, new RegExp(EXPORT_ABORTED));
+});
+
+test("encodeMp3MonoChunked: does not begin an aborted export", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(
+    () => encodeMp3MonoChunked(new Float32Array(1152).fill(0.2), 1, 0, 44100, 128, controller.signal),
+    new RegExp(EXPORT_ABORTED),
+  );
+});
+
+test("concatFloat32Abortable: observes cancellation while joining long note-queue passes", async () => {
+  const controller = new AbortController();
+  const pass = new Float32Array(8192 * 8).fill(0.3);
+  const pending = concatFloat32Abortable([pass, pass], controller.signal);
+  setTimeout(() => controller.abort(), 0);
+  await assert.rejects(() => pending, new RegExp(EXPORT_ABORTED));
 });
