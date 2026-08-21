@@ -10,21 +10,31 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withSpring,
+  withSequence,
   Easing,
 } from "react-native-reanimated";
+import type { SharedValue } from "react-native-reanimated";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import { onAccentColor } from "@/lib/color-contrast";
+import {
+  MODE_DIAL_SLOTS,
+  nearestModeDialSnapTarget,
+  snapModeDialPosition,
+  wrapModeDialPosition,
+} from "@/lib/mode-dial-logic";
+import type { ModeSlot } from "@/lib/mode-dial-logic";
 
-export type ModeSlot = "beat" | "bar" | "score" | "note" | "practice" | "stage" | "menu";
+export type { ModeSlot } from "@/lib/mode-dial-logic";
 
 type Wall = "top" | "right" | "bottom" | "left";
 type WallPos = { wall: Wall; t: number };
 
-const MODES: ModeSlot[] = ["beat", "bar", "note", "stage", "practice", "menu"];
+const MODES = MODE_DIAL_SLOTS;
 const WALL_KEY = "metronome_dial_wall_v2";
 
 const Z_OVERLAY = 100000;
@@ -43,12 +53,8 @@ const MINI_ICON_S   = 28;   // icon size for current-mode slot in mini arc
 const MINI_A_STEP   = 55;   // wider step so dots clear the centre icon at MINI_R=24
 const ANGLE_STEP    = 34;   // degrees between adjacent mode slots; arc dist=104×34°≈62px > ICON_S=52 ✓
 const PX_PER_STEP = 36;   // pixels of swipe per one mode step
-const N_MODES     = MODES.length; // 7 — used for circular wrapping
+const N_MODES     = MODES.length;
 const RIM_INSET   = 6;           // inner ring inset from rim edge
-
-// Circular wrap: keeps scrollPos in [0, N_MODES)
-function wrapScroll(v: number): number { return ((v % N_MODES) + N_MODES) % N_MODES; }
-function snapWrap(v: number): number { return ((Math.round(wrapScroll(v)) % N_MODES) + N_MODES) % N_MODES; }
 
 // Front-camera safe zone: top/bottom wall t must stay outside [0.28, 0.72].
 // Covers iPhone Dynamic Island / notch and Galaxy punch-hole.
@@ -234,6 +240,123 @@ function ModeIcon({ mode, size, color }: { mode: ModeSlot; size: number; color: 
   }
 }
 
+interface DialIconSlotProps {
+  mode: ModeSlot;
+  index: number;
+  selectedIndex: number;
+  scrollPosition: SharedValue<number>;
+  selectionPulse: SharedValue<number>;
+  centAng: number;
+  halfSpan: number;
+  fanLeft: number;
+  fanTop: number;
+  colors: ReturnType<typeof useTheme>["colors"];
+  iconSize: number;
+  label: string;
+}
+
+/**
+ * A dial slot animates on the UI thread between PanResponder updates. Keeping
+ * its radial math here avoids a React render for every pointer-move event.
+ */
+function DialIconSlot({
+  mode,
+  index,
+  selectedIndex,
+  scrollPosition,
+  selectionPulse,
+  centAng,
+  halfSpan,
+  fanLeft,
+  fanTop,
+  colors: C,
+  iconSize,
+  label,
+}: DialIconSlotProps) {
+  const isSelected = selectedIndex === index;
+  const motionStyle = useAnimatedStyle(() => {
+    const rawOff = index - scrollPosition.value;
+    const offset = rawOff - Math.round(rawOff / N_MODES) * N_MODES;
+    const deg = centAng - offset * ANGLE_STEP;
+    const rad = (deg * Math.PI) / 180;
+    const distance = Math.abs(offset);
+    const outOfArc = Math.abs(offset * ANGLE_STEP) > halfSpan;
+    const opacity = outOfArc
+      ? Math.max(0, 0.35 - distance * 0.1)
+      : Math.max(0, 1 - distance * 0.28);
+    const scale = Math.max(0.55, 1 - distance * 0.12);
+
+    return {
+      opacity,
+      transform: [
+        { translateX: Math.cos(rad) * ICON_R },
+        { translateY: Math.sin(rad) * ICON_R },
+        { scale },
+      ],
+    };
+  }, [centAng, halfSpan, index]);
+
+  const selectedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: isSelected ? 1 + selectionPulse.value * 0.09 : 1 }],
+    shadowOpacity: isSelected ? 0.24 + selectionPulse.value * 0.32 : 0,
+  }), [isSelected]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      testID={`mode-dial-slot-${mode}`}
+      style={[
+        {
+          position: "absolute",
+          left: -fanLeft - ICON_S / 2,
+          top: -fanTop - ICON_S / 2,
+          width: ICON_S,
+          height: ICON_S,
+        },
+        motionStyle,
+      ]}
+    >
+      <Animated.View
+        style={[
+          {
+            width: ICON_S,
+            height: ICON_S,
+            borderRadius: ICON_S / 2,
+            backgroundColor: isSelected ? C.accent : "transparent",
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: C.accent,
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 8,
+            elevation: isSelected ? 5 : 0,
+          },
+          selectedStyle,
+        ]}
+      >
+        <ModeIcon
+          mode={mode}
+          size={iconSize}
+          color={isSelected ? onAccentColor(C.accent) : C.textSecondary}
+        />
+        {isSelected && (
+          <Text
+            style={{
+              fontSize: 9,
+              lineHeight: 11,
+              color: onAccentColor(C.accent),
+              fontFamily: "SpaceGrotesk_500Medium",
+              letterSpacing: 0.3,
+            }}
+            numberOfLines={1}
+          >
+            {label}
+          </Text>
+        )}
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ModeSwitcherDialHandle {
@@ -315,18 +438,70 @@ function ModeSwitcherDial({
 
   // ── Rotary scroll position ───────────────────────────────────────────────
   const initIdx = Math.max(0, MODES.indexOf(currentMode));
-  const [scrollPos, setScrollPos] = useState<number>(initIdx);
   const scrollPosRef = useRef<number>(initIdx);
+  const scrollPosition = useSharedValue(initIdx);
+  const [selectedIndex, setSelectedIndex] = useState(initIdx);
+  const selectedIndexRef = useRef(initIdx);
+  const selectionPulse = useSharedValue(0);
+  const isConfirmingRef = useRef(false);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Refs for PanResponder tap-detection (updated each render)
   const anchorRef    = useRef({ x: 0, y: 0 });
   const iconSlotsRef = useRef<{ i: number; dx: number; dy: number }[]>([]);
 
+  const highlightPosition = useCallback((position: number, pulse = true) => {
+    const nextIndex = snapModeDialPosition(position);
+    if (selectedIndexRef.current === nextIndex) return;
+    selectedIndexRef.current = nextIndex;
+    setSelectedIndex(nextIndex);
+    if (pulse) {
+      selectionPulse.value = withSequence(
+        withTiming(1, { duration: 80, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: 180, easing: Easing.out(Easing.cubic) }),
+      );
+    }
+  }, [selectionPulse]);
+
+  const settleToPosition = useCallback((position: number) => {
+    const snapped = snapModeDialPosition(position);
+    const visualTarget = nearestModeDialSnapTarget(position);
+    scrollPosRef.current = snapped;
+    highlightPosition(snapped);
+    // Keep the logical index canonical, but spring to its closest visual
+    // equivalent so wrapping 5.6 → 0 moves a fraction forward to 6, not
+    // backwards through the entire fan.
+    scrollPosition.value = withSpring(visualTarget, {
+      damping: 18,
+      stiffness: 210,
+      mass: 0.7,
+    });
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = setTimeout(() => {
+      settleTimerRef.current = null;
+    }, 220);
+  }, [highlightPosition, scrollPosition]);
+
+  const highlightPositionRef = useRef(highlightPosition);
+  const settleToPositionRef = useRef(settleToPosition);
+  useEffect(() => { highlightPositionRef.current = highlightPosition; }, [highlightPosition]);
+  useEffect(() => { settleToPositionRef.current = settleToPosition; }, [settleToPosition]);
+  useEffect(() => () => {
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+  }, []);
+
   const doOpen = useCallback(() => {
+    // The prior confirmation has not handed off the selected mode yet. Reopening
+    // here would allow a second stale confirmation to be queued.
+    if (isConfirmingRef.current) return;
     // currentModeRef는 렌더 중 동기 갱신되므로 항상 최신값
     const idx = Math.max(0, MODES.indexOf(currentModeRef.current));
     scrollPosRef.current = idx;
-    setScrollPos(idx);
+    selectedIndexRef.current = idx;
+    setSelectedIndex(idx);
+    scrollPosition.value = idx;
+    selectionPulse.value = 0;
+    isConfirmingRef.current = false;
     setIsOpen(true);
     isOpenRef.current = true;
     fanScale.value   = withTiming(1,   { duration: 220, easing: Easing.out(Easing.cubic) });
@@ -334,7 +509,7 @@ function ModeSwitcherDial({
     overlayOp.value  = withTiming(0.5, { duration: 200 });
   // currentMode 제거 — ref로 읽으므로 deps 불필요, React Compiler 재생성 방지
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fanScale, fanOpacity, overlayOp]);
+  }, [fanScale, fanOpacity, overlayOp, scrollPosition, selectionPulse]);
 
   const doClose = useCallback(() => {
     fanScale.value   = withTiming(0.05, { duration: 180, easing: Easing.in(Easing.cubic) });
@@ -438,6 +613,7 @@ function ModeSwitcherDial({
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,   // always claim — blocks overlay
       onPanResponderGrant: (e) => {
+        if (isConfirmingRef.current) return;
         const { axis } = SWIPE_CFG[wallRef.current];
         swipeStart.current = {
           coord:       axis === "x" ? e.nativeEvent.pageX : e.nativeEvent.pageY,
@@ -448,17 +624,20 @@ function ModeSwitcherDial({
         };
       },
       onPanResponderMove: (e, gs) => {
+        if (isConfirmingRef.current) return;
         if (Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5) {
           swipeStart.current.moved = true;
           const { axis, sign } = SWIPE_CFG[wallRef.current];
           const coord = axis === "x" ? e.nativeEvent.pageX : e.nativeEvent.pageY;
           const delta = (coord - swipeStart.current.coord) / PX_PER_STEP * sign;
-          const next  = wrapScroll(swipeStart.current.startScroll + delta);
+          const next  = wrapModeDialPosition(swipeStart.current.startScroll + delta);
           scrollPosRef.current = next;
-          setScrollPos(next);
+          scrollPosition.value = next;
+          highlightPositionRef.current(next);
         }
       },
       onPanResponderRelease: (e) => {
+        if (isConfirmingRef.current) return;
         if (!swipeStart.current.moved) {
           // TAP — find icon closest to tap position in anchor-space
           const anch   = anchorRef.current;
@@ -471,24 +650,20 @@ function ModeSwitcherDial({
             if (d < bestDist) { bestDist = d; best = i; }
           });
           if (best >= 0 && bestDist <= ICON_S) {
-            scrollPosRef.current = best;
-            setScrollPos(best);
+            settleToPositionRef.current(best);
           }
           // else: tap on empty bg — do nothing (keep current selection)
         } else {
           // SWIPE — snap to nearest; fan stays open for overlay-tap to confirm
-          const snapped = snapWrap(scrollPosRef.current);
-          scrollPosRef.current = snapped;
-          setScrollPos(snapped);
+          settleToPositionRef.current(scrollPosRef.current);
         }
       },
       // Don't surrender gesture to parent ScrollViews
       onPanResponderTerminationRequest: () => false,
       onPanResponderTerminate: () => {
+        if (isConfirmingRef.current) return;
         // Snap gracefully — do NOT close (terminate ≠ user intent to dismiss)
-        const snapped = snapWrap(scrollPosRef.current);
-        scrollPosRef.current = snapped;
-        setScrollPos(snapped);
+        settleToPositionRef.current(scrollPosRef.current);
       },
     })
   ).current;
@@ -502,16 +677,25 @@ function ModeSwitcherDial({
 
   // Confirm the highlighted mode and close the fan
   const confirmSelection = useCallback(() => {
-    const snapped = snapWrap(scrollPosRef.current);
+    if (!isOpenRef.current || isConfirmingRef.current) return;
+    isConfirmingRef.current = true;
+    const snapped = snapModeDialPosition(scrollPosRef.current);
     // 다이얼을 돌린 방향 계산 (원형 보정)
     const currentIdx = MODES.indexOf(currentModeRef.current);
     let delta = snapped - currentIdx;
     if (delta >  N_MODES / 2) delta -= N_MODES;
     if (delta < -N_MODES / 2) delta += N_MODES;
     const direction: "left" | "right" = delta < 0 ? "left" : "right";
+    selectionPulse.value = withSequence(
+      withTiming(1, { duration: 70, easing: Easing.out(Easing.quad) }),
+      withTiming(0, { duration: 130, easing: Easing.in(Easing.quad) }),
+    );
     doClose();
-    setTimeout(() => onSelectModeRef.current(MODES[snapped], direction), 200);
-  }, [doClose]);
+    setTimeout(() => {
+      onSelectModeRef.current(MODES[snapped], direction);
+      isConfirmingRef.current = false;
+    }, 200);
+  }, [doClose, selectionPulse]);
 
   // ── Geometry (sync refs synchronously in render) ──────────────────────────
   // When hideHandle=true, all geometry is pinned to top-center regardless of stored wallPos.
@@ -542,10 +726,11 @@ function ModeSwitcherDial({
     Object.entries(bgCorner).map(([k, v]) => [k, Math.max(0, (v as number) - RIM_INSET)]),
   );
 
-  // Expanded rotary slots: position = centAng + (i - scrollPos) × ANGLE_STEP
+  // Keep a JS geometry snapshot only for tap hit-testing. Rendering itself is
+  // driven by the UI-thread shared scroll position in DialIconSlot.
   const iconSlots = MODES.map((mode, i) => {
     // Circular shortest-path offset so wrapping works smoothly
-    const rawOff         = i - scrollPos;
+    const rawOff         = i - scrollPosRef.current;
     const offset         = rawOff - Math.round(rawOff / N_MODES) * N_MODES;
     // 부호를 빼기로: 배열 순서(비트→바→…)가 사용자가 읽는 방향과 일치하도록
     // (top 벽: 다음 모드가 오른쪽, right 벽: 다음 모드가 아래쪽)
@@ -557,9 +742,6 @@ function ModeSwitcherDial({
       mode, i,
       dx:      Math.cos(rad) * ICON_R,
       dy:      Math.sin(rad) * ICON_R,
-      isCtr:   Math.round(scrollPos) === i,
-      opacity: outOfArc ? Math.max(0, 0.35 - dist * 0.1) : Math.max(0, 1 - dist * 0.28),
-      scale:   Math.max(0.55, 1 - dist * 0.12),
     };
   });
   // Keep ref in sync for PanResponder tap-detection (runs synchronously in render)
@@ -588,7 +770,8 @@ function ModeSwitcherDial({
           Clipped to the side the fan opens into so the area behind the
           dial handle (e.g. above the circle on a top-wall position) stays clean. */}
       {isOpen && (
-        <Animated.View
+            <Animated.View
+              testID="mode-dial-fan"
           style={[
             {
               position: "absolute",
@@ -685,41 +868,22 @@ function ModeSwitcherDial({
             }}
           >
             {/* Rotary dial icons — visual only; gesture handled by parent wrapper */}
-            {iconSlots.map(({ mode, i, dx, dy, isCtr, opacity: op, scale: sc }) => (
-                <View
-                  key={mode}
-                  pointerEvents="none"
-                  style={{
-                    position: "absolute",
-                    left: dx - bgLayout.left - ICON_S / 2,
-                    top:  dy - bgLayout.top  - ICON_S / 2,
-                    width: ICON_S, height: ICON_S,
-                    borderRadius: ICON_S / 2,
-                    backgroundColor: isCtr ? C.accent : "transparent",
-                    alignItems: "center", justifyContent: "center",
-                    opacity: op,
-                    transform: [{ scale: sc }],
-                  }}
-                >
-                  <ModeIcon
-                    mode={mode}
-                    size={S.ms(25, 0.3)}
-                    color={isCtr ? onAccentColor(C.accent) : C.textSecondary}
-                  />
-                  {isCtr && (
-                    <Text
-                      style={{
-                        fontSize: 9, lineHeight: 11,
-                        color: onAccentColor(C.accent),
-                        fontFamily: "SpaceGrotesk_500Medium",
-                        letterSpacing: 0.3,
-                      }}
-                      numberOfLines={1}
-                    >
-                      {t("switcher", mode as "beat"|"bar"|"score"|"note"|"practice"|"stage"|"menu")}
-                    </Text>
-                  )}
-                </View>
+            {MODES.map((mode, index) => (
+              <DialIconSlot
+                key={mode}
+                mode={mode}
+                index={index}
+                selectedIndex={selectedIndex}
+                scrollPosition={scrollPosition}
+                selectionPulse={selectionPulse}
+                centAng={centAng}
+                halfSpan={halfSpan}
+                fanLeft={bgLayout.left}
+                fanTop={bgLayout.top}
+                colors={C}
+                iconSize={S.ms(25, 0.3)}
+                label={t("switcher", mode as "beat"|"bar"|"score"|"note"|"practice"|"stage"|"menu")}
+              />
             ))}
           </View>
         </Animated.View>

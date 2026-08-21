@@ -7,7 +7,7 @@
  * React/렌더러 없이 JS 로직으로 검증한다.
  *
  * 검증 항목:
- *   1. wrapScroll / snapWrap — 원형 스크롤 랩핑
+ *   1. 실제 다이얼 슬롯 기반 원형 스크롤·스냅
  *   2. safeT — 상/하단 벽 카메라 안전 구역 (t ∈ [0.28, 0.72] 이탈)
  *   3. hideHandle 앵커 — safeT 우회, 정확히 top-center(winW/2, topInset) 고정
  *   4. snapToWall — 드래그 해제 후 가장 가까운 벽으로 스냅
@@ -18,18 +18,14 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createT } from "../lib/i18n";
+import {
+  MODE_DIAL_SLOTS,
+  nearestModeDialSnapTarget,
+  snapModeDialPosition,
+  wrapModeDialPosition,
+} from "../lib/mode-dial-logic";
 
-// ─── 1. 기하 순수 함수 (컴포넌트에서 재현) ───────────────────────────────────
-
-const N_MODES = 7; // MODES.length
-
-function wrapScroll(v: number): number {
-  return ((v % N_MODES) + N_MODES) % N_MODES;
-}
-
-function snapWrap(v: number): number {
-  return ((Math.round(wrapScroll(v)) % N_MODES) + N_MODES) % N_MODES;
-}
+// ─── 1. 기하 순수 함수 ───────────────────────────────────────────────────────
 
 type Wall = "top" | "right" | "bottom" | "left";
 
@@ -78,43 +74,63 @@ function isLabelVisible(stageModeActive: boolean, scoreMode: string | null): boo
 
 // ─── 2. 테스트 ────────────────────────────────────────────────────────────────
 
-describe("wrapScroll", () => {
+describe("wrapModeDialPosition", () => {
   test("양수 범위 내 값은 그대로 반환", () => {
-    assert.equal(wrapScroll(0), 0);
-    assert.equal(wrapScroll(3), 3);
-    assert.equal(wrapScroll(6), 6);
+    assert.equal(wrapModeDialPosition(0), 0);
+    assert.equal(wrapModeDialPosition(3), 3);
+    assert.equal(wrapModeDialPosition(5), 5);
   });
 
-  test("N_MODES는 0으로 랩핑", () => {
-    assert.equal(wrapScroll(7), 0);
-    assert.equal(wrapScroll(14), 0);
+  test("실제 다이얼 슬롯 수는 6개이며 끝에서는 처음으로 랩핑", () => {
+    assert.equal(MODE_DIAL_SLOTS.length, 6);
+    assert.equal(wrapModeDialPosition(6), 0);
+    assert.equal(wrapModeDialPosition(12), 0);
   });
 
   test("음수 값 정상 랩핑", () => {
-    assert.equal(wrapScroll(-1), 6);
-    assert.equal(wrapScroll(-7), 0);
-    assert.equal(wrapScroll(-8), 6);
+    assert.equal(wrapModeDialPosition(-1), 5);
+    assert.equal(wrapModeDialPosition(-6), 0);
+    assert.equal(wrapModeDialPosition(-7), 5);
   });
 
   test("소수점 스크롤 값 유지", () => {
-    const v = wrapScroll(6.5);
-    assert.ok(v > 6 && v < 7, `expected 6<v<7, got ${v}`);
+    const v = wrapModeDialPosition(5.5);
+    assert.ok(v > 5 && v < 6, `expected 5<v<6, got ${v}`);
   });
 });
 
-describe("snapWrap", () => {
+describe("snapModeDialPosition", () => {
   test("가장 가까운 정수 인덱스로 스냅", () => {
-    assert.equal(snapWrap(2.3), 2);
-    assert.equal(snapWrap(2.7), 3);
+    assert.equal(snapModeDialPosition(2.3), 2);
+    assert.equal(snapModeDialPosition(2.7), 3);
   });
 
-  test("경계 랩핑: 6.6 → 0 (N_MODES=7)", () => {
-    assert.equal(snapWrap(6.6), 0);
+  test("경계 랩핑: 마지막 슬롯 뒤의 스냅은 첫 슬롯으로 돌아감", () => {
+    assert.equal(snapModeDialPosition(5.6), 0);
   });
 
   test("음수 스크롤 스냅", () => {
-    assert.equal(snapWrap(-0.4), 0);
-    assert.equal(snapWrap(-0.6), 6);
+    assert.equal(snapModeDialPosition(-0.4), 0);
+    assert.equal(snapModeDialPosition(-0.6), 5);
+  });
+});
+
+describe("nearestModeDialSnapTarget", () => {
+  test("마지막 슬롯에서 첫 슬롯으로 넘어갈 때 가까운 다음 회전 위치로 스냅", () => {
+    // 5.6 is logically slot 0, but the visual target must be 6 rather than
+    // 0 so the spring finishes the short forward movement.
+    assert.equal(nearestModeDialSnapTarget(5.6), 6);
+  });
+
+  test("첫 슬롯에서 마지막 슬롯으로 넘어갈 때 역방향으로 짧게 스냅", () => {
+    // A negative drag from slot 0 is wrapped to 5.4. Slot 5 is the closest
+    // visual target, rather than an unnecessary full turn to -1 or 11.
+    assert.equal(nearestModeDialSnapTarget(5.4), 5);
+  });
+
+  test("일반 슬롯은 기존의 정수 스냅 위치를 유지", () => {
+    assert.equal(nearestModeDialSnapTarget(2.7), 3);
+    assert.equal(nearestModeDialSnapTarget(0.3), 0);
   });
 });
 

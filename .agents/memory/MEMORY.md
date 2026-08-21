@@ -28,3 +28,4 @@
 - [Abortable audio export](abortable-audio-export.md) — long export work must yield with AbortSignal checks; cache outputs need per-export ownership to make stale cleanup safe.
 - [Note-sample persistence retries](note-sample-persistence-retries.md) — retrying last-write-wins saves need versioned waiter settlement, not a single shared resolver queue.
 - [Subdivision web shake tracking](subdivision-web-shake-tracking.md) — cumulative gesture displacement needs a zero seed; capture web starts at document level, not a View ref.
+- [Circular dial snap seams](circular-dial-snap-seams.md) — spring circular UI to the nearest equivalent visual index, not always its canonical state index.
