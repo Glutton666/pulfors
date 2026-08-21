@@ -57,7 +57,7 @@ import { Radius, Spacing, FontSize } from "@/constants/tokens";
 import { showPlayingNotification } from "@/lib/notification-controls";
 import { addActivityLog, saveLoggingEnabled } from "@/lib/activity-log";
 import { hasNoteSample } from "@/lib/note-samples";
-import { getPersistFailureBannerKey } from "@/lib/persist-status";
+import { combinePersisterStatuses, getPersistFailureBannerKey } from "@/lib/persist-status";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { useMetronomeScreen } from "@/hooks/useMetronomeScreen";
 import { onAccentColor } from "@/lib/color-contrast";
@@ -149,7 +149,7 @@ export function MetronomeScreenUI(props: Props) {
     getClickPCMs,
     polygonOnBeatRef,
     scheduleReRender, stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals,
-    notifyVoicePlayState, persistSettings, persistStatus,
+    notifyVoicePlayState, persistSettings, persistStatus, noteSamplePersistStatus,
     tempoLabel,
     // Additional state setters
     setIsPreparing, setIsPlaying,
@@ -172,7 +172,9 @@ export function MetronomeScreenUI(props: Props) {
     volumeRef,
   } = props;
 
-  const saveFailureBannerKey = getPersistFailureBannerKey(persistStatus);
+  const saveFailureBannerKey = getPersistFailureBannerKey(
+    combinePersisterStatuses(persistStatus, noteSamplePersistStatus),
+  );
 
   const openMenuItem = (open: () => void) => {
     markMenuItemReturn();

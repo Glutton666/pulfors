@@ -69,6 +69,7 @@ import {
 } from "@/lib/modal-routing";
 import { BUILTIN_POOL_SIZE, type BuiltinPlayers, type SoundSetPlayers } from "@/hooks/useAudioPlayers";
 import { useNoteSamples } from "@/hooks/useNoteSamples";
+import { useNoteSamplePersistenceStatus } from "@/hooks/useNoteSamplePersistenceStatus";
 import { useDialConfig } from "@/hooks/useBarDialConfig";
 import { useBarMode } from "@/hooks/useBarMode";
 import { useMetronomeEngine } from "@/hooks/useMetronomeEngine";
@@ -440,6 +441,7 @@ export function useMetronomeScreen() {
   const { permissionRecoveryToast, showRecoveryToast } = usePermissionRecoveryToast(t);
 
   const noteSamplesHook = useNoteSamples();
+  const noteSamplePersistStatus = useNoteSamplePersistenceStatus();
   const {
     samples: noteSamples,
     samplesRef: noteSamplesRef,
@@ -3550,6 +3552,7 @@ export function useMetronomeScreen() {
     notifyVoicePlayState,
     persistSettings,
     persistStatus,
+    noteSamplePersistStatus,
     // Tempo label
     tempoLabel,
     // Additional state setters exposed for JSX inline callbacks

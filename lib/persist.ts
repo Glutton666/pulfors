@@ -50,6 +50,8 @@ export interface DebouncedPersister<T extends object> {
   flush(): void;
   cancel(): void;
   getStatus(): PersisterStatus;
+  /** Subscribes to immediate status transitions; returns an unsubscribe function. */
+  subscribeStatus(listener: (status: PersisterStatus) => void): () => void;
 }
 
 const DEFAULT_MAX_ATTEMPTS = 3;
@@ -73,9 +75,28 @@ export function createDebouncedPersister<T extends object>(
   let lastErrorAt: number | null = null;
   let consecutiveFailures = 0;
   let cycleFailed = false;
+  const statusListeners = new Set<(status: PersisterStatus) => void>();
   // 취소 토큰: cancel() 호출 시마다 증가시켜, 토큰이 캡처된 시점 이전의 in-flight
   // write 콜백이 상태를 오염시키지 않도록 차단한다.
   let cycleToken = 0;
+
+  const getStatus = (): PersisterStatus => ({
+    lastSaveAt,
+    lastErrorAt,
+    consecutiveFailures,
+    pendingChanges: Object.keys(pending).length,
+    cycleFailed,
+  });
+  const notifyStatus = () => {
+    const status = getStatus();
+    for (const listener of statusListeners) {
+      try {
+        listener(status);
+      } catch {
+        // A UI observer must never interrupt persistence.
+      }
+    }
+  };
 
   const clearDebounce = () => {
     if (debounceTimer) {
@@ -106,6 +127,7 @@ export function createDebouncedPersister<T extends object>(
     const merged: T = { ...getSnapshot(), ...pending };
     const writtenKeys = Object.keys(pending);
     pending = {};
+    notifyStatus();
     // 이 시도에 묶인 토큰. cancel() 이후의 콜백은 무시된다.
     const myToken = cycleToken;
 
@@ -119,6 +141,7 @@ export function createDebouncedPersister<T extends object>(
         // 쓰는 동안 새 변경이 들어왔다면 한 번 더 사이클을 돌린다.
         startCycle();
       }
+      notifyStatus();
     };
     const onFailure = (err: unknown) => {
       if (myToken !== cycleToken) return;
@@ -151,6 +174,7 @@ export function createDebouncedPersister<T extends object>(
           );
         }
       }
+      notifyStatus();
     };
 
     let result: void | Promise<void>;
@@ -192,6 +216,7 @@ export function createDebouncedPersister<T extends object>(
     }
     clearDebounce();
     debounceTimer = setTimeout(flushNow, debounceMs);
+    notifyStatus();
   }) as DebouncedPersister<T>;
 
   persister.flush = flushNow;
@@ -204,14 +229,18 @@ export function createDebouncedPersister<T extends object>(
     // 토큰을 무효화해 in-flight write의 콜백이 상태를 더는 건드리지 못하게 한다.
     cycleToken += 1;
     writing = false;
+    notifyStatus();
   };
-  persister.getStatus = () => ({
-    lastSaveAt,
-    lastErrorAt,
-    consecutiveFailures,
-    pendingChanges: Object.keys(pending).length,
-    cycleFailed,
-  });
+  persister.getStatus = getStatus;
+  persister.subscribeStatus = (listener) => {
+    statusListeners.add(listener);
+    try {
+      listener(getStatus());
+    } catch {
+      // A UI observer must never interrupt persistence.
+    }
+    return () => statusListeners.delete(listener);
+  };
 
   return persister;
 }

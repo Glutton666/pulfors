@@ -16,6 +16,8 @@ import {
   saveNoteSampleNames,
   loadNoteSampleSources,
   saveNoteSampleSources,
+  getNoteSamplePersistenceStatus,
+  subscribeNoteSamplePersistenceStatus,
 } from "../lib/note-samples";
 
 const AsyncStorage = require("./_stubs/async-storage");
@@ -280,6 +282,28 @@ test("saveNoteSamples: 일시적 setItem 실패는 백오프 재시도 후 마�
   }
 });
 
+test("saveNoteSamples: 짧은 재시도 중에도 구독자는 저장 중단 상태를 즉시 받는다", async () => {
+  const original = AsyncStorage.setItem;
+  const observed: number[] = [];
+  const unsubscribe = subscribeNoteSamplePersistenceStatus((status) => {
+    observed.push(status.consecutiveFailures);
+  });
+  let calls = 0;
+  AsyncStorage.setItem = async (key: string, value: string) => {
+    if (key === "@note_samples" && ++calls === 1) throw new Error("temporary IO failure");
+    return original(key, value);
+  };
+  try {
+    await saveNoteSamples({ "0-0": "recovered-after-retry" });
+    assert.equal(calls, 2, "the real 10ms retry backoff recovered");
+    assert.ok(observed.includes(1), "UI receives the brief retrying state before recovery");
+    assert.equal(observed.at(-1), 0, "a successful retry clears the warning immediately");
+  } finally {
+    unsubscribe();
+    AsyncStorage.setItem = original;
+  }
+});
+
 test("saveNoteSamples: 모든 재시도 실패 뒤 다음 호출은 새 cycle로 저장한다", async () => {
   const original = AsyncStorage.setItem;
   let failuresLeft = 3;
@@ -299,9 +323,11 @@ test("saveNoteSamples: 모든 재시도 실패 뒤 다음 호출은 새 cycle로
     // important guarantee is that the subsequent user change opens a new one.
     await saveNoteSamples({ "0-0": "lost" });
     assert.equal(calls, 3, "first cycle exhausts all retries");
+    assert.equal(getNoteSamplePersistenceStatus().cycleFailed, true, "UI can observe exhausted failures");
     await saveNoteSamples({ "0-0": "recovered" });
     assert.equal(calls, 4, "next call starts a fresh cycle");
     assert.deepEqual(await loadNoteSamples(), { "0-0": "recovered" });
+    assert.equal(getNoteSamplePersistenceStatus().cycleFailed, false, "successful recovery clears the UI warning");
   } finally {
     AsyncStorage.setItem = original;
   }

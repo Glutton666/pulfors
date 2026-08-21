@@ -25,6 +25,7 @@ const NOTE_SAMPLES_RETRY = { maxAttempts: 3, baseDelayMs: 10 } as const;
 
 type SerializedWriter<T> = ((value: T) => Promise<void>) & {
   getStatus: () => PersisterStatus;
+  subscribeStatus: (listener: (status: PersisterStatus) => void) => () => void;
 };
 
 function createSerializedWriter<T>(
@@ -79,6 +80,7 @@ function createSerializedWriter<T>(
       persister({ value, version: snapshotVersion });
     })) as SerializedWriter<T>;
   writer.getStatus = persister.getStatus;
+  writer.subscribeStatus = persister.subscribeStatus;
   return writer;
 }
 
@@ -94,6 +96,43 @@ export type SampleSource = "recording" | "import";
 export type NoteSampleSourceMap = Record<string, SampleSource>;
 export type NoteSampleChannelMap = Record<string, SampleChannel>;
 export type NoteSampleMetroChannelMap = Record<string, MetroChannel>;
+
+/**
+ * Exposes the aggregate storage health of all note-sample maps. UI code polls
+ * this just like settings persistence so swallowed save errors remain visible.
+ */
+export function getNoteSamplePersistenceStatus(): PersisterStatus {
+  const statuses = [
+    samplesWriter.getStatus(),
+    namesWriter.getStatus(),
+    sourcesWriter.getStatus(),
+    channelsWriter.getStatus(),
+    metroChannelsWriter.getStatus(),
+  ];
+  return {
+    lastSaveAt: statuses.reduce<number | null>(
+      (latest, status) => Math.max(latest ?? 0, status.lastSaveAt ?? 0) || null,
+      null,
+    ),
+    lastErrorAt: statuses.reduce<number | null>(
+      (latest, status) => Math.max(latest ?? 0, status.lastErrorAt ?? 0) || null,
+      null,
+    ),
+    consecutiveFailures: Math.max(...statuses.map((status) => status.consecutiveFailures)),
+    pendingChanges: statuses.reduce((total, status) => total + status.pendingChanges, 0),
+    cycleFailed: statuses.some((status) => status.cycleFailed),
+  };
+}
+
+/** Delivers note-sample save state immediately, including brief retry windows. */
+export function subscribeNoteSamplePersistenceStatus(
+  listener: (status: PersisterStatus) => void,
+): () => void {
+  const writers = [samplesWriter, namesWriter, sourcesWriter, channelsWriter, metroChannelsWriter];
+  const notify = () => listener(getNoteSamplePersistenceStatus());
+  const unsubscribers = writers.map((writer) => writer.subscribeStatus(notify));
+  return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+}
 
 function sampleKey(beatIndex: number, subIndex: number): string {
   return `${beatIndex}-${subIndex}`;

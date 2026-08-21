@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createDebouncedPersister } from "../lib/persist";
-import { getPersistFailureBannerKey } from "../lib/persist-status";
+import { combinePersisterStatuses, getPersistFailureBannerKey } from "../lib/persist-status";
 import { saveSettings, type MetronomeSettings } from "../lib/storage";
 import {
   clearStorageErrorListeners,
@@ -318,4 +318,26 @@ test("[persist:retry] 소진된 사이클은 재시도 중 메시지 대신 보�
     }),
     "saveFailedPending",
   );
+});
+
+test("[persist-status] 여러 저장 경로를 합칠 때 소진된 실패가 재시도보다 우선한다", () => {
+  const combined = combinePersisterStatuses(
+    {
+      lastSaveAt: 100,
+      lastErrorAt: null,
+      consecutiveFailures: 0,
+      pendingChanges: 0,
+      cycleFailed: false,
+    },
+    {
+      lastSaveAt: null,
+      lastErrorAt: 200,
+      consecutiveFailures: 3,
+      pendingChanges: 1,
+      cycleFailed: true,
+    },
+  );
+  assert.equal(combined.cycleFailed, true);
+  assert.equal(combined.consecutiveFailures, 3);
+  assert.equal(getPersistFailureBannerKey(combined), "saveFailedPending");
 });
