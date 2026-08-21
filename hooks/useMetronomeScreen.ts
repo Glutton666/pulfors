@@ -70,6 +70,7 @@ import {
 import { BUILTIN_POOL_SIZE, type BuiltinPlayers, type SoundSetPlayers } from "@/hooks/useAudioPlayers";
 import { useNoteSamples } from "@/hooks/useNoteSamples";
 import { useNoteSamplePersistenceStatus } from "@/hooks/useNoteSamplePersistenceStatus";
+import { usePlaybackControl } from "@/hooks/usePlaybackControl";
 import { useDialConfig } from "@/hooks/useBarDialConfig";
 import { useBarMode } from "@/hooks/useBarMode";
 import { useMetronomeEngine } from "@/hooks/useMetronomeEngine";
@@ -604,15 +605,8 @@ export function useMetronomeScreen() {
   // Bundles engine.stop() + rendered-audio teardown + state reset so that
   // useBarMode has no dependency on stopRenderedAudio / clearSamplePlayStates
   // / setIsPlaying / setIsPreparing.
-  const stopIfPlaying = useCallback(() => {
-    if (!isPlayingRef.current) return;
-    engineRef.current?.stop();
-    stopRenderedAudio();
-    clearSamplePlayStates();
-    setIsPreparing(false);
-    setIsPlaying(false);
-    resetPlaybackVisuals();
-  }, [stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals]);
+  const stopIfPlayingRef = useRef<() => void>(() => {});
+  const stopIfPlaying = useCallback(() => stopIfPlayingRef.current(), []);
 
   // ── Bar mode domain ───────────────────────────────────────────────────────
   /** Global BPM saved on bar mode entry; restored on exit. */
@@ -1592,215 +1586,64 @@ export function useMetronomeScreen() {
     []
   );
 
-  /** 셋리스트 seamless 전환 시 onMeasureComplete에서 즉시 적용할 다음 항목 */
-  const seamlessNextEntryRef = useRef<PracticeEntry | null>(null);
-
-  const togglePlayPause = useCallback(async () => {
-    const engine = engineRef.current;
-    if (!engine) return;
-
-    // 모달이 열려있는 동안 사용자가 직접 토글했음을 audio-session에 알려서
-    // 모달 닫힐 때 우리가 무심코 자동 resume하지 않도록 한다.
-    // 반환된 Promise는 재생 시작 분기(else 분기)에서 engine.start() 직전에
-    // await한다 — Android 오디오 포커스 프로브의 setAudioModeAsync 호출이
-    // 완료된 뒤에 엔진이 자신의 AudioTrack을 생성하도록 순서를 보장해,
-    // 네이티브 setSpeakerphoneOn 라우팅 변경과의 경합(무음 원인, 2026-08-02
-    // adb logcat으로 확인)을 없앤다. 설정이 이전과 동일하면
-    // applyAudioModeIfChanged 캐시가 네이티브 호출 자체를 생략하므로 보통은
-    // 즉시 resolve된다.
-    const androidProbeReady = notifyUserMetronomeToggle();
-
-    // BPM 퀴즈 이스터에그 활성 중 정지 → 정답 공개 후 비트모드로 복귀
-    if (easterEggActiveRef.current) {
-      handleEasterEggGiveUpRef.current(true);
-      return;
-    }
-
-    if (isPreparing && !isPlaying) {
-      preparingCancelledRef.current = true;
-      setIsPreparing(false);
-      return;
-    }
-
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-
-    const modeLabel = barModeRef.current ? "Bar" : "Dial";
-    if (isPlaying) {
-      seamlessNextEntryRef.current = null; // 수동 정지 시 예약된 seamless 취소
-      clearAudioWatchdogRef.current();
-      engine.stop();
-      stopRenderedAudio();
-      clearSamplePlayStates();
-      setIsPreparing(false);
-      setIsPlaying(false);
-      notifyVoicePlayState(false);
-      resetPlaybackVisuals();
-      showPausedNotification(bpm, modeLabel, languageRef.current);
-      if (loggingEnabled && practiceStartRef.current) {
-        const dur = Math.round((Date.now() - practiceStartRef.current) / 1000);
-        if (dur >= 3) {
-          const noteRef = loadedPracticeNoteRef.current;
-          addActivityLog({
-            type: "practice_session",
-            data: {
-              bpm,
-              mode: barMode ? "bar" : "dial",
-              duration: dur,
-              ...(barMode ? { barConfig: { beatsPerMeasure, subdivisions: subdivisionPattern.length } } : {}),
-              ...(barMode && noteRef ? { practiceNoteId: noteRef.id, practiceNoteLabel: noteRef.label } : {}),
-            },
-          }).then(() => checkCompletedGoals());
-        }
-        practiceStartRef.current = null;
-      }
-    } else {
-      resetPlaybackVisuals();
-      clearSamplePlayStates();
-
-      const startBeat = barModeRef.current ? barStartBeatRef.current : undefined;
-      showPlayingNotification(bpm, modeLabel, languageRef.current);
-      if (loggingEnabled) {
-        practiceStartRef.current = Date.now();
-      }
-
-      if (barModeRef.current) {
-        engine.setBeatTypes([...(barConfigRef.current.beatTypes || [])]);
-        engine.setAllBeatSubdivisions(barConfigRef.current.beatSubdivisions || {});
-        engine.setAllBarRepeats(barConfigRef.current.barRepeats || {});
-        engine.setLoopBlocks(barConfigRef.current.loopBlocks || []);
-        engine.setBlockPlayMode(blockPlayModeRef.current);
-        const bpmOverrides: Record<number, number> = {};
-        for (const [k, v] of Object.entries(barConfigRef.current.barRepeats || {})) {
-          if (v.bpm) bpmOverrides[Number(k)] = toEngineBpm(v.bpm, beatDenominatorRef.current);
-        }
-        engine.setAllBarBpmOverrides(bpmOverrides);
-      } else {
-        engine.setBeatTypes([...(dialConfigRef.current.beatTypes || [])]);
-        engine.setAllBeatSubdivisions(dialConfigRef.current.beatSubdivisions || {});
-      }
-      engine.buildScheduleOnly();
-
-      preparingCancelledRef.current = false;
-
-      try {
-        if (Platform.OS === "web") {
-          const ctx = getWebAudioContext();
-          // ① 항상 resume 시도 — 이미 running이면 즉시 resolve (no-op)
-          if (ctx) {
-            await ctx.resume().catch(() => {});
-          }
-          // ② 버퍼 미준비면 엔진 시작 전에 먼저 로드
-          //    (preload effect에서 이미 완료됐으면 즉시 true 반환)
-          if (!webClickReadyRef.current) {
-            const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
-            const ready = await ensureWebClickBuffers(src as any).catch(() => false);
-            if (ready) webClickReadyRef.current = true;
-          }
-
-          // context running + buffers ready 상태에서 시작
-          setIsPreparing(false);
-          setIsPlaying(true);
-          notifyVoicePlayState(true);
-          isPlayingRef.current = true;
-          engine.start(startBeat ?? undefined);
-          armAudioWatchdogRef.current();
-
-          // 백그라운드: PCM 렌더 후 pre-rendered loop으로 전환
-          ;(async () => {
-            try {
-              const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
-              const ready = await ensureWebClickBuffers(src as any);
-              if (!ready || !engineRef.current?.getIsRunning()) return;
-              webClickReadyRef.current = true;
-
-              // ctx는 이미 위에서 resume됨 — 한 번 더 suspend된 경우만 처리
-              if (ctx && ctx.state === "suspended") {
-                await ctx.resume().catch(() => {});
-              }
-
-              if (webRenderedLoopRef.current) {
-                webRenderedLoopRef.current.stop();
-                webRenderedLoopRef.current = null;
-              }
-
-              try {
-                const scheduleInfo = engineRef.current.getScheduleInfo();
-                const ticks = scheduleInfo.ticks as TickInfo[];
-                const [clickPCMs, layerClickPCMs] = await Promise.all([
-                  getClickPCMs(soundSetRef.current),
-                  getLayerClickPCMsForSchedule(ticks),
-                ]);
-                if (!engineRef.current?.getIsRunning()) return;
-                const pcm = renderMeasure({
-                  schedule: ticks,
-                  measureDurationMs: scheduleInfo.durationMs,
-                  clickPCMs,
-                  samplePCMs: new Map(),
-                  clickVolume: Math.max(1.0, volumeRef.current),
-                  sampleVolume: 0,
-                  metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
-                  metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
-                  layerClickPCMs,
-                });
-                if (volumeRef.current > 1.0) {
-                  if (pcm instanceof Float32Array) { applySoftClip(pcm); }
-                  else { applySoftClip(pcm.left); applySoftClip(pcm.right); }
-                }
-                // 다음 마디 경계에서 루프 시작 — 마디 중간에 시작하면 위상이 어긋남
-                engineRef.current.setPendingMeasureStartAction(() => {
-                  if (!engineRef.current?.getIsRunning()) return;
-                  if (webRenderedLoopRef.current) {
-                    try { webRenderedLoopRef.current.stop(); } catch {}
-                    webRenderedLoopRef.current = null;
-                  }
-                  const loop = playWebRenderedLoop(pcm);
-                  webRenderedLoopRef.current = loop;
-                  engineRef.current?.setPreRenderedAudio(true);
-                });
-              } catch (renderErr) {
-                captureBreadcrumb({ category: "metronome", message: "togglePlayPause: Web pre-render failed, using per-tick", level: "warning", data: { error: String(renderErr) } });
-              }
-            } catch {}
-          })();
-        } else {
-          // 즉시 시작 — per-tick 모드로 바로 재생
-          setIsPreparing(false);
-          setIsPlaying(true);
-          notifyVoicePlayState(true);
-          isPlayingRef.current = true;
-          if (Platform.OS === "android") {
-            await androidProbeReady;
-          }
-          engine.start(startBeat ?? undefined);
-          armAudioWatchdogRef.current();
-
-          // 백그라운드: pre-render 완료 후 rendered player로 전환
-          buildRenderedPlayer().then(renderedPlayer => {
-            if (!renderedPlayer || !engineRef.current?.getIsRunning()) {
-              if (renderedPlayer) { try { renderedPlayer.release(); } catch {} }
-              return;
-            }
-            stopRenderedAudio();
-            renderedPlayerRef.current = renderedPlayer;
-            renderedPlayer.volume = 1.0;
-            engine.setPreRenderedAudio(true);
-            safePlay(renderedPlayer, "metronome.start.native");
-          }).catch(() => {});
-        }
-
-        if (barModeRef.current && barLoopModeRef.current === "once") {
-          engine.requestStopAfterMeasure();
-        }
-      } catch {
-        setIsPreparing(false);
-      }
-    }
-  }, [isPlaying, loggingEnabled, bpm, barMode, beatsPerMeasure, getClickPCMs, getLayerClickPCMsForSchedule]);
-
-  const togglePlayPauseRef = useRef(togglePlayPause);
-  useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
+  const { notifyPlayState: notifyVoicePlayState } = useVoiceAssistant();
+  const {
+    togglePlayPause,
+    togglePlayPauseRef,
+    startMetronome,
+    stopMetronome,
+    seamlessNextEntryRef,
+  } = usePlaybackControl({
+    engineRef,
+    isPlaying,
+    isPreparing,
+    setIsPlaying,
+    setIsPreparing,
+    isPlayingRef,
+    isPreparingRef,
+    preparingCancelledRef,
+    barMode,
+    barModeRef,
+    bpm,
+    beatsPerMeasure,
+    subdivisionPattern,
+    barConfigRef,
+    dialConfigRef,
+    barStartBeatRef,
+    barLoopModeRef,
+    blockPlayModeRef,
+    beatDenominatorRef,
+    stopRenderedAudio,
+    clearSamplePlayStates,
+    resetPlaybackVisuals,
+    renderedPlayerRef,
+    webRenderedLoopRef,
+    buildRenderedPlayer,
+    clearAudioWatchdogRef,
+    armAudioWatchdogRef,
+    soundSetRef,
+    volumeRef,
+    webClickReadyRef,
+    getClickPCMs,
+    getLayerClickPCMsForSchedule,
+    barMetronomeChannelRef,
+    noteSampleMetroChannelsRef,
+    notifyVoicePlayState,
+    languageRef,
+    notifyUserToggle: notifyUserMetronomeToggle,
+    showPlayingNotification,
+    showPausedNotification,
+    easterEggActiveRef,
+    handleEasterEggGiveUpRef,
+    loggingEnabled,
+    practiceStartRef,
+    loadedPracticeNoteRef,
+    addPracticeLog: (data) => addActivityLog({ type: "practice_session", data }),
+    checkCompletedGoals,
+    capturePlaybackError: (message, error, level = "error") =>
+      captureBreadcrumb({ category: "metronome", message, level, data: { error: String(error) } }),
+  });
+  stopIfPlayingRef.current = stopMetronome;
 
   useEffect(() => {
     registerMetronomeBridge({
@@ -1835,7 +1678,6 @@ export function useMetronomeScreen() {
 
   // 딥링크 명령 핸들러 등록
   const { setCommandHandler } = useDeepLink();
-  const { notifyPlayState: notifyVoicePlayState } = useVoiceAssistant();
   useEffect(() => {
     const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
     setCommandHandler((cmd) => {
@@ -1923,124 +1765,6 @@ export function useMetronomeScreen() {
 
 
   // handleBarModeChange → wrapped (BPM swap) + barModeHandleBarModeChange
-
-  const startMetronome = useCallback(async () => {
-    const engine = engineRef.current;
-    if (!engine || isPlayingRef.current || isPreparingRef.current) return;
-
-    resetPlaybackVisuals();
-    clearSamplePlayStates();
-
-    if (barModeRef.current) {
-      engine.setBeatTypes([...(barConfigRef.current.beatTypes || [])]);
-      engine.setAllBeatSubdivisions(barConfigRef.current.beatSubdivisions || {});
-      engine.setAllBarRepeats(barConfigRef.current.barRepeats || {});
-      engine.setLoopBlocks(barConfigRef.current.loopBlocks || []);
-      engine.setBlockPlayMode(blockPlayModeRef.current);
-      const bpmOv: Record<number, number> = {};
-      for (const [k, v] of Object.entries(barConfigRef.current.barRepeats || {})) {
-        if (v.bpm) bpmOv[Number(k)] = toEngineBpm(v.bpm, beatDenominatorRef.current);
-      }
-      engine.setAllBarBpmOverrides(bpmOv);
-    } else {
-      engine.setBeatTypes([...(dialConfigRef.current.beatTypes || [])]);
-      engine.setAllBeatSubdivisions(dialConfigRef.current.beatSubdivisions || {});
-    }
-    engine.buildScheduleOnly();
-
-    preparingCancelledRef.current = false;
-    setIsPreparing(true);
-
-    try {
-      if (Platform.OS === "web") {
-        const ctx = getWebAudioContext();
-        if (ctx && ctx.state === "suspended") {
-          ctx.resume().catch(() => {});
-        }
-
-        const src = soundSets[soundSetRef.current as keyof typeof soundSets] || soundSets.classic;
-        await ensureWebClickBuffers(src as any);
-        webClickReadyRef.current = true;
-
-        if (ctx && ctx.state === "suspended") {
-          ctx.resume().catch(() => {});
-        }
-
-        if (preparingCancelledRef.current) {
-          setIsPreparing(false);
-          return;
-        }
-        setIsPreparing(false);
-
-        if (webRenderedLoopRef.current) {
-          webRenderedLoopRef.current.stop();
-          webRenderedLoopRef.current = null;
-        }
-
-        try {
-          const scheduleInfo = engine.getScheduleInfo();
-          const ticks = scheduleInfo.ticks as TickInfo[];
-          const [clickPCMs, layerClickPCMs] = await Promise.all([
-            getClickPCMs(soundSetRef.current),
-            getLayerClickPCMsForSchedule(ticks),
-          ]);
-          const pcm = renderMeasure({
-            schedule: ticks,
-            measureDurationMs: scheduleInfo.durationMs,
-            clickPCMs,
-            samplePCMs: new Map(),
-            clickVolume: Math.max(1.0, volumeRef.current),
-            sampleVolume: 0,
-            metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
-            metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
-            layerClickPCMs,
-          });
-          if (volumeRef.current > 1.0) {
-            if (pcm instanceof Float32Array) { applySoftClip(pcm); }
-            else { applySoftClip(pcm.left); applySoftClip(pcm.right); }
-          }
-          const loop = playWebRenderedLoop(pcm);
-          webRenderedLoopRef.current = loop;
-          engine.setPreRenderedAudio(true);
-        } catch (renderErr) {
-          captureBreadcrumb({ category: "metronome", message: "startMetronome: Web pre-render failed, using per-tick", level: "warning", data: { error: String(renderErr) } });
-          engine.setPreRenderedAudio(false);
-        }
-
-        setIsPlaying(true);
-        engine.start();
-        armAudioWatchdogRef.current();
-      } else {
-        const renderedPlayer = await buildRenderedPlayer();
-        if (preparingCancelledRef.current) {
-          if (renderedPlayer) { try { renderedPlayer.release(); } catch {} }
-          setIsPreparing(false);
-          return;
-        }
-        setIsPreparing(false);
-
-        if (renderedPlayer) {
-          stopRenderedAudio();
-          renderedPlayerRef.current = renderedPlayer;
-          renderedPlayer.volume = 1.0;
-          engine.setPreRenderedAudio(true);
-        } else {
-          engine.setPreRenderedAudio(false);
-        }
-
-        setIsPlaying(true);
-        engine.start();
-        armAudioWatchdogRef.current();
-
-        if (renderedPlayer) {
-          safePlay(renderedPlayer, "metronome.start.fallback");
-        }
-      }
-    } catch (e) {
-      captureBreadcrumb({ category: "metronome", message: "startMetronome error", level: "error", data: { error: String(e) } });
-      setIsPreparing(false);
-    }
-  }, [buildRenderedPlayer, stopRenderedAudio, getClickPCMs, getLayerClickPCMsForSchedule]);
 
   const handleEasterEggTrigger = useCallback(async (isHighRange: boolean) => {
     if (barModeRef.current) return;
