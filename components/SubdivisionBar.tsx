@@ -27,6 +27,11 @@ import type { ScaleValues } from "@/lib/scale";
 import type { BeatType } from "@/lib/metronome-engine";
 import { pureGetSubPattern } from "@/lib/metronome-engine-pure";
 import { accentGradientEdge, onAccentColor, onAccentShadow } from "@/lib/color-contrast";
+import {
+  createShakeTracker,
+  resetShakeTracker,
+  trackSubdivisionShake,
+} from "@/lib/subdivision-shake";
 
 interface SubdivisionBarProps {
   pattern: BeatType[];
@@ -47,8 +52,6 @@ const CELL_GAP = IS_TABLET ? moderateScale(4, 0.3) : moderateScale(3, 0.3);
 const MAX_CELLS = 8;
 const MIN_CELLS = 1;
 const SWIPE_THRESHOLD = 30;
-const SHAKE_WINDOW_MS = 2000;
-const SHAKE_COUNT_TRIGGER = 4;
 
 function getCellColor(type: BeatType, active: boolean, accentColor: string, accentMutedColor: string, textColor: string, textTertiaryColor: string): string {
   if (type === "strong") return accentColor;
@@ -92,8 +95,7 @@ export function SubdivisionBar({
   const onDragMoveRef = useRef(onDragMove);
   const onDragEndRef = useRef(onDragEnd);
 
-  const directionChangesRef = useRef<number[]>([]);
-  const lastDirectionRef = useRef<"left" | "right" | null>(null);
+  const shakeTrackerRef = useRef(createShakeTracker());
 
   const shakeScale = useSharedValue(1);
   const shakeRotate = useSharedValue(0);
@@ -174,27 +176,6 @@ export function SubdivisionBar({
     onPatternChangeRef.current(p.slice(0, -1));
   }, []);
 
-  const trackShake = useCallback((dx: number) => {
-    const now = Date.now();
-    const dir: "left" | "right" = dx < 0 ? "left" : "right";
-
-    if (lastDirectionRef.current !== null && dir !== lastDirectionRef.current) {
-      directionChangesRef.current.push(now);
-    }
-    lastDirectionRef.current = dir;
-
-    directionChangesRef.current = directionChangesRef.current.filter(
-      (t) => now - t < SHAKE_WINDOW_MS
-    );
-
-    if (directionChangesRef.current.length >= SHAKE_COUNT_TRIGGER) {
-      directionChangesRef.current = [];
-      lastDirectionRef.current = null;
-      return true;
-    }
-    return false;
-  }, []);
-
   const triggerReset = useCallback(() => {
     if (isPlayingRef.current) return;
     if (Platform.OS !== "web") {
@@ -213,11 +194,9 @@ export function SubdivisionBar({
     onResetRef.current();
   }, []);
 
-  const trackShakeRef = useRef(trackShake);
   const triggerResetRef = useRef(triggerReset);
   const addCellRef = useRef(addCell);
   const removeCellRef = useRef(removeCell);
-  useEffect(() => { trackShakeRef.current = trackShake; }, [trackShake]);
   useEffect(() => { triggerResetRef.current = triggerReset; }, [triggerReset]);
   useEffect(() => { addCellRef.current = addCell; }, [addCell]);
   useEffect(() => { removeCellRef.current = removeCell; }, [removeCell]);
@@ -232,7 +211,7 @@ export function SubdivisionBar({
       onPanResponderGrant: () => {
         isDraggingUpRef.current = false;
         horizontalTriggeredRef.current = false;
-        lastDirectionRef.current = null;
+        resetShakeTracker(shakeTrackerRef.current);
       },
       onPanResponderMove: (e, gs) => {
         if (isDraggingUpRef.current) {
@@ -252,7 +231,7 @@ export function SubdivisionBar({
         }
 
         const dx = gs.dx;
-        if (trackShake(dx)) {
+        if (trackSubdivisionShake(shakeTrackerRef.current, dx, Date.now())) {
           triggerReset();
           horizontalTriggeredRef.current = true;
           return;
@@ -276,7 +255,7 @@ export function SubdivisionBar({
           onDragEndRef.current(e.nativeEvent.pageX, e.nativeEvent.pageY);
         }
         horizontalTriggeredRef.current = false;
-        lastDirectionRef.current = null;
+        resetShakeTracker(shakeTrackerRef.current);
       },
       onPanResponderTerminate: (e) => {
         if (isDraggingUpRef.current) {
@@ -284,7 +263,7 @@ export function SubdivisionBar({
           onDragEndRef.current(e.nativeEvent.pageX, e.nativeEvent.pageY);
         }
         horizontalTriggeredRef.current = false;
-        lastDirectionRef.current = null;
+        resetShakeTracker(shakeTrackerRef.current);
       },
     })
   ).current;
@@ -311,8 +290,7 @@ export function SubdivisionBar({
         isDraggingUp: false,
         horizontalTriggered: false,
       };
-      lastDirectionRef.current = null;
-      directionChangesRef.current = [];
+      resetShakeTracker(shakeTrackerRef.current);
     };
 
     const handleMove = (e: PointerEvent) => {
@@ -327,7 +305,7 @@ export function SubdivisionBar({
         return;
       }
 
-      if (trackShakeRef.current(dx)) {
+      if (trackSubdivisionShake(shakeTrackerRef.current, dx, Date.now())) {
         triggerResetRef.current();
         g.horizontalTriggered = true;
         g.isDown = false;
@@ -367,7 +345,7 @@ export function SubdivisionBar({
         isDraggingUp: false,
         horizontalTriggered: false,
       };
-      lastDirectionRef.current = null;
+      resetShakeTracker(shakeTrackerRef.current);
     };
 
     node.addEventListener("pointerdown", handleDown, true);
