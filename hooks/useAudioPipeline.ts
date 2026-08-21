@@ -28,6 +28,11 @@ import { useAudioPlayers } from "@/hooks/useAudioPlayers";
 import type { BuiltinPlayers, SoundSetPlayers } from "@/hooks/useAudioPlayers";
 import { BUILTIN_POOL_SIZE } from "@/hooks/useAudioPlayers";
 import { setAutoResumeAfterInterruption as setAudioSessionAutoResume } from "@/lib/audio-session";
+import {
+  markAudioRecovering,
+  markAudioRecoveryFailed,
+  markAudioRecoverySucceeded,
+} from "@/lib/audio-lifecycle";
 import type { TranslationFn } from "@/lib/i18n";
 
 /** Narrow callback type for audio-specific settings persistence. */
@@ -550,12 +555,14 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       const isStuck = webCtxSuspended || timeSinceFire > threshold;
 
       if (!isStuck) {
+        if (audioRetryCountRef.current > 0) markAudioRecoverySucceeded();
         audioWatchdogTimerRef.current = setTimeout(runCheck, 3000);
         return;
       }
 
       if (audioRetryCountRef.current < 2) {
         audioRetryCountRef.current += 1;
+        markAudioRecovering("watchdog");
         if (Platform.OS === "web") {
           const ctx = getWebAudioContext();
           if (ctx?.state === "suspended") { ctx.resume().catch(() => {}); }
@@ -569,6 +576,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         showRecoveryToastRef.current(t("main", "audioRecoveryRetry"));
         audioWatchdogTimerRef.current = setTimeout(runCheck, 3500);
       } else {
+        markAudioRecoveryFailed("watchdog");
         showRecoveryToastRef.current(t("main", "audioRecoveryFailed"));
         audioWatchdogTimerRef.current = null;
       }

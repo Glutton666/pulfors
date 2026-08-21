@@ -71,6 +71,8 @@ import { BUILTIN_POOL_SIZE, type BuiltinPlayers, type SoundSetPlayers } from "@/
 import { useNoteSamples } from "@/hooks/useNoteSamples";
 import { useNoteSamplePersistenceStatus } from "@/hooks/useNoteSamplePersistenceStatus";
 import { usePlaybackControl } from "@/hooks/usePlaybackControl";
+import { useAudioLifecycle } from "@/hooks/useAudioLifecycle";
+import { markAudioPlaying, markAudioStopped } from "@/lib/audio-lifecycle";
 import { useDialConfig } from "@/hooks/useBarDialConfig";
 import { useBarMode } from "@/hooks/useBarMode";
 import { useMetronomeEngine } from "@/hooks/useMetronomeEngine";
@@ -440,6 +442,7 @@ export function useMetronomeScreen() {
 
   // ── 권한 복구 토스트 ────────────────────────────────────────────────────────
   const { permissionRecoveryToast, showRecoveryToast } = usePermissionRecoveryToast(t);
+  const audioLifecycle = useAudioLifecycle();
 
   const noteSamplesHook = useNoteSamples();
   const noteSamplePersistStatus = useNoteSamplePersistenceStatus();
@@ -1592,6 +1595,7 @@ export function useMetronomeScreen() {
     togglePlayPauseRef,
     startMetronome,
     stopMetronome,
+    retryAudioRecovery,
     seamlessNextEntryRef,
   } = usePlaybackControl({
     engineRef,
@@ -1649,10 +1653,10 @@ export function useMetronomeScreen() {
     registerMetronomeBridge({
       isRunning: () => engineRef.current?.getIsRunning() ?? false,
       pause: () => {
-        if (engineRef.current?.getIsRunning()) togglePlayPauseRef.current?.();
+        if (engineRef.current?.getIsRunning()) return togglePlayPauseRef.current?.();
       },
       resume: () => {
-        if (!engineRef.current?.getIsRunning()) togglePlayPauseRef.current?.();
+        if (!engineRef.current?.getIsRunning()) return togglePlayPauseRef.current?.();
       },
     });
     return () => { registerMetronomeBridge(null); };
@@ -1831,7 +1835,10 @@ export function useMetronomeScreen() {
       } catch (_) {}
     }
 
-    if (preparingCancelledRef.current) return;
+    if (preparingCancelledRef.current) {
+      markAudioStopped();
+      return;
+    }
 
     // ④ pre-rendered loop 없이 per-tick으로 즉시 시작 (AudioContext 상태에 무관)
     engine.setPreRenderedAudio(false);
@@ -1839,6 +1846,7 @@ export function useMetronomeScreen() {
     setIsPlaying(true);
     isPlayingRef.current = true;
     engine.start();
+    markAudioPlaying();
     armAudioWatchdogRef.current();
   }, [stopRenderedAudio, resetPlaybackVisuals, clearSamplePlayStates, setEasterEggApplyBpm]);
 
@@ -2437,6 +2445,7 @@ export function useMetronomeScreen() {
     setIsPlaying(true);
     setNoteIsPlaying(true);
     engine.start();
+    markAudioPlaying();
     engine.requestStopAfterMeasure();
     showPlayingNotification(entry.bpm, "Note", languageRef.current);
   }, [preloadNoteSampleSounds]);
@@ -3036,6 +3045,7 @@ export function useMetronomeScreen() {
     beatSubdivisions,
     isPlaying,
     isPreparing,
+    audioLifecycle,
     currentBeat,
     measureCount,
     activeSubNote,
@@ -3052,6 +3062,7 @@ export function useMetronomeScreen() {
     handleTapTempo,
     handleReset,
     startMetronome,
+    retryAudioRecovery,
     handleTimerExpired,
     // Beat subdivision drag
     beatSubdivisionCounts,

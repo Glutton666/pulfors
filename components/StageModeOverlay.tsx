@@ -56,6 +56,7 @@ import type { BeatType } from "@/lib/metronome-engine";
 import type { ProgressInfo } from "@/lib/metronome-engine-pure";
 import { handleStageModeBackPress, type StageModeBackState } from "@/lib/stage-mode-logic";
 import { withAlpha } from "@/lib/color-contrast";
+import type { AudioLifecycleSnapshot } from "@/lib/audio-lifecycle";
 
 // ─── 스테이지 설정 타입 ──────────────────────────────────────────────
 const STAGE_SETTINGS_KEY = "stage_settings_v1";
@@ -290,6 +291,8 @@ export interface StageModeOverlayProps {
   /** 엔진 진행 정보 (바 반복·블록 진행 등) — 무대용 전체 진행도 표시 */
   progressInfo?:     ProgressInfo | null;
   isPlaying:         boolean;
+  audioLifecycle?:   AudioLifecycleSnapshot;
+  onRetryAudioRecovery?: () => void;
   flashMode:         FlashMode;
   hapticMode:        HapticMode;
   onPlayPause:       () => void;
@@ -335,6 +338,8 @@ export function StageModeOverlay({
   activeSubNote,
   progressInfo,
   isPlaying,
+  audioLifecycle,
+  onRetryAudioRecovery,
   flashMode,
   hapticMode,
   onPlayPause,
@@ -357,6 +362,12 @@ export function StageModeOverlay({
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const { width: winWidth } = useWindowDimensions();
+  const audioStatusKey =
+    audioLifecycle?.phase === "preparing" ? "audioStatusPreparing"
+    : audioLifecycle?.phase === "interrupted" ? "audioStatusInterrupted"
+    : audioLifecycle?.phase === "recovering" ? "audioStatusRecovering"
+    : audioLifecycle?.phase === "recoveryFailed" ? "audioStatusRecoveryFailed"
+    : null;
 
   // ── 설정 & 셋 리스트 상태 ──────────────────────────────────────────
   const [settings, setSettings]       = useState<StageSettings>(DEFAULT_STAGE_SETTINGS);
@@ -902,6 +913,40 @@ export function StageModeOverlay({
 
   return (
     <View style={[styles.container, { backgroundColor: bg }]} testID="stage-mode-overlay">
+      {audioStatusKey ? (
+        <View
+          testID="stage-audio-lifecycle-status"
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+          style={{
+            position: "absolute",
+            top: insets.top + 12,
+            alignSelf: "center",
+            zIndex: 100,
+            alignItems: "center",
+            gap: 6,
+            paddingHorizontal: 14,
+            paddingVertical: 9,
+            borderRadius: 12,
+            backgroundColor: audioLifecycle?.phase === "recoveryFailed" ? accentColor : `${bg}E8`,
+          }}
+        >
+          <Text style={{ color: audioLifecycle?.phase === "recoveryFailed" ? "#111" : text, fontWeight: "700" }}>
+            {t("main", audioStatusKey)}
+          </Text>
+          {audioLifecycle?.phase === "recoveryFailed" && onRetryAudioRecovery ? (
+            <Pressable
+              onPress={onRetryAudioRecovery}
+              testID="stage-audio-recovery-retry"
+              accessibilityRole="button"
+              accessibilityLabel={t("main", "audioRecoveryRetry")}
+              style={{ backgroundColor: bg, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}
+            >
+              <Text style={{ color: text, fontWeight: "700" }}>{t("main", "audioRecoveryRetry")}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
       {/* 플래시 레이어 */}
       <Animated.View pointerEvents="none" style={[styles.flashLayer, flashStyle]} />
 

@@ -645,6 +645,10 @@ export const translations = {
     eggConfirmCancel: { ko: "취소", en: "Cancel" },
     audioRecoveryRetry: { ko: "재생 복구 중…", en: "Recovering audio…" },
     audioRecoveryFailed: { ko: "소리가 안 나오면 정지 후 다시 눌러보세요", en: "No sound? Stop and press play again" },
+    audioStatusPreparing: { ko: "재생을 준비하는 중…", en: "Preparing playback…" },
+    audioStatusInterrupted: { ko: "오디오가 중단되었습니다", en: "Audio was interrupted" },
+    audioStatusRecovering: { ko: "오디오를 복구하는 중…", en: "Recovering audio…" },
+    audioStatusRecoveryFailed: { ko: "오디오 복구에 실패했습니다", en: "Audio recovery failed" },
   },
   scheduledStart: {
     title: { ko: "동시 시작", en: "Scheduled Start" },

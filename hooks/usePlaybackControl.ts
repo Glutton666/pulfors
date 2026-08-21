@@ -19,6 +19,14 @@ import type { Language } from "@/lib/i18n";
 import type { SampleChannel } from "@/lib/stereo-channel";
 import type { NoteSampleMetroChannelMap } from "@/lib/note-samples";
 import type { AudioPlayer } from "expo-audio";
+import {
+  getAudioLifecycleSnapshot,
+  markAudioPlaying,
+  markAudioPreparing,
+  markAudioRecovering,
+  markAudioRecoveryFailed,
+  markAudioStopped,
+} from "@/lib/audio-lifecycle";
 
 type Ref<T> = { current: T };
 
@@ -143,20 +151,22 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     p.setIsPreparing(false);
     p.setIsPlaying(false);
     p.resetPlaybackVisuals();
+    markAudioStopped();
   }, [p]);
 
   const togglePlayPause = useCallback(async () => {
     const engine = p.engineRef.current;
-    if (!engine) return;
+    if (!engine) return false;
     const androidProbeReady = p.notifyUserToggle();
     if (p.easterEggActiveRef.current) {
       p.handleEasterEggGiveUpRef.current(true);
-      return;
+      return true;
     }
     if (p.isPreparing && !p.isPlaying) {
       p.preparingCancelledRef.current = true;
       p.setIsPreparing(false);
-      return;
+      markAudioStopped();
+      return true;
     }
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const modeLabel = p.barModeRef.current ? "Bar" : "Dial";
@@ -170,6 +180,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       p.setIsPlaying(false);
       p.notifyVoicePlayState(false);
       p.resetPlaybackVisuals();
+      if (getAudioLifecycleSnapshot().phase !== "interrupted") markAudioStopped();
       p.showPausedNotification(p.bpm, modeLabel, p.languageRef.current);
       if (p.loggingEnabled && p.practiceStartRef.current) {
         const duration = Math.round((Date.now() - p.practiceStartRef.current) / 1000);
@@ -188,6 +199,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
 
     p.resetPlaybackVisuals();
     p.clearSamplePlayStates();
+    markAudioPreparing();
     const startBeat = p.barModeRef.current ? p.barStartBeatRef.current : undefined;
     p.showPlayingNotification(p.bpm, modeLabel, p.languageRef.current);
     if (p.loggingEnabled) p.practiceStartRef.current = Date.now();
@@ -203,12 +215,14 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         }
         p.setIsPreparing(false); p.setIsPlaying(true); p.notifyVoicePlayState(true); p.isPlayingRef.current = true;
         engine.start(startBeat ?? undefined);
+        markAudioPlaying();
         p.armAudioWatchdogRef.current();
         void renderWebLoop(engine, true).catch((error) => p.capturePlaybackError("togglePlayPause: Web pre-render failed, using per-tick", error, "warning"));
       } else {
-        p.setIsPreparing(false); p.setIsPlaying(true); p.notifyVoicePlayState(true); p.isPlayingRef.current = true;
         if (Platform.OS === "android") await androidProbeReady;
+        p.setIsPreparing(false); p.setIsPlaying(true); p.notifyVoicePlayState(true); p.isPlayingRef.current = true;
         engine.start(startBeat ?? undefined);
+        markAudioPlaying();
         p.armAudioWatchdogRef.current();
         void p.buildRenderedPlayer().then((player) => {
           if (!player || !p.engineRef.current?.getIsRunning()) { try { player?.release(); } catch {} return; }
@@ -220,8 +234,14 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         }).catch(() => {});
       }
       if (p.barModeRef.current && p.barLoopModeRef.current === "once") engine.requestStopAfterMeasure();
+      return true;
     } catch {
       p.setIsPreparing(false);
+      p.setIsPlaying(false);
+      p.isPlayingRef.current = false;
+      if (getAudioLifecycleSnapshot().phase === "recovering") markAudioRecoveryFailed("interruption");
+      else markAudioStopped();
+      return false;
     }
   }, [configureEngine, p, renderWebLoop, seamlessRef]);
 
@@ -233,6 +253,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     if (!engine || p.isPlayingRef.current || p.isPreparingRef.current) return;
     p.resetPlaybackVisuals();
     p.clearSamplePlayStates();
+    markAudioPreparing();
     configureEngine(engine);
     p.preparingCancelledRef.current = false;
     p.setIsPreparing(true);
@@ -244,7 +265,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         await ensureWebClickBuffers(source as never);
         p.webClickReadyRef.current = true;
         if (context?.state === "suspended") await context.resume().catch(() => {});
-        if (p.preparingCancelledRef.current) { p.setIsPreparing(false); return; }
+        if (p.preparingCancelledRef.current) { p.setIsPreparing(false); markAudioStopped(); return; }
         p.setIsPreparing(false);
         try {
           await renderWebLoop(engine, false);
@@ -252,12 +273,13 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           p.capturePlaybackError("startMetronome: Web pre-render failed, using per-tick", error, "warning");
           engine.setPreRenderedAudio(false);
         }
-        p.setIsPlaying(true); engine.start(); p.armAudioWatchdogRef.current();
+        p.setIsPlaying(true); engine.start(); markAudioPlaying(); p.armAudioWatchdogRef.current();
       } else {
         const player = await p.buildRenderedPlayer();
         if (p.preparingCancelledRef.current) {
           try { player?.release(); } catch {}
           p.setIsPreparing(false);
+          markAudioStopped();
           return;
         }
         p.setIsPreparing(false);
@@ -267,14 +289,31 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           player.volume = 1;
           engine.setPreRenderedAudio(true);
         } else engine.setPreRenderedAudio(false);
-        p.setIsPlaying(true); engine.start(); p.armAudioWatchdogRef.current();
+        p.setIsPlaying(true); engine.start(); markAudioPlaying(); p.armAudioWatchdogRef.current();
         if (player) safePlay(player, "metronome.start.fallback");
       }
     } catch (error) {
       p.capturePlaybackError("startMetronome error", error);
       p.setIsPreparing(false);
+      p.setIsPlaying(false);
+      p.isPlayingRef.current = false;
+      if (getAudioLifecycleSnapshot().phase === "recovering") markAudioRecoveryFailed("interruption");
+      else markAudioStopped();
     }
   }, [configureEngine, p, renderWebLoop]);
 
-  return { togglePlayPause, togglePlayPauseRef, startMetronome, stopMetronome, seamlessNextEntryRef: seamlessRef };
+  const retryAudioRecovery = useCallback(async () => {
+    if (p.isPreparingRef.current) return;
+    markAudioRecovering("watchdog");
+    p.engineRef.current?.stop();
+    p.stopRenderedAudio();
+    p.clearSamplePlayStates();
+    p.setIsPlaying(false);
+    p.isPlayingRef.current = false;
+    p.setIsPreparing(false);
+    p.isPreparingRef.current = false;
+    await startMetronome();
+  }, [p, startMetronome]);
+
+  return { togglePlayPause, togglePlayPauseRef, startMetronome, stopMetronome, retryAudioRecovery, seamlessNextEntryRef: seamlessRef };
 }

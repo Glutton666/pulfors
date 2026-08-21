@@ -12,6 +12,7 @@ import {
   _resetAudioSessionForTests,
   _audioSessionDebugState,
 } from "../lib/audio-session";
+import { getAudioLifecycleSnapshot } from "../lib/audio-lifecycle";
 
 function makeBridge(initial = false) {
   const state = { running: initial, pauseCount: 0, resumeCount: 0 };
@@ -367,6 +368,33 @@ test("autoResumeAfterInterruption=false skips resume on interruption end", async
   notifyInterruptionEnd();
   assert.equal(state.resumeCount, 0, "auto-resume disabled: bridge.resume must NOT be called");
   assert.equal(state.running, false);
+  assert.deepEqual(getAudioLifecycleSnapshot(), { phase: "idle", reason: null });
+});
+
+test("manual stop during interruption clears the temporary interrupted status", async () => {
+  _resetAudioSessionForTests();
+  const { state, bridge } = makeBridge(true);
+  registerMetronomeBridge(bridge);
+  notifyInterruptionBegin();
+  notifyUserMetronomeToggle();
+  notifyInterruptionEnd();
+  assert.equal(state.resumeCount, 0);
+  assert.deepEqual(getAudioLifecycleSnapshot(), { phase: "idle", reason: null });
+});
+
+test("failed asynchronous interruption resume exposes recovery failure", async () => {
+  _resetAudioSessionForTests();
+  let running = true;
+  registerMetronomeBridge({
+    isRunning: () => running,
+    pause: () => { running = false; },
+    resume: async () => false,
+  });
+  notifyInterruptionBegin();
+  notifyInterruptionEnd();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(getAudioLifecycleSnapshot(), { phase: "recoveryFailed", reason: "interruption" });
 });
 
 test("autoResumeAfterInterruption=true (default) still resumes on interruption end", async () => {

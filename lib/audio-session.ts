@@ -1,6 +1,13 @@
 import { Platform } from "react-native";
 import { logger } from "@/lib/logger";
 import { applyAudioModeIfChanged, _resetAudioModeCacheForTests } from "@/lib/audio-mode-cache";
+import {
+  markAudioInterrupted,
+  markAudioRecovering,
+  markAudioRecoveryFailed,
+  markAudioStopped,
+  _resetAudioLifecycleForTests,
+} from "@/lib/audio-lifecycle";
 
 /**
  * Caller ID 컨벤션 (충돌 방지용 레지스트리)
@@ -19,8 +26,8 @@ export type SessionMode = "playback" | "recording" | "mic";
 
 export interface MetronomeBridge {
   isRunning: () => boolean;
-  pause: () => void;
-  resume: () => void;
+  pause: () => boolean | void | Promise<boolean | void>;
+  resume: () => boolean | void | Promise<boolean | void>;
 }
 
 /** Android 오디오 포커스 프로브의 start/stop 진입점. */
@@ -112,6 +119,7 @@ export async function acquireAudioSession(callerId: string, mode: SessionMode): 
   if (needsPause && !pausedByUs && bridge) {
     try {
       if (bridge.isRunning()) {
+        markAudioInterrupted("session");
         suppressUserToggle++;
         try {
           bridge.pause();
@@ -136,8 +144,9 @@ export async function releaseAudioSession(callerId: string): Promise<void> {
       try {
         bridge?.resume();
         androidProbe?.start();
-      } catch (e) {
-        logger.warn("[audioSession] resume failed:", e);
+    } catch (e) {
+      markAudioRecoveryFailed("session");
+      logger.warn("[audioSession] resume failed:", e);
       }
     }
     return;
@@ -157,9 +166,13 @@ export async function releaseAudioSession(callerId: string): Promise<void> {
     // 일관되게 처리한다.
     try {
       if (!wasUserToggled && !pausedByInterruption && bridge && !bridge.isRunning()) {
+        markAudioRecovering("session");
         suppressUserToggle++;
         try {
-          bridge.resume();
+          const resumeResult = bridge.resume();
+          Promise.resolve(resumeResult).then((didStart) => {
+            if (didStart === false) markAudioRecoveryFailed("session");
+          }).catch(() => markAudioRecoveryFailed("session"));
           androidProbe?.start();
         } finally {
           suppressUserToggle--;
@@ -212,6 +225,7 @@ export function notifyInterruptionBegin(): void {
   if (!bridge) return;
   try {
     if (bridge.isRunning()) {
+      markAudioInterrupted("interruption");
       suppressUserToggle++;
       try {
         bridge.pause();
@@ -252,6 +266,7 @@ export function notifyInterruptionEnd(): void {
   pausedByInterruption = false;
   userToggledDuringInterruption = false;
   if (wasUserToggled) {
+    markAudioStopped();
     logger.info("[audioSession] interruption end → user toggled during interruption, skipping auto-resume");
     return;
   }
@@ -265,14 +280,19 @@ export function notifyInterruptionEnd(): void {
   }
   if (!bridge) return;
   if (!autoResumeAfterInterruption) {
+    markAudioStopped();
     logger.info("[audioSession] interruption end → auto-resume disabled by user setting, skipping resume");
     return;
   }
   try {
     if (!bridge.isRunning()) {
+      markAudioRecovering("interruption");
       suppressUserToggle++;
       try {
-        bridge.resume();
+        const resumeResult = bridge.resume();
+        Promise.resolve(resumeResult).then((didStart) => {
+          if (didStart === false) markAudioRecoveryFailed("interruption");
+        }).catch(() => markAudioRecoveryFailed("interruption"));
         // 주의: androidProbe?.start() 를 호출하지 않는다.
         // 프로브는 이미 살아있다 — OS 가 Sound 를 자동 재개해 isPlaying: true
         // 이벤트를 발생시키고 그 이벤트가 이 함수를 호출했다.
@@ -284,6 +304,7 @@ export function notifyInterruptionEnd(): void {
       logger.info("[audioSession] interruption end → metronome already running, no-op");
     }
   } catch (e) {
+    markAudioRecoveryFailed("interruption");
     logger.warn("[audioSession] interruption resume failed:", e);
   }
 }
@@ -303,6 +324,7 @@ export async function withAudioSession<T>(
 }
 
 export function _resetAudioSessionForTests() {
+  _resetAudioLifecycleForTests();
   activeCallers.clear();
   bridge = null;
   pausedByUs = false;

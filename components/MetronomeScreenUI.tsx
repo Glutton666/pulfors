@@ -26,6 +26,7 @@ import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import PracticeStatsGraph from "@/components/PracticeStatsGraph";
 import { StageModeOverlay } from "@/components/StageModeOverlay";
+import { markAudioPlaying } from "@/lib/audio-lifecycle";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { ScoreListScreen } from "@/components/ScoreListScreen";
 import { ScoreEditorScreen } from "@/components/ScoreEditorScreen";
@@ -76,7 +77,7 @@ export function MetronomeScreenUI(props: Props) {
     settingsReturnModalRef, stemSepReturnModalRef, featureStartRef, practiceStartRef,
     handleNoteTogglePlayRef, clickPCMCacheRef,
     bpm, beatsPerMeasure, beatDenominator, beatTypes, subdivisionPattern, beatSubdivisions,
-    isPlaying, isPreparing, currentBeat, measureCount, activeSubNote, progressInfo,
+    isPlaying, isPreparing, audioLifecycle, retryAudioRecovery, currentBeat, measureCount, activeSubNote, progressInfo,
     layerProgressMap, halfTime,
     togglePlayPause, updateBpm, updateTimeSignature, handleBeatTypeChange,
     handleBeatSubdivisionChange, handleBeatDenominatorCycle, handleTapTempo,
@@ -300,6 +301,43 @@ export function MetronomeScreenUI(props: Props) {
           <Text style={{ color: C.text, fontSize: 14, fontWeight: "500" as const }}>
             {permissionRecoveryToast}
           </Text>
+        </View>
+      ) : null}
+      {audioLifecycle.phase !== "idle" && audioLifecycle.phase !== "playing" ? (
+        <View
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+          testID="audio-lifecycle-status"
+          style={{
+            position: "absolute",
+            top: insets.top + (saveFailureBannerKey ? 60 : 12),
+            left: 16,
+            right: 16,
+            zIndex: 10000,
+            backgroundColor: audioLifecycle.phase === "recoveryFailed" ? C.accent : C.surface,
+            borderRadius: 12,
+            paddingVertical: 10,
+            paddingHorizontal: 14,
+            borderWidth: 1,
+            borderColor: C.border,
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <Text style={{ color: audioLifecycle.phase === "recoveryFailed" ? onAccentColor(C.accent) : C.text, fontSize: 14, fontWeight: "600" as const }}>
+            {t("main", `audioStatus${audioLifecycle.phase[0].toUpperCase()}${audioLifecycle.phase.slice(1)}` as any)}
+          </Text>
+          {audioLifecycle.phase === "recoveryFailed" ? (
+            <Pressable
+              onPress={() => void retryAudioRecovery()}
+              accessibilityRole="button"
+              accessibilityLabel={t("main", "audioRecoveryRetry")}
+              testID="audio-recovery-retry"
+              style={{ backgroundColor: C.surface, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 }}
+            >
+              <Text style={{ color: C.text, fontWeight: "700" as const }}>{t("main", "audioRecoveryRetry")}</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
       <LinearGradient
@@ -534,6 +572,7 @@ export function MetronomeScreenUI(props: Props) {
           const modeLabel = barModeRef.current ? "Bar" : "Dial";
           showPlayingNotification(bpm, modeLabel, languageRef.current);
           engine.start();
+          markAudioPlaying();
         }}
       />
 
@@ -550,6 +589,7 @@ export function MetronomeScreenUI(props: Props) {
             resetPlaybackVisuals();
             setIsPlaying(true);
             engine.start({ startAtPerformanceTime });
+            markAudioPlaying();
           }}
         />
       )}
@@ -1338,6 +1378,8 @@ export function MetronomeScreenUI(props: Props) {
         activeSubNote={activeSubNote}
         progressInfo={progressInfo}
         isPlaying={isPlaying}
+        audioLifecycle={audioLifecycle}
+        onRetryAudioRecovery={() => void retryAudioRecovery()}
         flashMode={flashMode}
         hapticMode={hapticMode}
         onPlayPause={() => void togglePlayPauseRef.current?.()}

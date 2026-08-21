@@ -1,8 +1,8 @@
 # 전화·알람 인터럽션 처리 검증 결과
 
-**작성일**: 2026-05-04  
+**작성일**: 2026-08-21  
 **관련 파일**: `lib/audio-session.ts`, `app/_layout.tsx`  
-**단위 테스트**: `tests/audio-session.test.ts` (25/25 pass)
+**단위 테스트**: `tests/audio-session.test.ts` 및 `tests/audio-lifecycle.test.ts` (33/33 pass)
 
 ---
 
@@ -11,12 +11,12 @@
 실제 iOS/Android 기기에서 직접 테스트하는 것이 이상적이나, Replit 환경에서는 물리
 기기 접근이 불가하다. 따라서 다음 두 계층으로 검증을 완료했다.
 
-1. **단위 테스트 (완전 자동화)** — 25개 시나리오를 JS 레벨에서 검증
+1. **단위 테스트 (완전 자동화)** — 33개 시나리오를 JS 레벨에서 검증
 2. **코드 리뷰 기반 정적 분석** — AppState 연동, 플랫폼별 분기, 엣지 케이스 검토
 
 ---
 
-## 단위 테스트 결과 (25/25 pass)
+## 단위 테스트 결과 (33/33 pass)
 
 실행 명령:
 
@@ -94,21 +94,44 @@ Expo Go / 개발 빌드 콘솔에서 다음 로그 시퀀스를 확인:
 ## Android 동작 및 한계
 
 ### 메커니즘
-`interruptStates`를 `["background", "inactive"]`로 설정해 두 가지 모두를 인터럽션으로 처리.
+Android는 우선 `initAndroidFocusCallbacks`의 expo-audio 상태 프로브 또는 커스텀
+네이티브 interruption listener로 오디오 포커스 손실/복귀를 감지한다. AppState는
+`inactive`만 보조 경로로 사용한다. 사용자가 홈 화면으로 이동한 `'background'`는
+인터럽션으로 처리하지 않으므로, 의도적인 백그라운드 재생을 잘못 pause/resume하지 않는다.
 
 ### 알려진 한계
 
 | 한계 | 원인 | 영향 |
 |------|------|------|
-| `'inactive'`가 거의 발생하지 않음 | Android AppState 구현 특성 | 전화 수신 신호가 `'background'`로 오거나 아예 없을 수 있음 |
-| 사용자 홈 버튼과 OS 인터럽션 구분 불가 | AppState만으로는 두 경우 모두 `'background'` | 사용자가 홈 버튼 후 돌아오면 메트로놈이 자동 재개될 수 있음 |
+| expo-audio 상태 이벤트가 기기별로 제한될 수 있음 | Expo Go/제조사 오디오 구현 차이 | 네이티브 listener 없는 빌드에서는 일부 포커스 변화가 감지되지 않을 수 있음 |
+| `'inactive'`가 거의 발생하지 않음 | Android AppState 구현 특성 | AppState는 보조 신호이며 AudioFocus 경로를 대체하지 않음 |
 | Foreground Service 미구성 | 백그라운드 오디오 공식 지원 없음 | 백그라운드 전환 시 OS가 오디오를 강제 중단함 — AppState 인터럽션 처리와 무관 |
-| AudioFocus 콜백 미구독 | `expo-audio`가 JS 레벨 AudioFocus 콜백 미노출 | 전화 수신 외에도 다른 앱의 오디오 포커스 요청에 반응하지 못할 수 있음 |
+| 커스텀 listener는 개발 빌드 필요 | Expo Go에서 네이티브 모듈을 포함할 수 없음 | Expo Go에서는 expo-audio 프로브와 AppState 보조 경로로만 검증 |
 
 ### 정공법 (후속 작업 #88 참고)
 Android `AudioManager.OnAudioFocusChangeListener`를 Expo Module(네이티브 레이어)로
 직접 구독하면 `'background'` 없이도 오디오 포커스 변화를 정확히 감지할 수 있다.
 현재 AppState 방식은 Expo Go 환경에서 네이티브 모듈 없이 동작하는 최선의 근사다.
+
+---
+
+## 오디오 복구 상태와 실제 기기 검증 체크리스트
+
+화면과 무대 화면은 준비 중, 인터럽션, 복구 중, 복구 실패 상태를 동일하게 표시한다.
+복구 실패는 사라지지 않는 안내와 **다시 시작** 버튼을 제공하며, 버튼은 렌더링 오디오와
+엔진을 정리한 뒤 새 재생 준비를 시도한다. 자동 재개를 사용하지 않거나 사용자가 직접
+정지한 경우에는 자동 재개를 시작하지 않는다.
+
+| 플랫폼 | 빌드 | 절차 | 예상 결과 | 실제 결과 |
+|---|---|---|---|---|
+| iOS | 개발 빌드 | 재생 → 전화/알람/Siri → 복귀 | interrupted → recovering → playing, 음성·알림이 끝난 뒤 한 번만 재개 | 물리 기기 확인 필요 |
+| iOS | 개발 빌드 | 재생 → 인터럽션 중 수동 Pause → 복귀 | 재생을 다시 시작하지 않음 | 물리 기기 확인 필요 |
+| Android | 커스텀 개발 빌드 | 재생 → 다른 앱이 AudioFocus 요청 → 복귀 | 포커스 손실 시 pause, gain 시 설정에 따라 재개 | 물리 기기 확인 필요 |
+| Android | Expo Go | 재생 → 홈 → 복귀 | background만으로는 pause/resume하지 않음 | 물리 기기 확인 필요 |
+| Android/iOS | 개발 빌드 | 재생 중 오디오 경로를 강제로 중단 | recovering 표시 후 성공 시 playing, 두 번 실패 시 재시작 버튼 표시 | 물리 기기 확인 필요 |
+
+실행 가능한 확인 기록: 기기 콘솔에서 `[audioSession] interruption begin/end`와
+`[androidFocus]` 로그를 확인하고, 화면의 상태 문구가 위 전이와 일치하는지 기록한다.
 
 ---
 
@@ -120,10 +143,10 @@ Android `AudioManager.OnAudioFocusChangeListener`를 Expo Module(네이티브 �
 | `notifyInterruptionEnd` 사용자 의도 존중 | ✅ |
 | 모달 + 인터럽션 중첩 처리 | ✅ |
 | iOS `'inactive'` → `'active'` 연동 | ✅ |
-| Android `'background'`/`'inactive'` 인터럽션 근사 | ✅ (한계 있음) |
+| Android AudioFocus + `'inactive'` 보조 경로 | ✅ (기기별 검증 필요) |
 | `suppressUserToggle` 재진입 방어 | ✅ |
 | bridge 등록 전 인터럽션 방어 | ✅ |
-| 단위 테스트 커버리지 | ✅ 25/25 pass |
+| 단위 테스트 커버리지 | ✅ 33/33 pass |
 
 ---
 
