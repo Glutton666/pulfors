@@ -33,6 +33,8 @@ export interface ImportBackupResult {
   errorCode?: ImportBackupErrorCode;
   /** Zod가 파싱 단계에서 감지한 필드별 오류 설명. 사용자에게 표시 가능. */
   validationDetail?: string;
+  /** 쓰기 실패 뒤 원래 데이터를 되돌렸는지, 다음 실행 때 복구해야 하는지. */
+  recoveryStatus?: "rolled_back" | "rollback_pending";
 }
 
 /** score 인덱스에서 모든 개별 악보 키를 동적으로 수집한다 */
@@ -165,6 +167,17 @@ export async function restoreFromJson(
     // 이전 복원이 끝날 때까지 기다린 뒤 우리 차례로 재진입.
     try { await restoreInFlight; } catch {}
   }
+  // 이전 복원이 끝까지 롤백되지 않았다면 유일한 원본 스냅샷을 절대 덮어쓰지
+  // 않는다. 앱 시작 시 자동 복구가 먼저 이를 적용할 때까지 새 복원을 막는다.
+  try {
+    if (await AsyncStorage.getItem(RESTORE_SNAPSHOT_KEY)) {
+      logger.warn("[Backup] Restore blocked while a prior rollback is pending");
+      return { success: false, keyCount: 0, errorCode: "io", recoveryStatus: "rollback_pending" };
+    }
+  } catch (e) {
+    logger.warn("[Backup] Could not check pending restore state:", e);
+    return { success: false, keyCount: 0, errorCode: "io" };
+  }
   const p = restoreFromJsonInternal(json);
   restoreInFlight = p;
   try {
@@ -237,15 +250,22 @@ async function restoreFromJsonInternal(
       }
     }
 
-    // 트랜잭션: 기존 ALL_KEYS 값을 스냅샷에 저장한 뒤 multiRemove + multiSet을
+    // 트랜잭션: 기존의 정적 키뿐 아니라 현재/새 백업에 들어있는 개별 악보 키도
+    // 함께 다룬다. 그렇지 않으면 부분 실패 시 악보 인덱스와 실제 문서가 서로
+    // 다른 세대로 남을 수 있다.
+    const existingScoreKeys = await collectScoreKeys();
+    const incomingScoreKeys = Object.keys(data).filter((key) => key.startsWith(SCORE_KEY_PREFIX));
+    const restoreKeys = [...new Set([...ALL_KEYS, ...existingScoreKeys, ...incomingScoreKeys])];
+
+    // 트랜잭션: 기존 restoreKeys 값을 스냅샷에 저장한 뒤 multiRemove + multiSet을
     // 시도한다. 어느 단계에서 실패하거나 앱이 강제 종료되더라도 스냅샷이
     // 남아 부팅 시 rollbackPendingRestoreIfAny()로 자동 복구할 수 있다.
     let snapshotJson: string;
     try {
-      const snapshotPairs = await AsyncStorage.multiGet(ALL_KEYS);
+      const snapshotPairs = await AsyncStorage.multiGet(restoreKeys);
       const snapshotObj: Record<string, string | null> = {};
       for (const [k, v] of snapshotPairs) snapshotObj[k] = v;
-      snapshotJson = JSON.stringify(snapshotObj);
+      snapshotJson = JSON.stringify({ keys: restoreKeys, data: snapshotObj });
       await AsyncStorage.setItem(RESTORE_SNAPSHOT_KEY, snapshotJson);
     } catch (e) {
       logger.warn("[Backup] Snapshot before restore failed:", e);
@@ -254,7 +274,7 @@ async function restoreFromJsonInternal(
     }
 
     try {
-      await AsyncStorage.multiRemove(ALL_KEYS);
+      await AsyncStorage.multiRemove(restoreKeys);
       if (pairs.length > 0) {
         await AsyncStorage.multiSet(pairs);
       }
@@ -266,6 +286,7 @@ async function restoreFromJsonInternal(
       try {
         await applyRestoreSnapshot(snapshotJson);
         await AsyncStorage.removeItem(RESTORE_SNAPSHOT_KEY);
+        return { success: false, keyCount: 0, errorCode: "io", recoveryStatus: "rolled_back" };
       } catch (rollbackErr) {
         // 롤백도 실패한 경우 — 스냅샷 키는 남겨 다음 부팅에서 재시도하도록 한다.
         logger.warn("[Backup] Rollback also failed, snapshot retained for boot recovery:", rollbackErr);
@@ -276,7 +297,7 @@ async function restoreFromJsonInternal(
           data: { error: String(rollbackErr) },
         });
       }
-      return { success: false, keyCount: 0, errorCode: "io" };
+      return { success: false, keyCount: 0, errorCode: "io", recoveryStatus: "rollback_pending" };
     }
   } catch (e) {
     logger.warn("[Backup] Restore error:", e);
@@ -297,18 +318,28 @@ class SnapshotCorruptError extends Error {
 // 스냅샷 JSON으로 ALL_KEYS를 덮어쓴다. 손상/누락된 키는 조용히 건너뛴다.
 // 파싱/모양 검증 실패는 SnapshotCorruptError로, I/O 실패는 원본 에러로 던진다.
 async function applyRestoreSnapshot(json: string): Promise<void> {
-  let obj: Record<string, unknown>;
+  let parsed: unknown;
   try {
-    obj = JSON.parse(json);
+    parsed = JSON.parse(json);
   } catch {
     throw new SnapshotCorruptError("Snapshot JSON parse failed");
   }
-  if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new SnapshotCorruptError("Snapshot shape invalid");
   }
-  await AsyncStorage.multiRemove(ALL_KEYS);
+  const raw = parsed as Record<string, unknown>;
+  // v1 스냅샷은 값만 저장했다. 기존 백업을 안전하게 복구할 수 있도록 읽기
+  // 호환성을 유지한다.
+  const isScopedSnapshot = Array.isArray(raw.keys) && raw.data && typeof raw.data === "object" && !Array.isArray(raw.data);
+  const obj = (isScopedSnapshot ? raw.data : raw) as Record<string, unknown>;
+  const scopedKeys = Array.isArray(raw.keys) ? raw.keys : [];
+  const keys = isScopedSnapshot
+    ? scopedKeys.filter((key): key is string => typeof key === "string")
+    : ALL_KEYS;
+  if (keys.length === 0) throw new SnapshotCorruptError("Snapshot keys invalid");
+  await AsyncStorage.multiRemove(keys);
   const pairs: [string, string][] = [];
-  for (const key of ALL_KEYS) {
+  for (const key of keys) {
     const v = obj[key];
     if (typeof v === "string") pairs.push([key, v]);
   }

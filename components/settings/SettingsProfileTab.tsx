@@ -102,6 +102,41 @@ export function SettingsProfileTab({
     setAddingRoom(false);
   }, [newRoomName, t]);
 
+  const showRestoreResult = useCallback(async () => {
+    const { importBackup } = await import("@/lib/backup");
+    const result = await importBackup();
+    if (result.success) {
+      Alert.alert(t("settings", "complete"), t("settings", "restoreSuccess"), [{
+        text: "OK",
+        onPress: async () => {
+          if (Platform.OS === "web") window.location.reload();
+          else {
+            const { reloadAppAsync } = await import("expo");
+            await reloadAppAsync();
+          }
+        },
+      }]);
+      return;
+    }
+    const msgKey = result.errorCode === "unsupported_version"
+      ? "restoreUnsupportedVersion"
+      : result.recoveryStatus === "rolled_back"
+        ? "restoreRolledBack"
+        : result.recoveryStatus === "rollback_pending"
+          ? "restoreRecoveryPending"
+          : "restoreFail";
+    const detail = result.validationDetail
+      ? `\n\n${t("settings", "restoreInvalidDetail")}: ${result.validationDetail}`
+      : "";
+    const actions = result.recoveryStatus === "rollback_pending"
+      ? [{ text: t("settings", "complete") }]
+      : [
+          { text: t("settings", "cancel"), style: "cancel" as const },
+          { text: t("settings", "restoreRetry"), onPress: () => { void showRestoreResult(); } },
+        ];
+    Alert.alert(t("settings", "error"), t("settings", msgKey) + detail, actions);
+  }, [t]);
+
   const handleDeleteRoom = useCallback(async (id: string) => {
     await deletePracticeRoom(id);
     setPracticeRooms((prev) => prev.filter((r) => r.id !== id));
@@ -314,35 +349,7 @@ export function SettingsProfileTab({
                   {
                     text: t("settings", "restoreConfirm"),
                     style: "destructive",
-                    onPress: async () => {
-                      const { importBackup } = await import("@/lib/backup");
-                      const result = await importBackup();
-                      if (result.success) {
-                        Alert.alert(
-                          t("settings", "complete"),
-                          t("settings", "restoreSuccess"),
-                          [{
-                            text: "OK",
-                            onPress: async () => {
-                              if (Platform.OS === "web") {
-                                window.location.reload();
-                              } else {
-                                const { reloadAppAsync } = await import("expo");
-                                await reloadAppAsync();
-                              }
-                            },
-                          }]
-                        );
-                      } else {
-                        const msgKey = result.errorCode === "unsupported_version"
-                          ? "restoreUnsupportedVersion"
-                          : "restoreFail";
-                        const detail = result.validationDetail
-                          ? `\n\n${t("settings", "restoreInvalidDetail")}: ${result.validationDetail}`
-                          : "";
-                        Alert.alert(t("settings", "error"), t("settings", msgKey) + detail);
-                      }
-                    },
+                    onPress: () => { void showRestoreResult(); },
                   },
                 ]
               );

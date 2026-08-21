@@ -53,6 +53,7 @@ test("실패 경로: multiSet 실패 시 기존 데이터로 롤백", async () =
     const r = await restoreFromJson(json);
     assert.equal(r.success, false);
     assert.equal(r.errorCode, "io");
+    assert.equal(r.recoveryStatus, "rolled_back");
     // 원본이 복구되었는지 확인
     const s = JSON.parse(await AsyncStorage.getItem("metronome_settings"));
     assert.equal(s.bpm, 77);
@@ -63,6 +64,96 @@ test("실패 경로: multiSet 실패 시 기존 데이터로 롤백", async () =
   } finally {
     AsyncStorage.multiSet = original;
   }
+});
+
+test("복원 성공: 이전 개별 악보 키를 함께 교체해 오래된 문서가 남지 않음", async () => {
+  await AsyncStorage.setItem("metronome_scores_v1", JSON.stringify(["old-score"]));
+  await AsyncStorage.setItem("metronome_score_old-score", JSON.stringify({ id: "old-score" }));
+  const json = makeBackupJson({
+    metronome_scores_v1: JSON.stringify(["new-score"]),
+    "metronome_score_new-score": JSON.stringify({ id: "new-score" }),
+  });
+  const result = await restoreFromJson(json);
+  assert.equal(result.success, true);
+  assert.equal(await AsyncStorage.getItem("metronome_score_old-score"), null);
+  assert.equal(await AsyncStorage.getItem("metronome_score_new-score"), JSON.stringify({ id: "new-score" }));
+});
+
+test("부분 쓰기 실패: 개별 악보를 포함한 이전 데이터가 모두 롤백됨", async () => {
+  await AsyncStorage.setItem("metronome_settings", JSON.stringify({ bpm: 77 }));
+  await AsyncStorage.setItem("metronome_scores_v1", JSON.stringify(["old-score"]));
+  await AsyncStorage.setItem("metronome_score_old-score", JSON.stringify({ id: "old-score" }));
+  const original = AsyncStorage.multiSet;
+  let calls = 0;
+  AsyncStorage.multiSet = async (pairs: [string, string][]) => {
+    calls++;
+    if (calls === 1) {
+      await original.call(AsyncStorage, pairs.slice(0, 1));
+      throw new Error("simulated partial write");
+    }
+    return original.call(AsyncStorage, pairs);
+  };
+  try {
+    const result = await restoreFromJson(makeBackupJson({
+      metronome_settings: JSON.stringify({ bpm: 200 }),
+      metronome_scores_v1: JSON.stringify(["new-score"]),
+      "metronome_score_new-score": JSON.stringify({ id: "new-score" }),
+    }));
+    assert.equal(result.success, false);
+    assert.equal(result.recoveryStatus, "rolled_back");
+    assert.equal(await AsyncStorage.getItem("metronome_settings"), JSON.stringify({ bpm: 77 }));
+    assert.equal(await AsyncStorage.getItem("metronome_score_old-score"), JSON.stringify({ id: "old-score" }));
+    assert.equal(await AsyncStorage.getItem("metronome_score_new-score"), null);
+    assert.equal(await AsyncStorage.getItem(RESTORE_SNAPSHOT_KEY), null);
+  } finally {
+    AsyncStorage.multiSet = original;
+  }
+});
+
+test("롤백도 실패하면 스냅샷을 보존하고 안전 복구 상태를 반환", async () => {
+  await AsyncStorage.setItem("metronome_settings", JSON.stringify({ bpm: 77 }));
+  const original = AsyncStorage.multiSet;
+  AsyncStorage.multiSet = async () => { throw new Error("simulated persistent I/O"); };
+  try {
+    const result = await restoreFromJson(makeBackupJson({ metronome_settings: JSON.stringify({ bpm: 200 }) }));
+    assert.equal(result.success, false);
+    assert.equal(result.recoveryStatus, "rollback_pending");
+    assert.notEqual(await AsyncStorage.getItem(RESTORE_SNAPSHOT_KEY), null);
+  } finally {
+    AsyncStorage.multiSet = original;
+  }
+});
+
+test("보류된 롤백이 있으면 새 복원이 원본 스냅샷을 덮어쓰지 않음", async () => {
+  const originalSnapshot = JSON.stringify({
+    keys: ["metronome_settings"],
+    data: { metronome_settings: JSON.stringify({ bpm: 77 }) },
+  });
+  await AsyncStorage.setItem(RESTORE_SNAPSHOT_KEY, originalSnapshot);
+  await AsyncStorage.setItem("metronome_settings", JSON.stringify({ bpm: 999 }));
+  const result = await restoreFromJson(makeBackupJson({ metronome_settings: JSON.stringify({ bpm: 200 }) }));
+  assert.equal(result.success, false);
+  assert.equal(result.recoveryStatus, "rollback_pending");
+  assert.equal(await AsyncStorage.getItem(RESTORE_SNAPSHOT_KEY), originalSnapshot);
+  assert.equal(await AsyncStorage.getItem("metronome_settings"), JSON.stringify({ bpm: 999 }));
+});
+
+test("부팅 복구: 범위가 지정된 스냅샷은 이전 개별 악보를 되돌리고 새 악보를 제거", async () => {
+  const snapshot = JSON.stringify({
+    keys: ["metronome_scores_v1", "metronome_score_old-score", "metronome_score_new-score"],
+    data: {
+      metronome_scores_v1: JSON.stringify(["old-score"]),
+      "metronome_score_old-score": JSON.stringify({ id: "old-score" }),
+      "metronome_score_new-score": null,
+    },
+  });
+  await AsyncStorage.setItem("metronome_scores_v1", JSON.stringify(["new-score"]));
+  await AsyncStorage.setItem("metronome_score_new-score", JSON.stringify({ id: "new-score" }));
+  await AsyncStorage.setItem(RESTORE_SNAPSHOT_KEY, snapshot);
+  assert.equal(await rollbackPendingRestoreIfAny(), true);
+  assert.equal(await AsyncStorage.getItem("metronome_score_old-score"), JSON.stringify({ id: "old-score" }));
+  assert.equal(await AsyncStorage.getItem("metronome_score_new-score"), null);
+  assert.equal(await AsyncStorage.getItem(RESTORE_SNAPSHOT_KEY), null);
 });
 
 test("부팅 복구: 스냅샷 키가 남아 있으면 자동 롤백", async () => {
