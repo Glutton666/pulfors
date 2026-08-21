@@ -27,3 +27,4 @@
 - [Settings retry notifications](settings-retry-notifications.md) — automatic settings-write retries must own a nonblocking warning, not trigger a modal storage alert per attempt.
 - [Abortable audio export](abortable-audio-export.md) — long export work must yield with AbortSignal checks; cache outputs need per-export ownership to make stale cleanup safe.
 - [Note-sample persistence retries](note-sample-persistence-retries.md) — retrying last-write-wins saves need versioned waiter settlement, not a single shared resolver queue.
+- [Subdivision web shake tracking](subdivision-web-shake-tracking.md) — cumulative gesture displacement needs a zero seed; capture web starts at document level, not a View ref.

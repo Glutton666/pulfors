@@ -28,6 +28,7 @@ import type { BeatType } from "@/lib/metronome-engine";
 import { pureGetSubPattern } from "@/lib/metronome-engine-pure";
 import { accentGradientEdge, onAccentColor, onAccentShadow } from "@/lib/color-contrast";
 import {
+  beginShakeTracking,
   createShakeTracker,
   resetShakeTracker,
   trackSubdivisionShake,
@@ -211,7 +212,7 @@ export function SubdivisionBar({
       onPanResponderGrant: () => {
         isDraggingUpRef.current = false;
         horizontalTriggeredRef.current = false;
-        resetShakeTracker(shakeTrackerRef.current);
+        beginShakeTracking(shakeTrackerRef.current);
       },
       onPanResponderMove: (e, gs) => {
         if (isDraggingUpRef.current) {
@@ -268,7 +269,6 @@ export function SubdivisionBar({
     })
   ).current;
 
-  const webContainerRef = useRef<View>(null);
   const webGestureRef = useRef({
     isDown: false,
     startX: 0,
@@ -279,10 +279,16 @@ export function SubdivisionBar({
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
-    const node = webContainerRef.current as unknown as HTMLElement;
-    if (!node?.addEventListener) return;
 
     const handleDown = (e: PointerEvent) => {
+      const target = e.target;
+      if (
+        !(target instanceof Element) ||
+        !target.closest('[data-testid="subdivision-gesture-wrapper"]')
+      ) {
+        return;
+      }
+
       webGestureRef.current = {
         isDown: true,
         startX: e.clientX,
@@ -290,7 +296,7 @@ export function SubdivisionBar({
         isDraggingUp: false,
         horizontalTriggered: false,
       };
-      resetShakeTracker(shakeTrackerRef.current);
+      beginShakeTracking(shakeTrackerRef.current);
     };
 
     const handleMove = (e: PointerEvent) => {
@@ -348,12 +354,12 @@ export function SubdivisionBar({
       resetShakeTracker(shakeTrackerRef.current);
     };
 
-    node.addEventListener("pointerdown", handleDown, true);
+    document.addEventListener("pointerdown", handleDown, true);
     document.addEventListener("pointermove", handleMove);
     document.addEventListener("pointerup", handleUp);
 
     return () => {
-      node.removeEventListener("pointerdown", handleDown, true);
+      document.removeEventListener("pointerdown", handleDown, true);
       document.removeEventListener("pointermove", handleMove);
       document.removeEventListener("pointerup", handleUp);
     };
@@ -394,7 +400,11 @@ export function SubdivisionBar({
 
   return (
     <>
-    <View ref={webContainerRef} style={styles.gestureWrapper} {...nativePanHandlers}>
+    <View
+      testID="subdivision-gesture-wrapper"
+      style={styles.gestureWrapper}
+      {...nativePanHandlers}
+    >
     <Animated.View
       style={[styles.wrapper, shakeAnimStyle]}
       onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
@@ -594,6 +604,7 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     width: "100%",
     cursor: "grab" as any,
     userSelect: "none" as any,
+    touchAction: "none" as any,
   },
   wrapper: {
     flexDirection: "row",

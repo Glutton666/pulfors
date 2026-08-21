@@ -25,6 +25,15 @@ export function resetShakeTracker(state: ShakeTrackerState): void {
 }
 
 /**
+ * Starts a gesture measured as displacement from its own starting point.
+ * Seeding zero makes the first meaningful left/right move establish direction.
+ */
+export function beginShakeTracking(state: ShakeTrackerState): void {
+  resetShakeTracker(state);
+  state.lastPosition = 0;
+}
+
+/**
  * Updates a tracker with the current horizontal position.
  *
  * The gesture event's dx is measured from the beginning of the gesture, so its

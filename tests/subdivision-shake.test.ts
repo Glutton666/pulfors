@@ -1,4 +1,5 @@
 import {
+  beginShakeTracking,
   createShakeTracker,
   resetShakeTracker,
   trackSubdivisionShake,
@@ -7,7 +8,8 @@ import {
 describe("subdivision shake detection", () => {
   it("counts reversals from consecutive movement, not the gesture start point", () => {
     const tracker = createShakeTracker();
-    const positions = [0, -35, -10, -30, -5, -25, 0, -20, 5];
+    beginShakeTracking(tracker);
+    const positions = [-35, -10, -30, -5, -25, 0, -20, 5];
 
     const didReset = positions.some((position, index) =>
       trackSubdivisionShake(tracker, position, index * 100),
@@ -18,7 +20,8 @@ describe("subdivision shake detection", () => {
 
   it("ignores tiny movement and reversals outside the shake window", () => {
     const tracker = createShakeTracker();
-    const positions = [0, -20, -18, -20, -18, -20, -18];
+    beginShakeTracking(tracker);
+    const positions = [-20, -18, -20, -18, -20, -18];
 
     const didReset = positions.some((position, index) =>
       trackSubdivisionShake(tracker, position, index * 700),
