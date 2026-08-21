@@ -10,6 +10,7 @@ import {
   migrateBackup,
   UnsupportedBackupVersionError,
 } from "../lib/backup/migrations";
+import * as backupMigrations from "../lib/backup/migrations";
 import type { BackupFile } from "../lib/backup/shared";
 import { restoreFromJson } from "../lib/backup/full";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -153,6 +154,43 @@ test("[import] 정상 v1 백업은 라운드트립으로 데이터를 복원하�
   // AsyncStorage에 실제로 저장된 값 확인
   const stored = await AsyncStorage.getItem("metronome_settings");
   assert.equal(stored, settings);
+});
+
+test("[import] v0 백업은 restoreFromJson의 migration chain을 거쳐 모든 저장 키를 복원한다", async () => {
+  await (AsyncStorage as unknown as { __reset: () => void }).__reset();
+  const data = {
+    metronome_settings: JSON.stringify({ bpm: 143, beatsPerMeasure: 7 }),
+    practice_book: JSON.stringify([{ id: "legacy-entry", label: "Legacy", bpm: 90 }]),
+    "@note_samples": JSON.stringify({ "0-0": "file:///legacy.wav" }),
+    "@note_sample_names": JSON.stringify({ "0-0": "legacy click" }),
+    "@note_sample_channels": JSON.stringify({ "0-0": "left" }),
+  };
+  const legacy: BackupFile = {
+    _meta: {
+      app: "metronome",
+      version: 1,
+      createdAt: "2025-01-01T00:00:00.000Z",
+      keyCount: Object.keys(data).length,
+    },
+    schemaVersion: 0,
+    data,
+  };
+  const migrateSpy = jest.spyOn(backupMigrations, "migrateBackup");
+  try {
+    const result = await restoreFromJson(JSON.stringify(legacy));
+
+    assert.equal(result.success, true);
+    assert.equal(result.keyCount, Object.keys(data).length);
+    for (const [key, value] of Object.entries(data)) {
+      assert.equal(await AsyncStorage.getItem(key), value, `${key} restored after migration`);
+    }
+    assert.equal(migrateSpy.mock.calls.length, 1, "restore invokes the migration chain once");
+    const migration = migrateSpy.mock.results[0]?.value;
+    assert.equal(migration.fromVersion, 0, "restore starts at legacy schema v0");
+    assert.equal(migration.toVersion, CURRENT_SCHEMA_VERSION, "restore migrates to the current schema");
+  } finally {
+    migrateSpy.mockRestore();
+  }
 });
 
 test("[migrate] 빈 data 객체도 마이그레이션 체인을 통과한다", () => {
