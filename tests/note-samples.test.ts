@@ -261,6 +261,52 @@ test("saveNoteSamples: 늦게 실패하는 in-flight write 도중 도착한 호�
   }
 });
 
+test("saveNoteSamples: 일시적 setItem 실패는 백오프 재시도 후 마지막 값을 저장한다", async () => {
+  const original = AsyncStorage.setItem;
+  let calls = 0;
+  AsyncStorage.setItem = async (key: string, value: string) => {
+    if (key === "@note_samples") {
+      calls++;
+      if (calls < 3) throw new Error("temporary IO failure");
+    }
+    return original(key, value);
+  };
+  try {
+    await saveNoteSamples({ "0-0": "eventual" });
+    assert.equal(calls, 3, "two failed attempts followed by one successful retry");
+    assert.deepEqual(await loadNoteSamples(), { "0-0": "eventual" });
+  } finally {
+    AsyncStorage.setItem = original;
+  }
+});
+
+test("saveNoteSamples: 모든 재시도 실패 뒤 다음 호출은 새 cycle로 저장한다", async () => {
+  const original = AsyncStorage.setItem;
+  let failuresLeft = 3;
+  let calls = 0;
+  AsyncStorage.setItem = async (key: string, value: string) => {
+    if (key === "@note_samples") {
+      calls++;
+      if (failuresLeft > 0) {
+        failuresLeft--;
+        throw new Error("temporary IO failure");
+      }
+    }
+    return original(key, value);
+  };
+  try {
+    // Public save helpers intentionally absorb a fully failed cycle; the
+    // important guarantee is that the subsequent user change opens a new one.
+    await saveNoteSamples({ "0-0": "lost" });
+    assert.equal(calls, 3, "first cycle exhausts all retries");
+    await saveNoteSamples({ "0-0": "recovered" });
+    assert.equal(calls, 4, "next call starts a fresh cycle");
+    assert.deepEqual(await loadNoteSamples(), { "0-0": "recovered" });
+  } finally {
+    AsyncStorage.setItem = original;
+  }
+});
+
 test("saveNoteSamples: 서로 다른 호출자 모두 resolve된다", async () => {
   let resolved = 0;
   const promises = Array.from({ length: 30 }, (_, i) =>

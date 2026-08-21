@@ -25,6 +25,8 @@ export interface PersistRetryOptions {
   maxAttempts?: number;
   /** Base backoff in milliseconds; doubled per attempt. Default 500. */
   baseDelayMs?: number;
+  /** Called once when a cycle exhausts every attempt. */
+  onCycleFailed?: (error: unknown) => void;
 }
 
 export interface PersisterStatus {
@@ -136,6 +138,11 @@ export function createDebouncedPersister<T extends object>(
         }, delay);
       } else {
         cycleFailed = true;
+        try {
+          retry.onCycleFailed?.(err);
+        } catch {
+          // Failure observers must never interfere with persister recovery.
+        }
         if (typeof __DEV__ !== "undefined" && __DEV__) {
           // eslint-disable-next-line no-console
           console.warn(

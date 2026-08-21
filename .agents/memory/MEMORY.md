@@ -25,3 +25,4 @@
 - [Stage mode overlay wrapper](stage-mode-overlay-wrapper.md) — modeSlideStyle wrappers need absoluteFillObject or the overlay renders at 0×0; also add pointerEvents="box-none" so transparent wrapper doesn't block touches.
 - [Settings retry notifications](settings-retry-notifications.md) — automatic settings-write retries must own a nonblocking warning, not trigger a modal storage alert per attempt.
 - [Abortable audio export](abortable-audio-export.md) — long export work must yield with AbortSignal checks; cache outputs need per-export ownership to make stale cleanup safe.
+- [Note-sample persistence retries](note-sample-persistence-retries.md) — retrying last-write-wins saves need versioned waiter settlement, not a single shared resolver queue.
