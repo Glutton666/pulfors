@@ -641,6 +641,62 @@ export async function ensureWebClickBuffers(
   }
 }
 
+export interface ScheduledWebAudio {
+  cancel: () => void;
+  onEnded?: (listener: () => void) => void;
+}
+
+/**
+ * Schedule a built-in click on the Web Audio clock.
+ *
+ * Unlike playWebClick, this function deliberately does not resume the
+ * AudioContext. Callers should unlock audio from a user gesture before
+ * scheduling. `when` is an AudioContext time, not a wall-clock timestamp.
+ */
+export function scheduleWebClickAt(
+  role: "strong" | "high" | "low",
+  channel: MetroChannel = "both",
+  gain: number = 1.0,
+  when?: number,
+): ScheduledWebAudio | null {
+  if (channel === "off" || Platform.OS !== "web" || !webClickBuffers) return null;
+  const ctx = getSharedAudioContext();
+  if (!ctx) return null;
+  const buffer = webClickBuffers[role];
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  const gainNode = ctx.createGain();
+  gainNode.gain.value = Math.max(0, Math.min(2, gain));
+  source.connect(gainNode);
+  if (channel !== "both" && hasStereoPanner(ctx)) {
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = channel === "left" ? -1 : 1;
+    gainNode.connect(panner);
+    panner.connect(ctx.destination);
+  } else {
+    gainNode.connect(ctx.destination);
+  }
+  const startAt = Math.max(ctx.currentTime, when ?? ctx.currentTime);
+  source.start(startAt);
+  let cancelled = false;
+  let endedListener: (() => void) | null = null;
+  source.onended = () => {
+    endedListener?.();
+    try { source.disconnect(); } catch {}
+    try { gainNode.disconnect(); } catch {}
+  };
+  return {
+    cancel: () => {
+      if (cancelled) return;
+      cancelled = true;
+      try { source.stop(); } catch {}
+      try { source.disconnect(); } catch {}
+      try { gainNode.disconnect(); } catch {}
+    },
+    onEnded: (listener) => { endedListener = listener; },
+  };
+}
+
 export function playWebClick(
   role: "strong" | "high" | "low",
   channel: MetroChannel = "both",
@@ -653,23 +709,7 @@ export function playWebClick(
   if (ctx.state === "suspended") {
     ctx.resume().catch(() => {});
   }
-  const buffer = webClickBuffers[role];
-  const source = ctx.createBufferSource();
-  source.buffer = buffer;
-  // GainNode로 레이어별 볼륨 적용 (gain=1.0이면 투명하게 동작)
-  const gainNode = ctx.createGain();
-  gainNode.gain.value = Math.max(0, Math.min(2, gain));
-  source.connect(gainNode);
-  if (channel !== "both" && hasStereoPanner(ctx)) {
-    const panner = ctx.createStereoPanner();
-    panner.pan.value = channel === "left" ? -1 : 1;
-    gainNode.connect(panner);
-    panner.connect(ctx.destination);
-  } else {
-    gainNode.connect(ctx.destination);
-  }
-  source.start(0);
-  return true;
+  return scheduleWebClickAt(role, channel, gain, ctx.currentTime) !== null;
 }
 
 export function clearWebClickBuffers(): void {
