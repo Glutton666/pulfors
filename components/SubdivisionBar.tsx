@@ -507,6 +507,8 @@ export function SubdivisionBar({
                 <Pressable
                   key={bt}
                   testID={`type-picker-option-${bt}`}
+                  accessibilityRole="radio"
+                  aria-checked={isSelected}
                   onPress={() => {
                     const newPattern = [...pattern];
                     newPattern[typePicker.cellIndex] = bt;

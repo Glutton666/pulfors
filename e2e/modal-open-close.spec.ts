@@ -68,7 +68,9 @@ async function openMainMenu(page: Page) {
 
 test.describe("AnimatedModal 열기/닫기", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    // Expo 웹 개발 서버의 load 이벤트는 열린 연결 때문에 끝나지 않을 수 있다.
+    // 화면 준비는 아래 testID 대기로 확인한다.
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     // 앱이 완전히 로딩될 때까지 상단 모드 레이블 대기
     await page
       .locator('[data-testid="mode-cycle-label"]')
@@ -77,16 +79,16 @@ test.describe("AnimatedModal 열기/닫기", () => {
   });
 
   test("메인 메뉴: 열기 → 항목 표시 → 다이얼로 비트 모드 복귀", async ({ page }) => {
-    const menuStemSep = page.locator('[data-testid="menu-stemSep"]');
+    const menuLab = page.locator('[data-testid="menu-lab"]');
 
-    // 초기 상태: menu-stemSep 숨겨짐
-    await expect(menuStemSep).toBeHidden();
+    // 초기 상태: Lab 항목 숨겨짐
+    await expect(menuLab).toBeHidden();
 
     // 메뉴 열기
     await openMainMenu(page);
 
-    // menu-stemSep이 visible 상태로 전환될 때까지 조건부 대기
-    await expect(menuStemSep).toBeVisible();
+    // Lab 항목이 visible 상태로 전환될 때까지 조건부 대기
+    await expect(menuLab).toBeVisible();
 
     // menuitem role 요소가 하나 이상 존재하는지 확인 (언어 독립적)
     await expect(page.getByRole("menuitem").first()).toBeVisible();
@@ -100,8 +102,8 @@ test.describe("AnimatedModal 열기/닫기", () => {
     await page.waitForTimeout(300);
     await page.mouse.click(vp.width / 2, vp.height * 0.7);
 
-    // menu-stemSep이 hidden 상태로 전환될 때까지 조건부 대기
-    await expect(menuStemSep).toBeHidden();
+    // Lab 항목이 hidden 상태로 전환될 때까지 조건부 대기
+    await expect(menuLab).toBeHidden();
   });
 
   test("설정 모달: 메뉴에서 열기 → 내용 표시 → X 버튼 닫기", async ({
@@ -141,6 +143,9 @@ test.describe("AnimatedModal 열기/닫기", () => {
 
     // 메뉴 열기
     await openMainMenu(page);
+
+    // 음원 분리는 Lab 하위 메뉴에 있다.
+    await page.locator('[data-testid="menu-lab"]').click();
 
     // 음원 분리 항목 대기 후 클릭
     await expect(stemSepItem).toBeVisible();

@@ -1,5 +1,6 @@
 - [onnxruntime-react-native new arch crash](onnxruntime-new-arch-crash.md) — v1.x uses old-arch RCTBridge; crashes on startup with newArchEnabled=true; fix via react-native.config.js null platforms.
 - [Alert.alert no-op on web](alert-web-noop.md) — react-native-web's Alert.alert is a stub that does nothing; long-press context menus using Alert.alert can't be verified via web/Playwright e2e tests.
+- [React Native Web radio state](react-native-web-radio-state.md) — use direct aria-checked for radio Pressables; accessibilityState alone may not reach DOM in RNW tests.
 - [screenshot tool hits wrong port](screenshot-tool-wrong-port.md) — app_preview screenshot tool sometimes serves the Express landing page (port 5000) instead of the real Expo web app (port 8081); retry via runTest() instead of looping the screenshot tool.
 - [Score editor magnifier must render existing notes](score-magnifier-nearby-notes.md) — MagnifierView only draws staff+ghost by default; attach nearby element data to GhostState from touchToGhost, don't recompute layout inside the magnifier.
 - [Score editor scrolling vs. tap-to-place gestures](score-editor-scroll-lock.md) — prefer gating canvas PanResponder on touch count (single vs. multi), not tool-mode-based scrollEnabled toggling, to avoid blocking wheel/trackpad scroll.

@@ -2,7 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
-  timeout: 30000,
+  // Expo 웹의 첫 Metro 번들은 CI의 깨끗한 캐시에서 30초를 넘길 수 있다.
+  timeout: process.env.CI ? 120000 : 30000,
   expect: { timeout: 8000 },
   fullyParallel: false,
   retries: 0,

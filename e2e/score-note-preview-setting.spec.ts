@@ -69,18 +69,12 @@ async function skipOnboarding(page: Page) {
 }
 
 /**
- * 메인 화면 → 모드 다이얼 → 악보 모드 → 새 악보 생성 → 악보 편집기.
+ * 메인 화면 → 모드 다이얼 → 메뉴 Lab → 악보 모드 → 새 악보 생성 → 악보 편집기.
  * 호출 후 score-editor-back 이 visible 상태가 보장된다.
  *
  * 다이얼 fan 지오메트리 (ModeSwitcherDial.tsx, hideHandle=true → top-center 고정):
- *   anchor = (winW/2, 0), centAng = 90°(아래), ANGLE_STEP = 34°, ICON_R = 104
- *   MODES  = [beat, bar, note, stage, score, practice, menu]
- *   배치는 읽기 방향: deg = 90 − offset×34° (다음 모드가 오른쪽)
- *   초기 모드 beat(idx 0) 기준 score 는 offset −3 → 호 밖(클릭 불가).
- *   → 두 단계 탭: note(+2, deg=22° → dx≈+96, dy≈+39)를 탭해 스크롤을 옮기고
- *     (탭은 확정 없이 scrollPos만 이동, 팬은 열린 채 재중앙), 다시 +2 위치(score) 탭.
- *   탭 판정: 가장 가까운 슬롯이 ICON_S(52px) 이내면 해당 슬롯 선택.
- *   이후 오버레이(fan 밖) 탭이 confirmSelection → switchToMode("score").
+ *   초기 비트 모드에서 menu 는 offset −1 → dx≈−58, dy≈+86.
+ *   menu 를 선택한 뒤 바깥 영역을 탭해 확정하고, Lab 하위 메뉴에서 악보를 선택한다.
  */
 async function navigateToScoreEditor(page: Page) {
   const viewport = page.viewportSize();
@@ -92,14 +86,18 @@ async function navigateToScoreEditor(page: Page) {
   // 팬 오픈 애니메이션 대기
   await page.waitForTimeout(400);
 
-  // note(+2) 탭으로 스크롤 이동 → score 가 +2 로 들어옴 → 다시 +2 위치 탭
-  await page.mouse.click(cx + 96, 39);
-  await page.waitForTimeout(300);
-  await page.mouse.click(cx + 96, 39);
+  // menu(−1) 선택
+  await page.mouse.click(cx - 58, 86);
   await page.waitForTimeout(300);
 
-  // 팬 밖 오버레이 탭 → 선택 확정 (confirmSelection → switchToMode("score"))
+  // 팬 밖 오버레이 탭 → 메뉴 선택 확정
   await page.mouse.click(cx, viewport.height * 0.7);
+
+  // Lab 하위 메뉴 → 악보 목록
+  await page.locator('[data-testid="menu-lab"]').waitFor({ state: "visible" });
+  await page.locator('[data-testid="menu-lab"]').click();
+  await page.locator('[data-testid="menu-score"]').waitFor({ state: "visible" });
+  await page.locator('[data-testid="menu-score"]').click();
 
   // 악보 목록이 열릴 때까지 대기 (score-list-import 는 목록 헤더에 항상 존재)
   await page
@@ -229,7 +227,9 @@ test.describe("음표 입력 미리 듣기 설정 E2E", () => {
       }
     });
 
-    await page.goto("/");
+    // Expo 웹 개발 서버의 load 이벤트는 열린 연결 때문에 끝나지 않을 수 있다.
+    // 화면 준비는 아래 testID 대기로 확인한다.
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     await page
       .locator('[data-testid="mode-cycle-label"]')
       .waitFor({ state: "visible", timeout: 20000 });

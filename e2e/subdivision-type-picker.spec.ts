@@ -6,7 +6,7 @@
  * 검증 대상:
  *   1. subdivision 셀 long-press → 타입 피커 Modal 표시 (4개 옵션 모두 렌더링)
  *   2. 4가지 beat type(normal, accent, strong, mute) 각각 선택 →
- *      피커가 닫히고, 재오픈 시 선택한 항목에만 체크마크(svg)가 표시됨
+ *      피커가 닫히고, 재오픈 시 선택한 항목만 접근성 선택 상태로 표시됨
  *   3. backdrop(overlay) 탭 → 피커 닫힘, 이전 선택 유지
  *
  * 실행:
@@ -16,8 +16,7 @@
  *   - 모든 어설션은 data-testid 기반 (locale/언어 독립적)
  *   - long-press 는 mouse.down() + waitForTimeout(450ms) + mouse.up() 으로 재현
  *     (Pressable.delayLongPress=350ms 보다 충분히 길게)
- *   - 선택 상태 검증: 선택된 옵션 안에 svg(체크마크)가 visible,
- *     선택되지 않은 옵션 안에는 svg가 없음 — toBeHidden() 또는 count()=0 확인
+ *   - 선택 상태 검증: radio 항목의 aria-checked 값으로 확인
  *   - backdrop 닫기는 overlay 좌상단 좌표 클릭 (메뉴 영역 바깥)
  *   - 모달 가시성은 waitFor(state:"visible"|"hidden") 조건부 대기
  *
@@ -67,35 +66,29 @@ async function longPressCell(page: Page, cellIndex: number) {
 }
 
 /**
- * 피커가 열린 상태에서 특정 beat type 옵션에만 체크마크 svg가 있고
- * 나머지에는 없음을 검증한다.
- *
- * Feather name="check" 는 웹에서 <svg> 로 렌더된다.
+ * 피커가 열린 상태에서 특정 beat type 옵션만 선택 상태인지 검증한다.
  */
 async function assertCheckMarkOnlyFor(page: Page, selectedType: BeatType) {
   for (const bt of BEAT_TYPES) {
-    const svgLocator = page.locator(
-      `[data-testid="type-picker-option-${bt}"] svg`
+    const option = page.locator(
+      `[data-testid="type-picker-option-${bt}"]`
     );
-    if (bt === selectedType) {
-      // 선택된 항목: 체크마크 svg가 visible 이어야 함
-      await expect(svgLocator).toBeVisible();
-    } else {
-      // 선택되지 않은 항목: svg가 없어야 함
-      const svgCount = await svgLocator.count();
-      expect(svgCount, `'${bt}' 에 체크마크가 없어야 한다`).toBe(0);
-    }
+    await expect(option).toHaveAttribute(
+      "aria-checked",
+      bt === selectedType ? "true" : "false",
+    );
   }
 }
 
 test.describe("SubdivisionBar 타입 피커", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
+    // Expo 웹 개발 서버의 load 이벤트는 열린 연결 때문에 끝나지 않을 수 있다.
+    // 화면 준비는 아래 testID 대기로 확인한다.
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     await page
-      .locator('[data-testid="menu-button"]')
+      .locator('[data-testid="mode-cycle-label"]')
       .waitFor({ state: "visible", timeout: 20000 });
     await skipOnboarding(page);
-    // 첫 번째 셀이 렌더링될 때까지 대기
     await page
       .locator('[data-testid="subdivision-cell-0"]')
       .waitFor({ state: "visible", timeout: 10000 });
@@ -153,7 +146,7 @@ test.describe("SubdivisionBar 타입 피커", () => {
       await longPressCell(page, 0);
       await expect(pickerMenu).toBeVisible();
 
-      // 선택된 타입에만 체크마크 svg가 있고, 나머지에는 없어야 함
+      // 선택된 타입만 접근성 선택 상태여야 함
       await assertCheckMarkOnlyFor(page, bt);
 
       // 정리
