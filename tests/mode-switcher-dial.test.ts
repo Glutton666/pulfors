@@ -21,6 +21,7 @@ import { createT } from "../lib/i18n";
 import {
   MODE_DIAL_SLOTS,
   nearestModeDialSnapTarget,
+  shortestModeDialTarget,
   snapModeDialPosition,
   wrapModeDialPosition,
 } from "../lib/mode-dial-logic";
@@ -131,6 +132,29 @@ describe("nearestModeDialSnapTarget", () => {
   test("일반 슬롯은 기존의 정수 스냅 위치를 유지", () => {
     assert.equal(nearestModeDialSnapTarget(2.7), 3);
     assert.equal(nearestModeDialSnapTarget(0.3), 0);
+  });
+});
+
+describe("shortestModeDialTarget", () => {
+  test("6개 슬롯에서 1~3칸 차이는 정방향으로 이동", () => {
+    assert.equal(shortestModeDialTarget(0, 1), 1);
+    assert.equal(shortestModeDialTarget(0, 2), 2);
+    assert.equal(shortestModeDialTarget(0, 3), 3);
+  });
+
+  test("6개 슬롯에서 4~5칸 차이는 역방향으로 이동", () => {
+    assert.equal(shortestModeDialTarget(0, 4), -2);
+    assert.equal(shortestModeDialTarget(0, 5), -1);
+  });
+
+  test("마지막 슬롯에서 첫 슬롯은 정방향 한 칸으로 이동", () => {
+    assert.equal(shortestModeDialTarget(5, 0), 6);
+  });
+
+  test("반대 방향에서도 최단 경로를 유지", () => {
+    assert.equal(shortestModeDialTarget(4, 0), 6);
+    // 2 → 5 is the exact half-turn, which intentionally stays forward.
+    assert.equal(shortestModeDialTarget(2, 5), 5);
   });
 });
 

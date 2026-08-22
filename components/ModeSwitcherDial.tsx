@@ -24,6 +24,7 @@ import { onAccentColor } from "@/lib/color-contrast";
 import {
   MODE_DIAL_SLOTS,
   nearestModeDialSnapTarget,
+  shortestModeDialTarget,
   snapModeDialPosition,
   wrapModeDialPosition,
 } from "@/lib/mode-dial-logic";
@@ -652,7 +653,9 @@ function ModeSwitcherDial({
             if (d < bestDist) { bestDist = d; best = i; }
           });
           if (best >= 0 && bestDist <= ICON_S) {
-            settleToPositionRef.current(best);
+            settleToPositionRef.current(
+              shortestModeDialTarget(scrollPosRef.current, best),
+            );
           }
           // else: tap on empty bg — do nothing (keep current selection)
         } else {
@@ -682,11 +685,10 @@ function ModeSwitcherDial({
     if (!isOpenRef.current || isConfirmingRef.current) return;
     isConfirmingRef.current = true;
     const snapped = snapModeDialPosition(scrollPosRef.current);
-    // 다이얼을 돌린 방향 계산 (원형 보정)
+    // 탭/스와이프 애니메이션과 같은 최단 경로 기준으로 전환 방향 결정
     const currentIdx = MODES.indexOf(currentModeRef.current);
-    let delta = snapped - currentIdx;
-    if (delta >  N_MODES / 2) delta -= N_MODES;
-    if (delta < -N_MODES / 2) delta += N_MODES;
+    const visualTarget = shortestModeDialTarget(currentIdx, snapped);
+    const delta = visualTarget - currentIdx;
     const direction: "left" | "right" = delta < 0 ? "left" : "right";
     selectionPulse.value = withSequence(
       withTiming(1, { duration: 70, easing: Easing.out(Easing.quad) }),
