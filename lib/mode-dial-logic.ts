@@ -39,17 +39,17 @@ export function nearestModeDialSnapTarget(value: number): number {
 
 /**
  * Returns the equivalent visual position for a tapped slot using the shortest
- * path from the current slot. With an even number of slots, the half-way move
- * stays forward (3 steps for a six-slot dial); only longer moves wrap back.
+ * path from the current dial position.
+ *
+ * The tie-break intentionally mirrors DialIconSlot's circular offset math:
+ * when an even-slot dial has an icon exactly three slots away, it follows the
+ * side where that icon is actually rendered instead of always forcing a
+ * positive ("forward") turn.
  */
 export function shortestModeDialTarget(currentPosition: number, targetIndex: number): number {
   const count = MODE_DIAL_SLOTS.length;
-  const current = snapModeDialPosition(currentPosition);
   const target = snapModeDialPosition(targetIndex);
-  let delta = target - current;
-
-  if (delta > count / 2) delta -= count;
-  if (delta < -count / 2) delta += count;
-
-  return current + delta;
+  const rawDelta = target - currentPosition;
+  const visualDelta = rawDelta - Math.round(rawDelta / count) * count;
+  return currentPosition + visualDelta;
 }

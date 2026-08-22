@@ -136,13 +136,15 @@ describe("nearestModeDialSnapTarget", () => {
 });
 
 describe("shortestModeDialTarget", () => {
-  test("6개 슬롯에서 1~3칸 차이는 정방향으로 이동", () => {
+  test("오른쪽에 표시된 1~2칸 대상은 정방향으로 이동", () => {
     assert.equal(shortestModeDialTarget(0, 1), 1);
     assert.equal(shortestModeDialTarget(0, 2), 2);
-    assert.equal(shortestModeDialTarget(0, 3), 3);
   });
 
-  test("6개 슬롯에서 4~5칸 차이는 역방향으로 이동", () => {
+  test("왼쪽에 표시된 3~5칸 대상은 역방향으로 이동", () => {
+    // 3칸 떨어진 슬롯은 팬에서 왼쪽에 그려진다. 거리 동률일 때도
+    // 항상 정방향으로 강제하지 않고 실제 버튼이 보이는 쪽을 따른다.
+    assert.equal(shortestModeDialTarget(0, 3), -3);
     assert.equal(shortestModeDialTarget(0, 4), -2);
     assert.equal(shortestModeDialTarget(0, 5), -1);
   });
@@ -153,8 +155,14 @@ describe("shortestModeDialTarget", () => {
 
   test("반대 방향에서도 최단 경로를 유지", () => {
     assert.equal(shortestModeDialTarget(4, 0), 6);
-    // 2 → 5 is the exact half-turn, which intentionally stays forward.
-    assert.equal(shortestModeDialTarget(2, 5), 5);
+    // 2 → 5 is the exact half-turn and the target is rendered to the left.
+    assert.equal(shortestModeDialTarget(2, 5), -1);
+  });
+
+  test("랩 경계 근처에서도 현재 보이는 위치에서 가장 가까운 등가 슬롯을 택한다", () => {
+    // Position 5.6 is visually close to the following cycle's slot 0.
+    // Snapping to 6 must not jump backward to the canonical index 0.
+    assert.equal(shortestModeDialTarget(5.6, 0), 6);
   });
 });
 
