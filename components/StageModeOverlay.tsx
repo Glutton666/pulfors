@@ -122,6 +122,24 @@ function getEntryMode(e: PracticeEntry): string {
   return e.mode ?? "beat";
 }
 
+// 슬롯은 중복 추가를 위해 원본 ID 뒤에 "__slot__..."를 붙인다. 무대
+// 셋리스트에는 당시의 PracticeEntry 스냅샷도 저장되므로, 연습장에 사진을
+// 추가하거나 바꾼 뒤 다시 진입할 때는 최신 원본을 슬롯 ID에 맞춰 반영한다.
+function getOriginalEntryId(id: string) {
+  return id.includes("__slot__") ? id.split("__slot__")[0]! : id;
+}
+
+function refreshSetlistFromPracticeBook(
+  saved: PracticeEntry[],
+  practiceBook: PracticeEntry[],
+): PracticeEntry[] {
+  if (practiceBook.length === 0) return saved;
+  return saved.flatMap((slot) => {
+    const latest = practiceBook.find((entry) => entry.id === getOriginalEntryId(slot.id));
+    return latest ? [{ ...latest, id: slot.id }] : [];
+  });
+}
+
 // ─── 빈 셋리스트 전용 비트 편집기 ─────────────────────────────────────
 const BEAT_TYPE_ORDER: BeatType[] = ["strong", "accent", "normal", "mute"];
 
@@ -428,20 +446,19 @@ export function StageModeOverlay({
     prevBeatRef2.current = -1;
   }, [activeEntryId]);
 
-  // 슬롯 ID에서 원본 entry ID 추출 (중복 허용 포맷: "origId__slot__ts_rand")
-  const getOriginalEntryId = (id: string) =>
-    id.includes("__slot__") ? id.split("__slot__")[0]! : id;
-
   // ── practiceBook 변경 시 셋리스트 재검증 ────────────────────────
   // book이 비어 있으면 아직 로딩 중이므로 건너뜀 (visible 효과에서 이미 defer 처리)
   useEffect(() => {
     if (!visible || practiceBook.length === 0) return;
     const current = setlistRef.current;
     if (current.length === 0) return;
-    const filtered = current.filter((e) => practiceBook.some((b) => b.id === getOriginalEntryId(e.id)));
-    if (filtered.length !== current.length) {
-      setSetlist(filtered);
-      saveStageSetlist(filtered).catch(() => {});
+    const refreshed = refreshSetlistFromPracticeBook(current, practiceBook);
+    if (
+      refreshed.length !== current.length ||
+      refreshed.some((entry, index) => JSON.stringify(entry) !== JSON.stringify(current[index]))
+    ) {
+      setSetlist(refreshed);
+      saveStageSetlist(refreshed).catch(() => {});
     }
   }, [practiceBook, visible]);
 
@@ -454,10 +471,14 @@ export function StageModeOverlay({
       // book이 비어 있으면 아직 비동기 로딩 중이므로 필터링/저장 건너뜀 (데이터 유실 방지)
       // 나중에 practiceBook이 로드되면 아래 revalidation 효과가 자동으로 정리
       const book = practiceBookRef.current;
-      const list = book.length > 0
-        ? saved.filter((e) => book.some((b) => b.id === getOriginalEntryId(e.id)))
-        : saved;
-      if (book.length > 0 && list.length !== saved.length) {
+      const list = refreshSetlistFromPracticeBook(saved, book);
+      if (
+        book.length > 0 &&
+        (
+          list.length !== saved.length ||
+          list.some((entry, index) => JSON.stringify(entry) !== JSON.stringify(saved[index]))
+        )
+      ) {
         saveStageSetlist(list).catch(() => {});
       }
       setSetlist(list);

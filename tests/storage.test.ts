@@ -215,6 +215,60 @@ test("savePracticeBook/loadPracticeBook: 라운드트립", async () => {
   assert.deepEqual(await loadPracticeBook(), entries);
 });
 
+test("savePracticeBook/loadPracticeBook: 노트 큐 항목별 사진 URI 라운드트립", async () => {
+  const entries = [
+    {
+      id: "note-parent",
+      label: "사진 큐",
+      createdAt: 1,
+      mode: "note" as const,
+      bpm: 100,
+      beatsPerMeasure: 4,
+      beatTypes: ["strong", "normal", "normal", "normal"] as any,
+      beatSubdivisions: {},
+      barRepeats: {},
+      barLoopMode: "once" as const,
+      subdivisionPattern: ["accent"] as any,
+      notePlayMode: "once" as const,
+      noteQueueEntries: [
+        {
+          id: "queue-a",
+          label: "첫 번째",
+          createdAt: 2,
+          mode: "bar" as const,
+          bpm: 100,
+          beatsPerMeasure: 4,
+          beatTypes: ["strong", "normal", "normal", "normal"] as any,
+          beatSubdivisions: {},
+          barRepeats: {},
+          barLoopMode: "once" as const,
+          subdivisionPattern: ["accent"] as any,
+          imageUri: "file:///practice-first.jpg",
+        },
+        {
+          id: "queue-b",
+          label: "두 번째",
+          createdAt: 3,
+          mode: "bar" as const,
+          bpm: 100,
+          beatsPerMeasure: 4,
+          beatTypes: ["strong", "normal", "normal", "normal"] as any,
+          beatSubdivisions: {},
+          barRepeats: {},
+          barLoopMode: "once" as const,
+          subdivisionPattern: ["accent"] as any,
+          imageUri: "file:///practice-second.jpg",
+        },
+      ],
+    },
+  ];
+
+  await savePracticeBook(entries);
+  const restored = await loadPracticeBook();
+  assert.equal(restored[0]?.noteQueueEntries?.[0]?.imageUri, "file:///practice-first.jpg");
+  assert.equal(restored[0]?.noteQueueEntries?.[1]?.imageUri, "file:///practice-second.jpg");
+});
+
 test("createPracticeEntry: id/createdAt 자동 생성", () => {
   const e = createPracticeEntry("곡", {
     bpm: 100,

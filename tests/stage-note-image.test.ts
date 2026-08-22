@@ -57,6 +57,17 @@ describe("stage note image resolution", () => {
     assert.equal(getStageNoteImageUri(entry, -1), "file:///first.jpg");
   });
 
+  test("falls back to the first queue photo after a stale index", () => {
+    const entry = noteEntry({
+      noteQueueEntries: [
+        noteEntry({ id: "child-0", imageUri: "file:///first.jpg" }),
+        noteEntry({ id: "child-1", imageUri: "file:///second.jpg" }),
+      ],
+    });
+
+    assert.equal(getStageNoteImageUri(entry, 99), "file:///first.jpg");
+  });
+
   test("returns no image for an empty or out-of-range queue", () => {
     const entry = noteEntry({ noteQueueEntries: [] });
 

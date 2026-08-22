@@ -34,8 +34,10 @@ export function getStageNoteImageUri(
   const queue = entry.noteQueueEntries;
   if (!queue || queue.length === 0) return undefined;
   // A stage item can be selected before Note mode has initialized its
-  // playback index. In that state, show the first queue photo.
-  const queueIndex = Number.isInteger(currentIndex) && currentIndex >= 0
+  // playback index. In that state, show the first queue photo. Also reset to
+  // the first item when a stale index from a previous queue is out of range;
+  // this can happen while switching stage items without interrupting playback.
+  const queueIndex = Number.isInteger(currentIndex) && currentIndex >= 0 && currentIndex < queue.length
     ? currentIndex
     : 0;
   const child = queue[queueIndex];
