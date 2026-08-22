@@ -366,7 +366,7 @@ export interface ModeSwitcherDialHandle {
 
 interface ModeSwitcherDialProps {
   currentMode: ModeSlot;
-  onSelectMode: (mode: ModeSlot, direction: "left" | "right") => void;
+  onSelectMode: (mode: ModeSlot, direction: "left" | "right") => void | Promise<void>;
   topInset: number;
   isLandscape: boolean;
   isPlaying?: boolean;
@@ -445,6 +445,7 @@ function ModeSwitcherDial({
   const selectionPulse = useSharedValue(0);
   const isConfirmingRef = useRef(false);
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Refs for PanResponder tap-detection (updated each render)
   const anchorRef    = useRef({ x: 0, y: 0 });
@@ -488,6 +489,7 @@ function ModeSwitcherDial({
   useEffect(() => { settleToPositionRef.current = settleToPosition; }, [settleToPosition]);
   useEffect(() => () => {
     if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
   }, []);
 
   const doOpen = useCallback(() => {
@@ -691,9 +693,21 @@ function ModeSwitcherDial({
       withTiming(0, { duration: 130, easing: Easing.in(Easing.quad) }),
     );
     doClose();
-    setTimeout(() => {
-      onSelectModeRef.current(MODES[snapped], direction);
-      isConfirmingRef.current = false;
+    confirmTimerRef.current = setTimeout(() => {
+      confirmTimerRef.current = null;
+      try {
+        // Keep the confirmation lock until an async mode transition (notably
+        // note-mode setup) has handed control back. Releasing it on a fixed
+        // animation timeout lets rapid native taps queue a second transition.
+        Promise.resolve(
+          onSelectModeRef.current(MODES[snapped], direction),
+        ).then(
+          () => { isConfirmingRef.current = false; },
+          () => { isConfirmingRef.current = false; },
+        );
+      } catch {
+        isConfirmingRef.current = false;
+      }
     }, 200);
   }, [doClose, selectionPulse]);
 
