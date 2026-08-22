@@ -5,6 +5,7 @@
 - [Score editor magnifier must render existing notes](score-magnifier-nearby-notes.md) — MagnifierView only draws staff+ghost by default; attach nearby element data to GhostState from touchToGhost, don't recompute layout inside the magnifier.
 - [Score editor scrolling vs. tap-to-place gestures](score-editor-scroll-lock.md) — prefer gating canvas PanResponder on touch count (single vs. multi), not tool-mode-based scrollEnabled toggling, to avoid blocking wheel/trackpad scroll.
 - [Bar Mode "Add Bar" swipe gesture](bar-mode-add-bar-gesture.md) — "↑Add Bar" text is a hint, not a button; requires a swipe-up drag on the editor panel to actually add a bar.
+- [Bar mode duration editing](bar-mode-duration-editing.md) — duration +/- edits only the selected mm or ss field and preserves the other field at its bounds.
 - [Score free-placement center vs. left-edge](score-free-placement-center-vs-left-edge.md) — placedX is a note-center coord; layoutMeasure's overlap-clamp math must convert it to a left edge before use, or placed notes render half a notehead-width off.
 - [Mode dial e2e navigation recipe](e2e-dial-navigation.md) — Playwright drives the fan dial with plain clicks; includes RNW Switch checked-state and onboarding-skip selector gotchas.
 - [Gesture flows resist Playwright e2e](gesture-flows-resist-e2e.md) — swipe-up-to-add-bar + long-press-to-open-recorder chained together reliably stall the testing subagent; verify via TS compile + unit tests + manual trace instead of forcing e2e.
