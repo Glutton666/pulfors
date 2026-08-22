@@ -573,7 +573,6 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         }
         stopRenderedAudio();
         lastAudioFireRef.current = Date.now();
-        showRecoveryToastRef.current(t("main", "audioRecoveryRetry"));
         audioWatchdogTimerRef.current = setTimeout(runCheck, 3500);
       } else {
         markAudioRecoveryFailed("watchdog");

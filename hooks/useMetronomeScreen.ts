@@ -72,7 +72,12 @@ import { useNoteSamples } from "@/hooks/useNoteSamples";
 import { useNoteSamplePersistenceStatus } from "@/hooks/useNoteSamplePersistenceStatus";
 import { usePlaybackControl } from "@/hooks/usePlaybackControl";
 import { useAudioLifecycle } from "@/hooks/useAudioLifecycle";
-import { markAudioPlaying, markAudioStopped } from "@/lib/audio-lifecycle";
+import {
+  getAudioLifecycleSnapshot,
+  markAudioPlaying,
+  markAudioRecoverySucceeded,
+  markAudioStopped,
+} from "@/lib/audio-lifecycle";
 import { useDialConfig } from "@/hooks/useBarDialConfig";
 import { useBarMode } from "@/hooks/useBarMode";
 import { useMetronomeEngine } from "@/hooks/useMetronomeEngine";
@@ -806,6 +811,16 @@ export function useMetronomeScreen() {
       return pickSlot(players, role, idx);
     };
 
+    // Every audible path must report activity to the watchdog. Layer/block
+    // callbacks were previously omitted, which could label healthy playback as
+    // "recovering" and trigger an unnecessary restart.
+    const recordAudibleTick = () => {
+      lastAudioFireRef.current = Date.now();
+      if (getAudioLifecycleSnapshot().phase === "recovering") {
+        markAudioRecoverySucceeded();
+      }
+    };
+
     engine.setAudioCallbacks(
       () => {
         if (fadeOutMutedRef.current) return;
@@ -813,14 +828,14 @@ export function useMetronomeScreen() {
           const ch = barModeRef.current
             ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
             : "both";
-          if (playWebClick("high", ch)) lastAudioFireRef.current = Date.now();
+          if (playWebClick("high", ch)) recordAudibleTick();
           return;
         }
         try {
           const active = getCustomPlayer("high", highToggle.current);
           highToggle.current = (highToggle.current + 1) % BUILTIN_POOL_SIZE;
           restartPlayer(active);
-          lastAudioFireRef.current = Date.now();
+          recordAudibleTick();
         } catch (e) {}
       },
       () => {
@@ -829,14 +844,14 @@ export function useMetronomeScreen() {
           const ch = barModeRef.current
             ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
             : "both";
-          if (playWebClick("low", ch)) lastAudioFireRef.current = Date.now();
+          if (playWebClick("low", ch)) recordAudibleTick();
           return;
         }
         try {
           const active = getCustomPlayer("low", lowToggle.current);
           lowToggle.current = (lowToggle.current + 1) % BUILTIN_POOL_SIZE;
           restartPlayer(active);
-          lastAudioFireRef.current = Date.now();
+          recordAudibleTick();
         } catch (e) {}
       },
       () => {
@@ -845,14 +860,14 @@ export function useMetronomeScreen() {
           const ch = barModeRef.current
             ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
             : "both";
-          if (playWebClick("strong", ch)) lastAudioFireRef.current = Date.now();
+          if (playWebClick("strong", ch)) recordAudibleTick();
           return;
         }
         try {
           const active = getCustomPlayer("strong", strongToggle.current);
           strongToggle.current = (strongToggle.current + 1) % BUILTIN_POOL_SIZE;
           restartPlayer(active);
-          lastAudioFireRef.current = Date.now();
+          recordAudibleTick();
         } catch (e) {}
       }
     );
@@ -869,7 +884,9 @@ export function useMetronomeScreen() {
         const ch = barModeRef.current
           ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
           : "both";
-        playWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low", ch);
+        if (playWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low", ch)) {
+          recordAudibleTick();
+        }
         return;
       }
 
@@ -884,6 +901,7 @@ export function useMetronomeScreen() {
             players = allPlayersRef.current[srcSet as keyof BuiltinPlayers] || allPlayersRef.current.classic;
             const r = (mapping.sourceRole || "strong") as "high" | "low" | "strong";
             restartPlayer(pickSlot(players, r, toggle));
+            recordAudibleTick();
             return;
           }
           players = allPlayersRef.current.classic;
@@ -891,6 +909,7 @@ export function useMetronomeScreen() {
           players = allPlayersRef.current[layerSet as keyof typeof allPlayersRef.current] || allPlayersRef.current.classic;
         }
         restartPlayer(pickSlot(players, role, toggle));
+        recordAudibleTick();
       } catch (e) {}
     });
 
@@ -907,7 +926,9 @@ export function useMetronomeScreen() {
         const ch = barModeRef.current
           ? (noteSampleMetroChannelsRef.current[String(engine.getCurrentBeat())] ?? barMetronomeChannelRef.current)
           : "both";
-        playWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low", ch);
+        if (playWebClick(role === "strong" ? "strong" : role === "high" ? "high" : "low", ch)) {
+          recordAudibleTick();
+        }
         return;
       }
 
@@ -922,6 +943,7 @@ export function useMetronomeScreen() {
             players = allPlayersRef.current[srcSet as keyof BuiltinPlayers] || allPlayersRef.current.classic;
             const r = (mapping.sourceRole || "strong") as "high" | "low" | "strong";
             restartPlayer(pickSlot(players, r, toggle));
+            recordAudibleTick();
             return;
           }
           players = allPlayersRef.current.classic;
@@ -929,6 +951,7 @@ export function useMetronomeScreen() {
           players = allPlayersRef.current[blockSet as keyof typeof allPlayersRef.current] || allPlayersRef.current.classic;
         }
         restartPlayer(pickSlot(players, role, toggle));
+        recordAudibleTick();
       } catch (e) {}
     });
 

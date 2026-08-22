@@ -8,6 +8,7 @@ import {
   markAudioPreparing,
   markAudioRecovering,
   markAudioRecoveryFailed,
+  markAudioRecoverySucceeded,
   markAudioStopped,
 } from "../lib/audio-lifecycle";
 
@@ -27,6 +28,13 @@ test("interruption recovery preserves a clear interrupted and recovering state",
   markAudioRecovering("interruption");
   assert.deepEqual(getAudioLifecycleSnapshot(), { phase: "recovering", reason: "interruption" });
   markAudioPlaying();
+  assert.deepEqual(getAudioLifecycleSnapshot(), { phase: "playing", reason: null });
+});
+
+test("an audible tick clears a transient recovery status immediately", () => {
+  _resetAudioLifecycleForTests();
+  markAudioRecovering("watchdog");
+  markAudioRecoverySucceeded();
   assert.deepEqual(getAudioLifecycleSnapshot(), { phase: "playing", reason: null });
 });
 

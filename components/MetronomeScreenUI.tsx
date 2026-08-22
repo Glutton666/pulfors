@@ -305,6 +305,7 @@ export function MetronomeScreenUI(props: Props) {
       ) : null}
       {audioLifecycle.phase !== "idle" && audioLifecycle.phase !== "playing" ? (
         <View
+          pointerEvents={audioLifecycle.phase === "recoveryFailed" ? "auto" : "none"}
           accessibilityRole="alert"
           accessibilityLiveRegion="polite"
           testID="audio-lifecycle-status"

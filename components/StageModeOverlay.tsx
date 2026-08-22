@@ -915,6 +915,7 @@ export function StageModeOverlay({
     <View style={[styles.container, { backgroundColor: bg }]} testID="stage-mode-overlay">
       {audioStatusKey ? (
         <View
+          pointerEvents={audioLifecycle?.phase === "recoveryFailed" ? "auto" : "none"}
           testID="stage-audio-lifecycle-status"
           accessibilityRole="alert"
           accessibilityLiveRegion="polite"
