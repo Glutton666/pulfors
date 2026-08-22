@@ -1433,6 +1433,7 @@ export function MetronomeScreenUI(props: Props) {
         }
         practiceBook={stagePracticeEntries}
         activeEntryId={activeStagePracticeEntryId}
+        noteCurrentIndex={noteCurrentIndex}
         onOpenScheduledStart={() => openExclusive("scheduledStart")}
         onQueueSeamlessNext={(next) => { seamlessNextEntryRef.current = next; }}
         onSelectEntry={(entry) => {

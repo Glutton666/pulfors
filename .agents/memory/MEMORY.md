@@ -34,3 +34,4 @@
 - [Full reset settings races](full-reset-settings-races.md) — cancel pending writes and invalidate the initial async settings load before clearing storage, or stale patterns can return only in the UI.
 - [Bar reset UI-engine sync](bar-reset-ui-engine-sync.md) — bar resets must clear the editor's staging pattern as well as engine subdivisions, or visuals and audio diverge.
 - [Native feature removal audit](native-feature-removal-audit.md) — removing a local native module needs a directory-level residue check after dependency cleanup.
+- [Stage note photo resolution](stage-note-photo-resolution.md) — prefer a usable parent photo, then the current queue child; ignore unsafe persisted URIs.

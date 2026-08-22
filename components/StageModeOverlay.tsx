@@ -57,6 +57,7 @@ import type { ProgressInfo } from "@/lib/metronome-engine-pure";
 import { handleStageModeBackPress, type StageModeBackState } from "@/lib/stage-mode-logic";
 import { withAlpha } from "@/lib/color-contrast";
 import type { AudioLifecycleSnapshot } from "@/lib/audio-lifecycle";
+import { getStageNoteImageUri } from "@/lib/stage-note-image";
 
 // ─── 스테이지 설정 타입 ──────────────────────────────────────────────
 const STAGE_SETTINGS_KEY = "stage_settings_v1";
@@ -309,6 +310,8 @@ export interface StageModeOverlayProps {
   practiceBook?: PracticeEntry[];
   /** 현재 활성(하이라이트) 셋 리스트 항목 ID */
   activeEntryId?: string;
+  /** 노트 셋리스트 항목에서 현재 재생 중인 큐 자식 인덱스 */
+  noteCurrentIndex?: number;
   /** 셋 리스트 항목 선택 — 엔진 재시작 없이 즉시 전환 */
   onSelectEntry?: (entry: PracticeEntry) => void;
   /** 셋리스트 없을 때 StageBeatColumn 자리에 표시할 컨텐츠 슬롯 (BeatIndicator + SubdivisionBar 등) */
@@ -354,6 +357,7 @@ export function StageModeOverlay({
   onBeatTypesChange,
   practiceBook = [],
   activeEntryId,
+  noteCurrentIndex = -1,
   onSelectEntry,
   noSetlistContent,
   onOpenScheduledStart,
@@ -613,7 +617,8 @@ export function StageModeOverlay({
     [beatSubdivisions],
   );
   // 악보 모드 또는 사진이 있는 노트 모드 → 전체화면 컨텐츠 표시
-  const hasPhoto    = activeMode === "note" && !!activeEntry?.imageUri;
+  const stageNoteImageUri = getStageNoteImageUri(activeEntry, noteCurrentIndex);
+  const hasPhoto    = activeMode === "note" && !!stageNoteImageUri;
   const isFullscreen = activeMode === "score" || hasPhoto;
 
   // ── 악보 문서 로드 ────────────────────────────────────────────────
@@ -1017,10 +1022,10 @@ export function StageModeOverlay({
                   {activeEntry?.label ?? "Score"}
                 </Text>
               </View>
-            ) : hasPhoto && activeEntry?.imageUri ? (
+            ) : hasPhoto && stageNoteImageUri ? (
               /* 사진 노트 */
               <Image
-                source={{ uri: activeEntry.imageUri }}
+                source={{ uri: stageNoteImageUri }}
                 style={styles.notePhoto}
                 resizeMode="contain"
               />
