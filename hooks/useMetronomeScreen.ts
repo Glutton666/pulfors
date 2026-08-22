@@ -50,7 +50,7 @@ import { useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
 import { MetronomeEngine, soundSets, toEngineBpm } from "@/lib/metronome-engine";
 import type { BeatType, ProgressInfo } from "@/lib/metronome-engine";
-import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, runStorageMigrations, type MetronomeSettings } from "@/lib/storage";
+import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, runStorageMigrations, clearAllAppStorage, type MetronomeSettings } from "@/lib/storage";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample, FadeOutSettings, PracticeEntry } from "@/lib/storage";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
 import type { StopwatchTimerHandle } from "@/components/StopwatchTimer";
@@ -1335,7 +1335,7 @@ export function useMetronomeScreen() {
       practiceStartRef.current = null;
       discardRoomTracking();
       featureStartRef.current = null;
-      await AsyncStorage.clear();
+      await clearAllAppStorage();
 
       setActiveModal(null);
       tuningGuideOnSelectRef.current = null;

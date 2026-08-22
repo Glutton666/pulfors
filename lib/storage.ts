@@ -256,23 +256,50 @@ export interface SaveSettingsOptions {
   notifyOnError?: boolean;
 }
 
+// Settings writes and a full storage reset must use one queue.  Otherwise an
+// already-started write can finish after AsyncStorage.clear() and resurrect a
+// stale metronome_settings value.
+let settingsStorageQueue: Promise<void> = Promise.resolve();
+let pendingSettings: MetronomeSettings | null = null;
+let settingsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const SETTINGS_DEBOUNCE_MS = 400;
+
+function enqueueSettingsStorageOperation(operation: () => Promise<void>): Promise<void> {
+  const result = settingsStorageQueue.then(operation, operation);
+  settingsStorageQueue = result.catch(() => {});
+  return result;
+}
+
 export async function saveSettings(
   settings: MetronomeSettings,
   options: SaveSettingsOptions = {},
 ): Promise<void> {
-  try {
-    await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  } catch (e) {
-    if (options.notifyOnError !== false) {
-      notifyStorageError({ key: SETTINGS_KEY, operation: "save", error: e });
+  return enqueueSettingsStorageOperation(async () => {
+    try {
+      await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    } catch (e) {
+      if (options.notifyOnError !== false) {
+        notifyStorageError({ key: SETTINGS_KEY, operation: "save", error: e });
+      }
+      throw e;
     }
-    throw e;
-  }
+  });
 }
 
-let pendingSettings: MetronomeSettings | null = null;
-let settingsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-const SETTINGS_DEBOUNCE_MS = 400;
+/**
+ * Clears all persisted app data only after settings writes that were already
+ * in flight have settled. New settings writes queue behind the clear.
+ */
+export function clearAllAppStorage(): Promise<void> {
+  if (settingsDebounceTimer) {
+    clearTimeout(settingsDebounceTimer);
+    settingsDebounceTimer = null;
+  }
+  pendingSettings = null;
+  return enqueueSettingsStorageOperation(async () => {
+    await AsyncStorage.clear();
+  });
+}
 
 export function saveSettingsDebounced(settings: MetronomeSettings): void {
   pendingSettings = settings;

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   loadSettings,
   saveSettings,
+  clearAllAppStorage,
   saveSettingsDebounced,
   flushPendingSettings,
   loadCustomSoundSets,
@@ -37,6 +38,44 @@ test("saveSettings + loadSettings: 라운드트립 + 기본값 병합", async ()
   assert.equal(s.beatsPerMeasure, 3);
   assert.equal(s.themeColor, "gold");
   assert.equal(s.flashMode, "accent");
+});
+
+test("전체 초기화는 진행 중인 이전 설정 저장 뒤에 실행되어 값을 되살리지 않는다", async () => {
+  const originalSetItem = AsyncStorage.setItem;
+  let releaseOldWrite!: () => void;
+  let signalWriteStarted!: () => void;
+  const oldWriteStarted = new Promise<void>((resolve) => {
+    signalWriteStarted = resolve;
+  });
+  const waitForRelease = new Promise<void>((resolve) => {
+    releaseOldWrite = resolve;
+  });
+
+  AsyncStorage.setItem = async (key: string, value: string) => {
+    if (key === "metronome_settings") {
+      signalWriteStarted();
+      await waitForRelease;
+    }
+    return originalSetItem(key, value);
+  };
+
+  try {
+    const oldSave = saveSettings({ bpm: 77 } as MetronomeSettings);
+    await oldWriteStarted;
+    const reset = clearAllAppStorage();
+
+    releaseOldWrite();
+    await oldSave;
+    await reset;
+
+    assert.equal(
+      await AsyncStorage.getItem("metronome_settings"),
+      null,
+      "the clear must run after the earlier save completes",
+    );
+  } finally {
+    AsyncStorage.setItem = originalSetItem;
+  }
 });
 
 test("loadSettings: 손상된 JSON → 기본값", async () => {
