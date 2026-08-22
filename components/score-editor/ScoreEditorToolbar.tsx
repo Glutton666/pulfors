@@ -31,7 +31,6 @@ export interface ScoreEditorToolbarProps {
   parts: ScorePart[];
   selectedPartIdx: number;
   onBack: () => void;
-  onOpenDial?: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onPlayPause: () => void;
@@ -56,7 +55,6 @@ export function ScoreEditorToolbar({
   parts,
   selectedPartIdx,
   onBack,
-  onOpenDial,
   onUndo,
   onRedo,
   onPlayPause,
@@ -93,24 +91,19 @@ export function ScoreEditorToolbar({
           <Ionicons name="chevron-back" size={S.ms(22, 0.4)} color={C.text} />
         </Pressable>
 
-        {/* 모드 다이얼 트리거 — 아이콘만 표시 (좁은 화면에서 텍스트가 잘려 제거됨) */}
-        <Pressable
-          onPress={onOpenDial}
-          style={({ pressed }) => ({
+        {/* 악보 모드 표시 — 모드 변환 다이얼은 악보 화면에서 호출하지 않음 */}
+        <View
+          style={{
             flex: 1,
             minWidth: 44,
             minHeight: 36,
             flexDirection: "row" as const,
             alignItems: "center" as const,
             justifyContent: "center" as const,
-            opacity: pressed ? 0.7 : 1,
-          })}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t("scoreMode", "title") || t("switcher", "score")}
+          }}
         >
           <Ionicons name="musical-notes" size={S.ms(20, 0.4)} color={C.accent} />
-        </Pressable>
+        </View>
 
         {savedToast && (
           <Text style={[styles.savedToast, { color: C.accent }]}>

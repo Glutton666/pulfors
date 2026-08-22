@@ -255,7 +255,6 @@ export function MetronomeScreenUI(props: Props) {
         <Animated.View style={[StyleSheet.absoluteFillObject, { zIndex: 500, backgroundColor: C.background }, modeSlideStyle]}>
           <ScoreListScreen
             defaultBpm={bpm}
-            onOpenDial={openModeDial}
             onClose={closeScoreMode}
             onOpenEditor={(doc) => {
               setScoreEditorDoc(doc);
@@ -269,7 +268,6 @@ export function MetronomeScreenUI(props: Props) {
           <ScoreEditorScreen
             doc={scoreEditorDoc}
             onBack={() => setScoreMode("list")}
-            onOpenDial={openModeDial}
             onSaved={(updatedDoc) => {
               setScoreEditorDoc(updatedDoc);
               // 연습장 캐시 무효화 (저장된 연결 항목 반영)

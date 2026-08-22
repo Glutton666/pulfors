@@ -34,10 +34,9 @@ export interface ScoreListScreenProps {
   defaultBpm: number;
   onClose: () => void;
   onOpenEditor: (doc: ScoreDocument) => void;
-  onOpenDial?: () => void;
 }
 
-export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onOpenDial }: ScoreListScreenProps) {
+export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor }: ScoreListScreenProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -202,14 +201,12 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onOpenDial 
       {/* 헤더 */}
       <View style={[styles.header, { paddingTop: topInset + 8, borderBottomColor: C.border }]}>
         {/* 제목 — 화면 전체 기준 가운데 정렬 (우측 버튼과 무관하게 절대 중앙) */}
-        <Pressable
-          onPress={onOpenDial}
+        <View
           style={{
             position: "absolute", left: 0, right: 0,
             top: topInset + 8, bottom: 12,
             flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
           }}
-          accessibilityRole="button"
         >
           <Ionicons name="musical-notes" size={S.ms(20, 0.4)} color={C.accent} />
           {/* flex:0은 웹에서 flex-basis:0%로 변환돼 세로 쌓임 발생 — flex 속성 없이 렌더 */}
@@ -219,7 +216,7 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onOpenDial 
           >
             {t("scoreMode", "title")}
           </Text>
-        </Pressable>
+        </View>
         <View style={{ flex: 1 }} pointerEvents="none" />
         <Pressable
           style={({ pressed }) => [styles.importBtn, { borderColor: C.border }, pressed && { opacity: 0.7 }]}

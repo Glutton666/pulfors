@@ -101,7 +101,6 @@ export interface ScoreEditorScreenProps {
     entryId: string | undefined,
     scoreDefaults: { bpm: number; beatsPerMeasure: number },
   ) => void;
-  onOpenDial?: () => void;
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
@@ -111,7 +110,6 @@ export function ScoreEditorScreen({
   onBack,
   onSaved,
   onLinkedEntryChange,
-  onOpenDial,
 }: ScoreEditorScreenProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
@@ -1714,7 +1712,6 @@ export function ScoreEditorScreen({
         parts={doc.parts}
         selectedPartIdx={selectedPartIdx}
         onBack={onBack}
-        onOpenDial={onOpenDial}
         onUndo={handleUndo}
         onRedo={handleRedo}
         onPlayPause={playback.isPlaying ? playback.pause : playback.play}
