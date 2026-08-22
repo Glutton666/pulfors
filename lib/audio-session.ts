@@ -5,6 +5,7 @@ import {
   markAudioInterrupted,
   markAudioRecovering,
   markAudioRecoveryFailed,
+  markAudioRecoverySucceeded,
   markAudioStopped,
   _resetAudioLifecycleForTests,
 } from "@/lib/audio-lifecycle";
@@ -68,6 +69,21 @@ let androidProbe: AndroidFocusProbeController | null = null;
 // 기본값 true (기존 동작 유지). false로 설정하면 notifyInterruptionEnd에서
 // bridge.resume() 호출을 건너뛴다.
 let autoResumeAfterInterruption = true;
+
+function settleAutomaticResume(
+  result: boolean | void | Promise<boolean | void>,
+  reason: "session" | "interruption",
+): void {
+  Promise.resolve(result)
+    .then((didStart) => {
+      if (didStart === false) {
+        markAudioRecoveryFailed(reason);
+      } else {
+        markAudioRecoverySucceeded();
+      }
+    })
+    .catch(() => markAudioRecoveryFailed(reason));
+}
 
 /**
  * 인터럽션 후 자동 재개 여부를 설정한다.
@@ -142,7 +158,7 @@ export async function releaseAudioSession(callerId: string): Promise<void> {
     if (activeCallers.size === 0 && pausedByUs) {
       pausedByUs = false;
       try {
-        bridge?.resume();
+        if (bridge) settleAutomaticResume(bridge.resume(), "session");
         androidProbe?.start();
     } catch (e) {
       markAudioRecoveryFailed("session");
@@ -169,10 +185,7 @@ export async function releaseAudioSession(callerId: string): Promise<void> {
         markAudioRecovering("session");
         suppressUserToggle++;
         try {
-          const resumeResult = bridge.resume();
-          Promise.resolve(resumeResult).then((didStart) => {
-            if (didStart === false) markAudioRecoveryFailed("session");
-          }).catch(() => markAudioRecoveryFailed("session"));
+          settleAutomaticResume(bridge.resume(), "session");
           androidProbe?.start();
         } finally {
           suppressUserToggle--;
@@ -289,10 +302,7 @@ export function notifyInterruptionEnd(): void {
       markAudioRecovering("interruption");
       suppressUserToggle++;
       try {
-        const resumeResult = bridge.resume();
-        Promise.resolve(resumeResult).then((didStart) => {
-          if (didStart === false) markAudioRecoveryFailed("interruption");
-        }).catch(() => markAudioRecoveryFailed("interruption"));
+        settleAutomaticResume(bridge.resume(), "interruption");
         // 주의: androidProbe?.start() 를 호출하지 않는다.
         // 프로브는 이미 살아있다 — OS 가 Sound 를 자동 재개해 isPlaying: true
         // 이벤트를 발생시키고 그 이벤트가 이 함수를 호출했다.

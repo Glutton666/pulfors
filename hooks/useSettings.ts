@@ -131,6 +131,10 @@ export interface UseSettingsResult {
   setBarRowHeight: React.Dispatch<React.SetStateAction<number>>;
   // ── Persistence ────────────────────────────────────────────────────────────
   persistSettings: DebouncedPersister<MetronomeSettings>;
+  /** Ignore a settings load that began before a full application reset. */
+  invalidateSettingsLoad: () => void;
+  /** Stop queued setting writes before clearing persistent app data. */
+  cancelSettingsPersistence: () => void;
   /** Latest retry status, kept in React state so the UI can show stale changes. */
   persistStatus: PersisterStatus;
   /**
@@ -274,6 +278,13 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     );
   }
   const persistSettings = persistSettingsRef.current;
+  const settingsLoadGenerationRef = useRef(0);
+  const invalidateSettingsLoad = useCallback(() => {
+    settingsLoadGenerationRef.current += 1;
+  }, []);
+  const cancelSettingsPersistence = useCallback(() => {
+    persistSettings.cancel();
+  }, [persistSettings]);
 
   // The persister intentionally has no React dependency, so retry callbacks
   // cannot trigger a render on their own. Poll its public status while this
@@ -318,7 +329,9 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   // ── Settings load (mount-once) ────────────────────────────────────────────────
 
   useEffect(() => {
+    const loadGeneration = settingsLoadGenerationRef.current;
     loadSettings().then((settings) => {
+      if (loadGeneration !== settingsLoadGenerationRef.current) return;
       setBpm(settings.bpm);
       const loadedDenom = settings.beatDenominator ?? 4;
       baseBpmRef.current = Math.round(settings.bpm * (loadedDenom / 4));
@@ -532,6 +545,8 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
     barCellOpacity, setBarCellOpacity,
     barRowHeight, setBarRowHeight,
     persistSettings,
+    invalidateSettingsLoad,
+    cancelSettingsPersistence,
     persistStatus,
     persistAudioSettingsCallbackRef,
     syncExternalSnapshot,

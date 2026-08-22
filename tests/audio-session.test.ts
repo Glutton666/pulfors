@@ -258,6 +258,8 @@ test("interruption begin pauses metronome and end resumes it", async () => {
   notifyInterruptionEnd();
   assert.equal(state.resumeCount, 1, "interruption end resumes when no user toggle");
   assert.equal(state.running, true);
+  await Promise.resolve();
+  assert.deepEqual(getAudioLifecycleSnapshot(), { phase: "playing", reason: null });
 });
 
 test("interruption begin is idempotent", async () => {

@@ -21,12 +21,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import Colors from "@/constants/colors";
-import { moderateScale, IS_TABLET, useScale } from "@/lib/scale";
+import { useScale } from "@/lib/scale";
 import { Radius, Spacing } from "@/constants/tokens";
 import type { ScaleValues } from "@/lib/scale";
 import type { BeatType } from "@/lib/metronome-engine";
 import { pureGetSubPattern } from "@/lib/metronome-engine-pure";
 import { accentGradientEdge, onAccentColor, onAccentShadow } from "@/lib/color-contrast";
+import { getSubdivisionCellLayout } from "@/lib/subdivision-cell-layout";
 import {
   beginShakeTracking,
   createShakeTracker,
@@ -48,8 +49,6 @@ interface SubdivisionBarProps {
   currentBeatType?: BeatType | null;
 }
 
-const CELL_SIZE = IS_TABLET ? moderateScale(28, 0.4) : moderateScale(28, 0.4);
-const CELL_GAP = IS_TABLET ? moderateScale(4, 0.3) : moderateScale(3, 0.3);
 const MAX_CELLS = 8;
 const MIN_CELLS = 1;
 const SWIPE_THRESHOLD = 30;
@@ -386,17 +385,12 @@ export function SubdivisionBar({
   }, [currentBeatType, activeBeatPattern]);
   const displayPattern = isPlaying ? (livePattern ?? pattern) : pattern;
   const isShowingLivePattern = isPlaying && displayPattern !== pattern;
-  const baseCellSize = S.isTablet ? S.ms(28, 0.5) : CELL_SIZE;
-  const baseCellGap = S.isTablet ? S.ms(4, 0.4) : CELL_GAP;
-  const hintWidth = 16;
-  const availableWidth = containerWidth > 0 ? containerWidth - hintWidth * 2 : 0;
-  const cellCount = displayPattern.length;
-  const dynamicCellSize = availableWidth > 0
-    ? Math.min(baseCellSize, Math.floor((availableWidth - baseCellGap * (cellCount - 1)) / cellCount))
-    : baseCellSize;
-  const clampedCellSize = Math.max(14, dynamicCellSize);
-  const dynamicRadius = Math.max(4, Math.round(clampedCellSize * 4 / baseCellSize));
-  const dynamicFontSize = Math.max(7, Math.round(clampedCellSize * 11 / baseCellSize));
+  const { cellSize, radius: dynamicRadius, fontSize: dynamicFontSize } = getSubdivisionCellLayout({
+    containerWidth,
+    cellCount: displayPattern.length,
+    preferredCellSize: S.ms(28, 0.5),
+    preferredGap: S.ms(3, 0.3),
+  });
 
   return (
     <>
@@ -435,14 +429,14 @@ export function SubdivisionBar({
               testID={`subdivision-cell-${i}`}
             >
               {type === "strong" ? (
-                <View style={[{ width: clampedCellSize, height: clampedCellSize, borderRadius: dynamicRadius, overflow: "hidden", backgroundColor: C.accent, opacity: isPlaying ? (isActive ? 1 : 0.8) : 1 }]}>
+                <View style={[{ width: cellSize, height: cellSize, borderRadius: dynamicRadius, overflow: "hidden", backgroundColor: C.accent, opacity: isPlaying ? (isActive ? 1 : 0.8) : 1 }]}>
                   <LinearGradient
                     key={C.accent}
                     colors={[accentGradientEdge(C.accent), C.accent, C.accent]}
                     locations={[0, 0.4, 1]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={{ width: clampedCellSize, height: clampedCellSize, alignItems: "center", justifyContent: "center", borderRadius: dynamicRadius }}
+                    style={{ width: cellSize, height: cellSize, alignItems: "center", justifyContent: "center", borderRadius: dynamicRadius }}
                   >
                     <Text style={{ color: onAccentColor(C.accent), fontSize: dynamicFontSize, fontWeight: "bold" as const, lineHeight: dynamicFontSize + 2, textShadowColor: onAccentShadow(C.accent), textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
                   </LinearGradient>
@@ -451,8 +445,8 @@ export function SubdivisionBar({
                 <View
                   style={[
                     {
-                      width: clampedCellSize,
-                      height: clampedCellSize,
+                      width: cellSize,
+                      height: cellSize,
                       borderRadius: dynamicRadius,
                       backgroundColor: getCellColor(type, true, C.accent, C.accentMuted, C.text, C.textTertiary),
                       borderColor: getCellBorder(type, C.textTertiary, C.white),
@@ -623,11 +617,6 @@ const make_styles = (C: typeof Colors, S: ScaleValues) => StyleSheet.create({
     justifyContent: "space-evenly",
     alignItems: "center",
   },
-  cell: {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    borderRadius: S.ms(6, 0.3),
-  } as any,
   ghost: {
     position: "absolute",
     flexDirection: "row",

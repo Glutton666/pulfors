@@ -30,3 +30,5 @@
 - [Subdivision web shake tracking](subdivision-web-shake-tracking.md) — cumulative gesture displacement needs a zero seed; capture web starts at document level, not a View ref.
 - [Circular dial snap seams](circular-dial-snap-seams.md) — spring circular UI to the nearest equivalent visual index, not always its canonical state index.
 - [Audio watchdog activity signals](audio-watchdog-activity-signals.md) — every audible callback must refresh watchdog activity or healthy layered playback can trigger false recovery.
+- [Subdivision cell sizing](subdivision-cell-sizing.md) — use live dimensions and cap compact subdivision controls; module-load device flags go stale after resizing or rotation.
+- [Full reset settings races](full-reset-settings-races.md) — cancel pending writes and invalidate the initial async settings load before clearing storage, or stale patterns can return only in the UI.

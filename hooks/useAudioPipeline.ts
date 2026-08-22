@@ -29,7 +29,6 @@ import type { BuiltinPlayers, SoundSetPlayers } from "@/hooks/useAudioPlayers";
 import { BUILTIN_POOL_SIZE } from "@/hooks/useAudioPlayers";
 import { setAutoResumeAfterInterruption as setAudioSessionAutoResume } from "@/lib/audio-session";
 import {
-  markAudioRecovering,
   markAudioRecoveryFailed,
   markAudioRecoverySucceeded,
 } from "@/lib/audio-lifecycle";
@@ -562,7 +561,10 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
 
       if (audioRetryCountRef.current < 2) {
         audioRetryCountRef.current += 1;
-        markAudioRecovering("watchdog");
+        // A watchdog only observes missing callbacks; it cannot prove that
+        // output has stopped (for example, pre-rendered audio bypasses those
+        // callbacks). Retry silently and reserve lifecycle recovery UI for
+        // real session interruptions or a confirmed failure.
         if (Platform.OS === "web") {
           const ctx = getWebAudioContext();
           if (ctx?.state === "suspended") { ctx.resume().catch(() => {}); }

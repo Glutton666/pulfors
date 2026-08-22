@@ -517,6 +517,8 @@ export function useMetronomeScreen() {
     barCellOpacity, setBarCellOpacity,
     barRowHeight, setBarRowHeight,
     persistSettings,
+    invalidateSettingsLoad,
+    cancelSettingsPersistence,
     persistStatus,
     persistAudioSettingsCallbackRef,
     syncExternalSnapshot,
@@ -1320,6 +1322,11 @@ export function useMetronomeScreen() {
 
   const handleResetApp = useCallback(async () => {
     try {
+      // `loadSettings` and the debounced persister can outlive a full reset.
+      // Invalidate both before clearing storage so an old pattern cannot return
+      // to the UI after the engine has already been reset.
+      invalidateSettingsLoad();
+      cancelSettingsPersistence();
       const engine = engineRef.current;
       if (engine?.getIsRunning()) {
         engine.stop();
@@ -1419,7 +1426,7 @@ export function useMetronomeScreen() {
     } catch (e) {
       captureBreadcrumb({ category: "reset", message: "Reset failed", level: "error", data: { error: String(e) } });
     }
-  }, [setThemeColor, discardRoomTracking]);
+  }, [setThemeColor, discardRoomTracking, invalidateSettingsLoad, cancelSettingsPersistence]);
 
   // updateBpm → useSettings 소유
 
