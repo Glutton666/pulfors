@@ -34,9 +34,10 @@ export interface ScoreListScreenProps {
   defaultBpm: number;
   onClose: () => void;
   onOpenEditor: (doc: ScoreDocument) => void;
+  onTitleSubmit?: (title: string) => boolean;
 }
 
-export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor }: ScoreListScreenProps) {
+export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor, onTitleSubmit }: ScoreListScreenProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -293,6 +294,7 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor }: ScoreList
         defaultBpm={defaultBpm}
         onClose={() => setShowNewModal(false)}
         onCreate={handleCreate}
+        onTitleSubmit={onTitleSubmit}
       />
     </View>
   );

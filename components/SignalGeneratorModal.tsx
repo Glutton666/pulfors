@@ -705,6 +705,9 @@ const make_tgStyles = (C: typeof Colors) => StyleSheet.create({
 interface SignalGeneratorModalProps {
   visible: boolean;
   onClose: () => void;
+  /** 2.5초 14연타 이스터에그를 위해 실제 마이크 토글 전에 호출한다.
+   * true를 반환하면 이번 탭은 게임 진입에 사용되므로 마이크 권한 요청을 생략한다. */
+  onMicTap?: () => boolean;
   /**
    * 앱 레벨에서 TuningGuideModal을 렌더링하도록 위임. 두 모달이 동시에
    * 활성화되어 입력이 한쪽에 묶이는 'ghost' 상태를 막기 위해 SignalGenerator
@@ -717,7 +720,7 @@ interface SignalGeneratorModalProps {
   onOpenBpmDetect: () => void;
 }
 
-export function SignalGeneratorModal({ visible, onClose, onOpenTuningGuide, onOpenBpmDetect }: SignalGeneratorModalProps) {
+export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningGuide, onOpenBpmDetect }: SignalGeneratorModalProps) {
   const { colors: C } = useTheme();
   const pickerStyles = make_pickerStyles(C);
   const tgStyles = make_tgStyles(C);
@@ -1142,6 +1145,15 @@ export function SignalGeneratorModal({ visible, onClose, onOpenTuningGuide, onOp
     }
   }, [micListening, stopMic, startMic, hapticFeedback]);
 
+  const handleMicPress = useCallback(() => {
+    if (onMicTap?.()) {
+      stopPlayback();
+      stopMic();
+      return;
+    }
+    toggleMic();
+  }, [onMicTap, stopPlayback, stopMic, toggleMic]);
+
   const handleClose = useCallback(() => {
     stopPlayback();
     stopMic();
@@ -1284,7 +1296,7 @@ export function SignalGeneratorModal({ visible, onClose, onOpenTuningGuide, onOp
             {/* 마이크 버튼 — 노브 아래 독립 행 */}
             <View style={styles.micRow}>
               <Pressable
-                onPress={toggleMic}
+                    onPress={handleMicPress}
                 style={[
                   styles.micEmoji,
                   micListening && styles.micEmojiActive,

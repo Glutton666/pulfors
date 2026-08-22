@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { AnimatedModal } from "@/components/AnimatedModal";
 import { BeatIndicator } from "@/components/BeatIndicator";
 import { BpmSlider } from "@/components/BpmSlider";
 import { EasterEggQuiz } from "@/components/EasterEggQuiz";
+import { PitchQuizModal } from "@/components/PitchQuizModal";
 import { SubdivisionBar, DragGhost } from "@/components/SubdivisionBar";
 import { StopwatchTimer } from "@/components/StopwatchTimer";
 import { SettingsModal } from "@/components/SettingsModal";
@@ -26,7 +27,7 @@ import { PracticeBookModal } from "@/components/PracticeBookModal";
 import { WorkUpOverviewModal } from "@/components/WorkUpOverviewModal";
 import PracticeStatsGraph from "@/components/PracticeStatsGraph";
 import { StageModeOverlay } from "@/components/StageModeOverlay";
-import { markAudioPlaying } from "@/lib/audio-lifecycle";
+import { markAudioPlaying, markAudioStopped } from "@/lib/audio-lifecycle";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { ScoreListScreen } from "@/components/ScoreListScreen";
 import { ScoreEditorScreen } from "@/components/ScoreEditorScreen";
@@ -61,6 +62,9 @@ import { combinePersisterStatuses, getPersistFailureBannerKey } from "@/lib/pers
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { useMetronomeScreen } from "@/hooks/useMetronomeScreen";
 import { onAccentColor } from "@/lib/color-contrast";
+import { appendRapidTap, isChordEasterEggTitle, type PitchQuizMode } from "@/lib/pitch-quiz";
+import { stopAllScoreNotes } from "@/lib/score-audio";
+import * as Haptics from "expo-haptics";
 
 type Props = ReturnType<typeof useMetronomeScreen>;
 
@@ -175,6 +179,54 @@ export function MetronomeScreenUI(props: Props) {
   const saveFailureBannerKey = getPersistFailureBannerKey(
     combinePersisterStatuses(persistStatus, noteSamplePersistStatus),
   );
+  const [pitchQuizVisible, setPitchQuizVisible] = useState(false);
+  const [pitchQuizMode, setPitchQuizMode] = useState<PitchQuizMode | null>(null);
+  const rapidMicTapRef = useRef<number[]>([]);
+  const pitchQuizEntryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopPlaybackForPitchQuiz = useCallback(() => {
+    const engine = engineRef.current;
+    if (engine?.getIsRunning()) engine.stop();
+    stopRenderedAudio();
+    stopAllScoreNotes();
+    clearSamplePlayStates();
+    resetPlaybackVisuals();
+    setIsPlaying(false);
+    markAudioStopped();
+  }, [engineRef, stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals, setIsPlaying]);
+
+  const enterPitchQuiz = useCallback((mode: PitchQuizMode | null) => {
+    stopPlaybackForPitchQuiz();
+    // SignalGenerator와 게임 오버레이가 겹치지 않도록 단일 모달 상태를 먼저 비운다.
+    clearMenuItemReturn();
+    setActiveModal(null);
+    if (pitchQuizEntryTimerRef.current) clearTimeout(pitchQuizEntryTimerRef.current);
+    setPitchQuizVisible(false);
+    // AnimatedModal은 visible=false 뒤에도 150ms 동안 native Modal을 유지한다.
+    // 두 native Modal이 동시에 존재하면 iOS에서 새 모달이 입력을 받지 못할 수
+    // 있으므로, 이전 모달의 exit animation이 끝난 뒤에만 퀴즈를 연다.
+    pitchQuizEntryTimerRef.current = setTimeout(() => {
+      pitchQuizEntryTimerRef.current = null;
+      setPitchQuizMode(mode);
+      setPitchQuizVisible(true);
+    }, 180);
+    if (Platform.OS !== "web") void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, [stopPlaybackForPitchQuiz, clearMenuItemReturn, setActiveModal]);
+
+  const handleSignalMicTap = useCallback(() => {
+    rapidMicTapRef.current = appendRapidTap(rapidMicTapRef.current, Date.now());
+    if (rapidMicTapRef.current.length < 14) return false;
+    rapidMicTapRef.current = [];
+    enterPitchQuiz(null);
+    return true;
+  }, [enterPitchQuiz]);
+
+  const handleScoreTitleSubmit = useCallback((title: string) => {
+    if (!isChordEasterEggTitle(title)) return false;
+    setScoreMode(null);
+    enterPitchQuiz("chord");
+    return true;
+  }, [enterPitchQuiz, setScoreMode]);
 
   const openMenuItem = (open: () => void) => {
     markMenuItemReturn();
@@ -256,6 +308,7 @@ export function MetronomeScreenUI(props: Props) {
           <ScoreListScreen
             defaultBpm={bpm}
             onClose={closeScoreMode}
+            onTitleSubmit={handleScoreTitleSubmit}
             onOpenEditor={(doc) => {
               setScoreEditorDoc(doc);
               setScoreMode("editor");
@@ -610,6 +663,16 @@ export function MetronomeScreenUI(props: Props) {
           setActiveModal(next.activeModal);
         }}
         onOpenBpmDetect={() => { setActiveModal(null); setTimeout(() => openExclusive("bpmDetect"), 160); }}
+        onMicTap={handleSignalMicTap}
+      />
+
+      <PitchQuizModal
+        visible={pitchQuizVisible}
+        initialMode={pitchQuizMode}
+        onClose={() => {
+          setPitchQuizVisible(false);
+          setPitchQuizMode(null);
+        }}
       />
 
       {recorderTarget !== null && (

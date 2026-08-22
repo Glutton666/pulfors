@@ -29,9 +29,11 @@ export interface ScoreNewModalProps {
   defaultBpm: number;
   onClose: () => void;
   onCreate: (doc: ScoreDocument) => void;
+  /** true를 반환하면 일반 악보 생성 대신 호출자가 입력을 처리한다. */
+  onTitleSubmit?: (title: string) => boolean;
 }
 
-export function ScoreNewModal({ visible, defaultBpm, onClose, onCreate }: ScoreNewModalProps) {
+export function ScoreNewModal({ visible, defaultBpm, onClose, onCreate, onTitleSubmit }: ScoreNewModalProps) {
   const { colors: C } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -56,8 +58,13 @@ export function ScoreNewModal({ visible, defaultBpm, onClose, onCreate }: ScoreN
   const styles = makeStyles(C, S);
 
   function handleCreate() {
+    const trimmedTitle = title.trim();
+    if (trimmedTitle && onTitleSubmit?.(trimmedTitle)) {
+      handleClose();
+      return;
+    }
     const doc = createScoreDocument({
-      title: title.trim() || t("scoreMode", "untitled"),
+      title: trimmedTitle || t("scoreMode", "untitled"),
       parts: [{ instrumentId: "piano" }],
       timeSignature: { numerator: 4, denominator: 4 },
       bpm: defaultBpm,

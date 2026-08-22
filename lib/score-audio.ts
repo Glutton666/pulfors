@@ -192,6 +192,9 @@ let _currentMeasureStop: (() => void) | null = null;
 // 현재 재생 중인 미리 듣기의 취소 함수 (단일)
 let _currentPreviewStop: (() => void) | null = null;
 
+// 음감 퀴즈의 순차 재생 예약. 새 문제나 오버레이 종료 시 함께 취소한다.
+let _currentPitchSequenceStop: (() => void) | null = null;
+
 // ── 웹: AudioContext 오실레이터 발음 ─────────────────────────
 
 function _playWebNote(midi: number, durationMs: number, volume: number, oscType: WaveformType = "sine"): () => void {
@@ -614,6 +617,70 @@ export function previewScoreNote(midi: number, instrumentId?: string): void {
 }
 
 /**
+ * 음감 퀴즈용 단음 시퀀스 재생.
+ * 이전 시퀀스를 취소해 다음 문제의 음이 겹치지 않게 한다.
+ */
+export function playPitchSequence(notes: number[], gapMs = 500, durationMs = 440): void {
+  if (_currentPitchSequenceStop) _currentPitchSequenceStop();
+  const timers: ReturnType<typeof setTimeout>[] = [];
+  let cancelled = false;
+  notes.forEach((midi, index) => {
+    const timer = setTimeout(() => {
+      if (!cancelled) previewScoreNote(midi);
+    }, index * Math.max(gapMs, durationMs));
+    timers.push(timer);
+  });
+  _currentPitchSequenceStop = () => {
+    cancelled = true;
+    timers.forEach(clearTimeout);
+    _currentPitchSequenceStop = null;
+  };
+}
+
+/**
+ * 여러 MIDI 음을 동시에 재생한다.
+ * 화음 퀴즈에서는 기본 위치의 3·4음을 하나의 단서로 들려줘야 하므로
+ * 단일 음 미리 듣기와 별도 API로 둔다.
+ */
+export function playChord(midiNotes: number[], durationMs = 1050, volume = 0.62): void {
+  stopPreviewNote();
+  const notes = midiNotes.filter((midi) => midi >= 21 && midi <= 108);
+  if (!notes.length) return;
+
+  if (Platform.OS === "web") {
+    const stops = notes.map((midi) => _playWebNote(midi, durationMs, volume, "triangle"));
+    _currentPreviewStop = () => {
+      stops.forEach((stop) => {
+        try { stop(); } catch {}
+      });
+      _currentPreviewStop = null;
+    };
+    return;
+  }
+
+  const token = { cancelled: false };
+  _currentPreviewStop = () => {
+    token.cancelled = true;
+    _currentPreviewStop = null;
+  };
+  Promise.all(notes.map(async (midi) => {
+    await _ensureNoteFile(midi, "triangle");
+    const stop = await _playNativeNote(midi, durationMs, volume, "triangle");
+    if (token.cancelled) stop();
+    return stop;
+  })).then((stops) => {
+    if (token.cancelled) return;
+    _currentPreviewStop = () => {
+      token.cancelled = true;
+      stops.forEach((stop) => {
+        try { stop(); } catch {}
+      });
+      _currentPreviewStop = null;
+    };
+  }).catch(() => {});
+}
+
+/**
  * 드럼 노트 입력 즉시 미리 듣기 (드럼 종류별 decayS 길이, 볼륨 0.6)
  * 이전 미리 듣기가 아직 재생 중이면 먼저 취소합니다.
  */
@@ -649,6 +716,10 @@ export function previewScoreDrum(drumType: DrumType): void {
  * 에디터 닫힘(언마운트) 시 호출합니다.
  */
 export function stopPreviewNote(): void {
+  if (_currentPitchSequenceStop) {
+    _currentPitchSequenceStop();
+    _currentPitchSequenceStop = null;
+  }
   if (_currentPreviewStop) {
     _currentPreviewStop();
     _currentPreviewStop = null;
@@ -660,6 +731,7 @@ export function stopPreviewNote(): void {
  * stop/pause 시 호출합니다.
  */
 export function stopAllScoreNotes(): void {
+  stopPreviewNote();
   if (_currentMeasureStop) {
     _currentMeasureStop();
     _currentMeasureStop = null;
