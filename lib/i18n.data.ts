@@ -480,6 +480,9 @@ export const translations = {
     yearInReview: { ko: "연간 리뷰", en: "Year in Review" },
     noSessionsRecorded: { ko: "{0} 기록된 세션 없음", en: "No sessions recorded {0}" },
     shareCustomImage: { ko: "커스텀 이미지", en: "Custom Image" },
+    clearActivity: { ko: "활동 기록 삭제", en: "Delete activity records" },
+    clearActivityTitle: { ko: "활동 기록 삭제", en: "Delete activity records" },
+    clearActivityConfirm: { ko: "연습 세션, 목표, 이 기기의 기록 동의 설정을 모두 삭제합니다. 계속할까요?", en: "This deletes practice sessions, goals, and this device's logging consent. Continue?" },
   },
   signalGenerator: {
     title: { ko: "시그널 제너레이터", en: "Signal Generator" },

@@ -6,8 +6,11 @@ import {
   addActivityLog,
   loadActivityLogs,
   clearActivityLogs,
+  clearActivityData,
   loadGoals,
+  pruneActivityLogs,
   saveGoals,
+  ACTIVITY_RETENTION_DAYS,
   type Goal,
 } from "../lib/activity-log";
 
@@ -76,6 +79,48 @@ test("clearActivityLogs: 전체 삭제", async () => {
   });
   await clearActivityLogs();
   assert.deepEqual(await loadActivityLogs(), []);
+});
+
+test("clearActivityData: 로그·목표·로컬 기록 동의를 함께 삭제", async () => {
+  await saveLoggingEnabled(true);
+  await saveGoals([{ id: "g", type: "total_play_time", target: 10, label: "10분" }]);
+  await addActivityLog({
+    type: "practice_session",
+    data: { bpm: 120, mode: "bar", duration: 5 },
+  });
+  await clearActivityData();
+  assert.equal(await loadLoggingEnabled(), false);
+  assert.deepEqual(await loadActivityLogs(), []);
+  assert.deepEqual(await loadGoals(), []);
+});
+
+test("clearActivityData: 이미 대기 중인 로그 쓰기 뒤에 직렬화되어 기록을 되살리지 않음", async () => {
+  const pendingWrite = addActivityLog({
+    type: "practice_session",
+    data: { bpm: 120, mode: "bar", duration: 5 },
+  });
+  await clearActivityData();
+  await pendingWrite;
+  assert.deepEqual(await loadActivityLogs(), []);
+});
+
+test("pruneActivityLogs: 730일보다 오래된 세션만 정리", () => {
+  const now = new Date(2026, 7, 21).getTime();
+  const retained = pruneActivityLogs([
+    { id: "edge", type: "practice_session", timestamp: now - ACTIVITY_RETENTION_DAYS * 24 * 60 * 60 * 1000, data: { bpm: 120, mode: "dial", duration: 1 } },
+    { id: "old", type: "practice_session", timestamp: now - (ACTIVITY_RETENTION_DAYS + 1) * 24 * 60 * 60 * 1000, data: { bpm: 120, mode: "dial", duration: 1 } },
+  ], now);
+  assert.deepEqual(retained.map((entry) => entry.id), ["edge"]);
+});
+
+test("loadActivityLogs: 읽는 동안 만료 로그를 저장소에서도 자동 정리", async () => {
+  const now = Date.now();
+  await AsyncStorage.setItem("metronome_activity_log", JSON.stringify([
+    { id: "old", type: "practice_session", timestamp: now - (ACTIVITY_RETENTION_DAYS + 1) * 24 * 60 * 60 * 1000, data: { bpm: 120, mode: "dial", duration: 10 } },
+    { id: "fresh", type: "practice_session", timestamp: now, data: { bpm: 120, mode: "dial", duration: 10 } },
+  ]));
+  assert.deepEqual((await loadActivityLogs()).map((entry) => entry.id), ["fresh"]);
+  assert.deepEqual(JSON.parse(await AsyncStorage.getItem("metronome_activity_log")).map((entry: { id: string }) => entry.id), ["fresh"]);
 });
 
 test("loadGoals: 기본 []", async () => {

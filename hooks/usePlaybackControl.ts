@@ -14,7 +14,7 @@ import type { ClickPCMs, TickInfo } from "@/lib/audio-renderer";
 import type { MetronomeEngine } from "@/lib/metronome-engine";
 import type { BarConfig, DialConfig } from "@/app/index.helpers";
 import type { PracticeEntry, SoundSet } from "@/lib/storage";
-import type { PracticeSessionData } from "@/lib/activity-log";
+import { PracticeSessionTracker, type PracticeSessionData } from "@/lib/activity-log";
 import type { Language } from "@/lib/i18n";
 import type { SampleChannel } from "@/lib/stereo-channel";
 import type { NoteSampleMetroChannelMap } from "@/lib/note-samples";
@@ -75,6 +75,7 @@ export interface UsePlaybackControlParams {
   handleEasterEggGiveUpRef: Ref<(stopEngine?: boolean) => void>;
   loggingEnabled: boolean;
   practiceStartRef: Ref<number | null>;
+  practiceSessionRef: Ref<PracticeSessionTracker | null>;
   loadedPracticeNoteRef: Ref<{ id: string; label: string } | null>;
   addPracticeLog: (data: PracticeSessionData) => Promise<unknown>;
   checkCompletedGoals: () => void;
@@ -85,6 +86,52 @@ export interface UsePlaybackControlParams {
 export function usePlaybackControl(p: UsePlaybackControlParams) {
   const seamlessNextEntryRef = useRef<PracticeEntry | null>(null);
   const seamlessRef = p.seamlessNextEntryRef ?? seamlessNextEntryRef;
+
+  const startOrResumePracticeSession = useCallback(() => {
+    if (!p.loggingEnabled) return;
+    const now = Date.now();
+    const existing = p.practiceSessionRef.current;
+    if (existing) {
+      existing.updateBpm(p.bpm);
+      existing.resume(now);
+      p.practiceStartRef.current = now;
+      return;
+    }
+    const note = p.loadedPracticeNoteRef.current;
+    p.practiceSessionRef.current = new PracticeSessionTracker({
+      bpm: p.bpm,
+      mode: p.barModeRef.current ? "bar" : "dial",
+      startedAt: now,
+      ...(p.barModeRef.current ? { barConfig: { beatsPerMeasure: p.beatsPerMeasure, subdivisions: p.subdivisionPattern.length } } : {}),
+      ...(p.barModeRef.current && note ? { practiceNoteId: note.id, practiceNoteLabel: note.label } : {}),
+    }, now);
+    p.practiceStartRef.current = now;
+  }, [p]);
+
+  const pausePracticeSession = useCallback((interrupted: boolean) => {
+    const session = p.practiceSessionRef.current;
+    if (!session) return;
+    if (interrupted) session.interrupt();
+    else session.pause();
+  }, [p]);
+
+  const completePracticeSession = useCallback((
+    endReason: NonNullable<PracticeSessionData["endReason"]> = "manual",
+    status: NonNullable<PracticeSessionData["status"]> = "completed",
+  ) => {
+    const session = p.practiceSessionRef.current;
+    p.practiceSessionRef.current = null;
+    p.practiceStartRef.current = null;
+    if (!session || !p.loggingEnabled) return;
+    const data = session.complete(p.bpm, endReason, status);
+    if (data.duration < 3) return;
+    void p.addPracticeLog(data).then(p.checkCompletedGoals);
+  }, [p]);
+
+  const discardPracticeSession = useCallback(() => {
+    p.practiceSessionRef.current = null;
+    p.practiceStartRef.current = null;
+  }, [p]);
 
   const configureEngine = useCallback((engine: MetronomeEngine) => {
     if (p.barModeRef.current) {
@@ -152,7 +199,8 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     p.setIsPlaying(false);
     p.resetPlaybackVisuals();
     markAudioStopped();
-  }, [p]);
+    completePracticeSession("manual");
+  }, [completePracticeSession, p]);
 
   const togglePlayPause = useCallback(async () => {
     const engine = p.engineRef.current;
@@ -180,20 +228,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       p.setIsPlaying(false);
       p.notifyVoicePlayState(false);
       p.resetPlaybackVisuals();
-      if (getAudioLifecycleSnapshot().phase !== "interrupted") markAudioStopped();
+      const interrupted = ["interrupted", "recovering"].includes(getAudioLifecycleSnapshot().phase);
+      if (!interrupted) markAudioStopped();
       p.showPausedNotification(p.bpm, modeLabel, p.languageRef.current);
-      if (p.loggingEnabled && p.practiceStartRef.current) {
-        const duration = Math.round((Date.now() - p.practiceStartRef.current) / 1000);
-        if (duration >= 3) {
-          const note = p.loadedPracticeNoteRef.current;
-          p.addPracticeLog({
-            bpm: p.bpm, mode: p.barMode ? "bar" : "dial", duration,
-            ...(p.barMode ? { barConfig: { beatsPerMeasure: p.beatsPerMeasure, subdivisions: p.subdivisionPattern.length } } : {}),
-            ...(p.barMode && note ? { practiceNoteId: note.id, practiceNoteLabel: note.label } : {}),
-          }).then(p.checkCompletedGoals);
-        }
-        p.practiceStartRef.current = null;
-      }
+      pausePracticeSession(interrupted);
       return;
     }
 
@@ -202,7 +240,6 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     markAudioPreparing();
     const startBeat = p.barModeRef.current ? p.barStartBeatRef.current : undefined;
     p.showPlayingNotification(p.bpm, modeLabel, p.languageRef.current);
-    if (p.loggingEnabled) p.practiceStartRef.current = Date.now();
     configureEngine(engine);
     p.preparingCancelledRef.current = false;
     try {
@@ -233,6 +270,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
           safePlay(player, "metronome.start.native");
         }).catch(() => {});
       }
+      startOrResumePracticeSession();
       if (p.barModeRef.current && p.barLoopModeRef.current === "once") engine.requestStopAfterMeasure();
       return true;
     } catch {
@@ -243,7 +281,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       else markAudioStopped();
       return false;
     }
-  }, [configureEngine, p, renderWebLoop, seamlessRef]);
+  }, [configureEngine, p, pausePracticeSession, renderWebLoop, startOrResumePracticeSession, seamlessRef]);
 
   const togglePlayPauseRef = useRef(togglePlayPause);
   useEffect(() => { togglePlayPauseRef.current = togglePlayPause; }, [togglePlayPause]);
@@ -292,6 +330,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
         p.setIsPlaying(true); engine.start(); markAudioPlaying(); p.armAudioWatchdogRef.current();
         if (player) safePlay(player, "metronome.start.fallback");
       }
+      startOrResumePracticeSession();
     } catch (error) {
       p.capturePlaybackError("startMetronome error", error);
       p.setIsPreparing(false);
@@ -300,11 +339,12 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       if (getAudioLifecycleSnapshot().phase === "recovering") markAudioRecoveryFailed("interruption");
       else markAudioStopped();
     }
-  }, [configureEngine, p, renderWebLoop]);
+  }, [configureEngine, p, renderWebLoop, startOrResumePracticeSession]);
 
   const retryAudioRecovery = useCallback(async () => {
     if (p.isPreparingRef.current) return;
     markAudioRecovering("watchdog");
+    p.practiceSessionRef.current?.interrupt();
     p.engineRef.current?.stop();
     p.stopRenderedAudio();
     p.clearSamplePlayStates();
@@ -315,5 +355,15 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     await startMetronome();
   }, [p, startMetronome]);
 
-  return { togglePlayPause, togglePlayPauseRef, startMetronome, stopMetronome, retryAudioRecovery, seamlessNextEntryRef: seamlessRef };
+  return {
+    togglePlayPause,
+    togglePlayPauseRef,
+    startMetronome,
+    stopMetronome,
+    retryAudioRecovery,
+    completePracticeSession,
+    discardPracticeSession,
+    startOrResumePracticeSession,
+    seamlessNextEntryRef: seamlessRef,
+  };
 }

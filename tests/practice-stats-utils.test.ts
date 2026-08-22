@@ -112,6 +112,62 @@ test("buildDailyStats: 알 수 없는 mode는 total에만 합산", () => {
   assert.equal(today.barSec, 0);
 });
 
+test("buildDailyStats: V2는 pause/interruption이 아닌 activeDurationSec만 집계", () => {
+  const logs: ActivityLog[] = [{
+    id: "v2",
+    type: "practice_session",
+    timestamp: FIXED_NOW,
+    data: {
+      bpm: 120,
+      mode: "dial",
+      duration: 90,
+      schemaVersion: 2,
+      activeDurationSec: 20,
+      pausedDurationSec: 40,
+      interruptionDurationSec: 30,
+      status: "completed",
+    },
+  }];
+  const today = buildDailyStats(logs, 7, FIXED_NOW).at(-1)!;
+  assert.equal(today.totalSec, 20);
+  assert.equal(today.beatSec, 20);
+});
+
+test("buildDailyStats: abandoned V2 세션은 성장·목표 시간에 포함하지 않음", () => {
+  const logs: ActivityLog[] = [{
+    id: "abandoned",
+    type: "practice_session",
+    timestamp: FIXED_NOW,
+    data: {
+      bpm: 120,
+      mode: "dial",
+      duration: 60,
+      schemaVersion: 2,
+      activeDurationSec: 60,
+      status: "abandoned",
+    },
+  }];
+  const today = buildDailyStats(logs, 7, FIXED_NOW).at(-1)!;
+  assert.equal(today.totalSec, 0);
+});
+
+test("buildDailyStats: 백업에서 읽은 3초 미만 V2 세션도 합계에서 제외", () => {
+  const logs: ActivityLog[] = [{
+    id: "short",
+    type: "practice_session",
+    timestamp: FIXED_NOW,
+    data: {
+      bpm: 120,
+      mode: "dial",
+      duration: 2,
+      schemaVersion: 2,
+      activeDurationSec: 2,
+      status: "completed",
+    },
+  }];
+  assert.equal(buildDailyStats(logs, 7, FIXED_NOW).at(-1)!.totalSec, 0);
+});
+
 test("isStatsEmpty: 모두 0 → true, 하나라도 양수면 false", () => {
   assert.equal(isStatsEmpty([{ label: "월", totalSec: 0, beatSec: 0, barSec: 0 }]), true);
   assert.equal(isStatsEmpty([

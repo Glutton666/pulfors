@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { restoreFromJson, rollbackPendingRestoreIfAny } from "../lib/backup/full";
 import { ALL_KEYS, RESTORE_SNAPSHOT_KEY } from "../lib/backup/shared";
 import { CURRENT_SCHEMA_VERSION } from "../lib/backup/migrations";
+import { loadActivityLogs } from "../lib/activity-log";
 
 const AsyncStorage = require("./_stubs/async-storage");
 
@@ -35,6 +36,29 @@ test("성공 경로: 복원 성공 시 스냅샷 키가 정리됨", async () => 
   assert.equal(await AsyncStorage.getItem(RESTORE_SNAPSHOT_KEY), null);
   const s = JSON.parse(await AsyncStorage.getItem("metronome_settings"));
   assert.equal(s.bpm, 200);
+});
+
+test("활동 로그 백업: V1과 V2 세션 필드를 변형 없이 복원", async () => {
+  const timestamp = Date.now();
+  const sessions = [
+    { id: "v1", type: "practice_session", timestamp, data: { bpm: 100, mode: "dial", duration: 9 } },
+    {
+      id: "v2",
+      type: "practice_session",
+      timestamp,
+      data: {
+        bpm: 120, mode: "bar", duration: 12, schemaVersion: 2,
+        startedAt: timestamp - 30_000, endedAt: timestamp,
+        activeDurationSec: 12, pausedDurationSec: 8, interruptionDurationSec: 10,
+        pauseCount: 1, interruptionCount: 1, status: "completed", endReason: "manual",
+      },
+    },
+  ];
+  const result = await restoreFromJson(makeBackupJson({
+    metronome_activity_log: JSON.stringify(sessions),
+  }));
+  assert.equal(result.success, true);
+  assert.deepEqual(await loadActivityLogs(), sessions);
 });
 
 test("실패 경로: multiSet 실패 시 기존 데이터로 롤백", async () => {

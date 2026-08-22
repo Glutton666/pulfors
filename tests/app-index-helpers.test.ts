@@ -87,6 +87,26 @@ test("computeLandscapeStats: duration 누락 시 0으로 처리", () => {
   assert.equal(r.todayTotal, 0);
 });
 
+test("computeLandscapeStats: abandoned V2 세션은 합계에서 제외", () => {
+  const now = new Date("2026-05-03T12:00:00Z");
+  const logs = [{
+    ...mkPracticeLog(now.getTime() - 1000, "dial", 100),
+    data: { mode: "dial" as const, bpm: 120, duration: 100, schemaVersion: 2 as const, activeDurationSec: 100, status: "abandoned" as const },
+  }];
+  const r = computeLandscapeStats(logs as any, now);
+  assert.equal(r.todayTotal, 0);
+  assert.equal(r.weekTotal, 0);
+});
+
+test("computeLandscapeStats: 3초 미만 V2 세션은 합계에서 제외", () => {
+  const now = new Date("2026-05-03T12:00:00Z");
+  const logs = [{
+    ...mkPracticeLog(now.getTime() - 1000, "dial", 2),
+    data: { mode: "dial" as const, bpm: 120, duration: 2, schemaVersion: 2 as const, activeDurationSec: 2, status: "completed" as const },
+  }];
+  assert.equal(computeLandscapeStats(logs as any, now).todayTotal, 0);
+});
+
 test("defaultBeatTypes: first beat is accent, rest normal", () => {
   assert.deepEqual(defaultBeatTypes(4), ["accent", "normal", "normal", "normal"]);
 });

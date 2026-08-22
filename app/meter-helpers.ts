@@ -1,6 +1,6 @@
 import { Platform } from "react-native";
 import type { BeatType } from "@/lib/metronome-engine";
-import type { ActivityLog, PracticeSessionData } from "@/lib/activity-log";
+import { getPracticeSessionDuration, isPracticeSessionIncludedInActivityTotals, type ActivityLog, type PracticeSessionData } from "@/lib/activity-log";
 
 export interface LandscapeStatsTotals {
   todayTotal: number;
@@ -30,7 +30,8 @@ export function computeLandscapeStats(
   for (const l of logs) {
     if (l.type !== "practice_session") continue;
     const d = l.data as PracticeSessionData;
-    const dur = d.duration || 0;
+    if (!isPracticeSessionIncludedInActivityTotals(d)) continue;
+    const dur = getPracticeSessionDuration(d);
     if (l.timestamp >= weekMs) weekTotal += dur;
     if (l.timestamp >= todayMs) {
       todayTotal += dur;

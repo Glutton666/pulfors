@@ -182,13 +182,18 @@ interface PracticeSessionV2 {
   endedAt: number;             // epoch ms, 끝난 순간
   activeDurationSec: number;   // 재생/실제 연습으로 인정된 초
   pausedDurationSec: number;   // 표시·디버그용, 성장 시간에는 미포함
+  interruptionDurationSec: number; // 오디오 중단으로 제외된 시간
+  pauseCount: number;
+  interruptionCount: number;
   mode: "dial" | "bar" | "note" | "score" | "polygon";
   bpmStart: number;
   bpmEnd: number;
   bpmPeak: number;
   timingBasis?: PolygonTimingBasis; // polygon일 때만
   meter?: { numerator: number; denominator: 2 | 4 | 8 };
-  completion: "manual_stop" | "timer_complete" | "measure_complete" | "abandoned";
+  status: "completed" | "abandoned";
+  endReason: "manual" | "timer" | "measure_complete" | "fade_out"
+    | "audio_interruption" | "audio_recovery_failed";
   repeatCount?: number;        // 명시적 반복이 끝난 수, 추정 금지
   goalId?: string;             // 연결된 목표가 있을 때만
   quality?: {

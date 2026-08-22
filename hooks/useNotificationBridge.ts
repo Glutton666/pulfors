@@ -33,6 +33,7 @@ interface UseNotificationBridgeParams {
   resetPlaybackVisuals: () => void;
   setIsPlaying: React.Dispatch<React.SetStateAction<boolean>>;
   setIsPreparing: React.Dispatch<React.SetStateAction<boolean>>;
+  togglePlaybackRef: React.MutableRefObject<(() => Promise<boolean | undefined>) | null>;
 }
 
 /**
@@ -47,7 +48,7 @@ export function useNotificationBridge(params: UseNotificationBridgeParams): void
     engineRef, barModeRef, barConfigRef, dialConfigRef, barLoopModeRef,
     blockPlayModeRef, barStartBeatRef, bpmRef, updateBpmRef, languageRef,
     renderedPlayerRef, buildRenderedPlayer, stopRenderedAudio, clearSamplePlayStates,
-    resetPlaybackVisuals, setIsPlaying, setIsPreparing,
+    resetPlaybackVisuals, setIsPlaying, setIsPreparing, togglePlaybackRef,
   } = params;
 
   // Double-tap accumulator for BPM_UP / BPM_DOWN: single tap → ±1, double → ±5.
@@ -58,77 +59,9 @@ export function useNotificationBridge(params: UseNotificationBridgeParams): void
     const sub = addNotificationActionListener((actionId) => {
       const handleAsync = async () => {
         if (actionId === "TOGGLE_PLAY") {
-          const engine = engineRef.current;
-          if (!engine) return;
-
-          const modeLabel = barModeRef.current ? "Bar" : "Dial";
-
-          if (engine.getIsRunning()) {
-            engine.stop();
-            stopRenderedAudio();
-            clearSamplePlayStates();
-            setIsPreparing(false);
-            setIsPlaying(false);
-            resetPlaybackVisuals();
-            showPausedNotification(bpmRef.current, modeLabel, languageRef.current as "ko" | "en" | undefined);
-          } else {
-            stopRenderedAudio();
-            engine.setPreRenderedAudio(false);
-            setIsPreparing(false);
-
-            if (barModeRef.current) {
-              engine.setBeatTypes([...(barConfigRef.current.beatTypes || [])]);
-              engine.setAllBeatSubdivisions(barConfigRef.current.beatSubdivisions || {});
-              engine.setAllBarRepeats(barConfigRef.current.barRepeats || {});
-              engine.setLoopBlocks(barConfigRef.current.loopBlocks || []);
-              engine.setBlockPlayMode(blockPlayModeRef.current);
-              const bpmOverrides: Record<number, number> = {};
-              for (const [k, v] of Object.entries(barConfigRef.current.barRepeats || {})) {
-                if (v.bpm) bpmOverrides[Number(k)] = toEngineBpm(v.bpm, params.beatDenominatorRef.current);
-              }
-              engine.setAllBarBpmOverrides(bpmOverrides);
-            } else {
-              engine.setBeatTypes([...(dialConfigRef.current.beatTypes || [])]);
-              engine.setAllBeatSubdivisions(dialConfigRef.current.beatSubdivisions || {});
-            }
-            engine.buildScheduleOnly();
-
-            resetPlaybackVisuals();
-
-            if (Platform.OS !== "web") {
-              // lib/android-audio-focus.ts의 오디오 포커스 프로브, lib/android-foreground-service.ts와
-              // 동일한 "doNotMix" 설정을 사용한다 — 서로 다른 interruptionMode를 쓰면
-              // 재생 시작 시점에 오디오 모드가 오락가락하며 AudioTrack 생성과 경합해
-              // 무음을 유발할 수 있다 (2026-08-02 확인, useMetronomeScreen.ts 참고).
-              await applyAudioModeIfChanged({
-                allowsRecording: false,
-                playsInSilentMode: true,
-                interruptionMode: "doNotMix",
-                shouldPlayInBackground: true,
-              });
-            }
-
-            const renderedPlayer = await buildRenderedPlayer();
-            if (renderedPlayer) {
-              stopRenderedAudio();
-              renderedPlayerRef.current = renderedPlayer;
-              renderedPlayer.volume = 1.0;
-              engine.setPreRenderedAudio(true);
-            }
-
-            setIsPlaying(true);
-            engine.start(barModeRef.current ? (barStartBeatRef.current ?? undefined) : undefined);
-
-            if (renderedPlayer) {
-              safePlay(renderedPlayer, "metronome.start.barMode");
-            }
-
-            showPlayingNotification(bpmRef.current, modeLabel, languageRef.current as "ko" | "en" | undefined);
-
-            if (barModeRef.current && barLoopModeRef.current === "once") {
-              engine.requestStopAfterMeasure();
-            }
-          }
+          // Keep notification controls on the same lifecycle path as the main
+          // control so pause/resume remains one accurately timed session.
+          await togglePlaybackRef.current?.();
           return;
         }
 

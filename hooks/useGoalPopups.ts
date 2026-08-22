@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { loadActivityLogs, loadGoals, saveGoals, type Goal, type PracticeSessionData, type PracticeRoomVisitData } from "@/lib/activity-log";
+import { getPracticeSessionDuration, isPracticeSessionIncludedInActivityTotals, loadActivityLogs, loadGoals, saveGoals, type Goal, type PracticeSessionData, type PracticeRoomVisitData } from "@/lib/activity-log";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 
 /**
@@ -22,10 +22,13 @@ export function useGoalPopups() {
       const dayStartMs = dayStart.getTime();
 
       const todayLogs = allLogs.filter((l) => l.timestamp >= dayStartMs);
-      const todaySessions = todayLogs.filter((l) => l.type === "practice_session");
-      const todayTotalTime = todaySessions.reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0) / 60;
-      const todayBeatTime = todaySessions.filter((l) => (l.data as PracticeSessionData).mode === "dial").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0) / 60;
-      const todayBarTime = todaySessions.filter((l) => (l.data as PracticeSessionData).mode === "bar").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0) / 60;
+      const todaySessions = todayLogs.filter((l) =>
+        l.type === "practice_session"
+        && isPracticeSessionIncludedInActivityTotals(l.data as PracticeSessionData)
+      );
+      const todayTotalTime = todaySessions.reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0) / 60;
+      const todayBeatTime = todaySessions.filter((l) => (l.data as PracticeSessionData).mode === "dial").reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0) / 60;
+      const todayBarTime = todaySessions.filter((l) => (l.data as PracticeSessionData).mode === "bar").reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0) / 60;
       const todayRoomTime = todayLogs.filter((l) => l.type === "practice_room_visit").reduce((s, l) => s + ((l.data as PracticeRoomVisitData).duration || 0), 0) / 60;
 
       const newlyCompleted = allGoals.filter((g) => {
@@ -42,7 +45,7 @@ export function useGoalPopups() {
                 const d = l.data as PracticeSessionData;
                 return d.mode === "bar" && d.practiceNoteId === g.practiceNoteId;
               })
-              .reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0) / 60;
+                .reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0) / 60;
             break;
           }
         }

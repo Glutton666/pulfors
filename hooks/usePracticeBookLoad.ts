@@ -96,6 +96,7 @@ export interface UsePracticeBookLoadParams {
   resetPlaybackVisuals: () => void;
   preloadNoteSampleSounds: (samples: NoteSampleMap, force?: boolean) => void;
   handleExitNoteMode: () => void;
+  completePracticeSession: () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -182,6 +183,7 @@ export function usePracticeBookLoad({
   resetPlaybackVisuals,
   preloadNoteSampleSounds,
   handleExitNoteMode,
+  completePracticeSession,
 }: UsePracticeBookLoadParams): UsePracticeBookLoadResult {
   // ── 훅 내부 전용 refs ─────────────────────────────────────────────────────
   /** 악보 마디 연결 캐시 — handleLinkedEntryChange 전용 */
@@ -283,6 +285,7 @@ export function usePracticeBookLoad({
     if (!engine) return;
 
     if (isPlaying) {
+      completePracticeSession();
       engine.stop();
       stopRenderedAudio();
       clearSamplePlayStates();
@@ -459,7 +462,7 @@ export function usePracticeBookLoad({
     }
 
     loadedPracticeNoteRef.current = { id: entry.id, label: entry.label };
-  }, [isPlaying, barMode, noteMode, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, noteSamples, noteSampleNames, noteSampleSources, preloadNoteSampleSounds, handleExitNoteMode]);
+  }, [isPlaying, barMode, noteMode, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, noteSamples, noteSampleNames, noteSampleSources, preloadNoteSampleSounds, handleExitNoteMode, completePracticeSession]);
 
   return {
     scorePracticeBookRef,

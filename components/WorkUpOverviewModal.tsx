@@ -27,6 +27,9 @@ import { captureRef } from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
 import * as ImagePicker from "expo-image-picker";
 import {
+  clearActivityData,
+  getPracticeSessionDuration,
+  isPracticeSessionIncludedInActivityTotals,
   loadActivityLogs,
   loadGoals,
   saveGoals,
@@ -46,6 +49,7 @@ interface WorkUpOverviewModalProps {
   trackingRoomName: string | null;
   onStartRoomTracking: (room: { id: string; name: string }) => void;
   onStopRoomTracking: () => void;
+  onActivityDataCleared: () => void;
   username?: string;
 }
 
@@ -209,6 +213,7 @@ export function WorkUpOverviewModal({
   trackingRoomName,
   onStartRoomTracking,
   onStopRoomTracking,
+  onActivityDataCleared,
   username,
 }: WorkUpOverviewModalProps) {
   const { colors: C } = useTheme();
@@ -295,65 +300,77 @@ export function WorkUpOverviewModal({
   const todayLogs = useMemo(() => logs.filter((l) => l.timestamp >= todayStart), [logs, todayStart]);
   const weekLogs = useMemo(() => logs.filter((l) => l.timestamp >= weekStart), [logs, weekStart]);
 
-  const todaySessions = useMemo(() => todayLogs.filter((l) => l.type === "practice_session"), [todayLogs]);
+  const todaySessions = useMemo(() => todayLogs.filter((l) =>
+    l.type === "practice_session"
+    && isPracticeSessionIncludedInActivityTotals(l.data as PracticeSessionData)
+  ), [todayLogs]);
 
   const todayTotalTime = useMemo(
-    () => todaySessions.reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    () => todaySessions.reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0),
     [todaySessions]
   );
   const todayBeatTime = useMemo(
-    () => todaySessions.filter(l => (l.data as PracticeSessionData).mode === "dial").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    () => todaySessions.filter(l => (l.data as PracticeSessionData).mode === "dial").reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0),
     [todaySessions]
   );
   const todayBarTime = useMemo(
-    () => todaySessions.filter(l => (l.data as PracticeSessionData).mode === "bar").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    () => todaySessions.filter(l => (l.data as PracticeSessionData).mode === "bar").reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0),
     [todaySessions]
   );
 
-  const weekSessions = useMemo(() => weekLogs.filter((l) => l.type === "practice_session"), [weekLogs]);
+  const weekSessions = useMemo(() => weekLogs.filter((l) =>
+    l.type === "practice_session"
+    && isPracticeSessionIncludedInActivityTotals(l.data as PracticeSessionData)
+  ), [weekLogs]);
   const weekTotalTime = useMemo(
-    () => weekSessions.reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    () => weekSessions.reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0),
     [weekSessions]
   );
   const weekBeatTime = useMemo(
-    () => weekSessions.filter(l => (l.data as PracticeSessionData).mode === "dial").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    () => weekSessions.filter(l => (l.data as PracticeSessionData).mode === "dial").reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0),
     [weekSessions]
   );
   const weekBarTime = useMemo(
-    () => weekSessions.filter(l => (l.data as PracticeSessionData).mode === "bar").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    () => weekSessions.filter(l => (l.data as PracticeSessionData).mode === "bar").reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0),
     [weekSessions]
   );
 
   const monthStart = getStartOfMonth(new Date());
   const monthLogs = useMemo(() => logs.filter((l) => l.timestamp >= monthStart), [logs, monthStart]);
-  const monthSessions = useMemo(() => monthLogs.filter((l) => l.type === "practice_session"), [monthLogs]);
+  const monthSessions = useMemo(() => monthLogs.filter((l) =>
+    l.type === "practice_session"
+    && isPracticeSessionIncludedInActivityTotals(l.data as PracticeSessionData)
+  ), [monthLogs]);
   const monthTotalTime = useMemo(
-    () => monthSessions.reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    () => monthSessions.reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0),
     [monthSessions]
   );
   const monthBeatTime = useMemo(
-    () => monthSessions.filter(l => (l.data as PracticeSessionData).mode === "dial").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    () => monthSessions.filter(l => (l.data as PracticeSessionData).mode === "dial").reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0),
     [monthSessions]
   );
   const monthBarTime = useMemo(
-    () => monthSessions.filter(l => (l.data as PracticeSessionData).mode === "bar").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    () => monthSessions.filter(l => (l.data as PracticeSessionData).mode === "bar").reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0),
     [monthSessions]
   );
 
   const lastYearStart = getStartOfYear(new Date(new Date().getFullYear() - 1, 0, 1));
   const lastYearEnd = getStartOfYear(new Date());
   const lastYearLogs = useMemo(() => logs.filter((l) => l.timestamp >= lastYearStart && l.timestamp < lastYearEnd), [logs, lastYearStart, lastYearEnd]);
-  const lastYearSessions = useMemo(() => lastYearLogs.filter((l) => l.type === "practice_session"), [lastYearLogs]);
+  const lastYearSessions = useMemo(() => lastYearLogs.filter((l) =>
+    l.type === "practice_session"
+    && isPracticeSessionIncludedInActivityTotals(l.data as PracticeSessionData)
+  ), [lastYearLogs]);
   const lastYearTotalTime = useMemo(
-    () => lastYearSessions.reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    () => lastYearSessions.reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0),
     [lastYearSessions]
   );
   const lastYearBeatTime = useMemo(
-    () => lastYearSessions.filter(l => (l.data as PracticeSessionData).mode === "dial").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    () => lastYearSessions.filter(l => (l.data as PracticeSessionData).mode === "dial").reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0),
     [lastYearSessions]
   );
   const lastYearBarTime = useMemo(
-    () => lastYearSessions.filter(l => (l.data as PracticeSessionData).mode === "bar").reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0),
+    () => lastYearSessions.filter(l => (l.data as PracticeSessionData).mode === "bar").reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0),
     [lastYearSessions]
   );
   const lastYearSessionCount = lastYearSessions.length;
@@ -393,7 +410,7 @@ export function WorkUpOverviewModal({
       .forEach(l => {
         const d = l.data as PracticeSessionData;
         if (!byBpm[d.bpm]) byBpm[d.bpm] = { bpm: d.bpm, duration: 0, count: 0 };
-        byBpm[d.bpm].duration += d.duration;
+        byBpm[d.bpm].duration += getPracticeSessionDuration(d);
         byBpm[d.bpm].count += 1;
       });
     return Object.values(byBpm).sort((a, b) => b.duration - a.duration);
@@ -430,7 +447,7 @@ export function WorkUpOverviewModal({
             practiceNoteLabel: noteLabel,
           });
         }
-        configs[configMap[key]].duration += d.duration;
+        configs[configMap[key]].duration += getPracticeSessionDuration(d);
         configs[configMap[key]].count += 1;
       });
     return configs.sort((a, b) => b.duration - a.duration);
@@ -454,7 +471,7 @@ export function WorkUpOverviewModal({
               const d = l.data as PracticeSessionData;
               return d.mode === "bar" && d.practiceNoteId === goal.practiceNoteId;
             })
-            .reduce((s, l) => s + ((l.data as PracticeSessionData).duration || 0), 0);
+            .reduce((s, l) => s + getPracticeSessionDuration(l.data as PracticeSessionData), 0);
           return sessionTime / 60;
         }
         default: return 0;
@@ -491,6 +508,23 @@ export function WorkUpOverviewModal({
     },
     [goals, editingGoalId]
   );
+
+  const handleClearActivityData = useCallback(() => {
+    Alert.alert(t("workUp", "clearActivityTitle"), t("workUp", "clearActivityConfirm"), [
+      { text: t("settings", "cancel"), style: "cancel" },
+      {
+        text: t("workUp", "clearActivity"),
+        style: "destructive",
+        onPress: () => {
+          // Fence in-memory writers before waiting for earlier storage writes.
+          onActivityDataCleared();
+          setLogs([]);
+          setGoals([]);
+          void clearActivityData();
+        },
+      },
+    ]);
+  }, [onActivityDataCleared, t]);
 
   const handleUpdateGoalTarget = useCallback(
     async () => {
@@ -705,6 +739,11 @@ export function WorkUpOverviewModal({
                 {loggingEnabled && (
                   <Pressable onPress={() => setShowShareModal(true)} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("workUp", "share")}>
                     <Ionicons name="share-outline" size={20} color={C.accent} />
+                  </Pressable>
+                )}
+                {loggingEnabled && (
+                  <Pressable onPress={handleClearActivityData} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("workUp", "clearActivity")}>
+                    <Ionicons name="trash-outline" size={20} color={C.danger} />
                   </Pressable>
                 )}
                 <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("a11y", "closeModal")}>

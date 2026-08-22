@@ -90,7 +90,7 @@ import { createRafBatcher } from "@/lib/raf-batcher";
 import type { ModeSlot } from "@/components/ModeSwitcherDial";
 import type { ScoreDocument } from "@/lib/score-types";
 import type { OnboardingResult } from "@/components/OnboardingModal";
-import { loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
+import { PracticeSessionTracker, loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
 import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource, loadNoteSampleChannels, saveNoteSampleChannels, setNoteSampleChannel, removeNoteSampleChannel, loadNoteSampleMetroChannels, saveNoteSampleMetroChannels, setNoteSampleMetroChannel, removeNoteSampleMetroChannel } from "@/lib/note-samples";
 import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap, NoteSampleMetroChannelMap, SampleSource } from "@/lib/note-samples";
 import type { SampleChannel, MetroChannel } from "@/lib/stereo-channel";
@@ -323,14 +323,15 @@ export function useMetronomeScreen() {
   const reopenSignalGenAfterTuningGuideRef = useRef(false);
   const [loggingEnabled, setLoggingEnabled] = useState(false);
   const practiceStartRef = useRef<number | null>(null);
+  const practiceSessionRef = useRef<PracticeSessionTracker | null>(null);
   const featureStartRef = useRef<{ name: string; start: number } | null>(null);
   const loadedPracticeNoteRef = useRef<{ id: string; label: string } | null>(null);
   const { completedGoalPopups, checkCompletedGoals, dismissGoalPopup } = useGoalPopups();
   const {
     roomTrackingActive, setRoomTrackingActive,
     trackingRoomName, setTrackingRoomName,
-    startRoomTracking, stopRoomTracking,
-  } = usePracticeRoomTracking(checkCompletedGoals);
+    startRoomTracking, stopRoomTracking, discardRoomTracking,
+  } = usePracticeRoomTracking(checkCompletedGoals, loggingEnabled);
   const [showReboot, setShowReboot] = useState(false);
   const {
     fadeOutSessionRef, fadeOutMutedRef, fadeOutPhase, setFadeOutPhase,
@@ -1300,6 +1301,10 @@ export function useMetronomeScreen() {
       if (engine?.getIsRunning()) {
         engine.stop();
       }
+      practiceSessionRef.current = null;
+      practiceStartRef.current = null;
+      discardRoomTracking();
+      featureStartRef.current = null;
       await AsyncStorage.clear();
 
       setActiveModal(null);
@@ -1391,7 +1396,7 @@ export function useMetronomeScreen() {
     } catch (e) {
       captureBreadcrumb({ category: "reset", message: "Reset failed", level: "error", data: { error: String(e) } });
     }
-  }, [setThemeColor]);
+  }, [setThemeColor, discardRoomTracking]);
 
   // updateBpm → useSettings 소유
 
@@ -1437,6 +1442,7 @@ export function useMetronomeScreen() {
     setEasterEggHintDirection(null);
     setEasterEggRevealBpm(actual);
     if (stopEngine) {
+      completePracticeSessionRef.current("manual");
       engineRef.current?.stop();
       stopRenderedAudio();
       clearSamplePlayStates();
@@ -1596,6 +1602,9 @@ export function useMetronomeScreen() {
     startMetronome,
     stopMetronome,
     retryAudioRecovery,
+    completePracticeSession,
+    discardPracticeSession,
+    startOrResumePracticeSession,
     seamlessNextEntryRef,
   } = usePlaybackControl({
     engineRef,
@@ -1641,6 +1650,7 @@ export function useMetronomeScreen() {
     handleEasterEggGiveUpRef,
     loggingEnabled,
     practiceStartRef,
+    practiceSessionRef,
     loadedPracticeNoteRef,
     addPracticeLog: (data) => addActivityLog({ type: "practice_session", data }),
     checkCompletedGoals,
@@ -1648,6 +1658,22 @@ export function useMetronomeScreen() {
       captureBreadcrumb({ category: "metronome", message, level, data: { error: String(error) } }),
   });
   stopIfPlayingRef.current = stopMetronome;
+  const completePracticeSessionRef = useRef(completePracticeSession);
+  useEffect(() => { completePracticeSessionRef.current = completePracticeSession; }, [completePracticeSession]);
+
+  useEffect(() => {
+    const session = practiceSessionRef.current;
+    if (!session) return;
+    if (audioLifecycle.phase === "interrupted" || audioLifecycle.phase === "recovering") {
+      session.interrupt();
+    } else if (audioLifecycle.phase === "playing" && session.getState() === "interrupted") {
+      startOrResumePracticeSession();
+    } else if (audioLifecycle.phase === "recoveryFailed") {
+      completePracticeSessionRef.current("audio_recovery_failed", "abandoned");
+    } else if (audioLifecycle.phase === "idle" && session.getState() === "interrupted") {
+      completePracticeSessionRef.current("audio_interruption", "abandoned");
+    }
+  }, [audioLifecycle, startOrResumePracticeSession]);
 
   useEffect(() => {
     registerMetronomeBridge({
@@ -1765,6 +1791,7 @@ export function useMetronomeScreen() {
     blockPlayModeRef, barStartBeatRef, bpmRef, beatDenominatorRef, updateBpmRef,
     languageRef, renderedPlayerRef, buildRenderedPlayer, stopRenderedAudio,
     clearSamplePlayStates, resetPlaybackVisuals, setIsPlaying, setIsPreparing,
+    togglePlaybackRef: togglePlayPauseRef,
   });
 
 
@@ -1788,6 +1815,7 @@ export function useMetronomeScreen() {
 
     // ① 기존 재생/준비 중단 — startMetronome 우회하여 직접 제어
     preparingCancelledRef.current = true;
+    completePracticeSessionRef.current("manual");
     if (engine.getIsRunning()) engine.stop();
     stopRenderedAudio();
     setIsPreparing(false);
@@ -1874,6 +1902,8 @@ export function useMetronomeScreen() {
             setIsPreparing(false);
             setIsPlaying(false);
             resetPlaybackVisuals();
+             markAudioStopped();
+             completePracticeSessionRef.current("fade_out");
             const modeLabel = barModeRef.current ? "Bar" : "Dial";
             showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
           }, 0);
@@ -1973,6 +2003,8 @@ export function useMetronomeScreen() {
         setIsPreparing(false);
         setIsPlaying(false);
         resetPlaybackVisuals();
+         markAudioStopped();
+         completePracticeSessionRef.current("measure_complete");
         const modeLabel = barModeRef.current ? "Bar" : "Dial";
         showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
       }
@@ -1992,12 +2024,14 @@ export function useMetronomeScreen() {
       setIsPreparing(false);
       setIsPlaying(false);
       resetPlaybackVisuals();
+      markAudioStopped();
+      completePracticeSession("timer");
       const modeLabel = barModeRef.current ? "Bar" : "Dial";
       showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
     } else {
       engine.requestStopAfterMeasure();
     }
-  }, []);
+  }, [completePracticeSession]);
 
   // updateTimerStopMode / updateUsername → useSettings 소유
 
@@ -2513,6 +2547,7 @@ export function useMetronomeScreen() {
       setIsPlaying(false);
       resetPlaybackVisuals();
     }
+    completePracticeSessionRef.current("manual");
     const book = await loadPracticeBook();
     setNoteBarEntries(book.filter(isNoteSourceEntry));
     setNoteMode(true);
@@ -2529,6 +2564,7 @@ export function useMetronomeScreen() {
       clearSamplePlayStates();
       setIsPlaying(false);
     }
+    completePracticeSessionRef.current("manual");
     resetPlaybackVisuals();
     setNoteMode(false);
     noteModeRef.current = false;
@@ -2567,6 +2603,7 @@ export function useMetronomeScreen() {
     stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals,
     preloadNoteSampleSounds,
     handleExitNoteMode,
+    completePracticeSession: () => completePracticeSessionRef.current("manual"),
   });
 
   const currentMode: ModeSlot = showMenu
@@ -3032,6 +3069,9 @@ export function useMetronomeScreen() {
     stemSepReturnModalRef,
     featureStartRef,
     practiceStartRef,
+    discardPracticeSession,
+    startOrResumePracticeSession,
+    discardRoomTracking,
     handleNoteTogglePlayRef,
     clickPCMCacheRef,
     allPlayersRef,

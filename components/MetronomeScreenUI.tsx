@@ -74,7 +74,7 @@ export function MetronomeScreenUI(props: Props) {
     rootViewRef, barAreaRef, dialRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
     barScrollOffsetRef, engineRef, togglePlayPauseRef, updateBpmRef, beatDenominatorRef,
     seamlessNextEntryRef, tuningGuideOnSelectRef, reopenSignalGenAfterTuningGuideRef,
-    settingsReturnModalRef, stemSepReturnModalRef, featureStartRef, practiceStartRef,
+    settingsReturnModalRef, stemSepReturnModalRef, featureStartRef, practiceStartRef, discardPracticeSession, startOrResumePracticeSession,
     handleNoteTogglePlayRef, clickPCMCacheRef,
     bpm, beatsPerMeasure, beatDenominator, beatTypes, subdivisionPattern, beatSubdivisions,
     isPlaying, isPreparing, audioLifecycle, retryAudioRecovery, currentBeat, measureCount, activeSubNote, progressInfo,
@@ -100,7 +100,7 @@ export function MetronomeScreenUI(props: Props) {
     flashMode, updateFlashMode, hapticMode, updateHapticMode,
     audioOffsetMs, updateAudioOffset, timerStopMode, updateTimerStopMode,
     loggingEnabled, setLoggingEnabled, username, updateUsername,
-    roomTrackingActive, trackingRoomName, startRoomTracking, stopRoomTracking,
+    roomTrackingActive, trackingRoomName, startRoomTracking, stopRoomTracking, discardRoomTracking,
     handleResetApp, handleOnboardingComplete,
     keyBindings, setKeyBindings, keyBindingsRef,
     showKbShortcuts, setShowKbShortcuts,
@@ -573,6 +573,7 @@ export function MetronomeScreenUI(props: Props) {
           showPlayingNotification(bpm, modeLabel, languageRef.current);
           engine.start();
           markAudioPlaying();
+          startOrResumePracticeSession();
         }}
       />
 
@@ -590,6 +591,7 @@ export function MetronomeScreenUI(props: Props) {
             setIsPlaying(true);
             engine.start({ startAtPerformanceTime });
             markAudioPlaying();
+            startOrResumePracticeSession();
           }}
         />
       )}
@@ -775,6 +777,12 @@ export function MetronomeScreenUI(props: Props) {
         onStartRoomTracking={startRoomTracking}
         onStopRoomTracking={stopRoomTracking}
         username={username}
+        onActivityDataCleared={() => {
+          discardPracticeSession();
+          discardRoomTracking();
+          featureStartRef.current = null;
+          setLoggingEnabled(false);
+        }}
       />
       )}
 
@@ -816,6 +824,10 @@ export function MetronomeScreenUI(props: Props) {
         onTimerStopModeChange={updateTimerStopMode}
         loggingEnabled={loggingEnabled}
         onLoggingEnabledChange={(val) => {
+          if (!val) {
+            discardPracticeSession();
+            discardRoomTracking();
+          }
           setLoggingEnabled(val);
           saveLoggingEnabled(val);
         }}

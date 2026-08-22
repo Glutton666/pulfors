@@ -1,4 +1,4 @@
-import type { ActivityLog, PracticeSessionData } from "@/lib/activity-log";
+import { getPracticeSessionDuration, isPracticeSessionIncludedInActivityTotals, type ActivityLog, type PracticeSessionData } from "@/lib/activity-log";
 
 export interface DailyStat {
   label: string;
@@ -42,8 +42,9 @@ export function buildDailyStats(
   for (const log of logs) {
     if (log.type !== "practice_session") continue;
     const data = log.data as PracticeSessionData;
-    const dur = data.duration;
-    if (!Number.isFinite(dur) || dur <= 0) continue;
+    if (!isPracticeSessionIncludedInActivityTotals(data)) continue;
+    const dur = getPracticeSessionDuration(data);
+    if (dur <= 0) continue;
     if (!Number.isFinite(log.timestamp)) continue;
     const tsMs = new Date(log.timestamp).setHours(0, 0, 0, 0);
     if (!Number.isFinite(tsMs)) continue;
