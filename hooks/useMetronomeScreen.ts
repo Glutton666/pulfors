@@ -316,7 +316,6 @@ export function useMetronomeScreen() {
     showScheduledStart,
     showFadeOut,
     showBpmDetect,
-    showStemSep,
     showPolygon,
   } = deriveModalFlags(activeModal);
   // soundSet/layerSoundSets/flashMode/hapticMode/audioOffsetMs/timerStopMode/
@@ -347,9 +346,6 @@ export function useMetronomeScreen() {
 
   // Tracks which modal opened settings, so we can return there on close
   const settingsReturnModalRef = useRef<ActiveModal>(null);
-
-  // Tracks which modal opened stem separation, so we can return there on close
-  const stemSepReturnModalRef = useRef<ActiveModal>(null);
 
   // Tracks whether a full-screen item was opened from the main menu.
   // This lives in the screen hook (rather than a UI component) so Android's
@@ -409,13 +405,6 @@ export function useMetronomeScreen() {
       if (showFadeOut) { setActiveModal(null); return true; }
       if (showScheduledStart) { setActiveModal(null); return true; }
       if (showDrumKit) { setActiveModal(null); return true; }
-      if (showStemSep) {
-        const returnTo = stemSepReturnModalRef.current;
-        stemSepReturnModalRef.current = null;
-        setActiveModal(null);
-        if (returnTo) setTimeout(() => setActiveModal(returnTo), 160);
-        return true;
-      }
       if (showPolygon) { closeMenuItem(); return true; }
       if (showMenu) { clearMenuItemReturn(); setActiveModal(null); return true; }
       if (showOnboarding) { setActiveModal(null); return true; }
@@ -3097,7 +3086,6 @@ export function useMetronomeScreen() {
     tuningGuideOnSelectRef,
     reopenSignalGenAfterTuningGuideRef,
     settingsReturnModalRef,
-    stemSepReturnModalRef,
     featureStartRef,
     practiceStartRef,
     discardPracticeSession,
@@ -3166,7 +3154,6 @@ export function useMetronomeScreen() {
     showScheduledStart,
     showFadeOut,
     showBpmDetect,
-    showStemSep,
     showPolygon,
     // Settings
     volume,

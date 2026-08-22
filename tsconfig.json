@@ -9,9 +9,6 @@
       ],
       "@shared/*": [
         "./shared/*"
-      ],
-      "audio-decoder": [
-        "./modules/audio-decoder/src/index.ts"
       ]
     }
   },

@@ -20,7 +20,6 @@ export type ActiveModal =
   | "scheduledStart"
   | "fadeOut"
   | "bpmDetect"
-  | "stemSep"
   | "polygon"
   | null;
 
@@ -38,7 +37,6 @@ export function deriveModalFlags(activeModal: ActiveModal) {
     showScheduledStart: activeModal === "scheduledStart",
     showFadeOut:        activeModal === "fadeOut",
     showBpmDetect:      activeModal === "bpmDetect",
-    showStemSep:        activeModal === "stemSep",
     showPolygon:        activeModal === "polygon",
   };
 }

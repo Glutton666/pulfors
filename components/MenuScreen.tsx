@@ -18,7 +18,6 @@ interface MenuScreenProps {
   onSettings: () => void;
   onSignalGen: () => void;
   onWorkUp: () => void;
-  onStemSep: () => void;
   onScore: () => void;
   onPolygon: () => void;
 }
@@ -30,7 +29,6 @@ export function MenuScreen({
   onSettings,
   onSignalGen,
   onWorkUp,
-  onStemSep,
   onScore,
   onPolygon,
 }: MenuScreenProps) {
@@ -77,12 +75,6 @@ export function MenuScreen({
     onPress: () => void;
     testID?: string;
   }[] = [
-    {
-      icon: <MaterialCommunityIcons name="layers-triple-outline" size={ICON_SIZE} color={C.accent} />,
-      label: t("stemSep", "title"),
-      onPress: onStemSep,
-      testID: "menu-stemSep",
-    },
     {
       icon: <Ionicons name="document-text-outline" size={ICON_SIZE} color={C.accent} />,
       label: t("polygon", "scoreMenuLabel"),

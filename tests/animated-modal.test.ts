@@ -316,13 +316,6 @@ describe("deriveModalFlags — activeModal → visible 파생", () => {
     assert.equal(flags.showMenu, false);
   });
 
-  test("activeModal='stemSep': showStemSep=true, 나머지 false", () => {
-    const flags = deriveModalFlags("stemSep");
-    assert.equal(flags.showStemSep, true);
-    assert.equal(flags.showMenu, false);
-    assert.equal(flags.showSettings, false);
-  });
-
   test("activeModal='practiceBook': showPracticeBook=true", () => {
     const flags = deriveModalFlags("practiceBook");
     assert.equal(flags.showPracticeBook, true);
@@ -333,7 +326,7 @@ describe("deriveModalFlags — activeModal → visible 파생", () => {
     const modals: ActiveModal[] = [
       "settings", "menu", "signalGen", "tuningGuide",
       "practiceBook", "workUp", "onboarding",
-      "drumKit", "scheduledStart", "fadeOut", "stemSep",
+      "drumKit", "scheduledStart", "fadeOut",
     ];
     for (const modal of modals) {
       const flags = deriveModalFlags(modal);
@@ -354,7 +347,7 @@ describe("모달 라우팅 — 단일 활성 모달 보장", () => {
     const allValues: ActiveModal[] = [
       "settings", "menu", "signalGen", "tuningGuide",
       "practiceBook", "workUp", "onboarding",
-      "drumKit", "scheduledStart", "fadeOut", "stemSep",
+      "drumKit", "scheduledStart", "fadeOut",
     ];
     for (const v of allValues) {
       assert.equal(countVisibleModals(deriveModalFlags(v)), 1, `${v} → 1 modal`);
@@ -370,14 +363,6 @@ describe("모달 라우팅 — 단일 활성 모달 보장", () => {
     assert.equal(toMenu.showMenu, true);
   });
 
-  test("음원 분리 → 설정 전환: stemSep false, 설정 true", () => {
-    const from = deriveModalFlags("stemSep");
-    const to = deriveModalFlags("settings");
-    assert.equal(from.showStemSep, true);
-    assert.equal(from.showSettings, false);
-    assert.equal(to.showStemSep, false);
-    assert.equal(to.showSettings, true);
-  });
 });
 
 // ─── 10. 연습장 모달 — 닫기 버튼 제거 후 닫기 경로 검증 ─────────────────────

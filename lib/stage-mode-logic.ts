@@ -67,7 +67,7 @@ export async function applySwitchToMode(
   }
 
   // 열려 있는 모달이 있으면 모드 전환 전에 먼저 닫는다 (메뉴 제외 — 아래에서 별도 처리).
-  // stemSep·drumKit·settings·fadeOut 등 어떤 모달이든 열린 채로 모드가 바뀌면
+  // drumKit·settings·fadeOut 등 어떤 모달이든 열린 채로 모드가 바뀌면
   // 모달이 화면 위에 계속 남아 있어 메인 UI 조작이 막힌다.
   if (activeModal && activeModal !== "menu") cb.setActiveModal(null);
 

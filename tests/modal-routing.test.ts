@@ -2,9 +2,7 @@
  * 주요 모달 진입 흐름 회귀 테스트
  *
  * 검증 대상:
- *   1. 메인 메뉴 → 음원 분리(StemSep) 전환 시
- *      한 시점에 하나의 모달만 visible해지는지
- *   2. SignalGenerator → TuningGuide 전환 시 두 모달이 동시에 visible=true가
+ *   1. SignalGenerator → TuningGuide 전환 시 두 모달이 동시에 visible=true가
  *      되지 않으며, TuningGuide 종료 후 SignalGenerator가 재오픈되는지
  *
  * 모든 테스트는 lib/modal-routing.ts 의 실제 프로덕션 함수를 직접 임포트해
@@ -69,7 +67,7 @@ test("modal-routing: 어떤 activeModal 값이든 visible 모달은 최대 1개"
   const allValues: ActiveModal[] = [
     "settings", "menu", "signalGen", "tuningGuide", "practiceBook", "workUp",
     "onboarding", "drumKit", "scheduledStart", "fadeOut",
-    "bpmDetect", "stemSep",
+    "bpmDetect", "polygon",
     null,
   ];
   for (const modal of allValues) {
@@ -124,7 +122,7 @@ test("modal-routing: 각 activeModal 값은 정확히 해당 show* 플래그만 
     ["scheduledStart", "showScheduledStart"],
     ["fadeOut",        "showFadeOut"],
     ["bpmDetect",      "showBpmDetect"],
-    ["stemSep",        "showStemSep"],
+    ["polygon",        "showPolygon"],
   ];
   for (const [modal, expectedKey] of cases) {
     const flags = deriveModalFlags(modal);
@@ -134,32 +132,7 @@ test("modal-routing: 각 activeModal 값은 정확히 해당 show* 플래그만 
 });
 
 // ────────────────────────────────────────────────────────────────
-// 2. 메인 메뉴 → 음원 분리 전환
-//    메뉴 항목 탭 시 openExclusive("stemSep") 가 setActiveModal 을 호출한다.
-//    activeModal 단일 문자열 구조 때문에 mutual exclusion이 보장된다.
-// ────────────────────────────────────────────────────────────────
-
-test("modal-routing: menu → stemSep — 전환 전 menu만 visible, 전환 후 stemSep만 visible", () => {
-  const beforeFlags = deriveModalFlags("menu");
-  assert.equal(beforeFlags.showMenu, true);
-  assert.equal(countVisibleModals(beforeFlags), 1);
-
-  const afterFlags = deriveModalFlags("stemSep");
-  assert.equal(afterFlags.showMenu, false, "메뉴가 닫혀야 한다");
-  assert.equal(afterFlags.showStemSep, true, "stemSep 모달이 열려야 한다");
-  assert.equal(countVisibleModals(afterFlags), 1, "전환 후 visible 모달은 1개여야 한다");
-});
-
-test("modal-routing: menu와 stemSep이 동시에 visible=true가 되는 경우 없음", () => {
-  const beforeFlags = deriveModalFlags("menu");
-  const afterFlags  = deriveModalFlags("stemSep");
-  const keys = Object.keys(beforeFlags) as Array<keyof typeof beforeFlags>;
-  const simultaneous = keys.filter((k) => beforeFlags[k] && afterFlags[k]);
-  assert.deepEqual(simultaneous, [], "menu → stemSep 전환 중 두 모달이 동시에 visible 이면 안 된다");
-});
-
-// ────────────────────────────────────────────────────────────────
-// 3. SignalGenerator → TuningGuide 전환 및 재오픈
+// 2. SignalGenerator → TuningGuide 전환 및 재오픈
 //    openTuningGuideFromSignalGen / closeTuningGuide 는 app/index.tsx 의
 //    onOpenTuningGuide / TuningGuideModal onClose / onSelectFreq 핸들러가
 //    직접 호출한다.
@@ -232,16 +205,15 @@ test("modal-routing: SignalGen → TG → 닫기 전체 흐름 — 각 단계에
 });
 
 // ────────────────────────────────────────────────────────────────
-// 4. 빠른 연속 탭(rapid double-tap) 스트레스 테스트
+// 3. 빠른 연속 탭(rapid double-tap) 스트레스 테스트
 //
 //    openExclusive 는 setActiveModal(next) 를 원자적으로 호출하므로
 //    빠른 연속 탭도 activeModal 값의 순차 전환으로 모델링된다.
 //    각 전환 단계에서 visible 모달이 정확히 0 또는 1개임을 검증한다.
 //
-//    커버 시나리오 (task #85 Done 기준):
+//    커버 시나리오:
 //      A. menu → settings  (같은 메뉴를 빠르게 열고-닫고-다시 열기)
-//      B. menu → stemSep
-//      C. menu → signalGen → tuningGuide
+//      B. menu → signalGen → tuningGuide
 // ────────────────────────────────────────────────────────────────
 
 test("rapid-tap: menu → settings — 빠른 연속 탭에서 visible 모달은 항상 ≤ 1", () => {
@@ -276,51 +248,6 @@ test("rapid-tap: menu → settings 빠른 토글 — 동일 모달이 open-close
     [null,       "menu"],      // 같은 메뉴를 다시 빠르게 탭
     ["menu",     "settings"],  // 같은 설정을 다시 빠르게 탭
     ["settings", null],
-  ];
-
-  for (const [from, to] of transitions) {
-    const beforeFlags = deriveModalFlags(from);
-    const afterFlags  = deriveModalFlags(to);
-    const keys = Object.keys(beforeFlags) as Array<keyof typeof beforeFlags>;
-    const simultaneous = keys.filter((k) => beforeFlags[k] && afterFlags[k]);
-    assert.deepEqual(
-      simultaneous,
-      [],
-      `${from} → ${to} 전환 중 두 모달이 동시에 visible 이면 안 된다`,
-    );
-  }
-});
-
-test("rapid-tap: menu → stemSep — 빠른 연속 탭에서 visible 모달은 항상 ≤ 1", () => {
-  // 사용자가 빠르게: 메뉴 열기 → 음원 분리 → 닫기 → 다시 반복
-  const sequence: ActiveModal[] = [
-    null,
-    "menu",
-    "stemSep",
-    null,
-    "menu",     // 빠른 재탭
-    "stemSep",
-    null,
-  ];
-
-  for (const activeModal of sequence) {
-    const flags = deriveModalFlags(activeModal);
-    const count = countVisibleModals(flags);
-    assert.ok(
-      count <= 1,
-      `activeModal="${activeModal}" 전환 중 visible 모달 수 ${count}개 — 최대 1개여야 한다`,
-    );
-  }
-});
-
-test("rapid-tap: menu → stemSep — 연속 전환에서 동시에 두 모달 visible 없음", () => {
-  const transitions: Array<[ActiveModal, ActiveModal]> = [
-    [null,      "menu"],
-    ["menu",    "stemSep"],
-    ["stemSep", null],
-    [null,      "menu"],      // 빠른 재탭
-    ["menu",    "stemSep"],
-    ["stemSep", null],
   ];
 
   for (const [from, to] of transitions) {
@@ -428,48 +355,8 @@ test("rapid-tap: menu → signalGen → tuningGuide — 연속 전환에서 동�
 });
 
 // ────────────────────────────────────────────────────────────────
-// 5. 소스 구조 테스트 — 실험실 하위 메뉴 음원 분리 항목 및 핸들러 검증
-//
-//    a) components/MenuScreen.tsx 의 실험실 하위 목록에 testID="menu-stemSep" 항목이 있어야 한다
-//    b) components/MetronomeScreenUI.tsx 의 <MenuScreen> onStemSep 핸들러는
-//       openExclusive("stemSep") 를 경유해야 하며, stemSepReturnModalRef 로
-//       복귀 모달을 저장해야 한다.
+// 4. 소스 구조 테스트 — 실험실 메뉴 구성 검증
 // ────────────────────────────────────────────────────────────────
-
-/**
- * lib/modal-routing.ts 의 ActiveModal 유니온 타입에 선언된
- * 모든 비-null 리터럴 값을 추출한다.
- */
-function extractActiveModalLiterals(): Set<string> {
-  const src = readFileSync(join(process.cwd(), "lib/modal-routing.ts"), "utf-8");
-
-  const typeMatch = src.match(/export type ActiveModal\s*=\s*([\s\S]*?);/);
-  assert.ok(typeMatch, "lib/modal-routing.ts 에서 ActiveModal 타입 선언을 찾을 수 없다");
-
-  const literals = new Set<string>();
-  const literalRe = /["']([a-zA-Z]+)["']/g;
-  let m: RegExpExecArray | null;
-  while ((m = literalRe.exec(typeMatch![1])) !== null) {
-    literals.add(m[1]);
-  }
-  return literals;
-}
-
-test("source: ActiveModal 타입에 stemSep 리터럴이 선언되어 있다", () => {
-  assert.ok(extractActiveModalLiterals().has("stemSep"));
-});
-
-test("source: MenuScreen — 음원 분리 항목에 testID=\"menu-stemSep\" 가 존재한다", () => {
-  const src = readFileSync(join(process.cwd(), "components/MenuScreen.tsx"), "utf-8");
-  assert.ok(
-    src.includes('testID: "menu-stemSep"') || src.includes('testID="menu-stemSep"'),
-    'components/MenuScreen.tsx 에 testID "menu-stemSep" 가 없다 — e2e 테스트가 음원 분리 항목에 접근하려면 필요하다',
-  );
-  assert.ok(
-    /onPress:\s*onStemSep/.test(src),
-    "MenuScreen 의 음원 분리 항목이 onStemSep 핸들러를 사용해야 한다",
-  );
-});
 
 test("source: MenuScreen — 연습장은 메인 메뉴에서 제거되고 실험실 진입점이 있다", () => {
   const src = readFileSync(join(process.cwd(), "components/MenuScreen.tsx"), "utf-8");
@@ -483,7 +370,7 @@ test("source: MenuScreen — 연습장은 메인 메뉴에서 제거되고 실�
   assert.ok(!mainItems.includes("menuPracticeNote"), "연습장이 메인 메뉴에 남아 있다");
 });
 
-test("source: MenuScreen — 실험실에 음원 분리·악보·펄스 폴리곤을 묶는다", () => {
+test("source: MenuScreen — 실험실에 악보·펄스 폴리곤을 묶는다", () => {
   const src = readFileSync(join(process.cwd(), "components/MenuScreen.tsx"), "utf-8");
   const labStart = src.indexOf("const labItems");
   const itemsEnd = src.indexOf("const items =", labStart);
@@ -491,66 +378,16 @@ test("source: MenuScreen — 실험실에 음원 분리·악보·펄스 폴리�
   const labItems = src.slice(labStart, itemsEnd);
 
   for (const [testID, handler] of [
-    ['testID: "menu-stemSep"', "onStemSep"],
     ['testID: "menu-score"', "onScore"],
     ['testID: "menu-polygon"', "onPolygon"],
   ]) {
     assert.ok(labItems.includes(testID), `실험실에 ${testID} 항목이 없다`);
     assert.ok(labItems.includes(`onPress: ${handler}`), `실험실 ${testID} 항목이 ${handler}를 호출하지 않는다`);
   }
-});
-
-/**
- * components/MetronomeScreenUI.tsx 의 <MenuScreen … /> JSX 블록에서
- * 지정한 핸들러 prop 의 소스 문자열을 반환한다.
- */
-function extractMenuScreenHandlerSource(handlerName: string): string {
-  const src = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
-
-  const startIdx = src.indexOf("<MenuScreen");
-  assert.ok(startIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MenuScreen 를 찾을 수 없다");
-
-  const endIdx = src.indexOf("/>", startIdx);
-  assert.ok(endIdx !== -1, "components/MetronomeScreenUI.tsx 에서 <MenuScreen 의 닫는 /> 를 찾을 수 없다");
-
-  const block = src.slice(startIdx, endIdx + 2);
-
-  const propStart = block.indexOf(`${handlerName}={`);
-  assert.ok(propStart !== -1, `<MenuScreen 블록에서 ${handlerName}={ 를 찾을 수 없다`);
-
-  const braceStart = block.indexOf("{", propStart + handlerName.length + 1);
-  let depth = 0;
-  let i = braceStart;
-  for (; i < block.length; i++) {
-    if (block[i] === "{") depth++;
-    else if (block[i] === "}") { depth--; if (depth === 0) break; }
-  }
-
-  return block.slice(propStart, i + 1);
-}
-
-test("source: MenuScreen onStemSep 핸들러가 openExclusive(\"stemSep\")를 호출한다", () => {
-  const prop = extractMenuScreenHandlerSource("onStemSep");
-  assert.ok(
-    /openExclusive\(["']stemSep["']\)/.test(prop),
-    `onStemSep 핸들러에 openExclusive("stemSep") 호출이 없다 — 모달 전환은 반드시 openExclusive 를 경유해야 한다:\n${prop}`,
-  );
-});
-
-test("source: MenuScreen onStemSep 핸들러가 복귀용 stemSepReturnModalRef 를 설정한다", () => {
-  const prop = extractMenuScreenHandlerSource("onStemSep");
-  assert.ok(
-    /stemSepReturnModalRef\.current\s*=/.test(prop),
-    `onStemSep 핸들러가 stemSepReturnModalRef 를 설정하지 않는다 — 음원 분리 종료 시 메뉴 복귀가 깨진다:\n${prop}`,
-  );
-});
-
-test("source: MenuScreen onStemSep 핸들러가 setActiveModal 을 직접 호출하지 않는다 (openExclusive 우회 방지)", () => {
-  const prop = extractMenuScreenHandlerSource("onStemSep");
-  assert.ok(
-    !/setActiveModal\(\s*(?!null\s*\))/.test(prop),
-    `onStemSep 핸들러에서 setActiveModal(null) 이 아닌 직접 호출이 발견됐다:\n${prop}`,
-  );
+  const removedItemId = ["menu", ["stem", "Sep"].join("")].join("-");
+  const removedHandler = ["on", "Stem", "Sep"].join("");
+  assert.ok(!labItems.includes(removedItemId), "제거된 음원분리 메뉴 항목이 실험실에 남아 있다");
+  assert.ok(!labItems.includes(removedHandler), "제거된 음원분리 핸들러가 실험실에 남아 있다");
 });
 
 // ────────────────────────────────────────────────────────────────
@@ -713,7 +550,7 @@ test("android-appstate: 모든 모달 상태에서 foreground 복귀 → back-pr
     "settings", "menu", "signalGen", "tuningGuide",
     "practiceBook", "workUp", "drumKit",
     "scheduledStart", "fadeOut", "onboarding",
-    "bpmDetect", "stemSep",
+    "bpmDetect", "polygon",
     null,
   ];
 

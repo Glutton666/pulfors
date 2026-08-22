@@ -65,7 +65,7 @@ const stub = {
 };
 // __esModule: true prevents Babel's _interopRequireWildcard from copying
 // properties at import time. Without it, `import * as FileSystem from "..."` in
-// lib/stem-separation.ts gets a frozen snapshot; later patches to this stub
+// import * as FileSystem consumers get a frozen snapshot; later patches to this stub
 // object are invisible to the module.
 stub.__esModule = true;
 module.exports = stub;

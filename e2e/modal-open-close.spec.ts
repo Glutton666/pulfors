@@ -6,7 +6,6 @@
  * 검증 대상:
  *   1. 메인 메뉴 (AnimatedModal) — 열기 → 항목 표시 → overlay 닫기
  *   2. 설정 모달 (AnimatedModal) — 메뉴에서 열기 → 내용 표시 → X 버튼 닫기
- *   3. 메인 메뉴 → 음원 분리 항목 표시 → 음원 분리 모달 열기/닫기
  *
  * 실행:
  *   npx playwright test e2e/modal-open-close.spec.ts
@@ -25,10 +24,7 @@
  * 관련 파일:
  *   components/AnimatedModal.tsx          FADE_MS=150
  *   components/SettingsModal.tsx          testID="settings-close"
- *   components/MenuScreen.tsx             testID="menu-stemSep"
- *   components/StemSeparationModal.tsx    testID="stem-sep-close"
  *   components/MetronomeScreenUI.tsx      testID="mode-cycle-label", "menu-overlay"
- *   components/MenuScreen.tsx             testID="menu-stemSep"
  */
 import { test, expect, type Page } from "@playwright/test";
 
@@ -132,30 +128,4 @@ test.describe("AnimatedModal 열기/닫기", () => {
     await expect(settingsClose).toBeHidden();
   });
 
-  test("메인 메뉴: 음원 분리 항목 → 모달 열기 → 닫기", async ({
-    page,
-  }) => {
-    const stemSepItem = page.locator('[data-testid="menu-stemSep"]');
-    const stemSepClose = page.locator('[data-testid="stem-sep-close"]');
-
-    // 초기 상태: 항목 숨겨짐
-    await expect(stemSepItem).toBeHidden();
-
-    // 메뉴 열기
-    await openMainMenu(page);
-
-    // 음원 분리는 Lab 하위 메뉴에 있다.
-    await page.locator('[data-testid="menu-lab"]').click();
-
-    // 음원 분리 항목 대기 후 클릭
-    await expect(stemSepItem).toBeVisible();
-    await stemSepItem.click();
-
-    // 음원 분리 모달이 열릴 때까지 대기
-    await expect(stemSepClose).toBeVisible();
-
-    // 닫기 → 메뉴로 복귀
-    await stemSepClose.click();
-    await expect(stemSepClose).toBeHidden();
-  });
 });

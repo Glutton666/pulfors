@@ -36,7 +36,6 @@ import type { ModeSlot } from "@/components/ModeSwitcherDial";
 import { ModeIcon } from "@/components/ModeIcon";
 import { MenuScreen } from "@/components/MenuScreen";
 import { BpmDetectModal } from "@/components/BpmDetectModal";
-import { StemSeparationModal } from "@/components/StemSeparationModal";
 import { PolygonModeView } from "@/components/PolygonModeView";
 import { usePolygonMode } from "@/hooks/usePolygonMode";
 import { DrumKitModal } from "@/components/DrumKitModal";
@@ -74,7 +73,7 @@ export function MetronomeScreenUI(props: Props) {
     rootViewRef, barAreaRef, dialRef, stopwatchTimerRef, stopwatchTimerLandscapeRef,
     barScrollOffsetRef, engineRef, togglePlayPauseRef, updateBpmRef, beatDenominatorRef,
     seamlessNextEntryRef, tuningGuideOnSelectRef, reopenSignalGenAfterTuningGuideRef,
-    settingsReturnModalRef, stemSepReturnModalRef, featureStartRef, practiceStartRef, discardPracticeSession, startOrResumePracticeSession,
+    settingsReturnModalRef, featureStartRef, practiceStartRef, discardPracticeSession, startOrResumePracticeSession,
     handleNoteTogglePlayRef, clickPCMCacheRef,
     bpm, beatsPerMeasure, beatDenominator, beatTypes, subdivisionPattern, beatSubdivisions,
     isPlaying, isPreparing, audioLifecycle, retryAudioRecovery, currentBeat, measureCount, activeSubNote, progressInfo,
@@ -90,7 +89,7 @@ export function MetronomeScreenUI(props: Props) {
     markMenuItemReturn, clearMenuItemReturn, closeMenuItem,
     showSettings, showMenu, showSignalGen, showTuningGuide, showPracticeBook,
     showWorkUp, showOnboarding, showDrumKit, showScheduledStart,
-    showFadeOut, showBpmDetect, showStemSep, showPolygon,
+    showFadeOut, showBpmDetect, showPolygon,
     volume, updateVolume, sampleVolume, updateSampleVolume,
     backgroundPlay, updateBackgroundPlay,
     autoResumeAfterInterruption, updateAutoResumeAfterInterruption,
@@ -479,11 +478,6 @@ export function MetronomeScreenUI(props: Props) {
               });
             }}
             onWorkUp={() => openMenuItem(() => openExclusive("workUp"))}
-            onStemSep={() => {
-              // 음원분리 닫을 때 메뉴로 돌아올 수 있도록 직전 activeModal을 저장한다.
-              stemSepReturnModalRef.current = "menu";
-              openExclusive("stemSep");
-            }}
             onScore={() => {
               openMenuItem(() => {
                 setActiveModal(null);
@@ -510,31 +504,6 @@ export function MetronomeScreenUI(props: Props) {
           setActiveModal(null);
         }}
       />
-
-      <StemSeparationModal
-        visible={showStemSep}
-        onClose={() => {
-          // 음원분리 진입 직전 모달(메뉴 등)이 있으면 그쪽으로 복귀한다.
-          // AnimatedModal 기반 모달은 null→modal 전환이 있어야 fade-in이 트리거되므로
-          // 먼저 null로 닫은 뒤 160 ms 지연 후 복귀 모달을 열어야 한다.
-          const returnTo = stemSepReturnModalRef.current;
-          stemSepReturnModalRef.current = null;
-          setActiveModal(null);
-          if (returnTo) setTimeout(() => setActiveModal(returnTo), 160);
-        }}
-        onSetBpm={updateBpm}
-        onStartMetronome={() => {
-          if (!engineRef.current?.getIsRunning()) {
-            void togglePlayPauseRef.current?.();
-          }
-        }}
-        onStopMetronome={() => {
-          if (engineRef.current?.getIsRunning()) {
-            void togglePlayPauseRef.current?.();
-          }
-        }}
-      />
-
 
       {/* ── 폴리곤 메트로놈 전체화면 ── */}
       {showPolygon && (
