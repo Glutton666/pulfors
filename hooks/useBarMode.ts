@@ -94,6 +94,7 @@ export interface UseBarModeParams {
     React.SetStateAction<Record<string, BeatType[]>>
   >;
   subdivisionPattern: BeatType[];
+  setSubdivisionPattern: React.Dispatch<React.SetStateAction<BeatType[]>>;
 
   // ── Note samples (shared with note mode) ─────────────────────────────────
   noteSamples: NoteSampleMap;
@@ -279,6 +280,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
         p.setBeatsPerMeasure(0);
         p.setBeatTypes([]);
         p.setBeatSubdivisions({});
+        p.setSubdivisionPattern(["accent"]);
         setBarRepeats({});
         setLoopBlocks([]);
         setBarLoopMode("once");
@@ -805,6 +807,9 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
     const newTypes = defaultBeatTypes(beats);
     p.setBeatTypes(newTypes);
     p.setBeatSubdivisions({});
+    // The editor renders this staging pattern while stopped. Keep it aligned
+    // with the engine state we are about to reset below.
+    p.setSubdivisionPattern(["accent"]);
     setBarRepeats({});
     setLoopBlocks([]);
     setBarStartBeat(null);

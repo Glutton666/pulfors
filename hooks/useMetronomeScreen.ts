@@ -656,6 +656,7 @@ export function useMetronomeScreen() {
     beatTypes, setBeatTypes,
     beatSubdivisions, setBeatSubdivisions,
     subdivisionPattern,
+    setSubdivisionPattern,
     noteSamples, setNoteSamples, noteSamplesRef,
     noteSampleNames, setNoteSampleNames, noteSampleNamesRef,
     noteSampleSources, setNoteSampleSources, noteSampleSourcesRef,

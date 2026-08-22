@@ -52,7 +52,10 @@ jest.mock("@/app/index.helpers", () => ({
     blockPlayMode: "loop",
     hasBeenConfigured: false,
   }),
-  defaultBeatTypes: ["strong", "normal", "normal", "normal"],
+  defaultBeatTypes: (beats: number) => Array.from(
+    { length: beats },
+    (_, index) => (index === 0 ? "strong" : "normal"),
+  ),
   applyLoopBlocksChange: jest.fn(),
 }));
 
@@ -119,6 +122,7 @@ function makeParams(
     beatSubdivisions: {},
     setBeatSubdivisions: jest.fn(),
     subdivisionPattern: [],
+    setSubdivisionPattern: jest.fn(),
     noteSamples: {},
     setNoteSamples: jest.fn(),
     noteSamplesRef: { current: {} },
@@ -246,5 +250,19 @@ describe("useBarMode — barBpm 독립 BPM", () => {
 
     expect(result.current.barBpm).toBe(200);
     expect(onBarBpmChange).toHaveBeenLastCalledWith(200);
+  });
+
+  it("바 초기화는 엔진뿐 아니라 화면용 서브디비전 패턴도 기본값으로 되돌린다", () => {
+    const setSubdivisionPattern = jest.fn();
+    const params = makeParams({
+      subdivisionPattern: ["strong", "normal", "mute"],
+      setSubdivisionPattern,
+    });
+    const { result } = renderHook(() => useBarMode(params));
+
+    act(() => { result.current.handleBarReset(); });
+
+    expect(setSubdivisionPattern).toHaveBeenCalledWith(["accent"]);
+    expect(params.engineRef.current?.setAllBeatSubdivisions).toHaveBeenCalledWith({});
   });
 });
