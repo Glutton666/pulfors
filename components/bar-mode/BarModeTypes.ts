@@ -67,6 +67,10 @@ export const BAR_ROW_H = 44;
 export const MIN_BEATS = 1;
 export const MAX_BEATS = 16;
 export const SWIPE_ACTION_THRESHOLD = 60;
+export const MIN_BAR_DURATION_SECONDS = 1;
+export const MAX_BAR_DURATION_SECONDS = 59 * 60 + 59;
+
+export type BarDurationPart = "minutes" | "seconds";
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 
@@ -103,4 +107,45 @@ export function nextJumpPairId(barRepeats: Record<number, BarRepeat>): number {
     if (r.jumpToId && r.jumpToId > max) max = r.jumpToId;
   }
   return max + 1;
+}
+
+export function clampBarRepeatCount(value: number): number {
+  return Math.max(1, Math.min(99, Math.round(value)));
+}
+
+export function clampBarBpm(value: number): number {
+  return Math.max(20, Math.min(300, Math.round(value)));
+}
+
+export function clampBarDurationSeconds(value: number): number {
+  return Math.max(
+    MIN_BAR_DURATION_SECONDS,
+    Math.min(MAX_BAR_DURATION_SECONDS, Math.round(value)),
+  );
+}
+
+export function adjustBarDuration(
+  totalSeconds: number,
+  part: BarDurationPart,
+  amount: number,
+): number {
+  const { minutes, seconds } = splitBarDuration(totalSeconds);
+  if (part === "minutes") {
+    return clampBarDurationSeconds(
+      Math.max(0, Math.min(59, minutes + amount)) * 60 + seconds,
+    );
+  }
+  return clampBarDurationSeconds(
+    minutes * 60 + Math.max(0, Math.min(59, seconds + amount)),
+  );
+}
+
+export function splitBarDuration(totalSeconds: number): { minutes: number; seconds: number } {
+  const total = clampBarDurationSeconds(totalSeconds);
+  return { minutes: Math.floor(total / 60), seconds: total % 60 };
+}
+
+export function formatBarDuration(totalSeconds: number): string {
+  const { minutes, seconds } = splitBarDuration(totalSeconds);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }

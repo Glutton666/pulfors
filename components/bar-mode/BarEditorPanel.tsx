@@ -29,7 +29,16 @@ import type { BeatType, BarRepeat, BarLayer } from "@/components/beat-indicator.
 import type { LoopBlock } from "@/components/beat-indicator.types";
 import type { CustomSoundSetConfig } from "@/lib/storage";
 import type { TranslationFn } from "@/lib/i18n";
-import { SOUND_SET_OPTIONS, type BarModeColors } from "./BarModeTypes";
+import {
+  adjustBarDuration,
+  clampBarBpm,
+  clampBarRepeatCount,
+  formatBarDuration,
+  splitBarDuration,
+  SOUND_SET_OPTIONS,
+  type BarModeColors,
+  type BarDurationPart,
+} from "./BarModeTypes";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -103,6 +112,7 @@ export function BarEditorPanel({
   const [repMin, setRepMin] = useState(0);
   const [repSec, setRepSec] = useState(30);
   const [repBpm, setRepBpm] = useState<number | null>(null);
+  const [durationPart, setDurationPart] = useState<BarDurationPart>("seconds");
 
   // Refs to avoid stale closures in hold timers
   const repBpmRef = useRef<number | null>(null);
@@ -115,6 +125,8 @@ export function BarEditorPanel({
   useEffect(() => { repMinRef.current = repMin; }, [repMin]);
   const repSecRef = useRef(30);
   useEffect(() => { repSecRef.current = repSec; }, [repSec]);
+  const durationPartRef = useRef<BarDurationPart>("seconds");
+  useEffect(() => { durationPartRef.current = durationPart; }, [durationPart]);
   const bpmPropRef = useRef(bpm);
   useEffect(() => { bpmPropRef.current = bpm; }, [bpm]);
 
@@ -133,16 +145,6 @@ export function BarEditorPanel({
     if (bpmPressTimer.current) { clearTimeout(bpmPressTimer.current); bpmPressTimer.current = null; }
     if (bpmPressInterval.current) { clearInterval(bpmPressInterval.current); bpmPressInterval.current = null; }
     bpmHoldFired.current = false;
-  }, []);
-
-  // Sec hold timers
-  const secHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const secHoldInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-  const secHoldFired = useRef(false);
-  const clearSecTimers = useCallback(() => {
-    if (secHoldTimer.current) { clearTimeout(secHoldTimer.current); secHoldTimer.current = null; }
-    if (secHoldInterval.current) { clearInterval(secHoldInterval.current); secHoldInterval.current = null; }
-    secHoldFired.current = false;
   }, []);
 
   // Cleanup on unmount
@@ -221,7 +223,23 @@ export function BarEditorPanel({
       // Per-bar override: update local repBpm state and commit to bar repeat
       setRepBpm(newBpm);
       commitRepeatRef.current(repTypeRef.current, repCountRef.current, repMinRef.current, repSecRef.current, newBpm);
+    } else {
+      // No selected bar: edit the bar-mode base BPM instead of disabling the control.
+      onBpmChangeRef.current?.(newBpm);
     }
+  }, []);
+
+  const commitCount = useCallback((nextCount: number) => {
+    const next = clampBarRepeatCount(nextCount);
+    setRepCount(next);
+    commitRepeatRef.current(repTypeRef.current, next, repMinRef.current, repSecRef.current, repBpmRef.current);
+  }, []);
+
+  const commitDuration = useCallback((minutes: number, seconds: number) => {
+    const { minutes: nextMin, seconds: nextSec } = splitBarDuration(minutes * 60 + seconds);
+    setRepMin(nextMin);
+    setRepSec(nextSec);
+    commitRepeatRef.current(repTypeRef.current, repCountRef.current, nextMin, nextSec, repBpmRef.current);
   }, []);
 
   const startBpmHold = useCallback((dir: 1 | -1) => {
@@ -245,27 +263,6 @@ export function BarEditorPanel({
     }, 500);
   }, [clearBpmTimers, applyRepBpm]);
 
-  const startSecHold = useCallback((
-    dir: 1 | -1,
-    _repMinVal: number,
-    _repSecVal: number,
-    commitFn: (m: number, s: number) => void,
-  ) => {
-    clearSecTimers();
-    secHoldTimer.current = setTimeout(() => {
-      secHoldFired.current = true;
-      const step = () => {
-        const totalSec = repMinRef.current * 60 + repSecRef.current;
-        const next = Math.max(0, Math.min(3599, totalSec + dir * 10));
-        const m = Math.floor(next / 60);
-        const s = next % 60;
-        commitFn(m, s);
-      };
-      step();
-      secHoldInterval.current = setInterval(step, 250);
-    }, 400);
-  }, [clearSecTimers]);
-
   const bpmSwipePan = useMemo(() => {
     let startBpm = 0;
     return PanResponder.create({
@@ -273,13 +270,48 @@ export function BarEditorPanel({
       onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
       onPanResponderGrant: () => { startBpm = repBpmRef.current ?? bpmPropRef.current ?? 120; },
       onPanResponderMove: (_, gs) => {
-        const newBpm = Math.min(300, Math.max(20, Math.round(startBpm - gs.dx / 3)));
+        if (isPlaying) return;
+        const newBpm = clampBarBpm(startBpm - gs.dx / 3);
         applyRepBpm(newBpm);
       },
       onPanResponderRelease: () => {},
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [applyRepBpm, isPlaying]);
+
+  const countSwipePan = useMemo(() => {
+    let startCount = 1;
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) => !isPlaying && Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+      onPanResponderGrant: () => { startCount = repCountRef.current; },
+      onPanResponderMove: (_, gs) => {
+        if (isPlaying) return;
+        commitCount(startCount - Math.round(gs.dx / 24));
+      },
+      onPanResponderRelease: () => {},
+    });
+  }, [commitCount, isPlaying]);
+
+  const durationSwipePan = useMemo(() => {
+    let startTotal = 0;
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) => !isPlaying && Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+      onPanResponderGrant: () => {
+        startTotal = repMinRef.current * 60 + repSecRef.current;
+      },
+      onPanResponderMove: (_, gs) => {
+        if (isPlaying) return;
+        const total = adjustBarDuration(
+          startTotal,
+          durationPartRef.current,
+          -Math.round(gs.dx / 24),
+        );
+        commitDuration(Math.floor(total / 60), total % 60);
+      },
+      onPanResponderRelease: () => {},
+    });
+  }, [commitDuration, isPlaying]);
 
   // ─── clearRepeat ─────────────────────────────────────────────────────────
 
@@ -432,6 +464,7 @@ export function BarEditorPanel({
   // ─── Render ───────────────────────────────────────────────────────────────
 
   const editorSwipeAnim = useRef(new Animated.Value(0)).current;
+  const [displayMinutes, displaySeconds] = formatBarDuration(repMin * 60 + repSec).split(":");
 
   return (
     <>
@@ -510,40 +543,85 @@ export function BarEditorPanel({
                 </Pressable>
               ))}
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: repType === "count" ? 4 : 2 }}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: repType === "count" ? 4 : 6 }}
+              {...(repType === "count" ? countSwipePan.panHandlers : durationSwipePan.panHandlers)}
+            >
               {repType === "count" ? (
                 <>
-                  <Pressable onPress={() => { if (!isPlaying) { const c = Math.max(1, repCount - 1); setRepCount(c); commitRepeat(repType, c, repMin, repSec, repBpm); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                  <Pressable
+                    onPress={() => { if (!isPlaying) commitCount(repCount - 1); }}
+                    style={styles.stepBtn}
+                    testID="bar-count-minus"
+                  >
                     <Ionicons name="remove" size={ms(13, 0.4)} color={C.textSecondary} />
                   </Pressable>
-                  <Text style={{ color: C.text, fontSize: 16, fontFamily: "SpaceGrotesk_700Bold", minWidth: 32, textAlign: "center" }}>×{repCount}</Text>
-                  <Pressable onPress={() => { if (!isPlaying) { const c = Math.min(99, repCount + 1); setRepCount(c); commitRepeat(repType, c, repMin, repSec, repBpm); } }} style={[styles.stepBtn, { backgroundColor: C.overlay10 }]}>
+                  <Text
+                    style={{ color: C.text, fontSize: 16, fontFamily: "SpaceGrotesk_700Bold", minWidth: 32, textAlign: "center" }}
+                    testID="bar-count-value"
+                  >
+                    ×{repCount}
+                  </Text>
+                  <Pressable
+                    onPress={() => { if (!isPlaying) commitCount(repCount + 1); }}
+                    style={styles.stepBtn}
+                    testID="bar-count-plus"
+                  >
                     <Ionicons name="add" size={ms(13, 0.4)} color={C.textSecondary} />
                   </Pressable>
                 </>
               ) : (
                 <>
-                  <Pressable onPress={() => { if (!isPlaying) { const m = Math.max(0, repMin - 1); setRepMin(m); commitRepeat(repType, repCount, m, repSec, repBpm); } }} style={[styles.stepBtn, styles.stepBtnCompact, { backgroundColor: C.overlay10 }]}>
-                    <Ionicons name="remove" size={ms(11, 0.4)} color={C.textSecondary} />
-                  </Pressable>
-                  <Text style={{ color: C.text, fontSize: 13, fontFamily: "SpaceGrotesk_700Bold", minWidth: 18, textAlign: "center" }}>{repMin}{t("barModeView", "minuteSuffix")}</Text>
-                  <Pressable onPress={() => { if (!isPlaying) { const m = Math.min(59, repMin + 1); setRepMin(m); commitRepeat(repType, repCount, m, repSec, repBpm); } }} style={[styles.stepBtn, styles.stepBtnCompact, { backgroundColor: C.overlay10 }]}>
-                    <Ionicons name="add" size={ms(11, 0.4)} color={C.textSecondary} />
-                  </Pressable>
                   <Pressable
-                    onPress={() => { if (!isPlaying && !secHoldFired.current) { const total = Math.max(0, repMin * 60 + repSec - 1); const m = Math.floor(total / 60); const s = total % 60; setRepMin(m); setRepSec(s); commitRepeat(repType, repCount, m, s, repBpm); } }}
-                    onPressIn={() => { if (!isPlaying) startSecHold(-1, repMin, repSec, (m, s) => { setRepMin(m); setRepSec(s); commitRepeat(repTypeRef.current, repCountRef.current, m, s, repBpmRef.current); }); }}
-                    onPressOut={() => clearSecTimers()}
-                    style={[styles.stepBtn, styles.stepBtnCompact, { backgroundColor: C.overlay10 }]}
+                    onPress={() => {
+                      if (!isPlaying) {
+                        const total = adjustBarDuration(repMin * 60 + repSec, durationPart, -1);
+                        commitDuration(Math.floor(total / 60), total % 60);
+                      }
+                    }}
+                    style={[styles.stepBtn, styles.stepBtnCompact]}
+                    testID="bar-duration-minus"
                   >
                     <Ionicons name="remove" size={ms(11, 0.4)} color={C.textSecondary} />
                   </Pressable>
-                  <Text style={{ color: C.text, fontSize: 13, fontFamily: "SpaceGrotesk_700Bold", minWidth: 18, textAlign: "center" }}>{repSec}{t("barModeView", "secondSuffix")}</Text>
                   <Pressable
-                    onPress={() => { if (!isPlaying && !secHoldFired.current) { const total = Math.min(3599, repMin * 60 + repSec + 1); const m = Math.floor(total / 60); const s = total % 60; setRepMin(m); setRepSec(s); commitRepeat(repType, repCount, m, s, repBpm); } }}
-                    onPressIn={() => { if (!isPlaying) startSecHold(1, repMin, repSec, (m, s) => { setRepMin(m); setRepSec(s); commitRepeat(repTypeRef.current, repCountRef.current, m, s, repBpmRef.current); }); }}
-                    onPressOut={() => clearSecTimers()}
-                    style={[styles.stepBtn, styles.stepBtnCompact, { backgroundColor: C.overlay10 }]}
+                    onPress={() => !isPlaying && setDurationPart("minutes")}
+                    style={[
+                      styles.durationPart,
+                      durationPart === "minutes" && { borderBottomColor: C.accent },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("barModeView", "minuteSuffix")}
+                    testID="bar-duration-minutes"
+                  >
+                    <Text style={{ color: durationPart === "minutes" ? C.accent : C.text, fontSize: 15, fontFamily: "SpaceGrotesk_700Bold" }}>
+                      {displayMinutes}
+                    </Text>
+                  </Pressable>
+                  <Text style={{ color: C.textTertiary, fontSize: 15, fontFamily: "SpaceGrotesk_700Bold" }}>:</Text>
+                  <Pressable
+                    onPress={() => !isPlaying && setDurationPart("seconds")}
+                    style={[
+                      styles.durationPart,
+                      durationPart === "seconds" && { borderBottomColor: C.accent },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("barModeView", "secondSuffix")}
+                    testID="bar-duration-seconds"
+                  >
+                    <Text style={{ color: durationPart === "seconds" ? C.accent : C.text, fontSize: 15, fontFamily: "SpaceGrotesk_700Bold" }}>
+                      {displaySeconds}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      if (!isPlaying) {
+                        const total = adjustBarDuration(repMin * 60 + repSec, durationPart, 1);
+                        commitDuration(Math.floor(total / 60), total % 60);
+                      }
+                    }}
+                    style={[styles.stepBtn, styles.stepBtnCompact]}
+                    testID="bar-duration-plus"
                   >
                     <Ionicons name="add" size={ms(11, 0.4)} color={C.textSecondary} />
                   </Pressable>
@@ -600,14 +678,15 @@ export function BarEditorPanel({
             </View>
 
             {/* Right: BPM stepper */}
-            <View style={{ flex: 1, alignItems: "flex-end" }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, opacity: isPlaying || editingBeat === null ? 0.5 : 1 }} {...(editingBeat !== null ? bpmSwipePan.panHandlers : {})}>
+              <View style={{ flex: 1, alignItems: "flex-end" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, opacity: isPlaying ? 0.5 : 1 }} {...bpmSwipePan.panHandlers}>
                 <Pressable
-                  disabled={isPlaying || editingBeat === null}
-                  onPress={() => { if (!isPlaying && editingBeat !== null && !bpmHoldFired.current) { applyRepBpm(Math.max(20, (repBpm ?? bpm ?? 120) - 1)); } }}
-                  onPressIn={() => { if (!isPlaying && editingBeat !== null) startBpmHold(-1); }}
+                  disabled={isPlaying}
+                  onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.max(20, (repBpm ?? bpm ?? 120) - 1)); } }}
+                  onPressIn={() => { if (!isPlaying) startBpmHold(-1); }}
                   onPressOut={() => clearBpmTimers()}
-                  style={{ width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: C.overlay10 }}
+                  style={styles.stepBtn}
+                  testID="bar-bpm-minus"
                 >
                   <Ionicons name="remove" size={ms(13, 0.4)} color={C.accent} />
                 </Pressable>
@@ -615,21 +694,26 @@ export function BarEditorPanel({
                   style={{ fontSize: ms(28, 0.4), fontFamily: "SpaceGrotesk_700Bold", width: ms(56, 0.4), textAlign: "center", borderBottomWidth: 1.5, paddingVertical: 1, color: C.accent, borderBottomColor: C.accent }}
                   value={String(repBpm ?? bpm ?? 120)}
                   keyboardType="number-pad"
-                  editable={!isPlaying && editingBeat !== null}
+                  editable={!isPlaying}
                   onEndEditing={e => {
-                    if (isPlaying || editingBeat === null) return;
+                    if (isPlaying) return;
                     const v = parseInt(e.nativeEvent.text, 10);
                     if (!isNaN(v) && v >= 20 && v <= 300) { applyRepBpm(v); }
-                    else if (!e.nativeEvent.text) { setRepBpm(null); commitRepeat(repType, repCount, repMin, repSec, null); }
+                    else if (!e.nativeEvent.text && editingBeat !== null) {
+                      setRepBpm(null);
+                      commitRepeat(repType, repCount, repMin, repSec, null);
+                    }
                   }}
                   selectTextOnFocus
+                  testID="bar-bpm-value"
                 />
                 <Pressable
-                  disabled={isPlaying || editingBeat === null}
-                  onPress={() => { if (!isPlaying && editingBeat !== null && !bpmHoldFired.current) { applyRepBpm(Math.min(300, (repBpm ?? bpm ?? 120) + 1)); } }}
-                  onPressIn={() => { if (!isPlaying && editingBeat !== null) startBpmHold(1); }}
+                  disabled={isPlaying}
+                  onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.min(300, (repBpm ?? bpm ?? 120) + 1)); } }}
+                  onPressIn={() => { if (!isPlaying) startBpmHold(1); }}
                   onPressOut={() => clearBpmTimers()}
-                  style={{ width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: C.overlay10 }}
+                  style={styles.stepBtn}
+                  testID="bar-bpm-plus"
                 >
                   <Ionicons name="add" size={ms(13, 0.4)} color={C.accent} />
                 </Pressable>
@@ -914,4 +998,13 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
   },
+    durationPart: {
+      minWidth: 24,
+      paddingHorizontal: 2,
+      paddingVertical: 2,
+      alignItems: "center",
+      justifyContent: "center",
+      borderBottomWidth: 2,
+      borderBottomColor: "transparent",
+    },
 });
