@@ -90,7 +90,7 @@ export function MetronomeScreenUI(props: Props) {
     handlePatternChange, handleDragStart, handleDragMove, handleDragEnd,
     showSubdivisionLongPressHint, setShowSubdivisionLongPressHint,
     activeModal, setActiveModal, openExclusive,
-    markMenuItemReturn, clearMenuItemReturn, closeMenuItem,
+    markMenuItemReturn, clearMenuItemReturn, closeMenuItem, closeScoreMode,
     showSettings, showMenu, showSignalGen, showTuningGuide, showPracticeBook,
     showWorkUp, showOnboarding, showDrumKit, showScheduledStart,
     showFadeOut, showBpmDetect, showPolygon,
@@ -231,11 +231,6 @@ export function MetronomeScreenUI(props: Props) {
   const openMenuItem = (open: () => void) => {
     markMenuItemReturn();
     open();
-  };
-
-  const closeScoreMode = () => {
-    setScoreMode(null);
-    closeMenuItem();
   };
 
   const openModeDial = () => {
@@ -499,15 +494,17 @@ export function MetronomeScreenUI(props: Props) {
       )}
 
       {/* 모드 다이얼 — D-탭 없이 텍스트 레이블이 트리거 */}
-      <ModeSwitcherDial
-        ref={modeSwitcherDialRef}
-        currentMode={currentMode}
-        onSelectMode={switchToMode}
-        topInset={insets.top || webTopInset}
-        isLandscape={isLandscape}
-        isPlaying={isPlaying}
-        hideHandle
-      />
+      {scoreMode === null && (
+        <ModeSwitcherDial
+          ref={modeSwitcherDialRef}
+          currentMode={currentMode}
+          onSelectMode={switchToMode}
+          topInset={insets.top || webTopInset}
+          isLandscape={isLandscape}
+          isPlaying={isPlaying}
+          hideHandle
+        />
+      )}
 
 
       {showMenu && (

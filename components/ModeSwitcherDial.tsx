@@ -13,6 +13,7 @@ import Animated, {
   withSpring,
   withSequence,
   Easing,
+  cancelAnimation,
 } from "react-native-reanimated";
 import type { SharedValue } from "react-native-reanimated";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -27,6 +28,7 @@ import {
   shortestModeDialTarget,
   snapModeDialPosition,
   wrapModeDialPosition,
+  modeDialSessionForMode,
 } from "@/lib/mode-dial-logic";
 import type { ModeSlot } from "@/lib/mode-dial-logic";
 
@@ -447,6 +449,10 @@ function ModeSwitcherDial({
   const isConfirmingRef = useRef(false);
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const swipeStart = useRef({ coord: 0, startScroll: 0, moved: false,
+                               pageX: 0, pageY: 0 });
 
   // Refs for PanResponder tap-detection (updated each render)
   const anchorRef    = useRef({ x: 0, y: 0 });
@@ -484,6 +490,35 @@ function ModeSwitcherDial({
     }, 220);
   }, [highlightPosition, scrollPosition]);
 
+  const resetDialSession = useCallback((mode: ModeSlot) => {
+    const session = modeDialSessionForMode(mode);
+    if (settleTimerRef.current) {
+      clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = null;
+    }
+    cancelAnimation(scrollPosition);
+    scrollPosRef.current = session.scrollPosition;
+    selectedIndexRef.current = session.selectedIndex;
+    setSelectedIndex(session.selectedIndex);
+    scrollPosition.value = session.scrollPosition;
+    selectionPulse.value = 0;
+    swipeStart.current = {
+      coord: 0,
+      startScroll: session.scrollPosition,
+      moved: false,
+      pageX: 0,
+      pageY: 0,
+    };
+  }, [scrollPosition, selectionPulse]);
+
+  // A mode can change while the fan is closed (for example, from the menu or
+  // a practice-book shortcut). Keep the collapsed/next-open state aligned with
+  // that mode, but never interrupt an active gesture or confirmation.
+  useEffect(() => {
+    if (isOpenRef.current || isConfirmingRef.current) return;
+    resetDialSession(currentMode);
+  }, [currentMode, resetDialSession]);
+
   const highlightPositionRef = useRef(highlightPosition);
   const settleToPositionRef = useRef(settleToPosition);
   useEffect(() => { highlightPositionRef.current = highlightPosition; }, [highlightPosition]);
@@ -491,6 +526,7 @@ function ModeSwitcherDial({
   useEffect(() => () => {
     if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
     if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
   }, []);
 
   const doOpen = useCallback(() => {
@@ -498,13 +534,12 @@ function ModeSwitcherDial({
     // here would allow a second stale confirmation to be queued.
     if (isConfirmingRef.current) return;
     // currentModeRef는 렌더 중 동기 갱신되므로 항상 최신값
-    const idx = Math.max(0, MODES.indexOf(currentModeRef.current));
-    scrollPosRef.current = idx;
-    selectedIndexRef.current = idx;
-    setSelectedIndex(idx);
-    scrollPosition.value = idx;
-    selectionPulse.value = 0;
+    resetDialSession(currentModeRef.current);
     isConfirmingRef.current = false;
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
     setIsOpen(true);
     isOpenRef.current = true;
     fanScale.value   = withTiming(1,   { duration: 220, easing: Easing.out(Easing.cubic) });
@@ -512,13 +547,18 @@ function ModeSwitcherDial({
     overlayOp.value  = withTiming(0.5, { duration: 200 });
   // currentMode 제거 — ref로 읽으므로 deps 불필요, React Compiler 재생성 방지
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fanScale, fanOpacity, overlayOp, scrollPosition, selectionPulse]);
+  }, [fanScale, fanOpacity, overlayOp, resetDialSession]);
 
   const doClose = useCallback(() => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     fanScale.value   = withTiming(0.05, { duration: 180, easing: Easing.in(Easing.cubic) });
     fanOpacity.value = withTiming(0,    { duration: 150 });
     overlayOp.value  = withTiming(0,    { duration: 160 });
-    setTimeout(() => { setIsOpen(false); isOpenRef.current = false; }, 185);
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
+      setIsOpen(false);
+      isOpenRef.current = false;
+    }, 185);
   }, [fanScale, fanOpacity, overlayOp]);
 
   // Expose open/close to parent via ref.
@@ -553,10 +593,10 @@ function ModeSwitcherDial({
   const currentModeRef = useRef<ModeSlot>(currentMode);
   // 렌더 중 동기적으로 갱신 — effect로 갱신하면 모드 변경 직후 탭 시 구버전이 읽힘
   currentModeRef.current = currentMode;
-  useEffect(() => { winWRef.current  = winW; },        [winW]);
-  useEffect(() => { winHRef.current  = winH; },        [winH]);
-  useEffect(() => { topInRef.current = topInset; },    [topInset]);
-  useEffect(() => { wallRef.current  = wallPos.wall; }, [wallPos.wall]);
+  winWRef.current  = winW;
+  winHRef.current  = winH;
+  topInRef.current = topInset;
+  wallRef.current  = wallPos.wall;
 
   // ── Handle PanResponder (tap = toggle; drag = reposition) ─────────────────
   const longRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -609,9 +649,6 @@ function ModeSwitcherDial({
   // ── Fan swipe PanResponder (rotary dial) ──────────────────────────────────
   // Claims ALL starts so the overlay below can never steal the touch on web.
   // Tap vs swipe is distinguished by movement distance on release.
-  const swipeStart = useRef({ coord: 0, startScroll: 0, moved: false,
-                               pageX: 0, pageY: 0 });
-
   const fanSwipePR = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,   // always claim — blocks overlay

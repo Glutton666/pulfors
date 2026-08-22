@@ -93,10 +93,18 @@ test("menu return: Android BackHandler가 메뉴 진입 항목을 공통 closeMe
     const branchBody = onBack.slice(branchIndex, nextBranchIndex === -1 ? undefined : nextBranchIndex);
     assert.match(
       branchBody,
-      /closeMenuItem\(\)/,
-      `Android BackHandler의 ${branch} 분기가 공통 메뉴 복귀 경로를 사용하지 않는다`,
+      branch === 'coreMode === "score"' ? /closeScoreMode\(\)/ : /closeMenuItem\(\)/,
+      `Android BackHandler의 ${branch} 분기가 공통 종료 경로를 사용하지 않는다`,
     );
   }
+});
+
+test("score close: 목록과 편집기가 문서 상태를 비우는 공통 종료 핸들러를 사용한다", () => {
+  const ui = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
+  const hook = readFileSync(join(process.cwd(), "hooks/useMetronomeScreen.ts"), "utf-8");
+  assert.match(ui, /onClose=\{closeScoreMode\}/);
+  assert.match(hook, /const closeScoreMode = useCallback\(\(\) => \{\s*setScoreEditorDoc\(null\);\s*setScoreMode\(null\);\s*closeMenuItem\(\);/);
+  assert.match(hook, /if \(coreMode === "score"\) \{\s*closeScoreMode\(\);/);
 });
 
 test("menu return: 메뉴 화면의 각 항목 진입이 메뉴 복귀 상태를 기록한다", () => {

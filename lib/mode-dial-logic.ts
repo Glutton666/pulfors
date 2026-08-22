@@ -16,6 +16,17 @@ export const MODE_DIAL_SLOTS: ModeSlot[] = [
   "menu",
 ];
 
+export interface ModeDialSession {
+  selectedIndex: number;
+  scrollPosition: number;
+}
+
+/** Build the canonical starting point for a newly opened dial session. */
+export function modeDialSessionForMode(mode: ModeSlot): ModeDialSession {
+  const index = Math.max(0, MODE_DIAL_SLOTS.indexOf(mode));
+  return { selectedIndex: index, scrollPosition: index };
+}
+
 export function wrapModeDialPosition(value: number): number {
   const count = MODE_DIAL_SLOTS.length;
   return ((value % count) + count) % count;

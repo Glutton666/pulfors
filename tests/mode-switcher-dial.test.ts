@@ -22,6 +22,7 @@ import {
   MODE_DIAL_SLOTS,
   nearestModeDialSnapTarget,
   shortestModeDialTarget,
+  modeDialSessionForMode,
   snapModeDialPosition,
   wrapModeDialPosition,
 } from "../lib/mode-dial-logic";
@@ -97,6 +98,22 @@ describe("wrapModeDialPosition", () => {
   test("소수점 스크롤 값 유지", () => {
     const v = wrapModeDialPosition(5.5);
     assert.ok(v > 5 && v < 6, `expected 5<v<6, got ${v}`);
+  });
+});
+
+describe("modeDialSessionForMode", () => {
+  test("새로 열 때 현재 모드를 선택값과 스크롤 기준으로 함께 사용", () => {
+    assert.deepEqual(modeDialSessionForMode("stage"), {
+      selectedIndex: MODE_DIAL_SLOTS.indexOf("stage"),
+      scrollPosition: MODE_DIAL_SLOTS.indexOf("stage"),
+    });
+  });
+
+  test("반복 열기에서 이전 회전 위치가 아니라 현재 모드의 정규 인덱스로 시작", () => {
+    const current = modeDialSessionForMode("bar");
+    const reopened = modeDialSessionForMode("bar");
+    assert.deepEqual(reopened, current);
+    assert.equal(reopened.scrollPosition, MODE_DIAL_SLOTS.indexOf("bar"));
   });
 });
 

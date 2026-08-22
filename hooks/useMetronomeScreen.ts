@@ -364,6 +364,12 @@ export function useMetronomeScreen() {
     setActiveModal(target);
   }, []);
 
+  const closeScoreMode = useCallback(() => {
+    setScoreEditorDoc(null);
+    setScoreMode(null);
+    closeMenuItem();
+  }, [closeMenuItem, setScoreMode]);
+
   const closeAllModals = useCallback(() => {
     tuningGuideOnSelectRef.current = null;
     clearMenuItemReturn();
@@ -411,8 +417,7 @@ export function useMetronomeScreen() {
       if (showOnboarding) { setActiveModal(null); return true; }
       if (showReboot) { setShowReboot(false); return true; }
       if (coreMode === "score") {
-        setScoreMode(null);
-        closeMenuItem();
+        closeScoreMode();
         return true;
       }
       if (barModeRef.current) { setBarMode(false); barModeRef.current = false; return true; }
@@ -424,7 +429,7 @@ export function useMetronomeScreen() {
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
     return () => sub.remove();
-  }, [activeModal, showReboot, coreMode, closeMenuItem, clearMenuItemReturn, setScoreMode]);
+  }, [activeModal, showReboot, coreMode, closeScoreMode, closeMenuItem, clearMenuItemReturn, setScoreMode]);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
@@ -3143,6 +3148,7 @@ export function useMetronomeScreen() {
     markMenuItemReturn,
     clearMenuItemReturn,
     closeMenuItem,
+    closeScoreMode,
     showSettings,
     showMenu,
     showSignalGen,
