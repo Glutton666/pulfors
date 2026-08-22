@@ -30,6 +30,7 @@ import {
   BEAT_TYPE_LABEL,
   computeVertexAngles,
   computeHitTargets,
+  computePulseLabelPosition,
 } from "./PolygonTypes";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -118,6 +119,12 @@ export function PolygonCanvas({
   // ── 터치 오버레이 히트 타깃 (SVG G onLongPress는 웹에서 미동작) ──
   // 편집 모드에서는 편집 중인 레이어의 타깃만 활성화 (겹치는 꼭짓점 라우팅)
   const hitTargets = computeHitTargets(sorted, layouts, size, editingLayerId);
+  const pulseLabelIndices = new Map<string, number>();
+  const pulseCount = sorted.reduce((count, layer) => {
+    if (Math.max(1, layer.sides) !== 1) return count;
+    pulseLabelIndices.set(layer.id, count);
+    return count + 1;
+  }, 0);
 
   return (
     <View style={{ width: size, height: size }}>
@@ -139,7 +146,15 @@ export function PolygonCanvas({
             const isMute = beatType === "mute";
             const label = BEAT_TYPE_LABEL[beatType];
             const labelColor = isMute ? layer.color + "55" : layer.color;
-            const labelPos = getLabelPos(cx, cy, cx, cy, VERTEX_R_ACTIVE + LABEL_OFFSET);
+            const labelPos = pulseLabelIndices.has(layer.id)
+              ? computePulseLabelPosition(
+                cx,
+                cy,
+                pulseLabelIndices.get(layer.id) ?? 0,
+                pulseCount,
+                size,
+              )
+              : getLabelPos(cx, cy, cx, cy, VERTEX_R_ACTIVE + LABEL_OFFSET);
             return (
               <G key={layer.id} opacity={layerOpacity}>
                 {/* 원 외곽선·활성 링: mute이면 미표시 */}

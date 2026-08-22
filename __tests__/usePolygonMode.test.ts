@@ -17,7 +17,13 @@ import { renderHook, act } from "@testing-library/react";
 import { Platform } from "react-native";
 import { usePolygonMode } from "@/hooks/usePolygonMode";
 import type { UsePolygonModeParams } from "@/hooks/usePolygonMode";
-import { computeVertexAngles, computeLayerLayout, sortLayersForDisplay, computeHitTargets } from "@/components/polygon-mode/PolygonTypes";
+import {
+  computeVertexAngles,
+  computeLayerLayout,
+  sortLayersForDisplay,
+  computeHitTargets,
+  computePulseLabelPosition,
+} from "@/components/polygon-mode/PolygonTypes";
 import type { PolygonLayer } from "@/components/polygon-mode/PolygonTypes";
 
 // ── 모듈 모킹 ─────────────────────────────────────────────────────────────
@@ -1241,5 +1247,34 @@ describe("computeLayerLayout", () => {
       expect(layout.cx).toBeCloseTo(SIZE / 2, 6);
       expect(layout.cy).toBeCloseTo(SIZE / 2, 6);
     }
+  });
+});
+
+describe("computePulseLabelPosition", () => {
+  it("keeps a single pulse label centered below the pulse", () => {
+    const position = computePulseLabelPosition(150, 150, 0, 1, 300);
+
+    expect(position).toEqual({ x: 150, y: 174 });
+  });
+
+  it("fans multiple pulse labels out in display order", () => {
+    const positions = [0, 1, 2].map((index) =>
+      computePulseLabelPosition(150, 150, index, 3, 300),
+    );
+
+    expect(positions.map((position) => position.x)).toEqual([136, 150, 164]);
+    expect(new Set(positions.map((position) => position.y)).size).toBe(1);
+    expect(positions[1].x - positions[0].x).toBeGreaterThan(8);
+    expect(positions[2].x - positions[1].x).toBeGreaterThan(8);
+  });
+
+  it("compresses labels into the canvas on small crowded canvases", () => {
+    const positions = Array.from({ length: 8 }, (_, index) =>
+      computePulseLabelPosition(20, 20, index, 8, 40),
+    );
+
+    expect(positions.every((position) => position.x >= 4 && position.x <= 36)).toBe(true);
+    expect(positions.every((position) => position.y <= 34)).toBe(true);
+    expect(positions[0].x).toBeLessThan(positions[positions.length - 1].x);
   });
 });

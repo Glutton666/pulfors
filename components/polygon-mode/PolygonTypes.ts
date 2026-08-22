@@ -86,6 +86,38 @@ export interface LayerLayout {
 }
 
 /**
+ * 겹친 펄스 레이어의 약호 표시 좌표를 계산한다.
+ *
+ * 펄스 자체는 같은 중심 허브를 공유하므로, 약호만 중심 아래에서
+ * 가로로 펼친다. 캔버스가 작거나 레이어가 많으면 사용 가능한 폭 안에서
+ * 간격을 줄여 약호가 캔버스 밖으로 나가지 않게 한다.
+ */
+export function computePulseLabelPosition(
+  cx: number,
+  cy: number,
+  index: number,
+  count: number,
+  size: number,
+): { x: number; y: number } {
+  const safeCount = Math.max(1, count);
+  const safeIndex = Math.min(Math.max(0, index), safeCount - 1);
+  const labelHalfWidth = 4;
+  const edgePadding = 2;
+  const desiredSpacing = 14;
+  const maxSpread = Math.max(0, size / 2 - labelHalfWidth - edgePadding);
+  const spacing = safeCount > 1
+    ? Math.min(desiredSpacing, (maxSpread * 2) / (safeCount - 1))
+    : 0;
+  const centeredIndex = safeIndex - (safeCount - 1) / 2;
+  const y = Math.min(cy + 24, Math.max(0, size - labelHalfWidth - edgePadding));
+
+  return {
+    x: cx + centeredIndex * spacing,
+    y,
+  };
+}
+
+/**
  * 중앙 허브 기반 동심 레이아웃 계산.
  *
  * 모든 레이어가 캔버스 중앙 허브를 공유한다. 변 수가 같은 도형 그룹은
