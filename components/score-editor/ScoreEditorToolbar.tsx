@@ -31,6 +31,7 @@ export interface ScoreEditorToolbarProps {
   parts: ScorePart[];
   selectedPartIdx: number;
   onBack: () => void;
+  onClose: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onPlayPause: () => void;
@@ -55,6 +56,7 @@ export function ScoreEditorToolbar({
   parts,
   selectedPartIdx,
   onBack,
+  onClose,
   onUndo,
   onRedo,
   onPlayPause,
@@ -81,6 +83,18 @@ export function ScoreEditorToolbar({
         ]}
         onLayout={(e) => onLayout(e.nativeEvent.layout.height)}
       >
+        {/* 악보 모드 종료 */}
+        <Pressable
+          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}
+          onPress={onClose}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={t("scoreMode", "close")}
+          testID="score-editor-close"
+        >
+          <Ionicons name="close" size={S.ms(24, 0.4)} color={C.text} />
+        </Pressable>
+
         {/* 뒤로가기 */}
         <Pressable
           style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.6 }]}

@@ -96,6 +96,7 @@ import { ScoreEditorExportCapture } from "@/components/score-editor/ScoreEditorE
 export interface ScoreEditorScreenProps {
   doc: ScoreDocument;
   onBack: () => void;
+  onClose: () => void;
   onSaved: (doc: ScoreDocument) => void;
   onLinkedEntryChange?: (
     entryId: string | undefined,
@@ -108,6 +109,7 @@ export interface ScoreEditorScreenProps {
 export function ScoreEditorScreen({
   doc: initialDoc,
   onBack,
+  onClose,
   onSaved,
   onLinkedEntryChange,
 }: ScoreEditorScreenProps) {
@@ -1712,6 +1714,7 @@ export function ScoreEditorScreen({
         parts={doc.parts}
         selectedPartIdx={selectedPartIdx}
         onBack={onBack}
+        onClose={onClose}
         onUndo={handleUndo}
         onRedo={handleRedo}
         onPlayPause={playback.isPlaying ? playback.pause : playback.play}

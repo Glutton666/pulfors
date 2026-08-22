@@ -200,6 +200,16 @@ export function ScoreListScreen({ defaultBpm, onClose, onOpenEditor }: ScoreList
     <View style={[styles.container, { backgroundColor: C.background }]}>
       {/* 헤더 */}
       <View style={[styles.header, { paddingTop: topInset + 8, borderBottomColor: C.border }]}>
+        <Pressable
+          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
+          onPress={onClose}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={t("scoreMode", "close")}
+          testID="score-list-close"
+        >
+          <Ionicons name="close" size={S.ms(24, 0.4)} color={C.text} />
+        </Pressable>
         {/* 제목 — 화면 전체 기준 가운데 정렬 (우측 버튼과 무관하게 절대 중앙) */}
         <View
           style={{

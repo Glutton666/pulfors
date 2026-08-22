@@ -268,6 +268,7 @@ export function MetronomeScreenUI(props: Props) {
           <ScoreEditorScreen
             doc={scoreEditorDoc}
             onBack={() => setScoreMode("list")}
+            onClose={closeScoreMode}
             onSaved={(updatedDoc) => {
               setScoreEditorDoc(updatedDoc);
               // 연습장 캐시 무효화 (저장된 연결 항목 반영)
