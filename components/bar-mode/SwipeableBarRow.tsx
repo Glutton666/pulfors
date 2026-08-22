@@ -4,6 +4,7 @@
 import React, { useRef, useMemo } from "react";
 import { View, Text, Pressable, PanResponder, Animated, Platform, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
+import { Ionicons } from "@expo/vector-icons";
 import type { BeatType, BarRepeat } from "@/components/beat-indicator.types";
 import type { ProgressInfo } from "@/lib/metronome-engine";
 import { FontSize } from "@/constants/tokens";
@@ -45,6 +46,7 @@ export interface SwipeableBarRowProps {
   ms: (size: number, factor?: number) => number;
   rowHeight?: number;
   cellOverlayOpacity?: number;
+  sampleCells?: boolean[];
 }
 
 export function SwipeableBarRow({
@@ -54,7 +56,7 @@ export function SwipeableBarRow({
   onPress, onSwipeLeft, onSwipeRight, onLongPress,
   onDragStart, onDragMove, onDragEnd, isDragging, showDropLineAbove, dragTranslateY,
   colors: C, ms,
-  rowHeight, cellOverlayOpacity: _cellOverlayOpacity,
+  rowHeight, cellOverlayOpacity: _cellOverlayOpacity, sampleCells = [],
 }: SwipeableBarRowProps) {
   const translateX = useRef(new Animated.Value(0)).current;
   const actionTriggered = useRef(false);
@@ -141,6 +143,7 @@ export function SwipeableBarRow({
           onPress={() => { if (!isPlaying) onPress(beat); }}
           onLongPress={() => { if (!isPlaying) onLongPress(beat); }}
           delayLongPress={500}
+          accessibilityLabel={`Bar ${beat + 1}${sampleCells.some(Boolean) ? ", audio sample attached" : ""}`}
           style={[
             styles.barRow,
             {
@@ -210,7 +213,16 @@ export function SwipeableBarRow({
                       borderColor: ct === "mute" ? C.textTertiary + "80" : "transparent",
                     },
                   ]}
-                />
+                >
+                  {sampleCells[ci] && (
+                    <Ionicons
+                      name="musical-note"
+                      size={ms(11, 0.4)}
+                      color={C.background}
+                      accessibilityLabel={`Audio sample on bar ${beat + 1}, cell ${ci + 1}`}
+                    />
+                  )}
+                </View>
               );
             })}
 

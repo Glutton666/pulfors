@@ -15,7 +15,7 @@
  * - bpm / beatTypes 가 누락된 페이로드는 null 반환.
  */
 
-import { sanitizeNoteSampleChannelMap } from "./backup/shared";
+import { sanitizeNoteSampleChannelMap, sanitizeNoteSampleVolumeMap } from "./backup/shared";
 import { logger } from "./logger";
 import type { PracticeEntry } from "./storage";
 import type { BeatType } from "./metronome-engine";
@@ -109,6 +109,15 @@ export function sanitizeDeepLinkEntry(raw: unknown, _depth = 0): PracticeEntry |
     d.blockPlayMode === "random"
   ) {
     entry.blockPlayMode = d.blockPlayMode;
+  }
+  if (
+    d.noteSampleVolumes !== null &&
+    typeof d.noteSampleVolumes === "object" &&
+    !Array.isArray(d.noteSampleVolumes)
+  ) {
+    entry.noteSampleVolumes = sanitizeNoteSampleVolumeMap(
+      d.noteSampleVolumes as Record<string, unknown>,
+    );
   }
   if (d.barClockMode === "stopwatch" || d.barClockMode === "timer") {
     entry.barClockMode = d.barClockMode;

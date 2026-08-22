@@ -7,6 +7,7 @@ const STORAGE_KEY = "@note_samples";
 const NAMES_STORAGE_KEY = "@note_sample_names";
 const SOURCES_STORAGE_KEY = "@note_sample_sources";
 const CHANNELS_STORAGE_KEY = "@note_sample_channels";
+const VOLUMES_STORAGE_KEY = "@note_sample_volumes";
 const METRO_CHANNELS_STORAGE_KEY = "@note_sample_metro_channels_beat";
 
 /**
@@ -88,6 +89,7 @@ const samplesWriter = createSerializedWriter<NoteSampleMap>(STORAGE_KEY);
 const namesWriter = createSerializedWriter<NoteSampleNameMap>(NAMES_STORAGE_KEY);
 const sourcesWriter = createSerializedWriter<NoteSampleSourceMap>(SOURCES_STORAGE_KEY);
 const channelsWriter = createSerializedWriter<NoteSampleChannelMap>(CHANNELS_STORAGE_KEY);
+const volumesWriter = createSerializedWriter<NoteSampleVolumeMap>(VOLUMES_STORAGE_KEY);
 const metroChannelsWriter = createSerializedWriter<NoteSampleMetroChannelMap>(METRO_CHANNELS_STORAGE_KEY);
 
 export type NoteSampleMap = Record<string, string>;
@@ -95,6 +97,8 @@ export type NoteSampleNameMap = Record<string, string>;
 export type SampleSource = "recording" | "import";
 export type NoteSampleSourceMap = Record<string, SampleSource>;
 export type NoteSampleChannelMap = Record<string, SampleChannel>;
+/** Per-sample gain (0–1). Missing values deliberately mean 100% for old saves. */
+export type NoteSampleVolumeMap = Record<string, number>;
 export type NoteSampleMetroChannelMap = Record<string, MetroChannel>;
 
 /**
@@ -107,6 +111,7 @@ export function getNoteSamplePersistenceStatus(): PersisterStatus {
     namesWriter.getStatus(),
     sourcesWriter.getStatus(),
     channelsWriter.getStatus(),
+    volumesWriter.getStatus(),
     metroChannelsWriter.getStatus(),
   ];
   return {
@@ -128,7 +133,7 @@ export function getNoteSamplePersistenceStatus(): PersisterStatus {
 export function subscribeNoteSamplePersistenceStatus(
   listener: (status: PersisterStatus) => void,
 ): () => void {
-  const writers = [samplesWriter, namesWriter, sourcesWriter, channelsWriter, metroChannelsWriter];
+  const writers = [samplesWriter, namesWriter, sourcesWriter, channelsWriter, volumesWriter, metroChannelsWriter];
   const notify = () => listener(getNoteSamplePersistenceStatus());
   const unsubscribers = writers.map((writer) => writer.subscribeStatus(notify));
   return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
@@ -310,6 +315,56 @@ export async function removeNoteSampleChannel(
   const updated = { ...existing };
   delete updated[key];
   await saveNoteSampleChannels(updated);
+  return updated;
+}
+
+export async function loadNoteSampleVolumes(): Promise<NoteSampleVolumeMap> {
+  try {
+    const raw = await AsyncStorage.getItem(VOLUMES_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const volumes: NoteSampleVolumeMap = {};
+      if (parsed && typeof parsed === "object") {
+        for (const [key, value] of Object.entries(parsed)) {
+          if (typeof value === "number" && Number.isFinite(value)) {
+            volumes[key] = Math.max(0, Math.min(1, value));
+          }
+        }
+      }
+      return volumes;
+    }
+  } catch {}
+  return {};
+}
+
+export async function saveNoteSampleVolumes(volumes: NoteSampleVolumeMap): Promise<void> {
+  try {
+    await volumesWriter(volumes);
+  } catch {}
+}
+
+export async function setNoteSampleVolume(
+  beatIndex: number,
+  subIndex: number,
+  volume: number,
+  existing: NoteSampleVolumeMap,
+): Promise<NoteSampleVolumeMap> {
+  const key = sampleKey(beatIndex, subIndex);
+  const updated = { ...existing, [key]: Math.max(0, Math.min(1, volume)) };
+  await saveNoteSampleVolumes(updated);
+  return updated;
+}
+
+export async function removeNoteSampleVolume(
+  beatIndex: number,
+  subIndex: number,
+  existing: NoteSampleVolumeMap,
+): Promise<NoteSampleVolumeMap> {
+  const key = sampleKey(beatIndex, subIndex);
+  if (!(key in existing)) return existing;
+  const updated = { ...existing };
+  delete updated[key];
+  await saveNoteSampleVolumes(updated);
   return updated;
 }
 

@@ -384,6 +384,8 @@ export interface PracticeEntry {
   noteSampleNames?: Record<string, string>;
   noteSampleSources?: Record<string, "recording" | "import">;
   noteSampleChannels?: Record<string, "both" | "left" | "right">;
+  /** Per-sample gain (0–1); absent values are treated as 100% for compatibility. */
+  noteSampleVolumes?: Record<string, number>;
   noteQueueEntryIds?: string[];
   notePlayMode?: "once" | "loop" | "random";
   noteQueueEntries?: PracticeEntry[];

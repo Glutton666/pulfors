@@ -112,7 +112,7 @@ export function BarModeView({
   customSoundSets = {} as Record<string, CustomSoundSetConfig>, onCustomSoundSetsChange,
   colors: C, ms,
   cellOverlayOpacity, rowHeight,
-  onNoteRecordRequest, onReorderBar, onInsertBarAfter,
+  noteSamples, onNoteRecordRequest, onReorderBar, onInsertBarAfter,
 }: BarModeViewProps) {
   const { t } = useLanguage();
   const S = useScale();
@@ -549,7 +549,7 @@ export function BarModeView({
               isPlaying={isPlaying}
               progressCurrent={progressInfo?.beat === beat ? progressInfo.barRepeatCurrent : undefined}
               progressTotal={progressInfo?.beat === beat ? progressInfo.barRepeatTotal : undefined}
-              bpm={bpm ?? 120}
+              bpm={rep?.bpm ?? bpm ?? 120}
               beatsPerMeasure={beatsPerMeasure}
               onPress={handleBarRowPress}
               onSwipeLeft={handleSwipeLeft}
@@ -565,6 +565,10 @@ export function BarModeView({
               ms={ms}
               rowHeight={rowHeight}
               cellOverlayOpacity={cellOverlayOpacity}
+              sampleCells={Array.from(
+                { length: (beatSubdivisions[String(beat)]?.length || 1) },
+                (_, cell) => Boolean(noteSamples?.[`${beat}-${cell}`]),
+              )}
             />
           );
         })}

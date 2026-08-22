@@ -18,6 +18,9 @@ import {
   saveNoteSampleSources,
   getNoteSamplePersistenceStatus,
   subscribeNoteSamplePersistenceStatus,
+  loadNoteSampleVolumes,
+  setNoteSampleVolume,
+  removeNoteSampleVolume,
 } from "../lib/note-samples";
 
 const AsyncStorage = require("./_stubs/async-storage");
@@ -98,6 +101,15 @@ test("loadNoteSamples: 빈 storage → {}", async () => {
 test("loadNoteSamples/saveNoteSamples: 라운드트립", async () => {
   await saveNoteSamples({ "0-0": "u" });
   assert.deepEqual(await loadNoteSamples(), { "0-0": "u" });
+});
+
+test("sample volume: 값은 0–1로 clamp되고 삭제까지 저장된다", async () => {
+  const saved = await setNoteSampleVolume(0, 1, 1.4, {});
+  assert.deepEqual(saved, { "0-1": 1 });
+  assert.deepEqual(await loadNoteSampleVolumes(), { "0-1": 1 });
+  const removed = await removeNoteSampleVolume(0, 1, saved);
+  assert.deepEqual(removed, {});
+  assert.deepEqual(await loadNoteSampleVolumes(), {});
 });
 
 test("loadNoteSamples: 손상된 JSON → {}", async () => {

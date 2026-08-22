@@ -22,7 +22,7 @@ import { safePlay, notifyAudioPoolFallback } from "@/lib/audio-utils";
 import { isSafeNoteSampleUri } from "@/app/index.helpers";
 import type { ClickPCMs, SamplePCMEntry, TickInfo, DecodedSample } from "@/lib/audio-renderer";
 import type { SoundSet, BuiltinSoundSet, CustomSoundSetConfig } from "@/lib/storage";
-import type { NoteSampleMap, NoteSampleChannelMap, NoteSampleMetroChannelMap } from "@/lib/note-samples";
+import type { NoteSampleMap, NoteSampleChannelMap, NoteSampleMetroChannelMap, NoteSampleVolumeMap } from "@/lib/note-samples";
 import type { SampleChannel } from "@/lib/stereo-channel";
 import { useAudioPlayers } from "@/hooks/useAudioPlayers";
 import type { BuiltinPlayers, SoundSetPlayers } from "@/hooks/useAudioPlayers";
@@ -46,6 +46,7 @@ export interface UseAudioPipelineParams {
   layerSoundSetsRef: React.MutableRefObject<Record<number, SoundSet>>;
   noteSamplesRef: React.MutableRefObject<NoteSampleMap>;
   noteSampleChannelsRef: React.MutableRefObject<NoteSampleChannelMap>;
+  noteSampleVolumesRef: React.MutableRefObject<NoteSampleVolumeMap>;
   barModeRef: React.MutableRefObject<boolean>;
   barMetronomeChannelRef: React.MutableRefObject<SampleChannel>;
   noteSampleMetroChannelsRef: React.MutableRefObject<NoteSampleMetroChannelMap>;
@@ -127,7 +128,7 @@ export interface UseAudioPipelineResult {
 export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipelineResult {
   const {
     engineRef, soundSet, volume, customSoundSetsRef,
-    layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, barModeRef,
+    layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
     isPlayingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
   } = params;
@@ -338,6 +339,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         samplePCMs,
         clickVolume: Math.max(1.0, volumeRef.current),
         sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current : 0,
+        sampleVolumes: noteSampleVolumesRef.current,
         metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
         metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
         layerClickPCMs,
@@ -491,7 +493,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         try {
           const isFileUri = result.uri.startsWith("file://");
           const player = createAudioPlayer(result.uri, { downloadFirst: isFileUri });
-          player.volume = Math.max(0, Math.min(1, sampleVolumeRef.current));
+          player.volume = Math.max(0, Math.min(1, sampleVolumeRef.current * (noteSampleVolumesRef.current[key] ?? 1)));
           newPlayers[key] = player;
         } catch (e) {
           captureBreadcrumb({ category: "sample.preload", message: "Failed", level: "warning", data: { key, error: String(e) } });

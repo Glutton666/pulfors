@@ -1,7 +1,7 @@
 import { toEngineBpm } from "@/lib/metronome-engine";
 import type { BeatType } from "@/lib/metronome-engine";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
-import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap } from "@/lib/note-samples";
+import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap, NoteSampleVolumeMap } from "@/lib/note-samples";
 import type { PracticeEntry, SoundSet } from "@/lib/storage";
 import type { BarConfig, BarLoopMode, BlockPlayMode } from "./bar-config-helpers";
 
@@ -46,6 +46,7 @@ export interface AppliedEntryState {
   noteSampleNames: NoteSampleNameMap;
   noteSampleSources: NoteSampleSourceMap;
   noteSampleChannels: NoteSampleChannelMap;
+  noteSampleVolumes?: NoteSampleVolumeMap;
   bpmOverrides: Record<number, number>;
 }
 
@@ -80,6 +81,7 @@ export function applyEntryToState(entry: PracticeEntry): AppliedEntryState {
     noteSampleNames: { ...(entry.noteSampleNames || {}) } as NoteSampleNameMap,
     noteSampleSources: { ...(entry.noteSampleSources || {}) } as NoteSampleSourceMap,
     noteSampleChannels: { ...(entry.noteSampleChannels || {}) } as NoteSampleChannelMap,
+    noteSampleVolumes: { ...(entry.noteSampleVolumes || {}) },
     bpmOverrides,
   };
 }

@@ -40,12 +40,14 @@ import {
   saveNoteSampleNames,
   saveNoteSampleSources,
   saveNoteSampleChannels,
+  saveNoteSampleVolumes,
 } from "@/lib/note-samples";
 import type {
   NoteSampleMap,
   NoteSampleNameMap,
   NoteSampleSourceMap,
   NoteSampleChannelMap,
+  NoteSampleVolumeMap,
   NoteSampleMetroChannelMap,
 } from "@/lib/note-samples";
 import { releaseAll as releaseAllStereoArtifacts } from "@/lib/sample-cache";
@@ -113,6 +115,9 @@ export interface UseBarModeParams {
     React.SetStateAction<NoteSampleChannelMap>
   >;
   noteSampleChannelsRef: React.MutableRefObject<NoteSampleChannelMap>;
+  noteSampleVolumes: NoteSampleVolumeMap;
+  setNoteSampleVolumes: React.Dispatch<React.SetStateAction<NoteSampleVolumeMap>>;
+  noteSampleVolumesRef: React.MutableRefObject<NoteSampleVolumeMap>;
   setNoteSampleMetroChannels: React.Dispatch<
     React.SetStateAction<NoteSampleMetroChannelMap>
   >;
@@ -257,6 +262,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
           noteSampleNames: { ...p.noteSampleNames },
           noteSampleSources: { ...p.noteSampleSources },
           noteSampleChannels: { ...p.noteSampleChannels },
+          noteSampleVolumes: { ...p.noteSampleVolumes },
         };
 
         // Reset bar config to empty (entries are added via handleAddBar).
@@ -273,6 +279,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
           noteSampleNames: {},
           noteSampleSources: {},
           noteSampleChannels: {},
+          noteSampleVolumes: {},
           barLoopMode: "once",
           blockPlayMode: "loop",
           hasBeenConfigured: true,
@@ -292,6 +299,8 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
         p.noteSampleSourcesRef.current = {};
         p.setNoteSampleChannels({});
         p.noteSampleChannelsRef.current = {};
+        p.setNoteSampleVolumes({});
+        p.noteSampleVolumesRef.current = {};
         p.setNoteSampleMetroChannels({});
         p.noteSampleMetroChannelsRef.current = {};
         engine.setBeatsPerMeasure(0);
@@ -312,6 +321,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
           noteSampleNames: { ...p.noteSampleNames },
           noteSampleSources: { ...p.noteSampleSources },
           noteSampleChannels: { ...p.noteSampleChannels },
+          noteSampleVolumes: { ...p.noteSampleVolumes },
           barLoopMode,
           blockPlayMode,
           hasBeenConfigured: true,
@@ -331,6 +341,8 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
         p.noteSampleSourcesRef.current = { ...dc.noteSampleSources };
         p.setNoteSampleChannels({ ...(dc.noteSampleChannels || {}) });
         p.noteSampleChannelsRef.current = { ...(dc.noteSampleChannels || {}) };
+        p.setNoteSampleVolumes({ ...(dc.noteSampleVolumes || {}) });
+        p.noteSampleVolumesRef.current = { ...(dc.noteSampleVolumes || {}) };
         engine.setBeatsPerMeasure(dc.beatsPerMeasure);
         engine.setBeatTypes([...dc.beatTypes]);
         engine.setAllBeatSubdivisions(dc.beatSubdivisions);
@@ -352,6 +364,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
       p.noteSampleNames,
       p.noteSampleSources,
       p.noteSampleChannels,
+      p.noteSampleVolumes,
       barRepeats,
       loopBlocks,
       barLoopMode,
@@ -822,6 +835,8 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
     p.noteSampleSourcesRef.current = {};
     p.setNoteSampleChannels({});
     p.noteSampleChannelsRef.current = {};
+    p.setNoteSampleVolumes({});
+    p.noteSampleVolumesRef.current = {};
     for (const [, st] of Object.entries(p.samplePlayStateRef.current)) {
       if (st.endTimer) clearTimeout(st.endTimer);
     }
@@ -840,6 +855,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
     saveNoteSampleNames({});
     saveNoteSampleSources({});
     saveNoteSampleChannels({});
+    saveNoteSampleVolumes({});
     barConfigRef.current = {
       beatsPerMeasure: beats,
       beatTypes: [...newTypes],
@@ -852,6 +868,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
       noteSampleNames: {},
       noteSampleSources: {},
       noteSampleChannels: {},
+      noteSampleVolumes: {},
       barLoopMode: "once",
       blockPlayMode: "loop",
       hasBeenConfigured: true,

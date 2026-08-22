@@ -258,6 +258,19 @@ export function sanitizeNoteSampleChannelMap(
   return out;
 }
 
+export function sanitizeNoteSampleVolumeMap(
+  volumes: Record<string, unknown> | undefined,
+): Record<string, number> | undefined {
+  if (!volumes) return volumes;
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(volumes)) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      out[key] = Math.max(0, Math.min(1, value));
+    }
+  }
+  return out;
+}
+
 export function sanitizeCustomSoundSetsJson(json: string): string {
   try {
     const parsed: unknown = JSON.parse(json);
@@ -345,6 +358,7 @@ export function sanitizePracticeEntry(raw: unknown, depth = 0): PracticeEntry | 
     ...entry,
     noteSamples: sanitizeNoteSampleUris(entry.noteSamples),
     noteSampleChannels: sanitizeNoteSampleChannelMap(entry.noteSampleChannels),
+    noteSampleVolumes: sanitizeNoteSampleVolumeMap(entry.noteSampleVolumes),
     imageUri: sanitizeImageUri(entry.imageUri),
     noteQueueEntries: queueEntries,
     noteQueueEntryIds: queueEntryIds,
@@ -375,6 +389,13 @@ export function sanitizeBackupData(
       result["@note_sample_channels"] = JSON.stringify(
         sanitizeNoteSampleChannelMap(channels) ?? {},
       );
+    } catch {}
+  }
+
+  if (result["@note_sample_volumes"]) {
+    try {
+      const volumes: Record<string, unknown> = JSON.parse(result["@note_sample_volumes"]!);
+      result["@note_sample_volumes"] = JSON.stringify(sanitizeNoteSampleVolumeMap(volumes) ?? {});
     } catch {}
   }
 

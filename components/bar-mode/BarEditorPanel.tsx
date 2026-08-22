@@ -48,7 +48,7 @@ export interface BarEditorPanelProps {
   onBarQuickSave?: () => Promise<boolean> | void;
   // Playback controls
   bpm?: number;
-  /** When provided, +/- buttons with no per-bar override edit the base bar BPM. */
+  /** Retained for parent compatibility; bar editing only changes a selected bar. */
   onBpmChange?: (bpm: number) => void;
   beatDenominator?: 2 | 4 | 8;
   onDenominatorCycle?: () => void;
@@ -221,10 +221,6 @@ export function BarEditorPanel({
       // Per-bar override: update local repBpm state and commit to bar repeat
       setRepBpm(newBpm);
       commitRepeatRef.current(repTypeRef.current, repCountRef.current, repMinRef.current, repSecRef.current, newBpm);
-    } else {
-      // No bar selected → edit the base bar BPM via the parent callback
-      setRepBpm(null); // keep per-bar override cleared
-      onBpmChangeRef.current?.(newBpm);
     }
   }, []);
 
@@ -605,10 +601,11 @@ export function BarEditorPanel({
 
             {/* Right: BPM stepper */}
             <View style={{ flex: 1, alignItems: "flex-end" }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, opacity: isPlaying ? 0.5 : 1 }} {...bpmSwipePan.panHandlers}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, opacity: isPlaying || editingBeat === null ? 0.5 : 1 }} {...(editingBeat !== null ? bpmSwipePan.panHandlers : {})}>
                 <Pressable
-                  onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.max(20, (repBpm ?? bpm ?? 120) - 1)); } }}
-                  onPressIn={() => { if (!isPlaying) startBpmHold(-1); }}
+                  disabled={isPlaying || editingBeat === null}
+                  onPress={() => { if (!isPlaying && editingBeat !== null && !bpmHoldFired.current) { applyRepBpm(Math.max(20, (repBpm ?? bpm ?? 120) - 1)); } }}
+                  onPressIn={() => { if (!isPlaying && editingBeat !== null) startBpmHold(-1); }}
                   onPressOut={() => clearBpmTimers()}
                   style={{ width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: C.overlay10 }}
                 >
@@ -618,9 +615,9 @@ export function BarEditorPanel({
                   style={{ fontSize: ms(28, 0.4), fontFamily: "SpaceGrotesk_700Bold", width: ms(56, 0.4), textAlign: "center", borderBottomWidth: 1.5, paddingVertical: 1, color: C.accent, borderBottomColor: C.accent }}
                   value={String(repBpm ?? bpm ?? 120)}
                   keyboardType="number-pad"
-                  editable={!isPlaying}
+                  editable={!isPlaying && editingBeat !== null}
                   onEndEditing={e => {
-                    if (isPlaying) return;
+                    if (isPlaying || editingBeat === null) return;
                     const v = parseInt(e.nativeEvent.text, 10);
                     if (!isNaN(v) && v >= 20 && v <= 300) { applyRepBpm(v); }
                     else if (!e.nativeEvent.text) { setRepBpm(null); commitRepeat(repType, repCount, repMin, repSec, null); }
@@ -628,8 +625,9 @@ export function BarEditorPanel({
                   selectTextOnFocus
                 />
                 <Pressable
-                  onPress={() => { if (!isPlaying && !bpmHoldFired.current) { applyRepBpm(Math.min(300, (repBpm ?? bpm ?? 120) + 1)); } }}
-                  onPressIn={() => { if (!isPlaying) startBpmHold(1); }}
+                  disabled={isPlaying || editingBeat === null}
+                  onPress={() => { if (!isPlaying && editingBeat !== null && !bpmHoldFired.current) { applyRepBpm(Math.min(300, (repBpm ?? bpm ?? 120) + 1)); } }}
+                  onPressIn={() => { if (!isPlaying && editingBeat !== null) startBpmHold(1); }}
                   onPressOut={() => clearBpmTimers()}
                   style={{ width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: C.overlay10 }}
                 >

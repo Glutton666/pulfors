@@ -4,10 +4,11 @@ import type {
   NoteSampleNameMap,
   NoteSampleSourceMap,
   NoteSampleChannelMap,
+  NoteSampleVolumeMap,
 } from "@/lib/note-samples";
 
 /**
- * Centralizes the four note-sample maps (samples/names/sources/channels) and
+ * Centralizes the note-sample metadata maps and
  * their refs. Each pair (state + ref) is updated together via the returned
  * setAll helpers, removing the dual-update boilerplate previously sprinkled
  * across ~30 sites in app/index.tsx.
@@ -35,6 +36,10 @@ export interface NoteSamplesHook {
   channelsRef: React.MutableRefObject<NoteSampleChannelMap>;
   setChannels: React.Dispatch<React.SetStateAction<NoteSampleChannelMap>>;
   setChannelsAll: (m: NoteSampleChannelMap) => void;
+  volumes: NoteSampleVolumeMap;
+  volumesRef: React.MutableRefObject<NoteSampleVolumeMap>;
+  setVolumes: React.Dispatch<React.SetStateAction<NoteSampleVolumeMap>>;
+  setVolumesAll: (m: NoteSampleVolumeMap) => void;
 
   /** Replace all four maps in one call. Both state and refs sync together. */
   replaceAll(maps: {
@@ -42,6 +47,7 @@ export interface NoteSamplesHook {
     names?: NoteSampleNameMap;
     sources?: NoteSampleSourceMap;
     channels?: NoteSampleChannelMap;
+    volumes?: NoteSampleVolumeMap;
   }): void;
 }
 
@@ -54,6 +60,8 @@ export function useNoteSamples(): NoteSamplesHook {
   const sourcesRef = useRef<NoteSampleSourceMap>({});
   const [channels, setChannels] = useState<NoteSampleChannelMap>({});
   const channelsRef = useRef<NoteSampleChannelMap>({});
+  const [volumes, setVolumes] = useState<NoteSampleVolumeMap>({});
+  const volumesRef = useRef<NoteSampleVolumeMap>({});
 
   const setSamplesAll = useCallback((m: NoteSampleMap) => {
     setSamples(m);
@@ -71,12 +79,17 @@ export function useNoteSamples(): NoteSamplesHook {
     setChannels(m);
     channelsRef.current = m;
   }, []);
+  const setVolumesAll = useCallback((m: NoteSampleVolumeMap) => {
+    setVolumes(m);
+    volumesRef.current = m;
+  }, []);
 
   const replaceAll = useCallback((maps: {
     samples?: NoteSampleMap;
     names?: NoteSampleNameMap;
     sources?: NoteSampleSourceMap;
     channels?: NoteSampleChannelMap;
+    volumes?: NoteSampleVolumeMap;
   }) => {
     if (maps.samples !== undefined) {
       setSamples(maps.samples);
@@ -94,6 +107,10 @@ export function useNoteSamples(): NoteSamplesHook {
       setChannels(maps.channels);
       channelsRef.current = maps.channels;
     }
+    if (maps.volumes !== undefined) {
+      setVolumes(maps.volumes);
+      volumesRef.current = maps.volumes;
+    }
   }, []);
 
   return {
@@ -101,6 +118,7 @@ export function useNoteSamples(): NoteSamplesHook {
     names, namesRef, setNames, setNamesAll,
     sources, sourcesRef, setSources, setSourcesAll,
     channels, channelsRef, setChannels, setChannelsAll,
+    volumes, volumesRef, setVolumes, setVolumesAll,
     replaceAll,
   };
 }

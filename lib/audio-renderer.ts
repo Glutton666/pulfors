@@ -354,6 +354,8 @@ export interface RenderMeasureParams {
   samplePCMs: Map<string, SamplePCMEntry>;
   clickVolume: number;
   sampleVolume: number;
+  /** Per-sample gain values. Missing keys preserve the historic 100% level. */
+  sampleVolumes?: Record<string, number>;
   metronomeChannel?: SampleChannel;
   sampleChannels?: Record<string, SampleChannel>;
   layerClickPCMs?: Map<string, ClickPCMs>;
@@ -369,6 +371,7 @@ export function renderMeasure(params: RenderMeasureParams): Float32Array | { lef
     samplePCMs,
     clickVolume,
     sampleVolume,
+    sampleVolumes = {},
     metronomeChannel = "both",
     sampleChannels = {},
     layerClickPCMs,
@@ -455,9 +458,9 @@ export function renderMeasure(params: RenderMeasureParams): Float32Array | { lef
           );
           if (right) {
             const ch = sampleChannels[key] ?? "both";
-            mixToChannel(left, right, trimmed, offsetSamples, sampleVolume, ch);
+            mixToChannel(left, right, trimmed, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), ch);
           } else {
-            mixInto(left, trimmed, offsetSamples, sampleVolume, shouldAbort);
+            mixInto(left, trimmed, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), shouldAbort);
           }
         }
       }
@@ -530,6 +533,7 @@ export async function renderMeasureAbortable(
     samplePCMs,
     clickVolume,
     sampleVolume,
+    sampleVolumes = {},
     metronomeChannel = "both",
     sampleChannels = {},
     layerClickPCMs,
@@ -608,9 +612,9 @@ export async function renderMeasureAbortable(
             : sample.pcm.length - trimStart;
           const trimmed = sample.pcm.subarray(trimStart, Math.min(trimStart + trimLen, sample.pcm.length));
           if (right) {
-            await mixToChannel(left, right, trimmed, offsetSamples, sampleVolume, sampleChannels[key] ?? "both");
+            await mixToChannel(left, right, trimmed, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), sampleChannels[key] ?? "both");
           } else {
-            await mixIntoAbortable(left, trimmed, offsetSamples, sampleVolume, signal);
+            await mixIntoAbortable(left, trimmed, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), signal);
           }
         }
       }

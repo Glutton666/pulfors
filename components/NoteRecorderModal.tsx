@@ -54,13 +54,14 @@ type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
 interface NoteRecorderModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: MetroChannel) => void;
+  onSave: (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: MetroChannel, sampleGain?: number) => void;
   onDelete: () => void;
   beatIndex: number;
   subIndex: number;
   hasExisting: boolean;
   existingName?: string;
   existingChannel?: SampleChannel;
+  existingVolume?: number;
   existingMetronomeChannel?: MetroChannel;
   bpm: number;
   beatsPerMeasure?: number;
@@ -128,6 +129,7 @@ export function NoteRecorderModal({
   hasExisting,
   existingName,
   existingChannel = "both",
+  existingVolume = 1,
   existingMetronomeChannel,
   bpm,
   beatsPerMeasure = 4,
@@ -147,13 +149,15 @@ export function NoteRecorderModal({
   const sourceTypeRef = useRef<SampleSource>("recording");
   const [channel, setChannel] = useState<SampleChannel>(existingChannel);
   const [metronomeChannel, setMetronomeChannel] = useState<MetroChannel>(existingMetronomeChannel ?? "both");
+  const [sampleGain, setSampleGain] = useState(Math.max(0, Math.min(1, existingVolume)));
 
   useEffect(() => {
     if (visible) {
       setChannel(existingChannel);
       setMetronomeChannel(existingMetronomeChannel ?? "both");
+      setSampleGain(Math.max(0, Math.min(1, existingVolume)));
     }
-  }, [visible, existingChannel, existingMetronomeChannel]);
+  }, [visible, existingChannel, existingMetronomeChannel, existingVolume]);
 
   const [localBpm, setLocalBpm] = useState(bpm);
 
@@ -172,6 +176,7 @@ export function NoteRecorderModal({
   const [suggestedBpms, setSuggestedBpms] = useState<number[]>([]);
   const [isFetchingBpm, setIsFetchingBpm] = useState(false);
   const [bpmError, setBpmError] = useState<string | null>(null);
+  const [waveformPeaks, setWaveformPeaks] = useState<number[]>([]);
   const bpmDetectTokenRef = useRef(0);
   const userAdjustedBpmRef = useRef(false);
   const importedMimeTypeRef = useRef<string | null>(null);
@@ -295,7 +300,6 @@ export function NoteRecorderModal({
       const resp = await fetch(audioUri);
       if (token !== bpmDetectTokenRef.current) return;
       if (!resp.ok) {
-        setBpmError(t("noteRecorder", "bpmFailNetwork"));
         captureBreadcrumb({ category: "noteRecorder", message: "fetchBpm audio fetch failed", level: "warning", data: { status: resp.status } });
         return;
       }
@@ -332,7 +336,6 @@ export function NoteRecorderModal({
       });
       if (token !== bpmDetectTokenRef.current) return;
       if (!apiResp.ok) {
-        setBpmError(apiResp.status === 429 ? t("noteRecorder", "bpmFailRateLimit") : t("noteRecorder", "bpmFailServer"));
         captureBreadcrumb({ category: "noteRecorder", message: "fetchBpm API failed", level: "warning", data: { status: apiResp.status } });
         return;
       }
@@ -340,14 +343,12 @@ export function NoteRecorderModal({
       const rawCandidates = Array.isArray(data.bpmCandidates) ? data.bpmCandidates : (typeof data.bpm === "number" ? [data.bpm] : []);
       const validCandidates = rawCandidates.filter((b) => typeof b === "number" && b >= 50 && b <= 250);
       if (validCandidates.length === 0) {
-        setBpmError(t("noteRecorder", "bpmNotDetected"));
         captureBreadcrumb({ category: "noteRecorder", message: "fetchBpm no candidates", level: "info" });
         return;
       }
       applyDetectionResult(validCandidates);
     } catch (e) {
       if (token !== bpmDetectTokenRef.current) return;
-      setBpmError(t("noteRecorder", "bpmFailNetwork"));
       captureBreadcrumb({ category: "noteRecorder", message: "fetchBpm exception", level: "error", data: { error: String(e) } });
     } finally {
       if (token === bpmDetectTokenRef.current) setIsFetchingBpm(false);
@@ -620,6 +621,7 @@ export function NoteRecorderModal({
       const player = previewPlayerRef.current;
       try { player.pause(); } catch {}
       try { player.replace({ uri: effectiveUri }); } catch {}
+      player.volume = sampleGain;
 
       const startSec = trimStart * audioDuration;
       const endSec = trimEnd * audioDuration;
@@ -667,7 +669,7 @@ export function NoteRecorderModal({
       captureBreadcrumb({ category: "noteRecorder", message: "playPreview failed", level: "warning", data: { error: String(e) } });
       stopPreview();
     }
-  }, [recordedUri, trimStart, trimEnd, audioDuration, channel, metronomeChannel, localBpm, beatsPerMeasure, playClick, stopMetronomeClicks, stopPreview]);
+  }, [recordedUri, trimStart, trimEnd, audioDuration, channel, metronomeChannel, localBpm, beatsPerMeasure, sampleGain, playClick, stopMetronomeClicks, stopPreview]);
 
   const playPreviewRef = useRef(playPreview);
   useEffect(() => { playPreviewRef.current = playPreview; }, [playPreview]);
@@ -694,11 +696,11 @@ export function NoteRecorderModal({
     if (audioDuration > 0) {
       const startMs = Math.floor(trimStart * audioDuration * 1000);
       const endMs = Math.floor(trimEnd * audioDuration * 1000);
-      onSave(`${recordedUri}#t=${startMs},${endMs}`, sampleName, sourceTypeRef.current, channel, finalMetronomeChannel);
+      onSave(`${recordedUri}#t=${startMs},${endMs}`, sampleName, sourceTypeRef.current, channel, finalMetronomeChannel, sampleGain);
     } else {
-      onSave(recordedUri, sampleName, sourceTypeRef.current, channel, finalMetronomeChannel);
+      onSave(recordedUri, sampleName, sourceTypeRef.current, channel, finalMetronomeChannel, sampleGain);
     }
-  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave, sampleName, channel]);
+  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave, sampleName, channel, sampleGain]);
 
   const handleSave = useCallback(() => {
     if (!recordedUri) return;
@@ -938,6 +940,34 @@ export function NoteRecorderModal({
     };
   }, [phase, recordedUri, trimStart, trimEnd, audioDuration, detectBpmForCurrent]);
 
+  // Decode a lightweight amplitude envelope for an honest trim preview. Some
+  // compressed formats cannot be decoded locally; the empty state still shows
+  // a clear selection track instead of pretending a waveform was found.
+  useEffect(() => {
+    let cancelled = false;
+    if (phase !== "trimming" || !recordedUri) {
+      setWaveformPeaks([]);
+      return;
+    }
+    void decodeSampleFile(recordedUri).then((pcm) => {
+      if (cancelled || !pcm?.length) return;
+      const columns = 56;
+      const bucket = Math.max(1, Math.floor(pcm.length / columns));
+      const peaks = Array.from({ length: columns }, (_, column) => {
+        let peak = 0;
+        const start = column * bucket;
+        const end = Math.min(pcm.length, start + bucket);
+        for (let i = start; i < end; i += 1) peak = Math.max(peak, Math.abs(pcm[i]));
+        return Math.max(0.08, Math.min(1, peak));
+      });
+      const max = Math.max(...peaks, 0.01);
+      if (!cancelled) setWaveformPeaks(peaks.map((peak) => Math.max(0.08, peak / max)));
+    }).catch(() => {
+      if (!cancelled) setWaveformPeaks([]);
+    });
+    return () => { cancelled = true; };
+  }, [phase, recordedUri]);
+
   const trimStartDisplay = (trimStart * audioDuration).toFixed(2);
   const trimEndDisplay = (trimEnd * audioDuration).toFixed(2);
   const trimDuration = ((trimEnd - trimStart) * audioDuration).toFixed(2);
@@ -1075,6 +1105,18 @@ export function NoteRecorderModal({
 
               <View style={styles.trimContainer}>
                 <View style={styles.waveformBar}>
+                  <View style={styles.waveformPeaks} pointerEvents="none">
+                    {waveformPeaks.map((peak, index) => (
+                      <View
+                        key={index}
+                        style={{
+                          width: `${100 / waveformPeaks.length}%`,
+                          height: `${Math.round(16 + peak * 84)}%`,
+                          backgroundColor: C.textSecondary + "80",
+                        }}
+                      />
+                    ))}
+                  </View>
                   <View
                     style={[
                       styles.trimRegion,
@@ -1114,6 +1156,31 @@ export function NoteRecorderModal({
                     color={C.accent}
                     side="right"
                   />
+                </View>
+              </View>
+
+              <View style={{ marginTop: Spacing.md }}>
+                <Text style={{ color: C.textSecondary, fontSize: FontSize.small, marginBottom: Spacing.xs, textAlign: "center" }}>
+                  {`Audio volume · ${Math.round(sampleGain * 100)}%`}
+                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm }}>
+                  <Pressable
+                    onPress={() => setSampleGain((value) => Math.max(0, Math.round((value - 0.1) * 10) / 10))}
+                    style={[styles.volumeStepButton, { backgroundColor: C.surfaceLight }]}
+                    accessibilityLabel="Decrease audio volume"
+                  >
+                    <Ionicons name="remove" size={18} color={C.text} />
+                  </Pressable>
+                  <View style={{ flex: 1, height: Spacing.sm, borderRadius: Radius.xs, overflow: "hidden", backgroundColor: C.overlay10 }}>
+                    <View style={{ width: `${sampleGain * 100}%`, height: "100%", backgroundColor: C.accent }} />
+                  </View>
+                  <Pressable
+                    onPress={() => setSampleGain((value) => Math.min(1, Math.round((value + 0.1) * 10) / 10))}
+                    style={[styles.volumeStepButton, { backgroundColor: C.surfaceLight }]}
+                    accessibilityLabel="Increase audio volume"
+                  >
+                    <Ionicons name="add" size={18} color={C.text} />
+                  </Pressable>
                 </View>
               </View>
 
@@ -1574,6 +1641,19 @@ const make_styles = (C: typeof Colors) => StyleSheet.create({
     overflow: "visible",
     position: "relative",
   },
+    waveformPeaks: {
+      ...StyleSheet.absoluteFillObject,
+      flexDirection: "row",
+      alignItems: "center",
+      opacity: 0.65,
+    },
+    volumeStepButton: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: "center",
+      justifyContent: "center",
+    },
   trimRegion: {
     position: "absolute",
     top: 0,

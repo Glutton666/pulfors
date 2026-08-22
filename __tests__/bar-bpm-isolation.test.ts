@@ -48,6 +48,7 @@ jest.mock("@/app/index.helpers", () => ({
     noteSampleNames: {},
     noteSampleSources: {},
     noteSampleChannels: {},
+    noteSampleVolumes: {},
     barLoopMode: "once",
     blockPlayMode: "loop",
     hasBeenConfigured: false,
@@ -64,6 +65,7 @@ jest.mock("@/lib/note-samples", () => ({
   saveNoteSampleNames: jest.fn(),
   saveNoteSampleSources: jest.fn(),
   saveNoteSampleChannels: jest.fn(),
+  saveNoteSampleVolumes: jest.fn(),
 }));
 
 jest.mock("@/lib/sample-cache", () => ({
@@ -135,6 +137,9 @@ function makeParams(
     noteSampleChannels: {},
     setNoteSampleChannels: jest.fn(),
     noteSampleChannelsRef: { current: {} },
+    noteSampleVolumes: {},
+    setNoteSampleVolumes: jest.fn(),
+    noteSampleVolumesRef: { current: {} },
     setNoteSampleMetroChannels: jest.fn(),
     noteSampleMetroChannelsRef: { current: {} },
     noteSampleSoundsRef: { current: {} },

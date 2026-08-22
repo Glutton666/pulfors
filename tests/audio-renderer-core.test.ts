@@ -505,6 +505,23 @@ test("renderMeasure: samplePCMs — repeatIteration=0, barRepeatIteration=0이�
   assert.ok(peakAt(buf, 0) > 0.5, `repeatIteration=0 → 샘플 렌더돼야 함, peak=${peakAt(buf, 0)}`);
 });
 
+test("renderMeasure: per-sample volume multiplies the global sample master", () => {
+  const samplePCMs = new Map<string, SamplePCMEntry>([
+    ["0-0", { pcm: new Float32Array(64).fill(0.8), trimStartMs: 0, trimDurationMs: 0 }],
+  ]);
+  const result = renderMeasure({
+    schedule: [makeTick({ time: 0, beat: 0, subBeat: 0, repeatIteration: 0, barRepeatIteration: 0 })],
+    measureDurationMs: 500,
+    clickPCMs: makeClicks(0),
+    samplePCMs,
+    clickVolume: 0,
+    sampleVolume: 0.5,
+    sampleVolumes: { "0-0": 0.5 },
+  });
+  const buf = result instanceof Float32Array ? result : result.left;
+  assert.ok(Math.abs(peakAt(buf, 0) - 0.2) < 0.02, `global × local gain expected 0.2, got ${peakAt(buf, 0)}`);
+});
+
 test("renderMeasure: samplePCMs trimStartMs > 0 — 앞부분 잘리고 나머지 믹스됨", () => {
   // PCM: [0, 0, 0, ..., 0.9, 0.9, ...] → trimStartMs으로 앞 묵음부 스킵
   const SR_local = SR;
