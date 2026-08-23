@@ -189,3 +189,26 @@ test("getAllBarRepeats: 반환된 layers 변형이 내부 상태에 영향 없�
   assert.equal(second[2].layers![0].beatType, "normal", "반환값 변형이 내부에 영향 없음");
   assert.equal(second[2].layers!.length, 1, "반환값 push가 내부 배열에 반영 안 됨");
 });
+
+test("바 BPM 오버라이드를 지운 뒤 다이얼 일정은 전역 BPM으로 돌아온다", () => {
+  const engine = new MetronomeEngine();
+  engine.setBpm(120);
+  engine.setBeatsPerMeasure(4);
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+
+  // Bar repeats are intentionally empty: this proves that BPM overrides are
+  // independent engine state and must be cleared explicitly on mode exit.
+  engine.setAllBarRepeats({});
+  engine.setBarBpmOverride(0, 60);
+  engine.buildScheduleOnly();
+  assert.equal(engine.getScheduleInfo().durationMs, 2500);
+
+  // Equivalent to switching back to dial mode.
+  engine.clearBarRepeats();
+  engine.clearBarBpmOverrides();
+  engine.setBeatTypes(["accent", "normal", "normal", "normal"]);
+  engine.buildScheduleOnly();
+
+  assert.deepEqual(engine.getBarBpmOverrides(), {});
+  assert.equal(engine.getScheduleInfo().durationMs, 2000);
+});

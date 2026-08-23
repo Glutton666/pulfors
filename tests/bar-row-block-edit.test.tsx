@@ -1,0 +1,65 @@
+/** @jest-environment jsdom */
+import React from "react";
+import { fireEvent, render } from "@testing-library/react";
+
+import { SwipeableBarRow } from "@/components/bar-mode/SwipeableBarRow";
+
+jest.mock("@expo/vector-icons", () => ({
+  Ionicons: () => null,
+}));
+
+const colors = {
+  background: "#101116",
+  backgroundSecondary: "#1a1c22",
+  text: "#ffffff",
+  textSecondary: "#c4c6ce",
+  textTertiary: "#8a8d98",
+  accent: "#e0b34d",
+  accentMuted: "#af8f42",
+  danger: "#e25f5f",
+  overlay06: "rgba(255,255,255,0.06)",
+  overlay08: "rgba(255,255,255,0.08)",
+  overlay10: "rgba(255,255,255,0.10)",
+  white: "#ffffff",
+};
+
+describe("SwipeableBarRow block editing", () => {
+  it("keeps a boundary-row tap for bar selection and exposes a separate block editor action", () => {
+    const onPress = jest.fn();
+    const onEditBlock = jest.fn();
+    const { getByTestId } = render(
+      <SwipeableBarRow
+        beat={1}
+        beatType="normal"
+        subdivisions={["normal", "normal", "normal", "normal"]}
+        repeat={{ type: "count", value: 1, bpm: 120, meterNumerator: 4, meterDenominator: 4 }}
+        isCurrentBeat={false}
+        isEditingBeat={false}
+        blockDepth={1}
+        blockStart
+        blockEnd={false}
+        blockEditIndex={3}
+        symbolBadges={[]}
+        isPlaying={false}
+        bpm={120}
+        meterNumerator={4}
+        meterDenominator={4}
+        beatsPerMeasure={4}
+        onPress={onPress}
+        onSwipeLeft={jest.fn()}
+        onSwipeRight={jest.fn()}
+        onLongPress={jest.fn()}
+        onEditBlock={onEditBlock}
+        colors={colors}
+        ms={(value) => value}
+      />,
+    );
+
+    fireEvent.click(getByTestId("bar-row-1"));
+    expect(onPress).toHaveBeenCalledWith(1);
+
+    fireEvent.click(getByTestId("bar-block-edit-1"));
+    expect(onEditBlock).toHaveBeenCalledWith(3);
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+});

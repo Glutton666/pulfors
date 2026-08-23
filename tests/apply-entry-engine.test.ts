@@ -141,6 +141,28 @@ const bpmOverrideEntry: PracticeEntry = {
   subdivisionPattern: ["accent", "normal"],
 };
 
+const mixedBarConfigEntry: PracticeEntry = {
+  id: "mixed-bar-config",
+  label: "혼합 박자와 BPM",
+  createdAt: 5,
+  // The base BPM remains only as a legacy fallback: each bar below is explicit.
+  bpm: 140,
+  beatsPerMeasure: 3,
+  beatTypes: ["accent", "normal", "normal"],
+  beatSubdivisions: {
+    "0": ["accent", "normal", "normal"],
+    "1": ["accent", "normal", "normal", "normal"],
+    "2": ["accent", "normal", "normal", "normal", "normal", "normal"],
+  },
+  barRepeats: {
+    0: { type: "count", value: 2, bpm: 69, meterNumerator: 3, meterDenominator: 4 },
+    1: { type: "count", value: 1, bpm: 120, meterNumerator: 4, meterDenominator: 4 },
+    2: { type: "duration", value: 12, bpm: 90, meterNumerator: 6, meterDenominator: 8 },
+  },
+  barLoopMode: "once",
+  subdivisionPattern: ["accent"],
+};
+
 const noteSampleEntry: PracticeEntry = {
   id: "noteSample",
   label: "노트 샘플",
@@ -205,6 +227,21 @@ test("[apply-engine] BPM 오버라이드: barRepeats.bpm만 추출되어 setAllB
   const repeatsIdx = fake.calls.findIndex((c) => c.method === "setAllBarRepeats");
   const overridesIdx = fake.calls.findIndex((c) => c.method === "setAllBarBpmOverrides");
   assert.ok(overridesIdx > repeatsIdx, "BPM 오버라이드는 barRepeats 뒤에 적용");
+});
+
+test("[apply-engine] 혼합 바 설정: 저장 상태와 엔진 재생이 각 바의 박자·BPM을 유지", () => {
+  const fake = createFakeEngine();
+  applyEntryToEngine(fake, mixedBarConfigEntry);
+  const loaded = applyEntryToState(mixedBarConfigEntry);
+
+  assert.deepEqual(loaded.barRepeats, mixedBarConfigEntry.barRepeats);
+  assert.deepEqual(fake.state.barRepeats, mixedBarConfigEntry.barRepeats);
+  assert.deepEqual(fake.state.bpmOverrides, {
+    0: 69,
+    1: 120,
+    // 6/8 display BPM becomes the engine's quarter-note BPM.
+    2: 45,
+  });
 });
 
 test("[apply-engine] 노트 샘플 항목도 동일 8단 시퀀스(샘플은 엔진 외부)", () => {

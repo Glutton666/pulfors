@@ -303,24 +303,22 @@ export function BarModeView({
       handleSymbolPlacementRef.current(beat);
       return;
     }
-    // If the row is a block boundary, open block edit modal
-    const blockIdx = loopBlocks.findIndex(b => b.layerOf === undefined && (b.startBeat === beat || b.endBeat === beat));
-    if (blockIdx !== -1) {
-      setBlockEditingIdx(blockIdx);
-      return;
-    }
-    if (barStartBeat === beat) {
-      onBarStartBeatSelect(null);
-    } else {
-      onBarStartBeatSelect(beat);
-    }
-  }, [isPlaying, placingSymbol, loopBlocks, barStartBeat, onBarStartBeatSelect]);
+    // A tap always selects the bar, including a loop-block boundary. Block
+    // editing remains available through the symbol workflow; diverting a row
+    // tap here made a boundary bar impossible to edit as an individual bar.
+    onBarStartBeatSelect(beat);
+  }, [isPlaying, placingSymbol, onBarStartBeatSelect]);
 
   const handleBarRowLongPress = useCallback((beat: number) => {
     if (isPlaying) return;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onNoteRecordRequest?.(beat, 0);
   }, [isPlaying, onNoteRecordRequest]);
+
+  const handleBlockEdit = useCallback((blockIdx: number) => {
+    if (isPlaying) return;
+    setBlockEditingIdx(blockIdx);
+  }, [isPlaying]);
 
   const handleSwipeLeft = useCallback((beat: number) => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -549,6 +547,7 @@ export function BarModeView({
               blockDepth={maxDepth}
               blockStart={blockStart}
               blockEnd={blockEnd}
+               blockEditIndex={startEntry?.blockIdx}
               blockRepeatText={blockRepeatText}
               symbolBadges={badges}
               isPlaying={isPlaying}
@@ -562,6 +561,7 @@ export function BarModeView({
               onSwipeLeft={handleSwipeLeft}
               onSwipeRight={handleSwipeRight}
               onLongPress={handleBarRowLongPress}
+               onEditBlock={handleBlockEdit}
               onDragStart={handleDragStart}
               onDragMove={handleDragMove}
               onDragEnd={handleDragEnd}

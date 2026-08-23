@@ -64,6 +64,24 @@ type SamplePlayState = Record<
   { playing: boolean; endTimer: ReturnType<typeof setTimeout> | null }
 >;
 
+function syncEngineBarBpmOverrides(
+  engine: MetronomeEngine | null,
+  repeats: Record<number, BarRepeat>,
+  fallbackDenominator: 2 | 4 | 8,
+): void {
+  if (!engine) return;
+  const overrides: Record<number, number> = {};
+  for (const [key, repeat] of Object.entries(repeats)) {
+    if (typeof repeat.bpm === "number" && repeat.bpm > 0) {
+      overrides[Number(key)] = toEngineBpm(
+        repeat.bpm,
+        repeat.meterDenominator ?? fallbackDenominator,
+      );
+    }
+  }
+  engine.setAllBarBpmOverrides(overrides);
+}
+
 export interface UseBarModeParams {
   // ── Engine ────────────────────────────────────────────────────────────────
   engineRef: React.MutableRefObject<MetronomeEngine | null>;
@@ -400,6 +418,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
         engine.setAllBeatSubdivisions(dc.beatSubdivisions);
         engine.clearLoopBlocks();
         engine.clearBarRepeats();
+        engine.clearBarBpmOverrides();
       }
 
       void releaseAllStereoArtifacts();
@@ -563,7 +582,14 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
       }
       p.setBeatSubdivisions(newSubs);
       const newRepeat: BarRepeat = draftRepeat
-        ? { ...draftRepeat }
+        ? {
+            ...draftRepeat,
+            type: draftRepeat.type,
+            value: draftRepeat.value,
+            bpm: draftRepeat.bpm ?? barBpmRef.current,
+            meterNumerator: draftRepeat.meterNumerator ?? (newSubs[String(newBeat)]?.length || 1),
+            meterDenominator: draftRepeat.meterDenominator ?? p.beatDenominatorRef.current,
+          }
         : (() => {
             const srcLayers =
               barStartBeat !== null
@@ -572,6 +598,9 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
             return {
               type: "count",
               value: 1,
+              bpm: barBpmRef.current,
+              meterNumerator: newSubs[String(newBeat)]?.length || 1,
+              meterDenominator: p.beatDenominatorRef.current,
               layers: srcLayers.length
                 ? srcLayers.map((l) => ({ ...l }))
                 : [],
@@ -585,6 +614,11 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
         ...barConfigRef.current.barRepeats,
         [newBeat]: newRepeat,
       };
+       p.engineRef.current?.setBarRepeat(newBeat, newRepeat);
+       p.engineRef.current?.setBarBpmOverride(
+         newBeat,
+         toEngineBpm(newRepeat.bpm!, newRepeat.meterDenominator!),
+       );
       if (Platform.OS !== "web")
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     },
@@ -614,13 +648,17 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
       const newSubs = { ...p.beatSubdivisions };
       if (srcSub.length > 0) newSubs[String(newBeat)] = [...srcSub];
       const newRepeats = { ...barRepeats };
-      if (srcRepeat)
-        newRepeats[newBeat] = {
-          ...srcRepeat,
-          layers: srcRepeat.layers
-            ? srcRepeat.layers.map((l) => ({ ...l }))
-            : undefined,
-        };
+       newRepeats[newBeat] = {
+         ...(srcRepeat ?? {}),
+         type: srcRepeat?.type ?? "count",
+         value: srcRepeat?.value ?? 1,
+         bpm: srcRepeat?.bpm ?? barBpmRef.current,
+         meterNumerator: srcRepeat?.meterNumerator ?? (srcSub.length || 1),
+         meterDenominator: srcRepeat?.meterDenominator ?? p.beatDenominatorRef.current,
+         layers: srcRepeat?.layers
+           ? srcRepeat.layers.map((l) => ({ ...l }))
+           : undefined,
+       };
       p.setBeatsPerMeasure(p.beatsPerMeasure + 1);
       p.setBeatTypes(newTypes);
       p.setBeatSubdivisions(newSubs);
@@ -629,6 +667,11 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
       p.engineRef.current?.setBeatTypes(newTypes);
       p.engineRef.current?.setAllBeatSubdivisions(newSubs);
       p.engineRef.current?.setAllBarRepeats(newRepeats);
+       syncEngineBarBpmOverrides(
+         p.engineRef.current,
+         newRepeats,
+         p.beatDenominatorRef.current,
+       );
       barConfigRef.current.beatsPerMeasure = p.beatsPerMeasure + 1;
       barConfigRef.current.beatTypes = newTypes;
       barConfigRef.current.beatSubdivisions = newSubs;
@@ -672,13 +715,17 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
         if (ki < insertAt) newRepeats[ki] = v;
         else newRepeats[ki + 1] = v;
       }
-      if (srcRepeat)
-        newRepeats[insertAt] = {
-          ...srcRepeat,
-          layers: srcRepeat.layers
-            ? srcRepeat.layers.map((l) => ({ ...l }))
-            : undefined,
-        };
+       newRepeats[insertAt] = {
+         ...(srcRepeat ?? {}),
+         type: srcRepeat?.type ?? "count",
+         value: srcRepeat?.value ?? 1,
+         bpm: srcRepeat?.bpm ?? barBpmRef.current,
+         meterNumerator: srcRepeat?.meterNumerator ?? (srcSub.length || 1),
+         meterDenominator: srcRepeat?.meterDenominator ?? p.beatDenominatorRef.current,
+         layers: srcRepeat?.layers
+           ? srcRepeat.layers.map((l) => ({ ...l }))
+           : undefined,
+       };
 
       const shiftUp = (b: number) => (b >= insertAt ? b + 1 : b);
       const newBlocks = loopBlocks.map((lb) => {
@@ -709,6 +756,11 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
       p.engineRef.current?.setBeatTypes(newTypes);
       p.engineRef.current?.setAllBeatSubdivisions(newSubs);
       p.engineRef.current?.setAllBarRepeats(newRepeats);
+       syncEngineBarBpmOverrides(
+         p.engineRef.current,
+         newRepeats,
+         p.beatDenominatorRef.current,
+       );
       p.engineRef.current?.setLoopBlocks(newBlocks);
       barConfigRef.current.beatsPerMeasure = newBeats;
       barConfigRef.current.beatTypes = newTypes;
@@ -790,6 +842,11 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
       p.engineRef.current?.setBeatTypes(newTypes);
       p.engineRef.current?.setAllBeatSubdivisions(newSubs);
       p.engineRef.current?.setAllBarRepeats(newRepeats);
+       syncEngineBarBpmOverrides(
+         p.engineRef.current,
+         newRepeats,
+         p.beatDenominatorRef.current,
+       );
       p.engineRef.current?.setLoopBlocks(newBlocks);
       if (barStartBeat !== null) {
         if (barStartBeat === beatIndex) setBarStartBeat(null);
@@ -869,6 +926,11 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
       p.engineRef.current?.setBeatTypes(newTypes);
       p.engineRef.current?.setAllBeatSubdivisions(newSubs);
       p.engineRef.current?.setAllBarRepeats(newRepeats);
+       syncEngineBarBpmOverrides(
+         p.engineRef.current,
+         newRepeats,
+         p.beatDenominatorRef.current,
+       );
       p.engineRef.current?.setLoopBlocks(newBlocks);
 
       if (barStartBeat !== null) setBarStartBeat(reindex(barStartBeat));

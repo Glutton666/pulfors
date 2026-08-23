@@ -37,6 +37,7 @@ export interface UsePracticeBookLoadParams {
   barModeRef: React.MutableRefObject<boolean>;
   noteModeRef: React.MutableRefObject<boolean>;
   barConfigRef: React.MutableRefObject<BarConfig>;
+  barBpmRef?: React.MutableRefObject<number>;
   dialConfigRef: React.MutableRefObject<DialConfig>;
   beatDenominatorRef: React.MutableRefObject<2 | 4 | 8>;
   noteSamplesRef: React.MutableRefObject<NoteSampleMap>;
@@ -138,6 +139,7 @@ export function usePracticeBookLoad({
   barModeRef,
   noteModeRef,
   barConfigRef,
+  barBpmRef,
   dialConfigRef,
   beatDenominatorRef,
   noteSamplesRef,
@@ -210,6 +212,11 @@ export function usePracticeBookLoad({
       { ...entry.barRepeats },
     );
     setBpm(entry.bpm);
+    // The shared loader is also used by linked practice-book entries. Keep the
+    // bar-mode fallback tempo in sync so a legacy entry without an override
+    // cannot inherit a tempo from a previously opened bar session.
+    setBarBpm?.(entry.bpm);
+    if (barBpmRef) barBpmRef.current = entry.bpm;
     setBeatsPerMeasure(entry.beatsPerMeasure);
     setBeatTypes([...entry.beatTypes]);
     setBeatSubdivisions({ ...entry.beatSubdivisions });
@@ -423,6 +430,7 @@ export function usePracticeBookLoad({
       setBpm(entry.bpm);
       // Sync bar-mode's independent BPM so it matches the loaded entry
       setBarBpm?.(entry.bpm);
+      if (barBpmRef) barBpmRef.current = entry.bpm;
       setBeatsPerMeasure(entry.beatsPerMeasure);
       setBeatTypes([...entry.beatTypes]);
       setBeatSubdivisions({ ...entry.beatSubdivisions });

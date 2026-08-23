@@ -91,7 +91,9 @@ export function formatBarCenterInfo(
   );
   const bpmStr = String(Math.round(effectiveBpm));
 
-  if (!repeat || (repeat.type === "count" && repeat.value <= 1 && !repeat.bpm)) {
+  // Every newly created bar stores its own BPM. A normal single play should
+  // still read as a concise tempo, not as an artificial ×1 duration.
+  if (!repeat || (repeat.type === "count" && repeat.value <= 1)) {
     return `${bpmStr}`;
   }
 

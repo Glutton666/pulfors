@@ -2569,7 +2569,7 @@ export function useMetronomeScreen() {
   } = usePracticeBookLoad({
     engineRef,
     barModeRef, noteModeRef,
-    barConfigRef, dialConfigRef,
+    barConfigRef, barBpmRef, dialConfigRef,
     beatDenominatorRef,
     noteSamplesRef, noteSampleNamesRef, noteSampleSourcesRef, noteSampleChannelsRef, noteSampleVolumesRef,
     noteQueueRef, notePlayModeRef, noteIsPlayingRef,

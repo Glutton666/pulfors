@@ -153,6 +153,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     } else {
       engine.setBeatTypes([...(p.dialConfigRef.current.beatTypes || [])]);
       engine.setAllBeatSubdivisions(p.dialConfigRef.current.beatSubdivisions || {});
+      // BPM overrides are independent engine state. Clear them here as a
+      // defensive boundary so dial playback can never inherit a prior bar's
+      // tempo even if mode switching was interrupted.
+      engine.clearBarBpmOverrides();
     }
     engine.buildScheduleOnly();
   }, [p]);

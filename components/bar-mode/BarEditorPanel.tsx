@@ -192,6 +192,9 @@ export function BarEditorPanel({
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
+    // A newly selected row should never appear uneditable because the previous
+    // row's panel was collapsed.
+    setEditorCollapsed(false);
     if (editingBeat === null) {
       setDraftLayers([]);
       setRepType("count"); setRepCount(1); setRepMin(0); setRepSec(30); setRepBpm(null);
@@ -263,6 +266,8 @@ export function BarEditorPanel({
     if (bpmOverride !== null && bpmOverride > 0) rep.bpm = bpmOverride;
     const existing = barRepeats[editingBeat];
     if (existing) {
+      if (existing.meterNumerator) rep.meterNumerator = existing.meterNumerator;
+      if (existing.meterDenominator) rep.meterDenominator = existing.meterDenominator;
       if (existing.voltaMax) rep.voltaMax = existing.voltaMax;
       if (existing.isEnd) rep.isEnd = existing.isEnd;
       if (existing.jumpFromId) rep.jumpFromId = existing.jumpFromId;
@@ -426,9 +431,20 @@ export function BarEditorPanel({
     }
     const existing = barRepeats[editingBeat];
     if (!existing) return;
-    const hasOtherFields = existing.voltaMax || existing.isEnd || existing.jumpFromId || existing.jumpToId || existing.layers;
+    const hasOtherFields =
+      existing.bpm ||
+      existing.meterNumerator ||
+      existing.meterDenominator ||
+      existing.voltaMax ||
+      existing.isEnd ||
+      existing.jumpFromId ||
+      existing.jumpToId ||
+      existing.layers;
     if (hasOtherFields) {
       const rep: BarRepeat = { type: "count", value: 1 };
+      if (existing.bpm) rep.bpm = existing.bpm;
+      if (existing.meterNumerator) rep.meterNumerator = existing.meterNumerator;
+      if (existing.meterDenominator) rep.meterDenominator = existing.meterDenominator;
       if (existing.voltaMax) rep.voltaMax = existing.voltaMax;
       if (existing.isEnd) rep.isEnd = existing.isEnd;
       if (existing.jumpFromId) rep.jumpFromId = existing.jumpFromId;

@@ -25,6 +25,7 @@ export interface SwipeableBarRowProps {
   blockDepth: number;
   blockStart: boolean;
   blockEnd: boolean;
+  blockEditIndex?: number;
   blockRepeatText?: string | null;
   symbolBadges: string[];
   isPlaying: boolean;
@@ -38,6 +39,7 @@ export interface SwipeableBarRowProps {
   onSwipeLeft: (beat: number) => void;
   onSwipeRight: (beat: number) => void;
   onLongPress: (beat: number) => void;
+  onEditBlock?: (blockIndex: number) => void;
   onDragStart?: (beat: number) => void;
   onDragMove?: (beat: number, dy: number) => void;
   onDragEnd?: (beat: number, dy: number) => void;
@@ -55,9 +57,9 @@ export interface SwipeableBarRowProps {
 
 export function SwipeableBarRow({
   beat, beatType, subdivisions, repeat, isCurrentBeat, isEditingBeat,
-  blockDepth: _blockDepth, blockStart, blockEnd, blockRepeatText, symbolBadges, isPlaying,
+  blockDepth: _blockDepth, blockStart, blockEnd, blockEditIndex, blockRepeatText, symbolBadges, isPlaying,
   progressCurrent, progressTotal, bpm, meterNumerator, meterDenominator, beatsPerMeasure,
-  onPress, onSwipeLeft, onSwipeRight, onLongPress,
+  onPress, onSwipeLeft, onSwipeRight, onLongPress, onEditBlock,
   onDragStart, onDragMove, onDragEnd, isDragging, showDropLineAbove, dragTranslateY,
   colors: C, ms,
   rowHeight, cellOverlayOpacity: _cellOverlayOpacity, sampleCells = [],
@@ -99,21 +101,22 @@ export function SwipeableBarRow({
 
   const beatNumDragStarted = useRef(false);
   const beatNumPan = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => !isPlaying,
+    // Do not claim a tap on the number handle. Let the enclosing Pressable
+    // select the row, and only claim a deliberate vertical drag for reordering.
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_e, g) =>
+      !isPlaying && Math.abs(g.dy) > 8 && Math.abs(g.dy) > Math.abs(g.dx) * 1.2,
     onPanResponderTerminationRequest: () => false,
-    onPanResponderGrant: () => { beatNumDragStarted.current = false; },
+    onPanResponderGrant: () => {
+      beatNumDragStarted.current = true;
+      onDragStart?.(beat);
+    },
     onPanResponderMove: (_e, g) => {
-      if (!beatNumDragStarted.current && Math.abs(g.dy) > 8) {
-        beatNumDragStarted.current = true;
-        onDragStart?.(beat);
-      }
       if (beatNumDragStarted.current) { onDragMove?.(beat, g.dy); }
     },
     onPanResponderRelease: (_e, g) => {
       if (beatNumDragStarted.current) {
         onDragEnd?.(beat, g.dy);
-      } else if (Math.abs(g.dx) < 8 && Math.abs(g.dy) < 8) {
-        onPress?.(beat);
       }
       beatNumDragStarted.current = false;
     },
@@ -280,6 +283,22 @@ export function SwipeableBarRow({
             )}
           </View>
 
+          {blockEditIndex !== undefined && !isPlaying && (
+            <Pressable
+              testID={`bar-block-edit-${beat}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Edit block starting at bar ${beat + 1}`}
+              onPress={(event) => {
+                event.stopPropagation();
+                onEditBlock?.(blockEditIndex);
+              }}
+              hitSlop={8}
+              style={[styles.blockEditButton, { backgroundColor: C.accent + "18" }]}
+            >
+              <Ionicons name="settings-outline" size={ms(15, 0.4)} color={C.accent} />
+            </Pressable>
+          )}
+
           {sampleCount > 0 && (
             <View
               testID={`bar-sample-badge-${beat}`}
@@ -345,6 +364,14 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 0.5,
     borderColor: "rgba(255,255,255,0.08)",
+  },
+  blockEditButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 4,
   },
   barMiniCell: {
     flex: 1,
