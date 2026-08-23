@@ -33,6 +33,26 @@ test("PracticeSessionTracker: pause와 interruption은 능동 시간에서 제�
   assert.equal(record.status, "completed");
 });
 
+test("PracticeSessionTracker: bar BPM source metadata survives into the activity record", () => {
+  const session = new PracticeSessionTracker({
+    bpm: 156,
+    mode: "bar",
+    bpmSource: "bar_override",
+    activeBarIndex: 3,
+    startedAt: 1_000,
+  }, 1_000);
+  const record = session.complete(156, "manual", "completed", 6_000, {
+    bpmSource: "bar_override",
+    activeBarIndex: 3,
+  });
+
+  assert.equal(record.bpm, 156);
+  assert.equal(record.bpmSource, "bar_override");
+  assert.equal(record.activeBarIndex, 3);
+  assert.equal(record.bpmEndSource, "bar_override");
+  assert.equal(record.activeBarIndexEnd, 3);
+});
+
 test("PracticeSessionTracker: repeated lifecycle signals are idempotent", () => {
   const session = new PracticeSessionTracker(BASE, 0);
   session.interrupt(5_000);

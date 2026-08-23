@@ -19,6 +19,7 @@ import { PracticeSessionTracker, type PracticeSessionData } from "@/lib/activity
 import type { Language } from "@/lib/i18n";
 import type { SampleChannel } from "@/lib/stereo-channel";
 import type { NoteSampleMetroChannelMap } from "@/lib/note-samples";
+import type { PlaybackContext } from "@/lib/playback-context";
 import type { AudioPlayer } from "expo-audio";
 import {
   getAudioLifecycleSnapshot,
@@ -43,6 +44,7 @@ export interface UsePlaybackControlParams {
   barMode: boolean;
   barModeRef: Ref<boolean>;
   bpm: number;
+  getPlaybackContext: (overrides?: { activeBarIndex?: number }) => PlaybackContext;
   beatsPerMeasure: number;
   subdivisionPattern: unknown[];
   barConfigRef: Ref<BarConfig>;
@@ -92,16 +94,19 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     if (!p.loggingEnabled) return;
     const now = Date.now();
     const existing = p.practiceSessionRef.current;
+    const playback = p.getPlaybackContext();
     if (existing) {
-      existing.updateBpm(p.bpm);
+      existing.updateBpm(playback.bpm);
       existing.resume(now);
       p.practiceStartRef.current = now;
       return;
     }
     const note = p.loadedPracticeNoteRef.current;
     p.practiceSessionRef.current = new PracticeSessionTracker({
-      bpm: p.bpm,
-      mode: p.barModeRef.current ? "bar" : "dial",
+      bpm: playback.bpm,
+      mode: playback.activityMode,
+      bpmSource: playback.bpmSource,
+      activeBarIndex: playback.activeBarIndex,
       startedAt: now,
       ...(p.barModeRef.current ? { barConfig: { beatsPerMeasure: p.beatsPerMeasure, subdivisions: p.subdivisionPattern.length } } : {}),
       ...(p.barModeRef.current && note ? { practiceNoteId: note.id, practiceNoteLabel: note.label } : {}),
@@ -124,7 +129,17 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     p.practiceSessionRef.current = null;
     p.practiceStartRef.current = null;
     if (!session || !p.loggingEnabled) return;
-    const data = session.complete(p.bpm, endReason, status);
+    const playback = p.getPlaybackContext();
+    const data = session.complete(
+      playback.bpm,
+      endReason,
+      status,
+      Date.now(),
+      {
+        bpmSource: playback.bpmSource,
+        activeBarIndex: playback.activeBarIndex,
+      },
+    );
     if (data.duration < 3) return;
     void p.addPracticeLog(data).then(p.checkCompletedGoals);
   }, [p]);
@@ -222,8 +237,8 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       return true;
     }
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const modeLabel = p.barModeRef.current ? "Bar" : "Dial";
     if (p.isPlaying) {
+      const playback = p.getPlaybackContext();
       seamlessRef.current = null;
       p.clearAudioWatchdogRef.current();
       engine.stop();
@@ -235,7 +250,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       p.resetPlaybackVisuals();
       const interrupted = ["interrupted", "recovering"].includes(getAudioLifecycleSnapshot().phase);
       if (!interrupted) markAudioStopped();
-      p.showPausedNotification(p.bpm, modeLabel, p.languageRef.current);
+      p.showPausedNotification(playback.bpm, playback.modeLabel, p.languageRef.current);
       pausePracticeSession(interrupted);
       return;
     }
@@ -244,7 +259,10 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
     p.clearSamplePlayStates();
     markAudioPreparing();
     const startBeat = p.barModeRef.current ? p.barStartBeatRef.current : undefined;
-    p.showPlayingNotification(p.bpm, modeLabel, p.languageRef.current);
+    const playback = p.getPlaybackContext({
+      activeBarIndex: startBeat ?? 0,
+    });
+    p.showPlayingNotification(playback.bpm, playback.modeLabel, p.languageRef.current);
     configureEngine(engine);
     p.preparingCancelledRef.current = false;
     try {

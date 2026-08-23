@@ -103,6 +103,11 @@ import { createRafBatcher } from "@/lib/raf-batcher";
 import type { ModeSlot } from "@/components/ModeSwitcherDial";
 import type { ScoreDocument } from "@/lib/score-types";
 import type { OnboardingResult } from "@/components/OnboardingModal";
+import {
+  resolvePlaybackContext,
+  type PlaybackContext,
+  type PlaybackMode,
+} from "@/lib/playback-context";
 import { PracticeSessionTracker, loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
 import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource, loadNoteSampleChannels, saveNoteSampleChannels, setNoteSampleChannel, removeNoteSampleChannel, loadNoteSampleVolumes, setNoteSampleVolume, removeNoteSampleVolume, loadNoteSampleSpeeds, setNoteSampleSpeed, removeNoteSampleSpeed, loadNoteSampleMetroChannels, saveNoteSampleMetroChannels, setNoteSampleMetroChannel, removeNoteSampleMetroChannel } from "@/lib/note-samples";
 import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap, NoteSampleVolumeMap, NoteSampleSpeedMap, NoteSampleMetroChannelMap, SampleSource } from "@/lib/note-samples";
@@ -194,12 +199,14 @@ export function useMetronomeScreen() {
   // 기존 barMode/noteMode/scoreMode boolean 세 개를 단일 enum 상태로 통합.
   const [coreMode, setCoreMode] = useState<"beat" | "bar" | "note" | "score">("beat");
   const activeModeRef = useRef<"beat" | "bar" | "note" | "score">("beat");
+  const playbackModeRef = useRef<PlaybackMode>("beat");
   // 원자적 setter: ref와 React state를 항상 동시에 갱신.
   // useEffect 동기화를 쓰지 않으므로 effect 지연으로 인한 stale 덮어쓰기가 없다.
   // setCoreMode는 React가 렌더 간 동일 참조를 보장하므로 deps 없이 안정적.
   const setCoreModeAndRef = useCallback(
     (mode: "beat" | "bar" | "note" | "score") => {
       activeModeRef.current = mode;
+      playbackModeRef.current = mode;
       setCoreMode(mode);
     },
     [], // setCoreMode & activeModeRef are both stable
@@ -224,10 +231,12 @@ export function useMetronomeScreen() {
     set current(v: boolean) {
       if (v) {
         activeModeRef.current = "bar";
+        playbackModeRef.current = "bar";
         setCoreMode("bar");
       } else if (activeModeRef.current === "bar") {
         // false 경로: 현재 bar 모드일 때만 beat로 클리어 (다른 모드는 no-op)
         activeModeRef.current = "beat";
+        playbackModeRef.current = "beat";
         setCoreMode("beat");
       }
     },
@@ -238,10 +247,12 @@ export function useMetronomeScreen() {
     set current(v: boolean) {
       if (v) {
         activeModeRef.current = "note";
+        playbackModeRef.current = "note";
         setCoreMode("note");
       } else if (activeModeRef.current === "note") {
         // false 경로: 현재 note 모드일 때만 beat로 클리어 (다른 모드는 no-op)
         activeModeRef.current = "beat";
+        playbackModeRef.current = "beat";
         setCoreMode("beat");
       }
     },
@@ -390,6 +401,7 @@ export function useMetronomeScreen() {
 
   const openExclusive = useCallback((modal: ActiveModal) => {
     tuningGuideOnSelectRef.current = null;
+    if (modal === "polygon") playbackModeRef.current = "polygon";
     setActiveModal(modal);
   }, []);
   const [customSoundSets, setCustomSoundSets] = useState<Record<string, CustomSoundSetConfig>>({});
@@ -484,6 +496,9 @@ export function useMetronomeScreen() {
   const [recorderTarget, setRecorderTarget] = useState<{ beat: number; sub: number } | null>(null);
 
   const { engineRef } = useMetronomeEngine();
+  // The engine resets `currentBeat` when it stops. Keep the last main-bar
+  // cursor so a stop notification/log still identifies the BPM just played.
+  const activeBarIndexRef = useRef(0);
   const tapTimesRef = useRef<number[]>([]);
   const dialRef = useRef<View>(null);
   const dialCenterRef = useRef({ x: 0, y: 0 });
@@ -690,7 +705,14 @@ export function useMetronomeScreen() {
     noteSampleSoundsRef,
     samplePlayStateRef,
     preloadNoteSampleSounds,
-    onBarBpmChange: (newBpm) => { updateBpmRef.current(newBpm); },
+    onBarBpmChange: (newBpm) => {
+      // Bar mode owns a separate base BPM. Keep the dial setting untouched
+      // while making the bar engine tempo change immediately audible.
+      engineRef.current?.setBpm(
+        toEngineBpm(newBpm, beatDenominatorRef.current),
+      );
+      scheduleReRender();
+    },
     beatDenominatorRef,
     username,
     persistSettings,
@@ -715,12 +737,53 @@ export function useMetronomeScreen() {
       barBpmRef.current = nextBarBpm;
       setBarBpm(nextBarBpm);
       barModeHandleBarModeChange(true);
+      // The dial BPM is intentionally preserved until bar mode exits. Apply
+      // the bar session's own base BPM directly to the engine instead.
+      engineRef.current?.setBpm(
+        toEngineBpm(nextBarBpm, beatDenominatorRef.current),
+      );
     } else {
       barModeHandleBarModeChange(false);
       // Restore global BPM to the value before bar mode was entered
       updateBpmRef.current(prevGlobalBpmRef.current);
     }
   }, [barModeHandleBarModeChange, setBarBpm, barBpmRef]);
+
+  const getPlaybackContext = useCallback((
+    overrides: { mode?: unknown; bpm?: number; activeBarIndex?: number } = {},
+  ): PlaybackContext => resolvePlaybackContext({
+    mode: overrides.mode ?? playbackModeRef.current,
+    language: languageRef.current,
+    globalBpm: overrides.bpm ?? bpmRef.current,
+    barBpm: barBpmRef.current,
+    barConfig: barConfigRef.current,
+    activeBarIndex: overrides.activeBarIndex ?? (barModeRef.current
+      ? (engineRef.current?.getIsRunning()
+        ? engineRef.current.getCurrentBeat()
+        : activeBarIndexRef.current)
+      : undefined),
+  }), []);
+
+  const setPlaybackBpm = useCallback((nextBpm: number, playback: PlaybackContext) => {
+    const clamped = Math.max(20, Math.min(300, Math.round(nextBpm)));
+    if (playback.mode === "bar") {
+      if (playback.bpmSource === "bar_override" && playback.activeBarIndex !== undefined) {
+        const repeat = barConfigRef.current.barRepeats[playback.activeBarIndex];
+        if (repeat) {
+          handleBarRepeatChange(playback.activeBarIndex, { ...repeat, bpm: clamped });
+          return;
+        }
+      }
+      handleBarBpmChange(clamped);
+      return;
+    }
+    updateBpmRef.current(clamped);
+  }, [handleBarBpmChange, handleBarRepeatChange]);
+
+  const getPlaybackContextRef = useRef<() => PlaybackContext>(() => getPlaybackContext());
+  getPlaybackContextRef.current = () => getPlaybackContext();
+  const setPlaybackBpmRef = useRef<(bpm: number, context: PlaybackContext) => void>(() => {});
+  setPlaybackBpmRef.current = setPlaybackBpm;
 
   // ── 웹 AudioContext 잠금 해제 (audio unlock) ─────────────────────────────
   // Chrome의 Autoplay Policy: AudioContext는 사용자 제스처 이후에만 resume 가능.
@@ -1275,6 +1338,7 @@ export function useMetronomeScreen() {
         pendingLayerMap[key] = info.layerBeat;
         hasLayerUpdate = true;
       } else {
+        activeBarIndexRef.current = info.beat;
         pendingProgress = info;
         hasProgressUpdate = true;
       }
@@ -1644,6 +1708,7 @@ export function useMetronomeScreen() {
     barMode,
     barModeRef,
     bpm,
+    getPlaybackContext: () => getPlaybackContext(),
     beatsPerMeasure,
     subdivisionPattern,
     barConfigRef,
@@ -1718,6 +1783,21 @@ export function useMetronomeScreen() {
   // bpmRef sync는 useSettings 내부에서 처리
 
   const { stageModeActive, enterStageMode, exitStageMode } = useStageMode();
+  const enterStageModeForPlayback = useCallback(() => {
+    playbackModeRef.current = "stage";
+    enterStageMode();
+  }, [enterStageMode]);
+  const exitStageModeForPlayback = useCallback(async () => {
+    playbackModeRef.current = activeModeRef.current;
+    await exitStageMode();
+  }, [exitStageMode]);
+  useEffect(() => {
+    playbackModeRef.current = stageModeActive
+      ? "stage"
+      : showPolygon
+      ? "polygon"
+      : activeModeRef.current;
+  }, [coreMode, stageModeActive, showPolygon]);
   /** 무대 모드 셋 리스트 — 진입 시 연습장에서 로드 */
   const [stagePracticeEntries, setStagePracticeEntries] = useState<PracticeEntry[]>([]);
   /** 셋 리스트에서 현재 선택/적용된 항목 ID */
@@ -1813,11 +1893,8 @@ export function useMetronomeScreen() {
 
   // ── Notification bridge (TOGGLE_PLAY / BPM_UP / BPM_DOWN from lock screen) ─
   useNotificationBridge({
-    engineRef, barModeRef, barConfigRef, dialConfigRef, barLoopModeRef,
-    blockPlayModeRef, barStartBeatRef, bpmRef, beatDenominatorRef, updateBpmRef,
-    languageRef, renderedPlayerRef, buildRenderedPlayer, stopRenderedAudio,
-    clearSamplePlayStates, resetPlaybackVisuals, setIsPlaying, setIsPreparing,
-    togglePlaybackRef: togglePlayPauseRef,
+    engineRef, languageRef, getPlaybackContextRef, setPlaybackBpmRef,
+    stopRenderedAudio, togglePlaybackRef: togglePlayPauseRef,
   });
 
 
@@ -1933,8 +2010,8 @@ export function useMetronomeScreen() {
             resetPlaybackVisuals();
              markAudioStopped();
              completePracticeSessionRef.current("fade_out");
-            const modeLabel = barModeRef.current ? "Bar" : "Dial";
-            showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
+            const playback = getPlaybackContext();
+            showPausedNotification(playback.bpm, playback.modeLabel, languageRef.current);
           }, 0);
           return;
         }
@@ -2034,8 +2111,8 @@ export function useMetronomeScreen() {
         resetPlaybackVisuals();
          markAudioStopped();
          completePracticeSessionRef.current("measure_complete");
-        const modeLabel = barModeRef.current ? "Bar" : "Dial";
-        showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
+        const playback = getPlaybackContext();
+        showPausedNotification(playback.bpm, playback.modeLabel, languageRef.current);
       }
     });
   }, []);
@@ -2055,8 +2132,8 @@ export function useMetronomeScreen() {
       resetPlaybackVisuals();
       markAudioStopped();
       completePracticeSession("timer");
-      const modeLabel = barModeRef.current ? "Bar" : "Dial";
-      showPausedNotification(bpmRef.current, modeLabel, languageRef.current);
+      const playback = getPlaybackContext();
+      showPausedNotification(playback.bpm, playback.modeLabel, languageRef.current);
     } else {
       engine.requestStopAfterMeasure();
     }
@@ -2528,7 +2605,8 @@ export function useMetronomeScreen() {
     engine.start();
     markAudioPlaying();
     engine.requestStopAfterMeasure();
-    showPlayingNotification(entry.bpm, "Note", languageRef.current);
+    const playback = getPlaybackContext({ mode: "note", bpm: entry.bpm });
+    showPlayingNotification(playback.bpm, playback.modeLabel, languageRef.current);
   }, [preloadNoteSampleSounds]);
 
   const createShuffledIndices = useCallback((length: number) => createShuffledIndicesPure(length), []);
@@ -2571,7 +2649,8 @@ export function useMetronomeScreen() {
       setNoteIsPlaying(false);
       setIsPlaying(false);
       resetPlaybackVisuals();
-      showPausedNotification(bpmRef.current, "Note", languageRef.current);
+      const playback = getPlaybackContext({ mode: "note" });
+      showPausedNotification(playback.bpm, playback.modeLabel, languageRef.current);
     }
   }, [noteStartPlayingEntry, createShuffledIndices]);
 
@@ -2685,10 +2764,10 @@ export function useMetronomeScreen() {
       handleExitNoteMode,
       handleBarModeChange,
       setScoreMode: (m) => setScoreMode(m as "list" | "editor" | null),
-      exitStageMode,
+      exitStageMode: exitStageModeForPlayback,
       setActiveModal: (m) => setActiveModal(m as ActiveModal),
       handleEnterNoteMode,
-      enterStageMode: () => { void enterStageMode(); },
+      enterStageMode: enterStageModeForPlayback,
       openExclusive: (m) => openExclusive(m as ActiveModal),
     };
     await applySwitchToMode(mode, state, cb);
@@ -2698,7 +2777,7 @@ export function useMetronomeScreen() {
         setStagePracticeEntries(entries);
       }).catch(() => {});
     }
-  }, [currentMode, coreMode, stageModeActive, showMenu, showPracticeBook, handleExitNoteMode, handleBarModeChange, handleEnterNoteMode, enterStageMode, exitStageMode, activeModal, openExclusive]);
+  }, [currentMode, coreMode, stageModeActive, showMenu, showPracticeBook, handleExitNoteMode, handleBarModeChange, handleEnterNoteMode, enterStageModeForPlayback, exitStageModeForPlayback, activeModal, openExclusive]);
 
   // ── 상단 중앙 레이블 탭 → 다음 모드 순환 ──
   const MODE_CYCLE: ModeSlot[] = ["beat", "bar", "note", "stage", "practice"];
@@ -2831,7 +2910,8 @@ export function useMetronomeScreen() {
       setIsPlaying(false);
       setNoteIsPlaying(false);
       resetPlaybackVisuals();
-      showPausedNotification(bpmRef.current, "Note", languageRef.current);
+      const playback = getPlaybackContext({ mode: "note" });
+      showPausedNotification(playback.bpm, playback.modeLabel, languageRef.current);
     } else {
       const q = noteQueueRef.current;
       if (q.length === 0) return;
@@ -3101,6 +3181,7 @@ export function useMetronomeScreen() {
     practiceStartRef,
     discardPracticeSession,
     startOrResumePracticeSession,
+    getPlaybackContext,
     discardRoomTracking,
     handleNoteTogglePlayRef,
     clickPCMCacheRef,
@@ -3304,8 +3385,8 @@ export function useMetronomeScreen() {
     handleSetPracticeNoteGoal,
     // Stage mode
     stageModeActive,
-    enterStageMode,
-    exitStageMode,
+    enterStageMode: enterStageModeForPlayback,
+    exitStageMode: exitStageModeForPlayback,
     stagePracticeEntries,
     setStagePracticeEntries,
     activeStagePracticeEntryId,

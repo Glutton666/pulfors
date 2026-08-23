@@ -10,7 +10,15 @@ const ACTIVITY_RETENTION_MS = ACTIVITY_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
 export interface PracticeSessionData {
   bpm: number;
-  mode: "dial" | "bar";
+  mode: "dial" | "bar" | "note" | "score" | "polygon" | "stage" | "practice" | "menu" | "unknown";
+  /** Identifies whether a bar session started/ended on its base BPM or an override. */
+  bpmSource?: "global" | "bar_default" | "bar_override";
+  /** Zero-based active bar when a bar BPM override was in effect. */
+  activeBarIndex?: number;
+  /** Effective BPM source at the end of the session. */
+  bpmEndSource?: "global" | "bar_default" | "bar_override";
+  /** Zero-based active bar that supplied the final BPM. */
+  activeBarIndexEnd?: number;
   /** V1 호환 필드. V2에서는 activeDurationSec와 같은 능동 연습 시간이다. */
   duration: number;
   barConfig?: unknown;
@@ -61,6 +69,10 @@ export interface Goal {
 
 export type PracticeSessionState = "running" | "paused" | "interrupted";
 type PracticeSessionStart = Omit<PracticeSessionData, "duration" | "activeDurationSec" | "pausedDurationSec" | "interruptionDurationSec" | "pauseCount" | "interruptionCount" | "status" | "endReason" | "endedAt" | "bpmEnd" | "bpmPeak">;
+interface PracticeSessionEndContext {
+  bpmSource?: PracticeSessionData["bpmSource"];
+  activeBarIndex?: number;
+}
 
 /**
  * In-memory state machine for one user practice. It deliberately stores no
@@ -124,6 +136,7 @@ export class PracticeSessionTracker {
     endReason: NonNullable<PracticeSessionData["endReason"]>,
     status: NonNullable<PracticeSessionData["status"]> = "completed",
     now: number = Date.now(),
+    playback?: PracticeSessionEndContext,
   ): PracticeSessionData {
     if (this.state === "running") this.activeMs += Math.max(0, now - this.segmentStartedAt);
     else if (this.inactiveStartedAt !== null) {
@@ -148,6 +161,8 @@ export class PracticeSessionTracker {
       bpmStart: this.start.bpm,
       bpmEnd,
       bpmPeak: this.bpmPeak,
+      bpmEndSource: playback?.bpmSource ?? this.start.bpmSource,
+      activeBarIndexEnd: playback?.activeBarIndex ?? this.start.activeBarIndex,
     };
   }
 }

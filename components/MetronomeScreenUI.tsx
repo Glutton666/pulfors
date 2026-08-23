@@ -142,6 +142,7 @@ export function MetronomeScreenUI(props: Props) {
     fadeOutPhase, fadeOutStatusText,
     fadeOutSessionRef, fadeOutMutedRef, fadeOutMeasureCountRef,
     setFadeOutPhase, setFadeOutMeasureInPhase,
+    getPlaybackContext,
     landscapeReversed, setLandscapeReversed,
     showLandscapeImage, setShowLandscapeImage, landscapeImageUri,
     landscapeImageModalVisible, setLandscapeImageModalVisible,
@@ -599,8 +600,10 @@ export function MetronomeScreenUI(props: Props) {
           setFadeOutMeasureInPhase(0);
           practiceStartRef.current = null;
           setIsPlaying(true);
-          const modeLabel = barModeRef.current ? "Bar" : "Dial";
-          showPlayingNotification(bpm, modeLabel, languageRef.current);
+          // Fade-out begins from the first bar. Do not reuse the last cursor
+          // from a previous stopped bar session when resolving its notification.
+          const playback = getPlaybackContext({ activeBarIndex: 0 });
+          showPlayingNotification(playback.bpm, playback.modeLabel, languageRef.current);
           engine.start();
           markAudioPlaying();
           startOrResumePracticeSession();

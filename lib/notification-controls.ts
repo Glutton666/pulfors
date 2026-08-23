@@ -80,7 +80,7 @@ function buildContent(
   const t = createT(lang);
   return {
     title: `${isPlaying ? "▶" : "⏸"} ${bpm} BPM`,
-    body: isPlaying ? t("notification", "playing") : t("notification", "paused"),
+    body: `${_mode} · ${isPlaying ? t("notification", "playing") : t("notification", "paused")}`,
     categoryIdentifier: CATEGORY_ID,
     sticky: true,
     autoDismiss: false,

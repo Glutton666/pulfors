@@ -1352,6 +1352,7 @@ export const translations = {
     practice: { ko: "연습장",  en: "Practice" },
     stage:    { ko: "무대",    en: "Stage"    },
     menu:     { ko: "메뉴",  en: "Menu"  },
+    unknown:  { ko: "알 수 없는 모드", en: "Unknown Mode" },
     openDial:  { ko: "모드 전환 다이얼 열기", en: "Open mode switcher dial" },
     cycleTap:  { ko: "탭하여 다음 모드로 전환", en: "Tap to switch to next mode" },
   },
