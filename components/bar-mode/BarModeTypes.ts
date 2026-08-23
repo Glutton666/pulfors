@@ -69,6 +69,9 @@ export const MAX_BEATS = 16;
 export const SWIPE_ACTION_THRESHOLD = 60;
 export const MIN_BAR_DURATION_SECONDS = 1;
 export const MAX_BAR_DURATION_SECONDS = 59 * 60 + 59;
+export const BAR_REPEAT_COUNT_HOLD_DELAY_MS = 500;
+export const BAR_REPEAT_COUNT_HOLD_INITIAL_INTERVAL_MS = 300;
+export const BAR_REPEAT_COUNT_HOLD_MIN_INTERVAL_MS = 60;
 
 export type BarDurationPart = "minutes" | "seconds";
 
@@ -111,6 +114,16 @@ export function nextJumpPairId(barRepeats: Record<number, BarRepeat>): number {
 
 export function clampBarRepeatCount(value: number): number {
   return Math.max(1, Math.min(99, Math.round(value)));
+}
+
+export function getBarRepeatCountHoldIntervalMs(elapsedMs: number): number {
+  const elapsed = Math.max(0, elapsedMs);
+  return Math.max(
+    BAR_REPEAT_COUNT_HOLD_MIN_INTERVAL_MS,
+    Math.round(
+      BAR_REPEAT_COUNT_HOLD_INITIAL_INTERVAL_MS * Math.exp(-elapsed / 4500),
+    ),
+  );
 }
 
 export function clampBarBpm(value: number): number {

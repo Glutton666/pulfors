@@ -5,6 +5,7 @@ import {
   clampBarBpm,
   clampBarRepeatCount,
   formatBarDuration,
+  getBarRepeatCountHoldIntervalMs,
   splitBarDuration,
 } from "../components/bar-mode/BarModeTypes";
 
@@ -38,5 +39,17 @@ describe("bar editor control values", () => {
     assert.equal(clampBarRepeatCount(100), 99);
     assert.equal(clampBarBpm(19), 20);
     assert.equal(clampBarBpm(301), 300);
+  });
+
+  test("repeat-count hold interval accelerates and respects its floor", () => {
+    const initial = getBarRepeatCountHoldIntervalMs(0);
+    const afterOneSecond = getBarRepeatCountHoldIntervalMs(1000);
+    const afterThreeSeconds = getBarRepeatCountHoldIntervalMs(3000);
+    const atFloor = getBarRepeatCountHoldIntervalMs(60_000);
+
+    assert.equal(initial, 300);
+    assert.ok(afterOneSecond < initial);
+    assert.ok(afterThreeSeconds < afterOneSecond);
+    assert.equal(atFloor, 60);
   });
 });

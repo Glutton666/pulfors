@@ -36,6 +36,8 @@ import {
   formatBarDuration,
   splitBarDuration,
   SOUND_SET_OPTIONS,
+  BAR_REPEAT_COUNT_HOLD_DELAY_MS,
+  getBarRepeatCountHoldIntervalMs,
   type BarModeColors,
   type BarDurationPart,
 } from "./BarModeTypes";
@@ -147,6 +149,24 @@ export function BarEditorPanel({
     bpmHoldFired.current = false;
   }, []);
 
+  // Repeat-count hold timers. The recursive timeout lets each interval use
+  // the current hold duration, so the control accelerates smoothly instead
+  // of running at one fixed repeat rate.
+  const countPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countRepeatTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countHoldStartedAt = useRef(0);
+  const countHoldFired = useRef(false);
+  const clearCountTimers = useCallback(() => {
+    if (countPressTimer.current) {
+      clearTimeout(countPressTimer.current);
+      countPressTimer.current = null;
+    }
+    if (countRepeatTimer.current) {
+      clearTimeout(countRepeatTimer.current);
+      countRepeatTimer.current = null;
+    }
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -231,6 +251,7 @@ export function BarEditorPanel({
 
   const commitCount = useCallback((nextCount: number) => {
     const next = clampBarRepeatCount(nextCount);
+    repCountRef.current = next;
     setRepCount(next);
     commitRepeatRef.current(repTypeRef.current, next, repMinRef.current, repSecRef.current, repBpmRef.current);
   }, []);
@@ -262,6 +283,44 @@ export function BarEditorPanel({
       bpmPressInterval.current = setInterval(step, 350);
     }, 500);
   }, [clearBpmTimers, applyRepBpm]);
+
+  const scheduleCountHoldStep = useCallback((dir: 1 | -1) => {
+    if (isPlaying) {
+      clearCountTimers();
+      return;
+    }
+
+    const current = repCountRef.current;
+    const next = clampBarRepeatCount(current + dir);
+    if (next === current) {
+      countRepeatTimer.current = null;
+      return;
+    }
+
+    commitCount(next);
+    const elapsed = Date.now() - countHoldStartedAt.current;
+    countRepeatTimer.current = setTimeout(
+      () => scheduleCountHoldStep(dir),
+      getBarRepeatCountHoldIntervalMs(elapsed),
+    );
+  }, [clearCountTimers, commitCount, isPlaying]);
+
+  const startCountHold = useCallback((dir: 1 | -1) => {
+    clearCountTimers();
+    countHoldFired.current = false;
+    countPressTimer.current = setTimeout(() => {
+      countPressTimer.current = null;
+      countHoldFired.current = true;
+      countHoldStartedAt.current = Date.now();
+      scheduleCountHoldStep(dir);
+    }, BAR_REPEAT_COUNT_HOLD_DELAY_MS);
+  }, [clearCountTimers, scheduleCountHoldStep]);
+
+  useEffect(() => {
+    if (isPlaying) clearCountTimers();
+  }, [clearCountTimers, isPlaying]);
+
+  useEffect(() => clearCountTimers, [clearCountTimers]);
 
   const bpmSwipePan = useMemo(() => {
     let startBpm = 0;
@@ -550,7 +609,14 @@ export function BarEditorPanel({
               {repType === "count" ? (
                 <>
                   <Pressable
-                    onPress={() => { if (!isPlaying) commitCount(repCount - 1); }}
+                    disabled={isPlaying}
+                    onPress={() => {
+                      const wasHeld = countHoldFired.current;
+                      countHoldFired.current = false;
+                      if (!isPlaying && !wasHeld) commitCount(repCount - 1);
+                    }}
+                    onPressIn={() => { if (!isPlaying) startCountHold(-1); }}
+                    onPressOut={clearCountTimers}
                     style={styles.stepBtn}
                     testID="bar-count-minus"
                   >
@@ -563,7 +629,14 @@ export function BarEditorPanel({
                     ×{repCount}
                   </Text>
                   <Pressable
-                    onPress={() => { if (!isPlaying) commitCount(repCount + 1); }}
+                    disabled={isPlaying}
+                    onPress={() => {
+                      const wasHeld = countHoldFired.current;
+                      countHoldFired.current = false;
+                      if (!isPlaying && !wasHeld) commitCount(repCount + 1);
+                    }}
+                    onPressIn={() => { if (!isPlaying) startCountHold(1); }}
+                    onPressOut={clearCountTimers}
                     style={styles.stepBtn}
                     testID="bar-count-plus"
                   >
