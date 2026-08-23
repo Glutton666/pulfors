@@ -209,10 +209,15 @@ export async function startAndroidFocusProbe(): Promise<void> {
       allowsRecording: false,
     });
 
+    // 실제로 무음인 WAV(전체 샘플 0)를 사용한다 — volume=0은 JS→네이티브로
+    // 비동기 반영되는 속성이라, createAudioPlayer 직후 곧바로 play()하면
+    // 네이티브가 volume=0을 아직 적용하기 전에 첫 프레임이 기본 볼륨(1.0)으로
+    // 재생되는 순간이 생길 수 있다 (2026-08-24 실기기에서 앱 시작마다 "삑"
+    // 소리로 확인됨 — click-low.wav를 쓰고 있었음). 샘플 자체가 무음이면 이
+    // 레이스와 무관하게 항상 들리지 않는다.
     const player = expoAudioMod.createAudioPlayer(
-      // 기존 에셋의 짧은 WAV 파일을 volume=0 루프로 사용 → 사용자에게 들리지 않음
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require("@/assets/sounds/click-low.wav"),
+      require("@/assets/sounds/silence.wav"),
       { updateInterval: PROBE_PROGRESS_UPDATE_INTERVAL_MS },
     );
     player.loop = true;

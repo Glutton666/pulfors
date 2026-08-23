@@ -42,6 +42,8 @@ import {
   saveNoteSampleChannels,
   saveNoteSampleVolumes,
   saveNoteSampleSpeeds,
+  saveNoteSampleMetroChannels,
+  reindexSampleMapAfterBarDelete,
 } from "@/lib/note-samples";
 import type {
   NoteSampleMap,
@@ -855,6 +857,44 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
           };
         })
         .filter((b): b is NonNullable<typeof b> => b !== null);
+
+      // beatSubdivisions/barRepeats/loopBlocks와 마찬가지로 노트 샘플 관련
+      // 맵들도 같이 재인덱싱해야 한다. 이걸 안 하면 삭제된 바에 붙어있던
+      // 샘플이 그대로 남아, 인덱스가 한 칸씩 당겨진 다른 바에 잘못
+      // 붙어버린다 (2026-08-24 실기기에서 확인 — 샘플 바 삭제 후 무음이
+      // 계속되고, 재시작해도 유지되는 원인이었다). noteSampleSoundsRef의
+      // 캐시된 플레이어도 preloadNoteSampleSounds가 새 맵 기준으로 정리한다.
+      const newNoteSamples = reindexSampleMapAfterBarDelete(p.noteSamplesRef.current, beatIndex);
+      const newNoteSampleNames = reindexSampleMapAfterBarDelete(p.noteSampleNamesRef.current, beatIndex);
+      const newNoteSampleSources = reindexSampleMapAfterBarDelete(p.noteSampleSourcesRef.current, beatIndex);
+      const newNoteSampleChannels = reindexSampleMapAfterBarDelete(p.noteSampleChannelsRef.current, beatIndex);
+      const newNoteSampleVolumes = reindexSampleMapAfterBarDelete(p.noteSampleVolumesRef.current, beatIndex);
+      const newNoteSampleSpeeds = reindexSampleMapAfterBarDelete(p.noteSampleSpeedsRef.current, beatIndex);
+      const newNoteSampleMetroChannels = reindexSampleMapAfterBarDelete(p.noteSampleMetroChannelsRef.current, beatIndex);
+
+      p.setNoteSamples(newNoteSamples);
+      p.noteSamplesRef.current = newNoteSamples;
+      p.setNoteSampleNames(newNoteSampleNames);
+      p.noteSampleNamesRef.current = newNoteSampleNames;
+      p.setNoteSampleSources(newNoteSampleSources);
+      p.noteSampleSourcesRef.current = newNoteSampleSources;
+      p.setNoteSampleChannels(newNoteSampleChannels);
+      p.noteSampleChannelsRef.current = newNoteSampleChannels;
+      p.setNoteSampleVolumes(newNoteSampleVolumes);
+      p.noteSampleVolumesRef.current = newNoteSampleVolumes;
+      p.setNoteSampleSpeeds(newNoteSampleSpeeds);
+      p.noteSampleSpeedsRef.current = newNoteSampleSpeeds;
+      p.setNoteSampleMetroChannels(newNoteSampleMetroChannels);
+      p.noteSampleMetroChannelsRef.current = newNoteSampleMetroChannels;
+      void saveNoteSamples(newNoteSamples);
+      void saveNoteSampleNames(newNoteSampleNames);
+      void saveNoteSampleSources(newNoteSampleSources);
+      void saveNoteSampleChannels(newNoteSampleChannels);
+      void saveNoteSampleVolumes(newNoteSampleVolumes);
+      void saveNoteSampleSpeeds(newNoteSampleSpeeds);
+      void saveNoteSampleMetroChannels(newNoteSampleMetroChannels);
+      void p.preloadNoteSampleSounds(newNoteSamples);
+
       p.setBeatsPerMeasure(newBeats);
       p.setBeatTypes(newTypes);
       p.setBeatSubdivisions(newSubs);

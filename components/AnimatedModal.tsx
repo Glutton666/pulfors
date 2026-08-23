@@ -27,6 +27,7 @@ export function AnimatedModal({
 
   useEffect(() => {
     const gen = ++generationRef.current;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
     if (visible) {
       setNativeVisible(true);
@@ -37,7 +38,21 @@ export function AnimatedModal({
           runOnJS(setNativeVisible)(false);
         }
       });
+      // 안전장치: withTiming의 finished 콜백은 애니메이션이 중간에 끊기면
+      // (예: visible이 다시 바뀌어 값이 재대입되거나, 앱이 백그라운드로
+      // 전환되는 등) false로 온다. 그 경우 위 분기가 실행되지 않아
+      // setNativeVisible(false)가 영원히 호출되지 않고, 네이티브 Modal이
+      // 화면엔 안 보이지만 계속 떠 있는 상태로 남아 뒤로가기/터치/edge-swipe
+      // 제스처를 계속 가로챌 수 있다 (2026-08-24 실기기에서 재현·확인).
+      // 애니메이션이 정상 완료됐는지와 무관하게 일정 시간 후엔 반드시 닫는다.
+      fallbackTimer = setTimeout(() => {
+        if (gen === generationRef.current) setNativeVisible(false);
+      }, FADE_MS + 50);
     }
+
+    return () => {
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+    };
   }, [visible]);
 
   const animStyle = useAnimatedStyle(() => ({
@@ -80,6 +95,7 @@ export function AnimatedSlideModal({
 
   useEffect(() => {
     const gen = ++generationRef.current;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
     if (visible) {
       translateY.value = height;
@@ -98,7 +114,16 @@ export function AnimatedSlideModal({
           }
         }
       );
+      // 안전장치: AnimatedModal과 동일한 이유로, finished가 false로 오는
+      // 경우(애니메이션 중단)에 대비해 일정 시간 후 무조건 닫는다.
+      fallbackTimer = setTimeout(() => {
+        if (gen === generationRef.current) setNativeVisible(false);
+      }, duration + 50);
     }
+
+    return () => {
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+    };
   }, [visible, height, duration, enterEasing, exitEasing]);
 
   const animStyle = useAnimatedStyle(() => ({

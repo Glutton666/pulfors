@@ -498,4 +498,37 @@ export function getNoteSampleUri(
   return samples[sampleKey(beatIndex, subIndex)] || null;
 }
 
+/**
+ * 바 삭제 시 노트 샘플 관련 맵(noteSamples, noteSampleNames, noteSampleSources,
+ * noteSampleChannels, noteSampleVolumes, noteSampleSpeeds, noteSampleMetroChannels)을
+ * 재인덱싱한다. 키는 `${beat}-${sub}` 형태이거나(대부분) `${beat}` 단독
+ * 형태(noteSampleMetroChannels)인데, 둘 다 첫 "-" 앞부분을 beat 인덱스로
+ * 취급해 동일하게 처리한다.
+ *
+ * handleDeleteBar가 beatTypes/beatSubdivisions/barRepeats/loopBlocks는
+ * 재인덱싱하면서 이 맵들은 건드리지 않아, 삭제된 바의 샘플이 그대로 남아
+ * 인덱스가 당겨진 다른 바에 잘못 붙는 문제가 있었다 (2026-08-24 실기기 확인).
+ *
+ * - 삭제된 바(deletedBeat)에 붙어있던 항목은 제거한다.
+ * - deletedBeat보다 뒤에 있던 항목은 beat 인덱스를 한 칸 당긴다.
+ * - deletedBeat보다 앞에 있던 항목은 그대로 둔다.
+ */
+export function reindexSampleMapAfterBarDelete<T>(
+  map: Record<string, T>,
+  deletedBeat: number,
+): Record<string, T> {
+  const result: Record<string, T> = {};
+  for (const [key, value] of Object.entries(map)) {
+    const dashIndex = key.indexOf("-");
+    const beatPart = dashIndex === -1 ? key : key.slice(0, dashIndex);
+    const beat = Number(beatPart);
+    if (!Number.isFinite(beat)) continue;
+    if (beat === deletedBeat) continue;
+    const newBeat = beat > deletedBeat ? beat - 1 : beat;
+    const newKey = dashIndex === -1 ? String(newBeat) : `${newBeat}${key.slice(dashIndex)}`;
+    result[newKey] = value;
+  }
+  return result;
+}
+
 export { sampleKey };

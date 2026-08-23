@@ -1145,20 +1145,40 @@ export function SignalGeneratorModal({ visible, onClose, onMicTap, onOpenTuningG
     }
   }, [micListening, stopMic, startMic, hapticFeedback]);
 
+  // 이스터에그(14연타) 카운팅 중에도 매 탭마다 실제 toggleMic()이 불려서
+  // 마이크가 13번 연속으로 켜졌다 꺼지는 문제가 있었다 (2026-08-24 실기기
+  // 확인 — 마이크 상태가 꼬여 이스터에그 종료 후 버튼이 안 먹음, 오디오
+  // 세션도 반복적으로 흔들림). 실제 토글을 짧게 지연시켜, 그 사이 다음 탭이
+  // 오면(연타 중) 취소하고 다시 지연시킨다. 연타가 아닌 진짜 단일 탭만
+  // 지연 후 한 번 토글된다.
+  const micToggleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearMicToggleDebounce = useCallback(() => {
+    if (micToggleDebounceRef.current) {
+      clearTimeout(micToggleDebounceRef.current);
+      micToggleDebounceRef.current = null;
+    }
+  }, []);
+  useEffect(() => clearMicToggleDebounce, [clearMicToggleDebounce]);
+
   const handleMicPress = useCallback(() => {
+    clearMicToggleDebounce();
     if (onMicTap?.()) {
       stopPlayback();
       stopMic();
       return;
     }
-    toggleMic();
-  }, [onMicTap, stopPlayback, stopMic, toggleMic]);
+    micToggleDebounceRef.current = setTimeout(() => {
+      micToggleDebounceRef.current = null;
+      toggleMic();
+    }, 260);
+  }, [onMicTap, stopPlayback, stopMic, toggleMic, clearMicToggleDebounce]);
 
   const handleClose = useCallback(() => {
+    clearMicToggleDebounce();
     stopPlayback();
     stopMic();
     onClose();
-  }, [stopPlayback, stopMic, onClose]);
+  }, [stopPlayback, stopMic, onClose, clearMicToggleDebounce]);
 
   const handleFreqKnob = useCallback((norm: number) => {
     const f = normToFreq(norm);
