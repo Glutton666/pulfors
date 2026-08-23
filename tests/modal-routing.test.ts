@@ -120,11 +120,14 @@ test("Android BackHandler가 모든 active modal 종료 경로를 가진다", ()
   }
 });
 
-test("score close: 목록과 편집기가 문서 상태를 비우는 공통 종료 핸들러를 사용한다", () => {
+test("score close: 목록과 편집기의 X는 문서 상태를 비우고 실험실 메뉴로 돌아간다", () => {
   const ui = readFileSync(join(process.cwd(), "components/MetronomeScreenUI.tsx"), "utf-8");
   const hook = readFileSync(join(process.cwd(), "hooks/useMetronomeScreen.ts"), "utf-8");
   assert.match(ui, /onClose=\{closeScoreMode\}/);
-  assert.match(hook, /const closeScoreMode = useCallback\(\(\) => \{\s*setScoreEditorDoc\(null\);\s*setScoreMode\(null\);\s*closeMenuItem\(\);/);
+  assert.match(
+    hook,
+    /const closeScoreMode = useCallback\(\(\) => \{\s*setScoreEditorDoc\(null\);\s*setScoreMode\(null\);[\s\S]*?closeMenuItem\(\);/,
+  );
   assert.match(hook, /if \(coreMode === "score"\) \{\s*closeScoreMode\(\);/);
 });
 

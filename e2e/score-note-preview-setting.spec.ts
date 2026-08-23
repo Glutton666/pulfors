@@ -347,4 +347,23 @@ test.describe("음표 입력 미리 듣기 설정 E2E", () => {
       await stopBtn.click();
     }
   });
+
+  test("편집기의 X 버튼은 악보 모드를 닫고 실험실 메뉴로 돌아간다", async ({
+    page,
+  }) => {
+    await page.locator('[data-testid="score-editor-close"]').click();
+
+    await page
+      .locator('[data-testid="score-editor-close"]')
+      .waitFor({ state: "hidden", timeout: 8000 });
+    await page
+      .locator('[data-testid="score-list-import"]')
+      .waitFor({ state: "hidden", timeout: 8000 });
+    await page
+      .locator('[data-testid="menu-lab"]')
+      .waitFor({ state: "visible", timeout: 8000 });
+    await page
+      .locator('[data-testid="mode-cycle-label"]')
+      .waitFor({ state: "hidden", timeout: 8000 });
+  });
 });

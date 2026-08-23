@@ -4,6 +4,7 @@
 - [screenshot tool hits wrong port](screenshot-tool-wrong-port.md) — app_preview screenshot tool sometimes serves the Express landing page (port 5000) instead of the real Expo web app (port 8081); retry via runTest() instead of looping the screenshot tool.
 - [Score editor magnifier must render existing notes](score-magnifier-nearby-notes.md) — MagnifierView only draws staff+ghost by default; attach nearby element data to GhostState from touchToGhost, don't recompute layout inside the magnifier.
 - [Score editor scrolling vs. tap-to-place gestures](score-editor-scroll-lock.md) — prefer gating canvas PanResponder on touch count (single vs. multi), not tool-mode-based scrollEnabled toggling, to avoid blocking wheel/trackpad scroll.
+- [Score editor exit destination](score-editor-exit-destination.md) — the editor X closes score mode and returns to the Lab menu, not the main metronome screen.
 - [Bar Mode "Add Bar" swipe gesture](bar-mode-add-bar-gesture.md) — "↑Add Bar" text is a hint, not a button; requires a swipe-up drag on the editor panel to actually add a bar.
 - [Bar mode duration editing](bar-mode-duration-editing.md) — duration +/- edits only the selected mm or ss field and preserves the other field at its bounds.
 - [Score free-placement center vs. left-edge](score-free-placement-center-vs-left-edge.md) — placedX is a note-center coord; layoutMeasure's overlap-clamp math must convert it to a left edge before use, or placed notes render half a notehead-width off.
