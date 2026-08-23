@@ -213,6 +213,13 @@ export function PitchQuizModal({ visible, initialMode = null, onClose }: PitchQu
               >
                 <Text style={[styles.secondaryButtonText, { color: C.text }]}>{t("pitchQuiz", "relative")}</Text>
               </Pressable>
+              <Pressable
+                style={[styles.secondaryButton, { borderColor: C.border, backgroundColor: C.background }]}
+                onPress={() => selectMode("chord")}
+                testID="pitch-quiz-mode-chord"
+              >
+                <Text style={[styles.secondaryButtonText, { color: C.text }]}>{t("pitchQuiz", "chord")}</Text>
+              </Pressable>
             </View>
           ) : screen === "results" ? (
             <View style={styles.choiceContent}>
