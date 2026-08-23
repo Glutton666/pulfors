@@ -80,10 +80,15 @@ export type BarDurationPart = "minutes" | "seconds";
 export function formatBarCenterInfo(
   repeat: BarRepeat | null,
   bpm: number,
-  _beatsPerMeasure: number,
+  meterNumerator: number,
+  meterDenominator: 2 | 4 | 8,
 ): string | null {
   const effectiveBpm = (repeat?.bpm && repeat.bpm > 0) ? repeat.bpm : bpm;
-  const barSec = 60 / Math.max(1, effectiveBpm);
+  const barSec = (
+    (60 / Math.max(1, effectiveBpm))
+    * Math.max(1, meterNumerator)
+    * (4 / meterDenominator)
+  );
   const bpmStr = String(Math.round(effectiveBpm));
 
   if (!repeat || (repeat.type === "count" && repeat.value <= 1 && !repeat.bpm)) {

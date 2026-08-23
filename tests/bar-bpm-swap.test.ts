@@ -23,6 +23,7 @@ function makeBpmSwapHandler(opts: {
   bpmRef: { current: number };
   prevGlobalBpmRef: { current: number };
   barBpmRef: { current: number };
+  hasSavedBarConfig?: boolean;
   setBarBpm: (v: number) => void;
   updateBpm: (v: number) => void;
   barModeHandleBarModeChange: (toBarMode: boolean) => void;
@@ -30,8 +31,11 @@ function makeBpmSwapHandler(opts: {
   return function handleBarModeChange(toBarMode: boolean) {
     if (toBarMode) {
       opts.prevGlobalBpmRef.current = opts.bpmRef.current;
-      opts.barBpmRef.current = opts.bpmRef.current;
-      opts.setBarBpm(opts.bpmRef.current);
+      const nextBarBpm = opts.hasSavedBarConfig
+        ? opts.barBpmRef.current
+        : opts.bpmRef.current;
+      opts.barBpmRef.current = nextBarBpm;
+      opts.setBarBpm(nextBarBpm);
       opts.barModeHandleBarModeChange(true);
     } else {
       opts.barModeHandleBarModeChange(false);
@@ -85,6 +89,25 @@ describe("useMetronomeScreen — handleBarModeChange BPM 스왑 로직", () => {
 
     expect(barBpmRef.current).toBe(140);
     expect(setBarBpm).toHaveBeenCalledWith(140);
+  });
+
+  it("이미 만든 바 구성을 다시 열면 기존 bar BPM을 유지한다", () => {
+    const bpmRef = { current: 140 };
+    const prevGlobalBpmRef = { current: 120 };
+    const barBpmRef = { current: 92 };
+    const setBarBpm = jest.fn();
+    const updateBpm = jest.fn();
+    const barModeHandleBarModeChange = jest.fn();
+
+    const handleBarModeChange = makeBpmSwapHandler({
+      bpmRef, prevGlobalBpmRef, barBpmRef, hasSavedBarConfig: true,
+      setBarBpm, updateBpm, barModeHandleBarModeChange,
+    });
+
+    handleBarModeChange(true);
+
+    expect(barBpmRef.current).toBe(92);
+    expect(setBarBpm).toHaveBeenCalledWith(92);
   });
 
   // ── 3. 종료 시 글로벌 BPM 복원 ────────────────────────────────────────────

@@ -62,6 +62,7 @@ export function SwipeableBarRow({
 }: SwipeableBarRowProps) {
   const translateX = useRef(new Animated.Value(0)).current;
   const actionTriggered = useRef(false);
+  const sampleCount = sampleCells.filter(Boolean).length;
 
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => false,
@@ -216,14 +217,6 @@ export function SwipeableBarRow({
                     },
                   ]}
                 >
-                  {sampleCells[ci] && (
-                    <Ionicons
-                      name="musical-note"
-                      size={ms(11, 0.4)}
-                      color={C.background}
-                      accessibilityLabel={`Audio sample on bar ${beat + 1}, cell ${ci + 1}`}
-                    />
-                  )}
                 </View>
               );
             })}
@@ -241,8 +234,8 @@ export function SwipeableBarRow({
                 numberOfLines={1}
               >
                 {isPlaying && progressTotal && progressTotal > 1 && progressCurrent !== undefined
-                  ? `${meterNumerator}/${meterDenominator} · ${formatBarCenterInfo(repeat, bpm, beatsPerMeasure) ?? String(Math.round(bpm))} [${progressCurrent + 1}/${progressTotal}]`
-                  : `${meterNumerator}/${meterDenominator} · ${formatBarCenterInfo(repeat, bpm, beatsPerMeasure) ?? String(Math.round(bpm))}`
+                  ? `${meterNumerator}/${meterDenominator} · ${formatBarCenterInfo(repeat, bpm, meterNumerator, meterDenominator) ?? String(Math.round(bpm))} [${progressCurrent + 1}/${progressTotal}]`
+                  : `${meterNumerator}/${meterDenominator} · ${formatBarCenterInfo(repeat, bpm, meterNumerator, meterDenominator) ?? String(Math.round(bpm))}`
                 }
                 {symbolBadges.length > 0 ? `  ${symbolBadges.join(" ")}` : ""}
               </Text>
@@ -278,6 +271,35 @@ export function SwipeableBarRow({
               </View>
             )}
           </View>
+
+          {sampleCount > 0 && (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.sampleBadge,
+                {
+                  backgroundColor: C.backgroundSecondary,
+                  borderLeftColor: C.overlay10,
+                },
+              ]}
+            >
+              <Ionicons
+                name="musical-note"
+                size={ms(18, 0.45)}
+                color={C.accent}
+              />
+              {sampleCount > 1 && (
+                <Text
+                  style={[
+                    styles.sampleBadgeCount,
+                    { color: C.accent, fontSize: ms(10, 0.4) },
+                  ]}
+                >
+                  ×{sampleCount}
+                </Text>
+              )}
+            </View>
+          )}
         </Pressable>
       </Animated.View>
     </View>
@@ -332,5 +354,18 @@ const styles = StyleSheet.create({
   barCenterInfo: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     flexShrink: 1,
+  },
+  sampleBadge: {
+    alignSelf: "stretch",
+    minWidth: 34,
+    paddingHorizontal: 7,
+    borderLeftWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 1,
+  },
+  sampleBadgeCount: {
+    fontFamily: "SpaceGrotesk_700Bold",
+    includeFontPadding: false,
   },
 });

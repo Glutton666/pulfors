@@ -692,11 +692,13 @@ export function useMetronomeScreen() {
     if (toBarMode) {
       // Snapshot current global BPM before entering bar mode
       prevGlobalBpmRef.current = bpmRef.current;
-      // Seed bar BPM to the current global BPM (ref update is synchronous;
-      // the state update is async but barBpmRef is what matters for callbacks)
-      barBpmRef.current = bpmRef.current;
-      setBarBpm(bpmRef.current);
-      // Engine already has bpmRef.current — no updateBpm call needed on entry
+      // A returning bar session keeps its own base BPM. Only a brand-new bar
+      // session inherits the current dial BPM.
+      const nextBarBpm = barConfigRef.current.hasBeenConfigured
+        ? barBpmRef.current
+        : bpmRef.current;
+      barBpmRef.current = nextBarBpm;
+      setBarBpm(nextBarBpm);
       barModeHandleBarModeChange(true);
     } else {
       barModeHandleBarModeChange(false);

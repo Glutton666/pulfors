@@ -269,49 +269,97 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
           noteSampleVolumes: { ...p.noteSampleVolumes },
         };
 
-        // Reset bar config to empty (entries are added via handleAddBar).
-        barConfigRef.current = {
-          ...barConfigRef.current,
-          beatsPerMeasure: 0,
-          beatTypes: [],
-          beatSubdivisions: {},
-          barRepeats: {},
-          loopBlocks: [],
-          barClockMode: "stopwatch",
-          barTimerDuration: 180,
-          noteSamples: {},
-          noteSampleNames: {},
-          noteSampleSources: {},
-          noteSampleChannels: {},
-          noteSampleVolumes: {},
-          barLoopMode: "once",
-          blockPlayMode: "loop",
-          hasBeenConfigured: true,
-        };
-        p.setBeatsPerMeasure(0);
-        p.setBeatTypes([]);
-        p.setBeatSubdivisions({});
-        p.setSubdivisionPattern(["accent"]);
-        setBarRepeats({});
-        setLoopBlocks([]);
-        setBarLoopMode("once");
-        p.setNoteSamples({});
-        p.noteSamplesRef.current = {};
-        p.setNoteSampleNames({});
-        p.noteSampleNamesRef.current = {};
-        p.setNoteSampleSources({});
-        p.noteSampleSourcesRef.current = {};
-        p.setNoteSampleChannels({});
-        p.noteSampleChannelsRef.current = {};
-        p.setNoteSampleVolumes({});
-        p.noteSampleVolumesRef.current = {};
-        p.setNoteSampleMetroChannels({});
-        p.noteSampleMetroChannelsRef.current = {};
-        engine.setBeatsPerMeasure(0);
-        engine.setBeatTypes([]);
-        engine.setAllBeatSubdivisions({});
-        engine.clearLoopBlocks();
-        engine.clearBarRepeats();
+        const savedBarConfig = barConfigRef.current;
+        if (savedBarConfig.hasBeenConfigured) {
+          // A bar session is a persistent editing surface. Restoring this
+          // snapshot is essential: bar-specific meter/BPM and repeat data must
+          // not fall back to the global defaults merely because the user
+          // visited another mode.
+          const savedRepeats = { ...savedBarConfig.barRepeats };
+          const savedBlocks = [...savedBarConfig.loopBlocks];
+          const bpmOverrides: Record<number, number> = {};
+          for (const [key, repeat] of Object.entries(savedRepeats)) {
+            if (typeof repeat.bpm === "number" && repeat.bpm > 0) {
+              bpmOverrides[Number(key)] = toEngineBpm(
+                repeat.bpm,
+                repeat.meterDenominator ?? p.beatDenominatorRef.current,
+              );
+            }
+          }
+
+          p.setBeatsPerMeasure(savedBarConfig.beatsPerMeasure);
+          p.setBeatTypes([...savedBarConfig.beatTypes]);
+          p.setBeatSubdivisions({ ...savedBarConfig.beatSubdivisions });
+          setBarRepeats(savedRepeats);
+          setLoopBlocks(savedBlocks);
+          setBarLoopMode(savedBarConfig.barLoopMode);
+          setBlockPlayMode(savedBarConfig.blockPlayMode);
+          p.setNoteSamples({ ...savedBarConfig.noteSamples });
+          p.noteSamplesRef.current = { ...savedBarConfig.noteSamples };
+          p.setNoteSampleNames({ ...savedBarConfig.noteSampleNames });
+          p.noteSampleNamesRef.current = { ...savedBarConfig.noteSampleNames };
+          p.setNoteSampleSources({ ...savedBarConfig.noteSampleSources });
+          p.noteSampleSourcesRef.current = { ...savedBarConfig.noteSampleSources };
+          p.setNoteSampleChannels({ ...savedBarConfig.noteSampleChannels });
+          p.noteSampleChannelsRef.current = { ...savedBarConfig.noteSampleChannels };
+          p.setNoteSampleVolumes({ ...(savedBarConfig.noteSampleVolumes || {}) });
+          p.noteSampleVolumesRef.current = { ...(savedBarConfig.noteSampleVolumes || {}) };
+          p.setNoteSampleMetroChannels({});
+          p.noteSampleMetroChannelsRef.current = {};
+
+          engine.setBeatsPerMeasure(savedBarConfig.beatsPerMeasure);
+          engine.setBeatTypes([...savedBarConfig.beatTypes]);
+          engine.setAllBeatSubdivisions({ ...savedBarConfig.beatSubdivisions });
+          engine.setLoopBlocks(savedBlocks);
+          engine.setBlockPlayMode(savedBarConfig.blockPlayMode);
+          engine.setAllBarRepeats(savedRepeats);
+          engine.setAllBarBpmOverrides(bpmOverrides);
+        } else {
+          // First visit: start with an empty bar canvas.
+          barConfigRef.current = {
+            ...savedBarConfig,
+            beatsPerMeasure: 0,
+            beatTypes: [],
+            beatSubdivisions: {},
+            barRepeats: {},
+            loopBlocks: [],
+            barClockMode: "stopwatch",
+            barTimerDuration: 180,
+            noteSamples: {},
+            noteSampleNames: {},
+            noteSampleSources: {},
+            noteSampleChannels: {},
+            noteSampleVolumes: {},
+            barLoopMode: "once",
+            blockPlayMode: "loop",
+            hasBeenConfigured: true,
+          };
+          p.setBeatsPerMeasure(0);
+          p.setBeatTypes([]);
+          p.setBeatSubdivisions({});
+          p.setSubdivisionPattern(["accent"]);
+          setBarRepeats({});
+          setLoopBlocks([]);
+          setBarLoopMode("once");
+          p.setNoteSamples({});
+          p.noteSamplesRef.current = {};
+          p.setNoteSampleNames({});
+          p.noteSampleNamesRef.current = {};
+          p.setNoteSampleSources({});
+          p.noteSampleSourcesRef.current = {};
+          p.setNoteSampleChannels({});
+          p.noteSampleChannelsRef.current = {};
+          p.setNoteSampleVolumes({});
+          p.noteSampleVolumesRef.current = {};
+          p.setNoteSampleMetroChannels({});
+          p.noteSampleMetroChannelsRef.current = {};
+          engine.setBeatsPerMeasure(0);
+          engine.setBeatTypes([]);
+          engine.setAllBeatSubdivisions({});
+          engine.clearLoopBlocks();
+          engine.clearBarRepeats();
+          engine.clearBarBpmOverrides();
+        }
       } else {
         // Snapshot current bar state before leaving.
         barConfigRef.current = {
