@@ -58,7 +58,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDeepLink } from "@/contexts/DeepLinkContext";
 import { useVoiceAssistant } from "@/contexts/VoiceAssistantContext";
 import { make_styles } from "@/app/index.styles";
-import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks, applyLoopBlocksChange } from "@/app/index.helpers";
+import { defaultBeatTypes, isSafeNoteSampleUri, createInitialDialConfig, createInitialBarConfig, hydrateDialConfigFromSettings, createShuffledIndices as createShuffledIndicesPure, applyQueueInsert, beatSubdivisionCounts as beatSubdivisionCountsPure, selectCurrentBarConfig, computeLandscapeStats, entryToBarConfig, applyEntryToEngine as applyEntryToEngineCore, migrateLayerBlocks, applyLoopBlocksChange } from "@/app/index.helpers";
 import { serializeNoteQueueEntries } from "@/lib/note-queue-helpers";
 import {
   type ActiveModal,
@@ -551,6 +551,10 @@ export function useMetronomeScreen() {
     scheduleReRenderCallbackRef,
     applyAudioSettingsCallbackRef,
     onSettingsLoaded: (settings) => {
+      // `configureEngine` restores playback from this ref, while useSettings
+      // restores the visible state separately. Keep the two snapshots aligned
+      // after an app restart so saved beat subdivisions are audible.
+      dialConfigRef.current = hydrateDialConfigFromSettings(dialConfigRef.current, settings);
       if (settings.themeColor) setThemeColor(settings.themeColor);
       if (settings.showLandscapeImage !== undefined) setShowLandscapeImage(settings.showLandscapeImage);
       if (settings.landscapeContentType) setLandscapeContentType(settings.landscapeContentType);

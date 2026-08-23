@@ -50,6 +50,30 @@ export function createInitialDialConfig(beats = 4): DialConfig {
   };
 }
 
+/**
+ * Rehydrates the beat-mode snapshot used by playback after persisted settings
+ * have loaded. The screen state and this snapshot must use the same
+ * subdivisions: playback reads the snapshot immediately before it builds a
+ * schedule.
+ */
+export function hydrateDialConfigFromSettings(
+  config: DialConfig,
+  settings: Pick<
+    { beatsPerMeasure: number; subdivisionPattern?: BeatType[]; beatSubdivisions?: Record<string, BeatType[]> },
+    "beatsPerMeasure" | "subdivisionPattern" | "beatSubdivisions"
+  >,
+): DialConfig {
+  return {
+    ...config,
+    beatsPerMeasure: settings.beatsPerMeasure,
+    beatTypes: defaultBeatTypes(settings.beatsPerMeasure),
+    subdivisionPattern: [...(settings.subdivisionPattern ?? ["accent"])],
+    beatSubdivisions: Object.fromEntries(
+      Object.entries(settings.beatSubdivisions ?? {}).map(([beat, pattern]) => [beat, [...pattern]]),
+    ),
+  };
+}
+
 export function createInitialBarConfig(beats = 4): BarConfig {
   return {
     beatsPerMeasure: beats,

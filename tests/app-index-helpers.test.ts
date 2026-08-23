@@ -7,6 +7,7 @@ import {
   isSafeNoteSampleUri,
   createInitialDialConfig,
   createInitialBarConfig,
+  hydrateDialConfigFromSettings,
   createShuffledIndices,
   adjustShuffledIndicesOnInsert,
   appendShuffledIndexOnAdd,
@@ -16,6 +17,7 @@ import {
   computeLandscapeStats,
   type CurrentBarConfigInput,
 } from "../app/index.helpers";
+import type { BeatType } from "../lib/metronome-engine";
 
 const mkPracticeLog = (timestamp: number, mode: "dial" | "bar", duration: number) => ({
   id: String(timestamp),
@@ -199,6 +201,24 @@ test("createInitialDialConfig: custom beats", () => {
   const c = createInitialDialConfig(6);
   assert.equal(c.beatsPerMeasure, 6);
   assert.equal(c.beatTypes.length, 6);
+});
+
+test("hydrateDialConfigFromSettings: restores an independent copy of each saved beat subdivision", () => {
+  const saved = {
+    beatsPerMeasure: 4,
+    subdivisionPattern: ["accent", "normal"] as BeatType[],
+    beatSubdivisions: {
+      "0": ["accent", "normal"] as BeatType[],
+      "2": ["strong", "normal", "normal"] as BeatType[],
+    },
+  };
+
+  const hydrated = hydrateDialConfigFromSettings(createInitialDialConfig(), saved);
+
+  assert.deepEqual(hydrated.beatSubdivisions, saved.beatSubdivisions);
+  assert.deepEqual(hydrated.subdivisionPattern, saved.subdivisionPattern);
+  saved.beatSubdivisions["0"][0] = "normal";
+  assert.deepEqual(hydrated.beatSubdivisions["0"], ["accent", "normal"]);
 });
 
 test("createInitialBarConfig: defaults", () => {
