@@ -31,6 +31,8 @@ export interface SwipeableBarRowProps {
   progressCurrent?: number;
   progressTotal?: number;
   bpm: number;
+  meterNumerator: number;
+  meterDenominator: 2 | 4 | 8;
   beatsPerMeasure: number;
   onPress: (beat: number) => void;
   onSwipeLeft: (beat: number) => void;
@@ -52,7 +54,7 @@ export interface SwipeableBarRowProps {
 export function SwipeableBarRow({
   beat, beatType, subdivisions, repeat, isCurrentBeat, isEditingBeat,
   blockDepth: _blockDepth, blockStart, blockEnd, blockRepeatText, symbolBadges, isPlaying,
-  progressCurrent, progressTotal, bpm, beatsPerMeasure,
+  progressCurrent, progressTotal, bpm, meterNumerator, meterDenominator, beatsPerMeasure,
   onPress, onSwipeLeft, onSwipeRight, onLongPress,
   onDragStart, onDragMove, onDragEnd, isDragging, showDropLineAbove, dragTranslateY,
   colors: C, ms,
@@ -239,8 +241,8 @@ export function SwipeableBarRow({
                 numberOfLines={1}
               >
                 {isPlaying && progressTotal && progressTotal > 1 && progressCurrent !== undefined
-                  ? `${formatBarCenterInfo(repeat, bpm, beatsPerMeasure) ?? String(Math.round(bpm))} [${progressCurrent + 1}/${progressTotal}]`
-                  : (formatBarCenterInfo(repeat, bpm, beatsPerMeasure) ?? String(Math.round(bpm)))
+                  ? `${meterNumerator}/${meterDenominator} · ${formatBarCenterInfo(repeat, bpm, beatsPerMeasure) ?? String(Math.round(bpm))} [${progressCurrent + 1}/${progressTotal}]`
+                  : `${meterNumerator}/${meterDenominator} · ${formatBarCenterInfo(repeat, bpm, beatsPerMeasure) ?? String(Math.round(bpm))}`
                 }
                 {symbolBadges.length > 0 ? `  ${symbolBadges.join(" ")}` : ""}
               </Text>

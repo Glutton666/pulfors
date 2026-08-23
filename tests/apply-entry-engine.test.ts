@@ -384,6 +384,34 @@ test("[apply-engine] denominator=4 시 바 오버라이드 BPM이 항등 변환"
   assert.equal(fake.state.bpmOverrides![0], 120, "denominator=4에서 오버라이드 BPM 항등 변환");
 });
 
+test("[apply-engine] 바별 분모는 전역 분모보다 우선해 BPM 오버라이드를 정규화", () => {
+  const entry: PracticeEntry = {
+    ...emptyEntry,
+    bpm: 120,
+    barRepeats: {
+      0: {
+        type: "count",
+        value: 1,
+        bpm: 120,
+        meterNumerator: 3,
+        meterDenominator: 8,
+      } as BarRepeat,
+      1: {
+        type: "count",
+        value: 1,
+        bpm: 120,
+        meterNumerator: 4,
+        meterDenominator: 4,
+      } as BarRepeat,
+    },
+  };
+  const fake = createFakeEngine();
+  applyEntryToEngine(fake, entry, 4);
+
+  assert.equal(fake.state.bpmOverrides![0], 60, "3/8 바는 display BPM 120 → engine BPM 60");
+  assert.equal(fake.state.bpmOverrides![1], 120, "4/4 바는 display BPM 120 → engine BPM 120");
+});
+
 test("[apply-engine] blockPlayMode 누락 시 'loop' 폴백, barRepeats 누락 시 빈 객체", () => {
   const noBlocksEntry: PracticeEntry = {
     ...emptyEntry,

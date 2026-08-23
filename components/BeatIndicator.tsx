@@ -93,6 +93,10 @@ interface BeatIndicatorProps {
   barAreaRef?: React.RefObject<View | null>;
   barRepeats: Record<number, BarRepeat>;
   onBarRepeatChange: (beat: number, repeat: BarRepeat | null) => void;
+  onBarMeterChange?: (
+    beat: number,
+    meter: { numerator: number; denominator: 2 | 4 | 8 },
+  ) => void;
   loopBlocks: LoopBlock[];
   onLoopBlocksChange: (blocks: LoopBlock[]) => void;
   barLoopMode: "loop" | "once";
@@ -171,6 +175,7 @@ export function BeatIndicator({
   barAreaRef,
   barRepeats,
   onBarRepeatChange,
+  onBarMeterChange,
   loopBlocks,
   onLoopBlocksChange,
   barLoopMode,
@@ -1304,6 +1309,7 @@ export function BeatIndicator({
         onBeatSubdivisionChange={onBeatSubdivisionChange}
         barRepeats={barRepeats}
         onBarRepeatChange={onBarRepeatChange}
+        onBarMeterChange={onBarMeterChange}
         loopBlocks={loopBlocks}
         onLoopBlocksChange={onLoopBlocksChange}
         isPlaying={isPlaying}

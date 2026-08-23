@@ -59,6 +59,9 @@ export interface LoopBlockData {
 export type BarRepeatSpec = {
   type: "count" | "duration";
   value: number;
+  /** Optional per-bar meter; omitted fields use the legacy subdivision/default meter. */
+  meterNumerator?: number;
+  meterDenominator?: 2 | 4 | 8;
   /** N회 부호: blockIteration >= voltaMax 이면 이 바를 건너뜀 */
   voltaMax?: number;
   /** 끝 부호: 마지막 외부 반복 패스(outerIter === outerRepTotal-1)에서 이 바 이후 정지 */
@@ -132,6 +135,25 @@ export function pureGetBeatDur(
   return 60000 / effectiveBpm;
 }
 
+/**
+ * Returns a whole bar's duration. A bar may contain a different number of
+ * displayed beats; legacy bars continue to derive that count from their cells.
+ */
+export function pureGetBarDur(
+  inputs: ScheduleInputs,
+  beat: number,
+  blockBpm?: number,
+): number {
+  const explicitNumerator = inputs.barRepeats.get(beat)?.meterNumerator;
+  const numerator = Math.max(
+    1,
+    // Before per-bar meter existed, a row's cells were subdivisions of one
+    // engine beat. Do not reinterpret older saved rows as a longer measure.
+    Math.min(16, Math.round(explicitNumerator ?? 1)),
+  );
+  return pureGetBeatDur(inputs, beat, blockBpm) * numerator;
+}
+
 /** 순수 함수: 한 비트에 적용될 서브디비전 패턴을 반환. */
 export function pureGetSubPattern(
   beatTypes: BeatType[],
@@ -201,7 +223,7 @@ export function pureCalcSinglePassDur(
       dur += innerPassDur * innerRepCount;
       b = innerEnd + 1;
     } else {
-      const bd = pureGetBeatDur(inputs, b, blockBpm);
+      const bd = pureGetBarDur(inputs, b, blockBpm);
       const barRep = inputs.barRepeats.get(b);
       const barRepCount = barRep
         ? (barRep.type === "count" ? Math.max(1, barRep.value) : Math.max(1, Math.round((barRep.value * 1000) / bd)))
@@ -227,8 +249,8 @@ export function pureAddBeatTicks(
   blockBpm?: number,
 ): void {
   const subPattern = pureGetSubPattern(inputs.beatTypes, inputs.beatSubdivisions, beat);
-  const beatDur = pureGetBeatDur(inputs, beat, blockBpm);
-  const subDur = beatDur / subPattern.length;
+  const barDur = pureGetBarDur(inputs, beat, blockBpm);
+  const subDur = barDur / subPattern.length;
   for (let sub = 0; sub < subPattern.length; sub++) {
     state.ticks.push({
       time: state.time,
@@ -310,7 +332,7 @@ export function pureAddBarWithRepeat(
   if (barRep?.voltaMax && barRep.voltaMax > 0 && blockIteration >= barRep.voltaMax) {
     return;
   }
-  const beatDur = pureGetBeatDur(inputs, beat, blockBpm);
+  const beatDur = pureGetBarDur(inputs, beat, blockBpm);
   if (barRep) {
     let barRepeatCount = 1;
     if (barRep.type === "count") barRepeatCount = Math.max(1, barRep.value);

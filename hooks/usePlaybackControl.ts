@@ -142,7 +142,12 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       engine.setBlockPlayMode(p.blockPlayModeRef.current);
       const bpmOverrides: Record<number, number> = {};
       for (const [key, repeat] of Object.entries(p.barConfigRef.current.barRepeats || {})) {
-        if (repeat.bpm) bpmOverrides[Number(key)] = toEngineBpm(repeat.bpm, p.beatDenominatorRef.current);
+        if (repeat.bpm) {
+          bpmOverrides[Number(key)] = toEngineBpm(
+            repeat.bpm,
+            repeat.meterDenominator ?? p.beatDenominatorRef.current,
+          );
+        }
       }
       engine.setAllBarBpmOverrides(bpmOverrides);
     } else {

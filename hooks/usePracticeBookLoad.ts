@@ -459,10 +459,10 @@ export function usePracticeBookLoad({
       engine.setAllBarRepeats(mgRepeats3 || {});
       const bpmOverridesEntry: Record<number, number> = {};
       for (const [k, v] of Object.entries(mgRepeats3 || {})) {
-        if ((v as { bpm?: number }).bpm) {
+        if (typeof (v as { bpm?: number }).bpm === "number" && (v as { bpm: number }).bpm > 0) {
           bpmOverridesEntry[Number(k)] = toEngineBpm(
             (v as { bpm: number }).bpm,
-            beatDenominatorRef.current,
+            (v as BarRepeat).meterDenominator ?? beatDenominatorRef.current,
           );
         }
       }

@@ -116,7 +116,7 @@ export function MetronomeScreenUI(props: Props) {
     barMode, barBpm, setBarBpm, barBpmRef, handleBarBpmChange, handleBarModeChange, barLoopMode, setBarLoopMode,
     blockPlayMode, setBlockPlayMode, barRepeats, loopBlocks,
     barStartBeat, setBarStartBeat,
-    handleBarRepeatChange, handleLoopBlocksChange,
+    handleBarRepeatChange, handleBarMeterChange, handleLoopBlocksChange,
     handleBarReset, handleBarQuickSave, handleResetFlash,
     handleAddBar, handleDeleteBar, handleCopyBar, handleReorderBar, handleInsertBarAfter,
     barCellOpacity, setBarCellOpacity, barRowHeight, setBarRowHeight,
@@ -1004,6 +1004,7 @@ export function MetronomeScreenUI(props: Props) {
             barAreaRef={barAreaRef}
             barRepeats={barRepeats}
             onBarRepeatChange={handleBarRepeatChange}
+            onBarMeterChange={handleBarMeterChange}
             loopBlocks={loopBlocks}
             onLoopBlocksChange={handleLoopBlocksChange}
             barLoopMode={barLoopMode}

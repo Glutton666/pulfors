@@ -177,6 +177,10 @@ export interface UseBarModeResult {
   /** Sets bar-mode BPM, updates engine and notifies parent via onBarBpmChange. */
   handleBarBpmChange: (newBpm: number) => void;
   handleBarRepeatChange: (beat: number, repeat: BarRepeat | null) => void;
+  handleBarMeterChange: (
+    beat: number,
+    meter: { numerator: number; denominator: 2 | 4 | 8 },
+  ) => void;
   handleLoopBlocksChange: (blocks: LoopBlock[]) => void;
   handleBarReset: () => void;
   handleBarQuickSave: () => Promise<boolean>;
@@ -390,7 +394,10 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
         p.engineRef.current?.setBarBpmOverride(
           beat,
           repeat?.bpm != null
-            ? toEngineBpm(repeat.bpm, p.beatDenominatorRef.current)
+            ? toEngineBpm(
+                repeat.bpm,
+                repeat.meterDenominator ?? p.beatDenominatorRef.current,
+              )
             : null,
         );
         return next;
@@ -398,6 +405,22 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
       p.scheduleReRender();
     },
     [p.scheduleReRender],
+  );
+
+  const handleBarMeterChange = useCallback(
+    (
+      beat: number,
+      meter: { numerator: number; denominator: 2 | 4 | 8 },
+    ) => {
+      const existing = barRepeats[beat] ?? { type: "count" as const, value: 1 };
+      const next: BarRepeat = {
+        ...existing,
+        meterNumerator: Math.max(1, Math.min(16, Math.round(meter.numerator))),
+        meterDenominator: meter.denominator,
+      };
+      handleBarRepeatChange(beat, next);
+    },
+    [barRepeats, handleBarRepeatChange],
   );
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -907,6 +930,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
     handleBarModeChange,
     handleBarBpmChange,
     handleBarRepeatChange,
+    handleBarMeterChange,
     handleLoopBlocksChange,
     handleBarReset,
     handleBarQuickSave,

@@ -339,6 +339,9 @@ export interface BarRepeatEntry {
   value: number;
   /** Optional per-bar BPM override picked up by engine.setAllBarBpmOverrides. */
   bpm?: number;
+  /** Optional per-bar meter. Missing values preserve legacy default behavior. */
+  meterNumerator?: number;
+  meterDenominator?: 2 | 4 | 8;
   /** N회 부호: 최대 N번까지만 재생, 소진 후 건너뜀 */
   voltaMax?: number;
   /** 끝 부호: 모든 N회 조건 소진 시 정지 지점 */

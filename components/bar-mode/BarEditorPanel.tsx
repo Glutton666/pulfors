@@ -53,6 +53,10 @@ export interface BarEditorPanelProps {
   beatSubdivisions: Record<string, BeatType[]>;
   // Callbacks to parent
   onBarRepeatChange: (beat: number, repeat: BarRepeat | null) => void;
+  onBarMeterChange?: (
+    beat: number,
+    meter: { numerator: number; denominator: 2 | 4 | 8 },
+  ) => void;
   onDeleteBar?: (beatIndex: number) => void;
   onBarStartBeatSelect: (beat: number | null) => void;
   onAddBar: (draftRepeat?: BarRepeat) => void;
@@ -92,7 +96,7 @@ const MAX_LAYERS = 6;
 
 export function BarEditorPanel({
   editingBeat, barRepeats, isPlaying, beatsPerMeasure, beatSubdivisions,
-  onBarRepeatChange, onDeleteBar, onBarStartBeatSelect, onAddBar, onBarQuickSave,
+  onBarRepeatChange, onBarMeterChange, onDeleteBar, onBarStartBeatSelect, onAddBar, onBarQuickSave,
   bpm, onBpmChange, beatDenominator = 4, onDenominatorCycle, isPreparing, onTogglePlay,
   barLoopMode, onBarLoopModeChange, blockPlayMode, onBlockPlayModeChange,
   loopBlocks, onLoopBlocksChange,
@@ -203,7 +207,47 @@ export function BarEditorPanel({
     } else {
       setRepType("count"); setRepCount(1); setRepMin(0); setRepSec(30); setRepBpm(null);
     }
-  }, [editingBeat]); // barRepeats intentionally omitted
+  }, [editingBeat, barRepeats]);
+
+  const cycleSelectedBarDenominator = useCallback(() => {
+    if (isPlaying || editingBeat === null) return;
+    const current = barRepeats[editingBeat]?.meterDenominator ?? beatDenominator;
+    const next: 2 | 4 | 8 = current === 4 ? 8 : current === 8 ? 2 : 4;
+    onBarMeterChange?.(editingBeat, {
+      numerator: editingSubdivisionCount,
+      denominator: next,
+    });
+  }, [
+    barRepeats,
+    beatDenominator,
+    editingBeat,
+    editingSubdivisionCount,
+    isPlaying,
+    onBarMeterChange,
+  ]);
+
+  // Once a bar has an explicit meter, its visual cells are the numerator
+  // editor. Keep the stored meter in lockstep when that cell pattern changes.
+  useEffect(() => {
+    if (
+      editingBeat === null ||
+      !editingRepeat?.meterNumerator ||
+      editingRepeat.meterNumerator === editingSubdivisionCount
+    ) {
+      return;
+    }
+    onBarMeterChange?.(editingBeat, {
+      numerator: editingSubdivisionCount,
+      denominator: editingRepeat.meterDenominator ?? beatDenominator,
+    });
+  }, [
+    beatDenominator,
+    editingBeat,
+    editingRepeat?.meterDenominator,
+    editingRepeat?.meterNumerator,
+    editingSubdivisionCount,
+    onBarMeterChange,
+  ]);
 
   // ─── commitRepeat ─────────────────────────────────────────────────────────
 
@@ -712,7 +756,11 @@ export function BarEditorPanel({
               <Pressable
                 onLongPress={() => {
                   if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                  onDenominatorCycle?.();
+                  if (editingBeat !== null && onBarMeterChange) {
+                    cycleSelectedBarDenominator();
+                  } else {
+                    onDenominatorCycle?.();
+                  }
                 }}
                 delayLongPress={500}
                 disabled={isPlaying}
@@ -724,7 +772,7 @@ export function BarEditorPanel({
                 </Text>
                 <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(36, 0.4), color: C.textTertiary }}>/</Text>
                 <Text style={{ fontFamily: "SpaceGrotesk_700Bold", fontSize: ms(36, 0.4), color: isPlaying ? C.textTertiary : C.accent }}>
-                  {beatDenominator}
+                  {editingRepeat?.meterDenominator ?? beatDenominator}
                 </Text>
               </Pressable>
             </View>

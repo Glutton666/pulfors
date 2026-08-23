@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   pureGetBeatDur,
+  pureGetBarDur,
   pureGetSubPattern,
   pureFindInnerBlock,
   pureCalcSinglePassDur,
@@ -73,6 +74,22 @@ test("pureGetBeatDur: blockBpm 인자가 기본 bpm을 오버라이드", () => {
 test("pureGetBeatDur: barBpmOverrides가 blockBpm보다 우선", () => {
   const inputs = makeInputs({ barBpmOverrides: new Map([[2, 240]]) });
   assert.equal(pureGetBeatDur(inputs, 2, 60), 250);
+});
+
+test("pureGetBarDur: 바별 분자는 같은 BPM에서도 각 바의 전체 길이를 독립적으로 정한다", () => {
+  const inputs = makeInputs({
+    beatTypes: ["accent", "accent"],
+    beatSubdivisions: new Map([
+      [0, ["accent", "normal", "normal"]],
+      [1, ["accent", "normal", "normal", "normal"]],
+    ]),
+    barRepeats: new Map([
+      [0, { type: "count", value: 1, meterNumerator: 3, meterDenominator: 4 }],
+      [1, { type: "count", value: 1, meterNumerator: 4, meterDenominator: 4 }],
+    ]),
+  });
+  assert.equal(pureGetBarDur(inputs, 0), 1500);
+  assert.equal(pureGetBarDur(inputs, 1), 2000);
 });
 
 test("pureGetSubPattern: 커스텀 없으면 비트 타입 단일 배열", () => {

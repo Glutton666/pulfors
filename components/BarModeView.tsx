@@ -45,6 +45,10 @@ export interface BarModeViewProps {
   onBeatSubdivisionChange: (beatIndex: number, pattern: BeatType[] | null) => void;
   barRepeats: Record<number, BarRepeat>;
   onBarRepeatChange: (beat: number, repeat: BarRepeat | null) => void;
+  onBarMeterChange?: (
+    beat: number,
+    meter: { numerator: number; denominator: 2 | 4 | 8 },
+  ) => void;
   loopBlocks: LoopBlock[];
   onLoopBlocksChange: (blocks: LoopBlock[]) => void;
   isPlaying: boolean;
@@ -101,7 +105,7 @@ export interface BarModeViewProps {
 
 export function BarModeView({
   beatsPerMeasure, beatTypes, beatSubdivisions,
-  barRepeats, onBarRepeatChange, loopBlocks, onLoopBlocksChange,
+  barRepeats, onBarRepeatChange, onBarMeterChange, loopBlocks, onLoopBlocksChange,
   isPlaying, isPreparing, currentBeat, onTogglePlay, barLoopMode,
   onBarLoopModeChange, blockPlayMode, onBlockPlayModeChange, progressInfo,
   barStartBeat, onBarStartBeatSelect, onAddBar, onDeleteBar,
@@ -550,6 +554,8 @@ export function BarModeView({
               progressCurrent={progressInfo?.beat === beat ? progressInfo.barRepeatCurrent : undefined}
               progressTotal={progressInfo?.beat === beat ? progressInfo.barRepeatTotal : undefined}
               bpm={rep?.bpm ?? bpm ?? 120}
+              meterNumerator={rep?.meterNumerator ?? (subs.length || 1)}
+              meterDenominator={rep?.meterDenominator ?? beatDenominator}
               beatsPerMeasure={beatsPerMeasure}
               onPress={handleBarRowPress}
               onSwipeLeft={handleSwipeLeft}
@@ -594,6 +600,7 @@ export function BarModeView({
         beatsPerMeasure={beatsPerMeasure}
         beatSubdivisions={beatSubdivisions}
         onBarRepeatChange={onBarRepeatChange}
+        onBarMeterChange={onBarMeterChange}
         onDeleteBar={onDeleteBar}
         onBarStartBeatSelect={onBarStartBeatSelect}
         onAddBar={onAddBar ?? (() => {})}

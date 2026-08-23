@@ -161,7 +161,12 @@ export function applyEntryToEngine(engine: EntryEngineSetters, entry: PracticeEn
   // 변환해 엔진에 넘긴다. 미변환 시 6/8 등 비4/4 박자에서 2배 속도 차이가 발생한다.
   const bpmOverrides: Record<number, number> = {};
   for (const [k, v] of Object.entries(migratedRepeats)) {
-    if (typeof v.bpm === "number" && v.bpm > 0) bpmOverrides[Number(k)] = toEngineBpm(v.bpm, denominator);
+    if (typeof v.bpm === "number" && v.bpm > 0) {
+      bpmOverrides[Number(k)] = toEngineBpm(
+        v.bpm,
+        v.meterDenominator ?? denominator,
+      );
+    }
   }
   engine.setAllBarBpmOverrides(bpmOverrides);
 }
