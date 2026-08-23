@@ -311,7 +311,16 @@ export function useMetronomeScreen() {
 
   const [isDragging, setIsDragging] = useState(false);
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
+  const [dragPattern, setDragPattern] = useState<BeatType[] | null>(null);
   const [dropTargetBeat, setDropTargetBeat] = useState<number | null>(null);
+  const dragModeRef = useRef<"bar" | "beat" | null>(null);
+  const clearDragState = useCallback(() => {
+    dragModeRef.current = null;
+    setIsDragging(false);
+    setDragPattern(null);
+    setDragPos({ x: 0, y: 0 });
+    setDropTargetBeat(null);
+  }, []);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
   const isPreparingRef = useRef(false);
@@ -2362,6 +2371,9 @@ export function useMetronomeScreen() {
   );
 
   const handleDragStart = useCallback(() => {
+    dragModeRef.current = barMode ? "bar" : "beat";
+    setDragPattern([...subdivisionPatternRef.current]);
+    setDragPos({ x: 0, y: 0 });
     setIsDragging(true);
     if (barMode) {
       measureBarArea();
@@ -2381,6 +2393,22 @@ export function useMetronomeScreen() {
     },
     [findDropTarget]
   );
+
+  const handleDragCancel = useCallback(() => {
+    clearDragState();
+  }, [clearDragState]);
+
+  useEffect(() => {
+    if (isPlaying && isDragging) {
+      clearDragState();
+    }
+  }, [isPlaying, isDragging, clearDragState]);
+
+  useEffect(() => {
+    if (dragModeRef.current === "bar" && !barMode && isDragging) {
+      clearDragState();
+    }
+  }, [barMode, isDragging, clearDragState]);
 
   const applyToAllBeats = useCallback(
     (pattern: BeatType[]) => {
@@ -2424,8 +2452,7 @@ export function useMetronomeScreen() {
   const handleDragEnd = useCallback(
     (pageX: number, pageY: number) => {
       const target = findDropTarget(pageX, pageY);
-      setIsDragging(false);
-      setDropTargetBeat(null);
+      clearDragState();
 
       if (target === -1) {
         if (Platform.OS !== "web") {
@@ -2482,7 +2509,7 @@ export function useMetronomeScreen() {
         persistSettings({ beatSubdivisions: newSubs });
       }
     },
-    [findDropTarget, subdivisionPattern, beatSubdivisions, persistSettings, applyToAllBeats]
+    [findDropTarget, subdivisionPattern, beatSubdivisions, persistSettings, applyToAllBeats, clearDragState]
   );
 
   // handleBarRepeatChange / handleLoopBlocksChange → useBarMode
@@ -3221,11 +3248,13 @@ export function useMetronomeScreen() {
     setBeatDirection,
     isDragging,
     dragPos,
+    dragPattern,
     dropTargetBeat,
     handlePatternChange,
     handleDragStart,
     handleDragMove,
     handleDragEnd,
+    handleDragCancel,
     showSubdivisionLongPressHint,
     setShowSubdivisionLongPressHint,
     // Modal state

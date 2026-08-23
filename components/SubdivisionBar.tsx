@@ -41,6 +41,7 @@ interface SubdivisionBarProps {
   onDragStart: () => void;
   onDragMove: (pageX: number, pageY: number) => void;
   onDragEnd: (pageX: number, pageY: number) => void;
+  onDragCancel?: () => void;
   onReset: () => void;
   isPlaying?: boolean;
   activeSubNote?: number;
@@ -74,6 +75,7 @@ export function SubdivisionBar({
   onDragStart,
   onDragMove,
   onDragEnd,
+  onDragCancel,
   onReset,
   isPlaying = false,
   activeSubNote = -1,
@@ -94,6 +96,7 @@ export function SubdivisionBar({
   const onDragStartRef = useRef(onDragStart);
   const onDragMoveRef = useRef(onDragMove);
   const onDragEndRef = useRef(onDragEnd);
+  const onDragCancelRef = useRef(onDragCancel);
 
   const shakeTrackerRef = useRef(createShakeTracker());
 
@@ -118,6 +121,9 @@ export function SubdivisionBar({
   useEffect(() => {
     onDragEndRef.current = onDragEnd;
   }, [onDragEnd]);
+  useEffect(() => {
+    onDragCancelRef.current = onDragCancel;
+  }, [onDragCancel]);
 
   const cycleType = useCallback(
     (index: number) => {
@@ -260,7 +266,7 @@ export function SubdivisionBar({
       onPanResponderTerminate: (e) => {
         if (isDraggingUpRef.current) {
           isDraggingUpRef.current = false;
-          onDragEndRef.current(e.nativeEvent.pageX, e.nativeEvent.pageY);
+        onDragCancelRef.current?.();
         }
         horizontalTriggeredRef.current = false;
         resetShakeTracker(shakeTrackerRef.current);
@@ -338,11 +344,7 @@ export function SubdivisionBar({
       }
     };
 
-    const handleUp = (e: PointerEvent) => {
-      const g = webGestureRef.current;
-      if (g.isDraggingUp) {
-        onDragEndRef.current(e.clientX, e.clientY);
-      }
+    const resetWebGesture = () => {
       webGestureRef.current = {
         isDown: false,
         startX: 0,
@@ -353,15 +355,48 @@ export function SubdivisionBar({
       resetShakeTracker(shakeTrackerRef.current);
     };
 
+    const handleUp = (e: PointerEvent) => {
+      const g = webGestureRef.current;
+      if (g.isDraggingUp) {
+        onDragEndRef.current(e.clientX, e.clientY);
+      }
+      resetWebGesture();
+    };
+
+    const handleCancel = () => {
+      const g = webGestureRef.current;
+      if (g.isDraggingUp) {
+        onDragCancelRef.current?.();
+      }
+      resetWebGesture();
+    };
+
     document.addEventListener("pointerdown", handleDown, true);
     document.addEventListener("pointermove", handleMove);
     document.addEventListener("pointerup", handleUp);
+    document.addEventListener("pointercancel", handleCancel);
+    document.addEventListener("lostpointercapture", handleCancel);
 
     return () => {
       document.removeEventListener("pointerdown", handleDown, true);
       document.removeEventListener("pointermove", handleMove);
       document.removeEventListener("pointerup", handleUp);
+      document.removeEventListener("pointercancel", handleCancel);
+      document.removeEventListener("lostpointercapture", handleCancel);
+      if (webGestureRef.current.isDraggingUp) {
+        onDragCancelRef.current?.();
+      }
+      resetWebGesture();
     };
+  }, []);
+
+  useEffect(() => () => {
+    if (isDraggingUpRef.current) {
+      onDragCancelRef.current?.();
+    }
+    isDraggingUpRef.current = false;
+    horizontalTriggeredRef.current = false;
+    resetShakeTracker(shakeTrackerRef.current);
   }, []);
 
   const shakeAnimStyle = useAnimatedStyle(() => ({
@@ -552,9 +587,13 @@ export function DragGhost({
   const styles = useMemo(() => make_styles(GC, S), [GC, S]);
   return (
     <View
+      testID="subdivision-drag-ghost"
       style={[
         styles.ghost,
         {
+          // pageX/pageY are viewport coordinates on web. A fixed overlay
+          // keeps the ghost aligned while the bar list or drawer scrolls.
+          position: Platform.OS === "web" ? ("fixed" as "absolute") : "absolute",
           left: x - (pattern.length * (18 + 2)) / 2,
           top: y - 12,
         },

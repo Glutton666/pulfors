@@ -88,7 +88,8 @@ export function MetronomeScreenUI(props: Props) {
     handleBeatSubdivisionChange, handleBeatDenominatorCycle, handleTapTempo,
     handleReset, startMetronome, handleTimerExpired,
     beatSubdivisionCounts, beatDirection, setBeatDirection,
-    isDragging, dragPos, dropTargetBeat,
+    isDragging, dragPos, dragPattern, dropTargetBeat,
+    handleDragCancel,
     handlePatternChange, handleDragStart, handleDragMove, handleDragEnd,
     showSubdivisionLongPressHint, setShowSubdivisionLongPressHint,
     activeModal, setActiveModal, openExclusive,
@@ -1054,6 +1055,7 @@ export function MetronomeScreenUI(props: Props) {
                 onDragStart={handleDragStart}
                 onDragMove={handleDragMove}
                 onDragEnd={handleDragEnd}
+                onDragCancel={handleDragCancel}
                 onReset={handleReset}
                 isPlaying={isPlaying}
                 activeSubNote={activeSubNote}
@@ -1131,6 +1133,7 @@ export function MetronomeScreenUI(props: Props) {
               onDragStart={handleDragStart}
               onDragMove={handleDragMove}
               onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
               onReset={handleReset}
               isPlaying={isPlaying}
               activeSubNote={activeSubNote}
@@ -1309,6 +1312,7 @@ export function MetronomeScreenUI(props: Props) {
               onDragStart={handleDragStart}
               onDragMove={handleDragMove}
               onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
               onReset={handleReset}
               isPlaying={isPlaying}
               activeSubNote={activeSubNote}
@@ -1394,9 +1398,9 @@ export function MetronomeScreenUI(props: Props) {
         />
       )}
 
-      {isDragging && !noteMode && (
+      {isDragging && dragPattern && dragPattern.length > 0 && !noteMode && (
         <DragGhost
-          pattern={subdivisionPattern}
+          pattern={dragPattern}
           x={dragPos.x}
           y={dragPos.y}
         />
@@ -1499,6 +1503,7 @@ export function MetronomeScreenUI(props: Props) {
               onDragStart={handleDragStart}
               onDragMove={handleDragMove}
               onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
               onReset={handleReset}
               isPlaying={isPlaying}
               activeSubNote={activeSubNote}
