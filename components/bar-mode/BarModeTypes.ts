@@ -108,6 +108,14 @@ export function formatBarCenterInfo(
   }
 }
 
+export function getBarSampleCells(
+  beat: number,
+  cellCount: number,
+  samples?: Record<string, string>,
+): boolean[] {
+  const count = Math.max(1, Math.floor(cellCount));
+  return Array.from({ length: count }, (_, cell) => Boolean(samples?.[`${beat}-${cell}`]));
+}
 export function nextJumpPairId(barRepeats: Record<number, BarRepeat>): number {
   let max = 0;
   for (const r of Object.values(barRepeats)) {

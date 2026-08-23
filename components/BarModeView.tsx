@@ -24,6 +24,7 @@ import { FontSize, Spacing } from "@/constants/tokens";
 import {
   BAR_ROW_H,
   SYMBOL_INFO,
+  getBarSampleCells,
   nextJumpPairId,
   type BarModeColors,
   type SymbolType,
@@ -571,9 +572,12 @@ export function BarModeView({
               ms={ms}
               rowHeight={rowHeight}
               cellOverlayOpacity={cellOverlayOpacity}
-              sampleCells={Array.from(
-                { length: (beatSubdivisions[String(beat)]?.length || 1) },
-                (_, cell) => Boolean(noteSamples?.[`${beat}-${cell}`]),
+              sampleBadgeLabel={t("barModeView", "sampleBadge")}
+              sampleBadgeAccessibilityLabel={t("barModeView", "sampleBadgeAccessibility").replace("{{n}}", String(beat + 1))}
+              sampleCells={getBarSampleCells(
+                beat,
+                beatSubdivisions[String(beat)]?.length || 1,
+                noteSamples,
               )}
             />
           );

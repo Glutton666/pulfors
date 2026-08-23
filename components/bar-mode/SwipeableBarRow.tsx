@@ -49,6 +49,8 @@ export interface SwipeableBarRowProps {
   rowHeight?: number;
   cellOverlayOpacity?: number;
   sampleCells?: boolean[];
+  sampleBadgeLabel?: string;
+  sampleBadgeAccessibilityLabel?: string;
 }
 
 export function SwipeableBarRow({
@@ -59,10 +61,16 @@ export function SwipeableBarRow({
   onDragStart, onDragMove, onDragEnd, isDragging, showDropLineAbove, dragTranslateY,
   colors: C, ms,
   rowHeight, cellOverlayOpacity: _cellOverlayOpacity, sampleCells = [],
+  sampleBadgeLabel = "Sample",
+  sampleBadgeAccessibilityLabel,
 }: SwipeableBarRowProps) {
   const translateX = useRef(new Animated.Value(0)).current;
   const actionTriggered = useRef(false);
+  const hasSamples = sampleCells.some(Boolean);
   const sampleCount = sampleCells.filter(Boolean).length;
+  const rowAccessibilityLabel = hasSamples
+    ? (sampleBadgeAccessibilityLabel ?? `Bar ${beat + 1}, audio sample attached`)
+    : `Bar ${beat + 1}`;
 
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => false,
@@ -146,7 +154,7 @@ export function SwipeableBarRow({
           onPress={() => { if (!isPlaying) onPress(beat); }}
           onLongPress={() => { if (!isPlaying) onLongPress(beat); }}
           delayLongPress={500}
-          accessibilityLabel={`Bar ${beat + 1}${sampleCells.some(Boolean) ? ", audio sample attached" : ""}`}
+          accessibilityLabel={rowAccessibilityLabel}
           style={[
             styles.barRow,
             {
@@ -274,7 +282,11 @@ export function SwipeableBarRow({
 
           {sampleCount > 0 && (
             <View
+              testID={`bar-sample-badge-${beat}`}
               pointerEvents="none"
+              accessible
+              accessibilityRole="image"
+              accessibilityLabel={sampleBadgeAccessibilityLabel ?? `${sampleBadgeLabel} attached to bar ${beat + 1}`}
               style={[
                 styles.sampleBadge,
                 {
@@ -324,6 +336,7 @@ const styles = StyleSheet.create({
   },
   barRowCells: {
     flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     marginHorizontal: 2,

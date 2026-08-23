@@ -5,11 +5,21 @@ import {
   clampBarBpm,
   clampBarRepeatCount,
   formatBarDuration,
+  getBarSampleCells,
   getBarRepeatCountHoldIntervalMs,
   splitBarDuration,
 } from "../components/bar-mode/BarModeTypes";
 
 describe("bar editor control values", () => {
+  test("sample cells expose one flag per bar cell and stay false without samples", () => {
+    assert.deepEqual(
+      getBarSampleCells(2, 3, { "2-0": "file:///kick.wav", "2-2": "file:///snare.wav" }),
+      [true, false, true],
+    );
+    assert.deepEqual(getBarSampleCells(1, 0, { "1-0": "" }), [false]);
+    assert.deepEqual(getBarSampleCells(1, 2), [false, false]);
+  });
+
   test("duration always displays as zero-padded mm:ss", () => {
     assert.equal(formatBarDuration(30), "00:30");
     assert.equal(formatBarDuration(65), "01:05");

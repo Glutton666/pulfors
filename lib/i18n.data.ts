@@ -914,6 +914,8 @@ export const translations = {
     symbolJumpTo:       { ko: "←N 목적지", en: "←N Target" },
     symbolVolta:        { ko: "N회", en: "N×" },
     symbolEnd:          { ko: "■ 끝", en: "■ End" },
+    sampleBadge:        { ko: "샘플", en: "Sample" },
+    sampleBadgeAccessibility: { ko: "바 {{n}}에 오디오 샘플 연결됨", en: "Audio sample attached to bar {{n}}" },
     ssClassic:          { ko: "클래식", en: "Classic" },
     ssWoodblock:        { ko: "우드블록", en: "Woodblock" },
     ssCowbell:          { ko: "카우벨", en: "Cowbell" },
