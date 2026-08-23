@@ -572,8 +572,6 @@ export function BarModeView({
               ms={ms}
               rowHeight={rowHeight}
               cellOverlayOpacity={cellOverlayOpacity}
-              sampleBadgeLabel={t("barModeView", "sampleBadge")}
-              sampleBadgeAccessibilityLabel={t("barModeView", "sampleBadgeAccessibility").replace("{{n}}", String(beat + 1))}
               sampleCells={getBarSampleCells(
                 beat,
                 beatSubdivisions[String(beat)]?.length || 1,

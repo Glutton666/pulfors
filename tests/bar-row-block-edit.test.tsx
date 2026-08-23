@@ -62,4 +62,39 @@ describe("SwipeableBarRow block editing", () => {
     expect(onEditBlock).toHaveBeenCalledWith(3);
     expect(onPress).toHaveBeenCalledTimes(1);
   });
+
+  it("marks the exact sampled notes instead of rendering a row-level sample badge", () => {
+    const { getByTestId, queryByTestId } = render(
+      <SwipeableBarRow
+        beat={1}
+        beatType="normal"
+        subdivisions={["normal", "normal", "normal", "normal"]}
+        repeat={null}
+        isCurrentBeat={false}
+        isEditingBeat={false}
+        blockDepth={0}
+        blockStart={false}
+        blockEnd={false}
+        symbolBadges={[]}
+        isPlaying={false}
+        bpm={120}
+        meterNumerator={4}
+        meterDenominator={4}
+        beatsPerMeasure={4}
+        onPress={jest.fn()}
+        onSwipeLeft={jest.fn()}
+        onSwipeRight={jest.fn()}
+        onLongPress={jest.fn()}
+        colors={colors}
+        ms={(value) => value}
+        sampleCells={[false, true, false, true]}
+      />,
+    );
+
+    expect(getByTestId("bar-sample-cell-1-1")).toBeTruthy();
+    expect(getByTestId("bar-sample-cell-1-3")).toBeTruthy();
+    expect(queryByTestId("bar-sample-cell-1-0")).toBeNull();
+    expect(queryByTestId("bar-sample-cell-1-2")).toBeNull();
+    expect(queryByTestId("bar-sample-badge-1")).toBeNull();
+  });
 });

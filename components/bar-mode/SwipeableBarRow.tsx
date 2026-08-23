@@ -51,8 +51,6 @@ export interface SwipeableBarRowProps {
   rowHeight?: number;
   cellOverlayOpacity?: number;
   sampleCells?: boolean[];
-  sampleBadgeLabel?: string;
-  sampleBadgeAccessibilityLabel?: string;
 }
 
 export function SwipeableBarRow({
@@ -63,15 +61,15 @@ export function SwipeableBarRow({
   onDragStart, onDragMove, onDragEnd, isDragging, showDropLineAbove, dragTranslateY,
   colors: C, ms,
   rowHeight, cellOverlayOpacity: _cellOverlayOpacity, sampleCells = [],
-  sampleBadgeLabel = "Sample",
-  sampleBadgeAccessibilityLabel,
 }: SwipeableBarRowProps) {
   const translateX = useRef(new Animated.Value(0)).current;
   const actionTriggered = useRef(false);
-  const hasSamples = sampleCells.some(Boolean);
-  const sampleCount = sampleCells.filter(Boolean).length;
-  const rowAccessibilityLabel = hasSamples
-    ? (sampleBadgeAccessibilityLabel ?? `Bar ${beat + 1}, audio sample attached`)
+  const sampleNoteIndexes = sampleCells.reduce<number[]>((indexes, hasSample, index) => {
+    if (hasSample) indexes.push(index + 1);
+    return indexes;
+  }, []);
+  const rowAccessibilityLabel = sampleNoteIndexes.length > 0
+    ? `Bar ${beat + 1}, audio samples on notes ${sampleNoteIndexes.join(", ")}`
     : `Bar ${beat + 1}`;
 
   const panResponder = useMemo(() => PanResponder.create({
@@ -211,9 +209,14 @@ export function SwipeableBarRow({
             {cells.map((ct, ci) => {
               const isLast = ci === cells.length - 1;
               const isActiveCell = isCurrentBeat;
+              const hasSample = Boolean(sampleCells[ci]);
               return (
                 <View
                   key={ci}
+                  testID={hasSample ? `bar-sample-cell-${beat}-${ci}` : `bar-cell-${beat}-${ci}`}
+                  accessible={hasSample}
+                  accessibilityRole={hasSample ? "image" : undefined}
+                  accessibilityLabel={hasSample ? `Sample on note ${ci + 1} of bar ${beat + 1}` : undefined}
                   style={[
                     styles.barMiniCell,
                     !isLast && { borderRightWidth: 0.5, borderRightColor: C.overlay06 },
@@ -225,6 +228,13 @@ export function SwipeableBarRow({
                         : (isActiveCell ? C.textSecondary : C.textTertiary + "60"),
                       borderWidth: ct === "mute" ? 1 : 0,
                       borderColor: ct === "mute" ? C.textTertiary + "80" : "transparent",
+                    },
+                    hasSample && {
+                      // Keep the note readable while making the sample's
+                      // exact subdivision unmistakable at a glance.
+                      backgroundColor: C.accent + (isActiveCell ? "B0" : "70"),
+                      borderTopWidth: 3,
+                      borderTopColor: C.accent,
                     },
                   ]}
                 >
@@ -299,38 +309,6 @@ export function SwipeableBarRow({
             </Pressable>
           )}
 
-          {sampleCount > 0 && (
-            <View
-              testID={`bar-sample-badge-${beat}`}
-              pointerEvents="none"
-              accessible
-              accessibilityRole="image"
-              accessibilityLabel={sampleBadgeAccessibilityLabel ?? `${sampleBadgeLabel} attached to bar ${beat + 1}`}
-              style={[
-                styles.sampleBadge,
-                {
-                  backgroundColor: C.backgroundSecondary,
-                  borderLeftColor: C.overlay10,
-                },
-              ]}
-            >
-              <Ionicons
-                name="musical-note"
-                size={ms(18, 0.45)}
-                color={C.accent}
-              />
-              {sampleCount > 1 && (
-                <Text
-                  style={[
-                    styles.sampleBadgeCount,
-                    { color: C.accent, fontSize: ms(10, 0.4) },
-                  ]}
-                >
-                  ×{sampleCount}
-                </Text>
-              )}
-            </View>
-          )}
         </Pressable>
       </Animated.View>
     </View>
@@ -394,18 +372,5 @@ const styles = StyleSheet.create({
   barCenterInfo: {
     fontFamily: "SpaceGrotesk_600SemiBold",
     flexShrink: 1,
-  },
-  sampleBadge: {
-    alignSelf: "stretch",
-    minWidth: 34,
-    paddingHorizontal: 7,
-    borderLeftWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 1,
-  },
-  sampleBadgeCount: {
-    fontFamily: "SpaceGrotesk_700Bold",
-    includeFontPadding: false,
   },
 });
