@@ -88,6 +88,7 @@ import {
   prepareEasterEggEngine,
   type EasterEggBarEngineSnapshot,
 } from "@/lib/easter-egg-engine-session";
+import { applyDialConfigToEngine } from "@/lib/dial-engine-boundary";
 import { useFadeOutSession } from "@/hooks/useFadeOutSession";
 import { usePermissionRecoveryToast } from "@/hooks/usePermissionRecoveryToast";
 import { useBeatQuickSave } from "@/hooks/useBeatQuickSave";
@@ -1370,6 +1371,10 @@ export function useMetronomeScreen() {
       tuningGuideOnSelectRef.current = null;
 
       setBpm(120);
+      bpmRef.current = 120;
+      setHalfTime(false);
+      setBeatDenominator(4);
+      beatDenominatorRef.current = 4;
       setBeatsPerMeasure(4);
       setBeatTypes(defaultBeatTypes(4));
       setSubdivisionPattern(["accent"]);
@@ -1384,6 +1389,7 @@ export function useMetronomeScreen() {
         beatsPerMeasure: 4,
         beatTypes: defaultBeatTypes(4),
         beatSubdivisions: {},
+        subdivisionPattern: ["accent"],
         noteSamples: {},
         noteSampleNames: {},
         noteSampleSources: {},
@@ -1393,6 +1399,7 @@ export function useMetronomeScreen() {
         beatsPerMeasure: 4,
         beatTypes: defaultBeatTypes(4),
         beatSubdivisions: {},
+        subdivisionPattern: ["accent"],
         barRepeats: {},
         loopBlocks: [],
         barClockMode: "stopwatch",
@@ -1438,12 +1445,11 @@ export function useMetronomeScreen() {
 
       if (engine) {
         engine.setBpm(120);
-        engine.setBeatsPerMeasure(4);
+        engine.setHalfTime(false);
         engine.setHapticMode("all");
         engine.setAudioOffsetMs(0);
-        engine.setBeatTypes(defaultBeatTypes(4));
-        engine.setAllBeatSubdivisions({});
-        engine.setAllBarRepeats({});
+        applyDialConfigToEngine(engine, dialConfigRef.current);
+        engine.flushSchedule();
       }
 
       setThemeColor("gold");
@@ -2095,17 +2101,22 @@ export function useMetronomeScreen() {
   const handlePatternChange = useCallback(
     (pattern: BeatType[]) => {
       setSubdivisionPattern(pattern);
-      if (barModeRef.current && barStartBeatRef.current !== null) {
+      if (barModeRef.current) {
+        barConfigRef.current.subdivisionPattern = [...pattern];
         const target = barStartBeatRef.current;
-        setBeatSubdivisions((prev) => {
-          const newSubs = { ...prev, [String(target)]: [...pattern] };
-          barConfigRef.current.beatSubdivisions = newSubs;
-          return newSubs;
-        });
-        engineRef.current?.setBeatSubdivision(target, pattern);
-      } else {
-        persistSettings({ subdivisionPattern: pattern });
+        if (target !== null) {
+          setBeatSubdivisions((prev) => {
+            const newSubs = { ...prev, [String(target)]: [...pattern] };
+            barConfigRef.current.beatSubdivisions = newSubs;
+            return newSubs;
+          });
+          engineRef.current?.setBeatSubdivision(target, pattern);
+        }
+        return;
       }
+
+      dialConfigRef.current.subdivisionPattern = [...pattern];
+      persistSettings({ subdivisionPattern: pattern });
     },
     [persistSettings]
   );
@@ -2132,14 +2143,22 @@ export function useMetronomeScreen() {
     setSubdivisionPattern(["accent"]);
     const emptySubs: Record<string, BeatType[]> = {};
     setBeatSubdivisions(emptySubs);
-    dialConfigRef.current.beatSubdivisions = {};
+    if (barModeRef.current) {
+      barConfigRef.current.beatSubdivisions = {};
+      barConfigRef.current.subdivisionPattern = ["accent"];
+    } else {
+      dialConfigRef.current.beatSubdivisions = {};
+      dialConfigRef.current.subdivisionPattern = ["accent"];
+    }
     for (let i = 0; i < beatsPerMeasure; i++) {
       engineRef.current?.setBeatSubdivision(i, null);
     }
-    persistSettings({
-      subdivisionPattern: ["accent"],
-      beatSubdivisions: emptySubs,
-    });
+    if (!barModeRef.current) {
+      persistSettings({
+        subdivisionPattern: ["accent"],
+        beatSubdivisions: emptySubs,
+      });
+    }
   }, [beatsPerMeasure, persistSettings]);
 
   const measureDialCenter = useCallback(() => {

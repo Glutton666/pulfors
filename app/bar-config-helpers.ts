@@ -7,6 +7,8 @@ export interface DialConfig {
   beatsPerMeasure: number;
   beatTypes: BeatType[];
   beatSubdivisions: Record<string, BeatType[]>;
+  /** The subdivision drawer's staging pattern, kept separate from bar mode. */
+  subdivisionPattern?: BeatType[];
   noteSamples: NoteSampleMap;
   noteSampleNames: NoteSampleNameMap;
   noteSampleSources: NoteSampleSourceMap;
@@ -18,6 +20,8 @@ export interface BarConfig {
   beatsPerMeasure: number;
   beatTypes: BeatType[];
   beatSubdivisions: Record<string, BeatType[]>;
+  /** The subdivision drawer's staging pattern for the bar editor. */
+  subdivisionPattern?: BeatType[];
   barRepeats: Record<number, BarRepeat>;
   loopBlocks: LoopBlock[];
   barClockMode: "stopwatch" | "timer";
@@ -37,6 +41,7 @@ export function createInitialDialConfig(beats = 4): DialConfig {
     beatsPerMeasure: beats,
     beatTypes: defaultBeatTypes(beats),
     beatSubdivisions: {},
+    subdivisionPattern: ["accent"],
     noteSamples: {},
     noteSampleNames: {},
     noteSampleSources: {},
@@ -50,6 +55,7 @@ export function createInitialBarConfig(beats = 4): BarConfig {
     beatsPerMeasure: beats,
     beatTypes: defaultBeatTypes(beats),
     beatSubdivisions: {},
+    subdivisionPattern: ["accent"],
     barRepeats: {},
     loopBlocks: [],
     barClockMode: "stopwatch",

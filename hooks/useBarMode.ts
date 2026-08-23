@@ -51,6 +51,7 @@ import type {
   NoteSampleMetroChannelMap,
 } from "@/lib/note-samples";
 import { releaseAll as releaseAllStereoArtifacts } from "@/lib/sample-cache";
+import { applyDialConfigToEngine } from "@/lib/dial-engine-boundary";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import type { TranslationFn } from "@/lib/i18n";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
@@ -280,6 +281,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
           beatsPerMeasure: p.beatsPerMeasure,
           beatTypes: [...p.beatTypes],
           beatSubdivisions: { ...p.beatSubdivisions },
+          subdivisionPattern: [...p.subdivisionPattern],
           noteSamples: { ...p.noteSamples },
           noteSampleNames: { ...p.noteSampleNames },
           noteSampleSources: { ...p.noteSampleSources },
@@ -308,6 +310,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
           p.setBeatsPerMeasure(savedBarConfig.beatsPerMeasure);
           p.setBeatTypes([...savedBarConfig.beatTypes]);
           p.setBeatSubdivisions({ ...savedBarConfig.beatSubdivisions });
+          p.setSubdivisionPattern([...(savedBarConfig.subdivisionPattern ?? ["accent"])]);
           setBarRepeats(savedRepeats);
           setLoopBlocks(savedBlocks);
           setBarLoopMode(savedBarConfig.barLoopMode);
@@ -339,6 +342,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
             beatsPerMeasure: 0,
             beatTypes: [],
             beatSubdivisions: {},
+            subdivisionPattern: ["accent"],
             barRepeats: {},
             loopBlocks: [],
             barClockMode: "stopwatch",
@@ -385,6 +389,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
           beatsPerMeasure: p.beatsPerMeasure,
           beatTypes: [...p.beatTypes],
           beatSubdivisions: { ...p.beatSubdivisions },
+          subdivisionPattern: [...p.subdivisionPattern],
           barRepeats: { ...barRepeats },
           loopBlocks: [...loopBlocks],
           noteSamples: { ...p.noteSamples },
@@ -401,6 +406,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
         p.setBeatsPerMeasure(dc.beatsPerMeasure);
         p.setBeatTypes([...dc.beatTypes]);
         p.setBeatSubdivisions({ ...dc.beatSubdivisions });
+        p.setSubdivisionPattern([...(dc.subdivisionPattern ?? ["accent"])]);
         setBarRepeats({});
         setLoopBlocks([]);
         p.setNoteSamples({ ...dc.noteSamples });
@@ -413,12 +419,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
         p.noteSampleChannelsRef.current = { ...(dc.noteSampleChannels || {}) };
         p.setNoteSampleVolumes({ ...(dc.noteSampleVolumes || {}) });
         p.noteSampleVolumesRef.current = { ...(dc.noteSampleVolumes || {}) };
-        engine.setBeatsPerMeasure(dc.beatsPerMeasure);
-        engine.setBeatTypes([...dc.beatTypes]);
-        engine.setAllBeatSubdivisions(dc.beatSubdivisions);
-        engine.clearLoopBlocks();
-        engine.clearBarRepeats();
-        engine.clearBarBpmOverrides();
+        applyDialConfigToEngine(engine, dc);
       }
 
       void releaseAllStereoArtifacts();

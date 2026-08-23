@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 import * as Haptics from "expo-haptics";
 import { safePlay } from "@/lib/audio-utils";
 import { toEngineBpm, soundSets } from "@/lib/metronome-engine";
+import { applyDialConfigToEngine } from "@/lib/dial-engine-boundary";
 import {
   applySoftClip,
   ensureWebClickBuffers,
@@ -151,12 +152,7 @@ export function usePlaybackControl(p: UsePlaybackControlParams) {
       }
       engine.setAllBarBpmOverrides(bpmOverrides);
     } else {
-      engine.setBeatTypes([...(p.dialConfigRef.current.beatTypes || [])]);
-      engine.setAllBeatSubdivisions(p.dialConfigRef.current.beatSubdivisions || {});
-      // BPM overrides are independent engine state. Clear them here as a
-      // defensive boundary so dial playback can never inherit a prior bar's
-      // tempo even if mode switching was interrupted.
-      engine.clearBarBpmOverrides();
+      applyDialConfigToEngine(engine, p.dialConfigRef.current);
     }
     engine.buildScheduleOnly();
   }, [p]);
