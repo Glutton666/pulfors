@@ -97,4 +97,45 @@ describe("SwipeableBarRow block editing", () => {
     expect(queryByTestId("bar-sample-cell-1-2")).toBeNull();
     expect(queryByTestId("bar-sample-badge-1")).toBeNull();
   });
+
+  it("renders a non-interactive continuous overlay while preserving row actions", () => {
+    const onPress = jest.fn();
+    const { getByTestId } = render(
+      <SwipeableBarRow
+        beat={1}
+        beatType="normal"
+        subdivisions={["normal", "normal", "normal", "normal"]}
+        repeat={null}
+        isCurrentBeat={false}
+        isEditingBeat={false}
+        blockDepth={0}
+        blockStart={false}
+        blockEnd={false}
+        symbolBadges={[]}
+        isPlaying={false}
+        bpm={120}
+        meterNumerator={4}
+        meterDenominator={4}
+        beatsPerMeasure={4}
+        onPress={onPress}
+        onSwipeLeft={jest.fn()}
+        onSwipeRight={jest.fn()}
+        onLongPress={jest.fn()}
+        colors={colors}
+        ms={(value) => value}
+        sampleCellCoverage={[
+          undefined,
+          { source: "recording", kind: "direct" },
+          { source: "recording", kind: "continued" },
+          undefined,
+        ]}
+      />,
+    );
+
+    expect(getByTestId("bar-sample-cell-1-1")).toBeTruthy();
+    expect(getByTestId("bar-sample-coverage-cell-1-2")).toBeTruthy();
+    expect(getByTestId("bar-sample-coverage-overlay-1")).toBeTruthy();
+    fireEvent.click(getByTestId("bar-row-1"));
+    expect(onPress).toHaveBeenCalledWith(1);
+  });
 });

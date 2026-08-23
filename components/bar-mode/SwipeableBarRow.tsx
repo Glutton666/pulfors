@@ -13,6 +13,7 @@ import {
   SWIPE_ACTION_THRESHOLD,
   formatBarCenterInfo,
   type BarModeColors,
+  type SampleCellCoverage,
 } from "./BarModeTypes";
 
 export interface SwipeableBarRowProps {
@@ -51,6 +52,7 @@ export interface SwipeableBarRowProps {
   rowHeight?: number;
   cellOverlayOpacity?: number;
   sampleCells?: boolean[];
+  sampleCellCoverage?: Array<SampleCellCoverage | undefined>;
 }
 
 export function SwipeableBarRow({
@@ -60,7 +62,7 @@ export function SwipeableBarRow({
   onPress, onSwipeLeft, onSwipeRight, onLongPress, onEditBlock,
   onDragStart, onDragMove, onDragEnd, isDragging, showDropLineAbove, dragTranslateY,
   colors: C, ms,
-  rowHeight, cellOverlayOpacity: _cellOverlayOpacity, sampleCells = [],
+  rowHeight, cellOverlayOpacity: _cellOverlayOpacity, sampleCells = [], sampleCellCoverage = [],
 }: SwipeableBarRowProps) {
   const translateX = useRef(new Animated.Value(0)).current;
   const actionTriggered = useRef(false);
@@ -209,14 +211,29 @@ export function SwipeableBarRow({
             {cells.map((ct, ci) => {
               const isLast = ci === cells.length - 1;
               const isActiveCell = isCurrentBeat;
-              const hasSample = Boolean(sampleCells[ci]);
+              const coverage = sampleCellCoverage[ci];
+              const hasSample = Boolean(coverage || sampleCells[ci]);
+              const isDirectSample = coverage?.kind === "direct" || (!coverage && hasSample);
+              const sampleColor = coverage?.source === "import" ? C.accentMuted : C.accent;
               return (
                 <View
                   key={ci}
-                  testID={hasSample ? `bar-sample-cell-${beat}-${ci}` : `bar-cell-${beat}-${ci}`}
+                  testID={
+                    !hasSample
+                      ? `bar-cell-${beat}-${ci}`
+                      : isDirectSample
+                      ? `bar-sample-cell-${beat}-${ci}`
+                      : `bar-sample-coverage-cell-${beat}-${ci}`
+                  }
                   accessible={hasSample}
                   accessibilityRole={hasSample ? "image" : undefined}
-                  accessibilityLabel={hasSample ? `Sample on note ${ci + 1} of bar ${beat + 1}` : undefined}
+                  accessibilityLabel={
+                    hasSample
+                      ? `${coverage?.source === "import" ? "Imported" : "Recorded"} sample ${
+                        isDirectSample ? "starts" : "continues"
+                      } on note ${ci + 1} of bar ${beat + 1}`
+                      : undefined
+                  }
                   style={[
                     styles.barMiniCell,
                     !isLast && { borderRightWidth: 0.5, borderRightColor: C.overlay06 },
@@ -230,17 +247,43 @@ export function SwipeableBarRow({
                       borderColor: ct === "mute" ? C.textTertiary + "80" : "transparent",
                     },
                     hasSample && {
-                      // Keep the note readable while making the sample's
-                      // exact subdivision unmistakable at a glance.
-                      backgroundColor: C.accent + (isActiveCell ? "B0" : "70"),
-                      borderTopWidth: 3,
-                      borderTopColor: C.accent,
+                      backgroundColor: sampleColor + (isDirectSample
+                        ? (isActiveCell ? "B0" : "70")
+                        : (isActiveCell ? "68" : "3D")),
+                      borderTopWidth: isDirectSample ? 3 : 1,
+                      borderTopColor: sampleColor,
                     },
                   ]}
                 >
                 </View>
               );
             })}
+
+            {/* This overlay intentionally reaches a pixel beyond the row so
+                adjacent sample cells and rows read as one playback span
+                without ever taking presses, swipes, drags, or long presses. */}
+            <View
+              testID={`bar-sample-coverage-overlay-${beat}`}
+              style={[styles.barSampleCoverageOverlay, { pointerEvents: "none" }]}
+            >
+              {cells.map((_, ci) => {
+                const coverage = sampleCellCoverage[ci];
+                if (!coverage) return <View key={ci} style={styles.barSampleCoverageSpacer} />;
+                const sampleColor = coverage.source === "import" ? C.accentMuted : C.accent;
+                return (
+                  <View
+                    key={ci}
+                    style={[
+                      styles.barSampleCoverageSegment,
+                      {
+                        backgroundColor: sampleColor + (coverage.kind === "direct" ? "20" : "12"),
+                        borderTopColor: sampleColor + (coverage.kind === "direct" ? "D9" : "8C"),
+                      },
+                    ]}
+                  />
+                );
+              })}
+            </View>
 
             {/* 비트 셀 위 info overlay */}
             <View style={styles.barCellOverlay} pointerEvents="none">
@@ -355,6 +398,21 @@ const styles = StyleSheet.create({
     flex: 1,
     height: "100%",
     borderRadius: 0,
+  },
+  barSampleCoverageOverlay: {
+    position: "absolute",
+    top: -1,
+    bottom: -1,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+  },
+  barSampleCoverageSegment: {
+    flex: 1,
+    borderTopWidth: 1,
+  },
+  barSampleCoverageSpacer: {
+    flex: 1,
   },
   barCellOverlay: {
     position: "absolute",

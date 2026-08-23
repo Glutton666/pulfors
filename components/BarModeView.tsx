@@ -24,7 +24,7 @@ import { FontSize, Spacing } from "@/constants/tokens";
 import {
   BAR_ROW_H,
   SYMBOL_INFO,
-  getBarSampleCells,
+  getSampleCellCoverage,
   nextJumpPairId,
   type BarModeColors,
   type SymbolType,
@@ -111,16 +111,35 @@ export function BarModeView({
   onBarLoopModeChange, blockPlayMode, onBlockPlayModeChange, progressInfo,
   barStartBeat, onBarStartBeatSelect, onAddBar, onDeleteBar,
   subdivisionBarElement, onBarQuickSave, onBarScrollOffset,
-  bpm, onBpmChange, beatDenominator = 4, onDenominatorCycle,
+  bpm, onBpmChange, halfTime, beatDenominator = 4, onDenominatorCycle,
   soundSet = "classic", onSoundSetChange, layerSoundSets = {} as Record<number, string>,
   onLayerSoundSetsChange, onPreviewSoundSet,
   customSoundSets = {} as Record<string, CustomSoundSetConfig>, onCustomSoundSetsChange,
   colors: C, ms,
   cellOverlayOpacity, rowHeight,
-  noteSamples, onNoteRecordRequest, onReorderBar, onInsertBarAfter,
+  noteSamples, noteSampleSources, onNoteRecordRequest, onReorderBar, onInsertBarAfter,
 }: BarModeViewProps) {
   const { t } = useLanguage();
   const S = useScale();
+  const sampleCoverage = useMemo(() => getSampleCellCoverage({
+    bpm,
+    beatsPerMeasure,
+    beatSubdivisions,
+    barRepeats,
+    noteSamples,
+    noteSampleSources,
+    beatDenominator,
+    halfTime,
+  }), [
+    bpm,
+    beatsPerMeasure,
+    beatSubdivisions,
+    barRepeats,
+    noteSamples,
+    noteSampleSources,
+    beatDenominator,
+    halfTime,
+  ]);
 
   // ─── Drag-reorder state ────────────────────────────────────────────────────
 
@@ -528,6 +547,10 @@ export function BarModeView({
           const isCurrent = isPlaying && currentBeat === beat;
           const isEditing = barStartBeat === beat && !isPlaying;
           const isDragging = draggingBeat === beat;
+          const rowSampleCoverage = Array.from(
+            { length: beatSubdivisions[String(beat)]?.length || 1 },
+            (_, cell) => sampleCoverage.get(`${beat}-${cell}`),
+          );
           const showDropLineAbove = (
             draggingBeat !== null &&
             dropIndex !== null &&
@@ -572,11 +595,8 @@ export function BarModeView({
               ms={ms}
               rowHeight={rowHeight}
               cellOverlayOpacity={cellOverlayOpacity}
-              sampleCells={getBarSampleCells(
-                beat,
-                beatSubdivisions[String(beat)]?.length || 1,
-                noteSamples,
-              )}
+              sampleCells={rowSampleCoverage.map((coverage) => coverage?.kind === "direct")}
+              sampleCellCoverage={rowSampleCoverage}
             />
           );
         })}

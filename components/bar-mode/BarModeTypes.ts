@@ -7,6 +7,7 @@ import type React from "react";
 import type { Ionicons } from "@expo/vector-icons";
 import type { BarRepeat } from "@/components/beat-indicator.types";
 import type { BarModeViewKey } from "@/lib/i18n";
+import type { SampleSource } from "@/lib/note-samples";
 
 // ─── Icon type helper ────────────────────────────────────────────────────────
 
@@ -117,6 +118,198 @@ export function getBarSampleCells(
 ): boolean[] {
   const count = Math.max(1, Math.floor(cellCount));
   return Array.from({ length: count }, (_, cell) => Boolean(samples?.[`${beat}-${cell}`]));
+}
+
+export type SampleCellCoverageKind = "direct" | "continued";
+
+/**
+ * A single visual cell can be claimed by several samples.  Keep the winning
+ * source together with whether that source begins at the cell so the UI can
+ * distinguish a trigger from the tail of a preceding sample.
+ */
+export interface SampleCellCoverage {
+  source: SampleSource;
+  kind: SampleCellCoverageKind;
+}
+
+export type SampleCellCoverageMap = Map<string, SampleCellCoverage>;
+
+export interface SampleCoverageOptions {
+  bpm: number | undefined;
+  beatsPerMeasure: number;
+  beatSubdivisions: Record<string, unknown[]>;
+  barRepeats: Record<number, BarRepeat>;
+  noteSamples?: Record<string, string>;
+  noteSampleSources?: Record<string, SampleSource | string>;
+  beatDenominator?: 2 | 4 | 8;
+  halfTime?: boolean;
+}
+
+type BarTiming = {
+  cellCount: number;
+  baseDurationMs: number;
+  totalDurationMs: number;
+};
+
+function isFinitePositive(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function getSampleTrimDurationMs(uri: string): number | null {
+  const value = uri.trim();
+  const fragmentIndex = value.indexOf("#");
+  const baseUri = fragmentIndex >= 0 ? value.slice(0, fragmentIndex) : value;
+  // Recorder/importer output is URI based. Reject corrupt persisted values
+  // rather than treating arbitrary text as a playable sample.
+  if (!/^[a-z][a-z\d+.-]*:/i.test(baseUri)) return null;
+
+  if (fragmentIndex < 0) return 0;
+  const fragment = value.slice(fragmentIndex);
+  if (!fragment.startsWith("#t=")) return null;
+  const parts = fragment.slice(3).split(",");
+  if (parts.length !== 2) return null;
+
+  const startMs = Number(parts[0]);
+  const endMs = Number(parts[1]);
+  if (
+    !Number.isFinite(startMs) ||
+    !Number.isFinite(endMs) ||
+    startMs < 0 ||
+    endMs <= startMs
+  ) {
+    return null;
+  }
+  return endMs - startMs;
+}
+
+function getBarTiming(
+  beat: number,
+  options: SampleCoverageOptions,
+): BarTiming | null {
+  const repeat = options.barRepeats[beat];
+  const bpm = isFinitePositive(repeat?.bpm) ? repeat.bpm : options.bpm;
+  if (!isFinitePositive(bpm)) return null;
+
+  const cells = options.beatSubdivisions[String(beat)];
+  const cellCount = Math.max(1, Math.floor(cells?.length || 1));
+  // The scheduler treats old rows as one engine beat. Their displayed cells
+  // are subdivisions of that beat, not an implicit meter numerator.
+  const numerator = isFinitePositive(repeat?.meterNumerator)
+    ? Math.max(1, Math.min(16, Math.round(repeat.meterNumerator)))
+    : 1;
+  const denominator = repeat?.meterDenominator ?? options.beatDenominator ?? 4;
+  // Keep the same display-BPM → internal quarter-BPM normalization as the
+  // engine, including its guardrail clamp.
+  const engineBpm = Math.max(20, Math.min(300, bpm * (4 / denominator)));
+  const effectiveBpm = options.halfTime ? engineBpm / 2 : engineBpm;
+  const baseDurationMs = (60_000 / effectiveBpm) * numerator;
+
+  let totalDurationMs = baseDurationMs;
+  if (repeat?.type === "count") {
+    totalDurationMs *= Math.ceil(Math.max(
+      1,
+      Number.isFinite(repeat.value) ? repeat.value : 1,
+    ));
+  } else if (repeat?.type === "duration" && isFinitePositive(repeat.value)) {
+    totalDurationMs = baseDurationMs * Math.max(
+      1,
+      Math.round((repeat.value * 1_000) / baseDurationMs),
+    );
+  }
+
+  return { cellCount, baseDurationMs, totalDurationMs };
+}
+
+function normalizeSampleSource(value: unknown): SampleSource {
+  return value === "import" ? "import" : "recording";
+}
+
+function markCoveredCell(
+  covered: SampleCellCoverageMap,
+  key: string,
+  source: SampleSource,
+  kind: SampleCellCoverageKind,
+): void {
+  const previous = covered.get(key);
+  const sourceWins = !previous || (source === "recording" && previous.source === "import");
+  if (sourceWins) {
+    covered.set(key, { source, kind });
+  } else if (previous.source === source && kind === "direct" && previous.kind !== "direct") {
+    covered.set(key, { source, kind });
+  }
+}
+
+function markRowRange(
+  covered: SampleCellCoverageMap,
+  beat: number,
+  timing: BarTiming,
+  fromMs: number,
+  toMs: number,
+  source: SampleSource,
+): void {
+  if (!(toMs > fromMs)) return;
+  const repeats = Math.max(1, Math.ceil(timing.totalDurationMs / timing.baseDurationMs));
+  const cellDurationMs = timing.baseDurationMs / timing.cellCount;
+
+  for (let repeatIndex = 0; repeatIndex < repeats; repeatIndex++) {
+    const repeatStartMs = repeatIndex * timing.baseDurationMs;
+    if (repeatStartMs >= toMs) break;
+    for (let cell = 0; cell < timing.cellCount; cell++) {
+      const cellStartMs = repeatStartMs + cell * cellDurationMs;
+      const cellEndMs = cellStartMs + cellDurationMs;
+      if (cellStartMs < toMs && cellEndMs > fromMs) {
+        markCoveredCell(covered, `${beat}-${cell}`, source, "continued");
+      }
+    }
+  }
+}
+
+/**
+ * Calculates every displayed cell occupied by a trimmed note sample.
+ *
+ * A row is a visual representation of all of its configured repeats, so a
+ * sample that reaches a later repeat still covers the matching row cells.
+ * Recording sources win over imported ones when their ranges overlap.
+ */
+export function getSampleCellCoverage(options: SampleCoverageOptions): SampleCellCoverageMap {
+  const covered: SampleCellCoverageMap = new Map();
+  if (!options.noteSamples) return covered;
+
+  for (const [key, uri] of Object.entries(options.noteSamples)) {
+    const match = /^(\d+)-(\d+)$/.exec(key);
+    if (!match || typeof uri !== "string") continue;
+
+    const beat = Number(match[1]);
+    const cell = Number(match[2]);
+    if (!Number.isSafeInteger(beat) || !Number.isSafeInteger(cell) || beat >= options.beatsPerMeasure) {
+      continue;
+    }
+
+    const durationMs = getSampleTrimDurationMs(uri);
+    if (durationMs === null) continue;
+
+    const timing = getBarTiming(beat, options);
+    if (!timing || cell >= timing.cellCount) continue;
+
+    const source = normalizeSampleSource(options.noteSampleSources?.[key]);
+    markCoveredCell(covered, key, source, "direct");
+    if (durationMs <= 0) continue;
+
+    const startMs = (cell * timing.baseDurationMs) / timing.cellCount;
+    const firstRowEndMs = Math.min(timing.totalDurationMs, startMs + durationMs);
+    markRowRange(covered, beat, timing, startMs, firstRowEndMs, source);
+
+    let remainingMs = durationMs - (timing.totalDurationMs - startMs);
+    for (let nextBeat = beat + 1; remainingMs > 0 && nextBeat < options.beatsPerMeasure; nextBeat++) {
+      const nextTiming = getBarTiming(nextBeat, options);
+      if (!nextTiming) break;
+      const nextEndMs = Math.min(remainingMs, nextTiming.totalDurationMs);
+      markRowRange(covered, nextBeat, nextTiming, 0, nextEndMs, source);
+      remainingMs -= nextTiming.totalDurationMs;
+    }
+  }
+
+  return covered;
 }
 export function nextJumpPairId(barRepeats: Record<number, BarRepeat>): number {
   let max = 0;

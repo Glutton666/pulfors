@@ -1,11 +1,13 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
+import { MetronomeEngine } from "../lib/metronome-engine";
 import {
   adjustBarDuration,
   clampBarBpm,
   clampBarRepeatCount,
   formatBarDuration,
   getBarSampleCells,
+  getSampleCellCoverage,
   getBarRepeatCountHoldIntervalMs,
   splitBarDuration,
 } from "../components/bar-mode/BarModeTypes";
@@ -18,6 +20,164 @@ describe("bar editor control values", () => {
     );
     assert.deepEqual(getBarSampleCells(1, 0, { "1-0": "" }), [false]);
     assert.deepEqual(getBarSampleCells(1, 2), [false, false]);
+  });
+
+  test("keeps an untrimmed sample on its single trigger cell", () => {
+    const coverage = getSampleCellCoverage({
+      bpm: 120,
+      beatsPerMeasure: 1,
+      beatSubdivisions: { "0": ["normal"] },
+      barRepeats: {},
+      noteSamples: { "0-0": "file:///kick.wav" },
+    });
+
+    expect(coverage.get("0-0")).toEqual({ source: "recording", kind: "direct" });
+  });
+
+  test("matches the engine's legacy subdivision timestamps when a trim reaches the next row", () => {
+    const engine = new MetronomeEngine();
+    engine.setBpm(120);
+    engine.setBeatsPerMeasure(2);
+    engine.setBeatSubdivision(0, ["normal", "normal", "normal", "normal"]);
+    engine.setBeatSubdivision(1, ["normal", "normal", "normal", "normal"]);
+    const schedule = engine.getScheduleInfo();
+    expect(schedule.ticks.filter((tick) => tick.beat === 1 && tick.subBeat === 0)[0]?.time).toBe(500);
+
+    const coverage = getSampleCellCoverage({
+      bpm: 120,
+      beatsPerMeasure: 2,
+      beatSubdivisions: {
+        "0": ["normal", "normal", "normal", "normal"],
+        "1": ["normal", "normal", "normal", "normal"],
+      },
+      barRepeats: {},
+      noteSamples: { "0-1": "file:///clap.wav#t=0,500" },
+      beatDenominator: 4,
+    });
+
+    expect(coverage.get("0-0")).toBeUndefined();
+    expect(coverage.get("0-1")).toEqual({ source: "recording", kind: "direct" });
+    expect(coverage.get("0-2")).toEqual({ source: "recording", kind: "continued" });
+    expect(coverage.get("0-3")).toEqual({ source: "recording", kind: "continued" });
+    expect(coverage.get("1-0")).toEqual({ source: "recording", kind: "continued" });
+    expect(coverage.get("1-1")).toBeUndefined();
+  });
+
+  test("uses the engine's denominator-normalized timing for legacy rows", () => {
+    const engine = new MetronomeEngine();
+    // 120 displayed BPM at an eighth-note denominator is 60 internal BPM.
+    engine.setBpm(60);
+    engine.setBeatsPerMeasure(2);
+    engine.setBeatSubdivision(0, ["normal", "normal", "normal", "normal"]);
+    engine.setBeatSubdivision(1, ["normal", "normal", "normal", "normal"]);
+    const schedule = engine.getScheduleInfo();
+    expect(schedule.ticks.filter((tick) => tick.beat === 1 && tick.subBeat === 0)[0]?.time).toBe(1000);
+
+    const coverage = getSampleCellCoverage({
+      bpm: 120,
+      beatsPerMeasure: 2,
+      beatSubdivisions: {
+        "0": ["normal", "normal", "normal", "normal"],
+        "1": ["normal", "normal", "normal", "normal"],
+      },
+      barRepeats: {},
+      noteSamples: { "0-1": "file:///eighth-note.wav#t=0,1000" },
+      beatDenominator: 8,
+    });
+
+    expect(coverage.get("0-1")).toEqual({ source: "recording", kind: "direct" });
+    expect(coverage.get("0-2")).toEqual({ source: "recording", kind: "continued" });
+    expect(coverage.get("0-3")).toEqual({ source: "recording", kind: "continued" });
+    expect(coverage.get("1-0")).toEqual({ source: "recording", kind: "continued" });
+    expect(coverage.get("1-1")).toBeUndefined();
+  });
+
+  test("uses the engine's doubled half-time duration before extending into the next row", () => {
+    const engine = new MetronomeEngine();
+    engine.setBpm(120);
+    engine.setHalfTime(true);
+    engine.setBeatsPerMeasure(2);
+    engine.setBeatSubdivision(0, ["normal", "normal", "normal", "normal"]);
+    engine.setBeatSubdivision(1, ["normal", "normal", "normal", "normal"]);
+    const schedule = engine.getScheduleInfo();
+    expect(schedule.ticks.filter((tick) => tick.beat === 1 && tick.subBeat === 0)[0]?.time).toBe(1000);
+
+    const coverage = getSampleCellCoverage({
+      bpm: 120,
+      halfTime: true,
+      beatsPerMeasure: 2,
+      beatSubdivisions: {
+        "0": ["normal", "normal", "normal", "normal"],
+        "1": ["normal", "normal", "normal", "normal"],
+      },
+      barRepeats: {},
+      noteSamples: { "0-1": "file:///half-time.wav#t=0,1000" },
+      beatDenominator: 4,
+    });
+
+    expect(coverage.get("0-1")).toEqual({ source: "recording", kind: "direct" });
+    expect(coverage.get("0-2")).toEqual({ source: "recording", kind: "continued" });
+    expect(coverage.get("0-3")).toEqual({ source: "recording", kind: "continued" });
+    expect(coverage.get("1-0")).toEqual({ source: "recording", kind: "continued" });
+    expect(coverage.get("1-1")).toBeUndefined();
+  });
+
+  test("accounts for bar repeats, local BPM, and duration-repeat time", () => {
+    const coverage = getSampleCellCoverage({
+      bpm: 120,
+      beatsPerMeasure: 3,
+      beatSubdivisions: {
+        "0": ["normal", "normal", "normal", "normal"],
+        "1": ["normal", "normal", "normal", "normal"],
+        "2": ["normal", "normal", "normal", "normal"],
+      },
+      barRepeats: {
+        0: { type: "count", value: 2, meterNumerator: 4, meterDenominator: 4 },
+        1: { type: "duration", value: 3, bpm: 60, meterNumerator: 4, meterDenominator: 4 },
+      },
+      noteSamples: { "0-0": "file:///loop.wav#t=0,7500" },
+      beatDenominator: 4,
+    });
+
+    // Bar 0 is shown once but stands for two 2-second passes.
+    for (let cell = 0; cell < 4; cell++) {
+      expect(coverage.get(`0-${cell}`)).toBeDefined();
+    }
+    // The 60 BPM duration bar contributes the remaining 3.5 seconds; every
+    // displayed subdivision remains occupied before the trim ends.
+    for (let cell = 0; cell < 4; cell++) {
+      expect(coverage.get(`1-${cell}`)).toBeDefined();
+    }
+    expect(coverage.get("2-0")).toBeUndefined();
+  });
+
+  test("prefers recording coverage over an overlapping imported start and ignores corrupt samples", () => {
+    const coverage = getSampleCellCoverage({
+      bpm: 120,
+      beatsPerMeasure: 2,
+      beatSubdivisions: {
+        "0": ["normal", "normal", "normal", "normal"],
+        "1": ["normal", "normal", "normal", "normal"],
+      },
+      barRepeats: {},
+      noteSamples: {
+        "0-0": "file:///recording.wav#t=0,600",
+        "1-0": "file:///import.wav",
+        "1-1": "file:///bad-trim.wav#t=400,100",
+        "1-2": "not a uri#t=0,500",
+      },
+      noteSampleSources: {
+        "0-0": "recording",
+        "1-0": "import",
+        "1-1": "import",
+        "1-2": "recording",
+      },
+      beatDenominator: 4,
+    });
+
+    expect(coverage.get("1-0")).toEqual({ source: "recording", kind: "continued" });
+    expect(coverage.get("1-1")).toBeUndefined();
+    expect(coverage.get("1-2")).toBeUndefined();
   });
 
   test("duration always displays as zero-padded mm:ss", () => {
