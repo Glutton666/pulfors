@@ -83,6 +83,11 @@ import { useDialConfig } from "@/hooks/useBarDialConfig";
 import { useBarMode } from "@/hooks/useBarMode";
 import { useMetronomeEngine } from "@/hooks/useMetronomeEngine";
 import { useEasterEggQuiz } from "@/hooks/useEasterEggQuiz";
+import {
+  completeEasterEggBarSession,
+  prepareEasterEggEngine,
+  type EasterEggBarEngineSnapshot,
+} from "@/lib/easter-egg-engine-session";
 import { useFadeOutSession } from "@/hooks/useFadeOutSession";
 import { usePermissionRecoveryToast } from "@/hooks/usePermissionRecoveryToast";
 import { useBeatQuickSave } from "@/hooks/useBeatQuickSave";
@@ -158,6 +163,7 @@ export function useMetronomeScreen() {
   } = useEasterEggQuiz();
   // 이스터에그 발동 직전 재생 상태 보존 → 종료 시 원상복구
   const easterEggWasPlayingRef = useRef(false);
+  const easterEggBarEngineSnapshotRef = useRef<EasterEggBarEngineSnapshot | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const isPlayingRef = useRef(false);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
@@ -1453,6 +1459,28 @@ export function useMetronomeScreen() {
 
   // updateBpm → useSettings 소유
 
+  const restoreEasterEggEngine = useCallback((actual: number) => {
+    const engine = engineRef.current;
+    const barSnapshot = easterEggBarEngineSnapshotRef.current;
+    if (engine && barSnapshot) {
+      completeEasterEggBarSession(
+        engine,
+        barSnapshot,
+        actual,
+        easterEggApplyBpmRef.current,
+        updateBpm,
+      );
+      easterEggBarEngineSnapshotRef.current = null;
+      return;
+    }
+
+    if (easterEggApplyBpmRef.current) {
+      updateBpm(actual);
+    } else {
+      engine?.setBpm(easterEggPrevBpmRef.current);
+    }
+  }, [easterEggApplyBpmRef, updateBpm]);
+
   const handleEasterEggGuess = useCallback((guess: number) => {
     const actual = easterEggActualBpmRef.current;
     if (Math.abs(guess - actual) <= 5) {
@@ -1462,11 +1490,7 @@ export function useMetronomeScreen() {
       setEasterEggHintDirection(null);
       setEasterEggRevealBpm(actual);
       setTimeout(() => {
-        if (easterEggApplyBpmRef.current) {
-          updateBpm(actual);
-        } else {
-          engineRef.current?.setBpm(easterEggPrevBpmRef.current);
-        }
+        restoreEasterEggEngine(actual);
         // 이스터에그 발동 전 재생 중이 아니었으면 엔진 정지
         if (!easterEggWasPlayingRef.current) {
           engineRef.current?.stop();
@@ -1486,7 +1510,7 @@ export function useMetronomeScreen() {
       setEasterEggShakeCount(c => c + 1);
       setEasterEggHintDirection(guess < actual ? "up" : "down");
     }
-  }, [stopRenderedAudio, resetPlaybackVisuals, setEasterEggHintDirection, updateBpm, easterEggApplyBpmRef, setEasterEggApplyBpm]);
+  }, [stopRenderedAudio, resetPlaybackVisuals, setEasterEggHintDirection, restoreEasterEggEngine, setEasterEggApplyBpm]);
 
   const handleEasterEggGiveUp = useCallback((stopEngine = false) => {
     const actual = easterEggActualBpmRef.current;
@@ -1505,11 +1529,7 @@ export function useMetronomeScreen() {
       resetPlaybackVisuals();
     }
     setTimeout(() => {
-      if (easterEggApplyBpmRef.current) {
-        updateBpm(actual);
-      } else {
-        engineRef.current?.setBpm(easterEggPrevBpmRef.current);
-      }
+      restoreEasterEggEngine(actual);
       // 이스터에그 발동 전 재생 중이 아니었으면 엔진 정지
       if (!easterEggWasPlayingRef.current) {
         engineRef.current?.stop();
@@ -1524,7 +1544,7 @@ export function useMetronomeScreen() {
       setEasterEggHintDirection(null);
       setEasterEggApplyBpm(false);
     }, 2000);
-  }, [stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals, setEasterEggHintDirection, updateBpm, easterEggApplyBpmRef, setEasterEggApplyBpm]);
+  }, [stopRenderedAudio, clearSamplePlayStates, resetPlaybackVisuals, setEasterEggHintDirection, restoreEasterEggEngine, setEasterEggApplyBpm]);
 
   const handleEasterEggGiveUpRef = useRef(handleEasterEggGiveUp);
   useEffect(() => { handleEasterEggGiveUpRef.current = handleEasterEggGiveUp; }, [handleEasterEggGiveUp]);
@@ -1780,14 +1800,13 @@ export function useMetronomeScreen() {
   // handleBarModeChange → wrapped (BPM swap) + barModeHandleBarModeChange
 
   const handleEasterEggTrigger = useCallback(async (isHighRange: boolean) => {
-    if (barModeRef.current) return;
-
     const engine = engineRef.current;
     if (!engine) return;
+    const isBarMode = barModeRef.current;
 
     // 발동 직전 재생 상태 저장 (종료 시 복원용)
     easterEggWasPlayingRef.current = isPlayingRef.current;
-    easterEggPrevBpmRef.current = bpmRef.current;
+    easterEggPrevBpmRef.current = isBarMode ? engine.getBpm() : bpmRef.current;
     const randomBpm = isHighRange
       ? Math.floor(Math.random() * (200 - 100 + 1)) + 100
       : Math.floor(Math.random() * (100 - 30 + 1)) + 30;
@@ -1806,17 +1825,21 @@ export function useMetronomeScreen() {
     isPlayingRef.current = false;
 
     // ② 새 BPM / 박자 설정
-    engine.setBpm(randomBpm);
-    engine.setBeatsPerMeasure(1);
-    engine.setBeatTypes(eggBeatTypes);
-    engine.setAllBeatSubdivisions({});
-    setBeatsPerMeasure(1);
-    setBeatTypes(eggBeatTypes);
-    dialConfigRef.current = {
-      ...dialConfigRef.current,
-      beatTypes: eggBeatTypes,
-      beatSubdivisions: {},
-    };
+    easterEggBarEngineSnapshotRef.current = prepareEasterEggEngine(
+      engine,
+      randomBpm,
+      eggBeatTypes,
+      isBarMode,
+    );
+    if (!isBarMode) {
+      setBeatsPerMeasure(1);
+      setBeatTypes(eggBeatTypes);
+      dialConfigRef.current = {
+        ...dialConfigRef.current,
+        beatTypes: eggBeatTypes,
+        beatSubdivisions: {},
+      };
+    }
 
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     // 이전 라운드 잔여 상태 초기화 (2초 타이머가 아직 살아있어도 클린 상태로 시작)

@@ -65,6 +65,8 @@ import { onAccentColor } from "@/lib/color-contrast";
 import { appendRapidTap, isChordEasterEggTitle, type PitchQuizMode } from "@/lib/pitch-quiz";
 import { stopAllScoreNotes } from "@/lib/score-audio";
 import * as Haptics from "expo-haptics";
+import { useEasterEggGesture } from "@/hooks/useEasterEggGesture";
+import { usesSharedEasterEggGesture } from "@/lib/easter-egg-gesture";
 
 type Props = ReturnType<typeof useMetronomeScreen>;
 
@@ -176,6 +178,14 @@ export function MetronomeScreenUI(props: Props) {
     volumeRef,
   } = props;
 
+  const { nativeGestureHandlers: easterEggGestureHandlers } = useEasterEggGesture({
+    enabled: !easterEggActive && usesSharedEasterEggGesture(currentMode, showPolygon),
+    resetKey: currentMode,
+    onTrigger: handleEasterEggTrigger,
+  });
+  const showSharedEasterEggQuiz = easterEggActive
+    && usesSharedEasterEggGesture(currentMode, showPolygon);
+
   const saveFailureBannerKey = getPersistFailureBannerKey(
     combinePersisterStatuses(persistStatus, noteSamplePersistStatus),
   );
@@ -267,6 +277,7 @@ export function MetronomeScreenUI(props: Props) {
       focusable={Platform.OS !== "web" ? true : undefined}
       onKeyDown={Platform.OS !== "web" ? (e) => handleNativeKeyDown(e.nativeEvent) : undefined}
       onKeyUp={Platform.OS !== "web" ? (e) => handleNativeKeyUp(e.nativeEvent) : undefined}
+      {...easterEggGestureHandlers}
     >
       <StatusBar style={themeMode === "day" ? "dark" : "light"} />
 
@@ -1100,6 +1111,7 @@ export function MetronomeScreenUI(props: Props) {
             barCellOpacity={barCellOpacity}
             barRowHeight={barRowHeight}
             onEasterEggTrigger={handleEasterEggTrigger}
+            easterEggEnabled={!usesSharedEasterEggGesture(currentMode, showPolygon)}
           />
         </View>
 
@@ -1664,6 +1676,36 @@ export function MetronomeScreenUI(props: Props) {
           <Text style={{ color: C.text, fontSize: 14, fontWeight: "500" as const }}>
             {beatQuickSaveToast}
           </Text>
+        </View>
+      ) : null}
+
+      {showSharedEasterEggQuiz ? (
+        <View
+          accessibilityViewIsModal
+          style={[
+            StyleSheet.absoluteFillObject,
+            {
+              zIndex: 12000,
+              backgroundColor: C.background + "F2",
+              alignItems: "center",
+              justifyContent: "center",
+              paddingHorizontal: S.ms(20, 0.3),
+            },
+          ]}
+        >
+          <View style={{ width: "100%", maxWidth: 440 }}>
+            <EasterEggQuiz
+              onGuess={handleEasterEggGuess}
+              revealBpm={easterEggRevealBpm}
+              isGiveUp={easterEggGiveUpMode}
+              shakeCount={easterEggShakeCount}
+              successCount={easterEggSuccessCount}
+              hintDirection={easterEggHintDirection}
+              isLandscape={isLandscape}
+              applyBpmSelected={easterEggApplyBpm}
+              onToggleApplyBpm={handleEasterEggToggleApplyBpm}
+            />
+          </View>
         </View>
       ) : null}
     </KbView>

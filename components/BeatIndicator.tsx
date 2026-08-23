@@ -149,6 +149,7 @@ interface BeatIndicatorProps {
   barCellOpacity?: number;
   barRowHeight?: number;
   onEasterEggTrigger?: (isHighRange: boolean) => void;
+  easterEggEnabled?: boolean;
 }
 
 // BlockPill 컴포넌트는 components/BlockPill.tsx 로 분리되었습니다.
@@ -226,6 +227,7 @@ export function BeatIndicator({
   barCellOpacity,
   barRowHeight,
   onEasterEggTrigger,
+  easterEggEnabled = true,
 }: BeatIndicatorProps) {
   const { colors: C, getImageForBeatType, hubImages } = useTheme();
   const { t } = useLanguage();
@@ -453,7 +455,7 @@ export function BeatIndicator({
     }
 
     // 이스터에그 회전 카운터: 7바퀴 같은 방향으로 돌리면 트리거
-    if (!easterEggLockRef.current && Math.abs(delta) > 10) {
+    if (easterEggEnabled && !easterEggLockRef.current && Math.abs(delta) > 10) {
       const dir = delta > 0 ? 1 : -1;
       const prevTotal = totalRotationRef.current;
       if (prevTotal === 0 || Math.sign(prevTotal) === dir) {
@@ -474,7 +476,7 @@ export function BeatIndicator({
     lastDeltaAngleRef.current = 0;
     triggeredRef.current = false;
     resetVisuals();
-  }, [ANGLE_THRESHOLD, resetVisuals]);
+  }, [ANGLE_THRESHOLD, easterEggEnabled, resetVisuals]);
 
   useEffect(() => {
     commitAndResetRef.current = commitAndReset;
@@ -482,15 +484,15 @@ export function BeatIndicator({
 
   // 바 모드 전환 시 이스터에그 누적 회전량 초기화
   useEffect(() => {
-    if (barMode) {
+    if (barMode || !easterEggEnabled) {
       totalRotationRef.current = 0;
     }
-  }, [barMode]);
+  }, [barMode, easterEggEnabled]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
     // barMode 에서는 dial 컨테이너가 언마운트되어 containerRef 가 null 이므로 스킵
-    if (barMode) return;
+    if (barMode || !easterEggEnabled) return;
 
     // 원의 중심과 시작점을 저장하고 각도 차이로 처리
     const getCenter = (el: HTMLElement) => {
@@ -605,7 +607,7 @@ export function BeatIndicator({
         resetVisuals();
       }
     };
-  }, [processMoveByAngle, resetVisuals, barMode, isLandscape]);
+  }, [processMoveByAngle, resetVisuals, barMode, easterEggEnabled, isLandscape]);
 
   const panResponder = useRef(
     Platform.OS !== "web"
