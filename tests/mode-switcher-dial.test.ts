@@ -20,6 +20,11 @@ import assert from "node:assert/strict";
 import { createT } from "../lib/i18n";
 import {
   MODE_DIAL_SLOTS,
+  MODE_DIAL_SWIPE_SIGN,
+  createModeTransitionCoordinator,
+  modeTransitionMayApply,
+  stageExitRevealMode,
+  modeDialTransitionDirection,
   nearestModeDialSnapTarget,
   shortestModeDialTarget,
   modeDialSessionForMode,
@@ -180,6 +185,136 @@ describe("shortestModeDialTarget", () => {
     // Position 5.6 is visually close to the following cycle's slot 0.
     // Snapping to 6 must not jump backward to the canonical index 0.
     assert.equal(shortestModeDialTarget(5.6, 0), 6);
+  });
+});
+
+describe("모드 다이얼 방향 계약", () => {
+  test("각 벽의 물리 입력 부호가 논리 스크롤 부호와 일치한다", () => {
+    assert.deepEqual(MODE_DIAL_SWIPE_SIGN, {
+      top: -1,
+      right: -1,
+      bottom: 1,
+      left: 1,
+    });
+  });
+
+  test("일반 다음/이전 선택은 콘텐츠 진입 방향을 뒤집지 않는다", () => {
+    assert.equal(modeDialTransitionDirection(0, 1), "right");
+    assert.equal(modeDialTransitionDirection(1, 0), "left");
+  });
+
+  test("순환 경계에서도 5→0은 오른쪽, 0→5는 왼쪽으로 유지한다", () => {
+    assert.equal(modeDialTransitionDirection(5, 0), "right");
+    assert.equal(modeDialTransitionDirection(0, 5), "left");
+  });
+});
+
+describe("비동기 모드 전환 최신성", () => {
+  test("무대 종료는 무대 표시 상태와 무관하게 실제 core mode를 다시 표시한다", () => {
+    assert.equal(stageExitRevealMode("beat"), "beat");
+    assert.equal(stageExitRevealMode("bar"), "bar");
+    assert.equal(stageExitRevealMode("note"), "note");
+    assert.equal(stageExitRevealMode("score"), "score");
+  });
+
+  test("다이얼 밖에서 직접 노트 모드에 들어갈 때 선택적 guard가 없으면 적용된다", () => {
+    assert.ok(modeTransitionMayApply());
+  });
+
+  test("최신 guard는 비동기 결과를 적용한다", () => {
+    assert.ok(modeTransitionMayApply(() => true));
+  });
+
+  test("오래된 guard만 비동기 결과를 차단한다", () => {
+    assert.ok(!modeTransitionMayApply(() => false));
+  });
+
+  test("빠른 재선택 시 오래된 전환 토큰은 결과를 적용할 수 없다", () => {
+    const coordinator = createModeTransitionCoordinator();
+    const first = coordinator.begin();
+    const latest = coordinator.begin();
+
+    assert.ok(!coordinator.isCurrent(first));
+    assert.ok(coordinator.isCurrent(latest));
+  });
+
+  test("바를 떠날 때의 중간 비트 커밋이 최신 노트 전환을 취소하지 않는다", () => {
+    const coordinator = createModeTransitionCoordinator();
+    const note = coordinator.begin();
+    coordinator.expectModeCommit("beat", note);
+
+    assert.ok(coordinator.acknowledgeModeCommit("beat"));
+    assert.ok(coordinator.isCurrent(note));
+    coordinator.expectModeCommit("note", note);
+    assert.ok(coordinator.acknowledgeModeCommit("note"));
+    coordinator.finish(note);
+  });
+
+  test("이전 무대 전환의 커밋 뒤에도 최신 노트 선택이 유지된다", () => {
+    const coordinator = createModeTransitionCoordinator();
+    const stage = coordinator.begin();
+    coordinator.expectModeCommit("stage", stage);
+    const note = coordinator.begin();
+
+    // The older stage state was already scheduled before note was selected.
+    assert.ok(coordinator.acknowledgeModeCommit("stage"));
+    assert.ok(!coordinator.isCurrent(stage));
+    assert.ok(coordinator.isCurrent(note));
+
+    // Exiting the just-committed stage briefly shows beat before note loads.
+    coordinator.expectModeCommit("beat", note);
+    assert.ok(coordinator.acknowledgeModeCommit("beat"));
+    assert.ok(coordinator.isCurrent(note));
+    coordinator.finish(stage);
+    coordinator.finish(note);
+  });
+
+  test("무대와 악보를 떠날 때의 중간 비트 커밋도 노트 로딩을 유지한다", () => {
+    for (const fromMode of ["stage", "score"] as const) {
+      const coordinator = createModeTransitionCoordinator();
+      const note = coordinator.begin();
+      coordinator.expectModeCommit("beat", note);
+      assert.ok(coordinator.acknowledgeModeCommit("beat"), `${fromMode} departure should be owned`);
+      assert.ok(coordinator.isCurrent(note), `${fromMode}→note must stay current`);
+      coordinator.finish(note);
+    }
+  });
+
+  test("바·노트·악보 위의 무대를 닫아도 최신 노트 전환이 유지된다", () => {
+    for (const underlyingMode of ["bar", "note", "score"] as const) {
+      const coordinator = createModeTransitionCoordinator();
+      const note = coordinator.begin();
+
+      // Stage is an overlay and reveals the underlying core mode on exit.
+      coordinator.expectModeCommit(underlyingMode, note);
+      assert.ok(coordinator.acknowledgeModeCommit(underlyingMode));
+      assert.ok(coordinator.isCurrent(note), `stage-over-${underlyingMode} should keep note current`);
+      coordinator.finish(note);
+    }
+  });
+
+  test("외부 모드 변경은 커밋 뒤에도 아직 로딩 중인 무대 전환을 무효화한다", () => {
+    const coordinator = createModeTransitionCoordinator();
+    const pendingStageLoad = coordinator.begin();
+    coordinator.expectModeCommit("stage", pendingStageLoad);
+    assert.ok(coordinator.acknowledgeModeCommit("stage"));
+
+    // Stage UI has committed, but its practice-book request remains active.
+    // A menu/back/shortcut mode update must still win over that late result.
+    assert.ok(!coordinator.acknowledgeModeCommit("bar"));
+    assert.ok(!coordinator.isCurrent(pendingStageLoad));
+  });
+
+  test("외부 비트 선택은 내부 탈출 비트와 같은 값이어도 최신 노트 로딩을 무효화한다", () => {
+    const coordinator = createModeTransitionCoordinator();
+    const note = coordinator.begin();
+    coordinator.expectModeCommit("beat", note);
+
+    // The central non-dial setter invalidates before it schedules its own
+    // same-value beat write, so the later commit cannot be mistaken as owned.
+    coordinator.invalidateForExternalModeChange();
+    assert.ok(!coordinator.isCurrent(note));
+    assert.ok(coordinator.acknowledgeModeCommit("beat"));
   });
 });
 

@@ -32,6 +32,7 @@ import Animated, {
   withSequence,
   Easing,
   useSharedValue,
+  cancelAnimation,
 } from "react-native-reanimated";
 import { safePlay, notifyAudioPoolFallback, detectPoolCutoffRisk } from "@/lib/audio-utils";
 import { registerMetronomeBridge, notifyUserMetronomeToggle } from "@/lib/audio-session";
@@ -101,6 +102,11 @@ import { applySwitchToMode, type ModeSwitchState, type ModeSwitchCallbacks } fro
 import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist";
 import { createRafBatcher } from "@/lib/raf-batcher";
 import type { ModeSlot } from "@/components/ModeSwitcherDial";
+import {
+  createModeTransitionCoordinator,
+  modeTransitionMayApply,
+  stageExitRevealMode,
+} from "@/lib/mode-dial-logic";
 import type { ScoreDocument } from "@/lib/score-types";
 import type { OnboardingResult } from "@/components/OnboardingModal";
 import {
@@ -200,11 +206,19 @@ export function useMetronomeScreen() {
   const [coreMode, setCoreMode] = useState<"beat" | "bar" | "note" | "score">("beat");
   const activeModeRef = useRef<"beat" | "bar" | "note" | "score">("beat");
   const playbackModeRef = useRef<PlaybackMode>("beat");
+  const modeTransitionCoordinatorRef = useRef(createModeTransitionCoordinator());
+  const modeTransitionWriteTokenRef = useRef<number | null>(null);
   // 원자적 setter: ref와 React state를 항상 동시에 갱신.
   // useEffect 동기화를 쓰지 않으므로 effect 지연으로 인한 stale 덮어쓰기가 없다.
   // setCoreMode는 React가 렌더 간 동일 참조를 보장하므로 deps 없이 안정적.
   const setCoreModeAndRef = useCallback(
     (mode: "beat" | "bar" | "note" | "score") => {
+      const token = modeTransitionWriteTokenRef.current;
+      if (token === null) {
+        modeTransitionCoordinatorRef.current.invalidateForExternalModeChange();
+      } else {
+        modeTransitionCoordinatorRef.current.expectModeCommit(mode, token);
+      }
       activeModeRef.current = mode;
       playbackModeRef.current = mode;
       setCoreMode(mode);
@@ -230,14 +244,10 @@ export function useMetronomeScreen() {
     get current(): boolean { return activeModeRef.current === "bar"; },
     set current(v: boolean) {
       if (v) {
-        activeModeRef.current = "bar";
-        playbackModeRef.current = "bar";
-        setCoreMode("bar");
+        setCoreModeAndRef("bar");
       } else if (activeModeRef.current === "bar") {
         // false 경로: 현재 bar 모드일 때만 beat로 클리어 (다른 모드는 no-op)
-        activeModeRef.current = "beat";
-        playbackModeRef.current = "beat";
-        setCoreMode("beat");
+        setCoreModeAndRef("beat");
       }
     },
   });
@@ -246,14 +256,10 @@ export function useMetronomeScreen() {
     get current(): boolean { return activeModeRef.current === "note"; },
     set current(v: boolean) {
       if (v) {
-        activeModeRef.current = "note";
-        playbackModeRef.current = "note";
-        setCoreMode("note");
+        setCoreModeAndRef("note");
       } else if (activeModeRef.current === "note") {
         // false 경로: 현재 note 모드일 때만 beat로 클리어 (다른 모드는 no-op)
-        activeModeRef.current = "beat";
-        playbackModeRef.current = "beat";
-        setCoreMode("beat");
+        setCoreModeAndRef("beat");
       }
     },
   });
@@ -2690,7 +2696,10 @@ export function useMetronomeScreen() {
     e.mode === "score" ||
     e.mode === "beat";
 
-  const handleEnterNoteMode = useCallback(async () => {
+  const handleEnterNoteMode = useCallback(async (
+    isCurrentTransition?: () => boolean,
+    transitionToken?: number,
+  ) => {
     const engine = engineRef.current;
     if (engine && isPlaying) {
       engine.stop();
@@ -2702,9 +2711,16 @@ export function useMetronomeScreen() {
     }
     completePracticeSessionRef.current("manual");
     const book = await loadPracticeBook();
+    if (!modeTransitionMayApply(isCurrentTransition)) return;
     setNoteBarEntries(book.filter(isNoteSourceEntry));
-    setNoteMode(true);
-    noteModeRef.current = true;
+    if (transitionToken !== undefined) {
+      modeTransitionWriteTokenRef.current = transitionToken;
+    }
+    try {
+      setNoteMode(true);
+    } finally {
+      modeTransitionWriteTokenRef.current = null;
+    }
     setNoteIsPlaying(false);
     setNoteCurrentIndex(-1);
   }, [isPlaying]);
@@ -2720,7 +2736,6 @@ export function useMetronomeScreen() {
     completePracticeSessionRef.current("manual");
     resetPlaybackVisuals();
     setNoteMode(false);
-    noteModeRef.current = false;
     setNoteIsPlaying(false);
     noteIsPlayingRef.current = false;
     setNoteCurrentIndex(-1);
@@ -2775,6 +2790,7 @@ export function useMetronomeScreen() {
     : "beat";
 
   const switchToMode = useCallback(async (mode: ModeSlot, direction: "left" | "right" = "right") => {
+    const transitionGeneration = modeTransitionCoordinatorRef.current.begin();
     const state: ModeSwitchState = {
       currentMode,
       stageModeActive, showMenu, showPracticeBook, activeModal,
@@ -2783,28 +2799,88 @@ export function useMetronomeScreen() {
     // 메뉴 진입·이탈 → 위에서 아래로 슬라이드 (Y축)
     // 그 외 모드 전환  → 다이얼 방향에 따라 좌우 슬라이드 (X축)
     if (mode !== currentMode) {
+      cancelAnimation(modeSlideX);
+      cancelAnimation(modeSlideY);
+      cancelAnimation(modeSlideOpacity);
       modeSlideX.value       = direction === "right" ? windowWidth * 0.25 : -windowWidth * 0.25;
       modeSlideY.value       = 0;
       modeSlideOpacity.value = 0;
     }
-    const cb: ModeSwitchCallbacks = {
-      handleExitNoteMode,
-      handleBarModeChange,
-      setScoreMode: (m) => setScoreMode(m as "list" | "editor" | null),
-      exitStageMode: exitStageModeForPlayback,
-      setActiveModal: (m) => setActiveModal(m as ActiveModal),
-      handleEnterNoteMode,
-      enterStageMode: enterStageModeForPlayback,
-      openExclusive: (m) => openExclusive(m as ActiveModal),
+    const applyOwnedCoreMode = (
+      nextMode: "beat" | "bar" | "note" | "score",
+      apply: () => void,
+    ) => {
+      modeTransitionCoordinatorRef.current.expectModeCommit(nextMode, transitionGeneration);
+      modeTransitionWriteTokenRef.current = transitionGeneration;
+      try {
+        apply();
+      } finally {
+        modeTransitionWriteTokenRef.current = null;
+      }
     };
-    await applySwitchToMode(mode, state, cb);
+    const underlyingCoreMode = stageExitRevealMode(coreMode);
+    const underlyingMode: ModeSlot = stageModeActive ? "stage" : underlyingCoreMode;
+    const cb: ModeSwitchCallbacks = {
+      handleExitNoteMode: () => applyOwnedCoreMode("beat", handleExitNoteMode),
+      handleBarModeChange: (v) => applyOwnedCoreMode(v ? "bar" : "beat", () => handleBarModeChange(v)),
+      setScoreMode: (m) => applyOwnedCoreMode(m === null ? "beat" : "score", () => setScoreMode(m as "list" | "editor" | null)),
+      exitStageMode: () => {
+        // Stage is an overlay: closing it reveals whichever core mode was
+        // underneath, rather than necessarily returning to beat.
+        modeTransitionCoordinatorRef.current.expectModeCommit(underlyingCoreMode, transitionGeneration);
+        exitStageModeForPlayback();
+      },
+      setActiveModal: (m) => {
+        const expected = m === "menu"
+          ? "menu"
+          : m === "practiceBook"
+          ? "practice"
+          : m === null
+          ? underlyingMode
+          : null;
+        if (expected) modeTransitionCoordinatorRef.current.expectModeCommit(expected, transitionGeneration);
+        setActiveModal(m as ActiveModal);
+      },
+      handleEnterNoteMode: () => handleEnterNoteMode(
+        () => modeTransitionCoordinatorRef.current.isCurrent(transitionGeneration),
+        transitionGeneration,
+      ),
+      enterStageMode: () => {
+        modeTransitionCoordinatorRef.current.expectModeCommit("stage", transitionGeneration);
+        enterStageModeForPlayback();
+      },
+      openExclusive: (m) => {
+        if (m === "practiceBook") {
+          modeTransitionCoordinatorRef.current.expectModeCommit("practice", transitionGeneration);
+        }
+        openExclusive(m as ActiveModal);
+      },
+    };
+    try {
+      await applySwitchToMode(mode, state, cb);
+    } catch (error) {
+      modeTransitionCoordinatorRef.current.finish(transitionGeneration);
+      throw error;
+    }
+    // An older async mode entry (notably note-mode practice-book loading)
+    // must not perform any post-transition work after a newer selection wins.
+    if (!modeTransitionCoordinatorRef.current.isCurrent(transitionGeneration)) {
+      modeTransitionCoordinatorRef.current.finish(transitionGeneration);
+      return;
+    }
     // Load practice entries after entering stage mode (side-effect kept in hook)
     if (mode === "stage") {
       loadPracticeBook().then((entries) => {
-        setStagePracticeEntries(entries);
-      }).catch(() => {});
+        if (modeTransitionCoordinatorRef.current.isCurrent(transitionGeneration)) {
+          setStagePracticeEntries(entries);
+        }
+      }).catch(() => {}).finally(() => {
+        modeTransitionCoordinatorRef.current.finish(transitionGeneration);
+      });
+      return;
     }
-  }, [currentMode, coreMode, stageModeActive, showMenu, showPracticeBook, handleExitNoteMode, handleBarModeChange, handleEnterNoteMode, enterStageModeForPlayback, exitStageModeForPlayback, activeModal, openExclusive]);
+    modeTransitionCoordinatorRef.current.finish(transitionGeneration);
+  }, [currentMode, coreMode, stageModeActive, showMenu, showPracticeBook, handleExitNoteMode, handleBarModeChange, handleEnterNoteMode, enterStageModeForPlayback, exitStageModeForPlayback, activeModal, openExclusive, modeSlideX, modeSlideY, modeSlideOpacity, windowWidth]);
 
   // ── 상단 중앙 레이블 탭 → 다음 모드 순환 ──
   const MODE_CYCLE: ModeSlot[] = ["beat", "bar", "note", "stage", "practice"];
@@ -2819,12 +2895,19 @@ export function useMetronomeScreen() {
   useEffect(() => {
     if (prevModeRef.current !== currentMode) {
       prevModeRef.current = currentMode;
+      // A queued synchronous mode can commit while a newer async selection is
+      // loading. The coordinator recognises that earlier commit without
+      // cancelling the newer request; only a truly external mode update wins.
+      modeTransitionCoordinatorRef.current.acknowledgeModeCommit(currentMode);
+      cancelAnimation(modeSlideX);
+      cancelAnimation(modeSlideY);
+      cancelAnimation(modeSlideOpacity);
       modeSlideX.value       = withTiming(0, { duration: 270, easing: Easing.out(Easing.cubic) });
       modeSlideY.value       = withTiming(0, { duration: 270, easing: Easing.out(Easing.cubic) });
       modeSlideOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMode]);
+  }, [currentMode, modeSlideX, modeSlideY, modeSlideOpacity]);
 
   const handleNoteAddToQueue = useCallback((entry: PracticeEntry, insertAt?: number) => {
     setNoteQueue(prev => {

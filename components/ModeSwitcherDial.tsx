@@ -24,7 +24,9 @@ import { useScale } from "@/lib/scale";
 import { onAccentColor } from "@/lib/color-contrast";
 import {
   MODE_DIAL_SLOTS,
+  MODE_DIAL_SWIPE_SIGN,
   nearestModeDialSnapTarget,
+  modeDialTransitionDirection,
   shortestModeDialTarget,
   snapModeDialPosition,
   wrapModeDialPosition,
@@ -127,10 +129,10 @@ function effectiveArcParams(wall: Wall, t: number): { centAng: number; halfSpan:
 // deg = centAng − offset×ANGLE_STEP 배치에서 scroll+1 시 아이콘은 +deg 방향으로 이동:
 // top=왼쪽, right=위, bottom=오른쪽, left=아래. 그 방향 스와이프가 다음 모드.
 const SWIPE_CFG: Record<Wall, { axis: "x" | "y"; sign: 1 | -1 }> = {
-  top:    { axis: "x", sign: -1 },
-  right:  { axis: "y", sign: -1 },
-  bottom: { axis: "x", sign:  1 },
-  left:   { axis: "y", sign:  1 },
+  top:    { axis: "x", sign: MODE_DIAL_SWIPE_SIGN.top },
+  right:  { axis: "y", sign: MODE_DIAL_SWIPE_SIGN.right },
+  bottom: { axis: "x", sign: MODE_DIAL_SWIPE_SIGN.bottom },
+  left:   { axis: "y", sign: MODE_DIAL_SWIPE_SIGN.left },
 };
 
 // ── Anchor: exactly on the wall edge (camera-safe) ───────────────────────────
@@ -447,6 +449,8 @@ function ModeSwitcherDial({
   const selectedIndexRef = useRef(initIdx);
   const selectionPulse = useSharedValue(0);
   const isConfirmingRef = useRef(false);
+  const animationGenerationRef = useRef(0);
+  const selectionGenerationRef = useRef(0);
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -472,8 +476,10 @@ function ModeSwitcherDial({
   }, [selectionPulse]);
 
   const settleToPosition = useCallback((position: number) => {
+    const animationGeneration = ++animationGenerationRef.current;
     const snapped = snapModeDialPosition(position);
     const visualTarget = nearestModeDialSnapTarget(position);
+    cancelAnimation(scrollPosition);
     scrollPosRef.current = snapped;
     highlightPosition(snapped);
     // Keep the logical index canonical, but spring to its closest visual
@@ -486,6 +492,7 @@ function ModeSwitcherDial({
     });
     if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
     settleTimerRef.current = setTimeout(() => {
+      if (animationGeneration !== animationGenerationRef.current) return;
       settleTimerRef.current = null;
     }, 220);
   }, [highlightPosition, scrollPosition]);
@@ -496,6 +503,7 @@ function ModeSwitcherDial({
       clearTimeout(settleTimerRef.current);
       settleTimerRef.current = null;
     }
+    ++animationGenerationRef.current;
     cancelAnimation(scrollPosition);
     scrollPosRef.current = session.scrollPosition;
     selectedIndexRef.current = session.selectedIndex;
@@ -527,6 +535,12 @@ function ModeSwitcherDial({
     if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
     if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    ++selectionGenerationRef.current;
+    ++animationGenerationRef.current;
+    cancelAnimation(scrollPosition);
+    cancelAnimation(fanScale);
+    cancelAnimation(fanOpacity);
+    cancelAnimation(overlayOp);
   }, []);
 
   const doOpen = useCallback(() => {
@@ -540,6 +554,9 @@ function ModeSwitcherDial({
       clearTimeout(closeTimerRef.current);
       closeTimerRef.current = null;
     }
+    cancelAnimation(fanScale);
+    cancelAnimation(fanOpacity);
+    cancelAnimation(overlayOp);
     setIsOpen(true);
     isOpenRef.current = true;
     fanScale.value   = withTiming(1,   { duration: 220, easing: Easing.out(Easing.cubic) });
@@ -551,6 +568,9 @@ function ModeSwitcherDial({
 
   const doClose = useCallback(() => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    cancelAnimation(fanScale);
+    cancelAnimation(fanOpacity);
+    cancelAnimation(overlayOp);
     fanScale.value   = withTiming(0.05, { duration: 180, easing: Easing.in(Easing.cubic) });
     fanOpacity.value = withTiming(0,    { duration: 150 });
     overlayOp.value  = withTiming(0,    { duration: 160 });
@@ -654,6 +674,11 @@ function ModeSwitcherDial({
       onStartShouldSetPanResponder: () => true,   // always claim — blocks overlay
       onPanResponderGrant: (e) => {
         if (isConfirmingRef.current) return;
+        ++animationGenerationRef.current;
+        cancelAnimation(scrollPosition);
+        // A spring may still be moving toward an equivalent wrapped index.
+        // New input always owns the canonical logical position before moving.
+        scrollPosition.value = scrollPosRef.current;
         const { axis } = SWIPE_CFG[wallRef.current];
         swipeStart.current = {
           coord:       axis === "x" ? e.nativeEvent.pageX : e.nativeEvent.pageY,
@@ -721,12 +746,11 @@ function ModeSwitcherDial({
   const confirmSelection = useCallback(() => {
     if (!isOpenRef.current || isConfirmingRef.current) return;
     isConfirmingRef.current = true;
+    const selectionGeneration = ++selectionGenerationRef.current;
     const snapped = snapModeDialPosition(scrollPosRef.current);
     // 탭/스와이프 애니메이션과 같은 최단 경로 기준으로 전환 방향 결정
     const currentIdx = MODES.indexOf(currentModeRef.current);
-    const visualTarget = shortestModeDialTarget(currentIdx, snapped);
-    const delta = visualTarget - currentIdx;
-    const direction: "left" | "right" = delta < 0 ? "left" : "right";
+    const direction = modeDialTransitionDirection(currentIdx, snapped);
     selectionPulse.value = withSequence(
       withTiming(1, { duration: 70, easing: Easing.out(Easing.quad) }),
       withTiming(0, { duration: 130, easing: Easing.in(Easing.quad) }),
@@ -734,6 +758,7 @@ function ModeSwitcherDial({
     doClose();
     confirmTimerRef.current = setTimeout(() => {
       confirmTimerRef.current = null;
+      if (selectionGeneration !== selectionGenerationRef.current) return;
       try {
         // Keep the confirmation lock until an async mode transition (notably
         // note-mode setup) has handed control back. Releasing it on a fixed
@@ -741,11 +766,21 @@ function ModeSwitcherDial({
         Promise.resolve(
           onSelectModeRef.current(MODES[snapped], direction),
         ).then(
-          () => { isConfirmingRef.current = false; },
-          () => { isConfirmingRef.current = false; },
+          () => {
+            if (selectionGeneration === selectionGenerationRef.current) {
+              isConfirmingRef.current = false;
+            }
+          },
+          () => {
+            if (selectionGeneration === selectionGenerationRef.current) {
+              isConfirmingRef.current = false;
+            }
+          },
         );
       } catch {
-        isConfirmingRef.current = false;
+        if (selectionGeneration === selectionGenerationRef.current) {
+          isConfirmingRef.current = false;
+        }
       }
     }, 200);
   }, [doClose, selectionPulse]);
