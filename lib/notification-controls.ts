@@ -26,7 +26,15 @@ async function getNotifications() {
     Notifications = await import("expo-notifications");
     return Notifications;
   } catch {
-    return null;
+    // Jest's CommonJS runtime cannot execute dynamic import callbacks without
+    // experimental VM modules. Native bundlers support the import above; this
+    // fallback keeps the same optional-module behavior testable in Jest.
+    try {
+      Notifications = require("expo-notifications") as typeof import("expo-notifications");
+      return Notifications;
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -48,13 +56,16 @@ async function initHandler() {
 
 initHandler();
 
-function buildActions(isPlaying: boolean, lang: Language = "ko") {
+export function buildNotificationActions(isPlaying: boolean, lang: Language = "ko") {
   const t = createT(lang);
   return [
     {
       identifier: "BPM_DOWN",
       buttonTitle: "− BPM",
-      options: { opensAppToForeground: true },
+      // BPM adjustments are intentionally handled while the app stays
+      // backgrounded. The response listener still receives live and cold-start
+      // actions even when the platform does not foreground the UI.
+      options: { opensAppToForeground: false },
     },
     {
       identifier: "TOGGLE_PLAY",
@@ -66,7 +77,7 @@ function buildActions(isPlaying: boolean, lang: Language = "ko") {
     {
       identifier: "BPM_UP",
       buttonTitle: "+ BPM",
-      options: { opensAppToForeground: true },
+      options: { opensAppToForeground: false },
     },
   ];
 }
@@ -122,7 +133,7 @@ export async function setupNotificationControls(lang: Language = "ko") {
       });
     }
 
-    await N.setNotificationCategoryAsync(CATEGORY_ID, buildActions(false, lang));
+    await N.setNotificationCategoryAsync(CATEGORY_ID, buildNotificationActions(false, lang));
 
     isSetup = true;
   } catch (e) {
@@ -153,7 +164,7 @@ export async function showPlayingNotification(
   try {
     await N.setNotificationCategoryAsync(
       CATEGORY_ID,
-      buildActions(true, lang)
+      buildNotificationActions(true, lang)
     );
 
     await N.scheduleNotificationAsync({
@@ -208,7 +219,7 @@ export async function showPausedNotification(
   try {
     await N.setNotificationCategoryAsync(
       CATEGORY_ID,
-      buildActions(false, lang)
+      buildNotificationActions(false, lang)
     );
 
     await N.scheduleNotificationAsync({
