@@ -5,6 +5,7 @@ import type {
   NoteSampleSourceMap,
   NoteSampleChannelMap,
   NoteSampleVolumeMap,
+  NoteSampleSpeedMap,
 } from "@/lib/note-samples";
 
 /**
@@ -40,6 +41,10 @@ export interface NoteSamplesHook {
   volumesRef: React.MutableRefObject<NoteSampleVolumeMap>;
   setVolumes: React.Dispatch<React.SetStateAction<NoteSampleVolumeMap>>;
   setVolumesAll: (m: NoteSampleVolumeMap) => void;
+  speeds: NoteSampleSpeedMap;
+  speedsRef: React.MutableRefObject<NoteSampleSpeedMap>;
+  setSpeeds: React.Dispatch<React.SetStateAction<NoteSampleSpeedMap>>;
+  setSpeedsAll: (m: NoteSampleSpeedMap) => void;
 
   /** Replace all four maps in one call. Both state and refs sync together. */
   replaceAll(maps: {
@@ -48,6 +53,7 @@ export interface NoteSamplesHook {
     sources?: NoteSampleSourceMap;
     channels?: NoteSampleChannelMap;
     volumes?: NoteSampleVolumeMap;
+    speeds?: NoteSampleSpeedMap;
   }): void;
 }
 
@@ -62,6 +68,8 @@ export function useNoteSamples(): NoteSamplesHook {
   const channelsRef = useRef<NoteSampleChannelMap>({});
   const [volumes, setVolumes] = useState<NoteSampleVolumeMap>({});
   const volumesRef = useRef<NoteSampleVolumeMap>({});
+  const [speeds, setSpeeds] = useState<NoteSampleSpeedMap>({});
+  const speedsRef = useRef<NoteSampleSpeedMap>({});
 
   const setSamplesAll = useCallback((m: NoteSampleMap) => {
     setSamples(m);
@@ -83,6 +91,10 @@ export function useNoteSamples(): NoteSamplesHook {
     setVolumes(m);
     volumesRef.current = m;
   }, []);
+  const setSpeedsAll = useCallback((m: NoteSampleSpeedMap) => {
+    setSpeeds(m);
+    speedsRef.current = m;
+  }, []);
 
   const replaceAll = useCallback((maps: {
     samples?: NoteSampleMap;
@@ -90,6 +102,7 @@ export function useNoteSamples(): NoteSamplesHook {
     sources?: NoteSampleSourceMap;
     channels?: NoteSampleChannelMap;
     volumes?: NoteSampleVolumeMap;
+    speeds?: NoteSampleSpeedMap;
   }) => {
     if (maps.samples !== undefined) {
       setSamples(maps.samples);
@@ -111,6 +124,10 @@ export function useNoteSamples(): NoteSamplesHook {
       setVolumes(maps.volumes);
       volumesRef.current = maps.volumes;
     }
+    if (maps.speeds !== undefined) {
+      setSpeeds(maps.speeds);
+      speedsRef.current = maps.speeds;
+    }
   }, []);
 
   return {
@@ -119,6 +136,7 @@ export function useNoteSamples(): NoteSamplesHook {
     sources, sourcesRef, setSources, setSourcesAll,
     channels, channelsRef, setChannels, setChannelsAll,
     volumes, volumesRef, setVolumes, setVolumesAll,
+    speeds, speedsRef, setSpeeds, setSpeedsAll,
     replaceAll,
   };
 }

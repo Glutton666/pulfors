@@ -83,6 +83,12 @@
         }
       ],
       [
+        "react-native-audio-api",
+        {
+          "iosMicrophonePermission": "마이크를 사용하여 악기 음정을 감지하고 튜닝합니다."
+        }
+      ],
+      [
         "expo-notifications",
         {
           "icon": "./assets/images/android-icon-monochrome.png",

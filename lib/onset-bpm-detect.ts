@@ -28,6 +28,17 @@ export interface OnDeviceBpmResult {
   failureReason?: BpmDetectFailureReason;
 }
 
+/** Converts local BPM candidates to the user's current pitch-changing speed. */
+export function adjustBpmCandidatesForPlaybackSpeed(
+  candidates: readonly number[],
+  speed: number,
+): number[] {
+  const validSpeed = Math.max(0.5, Math.min(2, Number.isFinite(speed) ? speed : 1));
+  return [...new Set(candidates
+    .map((candidate) => Math.round(candidate * validSpeed))
+    .filter((candidate) => candidate >= 50 && candidate <= 250))];
+}
+
 function buildHannWindow(size: number): Float32Array {
   const w = new Float32Array(size);
   for (let i = 0; i < size; i++) {

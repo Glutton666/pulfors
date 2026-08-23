@@ -211,6 +211,24 @@ function resample(
   return out;
 }
 
+/** Resamples PCM for ordinary speed playback: a higher speed shortens the clip
+ * and raises pitch, matching expo-audio with pitch correction disabled. */
+export function resampleForPlaybackSpeed(pcm: Float32Array, speed = 1): Float32Array {
+  const clamped = Math.max(0.5, Math.min(2, speed));
+  if (clamped === 1) return pcm;
+  const len = Math.max(1, Math.floor(pcm.length / clamped));
+  const out = new Float32Array(len);
+  for (let i = 0; i < len; i++) {
+    const pos = i * clamped;
+    const low = Math.floor(pos);
+    const fraction = pos - low;
+    out[i] = low + 1 < pcm.length
+      ? pcm[low] * (1 - fraction) + pcm[low + 1] * fraction
+      : pcm[low] ?? 0;
+  }
+  return out;
+}
+
 function b64ToAB(b64: string): ArrayBuffer {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
@@ -289,13 +307,21 @@ export async function decodeSampleFile(
       return resample(pcm, sampleRate, RENDER_SR);
     } else {
       const fileUri = rawUri.startsWith("file://") ? rawUri : "file://" + rawUri;
-      const file = new File(fileUri);
-      const ab = await file.arrayBuffer();
       try {
-        const { pcm, sampleRate } = parseWav(ab);
-        return resample(pcm, sampleRate, RENDER_SR);
+        // The native decoder operates entirely on-device and supports WAV, MP3,
+        // FLAC/OGG/Opus plus AAC/M4A/MP4. It avoids the former server ffmpeg path.
+        // Lazy require keeps Node-only render tests from evaluating the package's
+        // ESM entry and keeps the web bundle on the browser decoder path.
+        const { decodeAudioData: decodeNativeAudioData } = require("react-native-audio-api") as {
+          decodeAudioData: (input: string, sampleRate?: number) => Promise<{
+            getChannelData(channel: number): Float32Array;
+          }>;
+        };
+        const audioBuffer = await decodeNativeAudioData(fileUri, RENDER_SR);
+        const pcm = audioBuffer.getChannelData(0);
+        return new Float32Array(pcm);
       } catch {
-        logger.warn("[AudioRenderer] Non-WAV on native, trying raw decode");
+        logger.warn("[AudioRenderer] Unsupported local audio codec:", rawUri.slice(0, 80));
         return null;
       }
     }
@@ -356,6 +382,8 @@ export interface RenderMeasureParams {
   sampleVolume: number;
   /** Per-sample gain values. Missing keys preserve the historic 100% level. */
   sampleVolumes?: Record<string, number>;
+  /** Per-sample playback rates. Missing keys preserve original speed. */
+  sampleSpeeds?: Record<string, number>;
   metronomeChannel?: SampleChannel;
   sampleChannels?: Record<string, SampleChannel>;
   layerClickPCMs?: Map<string, ClickPCMs>;
@@ -372,6 +400,7 @@ export function renderMeasure(params: RenderMeasureParams): Float32Array | { lef
     clickVolume,
     sampleVolume,
     sampleVolumes = {},
+    sampleSpeeds = {},
     metronomeChannel = "both",
     sampleChannels = {},
     layerClickPCMs,
@@ -456,11 +485,12 @@ export function renderMeasure(params: RenderMeasureParams): Float32Array | { lef
             trimStart,
             Math.min(trimStart + trimLen, sample.pcm.length),
           );
+          const speedAdjusted = resampleForPlaybackSpeed(trimmed, sampleSpeeds[key] ?? 1);
           if (right) {
             const ch = sampleChannels[key] ?? "both";
-            mixToChannel(left, right, trimmed, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), ch);
+            mixToChannel(left, right, speedAdjusted, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), ch);
           } else {
-            mixInto(left, trimmed, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), shouldAbort);
+            mixInto(left, speedAdjusted, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), shouldAbort);
           }
         }
       }
@@ -534,6 +564,7 @@ export async function renderMeasureAbortable(
     clickVolume,
     sampleVolume,
     sampleVolumes = {},
+    sampleSpeeds = {},
     metronomeChannel = "both",
     sampleChannels = {},
     layerClickPCMs,
@@ -611,10 +642,11 @@ export async function renderMeasureAbortable(
             ? Math.round((sample.trimDurationMs / 1000) * RENDER_SR)
             : sample.pcm.length - trimStart;
           const trimmed = sample.pcm.subarray(trimStart, Math.min(trimStart + trimLen, sample.pcm.length));
+          const speedAdjusted = resampleForPlaybackSpeed(trimmed, sampleSpeeds[key] ?? 1);
           if (right) {
-            await mixToChannel(left, right, trimmed, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), sampleChannels[key] ?? "both");
+            await mixToChannel(left, right, speedAdjusted, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), sampleChannels[key] ?? "both");
           } else {
-            await mixIntoAbortable(left, trimmed, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), signal);
+            await mixIntoAbortable(left, speedAdjusted, offsetSamples, sampleVolume * (sampleVolumes[key] ?? 1), signal);
           }
         }
       }

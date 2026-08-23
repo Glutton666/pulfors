@@ -66,6 +66,7 @@ jest.mock("@/lib/note-samples", () => ({
   saveNoteSampleSources: jest.fn(),
   saveNoteSampleChannels: jest.fn(),
   saveNoteSampleVolumes: jest.fn(),
+  saveNoteSampleSpeeds: jest.fn(),
 }));
 
 jest.mock("@/lib/sample-cache", () => ({
@@ -140,6 +141,9 @@ function makeParams(
     noteSampleVolumes: {},
     setNoteSampleVolumes: jest.fn(),
     noteSampleVolumesRef: { current: {} },
+    noteSampleSpeeds: {},
+    setNoteSampleSpeeds: jest.fn(),
+    noteSampleSpeedsRef: { current: {} },
     setNoteSampleMetroChannels: jest.fn(),
     noteSampleMetroChannelsRef: { current: {} },
     noteSampleSoundsRef: { current: {} },

@@ -41,20 +41,19 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import type { SampleSource } from "@/lib/note-samples";
 import type { SampleChannel, MetroChannel } from "@/lib/stereo-channel";
 import { buildPreviewUri } from "@/lib/note-preview";
-import { getApiUrl } from "@/lib/query-client";
 import { soundSets } from "@/lib/metronome-engine";
 import type { BuiltinSoundSet } from "@/lib/storage";
 import { safePlay } from "@/lib/audio-utils";
 import { captureBreadcrumb } from "@/lib/error-tracking";
 import { decodeSampleFile, getRenderSampleRate } from "@/lib/audio-renderer";
-import { detectBpmCandidatesOnDevice } from "@/lib/onset-bpm-detect";
+import { adjustBpmCandidatesForPlaybackSpeed, detectBpmCandidatesOnDevice } from "@/lib/onset-bpm-detect";
 
 type Phase = "idle" | "countdown" | "recording" | "trimming" | "loading";
 
 interface NoteRecorderModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: MetroChannel, sampleGain?: number) => void;
+  onSave: (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: MetroChannel, sampleGain?: number, sampleSpeed?: number) => void;
   onDelete: () => void;
   beatIndex: number;
   subIndex: number;
@@ -62,6 +61,7 @@ interface NoteRecorderModalProps {
   existingName?: string;
   existingChannel?: SampleChannel;
   existingVolume?: number;
+  existingSpeed?: number;
   existingMetronomeChannel?: MetroChannel;
   bpm: number;
   beatsPerMeasure?: number;
@@ -72,11 +72,8 @@ interface NoteRecorderModalProps {
 const MAX_RECORD_SECONDS = 10;
 const COUNTDOWN_BEATS = 4;
 
-// iOS supports uncompressed linear-PCM (WAV) recording directly via expo-audio,
-// enabling fully on-device BPM analysis without a server round-trip.
-// Android's MediaRecorder API has no WAV/PCM container output option (only
-// 3gp/mpeg4/amr/aac/webm), so Android and web keep the compressed HIGH_QUALITY
-// preset and continue to use the server-side ffmpeg analysis path.
+// iOS records WAV, while Android/web use their platform defaults. All supported
+// formats are decoded locally when the user explicitly requests BPM analysis.
 const WAV_RECORDING_OPTIONS: RecordingOptions = {
   extension: ".wav",
   sampleRate: 44100,
@@ -103,22 +100,6 @@ const WAV_RECORDING_OPTIONS: RecordingOptions = {
 const RECORDER_OPTIONS: RecordingOptions =
   Platform.OS === "ios" ? WAV_RECORDING_OPTIONS : RecordingPresets.HIGH_QUALITY;
 
-function isWavUri(uri: string, mimeType?: string | null): boolean {
-  if (mimeType && mimeType.toLowerCase().includes("wav")) return true;
-  const lower = uri.toLowerCase().split("?")[0].split("#")[0];
-  return lower.endsWith(".wav") || lower.endsWith(".wave");
-}
-
-function mimeTypeToServerExt(mimeType?: string | null): string | null {
-  if (!mimeType) return null;
-  const m = mimeType.toLowerCase();
-  if (m.includes("wav")) return ".wav";
-  if (m.includes("mp4") || m.includes("m4a") || m.includes("aac")) return ".m4a";
-  if (m.includes("3gpp") || m.includes("3gp")) return ".3gp";
-  if (m.includes("webm")) return ".webm";
-  return null;
-}
-
 export function NoteRecorderModal({
   visible,
   onClose,
@@ -130,6 +111,7 @@ export function NoteRecorderModal({
   existingName,
   existingChannel = "both",
   existingVolume = 1,
+  existingSpeed = 1,
   existingMetronomeChannel,
   bpm,
   beatsPerMeasure = 4,
@@ -150,14 +132,16 @@ export function NoteRecorderModal({
   const [channel, setChannel] = useState<SampleChannel>(existingChannel);
   const [metronomeChannel, setMetronomeChannel] = useState<MetroChannel>(existingMetronomeChannel ?? "both");
   const [sampleGain, setSampleGain] = useState(Math.max(0, Math.min(1, existingVolume)));
+  const [sampleSpeed, setSampleSpeed] = useState(Math.max(0.5, Math.min(2, existingSpeed)));
 
   useEffect(() => {
     if (visible) {
       setChannel(existingChannel);
       setMetronomeChannel(existingMetronomeChannel ?? "both");
       setSampleGain(Math.max(0, Math.min(1, existingVolume)));
+      setSampleSpeed(Math.max(0.5, Math.min(2, existingSpeed)));
     }
-  }, [visible, existingChannel, existingMetronomeChannel, existingVolume]);
+  }, [visible, existingChannel, existingMetronomeChannel, existingVolume, existingSpeed]);
 
   const [localBpm, setLocalBpm] = useState(bpm);
 
@@ -179,9 +163,6 @@ export function NoteRecorderModal({
   const [waveformPeaks, setWaveformPeaks] = useState<number[]>([]);
   const bpmDetectTokenRef = useRef(0);
   const userAdjustedBpmRef = useRef(false);
-  const importedMimeTypeRef = useRef<string | null>(null);
-  const lastDetectRangeRef = useRef<{ start: number; end: number } | null>(null);
-  const trimDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const recorder = useAudioRecorder(RECORDER_OPTIONS);
   const recorderRef = useRef(recorder);
@@ -231,10 +212,6 @@ export function NoteRecorderModal({
       await releaseAudioSession("noteRecorderModal");
     } catch {}
     bpmDetectTokenRef.current += 1;
-    if (trimDebounceRef.current) {
-      clearTimeout(trimDebounceRef.current);
-      trimDebounceRef.current = null;
-    }
     if (toastTimerRef.current) {
       clearTimeout(toastTimerRef.current);
       toastTimerRef.current = null;
@@ -252,8 +229,7 @@ export function NoteRecorderModal({
     }
   }, []);
 
-  // On-device BPM detection for WAV audio (recorded on iOS, or any imported .wav file).
-  // Fully local: no network call, works from a trimmed slice of decoded PCM.
+  // Fully local: works from a trimmed slice of decoded PCM, with no network fallback.
   const runOnDeviceDetection = useCallback(async (uri: string, trimStartRatio: number, trimEndRatio: number) => {
     const token = ++bpmDetectTokenRef.current;
     setSuggestedBpms([]);
@@ -278,7 +254,12 @@ export function NoteRecorderModal({
         captureBreadcrumb({ category: "noteRecorder", message: "onDeviceBpm no candidates", level: "info", data: { reason: result.failureReason ?? "unknown" } });
         return;
       }
-      applyDetectionResult(result.candidates);
+      const speedAdjusted = adjustBpmCandidatesForPlaybackSpeed(result.candidates, sampleSpeed);
+      if (speedAdjusted.length === 0) {
+        setBpmError(t("noteRecorder", "bpmNotDetected"));
+        return;
+      }
+      applyDetectionResult(speedAdjusted);
     } catch (e) {
       if (token !== bpmDetectTokenRef.current) return;
       setBpmError(t("noteRecorder", "bpmFailGeneric"));
@@ -286,82 +267,19 @@ export function NoteRecorderModal({
     } finally {
       if (token === bpmDetectTokenRef.current) setIsFetchingBpm(false);
     }
-  }, [applyDetectionResult, t]);
+  }, [applyDetectionResult, sampleSpeed, t]);
 
-  // Server-side BPM detection for compressed (non-WAV) imported audio. Sends the
-  // trim range so the server clips with ffmpeg instead of the client truncating
-  // the file before upload.
-  const runServerDetection = useCallback(async (audioUri: string, trimStartRatio: number, trimEndRatio: number, mimeType?: string | null) => {
-    const token = ++bpmDetectTokenRef.current;
+  const measureBpm = useCallback(() => {
+    if (!recordedUri) return;
+    void runOnDeviceDetection(recordedUri, trimStart, trimEnd);
+  }, [recordedUri, trimStart, trimEnd, runOnDeviceDetection]);
+
+  const updateSampleSpeed = useCallback((next: number) => {
+    bpmDetectTokenRef.current += 1;
     setSuggestedBpms([]);
     setBpmError(null);
-    setIsFetchingBpm(true);
-    try {
-      const resp = await fetch(audioUri);
-      if (token !== bpmDetectTokenRef.current) return;
-      if (!resp.ok) {
-        captureBreadcrumb({ category: "noteRecorder", message: "fetchBpm audio fetch failed", level: "warning", data: { status: resp.status } });
-        return;
-      }
-      const ab = await resp.arrayBuffer();
-      const bytes = new Uint8Array(ab);
-
-      let binary = "";
-      const chunkSize = 8192;
-      for (let i = 0; i < bytes.length; i += chunkSize) {
-        binary += String.fromCharCode(...(bytes.subarray(i, i + chunkSize) as unknown as number[]));
-      }
-      const base64Audio = btoa(binary);
-
-      const uriLower = audioUri.toLowerCase().split("?")[0].split("#")[0];
-      const dotIdx = uriLower.lastIndexOf(".");
-      const rawExt = dotIdx >= 0 ? uriLower.slice(dotIdx) : ".m4a";
-      const ALLOWED_EXTS = [".wav", ".m4a", ".3gp", ".mp4", ".aac", ".webm"];
-      const mimeExt = mimeTypeToServerExt(mimeType);
-      const format = mimeExt ?? (ALLOWED_EXTS.includes(rawExt) ? rawExt : ".m4a");
-
-      const trimStartSec = audioDuration > 0 ? Math.max(0, trimStartRatio * audioDuration) : undefined;
-      const trimEndSec = audioDuration > 0 ? Math.max(0, trimEndRatio * audioDuration) : undefined;
-
-      const apiUrl = new URL("/api/analyze-audio", getApiUrl()).toString();
-      const apiResp = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          audio: base64Audio,
-          format,
-          trimStartSec,
-          trimEndSec,
-        }),
-      });
-      if (token !== bpmDetectTokenRef.current) return;
-      if (!apiResp.ok) {
-        captureBreadcrumb({ category: "noteRecorder", message: "fetchBpm API failed", level: "warning", data: { status: apiResp.status } });
-        return;
-      }
-      const data = await apiResp.json() as { bpm?: number | null; bpmCandidates?: number[]; error?: string };
-      const rawCandidates = Array.isArray(data.bpmCandidates) ? data.bpmCandidates : (typeof data.bpm === "number" ? [data.bpm] : []);
-      const validCandidates = rawCandidates.filter((b) => typeof b === "number" && b >= 50 && b <= 250);
-      if (validCandidates.length === 0) {
-        captureBreadcrumb({ category: "noteRecorder", message: "fetchBpm no candidates", level: "info" });
-        return;
-      }
-      applyDetectionResult(validCandidates);
-    } catch (e) {
-      if (token !== bpmDetectTokenRef.current) return;
-      captureBreadcrumb({ category: "noteRecorder", message: "fetchBpm exception", level: "error", data: { error: String(e) } });
-    } finally {
-      if (token === bpmDetectTokenRef.current) setIsFetchingBpm(false);
-    }
-  }, [applyDetectionResult, t, audioDuration]);
-
-  const detectBpmForCurrent = useCallback((uri: string, trimStartRatio: number, trimEndRatio: number, mimeType?: string | null) => {
-    if (isWavUri(uri, mimeType)) {
-      void runOnDeviceDetection(uri, trimStartRatio, trimEndRatio);
-    } else {
-      void runServerDetection(uri, trimStartRatio, trimEndRatio, mimeType);
-    }
-  }, [runOnDeviceDetection, runServerDetection]);
+    setSampleSpeed(Math.max(0.5, Math.min(2, Math.round(next * 20) / 20)));
+  }, []);
 
   const playClick = useCallback(() => {
     try { clickPlayer.seekTo(0); } catch {}
@@ -553,10 +471,7 @@ export function NoteRecorderModal({
           setTrimEnd(1);
         }
         setPhase("trimming");
-        importedMimeTypeRef.current = null;
         userAdjustedBpmRef.current = false;
-        lastDetectRangeRef.current = { start: 0, end: 1 };
-        detectBpmForCurrent(uri, 0, 1);
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
@@ -569,7 +484,7 @@ export function NoteRecorderModal({
       // 에러로 stop이 실패해도 세션은 반드시 회복.
       try { await releaseAudioSession("noteRecorderModal"); } catch {}
     }
-  }, [probeDurationSec, stopMetronomeClicks, detectBpmForCurrent]);
+  }, [probeDurationSec, stopMetronomeClicks]);
 
   const stopPreview = useCallback(() => {
     if (previewWatchRef.current) {
@@ -622,6 +537,8 @@ export function NoteRecorderModal({
       try { player.pause(); } catch {}
       try { player.replace({ uri: effectiveUri }); } catch {}
       player.volume = sampleGain;
+      player.playbackRate = sampleSpeed;
+      player.shouldCorrectPitch = false;
 
       const startSec = trimStart * audioDuration;
       const endSec = trimEnd * audioDuration;
@@ -653,7 +570,7 @@ export function NoteRecorderModal({
       }
 
       const startedAt = Date.now();
-      const expectedDurMs = Math.max(50, (endSec - startSec) * 1000);
+      const expectedDurMs = Math.max(50, ((endSec - startSec) * 1000) / sampleSpeed);
       previewWatchRef.current = setInterval(() => {
         try {
           const ct = player.currentTime;
@@ -669,7 +586,7 @@ export function NoteRecorderModal({
       captureBreadcrumb({ category: "noteRecorder", message: "playPreview failed", level: "warning", data: { error: String(e) } });
       stopPreview();
     }
-  }, [recordedUri, trimStart, trimEnd, audioDuration, channel, metronomeChannel, localBpm, beatsPerMeasure, sampleGain, playClick, stopMetronomeClicks, stopPreview]);
+  }, [recordedUri, trimStart, trimEnd, audioDuration, channel, metronomeChannel, localBpm, beatsPerMeasure, sampleGain, sampleSpeed, playClick, stopMetronomeClicks, stopPreview]);
 
   const playPreviewRef = useRef(playPreview);
   useEffect(() => { playPreviewRef.current = playPreview; }, [playPreview]);
@@ -696,11 +613,11 @@ export function NoteRecorderModal({
     if (audioDuration > 0) {
       const startMs = Math.floor(trimStart * audioDuration * 1000);
       const endMs = Math.floor(trimEnd * audioDuration * 1000);
-      onSave(`${recordedUri}#t=${startMs},${endMs}`, sampleName, sourceTypeRef.current, channel, finalMetronomeChannel, sampleGain);
+      onSave(`${recordedUri}#t=${startMs},${endMs}`, sampleName, sourceTypeRef.current, channel, finalMetronomeChannel, sampleGain, sampleSpeed);
     } else {
-      onSave(recordedUri, sampleName, sourceTypeRef.current, channel, finalMetronomeChannel, sampleGain);
+      onSave(recordedUri, sampleName, sourceTypeRef.current, channel, finalMetronomeChannel, sampleGain, sampleSpeed);
     }
-  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave, sampleName, channel, sampleGain]);
+  }, [recordedUri, trimStart, trimEnd, audioDuration, onSave, sampleName, channel, sampleGain, sampleSpeed]);
 
   const handleSave = useCallback(() => {
     if (!recordedUri) return;
@@ -824,10 +741,7 @@ export function NoteRecorderModal({
         setPhase("trimming");
         setLoadingMessage("");
         setLoadingProgress(0);
-        importedMimeTypeRef.current = asset.mimeType ?? null;
         userAdjustedBpmRef.current = false;
-        lastDetectRangeRef.current = { start: 0, end: 1 };
-        detectBpmForCurrent(fileUri, 0, 1, asset.mimeType);
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
@@ -844,7 +758,7 @@ export function NoteRecorderModal({
       setLoadingMessage("");
       setLoadingProgress(0);
     }
-  }, [t, probeDurationSec, detectBpmForCurrent]);
+  }, [t, probeDurationSec]);
 
   const handleDelete = useCallback(() => {
     onDelete();
@@ -916,29 +830,6 @@ export function NoteRecorderModal({
     const ratio = Math.min(1, Math.max(parsed / audioDuration, trimStart + 0.01));
     setTrimEnd(ratio);
   }, [endTimeText, audioDuration, trimStart]);
-
-  // Recompute BPM candidates whenever the trim selection settles (debounced),
-  // for both recording and import flows.
-  useEffect(() => {
-    if (phase !== "trimming" || !recordedUri || audioDuration <= 0) return;
-    const range = { start: trimStart, end: trimEnd };
-    const last = lastDetectRangeRef.current;
-    if (last && last.start === range.start && last.end === range.end) return;
-
-    if (trimDebounceRef.current) clearTimeout(trimDebounceRef.current);
-    trimDebounceRef.current = setTimeout(() => {
-      trimDebounceRef.current = null;
-      lastDetectRangeRef.current = range;
-      detectBpmForCurrent(recordedUri, trimStart, trimEnd, importedMimeTypeRef.current);
-    }, 400);
-
-    return () => {
-      if (trimDebounceRef.current) {
-        clearTimeout(trimDebounceRef.current);
-        trimDebounceRef.current = null;
-      }
-    };
-  }, [phase, recordedUri, trimStart, trimEnd, audioDuration, detectBpmForCurrent]);
 
   // Decode a lightweight amplitude envelope for an honest trim preview. Some
   // compressed formats cannot be decoded locally; the empty state still shows
@@ -1184,6 +1075,31 @@ export function NoteRecorderModal({
                 </View>
               </View>
 
+              <View style={{ marginTop: Spacing.md }}>
+                <Text style={{ color: C.textSecondary, fontSize: FontSize.small, marginBottom: Spacing.xs, textAlign: "center" }}>
+                  {`Sample speed · ${Math.round(sampleSpeed * 100)}%`}
+                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm }}>
+                  <Pressable
+                    onPress={() => updateSampleSpeed(sampleSpeed - 0.05)}
+                    style={[styles.volumeStepButton, { backgroundColor: C.surfaceLight }]}
+                    accessibilityLabel="Decrease sample speed"
+                  >
+                    <Ionicons name="remove" size={18} color={C.text} />
+                  </Pressable>
+                  <View style={{ flex: 1, height: Spacing.sm, borderRadius: Radius.xs, overflow: "hidden", backgroundColor: C.overlay10 }}>
+                    <View style={{ width: `${((sampleSpeed - 0.5) / 1.5) * 100}%`, height: "100%", backgroundColor: C.accent }} />
+                  </View>
+                  <Pressable
+                    onPress={() => updateSampleSpeed(sampleSpeed + 0.05)}
+                    style={[styles.volumeStepButton, { backgroundColor: C.surfaceLight }]}
+                    accessibilityLabel="Increase sample speed"
+                  >
+                    <Ionicons name="add" size={18} color={C.text} />
+                  </Pressable>
+                </View>
+              </View>
+
               <View style={{ flexDirection: "row", justifyContent: "center", gap: Spacing.xs, marginTop: Spacing.sm, alignSelf: "stretch" }}>
                 {(["both", "left", "right"] as const).map((opt) => {
                   const active = channel === opt;
@@ -1304,6 +1220,30 @@ export function NoteRecorderModal({
                       <Ionicons name="add" size={16} color={C.text} />
                     </Pressable>
                   </View>
+
+                  <Pressable
+                    onPress={measureBpm}
+                    disabled={isFetchingBpm}
+                    style={{
+                      alignSelf: "center",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      marginTop: Spacing.sm,
+                      paddingHorizontal: Spacing.md,
+                      paddingVertical: Spacing.sm,
+                      borderRadius: Radius.md,
+                      backgroundColor: isFetchingBpm ? C.surfaceLight : C.accentDim,
+                      borderWidth: 1,
+                      borderColor: isFetchingBpm ? C.border : C.accent,
+                    }}
+                    accessibilityLabel="Measure BPM from selected sample"
+                  >
+                    <Ionicons name="speedometer-outline" size={16} color={isFetchingBpm ? C.textSecondary : C.accent} />
+                    <Text style={{ color: isFetchingBpm ? C.textSecondary : C.accent, fontSize: FontSize.small, fontWeight: "600" as const }}>
+                      BPM 측정
+                    </Text>
+                  </Pressable>
 
                   {isFetchingBpm && (
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: Spacing.sm }}>

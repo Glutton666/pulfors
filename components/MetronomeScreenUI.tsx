@@ -130,7 +130,7 @@ export function MetronomeScreenUI(props: Props) {
     handleNoteAddToQueue, handleNoteRemoveFromQueue, handleNoteReorderQueue, handleNoteInsertNext,
     handleNoteTogglePlay, handleNoteManualNext, handleNoteManualNextImmediate,
     handleNoteSave, handleNoteReset, handleNoteQueueItemImageChange,
-    noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, noteSampleVolumes, noteSampleMetroChannels,
+    noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, noteSampleVolumes, noteSampleSpeeds, noteSampleMetroChannels,
     recorderTarget, setRecorderTarget,
     handleNoteRecordRequest, handleNoteRecordSave, handleNoteRecordDelete, handleNoteRecordSuggestBpm,
     scoreMode, setScoreMode, scoreEditorDoc, setScoreEditorDoc, scorePracticeBookRef,
@@ -696,6 +696,7 @@ export function MetronomeScreenUI(props: Props) {
         existingName={recorderTarget ? (noteSampleNames[`${recorderTarget.beat}-${recorderTarget.sub}`] || "") : ""}
         existingChannel={recorderTarget ? (noteSampleChannels[`${recorderTarget.beat}-${recorderTarget.sub}`] ?? "both") : "both"}
         existingVolume={recorderTarget ? (noteSampleVolumes[`${recorderTarget.beat}-${recorderTarget.sub}`] ?? 1) : 1}
+        existingSpeed={recorderTarget ? (noteSampleSpeeds[`${recorderTarget.beat}-${recorderTarget.sub}`] ?? 1) : 1}
         existingMetronomeChannel={noteSampleMetroChannels[String(recorderTarget?.beat ?? 0)] ?? "both"}
         bpm={bpm}
         beatsPerMeasure={beatsPerMeasure}

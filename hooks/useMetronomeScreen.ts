@@ -104,8 +104,8 @@ import type { ModeSlot } from "@/components/ModeSwitcherDial";
 import type { ScoreDocument } from "@/lib/score-types";
 import type { OnboardingResult } from "@/components/OnboardingModal";
 import { PracticeSessionTracker, loadLoggingEnabled, saveLoggingEnabled, addActivityLog, loadActivityLogs, loadGoals, saveGoals } from "@/lib/activity-log";
-import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource, loadNoteSampleChannels, saveNoteSampleChannels, setNoteSampleChannel, removeNoteSampleChannel, loadNoteSampleVolumes, setNoteSampleVolume, removeNoteSampleVolume, loadNoteSampleMetroChannels, saveNoteSampleMetroChannels, setNoteSampleMetroChannel, removeNoteSampleMetroChannel } from "@/lib/note-samples";
-import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap, NoteSampleVolumeMap, NoteSampleMetroChannelMap, SampleSource } from "@/lib/note-samples";
+import { loadNoteSamples, saveNoteSamples, setNoteSample, removeNoteSample, hasNoteSample, loadNoteSampleNames, saveNoteSampleNames, setNoteSampleName, removeNoteSampleName, loadNoteSampleSources, saveNoteSampleSources, setNoteSampleSource, removeNoteSampleSource, loadNoteSampleChannels, saveNoteSampleChannels, setNoteSampleChannel, removeNoteSampleChannel, loadNoteSampleVolumes, setNoteSampleVolume, removeNoteSampleVolume, loadNoteSampleSpeeds, setNoteSampleSpeed, removeNoteSampleSpeed, loadNoteSampleMetroChannels, saveNoteSampleMetroChannels, setNoteSampleMetroChannel, removeNoteSampleMetroChannel } from "@/lib/note-samples";
+import type { NoteSampleMap, NoteSampleNameMap, NoteSampleSourceMap, NoteSampleChannelMap, NoteSampleVolumeMap, NoteSampleSpeedMap, NoteSampleMetroChannelMap, SampleSource } from "@/lib/note-samples";
 import type { SampleChannel, MetroChannel } from "@/lib/stereo-channel";
 import { AudioModule, createAudioPlayer } from "expo-audio";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
@@ -474,6 +474,9 @@ export function useMetronomeScreen() {
     volumes: noteSampleVolumes,
     volumesRef: noteSampleVolumesRef,
     setVolumes: setNoteSampleVolumes,
+    speeds: noteSampleSpeeds,
+    speedsRef: noteSampleSpeedsRef,
+    setSpeeds: setNoteSampleSpeeds,
   } = noteSamplesHook;
   // barMetronomeChannel/barCellOpacity/barRowHeight → useSettings 소유
   const [noteSampleMetroChannels, setNoteSampleMetroChannels] = useState<NoteSampleMetroChannelMap>({});
@@ -600,7 +603,7 @@ export function useMetronomeScreen() {
     armAudioWatchdog, clearAudioWatchdog,
   } = useAudioPipeline({
     engineRef, soundSet, soundSetRef, volume, customSoundSetsRef,
-    layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, barModeRef,
+    layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, noteSampleSpeedsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
     clickPCMCacheRef, webClickReadyRef, noteSampleSoundsRef,
     isPlayingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
@@ -681,6 +684,7 @@ export function useMetronomeScreen() {
     noteSampleSources, setNoteSampleSources, noteSampleSourcesRef,
     noteSampleChannels, setNoteSampleChannels, noteSampleChannelsRef,
     noteSampleVolumes, setNoteSampleVolumes, noteSampleVolumesRef,
+    noteSampleSpeeds, setNoteSampleSpeeds, noteSampleSpeedsRef,
     setNoteSampleMetroChannels,
     noteSampleMetroChannelsRef,
     noteSampleSoundsRef,
@@ -983,7 +987,7 @@ export function useMetronomeScreen() {
 
     // loadSettings は useSettings が担当。ここでは note-sample 관련만 처리.
 
-    Promise.all([loadNoteSamples(), loadNoteSampleNames(), loadNoteSampleSources(), loadNoteSampleChannels(), loadNoteSampleVolumes(), loadNoteSampleMetroChannels()]).then(async ([samples, names, sources, channels, volumes, metroChannels]) => {
+    Promise.all([loadNoteSamples(), loadNoteSampleNames(), loadNoteSampleSources(), loadNoteSampleChannels(), loadNoteSampleVolumes(), loadNoteSampleSpeeds(), loadNoteSampleMetroChannels()]).then(async ([samples, names, sources, channels, volumes, speeds, metroChannels]) => {
       setNoteSamples(samples);
       noteSamplesRef.current = samples;
       setNoteSampleNames(names);
@@ -994,6 +998,8 @@ export function useMetronomeScreen() {
       noteSampleChannelsRef.current = channels;
       setNoteSampleVolumes(volumes);
       noteSampleVolumesRef.current = volumes;
+      setNoteSampleSpeeds(speeds);
+      noteSampleSpeedsRef.current = speeds;
       setNoteSampleMetroChannels(metroChannels);
       noteSampleMetroChannelsRef.current = metroChannels;
       if (Object.keys(samples).length > 0) {
@@ -1052,7 +1058,7 @@ export function useMetronomeScreen() {
             samplePlayStateRef.current[key].playing = false;
             samplePlayStateRef.current[key].endTimer = null;
           }
-        }, effectiveDur);
+        }, effectiveDur / (noteSampleSpeedsRef.current[key] ?? 1));
         if (samplePlayStateRef.current[key]) {
           samplePlayStateRef.current[key].endTimer = timer;
         }
@@ -1069,6 +1075,8 @@ export function useMetronomeScreen() {
         // Keep a saved per-sample level independent from the global sample master.
         // This also updates retained players after a metadata-only edit.
         player.volume = Math.max(0, Math.min(1, sampleVolumeRef.current * (noteSampleVolumesRef.current[key] ?? 1)));
+        player.playbackRate = noteSampleSpeedsRef.current[key] ?? 1;
+        player.shouldCorrectPitch = false;
         setTimeout(() => playSampleAsync(key, player), 0);
         return true;
       }
@@ -1108,7 +1116,7 @@ export function useMetronomeScreen() {
     setRecorderTarget({ beat: beatIndex, sub: subIndex });
   }, []);
 
-  const handleNoteRecordSave = useCallback(async (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: MetroChannel, sampleGain = 1) => {
+  const handleNoteRecordSave = useCallback(async (uri: string, name: string, source: SampleSource, channel: SampleChannel, metronomeChannel: MetroChannel, sampleGain = 1, sampleSpeed = 1) => {
     if (!recorderTarget) return;
     const key = `${recorderTarget.beat}-${recorderTarget.sub}`;
     invalidateSamplePCMCache(key);
@@ -1127,6 +1135,9 @@ export function useMetronomeScreen() {
     const updatedVolumes = await setNoteSampleVolume(recorderTarget.beat, recorderTarget.sub, sampleGain, noteSampleVolumesRef.current);
     setNoteSampleVolumes(updatedVolumes);
     noteSampleVolumesRef.current = updatedVolumes;
+    const updatedSpeeds = await setNoteSampleSpeed(recorderTarget.beat, recorderTarget.sub, sampleSpeed, noteSampleSpeedsRef.current);
+    setNoteSampleSpeeds(updatedSpeeds);
+    noteSampleSpeedsRef.current = updatedSpeeds;
     const updatedMetroChannels = await setNoteSampleMetroChannel(recorderTarget.beat, metronomeChannel, noteSampleMetroChannelsRef.current);
     setNoteSampleMetroChannels(updatedMetroChannels);
     noteSampleMetroChannelsRef.current = updatedMetroChannels;
@@ -1160,6 +1171,9 @@ export function useMetronomeScreen() {
     const updatedVolumes = await removeNoteSampleVolume(recorderTarget.beat, recorderTarget.sub, noteSampleVolumesRef.current);
     setNoteSampleVolumes(updatedVolumes);
     noteSampleVolumesRef.current = updatedVolumes;
+    const updatedSpeeds = await removeNoteSampleSpeed(recorderTarget.beat, recorderTarget.sub, noteSampleSpeedsRef.current);
+    setNoteSampleSpeeds(updatedSpeeds);
+    noteSampleSpeedsRef.current = updatedSpeeds;
     const beatStillHasSamples = Object.keys(updated).some((k) => k.startsWith(`${recorderTarget.beat}-`));
     if (!beatStillHasSamples) {
       const updatedMetroChannels = await removeNoteSampleMetroChannel(recorderTarget.beat, noteSampleMetroChannelsRef.current);
@@ -2450,6 +2464,7 @@ export function useMetronomeScreen() {
     noteSampleNamesRef.current = { ...entryNames };
     noteSampleSourcesRef.current = { ...entrySources };
     noteSampleVolumesRef.current = { ...(entry.noteSampleVolumes || {}) };
+    noteSampleSpeedsRef.current = { ...(entry.noteSampleSpeeds || {}) };
 
     const { barRepeats: mgRepeats2, loopBlocks: mgBlocks2 } = migrateLayerBlocks((entry.loopBlocks || []) as LoopBlock[], { ...entry.barRepeats });
     setBpm(entry.bpm);
@@ -2466,6 +2481,7 @@ export function useMetronomeScreen() {
     setNoteSampleNames({ ...entryNames });
     setNoteSampleSources({ ...entrySources });
     setNoteSampleVolumes({ ...(entry.noteSampleVolumes || {}) });
+    setNoteSampleSpeeds({ ...(entry.noteSampleSpeeds || {}) });
     setNoteSampleChannels({ ...(entry.noteSampleChannels || {}) });
     noteSampleChannelsRef.current = { ...(entry.noteSampleChannels || {}) };
 
@@ -2486,6 +2502,7 @@ export function useMetronomeScreen() {
       noteSamples: { ...entrySamples },
       noteSampleNames: { ...entryNames },
       noteSampleSources: { ...entrySources },
+      noteSampleSpeeds: { ...(entry.noteSampleSpeeds || {}) },
       barLoopMode: "once",
       blockPlayMode: entry.blockPlayMode || "loop",
       hasBeenConfigured: true,
@@ -2618,15 +2635,16 @@ export function useMetronomeScreen() {
     barConfigRef, barBpmRef, dialConfigRef,
     beatDenominatorRef,
     noteSamplesRef, noteSampleNamesRef, noteSampleSourcesRef, noteSampleChannelsRef, noteSampleVolumesRef,
+    noteSampleSpeedsRef,
     noteQueueRef, notePlayModeRef, noteIsPlayingRef,
     seamlessNextEntryRef, loadedPracticeNoteRef,
     isPlaying, barMode, noteMode,
     beatsPerMeasure, beatTypes, beatSubdivisions,
     barRepeats, loopBlocks,
-    noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, noteSampleVolumes,
+    noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, noteSampleVolumes, noteSampleSpeeds,
     setBpm, setBarBpm, setBeatsPerMeasure, setBeatTypes, setBeatSubdivisions,
     setBarRepeats, setLoopBlocks, setBarLoopMode, setBlockPlayMode, setSubdivisionPattern,
-    setNoteSamples, setNoteSampleNames, setNoteSampleSources, setNoteSampleChannels, setNoteSampleVolumes,
+    setNoteSamples, setNoteSampleNames, setNoteSampleSources, setNoteSampleChannels, setNoteSampleVolumes, setNoteSampleSpeeds,
     setBarMode, setNoteMode,
     setIsPlaying, setIsPreparing,
     setNoteQueue, setNotePlayMode, setNoteCurrentIndex, setNoteIsPlaying, setNoteBarEntries,
@@ -2924,10 +2942,11 @@ export function useMetronomeScreen() {
     noteSampleSources,
     noteSampleChannels,
     noteSampleVolumes,
+    noteSampleSpeeds,
     dialConfig: dialConfigRef.current,
     barClockMode: barConfigRef.current.barClockMode,
     barTimerDuration: barConfigRef.current.barTimerDuration,
-  }), [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, blockPlayMode, subdivisionPattern, noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, noteSampleVolumes]);
+  }), [barMode, bpm, beatsPerMeasure, beatTypes, beatSubdivisions, barRepeats, loopBlocks, barLoopMode, blockPlayMode, subdivisionPattern, noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, noteSampleVolumes, noteSampleSpeeds]);
 
   // handleLoadPracticeEntry → usePracticeBookLoad
 
@@ -3265,6 +3284,7 @@ export function useMetronomeScreen() {
     noteSampleSources,
     noteSampleChannels,
     noteSampleVolumes,
+    noteSampleSpeeds,
     noteSampleMetroChannels,
     recorderTarget,
     setRecorderTarget,

@@ -41,6 +41,7 @@ import {
   saveNoteSampleSources,
   saveNoteSampleChannels,
   saveNoteSampleVolumes,
+  saveNoteSampleSpeeds,
 } from "@/lib/note-samples";
 import type {
   NoteSampleMap,
@@ -48,6 +49,7 @@ import type {
   NoteSampleSourceMap,
   NoteSampleChannelMap,
   NoteSampleVolumeMap,
+  NoteSampleSpeedMap,
   NoteSampleMetroChannelMap,
 } from "@/lib/note-samples";
 import { releaseAll as releaseAllStereoArtifacts } from "@/lib/sample-cache";
@@ -137,6 +139,9 @@ export interface UseBarModeParams {
   noteSampleVolumes: NoteSampleVolumeMap;
   setNoteSampleVolumes: React.Dispatch<React.SetStateAction<NoteSampleVolumeMap>>;
   noteSampleVolumesRef: React.MutableRefObject<NoteSampleVolumeMap>;
+  noteSampleSpeeds: NoteSampleSpeedMap;
+  setNoteSampleSpeeds: React.Dispatch<React.SetStateAction<NoteSampleSpeedMap>>;
+  noteSampleSpeedsRef: React.MutableRefObject<NoteSampleSpeedMap>;
   setNoteSampleMetroChannels: React.Dispatch<
     React.SetStateAction<NoteSampleMetroChannelMap>
   >;
@@ -287,6 +292,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
           noteSampleSources: { ...p.noteSampleSources },
           noteSampleChannels: { ...p.noteSampleChannels },
           noteSampleVolumes: { ...p.noteSampleVolumes },
+          noteSampleSpeeds: { ...p.noteSampleSpeeds },
         };
 
         const savedBarConfig = barConfigRef.current;
@@ -325,6 +331,8 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
           p.noteSampleChannelsRef.current = { ...savedBarConfig.noteSampleChannels };
           p.setNoteSampleVolumes({ ...(savedBarConfig.noteSampleVolumes || {}) });
           p.noteSampleVolumesRef.current = { ...(savedBarConfig.noteSampleVolumes || {}) };
+          p.setNoteSampleSpeeds({ ...(savedBarConfig.noteSampleSpeeds || {}) });
+          p.noteSampleSpeedsRef.current = { ...(savedBarConfig.noteSampleSpeeds || {}) };
           p.setNoteSampleMetroChannels({});
           p.noteSampleMetroChannelsRef.current = {};
 
@@ -352,6 +360,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
             noteSampleSources: {},
             noteSampleChannels: {},
             noteSampleVolumes: {},
+            noteSampleSpeeds: {},
             barLoopMode: "once",
             blockPlayMode: "loop",
             hasBeenConfigured: true,
@@ -373,6 +382,8 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
           p.noteSampleChannelsRef.current = {};
           p.setNoteSampleVolumes({});
           p.noteSampleVolumesRef.current = {};
+          p.setNoteSampleSpeeds({});
+          p.noteSampleSpeedsRef.current = {};
           p.setNoteSampleMetroChannels({});
           p.noteSampleMetroChannelsRef.current = {};
           engine.setBeatsPerMeasure(0);
@@ -397,6 +408,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
           noteSampleSources: { ...p.noteSampleSources },
           noteSampleChannels: { ...p.noteSampleChannels },
           noteSampleVolumes: { ...p.noteSampleVolumes },
+          noteSampleSpeeds: { ...p.noteSampleSpeeds },
           barLoopMode,
           blockPlayMode,
           hasBeenConfigured: true,
@@ -419,6 +431,8 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
         p.noteSampleChannelsRef.current = { ...(dc.noteSampleChannels || {}) };
         p.setNoteSampleVolumes({ ...(dc.noteSampleVolumes || {}) });
         p.noteSampleVolumesRef.current = { ...(dc.noteSampleVolumes || {}) };
+        p.setNoteSampleSpeeds({ ...(dc.noteSampleSpeeds || {}) });
+        p.noteSampleSpeedsRef.current = { ...(dc.noteSampleSpeeds || {}) };
         applyDialConfigToEngine(engine, dc);
       }
 
@@ -437,6 +451,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
       p.noteSampleSources,
       p.noteSampleChannels,
       p.noteSampleVolumes,
+      p.noteSampleSpeeds,
       barRepeats,
       loopBlocks,
       barLoopMode,
@@ -527,6 +542,12 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
         subdivisionPattern: [...p.subdivisionPattern],
         barClockMode: barConfigRef.current.barClockMode,
         barTimerDuration: barConfigRef.current.barTimerDuration,
+        noteSamples: { ...p.noteSamples },
+        noteSampleNames: { ...p.noteSampleNames },
+        noteSampleSources: { ...p.noteSampleSources },
+        noteSampleChannels: { ...p.noteSampleChannels },
+        noteSampleVolumes: { ...p.noteSampleVolumes },
+        noteSampleSpeeds: { ...p.noteSampleSpeeds },
       };
       const now = new Date();
       const label = `Bar ${p.beatsPerMeasure}/${barBpm} ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
@@ -971,6 +992,8 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
     p.noteSampleChannelsRef.current = {};
     p.setNoteSampleVolumes({});
     p.noteSampleVolumesRef.current = {};
+    p.setNoteSampleSpeeds({});
+    p.noteSampleSpeedsRef.current = {};
     for (const [, st] of Object.entries(p.samplePlayStateRef.current)) {
       if (st.endTimer) clearTimeout(st.endTimer);
     }
@@ -990,6 +1013,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
     saveNoteSampleSources({});
     saveNoteSampleChannels({});
     saveNoteSampleVolumes({});
+    saveNoteSampleSpeeds({});
     barConfigRef.current = {
       beatsPerMeasure: beats,
       beatTypes: [...newTypes],
@@ -1003,6 +1027,7 @@ export function useBarMode(p: UseBarModeParams): UseBarModeResult {
       noteSampleSources: {},
       noteSampleChannels: {},
       noteSampleVolumes: {},
+      noteSampleSpeeds: {},
       barLoopMode: "once",
       blockPlayMode: "loop",
       hasBeenConfigured: true,

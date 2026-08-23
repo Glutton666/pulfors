@@ -22,7 +22,7 @@ import { safePlay, notifyAudioPoolFallback } from "@/lib/audio-utils";
 import { isSafeNoteSampleUri } from "@/app/index.helpers";
 import type { ClickPCMs, SamplePCMEntry, TickInfo, DecodedSample } from "@/lib/audio-renderer";
 import type { SoundSet, BuiltinSoundSet, CustomSoundSetConfig } from "@/lib/storage";
-import type { NoteSampleMap, NoteSampleChannelMap, NoteSampleMetroChannelMap, NoteSampleVolumeMap } from "@/lib/note-samples";
+import type { NoteSampleMap, NoteSampleChannelMap, NoteSampleMetroChannelMap, NoteSampleVolumeMap, NoteSampleSpeedMap } from "@/lib/note-samples";
 import type { SampleChannel } from "@/lib/stereo-channel";
 import { useAudioPlayers } from "@/hooks/useAudioPlayers";
 import type { BuiltinPlayers, SoundSetPlayers } from "@/hooks/useAudioPlayers";
@@ -49,6 +49,7 @@ export interface UseAudioPipelineParams {
   noteSamplesRef: React.MutableRefObject<NoteSampleMap>;
   noteSampleChannelsRef: React.MutableRefObject<NoteSampleChannelMap>;
   noteSampleVolumesRef: React.MutableRefObject<NoteSampleVolumeMap>;
+  noteSampleSpeedsRef: React.MutableRefObject<NoteSampleSpeedMap>;
   barModeRef: React.MutableRefObject<boolean>;
   barMetronomeChannelRef: React.MutableRefObject<SampleChannel>;
   noteSampleMetroChannelsRef: React.MutableRefObject<NoteSampleMetroChannelMap>;
@@ -130,7 +131,7 @@ export interface UseAudioPipelineResult {
 export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipelineResult {
   const {
     engineRef, soundSet, volume, customSoundSetsRef,
-    layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, barModeRef,
+    layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, noteSampleSpeedsRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
     isPlayingRef, bpmRef, t, showRecoveryToast, persistAudioSettingsCallbackRef,
   } = params;
@@ -342,6 +343,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         clickVolume: Math.max(1.0, volumeRef.current),
         sampleVolume: samplePCMs.size > 0 ? sampleVolumeRef.current : 0,
         sampleVolumes: noteSampleVolumesRef.current,
+        sampleSpeeds: noteSampleSpeedsRef.current,
         metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
         metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
         layerClickPCMs,
@@ -428,6 +430,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
             samplePCMs: new Map(),
             clickVolume: Math.max(1.0, volumeRef.current),
             sampleVolume: 0,
+            sampleSpeeds: noteSampleSpeedsRef.current,
             metronomeChannel: barModeRef.current ? barMetronomeChannelRef.current : "both",
             metroChannelsByBeat: barModeRef.current ? noteSampleMetroChannelsRef.current : undefined,
             layerClickPCMs,
@@ -489,13 +492,19 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
         continue;
       }
       if (keepExisting && existing[key] && !result.changed) {
-        newPlayers[key] = existing[key];
+        const player = existing[key];
+        player.volume = Math.max(0, Math.min(1, sampleVolumeRef.current * (noteSampleVolumesRef.current[key] ?? 1)));
+        player.playbackRate = noteSampleSpeedsRef.current[key] ?? 1;
+        player.shouldCorrectPitch = false;
+        newPlayers[key] = player;
         keysToKeep.add(key);
       } else {
         try {
           const isFileUri = result.uri.startsWith("file://");
           const player = createAudioPlayer(result.uri, { downloadFirst: isFileUri });
           player.volume = Math.max(0, Math.min(1, sampleVolumeRef.current * (noteSampleVolumesRef.current[key] ?? 1)));
+          player.playbackRate = noteSampleSpeedsRef.current[key] ?? 1;
+          player.shouldCorrectPitch = false;
           newPlayers[key] = player;
         } catch (e) {
           captureBreadcrumb({ category: "sample.preload", message: "Failed", level: "warning", data: { key, error: String(e) } });

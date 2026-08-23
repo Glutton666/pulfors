@@ -21,6 +21,9 @@ import {
   loadNoteSampleVolumes,
   setNoteSampleVolume,
   removeNoteSampleVolume,
+  loadNoteSampleSpeeds,
+  setNoteSampleSpeed,
+  removeNoteSampleSpeed,
 } from "../lib/note-samples";
 
 const AsyncStorage = require("./_stubs/async-storage");
@@ -110,6 +113,16 @@ test("sample volume: 값은 0–1로 clamp되고 삭제까지 저장된다", asy
   const removed = await removeNoteSampleVolume(0, 1, saved);
   assert.deepEqual(removed, {});
   assert.deepEqual(await loadNoteSampleVolumes(), {});
+});
+
+test("sample speed: 100% 기본값을 보존하고 50–200%로 clamp한다", async () => {
+  assert.deepEqual(await loadNoteSampleSpeeds(), {});
+  const saved = await setNoteSampleSpeed(0, 1, 2.4, {});
+  assert.deepEqual(saved, { "0-1": 2 });
+  assert.deepEqual(await loadNoteSampleSpeeds(), { "0-1": 2 });
+  const removed = await removeNoteSampleSpeed(0, 1, saved);
+  assert.deepEqual(removed, {});
+  assert.deepEqual(await loadNoteSampleSpeeds(), {});
 });
 
 test("loadNoteSamples: 손상된 JSON → {}", async () => {

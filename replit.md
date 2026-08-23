@@ -53,7 +53,8 @@ Preferred communication style: Simple, everyday language.
 - **Active endpoints**:
   - `GET /` — serves the landing page (`server/templates/landing-page.html`) or the Expo OTA manifest when an `expo-platform` header is present.
   - `GET /manifest` — same Expo manifest routing as `/`.
-  - `POST /api/analyze-audio` — accepts a base64-encoded audio clip, detects dominant frequency/note and BPM candidates. WAV files are analyzed in a Node.js worker thread; other formats (m4a, webm, etc.) are converted via `ffmpeg`. Includes per-IP rate limiting (20 req/60 s) and concurrency caps.
+  - `GET /api/time` — returns an uncached server timestamp.
+- **Local sample analysis**: Imported and recorded audio is decoded, trimmed, and BPM-measured on the device; the backend never receives sample audio.
 - **No database**: All user data (settings, practice entries, sound sets, etc.) is stored on-device via AsyncStorage. The server holds no persistent state.
 - **Deployment**: Serves the static Expo web build from `static-build/` in production; in development the Expo dev server runs separately on port 8081.
 

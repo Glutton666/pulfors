@@ -16,6 +16,7 @@ import {
   saveNoteSampleSources,
   saveNoteSampleChannels,
   saveNoteSampleVolumes,
+  saveNoteSampleSpeeds,
 } from "@/lib/note-samples";
 import type {
   NoteSampleMap,
@@ -23,6 +24,7 @@ import type {
   NoteSampleSourceMap,
   NoteSampleChannelMap,
   NoteSampleVolumeMap,
+  NoteSampleSpeedMap,
 } from "@/lib/note-samples";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,6 +47,7 @@ export interface UsePracticeBookLoadParams {
   noteSampleSourcesRef: React.MutableRefObject<NoteSampleSourceMap>;
   noteSampleChannelsRef: React.MutableRefObject<NoteSampleChannelMap>;
   noteSampleVolumesRef: React.MutableRefObject<NoteSampleVolumeMap>;
+  noteSampleSpeedsRef: React.MutableRefObject<NoteSampleSpeedMap>;
   noteQueueRef: React.MutableRefObject<PracticeEntry[]>;
   notePlayModeRef: React.MutableRefObject<"once" | "loop" | "random">;
   noteIsPlayingRef: React.MutableRefObject<boolean>;
@@ -68,6 +71,7 @@ export interface UsePracticeBookLoadParams {
   noteSampleSources: NoteSampleSourceMap;
   noteSampleChannels: NoteSampleChannelMap;
   noteSampleVolumes: NoteSampleVolumeMap;
+  noteSampleSpeeds: NoteSampleSpeedMap;
 
   // Stable setters from useState / useBarMode / useSettings
   setBpm: (bpm: number) => void;
@@ -86,6 +90,7 @@ export interface UsePracticeBookLoadParams {
   setNoteSampleSources: (sources: NoteSampleSourceMap) => void;
   setNoteSampleChannels: (channels: NoteSampleChannelMap) => void;
   setNoteSampleVolumes: (volumes: NoteSampleVolumeMap) => void;
+  setNoteSampleSpeeds: (speeds: NoteSampleSpeedMap) => void;
   setBarMode: (v: boolean) => void;
   setNoteMode: (v: boolean) => void;
   setIsPlaying: (v: boolean) => void;
@@ -147,6 +152,7 @@ export function usePracticeBookLoad({
   noteSampleSourcesRef,
   noteSampleChannelsRef,
   noteSampleVolumesRef,
+  noteSampleSpeedsRef,
   noteQueueRef,
   notePlayModeRef,
   noteIsPlayingRef,
@@ -165,6 +171,7 @@ export function usePracticeBookLoad({
   noteSampleSources,
   noteSampleChannels,
   noteSampleVolumes,
+  noteSampleSpeeds,
   setBpm, setBarBpm,
   setBeatsPerMeasure,
   setBeatTypes,
@@ -179,6 +186,7 @@ export function usePracticeBookLoad({
   setNoteSampleSources,
   setNoteSampleChannels,
   setNoteSampleVolumes,
+  setNoteSampleSpeeds,
   setBarMode,
   setNoteMode,
   setIsPlaying,
@@ -231,6 +239,7 @@ export function usePracticeBookLoad({
     const entrySources = entry.noteSampleSources || {};
     const entryChannels = entry.noteSampleChannels || {};
     const entryVolumes = entry.noteSampleVolumes || {};
+    const entrySpeeds = entry.noteSampleSpeeds || {};
     setNoteSamples({ ...entrySamples });
     noteSamplesRef.current = { ...entrySamples };
     setNoteSampleNames({ ...entryNames });
@@ -241,6 +250,8 @@ export function usePracticeBookLoad({
     noteSampleChannelsRef.current = { ...entryChannels };
     setNoteSampleVolumes({ ...entryVolumes });
     noteSampleVolumesRef.current = { ...entryVolumes };
+    setNoteSampleSpeeds({ ...entrySpeeds });
+    noteSampleSpeedsRef.current = { ...entrySpeeds };
 
     if (Object.keys(entrySamples).length > 0) {
       preloadNoteSampleSounds(entrySamples);
@@ -260,10 +271,11 @@ export function usePracticeBookLoad({
         noteSampleSources: { ...noteSampleSources },
         noteSampleChannels: { ...noteSampleChannels },
         noteSampleVolumes: { ...noteSampleVolumes },
+        noteSampleSpeeds: { ...noteSampleSpeeds },
       };
       setBarMode(true);
     }
-  }, [barMode, beatsPerMeasure, beatTypes, beatSubdivisions, noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, noteSampleVolumes, preloadNoteSampleSounds]);
+  }, [barMode, beatsPerMeasure, beatTypes, beatSubdivisions, noteSamples, noteSampleNames, noteSampleSources, noteSampleChannels, noteSampleVolumes, noteSampleSpeeds, preloadNoteSampleSounds]);
 
   // ── handleLinkedEntryChange ───────────────────────────────────────────────
   /** 악보 마디 연결 항목이 변경될 때 엔진을 갱신. */
@@ -353,6 +365,9 @@ export function usePracticeBookLoad({
           noteSamples: { ...noteSamples },
           noteSampleNames: { ...noteSampleNames },
           noteSampleSources: { ...noteSampleSources },
+          noteSampleChannels: { ...noteSampleChannels },
+          noteSampleVolumes: { ...noteSampleVolumes },
+          noteSampleSpeeds: { ...noteSampleSpeeds },
           hasBeenConfigured: true,
         };
         setBarMode(false);
@@ -362,6 +377,7 @@ export function usePracticeBookLoad({
       const entryNames = entry.noteSampleNames || {};
       const entrySources = entry.noteSampleSources || {};
       const entryVolumes = entry.noteSampleVolumes || {};
+      const entrySpeeds = entry.noteSampleSpeeds || {};
 
       dialConfigRef.current = {
         ...dialConfigRef.current,
@@ -372,6 +388,7 @@ export function usePracticeBookLoad({
         noteSampleNames: { ...entryNames },
         noteSampleSources: { ...entrySources },
         noteSampleVolumes: { ...entryVolumes },
+        noteSampleSpeeds: { ...entrySpeeds },
       };
 
       setBpm(entry.bpm);
@@ -389,11 +406,14 @@ export function usePracticeBookLoad({
       noteSampleChannelsRef.current = { ...(entry.noteSampleChannels || {}) };
       setNoteSampleVolumes({ ...entryVolumes });
       noteSampleVolumesRef.current = { ...entryVolumes };
+      setNoteSampleSpeeds({ ...entrySpeeds });
+      noteSampleSpeedsRef.current = { ...entrySpeeds };
       saveNoteSamples(entrySamples);
       saveNoteSampleNames(entryNames);
       saveNoteSampleSources(entrySources);
       saveNoteSampleChannels(entry.noteSampleChannels || {});
       saveNoteSampleVolumes(entryVolumes);
+      saveNoteSampleSpeeds(entrySpeeds);
       if (Object.keys(entrySamples).length > 0) {
         preloadNoteSampleSounds(entrySamples);
       }
@@ -413,6 +433,7 @@ export function usePracticeBookLoad({
           noteSampleNames: { ...noteSampleNames },
           noteSampleSources: { ...noteSampleSources },
           noteSampleVolumes: { ...noteSampleVolumes },
+          noteSampleSpeeds: { ...noteSampleSpeeds },
         };
         setBarMode(true);
       }
@@ -422,6 +443,7 @@ export function usePracticeBookLoad({
       const barSources = entry.noteSampleSources || {};
       const barChannels = entry.noteSampleChannels || {};
       const barVolumes = entry.noteSampleVolumes || {};
+      const barSpeeds = entry.noteSampleSpeeds || {};
 
       const { barRepeats: mgRepeats3, loopBlocks: mgBlocks3 } = migrateLayerBlocks(
         (entry.loopBlocks || []) as LoopBlock[],
@@ -449,11 +471,14 @@ export function usePracticeBookLoad({
       noteSampleChannelsRef.current = { ...barChannels };
       setNoteSampleVolumes({ ...barVolumes });
       noteSampleVolumesRef.current = { ...barVolumes };
+      setNoteSampleSpeeds({ ...barSpeeds });
+      noteSampleSpeedsRef.current = { ...barSpeeds };
       saveNoteSamples(barSamples);
       saveNoteSampleNames(barNames);
       saveNoteSampleSources(barSources);
       saveNoteSampleChannels(barChannels);
       saveNoteSampleVolumes(barVolumes);
+      saveNoteSampleSpeeds(barSpeeds);
       if (Object.keys(barSamples).length > 0) {
         preloadNoteSampleSounds(barSamples);
       }
@@ -487,6 +512,7 @@ export function usePracticeBookLoad({
         noteSamples: { ...barSamples },
         noteSampleNames: { ...barNames },
         noteSampleSources: { ...barSources },
+        noteSampleSpeeds: { ...barSpeeds },
         hasBeenConfigured: true,
       };
     }

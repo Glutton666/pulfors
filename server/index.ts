@@ -108,7 +108,6 @@ export function setupSecurityHeaders(app: express.Application) {
 export function setupBodyParsing(app: express.Application) {
   app.use(
     express.json({
-      // 5 MB binary audio becomes ~6.99 MB when base64 encoded.
       limit: "7mb",
       verify: (req, _res, buf) => {
         req.rawBody = buf;

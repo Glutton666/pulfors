@@ -13,6 +13,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   parseWav,
+  resampleForPlaybackSpeed,
   encodeWav,
   applySoftClip,
   parseTrimInfo,
@@ -25,6 +26,14 @@ import {
 } from "../lib/audio-renderer";
 
 const SR = getRenderSampleRate(); // 44100
+
+test("playback-speed PCM resampling shortens audio and changes its sample positions", () => {
+  const source = new Float32Array([0, 0.25, 0.5, 0.75, 1, 0]);
+  const fast = resampleForPlaybackSpeed(source, 1.5);
+  assert.equal(fast.length, 4);
+  assert.equal(fast[1], 0.375);
+  assert.equal(resampleForPlaybackSpeed(source, 1), source);
+});
 
 // ── WAV 빌더 헬퍼 ─────────────────────────────────────────────────────────────
 
