@@ -138,4 +138,45 @@ describe("SwipeableBarRow block editing", () => {
     fireEvent.click(getByTestId("bar-row-1"));
     expect(onPress).toHaveBeenCalledWith(1);
   });
+
+  it("keeps accent and strong cell backgrounds while showing samples as a top line", () => {
+    const { getByTestId } = render(
+      <SwipeableBarRow
+        beat={1}
+        beatType="strong"
+        subdivisions={["accent", "strong", "normal", "normal"]}
+        repeat={null}
+        isCurrentBeat={false}
+        isEditingBeat={false}
+        blockDepth={0}
+        blockStart={false}
+        blockEnd={false}
+        symbolBadges={[]}
+        isPlaying={false}
+        bpm={120}
+        meterNumerator={4}
+        meterDenominator={4}
+        beatsPerMeasure={4}
+        onPress={jest.fn()}
+        onSwipeLeft={jest.fn()}
+        onSwipeRight={jest.fn()}
+        onLongPress={jest.fn()}
+        colors={colors}
+        ms={(value) => value}
+        sampleCellCoverage={[
+          { source: "recording", kind: "direct" },
+          { source: "recording", kind: "continued" },
+          undefined,
+          undefined,
+        ]}
+      />,
+    );
+
+    expect(getByTestId("bar-sample-cell-1-0")).toBeTruthy();
+    expect(getByTestId("bar-sample-coverage-cell-1-1")).toBeTruthy();
+
+    const overlay = getByTestId("bar-sample-coverage-overlay-1") as HTMLElement;
+    expect(overlay.children).toHaveLength(4);
+    expect(overlay.querySelectorAll("[data-testid]").length).toBe(0);
+  });
 });

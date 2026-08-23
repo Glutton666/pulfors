@@ -246,22 +246,14 @@ export function SwipeableBarRow({
                       borderWidth: ct === "mute" ? 1 : 0,
                       borderColor: ct === "mute" ? C.textTertiary + "80" : "transparent",
                     },
-                    hasSample && {
-                      backgroundColor: sampleColor + (isDirectSample
-                        ? (isActiveCell ? "B0" : "70")
-                        : (isActiveCell ? "68" : "3D")),
-                      borderTopWidth: isDirectSample ? 3 : 1,
-                      borderTopColor: sampleColor,
-                    },
                   ]}
                 >
                 </View>
               );
             })}
 
-            {/* This overlay intentionally reaches a pixel beyond the row so
-                adjacent sample cells and rows read as one playback span
-                without ever taking presses, swipes, drags, or long presses. */}
+            {/* Keep sample coverage as a line above the cells so beat accents
+                remain the only source of cell background color. */}
             <View
               testID={`bar-sample-coverage-overlay-${beat}`}
               style={[styles.barSampleCoverageOverlay, { pointerEvents: "none" }]}
@@ -276,7 +268,7 @@ export function SwipeableBarRow({
                     style={[
                       styles.barSampleCoverageSegment,
                       {
-                        backgroundColor: sampleColor + (coverage.kind === "direct" ? "20" : "12"),
+                        borderTopWidth: coverage.kind === "direct" ? 3 : 1,
                         borderTopColor: sampleColor + (coverage.kind === "direct" ? "D9" : "8C"),
                       },
                     ]}
@@ -382,7 +374,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 2,
     height: 28,
     borderRadius: 2,
-    overflow: "hidden",
+    overflow: "visible",
     borderWidth: 0.5,
     borderColor: "rgba(255,255,255,0.08)",
   },
@@ -401,18 +393,21 @@ const styles = StyleSheet.create({
   },
   barSampleCoverageOverlay: {
     position: "absolute",
-    top: -1,
-    bottom: -1,
+    top: -2,
     left: 0,
     right: 0,
+    height: 4,
     flexDirection: "row",
+    zIndex: 5,
   },
   barSampleCoverageSegment: {
     flex: 1,
     borderTopWidth: 1,
+    backgroundColor: "transparent",
   },
   barSampleCoverageSpacer: {
     flex: 1,
+    backgroundColor: "transparent",
   },
   barCellOverlay: {
     position: "absolute",
