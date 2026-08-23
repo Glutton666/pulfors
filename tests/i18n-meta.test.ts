@@ -2,16 +2,18 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  SUPPORTED_LANGUAGES,
-  FALLBACK_LANGUAGE,
   isLanguageCode,
-  translations,
   createT,
   detectDeviceLanguage,
+} from "../lib/i18n";
+import {
+  SUPPORTED_LANGUAGES,
+  FALLBACK_LANGUAGE,
+  translations,
   LANGUAGE_OPTIONS,
   LANGUAGE_LABELS,
   type TranslationLeaf,
-} from "../lib/i18n";
+} from "../lib/i18n.data";
 
 test("[meta] SUPPORTED_LANGUAGES는 비어있지 않고 FALLBACK_LANGUAGE를 포함한다", () => {
   assert.ok(SUPPORTED_LANGUAGES.length > 0);

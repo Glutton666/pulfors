@@ -116,6 +116,7 @@ function buildParams(): UseSettingsParams {
     noteSampleSoundsRef: { current: {} },
     clickPCMCacheRef: { current: {} },
     webClickReadyRef: { current: false },
+    soundSetRef: { current: "classic" },
     scheduleReRenderCallbackRef: { current: () => {} },
     applyAudioSettingsCallbackRef: { current: () => {} },
   };
@@ -206,6 +207,19 @@ test("beatDenominator is present in every save, not only in the explicit change 
   expect(savedSettings.length).toBeGreaterThan(0);
   const anyHasDenominator = savedSettings.some((s) => s.beatDenominator !== undefined);
   expect(anyHasDenominator).toBe(true);
+});
+
+test("updateSoundSet synchronously updates the ref read by an already-running audio callback", () => {
+  const params = buildParams();
+  const { result } = renderHook(() => useSettings(params));
+
+  act(() => {
+    result.current.updateSoundSet("woodblock");
+  });
+
+  expect(params.soundSetRef.current).toBe("woodblock");
+  expect(result.current.soundSet).toBe("woodblock");
+  expect(savedSettings[savedSettings.length - 1]?.soundSet).toBe("woodblock");
 });
 
 test("failed persistence is exposed to the UI and clears after the next success", () => {

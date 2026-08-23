@@ -30,6 +30,9 @@ jobs:
       - name: npm 의존성 설치
         run: npm ci
 
+      - name: 단위 테스트 실행
+        run: npm test -- --runInBand
+
       # Playwright 브라우저가 필요로 하는 Ubuntu 공유 라이브러리를 설치한다.
       - name: Playwright 시스템 의존성 설치
         run: npx playwright install-deps chromium

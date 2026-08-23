@@ -90,6 +90,7 @@ import { usePracticeBookLoad } from "@/hooks/usePracticeBookLoad";
 import { useGoalPopups } from "@/hooks/useGoalPopups";
 import { usePracticeRoomTracking } from "@/hooks/usePracticeRoomTracking";
 import { useStageMode } from "@/hooks/useStageMode";
+import { useBeatTypeControls } from "@/hooks/useBeatTypeControls";
 import { applySwitchToMode, type ModeSwitchState, type ModeSwitchCallbacks } from "@/lib/stage-mode-logic";
 import { createDebouncedPersister, type DebouncedPersister } from "@/lib/persist";
 import { createRafBatcher } from "@/lib/raf-batcher";
@@ -412,6 +413,7 @@ export function useMetronomeScreen() {
       if (showFadeOut) { setActiveModal(null); return true; }
       if (showScheduledStart) { setActiveModal(null); return true; }
       if (showDrumKit) { setActiveModal(null); return true; }
+      if (showBpmDetect) { setActiveModal(null); return true; }
       if (showPolygon) { closeMenuItem(); return true; }
       if (showMenu) { clearMenuItemReturn(); setActiveModal(null); return true; }
       if (showOnboarding) { setActiveModal(null); return true; }
@@ -482,6 +484,10 @@ export function useMetronomeScreen() {
   const clickPCMCacheRef = useRef<Record<string, import("@/lib/audio-renderer").ClickPCMs>>({});
   const webClickReadyRef = useRef(false);
   const noteSampleSoundsRef = useRef<Record<string, import("expo-audio").AudioPlayer>>({});
+  // Shared by the settings control and the engine's audio callbacks.  It is
+  // intentionally created before both hooks so a sound-set change is audible
+  // on the very next tick, even before React rerenders the audio pipeline.
+  const soundSetRef = useRef<SoundSet>("classic");
 
   // Stable refs for callbacks that come from useAudioPipeline (called after useSettings).
   // useSettings' loadSettings effect fires asynchronously, so by the time it runs
@@ -532,6 +538,7 @@ export function useMetronomeScreen() {
     noteSampleSoundsRef,
     clickPCMCacheRef,
     webClickReadyRef,
+    soundSetRef,
     scheduleReRenderCallbackRef,
     applyAudioSettingsCallbackRef,
     onSettingsLoaded: (settings) => {
@@ -565,7 +572,7 @@ export function useMetronomeScreen() {
   // ── Audio pipeline (player pool + PCM cache + rendered player + audio session settings) ──
   const {
     // Player pool (now owned by the pipeline)
-    allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle,
+    allPlayersRef, highToggle, lowToggle, strongToggle,
     // Audio-session settings (now owned by the pipeline)
     backgroundPlay, autoResumeAfterInterruption,
     updateBackgroundPlay, updateAutoResumeAfterInterruption, applyAudioSettings,
@@ -579,7 +586,7 @@ export function useMetronomeScreen() {
     invalidateSamplePCMCache, preloadNoteSampleSounds, clearSamplePlayStates,
     armAudioWatchdog, clearAudioWatchdog,
   } = useAudioPipeline({
-    engineRef, soundSet, volume, customSoundSetsRef,
+    engineRef, soundSet, soundSetRef, volume, customSoundSetsRef,
     layerSoundSetsRef, noteSamplesRef, noteSampleChannelsRef, noteSampleVolumesRef, barModeRef,
     barMetronomeChannelRef, noteSampleMetroChannelsRef, volumeRef, sampleVolumeRef,
     clickPCMCacheRef, webClickReadyRef, noteSampleSoundsRef,
@@ -1547,94 +1554,23 @@ export function useMetronomeScreen() {
     });
   }, [bpm, persistSettings]);
 
-  const updateTimeSignature = useCallback(
-    (beats: number) => {
-      beats = Math.max(1, Math.min(16, beats));
-      const oldBeats = beatsPerMeasure;
-      const oldTypes = beatTypes;
-      const isAdding = beats > oldBeats;
-
-      let newTypes: BeatType[];
-      if (isAdding) {
-        newTypes = [...oldTypes];
-        for (let i = oldTypes.length; i < beats; i++) {
-          newTypes.push("normal");
-        }
-      } else if (beats < oldBeats) {
-        newTypes = oldTypes.slice(0, beats);
-      } else {
-        newTypes = defaultBeatTypes(beats);
-      }
-
-      setBeatsPerMeasure(beats);
-      setBeatTypes(newTypes);
-      engineRef.current?.setBeatsPerMeasure(beats);
-      engineRef.current?.setBeatTypes(newTypes);
-      if (Platform.OS !== "web") {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-      const cleaned: Record<string, BeatType[]> = {};
-      for (const [k, v] of Object.entries(beatSubdivisions)) {
-        if (Number(k) < beats) cleaned[k] = v;
-      }
-      if (isAdding && barModeRef.current) {
-        const currentPattern = subdivisionPattern;
-        for (let i = oldBeats; i < beats; i++) {
-          if (currentPattern.length > 1 || (currentPattern.length === 1 && currentPattern[0] !== "normal")) {
-            cleaned[String(i)] = [...currentPattern];
-          }
-        }
-      }
-      engineRef.current?.setAllBeatSubdivisions(cleaned);
-      setBeatSubdivisions(cleaned);
-      if (barModeRef.current) {
-        barConfigRef.current.beatsPerMeasure = beats;
-        barConfigRef.current.beatTypes = newTypes;
-        barConfigRef.current.beatSubdivisions = cleaned;
-      } else {
-        dialConfigRef.current.beatsPerMeasure = beats;
-        dialConfigRef.current.beatTypes = newTypes;
-        dialConfigRef.current.beatSubdivisions = cleaned;
-        persistSettings({ beatsPerMeasure: beats, beatSubdivisions: cleaned });
-      }
-    },
-    [persistSettings, beatSubdivisions, beatsPerMeasure, beatTypes, subdivisionPattern]
-  );
-
-  const handleBeatTypeChange = useCallback(
-    (index: number, type: BeatType) => {
-      setBeatTypes((prev) => {
-        const next = [...prev];
-        next[index] = type;
-        if (barModeRef.current) {
-          barConfigRef.current.beatTypes = next;
-        } else {
-          dialConfigRef.current.beatTypes = next;
-        }
-        return next;
-      });
-      // 서브디비전이 있으면 첫 번째 셀을 비트 타입과 동기화
-      setBeatSubdivisions((prev) => {
-        const subs = prev[String(index)];
-        if (!subs || subs.length === 0) return prev;
-        const newSubs = { ...prev, [String(index)]: [type, ...subs.slice(1)] as BeatType[] };
-        if (barModeRef.current) {
-          barConfigRef.current.beatSubdivisions = newSubs;
-        } else {
-          dialConfigRef.current.beatSubdivisions = newSubs;
-        }
-        engineRef.current?.setAllBeatSubdivisions(newSubs);
-        return newSubs;
-      });
-      const engine = engineRef.current;
-      if (engine) {
-        const currentTypes = [...engine.getBeatTypes()];
-        currentTypes[index] = type;
-        engine.setBeatTypes(currentTypes);
-      }
-    },
-    []
-  );
+  // ── Beat-type controls (updateTimeSignature + handleBeatTypeChange) ──────────
+  // Extracted to useBeatTypeControls (task #532). Behaviour is identical;
+  // the returned callbacks preserve the same identity-stability guarantees.
+  const { updateTimeSignature, handleBeatTypeChange } = useBeatTypeControls({
+    engineRef,
+    barModeRef,
+    barConfigRef,
+    dialConfigRef,
+    beatsPerMeasure,
+    beatTypes,
+    beatSubdivisions,
+    subdivisionPattern,
+    setBeatsPerMeasure,
+    setBeatTypes,
+    setBeatSubdivisions,
+    persistSettings,
+  });
 
   const { notifyPlayState: notifyVoicePlayState } = useVoiceAssistant();
   const {

@@ -7,6 +7,8 @@ import { normalizeSampleChannel, type SampleChannel } from "../stereo-channel";
 
 export const ALL_KEYS = [
   "metronome_settings",
+  "metronome_fade_out",
+  "metronome_control_pad_mapping_v1",
   "practice_book",
   "metronome_custom_sound_sets",
   "metronome_practice_rooms",

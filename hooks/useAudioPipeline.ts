@@ -41,6 +41,8 @@ export interface UseAudioPipelineParams {
   engineRef: React.MutableRefObject<MetronomeEngine | null>;
   /** Reactive: triggers click-buffer preload when sound set changes. */
   soundSet: SoundSet;
+  /** Updated synchronously by settings controls so in-flight playback changes on the next tick. */
+  soundSetRef: React.MutableRefObject<SoundSet>;
   // soundSetRef and allPlayersRef are now owned by this hook via useAudioPlayers.
   customSoundSetsRef: React.MutableRefObject<Record<string, CustomSoundSetConfig>>;
   layerSoundSetsRef: React.MutableRefObject<Record<number, SoundSet>>;
@@ -137,7 +139,7 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
   // allPlayersRef, soundSetRef, highToggle/lowToggle/strongToggle are now owned
   // here. useMetronomeScreen's tick callback reads these via the return value.
   const { allPlayers, allPlayersRef, soundSetRef, highToggle, lowToggle, strongToggle, setPoolsVolume } =
-    useAudioPlayers(soundSet);
+    useAudioPlayers(soundSet, params.soundSetRef);
 
   // 3 refs now live in useMetronomeScreen (shared with useSettings)
   const { clickPCMCacheRef, webClickReadyRef, noteSampleSoundsRef } = params;

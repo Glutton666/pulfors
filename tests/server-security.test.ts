@@ -39,11 +39,11 @@ describe("Landing page: CDN script self-hosting", () => {
   });
 });
 
-describe("isRateLimited: sliding window per-IP rate limit 런타임 동작", () => {
+describe("isRateLimited: fixed window per-IP rate limit 런타임 동작", () => {
   const { isRateLimited, _ipRequestLog, RATE_LIMIT_MAX_REQUESTS } =
     require("../server/routes") as {
       isRateLimited: (ip: string) => boolean;
-      _ipRequestLog: Map<string, number[]>;
+      _ipRequestLog: Map<string, { count: number; windowStart: number }>;
       RATE_LIMIT_MAX_REQUESTS: number;
     };
 
@@ -72,11 +72,11 @@ describe("isRateLimited: sliding window per-IP rate limit 런타임 동작", () 
     assert.strictEqual(isRateLimited(ip2), false, "ip2는 차단되지 않아야 함");
   });
 
-  test("윈도우 이전 타임스탬프는 무시됨 (슬라이딩 윈도우)", () => {
+  test("만료된 고정 윈도우는 새 요청부터 다시 시작", () => {
     const ip = "3.4.5.6";
     const oldTs = Date.now() - 61_000;
-    _ipRequestLog.set(ip, new Array(RATE_LIMIT_MAX_REQUESTS).fill(oldTs));
-    assert.strictEqual(isRateLimited(ip), false, "만료된 타임스탬프는 카운트에서 제외되어야 함");
+    _ipRequestLog.set(ip, { count: RATE_LIMIT_MAX_REQUESTS, windowStart: oldTs });
+    assert.strictEqual(isRateLimited(ip), false, "만료된 윈도우는 새 카운트로 시작해야 함");
   });
 });
 
@@ -168,7 +168,7 @@ describe("/api/analyze-audio: 429/503 통합 동작 테스트 (mock req/res)", (
   const routesModule = require("../server/routes") as {
     analyzeAudioHandler: (req: any, res: any) => Promise<any>;
     isRateLimited: (ip: string) => boolean;
-    _ipRequestLog: Map<string, number[]>;
+    _ipRequestLog: Map<string, { count: number; windowStart: number }>;
     RATE_LIMIT_MAX_REQUESTS: number;
     MAX_CONCURRENT_WAV: number;
   };

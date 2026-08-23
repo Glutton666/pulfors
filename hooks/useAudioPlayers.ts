@@ -111,7 +111,10 @@ function disposeSoundSetPlayers(players: SoundSetPlayers): void {
  *
  * Hook order is unconditional and stable so this is a safe extraction.
  */
-export function useAudioPlayers(soundSet: SoundSet): AudioPlayersHook {
+export function useAudioPlayers(
+  soundSet: SoundSet,
+  playbackSoundSetRef?: React.MutableRefObject<SoundSet>,
+): AudioPlayersHook {
   // soundset key → SoundSetPlayers 캐시
   const cacheRef = useRef<Map<string, SoundSetPlayers>>(new Map());
   // Tracks the last volume set via setPoolsVolume so newly created pools
@@ -185,7 +188,11 @@ export function useAudioPlayers(soundSet: SoundSet): AudioPlayersHook {
   const highToggle   = useRef(0);
   const lowToggle    = useRef(0);
   const strongToggle = useRef(0);
-  const soundSetRef  = useRef<SoundSet>(soundSet);
+  const internalSoundSetRef = useRef<SoundSet>(soundSet);
+  // useSettings can receive a sound-set change before React has rendered the
+  // pipeline again. Sharing its ref lets the very next engine tick select the
+  // requested pool instead of one beat of the previous instrument.
+  const soundSetRef = playbackSoundSetRef ?? internalSoundSetRef;
 
   // soundSet 변경(또는 최초 마운트) 시:
   //   1. soundSetRef 동기화

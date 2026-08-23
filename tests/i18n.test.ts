@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { createT, getTempoLabel, formatDurationLocalized, SUPPORTED_LANGUAGES } from "../lib/i18n";
+import { createT, getTempoLabel, formatDurationLocalized } from "../lib/i18n";
+import { SUPPORTED_LANGUAGES } from "../lib/i18n.data";
 
 test("createT('ko') returns Korean strings for known keys", () => {
   const t = createT("ko");

@@ -56,6 +56,8 @@ export interface UseSettingsParams {
   clickPCMCacheRef: React.MutableRefObject<Record<string, ClickPCMs>>;
   /** Web click-ready flag — reset in updateSoundSet. */
   webClickReadyRef: React.MutableRefObject<boolean>;
+  /** Playback reads this ref from engine callbacks, so it must change synchronously with the UI setting. */
+  soundSetRef: React.MutableRefObject<SoundSet>;
   /**
    * Stable ref for scheduleReRender (from useAudioPipeline).
    * Created in useMetronomeScreen before any hook call; .current updated
@@ -173,7 +175,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
   const {
     engineRef, baseBpmRef,
     volumeRef, sampleVolumeRef, beatDenominatorRef,
-    noteSampleSoundsRef, clickPCMCacheRef, webClickReadyRef,
+    noteSampleSoundsRef, clickPCMCacheRef, webClickReadyRef, soundSetRef,
     scheduleReRenderCallbackRef, applyAudioSettingsCallbackRef,
     onSettingsLoaded,
   } = params;
@@ -370,6 +372,7 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
       });
       if (settings.soundSet) {
         setSoundSet(settings.soundSet);
+        soundSetRef.current = settings.soundSet;
       }
       if (settings.layerSoundSets) {
         setLayerSoundSets(settings.layerSoundSets);
@@ -453,6 +456,9 @@ export function useSettings(params: UseSettingsParams): UseSettingsResult {
       delete clickPCMCacheRef.current[value];
       clearWebClickBuffers();
       webClickReadyRef.current = false;
+      // Engine callbacks read this ref, not React state. Update it before the
+      // next render so a running metronome switches instruments immediately.
+      soundSetRef.current = value;
       setSoundSet(value);
       persistSettings({ soundSet: value });
       scheduleReRenderCallbackRef.current();

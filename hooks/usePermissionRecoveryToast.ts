@@ -24,16 +24,41 @@ export interface PermissionRecoveryToastResult {
   showRecoveryToast: (msg: string) => void;
 }
 
+type RecoveryToastState =
+  | { type: "message"; message: string }
+  | { type: "permission"; kind: "mic" | "photo" }
+  | null;
+
+/**
+ * Resolve permission recovery copy at render time, rather than when a recovery
+ * event fires. This keeps a visible toast in sync if the app language changes
+ * while it is on screen (for example after returning from Settings).
+ */
+export function resolveRecoveryToast(
+  toast: RecoveryToastState,
+  t: TranslationFn,
+): string | null {
+  if (!toast) return null;
+  if (toast.type === "message") return toast.message;
+  return t("permissions", toast.kind === "mic" ? "recoveredMic" : "recoveredPhoto");
+}
+
 export function usePermissionRecoveryToast(
   t: TranslationFn,
 ): PermissionRecoveryToastResult {
-  const [permissionRecoveryToast, setPermissionRecoveryToast] = useState<string | null>(null);
+  const [toastState, setToastState] = useState<RecoveryToastState>(null);
   const recoveryToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showRecoveryToast = useCallback((msg: string) => {
     if (recoveryToastTimerRef.current) clearTimeout(recoveryToastTimerRef.current);
-    setPermissionRecoveryToast(msg);
-    recoveryToastTimerRef.current = setTimeout(() => setPermissionRecoveryToast(null), 2500);
+    setToastState({ type: "message", message: msg });
+    recoveryToastTimerRef.current = setTimeout(() => setToastState(null), 2500);
+  }, []);
+
+  const showRecoveredPermissionToast = useCallback((kind: "mic" | "photo") => {
+    if (recoveryToastTimerRef.current) clearTimeout(recoveryToastTimerRef.current);
+    setToastState({ type: "permission", kind });
+    recoveryToastTimerRef.current = setTimeout(() => setToastState(null), 2500);
   }, []);
 
   useEffect(() => {
@@ -43,8 +68,7 @@ export function usePermissionRecoveryToast(
       recover: tryRecoverPermissionActions,
       isCancelled: () => cancelled,
       onRecovered: (kind) => {
-        const key = kind === "mic" ? "recoveredMic" : "recoveredPhoto";
-        showRecoveryToast(t("permissions", key));
+        showRecoveredPermissionToast(kind === "mic" ? "mic" : "photo");
       },
     });
     if (Platform.OS === "web") {
@@ -69,7 +93,7 @@ export function usePermissionRecoveryToast(
       cancelled = true;
       sub.remove();
     };
-  }, [t, showRecoveryToast]);
+  }, [showRecoveredPermissionToast]);
 
   // 타이머 정리
   useEffect(() => {
@@ -78,5 +102,8 @@ export function usePermissionRecoveryToast(
     };
   }, []);
 
-  return { permissionRecoveryToast, showRecoveryToast };
+  return {
+    permissionRecoveryToast: resolveRecoveryToast(toastState, t),
+    showRecoveryToast,
+  };
 }

@@ -79,22 +79,43 @@ test("modal-routing: 어떤 activeModal 값이든 visible 모달은 최대 1개"
   }
 });
 
-test("menu return: Android BackHandler가 메뉴 진입 항목을 공통 closeMenuItem 경로로 닫는다", () => {
+test("Android BackHandler가 모든 active modal 종료 경로를 가진다", () => {
   const src = readFileSync(join(process.cwd(), "hooks/useMetronomeScreen.ts"), "utf-8");
   const backStart = src.indexOf("const onBack = () => {");
   const backEnd = src.indexOf('BackHandler.addEventListener("hardwareBackPress"', backStart);
   assert.ok(backStart >= 0 && backEnd > backStart, "Android BackHandler 본문을 찾을 수 없다");
   const onBack = src.slice(backStart, backEnd);
 
-  for (const branch of ["showSignalGen", "showPracticeBook", "showWorkUp", "showPolygon", 'coreMode === "score"']) {
+  const expectedClosers: Record<string, RegExp> = {
+    showSettings: /setActiveModal\(null\)/,
+    showTuningGuide: /setActiveModal\(/,
+    showSignalGen: /closeMenuItem\(\)/,
+    showPracticeBook: /closeMenuItem\(\)/,
+    showWorkUp: /closeMenuItem\(\)/,
+    showFadeOut: /setActiveModal\(null\)/,
+    showScheduledStart: /setActiveModal\(null\)/,
+    showDrumKit: /setActiveModal\(null\)/,
+    showBpmDetect: /setActiveModal\(null\)/,
+    showPolygon: /closeMenuItem\(\)/,
+    showMenu: /setActiveModal\(null\)/,
+    showOnboarding: /setActiveModal\(null\)/,
+    showReboot: /setShowReboot\(false\)/,
+    'coreMode === "score"': /closeScoreMode\(\)/,
+  };
+  const branches = Object.entries(expectedClosers);
+  for (const [index, [branch, expectedCloser]] of branches.entries()) {
     const branchIndex = onBack.indexOf(branch);
     assert.ok(branchIndex >= 0, `Android BackHandler에 ${branch} 종료 분기가 없다`);
-    const nextBranchIndex = onBack.indexOf("if (", branchIndex + 3);
+    // A branch may contain nested conditionals (notably TuningGuide's
+    // SignalGen re-open decision). End at the next *top-level modal branch*,
+    // not the first `if` token inside this branch.
+    const nextBranch = branches[index + 1]?.[0];
+    const nextBranchIndex = nextBranch ? onBack.indexOf(nextBranch, branchIndex + branch.length) : -1;
     const branchBody = onBack.slice(branchIndex, nextBranchIndex === -1 ? undefined : nextBranchIndex);
     assert.match(
       branchBody,
-      branch === 'coreMode === "score"' ? /closeScoreMode\(\)/ : /closeMenuItem\(\)/,
-      `Android BackHandler의 ${branch} 분기가 공통 종료 경로를 사용하지 않는다`,
+      expectedCloser,
+      `Android BackHandler의 ${branch} 분기가 모달을 닫지 않는다`,
     );
   }
 });

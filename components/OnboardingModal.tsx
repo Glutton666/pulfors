@@ -32,6 +32,10 @@ import { AssistantShortcutsGuide } from "@/components/AssistantShortcutsGuide";
 import { createAudioPlayer } from "expo-audio";
 import type { AudioPlayer as ExpoAudioPlayer } from "expo-audio";
 import { ensurePermission } from "@/lib/permissions";
+import {
+  playOnboardingTestSound,
+  requestOnboardingPermissions,
+} from "@/lib/onboarding-helpers";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -462,28 +466,23 @@ export function OnboardingModal({ visible, onComplete }: OnboardingModalProps) {
 
   const handlePlayTestSound = useCallback(() => {
     setSoundTestError(false);
-    try {
-      if (soundRef.current) {
-        soundRef.current.seekTo(0);
-        soundRef.current.play();
-      } else {
-        const player = createAudioPlayer(
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          require("@/assets/sounds/click-strong.wav"),
-        );
-        player.play();
-        soundRef.current = player;
-      }
+    const result = playOnboardingTestSound(soundRef.current, () =>
+      createAudioPlayer(
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require("@/assets/sounds/click-strong.wav"),
+      ),
+    );
+    if (result.ok) {
+      soundRef.current = result.player;
       setSoundTestPlayed(true);
-    } catch {
+    } else {
       setSoundTestError(true);
     }
   }, []);
 
   const handleAllowNow = useCallback(async () => {
-    const micGranted = await ensurePermission("mic", t, { showAlertOnDeny: false });
+    const { micGranted, locationGranted } = await requestOnboardingPermissions(t, ensurePermission);
     setPermMicGranted(micGranted);
-    const locationGranted = await ensurePermission("location", t, { showAlertOnDeny: false });
     setPermLocationGranted(locationGranted);
   }, [t]);
 

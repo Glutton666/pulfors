@@ -8,6 +8,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "test": "jest --testPathIgnorePatterns='e2e/'",
     "lint": "expo lint",
     "lint:fix": "expo lint --fix",
     "server:dev": "PORT=5000 tsx server/index.ts",

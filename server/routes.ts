@@ -5,16 +5,25 @@ import { writeFile, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Worker } from "node:worker_threads";
+import {
+  frequencyToNote,
+  pickDominantFreq,
+  detectBpmCandidatesFromSamples,
+} from "../lib/audio-analysis-pure";
+// Re-export so existing tests that import detectBpmCandidatesFromSamples from
+// this module continue to work without modification.
+export { detectBpmCandidatesFromSamples } from "../lib/audio-analysis-pure";
 
 // ---------------------------------------------------------------------------
 // Audio-analysis worker code (plain JS, runs off the main event loop)
 // ---------------------------------------------------------------------------
-// autoCorrelate is defined once below (single source of truth, main-thread
-// TypeScript implementation) and its compiled function body is injected
-// verbatim into the worker script via .toString(). This keeps the worker
-// thread's eval'd JS context (which cannot `require()` this module directly
-// once esbuild-bundled for production) in lockstep with the main-thread
-// implementation used by the ffmpeg path, without hand-copying the algorithm.
+// frequencyToNote, pickDominantFreq, detectBpmCandidatesFromSamples, and
+// autoCorrelate are each defined once (in lib/audio-analysis-pure.ts or
+// below on the main thread) and their compiled function bodies are injected
+// verbatim into the worker script via .toString().  This keeps the worker's
+// eval'd JS context (which cannot `require()` this module directly once
+// esbuild-bundled for production) in lockstep with the main-thread
+// implementations, without hand-copying any algorithm.
 const WAV_WORKER_CODE = `
 const { workerData, parentPort } = require('worker_threads');
 
@@ -25,34 +34,11 @@ const MAX_ANALYSIS_WINDOWS = 5;
 
 ${autoCorrelate.toString()}
 
-function frequencyToNote(freq) {
-  const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-  const semitones = 12 * Math.log2(freq / 440);
-  const rounded = Math.round(semitones);
-  const noteIndex = ((rounded % 12) + 12 + 9) % 12;
-  const octave = Math.floor((rounded + 9) / 12) + 4;
-  return { name: NOTE_NAMES[noteIndex], octave };
-}
+${frequencyToNote.toString()}
 
-function pickDominantFreq(readings) {
-  if (readings.length === 0) return null;
-  const noteMap = new Map();
-  for (const f of readings) {
-    const info = frequencyToNote(f);
-    const key = info.name + info.octave;
-    if (!noteMap.has(key)) noteMap.set(key, []);
-    noteMap.get(key).push(f);
-  }
-  let bestKey = '';
-  let bestCount = 0;
-  for (const [key, freqs] of noteMap) {
-    if (freqs.length > bestCount) { bestCount = freqs.length; bestKey = key; }
-  }
-  if (!bestKey) return null;
-  const freqs = noteMap.get(bestKey);
-  freqs.sort((a, b) => a - b);
-  return freqs[Math.floor(freqs.length / 2)];
-}
+${pickDominantFreq.toString()}
+
+${detectBpmCandidatesFromSamples.toString()}
 
 function decodeWavBuffer(buf) {
   try {
@@ -104,61 +90,6 @@ function decodeWavBuffer(buf) {
   } catch { return null; }
 }
 
-function detectBpmCandidates(samples, sampleRate) {
-  const FRAME = 512;
-  const MIN_BPM = 50;
-  const MAX_BPM = 250;
-  const numFrames = Math.floor(samples.length / FRAME);
-  if (numFrames < 8) return [];
-  const energy = new Float32Array(numFrames);
-  for (let f = 0; f < numFrames; f++) {
-    let sum = 0;
-    for (let i = 0; i < FRAME; i++) { const s = samples[f * FRAME + i]; sum += s * s; }
-    energy[f] = Math.sqrt(sum / FRAME);
-  }
-  const onset = new Float32Array(numFrames);
-  for (let f = 1; f < numFrames; f++) {
-    const d = energy[f] - energy[f - 1];
-    onset[f] = d > 0 ? d : 0;
-  }
-  const fps = sampleRate / FRAME;
-  const lagMin = Math.max(1, Math.floor(fps * 60 / MAX_BPM));
-  const lagMax = Math.min(numFrames - 1, Math.ceil(fps * 60 / MIN_BPM));
-  if (lagMin >= lagMax) return [];
-  const acf = new Float32Array(lagMax + 1);
-  for (let lag = lagMin; lag <= lagMax; lag++) {
-    const count = numFrames - lag;
-    if (count <= 0) continue;
-    let corr = 0;
-    for (let i = 0; i < count; i++) corr += onset[i] * onset[i + lag];
-    acf[lag] = corr / count;
-  }
-  let bestLag = lagMin, bestCorr = 0;
-  for (let lag = lagMin; lag <= lagMax; lag++) {
-    if (acf[lag] > bestCorr) { bestCorr = acf[lag]; bestLag = lag; }
-  }
-  if (bestCorr <= 0) return [];
-  const candidates = [];
-  const addCandidate = (lag) => {
-    if (lag < lagMin || lag > lagMax) return;
-    const bpm = Math.round(fps * 60 / lag);
-    if (bpm < MIN_BPM || bpm > MAX_BPM) return;
-    const corr = acf[lag] || 0;
-    const tempoBonus = (bpm >= 80 && bpm <= 160) ? 1.2 : 1.0;
-    candidates.push({ bpm, score: (corr / bestCorr) * tempoBonus });
-  };
-  addCandidate(bestLag);
-  addCandidate(Math.round(bestLag / 2));
-  addCandidate(bestLag * 2);
-  candidates.sort((a, b) => b.score - a.score);
-  const seen = new Set();
-  const result = [];
-  for (const c of candidates) {
-    if (!seen.has(c.bpm)) { seen.add(c.bpm); result.push(c.bpm); }
-  }
-  return result;
-}
-
 function analyzeWavDirect(audioBuffer) {
   const decoded = decodeWavBuffer(audioBuffer);
   if (!decoded) return { frequency: null, note: null, bpm: null, bpmCandidates: [] };
@@ -180,7 +111,7 @@ function analyzeWavDirect(audioBuffer) {
     windowCount++;
   }
   const dominant = pickDominantFreq(readings);
-  const bpmCandidates = detectBpmCandidates(samples, rate);
+  const bpmCandidates = detectBpmCandidatesFromSamples(samples, rate);
   const bpm = bpmCandidates.length > 0 ? bpmCandidates[0] : null;
   if (!dominant) return { frequency: null, note: null, bpm, bpmCandidates };
   const rounded = Math.round(dominant * 10) / 10;
@@ -222,18 +153,10 @@ function analyzeWavInWorker(
 }
 
 // ---------------------------------------------------------------------------
-// Helpers used only by the ffmpeg path (main thread)
+// autoCorrelate: pitch-detection helper (main thread + injected into worker)
+// frequencyToNote / pickDominantFreq / detectBpmCandidatesFromSamples are
+// imported from lib/audio-analysis-pure and also injected into the worker.
 // ---------------------------------------------------------------------------
-function frequencyToNote(freq: number): { name: string; octave: number; cents: number } {
-  const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-  const semitones = 12 * Math.log2(freq / 440);
-  const rounded = Math.round(semitones);
-  const cents = Math.round((semitones - rounded) * 100);
-  const noteIndex = ((rounded % 12) + 12 + 9) % 12;
-  const octave = Math.floor((rounded + 9) / 12) + 4;
-  return { name: NOTE_NAMES[noteIndex], octave, cents };
-}
-
 function autoCorrelate(buffer: Float32Array, sampleRate: number, rmsThreshold: number = 0.03): number {
   const SIZE = buffer.length;
   let rms = 0;
@@ -275,84 +198,6 @@ function autoCorrelate(buffer: Float32Array, sampleRate: number, rmsThreshold: n
   return sampleRate / T0;
 }
 
-function pickDominantFreq(readings: number[]): number | null {
-  if (readings.length === 0) return null;
-  const noteMap = new Map<string, number[]>();
-  for (const f of readings) {
-    const info = frequencyToNote(f);
-    const key = `${info.name}${info.octave}`;
-    if (!noteMap.has(key)) noteMap.set(key, []);
-    noteMap.get(key)!.push(f);
-  }
-  let bestKey = "";
-  let bestCount = 0;
-  for (const [key, freqs] of noteMap) {
-    if (freqs.length > bestCount) {
-      bestCount = freqs.length;
-      bestKey = key;
-    }
-  }
-  if (!bestKey) return null;
-  const freqs = noteMap.get(bestKey)!;
-  freqs.sort((a, b) => a - b);
-  return freqs[Math.floor(freqs.length / 2)];
-}
-
-export function detectBpmCandidatesFromSamples(samples: Float32Array, sampleRate: number): number[] {
-  const FRAME = 512;
-  const MIN_BPM = 50;
-  const MAX_BPM = 250;
-  const numFrames = Math.floor(samples.length / FRAME);
-  if (numFrames < 8) return [];
-  const energy = new Float32Array(numFrames);
-  for (let f = 0; f < numFrames; f++) {
-    let sum = 0;
-    for (let i = 0; i < FRAME; i++) { const s = samples[f * FRAME + i]; sum += s * s; }
-    energy[f] = Math.sqrt(sum / FRAME);
-  }
-  const onset = new Float32Array(numFrames);
-  for (let f = 1; f < numFrames; f++) {
-    const d = energy[f] - energy[f - 1];
-    onset[f] = d > 0 ? d : 0;
-  }
-  const fps = sampleRate / FRAME;
-  const lagMin = Math.max(1, Math.floor(fps * 60 / MAX_BPM));
-  const lagMax = Math.min(numFrames - 1, Math.ceil(fps * 60 / MIN_BPM));
-  if (lagMin >= lagMax) return [];
-  const acf = new Float32Array(lagMax + 1);
-  for (let lag = lagMin; lag <= lagMax; lag++) {
-    const count = numFrames - lag;
-    if (count <= 0) continue;
-    let corr = 0;
-    for (let i = 0; i < count; i++) corr += onset[i] * onset[i + lag];
-    acf[lag] = corr / count;
-  }
-  let bestLag = lagMin, bestCorr = 0;
-  for (let lag = lagMin; lag <= lagMax; lag++) {
-    if (acf[lag] > bestCorr) { bestCorr = acf[lag]; bestLag = lag; }
-  }
-  if (bestCorr <= 0) return [];
-  const candidates: { bpm: number; score: number }[] = [];
-  const addCandidate = (lag: number) => {
-    if (lag < lagMin || lag > lagMax) return;
-    const bpm = Math.round(fps * 60 / lag);
-    if (bpm < MIN_BPM || bpm > MAX_BPM) return;
-    const corr = acf[lag] ?? 0;
-    const tempoBonus = (bpm >= 80 && bpm <= 160) ? 1.2 : 1.0;
-    candidates.push({ bpm, score: (corr / bestCorr) * tempoBonus });
-  };
-  addCandidate(bestLag);
-  addCandidate(Math.round(bestLag / 2));
-  addCandidate(bestLag * 2);
-  candidates.sort((a, b) => b.score - a.score);
-  const seen = new Set<number>();
-  const result: number[] = [];
-  for (const c of candidates) {
-    if (!seen.has(c.bpm)) { seen.add(c.bpm); result.push(c.bpm); }
-  }
-  return result;
-}
-
 // ---------------------------------------------------------------------------
 // Concurrency guards
 // ---------------------------------------------------------------------------
@@ -372,7 +217,7 @@ let activeWavCount = 0;
 export const MAX_CONCURRENT_WAV = 2;
 
 // ---------------------------------------------------------------------------
-// Per-IP rate limiter: max 20 requests per 60-second sliding window.
+// Per-IP rate limiter: max 20 requests in each fixed 60-second window.
 // Uses req.ip which is correctly populated when Express trust proxy is set.
 // ---------------------------------------------------------------------------
 const RATE_LIMIT_WINDOW_MS = 60_000;

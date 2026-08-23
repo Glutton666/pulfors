@@ -237,6 +237,11 @@ test("ALL_KEYS: @note_sample_channels 포함", () => {
   assert.ok(ALL_KEYS.includes("@note_sample_channels"));
 });
 
+test("ALL_KEYS: 페이드아웃과 컨트롤 패드 설정도 백업 대상", () => {
+  assert.ok(ALL_KEYS.includes("metronome_fade_out"));
+  assert.ok(ALL_KEYS.includes("metronome_control_pad_mapping_v1"));
+});
+
 test("sanitizeCustomSoundSetsJson: 안전한 URI는 그대로 보존", () => {
   const input = JSON.stringify({
     custom1: {

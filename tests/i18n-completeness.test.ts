@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { createT, translations, SUPPORTED_LANGUAGES, type TranslationLeaf } from "../lib/i18n";
+import { createT } from "../lib/i18n";
+import { translations, SUPPORTED_LANGUAGES, type TranslationLeaf } from "../lib/i18n.data";
 
 test("모든 i18n leaf는 SUPPORTED_LANGUAGES의 모든 언어가 비어있지 않다", () => {
   const failures: string[] = [];
