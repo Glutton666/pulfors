@@ -214,7 +214,6 @@ export function SwipeableBarRow({
               const coverage = sampleCellCoverage[ci];
               const hasSample = Boolean(coverage || sampleCells[ci]);
               const isDirectSample = coverage?.kind === "direct" || (!coverage && hasSample);
-              const sampleColor = coverage?.source === "import" ? C.accentMuted : C.accent;
               return (
                 <View
                   key={ci}
@@ -261,7 +260,12 @@ export function SwipeableBarRow({
               {cells.map((_, ci) => {
                 const coverage = sampleCellCoverage[ci];
                 if (!coverage) return <View key={ci} style={styles.barSampleCoverageSpacer} />;
-                const sampleColor = coverage.source === "import" ? C.accentMuted : C.accent;
+                // 예전엔 C.accent/C.accentMuted를 썼는데, 악센트 배경도 같은
+                // 색이라 악센트 비트 위에 샘플이 있으면 이 선이 배경에 묻혀
+                // 안 보였다 (2026-08-24 사용자 확인). C.text/C.textSecondary는
+                // 테마의 accent 색과 무관해 어떤 테마에서도 배경과 구별되면서,
+                // import/recording 구분(진하기 차이)도 그대로 유지한다.
+                const sampleColor = coverage.source === "import" ? C.textSecondary : C.text;
                 return (
                   <View
                     key={ci}
