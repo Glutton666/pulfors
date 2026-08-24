@@ -379,7 +379,8 @@ export function BarEditorPanel({
       onPanResponderGrant: () => { startBpm = repBpmRef.current ?? bpmPropRef.current ?? 120; },
       onPanResponderMove: (_, gs) => {
         if (isPlaying) return;
-        const newBpm = clampBarBpm(startBpm - gs.dx / 3);
+        // 오른쪽 스와이프 = 증가, 왼쪽 스와이프 = 감소로 반전 (2026-08-25 요청).
+        const newBpm = clampBarBpm(startBpm + gs.dx / 3);
         applyRepBpm(newBpm);
       },
       onPanResponderRelease: () => {},

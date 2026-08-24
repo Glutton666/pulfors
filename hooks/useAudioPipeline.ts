@@ -359,7 +359,11 @@ export function useAudioPipeline(params: UseAudioPipelineParams): UseAudioPipeli
       renderedUrlRef.current = wavUri;
       const player = createAudioPlayer(wavUri);
       player.loop = true;
-      player.volume = 1.0;
+      // 예전엔 1.0 고정값이라 사용자가 설정한 실제 볼륨(예: 0.8)을 무시하고
+      // pre-rendered 루프로 전환되는 순간 항상 최대 볼륨으로 재생됐다
+      // (2026-08-25 확인). per-tick 풀 플레이어(setPoolsVolume)와 동일하게
+      // 실제 볼륨을 반영한다.
+      player.volume = Math.max(0, Math.min(1, volumeRef.current));
       return player;
     } catch (e) {
       captureBreadcrumb({ category: "pre-render", message: "Failed, falling back to per-tick audio", level: "warning", data: { error: String(e) } });
