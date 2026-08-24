@@ -14,6 +14,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Platform } from "react-native";
 import * as Crypto from "expo-crypto";
 import { safePlay, safePlayWithVolume } from "@/lib/audio-utils";
+import { captureBreadcrumb } from "@/lib/error-tracking";
 import {
   getWebAudioContext,
   scheduleWebClickAt,
@@ -342,8 +343,24 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
           : soundRole === "high"
           ? [pool.highA, pool.highB, pool.highC, pool.highD][idx]
           : [pool.lowA, pool.lowB, pool.lowC, pool.lowD][idx];
+        // 진단용 breadcrumb: 프로덕션 빌드에서도(Sentry DSN 설정 시) 남아
+        // 레이어별로 실제 재생 호출이 계속 발생하는지 추적할 수 있다.
+        // (멀티레이어 폴리리듬에서 특정 레이어만 침묵하는 버그의 근본 원인이
+        // "JS가 더 이상 호출을 안 함"인지 "호출은 되는데 안 들림"인지 구분용.)
+        captureBreadcrumb({
+          category: "polygon.beat",
+          message: `layer=${layer.id.slice(0, 8)} sides=${layer.sides} role=${soundRole} slot=${toggleKey}#${idx} hasPlayer=${!!player}`,
+          level: "debug",
+        });
         if (player) safePlayWithVolume(player, layerVol * p.volumeRef.current, "polygon.beat");
-      } catch {}
+      } catch (e) {
+        captureBreadcrumb({
+          category: "polygon.beat",
+          message: `layer=${layer.id.slice(0, 8)} playNativeSound threw`,
+          level: "warning",
+          data: { error: String(e) },
+        });
+      }
     };
 
     const scheduleWebSound = (
@@ -390,7 +407,6 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
       const beatWithinMeasure = absbeat % beatsPerMeasure;
       const beatDurationMs = 60000 / Math.max(20, bpm);
       const beatStartMs = beatWithinMeasure * beatDurationMs; // 마디 시작 기준
-      const beatEndMs = beatStartMs + beatDurationMs;
 
       // 웹: 새 마디는 전체 마디를 한 번에 예약한다. 편집·템포 변경 뒤에는
       // 다음 엔진 비트부터 아직 지나지 않은 슬롯만 새 시간축으로 예약한다.
@@ -463,8 +479,17 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
 
         for (let k = 0; k < sides; k++) {
           const slotTimeMs = k * slotDurationMs;
-          // 이 비트 구간에 속하는 슬롯만 예약한다
-          if (slotTimeMs < beatStartMs || slotTimeMs >= beatEndMs) continue;
+          // 이 비트 구간에 속하는 슬롯만 예약한다.
+          //
+          // sides가 beatsPerMeasure의 약수가 아니면(3각형=3/4 등) slotDurationMs가
+          // beatDurationMs로 딱 나누어떨어지지 않아 slotTimeMs/beatStartMs가 이진
+          // 부동소수점으로 정확히 표현 안 되는 값이 된다. ms 단위 비교(slotTimeMs <
+          // beatStartMs 등)를 쓰면 특정 bpm에서 슬롯 하나가 두 구간의 경계 오차 사이로
+          // 영구히 빠지거나(매 마디 계속 그 슬롯만 무음) 반대로 중복 발화할 수 있다.
+          // 대신 bpm(beatDurationMs)에 무관한 "몇 번째 메인비트에 속하는가" 비율로
+          // 비교하면 이 오차가 사라진다.
+          const slotBeatPos = (k * beatsPerMeasure) / sides;
+          if (Math.floor(slotBeatPos + 1e-9) !== beatWithinMeasure) continue;
 
           const beatType = getVertexBeatType(layer, k);
 
@@ -486,10 +511,12 @@ export function usePolygonMode(p: UsePolygonModeParams): UsePolygonModeResult {
             slotTimeMs - beatStartMs + (layer.offsets[k] ?? 0) * slotDurationMs;
 
           schedule(delayMs, () => {
+            // 오디오 트리거를 먼저 실행해, 뒤이은 React 상태 갱신(재조정 비용)이
+            // 같은 타이머 콜백 안에서 실제 재생 호출을 지연시키지 않게 한다.
+            if (Platform.OS !== "web") playNativeSound(layer, beatType);
             setActiveVertices((prev) =>
               prev[layer.id] === k ? prev : { ...prev, [layer.id]: k },
             );
-            if (Platform.OS !== "web") playNativeSound(layer, beatType);
           });
         }
       });
