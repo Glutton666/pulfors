@@ -464,17 +464,23 @@ export function SubdivisionBar({
               testID={`subdivision-cell-${i}`}
             >
               {type === "strong" ? (
-                <View style={[{ width: cellSize, height: cellSize, borderRadius: dynamicRadius, overflow: "hidden", backgroundColor: C.accent, opacity: isPlaying ? (isActive ? 1 : 0.8) : 1 }]}>
+                <View style={{ width: cellSize, height: cellSize, borderRadius: dynamicRadius, overflow: "hidden", opacity: isPlaying ? (isActive ? 1 : 0.8) : 1 }}>
+                  {/* LinearGradient에 자식(View/Text)을 중첩시키면 이 빌드에서
+                      배경은 그려지는데 자식 콘텐츠가 합성되지 않는 문제가
+                      있었다 (2026-08-25 실기기 확인 — "S" 표시가 항상 안 보임).
+                      그라디언트는 자식 없이 배경만 그리고, 텍스트는 형제
+                      요소로 절대위치 오버레이한다. */}
                   <LinearGradient
                     key={C.accent}
                     colors={[accentGradientEdge(C.accent), C.accent, C.accent]}
                     locations={[0, 0.4, 1]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={{ width: cellSize, height: cellSize, alignItems: "center", justifyContent: "center", borderRadius: dynamicRadius }}
-                  >
+                    style={{ width: cellSize, height: cellSize }}
+                  />
+                  <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
                     <Text style={{ color: onAccentColor(C.accent), fontSize: dynamicFontSize, fontWeight: "bold" as const, lineHeight: dynamicFontSize + 2, textShadowColor: onAccentShadow(C.accent), textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
-                  </LinearGradient>
+                  </View>
                 </View>
               ) : (
                 <View
@@ -602,17 +608,18 @@ export function DragGhost({
     >
       {pattern.map((type, i) => (
         type === "strong" ? (
-          <View key={i} style={[styles.ghostCell, { overflow: "hidden", backgroundColor: GC.accent }]}>
+          <View key={i} style={[styles.ghostCell, { overflow: "hidden" }]}>
             <LinearGradient
               key={GC.accent}
               colors={[accentGradientEdge(GC.accent), GC.accent, GC.accent]}
               locations={[0, 0.4, 1]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={{ width: 18, height: 18, alignItems: "center", justifyContent: "center", borderRadius: Radius.xs }}
-            >
+              style={{ width: 18, height: 18, borderRadius: Radius.xs }}
+            />
+            <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
               <Text style={{ color: onAccentColor(GC.accent), fontSize: 8, fontWeight: "bold" as const, lineHeight: 10, textShadowColor: onAccentShadow(GC.accent), textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 }}>S</Text>
-            </LinearGradient>
+            </View>
           </View>
         ) : (
           <View

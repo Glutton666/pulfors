@@ -169,18 +169,22 @@ export function DialBeatDot({
             animatedStyle,
           ]}
         >
+          {/* LinearGradient에 자식(View/Text)을 중첩시키면 이 빌드에서 배경은
+              그려지는데 자식 콘텐츠가 합성되지 않는 문제가 있었다 (2026-08-25
+              실기기 확인 — "S" 표시가 항상 안 보임). 그라디언트는 자식 없이
+              배경만 그리고, 안쪽 링/텍스트는 형제 요소로 절대위치 오버레이한다. */}
           <LinearGradient
             key={C.accent}
             colors={[accentGradientEdge(C.accent), C.accent, C.accent]}
             locations={[0, 0.4, 1]}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
-            style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}
-          >
-            <View style={{ width: size - 10, height: size - 10, borderRadius: (size - 10) / 2, backgroundColor: C.accent, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: onAccentColor(C.accent), fontSize: FontSize.caption, fontWeight: "bold" as const, lineHeight: 13, textShadowColor: onAccentShadow(C.accent), textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
-            </View>
-          </LinearGradient>
+            style={{ width: size, height: size, borderRadius: size / 2 }}
+          />
+          <View style={{ position: "absolute", top: 5, left: 5, width: size - 10, height: size - 10, borderRadius: (size - 10) / 2, backgroundColor: C.accent }} />
+          <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: onAccentColor(C.accent), fontSize: FontSize.caption, fontWeight: "bold" as const, lineHeight: 13, textShadowColor: onAccentShadow(C.accent), textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
+          </View>
         </Animated.View>
       ) : (
         <Animated.View
