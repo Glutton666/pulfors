@@ -18,6 +18,7 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import { GradientLetter } from "@/components/GradientLetter";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import Colors from "@/constants/colors";
@@ -26,7 +27,7 @@ import { Radius, Spacing } from "@/constants/tokens";
 import type { ScaleValues } from "@/lib/scale";
 import type { BeatType } from "@/lib/metronome-engine";
 import { pureGetSubPattern } from "@/lib/metronome-engine-pure";
-import { accentGradientEdge, onAccentColor, onAccentShadow } from "@/lib/color-contrast";
+import { accentGradientEdge, onAccentColor, onAccentShadow, withAlpha } from "@/lib/color-contrast";
 import { getSubdivisionCellLayout } from "@/lib/subdivision-cell-layout";
 import {
   beginShakeTracking,
@@ -479,7 +480,15 @@ export function SubdivisionBar({
                     style={{ width: cellSize, height: cellSize }}
                   />
                   <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ color: onAccentColor(C.accent), fontSize: dynamicFontSize, fontWeight: "bold" as const, lineHeight: dynamicFontSize + 2, textShadowColor: onAccentShadow(C.accent), textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
+                    <GradientLetter
+                      letter="S"
+                      width={cellSize}
+                      height={cellSize}
+                      fontSize={dynamicFontSize}
+                      lineHeight={dynamicFontSize + 2}
+                      colors={[onAccentColor(C.accent), withAlpha(onAccentColor(C.accent), 0.55)]}
+                      textShadowColor={onAccentShadow(C.accent)}
+                    />
                   </View>
                 </View>
               ) : (
@@ -618,7 +627,15 @@ export function DragGhost({
               style={{ width: 18, height: 18, borderRadius: Radius.xs }}
             />
             <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: onAccentColor(GC.accent), fontSize: 8, fontWeight: "bold" as const, lineHeight: 10, textShadowColor: onAccentShadow(GC.accent), textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 2 }}>S</Text>
+              <GradientLetter
+                letter="S"
+                width={18}
+                height={18}
+                fontSize={8}
+                lineHeight={10}
+                colors={[onAccentColor(GC.accent), withAlpha(onAccentColor(GC.accent), 0.55)]}
+                textShadowColor={onAccentShadow(GC.accent)}
+              />
             </View>
           </View>
         ) : (

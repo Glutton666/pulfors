@@ -9,10 +9,11 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
+import { GradientLetter } from "@/components/GradientLetter";
 import { useTheme } from "@/contexts/ThemeContext";
 import type { BeatType } from "@/lib/metronome-engine";
 import { Radius, FontSize } from "@/constants/tokens";
-import { accentGradientEdge, onAccentColor, onAccentShadow } from "@/lib/color-contrast";
+import { accentGradientEdge, onAccentColor, onAccentShadow, withAlpha } from "@/lib/color-contrast";
 
 export interface DialBeatDotProps {
   index: number;
@@ -183,7 +184,15 @@ export function DialBeatDot({
           />
           <View style={{ position: "absolute", top: 5, left: 5, width: size - 10, height: size - 10, borderRadius: (size - 10) / 2, backgroundColor: C.accent }} />
           <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ color: onAccentColor(C.accent), fontSize: FontSize.caption, fontWeight: "bold" as const, lineHeight: 13, textShadowColor: onAccentShadow(C.accent), textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 3 }}>S</Text>
+            <GradientLetter
+              letter="S"
+              width={size - 10}
+              height={size - 10}
+              fontSize={FontSize.caption}
+              lineHeight={13}
+              colors={[onAccentColor(C.accent), withAlpha(onAccentColor(C.accent), 0.55)]}
+              textShadowColor={onAccentShadow(C.accent)}
+            />
           </View>
         </Animated.View>
       ) : (
