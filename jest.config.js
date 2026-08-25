@@ -36,6 +36,7 @@ module.exports = {
     // which is an ESM module that Jest can't load. Stub it with a CJS equivalent.
     "^expo/virtual/env(\\.js)?$": "<rootDir>/tests/_stubs/expo-virtual-env.js",
     "^@breezystack/lamejs$": "<rootDir>/tests/_stubs/lamejs.js",
+    "^@react-native-masked-view/masked-view$": "<rootDir>/tests/_stubs/masked-view.js",
   },
   transform: {
     "^.+\\.[jt]sx?$": ["babel-jest", { presets: ["babel-preset-expo"] }],
