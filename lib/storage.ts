@@ -379,6 +379,8 @@ export interface PracticeEntry {
   loopBlocks?: LoopBlockEntry[];
   /** Block playback mode used in bar mode practice. */
   blockPlayMode?: "sequential" | "loop" | "random";
+  /** Exact source-bar order recorded by a random bar session. */
+  randomBarOrder?: number[];
   barLoopMode: "loop" | "once";
   subdivisionPattern: BeatType[];
   barClockMode?: "stopwatch" | "timer";

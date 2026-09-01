@@ -163,6 +163,7 @@ export class MetronomeEngine {
   private audioOffsetMs: number = 0;
   private loopBlocks: { startBeat: number; endBeat: number; type: "count" | "duration"; value: number; jumpToBlock?: number; jumpCount?: number; bpm?: number; soundSet?: string; layerOf?: number; ownBeatTypes?: Record<number, string>; ownSubdivisions?: Record<string, string[]> }[] = [];
   private blockPlayMode: "sequential" | "loop" | "random" = "loop";
+  private randomBarOrder: number[] | null = null;
   private barRepeats: Map<number, BarRepeatSpec> = new Map();
   private barBpmOverrides: Map<number, number> = new Map();
   private preRenderedAudio = false;
@@ -363,6 +364,16 @@ export class MetronomeEngine {
     if (this.isRunning) {
       this.rebuildSchedule();
     }
+  }
+
+  /**
+   * Uses a caller-owned random bar sequence for the next schedule. This is
+   * separate from block randomization so a session can preview and replay the
+   * exact same order without changing normal loop-block behavior.
+   */
+  setRandomBarOrder(order: number[] | null) {
+    this.randomBarOrder = order?.filter(index => Number.isInteger(index) && index >= 0) ?? null;
+    this.invalidateScheduleCache();
   }
 
   clearLoopBlocks() {
@@ -670,7 +681,10 @@ export class MetronomeEngine {
     const processOuterCached = (outerIdx: number) =>
       pureProcessOuterCached(inputs, state, durCache, jumpProcessed, cacheHandle, outerIdx);
 
-    if (this.blockPlayMode === "random" && sortedBlocks.length === 0) {
+    if (
+      this.blockPlayMode === "random" &&
+      (this.randomBarOrder?.length || sortedBlocks.length === 0)
+    ) {
       let candidateCount = this.beatsPerMeasure;
       for (let beat = 0; beat < this.beatsPerMeasure; beat++) {
         if (inputs.barRepeats.get(beat)?.isEnd) {
@@ -678,13 +692,23 @@ export class MetronomeEngine {
           break;
         }
       }
-      const shuffledBeats = Array.from({ length: candidateCount }, (_, beat) => beat);
-      for (let i = shuffledBeats.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffledBeats[i], shuffledBeats[j]] = [shuffledBeats[j], shuffledBeats[i]];
+      const suppliedOrder = this.randomBarOrder?.filter(beat => beat < candidateCount);
+      const shuffledBeats = suppliedOrder?.length
+        ? suppliedOrder
+        : Array.from({ length: candidateCount }, (_, beat) => beat);
+      if (!suppliedOrder?.length) {
+        for (let i = shuffledBeats.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffledBeats[i], shuffledBeats[j]] = [shuffledBeats[j], shuffledBeats[i]];
+        }
       }
-      for (const beat of shuffledBeats) {
+      for (let sequenceIndex = 0; sequenceIndex < shuffledBeats.length; sequenceIndex += 1) {
+        const beat = shuffledBeats[sequenceIndex];
+        const firstTick = state.ticks.length;
         pureAddBarWithRepeat(inputs, state, beat, 0, -1, 1);
+        for (let tickIndex = firstTick; tickIndex < state.ticks.length; tickIndex += 1) {
+          state.ticks[tickIndex].randomSequenceIndex = sequenceIndex;
+        }
       }
     } else if (this.blockPlayMode === "random" && sortedBlocks.length >= 2) {
       const outerBlocks: number[] = [];
@@ -1005,6 +1029,7 @@ export class MetronomeEngine {
           jumpSourceBlockIndex: tick.jumpSourceBlockIndex >= 0 ? tick.jumpSourceBlockIndex : undefined,
           layerIndex: tick.layerIndex,
           layerBeat: tick.layerBeat,
+          randomSequenceIndex: tick.randomSequenceIndex,
         });
       } else {
         this.onProgress({
@@ -1017,6 +1042,7 @@ export class MetronomeEngine {
           jumpCurrent: tick.jumpIteration,
           jumpTotal: tick.jumpTotal,
           jumpSourceBlockIndex: tick.jumpSourceBlockIndex >= 0 ? tick.jumpSourceBlockIndex : undefined,
+          randomSequenceIndex: tick.randomSequenceIndex,
         });
       }
     }

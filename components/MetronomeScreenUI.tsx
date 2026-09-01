@@ -117,7 +117,10 @@ export function MetronomeScreenUI(props: Props) {
     handleEasterEggGuess, handleEasterEggToggleApplyBpm, handleEasterEggTrigger,
     handleEasterEggGiveUpRef,
     barMode, barBpm, setBarBpm, barBpmRef, handleBarBpmChange, handleBarModeChange, barLoopMode, setBarLoopMode,
-     blockPlayMode, setBlockPlayMode, handleRandomBarPlay, barRepeats, loopBlocks,
+     blockPlayMode, setBlockPlayMode, handleRandomBarPlay,
+    randomBarSession, randomBarConfig, setRandomBarConfig, onRandomViewportCapacityChange,
+    handleReplayRandomBarSession, handleSaveRandomBarSession, handleApplyRandomBarSession,
+    barRepeats, loopBlocks,
     barStartBeat, setBarStartBeat,
     handleBarRepeatChange, handleBarMeterChange, handleLoopBlocksChange,
     handleBarReset, handleBarQuickSave, handleResetFlash,
@@ -1028,6 +1031,13 @@ export function MetronomeScreenUI(props: Props) {
             blockPlayMode={blockPlayMode}
             onBlockPlayModeChange={setBlockPlayMode}
             onRandomPlayRequest={handleRandomBarPlay}
+            randomBarSession={randomBarSession}
+            randomBarConfig={randomBarConfig}
+            onRandomBarConfigChange={setRandomBarConfig}
+            onRandomViewportCapacityChange={onRandomViewportCapacityChange}
+            onReplayRandomBarSession={handleReplayRandomBarSession}
+            onSaveRandomBarSession={handleSaveRandomBarSession}
+            onApplyRandomBarSession={handleApplyRandomBarSession}
             onBarScrollOffset={(offset) => { barScrollOffsetRef.current = offset; }}
             noteSamples={noteSamples}
             noteSampleNames={noteSampleNames}

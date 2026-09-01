@@ -3,20 +3,21 @@
  *
  * Layout (top → bottom):
  *   1. BarSymbolDrawer (symbol palette + time display)
- *   2. Bar list (ScrollView of SwipeableBarRows)
+ *   2. Virtualized bar list (FlatList of SwipeableBarRows)
  *   3. BarEditorPanel (repeat / layer / BPM editor + sound-set picker)
  *   4. BarVoltaModal / BarBlockEditModal (overlays)
  */
 import React, {
   useState, useRef, useCallback, useMemo, useEffect,
 } from "react";
-import { View, Text, ScrollView, Platform, Animated } from "react-native";
+import { View, Text, Pressable, FlatList, Platform, Animated } from "react-native";
 import * as Haptics from "expo-haptics";
 
 import { HintBanner } from "@/components/HintTooltip";
 import type { BeatType, BarRepeat, LoopBlock } from "@/components/beat-indicator.types";
 import type { ProgressInfo } from "@/lib/metronome-engine";
 import type { CustomSoundSetConfig } from "@/lib/storage";
+import type { BarRandomConfig, BarRandomSession } from "@/lib/bar-random-session";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import { FontSize, Spacing } from "@/constants/tokens";
@@ -101,6 +102,13 @@ export interface BarModeViewProps {
   onNoteRecordRequest?: (beatIndex: number, subIndex: number) => void;
   onReorderBar?: (fromIndex: number, toIndex: number) => void;
   onInsertBarAfter?: (beatIndex: number) => void;
+  randomBarSession?: BarRandomSession | null;
+  randomBarConfig?: BarRandomConfig;
+  onRandomBarConfigChange?: (config: BarRandomConfig) => void;
+  onRandomViewportCapacityChange?: (capacity: number) => void;
+  onReplayRandomBarSession?: () => void;
+  onSaveRandomBarSession?: () => Promise<boolean> | void;
+  onApplyRandomBarSession?: () => void;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -119,6 +127,8 @@ export function BarModeView({
   colors: C, ms,
   cellOverlayOpacity, rowHeight,
   noteSamples, noteSampleSources, onNoteRecordRequest, onReorderBar, onInsertBarAfter,
+  randomBarSession, randomBarConfig, onRandomBarConfigChange, onRandomViewportCapacityChange,
+  onReplayRandomBarSession, onSaveRandomBarSession, onApplyRandomBarSession,
 }: BarModeViewProps) {
   const { t } = useLanguage();
   const S = useScale();
@@ -205,7 +215,7 @@ export function BarModeView({
 
   // ─── Scroll state ─────────────────────────────────────────────────────────
 
-  const barScrollRef = useRef<ScrollView>(null);
+  const barScrollRef = useRef<FlatList<number>>(null);
   const barScrollYRef = useRef(0);
   const [barContainerHeight, setBarContainerHeight] = useState(0);
 
@@ -232,7 +242,7 @@ export function BarModeView({
 
   useEffect(() => {
     if (!isPlaying) {
-      barScrollRef.current?.scrollTo({ y: 0, animated: false });
+      barScrollRef.current?.scrollToOffset({ offset: 0, animated: false });
       onBarScrollOffset?.(0);
       return;
     }
@@ -240,7 +250,7 @@ export function BarModeView({
     const rh = rowHeight ?? BAR_ROW_H;
     const beatTop = currentBeat * rh;
     const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + rh / 2);
-    barScrollRef.current?.scrollTo({ y: scrollTarget, animated: true });
+    barScrollRef.current?.scrollToOffset({ offset: scrollTarget, animated: true });
   }, [isPlaying, currentBeat, barContainerHeight]);
 
   // ─── Memos ────────────────────────────────────────────────────────────────
@@ -503,20 +513,35 @@ export function BarModeView({
       />
 
       {/* ── Bar list ── */}
-      <ScrollView
+      <FlatList
         ref={barScrollRef}
+        data={beats}
+        keyExtractor={beat => String(beat)}
         style={[{ flex: 1 }, S.isTablet && { paddingHorizontal: S.ms(16, 0.5) }]}
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
         scrollEnabled={!isPlaying && draggingBeat === null}
-        onLayout={e => setBarContainerHeight(e.nativeEvent.layout.height)}
+        initialNumToRender={Math.max(4, Math.ceil((barContainerHeight || rowH * 4) / rowH))}
+        maxToRenderPerBatch={8}
+        updateCellsBatchingPeriod={32}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS !== "web"}
+        getItemLayout={(_data, index) => ({
+          length: rowH,
+          offset: rowH * index,
+          index,
+        })}
+        onLayout={e => {
+          const height = e.nativeEvent.layout.height;
+          setBarContainerHeight(height);
+          onRandomViewportCapacityChange?.(Math.max(1, Math.ceil(height / rowH)));
+        }}
         onScroll={e => {
           barScrollYRef.current = e.nativeEvent.contentOffset.y;
           onBarScrollOffset?.(e.nativeEvent.contentOffset.y);
         }}
         scrollEventThrottle={16}
-      >
-        {beats.map(beat => {
+        renderItem={({ item: beat }) => {
           const bType = beatTypes[beat] || "normal";
           const subs = beatSubdivisions[String(beat)] ?? [];
           const rep = barRepeats[beat] ?? null;
@@ -561,7 +586,6 @@ export function BarModeView({
 
           return (
             <SwipeableBarRow
-              key={beat}
               beat={beat}
               beatType={bType}
               subdivisions={subs}
@@ -600,20 +624,101 @@ export function BarModeView({
               sampleCellCoverage={rowSampleCoverage}
             />
           );
-        })}
-
-        {/* Swipe hint */}
-        {barStartBeat === null && !isPlaying && (
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingTop: 12, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs }}>
-            <Text style={{ fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium", opacity: 0.6, color: C.textTertiary }}>{t("barModeView", "swipeHintCopy")}</Text>
-            <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, opacity: 0.3, marginHorizontal: 8 }}>|</Text>
-            <Text style={{ fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium", opacity: 0.6, color: C.textTertiary }}>{t("barModeView", "swipeHintEdit")}</Text>
-            <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, opacity: 0.3, marginHorizontal: 8 }}>|</Text>
-            <Text style={{ fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium", opacity: 0.6, color: C.textTertiary }}>{t("barModeView", "swipeHintAdd")}</Text>
-          </View>
+        }}
+        ListFooterComponent={(
+          <>
+            {barStartBeat === null && !isPlaying && (
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingTop: 12, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs }}>
+                <Text style={{ fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium", opacity: 0.6, color: C.textTertiary }}>{t("barModeView", "swipeHintCopy")}</Text>
+                <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, opacity: 0.3, marginHorizontal: 8 }}>|</Text>
+                <Text style={{ fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium", opacity: 0.6, color: C.textTertiary }}>{t("barModeView", "swipeHintEdit")}</Text>
+                <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, opacity: 0.3, marginHorizontal: 8 }}>|</Text>
+                <Text style={{ fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium", opacity: 0.6, color: C.textTertiary }}>{t("barModeView", "swipeHintAdd")}</Text>
+              </View>
+            )}
+            <View style={{ height: 8 }} />
+          </>
         )}
-        <View style={{ height: 8 }} />
-      </ScrollView>
+      />
+
+      {randomBarSession && (
+        <View
+          testID="bar-random-session-preview"
+          style={{ borderTopWidth: 1, borderTopColor: C.overlay08, paddingVertical: 6 }}
+        >
+          <FlatList
+            horizontal
+            data={randomBarSession.order.slice(
+              Math.max(0, randomBarSession.cursor),
+              Math.max(0, randomBarSession.cursor) + Math.max(2, Math.ceil((barContainerHeight || rowH * 4) / rowH) * 2),
+            )}
+            keyExtractor={(_item, index) => `${randomBarSession.cursor}-${index}`}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: Spacing.sm, gap: 6 }}
+            renderItem={({ item, index }) => (
+              <View style={{
+                minWidth: 48,
+                paddingHorizontal: 8,
+                paddingVertical: 5,
+                borderRadius: 8,
+                backgroundColor: index === 0 && randomBarSession.active ? C.accent : C.overlay06,
+                alignItems: "center",
+              }}>
+                <Text style={{ color: index === 0 && randomBarSession.active ? C.background : C.text, fontSize: FontSize.micro }}>
+                  {index === 0 ? t("barModeView", "randomNext") : `+${index}`}
+                </Text>
+                <Text style={{ color: index === 0 && randomBarSession.active ? C.background : C.textSecondary, fontSize: FontSize.small }}>
+                  #{item + 1}
+                </Text>
+              </View>
+            )}
+          />
+          {!randomBarSession.active && (
+            <View style={{ flexDirection: "row", gap: 6, paddingHorizontal: Spacing.sm, paddingTop: 6 }}>
+              {[
+                { key: "save", label: t("barModeView", "randomSave"), action: onSaveRandomBarSession },
+                { key: "replay", label: t("barModeView", "randomReplay"), action: onReplayRandomBarSession },
+                { key: "apply", label: t("barModeView", "randomApply"), action: onApplyRandomBarSession },
+              ].map(item => (
+                <Pressable
+                  key={item.key}
+                  onPress={() => item.action?.()}
+                  style={{ flex: 1, paddingVertical: 7, borderRadius: 8, backgroundColor: C.overlay06, alignItems: "center" }}
+                >
+                  <Text style={{ color: C.textSecondary, fontSize: FontSize.micro }}>{item.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
+
+      {!isPlaying && randomBarConfig && (
+        <View style={{ flexDirection: "row", paddingHorizontal: Spacing.sm, paddingVertical: 4, gap: 4 }}>
+          {(["independent", "no-consecutive", "shuffle-bag"] as const).map(strategy => (
+            <Text
+              key={strategy}
+              onPress={() => onRandomBarConfigChange?.({ ...randomBarConfig, strategy })}
+              style={{
+                flex: 1,
+                textAlign: "center",
+                paddingVertical: 5,
+                borderRadius: 7,
+                overflow: "hidden",
+                color: randomBarConfig.strategy === strategy ? C.background : C.textSecondary,
+                backgroundColor: randomBarConfig.strategy === strategy ? C.accent : C.overlay06,
+                fontSize: FontSize.micro,
+              }}
+            >
+              {strategy === "independent"
+                ? t("barModeView", "randomIndependent")
+                : strategy === "no-consecutive"
+                  ? t("barModeView", "randomNoRepeat")
+                  : t("barModeView", "randomShuffleBag")}
+            </Text>
+          ))}
+        </View>
+      )}
 
       {/* ── Editor panel ── */}
       <BarEditorPanel

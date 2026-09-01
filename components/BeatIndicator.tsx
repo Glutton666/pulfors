@@ -140,6 +140,13 @@ interface BeatIndicatorProps {
   onCopyBar?: (beat: number) => void;
   onReorderBar?: (fromIndex: number, toIndex: number) => void;
   onInsertBarAfter?: (beatIndex: number) => void;
+  randomBarSession?: import("@/lib/bar-random-session").BarRandomSession | null;
+  randomBarConfig?: import("@/lib/bar-random-session").BarRandomConfig;
+  onRandomBarConfigChange?: (config: import("@/lib/bar-random-session").BarRandomConfig) => void;
+  onRandomViewportCapacityChange?: (capacity: number) => void;
+  onReplayRandomBarSession?: () => void;
+  onSaveRandomBarSession?: () => Promise<boolean> | void;
+  onApplyRandomBarSession?: () => void;
   soundSet?: string;
   onSoundSetChange?: (ss: string) => void;
   layerSoundSets?: Record<number, string>;
@@ -219,6 +226,13 @@ export function BeatIndicator({
   onCopyBar,
   onReorderBar,
   onInsertBarAfter,
+  randomBarSession,
+  randomBarConfig,
+  onRandomBarConfigChange,
+  onRandomViewportCapacityChange,
+  onReplayRandomBarSession,
+  onSaveRandomBarSession,
+  onApplyRandomBarSession,
   soundSet,
   onSoundSetChange,
   layerSoundSets = {},
@@ -1255,6 +1269,13 @@ export function BeatIndicator({
         onCopyBar={onCopyBar}
         onReorderBar={onReorderBar}
         onInsertBarAfter={onInsertBarAfter}
+        randomBarSession={randomBarSession}
+        randomBarConfig={randomBarConfig}
+        onRandomBarConfigChange={onRandomBarConfigChange}
+        onRandomViewportCapacityChange={onRandomViewportCapacityChange}
+        onReplayRandomBarSession={onReplayRandomBarSession}
+        onSaveRandomBarSession={onSaveRandomBarSession}
+        onApplyRandomBarSession={onApplyRandomBarSession}
         subdivisionBarElement={subdivisionBarElement}
         onBarQuickSave={onBarQuickSave}
         onResetFlash={onResetFlash}

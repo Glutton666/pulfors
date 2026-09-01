@@ -51,6 +51,13 @@ import { useScale } from "@/lib/scale";
 import type { ScaleValues } from "@/lib/scale";
 import { MetronomeEngine, soundSets, toEngineBpm } from "@/lib/metronome-engine";
 import type { BeatType, ProgressInfo } from "@/lib/metronome-engine";
+import {
+  appendBarRandomItems,
+  createBarRandomSession,
+  DEFAULT_BAR_RANDOM_CONFIG,
+  type BarRandomConfig,
+  type BarRandomSession,
+} from "@/lib/bar-random-session";
 import { loadSettings, saveSettings, loadCustomSoundSets, saveCustomSoundSets, loadPracticeBook, savePracticeBook, createPracticeEntry, runStorageMigrations, clearAllAppStorage, type MetronomeSettings } from "@/lib/storage";
 import type { FlashMode, HapticMode, SoundSet, BuiltinSoundSet, CustomSoundSetConfig, CustomSoundSample, FadeOutSettings, PracticeEntry } from "@/lib/storage";
 import type { BarRepeat, LoopBlock } from "@/components/BeatIndicator";
@@ -284,6 +291,18 @@ export function useMetronomeScreen() {
 
   const [progressInfo, setProgressInfo] = useState<ProgressInfo | null>(null);
   const [layerProgressMap, setLayerProgressMap] = useState<Record<string, number>>({});
+  const [randomBarConfig, setRandomBarConfig] = useState<BarRandomConfig>(DEFAULT_BAR_RANDOM_CONFIG);
+  const randomBarConfigRef = useRef(randomBarConfig);
+  useEffect(() => { randomBarConfigRef.current = randomBarConfig; }, [randomBarConfig]);
+  const [randomBarSession, setRandomBarSession] = useState<BarRandomSession | null>(null);
+  const randomBarSessionRef = useRef<BarRandomSession | null>(null);
+  const randomBarViewportCapacityRef = useRef(4);
+  const randomBarChunkStartRef = useRef(0);
+  const randomBarChunkLengthRef = useRef(0);
+  const updateRandomBarSession = useCallback((session: BarRandomSession | null) => {
+    randomBarSessionRef.current = session;
+    setRandomBarSession(session ? { ...session, order: [...session.order] } : null);
+  }, []);
 
   // 악보 서브-모드 ("list" | "editor"); coreMode==="score"일 때만 의미 있음.
   const [scoreSubMode, setScoreSubMode] = useState<"list" | "editor">("list");
@@ -1354,6 +1373,14 @@ export function useMetronomeScreen() {
         hasLayerUpdate = true;
       } else {
         activeBarIndexRef.current = info.beat;
+        const randomSession = randomBarSessionRef.current;
+        if (randomSession?.active && info.randomSequenceIndex !== undefined) {
+          const nextCursor = randomBarChunkStartRef.current + info.randomSequenceIndex;
+          if (nextCursor !== randomSession.cursor) {
+            randomSession.cursor = nextCursor;
+            setRandomBarSession({ ...randomSession, order: [...randomSession.order] });
+          }
+        }
         pendingProgress = info;
         hasProgressUpdate = true;
       }
@@ -1708,8 +1735,14 @@ export function useMetronomeScreen() {
     randomBarPreviousModeRef.current = null;
     blockPlayModeRef.current = previousMode;
     setBlockPlayMode(previousMode);
+    engineRef.current?.setRandomBarOrder(null);
     engineRef.current?.setBlockPlayMode(previousMode);
-  }, [blockPlayModeRef, engineRef, setBlockPlayMode]);
+    const session = randomBarSessionRef.current;
+    if (session) {
+      session.active = false;
+      updateRandomBarSession(session);
+    }
+  }, [blockPlayModeRef, engineRef, setBlockPlayMode, updateRandomBarSession]);
   const randomBarPlaybackBecameActiveRef = useRef(false);
   useEffect(() => {
     if (randomBarPreviousModeRef.current === null) {
@@ -1797,20 +1830,226 @@ export function useMetronomeScreen() {
       isPreparing ||
       randomBarPreviousModeRef.current !== null
     ) return;
+    const sourceCount = Math.max(1, barConfigRef.current.beatsPerMeasure);
+    const session = createBarRandomSession(sourceCount);
+    const chunkLength = Math.max(2, randomBarViewportCapacityRef.current * 2);
+    const chunk = appendBarRandomItems(session, chunkLength, randomBarConfig);
+    randomBarChunkStartRef.current = 0;
+    randomBarChunkLengthRef.current = chunk.length;
+    updateRandomBarSession(session);
     randomBarPreviousModeRef.current = blockPlayModeRef.current;
     blockPlayModeRef.current = "random";
     setBlockPlayMode("random");
+    engineRef.current?.setRandomBarOrder(chunk);
     engineRef.current?.setBlockPlayMode("random");
     void togglePlayPauseRef.current();
   }, [
     barMode,
+    barConfigRef,
     blockPlayModeRef,
     engineRef,
     isPlaying,
     isPreparing,
     randomBarPreviousModeRef,
+    randomBarConfig,
     setBlockPlayMode,
     togglePlayPauseRef,
+    updateRandomBarSession,
+  ]);
+
+  const materializeRandomBarOrder = useCallback((requestedOrder: number[]) => {
+    const source = barConfigRef.current;
+    const order = requestedOrder
+      .filter(index => index >= 0 && index < source.beatsPerMeasure);
+    const remapSamples = <T,>(map: Record<string, T> | undefined): Record<string, T> => {
+      const result: Record<string, T> = {};
+      for (let targetBeat = 0; targetBeat < order.length; targetBeat += 1) {
+        const sourceBeat = order[targetBeat];
+        for (const [key, value] of Object.entries(map ?? {})) {
+          const [beat, ...rest] = key.split("-");
+          if (Number(beat) === sourceBeat) result[[targetBeat, ...rest].join("-")] = value;
+        }
+      }
+      return result;
+    };
+    const nextSubdivisions: Record<string, BeatType[]> = {};
+    const nextRepeats: Record<number, BarRepeat> = {};
+    order.forEach((sourceBeat, targetBeat) => {
+      const subdivisions = source.beatSubdivisions[String(sourceBeat)];
+      if (subdivisions?.length) nextSubdivisions[String(targetBeat)] = [...subdivisions];
+      const repeat = source.barRepeats[sourceBeat];
+      if (repeat) {
+        const {
+          jumpFromId: _jumpFromId,
+          jumpToId: _jumpToId,
+          voltaMax: _voltaMax,
+          isEnd: _isEnd,
+          ...portableRepeat
+        } = repeat;
+        nextRepeats[targetBeat] = {
+          ...portableRepeat,
+          layers: portableRepeat.layers?.map(layer => ({ ...layer })),
+        };
+      }
+    });
+    return {
+      order,
+      beatsPerMeasure: order.length,
+      beatTypes: order.map(index => source.beatTypes[index] ?? "normal"),
+      beatSubdivisions: nextSubdivisions,
+      barRepeats: nextRepeats,
+      noteSamples: remapSamples(source.noteSamples),
+      noteSampleNames: remapSamples(source.noteSampleNames),
+      noteSampleSources: remapSamples(source.noteSampleSources),
+      noteSampleChannels: remapSamples(source.noteSampleChannels),
+      noteSampleVolumes: remapSamples(source.noteSampleVolumes),
+      noteSampleSpeeds: remapSamples(source.noteSampleSpeeds),
+    };
+  }, [barConfigRef]);
+
+  const handleReplayRandomBarSession = useCallback(() => {
+    const previous = randomBarSessionRef.current;
+    if (!previous || previous.order.length === 0 || isPlaying || isPreparing) return;
+    const session = {
+      ...previous,
+      order: [...previous.order],
+      cursor: 0,
+      active: true,
+    };
+    randomBarChunkStartRef.current = 0;
+    randomBarChunkLengthRef.current = session.order.length;
+    updateRandomBarSession(session);
+    randomBarPreviousModeRef.current = blockPlayModeRef.current;
+    blockPlayModeRef.current = "random";
+    setBlockPlayMode("random");
+    engineRef.current?.setRandomBarOrder(session.order);
+    engineRef.current?.setBlockPlayMode("random");
+    void togglePlayPauseRef.current();
+  }, [
+    blockPlayModeRef,
+    engineRef,
+    isPlaying,
+    isPreparing,
+    setBlockPlayMode,
+    togglePlayPauseRef,
+    updateRandomBarSession,
+  ]);
+
+  const handleSaveRandomBarSession = useCallback(async (): Promise<boolean> => {
+    const session = randomBarSessionRef.current;
+    if (!session?.order.length) return false;
+    try {
+      const source = barConfigRef.current;
+      const now = new Date();
+      const entry = createPracticeEntry(
+        `Random ${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`,
+        {
+          mode: "bar",
+          bpm: barBpmRef.current,
+          beatsPerMeasure: source.beatsPerMeasure,
+          beatTypes: [...source.beatTypes],
+          beatSubdivisions: { ...source.beatSubdivisions },
+          barRepeats: { ...source.barRepeats },
+          loopBlocks: [...source.loopBlocks],
+          blockPlayMode: "random",
+          randomBarOrder: [...session.order],
+          barLoopMode: "once",
+          subdivisionPattern: [...(barConfigRef.current.subdivisionPattern ?? ["accent"])],
+          noteSamples: { ...source.noteSamples },
+          noteSampleNames: { ...source.noteSampleNames },
+          noteSampleSources: { ...source.noteSampleSources },
+          noteSampleChannels: { ...source.noteSampleChannels },
+          noteSampleVolumes: { ...(source.noteSampleVolumes ?? {}) },
+          noteSampleSpeeds: { ...(source.noteSampleSpeeds ?? {}) },
+        },
+        username,
+      );
+      const existing = await loadPracticeBook();
+      await savePracticeBook([entry, ...existing]);
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      return true;
+    } catch (error) {
+      captureBreadcrumb({
+        category: "practice-book",
+        message: "Random bar session save error",
+        level: "warning",
+        data: { error: String(error) },
+      });
+      return false;
+    }
+  }, [barBpmRef, username]);
+
+  const handleApplyRandomBarSession = useCallback(() => {
+    const session = randomBarSessionRef.current;
+    if (!session?.order.length || isPlaying || isPreparing) return;
+    const sourceCount = barConfigRef.current.beatsPerMeasure;
+    const uniqueOrder = Array.from(new Set(session.order))
+      .filter(index => index >= 0 && index < sourceCount);
+    for (let index = 0; index < sourceCount; index += 1) {
+      if (!uniqueOrder.includes(index)) uniqueOrder.push(index);
+    }
+    const next = materializeRandomBarOrder(uniqueOrder);
+    if (next.beatsPerMeasure === 0) return;
+    setBeatsPerMeasure(next.beatsPerMeasure);
+    setBeatTypes(next.beatTypes);
+    setBeatSubdivisions(next.beatSubdivisions);
+    setBarRepeats(next.barRepeats);
+    setLoopBlocks([]);
+    setBarStartBeat(null);
+    setNoteSamples(next.noteSamples);
+    noteSamplesRef.current = next.noteSamples;
+    setNoteSampleNames(next.noteSampleNames);
+    noteSampleNamesRef.current = next.noteSampleNames;
+    setNoteSampleSources(next.noteSampleSources);
+    noteSampleSourcesRef.current = next.noteSampleSources;
+    setNoteSampleChannels(next.noteSampleChannels);
+    noteSampleChannelsRef.current = next.noteSampleChannels;
+    setNoteSampleVolumes(next.noteSampleVolumes);
+    noteSampleVolumesRef.current = next.noteSampleVolumes;
+    setNoteSampleSpeeds(next.noteSampleSpeeds);
+    noteSampleSpeedsRef.current = next.noteSampleSpeeds;
+    barConfigRef.current = {
+      ...barConfigRef.current,
+      ...next,
+      loopBlocks: [],
+      hasBeenConfigured: true,
+    };
+    const engine = engineRef.current;
+    engine?.setRandomBarOrder(null);
+    engine?.setBeatsPerMeasure(next.beatsPerMeasure);
+    engine?.setBeatTypes(next.beatTypes);
+    engine?.setAllBeatSubdivisions(next.beatSubdivisions);
+    engine?.setAllBarRepeats(next.barRepeats);
+    engine?.setLoopBlocks([]);
+    updateRandomBarSession(null);
+    scheduleReRender();
+  }, [
+    engineRef,
+    isPlaying,
+    isPreparing,
+    materializeRandomBarOrder,
+    noteSampleChannelsRef,
+    noteSampleNamesRef,
+    noteSampleSourcesRef,
+    noteSampleSpeedsRef,
+    noteSampleVolumesRef,
+    noteSamplesRef,
+    scheduleReRender,
+    setBarRepeats,
+    setBarStartBeat,
+    setBeatSubdivisions,
+    setBeatTypes,
+    setBeatsPerMeasure,
+    setLoopBlocks,
+    setNoteSampleChannels,
+    setNoteSampleNames,
+    setNoteSampleSources,
+    setNoteSampleSpeeds,
+    setNoteSampleVolumes,
+    setNoteSamples,
+    updateRandomBarSession,
   ]);
 
   stopIfPlayingRef.current = stopMetronome;
@@ -2054,6 +2293,22 @@ export function useMetronomeScreen() {
     if (!engine) return;
     engine.setOnMeasureComplete(() => {
       setMeasureCount(c => c + 1);
+      const randomSession = randomBarSessionRef.current;
+      if (
+        randomSession?.active &&
+        randomBarPreviousModeRef.current !== null &&
+        engine.getIsRunning() &&
+        barLoopModeRef.current === "loop"
+      ) {
+        const nextStart = randomBarChunkStartRef.current + randomBarChunkLengthRef.current;
+        const nextLength = Math.max(2, randomBarViewportCapacityRef.current * 2);
+        const nextChunk = appendBarRandomItems(randomSession, nextLength, randomBarConfigRef.current);
+        randomSession.cursor = nextStart;
+        randomBarChunkStartRef.current = nextStart;
+        randomBarChunkLengthRef.current = nextChunk.length;
+        updateRandomBarSession(randomSession);
+        engine.setRandomBarOrder(nextChunk);
+      }
       const sess = fadeOutSessionRef.current;
       if (sess) {
         const elapsed = fadeOutMeasureCountRef.current + 1;
@@ -3480,6 +3735,15 @@ export function useMetronomeScreen() {
     setBlockPlayMode,
     blockPlayModeRef,
     handleRandomBarPlay,
+    handleReplayRandomBarSession,
+    handleSaveRandomBarSession,
+    handleApplyRandomBarSession,
+    randomBarSession,
+    randomBarConfig,
+    setRandomBarConfig,
+    onRandomViewportCapacityChange: (capacity: number) => {
+      randomBarViewportCapacityRef.current = Math.max(1, Math.floor(capacity));
+    },
     barRepeats,
     loopBlocks,
     barStartBeat,

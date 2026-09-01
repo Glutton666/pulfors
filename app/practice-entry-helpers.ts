@@ -143,6 +143,7 @@ export interface EntryEngineSetters {
   setAllBeatSubdivisions(subs: Record<string, BeatType[]>): void;
   setLoopBlocks(blocks: LoopBlock[]): void;
   setBlockPlayMode(mode: BlockPlayMode): void;
+  setRandomBarOrder?(order: number[] | null): void;
   setAllBarRepeats(repeats: Record<number, BarRepeat>): void;
   setAllBarBpmOverrides(overrides: Record<number, number>): void;
 }
@@ -157,6 +158,7 @@ export function applyEntryToEngine(engine: EntryEngineSetters, entry: PracticeEn
   engine.setAllBeatSubdivisions({ ...entry.beatSubdivisions });
   engine.setLoopBlocks([...blocks] as LoopBlock[]);
   engine.setBlockPlayMode(entry.blockPlayMode || "loop");
+  engine.setRandomBarOrder?.(entry.randomBarOrder?.length ? entry.randomBarOrder : null);
   engine.setAllBarRepeats(migratedRepeats);
   // BPM 오버라이드는 양수만 추출. 0/음수/누락은 "오버라이드 없음"으로 간주
   // (이전 인라인 코드의 truthy 체크와 동일 의도). 엔진은 20~300으로 클램프하므로

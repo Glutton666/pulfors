@@ -19,6 +19,8 @@ export interface ProgressInfo {
   jumpSourceBlockIndex?: number;
   layerIndex?: number;
   layerBeat?: number;
+  /** Position inside a caller-supplied random bar sequence. */
+  randomSequenceIndex?: number;
 }
 
 export interface ScheduledTick {
@@ -38,6 +40,8 @@ export interface ScheduledTick {
   layerIndex: number;
   layerBeat: number;
   layerSoundSet?: string;
+  /** Position inside a caller-supplied random bar sequence. */
+  randomSequenceIndex?: number;
   /** isEnd 심볼의 마지막 허용 반복에서 발생 — 이 tick 재생 후 엔진 전체 정지 */
   stopAfterThis?: boolean;
 }
