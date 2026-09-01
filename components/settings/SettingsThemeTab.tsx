@@ -51,6 +51,7 @@ interface SettingsThemeTabProps {
   onFlashModeChange: (value: FlashMode) => void;
   hapticMode: HapticMode;
   onHapticModeChange: (value: HapticMode) => void;
+  onOpenStageOptions?: () => void;
 }
 
 export function SettingsThemeTab({
@@ -75,6 +76,7 @@ export function SettingsThemeTab({
   onFlashModeChange,
   hapticMode,
   onHapticModeChange,
+  onOpenStageOptions,
 }: SettingsThemeTabProps) {
   const { themeColor, customHex, themeMode, setThemeColor, setCustomHex, setThemeMode, colors: C, hubImages, addHubImage, removeHubImage, updateHubImageBeatTypes } = useTheme();
   const S = useScale();
@@ -186,6 +188,32 @@ export function SettingsThemeTab({
 
   return (
     <>
+      {scope === "stage" && onOpenStageOptions && (
+        <>
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="options-outline" size={S.ms(18, 0.4)} color={C.accent} />
+              <Text style={[styles.sectionLabel, { color: C.text }]}>{t("stageMode", "stageOnlySettings")}</Text>
+            </View>
+            <Text style={[styles.offsetHint, { color: C.textTertiary }]}>
+              {t("stageMode", "stageOnlySettingsHint")}
+            </Text>
+            <Pressable
+              testID="open-stage-only-settings"
+              onPress={onOpenStageOptions}
+              style={[styles.toggleRow, { borderColor: C.border, backgroundColor: C.surface }]}
+            >
+              <Ionicons name="settings-outline" size={S.ms(18, 0.4)} color={C.accent} />
+              <Text style={[styles.toggleLabel, { color: C.accent }]}>
+                {t("stageMode", "stageOnlySettings")}
+              </Text>
+              <Ionicons name="chevron-forward" size={S.ms(18, 0.4)} color={C.textTertiary} />
+            </Pressable>
+          </View>
+          <View style={[styles.divider, { backgroundColor: C.border }]} />
+        </>
+      )}
+
       {isGlobal && <>
       <View style={styles.section}>
         <View style={styles.sectionHeader}>

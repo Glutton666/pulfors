@@ -338,6 +338,10 @@ export interface StageModeOverlayProps {
   onOpenScheduledStart?: () => void;
   /** Opens the shared mode-scoped audio, feedback and keyboard settings. */
   onOpenModeSettings?: () => void;
+  /** Monotonic request value used to reveal stage-only options from shared settings. */
+  stageOptionsRequest?: number;
+  /** True while the shared stage settings modal is displayed. */
+  modeSettingsVisible?: boolean;
   /**
    * 현재 항목이 유한(bar-once / note-once)이고 autoAdvance가 켜져 있을 때
    * 다음 항목을 seamless 전환용으로 등록/해제한다.
@@ -382,6 +386,8 @@ export function StageModeOverlay({
   noSetlistContent,
   onOpenScheduledStart,
   onOpenModeSettings,
+  stageOptionsRequest = 0,
+  modeSettingsVisible = false,
   onQueueSeamlessNext,
 }: StageModeOverlayProps) {
   const { t } = useLanguage();
@@ -597,6 +603,8 @@ export function StageModeOverlay({
   useEffect(() => {
     if (!visible || Platform.OS !== "android") return;
     const handler = BackHandler.addEventListener("hardwareBackPress", () => {
+      // The shared settings modal owns the Android back action while visible.
+      if (modeSettingsVisible) return false;
       const backState: StageModeBackState = { settingsOpen, pickerOpen, contextEntryId };
       return handleStageModeBackPress(
         backState,
@@ -607,7 +615,13 @@ export function StageModeOverlay({
       );
     });
     return () => handler.remove();
-  }, [visible, settingsOpen, pickerOpen, contextEntryId]);
+  }, [visible, settingsOpen, pickerOpen, contextEntryId, modeSettingsVisible]);
+
+  useEffect(() => {
+    if (visible && stageOptionsRequest > 0) {
+      setSettingsOpen(true);
+    }
+  }, [visible, stageOptionsRequest]);
 
   // ── 활성 항목 & 모드 결정 ────────────────────────────────────────
   const activeEntry = setlist.find((e) => e.id === activeEntryId) ?? null;
@@ -1010,7 +1024,13 @@ export function StageModeOverlay({
 
         <Pressable
           style={({ pressed }) => [styles.topBarBtn, { minWidth: 44, justifyContent: "flex-end" }, pressed && { opacity: 0.6 }]}
-          onPress={() => setSettingsOpen((v) => !v)}
+          onPress={() => {
+            if (onOpenModeSettings) {
+              onOpenModeSettings();
+            } else {
+              setSettingsOpen((v) => !v);
+            }
+          }}
           accessibilityLabel={t("stageMode", "settings")}
         >
           <Ionicons name="settings-outline" size={20} color={settingsOpen ? text : faint} />
@@ -1390,20 +1410,6 @@ export function StageModeOverlay({
       >
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsPanelContent}>
           <Text style={[styles.settingsPanelTitle, { color: text }]}>{t("stageMode", "settingsPanel")}</Text>
-          {onOpenModeSettings ? (
-            <Pressable
-              onPress={() => {
-                setSettingsOpen(false);
-                onOpenModeSettings();
-              }}
-              testID="open-stage-mode-settings"
-              style={[styles.segment, { borderColor: btnBdr, marginBottom: 16 }]}
-            >
-              <Ionicons name="options-outline" size={18} color={text} />
-              <Text style={[styles.segmentText, { color: text }]}>{t("settings", "title")}</Text>
-            </Pressable>
-          ) : null}
-
           {/* 테마 */}
           <SettingRow label={t("stageMode", "theme")} textColor={text} faintColor={faint}>
             <View style={styles.segmentRow}>
@@ -1424,41 +1430,6 @@ export function StageModeOverlay({
                 </Pressable>
               ))}
             </View>
-          </SettingRow>
-
-          {/* 화면 플래시 */}
-          <SettingRow label={t("stageMode", "flash")} textColor={text} faintColor={faint}>
-            <View style={styles.segmentRow}>
-              {(["accent", "all", "both", "off"] as FlashMode[]).map((opt) => (
-                <Pressable
-                  key={opt}
-                  style={({ pressed }) => [
-                    styles.segment,
-                    flashMode === opt && styles.segmentActive,
-                    { borderColor: btnBdr, backgroundColor: flashMode === opt ? (isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)") : "transparent" },
-                    pressed && { opacity: 0.7 },
-                  ]}
-                  onPress={() => onFlashModeChange?.(opt)}
-                >
-                  <Text style={[styles.segmentText, { color: text }]}>
-                    {opt === "accent" ? t("stageMode", "flashAccent")
-                     : opt === "all"  ? t("stageMode", "flashAll")
-                     : opt === "both" ? t("stageMode", "flashBoth")
-                     : t("stageMode", "flashOff")}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </SettingRow>
-
-          {/* 햅틱 */}
-          <SettingRow label={t("stageMode", "haptic")} textColor={text} faintColor={faint}>
-            <Switch
-              value={hapticMode !== "off"}
-              onValueChange={(v) => onHapticModeChange?.(v ? "all" : "off")}
-              trackColor={{ false: isDark ? "#333" : "#ccc", true: "#4A9EFF" }}
-              thumbColor="#fff"
-            />
           </SettingRow>
 
           {/* 화면 꺼짐 방지 */}

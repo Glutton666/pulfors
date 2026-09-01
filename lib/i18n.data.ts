@@ -1276,6 +1276,8 @@ export const translations = {
     setlistEmpty:          { ko: "+ 버튼으로 추가하세요", en: "Tap + to add items" },
     settings:              { ko: "설정", en: "Settings" },
     settingsPanel:         { ko: "무대 모드 설정", en: "Stage Mode Settings" },
+     stageOnlySettings:     { ko: "무대 전용 설정", en: "Stage-only settings" },
+     stageOnlySettingsHint: { ko: "자동 진행과 셋리스트 단축키처럼 무대에서만 사용하는 옵션입니다.", en: "Options used only on stage, such as auto-advance and setlist shortcuts." },
     tapTempo:              { ko: "탭 탬포", en: "Tap Tempo" },
     beats:                 { ko: "박자", en: "Beats" },
     next:                  { ko: "다음", en: "Next" },
