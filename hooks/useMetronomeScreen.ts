@@ -52,7 +52,7 @@ import type { ScaleValues } from "@/lib/scale";
 import { MetronomeEngine, soundSets, toEngineBpm } from "@/lib/metronome-engine";
 import type { BeatType, ProgressInfo } from "@/lib/metronome-engine";
 import {
-  appendBarRandomItems,
+  appendBarRandomPlaybackChunk,
   createBarRandomSession,
   DEFAULT_BAR_RANDOM_CONFIG,
   type BarRandomConfig,
@@ -297,6 +297,10 @@ export function useMetronomeScreen() {
   const randomBarViewportCapacityRef = useRef(4);
   const randomBarChunkStartRef = useRef(0);
   const randomBarChunkLengthRef = useRef(0);
+  const randomBarPreparedChunkRef = useRef<{
+    chunk: number[];
+    nextSession: BarRandomSession;
+  } | null>(null);
   const updateRandomBarSession = useCallback((session: BarRandomSession | null) => {
     randomBarSessionRef.current = session;
     setRandomBarSession(session ? { ...session, order: [...session.order] } : null);
@@ -1402,6 +1406,29 @@ export function useMetronomeScreen() {
             randomSession.cursor = nextCursor;
             setRandomBarSession({ ...randomSession, order: [...randomSession.order] });
           }
+          const prefetchAt = Math.max(
+            0,
+            randomBarChunkLengthRef.current - Math.max(1, randomBarViewportCapacityRef.current),
+          );
+          if (
+            barLoopModeRef.current === "loop" &&
+            randomBarPreparedChunkRef.current === null &&
+            info.randomSequenceIndex >= prefetchAt
+          ) {
+            const nextLength = Math.max(2, randomBarViewportCapacityRef.current * 2);
+            const nextSession: BarRandomSession = {
+              ...randomSession,
+              order: [...randomSession.order],
+              remainingShuffleBag: [...randomSession.remainingShuffleBag],
+            };
+            const chunk = appendBarRandomPlaybackChunk(
+              nextSession,
+              nextLength,
+              true,
+              randomBarConfigRef.current,
+            );
+            randomBarPreparedChunkRef.current = { chunk, nextSession };
+          }
         }
         pendingProgress = info;
         hasProgressUpdate = true;
@@ -1755,6 +1782,7 @@ export function useMetronomeScreen() {
     const previousMode = randomBarPreviousModeRef.current;
     if (previousMode === null) return;
     randomBarPreviousModeRef.current = null;
+    randomBarPreparedChunkRef.current = null;
     blockPlayModeRef.current = previousMode;
     setBlockPlayMode(previousMode);
     engineRef.current?.setRandomBarOrder(null);
@@ -1852,12 +1880,23 @@ export function useMetronomeScreen() {
       isPreparing ||
       randomBarPreviousModeRef.current !== null
     ) return;
-    const sourceCount = Math.max(1, barConfigRef.current.beatsPerMeasure);
+    const sourceCount = barConfigRef.current.beatsPerMeasure;
+    if (sourceCount <= 0) return;
     const session = createBarRandomSession(sourceCount);
-    const chunkLength = Math.max(2, randomBarViewportCapacityRef.current * 2);
-    const chunk = appendBarRandomItems(session, chunkLength, randomBarConfig);
+    const repeatEnabled = barLoopModeRef.current === "loop";
+    const chunkLength = repeatEnabled
+      ? Math.max(2, randomBarViewportCapacityRef.current * 2)
+      : sourceCount;
+    const chunk = appendBarRandomPlaybackChunk(
+      session,
+      chunkLength,
+      repeatEnabled,
+      randomBarConfig,
+    );
+    if (chunk.length === 0) return;
     randomBarChunkStartRef.current = 0;
     randomBarChunkLengthRef.current = chunk.length;
+    randomBarPreparedChunkRef.current = null;
     updateRandomBarSession(session);
     randomBarPreviousModeRef.current = blockPlayModeRef.current;
     blockPlayModeRef.current = "random";
@@ -1940,6 +1979,7 @@ export function useMetronomeScreen() {
     };
     randomBarChunkStartRef.current = 0;
     randomBarChunkLengthRef.current = session.order.length;
+    randomBarPreparedChunkRef.current = null;
     updateRandomBarSession(session);
     randomBarPreviousModeRef.current = blockPlayModeRef.current;
     blockPlayModeRef.current = "random";
@@ -2332,7 +2372,21 @@ export function useMetronomeScreen() {
       ) {
         const nextStart = randomBarChunkStartRef.current + randomBarChunkLengthRef.current;
         const nextLength = Math.max(2, randomBarViewportCapacityRef.current * 2);
-        const nextChunk = appendBarRandomItems(randomSession, nextLength, randomBarConfigRef.current);
+        const prepared = randomBarPreparedChunkRef.current;
+        let nextChunk: number[];
+        if (prepared) {
+          nextChunk = prepared.chunk;
+          randomSession.order = prepared.nextSession.order;
+          randomSession.remainingShuffleBag = prepared.nextSession.remainingShuffleBag;
+        } else {
+          nextChunk = appendBarRandomPlaybackChunk(
+            randomSession,
+            nextLength,
+            true,
+            randomBarConfigRef.current,
+          );
+        }
+        randomBarPreparedChunkRef.current = null;
         randomSession.cursor = nextStart;
         randomBarChunkStartRef.current = nextStart;
         randomBarChunkLengthRef.current = nextChunk.length;

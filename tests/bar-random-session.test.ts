@@ -1,5 +1,6 @@
 import {
   appendBarRandomItems,
+  appendBarRandomPlaybackChunk,
   createBarRandomSession,
   replayBarRandomSession,
 } from "../lib/bar-random-session";
@@ -52,5 +53,31 @@ describe("bar random session", () => {
     session.order[0] = 1;
     expect(order).toEqual([2, 0, 2, 1]);
     expect(session.cursor).toBe(0);
+  });
+
+  it("plays every source exactly once when random repeat is off", () => {
+    const session = createBarRandomSession(4);
+    const chunk = appendBarRandomPlaybackChunk(
+      session,
+      2,
+      false,
+      { strategy: "independent", bundleSize: 2, bundleRepeats: 2 },
+      () => 0,
+    );
+    expect(chunk).toHaveLength(4);
+    expect(new Set(chunk)).toEqual(new Set([0, 1, 2, 3]));
+    expect(appendBarRandomPlaybackChunk(session, 4, false)).toEqual([]);
+  });
+
+  it("uses the selected duplicate policy while random repeat is on", () => {
+    const session = createBarRandomSession(3);
+    const chunk = appendBarRandomPlaybackChunk(
+      session,
+      4,
+      true,
+      { strategy: "independent", bundleSize: 2, bundleRepeats: 2 },
+      () => 0.4,
+    );
+    expect(chunk).toEqual([1, 1, 1, 1]);
   });
 });

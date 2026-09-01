@@ -101,6 +101,37 @@ export function appendBarRandomItems(
   return added;
 }
 
+/**
+ * Builds the next engine chunk without ever consuming or reordering the source
+ * bar list. A one-shot random play is always a shuffled permutation of every
+ * source bar. Repeating random play follows the user-selected strategy and can
+ * be replenished in the background.
+ */
+export function appendBarRandomPlaybackChunk(
+  session: BarRandomSession,
+  requestedCount: number,
+  repeatEnabled: boolean,
+  config: BarRandomConfig = DEFAULT_BAR_RANDOM_CONFIG,
+  rng: () => number = Math.random,
+): number[] {
+  if (session.sourceCount <= 0) return [];
+  if (!repeatEnabled) {
+    if (session.order.length > 0) return [];
+    return appendBarRandomItems(
+      session,
+      session.sourceCount,
+      { ...config, strategy: "shuffle-bag" },
+      rng,
+    );
+  }
+  return appendBarRandomItems(
+    session,
+    Math.max(1, requestedCount),
+    config,
+    rng,
+  );
+}
+
 export function replayBarRandomSession(
   sourceCount: number,
   order: number[],

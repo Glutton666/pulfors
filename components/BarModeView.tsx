@@ -641,58 +641,6 @@ export function BarModeView({
         )}
       />
 
-      {randomBarSession && (
-        <View
-          testID="bar-random-session-preview"
-          style={{ borderTopWidth: 1, borderTopColor: C.overlay08, paddingVertical: 6 }}
-        >
-          <FlatList
-            horizontal
-            data={randomBarSession.order.slice(
-              Math.max(0, randomBarSession.cursor),
-              Math.max(0, randomBarSession.cursor) + Math.max(2, Math.ceil((barContainerHeight || rowH * 4) / rowH) * 2),
-            )}
-            keyExtractor={(_item, index) => `${randomBarSession.cursor}-${index}`}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: Spacing.sm, gap: 6 }}
-            renderItem={({ item, index }) => (
-              <View style={{
-                minWidth: 48,
-                paddingHorizontal: 8,
-                paddingVertical: 5,
-                borderRadius: 8,
-                backgroundColor: index === 0 && randomBarSession.active ? C.accent : C.overlay06,
-                alignItems: "center",
-              }}>
-                <Text style={{ color: index === 0 && randomBarSession.active ? C.background : C.text, fontSize: FontSize.micro }}>
-                  {index === 0 ? t("barModeView", "randomNext") : `+${index}`}
-                </Text>
-                <Text style={{ color: index === 0 && randomBarSession.active ? C.background : C.textSecondary, fontSize: FontSize.small }}>
-                  #{item + 1}
-                </Text>
-              </View>
-            )}
-          />
-          {!randomBarSession.active && (
-            <View style={{ flexDirection: "row", gap: 6, paddingHorizontal: Spacing.sm, paddingTop: 6 }}>
-              {[
-                { key: "save", label: t("barModeView", "randomSave"), action: onSaveRandomBarSession },
-                { key: "replay", label: t("barModeView", "randomReplay"), action: onReplayRandomBarSession },
-                { key: "apply", label: t("barModeView", "randomApply"), action: onApplyRandomBarSession },
-              ].map(item => (
-                <Pressable
-                  key={item.key}
-                  onPress={() => item.action?.()}
-                  style={{ flex: 1, paddingVertical: 7, borderRadius: 8, backgroundColor: C.overlay06, alignItems: "center" }}
-                >
-                  <Text style={{ color: C.textSecondary, fontSize: FontSize.micro }}>{item.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-        </View>
-      )}
-
       {/* ── Editor panel ── */}
       <BarEditorPanel
         editingBeat={barStartBeat}
