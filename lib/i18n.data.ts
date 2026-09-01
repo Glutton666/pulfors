@@ -948,6 +948,7 @@ export const translations = {
     randomSave:         { ko: "패턴 저장", en: "Save pattern" },
     randomReplay:       { ko: "다시하기", en: "Replay" },
     randomApply:        { ko: "현재 바에 적용", en: "Apply to bars" },
+    randomReturnOriginal: { ko: "원래 패턴으로 돌아가기", en: "Return to original pattern" },
     hintSwitchToOnce:   { ko: "길게 누르면 한 번만 재생 모드로 변경", en: "Long press to switch to once mode" },
     hintSwitchToLoop:   { ko: "길게 누르면 반복 재생 모드로 변경", en: "Long press to switch to loop mode" },
     beatStepperDecrease: { ko: "박자 줄이기", en: "Decrease beats" },

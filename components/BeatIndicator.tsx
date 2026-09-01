@@ -145,6 +145,7 @@ interface BeatIndicatorProps {
   onReplayRandomBarSession?: () => void;
   onSaveRandomBarSession?: () => Promise<boolean> | void;
   onApplyRandomBarSession?: () => void;
+  onReturnToOriginalBarList?: () => void;
   soundSet?: string;
   onSoundSetChange?: (ss: string) => void;
   layerSoundSets?: Record<number, string>;
@@ -230,6 +231,7 @@ export function BeatIndicator({
   onReplayRandomBarSession,
   onSaveRandomBarSession,
   onApplyRandomBarSession,
+  onReturnToOriginalBarList,
   soundSet,
   onSoundSetChange,
   layerSoundSets = {},
@@ -1272,6 +1274,7 @@ export function BeatIndicator({
         onReplayRandomBarSession={onReplayRandomBarSession}
         onSaveRandomBarSession={onSaveRandomBarSession}
         onApplyRandomBarSession={onApplyRandomBarSession}
+        onReturnToOriginalBarList={onReturnToOriginalBarList}
         subdivisionBarElement={subdivisionBarElement}
         onBarQuickSave={onBarQuickSave}
         onResetFlash={onResetFlash}

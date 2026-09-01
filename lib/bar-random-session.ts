@@ -29,6 +29,33 @@ export interface BarRandomSession {
   remainingShuffleBag: number[];
 }
 
+export interface BarRandomDisplayItem {
+  key: string;
+  displayBeat: number;
+  sourceBeat: number;
+  isRandom: boolean;
+}
+
+export function buildBarRandomDisplayItems(
+  sourceCount: number,
+  session: BarRandomSession | null | undefined,
+): BarRandomDisplayItem[] {
+  if (session?.active && session.order.length > 0) {
+    return session.order.map((sourceBeat, displayBeat) => ({
+      key: `random-${displayBeat}-${sourceBeat}`,
+      displayBeat,
+      sourceBeat,
+      isRandom: true,
+    }));
+  }
+  return Array.from({ length: Math.max(0, sourceCount) }, (_, sourceBeat) => ({
+    key: `source-${sourceBeat}`,
+    displayBeat: sourceBeat,
+    sourceBeat,
+    isRandom: false,
+  }));
+}
+
 export function createBarRandomSession(sourceCount: number): BarRandomSession {
   return { order: [], cursor: 0, sourceCount, active: true, remainingShuffleBag: [] };
 }

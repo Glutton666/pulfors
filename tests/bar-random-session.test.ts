@@ -1,6 +1,7 @@
 import {
   appendBarRandomItems,
   appendBarRandomPlaybackChunk,
+  buildBarRandomDisplayItems,
   createBarRandomSession,
   replayBarRandomSession,
 } from "../lib/bar-random-session";
@@ -79,5 +80,27 @@ describe("bar random session", () => {
       () => 0.4,
     );
     expect(chunk).toEqual([1, 1, 1, 1]);
+  });
+
+  it("overlays the generated order as numbered vertical rows without changing source indexes", () => {
+    const session = createBarRandomSession(3);
+    session.order = [2, 0, 2, 1];
+    expect(buildBarRandomDisplayItems(3, session)).toEqual([
+      { key: "random-0-2", displayBeat: 0, sourceBeat: 2, isRandom: true },
+      { key: "random-1-0", displayBeat: 1, sourceBeat: 0, isRandom: true },
+      { key: "random-2-2", displayBeat: 2, sourceBeat: 2, isRandom: true },
+      { key: "random-3-1", displayBeat: 3, sourceBeat: 1, isRandom: true },
+    ]);
+  });
+
+  it("returns to the unchanged source row list after the random overlay ends", () => {
+    const session = createBarRandomSession(3);
+    session.order = [2, 0, 1];
+    session.active = false;
+    expect(buildBarRandomDisplayItems(3, session)).toEqual([
+      { key: "source-0", displayBeat: 0, sourceBeat: 0, isRandom: false },
+      { key: "source-1", displayBeat: 1, sourceBeat: 1, isRandom: false },
+      { key: "source-2", displayBeat: 2, sourceBeat: 2, isRandom: false },
+    ]);
   });
 });

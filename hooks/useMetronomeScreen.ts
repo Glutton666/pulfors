@@ -2114,6 +2114,21 @@ export function useMetronomeScreen() {
     updateRandomBarSession,
   ]);
 
+  const handleReturnToOriginalBarList = useCallback(() => {
+    if (isPlaying || isPreparing) {
+      void togglePlayPauseRef.current();
+    }
+    finishRandomBarPlay();
+    randomBarPreparedChunkRef.current = null;
+    updateRandomBarSession(null);
+  }, [
+    finishRandomBarPlay,
+    isPlaying,
+    isPreparing,
+    togglePlayPauseRef,
+    updateRandomBarSession,
+  ]);
+
   stopIfPlayingRef.current = stopMetronome;
   const completePracticeSessionRef = useRef(completePracticeSession);
   useEffect(() => { completePracticeSessionRef.current = completePracticeSession; }, [completePracticeSession]);
@@ -3822,6 +3837,7 @@ export function useMetronomeScreen() {
     handleReplayRandomBarSession,
     handleSaveRandomBarSession,
     handleApplyRandomBarSession,
+    handleReturnToOriginalBarList,
     randomBarSession,
     randomBarConfig,
     onRandomBarConfigChange: setRandomBarConfig,

@@ -121,6 +121,7 @@ export function MetronomeScreenUI(props: Props) {
      blockPlayMode, setBlockPlayMode, handleRandomBarPlay,
      randomBarSession, randomBarConfig, onRandomBarConfigChange, onRandomViewportCapacityChange,
     handleReplayRandomBarSession, handleSaveRandomBarSession, handleApplyRandomBarSession,
+    handleReturnToOriginalBarList,
     barRepeats, loopBlocks,
     barStartBeat, setBarStartBeat,
     handleBarRepeatChange, handleBarMeterChange, handleLoopBlocksChange,
@@ -1061,6 +1062,7 @@ export function MetronomeScreenUI(props: Props) {
             onReplayRandomBarSession={handleReplayRandomBarSession}
             onSaveRandomBarSession={handleSaveRandomBarSession}
             onApplyRandomBarSession={handleApplyRandomBarSession}
+            onReturnToOriginalBarList={handleReturnToOriginalBarList}
             onBarScrollOffset={(offset) => { barScrollOffsetRef.current = offset; }}
             noteSamples={noteSamples}
             noteSampleNames={noteSampleNames}

@@ -17,7 +17,11 @@ import { HintBanner } from "@/components/HintTooltip";
 import type { BeatType, BarRepeat, LoopBlock } from "@/components/beat-indicator.types";
 import type { ProgressInfo } from "@/lib/metronome-engine";
 import type { CustomSoundSetConfig } from "@/lib/storage";
-import type { BarRandomSession } from "@/lib/bar-random-session";
+import {
+  buildBarRandomDisplayItems,
+  type BarRandomDisplayItem,
+  type BarRandomSession,
+} from "@/lib/bar-random-session";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useScale } from "@/lib/scale";
 import { FontSize, Spacing } from "@/constants/tokens";
@@ -107,6 +111,7 @@ export interface BarModeViewProps {
   onReplayRandomBarSession?: () => void;
   onSaveRandomBarSession?: () => Promise<boolean> | void;
   onApplyRandomBarSession?: () => void;
+  onReturnToOriginalBarList?: () => void;
   onOpenSettings?: () => void;
 }
 
@@ -128,6 +133,7 @@ export function BarModeView({
   noteSamples, noteSampleSources, onNoteRecordRequest, onReorderBar, onInsertBarAfter,
   randomBarSession, onRandomViewportCapacityChange,
   onReplayRandomBarSession, onSaveRandomBarSession, onApplyRandomBarSession,
+  onReturnToOriginalBarList,
   onOpenSettings,
 }: BarModeViewProps) {
   const { t } = useLanguage();
@@ -215,7 +221,7 @@ export function BarModeView({
 
   // ─── Scroll state ─────────────────────────────────────────────────────────
 
-  const barScrollRef = useRef<FlatList<number>>(null);
+  const barScrollRef = useRef<FlatList<BarRandomDisplayItem>>(null);
   const barScrollYRef = useRef(0);
   const [barContainerHeight, setBarContainerHeight] = useState(0);
 
@@ -240,18 +246,26 @@ export function BarModeView({
 
   // ─── Auto-scroll while playing ────────────────────────────────────────────
 
+  const showingRandomList = Boolean(randomBarSession?.active && randomBarSession.order.length > 0);
+  const activeListIndex = showingRandomList
+    ? Math.max(0, Math.min(
+      (randomBarSession?.order.length ?? 1) - 1,
+      randomBarSession?.cursor ?? 0,
+    ))
+    : currentBeat;
+
   useEffect(() => {
     if (!isPlaying) {
       barScrollRef.current?.scrollToOffset({ offset: 0, animated: false });
       onBarScrollOffset?.(0);
       return;
     }
-    if (barContainerHeight <= 0 || currentBeat < 0) return;
+    if (barContainerHeight <= 0 || activeListIndex < 0) return;
     const rh = rowHeight ?? BAR_ROW_H;
-    const beatTop = currentBeat * rh;
+    const beatTop = activeListIndex * rh;
     const scrollTarget = Math.max(0, beatTop - barContainerHeight / 2 + rh / 2);
     barScrollRef.current?.scrollToOffset({ offset: scrollTarget, animated: true });
-  }, [isPlaying, currentBeat, barContainerHeight]);
+  }, [isPlaying, activeListIndex, barContainerHeight, onBarScrollOffset, rowHeight]);
 
   // ─── Memos ────────────────────────────────────────────────────────────────
 
@@ -480,7 +494,10 @@ export function BarModeView({
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
-  const beats = Array.from({ length: beatsPerMeasure }, (_, i) => i);
+  const barListItems = useMemo(
+    () => buildBarRandomDisplayItems(beatsPerMeasure, randomBarSession),
+    [beatsPerMeasure, randomBarSession],
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: C.background }} testID="beat-indicator-bar-mode">
@@ -515,8 +532,8 @@ export function BarModeView({
       {/* ── Bar list ── */}
       <FlatList
         ref={barScrollRef}
-        data={beats}
-        keyExtractor={beat => String(beat)}
+        data={barListItems}
+        keyExtractor={item => item.key}
         style={[{ flex: 1 }, S.isTablet && { paddingHorizontal: S.ms(16, 0.5) }]}
         showsVerticalScrollIndicator={false}
         nestedScrollEnabled
@@ -541,11 +558,12 @@ export function BarModeView({
           onBarScrollOffset?.(e.nativeEvent.contentOffset.y);
         }}
         scrollEventThrottle={16}
-        renderItem={({ item: beat }) => {
-          const bType = beatTypes[beat] || "normal";
-          const subs = beatSubdivisions[String(beat)] ?? [];
-          const rep = barRepeats[beat] ?? null;
-          const blockEntries = blockForBeat.get(beat) ?? [];
+        renderItem={({ item }) => {
+          const { displayBeat: beat, sourceBeat, isRandom } = item;
+          const bType = beatTypes[sourceBeat] || "normal";
+          const subs = beatSubdivisions[String(sourceBeat)] ?? [];
+          const rep = barRepeats[sourceBeat] ?? null;
+          const blockEntries = isRandom ? [] : (blockForBeat.get(sourceBeat) ?? []);
           const maxDepth = blockEntries.length > 0 ? Math.max(...blockEntries.map(e => e.depth)) : 0;
           const blockStart = blockEntries.some(e => e.isStart);
           const blockEnd = blockEntries.some(e => e.isEnd);
@@ -569,19 +587,23 @@ export function BarModeView({
             }
             return null;
           })();
-          const badges = getSymbolBadges(beat);
-          const isCurrent = isPlaying && currentBeat === beat;
-          const isEditing = barStartBeat === beat && !isPlaying;
-          const isDragging = draggingBeat === beat;
+          const badges = getSymbolBadges(sourceBeat);
+          const isCurrent = isPlaying && (
+            isRandom
+              ? randomBarSession?.cursor === beat
+              : currentBeat === sourceBeat
+          );
+          const isEditing = !isRandom && barStartBeat === sourceBeat && !isPlaying;
+          const isDragging = !isRandom && draggingBeat === sourceBeat;
           const rowSampleCoverage = Array.from(
-            { length: beatSubdivisions[String(beat)]?.length || 1 },
-            (_, cell) => sampleCoverage.get(`${beat}-${cell}`),
+            { length: beatSubdivisions[String(sourceBeat)]?.length || 1 },
+            (_, cell) => sampleCoverage.get(`${sourceBeat}-${cell}`),
           );
           const showDropLineAbove = (
             draggingBeat !== null &&
             dropIndex !== null &&
-            beat !== draggingBeat &&
-            beat === dropIndex
+            sourceBeat !== draggingBeat &&
+            sourceBeat === dropIndex
           );
 
           return (
@@ -598,21 +620,21 @@ export function BarModeView({
                blockEditIndex={startEntry?.blockIdx}
               blockRepeatText={blockRepeatText}
               symbolBadges={badges}
-              isPlaying={isPlaying}
-              progressCurrent={progressInfo?.beat === beat ? progressInfo.barRepeatCurrent : undefined}
-              progressTotal={progressInfo?.beat === beat ? progressInfo.barRepeatTotal : undefined}
+              isPlaying={isPlaying || isPreparing || showingRandomList}
+              progressCurrent={isCurrent && progressInfo?.beat === sourceBeat ? progressInfo.barRepeatCurrent : undefined}
+              progressTotal={isCurrent && progressInfo?.beat === sourceBeat ? progressInfo.barRepeatTotal : undefined}
               bpm={rep?.bpm ?? bpm ?? 120}
               meterNumerator={rep?.meterNumerator ?? (subs.length || 1)}
               meterDenominator={rep?.meterDenominator ?? beatDenominator}
-              beatsPerMeasure={beatsPerMeasure}
-              onPress={handleBarRowPress}
-              onSwipeLeft={handleSwipeLeft}
-              onSwipeRight={handleSwipeRight}
-              onLongPress={handleBarRowLongPress}
-               onEditBlock={handleBlockEdit}
-              onDragStart={handleDragStart}
-              onDragMove={handleDragMove}
-              onDragEnd={handleDragEnd}
+              beatsPerMeasure={barListItems.length}
+              onPress={isRandom ? () => {} : handleBarRowPress}
+              onSwipeLeft={isRandom ? () => {} : handleSwipeLeft}
+              onSwipeRight={isRandom ? () => {} : handleSwipeRight}
+              onLongPress={isRandom ? () => {} : handleBarRowLongPress}
+              onEditBlock={isRandom ? undefined : handleBlockEdit}
+              onDragStart={isRandom ? undefined : handleDragStart}
+              onDragMove={isRandom ? undefined : handleDragMove}
+              onDragEnd={isRandom ? undefined : handleDragEnd}
               isDragging={isDragging}
               showDropLineAbove={showDropLineAbove}
               dragTranslateY={isDragging ? draggingDyAnim : undefined}
@@ -627,7 +649,7 @@ export function BarModeView({
         }}
         ListFooterComponent={(
           <>
-            {barStartBeat === null && !isPlaying && (
+             {barStartBeat === null && !isPlaying && !showingRandomList && (
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", paddingTop: 12, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs }}>
                 <Text style={{ fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_500Medium", opacity: 0.6, color: C.textTertiary }}>{t("barModeView", "swipeHintCopy")}</Text>
                 <Text style={{ color: C.textTertiary, fontSize: FontSize.micro, opacity: 0.3, marginHorizontal: 8 }}>|</Text>
@@ -640,6 +662,68 @@ export function BarModeView({
           </>
         )}
       />
+
+      {randomBarSession?.order.length ? (
+        <View
+          testID="bar-random-session-actions"
+          style={{
+            borderTopWidth: 1,
+            borderTopColor: C.overlay08,
+            paddingHorizontal: Spacing.sm,
+            paddingVertical: 6,
+            gap: 6,
+          }}
+        >
+          {!randomBarSession.active && (
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              {[
+                { key: "save", label: t("barModeView", "randomSave"), action: onSaveRandomBarSession },
+                { key: "replay", label: t("barModeView", "randomReplay"), action: onReplayRandomBarSession },
+                { key: "apply", label: t("barModeView", "randomApply"), action: onApplyRandomBarSession },
+              ].map(item => (
+                <Pressable
+                  key={item.key}
+                  testID={`bar-random-${item.key}`}
+                  onPress={() => item.action?.()}
+                  style={{
+                    flex: 1,
+                    paddingHorizontal: 4,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    backgroundColor: C.overlay06,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    style={{ color: C.textSecondary, fontSize: FontSize.micro }}
+                  >
+                    {item.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          <Pressable
+            testID="bar-random-return-original"
+            onPress={onReturnToOriginalBarList}
+            style={{
+              paddingVertical: 8,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: C.accent + "70",
+              backgroundColor: C.accent + "12",
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: C.accent, fontSize: FontSize.micro, fontFamily: "SpaceGrotesk_600SemiBold" }}>
+              {t("barModeView", "randomReturnOriginal")}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* ── Editor panel ── */}
       <BarEditorPanel
