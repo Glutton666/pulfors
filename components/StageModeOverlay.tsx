@@ -302,7 +302,7 @@ export interface StageModeOverlayProps {
   currentBeat:       number;
   beatsPerMeasure:   number;
   beatDenominator:   2 | 4 | 8;
-  subdivisionCount?: number;
+  subdivisionPattern?: BeatType[];
   beatTypes?:        BeatType[];
   beatSubdivisions?: Record<string, BeatType[]>;
   /** 현재 활성 서브디비전 인덱스 (재생 중 실시간 하이라이트) */
@@ -359,7 +359,7 @@ export function StageModeOverlay({
   currentBeat,
   beatsPerMeasure,
   beatDenominator,
-  subdivisionCount = 1,
+  subdivisionPattern,
   beatTypes,
   beatSubdivisions,
   activeSubNote,
@@ -639,7 +639,7 @@ export function StageModeOverlay({
   }, [setlist, visible, activeEntryId]);
   const activeMode  = activeEntry ? getEntryMode(activeEntry) : "beat";
 
-  // 현재 재생 위치의 실효 서브디비전 패턴 = 전역 beatSubdivisions.
+  // 현재 재생 위치의 실효 서브디비전 패턴 = 비트별 패턴 또는 기본 패턴.
   // 엔진 정합성 근거: onSubBeat(→ activeSubNote)는 비레이어 틱에서만 발화하고
   // (metronome-engine.ts fireTick, !isLayerTick 가드), 비레이어 틱의 subBeat 는
   // 항상 전역 패턴(pureGetSubPattern ≒ beatSubdivisions)으로 스케줄된다
@@ -650,9 +650,9 @@ export function StageModeOverlay({
   const getEffectiveSubdiv = useCallback(
     (beat: number): BeatType[] | undefined => {
       if (beat < 0) return undefined;
-      return beatSubdivisions?.[String(beat)];
+      return beatSubdivisions?.[String(beat)] ?? subdivisionPattern;
     },
-    [beatSubdivisions],
+    [beatSubdivisions, subdivisionPattern],
   );
   // 악보 모드 또는 사진이 있는 노트 모드 → 전체화면 컨텐츠 표시
   const stageNoteImageUri = getStageNoteImageUri(activeEntry, noteCurrentIndex);
@@ -1175,14 +1175,18 @@ export function StageModeOverlay({
                   beatsPerMeasure={beatsPerMeasure}
                   beatTypes={beatTypes}
                   theme={settings.theme}
-                  subdivisionTypes={
-                    currentBeat >= 0 ? getEffectiveSubdiv(currentBeat) : undefined
-                  }
-                  nextSubdivisionTypes={
+                  subdivisionTypes={getEffectiveSubdiv(currentBeat >= 0 ? currentBeat : 0)}
+                  nextSubdivisionTypes={getEffectiveSubdiv(
                     currentBeat >= 0
-                      ? getEffectiveSubdiv((currentBeat + 1) % Math.max(1, beatsPerMeasure))
-                      : undefined
-                  }
+                      ? (currentBeat + 1) % Math.max(1, beatsPerMeasure)
+                      : 1 % Math.max(1, beatsPerMeasure),
+                  )}
+                  labels={{
+                    current: t("stageMode", "currentPlaying"),
+                    next: t("stageMode", "nextPlaying"),
+                    beat: t("stageMode", "beatUnit"),
+                    subdivision: t("stageMode", "subdivisionUnit"),
+                  }}
                   activeSubNote={
                     // 실효 패턴(블록 자체 서브디비전 포함)을 표시하므로 재생 중이면
                     // 항상 하이라이트. 범위를 벗어난 인덱스는 SubdivDots 가 무시.

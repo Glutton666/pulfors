@@ -2,8 +2,8 @@
 /**
  * StageBeatColumn — 수직 비트 디스플레이 (무대 모드 전용).
  *
- * 현재 비트와 다음 비트를 동일한 크기로 표시한다.
- * 둘 다 서브디비전 도트를 표시한다.
+ * 현재/다음 재생을 각각 비트와 서브디비전의 2줄 그룹으로 표시한다.
+ * 현재 그룹은 강하게, 다음 그룹은 낮은 대비로 표시한다.
  * 비트가 바뀔 때마다 슬라이드-업 애니메이션이 발생한다.
  *
  * currentBeat: 0-based (엔진 기준). -1 = 멈춤.
@@ -46,6 +46,7 @@ function SubdivDots({
   size = 10,
   activeIndex,
   maxWidth,
+  testID,
 }: {
   types: BeatType[];
   theme: "dark" | "light";
@@ -54,14 +55,14 @@ function SubdivDots({
   activeIndex?: number;
   /** 사용 가능한 가로 폭 — 점 개수가 많아도 잘리지 않도록 크기를 줄인다 */
   maxWidth?: number;
+  testID?: string;
 }) {
-  if (types.length <= 1) return null;
+  if (types.length === 0) return null;
   // 활성 인덱스가 표시 패턴 범위를 벗어나면(예: 블록 자체 서브디비전 재생 중)
   // 잘못된 점을 강조하지 않도록 하이라이트를 생략한다.
   if (activeIndex != null && (activeIndex < 0 || activeIndex >= types.length)) activeIndex = undefined;
   // 무대용 가시성: 일반 점도 어두운 배경에서 멀리서 보이도록 충분히 밝게.
   const dotBase     = theme === "dark" ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.55)";
-  const dotMute     = theme === "dark" ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
   const activeRing  = theme === "dark" ? "#FFD54F" : "#B8860B";
   // 두 줄(현재+다음)로 세로 공간을 쓰는 대신 가로로 넓게 펼친다.
   // 점 개수가 많으면 화면을 넘지 않도록 간격을 줄인다.
@@ -79,7 +80,7 @@ function SubdivDots({
   const accentCol = theme === "dark" ? "#FFD54F" : "#B8860B";
   const muteEdge  = theme === "dark" ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.45)";
   return (
-    <View style={[styles.subdivRow, { gap }]} testID="stage-subdiv-dots">
+    <View style={[styles.subdivRow, { gap }]} testID={testID ?? "stage-subdiv-dots"}>
       {types.map((t, i) => {
         const isActive = activeIndex === i;
         // 타입별 약호: strong=흰 바탕 S, accent=노란 채움 A, mute=속 빈 링, normal=회색 점
@@ -149,6 +150,12 @@ export interface StageBeatColumnProps {
   onSwipeLeft?:         () => void;
   /** 오른쪽 스와이프 → 이전 항목 */
   onSwipeRight?:        () => void;
+  labels?: {
+    current: string;
+    next: string;
+    beat: string;
+    subdivision: string;
+  };
 }
 
 export function StageBeatColumn({
@@ -161,6 +168,12 @@ export function StageBeatColumn({
   theme = "dark",
   onSwipeLeft,
   onSwipeRight,
+  labels = {
+    current: "현재 재생 중",
+    next: "다음 재생",
+    beat: "비트",
+    subdivision: "서브디비전",
+  },
 }: StageBeatColumnProps) {
   const total     = Math.max(1, beatsPerMeasure);
   const stopped   = currentBeat < 0;
@@ -225,21 +238,50 @@ export function StageBeatColumn({
     ? (nextType === "accent" ? "rgba(255,213,79,0.38)" : "rgba(255,255,255,0.28)")
     : (nextType === "accent" ? "rgba(184,134,11,0.36)" : "rgba(0,0,0,0.22)");
 
-  const dotActive   = theme === "dark" ? "#ffffff" : "#222222";
-  const dotInactive = theme === "dark" ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)";
   const dividerColor = theme === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)";
 
-  const maxDots = Math.min(total, 16);
-
-  // 컨테이너 높이에 맞춰 축소: 재생 중 콘텐츠(도트+구분선+큰 숫자 2개+서브디비전)는
-  // 최대 약 420px — 짧은 화면에서는 overflow hidden 에 위·아래(마디 도트,
-  // 서브디비전 점)가 잘려 아예 안 보였다. 높이를 재서 비율로 글자를 줄인다.
+  // 컨테이너 높이에 맞춰 축소해 네 줄(현재/다음 비트와 서브디비전)이
+  // 작은 화면에서도 모두 보이도록 한다.
   const [rootH, setRootH] = useState(0);
   const [rootW, setRootW] = useState(0);
-  const fit = rootH > 0 ? Math.min(1, rootH / 430) : 1;
-  const curFont  = Math.round(172 * fit);
-  const nextFont = Math.round(108 * fit);
-  const subSize  = Math.max(16, Math.round(26 * fit));
+  const fit = rootH > 0 ? Math.min(1, rootH / 330) : 1;
+  const curFont  = Math.round(78 * fit);
+  const nextFont = Math.round(58 * fit);
+  const subSize  = Math.max(12, Math.round(21 * fit));
+  const currentSubdiv = subdivisionTypes ?? [];
+  const nextSubdiv = nextSubdivisionTypes ?? [];
+
+  const SubdivisionLine = ({
+    types,
+    activeIndex,
+    testID,
+    muted = false,
+  }: {
+    types: BeatType[];
+    activeIndex?: number;
+    testID: string;
+    muted?: boolean;
+  }) => (
+    <View style={styles.detailRow}>
+      <Text style={[styles.detailLabel, { color: muted ? nextColor : curColor }]}>
+        {labels.subdivision}
+      </Text>
+      {types.length > 0 ? (
+        <SubdivDots
+          types={types}
+          theme={theme}
+          size={subSize}
+          maxWidth={rootW > 0 ? rootW - 132 : undefined}
+          activeIndex={activeIndex}
+          testID={testID}
+        />
+      ) : (
+        <Text testID={testID} style={[styles.emptyDetail, { color: muted ? nextColor : curColor }]}>
+          —
+        </Text>
+      )}
+    </View>
+  );
 
   return (
     <View
@@ -249,71 +291,66 @@ export function StageBeatColumn({
     >
       <Animated.View style={[styles.inner, slideStyle]}>
 
-        {stopped ? (
-          /* 정지 상태: 첫 비트를 매우 흐리게 표시 (재생 전 미리보기) */
-          <>
-            <Text style={[styles.beatNum, { color: theme === "dark" ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.13)" }]}>
-              1
-            </Text>
-            {total > 1 && (
-              <View style={styles.dotsRow}>
-                {Array.from({ length: maxDots }, (_, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.dot,
-                      i === 0
-                        ? [styles.dotActive, { backgroundColor: dotInactive }]
-                        : { backgroundColor: dotInactive },
-                    ]}
-                  />
-                ))}
-              </View>
-            )}
-          </>
-        ) : (
-          /* 재생 중: 마디 도트 + 구분선 → 현재 비트 → 다음 비트 → 서브디비전 */
-          <>
-            {/* 마디 진행 도트 (현재 비트 위) */}
-            <View style={styles.dotsRow}>
-              {Array.from({ length: maxDots }, (_, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.dot,
-                    i === cur0
-                      ? [styles.dotActive, { backgroundColor: dotActive }]
-                      : { backgroundColor: dotInactive },
-                  ]}
-                />
-              ))}
-            </View>
-
-            {/* 구분선 (현재 비트 위) */}
-            <View style={[styles.divider, { backgroundColor: dividerColor }]} />
-
-            {/* 현재 비트 */}
-            <Text style={[styles.beatNum, { color: curColor, fontSize: curFont, lineHeight: curFont + 8 }]}>
+        <View
+          testID="stage-current-count"
+          style={[
+            styles.countGroup,
+            {
+              borderColor: dividerColor,
+              backgroundColor: theme === "dark"
+                ? "rgba(255,255,255,0.045)"
+                : "rgba(0,0,0,0.035)",
+            },
+          ]}
+        >
+          <Text style={[styles.groupLabel, { color: curColor }]}>{labels.current}</Text>
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: curColor }]}>{labels.beat}</Text>
+            <Text
+              testID="stage-current-beat"
+              style={[styles.beatNum, styles.currentBeatNum, { color: curColor, fontSize: curFont, lineHeight: curFont + 4 }]}
+            >
               {String(cur0 + 1)}
             </Text>
+          </View>
+          <SubdivisionLine
+            types={currentSubdiv}
+            activeIndex={!stopped && activeSubNote != null && activeSubNote >= 0 ? activeSubNote : undefined}
+            testID="stage-current-subdivision"
+          />
+        </View>
 
-            {/* 다음 비트 */}
-            <Text style={[styles.beatNum, { color: nextColor, fontSize: nextFont, lineHeight: nextFont + 8 }]}>
+        <View style={[styles.groupDivider, { backgroundColor: dividerColor }]} />
+
+        <View
+          testID="stage-next-count"
+          style={[
+            styles.countGroup,
+            styles.nextCountGroup,
+            {
+              borderColor: dividerColor,
+              backgroundColor: theme === "dark"
+                ? "rgba(255,255,255,0.018)"
+                : "rgba(0,0,0,0.018)",
+            },
+          ]}
+        >
+          <Text style={[styles.groupLabel, { color: nextColor }]}>{labels.next}</Text>
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: nextColor }]}>{labels.beat}</Text>
+            <Text
+              testID="stage-next-beat"
+              style={[styles.beatNum, styles.nextBeatNum, { color: nextColor, fontSize: nextFont, lineHeight: nextFont + 4 }]}
+            >
               {String(next0 + 1)}
             </Text>
-
-            {/* 서브디비전 — 현재 비트만 한 줄로 넓게 (다음 비트 줄은 2단으로 보여 제거) */}
-            {subdivisionTypes && subdivisionTypes.length > 1 && (
-              <SubdivDots
-                types={subdivisionTypes}
-                theme={theme}
-                size={subSize}
-                maxWidth={rootW > 0 ? rootW : undefined}
-                activeIndex={activeSubNote != null && activeSubNote >= 0 ? activeSubNote : undefined}
-              />
-            )}
-          </>
-        )}
+          </View>
+          <SubdivisionLine
+            types={nextSubdiv}
+            testID="stage-next-subdivision"
+            muted
+          />
+        </View>
 
       </Animated.View>
     </View>
@@ -331,13 +368,61 @@ const styles = StyleSheet.create({
   inner: {
     alignItems: "center",
     width: "100%",
+    gap: 10,
+  },
+  countGroup: {
+    width: "100%",
+    maxWidth: 430,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  nextCountGroup: {
+    opacity: 0.9,
+  },
+  groupLabel: {
+    alignSelf: "center",
+    fontSize: 12,
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  detailRow: {
+    minHeight: 58,
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  detailLabel: {
+    width: 112,
+    fontSize: 14,
+    fontFamily: "SpaceGrotesk_500Medium",
+    opacity: 0.72,
+  },
+  emptyDetail: {
+    fontSize: 22,
+    fontFamily: "SpaceGrotesk_600SemiBold",
+    includeFontPadding: false,
+  },
+  groupDivider: {
+    width: 42,
+    height: 1,
+    marginVertical: 1,
   },
   beatNum: {
     fontSize: 148,
     fontFamily: "SpaceGrotesk_700Bold",
-    lineHeight: 156,
-    textAlign: "center",
     includeFontPadding: false,
+  },
+  currentBeatNum: {
+    flex: 1,
+    textAlign: "right",
+  },
+  nextBeatNum: {
+    flex: 1,
+    textAlign: "right",
   },
   dotsRow: {
     flexDirection: "row",
@@ -366,8 +451,9 @@ const styles = StyleSheet.create({
   },
   subdivRow: {
     flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 6,
-    marginBottom: 2,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    flex: 1,
+    minHeight: 24,
   },
 });

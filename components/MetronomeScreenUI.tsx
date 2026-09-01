@@ -1471,7 +1471,7 @@ export function MetronomeScreenUI(props: Props) {
         currentBeat={currentBeat}
         beatsPerMeasure={beatsPerMeasure}
         beatDenominator={beatDenominator}
-        subdivisionCount={Math.max(1, subdivisionPattern?.length ?? 1)}
+        subdivisionPattern={subdivisionPattern}
         beatTypes={beatTypes}
         beatSubdivisions={beatSubdivisions}
         activeSubNote={activeSubNote}
